@@ -604,7 +604,17 @@ const selectableThemes = computed(() => {
       .map((t: any) => ({
         key: String(t.key),
         name: String(t.name || t.key),
-        brightness: t.brightness === 'dark' ? 'dark' : 'light',
+        // 🔴 2026-10-19：brightness 缺省回退必须按 key/name 语义推导——
+        //   旧产物 declare.json 的内置 dark 轨**没有 brightness 字段**，
+        //   一律回退 'light' 会让 resolveHostThemeTrack('dark') 把 dark 误映射到
+        //   浅色真值轨（明暗串味 ⇒ URL ?theme=dark 实渲浅色 + default-panel，
+        //   主题→面板联动整体失效）。TaskDetail :2064 已是同口径 key 回退。
+        brightness:
+          t.brightness === 'dark' || t.brightness === 'light'
+            ? t.brightness
+            : /dark|深色|夜|night/i.test(`${t.key} ${t.name || ''}`)
+              ? ('dark' as const)
+              : ('light' as const),
         // 🔴 2026-10-12：这三个字段**必须显式透传** ——
         //   上面的 map 是白名单式构造（不 spread 原对象），漏了会被静默丢弃。
         //   作用：给系统占位 `dark` 打「内置预设色」标记（readonly/builtin/coreColors）。

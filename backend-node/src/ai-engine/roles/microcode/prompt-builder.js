@@ -56,8 +56,42 @@ import {
   dedupeDuplicateSections,
   buildSectionStyleFacts,
 } from '../../utils/section-tree.js';
+// 🛡️ 2026-10-19 业务术语规则（rewrite + drop；默认关闭 ⇒ 零回归）
+import {
+  applyRulesToLine,
+  applyRulesToFactsBlock,
+  buildBusinessTextDirective,
+} from '../../utils/business-text-rules.js';
 // 🎯 A1 收回（2026-09-16）：空块骨架生成器，注入 style chunk 让 LLM 只填 value
 import { generateEmptyClassSkeleton } from './code-validator.js';
+// 🌗 2026-10-19 多主题：跨稿配色真值（副主题槽位不再靠语义推断）
+import {
+  buildCrossThemeColorFacts,
+  formatCrossThemeColorFacts,
+} from '../../utils/color-slot-mapper.js';
+
+/**
+ * 🌗 跨主题配色真值段（2026-10-19）
+ *
+ * 数据源 = `input.dualTruth.themes`（N 份设计稿的 Figma 树，[0] 为主稿）。
+ * 单稿 / 未透传 / 解析异常 ⇒ 空串（零注入、零回归）。
+ *
+ * ⚠️ 透传链（漏一层即静默失效，2026-10-19 实锤）：
+ *   graph(state.dualTruth) → engineer.execute(params.dualTruth)
+ *   → **this.generateCode({ ... dualTruth })**（曾漏传）→ 本函数。
+ */
+export function buildCrossThemeColorBlock(input) {
+  try {
+    const themes = Array.isArray(input?.dualTruth?.themes) ? input.dualTruth.themes : null;
+    if (!themes) return '';
+    return formatCrossThemeColorFacts(buildCrossThemeColorFacts({ themes }));
+  } catch (e) {
+    safeLogger(input?.logger)?.warn?.(
+      `⚠️ 跨主题配色真值构建失败（已降级：不注入）: ${e?.message || e}`,
+    );
+    return '';
+  }
+}
 
 /**
  * 构建代码生成 Prompt（主入口）
@@ -629,7 +663,7 @@ ${outputFormatWarnings(true)}
 
     // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
     const textTruthWhitelist = input.figmaNodeData
-      ? buildTextTruthWhitelist(input.figmaNodeData)
+      ? buildTextTruthWhitelist(input.figmaNodeData, input.businessTextRules)
       : '';
 
     // 🧭 把子组件规划诊断前移进 prompt，让模型直接看到 coverage / truth / chrome / resource 事实
@@ -647,6 +681,12 @@ ${outputFormatWarnings(true)}
 
 - \`control=table\` 或表格形态（多行多列数据网格+表头）→ \`<a-table>\`（:columns + :data-source 承载数据，禁止手写行列 DOM）
 - \`control=form\`/\`form-item\` 或表单形态（label+输入控件成行 ≥2 行）→ \`<a-form>\` + \`<a-form-item>\`（label 与必填星号由组件属性承载；**ant-design-vue 没有 label 组件**）
+- **label 文字颜色硬约束（D-③ · 2026-10-19 · c-a579d-6a579df0 实锤）**：接管表单后，antd 默认 label 是深灰字色，深色主题下**不可读**。必须在 common.less 显式声明（⚠️ common.less 编译后走全局 CSS 注入、无 scoped 编译器，\`:deep()\` 是死语法会被写盘门禁改写——**直接写裸后代选择器**）：
+  \`\`\`less
+  .<宿主类> .ant-form-item-label { color: @color-text-base; }  /* ✅ 主题变量，明暗自适应 */
+  .<宿主类> .ant-form-item-label { color: #333333; }           /* ❌ 硬编码，深色下不可读 */
+  \`\`\`
+  同理，输入控件/占位文字若与主题底色冲突，也用 \`@color-\` 槽位变量补（XCLASS-004 门禁会审）
 - \`control=upload\` 或上传形态（虚线框/点击上传区）→ \`<a-upload>\`
 - \`control=download\` → \`<a-button>\` + download 图标
 - \`control=pagination\` → \`<a-pagination>\`；\`tabs\` → \`<a-tabs>\`/\`<a-tab-pane>\`；\`search\` → \`<a-input-search>\`
@@ -1098,15 +1138,56 @@ export function buildMcPlatformConstraints(input = {}, options = {}) {
 }
 
 /**
+ * 🛡️ 业务术语规则作用的**唯一下发点**（2026-10-19）。
+ *
+ * ⚠️ 边界（与 T1 / TEXT-TRUTH 的契约）：
+ *   - **不动事实层**：`buildSectionStyleFacts` 的原始输出仍是 Figma 真值（T1 配额审计、
+ *     结构判据、快照比对都以此为准），规则只改**喂给 LLM 的这一副本**。
+ *   - **不静默**：有改动时落日志（真机日志可核对），无规则时零开销、零 token。
+ *
+ * @param {Object} input generateCode 的 input（含 businessTextRules）
+ * @param {Object} figmaNodeData
+ * @returns {string} 应用规则后的事实文本块
+ */
+export function buildSectionStyleFactsForPrompt(input, figmaNodeData) {
+  const raw = buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData);
+  const rules = input?.businessTextRules;
+  if (!rules) return raw;
+  const r = applyRulesToFactsBlock(raw, rules);
+  if (r.rewrittenLines > 0 || r.droppedLines > 0) {
+    try {
+      safeLogger(input?.logger).info('🏷️ 业务术语规则已作用于样式事实真值', {
+        rewrittenLines: r.rewrittenLines,
+        droppedLines: r.droppedLines,
+        hits: r.hits.slice(0, 20),
+      });
+    } catch { /* 日志失败不影响生成 */ }
+  }
+  return r.text;
+}
+
+/**
+ * 业务口径指令段（喂 LLM 的硬性约束；无规则 ⇒ 空串，零 token）。
+ */
+export function buildBusinessTextRulesDirective(input) {
+  return buildBusinessTextDirective(input?.businessTextRules);
+}
+
+/**
  * 🛡️ P0（2026-09-04）：构建 Figma 文字真值白名单提示段
  * 
  * 从 Figma 节点数据中提取所有 TEXT 节点的 characters，格式化成白名单提示，
  * 明确要求 LLM 只使用这些文字，防止臆造/OCR 误读。
  * 
+ * ⚠️ 2026-10-19：白名单**必须先过业务术语规则**再下发 —— 否则白名单里是「客车/货车」，
+ *   而业务口径要求写「小汽车」⇒ prompt 自相矛盾（"只能使用白名单文字" vs "必须改名"），
+ *   LLM 要么不敢写、要么写了被 TEXT-TRUTH 判臆造 BLOCK。
+ * 
  * @param {Object} figmaNodeData - Figma 节点数据
+ * @param {Object} [rules] businessTextRules（可选，默认关闭）
  * @returns {string} 白名单提示段（无真值时返回空串）
  */
-export function buildTextTruthWhitelist(figmaNodeData) {
+export function buildTextTruthWhitelist(figmaNodeData, rules) {
   if (!figmaNodeData) return '';
   
   const truthSet = collectFigmaTextTruth(figmaNodeData);
@@ -1120,7 +1201,15 @@ export function buildTextTruthWhitelist(figmaNodeData) {
   if (chineseTexts.length === 0) return '';
   
   // 限制数量，避免 prompt 过长（最多 50 个）
-  const limitedTexts = chineseTexts.slice(0, 50);
+  // 🛡️ 2026-10-19：先过一遍业务术语规则（改名 / 移除）再下发，
+  //   否则白名单与「业务口径指令」互相矛盾（无规则时该步骤原样返回）。
+  const limitedTexts = chineseTexts
+    .slice(0, 50)
+    .map((t) => applyRulesToLine(t, rules))
+    .filter((r) => !r.dropped)
+    .map((r) => r.text);
+
+  if (limitedTexts.length === 0) return '';
   
   return `
 ## 🛡️ 文字真值白名单（强制遵守）
@@ -2060,7 +2149,7 @@ ${fileList}
   - 中文数据值（如「施工养护」）不得进 class，用语义修饰符（\`--maintenance\`）或索引替代。
   - 🆔 根容器的实例 id 类 \`c-mc-max-{INSTANCE_ID}\`（INSTANCE_ID 为运行时随机标识）由**系统自动注入**，你无需也无法手写它；只需给根元素一个语义 class（如 \`c-env-monitor-root\`），系统会另行追加实例 id 类。内部 class 切勿手写 \`c-mc-max-...\` 长前缀（会被后处理剥离并导致 .vue/.less 错配）。
 - **资源变量白名单**：${availVarsBlock}
-${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)
+${buildSectionStyleFactsForPrompt(input, input.figmaNodeData)
   ? `
 ## 🧭 布局与顺序真值 + 🧩 语义化样式真值（按业务区块归属 · 生成模板与 style 时最高优先级）
 
@@ -2072,7 +2161,8 @@ ${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)
   生成子组件 .vue 的 style scoped 时必须与下表逐条对应，禁止臆造、禁止统一成同一颜色。
   激活态与普通态的背景/文字色必须分别实现。
 
-${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)}
+${buildSectionStyleFactsForPrompt(input, input.figmaNodeData)}
+${buildBusinessTextRulesDirective(input)}
 
 ⚠️ 两块各自为准逐条实现：**顺序**按「布局与顺序真值」，**样式**按「内部元素样式真值」。**两份表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非样式表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在样式表中都有背景，必须分别取各自的值。
 `
@@ -2389,6 +2479,9 @@ export function buildThemeVarsChunkPrompt(input, chunk, options = {}) {
 
     const themeVarsInjection = themeVarsBlock ? `\n${themeVarsBlock}\n` : '';
 
+    // 🌗 2026-10-19：多主题（N 稿）跨稿配色真值 —— 副主题业务槽位的唯一真值来源
+    const crossThemeBlock = buildCrossThemeColorBlock(input);
+
     // 🆕 2026-10-15（91544b38 实锤）：重复卡基础底色确定性真值。
     //   病灶：5 张卡 #ffffff@0.43（半透白叠浅蓝页底=tint 效果）被提为不透明
     //   `#ffffff` 写进 @color-bg-card → 预览卡底纯白、设计稿浅蓝 tint 全丢。
@@ -2442,6 +2535,7 @@ ${fileList}
 ${lessNaming}
 ${themeVarsInjection}
 ${repeatedTruthInjection}
+${crossThemeBlock}
 ${factsBlock}
 ${styleOutputFormatTail(chunk)}`;
   }
@@ -2457,6 +2551,8 @@ export function buildCommonLessChunkPrompt(input, chunk, options = {}) {
     const revisionSection = buildStyleRevisionSection(input);
     const classNamesList = chunk.classNamesList || [];
     const fileList = (chunk.files || []).map((f) => `- \`${f}\``).join('\n');
+    // 🌗 2026-10-19：多主题（N 稿）跨稿配色真值
+    const crossThemeBlock = buildCrossThemeColorBlock(input);
 
     // 🅰️ 字体缩放规范（仅微码组件；Vue3 走空占位 + 自定义 @xxx 约定，不受影响）
     const fontScaleBlock =
@@ -2532,7 +2628,9 @@ ${extractFigmaColorEssentials(figmaNodeData)}
     : ''
 }
 
-${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)
+${crossThemeBlock}
+
+${buildSectionStyleFactsForPrompt(input, figmaNodeData)
   ? `
 ## 🧭 布局与顺序真值 + 🧩 语义化样式真值（按业务区块归属 · 最高优先级，必须逐条精确使用）
 
@@ -2544,7 +2642,8 @@ ${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)
   **生成 common.less 时，每个内部元素（tab 项/卡片/图例项）的背景、文字色、尺寸必须与下表逐条对应**，
   禁止臆造、禁止统一成同一颜色。
 
-${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)}
+${buildSectionStyleFactsForPrompt(input, figmaNodeData)}
+${buildBusinessTextRulesDirective(input)}
 
 ⚠️ 两块各自为准逐条实现：**顺序/方向**按「布局与顺序真值」，**样式**按「内部元素样式真值」。**两份表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非样式表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在样式表中都有背景，必须分别取各自的值（如出现 tab-active 与 tab 两行且各自带 bg，则分别实现，禁止统一成同一背景）。
 `
@@ -2684,6 +2783,8 @@ ${previousCritiques.filter((c) => c.category === 'STYLE' || c.category === 'CSS'
     // Less 命名规范
     const lessNaming =
       (options.constraints || {})['references/standards/less-naming-convention.md'] || '';
+    // 🌗 2026-10-19：多主题（N 稿）跨稿配色真值
+    const crossThemeBlock = buildCrossThemeColorBlock(input);
 
     return `你是专业的微码组件样式工程师。你只负责生成 Less/CSS 样式文件。
 
@@ -2758,6 +2859,8 @@ ${JSON.stringify(elementStyleMap, null, 2)}
 `
     : ''
 }
+
+${crossThemeBlock}
 
 ## 颜色/圆角/阴影/边框规则
 - 颜色从 Figma fills.color 精确转换（r*255, g*255, b*255）

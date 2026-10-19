@@ -201,3 +201,46 @@ describe('findClosestTruth', () => {
     expect(invented?.suggest).toBeNull()
   })
 })
+
+describe('detectUnknownText · 业务术语规则接入（2026-10-19）', () => {
+  // 真值里只有「客车/货车」，业务口径要求「小汽车」、禁用「货车/卡车」
+  const figmaTraffic = {
+    name: 'root',
+    type: 'FRAME',
+    children: [
+      { type: 'TEXT', name: 't-1', characters: '客车' },
+      { type: 'TEXT', name: 't-2', characters: '货车' },
+    ],
+  }
+  const RULES = { rewrite: { 客车: '小汽车' }, drop: ['货车', '卡车'] }
+
+  const fileOf = (label) => [
+    {
+      path: 'p/index.vue',
+      content: `<script setup>\nconst items = ref([{ name: '${label}' }])\n</script>`,
+    },
+  ]
+
+  it('① 无规则时：产物写「小汽车」被判臆造（这是接入前的行为，阳性对照）', () => {
+    const u = detectUnknownText(fileOf('小汽车'), figmaTraffic)
+    expect(u.map((x) => x.text)).toContain('小汽车')
+  })
+
+  it('② 有规则时：产物写业务口径词「小汽车」不再被判臆造（解 TEXT-TRUTH 自相矛盾）', () => {
+    const u = detectUnknownText(fileOf('小汽车'), figmaTraffic, RULES)
+    expect(u.map((x) => x.text)).not.toContain('小汽车')
+  })
+
+  it('③ 有规则时：产物仍写「货车」⇒ 判违规且 suggest=null（引导删除区块而非改回原词）', () => {
+    const u = detectUnknownText(fileOf('货车'), figmaTraffic, RULES)
+    const hit = u.find((x) => x.text === '货车')
+    expect(hit).toBeTruthy()
+    expect(hit.suggest).toBeNull()
+    expect((hit as any).forbiddenTerm).toBe('货车')
+  })
+
+  it('④ 无关臆造词不受规则影响，仍被检出（规则不是免检门票）', () => {
+    const u = detectUnknownText(fileOf('飞行器'), figmaTraffic, RULES)
+    expect(u.map((x) => x.text)).toContain('飞行器')
+  })
+})

@@ -18,6 +18,9 @@
 
 const CHINESE_RUN_RE = /[\u4e00-\u9fa5]{2,}/g;
 
+// 🛡️ 2026-10-19：业务术语规则（可选）。零依赖的纯函数模块，不存在循环引用风险。
+import { parseBusinessTextRules } from './business-text-rules.js';
+
 import { extractSfcTemplate } from './sfc-template-extractor.js';
 
 /**
@@ -230,13 +233,33 @@ function extractScriptFieldsWithKey(content) {
  *
  * @param {Array<{path:string, content:string}>} files 生成产物文件数组
  * @param {object} figmaNodeData Figma 节点树
+ * @param {object|null} [businessTextRules] 业务术语规则（可选，2026-10-19）
+ *   - rewrite 的**目标词**会被纳入真值集合 ⇒ 产物写「小汽车」不再被判臆造
+ *     （否则 TEXT-TRUTH 与业务口径自相矛盾：指令要求改名、门禁却判改名违规）；
+ *   - drop 词：**产物里出现即判违规**（即便它确实是 Figma 真值），suggest 置 null
+ *     ⇒ 调用方引导「删除整个区块」，而不是「改回原词」。
  * @returns {Array<{text:string, file:string, suggest:string|null}>} 不在真值里的中文文字
  *   （去重）。suggest 为「最接近的 Figma 真值」，供重试确定性替换；无相似候选（臆造
  *   文字）时为 null，调用方应提示「删除该区块」而非替换。
  */
-export function detectUnknownText(files, figmaNodeData) {
+export function detectUnknownText(files, figmaNodeData, businessTextRules = null) {
   const truth = collectFigmaTextTruth(figmaNodeData);
   if (truth.size === 0) return [];
+
+  // 🛡️ 业务术语规则（2026-10-19）：先 rewrite 后 drop，与下发层同一语义顺序。
+  const parsed = parseBusinessTextRules(businessTextRules);
+  const forbidden = parsed ? [...parsed.drop] : [];
+  if (parsed) {
+    const rewritten = [];
+    for (const [from, to] of parsed.rewrite) {
+      truth.add(to); // 业务口径词成为合法真值
+      rewritten.push(from);
+    }
+    // 被改名的原词**不再是合法产物文本**（产物应写新词）——
+    // 但这里不把它从 truth 移除：真值集合同时服务于「suggest 近似替换」，
+    // 保留原词才能给出正确的替换建议。
+    void rewritten;
+  }
 
   const seen = new Set();
   const unknown = [];
@@ -254,6 +277,19 @@ export function detectUnknownText(files, figmaNodeData) {
     for (const c of candidates) {
       if (seen.has(c.text)) continue;
       seen.add(c.text);
+      // ① 业务禁用词：命中即违规（suggest=null ⇒ 引导「删除整个区块」，而非改回原词）
+      const hitForbidden = forbidden.find((d) => c.text.includes(d));
+      if (hitForbidden) {
+        unknown.push({
+          text: c.text,
+          file: f.path || '',
+          suggest: null,
+          titleContext: c.key === 'title',
+          forbiddenTerm: hitForbidden,
+        });
+        continue;
+      }
+      // ② 真值覆盖判定（真值集合已含业务口径改写词）
       if (!isCoveredByTruth(c.text, truth)) {
         unknown.push({
           text: c.text,

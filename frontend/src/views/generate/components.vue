@@ -326,29 +326,44 @@
                   :disabled="!nThemeSupported || busy"
                   :title="
                     nThemeSupported
-                      ? '同时提供浅色 + 深色两份设计稿，色值取自各稿真值'
-                      : '深浅双色仅支持「微码 + Max」档'
+                      ? '提供多份不同主题的设计稿（浅色/深色/自定义均可），色值取自各稿真值'
+                      : '多主题仅支持「微码 + Max」档'
                   "
                   @click="toggleNTheme"
                 >
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
-                  深浅双色
+                  多主题
                   <span v-if="!nThemeSupported" class="n-theme-hint">（需微码 + Max）</span>
                 </button>
 
                 <template v-else>
-                  <div class="n-theme-rows">
+                  <!-- 🔴 2026-10-19：概览条 —— 就绪度一眼可见，避免「静默丢掉没填完的主题」 -->
+                  <div class="n-theme-head">
+                    <span class="n-theme-count">
+                      就绪 <b>{{ nThemeReadyCount }}</b> / {{ nThemeRows.length }}
+                    </span>
+                    <span class="n-theme-head-tip">
+                      第 1 张为结构基准（决定结构与文案），其余主题只提供色值
+                    </span>
+                  </div>
+
+                  <div class="n-theme-cards">
                     <div
                       v-for="(row, idx) in nThemeRows"
                       :key="idx"
-                      class="n-theme-row"
-                      :class="{ 'is-primary': idx === 0, 'is-active': activeNThemeIdx === idx }"
-                      :title="activeNThemeIdx === idx ? '当前在大框预览此主题' : '点击在大框预览此主题'"
+                      class="n-theme-card"
+                      :class="{
+                        'is-primary': idx === 0,
+                        'is-active': activeNThemeIdx === idx,
+                        'is-ready': nThemeRowState(idx).state === 'ready',
+                        'is-bad': nThemeRowState(idx).state === 'invalid' || nThemeRowState(idx).state === 'error',
+                      }"
+                      :title="idx === 0 ? '默认主题：链接使用上方已确认的 Figma 来源' : '点击在大框预览此主题'"
                       @click="activeNThemeIdx = idx"
                     >
-                      <div class="n-theme-row-head">
+                      <div class="n-theme-card-head">
                         <!-- 🔴 2026-10-13：深浅配色自选（与主题解耦）——点 chip 在 浅/深 间切换 -->
                         <button
                           type="button"
@@ -360,8 +375,10 @@
                         >
                           <svg v-if="row.tone === 'dark'" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" /></svg>
                           <svg v-else viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
-                          {{ row.tone === 'dark' ? '深色' : '浅色' }}{{ idx === 0 ? '主稿' : '' }}
+                          {{ row.tone === 'dark' ? '深色' : '浅色' }}
                         </button>
+                        <!-- 🔴 2026-10-19：第 1 张恒为「默认主题」（结构基准），不提供排序箭头 -->
+                        <span v-if="idx === 0" class="n-theme-badge is-default" title="第 1 张即默认主题（决定组件结构与文案），无需排序">默认主题</span>
                         <input
                           v-model="row.name"
                           type="text"
@@ -373,45 +390,91 @@
                           @click="selectNThemeName"
                         />
                         <div v-if="N_THEME_ADD_ENABLED" class="n-theme-row-actions">
-                          <button type="button" :disabled="busy || idx === 0" @click="moveNThemeRow(idx, -1)" title="上移（设为主稿）">
-                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
-                          </button>
-                          <button type="button" :disabled="busy || idx === nThemeRows.length - 1" @click="moveNThemeRow(idx, 1)" title="下移">
-                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M19 12l-7 7-7-7" /></svg>
-                          </button>
-                          <button type="button" :disabled="busy || nThemeRows.length <= 1" @click="removeNThemeRow(idx)" title="删除">
+                          <button type="button" :disabled="busy || nThemeRows.length <= 1" @click.stop="removeNThemeRow(idx)" :title="nThemeRows.length <= 1 ? '至少保留 1 个主题' : '删除该主题'">
                             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
                           </button>
                         </div>
                       </div>
 
-                      <!-- 第 0 行复用主框链接（主稿已在主输入框填过） -->
+                      <!-- 该主题的预览缩略图（横向排列才谈得上「对比各套色值」） -->
+                      <div class="n-theme-thumb" :class="`is-${nThemeRowState(idx).state}`">
+                        <template v-if="nThemeRowState(idx).imageUrl">
+                          <img :src="nThemeRowState(idx).imageUrl" :alt="row.name || `主题 ${idx + 1}`" />
+                          <span v-if="nThemeRowState(idx).sizeText" class="n-theme-thumb-size">
+                            {{ nThemeRowState(idx).sizeText }}
+                          </span>
+                        </template>
+                        <span v-else class="n-theme-thumb-ph">{{ nThemeRowState(idx).placeholder }}</span>
+                      </div>
+
+                      <!-- 第 0 行复用主框链接（默认主题已在主输入框填过） -->
                       <div v-if="idx === 0" class="n-theme-note">
                         <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                           <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
                           <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
                         </svg>
-                        主稿链接使用上方已确认的 Figma 来源（决定组件结构与文案）
+                        链接使用上方已确认的 Figma 来源（决定组件结构与文案）
                       </div>
                       <input
                         v-else
                         v-model="row.url"
                         type="text"
                         class="form-input n-theme-url"
+                        :class="{ 'is-invalid': nThemeRowState(idx).state === 'invalid' || nThemeRowState(idx).state === 'error' }"
                         :placeholder="`在此粘贴「${row.name || '该主题'}」的 figma.com 节点链接`"
                         :disabled="busy"
                         autocomplete="off"
                         spellcheck="false"
                       />
 
+                      <div class="n-theme-card-foot">
+                        <!-- 🔴 2026-10-19：面板由用户自选（不再从深浅派生） -->
+                        <select
+                          v-model="row.panelType"
+                          class="n-theme-panel-select"
+                          :disabled="busy"
+                          title="该主题使用的面板（组件壳取第 1 张·默认主题的选择）"
+                          @click.stop
+                        >
+                          <option value="default-panel">默认面板</option>
+                          <option value="model-panels">弹窗面板</option>
+                          <option value="aio-panel">一体化面板</option>
+                        </select>
+                        <span class="n-theme-state" :class="`is-${nThemeRowState(idx).state}`">
+                          {{ nThemeRowState(idx).text }}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
+                  <!-- 🔴 2026-10-19：未就绪的主题逐条点名（旧版只在此处不显示，
+                       未填的行被 nThemeFilled 静默过滤，用户毫不知情） -->
+                  <ul v-if="nThemeIssueTexts.length" class="n-theme-issues">
+                    <li v-for="text in nThemeIssueTexts" :key="text">{{ text }}</li>
+                  </ul>
                   <div v-if="nThemeDuplicateNode" class="n-theme-warn">
                     多个主题指向同一个 Figma 节点，请提供各自独立的设计稿
                   </div>
                   <div v-else-if="nThemeDuplicateName" class="n-theme-warn">
                     主题名称重复，请改成不同的名字
+                  </div>
+
+                  <!-- 生成拦截条：存在未就绪主题时点生成先回到这里确认，禁止静默退化为单稿 -->
+                  <div v-if="themeGateVisible" class="n-theme-gate">
+                    <div class="n-theme-gate-body">
+                      <strong>{{ nThemeRows.length - nThemeReadyCount }} 个主题未就绪</strong>
+                      <span>
+                        继续将只生成已就绪的 {{ nThemeReadyCount }} 套主题，未就绪的会被跳过且不会有第二套。
+                      </span>
+                    </div>
+                    <div class="n-theme-gate-actions">
+                      <button type="button" class="n-theme-gate-btn is-ghost" @click="themeGateVisible = false">
+                        返回补全
+                      </button>
+                      <button type="button" class="n-theme-gate-btn" @click="ackThemeGateAndGo">
+                        仅生成 {{ nThemeReadyCount }} 套
+                      </button>
+                    </div>
                   </div>
 
                   <div class="n-theme-foot">
@@ -1387,7 +1450,15 @@ interface NThemeRow {
    *   浅色主题在 key 分配时占用 light 保留位（resolveThemeKey 既有规则）。
    */
   tone: 'light' | 'dark'
-  /** 副主题的预览状态（主稿复用页面顶部的主预览，不在此列） */
+  /**
+   * 🔴 2026-10-19：用户自选的面板（与深浅解耦——两者都由用户拍板）。
+   *   默认值随 tone 给（深色→一体化、浅色→默认），但**用户可改**；
+   *   切换 tone 不再回头改 panelType，避免覆盖用户已做的选择。
+   *   任务级 panelType（组件壳）取**默认主题**（第 0 行）的选择；
+   *   每主题的选择透传进 declare.json `themeConfig.list[].panelType`。
+   */
+  panelType: 'default-panel' | 'model-panels' | 'aio-panel'
+  /** 副主题的预览状态（默认主题复用页面顶部的主预览，不在此列） */
   preview?: {
     status: 'idle' | 'loading' | 'ready' | 'error'
     imageUrl?: string
@@ -1398,11 +1469,16 @@ interface NThemeRow {
   }
 }
 
-function newNThemeRow(name: string, tone: 'light' | 'dark' = 'dark'): NThemeRow {
-  return { name, url: '', tone }
+/** 深浅 → 面板默认值（仅建行时用一次；之后两者完全独立） */
+function defaultPanelForTone(tone: 'light' | 'dark'): NThemeRow['panelType'] {
+  return tone === 'dark' ? 'aio-panel' : 'default-panel'
 }
 
-/** 主题行：索引 0 恒为主稿（决定结构/几何/文案），用户用「上移」表达主副 */
+function newNThemeRow(name: string, tone: 'light' | 'dark' = 'dark'): NThemeRow {
+  return { name, url: '', tone, panelType: defaultPanelForTone(tone) }
+}
+
+/** 主题行：索引 0 恒为默认主题（决定结构/几何/文案），不提供排序——想换默认主题就改上方主链接 */
 const nThemeRows = ref<NThemeRow[]>([newNThemeRow('浅色', 'light'), newNThemeRow('深色', 'dark')])
 
 /** 🔴 2026-10-13：点击激活的主题行 ⇒ 大框预览联动显示该行设计稿 */
@@ -1440,16 +1516,6 @@ function addNThemeRow() {
 function removeNThemeRow(index: number) {
   if (nThemeRows.value.length <= 1) return
   nThemeRows.value.splice(index, 1)
-}
-
-/** 上移/下移 —— 第一行即主稿 */
-function moveNThemeRow(index: number, delta: -1 | 1) {
-  const next = index + delta
-  const arr = nThemeRows.value
-  if (next < 0 || next >= arr.length) return
-  const tmp = arr[index]
-  arr[index] = arr[next]
-  arr[next] = tmp
 }
 
 /** 聚焦时全选 —— 名字是预填的，用户意图几乎总是「替换」而非「追加」 */
@@ -1505,11 +1571,155 @@ const nThemeReady = computed(
     !nThemeDuplicateName.value,
 )
 
+// ══ 2026-10-19：逐行状态 + 校验收口 ══════════════════════════
+//
+// 背景（用户反馈「添加了主题输入不全是否有校验」）：
+//   `nThemeFilled` 只收「解析成功」的行 ⇒ 空链接行与非法链接行被**静默过滤**，
+//   既不上报也不提示，`themeNodes` 悄悄少几套；`nThemeReady` 为 false 时
+//   `goSingle` 干脆**不下发 themeNodes**，整次退化成单稿 —— 用户全程无感知。
+//
+// 收口三件事：
+//   1. 每行有显式状态（ready / loading / error / invalid / empty），卡片上直接显示；
+//   2. 未就绪的行**逐条点名**列出（见模板 `.n-theme-issues`）；
+//   3. 存在未就绪行时点生成 ⇒ **显式拦截确认**（`themeGateVisible`），
+//      用户要么回去补全，要么明确接受「只生成已就绪的 N 套」。
+
+type NThemeRowStateKind = 'ready' | 'loading' | 'error' | 'invalid' | 'empty'
+
+interface NThemeRowStateView {
+  state: NThemeRowStateKind
+  /** 缩略图地址（仅 ready 非空） */
+  imageUrl: string
+  /** 「1440 × 900」 */
+  sizeText: string
+  /** 无图时的占位文案 */
+  placeholder: string
+  /** 卡片右下角的短状态文案 */
+  text: string
+}
+
+/** 单行的完整状态（第 0 行取主框预览，副主题取自己的 row.preview） */
+function nThemeRowState(idx: number): NThemeRowStateView {
+  const emptyHead = (state: NThemeRowStateKind, placeholder: string, text: string): NThemeRowStateView => ({
+    state, imageUrl: '', sizeText: '', placeholder, text,
+  })
+  const row = nThemeRows.value[idx]
+  if (!row) return emptyHead('empty', '该主题已删除', '—')
+
+  // ── 默认主题：链接与预览都在页面顶部那条状态机上，此处只读不算
+  if (idx === 0) {
+    const pv = figmaPreview.value
+    const ok = previewStatus.value === 'ready' || previewStatus.value === 'confirmed'
+    if (ok && pv?.imageUrl) {
+      return {
+        state: 'ready',
+        imageUrl: pv.imageUrl,
+        sizeText: pv.width && pv.height ? `${pv.width} × ${pv.height}` : '',
+        placeholder: '',
+        text: '已就绪',
+      }
+    }
+    if (isLoadingPreview.value) return emptyHead('loading', '正在获取默认主题预览…', '获取预览中')
+    if (previewStatus.value === 'error') return emptyHead('error', previewError.value?.message || '主预览加载失败', '预览失败')
+    return emptyHead('empty', '请先在上方获取默认主题预览', '等待主预览')
+  }
+
+  // ── 副主题
+  const raw = row.url.trim()
+  if (!raw) return emptyHead('empty', '粘贴链接后自动生成预览', '未填链接')
+  // 非法链接：`previewNThemeRow` 不会自动触发（它只看 preview.status），
+  // 必须在这里显式判定，否则这行同样被静默丢弃。
+  if (!parseFigmaUrlLite(raw)) {
+    return emptyHead('invalid', '链接无效：需 figma.com 文件/设计稿链接且带 node-id', '链接无效')
+  }
+  const pv = row.preview
+  if (pv?.status === 'ready' && pv.imageUrl) {
+    return {
+      state: 'ready',
+      imageUrl: pv.imageUrl,
+      sizeText: pv.width && pv.height ? `${pv.width} × ${pv.height}` : '',
+      placeholder: '',
+      text: '已就绪',
+    }
+  }
+  if (pv?.status === 'loading') return emptyHead('loading', '正在获取该主题预览…', '获取预览中')
+  if (pv?.status === 'error') return emptyHead('error', pv.error || '预览获取失败', '预览失败')
+  return emptyHead('loading', '等待预览结果…', '等待预览')
+}
+
+/** 全部行的状态快照 */
+const nThemeRowStates = computed(() => nThemeRows.value.map((_, i) => nThemeRowState(i)))
+
+/** 就绪（可下发）的主题数 */
+const nThemeReadyCount = computed(
+  () => nThemeRowStates.value.filter((s) => s.state === 'ready').length,
+)
+
+/** 未就绪行的逐条说明 —— 模板点名展示，替代原先的「什么都不说」 */
+const nThemeIssueTexts = computed(() =>
+  nThemeRowStates.value
+    .map((s, idx) => {
+      const row = nThemeRows.value[idx]
+      const label = row?.name?.trim() || `主题 ${idx + 1}`
+      switch (s.state) {
+        case 'ready':
+          return ''
+        case 'empty':
+          return `主题「${label}」未填写 Figma 链接（或在上方主框未就绪的 ${idx === 0 ? '默认主题' : '链接'}），本次不会生成`
+        case 'invalid':
+          return `主题「${label}」链接无效：需 figma.com 链接且带 node-id 参数，本次不会生成`
+        case 'error':
+          return `主题「${label}」预览失败：${s.placeholder}，本次不会生成`
+        case 'loading':
+          return `主题「${label}」预览仍在获取中，请稍候再生成`
+        default:
+          return ''
+      }
+    })
+    .filter(Boolean),
+)
+
+/** 生成拦截条是否展示（有未完成主题 + 用户尚未确认过） */
+const themeGateVisible = ref(false)
+/** 用户已明确接受「只生成已就绪的 N 套」——行内容一变就作废，重新问 */
+const themeGateAcked = ref(false)
+
+watch(
+  () => nThemeRows.value.map((r) => `${r.name}|${r.url}`).join('||'),
+  () => {
+    themeGateAcked.value = false
+    themeGateVisible.value = false
+  },
+)
+watch(nThemeEnabled, () => {
+  themeGateAcked.value = false
+  themeGateVisible.value = false
+})
+
+/**
+ * 生成前的主题校验收口。
+ * @returns true = 放行；false = 已拦下并展示确认条（本次不发起请求）
+ */
+function ensureThemeGate(): boolean {
+  if (sourceMode.value !== 'figma' || !nThemeEnabled.value) return true
+  if (nThemeIssueTexts.value.length === 0) return true
+  if (themeGateAcked.value) return true
+  themeGateVisible.value = true
+  return false
+}
+
+/** 拦截条上「仅生成 N 套」：记录确认后重跑一次生成流程 */
+async function ackThemeGateAndGo() {
+  themeGateAcked.value = true
+  themeGateVisible.value = false
+  await go()
+}
+
 // ── 副主题预览（2026-10-12）────────────────────────────────
 // 此前副主题填完链接直接盲发，用户无法确认那一份稿是否选对节点。
 // 现在每行可单独「预览」：行内展开缩略图 + 节点名 + 尺寸，可再次收起。
 //
-// ⚠️ 只对**副**主题做（索引 ≥1）：主稿的预览/确认是提交硬门槛
+// ⚠️ 只对**副**主题做（索引 ≥1）：默认主题的预览/确认是提交硬门槛
 //   （`previewConfirmed` + `previewToken`），走页面顶部那条状态机，
 //   这里重复一套会造成两个真相源。
 const canPreviewNTheme = (idx: number) =>
@@ -1567,7 +1777,7 @@ function toggleNThemePreview(index: number) {
  *   预览获取改由「点击行激活」驱动：填了链接的行被激活时自动拉预览。
  */
 watch(activeNThemeIdx, (idx) => {
-  if (idx <= 0) return // 主稿预览复用主框流程
+  if (idx <= 0) return // 默认主题预览复用主框流程
   const row = nThemeRows.value[idx]
   if (!row) return
   if (!row.url.trim()) return
@@ -3004,6 +3214,9 @@ async function go() {
 
   submitting.value = true
   try {
+    // 🔴 2026-10-19：多主题有未就绪项 ⇒ 显式确认后再发，禁止静默退化为单稿
+    if (!ensureThemeGate()) return
+
     const aiConfig = await validateAiConfig()
     if (!aiConfig) return
 
@@ -3087,7 +3300,11 @@ async function goSingle(aiConfig) {
     config: aiConfig
   }
   if (compType.value === 'microcode') {
-    p.panelType = panelType.value
+    // 🔴 2026-10-19：多主题模式下组件壳（panelKey）取**默认主题卡**的面板选择
+    //   （结构基准决定结构与壳）；其余主题的面板选择随 themeNodes 透传进
+    //   declare.json themeConfig.list[].panelType 留痕。单稿/未就绪时仍用全局开关。
+    const primaryPanel = nThemeRows.value[0]?.panelType
+    p.panelType = nThemeEnabled.value && primaryPanel ? primaryPanel : panelType.value
     // 高级选项三字段（仅微码生效）
     if (advUserId.value.trim()) p.userComponentId = advUserId.value.trim()
     if (advExtraPrompt.value.trim()) p.extraPrompt = advExtraPrompt.value.trim()
@@ -3115,9 +3332,9 @@ async function goSingle(aiConfig) {
     saveToUrlHistory(currentUrl)
 
     // 🆕🆕 2026-10-12 N 主题：下发多套主题设计稿。
-    //   关键：**顺序即语义** —— themeNodes[0] 恒为主稿（决定结构/几何/文案），
-    //   所以「上移某行」等价于「把它设为主稿」，前端不另传 primaryRole。
-    //   主稿（第 0 行）复用主框已解析的 fileKey/nodeId，避免用户重复粘贴。
+    //   关键：**顺序即语义** —— themeNodes[0] 恒为默认主题（决定结构/几何/文案），
+    //   第 1 张不可排序/不可删（想换默认主题就改上方主链接），前端不另传 primaryRole。
+    //   默认主题（第 0 行）复用主框已解析的 fileKey/nodeId，避免用户重复粘贴。
     //   不满足条件时**不下发**（退化单稿，与改动前请求体一致）。
     if (nThemeReady.value && !nThemeDuplicateNode.value && !nThemeDuplicateName.value) {
       p.themeNodes = nThemeFilled.value.map((x, i) => ({
@@ -3127,10 +3344,18 @@ async function goSingle(aiConfig) {
         // 🔴 2026-10-13：用户自选深浅配色透传（浅色占 light 保留位、深色走深色系 key；
         //   dark 恒由系统生成占位）。DTO/normalizeThemeInputs 均已支持。
         brightness: x.row.tone,
+        // 🔴 2026-10-19：用户自选面板透传（与深浅解耦，两者都用户拍板）。
+        //   组件壳取默认主题（themeNodes[0]）的面板；其余主题的选择进
+        //   declare.json themeConfig.list[].panelType 供预览/后续消费。
+        panelType: x.row.panelType,
+        // 🔴 2026-10-19：副主题预览图透传 —— 此前 v4 页从未发送此字段，
+        //   后端 graph 拿不到 URL 就不会落盘 `mc-preview-<key>.png`，
+        //   任务详情页的主题卡预览图因此恒为空（默认主题走 previewToken 链路不受影响）。
+        previewImageUrl: x.row.preview?.status === 'ready' ? x.row.preview.imageUrl : undefined,
       }))
       logs.value.push({
         time: nowTime(),
-        text: `🎨 多主题模式：${p.themeNodes.length} 套主题，主稿「${p.themeNodes[0].name}」`,
+        text: `🎨 多主题模式：${p.themeNodes.length} 套主题，默认主题「${p.themeNodes[0].name}」`,
       })
     }
   } else if (sourceMode.value === 'html') {
@@ -3552,25 +3777,208 @@ onUnmounted(() => {
   color: #909399;
   font-size: 11px;
 }
-.n-theme-rows {
-  display: flex;
-  flex-direction: column;
+/* 🔴 2026-10-19：竖排列表 → 卡片网格。
+   多主题的核心诉求是「并排对比各套色值」，竖排时 2 张卡就占掉半屏，
+   且每张卡要装下「预览图 + 链接 + 面板 + 状态」四件套，横排才放得下。 */
+.n-theme-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
   gap: 8px;
 }
-.n-theme-row {
-  padding: 9px 10px;
-  border: 1px solid var(--c-border, #dcdfe6);
+.n-theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
-  background: var(--c-bg, #fff);
+  background: var(--surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.n-theme-row.is-primary {
+.n-theme-card:hover {
+  border-color: var(--c-primary, #2563eb);
+}
+.n-theme-card.is-primary {
   border-color: var(--c-primary, #2563eb);
   background: var(--c-primary-soft, #eff6ff);
 }
-.n-theme-row-head {
+.n-theme-card.is-active {
+  border-color: var(--c-primary, #2563eb);
+  box-shadow: 0 0 0 1px var(--c-primary, #2563eb) inset;
+}
+.n-theme-card.is-bad {
+  border-color: var(--c-danger, #dc2626);
+}
+.n-theme-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 预览缩略图：固定 16:9，保证所有主题视觉可比 */
+.n-theme-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-soft, #f1f5f9);
+  border-radius: 6px;
+  background: var(--surface-2, #f8fafc);
+}
+.n-theme-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.n-theme-thumb-size {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10px;
+}
+.n-theme-thumb-ph {
+  padding: 0 12px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--txt-3, #94a3b8);
+}
+.n-theme-thumb.is-invalid .n-theme-thumb-ph,
+.n-theme-thumb.is-error .n-theme-thumb-ph {
+  color: var(--c-danger, #dc2626);
+}
+.n-theme-thumb.is-invalid,
+.n-theme-thumb.is-error {
+  border-style: dashed;
+  border-color: var(--c-danger, #dc2626);
+}
+.n-theme-url.is-invalid {
+  border-color: var(--c-danger, #dc2626) !important;
+}
+
+.n-theme-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.n-theme-panel-select {
+  flex-shrink: 0;
+  max-width: 96px;
+  padding: 1px 4px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--surface-3, #f1f5f9);
+  color: var(--txt-2, #475569);
+  font-size: 10px;
+  cursor: pointer;
+}
+.n-theme-panel-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.n-theme-state {
+  font-size: 10px;
+  color: var(--txt-3, #94a3b8);
+}
+.n-theme-state.is-ready {
+  color: var(--c-cta, #059669);
+}
+.n-theme-state.is-invalid,
+.n-theme-state.is-error {
+  color: var(--c-danger, #dc2626);
+}
+.n-theme-state.is-loading {
+  color: var(--c-warn, #d97706);
+}
+
+.n-theme-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 6px;
+}
+.n-theme-count {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--c-primary-soft, #eff6ff);
+  color: var(--c-primary, #2563eb);
+  font-size: 11px;
+}
+.n-theme-count b {
+  font-size: 13px;
+}
+.n-theme-head-tip {
+  font-size: 11px;
+  color: var(--txt-3, #94a3b8);
+}
+
+.n-theme-issues {
+  margin: 8px 0 0;
+  padding: 8px 10px 8px 26px;
+  list-style: disc;
+  border: 1px solid var(--c-warn, #d97706);
+  border-radius: 6px;
+  background: var(--surface-2, #f8fafc);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--txt-2, #475569);
+}
+
+/* 生成拦截条 */
+.n-theme-gate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-warn, #d97706);
+  border-radius: 8px;
+  background: var(--surface-2, #f8fafc);
+}
+.n-theme-gate-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--txt-2, #475569);
+}
+.n-theme-gate-body strong {
+  font-size: 13px;
+  color: var(--txt-1, #0f172a);
+  font-weight: 600;
+}
+.n-theme-gate-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.n-theme-gate-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--c-warn, #d97706);
+  border-radius: 6px;
+  background: var(--c-warn, #d97706);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.n-theme-gate-btn.is-ghost {
+  background: transparent;
+  color: var(--txt-2, #475569);
+  border-color: var(--border, #e5e7eb);
+}
+.n-theme-gate-btn:hover {
+  filter: brightness(0.95);
 }
 .n-theme-badge {
   flex-shrink: 0;
@@ -3580,7 +3988,7 @@ onUnmounted(() => {
   color: #606266;
   font-size: 11px;
 }
-.n-theme-row.is-primary .n-theme-badge {
+.n-theme-card.is-primary .n-theme-badge {
   background: var(--c-primary, #2563eb);
   color: #fff;
 }
@@ -3608,15 +4016,16 @@ onUnmounted(() => {
   filter: brightness(0.96);
 }
 
+/* 🔴 2026-10-19：默认主题徽章（第 1 张·结构基准，不可排序） */
+.n-theme-badge.is-default {
+  background: var(--c-primary, #2563eb);
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 /* 行激活态：当前在大框预览的主题行 */
-.n-theme-row.is-active {
-  border-color: var(--c-primary, #2563eb);
-  box-shadow: 0 0 0 1px var(--c-primary, #2563eb) inset;
-}
-.n-theme-row {
-  cursor: pointer;
-}
-.n-theme-row.is-active .n-theme-name {
+.n-theme-card.is-active .n-theme-name {
   font-weight: 600;
 }
 .n-theme-name {

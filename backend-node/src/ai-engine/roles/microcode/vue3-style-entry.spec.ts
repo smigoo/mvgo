@@ -47,7 +47,7 @@ describe('ensureVue3StyleEntry + styleTokens（1.4）', () => {
       '@colorPrimary: #44E4FF;',
     )
     expect(files['resources/styles/index.less']).toBe(
-      "@import './theme-vars.less';\n@import './common.less';\n",
+      "@import './theme-vars.less';\n\n// 根作用域调用默认主题 mixin，暴露 @fontSize 等变量给 common.less\n.common();\n.theme-light();\n@import (multiple) './common.less';\n",
     )
     expect(files['resources/styles/common.less']).toBeDefined()
   })

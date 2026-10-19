@@ -2633,11 +2633,14 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         };
 
     // themeConfig：必须包含 light 和 dark
+    // 🔴 2026-10-19：显式 brightness——预览页 resolveHostThemeTrack 按内置轨
+    //   brightness 映射真值轨，缺省被前端判成 'light' ⇒ ?theme=dark 实渲浅色
+    //   + 主题→面板联动（dark⇒aio-panel）失效。与 Max 管线 A8-3 同口径。
     const themeConfig = {
       default: theme,
       list: [
-        { name: '亮色主题', key: 'light' },
-        { name: '深色主题', key: 'dark' },
+        { name: '亮色主题', key: 'light', brightness: 'light' },
+        { name: '深色主题', key: 'dark', brightness: 'dark' },
       ],
     };
 
@@ -2919,8 +2922,14 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         entries.push({
           key: t.key,
           name: t.name,
-          brightness: resolveBackgroundBrightness(nodeData, i === 0 ? 'dark' : 'light'),
+          // 🔴 2026-10-19：用户声明的深浅优先（深浅由用户拍板），未声明才实测兜底
+          brightness:
+            t.brightness === 'light' || t.brightness === 'dark'
+              ? t.brightness
+              : resolveBackgroundBrightness(nodeData, i === 0 ? 'dark' : 'light'),
           palette: extractFigmaColorPalette(nodeData) as any,
+          // 🔴 2026-10-19：用户自选面板透传（→ themeConfig.list[].panelType）
+          panelType: (t as any).panelType || null,
         });
       }
 
@@ -2954,6 +2963,8 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
             name: t.legacyName || t.name,
             key: t.key,
             brightness: t.brightness,
+            // 🔴 2026-10-19：用户自选面板（缺省不写，保持旧产物结构不变）
+            ...(t.panelType ? { panelType: t.panelType } : {}),
           }));
           tc.multiTheme = asm.list.length > 2;
           tc.themeCount = asm.list.length;

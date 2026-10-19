@@ -157,6 +157,9 @@ export function resolveThemeKey({ name, brightness, usedKeyNames, index = 0 }) {
  *          错误**不抛出**：只要还有有效主题就继续（部分可用），
  *          但若一个都没有则由调用方阻断（fail-closed）。
  */
+/** 面板枚举（与 DTO IsIn 白名单一致；非法值不阻断，静默回落 null） */
+const THEME_PANEL_TYPES = new Set(['default-panel', 'model-panels', 'aio-panel', 'empty']);
+
 export function normalizeThemeInputs(inputs = [], { max = MAX_THEMES } = {}) {
   const errors = [];
   const themes = [];
@@ -252,6 +255,12 @@ export function normalizeThemeInputs(inputs = [], { max = MAX_THEMES } = {}) {
       //   是白名单式构造对象，不 spread 原始 raw）—— 与 2026-10-10 `secondaryNode`
       //   丢失是同一类坑，务必保持同步。
       previewImageUrl: String(raw.previewImageUrl || '').trim() || null,
+      // 🔴 2026-10-19：透传该主题用户自选的面板（与深浅解耦，两者都用户拍板）。
+      //   组件壳取主稿（themes[0]）的面板；每主题值进 themeConfig.list[].panelType。
+      //   非法值不阻断（DTO IsIn 已拦过一层，这里纯兜底）。
+      panelType: THEME_PANEL_TYPES.has(String(raw.panelType || '').trim())
+        ? String(raw.panelType).trim()
+        : null,
     });
   });
 

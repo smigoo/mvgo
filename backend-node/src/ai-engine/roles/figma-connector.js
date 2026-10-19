@@ -1029,6 +1029,15 @@ export class FigmaConnector {
           simplified.color = fill.color;
         }
 
+        // 🛡️ 2026-10-19（c-aiot-dpjh-bsjd-44268ffe 实锤）：fill 级透明度必须保留。
+        //   Figma 的 SOLID fill 有「color.a」与「fill.opacity」两层 alpha，设计稿里
+        //   半透明底衬几乎都用 fill.opacity 表达（如白 43% 叠蓝底 = 浅蓝灰卡）。
+        //   此前本处重建 fill 时只留 color ⇒ opacity 整层丢失 ⇒ fillToRgba 回退 color.a=1
+        //   ⇒ 下游 hints/真值输出成不透明色 ⇒ LLM 把半透明白卡写成纯白色块（视觉失真）。
+        if (typeof fill.opacity === 'number') {
+          simplified.opacity = fill.opacity;
+        }
+
         // ✅ 保留 IMAGE fill 的 imageRef（2026-09-02）：资源下载去重签名依赖它。
         // 缓存路径B 的节点树经本方法裁剪，缺 imageRef 时 fill 签名退化为
         // `IMAGE:true##尺寸` → 同尺寸异图有误去重隐患；imageRef 只是短哈希字符串，体积可忽略。
@@ -1052,11 +1061,19 @@ export class FigmaConnector {
 
     // ✅ 保留描边信息（简化）
     if (node.strokes && node.strokes.length > 0) {
-      optimized.strokes = node.strokes.map((stroke) => ({
-        type: stroke.type,
-        color: stroke.color,
-        visible: stroke.visible !== false,
-      }));
+      optimized.strokes = node.strokes.map((stroke) => {
+        const s = {
+          type: stroke.type,
+          color: stroke.color,
+          visible: stroke.visible !== false,
+        };
+        // 🛡️ 2026-10-19：描边透明度同 fills 口径保留（strokesToCss 读 stroke.opacity，
+        //   丢失会把半透明描边写成实色——d70a19bf 事故的另一半隐患）。
+        if (typeof stroke.opacity === 'number') {
+          s.opacity = stroke.opacity;
+        }
+        return s;
+      });
       if (typeof node.strokeWeight !== 'undefined') {
         optimized.strokeWeight = node.strokeWeight;
       }

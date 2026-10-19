@@ -266,6 +266,7 @@ import {
   resolveComponentIdCheckpoint,
   applyDeclareCheckpoint,
   sanitizeComponentId,
+  normalizeBusinessEventKeys,
 } from '../utils/component-naming.js';
 // 🛡️ 2026-09-03（管线 A 方案）：写盘前把子组件类样式收敛进 common.less
 import { consolidateSubComponentClasses, ensureSubComponentAttrsBinding, ensureSubComponentRootDimensions, ensureChartContainerDimensions, ensureMiddleContainerWidth, ensureBackgroundLayerPosition, ensureButtonMinHeight, ensureBackgroundContainerDimensions } from '../utils/style-class-consolidator.js';
@@ -2588,6 +2589,29 @@ export class MicrocodeEngineer extends BaseAgent {
         input.elementStyleMap,
       );
       const classMismatches = validationResult.mismatches;
+      // 🎯 T-②（2026-10-19 · c-a579d-6a579df0 实锤）：跨前缀交叉审计透出（只报不改）。
+      //   判据域 = 全部 c- 类（含 LLM 自造前缀家族），独立计数，不混入 mismatch 门禁。
+      const crossRefWarnings = Array.isArray(validationResult.crossRefWarnings)
+        ? validationResult.crossRefWarnings
+        : [];
+      if (crossRefWarnings.length > 0) {
+        this.logger.warn('⚠️ XCLASS 模板/样式跨前缀交叉审计（只报不改）', {
+          count: crossRefWarnings.length,
+          sample: crossRefWarnings.slice(0, 5),
+        });
+        const byGate = crossRefWarnings.reduce((acc, w) => {
+          acc[w.gate] = (acc[w.gate] || 0) + 1;
+          return acc;
+        }, {});
+        input.onProgress?.({
+          stage: '样式校验',
+          message: `⚠️ 跨前缀交叉审计 ${crossRefWarnings.length} 条：` +
+            `零规则 ${byGate['XCLASS-001'] || 0} / 孤儿规则 ${byGate['XCLASS-002'] || 0} / ` +
+            `前缀漂移 ${byGate['XCLASS-003'] || 0} / antd label 色 ${byGate['XCLASS-004'] || 0}`,
+          status: 'warning',
+          details: crossRefWarnings.slice(0, 10),
+        });
+      }
       if (classMismatches.length > 0) {
         this.logger.warn('⚠️ Class name mismatches (template vs common.less)', {
           count: classMismatches.length,
@@ -5363,6 +5387,16 @@ export class MicrocodeEngineer extends BaseAgent {
       d.businessEvents[onloadId].eventId = onloadId;
       changed = true;
     }
+    // 🛡️ B（2026-10-19，M3-3 fail-closed）：businessEvents 键必须合法 kebab（首字符字母）。
+    //   判据单一来源 = component-naming#normalizeBusinessEventKeys（数字开头/大写/下划线等
+    //   确定性改名 'c-'+slug；碰撞折叠保留已有键）。A 修正常收敛后本块零命中，纯防御层。
+    {
+      const _bk = normalizeBusinessEventKeys(d.businessEvents);
+      if (_bk.changed) {
+        d.businessEvents = _bk.events;
+        changed = true;
+      }
+    }
     if (!d.businessEvents[onloadId]) {
       d.businessEvents[onloadId] = {
         eventId: onloadId,
@@ -5516,6 +5550,9 @@ export class MicrocodeEngineer extends BaseAgent {
           //   ⚠️ check **不要求** themeConfig 有 previewName（M2-6 只管 layoutConfig），
           //   这纯粹是给前端的展示数据 ⇒ 缺失不阻断。
           ...(t.previewImageName ? { previewName: t.previewImageName } : {}),
+          // 🔴 2026-10-19：该主题用户自选的面板（与深浅解耦）。组件壳取主稿的面板
+          //   （任务级 panelType），此项是逐主题留痕 + 供预览页展示。缺失不阻断。
+          ...(t.panelType ? { panelType: t.panelType } : {}),
         }));
 
         // 🔴🔴 2026-10-12 A8-1：补`dark` 系统占位主题（mc-check M3-13 硬要求
@@ -5582,6 +5619,11 @@ export class MicrocodeEngineer extends BaseAgent {
         _builtinDark.builtin = true;
         _builtinDark.notice = 'builtin-dark-enum';
         _builtinDark.coreColors = { ...MC_DARK_THEME_COLOR_ENUM_CORE };
+        // 🔴 2026-10-19：补 brightness——前端 preview 页 resolveHostThemeTrack
+        //   按「内置轨 brightness → 同明暗真值轨」映射，缺省会被映射成 'light'
+        //   ⇒ URL ?theme=dark 实渲浅色轨 + 主题→面板联动失效（实锤
+        //   c-aiot-dpjh-bsjd-44268ffe：dark 占位轨 brightness 被前端判成 light）。
+        _builtinDark.brightness = 'dark';
         changed = true;
       }
     }
@@ -6474,6 +6516,7 @@ export class MicrocodeEngineer extends BaseAgent {
       elementStyleMap = null, //  per-element 样式映射（来自 Style Mapper）
       backgroundBrightness = 'dark', //面板明暗主题
       dualTruth = null, //🆕 2026-10-10 双主题：深浅两份设计真值（单稿恒为 null）
+      businessTextRules = null, //🛡️ 2026-10-19 业务术语规则 {rewrite,drop}（默认 null ⇒ 零回归）
       displayName = null, //  组件中文显示名称（用于 declare.json 后校验）
       docAnalysis = null, //S8: 需求文档分析产物（doc-analysis.json 六维）
       onProgress = null, //  SSE 进度回调（LLM 心跳推送）
@@ -6645,6 +6688,15 @@ export class MicrocodeEngineer extends BaseAgent {
         userComponentId,
         extraPrompt,
         requirementDocText,
+        // 🛡️ 2026-10-19 业务术语规则：透传给 generateCode（此处不传 ⇒ 规则静默失效）
+        businessTextRules,
+        // 🛡️ 2026-10-19（c-aiot-dpjh-bsjd-c27cb2eb 实锤）：多主题（N 稿）色值真值。
+        //   本对象是**显式白名单**——execute 虽已解构 `dualTruth`（:6518），但
+        //   generateCode 只认这里列出的键，漏一个即**静默丢弃、零报错零日志**。
+        //   此前漏传 ⇒ 分块 prompt 里完全没有副稿色值 ⇒ LLM 只能按语义推断给
+        //   @color-card-bg 之类业务槽位填 #ffffff/#2b2b2b 通用灰阶（深色稿「看着
+        //   和默认 dark 一样」的直接原因）。
+        dualTruth,
       });
 
       // 🛡️ 统一产物契约（mc-max-1787934982316 实锤，2026-08-29）：generateCode 三种返回形态：
@@ -7913,6 +7965,8 @@ export default declareInfo
             outputPath,
           ),
           figmaNodeData,
+          // 🛡️ 2026-10-19：业务术语规则 → fix-text-truth（不传会把业务口径词改回设计稿原词）
+          businessTextRules,
           sectionHeights: this._buildSectionHeightsMap(
             modelFiles,
             layoutStructure,
@@ -8202,6 +8256,9 @@ export default declareInfo
             //   覆盖率显著提升（离线 552 产物实测即以此路径跑出 H1 全量命中面）。
             //   口径与 indexFigmaNodes 一致（兼容 {document:…} 与裸根两种形态）。
             figmaRoot: figmaNodeData,
+            // 🛡️ 刀 30（2026-10-19 · 17750e31 实锤）：v-for 列表方向自愈真值源。
+            //   本作用域是 execute(params) 解构域，layoutStructure 为裸局部变量（非 input.xxx）。
+            layoutStructure,
           },
           { logger: this.logger },
         );

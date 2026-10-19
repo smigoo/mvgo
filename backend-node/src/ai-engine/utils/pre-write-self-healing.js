@@ -43,6 +43,10 @@ import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
 //   （治 [vue/compiler-sfc] Unexpected token：mc-max-1791779417789-cba8407d 实锤）。
 import { healStyleFragments, normalizeVForRowListDirection } from './style-fragment-healer.js';
 import {
+  detectVForListDirectionMismatch,
+  healVForListDirection,
+} from './vfor-list-direction-guard.js';
+import {
   normalizeSectionFlexTruth,
   normalizeTextSlotOrder,
   normalizeStatGroupLayout,
@@ -62,6 +66,8 @@ import {
  *   不想连带激活 D1」的链路（如 vue3-engineer：其调用点历史上未传 effectiveSections，若直接补传会
  *   首次激活 D1 的 per-card 改写——属未验证行为变化）。未提供时回退 effectiveSections。
  * @param {object} [ctx.figmaRoot] figma.json 根（⑪ H1 更权威真值源，可选）
+ * @param {object} [ctx.layoutStructure] state.layoutStructure（④-h 刀 30 v-for 列表方向
+ *   自愈的真值源；形态 `{layout:{sections}}` 或 `{sections}`。缺省 ⇒ 该步 fail-open 不判不改）
  * @param {object} [deps]
  * @param {object} [deps.logger] 日志器
  * @returns {{ files: Record<string,string>, summary: object }} 自愈后的文件集 + 计数摘要
@@ -358,8 +364,49 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     });
   }
 
-  // ④-f 刀 28（2026-10-14 · mc-max-1791942831818-0397a327 / mc-max-1791944957047-cd63d1c5
-  //   连续两轮实锤）：兄弟 section 等分臆造比例（flex:0.5/0.5）→ Figma 真值「固定 px + 填充」。
+  // ④-h 刀 30（2026-10-19 · mc-max-1792401161280-17750e31 实锤）：v-for 列表方向确定性自愈。
+  //   T3 守卫（vfor-list-direction-guard）首轮只 WARN 观察 ⇒ 本任务 wrapper 被判
+  //   row（折叠段真值 vertical）仍带病落盘，用户截图实锤「6 卡变 2 列巨型卡」。
+  //   且 LLM 把同名 wrapper 规则写进 SFC scoped + common.less 两份（方向同错），
+  //   只改 common.less 复检仍红 ⇒ healVForListDirection 已升级为**全部出现点**翻转。
+  //   判据仍完全来自守卫（truth=section 树 layout；无真值/非宿主 wrapper/歧义 ⇒ 不判不改），
+  //   自愈后复检留痕，残留交回 L0-B/WARN 门禁。
+  //   位置：在 FLEX 归一与残片修复之后（它们可能改写 style 文本），在写盘门禁之前。
+  try {
+    const layoutStructure = ctx?.layoutStructure;
+    if (layoutStructure) {
+      const fileArr = Object.entries(result).map(([path, content]) => ({ path, content }));
+      const det = detectVForListDirectionMismatch(fileArr, layoutStructure);
+      if (det.issues.length > 0) {
+        const healed = healVForListDirection(fileArr, det.issues);
+        for (const f of healed.files) {
+          if (typeof f.content === 'string' && result[f.path] !== f.content) {
+            result[f.path] = f.content;
+          }
+        }
+        summary.vForListDirectionHealed = healed.healed.length;
+        logger?.warn?.('🛡️ 刀 30 自愈：v-for 列表方向按 section 树真值确定性翻转', {
+          issues: det.issues.map((i) => i.id),
+          healed: healed.healed,
+          failed: healed.failed,
+        });
+        // 复检留痕（0 = 全愈；残留仍由 code-structure-validator 的 WARN issue 承载）
+        const recheck = detectVForListDirectionMismatch(healed.files, layoutStructure);
+        if (recheck.issues.length > 0) {
+          summary.vForListDirectionResidual = recheck.issues.length;
+          logger?.warn?.('🛡️ 刀 30 复检残留（交回 WARN 门禁）', {
+            residual: recheck.issues.map((i) => `${i.id}@${i.file}`),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 30 v-for 方向自愈异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-f 刀 28（同上实锤）：兄弟 section 等分臆造比例（flex:0.5/0.5）→ Figma 真值「固定 px + 填充」。
   //   固定卡撑满半屏成巨型卡的治本刀；无 figmaRoot 或判据不全时 fail-open。
   try {
     const d28 = normalizeSectionFlexTruth(result, { figmaRoot: ctx?.figmaRoot });

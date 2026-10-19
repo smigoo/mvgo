@@ -451,6 +451,88 @@ function stripCommentsAndStrings(source = '') {
 }
 
 /**
+ * 🛡️ 2026-10-19（mc-max-1792235823223-5e063d76 实锤）：**孤立右圆括号**配平。
+ *
+ * 病灶：LLM 写 `background: @color-bg-page);`（多一个 `)`），而既有判据只查
+ *   `{`/`}`（scanStandaloneLessDefects ① + healLessSource(braces) + style-class-
+ *   consolidator#isBalanced 全都是只数大括号）⇒ `){` 平衡、缺陷扫描零命中 ⇒
+ *   坏文本原样落盘 ⇒ LessCompileGate 报 `Unrecognised input. Possibly missing
+ *   opening '('`（191:29）⇒ L0-B 重试 2 轮仍失败 ⇒ **整次生成失败**。
+ *
+ * 判据（与 rebalanceBlockComments 同构的栈模型，纯语法、命名无关）：
+ *   `(` 入栈；`)` 出栈，**栈空时遇到的 `)` 即孤立闭括号**（无对应开括号），抹掉它。
+ *   未配对的 `(`（缺闭括号）**不猜位置补**——交给缺陷扫描报 LESS-WRITE-004。
+ *   ⚠️ 扫描**逐字符跳过注释与字符串**（`content: "("` / `// )` 不得误伤）。
+ *
+ * @param {string} source
+ * @returns {{source: string, dropped: Array<{line:number,column:number,code:string}>, changed: boolean}}
+ */
+export function rebalanceOrphanCloseParens(source = '') {
+  const cur = String(source || '')
+  const drop = []
+  const stack = []
+  let i = 0
+  const n = cur.length
+  while (i < n) {
+    const c = cur[i]
+    const nx = cur[i + 1]
+    // 块注释
+    if (c === '/' && nx === '*') {
+      const end = cur.indexOf('*/', i + 2)
+      i = end < 0 ? n : end + 2
+      continue
+    }
+    // 行注释
+    if (c === '/' && nx === '/') {
+      const end = cur.indexOf('\n', i)
+      i = end < 0 ? n : end
+      continue
+    }
+    // 字符串
+    if (c === '"' || c === "'") {
+      let j = i + 1
+      while (j < n) {
+        if (cur[j] === '\\') { j += 2; continue }
+        if (cur[j] === c) { j++; break }
+        j++
+      }
+      i = j
+      continue
+    }
+    if (c === '(') stack.push(i)
+    else if (c === ')') {
+      if (stack.length === 0) drop.push(i)
+      else stack.pop()
+    }
+    i++
+  }
+  if (drop.length === 0) return { source: cur, dropped: [], changed: false }
+
+  const lines = cur.split('\n')
+  const lineStarts = []
+  let acc = 0
+  for (const l of lines) { lineStarts.push(acc); acc += l.length + 1 }
+  const dropped = drop.map((idx) => {
+    let line = 1
+    for (let k = 0; k < lineStarts.length; k++) {
+      if (lineStarts[k] <= idx) line = k + 1
+      else break
+    }
+    return {
+      line,
+      column: idx - lineStarts[line - 1] + 1,
+      code: (lines[line - 1] || '').trim().slice(0, 80),
+    }
+  })
+  // ⚠️ 用**删除**而非替换空格（与 rebalanceBlockComments 不同）：圆括号紧贴值/分号，
+  //   留空格会产出 `background: @color-bg-page ;` 这类虽可编译但不洁的文本。
+  //   行列信息已在删除前算好（见上），不受索引位移影响。
+  const dropSet = new Set(drop)
+  const kept = cur.split('').filter((_, idx) => !dropSet.has(idx)).join('')
+  return { source: kept, dropped, changed: true }
+}
+
+/**
  * 🛡️ P1-5（2026-10-01）：独立 `.less` 的**残留缺陷扫描**（结构级，不依赖 less 编译器）。
  *
  * ⚠️ 注意本注释内不得出现块注释的闭合符号字面量（会提前终结本注释）——用「开闭标记数量」表述。
@@ -485,6 +567,18 @@ export function scanStandaloneLessDefects(source = '') {
     })
   }
 
+  // 🛡️ 2026-10-19（5e063d76 实锤）：圆括号平衡。孤立 `)` 由 rebalanceOrphanCloseParens
+  //   抹掉 ⇒ 走到这里仍不平衡 ⇒ 是「缺 `(`」（无法确定性补位）⇒ 判坏、跳过写盘。
+  const pOpens = (cleaned.match(/\(/g) || []).length
+  const pCloses = (cleaned.match(/\)/g) || []).length
+  if (pOpens !== pCloses) {
+    defects.push({
+      id: 'LESS-WRITE-004',
+      line: 1,
+      message: `圆括号不平衡：( ×${pOpens} vs ) ×${pCloses}（孤立 ) 已抹除仍有差 ⇒ 缺 ( ，less 必报 Unrecognised input）`,
+    })
+  }
+
   // ③ 声明粘连残留：与 healMissingSemicolons 的 joint 判据同源，heal 后仍有 ⇒ 判坏
   const jointRe = /(.*\{)\s*([A-Za-z-][\w-]*\s*:\s*[^;{}\s][^;{}]*)$/
   text.split('\n').forEach((line, index) => {
@@ -496,7 +590,111 @@ export function scanStandaloneLessDefects(source = '') {
     })
   })
 
+  // ④ 2026-10-19（c-a579d-6a579df0 实锤）：残留 `:deep(` / `::v-deep(`。
+  //   gateStandaloneLessWrite 已先跑 stripDeepSelectors ⇒ 走到这里仍残留的只有
+  //   「未闭合无法改写」的形态 —— 全局注入下是死规则，判坏不落盘。
+  const deepIdx = cleaned.search(/:{1,2}(?:v-deep|deep)\(/)
+  if (deepIdx !== -1) {
+    const line = cleaned.slice(0, deepIdx).split('\n').length
+    defects.push({
+      id: 'LESS-WRITE-005',
+      line,
+      message: `残留 :deep( / ::v-deep(（未闭合无法确定性改写；全局 CSS 注入下为死规则，整条规则会被浏览器丢弃）`,
+    })
+  }
+
   return defects
+}
+
+/**
+ * 🛡️ 2026-10-19（c-a579d-6a579df0 实锤）：`:deep(...)` 确定性改写为裸后代选择器。
+ *
+ * 背景：微码产物的独立 .less 编译为 CSS 后经全局 `style.textContent` 注入预览，
+ * **没有 Vue scoped 编译器参与**。`:deep(...)` 是 SFC scoped 专有语法，浏览器视为
+ * 非法伪类 ⇒ **整条规则被丢弃**（该组件 common.less 4 条 :deep 全部失效，antd
+ * 接管样式全丢、深色下输入控件/label 不可读）。而管线 prompt 出于 scoped 语义
+ * 又在教 `:deep()`（对 SFC 内联块是正确写法），产物必然携带 ⇒ 必须在独立样式
+ * 写盘口确定性拦截。
+ *
+ * 改写规则（保语义：deep 本质就是「后代选择器」）：
+ *   · `:deep(X)` → `X`（嵌套块内 `.parent { :deep(.a) {} }` → `.parent .a`）
+ *   · `&:deep(X)` / `.foo:deep(X)` 等复合形态 → 补空格降为后代（`& X` / `.foo X`）
+ *   · 同步覆盖旧写法 `::v-deep(X)`
+ *   · 注释与字符串内的字面量不动（扫描时跳过）；未闭合的 `:deep(` 不猜改写
+ *     （交给 scanStandaloneLessDefects 判 LESS-WRITE-005）
+ *
+ * @param {string} source
+ * @returns {{source: string, count: number}}
+ */
+export function stripDeepSelectors(source = '') {
+  const src = String(source || '')
+  // 长者在前：`::v-deep(` 必须先于 `:deep(` 匹配，否则会被吃掉半截
+  const OPENERS = ['::v-deep(', ':deep(']
+  let out = ''
+  let i = 0
+  let count = 0
+  while (i < src.length) {
+    const two = src[i] + (src[i + 1] || '')
+    if (two === '/*') {
+      const end = src.indexOf('*/', i + 2)
+      const stop = end === -1 ? src.length : end + 2
+      out += src.slice(i, stop)
+      i = stop
+      continue
+    }
+    if (two === '//') {
+      const nl = src.indexOf('\n', i)
+      const stop = nl === -1 ? src.length : nl
+      out += src.slice(i, stop)
+      i = stop
+      continue
+    }
+    if (src[i] === '"' || src[i] === "'") {
+      const quote = src[i]
+      let j = i + 1
+      while (j < src.length && src[j] !== quote) {
+        if (src[j] === '\\') j++
+        j++
+      }
+      const stop = Math.min(j + 1, src.length)
+      out += src.slice(i, stop)
+      i = stop
+      continue
+    }
+    const opener = OPENERS.find((o) => src.startsWith(o, i))
+    if (!opener) {
+      out += src[i]
+      i++
+      continue
+    }
+    // 括号深度匹配取内层选择器（内层可含嵌套括号，如 :deep(.a:not(.b))）
+    const openStart = i + opener.length - 1 // '(' 下标
+    let depth = 0
+    let closeIdx = -1
+    for (let j = openStart; j < src.length; j++) {
+      if (src[j] === '(') depth++
+      else if (src[j] === ')') {
+        depth--
+        if (depth === 0) {
+          closeIdx = j
+          break
+        }
+      }
+    }
+    if (closeIdx === -1) {
+      out += src[i]
+      i++
+      continue
+    }
+    const inner = src.slice(openStart + 1, closeIdx).trim()
+    const prevChar = out.length ? out[out.length - 1] : ''
+    // 复合形态（前接 & / .foo / ] 等）补空格降为后代选择器；嵌套裸形态（前接空白）保持
+    const needsSpace = /[\w\-.#[\]&)]/.test(prevChar)
+    out += (needsSpace ? ' ' : '') + inner
+    i = closeIdx + 1
+    count++
+  }
+  return { source: out, count }
 }
 
 /**
@@ -531,6 +729,23 @@ export function gateStandaloneLessWrite(source = '', filePath = '') {
   if (healed.changed) {
     content = healed.source
     fixes.push(`heal(braces:${healed.addedBraces || 0})`)
+  }
+
+  // 🛡️ 2026-10-19（5e063d76 实锤）：孤立 `)` 确定性抹除（大括号判据看不见这类缺陷）。
+  //   放在 healLessSource 之后：补过 `}` 再数圆括号，避免块结构残缺时误判。
+  const parens = rebalanceOrphanCloseParens(content)
+  if (parens.changed) {
+    content = parens.source
+    fixes.push(`heal(parens:${parens.dropped.length})`)
+  }
+
+  // 🛡️ 2026-10-19（c-a579d-6a579df0 实锤）：独立样式走全局 CSS 注入，`:deep(...)`
+  //   是 SFC scoped 专有语法 ⇒ 整条规则被浏览器丢弃（antd 接管样式全丢）。
+  //   确定性改写为裸后代选择器，保住规则本身。
+  const deep = stripDeepSelectors(content)
+  if (deep.count > 0) {
+    content = deep.source
+    fixes.push(`strip-deep:${deep.count}`)
   }
 
   const defects = scanStandaloneLessDefects(content)

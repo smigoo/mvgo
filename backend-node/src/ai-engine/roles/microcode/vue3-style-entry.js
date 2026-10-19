@@ -127,9 +127,15 @@ export function ensureVue3StyleEntry(files = {}, options = {}) {
 `;
   }
 
+  // 🔴 治本（2026-10-19）：Vue3 index.less 必须在根作用域调用 .common(); + .theme-light();
+  //   否则 theme-vars.less 内 .common() mixin 定义的 @fontSize 等变量不会暴露到全局作用域，
+  //   common.less 里引用 @fontSize 时报 LESS-COMPILE-001 "variable @fontSize is undefined"。
+  //   微码管线 mc-skeleton.js:155 的 buildIndexLess() 一直正确（.common(); .theme-light();），
+  //   Vue3 管线此前遗漏了这两步，只做了 @import。
   return {
     ...files,
-    [entryPath]: "@import './theme-vars.less';\n@import './common.less';\n",
+    [entryPath]:
+      "@import './theme-vars.less';\n\n// 根作用域调用默认主题 mixin，暴露 @fontSize 等变量给 common.less\n.common();\n.theme-light();\n@import (multiple) './common.less';\n",
   };
 }
 

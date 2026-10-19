@@ -915,8 +915,9 @@ function checkM5_script(dir, dirName, declare, isBusiness) {
     )
   )
 
+  // M5-2 只统计真实调用：先剥注释再计数（管线教学注释里出现 $mcComponentBuilder 不算调用）
   const builderCalls = packageContent.reduce(
-    (sum, { content }) => sum + (content.match(/\$mcComponentBuilder\s*\(/g) || []).length,
+    (sum, { content }) => sum + (stripComments(content).match(/\$mcComponentBuilder\s*\(/g) || []).length,
     0
   )
   results.push(

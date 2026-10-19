@@ -230,6 +230,7 @@ export class Phase2Service {
       secondaryNode,         // 🆕 2026-10-10 双主题：副稿 Figma 节点（已被 themeNodes 取代，保留兼容）
       themeNodes,            // 🆕🆕 2026-10-12 N 主题：主题设计稿数组（themeNodes[0] 即主稿）
       primaryRole,           // 🆕 2026-10-10 双主题：主副角色（'first' 默认 / 'second'）
+      businessTextRules,     // 🛡️ 2026-10-19 业务术语规则（可选，默认关闭：不传 ⇒ 零回归）
     } = dto;
 
     // 🐛 防御：phase2 是 Figma 完整生成管线，必须携带有效 fileKey/nodeId。
@@ -370,6 +371,8 @@ export class Phase2Service {
         primaryRole,
         // 🆕🆕 2026-10-12 N 主题设计稿数组（存在时优先于 secondaryNode）
         themeNodes,
+        // 🛡️ 2026-10-19 业务术语规则（rewrite + drop；不传 ⇒ 不下发、零回归）
+        businessTextRules,
       }).catch((error) => {
         this.logger.error(
           `Phase 1 generation failed: ${error.message}`,
@@ -554,6 +557,7 @@ export class Phase2Service {
       secondaryNode?: { fileKey: string; nodeId: string }; // 🆕 2026-10-10 双主题：副稿节点（兼容）
       themeNodes?: Array<{ fileKey: string; nodeId: string; name?: string }>; // 🆕🆕 2026-10-12 N 主题
       primaryRole?: 'first' | 'second';    // 🆕 2026-10-10 双主题：主副角色
+      businessTextRules?: { rewrite?: Record<string, string>; drop?: string[] }; // 🛡️ 2026-10-19 业务术语规则
     },
   ) {
     // 声明变量以便在finally块中使用
@@ -767,6 +771,9 @@ export class Phase2Service {
         primaryRole: params.primaryRole,
         // 🆕🆕 2026-10-12 N 主题 → graph 的 fetchThemeNodes（逐份 getNode，fail-closed）
         themeNodes: params.themeNodes,
+        // 🛡️ 2026-10-19 业务术语规则 → graph（此处不转发 ⇒ 前面 executeGeneration 收了也白收，
+        // 字段到不了 runPhase2Generation ⇒ 规则静默失效；默认 null ⇒ 零回归）
+        businessTextRules: params.businessTextRules,
         onProgress: (data) => {
           // 生成链以 `{ fileLifecycle: {...} }` 标记文件级生命周期事件，
           // 走独立的瞬态广播通道（不持久化、不进入 progress 历史）。

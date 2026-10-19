@@ -640,6 +640,8 @@ export function buildStyleTokens(input = {}, options = {}) {
         //   已由 graph 的 fetchThemeNodes 落盘为 `mc-preview-<key>.png`）。
         //   ⚠️ 必须显式透传 —— perTheme 是白名单式构造，不spread 原始 themeEntry。
         previewImageName: t.previewImageName || null,
+        // 🔴 2026-10-19：透传该主题用户自选的面板（themeMeta → declare themeConfig.list）。
+        panelType: t.panelType || null,
       };
     });
 
@@ -768,6 +770,8 @@ export function buildStyleTokens(input = {}, options = {}) {
           isTruth: t.ok,
           // 🔴 2026-10-12：主题预览图文件名（下游 declare.json themeConfig[].previewName）
           previewImageName: t.previewImageName || null,
+          // 🔴 2026-10-19：用户自选面板（下游 declare.json themeConfig[].panelType）
+          panelType: t.panelType || null,
         })),
       };
       logger.info(
@@ -808,6 +812,8 @@ export function buildStyleTokens(input = {}, options = {}) {
           isTruth: t.ok,
           // 🔴 2026-10-12：主题预览图文件名（下游 declare.json themeConfig[].previewName）
           previewImageName: t.previewImageName || null,
+          // 🔴 2026-10-19：用户自选面板（下游 declare.json themeConfig[].panelType）
+          panelType: t.panelType || null,
         })),
         // 设计变量轨按主题分开 + 全局并集（declare.json 双向声明用）
         lightDesign: perThemeStatus.filter((t) => t.brightness === 'light').flatMap((t) => t.designVars),

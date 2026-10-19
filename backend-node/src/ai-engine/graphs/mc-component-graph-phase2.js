@@ -342,7 +342,11 @@ async function fetchThemeNodes(state, ctx) {
           }
         })();
 
-    const brightness = resolveBackgroundBrightness(nodeData, isPrimary ? 'dark' : 'light');
+    // 🔴 2026-10-19：用户声明的深浅**优先**（深浅由用户拍板，与稿子实测解耦）；
+    //   未声明才按实测明暗兜底。此前恒用实测值 ⇒ 用户在卡片上点的「浅色/深色」
+    //   只影响 key 分配，产物的明暗判定被悄悄覆盖。
+    const declaredBrightness = t.brightness === 'light' || t.brightness === 'dark' ? t.brightness : null;
+    const brightness = declaredBrightness || resolveBackgroundBrightness(nodeData, isPrimary ? 'dark' : 'light');
     // 🔴 2026-10-12：把**前端已确认的主题预览图**落盘为 `mc-preview-<key>.png`。
     //   设计（用户决策）：
     //   - 预览发生在「填 Figma URL」阶段，前端强制预览 + 用户确认后才允许生成；
@@ -401,6 +405,9 @@ async function fetchThemeNodes(state, ctx) {
       //   缺省（老前端 / 未确认 / 落盘失败）时为 null，下游 declare.json 留空且**不阻断**。
       previewImageUrl: t.previewImageUrl || null,
       previewImageName,
+      // 🔴 2026-10-19：透传该主题用户自选的面板（下游 style-tokens themeMeta →
+      //   declare.json themeConfig.list[].panelType）。不显式透传会被白名单静默丢弃。
+      panelType: t.panelType || null,
     });
   }
 
@@ -1676,6 +1683,10 @@ export function createPhase2Graph(config = {}) {
         ),
         //🆕 2026-10-10 双主题：深浅两份设计真值（单稿恒为 null ⇒ 零回归）
         dualTruth: state.dualTruth || null,
+        //🛡️ 2026-10-19 业务术语规则（rewrite + drop；不传 ⇒ null，零回归）
+        //   ⚠️ 本调用同是**显式白名单**：漏在这里 = state 有值但 engineer 收不到
+        //   （既有实锤：userComponentId 曾在「state→engineer 最后一跳」漏传 ⇒ 恒不生效）。
+        businessTextRules: state.businessTextRules || null,
         //视觉降级防线：engineer 内部也会兜底拒绝，避免未来改边绕过 visual-parser 闸门
         _visualDegraded: state._visualDegraded,
         _visualDegradeReason: state._visualDegradeReason,
@@ -3679,6 +3690,33 @@ export function createPhase2Graph(config = {}) {
       });
     }
 
+    // 🔍 2026-10-19（c-aiot-dpjh-bsjd-c27cb2eb 实锤）：语义推断槽位留痕。
+    //   LessVariableChecker 刚补完缺失变量（含「自动添加（语义推断）」的猜测值）；
+    //   若这些猜测槽位被 common.less 实际引用 ⇒ 该处颜色**不跟随副稿设计**
+    //   （深色稿版本观感 ≈ 默认 dark 的直接来源）。只报不改：供排障与后续治本定位。
+    if (state.outputPath && mappingEntries.length >= 2) {
+      try {
+        const { readFileSync: _rf2, existsSync: _ex2 } = await import('node:fs');
+        const { join: _join2 } = await import('node:path');
+        const _tvP = _join2(state.outputPath, 'resources', 'styles', 'themes', 'theme-vars.less');
+        const _cmP = _join2(state.outputPath, 'resources', 'styles', 'common.less');
+        const { auditSemanticGuessSlots } = await import('../utils/color-slot-mapper.js');
+        const audit = auditSemanticGuessSlots({
+          themeVarsContent: _ex2(_tvP) ? _rf2(_tvP, 'utf-8') : '',
+          commonLessContent: _ex2(_cmP) ? _rf2(_cmP, 'utf-8') : '',
+        });
+        if (audit.risky.length > 0) {
+          logger.warn('⚠️ 业务样式引用了「语义推断」槽位（非副稿真值，主题色可能不跟随设计）', {
+            risky: audit.risky,
+            riskCount: audit.riskCount,
+            guessedTotal: audit.guessed.length,
+          });
+        }
+      } catch (e) {
+        logger.warn('⚠️ 语义推断槽位审计失败（非阻断）', { error: e?.message || e });
+      }
+    }
+
     // 所有 complete 阶段后处理完成后，必须从磁盘重新读取最终产物并真实编译。
     // 任何后处理都可能改变 LESS；禁止复用 engineer 阶段的旧内存快照后直接标记完成。
     const finalLessCompileResult = await LessCompileGate.validateDirectory(
@@ -4631,6 +4669,8 @@ export function createPhase2Graph(config = {}) {
         // 🛡️ P0：传入根装饰真值（designFacts.root.styleEvidence），供 CODE-014 硬性校验根容器臆造装饰
         designFacts: state.designFacts || null,
         figmaNodeData: state.figmaNodeData || null,
+        // 🛡️ 2026-10-19：业务术语规则 → TEXT-TRUTH 判据（不下发则产物写业务口径词被判臆造 BLOCK）
+        businessTextRules: state.businessTextRules || null,
         // 🛡️ COMP-001：传入子组件规划（effectiveSections），供模块组装覆盖校验
         // （检测「规划了 N 个 section 但 index.vue 只组装了 M<N 个」的模块整块缺失）
         componentPlan: state.subComponentPlan || null,
@@ -5630,6 +5670,7 @@ export async function runPhase2Generation(options) {
     secondaryNode, //🆕 2026-10-10 双主题：副稿 Figma 节点（已被 themeNodes 取代，兼容存量前端）
     primaryRole, //🆕 2026-10-10 双主题：主副角色（themeNodes 模式下不生效）
     themeNodes, //🆕🆕 2026-10-12 N 主题：主题设计稿数组（[0] 即主稿）
+    businessTextRules, //🛡️ 2026-10-19 业务术语规则 {rewrite,drop}（可选，默认关闭 ⇒ 零回归）
   } = options;
 
   //断点续跑：检查点保存辅助函数
@@ -5799,6 +5840,10 @@ export async function runPhase2Generation(options) {
     primaryRole: primaryRole || 'first',
     //🆕🆕 2026-10-12 N 主题设计稿数组（figma-connector 的 fetchThemeNodes 消费）
     themeNodes: Array.isArray(themeNodes) ? themeNodes : null,
+    //🛡️ 2026-10-19 业务术语规则（下发真值/产物层的 rewrite + drop；不传 ⇒ null，零回归）
+    //   ⚠️ 必须在此显式列入 initialState：本函数用**显式解构白名单**构造 state，
+    //   漏在这里字段会被静默丢弃（2026-10-10 实测踩过：service 已透传但 state 里没有）。
+    businessTextRules: businessTextRules || null,
     //🛡️ P1-3 深化：语义门禁失败带指导重试标记（_semanticRetried 置位且未消费 → 条件边回退 engineer 一次）
     _semanticRetried: false,
     _semanticRetryConsumed: false,

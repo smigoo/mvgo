@@ -114,6 +114,7 @@
                       :alt="item.name"
                       class="task-theme-card__thumb"
                       loading="lazy"
+                      @error="onThemeThumbError(item)"
                     />
                     <div v-else class="task-theme-card__thumb task-theme-card__thumb--empty">
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" /></svg>
@@ -2038,22 +2039,32 @@ async function loadThemeMeta() {
     if (!Array.isArray(list) || list.length <= 1) return
     themeList.value = list.map((item: any) => {
       const previewName = String(item.previewName || '')
+      // 🔴 2026-10-19：主稿卡的预览图兜底为任务主预览 mc-preview.png。
+      //   背景：后端只为**副主题**落盘 `mc-preview-<key>.png`（graph 里 `!isPrimary` 才导图），
+      //   主稿的图走 confirmPreview 链路落盘为 mc-preview.png —— 所以 declare 里主稿条目
+      //   previewName 恒为空；存量任务（N 主题字段未写时）的副主题也拿不到图。
+      const isPrimary = String(item.key || '') === String(declare?.themeConfig?.default || '')
       const previewUrl = previewName
         ? `/api/component/${cid}/file?path=resources/images/${encodeURIComponent(previewName)}&raw=1`
-        : ''
+        : isPrimary
+          ? `/api/component/${cid}/file?path=resources/images/mc-preview.png&raw=1`
+          : ''
       const nodeId = String(item.figmaNodeId || '')
       const fileKey = String(item.figmaFileKey || '')
-      const figmaUrl =
+      // 主稿条目缺 figmaNodeId 时（存量任务）回退到任务级 Figma 链接
+      const themeFigmaUrl =
         nodeId && fileKey
           ? `https://www.figma.com/file/${fileKey}/?node-id=${nodeId.replace(/:/g, '-')}`
-          : ''
+          : isPrimary
+            ? figmaUrl.value
+            : ''
       return {
         key: String(item.key || ''),
         name: String(item.name || item.key || ''),
         brightness: String(item.brightness || (item.key === 'dark' ? 'dark' : 'light')),
         isBuiltin: !!item.builtin || item.key === 'dark',
         previewUrl,
-        figmaUrl,
+        figmaUrl: themeFigmaUrl,
       }
     })
     // 🔴 2026-10-14：存量任务主题无落盘预览图 ⇒ 实时拉 Figma 缩略图兜底
@@ -2097,6 +2108,12 @@ function openThemePreview(item: TaskThemeItem) {
   previewModalUrl.value = item.previewUrl
   previewModalTitle.value = `Figma 源设计 · ${item.name}`
   sourceImagePreviewVisible.value = true
+}
+
+/** 主题缩略图加载失败（主稿兜底图在任务运行期间可能还没落盘）⇒ 退回占位符 */
+function onThemeThumbError(item: TaskThemeItem) {
+  const target = themeList.value.find((x) => x.key === item.key)
+  if (target) target.previewUrl = ''
 }
 watch(sourceDesignImageUrl, () => {
   sourceImageLoaded.value = false

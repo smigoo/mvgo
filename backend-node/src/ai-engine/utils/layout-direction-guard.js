@@ -42,7 +42,7 @@
  * 需真机 A/B 观察误报率再决定是否恢复 BLOCK。
  */
 
-import { extractFlexProps, matchTemplateTags } from './layout-facts-injector.js'
+import { matchTemplateTags } from './layout-facts-injector.js'
 
 // ─────────────────────────────────────────────────────────────────────────
 // 真值口径（与 subcomponent-planner#extractLayoutMetadata 逐字同源）
@@ -195,10 +195,54 @@ function parseStyleBinding(bindingText) {
 }
 
 /**
+ * 🛡️ 2026-10-19（c-aiot-dpjh-bsjd-17750e31 实锤）：同名 class 多份规则**聚合**判定。
+ *
+ * 背景：`extractFlexProps` 只取**首个** `.cls{}` 块，而 LLM 常把同名规则写进
+ * SFC scoped 块 + common.less 两份（甚至方向互相矛盾）：
+ *   · wrapper：SFC 块先命中（row）⇒ heal 只改 common.less 后复检仍红（残留 SFC 那份）；
+ *   · item：SFC 块先命中但**无 flex-direction 声明** ⇒ 判据域落空（skippedNoActual），
+ *     而 common.less 那份明明写着 row。
+ * 聚合策略：扫描同名 class 的**全部**规则块（精确选择器，`(?!\\w-)` 边界挡 `--active`/
+ * `:hover` 变体），只统计**带方向语义**的块（display/flex-direction/grid-cols）：
+ *   · 全部一致 ⇒ 该方向；
+ *   · 互相矛盾 ⇒ 返回首个方向 + `conflicts` 列出全部去重方向（调用方据此判违规，
+ *     多份矛盾本身就是缺陷）；
+ *   · 全部块都无方向声明 ⇒ []（未声明）。
+ *
+ * @param {string} corpus buildStyleCorpus 产物
+ * @param {string} selector 含点的选择器（如 `.c-x-card`）
+ * @returns {Array<{kind:'row'|'column'|'grid', cols:number|null}>}
+ */
+export function collectDirectionKinds(corpus, selector) {
+  const text = String(corpus || '')
+  if (!text || !selector) return []
+  const esc = String(selector).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`${esc}(?![\\w-])\\s*\\{([^{}]*)\\}`, 'g')
+  const kinds = []
+  let m
+  while ((m = re.exec(text)) !== null) {
+    const block = m[1] || ''
+    const display = /(?:^|;)\s*display\s*:\s*([^;]+)/i.exec(block)?.[1] || null
+    const flexDirection = /(?:^|;)\s*flex-direction\s*:\s*([^;]+)/i.exec(block)?.[1] || null
+    const colsM = /grid-template-columns\s*:\s*repeat\(\s*(\d+)/i.exec(block)
+    const kind = declToKind({
+      display,
+      flexDirection,
+      blockContent: colsM ? block : '',
+    })
+    if (kind) kinds.push(kind)
+  }
+  return kinds
+}
+
+/**
  * 解析宿主根元素**实际生效**的方向。
  *
  * 取值顺序 = CSS 层叠：inline `style` > `:style` 绑定 > class 规则。
- * @returns {{kind:'row'|'column'|'grid', cols:number|null}|null}  未声明/歧义 ⇒ null
+ * class 规则经 `collectDirectionKinds` 聚合同名多份（2026-10-19 起）：
+ * 返回值的 `kind` 恒为首个带方向语义的规则块方向；多份矛盾时附带 `conflicts`
+ * （全部去重方向列表）。未声明/跨 class 歧义 ⇒ null。
+ * @returns {{kind:'row'|'column'|'grid', cols:number|null, conflicts?:string[]}|null}
  */
 export function resolveActualDirection(tag, corpus) {
   const attrs = String(tag?.attrs || tag?.html || tag || '')
@@ -217,19 +261,27 @@ export function resolveActualDirection(tag, corpus) {
     if (k) return k
   }
 
-  // 3) class 规则（同文件 <style> + common.less + 其它样式文件）
+  // 3) class 规则（同文件 <style> + common.less + 其它样式文件；同名多份聚合）
   const classAttr = /(?:^|\s)class\s*=\s*"([^"]*)"/.exec(attrs)?.[1]
   if (!classAttr) return null
   const found = new Map() // `kind:cols` → {kind, cols}
+  let conflicts = null // 同名 class 多份规则方向矛盾时的全部去重方向
   for (const cls of classAttr.split(/\s+/)) {
     if (!cls || !/^[a-zA-Z][\w-]*$/.test(cls)) continue
-    const kind = declToKind(extractFlexProps(corpus, `.${cls}`))
-    if (!kind) continue
+    const kinds = collectDirectionKinds(corpus, `.${cls}`)
+    if (kinds.length === 0) continue
+    if (kinds.length > 1) {
+      const distinct = [...new Set(kinds.map((k) => k.kind))]
+      if (distinct.length > 1) conflicts = distinct
+    }
+    const kind = kinds[0]
     found.set(`${kind.kind}:${kind.cols ?? ''}`, kind)
   }
   // 多个 class 给出**互相冲突**的方向 ⇒ 歧义 ⇒ 不判（fail-open）
   if (found.size !== 1) return null
-  return [...found.values()][0]
+  const resolved = [...found.values()][0]
+  if (conflicts && conflicts.length > 1) resolved.conflicts = conflicts
+  return resolved
 }
 
 // ─────────────────────────────────────────────────────────────────────────

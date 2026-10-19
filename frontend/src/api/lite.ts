@@ -44,6 +44,12 @@ export interface GenerateLiteParams {
     nodeId: string
     /** 主题显示名（用户自填）；省略则由服务端补默认名 */
     name?: string
+    /** 🔴 2026-10-13：用户自选深浅配色（与稿子自动判定解耦） */
+    brightness?: 'light' | 'dark'
+    /** 🔴 2026-10-19：用户自选面板（组件壳取 themeNodes[0] 的面板） */
+    panelType?: 'default-panel' | 'model-panels' | 'aio-panel' | 'empty'
+    /** 🔴 2026-10-19：该主题已确认的预览图 URL（后端落盘为 mc-preview-<key>.png） */
+    previewImageUrl?: string
   }>
   config?: Record<string, any>
   panelType?: string

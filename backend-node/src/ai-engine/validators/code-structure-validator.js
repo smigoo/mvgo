@@ -87,6 +87,9 @@ import { buildResourceFacts, checkResourceContract } from '../utils/resource-fac
 import { checkSkeletonCompleteness } from '../utils/mc-skeleton.js';
 // 🛡️ LAYOUT-001（2026-09-30 §8.10 换证据源）：布局方向守卫 —— 事实源在 layout-direction-guard.js
 import { detectLayoutDirectionMismatch } from '../utils/layout-direction-guard.js';
+// 🛡️ T3（2026-10-19）：`v-for` 列表的 wrapper / item 方向守卫 —— 补 LAYOUT-001 的判据盲区
+//   （LAYOUT-001 只比「section 自身 layout vs 宿主根元素方向」，拦不住「wrapper/item 角色错位一级」）
+import { detectVForListDirectionMismatch } from '../utils/vfor-list-direction-guard.js';
 
 function normalizeCssLiteral(value = '') {
   return String(value || '')
@@ -755,6 +758,8 @@ export class CodeStructureValidator {
     const issues = [];
     // 📐 LAYOUT-001 运行统计（可达性留痕：旧实现在全语料恒不可达却无任何痕迹）
     let layoutDirectionStats = null;
+    // 📐 T3 v-for 列表方向守卫运行统计（可达性留痕）
+    let vforDirectionStats = null;
 
     // 🛡️ R5: L0-B 空集不得 pass=true（此前空产物恒 pass，绿灯直达发布阶段，
     // 直到 workspace-preview-publisher 才回滚「缺少 package/index.vue」）
@@ -1730,6 +1735,33 @@ export class CodeStructureValidator {
       layoutDirectionStats = layoutDir.stats;
     }
 
+    // ========== 🛡️ T3 v-for 列表方向守卫（2026-10-19 建立 · WARN 观察轮）==========
+    // 事故 mc-max-1792373861220-5160a2ec：设计「6 卡纵向列表 + 卡内横排」，产物
+    //   「6 卡横向溢出 + 卡内竖排」。E1/折叠段/几何事实**四层全对**，但产物把 wrapper 与 item
+    //   的 class 贴反一级 ⇒ 两个方向整体互换；LAYOUT-001 实测 judged:5/mismatches:0 **零命中**。
+    //   本守卫只比「DOM 节点真实扮演的角色」：wrapper 期望 = 重复单元**之间**排布，
+    //   item 期望 = 单元**内部**排布；三态 fail-open（无真值/非宿主 wrapper/非原型 item 一律不判）。
+    // ⚠️ 2026-10-19（17750e31 实锤）起：自愈已在 pre-write-self-healing ④-h（刀 30）启用
+    //   （翻转全部出现点含 .vue <style>）；此处保留 WARN 承担「自愈后复检残留」与无 ctx
+    //   链路的兜底观测。
+    if (options?.layoutStructure) {
+      try {
+        const vforDir = detectVForListDirectionMismatch(
+          productFiles,
+          options.layoutStructure,
+        );
+        for (const it of vforDir.issues) issues.push(it);
+        vforDirectionStats = vforDir.stats;
+      } catch (err) {
+        issues.push({
+          id: 'VFOR-DIR-ERROR',
+          severity: 'WARN',
+          file: '(vfor-list-direction-guard)',
+          message: `v-for 列表方向守卫执行异常（非阻断）：${err?.message || String(err)}`,
+        });
+      }
+    }
+
     // ========== 🎯 方案6: STYLE-001 common.less 外层选择器包裹检测（微码，BLOCK）==========
     // common.less 中的 class 必须写在文件根层，禁止被 .dark / .light / 任何外层选择器包裹
     // 原因：宿主环境不给组件根元素添加 .dark/.light 类，包裹后编译成 `.dark .c-xxx`，真实DOM上0命中 → 样式全部失效
@@ -2374,7 +2406,12 @@ export class CodeStructureValidator {
     // OCR 误读通过），>2 处仍 BLOCK（防止大量臆造）。配合 prompt 注入白名单降低误读率。
     if (options?.figmaNodeData) {
       try {
-        const unknownTexts = detectUnknownText(files, options.figmaNodeData);
+        const unknownTexts = detectUnknownText(
+          files,
+          options.figmaNodeData,
+          // 🛡️ 2026-10-19：业务术语规则（rewrite 目标词进真值 / drop 词判违规）
+          options.businessTextRules || null,
+        );
         if (unknownTexts.length > 0) {
           // 真值可能含换行（Figma 两行文本如 "南北接线\n设备"），展示时转义为字面量，
           // 否则 LLM 收到真实换行会把「该替换成什么」读丢——修正指导失效、重试再度盲猜。
@@ -3147,6 +3184,8 @@ export class CodeStructureValidator {
       // 📐 LAYOUT-001 统计（truthFact/judged/mismatches…）——让「门禁跑了但没命中」
       //   与「门禁根本没跑」可区分（旧实现死代码却零痕迹，这才是它藏了这么久的原因）
       layoutDirectionStats,
+      // 📐 T3 v-for 列表方向统计（vforPairs/judged/mismatches/skipped*）
+      vforDirectionStats,
     };
   }
 

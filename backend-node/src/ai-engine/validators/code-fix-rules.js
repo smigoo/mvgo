@@ -1023,6 +1023,7 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     resourceDomMapping = null,
     figmaNodeData = null,
     input = {},
+    businessTextRules = null,
   } = context;
   // 🛡️ P1（2026-09-28）：统一事实上下文。CodeFixPipeline 传入的 `input` 是
   //   `{ subComponentPlan, generationInput }`（不含 `_indexTemplateFacts`）⇒ 各规则若各读各的
@@ -1394,7 +1395,13 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
       applyTo: VUE,
       fix: (content, ctx) => {
         try {
-          const unknown = detectUnknownText([{ path: ctx.path, content }], figmaNodeData);
+          // 🛡️ 2026-10-19：不传业务术语规则 ⇒ 本规则会把「小汽车」判为未知、并按最近真值
+          //   改回「客车」——**与业务口径直接对抗**（改一次门禁再改回去，重试空转）。
+          const unknown = detectUnknownText(
+            [{ path: ctx.path, content }],
+            figmaNodeData,
+            businessTextRules,
+          );
           const replacable = unknown.filter((u) => u.suggest);
           if (replacable.length === 0) return content;
           let out = content;

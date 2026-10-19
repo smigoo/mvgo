@@ -18,6 +18,171 @@
 //    同类风险：本模块输入一律显式取字段，不做深 spread。
 // ══════════════════════════════════════════════════════════════
 
+/**
+ * 🔍 语义推断槽位审计（2026-10-19，c-aiot-dpjh-bsjd-c27cb2eb 实锤）
+ *
+ * `less-variable-checker#addMissingVariables` 补缺失变量时用的是 `safeLessVarValue`
+ * **按名字 + 明暗猜测**（落盘带 `// 自动添加（语义推断）` 注释），不是 Figma 真值。
+ * 这类槽位一旦被 common.less 实际引用，该处颜色就**不跟随副稿设计** ——
+ * 正是「深色设计稿版本 ≈ 默认 dark」的观感来源（@color-card-bg #ffffff/#2b2b2b
+ * 这类中性灰，而不是副稿的 #123259/#98c2f6）。
+ *
+ * 只报不改（fail-open、零副作用）：供调用方 logger.warn / meta 留痕。
+ *
+ * @param {Object} opts
+ * @param {string} [opts.themeVarsContent] theme-vars.less 全文
+ * @param {string} [opts.commonLessContent] common.less 全文
+ * @returns {{guessed:string[], risky:string[], riskCount:number}}
+ */
+export function auditSemanticGuessSlots({ themeVarsContent, commonLessContent } = {}) {
+  const GUESS_RE = /@([a-zA-Z0-9_-]+)\s*:\s*[^;]+;\s*\/\/[^\n]*语义推断/g
+  const guessed = new Set()
+  let gm
+  const tv = String(themeVarsContent || '')
+  while ((gm = GUESS_RE.exec(tv)) !== null) guessed.add(gm[1])
+  if (guessed.size === 0) return { guessed: [], risky: [], riskCount: 0 }
+
+  // common.less 里的**引用**（先剔掉本文件内的定义行 `@x: v;`，避免把定义算成引用）
+  const common = String(commonLessContent || '').replace(/^\s*@[a-zA-Z0-9_-]+\s*:[^;]+;/gm, '')
+  const risky = []
+  let riskCount = 0
+  for (const name of guessed) {
+    const refRe = new RegExp(`(^|[^@\\w-])@${name}(?![\\w-])`, 'g')
+    const n = (common.match(refRe) || []).length
+    if (n > 0) {
+      risky.push(name)
+      riskCount += n
+    }
+  }
+  return { guessed: [...guessed], risky, riskCount }
+}
+
+/** 树路径压缩：只保留末 2 段（全路径太长，且节点名常为 r/Frame 等无意义值） */
+function shortenTreePath(path) {
+  const segs = String(path || '').split('/').filter(Boolean)
+  if (segs.length <= 2) return segs.join('/') || '(root)'
+  return `…/${segs.slice(-2).join('/')}`
+}
+
+/**
+ * 🌗 跨主题配色真值（2026-10-19，c-aiot-dpjh-bsjd-c27cb2eb 实锤）
+ *
+ * 病灶：多主题（N 稿）生成时，分块 prompt 只带**主稿** Figma 树，theme-vars.less
+ *   的业务槽位（@color-card-bg / @color-node-name …）在副主题 mixin 里**没有真值
+ *   可依** ⇒ LLM 按明暗语义猜通用灰阶（#2b2b2b / #e6e6e6）⇒ 深色设计稿版本观感
+ *   ≈ 系统默认 dark，「列表背景与文字色没按设计」。
+ *
+ * 本函数把「同一树路径在各稿的实测色值」对齐成表，供 prompt 直接下发。
+ * 纯函数、无 IO；单稿 / 无 nodeData ⇒ 返回 null（零回归）。
+ *
+ * @param {Object} opts
+ * @param {Array<{key:string, nodeData:object}>} opts.themes dualTruth.themes（[0] 主稿）
+ * @param {string} [opts.primaryKey] 主稿 key（缺省取 themes[0]）
+ * @param {number} [opts.maxRows=40] 对齐行上限（按面积降序）
+ * @param {number} [opts.paletteTop=14] 每稿色板取样上限
+ * @returns {null|{primaryKey:string, themeKeys:string[], rows:Array, palettes:Object, truncated:boolean}}
+ */
+export function buildCrossThemeColorFacts({ themes, primaryKey, maxRows = 40, paletteTop = 14 } = {}) {
+  const entries = Array.isArray(themes) ? themes.filter((t) => t?.nodeData) : []
+  if (entries.length < 2) return null
+  const primary = entries.find((t) => t.key === primaryKey) || entries[0]
+  const secondaries = entries.filter((t) => t.key !== primary.key)
+  if (secondaries.length === 0) return null
+
+  const primaryTree = flattenTree(primary.nodeData)
+  const secTrees = secondaries.map((t) => ({ key: t.key, tree: flattenTree(t.nodeData) }))
+
+  // 1) 路径对齐的色值对（只留「至少一稿与主稿不同」的 —— 无差异色不随主题变，不该进表）
+  const seen = new Set()
+  const rows = []
+  for (const [path, pInfo] of Object.entries(primaryTree)) {
+    const mainHex = normalizeHex(pInfo.hex)
+    const perTheme = {}
+    let differs = false
+    for (const st of secTrees) {
+      const hit = st.tree[path]
+      if (!hit) continue
+      const h = normalizeHex(hit.hex)
+      perTheme[st.key] = h
+      if (h !== mainHex) differs = true
+    }
+    if (!differs || Object.keys(perTheme).length === 0) continue
+    // 同一「色值组合」只留第一条（同色在多条路径重复 ⇒ 表里几十行噪声）
+    const sig = `${mainHex}|${Object.entries(perTheme)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(',')}`
+    if (seen.has(sig)) continue
+    seen.add(sig)
+    rows.push({ path: shortenTreePath(path), primary: mainHex, perTheme, area: pInfo.area || 0 })
+  }
+  rows.sort((a, b) => b.area - a.area)
+  const top = rows.slice(0, maxRows)
+
+  // 2) 每稿实测主色板（按覆盖面积降序）—— 兜底：对齐表未覆盖时也能看出该稿真实调性
+  const palettes = {}
+  for (const t of entries) {
+    const tree = t.key === primary.key ? primaryTree : (secTrees.find((s) => s.key === t.key) || {}).tree
+    if (!tree) continue
+    const freq = new Map()
+    for (const v of Object.values(tree)) {
+      const h = normalizeHex(v.hex)
+      freq.set(h, (freq.get(h) || 0) + (v.area || 1))
+    }
+    palettes[t.key] = [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, paletteTop)
+      .map((e) => e[0])
+  }
+
+  return {
+    primaryKey: primary.key,
+    themeKeys: [primary.key, ...secondaries.map((t) => t.key)],
+    rows: top,
+    palettes,
+    truncated: rows.length > maxRows,
+  }
+}
+
+/**
+ * 把 buildCrossThemeColorFacts 的结果渲染成 prompt 段落（无数据 ⇒ 空串，零注入）。
+ * @param {null|Object} facts
+ * @returns {string}
+ */
+export function formatCrossThemeColorFacts(facts) {
+  if (!facts || !Array.isArray(facts.rows) || facts.rows.length === 0) return ''
+  const themeKeys = Array.isArray(facts.themeKeys) ? facts.themeKeys : []
+  const secKeys = themeKeys.filter((k) => k !== facts.primaryKey)
+  const header = `| 主稿 \`${facts.primaryKey}\` | ${secKeys.map((k) => `\`${k}\``).join(' | ')} | 节点 |`
+  const sep = `| --- | ${secKeys.map(() => '---').join(' | ')} | --- |`
+  const body = facts.rows
+    .map(
+      (r) =>
+        `| \`${r.primary}\` | ${secKeys.map((k) => (r.perTheme[k] ? `\`${r.perTheme[k]}\`` : '—')).join(' | ')} | ${r.path} |`,
+    )
+    .join('\n')
+  const palettes = Object.entries(facts.palettes || {})
+    .map(([k, hexes]) => `- \`${k}\`：${hexes.map((h) => `\`${h}\``).join('、')}`)
+    .join('\n')
+  return `\n## 🌗 跨主题配色真值（${themeKeys.length} 份设计稿实测对齐 · 最高优先级）
+
+同一节点在各主题设计稿中的实测色值（主稿 = \`${facts.primaryKey}\`${facts.truncated ? `，已按面积取 Top ${facts.rows.length} 条` : ''}）：
+
+${header}
+${sep}
+${body}
+
+各稿实测主色板（按覆盖面积降序）：
+
+${palettes}
+
+⚠️ **硬约束（违反即「深色设计稿版本看着和默认 dark 一样」）**：
+1. 业务槽位（\`@color-card-bg\` / \`@color-node-name\` / \`@color-stat-*\` 等）在每个 \`.theme-*()\` mixin 中的值，**必须取自上表该主题列的实测色**。
+2. **严禁**用「语义推断」或通用深浅灰阶顶替 —— \`#2b2b2b\`/\`#e6e6e6\`/\`#333333\` 这类**中性灰是典型错误**：真实深色稿多为带品牌色相的深蓝/深青（如 \`#123259\` 配 \`#98c2f6\`）。
+3. 上表未覆盖的颜色才允许按主题明暗自行补齐；补齐时也必须贴合该稿主色板的色相与明度。
+4. common.less 中凡引用这些槽位的类，**不要**再写 hex 字面量兜底（字面量会把颜色锁死成主稿色）。
+`
+}
+
 /** 单稿树展平：路径 → 该路径主色值（同节点多填充取第一个 SOLID） */
 function flattenTree(nodeData) {
   const out = {}
@@ -103,6 +268,16 @@ export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) 
       // 主通道：精确命中既有槽位
       replacements.set(mainHex, primarySlots[mainHex])
       statCanonical++
+      continue
+    }
+    // 🛡️ 2026-10-19（c-aiot-dpjh-bsjd-c27cb2eb 实锤）：同一主稿色在多条树路径上重复出现
+    //   时，旧实现**每条路径都新建**一个 color-custom-N（#10ba27→#26ce3c 一档色值对
+    //   被重复建成 custom-3/5/7/10/12 五个同值孤儿槽位）。同一色值对应同一槽位：
+    //   已建过 ⇒ 直接复用（幂等去重），slotValues 已在首轮写全各稿值。
+    if (replacements.has(mainHex)) {
+      const reused = replacements.get(mainHex)
+      if (typeof reused === 'string' && reused.startsWith('color-custom-')) statCustom++
+      else statCanonical++
       continue
     }
     // 扩展通道：自动生成自定义槽位

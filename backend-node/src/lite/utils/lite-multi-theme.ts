@@ -80,6 +80,8 @@ export type LiteThemeEntry = {
   name: string;
   brightness: 'light' | 'dark';
   palette: Palette;
+  /** 🔴 2026-10-19：用户自选面板（透传进 themeConfig.list[].panelType） */
+  panelType?: string | null;
 };
 
 /** 主题清单项（写入 declare.json 的 themeConfig.list） */
@@ -90,6 +92,8 @@ export type LiteThemeListItem = {
   isTruth: boolean;
   legacyName?: string;
   order: number;
+  /** 🔴 2026-10-19：用户自选面板（缺省不写字段） */
+  panelType?: string;
 };
 
 /**
@@ -150,6 +154,8 @@ export function assembleLiteThemes(themes: LiteThemeEntry[] = []) {
       // 兼容既有两主题字段：key 为 light/dark 时沿用既有名字
       ...(t.key === 'light' ? { legacyName: '亮色主题' } : {}),
       ...(t.key === 'dark' ? { legacyName: '深色主题' } : {}),
+      // 🔴 2026-10-19：用户自选面板透传（缺省不写字段，保持旧产物结构不变）
+      ...(t.panelType ? { panelType: t.panelType } : {}),
       order: i,
     });
   });

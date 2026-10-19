@@ -59,6 +59,17 @@ export class ThemeNodeDto {
   @IsOptional()
   @IsIn(['light', 'dark'])
   brightness?: 'light' | 'dark';
+
+  /**
+   * 🔴 2026-10-19：用户为该主题**自选的面板**（与深浅解耦，两者都由用户拍板）。
+   *   组件壳（产物 base-panel 的 panelKey）取 themeNodes[0]（主稿）的面板；
+   *   其余主题的面板透传进 declare.json `themeConfig.list[].panelType` 供预览消费。
+   *   ⚠️ 本 DTO 是白名单式校验类 —— 不加此字段会被 ValidationPipe 静默剥离
+   *   （与 secondaryNode/previewImageUrl 丢失同型坑）。
+   */
+  @IsOptional()
+  @IsIn(['default-panel', 'model-panels', 'aio-panel', 'empty'])
+  panelType?: string;
 }
 
 export class GeneratePhase2Dto {
@@ -112,6 +123,30 @@ export class GeneratePhase2Dto {
   @IsString()
   @IsIn(['first', 'second'])
   primaryRole?: 'first' | 'second' = 'first';
+
+  /**
+   * 🛡️ 业务术语规则（2026-10-19，可选 · **默认关闭**）：
+   * 生成期对「设计真值里的文本」做**改名 + 过滤**，用于业务口径与设计稿口径不一致的场景
+   * （实测：全量语料 Figma 真值里**没有「小汽车」**，只有客车/货车 ⇒ 只能靠 rewrite + drop）。
+   *
+   * ```json
+   * { "rewrite": { "客车": "小汽车" }, "drop": ["货车", "卡车"] }
+   * ```
+   *
+   * 语义顺序：**先 rewrite（改名）→ 再 drop（过滤）**。
+   * 不传 / 传空对象 ⇒ 完全不生效（零回归）。
+   *
+   * ⚠️ 本 DTO 是**白名单式校验类**：不加字段会被 ValidationPipe **静默剥离**
+   *   （与 secondaryNode / previewImageUrl 丢失同型坑）⇒ 字段必须在此显式声明。
+   */
+  @IsOptional()
+  @IsObject()
+  businessTextRules?: {
+    /** 改名映射：{ 设计稿原文: 业务口径文本 } */
+    rewrite?: Record<string, string>;
+    /** 过滤名单：命中的文本项直接从下发真值与产物中移除 */
+    drop?: string[];
+  };
 
   @IsString()
   @IsNotEmpty()

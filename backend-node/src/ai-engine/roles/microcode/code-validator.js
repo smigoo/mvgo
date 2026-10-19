@@ -726,6 +726,145 @@ export function validateClassSelectorPairs(
   return { mismatches };
 }
 
+/**
+ * 🎯 T-②（2026-10-19 · c-a579d-6a579df0 实锤）：模板类 ↔ 样式规则**跨前缀**交叉审计（只报不改）。
+ *
+ * 背景：既有双向门禁 CLASS-MUST-EXIST / NO-NEW-RENAME-CLASS 的判据域只覆盖
+ * `prefixId-`（规范前缀）类。该实锤产物里 LLM 产出三套前缀家族
+ * （规范 c-a579d- / 自造 c-6a579d- / antd 接管 c-component-antd-*），
+ * 双向门禁对后两套**全部空转**，两个真缺陷零告警：
+ *   ① 模板挂 label 类 c-component-antd-form-item-label-text，样式侧零规则
+ *      ⇒ 继承 antd 默认深字色，深色主题下文字不可读（用户实锤「文字都看不清」）；
+ *   ② 样式定义 .dark .c-6a579d-form-label { color: #ffffff }，模板全目录零引用
+ *      ⇒ 正确的颜色规则成了死码，颜色真值静默丢失。
+ *
+ * 判据（全部 reportOnly WARN，不做任何改写；不进 fallback、不计入 mismatch 门禁）：
+ *   XCLASS-001 模板挂载的 c- 类在样式侧零规则（含 `--state` 动态拼接豁免）
+ *   XCLASS-002 样式定义的 c- 类在模板全目录零引用（含 `--state` 剥离豁免；孤儿规则）
+ *   XCLASS-003 非规范前缀家族（前缀漂移信号，家族 = 类名前两段）
+ *   XCLASS-004 antd 表单接管 label 颜色硬约束缺失（模板用 <a-form-item> 但样式侧
+ *              无 .ant-form-item-label 的 color 声明 ⇒ 深色主题 label 不可读）
+ *
+ * @param {Object<string,string>} allFiles 路径 → 内容
+ * @param {{prefixId?: string}} options
+ * @returns {{warnings: Array<{gate: string, className?: string, reverse?: boolean, reportOnly: true, message: string}>}}
+ */
+export function auditTemplateStyleClassCrossRef(allFiles, options = {}) {
+  const warnings = [];
+  const files = allFiles && typeof allFiles === 'object' ? allFiles : {};
+  const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // 1. 收集样式文本（.less 全文 + .vue <style> 块）与模板全文
+  const styleChunks = [];
+  const vueTexts = [];
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== 'string') continue;
+    if (/\.less$/i.test(p)) styleChunks.push(c);
+    else if (/\.vue$/i.test(p)) {
+      vueTexts.push(c);
+      for (const sm of c.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+        styleChunks.push(sm[1]);
+      }
+    }
+  }
+  const stylesAll = styleChunks.join('\n');
+  const templatesAll = vueTexts.join('\n');
+  if (!templatesAll || !stylesAll) return { warnings };
+
+  // 只审「c- 开头、以字母数字收尾」的组件类；剔除实例 ID（c-mc-<ts>…）与框架 c-base-
+  const isOwnClass = (cls) =>
+    /^c-[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(cls) &&
+    !/^c-mc-\d/.test(cls) &&
+    !cls.startsWith('c-base-');
+
+  // 2. 模板侧类集合（extractTemplateClassNames 已剔除 ant- 等框架前缀与绑定表达式碎片）
+  let templateClasses = [];
+  try {
+    templateClasses = extractTemplateClassNames(files, '', {}).fullList.filter(isOwnClass);
+  } catch {
+    templateClasses = [];
+  }
+
+  // 3. 样式侧已定义类集合（文本级；孤儿规则正是发生在文本层——有规则但没人引用）
+  const definedClasses = new Set();
+  for (const m of stylesAll.matchAll(/\.(c-[a-z0-9][a-z0-9-]*)/g)) {
+    if (isOwnClass(m[1])) definedClasses.add(m[1]);
+  }
+
+  // 4. XCLASS-001：模板挂载类 → 样式侧零规则
+  for (const t of templateClasses) {
+    if (definedClasses.has(t)) continue;
+    // 动态拼接豁免：模板字面量 `c-x-item--` + state 变量 ⇒ 样式侧存在 --state 后缀规则即算有规则
+    const concatHit = [...definedClasses].some((d) => d.startsWith(t + '--'));
+    if (concatHit) continue;
+    warnings.push({
+      gate: 'XCLASS-001',
+      className: t,
+      reportOnly: true,
+      message:
+        `模板挂载类 .${t} 在样式侧零规则（跨前缀家族不在 CLASS-MUST-EXIST 判据域内）—— ` +
+        `该元素将退回浏览器/组件库默认样式，深色主题下常表现为文字不可读`,
+    });
+  }
+
+  // 5. XCLASS-002：样式定义类 → 模板零引用（边界匹配，防「长类名包含短类名」假命中）
+  for (const d of definedClasses) {
+    const bounded = new RegExp(`(?<![\\w-])${escapeRx(d)}(?![\\w-])`);
+    if (bounded.test(templatesAll)) continue;
+    const base = d.replace(/--[a-z0-9-]+$/, '');
+    if (base !== d && new RegExp(`(?<![\\w-])${escapeRx(base)}(?![\\w-])`).test(templatesAll)) continue;
+    warnings.push({
+      gate: 'XCLASS-002',
+      className: d,
+      reverse: true,
+      reportOnly: true,
+      message:
+        `样式规则 .${d} 在模板全目录零引用（孤儿规则）—— 真值已成死码；` +
+        `若模板挂的是同名异形类，颜色/布局真值将静默丢失`,
+    });
+  }
+
+  // 6. XCLASS-003：前缀漂移（家族 = 前两段；startsWith(prefixId-) 的规范类不算）
+  const prefixId = String(options.prefixId || '');
+  if (prefixId) {
+    const families = new Map();
+    for (const cls of new Set([...templateClasses, ...definedClasses])) {
+      if (cls.startsWith(prefixId + '-')) continue;
+      const fam = cls.split('-').slice(0, 2).join('-');
+      families.set(fam, (families.get(fam) || 0) + 1);
+    }
+    for (const [fam, n] of families) {
+      warnings.push({
+        gate: 'XCLASS-003',
+        className: fam,
+        reportOnly: true,
+        message:
+          `非规范前缀家族 .${fam}-*（模板+样式共 ${n} 处）：规范前缀为 ${prefixId} —— ` +
+          `CLASS-MUST-EXIST / NO-NEW-RENAME-CLASS 双向门禁只认规范前缀，此家族不受任何类名判据保护`,
+      });
+    }
+  }
+
+  // 7. XCLASS-004：antd 表单接管 label 颜色硬约束（D-③ 配套判据，只报不改）
+  if (/<a-form-item[\s>]/.test(templatesAll)) {
+    const labelColorOk =
+      /\.ant-form-item-label[^{}]*\{[^}]*\bcolor\s*:/i.test(stylesAll) ||
+      /\.ant-form-item\b[^{}]*\{[^}]*\bcolor\s*:/i.test(stylesAll);
+    if (!labelColorOk) {
+      warnings.push({
+        gate: 'XCLASS-004',
+        reportOnly: true,
+        message:
+          `antd 表单接管 label 颜色硬约束缺失：模板使用 <a-form-item>，但样式侧没有 ` +
+          `.ant-form-item-label 的 color 声明 —— label 将继承 antd 默认深灰字色，深色主题下不可读。` +
+          `须补：\`.<宿主类> .ant-form-item-label { color: @color-text-base; }\`（common.less 用裸后代选择器，勿用 :deep）`,
+      });
+    }
+  }
+
+  return { warnings: warnings.slice(0, 40) };
+}
+
 /** 状态 / 修饰符词表（用于判定 token 是否为「状态词形」） */
 const MODIFIER_STATE_WORDS = new Set([
   'active',
@@ -1046,7 +1185,7 @@ export function validateClassNames(
         className: '-',
         message: 'common.less 为空，所有模板 class 将无样式',
       });
-      return { mismatches, fixed: false, fallbackCss: null };
+      return { mismatches, fixed: false, fallbackCss: null, crossRefWarnings: [] };
     }
 
     // R0-4/P0-①（2026-09-01）：前缀统一走 resolveClassPrefixId 单一解析器
@@ -1278,7 +1417,31 @@ export function validateClassNames(
       });
     }
 
-    return { mismatches, fixed: fallbackCss !== null, fallbackCss };
+    // 🎯 T-②（2026-10-19 · c-a579d-6a579df0 实锤）：模板类 ↔ 样式规则跨前缀交叉审计。
+    //   独立于上方 mismatch 计数与 fallback 修复——只报不改（reportOnly），避免
+    //   跨前缀类被误生成 TODO 空块 stub。判据域覆盖 CLASS-MUST-EXIST 看不见的
+    //   自造前缀家族（c-6a579d-* / c-component-antd-*）。
+    let crossRefWarnings = [];
+    try {
+      const crossRef = auditTemplateStyleClassCrossRef(allFiles, { prefixId });
+      crossRefWarnings = crossRef.warnings;
+      if (crossRefWarnings.length > 0) {
+        options.logger?.warn?.('⚠️ XCLASS 模板/样式跨前缀交叉审计（只报不改）', {
+          count: crossRefWarnings.length,
+          byGate: crossRefWarnings.reduce((acc, w) => {
+            acc[w.gate] = (acc[w.gate] || 0) + 1;
+            return acc;
+          }, {}),
+          sample: crossRefWarnings.slice(0, 5),
+        });
+      }
+    } catch (e) {
+      options.logger?.warn?.('XCLASS 交叉审计异常（非阻断）', {
+        error: e?.message || String(e),
+      });
+    }
+
+    return { mismatches, fixed: fallbackCss !== null, fallbackCss, crossRefWarnings };
   }
 
 export function validateContainerSize(code, rootWidth, rootHeight, options = {}) {
@@ -1313,6 +1476,66 @@ export function validateResourceUsage(code, options = {}) {
 // L0-B 生成后大后处理（原 validateAndFixGeneratedFiles，2026-08-30 迁移）
 // 依赖经 options 注入（主类方法引用 + 模块常量）
 // ══════════════════════════════════════════════════════════════
+
+/**
+ * 🛡️ A（2026-10-19，c-a579d-6a579df0 实锤 M3-3 双 onload）：
+ * onload 代码字面量与 declare 规范槽**同源改写**。
+ *
+ * 背景（对抗循环）：normalizeDeclareJson 的 stray 折叠先删非规范 onload；
+ *   alignEvents ③ 又因代码 publishEvent 用非规范短名把它当「无关新事件」回填 declare
+ *   ⇒ 折叠删一条、回填加一条，产物恒双 onload（一条 kebab 违规，M3-3 error）。
+ *
+ * 治本：以 declare 规范槽（`/^c-[a-z][a-z0-9-]*-onload$/` 首个键）为**单一事实源**——
+ *   代码 .vue 里的 publishEvent/listenEvent 字面量确定性改写为规范名（单双引号均处理），
+ *   非规范短名从 publishEvents/listenEvents 集合移除（杜绝 alignEvents 的回填路径）。
+ *   declare 侧不增不改（折叠逻辑在 normalizeDeclareJson，单一职责）。
+ *
+ * @param {object} p
+ * @param {Record<string,string>} p.files 内容 map（原地改写）
+ * @param {Record<string,string>} p.fixedFiles 修复落盘 map（同步写入）
+ * @param {object|null} p.businessEvents declare.businessEvents
+ * @param {Set<string>} p.publishEvents 代码中出现的 publishEvent 事件名（会移除已改写项）
+ * @param {Set<string>} p.listenEvents  同上（listenEvent）
+ * @param {string[]} p.fixes 修复留痕（push）
+ */
+export function syncOnloadEventLiterals({
+  files,
+  fixedFiles,
+  businessEvents,
+  publishEvents,
+  listenEvents,
+  fixes,
+}) {
+  const canonical = Object.keys(businessEvents || {}).find((k) =>
+    /^c-[a-z][a-z0-9-]*-onload$/.test(k),
+  );
+  if (!canonical) return;
+  for (const evtName of [...publishEvents, ...listenEvents]) {
+    if (!evtName.endsWith('-onload') || evtName === canonical) continue;
+    let rewrittenFiles = 0;
+    for (const fp of Object.keys(files)) {
+      if (!fp.endsWith('.vue') || typeof files[fp] !== 'string') continue;
+      const before = files[fp];
+      const after = before
+        .split(`publishEvent('${evtName}'`).join(`publishEvent('${canonical}'`)
+        .split(`publishEvent("${evtName}"`).join(`publishEvent("${canonical}"`)
+        .split(`listenEvent('${evtName}'`).join(`listenEvent('${canonical}'`)
+        .split(`listenEvent("${evtName}"`).join(`listenEvent("${canonical}"`);
+      if (after !== before) {
+        files[fp] = after;
+        if (fixedFiles) fixedFiles[fp] = after;
+        rewrittenFiles += 1;
+      }
+    }
+    publishEvents.delete(evtName);
+    listenEvents.delete(evtName);
+    if (rewrittenFiles > 0 && Array.isArray(fixes)) {
+      fixes.push(
+        `declare.json 事件名同源：代码字面量 '${evtName}' → '${canonical}'（以 declare 规范槽为单一事实源）`,
+      );
+    }
+  }
+}
 
 export async function validateAndFixGeneratedFiles(
   files,
@@ -1441,6 +1664,20 @@ export async function validateAndFixGeneratedFiles(
             ))
               listenEvents.add(m[1]);
           }
+          // 🛡️ A（2026-10-19，c-a579d-6a579df0 实锤 M3-3 双 onload）：
+          //   此前时序是对抗循环——normalizeDeclareJson 先把非规范 onload（'6a579d-onload'）
+          //   折叠进规范槽并删除；紧接着 alignEvents ③ 又因代码 publishEvent 用的是非规范
+          //   短名，把它当「无关新事件」**回填** declare ⇒ 折叠删一条、回填加一条，
+          //   产物恒双 onload（一条 kebab 违规）。
+          //   治本见 syncOnloadEventLiterals（模块级导出，纯逻辑可单测）。
+          syncOnloadEventLiterals({
+            files,
+            fixedFiles,
+            businessEvents: declare.businessEvents,
+            publishEvents,
+            listenEvents,
+            fixes,
+          });
           const alignEvents = (container, idField, nameField, schemaField, defaultSchema) => {
             if (!container || typeof container !== 'object') return false;
             let mod = false;

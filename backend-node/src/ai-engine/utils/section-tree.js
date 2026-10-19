@@ -2544,6 +2544,56 @@ function mapChildNode(node, depth = 0) {
  * @param {Object} [opts] { maxLeaves=12, maxItemsPerSection=12, maxDepth=4 }
  * @returns {string} 语义化样式事实文本（markdown），空则 ''
  */
+
+/**
+ * 🛡️ 样式真值条目的「**文本优先**」裁剪（2026-10-19 治本 · mc-max-1792373861220-5160a2ec 实锤）
+ *
+ * 事故：单 section 样式条目收集是**深度优先 + 单一配额闸门**（`itemCount >= maxItemsPerSection`），
+ *   header 段 12 条配额被 `标题img / 标题-线 / Rectangle ×7 / Group 11` 等**装饰图元**耗光 ⇒
+ *   排在后面的 TEXT 节点（`48:5902`「全国」）**静默丢失** ⇒ 产物 HeaderSection.vue 零文本节点，
+ *   「全国」选择器整块消失（实测：配额 12 ⇒ 无「全国」；配额 40 ⇒ 有「全国」）。
+ *
+ * 危害面：这是**配额策略缺陷，不是某个组件/某个文案的特例** —— 任何可见节点数超过配额的
+ *   section 都会丢尾部元素，而**文本常排在嵌套较深处或尾部**，且文本只有本通道下发
+ *   （图片/资源另有 injectResourceImports 通道，被砍也能活）⇒ 文本是最容易被静默吃掉的一等公民。
+ *
+ * 治本（零硬编码、无组件/节点名特例）：收集与裁剪解耦——
+ *   ① 收集阶段用 **更大的** `collectCap`（仅防爆炸，不做语义取舍）；
+ *   ② 输出阶段按 **`isText` 标记**取舍：**TEXT 条目全保留**，剩余配额才给装饰条目；
+ *   ③ 最终仍按 **Figma 原始序**输出（顺序本身就是真值，不得重排）。
+ *
+ * @param {string[]} lines 样式条目（已按 Figma 序）
+ * @param {boolean[]} flags 与 lines 一一对应：true = 该条目是 TEXT 文本真值
+ * @param {number} quota 输出配额（maxItemsPerSection）
+ * @returns {{lines: string[], droppedText: number, droppedDeco: number}}
+ */
+export function pickTextPriorityLines(lines = [], flags = [], quota = 0) {
+  const arr = Array.isArray(lines) ? lines : []
+  const fl = Array.isArray(flags) ? flags : []
+  const n = Math.min(arr.length, fl.length)
+  if (!Number.isFinite(quota) || quota <= 0) {
+    return { lines: arr.slice(0, n), droppedText: 0, droppedDeco: 0 }
+  }
+  if (n <= quota) return { lines: arr.slice(0, n), droppedText: 0, droppedDeco: 0 }
+
+  const idx = Array.from({ length: n }, (_, i) => i)
+  const textIdx = idx.filter((i) => fl[i] === true)
+  const decoIdx = idx.filter((i) => fl[i] !== true)
+
+  const keep = new Set(textIdx.slice(0, quota))
+  const room = Math.max(quota - keep.size, 0)
+  const decoKept = decoIdx.slice(0, room)
+  for (const i of decoKept) keep.add(i)
+
+  const textKept = Math.min(textIdx.length, quota)
+  return {
+    // ⚠️ 仍按原始序号输出：顺序真值不得重排
+    lines: idx.filter((i) => keep.has(i)).map((i) => arr[i]),
+    droppedText: textIdx.length - textKept,
+    droppedDeco: decoIdx.length - decoKept.length,
+  }
+}
+
 export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
   if (!Array.isArray(treeSections) || treeSections.length === 0) return ''
   if (!figmaNodeData || typeof figmaNodeData !== 'object') return ''
@@ -2553,6 +2603,10 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
   // 布局与顺序轨独立配额（实测单 section 最多 5 条：横向顺序 ≤3 + 文本块纵向 + 重复单元/嵌套布局）
   const maxLayoutPerSection = opts.maxLayoutPerSection ?? 6
   const maxDepth = opts.maxDepth ?? 4
+  // 🛡️ 2026-10-19 治本（5160a2ec「全国」漏收实锤）：**收集上限 ≫ 输出配额**。
+  //   收集阶段只做「防爆炸」取舍（深/超大子树），**不做语义取舍**；语义取舍（文本优先）
+  //   统一交给输出阶段的 `pickTextPriorityLines`，避免配额被装饰图元耗光后静默吃掉文本。
+  const collectCap = opts.collectCap ?? Math.max(maxItemsPerSection * 4, 48)
 
   // 建 Figma 节点索引（id → rawNode）
   const root = figmaNodeData?.document ?? figmaNodeData
@@ -2672,6 +2726,9 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
     //   （cons/active/default 等叶子 type 可能为 undefined，但仍需提取样式事实）
     const label = type && type !== 'container' ? type : title
     const secLines = []
+    // 🛡️ 与 secLines 一一对应的「是否 TEXT 文本真值」标记（2026-10-19 治本）：
+    //   输出裁剪时凭此保住所有文本条目（见 `pickTextPriorityLines`）。
+    const secLineIsText = []
     // 🛡️ 布局与顺序事实**独立轨**（2026-09-29 · 全语料 40 样本审计：布局类 122 行 / 4.6%，样式类 2505 行 / 95.4%）
     //
     //   背景：`重复单元` / `内部布局(几何 · 嵌套)` / `横向顺序(几何)` / `文本块纵向` 这四类事实原本与
@@ -2979,7 +3036,8 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
 
       // 收集该节点子树的样式条目。parentOpacity 累积：父 GROUP 的 opacity 作用于子节点背景
       const collect = (node, depth, parentOpacity, parentBox) => {
-        if (!node || depth > maxDepth || itemCount >= maxItemsPerSection) return
+        // ⚠️ 闸门放宽为 `collectCap`：只防超大子树，**语义取舍交给输出阶段**（文本优先）。
+        if (!node || depth > maxDepth || itemCount >= collectCap) return
         const name = String(node.name || '')
         const typeN = String(node.type || '').toUpperCase()
         const bbox = node.absoluteBoundingBox
@@ -3097,6 +3155,8 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
 
         if (parts.length > 0) {
           secLines.push(`  - ${clean} → ${parts.join(' | ')}`)
+          // 📌 文本优先标记：**有实际字符的 TEXT 节点**才是「一等公民」（空文本/装饰不算）
+          secLineIsText.push(isText && chars.length > 0)
           itemCount++
         }
         // 递归遍历子节点（collect 自身的深度控制保证了安全）
@@ -3171,7 +3231,24 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
           )
         }
         lines.push(`**${label}**${bgBrightnessHint}（内部元素样式真值）：`)
-        lines.push(...secLines.slice(0, maxItemsPerSection))
+        // 🛡️ 2026-10-19 治本：文本优先裁剪（装饰图元让位，保证 TEXT 真值不被配额静默吃掉）
+        //   配额**至少**要装下全部文本条目（实测 env-monitor `2:7899` 单段 22 条文本，
+        //   固定 12 仍会丢 10 条）⇒ 文本行本身就该占的配额不外借给装饰。
+        const textCount = secLineIsText.reduce((n, f) => n + (f ? 1 : 0), 0)
+        const picked = pickTextPriorityLines(
+          secLines,
+          secLineIsText,
+          Math.max(maxItemsPerSection, textCount),
+        )
+        lines.push(...picked.lines)
+        if (picked.droppedText > 0 && typeof opts.onTextTruncated === 'function') {
+          opts.onTextTruncated({
+            sectionId: String(sec.id ?? ''),
+            droppedText: picked.droppedText,
+            droppedDeco: picked.droppedDeco,
+            quota: maxItemsPerSection,
+          })
+        }
       }
       leafUsed++
     }

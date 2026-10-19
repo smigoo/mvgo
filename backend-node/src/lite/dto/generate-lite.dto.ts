@@ -57,6 +57,25 @@ export class ThemeNodeDto {
   @IsOptional()
   @IsString()
   previewImageUrl?: string;
+
+  /**
+   * 🔴 2026-10-19：用户为该主题**自选的深浅配色**（与稿子自动判定解耦）。
+   *   phase2 的 ThemeNodeDto 早已有此字段；本 DTO 此前漏加 ⇒ whitelist 校验
+   *   会把前端传的 brightness 静默剥离 ⇒ Lite 管线用户的深浅选择被丢弃。
+   *   省略则按稿子实测明暗兜底。
+   */
+  @IsOptional()
+  @IsIn(['light', 'dark'])
+  brightness?: 'light' | 'dark';
+
+  /**
+   * 🔴 2026-10-19：用户为该主题**自选的面板**（与深浅解耦）。
+   *   组件壳取 themeNodes[0]（主稿）的面板；其余主题透传进
+   *   declare.json `themeConfig.list[].panelType`。
+   */
+  @IsOptional()
+  @IsIn(['default-panel', 'model-panels', 'aio-panel', 'empty'])
+  panelType?: string;
 }
 
 /**

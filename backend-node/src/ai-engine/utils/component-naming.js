@@ -591,3 +591,40 @@ export function autoFixNonAsciiClassNames(files, options = {}) {
   }
   return { files: changed, renamed, remaining: [...remaining] };
 }
+
+/**
+ * 🛡️ businessEvents 键 kebab 门禁（2026-10-19，M3-3 fail-closed，c-a579d-6a579df0 实锤）。
+ *
+ * 事故：LLM 代码 publishEvent('6a579d-onload')（数字开头非 kebab）→ declare 双 onload，
+ *   mc-check M3-3 判 error。normalizeDeclareJson 的 stray 折叠只管 *-onload 后缀，
+ *   其它违规键（'2btn_Click_Ev' 等）无防御 ⇒ 这里统一确定性改名：
+ *   'c-' + 小写 slug 化（非 [a-z0-9] 连续段折叠为 '-'）；与已有键碰撞则折叠（保留已有键内容）。
+ *
+ * 纯函数、幂等（合法键原样返回）。
+ * @param {object|null} events businessEvents 对象（null/非对象 ⇒ 原样返回）
+ * @returns {{events: object|null, changed: boolean, renames: Array<{from:string,to:string}>}}
+ */
+export function normalizeBusinessEventKeys(events) {
+  if (!events || typeof events !== 'object' || Array.isArray(events)) {
+    return { events, changed: false, renames: [] };
+  }
+  const KEBAB_OK = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+  let changed = false;
+  const renames = [];
+  for (const k of Object.keys(events)) {
+    if (KEBAB_OK.test(k)) continue;
+    const fixed = `c-${k
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')}`;
+    const evt = events[k];
+    delete events[k];
+    if (!events[fixed]) {
+      events[fixed] = evt;
+      if (evt && typeof evt === 'object') evt.eventId = fixed;
+    }
+    changed = true;
+    renames.push({ from: k, to: fixed });
+  }
+  return { events, changed, renames };
+}

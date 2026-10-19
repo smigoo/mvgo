@@ -160,3 +160,59 @@ describe('pruneRedundantFields · Auto Layout 属性保留（布局保真）', (
     expect(pruned.layoutMode).toBeUndefined();
   });
 });
+
+describe('pruneRedundantFields · fill/stroke 透明度保留（2026-10-19，c-aiot-dpjh-bsjd-44268ffe 实锤）', () => {
+  const conn = new FigmaConnector({ figmaToken: 'fake-token-for-test' });
+
+  it('SOLID fill.opacity=0.43 必须保留（卡片「白 43% 叠蓝底」不能退化成不透明白）', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '48:5814',
+      name: 'Rectangle 346242317',
+      type: 'RECTANGLE',
+      absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 72 },
+      fills: [
+        {
+          type: 'SOLID',
+          blendMode: 'NORMAL',
+          opacity: 0.4300000071525574,
+          color: { r: 1, g: 1, b: 1, a: 1 },
+        },
+      ],
+    } as any);
+    expect(pruned.fills[0].opacity).toBeCloseTo(0.43, 5);
+    expect(pruned.fills[0].color).toEqual({ r: 1, g: 1, b: 1, a: 1 });
+  });
+
+  it('fill.opacity=1 同样保留（不误删合法实底）', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '48:5799',
+      name: 'rect',
+      type: 'RECTANGLE',
+      fills: [{ type: 'SOLID', opacity: 1, color: { r: 0.65, g: 0.81, b: 1, a: 1 } }],
+    } as any);
+    expect(pruned.fills[0].opacity).toBe(1);
+  });
+
+  it('stroke.opacity 保留（半透明描边不退化为实色）', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '9:1',
+      name: 'bar',
+      type: 'RECTANGLE',
+      fills: [],
+      strokes: [{ type: 'SOLID', opacity: 0.1, color: { r: 1, g: 0, b: 0, a: 1 } }],
+      strokeWeight: 1,
+    } as any);
+    expect(pruned.strokes[0].opacity).toBe(0.1);
+  });
+
+  it('opacity 缺省时不凭空注入（保持旧字段形状）', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '9:2',
+      name: 'rect',
+      type: 'RECTANGLE',
+      fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 1, a: 0.5 } }],
+    } as any);
+    expect('opacity' in pruned.fills[0]).toBe(false);
+    expect(pruned.fills[0].color.a).toBe(0.5);
+  });
+});
