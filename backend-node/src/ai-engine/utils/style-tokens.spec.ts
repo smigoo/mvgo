@@ -115,4 +115,49 @@ describe('extractFigmaColorPalette：主色候选排除近白/近黑', () => {
     };
     expect(extractFigmaColorPalette(figma).topPrimary).toBe('#3170aa');
   });
+
+  // 🛡️ 2026-10-20（5ef650ff 实锤）：低透明度罩染 tint 不入主色候选。
+  //   病灶：分组面板底 #e2d084@0.20（604×161×3 块）面积碾压 ⇒ topPrimary 被抢成面板黄。
+  const rectOpacity = (name, hex, w, h, opacity) => ({
+    name, type: 'RECTANGLE', absoluteBoundingBox: { width: w, height: h },
+    fills: [{ type: 'SOLID', visible: true, opacity, color: (() => { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return { r: r / 255, g: g / 255, b: b / 255 } })() }],
+  });
+
+  it('半透明面板 tint（opacity 0.2，面积碾压）不被选为主色', () => {
+    const figma = {
+      name: 'root', type: 'FRAME',
+      children: [
+        rect('bg', '#ffffff', 660, 868), // topBg
+        rectOpacity('panel-tint', '#e2d084', 604, 161, 0.2), // 大面积半透明面板黄
+        rect('brand-blue', '#006efe', 53, 55), // 小面积不透明品牌蓝
+      ],
+    };
+    const p = extractFigmaColorPalette(figma);
+    expect(p.topBg).toBe('#ffffff'); // topBg 统计不回退（全量面积）
+    expect(p.topPrimary).not.toBe('#e2d084');
+    expect(p.topPrimary).toBe('#006efe');
+  });
+
+  it('阳性对照：同色但 opacity ≥0.5 仍是合法主色候选', () => {
+    const figma = {
+      name: 'root', type: 'FRAME',
+      children: [
+        rect('bg', '#ffffff', 660, 868),
+        rectOpacity('panel-solid', '#e2d084', 604, 161, 0.6), // 不透明的黄是真实色块
+      ],
+    };
+    expect(extractFigmaColorPalette(figma).topPrimary).toBe('#e2d084');
+  });
+
+  it('同一色半透明+不透明混用时按 maxOpacity 计（不透明出现即保留候选资格）', () => {
+    const figma = {
+      name: 'root', type: 'FRAME',
+      children: [
+        rect('bg', '#ffffff', 660, 868),
+        rectOpacity('tint', '#e2d084', 604, 161, 0.2),
+        rectOpacity('solid-use', '#e2d084', 40, 40, 1),
+      ],
+    };
+    expect(extractFigmaColorPalette(figma).topPrimary).toBe('#e2d084');
+  });
 });

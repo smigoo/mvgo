@@ -2237,6 +2237,47 @@ export class CodeStructureValidator {
       }
     }
 
+    // ========== 🛡️ IMG-SRC-001: 裸 img 无图源（两者通用，BLOCK，2026-10-20 · #128 ⑧）==========
+    // 病灶（84af4f8f 族实锤）：模板 <img> 既无 src 也无 :src ⇒ 渲染必为破图占位，
+    // 成因多为资源注入缺口（injectResourceImports 未覆盖该节点）或 LLM 占位残留。
+    // 纯形态判据、零真值依赖 ⇒ fail-closed，触发重试让模型接线或注入兜底。
+    try {
+      for (const f of files) {
+        const p = String(f?.path || '');
+        if (!/\.vue$/i.test(p)) continue;
+        const content = typeof f?.content === 'string' ? f.content : '';
+        if (!content.includes('<img')) continue;
+        // 先剔模板注释，防 <!-- <img ...> --> 误报
+        const tplM = content.match(/<template[^>]*>([\s\S]*)<\/template>/i);
+        const tpl = (tplM ? tplM[1] : content).replace(/<!--[\s\S]*?-->/g, '');
+        for (const m of tpl.matchAll(/<img\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g)) {
+          const attrs = m[1] || '';
+          const hasSrc =
+            /(?<![:\w-])src\s*=/.test(attrs) ||
+            /:src\s*=/.test(attrs) ||
+            /v-bind:src\s*=/.test(attrs);
+          if (!hasSrc) {
+            issues.push({
+              id: 'IMG-SRC-001',
+              severity: 'BLOCK',
+              file: p,
+              message:
+                `裸 <img> 无图源（既无 src 也无 :src/v-bind:src）：${m[0].slice(0, 120)}。` +
+                `渲染必为破图。若该位应是设计稿图片，请用 :src 绑定资源变量（injectResourceImports 注入）；` +
+                `若是装饰占位，请删除该元素`,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      issues.push({
+        id: 'IMG-SRC-001-ERROR',
+        severity: 'WARN',
+        file: '(img-src-guard)',
+        message: `裸 img 判据执行异常（非阻断）：${err?.message || String(err)}`,
+      });
+    }
+
     // ========== 🛡️ COMP-001: 模块组装覆盖（仅微码，BLOCK，2026-09-02）==========
     // 事故 mc-max-1788306635802（流量监测）：vision 88% 捕获 5 section、强制拆分 5 子组件、
     // LLM 也生成了 5 个子组件文件，但 index.vue 只内联 1 个 section，其余 4 个零引用 →

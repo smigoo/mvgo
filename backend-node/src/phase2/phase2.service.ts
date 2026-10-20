@@ -33,6 +33,8 @@ import { isTaskIdLikeName, resolveTaskFolderName } from '../ai-engine/utils/comp
 import { LessVariableChecker } from '../ai-engine/validators/less-variable-checker.js';
 // P4（增量修改）：把 refineType 翻译成 refiner 的 _reviseTarget，避免精修范围被静默放大
 import { resolveRefineTarget } from './refine-target.js';
+// 🛡️ #131：结构 BLOCK 晋升闸门（纯函数，5ef650ff 实锤）
+import { evalStructureGateForPromotion } from './promotion-gate';
 // 动态导入 ESM 模块（workspace-preview-publisher.js 依赖 ESM 的 logger）
 const loadPreviewPublisher = () => import('../ai-engine/utils/workspace-preview-publisher.js');
 import {
@@ -294,6 +296,8 @@ export class Phase2Service {
       componentName: finalComponentName,
       nodeId,
       fileKey,
+      // 🔴 2026-10-20：多主题整套设计稿随任务持久化（前端「最近使用」整体还原用）
+      themeNodes,
       target,
       outputPath,
       checkpointStatus: 'none',
@@ -1013,6 +1017,14 @@ export class Phase2Service {
       // 缺失、WARN、BLOCK 均保留审计并回滚旧版本，避免质量步骤未执行时误放行。
       const qualityGateSkipped = genResult?._v3Mode === 'generate';
       const qualityPassed = qualityGateSkipped || runtimeStatus === 'PASS';
+      // 🛡️ #131（2026-10-20 · 5ef650ff 实锤）：结构 BLOCK 不得晋升「稳定版本（已过门禁）」。
+      // L0-B 软失败降级只影响任务完成态；晋升判定单独收口（qualityPassed/落库/配额语义不动）。
+      const structureGate = evalStructureGateForPromotion(genResult);
+      if (structureGate.blocked) {
+        this.logger.warn(
+          `[Phase2] 结构 BLOCK ${structureGate.blockCount} 项，禁止晋升 last-good：${structureGate.reason}`,
+        );
+      }
       const qualityFailureMessage = genResult?.runtimeGate?.warning?.message
         || (runtimeStatus ? `运行时质量门禁未通过（${runtimeStatus}）` : '运行时质量门禁结果缺失');
       let terminalError = genError || (!qualityPassed ? new Error(qualityFailureMessage) : null);
@@ -1179,9 +1191,11 @@ export class Phase2Service {
         candidateValidation = {
           ...candidateValidation,
           runtime: runtimeStatus === 'PASS' ? 'passed' : runtimeStatus === 'WARN' ? 'warning' : 'blocked',
+          // 🛡️ #131：结构门禁结论落 manifest，版本时间线可追溯「为何停在候选」
+          structure: structureGate.blocked ? 'blocked' : 'passed',
         };
         let snapshot;
-        if (!genError && qualityPassed && !candidatePublishError && hasPreviewEntry) {
+        if (!genError && qualityPassed && !structureGate.blocked && !candidatePublishError && hasPreviewEntry) {
           snapshot = this.taskCodeSnapshotService.publishLastGood(
             sessionId,
             candidateRevision,
@@ -1197,10 +1211,11 @@ export class Phase2Service {
           );
         } else if (!candidatePublishError && hasPreviewEntry) {
           // 质量失败不等于文件不可用：保留 candidate，last-good 保持不变。
+          // 🛡️ #131：结构 BLOCK 降级也走本分支，原因明说「不晋升稳定版本」。
           snapshot = this.taskCodeSnapshotService.markCandidateDegraded(
             sessionId,
             candidateRevision,
-            terminalError?.message || '质量门禁未通过，已保留候选版本供人工审查',
+            terminalError?.message || structureGate.reason || '质量门禁未通过，已保留候选版本供人工审查',
             candidateValidation,
           );
         } else {

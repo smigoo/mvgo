@@ -23,7 +23,7 @@ import { collectFigmaNodes, applyFigmaElementHeightRatios } from '../utils/figma
 import { collectFigmaTextTruth, findClosestTruth } from '../utils/text-truth-guard.js'
 // 🛡️ 6-B（2026-09-15）：seriesColors 臆造色真值修正（VLM 红蓝对比先验 vs Figma 蓝系真值）
 import { collectFigmaChartColors, resolveSeriesColors } from '../utils/figma-color-truth.js'
-import { injectRepeatedCardTruth } from '../utils/layout-truth-healer.js'
+import { injectRepeatedCardTruth, injectTransparentContainerTruth } from '../utils/layout-truth-healer.js'
 // 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
 // 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
 import { fillToRgba } from '../utils/section-tree.js'
@@ -1415,6 +1415,14 @@ ${analysisTask}`
       const repeatedCardTruth = figmaData ? injectRepeatedCardTruth(parsed, figmaData) : null
       if (repeatedCardTruth) {
         logger.info('重复卡填充真值已注入', { kind: repeatedCardTruth.kind, size: repeatedCardTruth.size, activeHex: repeatedCardTruth.activeHex })
+      }
+
+      // 🛡️ 透明容器真值注入（2026-10-20 · 5ef650ff 实锤）：fills=[] 的透明容器若被
+      //   产物刷上背景色 ⇒ 盖住宿主底色（浅发白/深发灰）。真值随 layoutStructure 进
+      //   prompt/写盘前审计（TRANSPARENT-CONTAINER-BG）。
+      const transparentContainerTruth = figmaData ? injectTransparentContainerTruth(parsed, figmaData) : null
+      if (transparentContainerTruth) {
+        logger.info('透明容器真值已注入', { total: transparentContainerTruth.total })
       }
 
       logger.info('解析后处理完成', { layoutFixed, bgFixed, gridBgFixed, chromeStripped, chromeSectionsRemoved: chromeSectionsRemoved.length, bgSized, figmaTextCleaned, resourcesFiltered, figmaDimOverridden, figmaElemRatioApplied })

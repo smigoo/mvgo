@@ -850,39 +850,60 @@ export class FigmaConnector {
       // 整体导出 1 张图，不钻内部 VECTOR 碎片——否则子节点 <50px VECTOR 会被「小尺寸 VECTOR→icon」
       // 规则逐个识别，反向触发下方「资源容器拆分」(kidResourceCount>=2) 把整体拆成多张碎片图。
       // 例外：tabs-icon / *-list / *-group / icons（含多个并列独立 icon 按钮的容器）仍走下方拆分。
-      if (this._isWholeResourceByName(node.name)) {
-        logger.info(
-          `📦 命名资源节点整体导出（不拆分子矢量碎片）: ${node.name}`,
-          { nodeId: node.id },
-        );
-        collected.push(node);
-        return collected;
-      }
+      // 🛡️ 尺寸守卫（2026-10-20 · mc-max-1792481134178-477e185d 实锤）：
+      //   'slot-icon' 命名的 **604×787 内容区容器** 被 icon 命名整体导出 ⇒ 整棵子树
+      //   （三面板 + 全部 vector icon）不再递归 ⇒ 图标全灭、面板/chips 全靠 LLM 臆造。
+      //   icon 语义有物理上限：命名含 icon/图标/arrow/箭头 的容器若 max(边) > 96px，
+      //   必是「业务容器误挂 icon 名」，拒绝整体导出，降级为普通递归下钻。
+      //   （img/image/bg 命名的大图整体导出合法，不在此列。）
+    // 🛡️ 伪 icon 容器标记：拦截后必须跳过本函数内**全部**整体 push 路径
+    //   （下方「原子资源节点」push 同样会吞掉整棵子树），直落递归下钻。
+    const isOversizedPseudoIcon = this._isOversizedIconNamedContainer(node);
+    if (isOversizedPseudoIcon) {
+      logger.warn(
+        `⚠️ 伪 icon 容器拦截（icon 命名但尺寸超限，降级递归下钻）: ${node.name}`,
+        {
+          nodeId: node.id,
+          bbox: node.absoluteBoundingBox,
+        },
+      );
+    } else if (this._isWholeResourceByName(node.name)) {
+      logger.info(
+        `📦 命名资源节点整体导出（不拆分子矢量碎片）: ${node.name}`,
+        { nodeId: node.id },
+      );
+      collected.push(node);
+      return collected;
+    }
 
-      // 🎯 2026-08-25：区分「原子资源节点」vs「含多个并列资源子节点的容器」。
-      // 实锤：tabs-icon FRAME 含 2 个 24×24 icon 按钮，此前被整体导出成 1 张 104×48 合并图，
-      // LLM 无法拆分只好用 CSS 画图标替代（违背"icon 是静态资源直接使用"的规范）。
-      // 规则：FRAME/GROUP 且直接子节点中资源节点 ≥2 → 递归导出子节点（各自成图）；
-      // 否则视为原子资源整体导出（不钻内部 Vector）。
-      const kids = Array.isArray(node.children) ? node.children : [];
-      const kidResourceCount = kids.filter((c) => {
-        const t = this._identifyNodeType(c.name, c);
-        return t !== 'unknown' && t !== 'chrome';
-      }).length;
-      const isResourceContainer =
-        (node.type === 'FRAME' || node.type === 'GROUP') &&
-        kidResourceCount >= 2;
-      if (!isResourceContainer) {
-        collected.push(node);
-        // ✅ 原子资源节点：立即返回，跳过其内部 Vector 子节点
-        return collected;
-      }
+    // 🎯 2026-08-25：区分「原子资源节点」vs「含多个并列资源子节点的容器」。
+    // 实锤：tabs-icon FRAME 含 2 个 24×24 icon 按钮，此前被整体导出成 1 张 104×48 合并图，
+    // LLM 无法拆分只好用 CSS 画图标替代（违背"icon 是静态资源直接使用"的规范）。
+    // 规则：FRAME/GROUP 且直接子节点中资源节点 ≥2 → 递归导出子节点（各自成图）；
+    // 否则视为原子资源整体导出（不钻内部 Vector）。
+    const kids = Array.isArray(node.children) ? node.children : [];
+    const kidResourceCount = kids.filter((c) => {
+      const t = this._identifyNodeType(c.name, c);
+      return t !== 'unknown' && t !== 'chrome';
+    }).length;
+    const isResourceContainer =
+      (node.type === 'FRAME' || node.type === 'GROUP') &&
+      kidResourceCount >= 2;
+    if (!isResourceContainer && !isOversizedPseudoIcon) {
+      collected.push(node);
+      // ✅ 原子资源节点：立即返回，跳过其内部 Vector 子节点
+      return collected;
+    }
+    if (isOversizedPseudoIcon) {
+      // 伪 icon 容器：不 push，直落下方递归（子树里的真实资源逐个提取）
+    } else {
       logger.info(
         `🔀 资源容器拆分导出: ${node.name}（含 ${kidResourceCount} 个子资源节点）`,
         { nodeId: node.id },
       );
-      // 容器型：不整体 push，落到下方递归子节点分别导出
     }
+    // 容器型：不整体 push，落到下方递归子节点分别导出
+  }
 
     // 只有不是资源节点时才递归子节点
     if (node.children && Array.isArray(node.children)) {
@@ -2031,6 +2052,33 @@ export class FigmaConnector {
    * @param {string} nodeName - 节点名称
    * @returns {boolean} 是否命名级整体资源节点
    */
+  /**
+   * 🛡️ 伪 icon 容器守卫（2026-10-20 · mc-max-1792481134178-477e185d 实锤）。
+   * icon/图标/arrow/箭头 语义有物理上限：容器命名含这些词但 max(边) > 96px，
+   * 必是业务容器误挂 icon 名（实锤：'slot-icon' 604×787 内容区容器被整体导出
+   * 成一张大图，整棵子树不再递归 ⇒ 三面板 + 全部 vector icon 提取全灭）。
+   * img/image/bg 命名的大图整体导出合法，不在此列。
+   * @param {Object} node Figma 节点
+   * @returns {boolean} true = 拒绝整体导出，降级递归下钻
+   */
+  _isOversizedIconNamedContainer(node) {
+    if (!node || typeof node !== 'object') return false;
+    const n = String(node.name || '').toLowerCase();
+    const iconNamed =
+      n.includes('icon') ||
+      n.includes('图标') ||
+      n.includes('arrow') ||
+      n.includes('箭头');
+    if (!iconNamed) return false;
+    const t = String(node.type || '').toUpperCase();
+    if (t !== 'FRAME' && t !== 'GROUP' && t !== 'INSTANCE' && t !== 'COMPONENT') {
+      return false; // 叶子 VECTOR/RECTANGLE 大图（如大插画）不在守卫范围
+    }
+    const bb = node.absoluteBoundingBox;
+    if (!bb) return false;
+    return Math.max(bb.width || 0, bb.height || 0) > 96;
+  }
+
   _isWholeResourceByName(nodeName) {
     const n = (nodeName || '').toLowerCase();
     const named =
@@ -2493,7 +2541,12 @@ export class FigmaConnector {
         // 🛡️ 命名级整体资源节点（icon/img/bg）：整体进映射后不再钻子节点，
         // 避免内部 VECTOR 碎片被「小尺寸 VECTOR→icon」识别为独立资源重复进映射。
         // 例外：tabs-icon / *-list / *-group / icons 等多 icon 容器仍继续递归子节点。
-        if (this._isWholeResourceByName(node.name)) {
+        // 🛡️ 尺寸守卫同口径（2026-10-20 · 477e185d 实锤）：伪 icon 容器必须继续下钻，
+        // 否则映射侧与提取侧口径分裂（提取侧拆了、映射侧整挂）⇒ 子树资源无映射。
+        if (
+          this._isWholeResourceByName(node.name) &&
+          !this._isOversizedIconNamedContainer(node)
+        ) {
           return;
         }
       }

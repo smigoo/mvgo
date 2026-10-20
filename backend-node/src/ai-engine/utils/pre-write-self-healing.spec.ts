@@ -19,6 +19,9 @@ jest.mock('../../config/backend-root.js', () => ({
   frontendVue3ComponentsDir: () => process.cwd(),
 }), { virtual: true })
 
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runPreWriteSelfHealing } from './pre-write-self-healing.js';
 import { injectResourceImports } from './resource-import-guard.js';
 
@@ -183,5 +186,177 @@ const s = { bgImage: bg1.value }
     expect(summary.d1BgFixed).toBeUndefined();
     expect(summary.d1ColorFixed).toBeUndefined();
     expect(out['package/index.vue']).toBe(files['package/index.vue']);
+  });
+});
+
+describe('⑪-c 资源挂载/臆造规则审计（#128 ⑧，只报不改）', () => {
+  const noopLogger = { info() {}, warn() {}, error() {}, debug() {} };
+  const mkTmpOutput = (images: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'pwsh-11c-'));
+    mkdirSync(join(dir, 'resources', 'images'), { recursive: true });
+    for (const f of images) writeFileSync(join(dir, 'resources', 'images', f), 'x');
+    return dir;
+  };
+
+  it('已下载图片零引用 ⇒ summary.unreferencedImages + RES-UNREF WARN；mc-preview 豁免', () => {
+    const dir = mkTmpOutput(['header-1697.png', 'mc-preview.png']);
+    try {
+      const warn = jest.fn();
+      const { summary } = runPreWriteSelfHealing(
+        { 'package/index.vue': '<template><div/></template>' },
+        { outputPath: dir },
+        { logger: { ...noopLogger, warn } },
+      );
+      expect(summary.unreferencedImages).toEqual(['header-1697']);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('RES-UNREF'),
+        expect.objectContaining({ images: ['header-1697'] }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('图片被任一 .vue 引用 ⇒ 不报（阳性对照）', () => {
+    const dir = mkTmpOutput(['header-1697.png']);
+    try {
+      const { summary } = runPreWriteSelfHealing(
+        { 'package/index.vue': `<template><div/></template>
+<script setup>
+import logo from '../resources/images/header-1697.png'
+</script>` },
+        { outputPath: dir },
+        { logger: noopLogger },
+      );
+      expect(summary.unreferencedImages).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it(':first-child{background:transparent} 与重复卡真值底色矛盾 ⇒ 强 WARN', () => {
+    const warn = jest.fn();
+    const { summary } = runPreWriteSelfHealing(
+      { 'package/common.less': '.card:first-child { background: transparent; }' },
+      { layoutStructure: { repeatedCardTruth: { baseFill: { css: '#123259' } } } } as any,
+      { logger: { ...noopLogger, warn } },
+    );
+    expect(summary.firstChildTransparent).toEqual([{ file: 'package/common.less', class: 'card' }]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('FIRST-CHILD-TRANSPARENT'),
+      expect.anything(),
+    );
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('矛盾'))).toBe(true);
+  });
+
+  it(':first-child transparent 但无真值对照 ⇒ 弱 WARN 留痕', () => {
+    const warn = jest.fn();
+    const { summary } = runPreWriteSelfHealing(
+      { 'package/index.vue': `<template><div/></template>
+<style lang="less">
+.card:first-child { background: transparent; }
+</style>` },
+      {},
+      { logger: { ...noopLogger, warn } },
+    );
+    expect(summary.firstChildTransparent).toHaveLength(1);
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('留痕观察'))).toBe(true);
+  });
+
+  it('真值底色本身是透明 ⇒ 不算矛盾（阳性对照）', () => {
+    const warn = jest.fn();
+    runPreWriteSelfHealing(
+      { 'package/common.less': '.card:first-child { background: transparent; }' },
+      { layoutStructure: { repeatedCardTruth: { baseFill: { css: 'transparent' } } } } as any,
+      { logger: { ...noopLogger, warn } },
+    );
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('矛盾'))).toBe(false);
+  });
+
+  // ③ 透明容器臆造背景审计（2026-10-20 · 5ef650ff 实锤：figma fills=[] 透明容器
+  //    被产物刷 background ⇒ 盖住宿主底色，浅发白/深发灰。只报不改）
+  it('透明容器（figma fills=[]）被产物刷背景 ⇒ summary.transparentContainerBg + 强 WARN + 台账', () => {
+    const dir = mkTmpOutput([]);
+    try {
+      const warn = jest.fn();
+      const { summary } = runPreWriteSelfHealing(
+        {
+          'package/index.vue':
+            '<template><div class="c-x-root other" data-section-id="38:3134"><span/></div></template>',
+          'package/common.less': '.c-x-root { background: #1f1f1f; padding: 8px; }',
+        },
+        {
+          outputPath: dir,
+          layoutStructure: {
+            transparentContainerTruth: { transparentIds: ['38:3134'], total: 3, rootTransparent: true },
+          },
+        } as any,
+        { logger: { ...noopLogger, warn } },
+      );
+      expect(summary.transparentContainerBg).toHaveLength(1);
+      expect(summary.transparentContainerBg[0]).toEqual(
+        expect.objectContaining({ sectionId: '38:3134', class: 'c-x-root', file: 'package/common.less' }),
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('TRANSPARENT-CONTAINER-BG'),
+        expect.objectContaining({ truthTotal: 3 }),
+      );
+      const meta = JSON.parse(readFileSync(join(dir, 'component-meta.json'), 'utf-8'));
+      expect(
+        meta.failOpenEvents.some((e: any) => e.rule === 'TRANSPARENT-CONTAINER-BG' && e.severity === 'WARN'),
+      ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('透明容器 background:transparent ⇒ 不报（阳性对照）', () => {
+    const warn = jest.fn();
+    const { summary } = runPreWriteSelfHealing(
+      {
+        'package/index.vue': '<template><div class="c-x-root" data-section-id="38:3134"/></template>',
+        'package/common.less': '.c-x-root { background: transparent; }',
+      },
+      {
+        layoutStructure: {
+          transparentContainerTruth: { transparentIds: ['38:3134'], total: 1 },
+        },
+      } as any,
+      { logger: { ...noopLogger, warn } },
+    );
+    expect(summary.transparentContainerBg).toBeUndefined();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('TRANSPARENT-CONTAINER-BG'))).toBe(false);
+  });
+
+  it('无透明容器真值 ⇒ 审计不启动（阳性对照）', () => {
+    const warn = jest.fn();
+    const { summary } = runPreWriteSelfHealing(
+      {
+        'package/index.vue': '<template><div class="c-x-root" data-section-id="38:3134"/></template>',
+        'package/common.less': '.c-x-root { background: #1f1f1f; }',
+      },
+      {} as any,
+      { logger: { ...noopLogger, warn } },
+    );
+    expect(summary.transparentContainerBg).toBeUndefined();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('TRANSPARENT-CONTAINER-BG'))).toBe(false);
+  });
+
+  it('透明容器无 data-section-id 锚点 ⇒ 不报（阳性对照）', () => {
+    const warn = jest.fn();
+    const { summary } = runPreWriteSelfHealing(
+      {
+        'package/index.vue': '<template><div class="c-x-root"/></template>',
+        'package/common.less': '.c-x-root { background: #1f1f1f; }',
+      },
+      {
+        layoutStructure: {
+          transparentContainerTruth: { transparentIds: ['38:3134'], total: 1 },
+        },
+      } as any,
+      { logger: { ...noopLogger, warn } },
+    );
+    expect(summary.transparentContainerBg).toBeUndefined();
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('TRANSPARENT-CONTAINER-BG'))).toBe(false);
   });
 });

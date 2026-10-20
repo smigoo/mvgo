@@ -28,12 +28,28 @@ import { normalizeFontSizeLiterals } from '../../utils/font-size-normalizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
+// 🛡️ L2-a（195c8d0e 实锤）：写盘门禁判坏且磁盘无 last-good 时，回退到分块缓存中的合格版本
+import { pickCachedChunkLastGood } from './cached-chunk-last-good.js';
 import {
   isColorEvaluable,
   isColorFnConsumer,
   NEUTRAL_LESS_COLOR,
 } from '../../utils/less-color-funcs.js';
 import { safeLogger } from '../../logger/safe-logger.js';
+// 🛡️ #139（N3 · 2026-10-20 · e7a50be7 实锤）：颜色变量补齐「真值优先」——
+//   旧行为纯按变量名猜色（84 处 `// 自动添加（语义推断）`：group-bg-gold→#ffffff、
+//   group-glow-gold→#333333、accent-gold→#409EFF 蓝），与 Figma 真值全面漂移。
+//   新口径（对齐「node 出颜色」分工）：规范槽位用规范值；组件自定义颜色变量优先取
+//   node 真值桶（唯一才取，避免错位），无唯一真值则取桶内中性色，**不再编造语义色**。
+import {
+  buildTruthPalette,
+  bucketFromVarName,
+  bucketOfProperty,
+  findConsumerProperty,
+  neutralForBucket,
+  pickTruthCandidate,
+} from '../../utils/truth-palette.js';
+import { MC_CANONICAL_COLOR_SLOTS } from '../../utils/style-tokens.js';
 // 🛡️ 2026-09-29 治本：写盘门禁前置自愈——自闭合标签「` /` 后夹属性」畸形还原（单点实现，双链路共用）
 import { repairSelfClosingSlashInsideTag } from '../../utils/pre-write-self-healing.js';
 
@@ -431,11 +447,49 @@ function guessLessVarValueByName(n = '', ctx = {}) {
  *   拿不到消费端上下文时可省略 —— 此时退化为纯名字猜测（与刀 16b 之前行为一致）。
  * @returns {string}
  */
+/** 规范颜色槽位名集合（设计系统预设，属真值范畴；不在此列的组件变量不得按名编造色值） */
+const CANONICAL_COLOR_NAMES = new Set([
+  ...Object.keys(MC_CANONICAL_COLOR_SLOTS.light),
+  ...Object.keys(MC_CANONICAL_COLOR_SLOTS.dark),
+]);
+/** 猜测值是否为 CSS 颜色/渐变（用于分流「颜色变量」与「数值变量」） */
+const COLOR_VALUE_RE = /^(#|rgba?\(|hsla?\(|linear-gradient|radial-gradient)/i;
+
 export function safeLessVarValue(name = '', ctx = {}) {
   const n = String(name).replace(/^@/, '').toLowerCase();
-  // 🔴 2026-10-12 治本 B：把 `ctx`（含 `background: 'dark'`）**透传**给名字推断，
-  //   让深色主题的背景/边框/文字槽位取深色系值（否则两主题同值 ⇒ 切主题零变化）。
   const guess = guessLessVarValueByName(n, ctx);
+  // 🛡️ #139（N3 · e7a50be7 实锤）：颜色变量一律「真值优先、禁止按名编造」。
+  //   旧行为：`@color-group-glow-gold` → /accent|primary/ 未命中 → /(text|color)/ 命中 →
+  //   #333333；`@color-accent-gold` → /accent/ 命中 → #409EFF（蓝）。而 node 真值分别是
+  //   #ffc800（金）/ rgba(226,208,132,0.2)。按名猜测让整批变量色值漂移。
+  //   新口径：① 规范槽位（设计系统预设）保留规范值；② 组件自定义颜色变量取真值桶
+  //   （仅当桶内恰好 1 个候选，避免错位）；③ 否则取桶内中性色（backgrounds 全透明），
+  //   绝不编造语义色——「没有真值就不给颜色」。
+  if (COLOR_VALUE_RE.test(String(guess))) {
+    if (CANONICAL_COLOR_NAMES.has(n)) {
+      if (isColorEvaluable(guess) || !isColorFnConsumer(n, ctx)) return guess;
+      return NEUTRAL_LESS_COLOR;
+    }
+    const prop = findConsumerProperty(ctx.styleText || '', n);
+    // 🔴 桶优先取「真实消费属性」（事实）；查不到再按**变量名用途词**退路
+    //   （只决定用哪个桶的中性色/真值，不产生新色值）。
+    //   只认消费属性会让「定义在 mixin、消费在别处」的变量桶恒为 null ⇒ 全退成字色，
+    //   `@color-card-bg` 白底变 #333333（存量 spec 实锤）。
+    const bucket = bucketOfProperty(prop || '') || bucketFromVarName(n);
+    const dark = ctx.background === 'dark';
+    // 🔴 #139（N3 · e7a50be7 实锤）：**候选收窄**后唯一才取真值。
+    //   收窄维度：属性形态（color/border 不接受渐变）× 色系（名字带 gold/mint/cyan ⇒
+    //   只在同色系真值里挑）× 透明度档位（panel 偏半透明 / item·cell 偏不透明）。
+    //   多义 = 真值不可判定 ⇒ 走中性兜底，**不猜**（猜就是 #409EFF 蓝的来路）。
+    if (bucket) {
+      const truth = pickTruthCandidate(ctx.truthPalette, bucket, {
+        varName: n,
+        property: prop || '',
+      });
+      if (truth) return truth;
+      return neutralForBucket(bucket, { dark });
+    }
+    return isColorFnConsumer(n, ctx) ? NEUTRAL_LESS_COLOR : neutralForBucket('texts', { dark });  }
   // 🛡️ 刀 16b（2026-09-13）：**消费端事实优先于名字猜测**。
   // 名字分支可能给出非颜色（`@line-alpha` → '1'、`@radius-x` → '8px'）或兜底 'unset'；
   // 若该变量在样式里被 `lighten()/darken()/fade()` 等当**实参**引用，这些值在 LESS
@@ -497,10 +551,21 @@ export function shouldSkipWrite(fullPath, content) {
   }
 }
 
+/**
+ * 🛡️ L2-a（2026-10-20 · mc-max-1792497064987-195c8d0e 实锤）：分块缓存 last-good 回退。
+ * 实现与单测见 `cached-chunk-last-good.js`（独立模块，避免被本文件的重量级 import 链拖累）。
+ * 判据：①chunk-meta 有登记 ②候选自身过写盘门禁 ③与本轮输出同 class 前缀。
+ * @type {import('./cached-chunk-last-good.js').pickCachedChunkLastGood}
+ */
 export function writeFiles(files, outputPath, options = {}) {
   // 🔒 入口归一化（见 logger.js safeLogger）：本函数体内有 18 处裸 logger.* 调用，
   // 其中 3 处在 catch 块内。logger 未传时降级为 no-op，避免 TypeError 掩盖真实写盘错误。
   const logger = safeLogger(options.logger);
+  // 🛡️ #139（N3）：真值色板（node 侧精确色值，按用途分桶）。缺省时颜色变量走中性色，
+  //   不再按变量名编造语义色。调用方负责从 figma 树 buildTruthPalette 后透传。
+  if (!options.truthPalette && options.figmaRoot) {
+    try { options.truthPalette = buildTruthPalette(options.figmaRoot); } catch { /* fail-open */ }
+  }
 
   if (!files || typeof files !== 'object') {
     logger.error('writeFiles 收到无效的 files 参数', { files });
@@ -807,7 +872,7 @@ export function writeFiles(files, outputPath, options = {}) {
             if (missing.length > 0)
               declParts.push(
                 missing
-                  .map((v) => `@${v}: ${safeLessVarValue('@' + v, { styleText: styleBlocks })};`)
+                  .map((v) => `@${v}: ${safeLessVarValue('@' + v, { styleText: styleBlocks, truthPalette: options.truthPalette })};`)
                   .join('\n'),
               );
             if (missingMixins.length > 0)
@@ -825,7 +890,7 @@ export function writeFiles(files, outputPath, options = {}) {
             if (retry.valid) {
               sanitizedContent = fixed;
               if (missing.length > 0) {
-                pendingThemeVars += `${missing.map((v) => `@${v}: ${safeLessVarValue('@' + v, { styleText: styleBlocks })};`).join('\n')}\n`;
+                pendingThemeVars += `${missing.map((v) => `@${v}: ${safeLessVarValue('@' + v, { styleText: styleBlocks, truthPalette: options.truthPalette })};`).join('\n')}\n`;
                 if (logger) {
                   logger.warn(
                     `🛡️ 写盘门禁自动补全缺失 less 变量 ${missing.join(', ')}（${relativePath}）`,
@@ -907,27 +972,44 @@ export function writeFiles(files, outputPath, options = {}) {
               _hasLastGood = false;
             }
             if (!_hasLastGood) {
-              const _retry = gateStandaloneLessWrite(
-                rebalanceBlockComments(sanitizedContent),
+              // 🛡️ L2-a（195c8d0e 实锤）：磁盘无 last-good ⇒ 先试**分块缓存**里的合格版本。
+              //   命中则直接用它落盘（不再走块注释配平 / 跳过），避免好样式被兜底模板覆盖。
+              const _cachedGood = pickCachedChunkLastGood(
+                outputPath,
                 relativePath,
+                sanitizedContent,
               );
-              if (_retry.ok) {
-                sanitizedContent = _retry.content;
+              if (_cachedGood) {
+                sanitizedContent = _cachedGood;
                 if (logger) {
                   logger.warn(
-                    `🛡️ LESS 写盘门禁降级落盘（无 last-good，块注释配平）: ${relativePath}`,
-                    { defects: _lessGate.defects, retryFixes: _retry.fixes },
+                    `🛡️ LESS 写盘门禁失败，已回退到分块缓存中的合格版本: ${relativePath}`,
+                    { defects: _lessGate.defects, recoveredChars: _cachedGood.length },
                   );
                 }
               } else {
-                if (logger) {
-                  logger.warn(
-                    `🛡️ LESS 写盘门禁失败（无 last-good，配平后仍缺陷，已跳过）: ${relativePath}`,
-                    { defects: _retry.defects },
-                  );
+                const _retry = gateStandaloneLessWrite(
+                  rebalanceBlockComments(sanitizedContent),
+                  relativePath,
+                );
+                if (_retry.ok) {
+                  sanitizedContent = _retry.content;
+                  if (logger) {
+                    logger.warn(
+                      `🛡️ LESS 写盘门禁降级落盘（无 last-good，块注释配平）: ${relativePath}`,
+                      { defects: _lessGate.defects, retryFixes: _retry.fixes },
+                    );
+                  }
+                } else {
+                  if (logger) {
+                    logger.warn(
+                      `🛡️ LESS 写盘门禁失败（无 last-good、无缓存合格版本，配平后仍缺陷，已跳过）: ${relativePath}`,
+                      { defects: _retry.defects },
+                    );
+                  }
+                  skippedFiles.push(relativePath);
+                  continue;
                 }
-                skippedFiles.push(relativePath);
-                continue;
               }
             } else {
               if (logger) {
@@ -1260,7 +1342,7 @@ export function writeFiles(files, outputPath, options = {}) {
         const decl = [...globalMissing.entries()]
           .map(
             ([v, info]) =>
-              `@${v}: ${safeLessVarValue('@' + v, { styleText: info?.styleText })};`,
+              `@${v}: ${safeLessVarValue('@' + v, { styleText: info?.styleText, truthPalette: options?.truthPalette })};`,
           )
           .join('\n');
         pendingThemeVars += `${decl}\n`;

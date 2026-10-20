@@ -98,10 +98,12 @@
               <!-- Figma 来源：源设计缩略图 + URL -->
               <div class="source-value" v-if="taskSourceMode === 'figma'">
                 <div class="source-block-label">{{ sourceBlockLabel }}</div>
-                <!-- 🔴 2026-10-14：多主题任务 ⇒ 逐主题卡（缩略图/名称/深浅 chip/设计稿跳转） -->
-                <div v-if="themeList.length > 1" class="task-theme-list">
+                <!-- 🔴 2026-10-14：多主题任务 ⇒ 逐主题卡（缩略图/名称/深浅 chip/设计稿跳转）
+                     🔴 2026-10-20：生成期也可见 —— displayThemeList 在 declare 未就绪时
+                     用任务对象 themeNodes 的「计划主题卡」顶替 -->
+                <div v-if="displayThemeList.length > 1" class="task-theme-list">
                   <div
-                    v-for="item in themeList"
+                    v-for="item in displayThemeList"
                     :key="item.key"
                     class="task-theme-card"
                     :class="{ 'is-clickable': !!item.previewUrl }"
@@ -389,6 +391,8 @@
                           <span class="tag-pill" v-if="!pageTaskFlag && taskTier">
                             {{ taskTier === 'lite' ? 'Lite' : 'Max' }}
                           </span>
+                          <!-- 🔴 2026-10-20：主题徽章（单/多主题 + 设计真值主题数 + 默认一体化主题） -->
+                          <span class="tag-pill tag-multitheme">{{ themeModeLabel }}</span>
                           <span class="tag-pill tag-batch" v-if="batchContext">
                             {{ batchContext.index }}/{{ batchContext.total }}
                           </span>
@@ -2017,6 +2021,85 @@ const themeList = ref<TaskThemeItem[]>([])
 const previewModalUrl = ref('')
 const previewModalTitle = ref('')
 
+/**
+ * 🔴 2026-10-20：多主题任务在**生成期**就要看到各主题设计图 + 多主题标签。
+ *   既有 themeList 的数据源是产物 declare.json（生成完成后才落盘）⇒ 运行中恒空。
+ *   计划主题卡的数据源是任务对象 themeNodes（createTask 时已持久化，含各主题
+ *   previewImageUrl）——declare 就绪后 themeList 覆盖显示（落盘图更权威）。
+ */
+const taskThemeNodes = computed<any[] | null>(() => {
+  const tn = task.value?.themeNodes
+  return Array.isArray(tn) && tn.length > 1 ? tn : null
+})
+/** 计划主题卡（生成期占位展示），declare 就绪后由 themeList 顶替 */
+const plannedThemeList = ref<TaskThemeItem[]>([])
+/** 边栏实际渲染的主题卡清单 */
+const displayThemeList = computed<TaskThemeItem[]>(() =>
+  themeList.value.length > 1 ? themeList.value : plannedThemeList.value,
+)
+/**
+ * 🔴 2026-10-20：主题徽章口径 —— 只数**设计稿真值主题**（不含系统内置一体化 dark 占位）：
+ *   多主题 ⇒「多主题（设计主题 · N + 默认一体化主题）」；单主题 ⇒「单主题（设计主题 · 1 + 默认一体化主题）」。
+ *   数据源优先 declare 的 themeList（含内置标记），生成期用 plannedThemeList（全部是设计稿真值）。
+ */
+const designThemeCount = computed(() => {
+  const list = displayThemeList.value
+  if (!list.length) return 1
+  const truths = list.filter((x) => !x.isBuiltin).length
+  return truths > 0 ? truths : list.length
+})
+const themeModeLabel = computed(
+  () =>
+    `${designThemeCount.value > 1 ? '多主题' : '单主题'}（设计主题 · ${designThemeCount.value} + 默认一体化主题）`,
+)
+
+function seedPlannedThemes() {
+  const nodes = taskThemeNodes.value
+  const cid = task.value?.componentId || task.value?.sessionId
+  if (!nodes || !cid || pageTaskFlag.value) {
+    plannedThemeList.value = []
+    return
+  }
+  plannedThemeList.value = nodes.map((tn: any, i: number) => ({
+    key: `planned-${i}`,
+    name: String(tn.name || (i === 0 ? '默认主题' : `主题 ${i + 1}`)),
+    brightness: tn.brightness === 'dark' ? 'dark' : 'light',
+    isBuiltin: false,
+    // 第 0 张（默认主题）复用任务主预览 mc-preview.png（用户提交前已确认落盘）；
+    // 副主题优先用持久化的 previewImageUrl，缺省走下方实时拉取兜底。
+    previewUrl:
+      i === 0
+        ? `/api/component/${cid}/file?path=resources/images/mc-preview.png&raw=1`
+        : String(tn.previewImageUrl || ''),
+    figmaUrl: tn.fileKey
+      ? `https://www.figma.com/file/${tn.fileKey}${tn.nodeId ? `/?node-id=${String(tn.nodeId).replace(/:/g, '-')}` : ''}`
+      : '',
+  }))
+  // 缺图的副主题实时拉 Figma 预览兜底（与 loadThemeMeta 的兜底同口径；失败静默留占位）
+  for (const item of plannedThemeList.value) {
+    if (item.previewUrl || !item.figmaUrl) continue
+    void fetchThemePreviewInto(item, plannedThemeList.value)
+  }
+}
+
+/** 实时拉取某主题的 Figma 预览图并写入目标列表（失败静默） */
+function fetchThemePreviewInto(item: TaskThemeItem, list: TaskThemeItem[]) {
+  return fetch(`/api/phase2/figma-preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ figmaUrl: item.figmaUrl }),
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      const url =
+        data?.data?.imageUrl || data?.imageUrl || data?.data?.previewImageUrl || data?.previewImageUrl || ''
+      if (!url) return
+      const target = list.find((x) => x.key === item.key)
+      if (target && !target.previewUrl) target.previewUrl = url
+    })
+    .catch(() => {})
+}
+
 async function loadThemeMeta() {
   const t = task.value
   const cid = t?.componentId || t?.sessionId
@@ -2072,20 +2155,7 @@ async function loadThemeMeta() {
     //   其不展示预览图，仅小字说明「系统内置一体化 dark 主题」）
     for (const item of themeList.value) {
       if (item.isBuiltin || item.previewUrl || !item.figmaUrl) continue
-      void fetch(`/api/phase2/figma-preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ figmaUrl: item.figmaUrl }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          const url =
-            data?.data?.imageUrl || data?.imageUrl || data?.data?.previewImageUrl || data?.previewImageUrl || ''
-          if (!url) return
-          const target = themeList.value.find((x) => x.key === item.key)
-          if (target && !target.previewUrl) target.previewUrl = url
-        })
-        .catch(() => {})
+      void fetchThemePreviewInto(item, themeList.value)
     }
   } catch {
     /* declare 读取失败 ⇒ 静默走单图展示 */
@@ -2093,14 +2163,23 @@ async function loadThemeMeta() {
 }
 
 watch(
-  () => [task.value?.componentId, task.value?.sessionId, pageTaskFlag.value],
+  () => [task.value?.componentId, task.value?.sessionId, pageTaskFlag.value, taskThemeNodes.value],
   () => {
     themeList.value = []
     previewModalUrl.value = ''
     previewModalTitle.value = ''
+    seedPlannedThemes() // 🔴 2026-10-20：生成期即展示计划主题卡
     void loadThemeMeta()
   },
   { immediate: true },
+)
+
+// 🔴 2026-10-20：任务跑完 ⇒ declare.json 就绪，计划卡升级为落盘图权威版
+watch(
+  () => task.value?.status,
+  (s, prev) => {
+    if (s === 'completed' && prev && prev !== 'completed') void loadThemeMeta()
+  },
 )
 
 function openThemePreview(item: TaskThemeItem) {
@@ -2112,8 +2191,14 @@ function openThemePreview(item: TaskThemeItem) {
 
 /** 主题缩略图加载失败（主稿兜底图在任务运行期间可能还没落盘）⇒ 退回占位符 */
 function onThemeThumbError(item: TaskThemeItem) {
-  const target = themeList.value.find((x) => x.key === item.key)
-  if (target) target.previewUrl = ''
+  const list = themeList.value.some((x) => x.key === item.key) ? themeList.value : plannedThemeList.value
+  const target = list.find((x) => x.key === item.key)
+  if (!target) return
+  target.previewUrl = ''
+  // 🔴 2026-10-20：计划卡第 0 张的 mc-preview.png 在运行早期可能未落盘（404）⇒ 实时拉取补上
+  if (target.key.startsWith('planned-') && target.figmaUrl) {
+    void fetchThemePreviewInto(target, list)
+  }
 }
 watch(sourceDesignImageUrl, () => {
   sourceImageLoaded.value = false
@@ -5935,6 +6020,15 @@ watch(bindingWizardOpen, (open) => {
   background: var(--c-green-50);
   color: var(--c-green-700);
   font-family: var(--font-mono);
+}
+
+/* 🔴 2026-10-20：主题徽章（文案较长 ⇒ 不换行 + 稍小字号，避免撑破 tag-row） */
+.tag-pill.tag-multitheme {
+  background: linear-gradient(135deg, var(--c-blue-50) 0%, var(--c-purple-50) 100%);
+  color: var(--c-blue-700);
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 /* ── 身份识别区 ─ */

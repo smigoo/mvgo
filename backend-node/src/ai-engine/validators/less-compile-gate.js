@@ -454,8 +454,8 @@ function stripCommentsAndStrings(source = '') {
  * 🛡️ 2026-10-19（mc-max-1792235823223-5e063d76 实锤）：**孤立右圆括号**配平。
  *
  * 病灶：LLM 写 `background: @color-bg-page);`（多一个 `)`），而既有判据只查
- *   `{`/`}`（scanStandaloneLessDefects ① + healLessSource(braces) + style-class-
- *   consolidator#isBalanced 全都是只数大括号）⇒ `){` 平衡、缺陷扫描零命中 ⇒
+ *   `{`/`}`（scanStandaloneLessDefects ① + healLessSource(braces) 全都是只数大括号）
+ *   ⇒ `){` 平衡、缺陷扫描零命中 ⇒
  *   坏文本原样落盘 ⇒ LessCompileGate 报 `Unrecognised input. Possibly missing
  *   opening '('`（191:29）⇒ L0-B 重试 2 轮仍失败 ⇒ **整次生成失败**。
  *
@@ -530,6 +530,88 @@ export function rebalanceOrphanCloseParens(source = '') {
   const dropSet = new Set(drop)
   const kept = cur.split('').filter((_, idx) => !dropSet.has(idx)).join('')
   return { source: kept, dropped, changed: true }
+}
+
+/**
+ * 🛡️ L1-b（2026-10-20 · mc-max-1792497064987-195c8d0e 实锤）：**缺失右圆括号**确定性补全。
+ *
+ * 病灶：`rebalanceOrphanCloseParens` 按设计只抹「孤立 `)`」（多出来的），
+ *   **缺 `)` 一律不补**（其头注明确「不猜位置补」）⇒ 这是整条链上唯一没有自愈出口的缺陷，
+ *   只能靠 L0-B 重试，重试 6 轮仍失败 ⇒ 写盘门禁跳过 ⇒ 兜底模板覆盖磁盘
+ *   （195c8d0e：641 行合格样式被换成 15 行兜底，19 个布局容器类零定义）。
+ *
+ * 判据（纯语法、位置唯一、不猜语义）：
+ *   括号**不允许跨越声明终结符**（`;`）或块终结符（`}`）。因此扫描到 `;` / `}`
+ *   时若括号栈仍非空，缺失的 `)` 唯一确定位置就是**该终结符之前**：
+ *     `background: linear-gradient(\n 180deg,\n rgba(...) 0%;`  → 补在 `;` 前 ✓
+ *     `background: rgba(1,2,3;`                                 → 补成 `rgba(1,2,3);` ✓
+ *     `.a { color: red; }`（正常）                              → 栈空，零改动 ✓
+ *   文件末尾仍有残留开括号 ⇒ 追加到末尾。
+ *
+ * 安全边界：
+ *   - 逐字符**跳过注释与字符串**（`content: "("` / `url("a;b.png")` / `// (` 不得误伤）；
+ *   - 与 `rebalanceOrphanCloseParens` **互补不冲突**：先抹多余、再补缺失；
+ *   - 补完由 `scanStandaloneLessDefects` 复检 ⇒ 救不回来的仍判坏跳过（不劣于现状）。
+ *
+ * @param {string} source
+ * @returns {{source: string, added: number, changed: boolean}}
+ */
+export function healMissingCloseParens(source = '') {
+  const cur = String(source || '')
+  const pending = [] // [{ at: 插入位置, count: 补几个 }]
+  const stack = []
+  let i = 0
+  const n = cur.length
+  while (i < n) {
+    const c = cur[i]
+    const nx = cur[i + 1]
+    if (c === '/' && nx === '*') {
+      const end = cur.indexOf('*/', i + 2)
+      i = end < 0 ? n : end + 2
+      continue
+    }
+    if (c === '/' && nx === '/') {
+      const end = cur.indexOf('\n', i)
+      i = end < 0 ? n : end
+      continue
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1
+      while (j < n) {
+        if (cur[j] === '\\') { j += 2; continue }
+        if (cur[j] === c) { j += 1; break }
+        j += 1
+      }
+      i = j
+      continue
+    }
+    if (c === '(') stack.push(i)
+    else if (c === ')') { if (stack.length) stack.pop() }
+    else if (c === ';' || c === '}') {
+      // 声明/块终结符处仍有未闭合 `(` ⇒ 缺的 `)` 只能在这个终结符之前
+      if (stack.length) {
+        pending.push({ at: i, count: stack.length })
+        stack.length = 0
+      }
+    }
+    i += 1
+  }
+  const tailCount = stack.length
+  if (pending.length === 0 && tailCount === 0) {
+    return { source: cur, added: 0, changed: false }
+  }
+
+  let out = cur
+  let added = 0
+  for (const p of pending) added += p.count
+  added += tailCount
+  if (tailCount > 0) out += ')'.repeat(tailCount)
+  // 从后往前插入，避免索引位移
+  for (let k = pending.length - 1; k >= 0; k -= 1) {
+    const { at, count } = pending[k]
+    out = out.slice(0, at) + ')'.repeat(count) + out.slice(at)
+  }
+  return { source: out, added, changed: true }
 }
 
 /**
@@ -739,6 +821,15 @@ export function gateStandaloneLessWrite(source = '', filePath = '') {
     fixes.push(`heal(parens:${parens.dropped.length})`)
   }
 
+  // 🛡️ L1-b（195c8d0e 实锤）：缺失 `)` 确定性补全（补在 `;` / `}` 前，位置唯一）。
+  //   必须在 rebalanceOrphanCloseParens **之后**：先抹多余、再补缺失，两者互补。
+  //   此前缺 `)` 是全链唯一无自愈出口的缺陷 ⇒ 只能判坏跳过 ⇒ 兜底模板覆盖磁盘。
+  const missingParens = healMissingCloseParens(content)
+  if (missingParens.changed) {
+    content = missingParens.source
+    fixes.push(`heal(missing-paren:${missingParens.added})`)
+  }
+
   // 🛡️ 2026-10-19（c-a579d-6a579df0 实锤）：独立样式走全局 CSS 注入，`:deep(...)`
   //   是 SFC scoped 专有语法 ⇒ 整条规则被浏览器丢弃（antd 接管样式全丢）。
   //   确定性改写为裸后代选择器，保住规则本身。
@@ -923,6 +1014,102 @@ function collectCriticalLessFiles(outputPath) {
 }
 
 /**
+ * 🛡️ 2026-10-20（5ef650ff/ee06ee24 实锤）：双真值产物的**设计深色轨中性灰猜色** BLOCK。
+ *
+ * 病灶：双真值（dualTruth）产物的「设计深色轨」mixin（`.theme-theme_2()` 等，非内置
+ *   占位 `.theme-dark()`）里，颜色槽位若是「自愈迁出/语义推断」的**中性灰**
+ *   （#2b2b2b/#e6e6e6/#333333 这类 r≈g≈b 的消色）且被 common.less 实际引用 ⇒
+ *   该深色轨渲染观感 ≈ 默认 dark（设计稿深蓝/深青色板丢失）——prompt 侧
+ *   formatCrossThemeColorFacts 早已明令禁止这类猜色，但缺门禁兜底。
+ *
+ * 判据（三条件同时成立才命中，全部可辩驳）：
+ *   ① declare.json 标 dualTruth（或主题清单含非内置深色轨）；
+ *   ② 设计轨 mixin 内的 `@color*` 槽位带「语义推断/迁出」猜测标记且值是消色灰；
+ *   ③ 该槽位被 common.less 实际引用（不引用的死槽位不判）。
+ * 近白豁免（#ffffff 系，min 通道 ≥200）：深色轨常见合理值，不判（967f9696 实锤）。
+ * LLM 亲笔（无猜测标记）的灰色同样命中——设计稿可能真有灰色。
+ *
+ * 🛡️ 2026-10-20 降级（77caa86b/967f9696 双实锤）：原 BLOCK 造成任务级必失败——
+ *   猜灰槽位在跨稿真值表**无映射可依**（#2b2b2b 是臆造/内置默认灰，副稿无对应色），
+ *   LLM 重试修不掉 ⇒ BLOCK = 死锁，比要防的「深色稿发灰」破坏性更大。
+ *   且门禁侧拿不到真值表、无法证明「有真值可依」⇒ 恒 WARN 留痕，
+ *   severity 判定交视觉验收/人工评估（诊断随 task.result 可审计）。
+ *
+ * 纯函数、零 IO，供 spec 直测；接线在 LessCompileGate.validate（outputPath 分支）。
+ *
+ * @param {object} opts
+ * @param {string} opts.themeVarsContent theme-vars.less 全文
+ * @param {string} opts.commonLessContent common.less 全文
+ * @param {boolean} opts.hasDesignDarkTrack 是否存在设计深色轨（declare 判定结果）
+ * @returns {Array<{slot:string, value:string, mixin:string, blocked:boolean, guessed:boolean}>}
+ */
+export function auditDesignDarkTrackGuessedGray({ themeVarsContent, commonLessContent, hasDesignDarkTrack } = {}) {
+  if (!hasDesignDarkTrack) return []
+  const tv = String(themeVarsContent || '')
+  if (!tv) return []
+  const isNeutralGrayHex = (v) => {
+    const m = /#([0-9a-fA-F]{3,8})\b/.exec(String(v).trim())
+    if (!m) return false
+    let h = m[1]
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+    if (h.length < 6) return false
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+    // 消色判定：RGB 三通道近似相等（容差 4）
+    return Math.max(r, g, b) - Math.min(r, g, b) <= 4
+  }
+  // 近白豁免（2026-10-20 · 967f9696 实锤误杀）：深色轨上次要文字/滚动条/反白
+  // 用 #ffffff 系是常见合理值（消色但非「僵尸灰」），不判。
+  const isNearWhiteHex = (v) => {
+    const m = /#([0-9a-fA-F]{3,8})\b/.exec(String(v).trim())
+    if (!m) return false
+    let h = m[1]
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+    if (h.length < 6) return false
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+    return Math.min(r, g, b) >= 200
+  }
+  // common.less 里的**引用**（先剔定义行，避免把定义算成引用）
+  const common = String(commonLessContent || '').replace(/^\s*@[a-zA-Z0-9_-]+\s*:[^;]+;/gm, '')
+  const hits = []
+  // 按 mixin 块切分（brace 配对，兼容嵌套）
+  const mixinRe = /\.([\w-]+)\s*\(\s*\)\s*\{/g
+  let mm
+  while ((mm = mixinRe.exec(tv)) !== null) {
+    const mixinName = mm[1]
+    // 只盯设计轨（theme-theme_* 等自定义 key）；common/light/dark 不在此列
+    if (!/^theme-(?!dark$|light$)/.test(mixinName)) continue
+    const bodyStart = mm.index + mm[0].length
+    let depth = 1
+    let i = bodyStart
+    while (i < tv.length && depth > 0) {
+      if (tv[i] === '{') depth++
+      else if (tv[i] === '}') depth--
+      i++
+    }
+    const body = tv.slice(bodyStart, i - 1)
+    const declRe = /@([a-zA-Z0-9_-]*color[a-zA-Z0-9_-]*)\s*:\s*([^;]+);(\s*\/\/[^\n]*)?/gi
+    let dm
+    while ((dm = declRe.exec(body)) !== null) {
+      const [, slot, value, comment = ''] = dm
+      if (isNearWhiteHex(value)) continue
+      if (!isNeutralGrayHex(value)) continue
+      const guessed = /语义推断|迁出/.test(comment)
+      // 引用计数（common.less 剔定义行后）
+      const refRe = new RegExp(`(^|[^@\\w-])@${slot}(?![\\w-])`, 'g')
+      const referenced = (common.match(refRe) || []).length > 0
+      if (!referenced) continue
+      // 🛡️ 2026-10-20 降级（77caa86b/967f9696 双实锤）：BLOCK 曾造成任务级必失败——
+      //   跨稿真值表对猜灰槽位**无映射可依**（#2b2b2b 是臆造/内置默认灰，副稿没有对应色），
+      //   LLM 重试修不掉 ⇒ BLOCK = 死锁，比它要防的「深色稿发灰」破坏性更大。
+      //   门禁侧也拿不到真值表、无法证明「有真值可依」⇒ 全量 WARN 留痕，
+      //   交视觉验收/人工评估；诊断随 task.result.lessCompileGate.diagnostics 可审计。
+      hits.push({ slot, value: value.trim(), mixin: mixinName, blocked: false, guessed })
+    }
+  }
+  return hits
+}
+
+/**
  * 在 fileManager 创建之前预自愈 standalone less，避免虚拟文件缓存住修复前的内容。
  * 副作用：修复成功时写回磁盘，并同步更新内存中的 files 映射。
  */
@@ -1085,6 +1272,59 @@ export class LessCompileGate {
       // 且 LESS 编译能通过（url() 不参与语法校验）→ 静默丢图。此处对照磁盘真实文件给出明确诊断。
       // .vue <style> 内的 url() 已由 resource-import-guard.validateCssResourceUrls 覆盖，此处只查独立 less。
       validateStandaloneLessUrls(files, outputPath, diagnostics)
+
+      // 🛡️ 2026-10-20（5ef650ff/ee06ee24 实锤）：双真值设计深色轨中性灰猜色门禁。
+      //   有副稿真值可依却仍用猜测中性灰 ⇒ BLOCK 触发重试（真值已在 prompt 里，
+      //   重试有修正机会）；LLM 亲笔灰 WARN 不挡。fail-open：读不到文件/declare 跳过。
+      try {
+        const findFile = (suffix) => {
+          const key = Object.keys(files || {}).find((k) => normalizePath(k).endsWith(suffix))
+          if (key && typeof files[key] === 'string') return files[key]
+          try { return readFileSync(join(outputPath, suffix), 'utf-8') } catch { return '' }
+        }
+        const themeVarsContent = findFile('resources/styles/themes/theme-vars.less') || findFile('resources/styles/theme-vars.less')
+        const commonLessContent = findFile('resources/styles/common.less')
+        let hasDesignDarkTrack = false
+        try {
+          const declareRaw = readFileSync(join(outputPath, 'declare.json'), 'utf-8')
+          const tc = JSON.parse(declareRaw)?.themeConfig || {}
+          hasDesignDarkTrack = tc.dualTruth === true ||
+            (Array.isArray(tc.list) && tc.list.some((t) => t && t.key !== 'dark' && t.builtin !== true &&
+              (t.brightness === 'dark' || /dark|深色|夜|night/i.test(`${t.key} ${t.name || ''}`))))
+        } catch { /* declare 缺失 ⇒ fail-open 跳过 */ }
+        if (themeVarsContent && hasDesignDarkTrack) {
+          const grayHits = auditDesignDarkTrackGuessedGray({ themeVarsContent, commonLessContent, hasDesignDarkTrack })
+          for (const hit of grayHits) {
+            // 🛡️ 2026-10-20 降级（77caa86b/967f9696 双实锤）：两级 id 保留语义区分，severity 恒 WARN——
+            //   THEME-GRAY-001 = 猜测标记（语义推断/迁出）灰被引用，疑似僵尸灰，视觉验收关注；
+            //   THEME-GRAY-002 = 亲笔灰被引用，可能真有灰色。BLOCK 曾致任务必失败（真值表无映射，
+            //   LLM 无修复路径），WARN 留痕交人工评估。
+            diagnostics.push({
+              id: hit.guessed ? 'THEME-GRAY-001' : 'THEME-GRAY-002',
+              severity: 'WARN',
+              sourceType: 'standalone-less',
+              file: 'resources/styles/themes/theme-vars.less',
+              line: 1,
+              column: 1,
+              message: `设计深色轨 .${hit.mixin}() 的 @${hit.slot} = ${hit.value} 为中性灰且被 common.less 引用${hit.guessed ? '（语义推断/迁出，疑似内置默认灰顶替副稿色板）' : ''}——跨稿真值表对该槽位无映射时以人工/视觉验收为准`,
+              snippet: `@${hit.slot}: ${hit.value};`,
+              healApplied: false,
+            })
+          }
+        }
+      } catch (e) {
+        diagnostics.push({
+          id: 'THEME-GRAY-000',
+          severity: 'WARN',
+          sourceType: 'gate',
+          file: '(theme-gray-audit)',
+          line: 1,
+          column: 1,
+          message: `设计深色轨中性灰审计执行异常（非阻断）：${e?.message || String(e)}`,
+          snippet: '',
+          healApplied: false,
+        })
+      }
     }
 
     const fileManager = createFileManager(files, outputPath)

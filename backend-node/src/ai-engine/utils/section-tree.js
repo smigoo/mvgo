@@ -1975,47 +1975,78 @@ export function reorganizeCenteredChartLayout(sections) {
  * @returns {{sections:Array, backgrounds:Array, rootName:string, rootId:string}|null}
  */
 /**
- * 🛡️ 尾部孤儿文本子节点收集（2026-10-15 · 91544b38 footer 实锤）。
+ * 🛡️ 孤儿文本子节点收集（2026-10-15 · 91544b38 footer 实锤；2026-10-20 全位化 · 5ef650ff 实锤）。
  *
- * 只收「父容器直接子级中、位于所有已提升兄弟之下、且未被任何兄弟覆盖的裸 TEXT」——
- * 即设计稿里挂在容器尾部的汇总/统计行（footer）。三条判据见调用处注释。
+ * 收「父容器直接子级中、未被任何已提升兄弟 sourceNodeIds 覆盖的裸 TEXT」。
+ *
+ * 全位化背景（5ef650ff 合作厂商弹窗）：旧判据只收「位于所有兄弟之下」的尾部孤儿
+ *   （`box.y >= maxBottom-1`），导致头部统计卡的数字/标签（38:3262/3263「合作厂商/33」）
+ *   与组标题（38:3139「战略合作厂商」等容器直接子级裸 TEXT）整批丢失。
+ *
+ * 二路分流（几何判据，命名无关）：
+ *   ① **吸收**：孤儿与某已提升兄弟几何重叠（重叠面积 >50% 文本自身面积）⇒ 它视觉上
+ *      属于该兄弟（卡在图标右侧的数字/标签、面板内的标题行）⇒ 并入该兄弟的
+ *      sourceNodeIds/children（不改兄弟 bbox/布局），绝不新建段 ⇒ 零双渲风险；
+ *   ② **独立段**：不重叠任何兄弟 ⇒ 真·头/中/尾部孤儿 ⇒ 仍走原「补回独立段」逻辑
+ *      （footer 行为不变；位置由调用处按 y 排序归位）。
  *
  * @param {object} parentNode Figma 父容器节点
  * @param {Array<object>} promotedSections 已提升为 section 的兄弟（含 sourceNodeIds）
- * @returns {Array<object>} 按 y 升序的 TEXT 节点数组（可能为空）
+ * @returns {{ absorb: Array<{ section: object, texts: Array<object> }>, standalone: Array<object> }}
  */
-function collectTailOrphanTextKids(parentNode, promotedSections) {
-  if (!parentNode || typeof parentNode !== 'object') return []
-  if (!Array.isArray(promotedSections) || promotedSections.length === 0) return []
+function collectOrphanTextKids(parentNode, promotedSections) {
+  const empty = { absorb: [], standalone: [] }
+  if (!parentNode || typeof parentNode !== 'object') return empty
+  if (!Array.isArray(promotedSections) || promotedSections.length === 0) return empty
 
   const covered = new Set()
   const promotedIds = new Set()
-  let maxBottom = -Infinity
   for (const s of promotedSections) {
     if (!s || typeof s !== 'object') continue
     if (s.id != null) promotedIds.add(String(s.id))
     for (const id of Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds : []) {
       if (id != null) covered.add(String(id))
     }
-    const b = s.absoluteBoundingBox
-    if (b && Number.isFinite(b.y)) {
-      maxBottom = Math.max(maxBottom, (b.y || 0) + (b.height || 0))
+  }
+
+  const overlapRatio = (a, b) => {
+    if (!a || !b) return 0
+    const ox = Math.min(a.x + (a.width || 0), b.x + (b.width || 0)) - Math.max(a.x, b.x)
+    const oy = Math.min(a.y + (a.height || 0), b.y + (b.height || 0)) - Math.max(a.y, b.y)
+    if (ox <= 0 || oy <= 0) return 0
+    const area = (a.width || 0) * (a.height || 0)
+    return area > 0 ? (ox * oy) / area : 0
+  }
+
+  const absorbMap = new Map() // section → texts[]
+  const standalone = []
+  const kids = (parentNode.children || []).filter((c) => c && typeof c === 'object')
+  for (const k of kids) {
+    if (String(k.type || '').toUpperCase() !== 'TEXT') continue
+    const id = String(k.id || '')
+    if (!id || promotedIds.has(id) || covered.has(id)) continue
+    if (!String(k.characters || '').trim()) continue
+    const box = k.absoluteBoundingBox
+    if (!box || !Number.isFinite(box.y)) continue
+    // ① 几何重叠 ⇒ 吸收进所属兄弟（取重叠最大者）
+    let best = null
+    let bestRatio = 0.5 // 阈值：>50% 文本面积落在兄弟内
+    for (const s of promotedSections) {
+      const r = overlapRatio(box, s?.absoluteBoundingBox)
+      if (r > bestRatio) { best = s; bestRatio = r }
+    }
+    if (best) {
+      if (!absorbMap.has(best)) absorbMap.set(best, [])
+      absorbMap.get(best).push(k)
+    } else {
+      standalone.push(k)
     }
   }
-  if (!Number.isFinite(maxBottom)) return []
-
-  const kids = (parentNode.children || []).filter((c) => c && typeof c === 'object')
-  return kids
-    .filter((k) => {
-      if (String(k.type || '').toUpperCase() !== 'TEXT') return false
-      const id = String(k.id || '')
-      if (!id || promotedIds.has(id) || covered.has(id)) return false
-      if (!String(k.characters || '').trim()) return false
-      const box = k.absoluteBoundingBox
-      if (!box || !Number.isFinite(box.y)) return false
-      return box.y >= maxBottom - 1 // 容差 1px：与最后一个兄弟紧贴也算尾部
-    })
-    .sort((a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0))
+  standalone.sort((a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0))
+  return {
+    absorb: [...absorbMap.entries()].map(([section, texts]) => ({ section, texts })),
+    standalone,
+  }
 }
 
 export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
@@ -2220,18 +2251,76 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
     )
 
-    // 🛡️ 尾部孤儿文本段补回（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤 · footer 全丢）
-    //   病灶：E1 替代 vision 后，footer「共 6 个节点 / 接入设备 10810」（48:5888/5889，
-    //   slot-con 的**直接子级裸 TEXT**）永远进不了 section 树——`shouldPromoteToSection`
-    //   只提升容器类型（FRAME/GROUP/INSTANCE/…），裸 TEXT 恒被跳过 ⇒ 整段文案随 vision
-    //   段被替换而消失（产物 index.vue 只有 header + 卡列表，footer 零渲染）。
-    //   判据（纯几何 + 内容，命名无关，且只在「尾部」补、绝不插中间）：
-    //     ① 位于所有已提升兄弟之下（y ≥ max(兄弟底边)）⇒ 只补尾部孤儿，不动既有布局顺序；
-    //     ② 未被任何已提升兄弟的 sourceNodeIds 覆盖 ⇒ 真孤儿（防与列表轨重复渲染）；
-    //     ③ TEXT 且 characters 非空 ⇒ 承载文案真值（装饰 VECTOR/RECTANGLE/滚动条不补）。
-    const tailOrphanTextKids = collectTailOrphanTextKids(parentNode, nestedSections)
-    if (tailOrphanTextKids.length > 0) {
-      const boxes = tailOrphanTextKids
+    // 🛡️ 2026-10-20（#128 ⑦ · 84af4f8f 实锤）：横向并列兄弟检出。
+    //   病灶：本函数恒按 y 排序兄弟 ⇒ 隐含「兄弟=纵向堆叠」假设。但设计稿常见
+    //   「左图右文」头部（img 98×98 的 y 区间完整覆盖标题行+徽章行，x 不重叠）——
+    //   E1 拆成纵向兄弟 ⇒ 产物 header 变成「图上、标题下」两行，布局还原失败。
+    //   判据（纯几何，命名无关）：两兄弟 y 区间重叠 > 50%（以较矮者为基准）
+    //   且 x 区间分离（一方右缘 ≤ 另一方左缘 +2px 容差）⇒ 横向并列对。
+    //   动作：互挂 rowPeerIds 标记（**不改树结构**——结构合并牵连 planner/生成全链，
+    //   标记 + 真值下发 + 产物告警是窄条件治本第一步）。
+    for (let i = 0; i < nestedSections.length; i++) {
+      const a = nestedSections[i].absoluteBoundingBox
+      if (!a || !a.height) continue
+      for (let j = i + 1; j < nestedSections.length; j++) {
+        const b = nestedSections[j].absoluteBoundingBox
+        if (!b || !b.height) continue
+        const overlapY =
+          Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+        if (overlapY <= 0) continue
+        if (overlapY / Math.min(a.height, b.height) <= 0.5) continue
+        const aRight = a.x + (a.width || 0)
+        const bRight = b.x + (b.width || 0)
+        const xSeparated = aRight <= b.x + 2 || bRight <= a.x + 2
+        if (!xSeparated) continue
+        const idA = String(nestedSections[i].id || '')
+        const idB = String(nestedSections[j].id || '')
+        if (!idA || !idB) continue
+        if (!nestedSections[i].rowPeerIds) nestedSections[i].rowPeerIds = []
+        if (!nestedSections[j].rowPeerIds) nestedSections[j].rowPeerIds = []
+        if (!nestedSections[i].rowPeerIds.includes(idB)) nestedSections[i].rowPeerIds.push(idB)
+        if (!nestedSections[j].rowPeerIds.includes(idA)) nestedSections[j].rowPeerIds.push(idA)
+      }
+    }
+
+    // 🛡️ 孤儿文本段补回（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 footer 实锤；
+    //   2026-10-20 全位化 · 5ef650ff 头部统计卡文案/组标题丢失实锤）
+    //   病灶：E1 替代 vision 后，容器**直接子级裸 TEXT** 永远进不了 section 树——
+    //   `shouldPromoteToSection` 只提升容器类型，裸 TEXT 恒被跳过 ⇒ 整段文案随 vision
+    //   段被替换而消失。旧判据只补尾部 ⇒ 头部/中段孤儿（统计卡数字、面板标题）照丢。
+    //   判据（纯几何 + 内容，命名无关）：
+    //     ① 未被任何已提升兄弟的 sourceNodeIds 覆盖 ⇒ 真孤儿（防与列表轨重复渲染）；
+    //     ② TEXT 且 characters 非空 ⇒ 承载文案真值（装饰 VECTOR/RECTANGLE/滚动条不补）；
+    //     ③ 几何重叠某兄弟（>50% 文本面积）⇒ 吸收进该兄弟（不新建段，零双渲）；
+    //        否则 ⇒ 独立补回段（原 footer 逻辑，y 排序归位，头/中/尾皆可）。
+    const orphanTextKids = collectOrphanTextKids(parentNode, nestedSections)
+    // ③-a 吸收轨：并入所属兄弟（sourceNodeIds + children），兄弟 bbox/布局不动
+    for (const { section, texts } of orphanTextKids.absorb) {
+      if (!Array.isArray(section.sourceNodeIds)) section.sourceNodeIds = []
+      if (!Array.isArray(section.children)) section.children = []
+      for (const t of texts) {
+        const tid = String(t.id || '')
+        if (tid && !section.sourceNodeIds.includes(tid)) section.sourceNodeIds.push(tid)
+        section.children.push(mapChildNode(t))
+      }
+    }
+    // ③-b 独立段轨（头/中/尾真孤儿）
+    //   全位化后 standalone 可能同时含头部与尾部孤儿（5ef650ff 实测）⇒ 先按 y 带聚类：
+    //   相邻文本与当前带的底边不重叠（gap>1px）⇒ 新开一带；每带独立成段。
+    const orphanBands = []
+    for (const t of orphanTextKids.standalone) {
+      const b = t.absoluteBoundingBox
+      const band = orphanBands[orphanBands.length - 1]
+      const bandBottom = band ? Math.max(...band.map((x) => (x.absoluteBoundingBox?.y || 0) + (x.absoluteBoundingBox?.height || 0))) : -Infinity
+      if (band && b && b.y <= bandBottom + 1) band.push(t)
+      else orphanBands.push([t])
+    }
+    // 位置语义：全在兄弟之上 ⇒ header；全在兄弟之下 ⇒ footer；否则 text（中段）
+    const sibBoxes = nestedSections.map((s) => s?.absoluteBoundingBox).filter((b) => b && Number.isFinite(b.y))
+    const minSibTop = sibBoxes.length ? Math.min(...sibBoxes.map((b) => b.y || 0)) : Infinity
+    const maxSibBottom = sibBoxes.length ? Math.max(...sibBoxes.map((b) => (b.y || 0) + (b.height || 0))) : -Infinity
+    orphanBands.forEach((bandKids, bandIdx) => {
+      const boxes = bandKids
         .map((t) => t.absoluteBoundingBox)
         .filter((b) => b && Number.isFinite(b.y))
       const mergedBox = boxes.length
@@ -2250,23 +2339,31 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       const sameRow = boxes.length > 1
         ? Math.max(...boxes.map((b) => b.y || 0)) - Math.min(...boxes.map((b) => b.y || 0)) <= 4
         : false
+      const orphanTop = mergedBox ? mergedBox.y : 0
+      const orphanBottom = mergedBox ? mergedBox.y + mergedBox.height : 0
+      const posType = orphanBottom <= minSibTop + 1 ? 'header'
+        : orphanTop >= maxSibBottom - 1 ? 'footer'
+        : 'text'
       nestedSections.push({
-        id: `${String(parentNode.id || 'section')}-tail-text`,
-        name: tailOrphanTextKids
+        // 单带保持旧 id（-tail-text，footer 兼容）；多带按 y 序编号
+        id: orphanBands.length === 1
+          ? `${String(parentNode.id || 'section')}-tail-text`
+          : `${String(parentNode.id || 'section')}-orphan-text-${bandIdx}`,
+        name: bandKids
           .map((t) => String(t.characters || t.name || '').trim())
           .filter(Boolean)
           .slice(0, 3)
           .join(' / ')
           .slice(0, 40),
-        type: 'footer',
+        type: posType,
         // figmaNodeId 取首行文本节点：供 planner enrich 按 id 匹配（即便无 vision 对应段也不误配）
-        figmaNodeId: String(tailOrphanTextKids[0]?.id || ''),
-        sourceNodeIds: tailOrphanTextKids.map((t) => String(t.id || '')).filter(Boolean),
+        figmaNodeId: String(bandKids[0]?.id || ''),
+        sourceNodeIds: bandKids.map((t) => String(t.id || '')).filter(Boolean),
         ...(mergedBox ? { absoluteBoundingBox: mergedBox } : {}),
         layout: sameRow ? 'horizontal' : 'vertical',
-        children: tailOrphanTextKids.map((c) => mapChildNode(c)),
+        children: bandKids.map((c) => mapChildNode(c)),
         isNestedSection: depth > 0,
-        // 🛡️ 尾部孤儿标记：供下游/审计识别「推导补回段」（非 Figma 容器，纯文本行）
+        // 🛡️ 孤儿标记：供下游/审计识别「推导补回段」（非 Figma 容器，纯文本行）
         orphanTailText: true,
         styles: {
           flexGrow: 0,
@@ -2278,7 +2375,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       nestedSections.sort(
         (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
       )
-    }
+    })
 
     // 🛡️ 图表居中 + 图例分两侧（2026-09-17 · 策略类型分布实锤）：识别
     //   [chart, stats] 两栏中 stats 内部按 x 聚成左右两列、chart 居中的几何关系，
@@ -2711,6 +2808,138 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
   const lines = []
   let leafUsed = 0
   let layoutBannerShown = false
+  // ⑦-b：容器穿透下放的「横向并列」真值行去重登记（容器 id 维度，每容器只发一次）
+  const emittedRowPeerContainers = new Set()
+  // ⑧：面板底真值去重登记（节点 id 维度，每面板只发一次）
+  const emittedPanelBases = new Set()
+  // 🛡️ 2026-10-20 ⑧（5ef650ff 实锤）：**容器装饰矩形（面板底）真值下发**。
+  //   病灶：分组面板（38:3137/3162/3206）自身 fills=[]，底色/圆角/描边都挂在
+  //   与容器同尺寸的首个子矩形（38:3138 等，#e2d084@0.20 r=12）上；旧实现不下发
+  //   这类「面板底」事实 ⇒ 产物三个面板零 background/零圆角/零描边，整组消失。
+  //   判据（纯几何，命名无关）：节点自身无填充 ∧ 首个子节点是 RECTANGLE/VECTOR
+  //   ∧ 子框与节点框同尺寸（差 ≤2px）∧ 子有可见填充或描边 ⇒ 它是面板底色层。
+  //   （#133 起提到 leaf 循环外：全树兜底轨道复用同一函数，不产生第二套判据。）
+  const describePanelBase = (rawNode) => {
+    if (!rawNode || typeof rawNode !== 'object') return null
+    if (Array.isArray(rawNode.fills) && rawNode.fills.some((f) => f && f.visible !== false)) return null
+    const nb = rawNode.absoluteBoundingBox
+    const first = (rawNode.children || [])[0]
+    if (!first || !nb) return null
+    const t = String(first.type || '').toUpperCase()
+    if (t !== 'RECTANGLE' && t !== 'VECTOR') return null
+    const cb = first.absoluteBoundingBox
+    if (!cb) return null
+    if (Math.abs((cb.x || 0) - (nb.x || 0)) > 2 || Math.abs((cb.y || 0) - (nb.y || 0)) > 2) return null
+    if (Math.abs((cb.width || 0) - (nb.width || 0)) > 2 || Math.abs((cb.height || 0) - (nb.height || 0)) > 2) return null
+    const bg = fillsToCss(first.fills, first.opacity)
+    const border = strokesToCss(first.strokes)
+    // 🛡️ 2026-10-20 #133（477e185d 实锤）：面板底矩形常挂 INNER_SHADOW（内发光，
+    //   金 #ffc800/绿 #35be52/青 #19b5ba blur=16）。旧实现只下发 bg/radius/border ⇒
+    //   LLM 无从得知发光真值 ⇒ 产物零 box-shadow。合并进本真值行（纯增量不占新配额）。
+    const effectsToCss = (effects) => {
+      if (!Array.isArray(effects) || effects.length === 0) return null
+      const shadows = effects.filter(
+        (e) => e && e.visible !== false && /SHADOW/.test(String(e.type || '')),
+      )
+      if (shadows.length === 0) return null
+      return shadows
+        .map((e) => {
+          const inset = String(e.type).toUpperCase() === 'INNER_SHADOW' ? 'inset ' : ''
+          const c = rgbaToCss(e.color, e.color?.a)
+          if (!c) return null
+          const ox = Math.round(e.offset?.x || 0)
+          const oy = Math.round(e.offset?.y || 0)
+          const blur = Math.round(e.radius || 0)
+          const spread = Math.round(e.spread || 0)
+          return `${inset}${ox}px ${oy}px ${blur}px ${spread}px ${c}`
+        })
+        .filter(Boolean)
+        .join(', ')
+    }
+    const shadow = effectsToCss(first.effects) || effectsToCss(rawNode.effects)
+    if (!bg && !border && !shadow) return null
+    const radius = Number(first.cornerRadius) || 0
+    const parts = []
+    if (bg) parts.push(`background: ${bg}`)
+    if (radius > 0) parts.push(`border-radius: ${radius}px`)
+    if (border) parts.push(`border: 1px solid ${border}`)
+    if (shadow) parts.push(`box-shadow: ${shadow}`)
+    return (
+      `  - 面板底(几何)：本区块底层有与容器同尺寸的底色矩形 ⇒ 本区块容器必须实现 ` +
+      parts.join('、') +
+      `（这是分组面板的底色/圆角/发光，**禁止省略**——省略后面板整组消失）`
+    )
+  }
+
+  // 🛡️ #134（477e185d 实锤）：**行式网格真值下发**。
+  //   病灶：设计稿的「N 列网格」常实现为「每行一个 HORIZONTAL frame + 行纵向堆叠」
+  //   （38:3206 青面板：4 个行 frame，各含 2-4 个 126×30 chips，gap=20）。此结构下
+  //   `describeContainerLayout` 不命中（各项不共面：行 frame 是子容器，cols=1）；
+  //   横向顺序事实只在 DOM 序≠视觉序时输出（chips 本就有序）⇒ **方向零告知** ⇒
+  //   LLM 把 chips 竖排成单列（产物 ContentSection7/8 单列病灶）。判据（纯几何，
+  //   命名无关）：容器 content 子项中 ≥2 个「行 frame」（子容器内部 ≥2 子项两两
+  //   side-by-side、等高 ±4px）⇒ 行式网格；列数取众数，行宽多数派一致防误报。
+  const describeRowGridLayout = (parentNode) => {
+    const pb = parentNode?.absoluteBoundingBox
+    if (!pb || !pb.width || !pb.height) return null
+    const pArea = pb.width * pb.height
+    const content = (parentNode.children || []).filter((c) => {
+      const b = c && c.absoluteBoundingBox
+      if (!b) return false
+      if ((b.width * b.height) / pArea >= 0.9) return false // 整块背景层
+      if (Math.min(b.width || 0, b.height || 0) <= 8) return false
+      return true
+    })
+    const rowFrameInfo = (c) => {
+      const t = String(c.type || '').toUpperCase()
+      if (!['FRAME', 'GROUP', 'INSTANCE', 'COMPONENT'].includes(t)) return null
+      const cb = c.absoluteBoundingBox
+      if (!cb || !cb.width || !cb.height) return null
+      // 🛡️ 行宽闸门（477e185d 复放实锤）：真「行」至少占父容器一半宽（38:3211=564/604=93%）；
+      //   chip 单元格内部 [label,value] 对只占 126/564=22% ⇒ 不算行（否则整片误报「2 列×N 行」）
+      if (cb.width < pb.width * 0.5) return null
+      const kids = (c.children || []).filter((k) => {
+        const b = k && k.absoluteBoundingBox
+        if (!b) return false
+        if ((b.width * b.height) / (cb.width * cb.height) >= 0.9) return false
+        if (Math.min(b.width || 0, b.height || 0) <= 8) return false
+        return true
+      })
+      if (kids.length < 2) return null
+      for (let i = 0; i < kids.length; i++) {
+        for (let j = i + 1; j < kids.length; j++) {
+          if (!areBoxesSideBySide(kids[i], kids[j])) return null
+        }
+      }
+      const h0 = kids[0].absoluteBoundingBox.height || 0
+      const eqH = kids.every((k) => Math.abs((k.absoluteBoundingBox.height || 0) - h0) <= 4)
+      return eqH ? { count: kids.length, width: cb.width } : null
+    }
+    const rows = content.map(rowFrameInfo).filter(Boolean)
+    // 🛡️ rows≥1（金面板 38:3137 单行 4 chips 也需方向真值；闸门已含 side-by-side+等高+
+    //   行宽≥50% 父宽，单行误报风险可控）
+    if (rows.length < 1) return null
+    // 列数众数（各行等宽同构；末行可不满）
+    const countFreq = new Map()
+    for (const r of rows) countFreq.set(r.count, (countFreq.get(r.count) || 0) + 1)
+    const perRow = [...countFreq.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0]
+    if (perRow < 2) return null
+    // 行宽一致性闸门：多数派行宽 20px 桶占比 ≥50%（防「纵排杂容器」误报成网格）
+    const wFreq = new Map()
+    for (const r of rows) {
+      const key = Math.round(r.width / 20) * 20
+      wFreq.set(key, (wFreq.get(key) || 0) + 1)
+    }
+    const domN = [...wFreq.values()].sort((a, b) => b - a)[0]
+    if (domN < Math.ceil(rows.length * 0.5)) return null
+    const basis = Math.floor(100 / perRow)
+    return (
+      `  - 行式网格(几何)：本区块是 **${perRow} 列 × ${rows.length} 行** 的网格（每行 ${perRow} 项横向并列，末行可不满）⇒ ` +
+      `容器 \`display:flex; flex-direction:row; flex-wrap:wrap\`，每项 \`flex: 1 1 calc(${basis}% - 20px)\`；` +
+      `或 \`display:grid; grid-template-columns: repeat(${perRow}, 1fr)\`。**禁止把同行各项竖排成单列**`
+    )
+  }
+
   for (const sec of leaves) {
     if (leafUsed >= maxLeaves) break
     const type = String(sec.type || '').toLowerCase()
@@ -2918,7 +3147,18 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         if (ra !== rb) return ra - rb
         return a.absoluteBoundingBox.x - b.absoluteBoundingBox.x
       })
-      if (visual.every((it, i) => it === content[i])) return null
+      // 🛡️ 2026-10-20（84af4f8f 实锤）：**行主序约束始终输出**（含 DOM 序一致时）。
+      //   旧闸门「DOM 序==视觉序 ⇒ 不输出」防的是「嵌套列分组」膨胀，但网格场景的
+      //   真实病灶是：LLM **不抄 DOM 序**——它把 v-for 数据数组按「先全部 label 列、
+      //   再全部 value 列」的列主序自编（产物 order 字段算对了行主序、数组物理序却没
+      //   按它排）⇒ 6 行×4 列字段网格整体错位，而 TEXT-001 旧二分法（xRange>yRange ⇒
+      //   纯 x 排序）恰好也算出列主序 ⇒ 错错得正零检出。行主序是确定性几何事实，
+      //   对已通过「每列≥2」闸门的真网格无新增误判面，成本仅一行 prompt。
+      const rowMajorLine =
+        `  - 字段网格(几何 · 行主序)：${cols.length} 列 × ${rows.length} 行 — ` +
+        `v-for 数据数组/模板书写顺序**必须按行主序**：${visual.map(nameOf).join(' → ')}` +
+        `（从左到右、从上到下逐行；禁止「先排完全部 label 列再排 value 列」的列主序）`
+      if (visual.every((it, i) => it === content[i])) return rowMajorLine
 
       const colDesc = cols
         .map((col, i) => {
@@ -2928,7 +3168,8 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
           return `第${i + 1}列(x≈${Math.round(col.min)}，上→下): ${items.map(nameOf).join(' → ')}`
         })
         .join('；')
-      return `  - 内部布局(几何 · 嵌套)：${cols.length} 列 × ${rows.length} 行 — ${colDesc}`
+      // DOM 序 ≠ 行主序：列描述（定位错位单元格）+ 行主序硬约束（书写顺序真值）双行下发
+      return `  - 内部布局(几何 · 嵌套)：${cols.length} 列 × ${rows.length} 行 — ${colDesc}\n${rowMajorLine}`
     }
 
     // 🛡️ 2026-09-29 治本（mc-max-1790669176199-94b3bc69 实锤）：**祖先「布局容器」的重复单元事实**
@@ -2966,6 +3207,66 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       }
     }
 
+    // 🛡️ 2026-10-20（#128 ⑦ · 84af4f8f 实锤）：横向并列兄弟真值下发。
+    //   E1 检出 rowPeerIds（y 重叠 >50% + x 分离 ⇒ 设计上是「左图右文」式横向并列），
+    //   若不下发，LLM 默认把兄弟 section 纵向堆叠 ⇒ 头部拆行。配额同 layoutLines 独立轨。
+    const flatTree = (treeSections || []).flatMap(function flat(s) {
+      return [s, ...(Array.isArray(s.children) ? s.children.flatMap(flat) : [])]
+    })
+    const peerNamesOf = (peerIds) =>
+      peerIds
+        .map((pid) => {
+          const peer = flatTree.find((x) => String(x?.id || '') === String(pid))
+          return peer ? (peer.title || peer.name || pid) : pid
+        })
+        .join('、')
+    const rowPeerLine = (names) =>
+      `  - 横向并列兄弟(几何)：本区块与「${names}」**横向并列**（y 区间重叠 >50%、x 区间分离，` +
+      `左图右文/左右分栏结构）⇒ 二者必须包在同一个 \`display:flex; flex-direction:row\` 容器内左右排布，` +
+      `**禁止把它们纵向堆叠成上下两行**`
+    if (Array.isArray(sec.rowPeerIds) && sec.rowPeerIds.length > 0) {
+      layoutLines.push(rowPeerLine(peerNamesOf(sec.rowPeerIds)))
+    }
+    // 🛡️ 2026-10-20 ⑦-b（5ef650ff 实锤）：**peered section 被分类为布局容器时真值行随穿透被吞**。
+    //   事故形态：头部两张统计卡（38:3260/38:3282，纯 icon 子树）E1 互挂 rowPeerIds ✓，
+    //   但 isLayoutContainer=true ⇒ walkLeaves 穿透跳过（本节 L2702）⇒ 上面的叶子分支
+    //   永远不执行 ⇒ 「横向并列」真值零下发 ⇒ LLM 把两卡纵向堆叠成两个 76px 满宽段。
+    //   治本：叶子的**最近容器祖先**若带 rowPeerIds，把真值行下放到该叶子（容器语义由
+    //   叶子继承输出）；同一容器只发一次（emittedRowPeerContainers 去重，防多叶子刷屏）。
+    if (!Array.isArray(sec.rowPeerIds) || sec.rowPeerIds.length === 0) {
+      const peeredAnc = (containerAncestors.get(String(sec.id || '')) || [])
+        .find((a) => Array.isArray(a.rowPeerIds) && a.rowPeerIds.length > 0)
+      if (peeredAnc) {
+        const ancKey = String(peeredAnc.id || '')
+        if (!emittedRowPeerContainers.has(ancKey)) {
+          emittedRowPeerContainers.add(ancKey)
+          layoutLines.push(rowPeerLine(peerNamesOf(peeredAnc.rowPeerIds)))
+        }
+      }
+    }
+
+    // 🛡️ ⑧（5ef650ff 实锤）：面板底真值下发（describePanelBase 定义见 leaf 循环外，
+    //   全树兜底轨道复用同一函数）。叶子自身是面板容器 + 容器祖先是面板（穿透场景，
+    //   每面板只发一次）
+    // ⚠️ 去重键必须与 emittedPanelBases.add 一致（rawNode.id）；此前 filter 用 section.id
+    //    而 add 用 figma 节点 id ⇒ 去重恒空转（只重复不漏，但口径混乱）。
+    const panelBaseTargets = [startRec?.rawNode,
+      ...(containerAncestors.get(String(sec.id || '')) || [])
+        .map((a) => {
+          const aid = a.figmaNodeId ? String(a.figmaNodeId) : String(a.id || '')
+          return aid ? index.get(aid)?.rawNode : null
+        })
+        .filter((raw) => raw && !emittedPanelBases.has(String(raw.id || ''))),
+    ]
+    for (const target of panelBaseTargets) {
+      const line = target ? describePanelBase(target) : null
+      if (line) {
+        layoutLines.push(line)
+        const tid = String(target.id || '')
+        if (tid) emittedPanelBases.add(tid)
+      }
+    }
+
     // 对每个 sourceNode 的子树提取「直接业务子元素」样式（深度受控，累积父 opacity）
     for (const rec of startNodes) {
       const raw = rec.rawNode
@@ -2982,6 +3283,14 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         if (containerLayout) {
           layoutLines.push(containerLayout)
           itemCount++
+        } else {
+          // 🛡️ #134：共面网格（cols≥2 且 rows≥2）不命中时，试行式网格（行 frame 堆叠形态）。
+          //   二者互斥：共面网格优先（原判据语义不变），行式网格只兜「行容器堆叠」形态。
+          const rowGrid = describeRowGridLayout(raw)
+          if (rowGrid) {
+            layoutLines.push(rowGrid)
+            itemCount++
+          }
         }
       }
       // 🛡️ 横向顺序事实（2026-09-29 · 全语料 40 样本 42 命中，全为真错序、零噪声）：
@@ -3215,7 +3524,16 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
           )
         }
         lines.push(`**${label}**（布局与顺序真值 · 模板必须照此写）：`)
-        lines.push(...layoutLines.slice(0, maxLayoutPerSection))
+        // 🛡️ 2026-10-20 #133（477e185d 实锤）：**结构保命行不受配额裁剪**。
+        //   「面板底(几何)」「横向并列兄弟(几何)」是容器级结构真值（省略=面板整组消失/头部拆行），
+        //   实测 38:3206 青面板子树 51 个 section、布局行爆配额 ⇒ 面板底行（含 INNER_SHADOW
+        //   发光真值）被 slice 裁掉 ⇒ 发光/底色零下发。收集与裁剪解耦：普通行按配额裁，
+        //   保命行必留（mustKeep 挤占普通行额度；自身超配额时 clamp 防膨胀，退化为旧行为）。
+        const KEEP_LAYOUT = /面板底\(几何\)|横向并列兄弟\(几何\)/
+        const mustKeep = layoutLines.filter((l) => KEEP_LAYOUT.test(l))
+        const ordinary = layoutLines.filter((l) => !KEEP_LAYOUT.test(l))
+        lines.push(...ordinary.slice(0, Math.max(0, maxLayoutPerSection - mustKeep.length)))
+        lines.push(...mustKeep.slice(0, maxLayoutPerSection))
       }
       if (secLines.length > 0) {
         // 🛡️ 段首禁令（2026-09-27 · bd4f69db「一片蓝」实锤）：只在**首段**注入一次（控 token）。
@@ -3252,6 +3570,49 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       }
       leafUsed++
     }
+  }
+
+  // 🛡️ #133 面板底真值全树兜底轨道（2026-10-20 477e185d 实锤）：leaf 循环有 maxLeaves=12
+  //   配额窗口，排在窗口外的容器（38:3206 青面板，子树 51 个 section）其面板底/INNER_SHADOW
+  //   发光真值**零宿主** ⇒ 永不下发（实测金/绿发了、青没发）。容器级结构真值不该依赖叶子
+  //   配额窗口 ⇒ 循环后全树扫描「面板形态容器」，leaf 轨漏发的行独立成节补发
+  //   （emittedPanelBases 按 rawNode.id 去重，每面板至多 1 行，天然有界不膨胀）。
+  const panelBaseFallbackLines = []
+  // #134：行式网格兜底去重（独立于面板底——面板底已发不代表行式网格已发）
+  const emittedRowGrids = new Set()
+  const walkForPanelBases = (secs) => {
+    for (const s of secs || []) {
+      if (!s) continue
+      const fid = s.figmaNodeId ? String(s.figmaNodeId) : String(s.id || '')
+      const raw = fid ? index.get(fid)?.rawNode : null
+      if (raw && !emittedPanelBases.has(String(raw.id || ''))) {
+        const line = raw ? describePanelBase(raw) : null
+        if (line) {
+          emittedPanelBases.add(String(raw.id || ''))
+          // 行内标注 Figma 面板名，独立小节里 LLM 才能对上面板归属
+          panelBaseFallbackLines.push(line.replace('面板底(几何)：', `面板底(几何)「${raw.name || raw.id}」：`))
+        }
+      }
+      // #134：行式网格同轨兜底（38:3206 chips 网格在 leaf 窗口外 ⇒ leaf 轨零宿主）。
+      //   独立 Set 去重；判据自带行宽一致性闸门，全树扫描膨胀可控。
+      if (raw && !emittedRowGrids.has(String(raw.id || ''))) {
+        emittedRowGrids.add(String(raw.id || ''))
+        const gridLine = raw ? describeRowGridLayout(raw) : null
+        if (gridLine) {
+          panelBaseFallbackLines.push(
+            gridLine.replace('行式网格(几何)：', `行式网格(几何)「${raw.name || raw.id}」：`),
+          )
+        }
+      }
+      if (Array.isArray(s.children)) walkForPanelBases(s.children)
+    }
+  }
+  walkForPanelBases(treeSections)
+  if (panelBaseFallbackLines.length > 0) {
+    lines.push(
+      '> 🧱 容器级结构真值补发（面板底色/圆角/发光 + 行式网格方向；以下容器未在上方区块出现，对应样式与布局必须落到该容器上，**禁止省略**）：',
+    )
+    lines.push(...panelBaseFallbackLines)
   }
 
   return lines.length > 0 ? lines.join('\n') : ''

@@ -9,6 +9,7 @@ import {
   buildCrossThemeColorFacts,
   formatCrossThemeColorFacts,
   auditSemanticGuessSlots,
+  realignThemeVarsSlotValues,
 } from './color-slot-mapper.js'
 
 /**
@@ -323,5 +324,259 @@ describe('auditSemanticGuessSlots — 语义推断槽位留痕（只报不改）
       commonLessContent: '@color-card-bg: #ffffff;\n.c-x { color: #333333; }',
     })
     expect(r.risky).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────────────────────
+// 🛡️ 跨稿对齐三级降级（2026-10-20 治本 · dpjh-bsjd 双稿 unmatched:35/35 实锤）
+//
+// 旧实现对齐键 = 含根名绝对路径；用户的两稿 frame **不同名**（Figma 复制稿
+// 自动改名）⇒ 全灭。降级链：剥根段路径 → 先序位置 → none。
+// ⚠️ fixtures 必须复刻真实前提：两稿根名不同（理想化同名 fixture = 假绿温床）。
+// ──────────────────────────────────────────────────────────────
+describe('跨稿对齐三级降级（真实前提：两稿根名/层名不同）', () => {
+  it('L1：根名不同但内层同源 → mode=path，色值对命中', () => {
+    const light = frame('cp-aiot-dpjh-bsjd', [
+      frame('card', [solid('#ffffff')], '#a0c1ff'),
+      frame('title', [solid('#546881')]),
+    ])
+    const dark = frame('cp-aiot-dpjh-bsjd-深色稿', [ // 🔴 根名不同（真实场景）
+      frame('card', [solid('#071f3d')], '#123259'),
+      frame('title', [solid('#98c2f6')]),
+    ])
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: light },
+        { key: 'theme_2', nodeData: dark },
+      ],
+      themeSlots: {
+        light: { 'color-text-base': '#546881' },
+        theme_2: { 'color-text-base': '#98c2f6' },
+      },
+      primaryKey: 'light',
+    })
+    expect(r.stats.alignment[0].mode).toBe('path')
+    expect(r.stats.alignment[0].matched).toBeGreaterThan(0)
+    expect(r.replacements.get('#546881')).toBe('color-text-base') // 主通道仍通
+    expect(r.replacements.get('#ffffff')).toMatch(/^color-custom-\d+$/) // 扩展通道
+  })
+
+  it('🩺 阳性对照：回退绝对路径对齐（含根名）时该 fixture 应全灭 —— 证明修复确实生效', () => {
+    // 直接用含根名的绝对路径模拟旧行为：两稿根名不同 ⇒ 任何路径都不匹配
+    const light = frame('cp-foo', [frame('card', [solid('#ffffff')])])
+    const dark = frame('cp-bar', [frame('card', [solid('#071f3d')])])
+    const absKeys = (n: object) => {
+      const out: string[] = []
+      const walk = (node: any, path: string) => {
+        const key = path ? `${path}/${node.name || ''}` : String(node.name || '')
+        out.push(key)
+        for (const c of node.children || []) walk(c, key)
+      }
+      walk(n, '')
+      return out
+    }
+    const a = new Set(absKeys(light))
+    const b = new Set(absKeys(dark))
+    const intersection = [...a].filter((k) => b.has(k))
+    expect(intersection).toHaveLength(0) // 旧算法 0 命中 ⇒ 证明旧判据在此类数据上必死
+  })
+
+  it('L2：层名全不同（重画稿）→ mode=order，按先序位置对齐仍能给真值', () => {
+    const light = frame('cp-foo', [
+      frame('card', [solid('#ffffff')], '#a0c1ff'),
+      frame('title', [solid('#546881')]),
+    ])
+    const dark = frame('另一个根', [
+      frame('容器甲', [solid('#071f3d')], '#123259'),
+      frame('标题乙', [solid('#98c2f6')]),
+    ])
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: light },
+        { key: 'theme_2', nodeData: dark },
+      ],
+      themeSlots: {},
+      primaryKey: 'light',
+    })
+    expect(r.stats.alignment[0].mode).toBe('order')
+    // 先序位置：root bg #a0c1ff↔#123259, card #ffffff↔#071f3d, title #546881↔#98c2f6
+    const f = buildCrossThemeColorFacts({
+      themes: [
+        { key: 'light', nodeData: light },
+        { key: 'theme_2', nodeData: dark },
+      ],
+    })
+    expect(f?.alignment?.[0].mode).toBe('order')
+    expect(f?.rows.some((r2) => r2.primary === '#546881' && r2.perTheme.theme_2 === '#98c2f6')).toBe(true)
+  })
+
+  it('rows 空（两稿全同色）但色板非空 → 段落仍下发（2026-10-20 修正：色板不再被连带丢弃）', () => {
+    const light = frame('cp-a', [frame('card', [solid('#ffffff')])])
+    const dark = frame('cp-b', [frame('card', [solid('#ffffff')])])
+    const f = buildCrossThemeColorFacts({
+      themes: [
+        { key: 'light', nodeData: light },
+        { key: 'theme_2', nodeData: dark },
+      ],
+    })
+    expect(f?.rows).toHaveLength(0)
+    const md = formatCrossThemeColorFacts(f)
+    expect(md).toContain('跨主题配色真值')
+    expect(md).toContain('实测主色板')
+    expect(md).toContain('#ffffff')
+    expect(md).toContain('对齐未命中')
+  })
+})
+
+// 🆕 2026-10-20（#128 ③，84af4f8f 实锤）：LLM 自造槽位名（真值表外）→ 值被
+//   臆造/语义推断猜成中性灰 ⇒ 副稿配色全毁。以主稿 mixin 值为锚做二次对齐矫正。
+describe('realignThemeVarsSlotValues — 自造槽位二次对齐矫正', () => {
+  const TABLE = { '#a0c1ff': { light: '#a0c1ff', theme_2: '#123259' } }
+  const wrap = (lightBody, theme2Body, darkBody = '') => `.common() {
+  @font-size-base: 14px;
+}
+.theme-light() {
+${lightBody}
+}
+.theme-theme_2() {
+${theme2Body}
+}${darkBody ? `\n.theme-dark() {\n${darkBody}\n}` : ''}`
+
+  it('基本矫正：主稿值命中真值表 ⇒ 副稿 mixin 同名槽位改写为该稿实测色（含注释改写）', () => {
+    const content = wrap(
+      '  @color-mask-bg-outer: #a0c1ff;',
+      '  @color-mask-bg-outer: #2b2b2b; // 自动添加（语义推断）',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: TABLE,
+      primaryKey: 'light',
+    })
+    expect(r.corrections).toEqual([
+      { slot: 'color-mask-bg-outer', theme: 'theme_2', from: '#2b2b2b', to: '#123259' },
+    ])
+    expect(r.content).toContain('@color-mask-bg-outer: #123259;')
+    expect(r.content).toContain('跨稿真值矫正')
+    expect(r.content).not.toContain('自动添加（语义推断）') // 原标注已被矫正标注覆盖
+    // 主稿 mixin 自身不动
+    expect(r.content).toMatch(/\.theme-light\(\) \{\n  @color-mask-bg-outer: #a0c1ff;/)
+  })
+
+  it('幂等：副稿已是真值 ⇒ 零矫正、零 diff', () => {
+    const content = wrap(
+      '  @color-mask-bg-outer: #a0c1ff;',
+      '  @color-mask-bg-outer: #123259;',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: TABLE,
+      primaryKey: 'light',
+    })
+    expect(r.corrections).toHaveLength(0)
+    expect(r.content).toBe(content)
+  })
+
+  it('🩺 阳性对照：主稿值未命中真值表 ⇒ 不动（无锚不猜）', () => {
+    const content = wrap(
+      '  @color-mask-bg-outer: #abcdef;',
+      '  @color-mask-bg-outer: #2b2b2b; // 自动添加（语义推断）',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: TABLE,
+      primaryKey: 'light',
+    })
+    expect(r.corrections).toHaveLength(0)
+    expect(r.content).toBe(content)
+  })
+
+  it('🩺 阳性对照：空真值表 ⇒ 全不动', () => {
+    const content = wrap(
+      '  @color-mask-bg-outer: #a0c1ff;',
+      '  @color-mask-bg-outer: #2b2b2b;',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: {},
+      primaryKey: 'light',
+    })
+    expect(r.corrections).toHaveLength(0)
+    expect(r.content).toBe(content)
+  })
+
+  it('同 mixin 内重复定义全改（真机实锤：addMissingVariables 会重复追加同名槽位）', () => {
+    const content = wrap(
+      '  @color-mask-bg-outer: #a0c1ff;',
+      '  @color-mask-bg-outer: #2b2b2b; // 自动添加（语义推断）\n  @color-mask-bg-outer: #2b2b2b; // 自动添加（语义推断）',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: TABLE,
+      primaryKey: 'light',
+    })
+    expect(r.content.match(/@color-mask-bg-outer: #123259;/g)).toHaveLength(2)
+    expect(r.content).not.toContain('#2b2b2b')
+  })
+
+  it('窄条件：非颜色槽位 / 现状值非 hex / 真值表外主题（dark）一律不碰', () => {
+    const content = wrap(
+      '  @color-x: #a0c1ff;',
+      '  @color-x: rgba(0, 0, 0, 0.5);',
+      '  @color-x: #111111;',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: TABLE,
+      primaryKey: 'light',
+    })
+    // theme_2 现状是 rgba ⇒ 不碰；dark 不在 perTheme（表只有 light/theme_2）⇒ 不碰
+    expect(r.corrections).toHaveLength(0)
+    expect(r.content).toBe(content)
+  })
+
+  it('主稿 mixin 未定义该槽位 ⇒ 无锚不动', () => {
+    const content = wrap(
+      '  @color-other: #a0c1ff;',
+      '  @color-mask-bg-outer: #2b2b2b; // 自动添加（语义推断）',
+    )
+    const r = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: TABLE,
+      primaryKey: 'light',
+    })
+    // color-mask-bg-outer 只在副稿有 ⇒ 无锚；color-other 只在主稿有 ⇒ 副稿没定义 ⇒ 都不动
+    expect(r.corrections).toHaveLength(0)
+    expect(r.content).toBe(content)
+  })
+
+  it('与 buildColorSlotMapping 集成：perThemeByPrimaryHex 携带对齐真值（含主通道槽位色）', () => {
+    const light = frame('cp', [frame('card', [solid('#ffffff', 200, 100)], '#a0c1ff')])
+    const dark = frame('cp', [frame('card', [solid('#071f3d', 200, 100)], '#123259')])
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: light },
+        { key: 'theme_2', nodeData: dark },
+      ],
+      themeSlots: {
+        light: { 'color-bg-design': '#a0c1ff' },
+        theme_2: { 'color-bg-design': '#123259' },
+      },
+      primaryKey: 'light',
+    })
+    expect(r.perThemeByPrimaryHex['#a0c1ff']).toEqual({ light: '#a0c1ff', theme_2: '#123259' })
+    expect(r.perThemeByPrimaryHex['#ffffff']).toEqual({ light: '#ffffff', theme_2: '#071f3d' })
+    // 端到端：自造槽位以 #ffffff（主稿色）为锚 ⇒ 矫正副稿
+    const content = wrap(
+      '  @color-card-bg: #ffffff;',
+      '  @color-card-bg: #2b2b2b; // 自动添加（语义推断）',
+    )
+    const rr = realignThemeVarsSlotValues({
+      themeVarsContent: content,
+      perThemeByPrimaryHex: r.perThemeByPrimaryHex,
+      primaryKey: 'light',
+    })
+    expect(rr.corrections).toEqual([
+      { slot: 'color-card-bg', theme: 'theme_2', from: '#2b2b2b', to: '#071f3d' },
+    ])
   })
 })

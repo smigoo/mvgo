@@ -124,3 +124,81 @@ describe('尾部孤儿文本段补回（footer）', () => {
     expect(ids).not.toContain('tail-text')
   })
 })
+
+// 全位化（2026-10-20 · 5ef650ff 合作厂商弹窗实锤）：
+// 旧判据只收尾部 ⇒ 头部统计卡数字/标签（38:3262/3263）、组标题（38:3139）整批丢失。
+describe('孤儿文本全位化：吸收轨 + 头/中段独立段', () => {
+  /** 复刻 5ef650ff 头部：两张统计卡（GROUP）+ 卡在图标右侧的裸 TEXT 数字/标签 */
+  const makeHeaderCards = () => ({
+    id: '0:1',
+    type: 'FRAME',
+    name: 'cp-dialog',
+    absoluteBoundingBox: box(0, 0, 660, 868),
+    children: [
+      {
+        id: '796:3',
+        type: 'GROUP',
+        name: 'slot-icon',
+        absoluteBoundingBox: box(28, 40, 604, 787),
+        children: [
+          {
+            id: '38:3260', type: 'GROUP', name: 'Group 2136638431', absoluteBoundingBox: box(28, 55, 265, 76),
+            children: [
+              { id: '187:262', type: 'GROUP', name: 'icon', absoluteBoundingBox: box(44, 66, 53, 55),
+                children: [{ id: '38:3266', type: 'VECTOR', name: 'Vector', absoluteBoundingBox: box(44, 66, 33, 14) }] },
+            ],
+          },
+          { id: '38:3263', type: 'TEXT', name: '合作厂商', characters: '合作厂商', absoluteBoundingBox: box(110, 61, 64, 16) },
+          { id: '38:3262', type: 'TEXT', name: '33', characters: '33', absoluteBoundingBox: box(110, 87, 30, 24) },
+        ],
+      },
+    ],
+  })
+
+  test('⑦ 吸收轨：孤儿与兄弟几何重叠 >50% ⇒ 并入兄弟（不新建段、不双渲）', () => {
+    const r = deriveSectionsFromFigmaTree(makeHeaderCards(), null)
+    const con = r!.sections.find((s: any) => s.id === '796:3')!
+    // 不新建孤儿段（文本在卡 38:3260 区域内 ⇒ 属于该卡）
+    expect(con.children.map((x: any) => String(x.id))).not.toContain('796:3-tail-text')
+    // 吸收进卡：sourceNodeIds + children 文本真值
+    const card1 = con.children.find((x: any) => String(x.id) === '38:3260')!
+    expect(card1.sourceNodeIds).toContain('38:3262')
+    expect(card1.sourceNodeIds).toContain('38:3263')
+    const texts = (card1.children || []).map((c: any) => c.text).filter(Boolean)
+    expect(texts).toContain('合作厂商')
+    expect(texts).toContain('33')
+    // 卡的 bbox 不被改写（布局不动）
+    expect(card1.absoluteBoundingBox).toEqual(box(28, 55, 265, 76))
+  })
+
+  test('⑧ 头部独立段：孤儿在兄弟上方且不重叠 ⇒ 补回段 type=header 且按 y 归位最前', () => {
+    const f = makeFigmaWithFooter()
+    const con = f.children[0]
+    // 头部裸 TEXT（y=8，所有卡 y≥40 的上方，且不落入任何卡区域——容器从 y=40 起）
+    con.children.unshift(
+      { id: '48:6001', type: 'TEXT', name: '标题', characters: '部署总览', absoluteBoundingBox: box(0, 8, 120, 20) } as any,
+    )
+    const r = deriveSectionsFromFigmaTree(f, null)
+    const c = r!.sections.find((s: any) => s.id === '565:3')!
+    // 头+尾两带 ⇒ 各自成段（-orphan-text-0/1）
+    const head = c.children.find((x: any) => x.id === '565:3-orphan-text-0')
+    expect(head).toBeTruthy()
+    expect(head.type).toBe('header')
+    expect(head.children.map((x: any) => x.text)).toContain('部署总览')
+    // y 归位：头部补回段排在最前
+    expect(String(c.children[0].id)).toBe('565:3-orphan-text-0')
+    // footer 仍补（两个补回段共存：头部 + 尾部）
+    const orphans = c.children.filter((x: any) => x.orphanTailText)
+    expect(orphans.length).toBe(2)
+    expect(orphans.some((o: any) => o.type === 'footer')).toBe(true)
+  })
+
+  test('⑨ 阳性对照：footer 行为不回退（type=footer、横排、文案序保持）', () => {
+    const r = deriveSectionsFromFigmaTree(makeFigmaWithFooter(), null)
+    const con = r!.sections.find((s: any) => s.id === '565:3')!
+    const tail = con.children.find((c: any) => c.id === '565:3-tail-text')
+    expect(tail.type).toBe('footer')
+    expect(tail.layout).toBe('horizontal')
+    expect(tail.children.map((c: any) => c.text)).toEqual(['共 6 个节点', '接入设备 10810'])
+  })
+})

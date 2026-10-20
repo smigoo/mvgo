@@ -81,12 +81,24 @@ import {
  *   → **this.generateCode({ ... dualTruth })**（曾漏传）→ 本函数。
  */
 export function buildCrossThemeColorBlock(input) {
+  const logger = safeLogger(input?.logger);
   try {
     const themes = Array.isArray(input?.dualTruth?.themes) ? input.dualTruth.themes : null;
     if (!themes) return '';
-    return formatCrossThemeColorFacts(buildCrossThemeColorFacts({ themes }));
+    const facts = buildCrossThemeColorFacts({ themes });
+    if (!facts) return '';
+    const block = formatCrossThemeColorFacts(facts);
+    // 🛡️ 2026-10-20：fail-open 显性化 —— 空注入必须有日志（此前 rows 空即静默空串，
+    //   真机上「真值段没进 prompt」无法从日志发现，害得靠用户截图才发现）
+    logger.info('🌗 跨主题配色真值注入', {
+      rows: facts.rows?.length || 0,
+      palettes: Object.keys(facts.palettes || {}).length,
+      injected: block.length > 0,
+      alignment: facts.alignment,
+    });
+    return block;
   } catch (e) {
-    safeLogger(input?.logger)?.warn?.(
+    logger.warn?.(
       `⚠️ 跨主题配色真值构建失败（已降级：不注入）: ${e?.message || e}`,
     );
     return '';
@@ -1138,6 +1150,19 @@ export function buildMcPlatformConstraints(input = {}, options = {}) {
 }
 
 /**
+ * 🔴 N1（#139）：**真值色值不得被变量替换**（强制约束，单一来源）。
+ *
+ * 事故（e7a50be7 / 用户截图）：样式事实已下发 `rgba(226,208,132,0.2)` / `#ffc800` / `#fffdf1`，
+ *   但 LLM 写成 `background: @color-bg-card-active` / `box-shadow: inset ... fade(@color-accent-gold,100%)`，
+ *   变量值由系统按名推断 ⇒ `@color-accent-gold` 变蓝 `#409EFF`（真值金）、
+ *   `@color-bg-card-active` 变白（真值半透明金）⇒ 面板变蓝块/白块。
+ *
+ * ⚠️ 只在**给了样式事实**时注入（否则会与「禁止添加背景」的既有约束叠加成死锁）。
+ * ⚠️ 两处模板（整稿 / 分块）共用本常量，不得各写一份。
+ */
+export const N1_TRUTH_COLOR_LANDING_RULE = `- 🔴 **给出色值不得被变量替换（强制 · 真值落地）**：上表给出的 \`background\` / \`box-shadow\` / \`color\` / \`border\` 精确色值（如 \`rgba(226,208,132,0.2)\`、\`#ffc800\`、\`#fffdf1\`）**必须原样出现在产物里**——要么直接写字面量，要么写成 Less 变量且该变量的值**就是**该真值。**严禁**用 \`@color-accent-*\` / \`@color-primary\` / \`@color-bg-card-active\` 这类通用语义变量去"代表"它：这些变量的值由系统按变量名推断，会与真值漂移（实测 \`@color-accent-gold\` 被推断成蓝 \`#409EFF\`，真值是金 \`#ffc800\`）。若确需变量，变量名须带所属区块语义，且其定义值必须等于该真值。`
+
+/**
  * 🛡️ 业务术语规则作用的**唯一下发点**（2026-10-19）。
  *
  * ⚠️ 边界（与 T1 / TEXT-TRUTH 的契约）：
@@ -2165,6 +2190,7 @@ ${buildSectionStyleFactsForPrompt(input, input.figmaNodeData)}
 ${buildBusinessTextRulesDirective(input)}
 
 ⚠️ 两块各自为准逐条实现：**顺序**按「布局与顺序真值」，**样式**按「内部元素样式真值」。**两份表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非样式表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在样式表中都有背景，必须分别取各自的值。
+${N1_TRUTH_COLOR_LANDING_RULE}
 `
   : ''}
 ${contextBlock}
@@ -2598,10 +2624,11 @@ ${fileList}
 **主题变量引用规则（跨文件一致性）**：
 - 主题变量已在参考文件 theme-vars.less 中定义（见 📎 区块），common.less 中引用变量时必须使用其中已存在的变量名
 - elementStyleMap 有明确值的属性必须直接写精确值，禁止用主题变量覆盖
-- 不确定变量名是否存在时，直接写 elementStyleMap 精确值（写盘门禁会自动补缺失变量）
+- 🚫 **禁止引用 theme-vars.less 中不存在的变量名**（如凭空引用 \`@color-mask-bg-outer\`）：写盘门禁对缺失变量只做「语义推断」补中性灰猜测值（\`#2b2b2b\`/\`#e6e6e6\`），**深色/副主题配色会被整体毁掉**。需要的颜色没有对应槽位时，**直接写主稿（浅色稿）实测 hex 字面量**（如 \`background: #1a4272\`）——系统后处理会按跨稿真值自动换成各主题正确的槽位引用（主稿色 → 副稿色逐主题映射，确定性、已验证）
 
 **🎨 颜色变量化铁律（治本，2026-09-13）**：
 - **禁止颜色字面量直写**：\`color: rgba(51,51,51,1)\` / \`background: #1990ff\` 一律改写为变量引用
+- **唯一例外（2026-10-20 #128）**：需要的颜色在 theme-vars.less（📎 参考文件）与「跨主题配色真值」表中都没有对应槽位时，允许写**主稿实测 hex 字面量**（6 位，如 \`#1a4272\`）——系统会按跨稿真值自动槽位化。除此之外的字面量仍禁止
 ${(options.componentType || 'microcode') !== 'vue3'
   ? `- **微码组件：颜色一律用 Less 槽位变量** \`@color-xxx\`（**kebab-case**；槽位在 theme-vars.less 的 \`.theme-dark()\` 与 \`.theme-light()\` 各定义一份，**两处值必须不同**——模式 B 的深浅差异 100% 来自这两套槽位）。\`var()\` 只允许出现在 \`.common()\` 的透传映射里（如 \`@fontSize: var(--fontSize)\`），业务样式禁止直接写 \`var(--colorX, ...)\``
   : `- **vue3 组件：用 less 变量** \`@xxx\`（theme-vars.less 槽位已定义），禁止 \`var(--xxx)\`（\`<style scoped>\` 下 :root 变量会失效）`}
@@ -2646,6 +2673,7 @@ ${buildSectionStyleFactsForPrompt(input, figmaNodeData)}
 ${buildBusinessTextRulesDirective(input)}
 
 ⚠️ 两块各自为准逐条实现：**顺序/方向**按「布局与顺序真值」，**样式**按「内部元素样式真值」。**两份表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非样式表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在样式表中都有背景，必须分别取各自的值（如出现 tab-active 与 tab 两行且各自带 bg，则分别实现，禁止统一成同一背景）。
+${N1_TRUTH_COLOR_LANDING_RULE}
 `
     : ''
 }

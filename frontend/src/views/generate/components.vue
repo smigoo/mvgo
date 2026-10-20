@@ -203,11 +203,11 @@
                     spellcheck="false"
                   />
                   <button
-                    v-if="urlHistory.length"
+                    v-if="figmaHistoryTasks.length"
                     type="button"
                     class="history-btn"
-                    :class="{ active: showUrlHistory }"
-                    @click="showUrlHistory = !showUrlHistory"
+                    :class="{ active: isUrlHistoryOpen('main') }"
+                    @click="toggleUrlHistory('main')"
                     :disabled="busy"
                     title="最近使用"
                   >
@@ -232,52 +232,34 @@
                     {{ previewActionText }}
                   </button>
                   <!-- 历史下拉 — 绝对定位紧跟输入行下方 -->
-                  <div v-if="showUrlHistory && urlHistory.length" class="url-history-dropdown">
+                  <div v-if="isUrlHistoryOpen('main') && figmaHistoryTasks.length" class="url-history-dropdown">
+                    <!-- 🔴 2026-10-20：历史下拉改为**任务维度** —— 裸 URL 串同文件不同节点根本分不清；
+                         数据复用右栏「最近生成」（/api/tasks/recent），名称+节点+时间可辨。 -->
                     <div class="url-history-header">
-                      <span class="url-history-title">最近使用</span>
-                      <button type="button" class="url-history-clear" @click="clearUrlHistory">
-                        清空
+                      <span class="url-history-title">最近生成任务</span>
+                      <button type="button" class="url-history-clear" @click="toggleUrlHistory('main')">
+                        收起
                       </button>
                     </div>
                     <div
-                      v-for="(url, idx) in urlHistory"
-                      :key="url"
-                      class="url-history-item"
-                      @click="selectUrlHistory(url)"
+                      v-for="t in figmaHistoryTasks"
+                      :key="t.sessionId"
+                      class="url-history-item url-history-item--task"
+                      :title="t.themeCount > 1 ? `多主题任务（设计主题 ${t.themeCount} 套）——点击整体还原主链接与各主题卡` : '单主题任务——点击填入主链接（仅 1 套设计主题 + 默认一体化主题）'"
+                      @click="restoreHistoryTask(t)"
                     >
-                      <svg
-                        class="url-item-icon"
-                        viewBox="0 0 24 24"
-                        width="14"
-                        height="14"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                      </svg>
-                      <span class="url-text">{{ url }}</span>
-                      <button
-                        class="url-del"
-                        title="删除此记录"
-                        @click.stop="removeUrlHistory(idx)"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          width="14"
-                          height="14"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M18 6 6 18" />
-                          <path d="m6 6 12 12" />
-                          <circle cx="12" cy="12" r="9" />
-                        </svg>
-                      </button>
+                      <span class="task-hist-dot" :class="`is-${t.status}`"></span>
+                      <span class="task-hist-main">
+                        <span class="task-hist-name">
+                          <span class="task-hist-name__text">{{ t.name }}</span>
+                          <!-- 🔴 2026-10-20：单/多主题都打标签（与任务详情页徽章同口径：
+                               themeCount 只数设计稿真值主题，不含系统内置一体化 dark 占位） -->
+                          <span v-if="t.themeCount > 1" class="task-hist-badge">多主题（设计主题 · {{ t.themeCount }} + 默认一体化主题）</span>
+                          <span v-else class="task-hist-badge is-single">单主题（设计主题 · 1 + 默认一体化主题）</span>
+                        </span>
+                        <span class="task-hist-node">{{ t.themeCount > 1 ? t.themeSummary : (t.nodeId ? `node ${t.nodeId}` : '整个文件') }}</span>
+                      </span>
+                      <span class="task-hist-time">{{ historyTimeText(t) }}</span>
                     </div>
                   </div>
                 </div>
@@ -415,17 +397,61 @@
                         </svg>
                         链接使用上方已确认的 Figma 来源（决定组件结构与文案）
                       </div>
-                      <input
-                        v-else
-                        v-model="row.url"
-                        type="text"
-                        class="form-input n-theme-url"
-                        :class="{ 'is-invalid': nThemeRowState(idx).state === 'invalid' || nThemeRowState(idx).state === 'error' }"
-                        :placeholder="`在此粘贴「${row.name || '该主题'}」的 figma.com 节点链接`"
-                        :disabled="busy"
-                        autocomplete="off"
-                        spellcheck="false"
-                      />
+                      <!-- 🔴 2026-10-20：副主题链接同样可复用「最近使用」（与主框共用一份列表） -->
+                      <div v-else class="n-theme-url-row">
+                        <input
+                          v-model="row.url"
+                          type="text"
+                          class="form-input n-theme-url"
+                          :class="{ 'is-invalid': nThemeRowState(idx).state === 'invalid' || nThemeRowState(idx).state === 'error' }"
+                          :placeholder="`在此粘贴「${row.name || '该主题'}」的 figma.com 节点链接`"
+                          :disabled="busy"
+                          autocomplete="off"
+                          spellcheck="false"
+                          @click.stop
+                        />
+                        <button
+                          v-if="figmaHistoryTasks.length"
+                          type="button"
+                          class="n-theme-history-btn"
+                          :class="{ active: isUrlHistoryOpen(idx) }"
+                          :disabled="busy"
+                          title="最近使用"
+                          @click.stop="toggleUrlHistory(idx)"
+                        >
+                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 7v5l3 2" />
+                          </svg>
+                        </button>
+                        <!-- 行内历史下拉（任务维度，与主框同一份列表）：点击后填充本行链接（watch 自动跑预览） -->
+                        <div v-if="isUrlHistoryOpen(idx) && figmaHistoryTasks.length" class="url-history-dropdown n-theme-history-dropdown">
+                          <div class="url-history-header">
+                            <span class="url-history-title">最近生成任务</span>
+                            <button type="button" class="url-history-clear" @click.stop="toggleUrlHistory(idx)">
+                              收起
+                            </button>
+                          </div>
+                          <div
+                            v-for="t in figmaHistoryTasks"
+                            :key="t.sessionId"
+                            class="url-history-item url-history-item--task"
+                            :title="t.themeCount > 1 ? `多主题任务（设计主题 ${t.themeCount} 套）——点击整体还原主链接与各主题卡` : '单主题任务——点击填入主链接（仅 1 套设计主题 + 默认一体化主题）'"
+                            @click.stop="restoreHistoryTask(t)"
+                          >
+                            <span class="task-hist-dot" :class="`is-${t.status}`"></span>
+                            <span class="task-hist-main">
+                              <span class="task-hist-name">
+                                <span class="task-hist-name__text">{{ t.name }}</span>
+                                <span v-if="t.themeCount > 1" class="task-hist-badge">多主题（设计主题 · {{ t.themeCount }} + 默认一体化主题）</span>
+                                <span v-else class="task-hist-badge is-single">单主题（设计主题 · 1 + 默认一体化主题）</span>
+                              </span>
+                              <span class="task-hist-node">{{ t.themeCount > 1 ? t.themeSummary : (t.nodeId ? `node ${t.nodeId}` : '整个文件') }}</span>
+                            </span>
+                            <span class="task-hist-time">{{ historyTimeText(t) }}</span>
+                          </div>
+                        </div>
+                      </div>
 
                       <div class="n-theme-card-foot">
                         <!-- 🔴 2026-10-19：面板由用户自选（不再从深浅派生） -->
@@ -1860,8 +1886,17 @@ const docxDrag = ref(false)
 const docxFileInput = ref(null)
 const htmlDrag = ref(false) // 双栏 HTML 拖拽状态
 const quotaInfo = ref(null)
-const urlHistory = ref([])
-const showUrlHistory = ref(false)
+/**
+ * 🔴 2026-10-20：历史下拉改为**目标感知** —— 单列表多入口。
+ *   `'main'` ⇒ 主链接输入框；数字 ⇒ 第 N 张主题卡的 URL 输入框；null ⇒ 收起。
+ *   此前只有一个布尔量，多主题模式下副主题行拿不到「最近使用」入口。
+ */
+const showUrlHistory = ref<'main' | number | null>(null)
+/** 某行/主框是否处于展开态（模板用） */
+const isUrlHistoryOpen = (target: 'main' | number) => showUrlHistory.value === target
+function toggleUrlHistory(target: 'main' | number) {
+  showUrlHistory.value = showUrlHistory.value === target ? null : target
+}
 const logs = ref([])
 const recent = ref([])
 const taskSummary = ref(null)
@@ -2305,7 +2340,7 @@ function onPreviewIframeLoad() {
 
 watch(sourceMode, (value) => {
   localStorage.setItem(SOURCE_MODE_KEY, value)
-  showUrlHistory.value = false
+  showUrlHistory.value = null
   // 切到非 Figma / HTML 来源时，Max 不可选，自动回落到 Lite
   if (!tierAllowedSources.includes(value) && genTier.value === 'max') {
     genTier.value = 'lite'
@@ -3329,7 +3364,7 @@ async function goSingle(aiConfig) {
     p.previewToken = figmaPreview.value.previewToken
     p.previewWidth = figmaPreview.value.width
     p.previewHeight = figmaPreview.value.height
-    saveToUrlHistory(currentUrl)
+
 
     // 🆕🆕 2026-10-12 N 主题：下发多套主题设计稿。
     //   关键：**顺序即语义** —— themeNodes[0] 恒为默认主题（决定结构/几何/文案），
@@ -3617,44 +3652,76 @@ function visualQualityWarningTitle(w: any) {
   return [head, attribution, detail].filter(Boolean).join('')
 }
 
-// ═══ Figma URL 历史记录 ═══
-const URL_HISTORY_KEY = 'mvgo_figma_url_history'
-const MAX_URL_HISTORY = 10
-
-function loadUrlHistory() {
-  try {
-    urlHistory.value = JSON.parse(localStorage.getItem(URL_HISTORY_KEY) || '[]')
-  } catch {
-    urlHistory.value = []
+// ═══ Figma 历史（🔴 2026-10-20：任务维度，数据源 = /api/tasks/recent，替代原 localStorage 裸 URL 列表）═══
+/** 从 fileKey/nodeId 重建 Figma 链接（与 TaskDetail 同口径） */
+function figmaUrlFromKeyNode(fileKey: string, nodeId?: string) {
+  return `https://www.figma.com/file/${fileKey}${nodeId ? `?node-id=${encodeURIComponent(nodeId)}` : ''}`
+}
+/** 最近生成任务里带 Figma 来源的条目 → 重建链接 + 按 url 去重（重试会产生同链接多条） */
+const figmaHistoryTasks = computed(() => {
+  const seen = new Set<string>()
+  const out: any[] = []
+  for (const t of recent.value) {
+    if (!t.fileKey) continue
+    const url = figmaUrlFromKeyNode(t.fileKey, t.nodeId)
+    if (seen.has(url)) continue
+    seen.add(url)
+    const themes = Array.isArray(t.themeNodes) && t.themeNodes.length > 0 ? t.themeNodes : null
+    // 列表条目上可见的「主题摘要」：多主题任务显示 各主题名+节点，单稿显示主节点
+    const themeSummary = themes
+      ? themes
+          .map((tn: any, i: number) => `${tn.name || (i === 0 ? '默认' : `主题${i + 1}`)} ${tn.nodeId || ''}`.trim())
+          .join(' · ')
+      : ''
+    out.push({ ...t, url, themeCount: themes ? themes.length : 1, themeSummary })
   }
-}
-function saveToUrlHistory(url) {
-  if (!url || !url.trim()) return
-  const current = urlHistory.value.filter((u) => u !== url)
-  current.unshift(url)
-  urlHistory.value = current.slice(0, MAX_URL_HISTORY)
-  localStorage.setItem(URL_HISTORY_KEY, JSON.stringify(urlHistory.value))
-}
-function selectUrlHistory(url) {
-  figmaUrl.value = url
+  return out
+})
+/**
+ * 🔴 2026-10-20：任务维度**整体还原** —— 点击历史条目恢复主链接 + 多主题卡。
+ *   多主题任务（themeNodes>1）自动开启多主题模式并重建各主题卡（名称/深浅/面板/链接）；
+ *   当前档位不满足（非微码+Max）时自动切档，保证还原结果与原任务同构。
+ */
+const N_THEME_PANEL_SET = new Set(['default-panel', 'model-panels', 'aio-panel'])
+function restoreHistoryTask(t: any) {
+  figmaUrl.value = t.url
   sourceMode.value = 'figma'
-  showUrlHistory.value = false
+  const themes = Array.isArray(t?.themeNodes) ? t.themeNodes : null
+  if (themes && themes.length > 1 && !busy.value) {
+    if (!nThemeSupported.value) {
+      // 多主题还原需要 微码 + Max —— 自动切档（还原意图明确，无歧义）
+      compType.value = 'microcode'
+      genTier.value = 'max'
+    }
+    nThemeEnabled.value = true
+    nThemeRows.value = themes.map((tn: any, i: number) => ({
+      name: String(tn.name || (i === 0 ? '默认' : `主题 ${i + 1}`)).slice(0, 20),
+      // 第 0 行是默认主题：链接复用主输入框（既有契约），行内不重复存
+      url: i === 0 ? '' : figmaUrlFromKeyNode(String(tn.fileKey || t.fileKey), tn.nodeId),
+      tone: tn.brightness === 'light' || tn.brightness === 'dark' ? tn.brightness : i === 0 ? 'light' : 'dark',
+      panelType: N_THEME_PANEL_SET.has(tn.panelType)
+        ? tn.panelType
+        : defaultPanelForTone(tn.brightness === 'light' || tn.brightness === 'dark' ? tn.brightness : i === 0 ? 'light' : 'dark'),
+    }))
+    activeNThemeIdx.value = 0
+    // 🔴 2026-10-20：还原后立即并发预拉所有副主题预览 —— 既有 watch 只照顾**激活行**，
+    //   不点的卡会一直停在「等待预览结果…」（用户实测体验差）。
+    nextTick(() => {
+      nThemeRows.value.forEach((row, i) => {
+        if (i > 0 && row.url.trim()) void previewNThemeRow(i)
+      })
+    })
+  }
+  showUrlHistory.value = null
 }
-function removeUrlHistory(idx) {
-  urlHistory.value.splice(idx, 1)
-  localStorage.setItem(URL_HISTORY_KEY, JSON.stringify(urlHistory.value))
-}
-function clearUrlHistory() {
-  urlHistory.value = []
-  localStorage.removeItem(URL_HISTORY_KEY)
-  showUrlHistory.value = false
-}
-
 function handleClickOutside(e) {
-  const historyBtn = document.querySelector('.history-btn')
-  const dropdown = document.querySelector('.url-history-dropdown')
-  if (showUrlHistory.value && !historyBtn?.contains(e.target) && !dropdown?.contains(e.target))
-    showUrlHistory.value = false
+  if (showUrlHistory.value === null) return
+  // 主框按钮/下拉 与 各主题卡行内按钮/下拉 之外点击 ⇒ 收起
+  const inside =
+    e.target.closest?.('.history-btn') ||
+    e.target.closest?.('.n-theme-history-btn') ||
+    e.target.closest?.('.url-history-dropdown')
+  if (!inside) showUrlHistory.value = null
 }
 
 // ═══ 最近任务（空闲右栏）═══
@@ -3671,6 +3738,12 @@ async function fetchRecent() {
       error: t.error || '',
       componentType: t.target || t.componentType || t.codeType || 'microcode',
       configSnapshot: t.configSnapshot || null,
+      // 🔴 2026-10-20：任务维度 URL 历史（「最近使用」下拉数据源）——任务对象只存
+      //   fileKey/nodeId（TaskDetail 同口径），前端重建 Figma 链接。
+      fileKey: t.fileKey || '',
+      nodeId: t.nodeId || '',
+      // 🔴 2026-10-20：多主题整套设计稿（后端 createTask 已持久化）——整体还原用
+      themeNodes: Array.isArray(t.themeNodes) ? t.themeNodes : null,
       //  P0-3: 视觉分析降级标志（视觉超时→Figma 兜底 或 完全降级）
       visualDegraded: t.visualDegraded === true || !!t.result?._visualDegraded,
       visualLayoutSource: t.visualLayoutSource || t.result?._visualLayoutSource || null,
@@ -3708,7 +3781,6 @@ async function fetchSummary() {
 onMounted(() => {
   document.addEventListener('paste', onPaste)
   document.addEventListener('click', handleClickOutside)
-  loadUrlHistory()
   fetchRecent()
   fetchSummary()
   // 每 15s 重新拉取最近生成列表（反映排队→运行→完成的状态变化）+ 刷新相对时间显示
@@ -4082,6 +4154,45 @@ onUnmounted(() => {
 }
 .n-theme-note svg {
   flex-shrink: 0;
+}
+/* 🔴 2026-10-20：副主题链接行 —— 输入框 + 「最近使用」按钮 + 行内下拉 */
+.n-theme-url-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+}
+.n-theme-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 30px;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 6px;
+  background: #fff;
+  color: #909399;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.n-theme-history-btn:hover:not(:disabled),
+.n-theme-history-btn.active {
+  color: var(--c-primary, #2563eb);
+  border-color: var(--c-primary, #2563eb);
+}
+/* 行内历史下拉：贴在链接行正下方（沿用主框下拉样式，仅定位锚不同） */
+.n-theme-history-dropdown {
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  width: auto;
+  z-index: 30;
+}
+/* 行内输入框的外距交给容器统一管，避免双重 margin */
+.n-theme-url-row .n-theme-url {
+  margin-top: 0;
 }
 /* 🔴 必须给**完整**输入框样式：本页 `.form-input` 没有定义（它属于主输入框的
    另一套样式上下文），只靠 `.n-theme-url` 的两行会被压成 104×14 的文本行 ——
@@ -5707,6 +5818,76 @@ html[data-theme='dark'] .spinner--lg {
 }
 .url-history-item:hover .url-text {
   color: var(--txt-1);
+}
+
+/* 🔴 2026-10-20：任务维度历史条目（名称 + 节点 + 时间，状态点） */
+.url-history-item--task {
+  gap: var(--s2, 8px);
+  padding: 7px var(--s3, 12px);
+}
+.task-hist-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c0c4cc;
+}
+.task-hist-dot.is-completed { background: #22c55e; }
+.task-hist-dot.is-failed { background: #ef4444; }
+.task-hist-dot.is-running,
+.task-hist-dot.is-queued,
+.task-hist-dot.is-rate_limited,
+.task-hist-dot.is-retry_scheduled { background: #f59e0b; }
+.task-hist-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.task-hist-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm, 13px);
+  color: var(--txt-1, #303133);
+}
+/* 任务名过长时截断，保证主题徽章不被挤掉 */
+.task-hist-name__text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 主题徽章（列表上即可看出该任务是单主题还是多主题） */
+.task-hist-badge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--c-primary, #2563eb);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.task-hist-badge.is-single {
+  background: rgba(144, 147, 153, 0.14);
+  color: var(--txt-3, #909399);
+}
+.task-hist-node {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-family: var(--mono, monospace);
+  color: var(--txt-3, #909399);
+}
+.task-hist-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--txt-3, #909399);
 }
 
 /* 删除按钮 — 精致圆形 × 图标 */

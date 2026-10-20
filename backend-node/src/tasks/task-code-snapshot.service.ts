@@ -28,6 +28,8 @@ export interface TaskCodeSnapshotValidation {
   sfc?: 'pending' | 'passed' | 'warning' | 'blocked';
   less?: 'pending' | 'passed' | 'warning' | 'blocked';
   runtime?: 'pending' | 'passed' | 'warning' | 'blocked';
+  /** 🛡️ #131：L0-B 结构门禁结论（blocked ⇒ 禁止晋升 last-good，停留候选供人工审查） */
+  structure?: 'pending' | 'passed' | 'warning' | 'blocked';
 }
 
 export interface TaskCodeSnapshotManifest {

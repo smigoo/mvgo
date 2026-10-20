@@ -1134,6 +1134,14 @@ function buildEffectiveSection(sec, idx, ctx) {
       //   ⚠️ 仍未治本：`extractLayoutMetadata` 的 `: 'column'` 兜底本身会说谎（无事实 ≠ column），
       //   治本（字符串感知 + 无事实返回 null + 同步 section-content-guard 口径）是 ③-b，须单独一轮 + A/B。
       layoutMetadata: extractLayoutMetadata(sec),
+      // 🛡️ #138（2026-10-20 · e9165dce 实锤）：E1 互挂兄弟真值透传。section-tree#nestedSections
+      //   挂的 rowPeerIds（y 重叠>50% + x 分离 ⇒ 横向并列对）此前在白名单重建时被剥掉 ⇒
+      //   下游 pre-write-self-healing 刀32（rowPeers 包裹）真值条件永不满足、fail-open 静默跳过
+      //   ⇒「合作厂商/在线设备」两卡恒上下堆叠（477e185d/d27c5a1c/e9165dce 三连）。缺字段不产键，
+      //   下游 healRowPeersWrap 按 Array.isArray 判据天然 fail-open，无副作用。
+      ...(Array.isArray(sec.rowPeerIds) && sec.rowPeerIds.length > 0
+        ? { rowPeerIds: [...sec.rowPeerIds] }
+        : {}),
       internalSubcomponents: [],
       shouldSplitInternally: false,
     };
@@ -1340,6 +1348,11 @@ function buildEffectiveSection(sec, idx, ctx) {
     internalSubcomponents,
     shouldSplitInternally: collapsed ? false : scoreResult.shouldSplit,
     ...(tabStructured.tabStructure ? { tabStructure: tabStructured.tabStructure } : {}),
+    // 🛡️ #138（同容器分支）：E1 互挂兄弟真值透传——叶子级横向并列（左图右文头部等）同样
+    //   需要送达下游刀32。缺字段不产键，零副作用。
+    ...(Array.isArray(sec.rowPeerIds) && sec.rowPeerIds.length > 0
+      ? { rowPeerIds: [...sec.rowPeerIds] }
+      : {}),
   };
 }
 

@@ -2174,3 +2174,178 @@ describe('collectSubtreeTexts · 文案真值取 characters（2026-09-30 治本�
     expect(collectSubtreeTexts('s', index)[0].text).toBe('南北接线\n设备')
   })
 })
+
+describe('横向并列兄弟检出 rowPeerIds（#128 ⑦ · 84af4f8f 实锤）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+  const textKid = (id, x, y, w, h, characters) => ({
+    id, name: `t-${characters}`, type: 'TEXT', characters, absoluteBoundingBox: box(x, y, w, h),
+  })
+  // 84af4f8f 头部缩减复刻：top-bar 内「左 img（98×98）+ 右标题行」——
+  // img 的 y 区间完整覆盖标题行，x 区间分离；E1 旧行为恒按 y 排序 ⇒ 隐含纵向堆叠假设。
+  const mkHeader = (imgBox, titleBox) => ({
+    document: {
+      id: '36:1693', name: 'cp-设备详情', type: 'FRAME', absoluteBoundingBox: box(0, 0, 400, 400),
+      children: [
+        {
+          id: '36:1700', name: 'top-bar', type: 'GROUP', absoluteBoundingBox: box(0, 0, 400, 130),
+          children: [
+            { id: '36:1725', name: 'logo-wrap', type: 'GROUP', absoluteBoundingBox: imgBox,
+              children: [textKid('36:1726', imgBox.x, imgBox.y, 60, 20, '图标')] },
+            { id: '36:1722', name: 'title-row', type: 'GROUP', absoluteBoundingBox: titleBox,
+              children: [textKid('36:1724', titleBox.x, titleBox.y, 180, 28, '设备详情')] },
+          ],
+        },
+      ],
+    },
+  })
+  const leafBy = (r, id) => {
+    const top = (r?.sections || []).find((s) => s.id === '36:1700')
+    return (top?.children || []).find((s) => s.id === id)
+  }
+
+  it('左图右文（y 重叠 100% + x 分离）⇒ 互挂 rowPeerIds，树结构不变', () => {
+    const figma = mkHeader(box(20, 10, 98, 98), box(130, 20, 240, 78))
+    const r = deriveSectionsFromFigmaTree(figma)
+    const img = leafBy(r, '36:1725')
+    const title = leafBy(r, '36:1722')
+    expect(img?.rowPeerIds).toEqual(['36:1722'])
+    expect(title?.rowPeerIds).toEqual(['36:1725'])
+    // 不改树结构：仍是两个并列嵌套 section
+    const top = r.sections.find((s) => s.id === '36:1700')
+    expect(top.children).toHaveLength(2)
+  })
+
+  it('y 区间重叠 ≤50%（以较矮者为基准）⇒ 不判并列（阳性对照）', () => {
+    // overlap = 108-60 = 48，较矮者高 98 ⇒ 48/98 ≈ 0.49 ≤ 0.5
+    const figma = mkHeader(box(20, 10, 98, 98), box(130, 60, 240, 100))
+    const r = deriveSectionsFromFigmaTree(figma)
+    expect(leafBy(r, '36:1725')?.rowPeerIds).toBeUndefined()
+    expect(leafBy(r, '36:1722')?.rowPeerIds).toBeUndefined()
+  })
+
+  it('x 区间相交（即使 y 完全重叠）⇒ 不判并列（阳性对照）', () => {
+    const figma = mkHeader(box(20, 10, 200, 98), box(100, 20, 240, 78))
+    const r = deriveSectionsFromFigmaTree(figma)
+    expect(leafBy(r, '36:1725')?.rowPeerIds).toBeUndefined()
+    expect(leafBy(r, '36:1722')?.rowPeerIds).toBeUndefined()
+  })
+
+  it('真值下发：buildSectionStyleFacts 输出「横向并列兄弟(几何)」行且含并列方名', () => {
+    const figma = mkHeader(box(20, 10, 98, 98), box(130, 20, 240, 78))
+    const r = deriveSectionsFromFigmaTree(figma)
+    const out = buildSectionStyleFacts(r.sections, figma)
+    expect(out).toContain('横向并列兄弟(几何)')
+    expect(out).toContain('flex-direction:row')
+    expect(out).toContain('title-row')
+    expect(out).toContain('logo-wrap')
+  })
+
+  // ⑦-b（2026-10-20 · 5ef650ff 实锤）：peered section 本身是**布局容器**（纯装饰子树，
+  // isLayoutContainer=true）时 walkLeaves 穿透跳过 ⇒ 真值行曾随容器被吞、零下发。
+  // fixture 复刻：两张统计卡 GROUP（各只含 VECTOR 子树）同 y 并列。
+  const mkContainerPeers = () => ({
+    document: {
+      id: '38:3134', name: 'cp-合作厂商弹窗', type: 'FRAME', absoluteBoundingBox: box(0, 0, 660, 868),
+      children: [{
+        id: '796:3', name: 'slot-icon', type: 'GROUP', absoluteBoundingBox: box(28, 40, 604, 787),
+        children: [
+          { id: '38:3260', name: 'Group 2136638431', type: 'GROUP', absoluteBoundingBox: box(28, 55, 265, 76),
+            children: [
+              { id: '187:262', name: 'icon', type: 'GROUP', absoluteBoundingBox: box(44, 66, 53, 55),
+                children: [
+                  { id: '38:3266', name: 'Vector', type: 'VECTOR', absoluteBoundingBox: box(44, 66, 33, 14),
+                    fills: [{ type: 'SOLID', color: { r: 0.2, g: 0.6, b: 0.9 } }] },
+                ] },
+            ] },
+          { id: '38:3282', name: 'Group 2136638435', type: 'GROUP', absoluteBoundingBox: box(330, 55, 265, 76),
+            children: [
+              { id: '187:263', name: 'icon', type: 'GROUP', absoluteBoundingBox: box(346, 66, 53, 55),
+                children: [
+                  { id: '38:3290', name: 'Vector', type: 'VECTOR', absoluteBoundingBox: box(346, 66, 33, 14),
+                    fills: [{ type: 'SOLID', color: { r: 0.2, g: 0.6, b: 0.9 } }] },
+                ] },
+            ] },
+        ],
+      }],
+    },
+  })
+
+  it('⑦-b peered 容器（纯装饰子树）被穿透 ⇒ 真值行下放到叶子且每容器只发一次', () => {
+    const figma = mkContainerPeers()
+    const r = deriveSectionsFromFigmaTree(figma)
+    // 前提确认：两卡互挂 rowPeerIds 且确为容器（复刻真机分类）
+    const top = (r?.sections || []).find((s) => String(s.id) === '796:3')
+    const c1 = (top?.children || []).find((s) => String(s.id) === '38:3260')
+    const c2 = (top?.children || []).find((s) => String(s.id) === '38:3282')
+    expect(c1?.rowPeerIds).toEqual(['38:3282'])
+    expect(c2?.rowPeerIds).toEqual(['38:3260'])
+    const out = buildSectionStyleFacts(r.sections, figma)
+    // 真值行必须出现在 facts 文本层（验收锚不下树层）
+    expect(out).toContain('横向并列兄弟(几何)')
+    expect(out).toContain('Group 2136638435')
+    expect(out).toContain('Group 2136638431')
+    // 去重：每容器只发一次（两容器 ⇒ 恰好 2 行）
+    expect(out.split('\n').filter((l) => l.includes('横向并列兄弟(几何)')).length).toBe(2)
+  })
+})
+
+// ⑧（2026-10-20 · 5ef650ff 实锤）：容器装饰矩形 = 面板底真值下发。
+//   病灶：分组面板自身 fills=[]，底色/圆角挂在同尺寸首个子矩形上 ⇒ 旧实现不下发
+//   ⇒ 产物面板零 background/零圆角，整组消失。
+describe('面板底(几何)真值下发（#128 ⑧ · 5ef650ff 实锤）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+  const solid = (hex, opacity) => {
+    const n = parseInt(hex.slice(1), 16)
+    return { type: 'SOLID', color: { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 }, ...(opacity != null ? { opacity } : {}) }
+  }
+  const textKid = (id, x, y, characters) => ({
+    id, name: `t-${characters}`, type: 'TEXT', characters, absoluteBoundingBox: box(x, y, 80, 16),
+    fills: [{ type: 'SOLID', color: { r: 0.2, g: 0.2, b: 0.2 } }],
+  })
+  /** 面板容器：自身 fills=[] + 同尺寸底色子矩形 + 一行内容 */
+  const mkPanel = (panelFill, panelRadius) => ({
+    document: {
+      id: '0:1', name: 'cp-test', type: 'FRAME', absoluteBoundingBox: box(0, 0, 660, 400),
+      children: [{
+        id: '38:3137', name: 'Group 2136638432', type: 'GROUP', absoluteBoundingBox: box(28, 40, 604, 161),
+        children: [
+          {
+            id: '38:3138', name: 'Rectangle 346242326', type: 'RECTANGLE', absoluteBoundingBox: box(28, 40, 604, 161),
+            fills: panelFill ? [panelFill] : [], ...(panelRadius ? { cornerRadius: panelRadius } : {}),
+          },
+          {
+            id: '38:3140', name: 'Frame 2136639905', type: 'FRAME', absoluteBoundingBox: box(48, 120, 564, 30),
+            children: [textKid('38:3141', 48, 120, '华为技术')],
+          },
+        ],
+      }],
+    },
+  })
+
+  it('同尺寸底色子矩形（半透明+圆角）⇒ 下发面板底真值行（含 alpha 与 radius）', () => {
+    const figma = mkPanel(solid('#e2d084', 0.2), 12)
+    const r = deriveSectionsFromFigmaTree(figma)
+    const out = buildSectionStyleFacts(r.sections, figma)
+    expect(out).toContain('面板底(几何)')
+    expect(out).toContain('rgba(226,208,132,0.2)')
+    expect(out).toContain('border-radius: 12px')
+    expect(out).toContain('禁止省略')
+  })
+
+  it('阳性对照：容器自身有填充 ⇒ 不下发（无双份背景事实）', () => {
+    const figma = mkPanel(solid('#e2d084', 0.2), 12)
+    // 容器自身带填充 ⇒ 底色矩形不再是唯一背景来源，不发面板底行
+    ;(figma.document.children[0] as any).fills = [solid('#ffffff', 1)]
+    const r = deriveSectionsFromFigmaTree(figma)
+    const out = buildSectionStyleFacts(r.sections, figma)
+    expect(out).not.toContain('面板底(几何)')
+  })
+
+  it('阳性对照：首个子节点与容器不同尺寸 ⇒ 不下发（不是底色层）', () => {
+    const figma = mkPanel(solid('#e2d084', 0.2), 12)
+    ;(figma.document.children[0] as any).children[0].absoluteBoundingBox = box(28, 40, 100, 30)
+    const r = deriveSectionsFromFigmaTree(figma)
+    const out = buildSectionStyleFacts(r.sections, figma)
+    expect(out).not.toContain('面板底(几何)')
+  })
+})

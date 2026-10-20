@@ -105,7 +105,8 @@ describe('② 分块 prompt 注入（theme-vars / common.less）', () => {
 
   it('🩺 阳性对照：未透传 dualTruth 时 theme-vars 分块不含该段（证明注入确实来自 dualTruth）', () => {
     const p = buildThemeVarsChunkPrompt({ backgroundBrightness: 'light' }, baseChunk)
-    expect(p).not.toContain('跨主题配色真值')
+    // 锚 = 段落标题（而非「跨主题配色真值」裸词——正文硬约束可能提及该词，2026-10-20 误中实锤）
+    expect(p).not.toContain('## 🌗 跨主题配色真值（')
     expect(p).not.toContain('#123259')
   })
 
@@ -114,7 +115,7 @@ describe('② 分块 prompt 注入（theme-vars / common.less）', () => {
       ...baseChunk,
       files: ['resources/styles/common.less'],
     })
-    expect(p).toContain('跨主题配色真值')
+    expect(p).toContain('## 🌗 跨主题配色真值（')
     expect(p).toContain('#98c2f6')
   })
 
@@ -123,7 +124,7 @@ describe('② 分块 prompt 注入（theme-vars / common.less）', () => {
       ...baseChunk,
       files: ['resources/styles/common.less'],
     })
-    expect(p).not.toContain('跨主题配色真值')
+    expect(p).not.toContain('## 🌗 跨主题配色真值（')
   })
 })
 

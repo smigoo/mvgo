@@ -2260,3 +2260,43 @@ describe('TEXT-COVERAGE 真值文本覆盖率', () => {
     expect(byId(res, 'TEXT-COVERAGE')).toHaveLength(0)
   })
 })
+
+describe('IMG-SRC-001 裸 img 无图源（#128 ⑧ · 84af4f8f 族实锤，BLOCK）', () => {
+  const runImg = (content: string, path = 'package/index.vue') => {
+    const res = CodeStructureValidator.validate(
+      [{ path, content }],
+      'test-component',
+      { target: 'microcode' },
+    )
+    return res.issues.filter((i: any) => i.id === 'IMG-SRC-001')
+  }
+  const vueWith = (tpl: string) =>
+    `<template>\n${tpl}\n</template>\n<script setup>\nconst a = 1\n</script>`
+
+  it('裸 <img> 既无 src 也无 :src ⇒ BLOCK', () => {
+    const issues = runImg(vueWith(`  <div><img class="logo"></div>`))
+    expect(issues).toHaveLength(1)
+    expect(issues[0].severity).toBe('BLOCK')
+    expect(issues[0].file).toBe('package/index.vue')
+  })
+
+  it(':src 绑定 ⇒ 放行', () => {
+    expect(runImg(vueWith(`  <img :src="logoUrl" class="logo">`))).toHaveLength(0)
+  })
+
+  it('静态 src ⇒ 放行', () => {
+    expect(runImg(vueWith(`  <img src="./a.png">`))).toHaveLength(0)
+  })
+
+  it('v-bind:src ⇒ 放行', () => {
+    expect(runImg(vueWith(`  <img v-bind:src="logoUrl">`))).toHaveLength(0)
+  })
+
+  it('模板注释内的 <img> 不误报', () => {
+    expect(runImg(vueWith(`  <!-- <img class="logo"> -->\n  <div/>`))).toHaveLength(0)
+  })
+
+  it('非 .vue 文件不扫（.ts 中的 img 字符串不报）', () => {
+    expect(runImg(`const s = "<img class=x>"`, 'package/util.ts')).toHaveLength(0)
+  })
+})

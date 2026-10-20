@@ -10,6 +10,8 @@ import { BaseAgent } from '../agents/base-agent.js';
 //   不能用 await 动态 import；该常量是纯数据，静态导入安全且无循环依赖 ——
 //   style-tokens.js 不import roles/*）。
 import { MC_DARK_THEME_COLOR_ENUM_CORE } from '../utils/style-tokens.js';
+// 🛡️ #139（N3）：node 侧真值色板（颜色变量补齐「真值优先」的取值来源）
+import { buildTruthPalette } from '../utils/truth-palette.js';
 import * as microcodeParser from './microcode/code-parser.js';
 import * as microcodeHealer from './microcode/code-healer.js';
 import * as microcodeWriter from './microcode/file-writer.js';
@@ -5105,6 +5107,13 @@ export class MicrocodeEngineer extends BaseAgent {
     return microcodeWriter.writeFiles(targetFiles, outputPath, {
       logger: this.logger,
       componentType: this.componentType,
+      // 🛡️ #139（N3）：透传真值真值源——颜色变量补齐由「按名猜色」改为「真值优先」。
+      //   ⚠️ 白名单坑（#123 dualTruth / #127 secondaryNode / #138 rowPeerIds 同族）：
+      //   新增入参必须在**每一层**显式透传，否则静默丢弃、零报错。此处为落盘唯一出口。
+      ...(this._truthPalette ? { truthPalette: this._truthPalette } : {}),
+      ...(!this._truthPalette && this._figmaRootForTruthPalette
+        ? { figmaRoot: this._figmaRootForTruthPalette }
+        : {}),
     });
   }
 
@@ -6561,6 +6570,29 @@ export class MicrocodeEngineer extends BaseAgent {
       );
     }
 
+    // 🛡️ #139（N3 · 2026-10-20 · e7a50be7 实锤）：node 侧真值色板（按 backgrounds/shadows/
+    //   borders/texts 分桶）。落盘补齐颜色变量时优先取真值，替代按变量名猜测
+    //   （旧行为让 @color-group-glow-gold→#333333、@color-accent-gold→#409EFF 等 142 个
+    //   变量整体偏离 Figma 真值）。写在实例字段供 this.writeFiles 唯一落盘出口读取；
+    //   engineer 实例按任务新建（dynamic-workflow-graph#createRole），不存在跨任务污染。
+    try {
+      this._truthPalette = figmaNodeData ? buildTruthPalette(figmaNodeData) : null;
+      if (this._truthPalette && this.logger) {
+        this.logger.info('🎨 真值色板已构建（颜色变量补齐真值优先）', {
+          backgrounds: this._truthPalette.backgrounds.length,
+          shadows: this._truthPalette.shadows.length,
+          borders: this._truthPalette.borders.length,
+          texts: this._truthPalette.texts.length,
+        });
+      }
+    } catch (_paletteErr) {
+      this._truthPalette = null;
+      if (this.logger) {
+        this.logger.warn('🎨 真值色板构建失败（fail-open，颜色变量走中性兜底）', {
+          error: _paletteErr?.message || String(_paletteErr),
+        });
+      }
+    }
     // 如果未提供 displayName，从 figmaNodeData 中自动提取
     const compDisplayName = displayName || figmaNodeData?.name || '';
 

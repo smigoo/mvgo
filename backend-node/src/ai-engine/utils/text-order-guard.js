@@ -56,23 +56,59 @@ export function collectFigmaTextSiblingGroups(figmaNodeData) {
         if (new Set(trimmed).size === trimmed.length) {
           const boxes = texts.map((t) => t.absoluteBoundingBox);
           if (boxes.every((b) => b && typeof b.x === 'number')) {
-            const xs = boxes.map((b) => [b.x, b.x + (b.width || 0)]);
-            const ys = boxes.map((b) => [b.y, b.y + (b.height || 0)]);
-            const xRange =
-              Math.max(...xs.map((r) => r[1])) - Math.min(...xs.map((r) => r[0]));
-            const yRange =
-              Math.max(...ys.map((r) => r[1])) - Math.min(...ys.map((r) => r[0]));
-            const direction = xRange > yRange ? 'horizontal' : 'vertical';
             const keyed = texts.map((t, i) => ({ text: trimmed[i], box: boxes[i] }));
-            keyed.sort((a, b) =>
-              direction === 'horizontal'
-                ? a.box.x - b.box.x
-                : a.box.y - b.box.y,
-            );
+
+            // 🛡️ 2026-10-20（84af4f8f 实锤）：二维网格判定优先于横/纵二分。
+            //   旧逻辑「xRange>yRange ⇒ horizontal ⇒ 纯 x 排序」对字段网格（N 行×M 列
+            //   label/value）系统性产出**列主序**（x 跨 3 列 > y 跨 6 行 ⇒ 全部 label
+            //   列排前），与正确渲染序（**行主序**：y 分行 → 行内 x 升序）正好相反，
+            //   且与 LLM 自编的列主序数组「错错得正」⇒ TEXT-001 静默漏检。
+            //   网格判据（窄）：≥4 个文本、y 聚类 ≥2 行、每行 ≥2 列。
+            //   单行 tab（1 行）/纵向列表（每行 1 列）不会误入，走原二分。
+            const heights = boxes.map((b) => b.height || 0).filter((h) => h > 0).sort((a, b) => a - b);
+            const medianH = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
+            const rowTol = Math.max(4, medianH * 0.6);
+            const byY = [...keyed].sort((a, b) => a.box.y - b.box.y);
+            const rows = [];
+            for (const k of byY) {
+              const last = rows[rows.length - 1];
+              if (last && Math.abs(k.box.y - last._yRef) <= rowTol) {
+                last.push(k);
+              } else {
+                const row = [k];
+                row._yRef = k.box.y;
+                rows.push(row);
+              }
+            }
+            let direction;
+            let ordered;
+            if (
+              keyed.length >= 4 &&
+              rows.length >= 2 &&
+              rows.every((r) => r.length >= 2)
+            ) {
+              direction = 'grid';
+              ordered = rows.flatMap((r) =>
+                [...r].sort((a, b) => a.box.x - b.box.x),
+              );
+            } else {
+              const xs = boxes.map((b) => [b.x, b.x + (b.width || 0)]);
+              const ys = boxes.map((b) => [b.y, b.y + (b.height || 0)]);
+              const xRange =
+                Math.max(...xs.map((r) => r[1])) - Math.min(...xs.map((r) => r[0]));
+              const yRange =
+                Math.max(...ys.map((r) => r[1])) - Math.min(...ys.map((r) => r[0]));
+              direction = xRange > yRange ? 'horizontal' : 'vertical';
+              ordered = [...keyed].sort((a, b) =>
+                direction === 'horizontal'
+                  ? a.box.x - b.box.x
+                  : a.box.y - b.box.y,
+              );
+            }
             groups.push({
               parentName: String(node.name || ''),
               direction,
-              orderedTexts: keyed.map((k) => k.text),
+              orderedTexts: ordered.map((k) => k.text),
             });
           }
         }

@@ -462,3 +462,185 @@ const cards = ['激光雷达', 'CO/VI检测器']
     );
   });
 });
+
+describe('二维网格行主序（2026-10-20 · 84af4f8f 实锤：xRange>yRange 误判 horizontal ⇒ 列主序错错得正漏检）', () => {
+  // 84af4f8f 真实形态缩减复刻：6 行 × 4 列 label/value 字段网格
+  const T = (id: string, text: string, x: number, y: number) => ({
+    type: 'TEXT',
+    name: id,
+    characters: text,
+    absoluteBoundingBox: { x, y, width: 60, height: 14 },
+  });
+  const FIGMA_FIELD_GRID = {
+    document: {
+      type: 'FRAME',
+      name: 'cp-device',
+      children: [
+        {
+          type: 'GROUP',
+          name: 'Group 2136638454',
+          children: [
+            // 第 1 行（y=100）
+            T('36:1699', '所属产品', 0, 100),
+            T('36:1710', '爆闪灯', 71, 100),
+            T('36:1702', '产品厂家', 273, 100),
+            T('36:1713', '感动科技', 344, 100),
+            // 第 2 行（y=124）
+            T('36:1701', '设备类型', 0, 124),
+            T('36:1712', '具身机器人', 71, 124),
+            T('36:1700', '所属路公司', 273, 124),
+            T('36:1711', '江苏通行宝', 344, 124),
+            // 第 3 行（y=148，行内 y 抖动 1px）
+            T('36:1703', '链接分类', 0, 148),
+            T('36:1714', '直连设备', 71, 147),
+            T('36:1704', '父级设备', 273, 147),
+            T('36:1715', 'AP12343', 344, 147),
+          ],
+        },
+      ],
+    },
+  };
+  const ROW_MAJOR = [
+    '所属产品', '爆闪灯', '产品厂家', '感动科技',
+    '设备类型', '具身机器人', '所属路公司', '江苏通行宝',
+    '链接分类', '直连设备', '父级设备', 'AP12343',
+  ];
+
+  it('收集：2D 网格 ⇒ direction=grid，orderedTexts=行主序（y 分行容差 → 行内 x 升序）', () => {
+    const groups = collectFigmaTextSiblingGroups(FIGMA_FIELD_GRID);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].direction).toBe('grid');
+    expect(groups[0].orderedTexts).toEqual(ROW_MAJOR);
+  });
+
+  it('🩺 阳性对照：旧二分法在该 fixture 产出列主序（证明修复确实改变判定）', () => {
+    // 手工复刻旧算法：xRange>yRange ⇒ horizontal ⇒ 纯 x 升序
+    const boxes = FIGMA_FIELD_GRID.document.children[0].children.map((c: any) => ({
+      text: c.characters,
+      ...c.absoluteBoundingBox,
+    }));
+    const xs = boxes.map((b: any) => b.x);
+    const ys = boxes.map((b: any) => b.y);
+    const xRange = Math.max(...xs) - Math.min(...xs);
+    const yRange = Math.max(...ys) - Math.min(...ys);
+    expect(xRange > yRange).toBe(true); // 旧逻辑会判 horizontal
+    const legacy = [...boxes].sort((a: any, b: any) => a.x - b.x).map((b: any) => b.text);
+    // 列主序：全部 x=0 的 label 在前 ⇒ 与行主序不同
+    expect(legacy).not.toEqual(ROW_MAJOR);
+    expect(legacy.slice(0, 3)).toEqual(['所属产品', '设备类型', '链接分类']);
+  });
+
+  it('检出+自愈：产物数组列主序残留（84af4f8f 形态）⇒ drift 检出 ⇒ fix 重排为行主序 ⇒ 复检零 drift', () => {
+    const files = {
+      'package/components/ContentSection3.vue': `<template>
+  <div class="c-device-group-2136638454" data-section-id="81:7">
+    <span v-for="item in gridItems" :key="item.id" :class="item.cls">{{ item.text }}</span>
+  </div>
+</template>
+<script setup>
+import { ref } from 'vue'
+const gridItems = ref([
+  { id: 'l1', text: '所属产品', cls: 'lbl' }, { id: 'l2', text: '设备类型', cls: 'lbl' }, { id: 'l3', text: '链接分类', cls: 'lbl' },
+  { id: 'v1', text: '爆闪灯', cls: 'val' }, { id: 'v2', text: '具身机器人', cls: 'val' }, { id: 'v3', text: '直连设备', cls: 'val' },
+  { id: 'l4', text: '产品厂家', cls: 'lbl' }, { id: 'l5', text: '所属路公司', cls: 'lbl' }, { id: 'l6', text: '父级设备', cls: 'lbl' },
+  { id: 'v4', text: '感动科技', cls: 'val' }, { id: 'v5', text: '江苏通行宝', cls: 'val' }, { id: 'v6', text: 'AP12343', cls: 'val' }
+])
+</script>`,
+    };
+    const drifts = detectTextOrderDrift(files, FIGMA_FIELD_GRID);
+    expect(drifts).toHaveLength(1);
+    expect(drifts[0].expected).toEqual(ROW_MAJOR);
+    expect(drifts[0].actual).not.toEqual(ROW_MAJOR);
+
+    const healed = fixTextOrderDrift(files, FIGMA_FIELD_GRID);
+    expect(healed.fixed).toHaveLength(1);
+    expect(healed.remaining).toHaveLength(0);
+    // 重排后数组首 4 项 = 第 1 行行主序
+    const m = healed.files['package/components/ContentSection3.vue'].match(/gridItems = ref\(\[([\s\S]*?)\]\)/);
+    expect(m).toBeTruthy();
+    expect(m![1].indexOf('所属产品')).toBeLessThan(m![1].indexOf('爆闪灯'));
+    expect(m![1].indexOf('爆闪灯')).toBeLessThan(m![1].indexOf('产品厂家'));
+    expect(m![1].indexOf('产品厂家')).toBeLessThan(m![1].indexOf('感动科技'));
+    // 复检零 drift（幂等）
+    expect(detectTextOrderDrift(healed.files, FIGMA_FIELD_GRID)).toHaveLength(0);
+  });
+
+  it('不误报：产物已是行主序 ⇒ 零 drift', () => {
+    const files = {
+      'package/components/G.vue': `<template>
+  <div><span v-for="i in items" :key="i.id">{{ i.text }}</span></div>
+</template>
+<script setup>
+const items = [
+  { id: '1', text: '所属产品' }, { id: '2', text: '爆闪灯' }, { id: '3', text: '产品厂家' }, { id: '4', text: '感动科技' },
+  { id: '5', text: '设备类型' }, { id: '6', text: '具身机器人' }, { id: '7', text: '所属路公司' }, { id: '8', text: '江苏通行宝' },
+  { id: '9', text: '链接分类' }, { id: '10', text: '直连设备' }, { id: '11', text: '父级设备' }, { id: '12', text: 'AP12343' }
+]
+</script>`,
+    };
+    expect(detectTextOrderDrift(files, FIGMA_FIELD_GRID)).toHaveLength(0);
+  });
+
+  it('🩺 阳性对照：单行 4 文本（tabs）仍走 horizontal、纵向单列表仍走 vertical（不误入 grid）', () => {
+    const singleRow = {
+      document: {
+        type: 'FRAME',
+        name: 'r',
+        children: [
+          {
+            type: 'FRAME',
+            name: 'tabs',
+            children: [
+              T('1', '甲一', 0, 100),
+              T('2', '乙二', 80, 100),
+              T('3', '丙三', 160, 100),
+              T('4', '丁四', 240, 100),
+            ],
+          },
+        ],
+      },
+    };
+    expect(collectFigmaTextSiblingGroups(singleRow)[0].direction).toBe('horizontal');
+    const singleCol = {
+      document: {
+        type: 'FRAME',
+        name: 'r',
+        children: [
+          {
+            type: 'FRAME',
+            name: 'list',
+            children: [
+              T('1', '甲一', 0, 100),
+              T('2', '乙二', 0, 124),
+              T('3', '丙三', 0, 148),
+              T('4', '丁四', 0, 172),
+            ],
+          },
+        ],
+      },
+    };
+    expect(collectFigmaTextSiblingGroups(singleCol)[0].direction).toBe('vertical');
+  });
+
+  it('门禁集成：网格乱序 ⇒ TEXT-001 BLOCK（fail-closed 升级生效）', () => {
+    const files = {
+      'package/components/G.vue': `<template>
+  <div><span v-for="i in items" :key="i.id">{{ i.text }}</span></div>
+</template>
+<script setup>
+const items = [
+  { id: '1', text: '所属产品' }, { id: '5', text: '设备类型' }, { id: '9', text: '链接分类' },
+  { id: '2', text: '爆闪灯' }, { id: '6', text: '具身机器人' }, { id: '10', text: '直连设备' },
+  { id: '3', text: '产品厂家' }, { id: '7', text: '所属路公司' }, { id: '11', text: '父级设备' },
+  { id: '4', text: '感动科技' }, { id: '8', text: '江苏通行宝' }, { id: '12', text: 'AP12343' }
+]
+</script>`,
+    };
+    const result = CodeStructureValidator.validate(
+      Object.entries(files).map(([path, content]) => ({ path, content })),
+      'mc-max-test',
+      { target: 'microcode', figmaNodeData: FIGMA_FIELD_GRID },
+    );
+    expect(result.issues.filter((i: any) => i.id === 'TEXT-001').length).toBeGreaterThan(0);
+  });
+});

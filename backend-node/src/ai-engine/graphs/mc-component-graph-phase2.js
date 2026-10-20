@@ -95,6 +95,8 @@ import {
 //S11: 文档页面元素覆盖率校验器（L0-B 扩展）
 import { ElementCoverageValidator, collectTechStackMarkers } from '../validators/element-coverage-validator.js';
 import { computeGateScore, hasHardPublishBlock } from '../utils/gate-score.js';
+// 🛡️ #128 流程四件套 ②/③：fail-open 显性化台账（降级/WARN 升级事件落 component-meta.json）
+import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
@@ -3632,6 +3634,8 @@ export function createPhase2Graph(config = {}) {
     const mappingEntries = Array.isArray(state.dualTruth?.themes)
       ? state.dualTruth.themes
       : []
+    let colorSlotMapping = null // 提升作用域：语义推断矫正步骤（check 之后）还要消费
+    let colorSlotPrimaryKey = null
     if (mappingEntries.length >= 2 && state.outputPath) {
       try {
         const { readFileSync: _rf, existsSync: _ex } = await import('node:fs');
@@ -3660,6 +3664,8 @@ export function createPhase2Graph(config = {}) {
           themeSlots: themeSlotsFromArtifact,
           primaryKey: themeKeyOrder[0],
         });
+        colorSlotMapping = mapping
+        colorSlotPrimaryKey = themeKeyOrder[0] || mappingEntries[0]?.key || null
         const applied = applyColorSlotMapping({
           outputPath: state.outputPath,
           mapping,
@@ -3671,6 +3677,24 @@ export function createPhase2Graph(config = {}) {
           customSlotsInjected: applied.customSlotsInjected,
           replacedCount: applied.replacedCount,
         });
+        // 🛡️ 2026-10-20：fail-open 显性化——跨稿对齐全败/大比例未命中必须升 WARN
+        //   （此前 pairs>0 但 unmatched 100% 只打 INFO，配色「回退到语义猜测」无人察觉）。
+        const _al = Array.isArray(mapping.stats?.alignment) ? mapping.stats.alignment : [];
+        const _totalMatched = _al.reduce((s, a) => s + (a.matched || 0), 0);
+        const _worstNone = _al.some((a) => a.mode === 'none' || (a.total > 0 && a.matched / a.total < 0.3));
+        if (_al.length > 0 && (_totalMatched === 0 || _worstNone)) {
+          logger.warn('⚠️ 跨稿配色对齐低命中/失败（业务色将退化为语义推断，主题配色可能不跟随设计）', {
+            alignment: _al,
+            canonical: mapping.stats.canonical,
+            custom: mapping.stats.custom,
+          });
+          // 🛡️ #128 ②：对齐低命中显性化进 meta（47647fae/678ef873 配色崩的源头信号）
+          appendFailOpenEvent(state.outputPath, {
+            rule: 'CROSS-THEME-ALIGN-LOW',
+            reason: `跨稿配色对齐低命中/失败（matched=${_totalMatched}），业务色退化为语义推断`,
+            detail: { alignment: _al, canonical: mapping.stats.canonical, custom: mapping.stats.custom },
+          });
+        }
       } catch (e) {
         // 映射失败不阻断生成（色值字面量兜底仍在），但要留痕排查
         logger.warn('⚠️ 业务样式颜色→槽位映射失败（已降级：保留字面量）', {
@@ -3679,8 +3703,11 @@ export function createPhase2Graph(config = {}) {
       }
     }
 
+    // #139（N3）：把 Figma 真值树交给 checker —— 颜色变量补齐/矫正按「node 出颜色」口径，
+    //   有真值取真值（色系 + 透明度档位收窄到唯一），无真值落中性色，不再按名编造语义色。
     const lessVariableResult = await LessVariableChecker.check(
       state.outputPath,
+      { figmaRoot: state.figmaNodeData },
     );
 
     if (lessVariableResult.fixed) {
@@ -3688,6 +3715,36 @@ export function createPhase2Graph(config = {}) {
         missingCount: lessVariableResult.missingVariables.length,
         variables: lessVariableResult.missingVariables,
       });
+    }
+
+    // 🛡️ 2026-10-20（#128 ③，84af4f8f 实锤）：自造槽位「二次对齐矫正」。
+    //   时机必须在 LessVariableChecker.check **之后**：LLM 自造槽位（如
+    //   @color-mask-bg-outer）在原始 theme-vars.less 里可能根本没定义，要等
+    //   addMissingVariables 补值（含语义推断猜测值）后才存在可矫正的行。
+    //   锚 = 主稿 mixin 中该槽位的 6 位 hex 值命中跨稿对齐真值 ⇒ 改写其余主题
+    //   mixin 同名槽位为该主题列实测色（窄条件+幂等，详见函数 docstring）。
+    if (state.outputPath && colorSlotMapping && colorSlotPrimaryKey) {
+      try {
+        const { readFileSync: _rfR, writeFileSync: _wfR, existsSync: _exR } = await import('node:fs');
+        const { join: _joinR } = await import('node:path');
+        const { realignThemeVarsSlotValues } = await import('../utils/color-slot-mapper.js');
+        const _tvPR = _joinR(state.outputPath, 'resources', 'styles', 'themes', 'theme-vars.less');
+        if (_exR(_tvPR)) {
+          const realigned = realignThemeVarsSlotValues({
+            themeVarsContent: _rfR(_tvPR, 'utf-8'),
+            perThemeByPrimaryHex: colorSlotMapping.perThemeByPrimaryHex,
+            primaryKey: colorSlotPrimaryKey,
+          });
+          if (realigned.corrections.length > 0 && realigned.content) {
+            _wfR(_tvPR, realigned.content, 'utf-8');
+            logger.info('已矫正自造槽位副稿色值（跨稿真值锚定）', {
+              corrections: realigned.corrections,
+            });
+          }
+        }
+      } catch (e) {
+        logger.warn('⚠️ 自造槽位二次对齐矫正失败（非阻断）', { error: e?.message || e });
+      }
     }
 
     // 🔍 2026-10-19（c-aiot-dpjh-bsjd-c27cb2eb 实锤）：语义推断槽位留痕。
@@ -3714,6 +3771,105 @@ export function createPhase2Graph(config = {}) {
         }
       } catch (e) {
         logger.warn('⚠️ 语义推断槽位审计失败（非阻断）', { error: e?.message || e });
+      }
+    }
+
+    // 🔍 2026-10-20（#139 · N1 · e7a50be7 实锤）：**真值色值落地门禁**（只报不改）。
+    //   病灶：`buildSectionStyleFacts` 已把精确真值下发（rgba(226,208,132,0.2) / #ffc800 /
+    //   #fffdf1），但 LLM 把它们换成语义变量（@color-bg-card-active / @color-accent-gold），
+    //   变量值再由系统按名推断 ⇒ 真值全丢（产物里薄荷面板底 rgba(216,255,233,0.32) 零出现）。
+    //   判据自锚定：只看产物里已出现 `data-section-id` 的区块（没实现的区块不判），
+    //   收集其中面积占比 ≥1% 的醒目色，逐个校验「归一化后是否出现在产物颜色集合里」
+    //   （写成变量、且变量值等于真值，也算落地）。
+    if (state.outputPath && state.figmaNodeData) {
+      try {
+        const {
+          readdirSync: _rdN1,
+          statSync: _stN1,
+          readFileSync: _rfN1,
+          existsSync: _exN1,
+        } = await import('node:fs');
+        const { join: _joinN1, extname: _extN1 } = await import('node:path');
+        const { auditTruthColorUsage } = await import('../utils/truth-color-usage-guard.js');
+        const _n1Files = {};
+        const _collectN1 = (dir) => {
+          if (!_exN1(dir)) return;
+          for (const name of _rdN1(dir)) {
+            const fp = _joinN1(dir, name);
+            let st;
+            try {
+              st = _stN1(fp);
+            } catch {
+              continue;
+            }
+            if (st.isDirectory()) {
+              _collectN1(fp);
+              continue;
+            }
+            if (!['.vue', '.less', '.css', '.js'].includes(_extN1(name))) continue;
+            try {
+              _n1Files[fp] = _rfN1(fp, 'utf-8');
+            } catch {
+              /* 单文件读失败忽略 */
+            }
+          }
+        };
+        _collectN1(_joinN1(state.outputPath, 'package'));
+        _collectN1(_joinN1(state.outputPath, 'resources'));
+        const n1 = auditTruthColorUsage({ figmaRoot: state.figmaNodeData, files: _n1Files });
+        if (!n1.skipped && n1.missing.length > 0) {
+          logger.warn('⚠️ 已实现区块的真值色值未在产物落地（可能被语义变量替换）', {
+            truthCount: n1.truthCount,
+            covered: n1.covered,
+            missingCount: n1.missing.length,
+            missing: n1.missing.slice(0, 20),
+          });
+        } else if (!n1.skipped) {
+          logger.info('✅ 真值色值全部落地', { truthCount: n1.truthCount });
+        }
+      } catch (e) {
+        logger.warn('⚠️ 真值色值落地审计失败（非阻断）', { error: e?.message || e });
+      }
+    }
+
+    // 🛡️ 2026-10-20（678ef873 实锤）：「最终 LESS 编译门禁」前的**统一自愈 pass**。
+    //   病灶：common.less/theme-vars.less 存在多条**绕过 file-writer 写盘门禁**的
+    //   裸 writeFileSync 直写路径（less-variable-checker#healFileLevelSlotOverrides /
+    //   addMissingVariables / applyColorSlotMapping …），孤立 `)` / `:deep()` 等缺陷
+    //   带病落盘 ⇒ 最终编译门禁 BLOCK ⇒ 任务整体失败（离线重放证明 gate 本来能修）。
+    //   逐点堵不如在消费前统一修：对产物内全部 .less 跑 gateStandaloneLessWrite
+    //   （fence/括号/:deep 确定性修复），有修复才写回（幂等，正常产物零 diff）。
+    if (state.outputPath) {
+      try {
+        const { readdirSync: _rd3, statSync: _st3, readFileSync: _rf3, writeFileSync: _wf3, existsSync: _ex3 } = await import('node:fs');
+        const { join: _join3, extname: _ext3 } = await import('node:path');
+        const { gateStandaloneLessWrite } = await import('../validators/less-compile-gate.js');
+        const _stylesRoot = _join3(state.outputPath, 'resources', 'styles');
+        const _lessFiles = [];
+        const _walk3 = (dir) => {
+          if (!_ex3(dir)) return;
+          for (const name of _rd3(dir)) {
+            const fp = _join3(dir, name);
+            const st = _st3(fp);
+            if (st.isDirectory()) _walk3(fp);
+            else if (_ext3(name) === '.less') _lessFiles.push(fp);
+          }
+        };
+        _walk3(_stylesRoot);
+        const healedFiles = [];
+        for (const fp of _lessFiles) {
+          const src = _rf3(fp, 'utf-8');
+          const g = gateStandaloneLessWrite(src, fp);
+          if (g.fixes.length > 0 && g.content !== src) {
+            _wf3(fp, g.content, 'utf-8');
+            healedFiles.push({ file: fp.slice(state.outputPath.length + 1), fixes: g.fixes });
+          }
+        }
+        if (healedFiles.length > 0) {
+          logger.warn('🛡️ 最终编译门禁前统一自愈 pass 已修复落盘样式', { files: healedFiles });
+        }
+      } catch (e) {
+        logger.warn('⚠️ 最终编译门禁前统一自愈 pass 失败（非阻断，交编译门禁裁决）', { error: e?.message || e });
       }
     }
 
@@ -5019,8 +5175,46 @@ export function createPhase2Graph(config = {}) {
     // 评分 = 单一 0-100 分 + 维度拆解（结构/资源/类名/语义），挂到 result 供条件边/complete 消费。
     result.gateScore = computeGateScore(result.issues);
 
+    // 🛡️ 2026-10-20（#128 流程四件套 ③）：WARN 升级机制。
+    //   病灶：只 WARN 不修的判据（如 PERCENT-HEIGHT、TEXT-001 历史形态）长期「看见但放行」，
+    //   模型每轮重试都不修，WARN 在日志里刷屏却无人升级 ⇒ 带病产物出厂。
+    //   机制（确定性、不直接改 BLOCK）：同一 WARN id 连续 ≥2 轮 L0-B 检出（跨重试未愈合）⇒
+    //   升级留痕 component-meta.json failOpenEvents[]（rule=WARN-ESCALATED:*）+ logger.warn。
+    //   是否升级为 BLOCK/heal 由各规则独立决策（如 TEXT-001 已走 ⑥ 的 BLOCK 化）。
+    const _warnIds = [
+      ...new Set(
+        (result.issues || [])
+          .filter((i) => i && i.severity === 'WARN' && i.id)
+          .map((i) => String(i.id)),
+      ),
+    ];
+    const _prevStreak = state._warnStreak || {};
+    const _warnStreak = {};
+    for (const id of _warnIds) _warnStreak[id] = (_prevStreak[id] || 0) + 1;
+    const _escalated = Object.entries(_warnStreak).filter(([, n]) => n >= 2);
+    if (_escalated.length > 0) {
+      logger.warn('🛡️ WARN 升级：以下判据连续 ≥2 轮检出且模型未修（已留痕 component-meta.json）', {
+        escalated: _escalated.map(([id, n]) => `${id}×${n}`),
+      });
+      for (const [id, n] of _escalated) {
+        appendFailOpenEvent(state.outputPath, {
+          rule: `WARN-ESCALATED:${id}`,
+          reason: `判据 ${id} 连续 ${n} 轮 L0-B 检出（WARN 未愈合，需人工评估升级为 BLOCK/heal）`,
+          detail: {
+            streak: n,
+            samples: (result.issues || [])
+              .filter((i) => i.id === id)
+              .slice(0, 3)
+              .map((i) => `${i.file || ''}: ${String(i.message || '').slice(0, 120)}`),
+          },
+        });
+      }
+    }
+
     return {
       codeValidationResult: result,
+      // 🛡️ WARN 升级机制状态（跨轮连续检出计数）
+      _warnStreak,
       // L0-B 重试计数：失败且未绕过 → +1；通过 → 重置 0（避免跨轮累积耗尽预算）。
       // 条件边用 <= 比较（与 L0-A 约定一致），保证 l0MaxRetry=N 时最多 N 次重试。
       codeValidatorRetryCount:

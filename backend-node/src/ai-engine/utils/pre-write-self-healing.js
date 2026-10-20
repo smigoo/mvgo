@@ -38,6 +38,7 @@ import { pruneDuplicateStyleDeclsFromShared } from './style-dedup-guard.js';
 // 🛡️ 刀 24（2026-10-08）：techstack 契约履行占位——对每个 `wrong-tag` 违规往宿主 .vue 追加
 //   v-if="false" 占位元素（治 TECHSTACK-NOT-RENDERED 根因：07b4d2a5 实锤 6 个 antd 组件未渲染）。
 import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
+import { healStructuralTruth } from './structural-truth-healers.js';
 // 🛡️ 刀 25/26（2026-10-12）：LLM「压缩残片」格式损坏自愈——LESS 连续相同 `声明;}` 残片归一
 //   （治 .c-cba840-form 被提前闭合获得 display:flex → 表单横向排列）+ script 独行逗号删除
 //   （治 [vue/compiler-sfc] Unexpected token：mc-max-1791779417789-cba8407d 实锤）。
@@ -46,6 +47,20 @@ import {
   detectVForListDirectionMismatch,
   healVForListDirection,
 } from './vfor-list-direction-guard.js';
+// 🛡️ ⑪-c 资源零引用审计需列目录（node:fs 静态 import 安全：非 import.meta/backend-root，
+//   jest CJS 可跑；只读操作不污染「纯函数」定位）
+import { readdirSync as _readdirSync, existsSync as _existsSync } from 'node:fs';
+import { join as _joinPath } from 'node:path';
+// 🛡️ #128 流程四件套 ②：fail-open 显性化台账（降级/审计事件落 component-meta.json）
+import { appendFailOpenEvent } from './fail-open-ledger.js';
+// 🛡️ 刀 31（2026-10-20 · 47647fae 实锤）：v-for 重复单元「几何真值」纠偏——
+//   direction-guard 的真值源是 section 树（E1 未折叠时 wrapper 期望错取叶子段自身方向 ⇒ 零告警），
+//   percent-height-resolver 判定域是类名三明治（Figma 原名类不在域内）。本刀改用
+//   figma 原始树「同名同尺寸重复实例几何」做真值：方向 + 单 item 宽高都可确定性得出。
+import {
+  detectRepeatUnitIssues,
+  healRepeatUnitIssues,
+} from './vfor-repeat-unit-guard.js';
 import {
   normalizeSectionFlexTruth,
   normalizeTextSlotOrder,
@@ -196,7 +211,10 @@ function repairTagSlash(tag) {
 }
 
 export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
-  const { resourceDomMapping, outputPath, injectFn, effectiveSections } = ctx;
+  // 🛡️ figmaRoot 必须在此解构：⑭ 刀32 需要 rowPeers 真值兜底源。首版漏解构 ⇒ ⑭ 引用裸
+  //    变量抛 ReferenceError "figmaRoot is not defined" 被 fail-open 吞掉 ⇒ 三刀上线后
+  //    零生效（d27c5a1c 实锤：server.log 三轮异常日志、meta 无 structuralTruthDetails）。
+  const { resourceDomMapping, outputPath, injectFn, effectiveSections, figmaRoot } = ctx;
   const { logger } = deps;
   let result = { ...files };
   const summary = {
@@ -477,8 +495,11 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   // ④-i 刀 31（2026-10-14 · cd63d1c5 实锤立项，R8 容器底色契约）：
   //   slot-con 内容根容器无显式 background → 注入产物既有页面底色变量
   //   （color-bg-page/container/base/bg 优先级链，零臆造色值；全缺则跳过留痕）。
+  //   🛡️ 2026-10-20：透传透明容器真值（5ef650ff 实锤）——figma 根透明时刀 31 停手。
   try {
-    const d31 = ensureSlotConBackground(result);
+    const d31 = ensureSlotConBackground(result, {
+      transparentContainerTruth: ctx.layoutStructure?.transparentContainerTruth,
+    });
     for (const [p, c] of Object.entries(d31.files)) {
       if (typeof c === 'string' && result[p] !== c) result[p] = c;
     }
@@ -700,6 +721,177 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   }
 
+  // ⑪-b 刀 31（2026-10-20 · 47647fae 实锤，检出+确定性自愈）：v-for 重复单元几何纠偏。
+  //    与 ⑪ 的互补关系：⑪ 判定域 = 类名三明治 + section 真值；本刀判定域 = v-for 元素 +
+  //    figma 原始树「同名同尺寸重复实例几何」（命名/类名无关，E1 未折叠也能判）。
+  //    ① item 主轴垂直方向 100% 尺寸 ⇒ 改真值定值 px（治「6 卡各占满容器只见首卡」）；
+  //    ② wrapper 方向与重复组几何方向矛盾 ⇒ 翻转（direction-guard 在 E1 未折叠时的兜底）。
+  //    改写纪律与刀 30 同款：全部出现点、幂等、fail-open。
+  if (ctx.figmaRoot) {
+    try {
+      const ru = detectRepeatUnitIssues(result, { figmaRoot: ctx.figmaRoot });
+      summary.repeatUnitIssues = ru.issues;
+      summary.repeatUnitStats = ru.stats;
+      if (ru.issues.length > 0) {
+        const healed = healRepeatUnitIssues(result, ru.issues);
+        let healCount = 0;
+        for (const [p, c] of Object.entries(healed.files)) {
+          if (typeof c === 'string' && result[p] !== c) {
+            result[p] = c;
+            healCount++;
+          }
+        }
+        summary.repeatUnitHealed = healed.healed;
+        if (healed.failed.length > 0) {
+          summary.repeatUnitHealFailed = healed.failed;
+          // 🛡️ #128 ②：自愈失败显性化进 meta（此前仅日志，任务页不可见）
+          appendFailOpenEvent(ctx.outputPath, {
+            rule: 'REPEAT-UNIT-HEAL-FAILED',
+            reason: `${healed.failed.length} 处 v-for 重复单元几何纠偏自愈失败（产物仍带病）`,
+            detail: { failed: healed.failed.slice(0, 10) },
+          });
+        }
+        for (const it of ru.issues) {
+          logger?.warn?.(`🛡️ REPEAT-UNIT：[${it.file}] ${it.detail}`, {
+            anchorSid: it.anchorSid,
+            classes: it.classes || it.wrapperClasses,
+          });
+        }
+        logger?.warn?.('🛡️ v-for 重复单元几何纠偏完成', {
+          hits: ru.stats.hits,
+          healed: healed.healed.length,
+          healedFiles: healCount,
+          failed: healed.failed.length,
+        });
+      }
+    } catch (err) {
+      logger?.warn?.('🛡️ v-for 重复单元几何纠偏异常（非阻断）', {
+        error: err?.message || String(err),
+      });
+    }
+  }
+
+  // ⑪-c（2026-10-20 · #128 ⑧，只报不改）：资源挂载/臆造规则两类审计。
+  //   ① 已下载图片零引用（84af4f8f 实锤：header-1697.png 落盘但全产物零引用 ⇒
+  //      头部图标丢失）——resources/images 下图片 stem 必须在任一 .vue/.ts/.js/.less
+  //      中出现（import/url()），否则 WARN（资源挂载缺口，fail-open 显性化）。
+  //   ② `:first-child { background: transparent }` 臆造审计（47647fae 实锤族）——
+  //      与重复卡真值（layoutStructure.repeatedCardTruth）对照：首卡真值非透明 ⇒
+  //      「臆造透明覆盖真值」强 WARN；无真值 ⇒ 弱 WARN 留痕（只报不改）。
+  try {
+    // ① 已下载图片零引用
+    if (ctx.outputPath) {
+      const imgDir = _joinPath(ctx.outputPath, 'resources', 'images');
+      if (_existsSync(imgDir)) {
+        const stems = _readdirSync(imgDir)
+          .filter((f) => /\.(png|jpe?g|svg|webp|gif)$/i.test(f) && !/^mc-preview/.test(f))
+          .map((f) => f.replace(/\.[^.]+$/, ''));
+        if (stems.length > 0) {
+          const allCode = Object.entries(result)
+            .filter(([p]) => /\.(vue|ts|js|less|css)$/i.test(p))
+            .map(([, c]) => (typeof c === 'string' ? c : ''))
+            .join('\n');
+          const orphans = stems.filter((s) => !allCode.includes(s));
+          if (orphans.length > 0) {
+            summary.unreferencedImages = orphans;
+            logger?.warn?.(
+              `🛡️ RES-UNREF：${orphans.length} 张已下载图片零引用（资源挂载缺口）`,
+              { images: orphans },
+            );
+            // 🛡️ #128 ②：资源挂载缺口显性化进 meta（84af4f8f header-1697.png 实锤）
+            appendFailOpenEvent(ctx.outputPath, {
+              rule: 'RES-UNREF',
+              reason: `${orphans.length} 张已下载图片零引用（资源挂载缺口，渲染丢图）`,
+              detail: { images: orphans },
+            });
+          }
+        }
+      }
+    }
+    // ② :first-child transparent 臆造审计
+    const firstChildTransparent = [];
+    for (const [fp, fc] of Object.entries(result)) {
+      if (!/\.(less|css|vue)$/i.test(fp) || typeof fc !== 'string') continue;
+      for (const m of fc.matchAll(/\.([\w-]+):first-child\s*\{([^{}]*)\}/g)) {
+        if (/background\s*:\s*transparent/.test(m[2])) {
+          firstChildTransparent.push({ file: fp, class: m[1] });
+        }
+      }
+    }
+    if (firstChildTransparent.length > 0) {
+      const rct = ctx.layoutStructure?.repeatedCardTruth;
+      const contradictsTruth =
+        rct && rct.baseFill && !/transparent/.test(String(rct.baseFill?.css || rct.baseFill || ''));
+      summary.firstChildTransparent = firstChildTransparent;
+      logger?.warn?.(
+        `🛡️ FIRST-CHILD-TRANSPARENT：${firstChildTransparent.length} 处首卡透明背景规则${contradictsTruth ? '（⚠️ 与重复卡真值底色矛盾——疑似臆造覆盖）' : '（无真值对照，留痕观察）'}`,
+        { hits: firstChildTransparent, repeatedCardTruth: rct ? 'present' : 'absent' },
+      );
+      // 🛡️ #128 ②：与真值矛盾的臆造覆盖显性化进 meta（无真值的弱留痕不进，防噪声）
+      if (contradictsTruth) {
+        appendFailOpenEvent(ctx.outputPath, {
+          rule: 'FIRST-CHILD-TRANSPARENT',
+          severity: 'WARN',
+          reason: `${firstChildTransparent.length} 处 :first-child{background:transparent} 与重复卡真值底色矛盾（疑似臆造覆盖）`,
+          detail: { hits: firstChildTransparent.slice(0, 10) },
+        });
+      }
+    }
+    // ③ 透明容器臆造背景审计（2026-10-20 · 5ef650ff 实锤，只报不改）：
+    //    设计稿 fills=[] 的透明容器（底色由宿主提供），产物对应 wrapper 却刷
+    //    background ⇒ 盖住宿主底色（浅色发白/深色发灰）。对照透明容器真值：
+    //    data-section-id → class → 样式规则块顶层 background 非透明 ⇒ 强 WARN。
+    const tct = ctx.layoutStructure?.transparentContainerTruth;
+    if (tct?.transparentIds?.length > 0) {
+      const vueEntries = Object.entries(result)
+        .filter(([p, c]) => /\.vue$/i.test(p) && typeof c === 'string');
+      const styleEntries = Object.entries(result)
+        .filter(([p, c]) => /\.(less|css|vue)$/i.test(p) && typeof c === 'string');
+      const transparentBg = [];
+      for (const sid of tct.transparentIds) {
+        // data-section-id="sid" 所在标签的 class
+        let cls = null;
+        for (const [, fc] of vueEntries) {
+          const tagRe = new RegExp(`<[^>]*data-section-id=["']${sid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`, 'i');
+          const tm = fc.match(tagRe);
+          if (!tm) continue;
+          const cm = tm[0].match(/class=["']([^"']+)["']/i);
+          if (cm) { cls = cm[1].trim().split(/\s+/)[0]; break }
+        }
+        if (!cls) continue;
+        // 该 class 规则块顶层声明里的 background（[^{}]* 只取顶层段，嵌套块不扰）
+        const ruleRe = new RegExp(`\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^{}]*)\\}`, 'g');
+        for (const [fp, fc] of styleEntries) {
+          for (const rm of fc.matchAll(ruleRe)) {
+            const body = rm[1];
+            const bgM = body.match(/background(?:-color)?\s*:\s*([^;]+);/);
+            if (bgM && !/^\s*transparent\s*$/.test(bgM[1])) {
+              transparentBg.push({ sectionId: sid, file: fp, class: cls, value: bgM[1].trim().slice(0, 60) });
+              break;
+            }
+          }
+        }
+      }
+      if (transparentBg.length > 0) {
+        summary.transparentContainerBg = transparentBg;
+        logger?.warn?.(
+          `🛡️ TRANSPARENT-CONTAINER-BG：${transparentBg.length} 处透明容器被臆造背景色覆盖（设计稿 fills=[]，底色应由宿主透出）`,
+          { hits: transparentBg.slice(0, 10), truthTotal: tct.total },
+        );
+        appendFailOpenEvent(ctx.outputPath, {
+          rule: 'TRANSPARENT-CONTAINER-BG',
+          severity: 'WARN',
+          reason: `${transparentBg.length} 处透明容器（figma fills=[]）被产物刷上背景色，盖住宿主底色（浅发白/深发灰）`,
+          detail: { hits: transparentBg.slice(0, 10) },
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 资源/臆造规则审计异常（非阻断）', {
+      error: err?.message || String(err),
+    });
+  }
+
   // ⑫ 刀 23（2026-10-08 · 07b4d2a5 实锤）：跨文件「同 class 同一布局属性」重声明——
   //   从 shared 表里剥，保留 SFC scoped。理由：FLEX-003 跨文件类索引读到 shared 那份不同
   //   flex 值就 BLOCK（如 `.c-07b4d2-header` SFC `flex:1 1 0` + common.less `flex:0 0 auto`）；
@@ -764,6 +956,35 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         error: err?.message || String(err),
       });
     }
+  }
+
+  // ⑭ 刀 32/33/34（2026-10-20 · 477e185d 实锤）：结构真值三刀——
+  //   刀 32 rowPeers 互挂兄弟被父 column 堆叠 ⇒ 包 row 容器（gap=figma bbox 真值）；
+  //   刀 33 SFC × common.less 同名类布局属性冲突 ⇒ 以 SFC 为唯一语义源统一（双源归一，
+  //      治「改 SFC 漏 common.less」必然事故族）；
+  //   刀 34 插槽 × 主体同组件重复渲染 ⇒ 删插槽侧。
+  //   全部纯结构/几何判据（零任务 id/节点名/组件名硬编码）；无真值 fail-open。
+  //   刀 33 必须最后（读最终形态）。详 src/ai-engine/utils/structural-truth-healers.js。
+  try {
+    const st = healStructuralTruth(result, { effectiveSections, figmaRoot }, { logger });
+    result = st.files;
+    if (st.summary.rowpeersWrap > 0) {
+      summary.rowpeersWrap = st.summary.rowpeersWrap;
+      logger?.warn?.('🛡️ 刀 32：rowPeers 横向并列包裹完成', { count: st.summary.rowpeersWrap });
+    }
+    if (st.summary.dupClassDirection > 0) {
+      summary.dupClassDirection = st.summary.dupClassDirection;
+    }
+    if (st.summary.slotDupRender > 0) {
+      summary.slotDupRender = st.summary.slotDupRender;
+    }
+    if (st.summary.details?.length > 0) {
+      summary.structuralTruthDetails = st.summary.details;
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 32/33/34 结构真值三刀异常（fail-open）', {
+      error: err?.message || String(err),
+    });
   }
 
   return { files: result, summary };

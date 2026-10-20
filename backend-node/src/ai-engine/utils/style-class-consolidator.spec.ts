@@ -1,4 +1,4 @@
-import { consolidateSubComponentClasses } from './style-class-consolidator.js'
+import { consolidateSubComponentClasses, ensureBackgroundContainerDimensions } from './style-class-consolidator.js'
 
 /**
  * 子组件类样式收敛（2026-09-03，管线 A 方案）。
@@ -810,3 +810,50 @@ ${body}
     expect(opens).toBe(closes);
   });
 });
+
+describe('ensureBackgroundContainerDimensions · v-for 重复单元豁免（2026-10-20 ee06ee24 实锤）', () => {
+  // 病灶：v-for item 首卡 :style 绑背景图 ⇒ 根因 H 给 item class 前置注入 width/height:100%，
+  // flex-column wrapper 里 = 每项占满容器高 ⇒ 「6 卡只见首卡」。且本函数跑在 writeFiles
+  // 写盘路径（自愈链之后）⇒ 刀 31 检出时 item 尚无 height:100%，写盘时才被注入。
+  const COMMON = 'resources/styles/common.less'
+  const mkFiles = (itemAttrs: string) => ({
+    'package/components/ContentSection.vue': `<template>
+  <div class="c-x-content-section">
+    <div ${itemAttrs}>
+      <span>{{ n.name }}</span>
+    </div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-group-2136638414 {
+  display: flex;
+  flex-direction: row;
+}
+</style>`,
+    [COMMON]: `.c-x-group-2136638414 {
+  display: flex;
+}`,
+  })
+
+  it('v-for item 带 backgroundImage ⇒ 不注入 width/height:100%（common.less 与 SFC 都不动）', () => {
+    const files = mkFiles(`v-for="(n, i) in list" :key="n.name" class="c-x-group-2136638414" :style="i === 0 ? { backgroundImage: 'url(x)' } : {}"`)
+    const out = ensureBackgroundContainerDimensions(files)
+    expect(out[COMMON]).toBe(files[COMMON])
+    expect(out['package/components/ContentSection.vue']).toBe(files['package/components/ContentSection.vue'])
+  })
+
+  it(':style 在 class 前的属性序 + v-for ⇒ 同样豁免', () => {
+    const files = mkFiles(`v-for="(n, i) in list" :style="{ backgroundImage: 'url(x)' }" class="c-x-group-2136638414"`)
+    const out = ensureBackgroundContainerDimensions(files)
+    expect(out[COMMON]).toBe(files[COMMON])
+  })
+
+  it('阳性对照：非 v-for 背景容器 ⇒ 照常注入 width:100% + height:100%', () => {
+    const files = mkFiles(`class="c-x-group-2136638414" :style="{ backgroundImage: 'url(x)' }"`)
+    const out = ensureBackgroundContainerDimensions(files)
+    expect(out[COMMON]).toContain('width: 100%')
+    expect(out[COMMON]).toContain('height: 100%')
+    expect(out['package/components/ContentSection.vue']).toContain('width: 100%')
+    expect(out['package/components/ContentSection.vue']).toContain('height: 100%')
+  })
+})

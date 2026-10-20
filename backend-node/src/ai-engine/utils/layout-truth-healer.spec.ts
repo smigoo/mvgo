@@ -5,6 +5,7 @@ import {
   ensureSlotConBackground,
   healZebraStripeMisread,
   collectFigmaIndex,
+  classifyTransparentContainers,
 } from './layout-truth-healer.js';
 
 // Figma 真值最小树（按 mc-max-1791942831818-0397a327 实锤裁剪）：
@@ -684,5 +685,75 @@ describe("刀 32 healZebraStripeMisread（臆造斑马纹 → 激活态）", () 
     expect(twice.files["resources/styles/common.less"]).toBe(
       once.files["resources/styles/common.less"]
     );
+  });
+});
+
+// 🛡️ 2026-10-20（5ef650ff 实锤）：透明容器真值 + 刀 31 真值豁免
+describe("classifyTransparentContainers（透明容器真值）", () => {
+  const box = (x: number, y: number, w: number, h: number) => ({ x, y, width: w, height: h });
+  const solidFill = () => [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }];
+
+  test("根/容器 fills=[] ⇒ 收进 transparentIds 且 rootTransparent=true", () => {
+    const figma = {
+      document: {
+        id: "38:3134", type: "FRAME", name: "cp-dialog", absoluteBoundingBox: box(0, 0, 660, 868),
+        children: [{
+          id: "796:3", type: "GROUP", name: "slot-icon", absoluteBoundingBox: box(28, 40, 604, 787),
+          children: [{ id: "1:1", type: "TEXT", name: "t", characters: "x", absoluteBoundingBox: box(28, 40, 60, 16) }],
+        }],
+      },
+    };
+    const truth = classifyTransparentContainers(figma)!;
+    expect(truth.rootTransparent).toBe(true);
+    expect(truth.transparentIds).toContain("796:3");
+  });
+
+  test("面板底豁免：容器无填充但首个子矩形同尺寸带填充 ⇒ 不算透明（背景是设计意图）", () => {
+    const figma = {
+      document: {
+        id: "0:1", type: "FRAME", name: "root", absoluteBoundingBox: box(0, 0, 660, 400), fills: solidFill(),
+        children: [{
+          id: "38:3137", type: "GROUP", name: "panel", absoluteBoundingBox: box(28, 40, 604, 161),
+          children: [
+            { id: "38:3138", type: "RECTANGLE", name: "bg", absoluteBoundingBox: box(28, 40, 604, 161), fills: solidFill(), cornerRadius: 12 },
+            { id: "38:3140", type: "FRAME", name: "row", absoluteBoundingBox: box(48, 120, 564, 30), children: [] },
+          ],
+        }],
+      },
+    };
+    const truth = classifyTransparentContainers(figma);
+    // 根有填充 ⇒ rootTransparent=false；面板有底色矩形 ⇒ 不入透明清单
+    expect(truth === null || !truth.transparentIds.includes("38:3137")).toBe(true);
+    expect(truth === null || truth.rootTransparent === false).toBe(true);
+  });
+});
+
+describe("刀 31 真值豁免（rootTransparent ⇒ 禁止注入臆造背景）", () => {
+  const themeVars = ".theme-light() {\n  @color-bg-container: #f5f8fc;\n}\n";
+  const less = ".c-x-slot-con {\n  display: flex;\n}\n";
+  const files = () => ({
+    "resources/styles/common.less": less,
+    "resources/styles/themes/theme-vars.less": themeVars,
+  });
+
+  test("根透明真值 ⇒ 不注入，记 skipped=root-transparent-by-figma-truth", () => {
+    const r = ensureSlotConBackground(files(), {
+      transparentContainerTruth: { rootTransparent: true, transparentIds: ["796:3"], total: 1 },
+    });
+    expect(r.changes).toHaveLength(0);
+    expect(r.skipped[0]?.reason).toBe("root-transparent-by-figma-truth");
+    expect(r.files["resources/styles/common.less"]).toBe(less);
+  });
+
+  test("阳性对照：根非透明真值 ⇒ 照常注入", () => {
+    const r = ensureSlotConBackground(files(), {
+      transparentContainerTruth: { rootTransparent: false, transparentIds: [], total: 0 },
+    });
+    expect(r.changes).toHaveLength(1);
+  });
+
+  test("阳性对照：无真值（旧链路）⇒ 维持原注入行为（零回退）", () => {
+    const r = ensureSlotConBackground(files());
+    expect(r.changes).toHaveLength(1);
   });
 });

@@ -70,6 +70,16 @@ export class ThemeNodeDto {
   @IsOptional()
   @IsIn(['default-panel', 'model-panels', 'aio-panel', 'empty'])
   panelType?: string;
+
+  /**
+   * 🔴 2026-10-20：该主题的设计稿预览图 URL（前端「获取预览」阶段已拉过）。
+   *   用途：① graph 落盘 `mc-preview-<key>.png`（既有）；② 随任务 themeNodes 持久化，
+   *   任务详情页生成期即可展示「多主题设计图」卡片（declare.json 未产出前的数据源）。
+   *   ⚠️ 白名单式校验类，不声明会被静默剥离。
+   */
+  @IsOptional()
+  @IsString()
+  previewImageUrl?: string;
 }
 
 export class GeneratePhase2Dto {

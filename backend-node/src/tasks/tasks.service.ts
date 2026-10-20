@@ -32,6 +32,20 @@ interface TaskMetadata {
   componentName?: string;
   nodeId?: string;
   fileKey?: string;
+  /**
+   * 🔴 2026-10-20：多主题任务的整套主题设计稿（含主稿 themeNodes[0]）——
+   * 前端「最近使用」按任务维度**整体还原**（主链接 + 各主题卡链接）的数据源。
+   * 与主稿 fileKey/nodeId 并存：主稿两字段是所有任务的单稿基线，themeNodes 仅多主题任务携带。
+   */
+  themeNodes?: Array<{
+    fileKey: string;
+    nodeId: string;
+    name?: string;
+    brightness?: 'light' | 'dark';
+    panelType?: string;
+    /** 各主题设计稿预览图 URL（任务详情生成期即展示用） */
+    previewImageUrl?: string;
+  }>;
   target?: string;
   /** 生成档位：lite | max */
   generationTier?: 'lite' | 'max';
@@ -120,6 +134,19 @@ export interface Task {
   displayName?: string;
   nodeId: string;
   fileKey: string;
+  /**
+   * 🔴 2026-10-20：多主题任务的整套主题设计稿（themeNodes[0] 即主稿）。
+   * 前端「最近使用」（任务维度）整体还原主链接 + 各主题卡链接的数据源。
+   */
+  themeNodes?: Array<{
+    fileKey: string;
+    nodeId: string;
+    name?: string;
+    brightness?: 'light' | 'dark';
+    panelType?: string;
+    /** 各主题设计稿预览图 URL（任务详情生成期即展示用） */
+    previewImageUrl?: string;
+  }>;
   target?: string; // 'microcode' | 'vue3'
   /** 生成档位：lite | max（Lite 管线产物；普通管线无此字段） */
   generationTier?: 'lite' | 'max';
@@ -1088,6 +1115,10 @@ export class TasksService {
       componentName: metadata.componentName || '',
       nodeId: metadata.nodeId || '',
       fileKey: metadata.fileKey || '',
+      // 🔴 2026-10-20：多主题整套设计稿随任务持久化（「最近使用」整体还原用）
+      themeNodes: Array.isArray(metadata.themeNodes) && metadata.themeNodes.length > 0
+        ? metadata.themeNodes
+        : undefined,
       target: metadata.target || 'microcode',
       generationTier: metadata.generationTier,
       sourceType: metadata.sourceType,
@@ -1418,6 +1449,10 @@ export class TasksService {
         // 🆕 返回 fileKey/nodeId，供前端「重试」重建 Figma URL
         fileKey: task.fileKey,
         nodeId: task.nodeId,
+        // 🔴 2026-10-20：多主题整套设计稿（getTaskStatus 是**白名单式构造**，
+        //   不写会被静默剥离 ⇒ 任务详情页生成期拿不到 themeNodes，多主题卡/徽章恒空。
+        //   与 getAllTasks 的 `...task` spread 对齐（同型坑：字段不经显式声明到不了前端）。
+        themeNodes: task.themeNodes,
         target: task.target,
         panelKey: task.panelKey,
         taskType: task.taskType,

@@ -11,6 +11,17 @@ import { join, extname } from 'path'
 import { createLogger } from '../logger/index.js'
 import { safeLessVarValue } from '../roles/microcode/file-writer.js'
 import { collectColorFnVars } from '../utils/less-color-funcs.js'
+// 🔴 #139（N3 · e7a50be7 实锤）：颜色变量补齐 / 矫正的**真值源**。
+//   本 checker 是「语义推断」注释的唯一产出点（L451），也是 LLM 自造颜色变量
+//   拿到值的最后一站 —— 真值不接到这里，改 file-writer 的 safeLessVarValue 等于没改。
+import {
+  buildTruthPalette,
+  bucketOfProperty,
+  colorFamily,
+  familyFromVarName,
+  findConsumerProperty,
+  narrowTruthCandidates,
+} from '../utils/truth-palette.js'
 import {
   isCommonColorConflictVar,
   FRAMEWORK_PRESET_NAMES,
@@ -59,10 +70,19 @@ export class LessVariableChecker {
   /**
    * 检查并修复 Less 变量
    * @param {string} componentDir - 组件目录路径
+   * @param {{figmaRoot?: object, truthPalette?: object}} [opts]
+   *   #139（N3）：node 真值上下文。`figmaRoot` 给 Figma 节点树即自动构建真值色板；
+   *   也可直接给已构建的 `truthPalette`。缺省则 fail-open（颜色变量落中性色，绝不编造）。
    * @returns {object} 检查结果
    */
-  static async check(componentDir) {
+  static async check(componentDir, opts = {}) {
     logger.info('开始检查 Less 变量', { componentDir })
+
+    // 🔴 #139（N3）：真值上下文（色板 + 样式语料）。
+    //   `styleText` 用于判定「变量被哪个 CSS 属性消费」→ 决定取哪个真值桶
+    //   （box-shadow→发光色、background→底/面板色、color→文字色）。
+    //   不传 styleText ⇒ 桶恒为 null ⇒ 全部退化成中性色（比错色好，但真值用不上）。
+    const truthCtx = this.buildTruthContext(componentDir, opts)
 
     try {
       const result = {
@@ -108,7 +128,13 @@ export class LessVariableChecker {
       // 4. 如果有缺失的变量，自动添加到 .common()
       if (result.missingVariables.length > 0 && existsSync(themeVarsPath)) {
         const warnings = []
-        this.addMissingVariables(themeVarsPath, result.missingVariables, warnings, result.colorFnVariables)
+        this.addMissingVariables(
+          themeVarsPath,
+          result.missingVariables,
+          warnings,
+          result.colorFnVariables,
+          truthCtx,
+        )
         result.fixed = true
         result.uninferredVariables = warnings
         logger.info('已自动添加缺失的 Less 变量', {
@@ -116,6 +142,28 @@ export class LessVariableChecker {
           variables: result.missingVariables,
           uninferred: warnings.length > 0 ? warnings : undefined
         })
+      }
+
+      // 4b. 🔴🔴 #139（N3 · e7a50be7 实锤）：「名字说 gold、值是蓝」的**存量**矫正。
+      //   事故：`@color-accent-gold: #409EFF` / `@color-accent-mint: #409EFF` 已存在于
+      //   theme-vars.less（早前按名猜色的产物，后被 healCommonColorVars 从 .common() 迁出），
+      //   `addMissingVariables` **只补缺失** ⇒ 永远不会被碰到 ⇒ 蓝色发光/蓝块长期存在。
+      //   本刀按真值收窄后唯一才改写（收窄不到 1 个 = 真值不可判定 ⇒ 不动，交中性兜底逻辑）。
+      //   不依赖 figma 真值也能生效（「同文件其它 mixin 同色系值」路径），故不做 truthPalette 前置门。
+      if (existsSync(themeVarsPath)) {
+        try {
+          const healedFabricated = this.healFabricatedColorVarValues(themeVarsPath, truthCtx)
+          if (healedFabricated.changed.length > 0) {
+            result.fixed = true
+            result.healedFabricatedColorVars = healedFabricated.changed
+            logger.info('已按 node 真值矫正按名猜色的颜色变量', {
+              count: healedFabricated.changed.length,
+              changes: healedFabricated.changed,
+            })
+          }
+        } catch (e) {
+          logger.warn('⚠️ 颜色变量真值矫正失败（非阻断）', { error: e?.message || e })
+        }
       }
 
       // 5. 确保 .common() 被调用：如果 .common() 中定义了 Less 变量，
@@ -383,6 +431,192 @@ export class LessVariableChecker {
   }
 
   /**
+   * 构建 node 真值上下文（#139 · N3）。
+   *   - `truthPalette`：按用途分桶的精确色值（backgrounds/shadows/borders/texts）
+   *   - `styleText`：组件全部样式语料，用于判定「变量被哪个 CSS 属性消费」→ 选桶
+   *
+   * 两者缺一，颜色变量就只能落中性兜底（旧行为是按名猜语义色，即蓝色块的来路）。
+   * fail-open：任何异常都降级为空上下文，绝不阻断生成。
+   *
+   * @param {string} componentDir 组件目录
+   * @param {{figmaRoot?: object, truthPalette?: object}} opts
+   * @returns {{truthPalette: object|null, styleText: string}}
+   */
+  static buildTruthContext(componentDir, opts = {}) {
+    let truthPalette = opts.truthPalette || null
+    if (!truthPalette && opts.figmaRoot) {
+      try {
+        truthPalette = buildTruthPalette(opts.figmaRoot)
+      } catch (e) {
+        logger.warn('⚠️ 真值色板构建失败（颜色变量将走中性兜底）', { error: e?.message || e })
+        truthPalette = null
+      }
+    }
+    if (truthPalette) {
+      logger.info('真值色板已注入 Less 变量补齐链路', {
+        backgrounds: truthPalette.backgrounds?.length || 0,
+        shadows: truthPalette.shadows?.length || 0,
+        borders: truthPalette.borders?.length || 0,
+        texts: truthPalette.texts?.length || 0,
+      })
+    }
+    let styleText = ''
+    try {
+      styleText = this.collectStyleText(componentDir)
+    } catch (e) {
+      logger.warn('⚠️ 样式语料收集失败（变量消费属性不可判定，取中性兜底）', { error: e?.message || e })
+      styleText = ''
+    }
+    return { truthPalette, styleText }
+  }
+
+  /** 收集组件目录下全部样式/模板文本（判定变量消费属性用；上限 4MB 防爆内存） */
+  static collectStyleText(dir, state = { total: 0, buf: [] }) {
+    const CAP = 4 * 1024 * 1024
+    if (!dir || state.total > CAP) return state.buf.join('\n')
+    let entries
+    try {
+      entries = readdirSync(dir)
+    } catch {
+      return state.buf.join('\n')
+    }
+    for (const name of entries) {
+      if (name === 'node_modules' || name === '.git' || name.startsWith('.')) continue
+      const filePath = join(dir, name)
+      let st
+      try {
+        st = statSync(filePath)
+      } catch {
+        continue
+      }
+      if (st.isDirectory()) {
+        this.collectStyleText(filePath, state)
+        continue
+      }
+      if (!['.vue', '.less', '.css', '.js'].includes(extname(filePath))) continue
+      if (state.total > CAP) break
+      try {
+        const txt = readFileSync(filePath, 'utf-8')
+        state.total += txt.length
+        state.buf.push(txt)
+      } catch {
+        /* 单文件读失败忽略 */
+      }
+    }
+    return state.buf.join('\n')
+  }
+
+  /**
+   * 按 node 真值矫正「名字说某色系、值却不是该色系」的颜色变量（#139 · N3）。
+   *
+   * 事故（e7a50be7）：`@color-accent-gold: #409EFF`、`@color-accent-mint: #409EFF`
+   *   —— 名字是金/薄荷，值是 antd 蓝（`/(primary|accent)/ → #409EFF` 猜色产物），
+   *   产物 index.css 直接渲染成 `box-shadow: inset 0 0 16px #409EFF`（蓝色发光）
+   *   与 `background: #409EFF`（蓝色块）。
+   *
+   * 判据（三道全过才改写，任一不满足即不动）：
+   *   ① 变量名带色系词（gold/mint/cyan/blue/…）——无色系词的名字无从判对错；
+   *   ② 当前值的色系 ≠ 名字色系（含「当前值是中性色」—— 中性即未表达色相）；
+   *   ③ 真值收窄后**恰好 1 个**候选，且其色系 === 名字色系。
+   *
+   * ⚠️ 只改值不改结构：同一变量在所有 mixin 里的出现**一起改**（旧值彼此本就相同，
+   *   分主题差异化由 `.theme-dark()` 三核心枚举与双真值对齐负责，不归本刀）。
+   * ⚠️ 幂等：值已符合名字色系 ⇒ ②不成立 ⇒ 不动。
+   *
+   * @param {string} themeVarsPath theme-vars.less 路径
+   * @param {{truthPalette: object|null, styleText: string}} truthCtx
+   * @returns {{changed: Array<{name:string, from:string, to:string}>}}
+   */
+  static healFabricatedColorVarValues(themeVarsPath, truthCtx = {}) {
+    const { truthPalette = null, styleText = '' } = truthCtx || {}
+    let content
+    try {
+      content = readFileSync(themeVarsPath, 'utf-8')
+    } catch {
+      return { changed: [] }
+    }
+    const COLOR_VALUE_RE = /^(#|rgba?\(|hsla?\(|linear-gradient|radial-gradient)/i
+    const LINE_VAR_RE = /^([ \t]*)@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);([^\n]*)$/
+    const lines = content.split('\n')
+
+    // ① 收集每个变量在全文件（各 mixin）里的所有值 —— 用于「同文件已有同色系真值」优先。
+    //    真实来源：双真值/副稿 token 生成本身就会给某些 mixin 落真值（e7a50be7 里
+    //    `@color-accent-mint: rgba(0, 222, 59, 1)` 就存在于第三个 mixin，而 light 里是 #409EFF）。
+    //    这类同文件同色系值比跨源推断更可靠，且不需要 figma 真值也能矫正。
+    const valuesByName = new Map()
+    for (const line of lines) {
+      const m = line.match(LINE_VAR_RE)
+      if (!m) continue
+      const v = m[3].trim()
+      if (!COLOR_VALUE_RE.test(v)) continue
+      if (!valuesByName.has(m[2])) valuesByName.set(m[2], [])
+      valuesByName.get(m[2]).push(v)
+    }
+
+    const planByIndex = new Map()
+    const changedMap = new Map()
+    const NOTE = '真值矫正（node 色板/同文件同色系真值）'
+
+    lines.forEach((line, idx) => {
+      const m = line.match(LINE_VAR_RE)
+      if (!m) return
+      const [, indent, name, rawValue, trailing] = m
+      const value = rawValue.trim()
+      if (!COLOR_VALUE_RE.test(value)) return
+      if (PRESET_VAR_NAMES.has(name)) return
+      const nameFam = familyFromVarName(name)
+      if (!nameFam) return
+      // ② 当前值已符名字色系 ⇒ 已是对的（幂等锚点）
+      if (colorFamily(value) === nameFam) return
+
+      // ③ 真值来源 A：**node 色板优先**（用户分工口径「node 出颜色」；收窄到唯一且色系吻合）
+      let target = null
+      if (truthPalette) {
+        const prop = findConsumerProperty(styleText, name)
+        const bucket = bucketOfProperty(prop || '')
+        if (bucket) {
+          const narrowed = narrowTruthCandidates(truthPalette, bucket, {
+            varName: name,
+            property: prop || '',
+          })
+          if (narrowed.length === 1 && colorFamily(narrowed[0]) === nameFam) {
+            target = narrowed[0]
+          }
+        }
+      }
+      // ④ 真值来源 B：同文件其它 mixin 的同色系值（双真值/副稿 token 落的真值；
+      //    色板不可判定时的兜底，不需要 figma 也能矫正）
+      if (!target) {
+        target =
+          (valuesByName.get(name) || []).find(
+            (v) => v !== value && colorFamily(v) === nameFam,
+          ) || null
+      }
+      if (!target || target === value) return
+
+      planByIndex.set(idx, { indent, name, to: target, trailing })
+      if (!changedMap.has(name)) changedMap.set(name, { name, from: value, to: target })
+    })
+
+    if (planByIndex.size === 0) return { changed: [] }
+
+    const rewritten = lines.map((line, idx) => {
+      const plan = planByIndex.get(idx)
+      if (!plan) return line
+      // 保留原注释锚点（如「自愈：从 .common() 迁出」），但**抹掉**「自动添加（语义推断）」
+      // ——那是对旧猜值的标注，留着会让后续审计把真值当猜测（extractAllMixinVars 会跳过它）。
+      const kept = String(plan.trailing || '')
+        .replace(/⚠️\s*自动添加（[^）]*）/g, '')
+        .replace(/自动添加（[^）]*）/g, '')
+        .replace(/\/\/\s*$/, '')
+        .trim()
+      return `${plan.indent}@${plan.name}: ${plan.to}; ${kept ? `${kept} ` : ''}// ${NOTE}`
+    })
+    writeFileSync(themeVarsPath, rewritten.join('\n'), 'utf-8')
+    return { changed: [...changedMap.values()] }
+  }
+
+  /**
    * 添加缺失的变量到 theme-vars.less 的 .common()。
    * 值推断优先级：
    *   1. 从同文件的 .theme-light() / .theme-dark() 等 mixin 复制已有真值
@@ -393,9 +627,18 @@ export class LessVariableChecker {
    * @param {string[]} missingVariables 缺失的变量名列表
    * @param {string[]} [warnings] 无法推断含义、用了兜底值的变量名清单（用于结构化告警）
    * @param {Set<string>} [colorFnVariables] 被 LESS 颜色函数当实参引用的变量名（刀 16b）
+   * @param {{truthPalette?: object|null, styleText?: string}} [truthCtx]
+   *   #139（N3）：node 真值上下文。**必须传**，否则颜色变量桶恒为 null ⇒ 全部落中性色
+   *   （旧行为是按名猜语义色 —— 蓝色块的来路）。
    * @returns {string[]} 无法推断含义、用了兜底值的变量名清单（用于结构化告警）
    */
-  static addMissingVariables(themeVarsPath, missingVariables, warnings = [], colorFnVariables = new Set()) {
+  static addMissingVariables(
+    themeVarsPath,
+    missingVariables,
+    warnings = [],
+    colorFnVariables = new Set(),
+    truthCtx = {},
+  ) {
     let content
     try {
       content = readFileSync(themeVarsPath, 'utf-8')
@@ -438,9 +681,13 @@ export class LessVariableChecker {
         return `  @${v}: ${value}; // 自动添加（从 theme mixin 复制）`
       }
       // 优先级 2：按变量名语义猜测（**带明暗上下文**，让推断表能反相）
+      //   #139（N3）：同时带**真值上下文**（styleText + truthPalette）——
+      //   有真值就取真值，无真值落中性色，绝不按名编造语义彩色。
       const usesColorFn = colorFnVariables.has(v)
       const guess = safeLessVarValue(`@${v}`, {
         usedByColorFn: usesColorFn,
+        styleText: truthCtx?.styleText || '',
+        truthPalette: truthCtx?.truthPalette || null,
         ...(isDark ? { background: 'dark' } : {}),
       })
       if (guess !== 'unset') {

@@ -53,6 +53,13 @@ function normalizeSectionNode(section) {
     sourceNodeIds: Array.isArray(section.sourceNodeIds)
       ? section.sourceNodeIds.map((s) => String(s)).filter(Boolean)
       : undefined,
+    // 🛡️ #138 续（2026-10-20 · 60dee79d/d7abdee8 实锤）：E1 互挂兄弟真值第二断点。
+    //   planner 已透传 rowPeerIds，但此处 normalizeSectionNode 白名单重建再次剥掉 ⇒
+    //   engineer 的 resolveSubComponentPlan **优先取 generationInput.componentPlan**（本函数产物）
+    //   ⇒ 刀32（healRowPeersWrap）真值条件仍恒 false、fail-open 静默跳过。缺字段不产键，零副作用。
+    ...(Array.isArray(section.rowPeerIds) && section.rowPeerIds.length > 0
+      ? { rowPeerIds: section.rowPeerIds.map((s) => String(s)) }
+      : {}),
     // 🛡️ 2026-09-16：透传布局元数据（height/flexGrow/direction/gap/padding）
     ...(layoutMetadata ? { layoutMetadata } : {}),
     ...(children && children.length > 0 ? { children } : {}),

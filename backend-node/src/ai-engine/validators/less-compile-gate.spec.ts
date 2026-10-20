@@ -400,3 +400,112 @@ describe("stripDeepSelectors（D-① :deep 死规则改写）", () => {
     expect(twice.source).toBe(once.source);
   });
 });
+
+// 🛡️ 2026-10-20（5ef650ff/ee06ee24 实锤）：双真值设计深色轨中性灰猜色门禁
+import { auditDesignDarkTrackGuessedGray } from './less-compile-gate.js'
+
+describe('auditDesignDarkTrackGuessedGray（纯函数）', () => {
+  const TV = `.theme-light() { @color-bg-card: #ffffff; }
+.theme-theme_2() {
+  @color-bg-card: #2b2b2b; // 自愈：从 .common() 迁出
+  @color-node-name: #123259;
+  @color-dead: #333333; // 自动添加（语义推断）
+}
+.theme-dark() { @color-bg-card: #123259; }
+`
+  const COMMON = `.card { background: @color-bg-card; color: @color-node-name; }\n`
+
+  it('设计轨猜灰（迁出标记+被引用）⇒ 命中 guessed=true（WARN 留痕，2026-10-20 降级不再 BLOCK）', () => {
+    const hits = auditDesignDarkTrackGuessedGray({ themeVarsContent: TV, commonLessContent: COMMON, hasDesignDarkTrack: true })
+    const bg = hits.find((h) => h.slot === 'color-bg-card')
+    expect(bg).toBeTruthy()
+    expect(bg.guessed).toBe(true)
+    expect(bg.blocked).toBe(false)
+    expect(bg.mixin).toBe('theme-theme_2')
+  })
+
+  it('近白豁免（967f9696 实锤）：深色轨 @color-text-secondary = #ffffff 迁出 ⇒ 不判', () => {
+    const tv = `.theme-theme_2() {\n  @color-text-secondary: #ffffff; // 自愈：从 .common() 迁出\n}\n`
+    const common = `.x { color: @color-text-secondary; }\n`
+    const hits = auditDesignDarkTrackGuessedGray({ themeVarsContent: tv, commonLessContent: common, hasDesignDarkTrack: true })
+    expect(hits).toEqual([])
+  })
+
+  it('阳性对照：无设计深色轨 ⇒ 不判（单稿零回归）', () => {
+    expect(auditDesignDarkTrackGuessedGray({ themeVarsContent: TV, commonLessContent: COMMON, hasDesignDarkTrack: false })).toEqual([])
+  })
+
+  it('阳性对照：非消色（#123259 深蓝）与未引用死槽位 ⇒ 不判', () => {
+    const hits = auditDesignDarkTrackGuessedGray({ themeVarsContent: TV, commonLessContent: COMMON, hasDesignDarkTrack: true })
+    expect(hits.some((h) => h.slot === 'color-node-name')).toBe(false)
+    expect(hits.some((h) => h.slot === 'color-dead')).toBe(false) // 中性灰但零引用
+  })
+
+  it('阳性对照：LLM 亲笔灰（无猜测标记）⇒ WARN 不 BLOCK', () => {
+    const tv = `.theme-theme_2() {\n  @color-bg-card: #4b4b4b;\n}\n`
+    const hits = auditDesignDarkTrackGuessedGray({ themeVarsContent: tv, commonLessContent: COMMON, hasDesignDarkTrack: true })
+    expect(hits.length).toBe(1)
+    expect(hits[0].blocked).toBe(false)
+  })
+
+  it('阳性对照：内置轨 .theme-dark() 的灰不在管辖（枚举占位合法）', () => {
+    const tv = `.theme-dark() {\n  @color-primary-bg: #414141; // 自动添加（语义推断）\n}\n`
+    const common = `.x { background: @color-primary-bg; }\n`
+    expect(auditDesignDarkTrackGuessedGray({ themeVarsContent: tv, commonLessContent: common, hasDesignDarkTrack: true })).toEqual([])
+  })
+})
+
+describe('THEME-GRAY 门禁（validateDirectory 集成）', () => {
+  const mk = async (opts: { dualTruth: boolean; grayComment?: string }) => {
+    const r = await mkdtemp(join(tmpdir(), 'mvgo-theme-gray-'))
+    await mkdir(join(r, 'package'), { recursive: true })
+    await mkdir(join(r, 'resources', 'styles', 'themes'), { recursive: true })
+    await writeFile(join(r, 'declare.json'), JSON.stringify({ themeConfig: { dualTruth: opts.dualTruth } }), 'utf-8')
+    await writeFile(join(r, 'package', 'index.vue'),
+      `<template><div class="card">x</div></template>\n<style lang="less" scoped>@import '../resources/styles/index.less';</style>`, 'utf-8')
+    await writeFile(join(r, 'resources', 'styles', 'index.less'),
+      `@import './themes/theme-vars.less';\n@import (multiple) './common.less';\n`, 'utf-8')
+    await writeFile(join(r, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      `.theme-light() { @color-bg-card: #ffffff; }\n.theme-theme_2() { @color-bg-card: #2b2b2b;${opts.grayComment ?? ' // 自愈：从 .common() 迁出'} }\n`, 'utf-8')
+    await writeFile(join(r, 'resources', 'styles', 'common.less'),
+      `.card { background: @color-bg-card; }\n`, 'utf-8')
+    return r
+  }
+
+  it('dualTruth + 设计轨猜灰被引用 ⇒ THEME-GRAY-001 WARN 且 res.pass=true（77caa86b 降级实证）', async () => {
+    const r = await mk({ dualTruth: true })
+    try {
+      const res = await LessCompileGate.validateDirectory(r)
+      const d = res.diagnostics.find((x: any) => x.id === 'THEME-GRAY-001')
+      expect(d).toBeTruthy()
+      expect(d.severity).toBe('WARN')
+      // THEME-GRAY 族不得再产出 BLOCK（fixture 自身可能有无关的 LESS-COMPILE-001，不在此断言范围）
+      expect(res.diagnostics.some((x: any) => String(x.id).startsWith('THEME-GRAY') && x.severity === 'BLOCK')).toBe(false)
+    } finally {
+      await rm(r, { recursive: true, force: true })
+    }
+  })
+
+  it('阳性对照：非 dualTruth ⇒ 无 THEME-GRAY 诊断（单稿零回归）', async () => {
+    const r = await mk({ dualTruth: false })
+    try {
+      const res = await LessCompileGate.validateDirectory(r)
+      expect(res.diagnostics.some((x: any) => String(x.id).startsWith('THEME-GRAY'))).toBe(false)
+    } finally {
+      await rm(r, { recursive: true, force: true })
+    }
+  })
+
+  it('阳性对照：LLM 亲笔灰（无标记）⇒ 仅 WARN 不 BLOCK', async () => {
+    const r = await mk({ dualTruth: true, grayComment: '' })
+    try {
+      const res = await LessCompileGate.validateDirectory(r)
+      const d = res.diagnostics.find((x: any) => x.id === 'THEME-GRAY-002')
+      expect(d).toBeTruthy()
+      expect(d.severity).toBe('WARN')
+      expect(res.diagnostics.some((x: any) => x.id === 'THEME-GRAY-001')).toBe(false)
+    } finally {
+      await rm(r, { recursive: true, force: true })
+    }
+  })
+})

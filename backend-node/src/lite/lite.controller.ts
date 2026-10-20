@@ -369,6 +369,9 @@ export class LiteController {
         {
           componentId: sessionId,
           componentName: dto.componentName || sessionId,
+          // 🔴 2026-10-20：多主题整套设计稿（后续 startGeneration 会整体覆盖，
+          //   但排队期间任务卡片/详情要靠它显示多主题）
+          themeNodes: dto.themeNodes,
           target: componentType,
           groupId,
           panelKey: dto.panelType || 'default-panel',

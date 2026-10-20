@@ -45,6 +45,18 @@ import {
   resolveDomClass,
 } from './class-facts.js';
 import { extractSfcTemplate } from './sfc-template-extractor.js';
+// 🛡️ L0 判据单点化（2026-10-20 · mc-max-1792497064987-195c8d0e 实锤）：
+//   本文件原有一个自写 `isBalanced()`（只数 `{}`，不数圆括号），与写盘门禁
+//   `scanStandaloneLessDefects`（数圆括号，LESS-WRITE-004）**判据不同构** ⇒
+//   合并器放行「大括号平衡但圆括号缺 1」的合并稿（13ms 前报「已收敛」），
+//   写盘门禁立刻判死并跳过（本组件连续 6 轮），无 last-good ⇒ 15 行兜底模板
+//   覆盖磁盘 ⇒ 641 行 / 覆盖 53/56 class 的合格样式表被丢弃，19 个布局容器
+//   类零定义（组件几乎无样式）。
+//   ⇒ 根治方式不是「给 isBalanced 补一维」（那仍是第二份副本，下次门禁升级
+//   判据还会错位），而是**只保留一个判据点**：合并产物直接交给写盘门禁判定，
+//   通过则接受其 heal 后的文本（保证合并器输出恒能过门禁，写盘时退化为幂等）。
+//   ⚠️ less-compile-gate.js 无任何内部 import（仅 less/fs/path）⇒ 无循环依赖。
+import { gateStandaloneLessWrite } from '../validators/less-compile-gate.js';
 
 /**
  * 从 SFC 源码中提取 style 块内容（可能多个），返回拼接后的 Less 文本。
@@ -471,17 +483,6 @@ function mergeCssBlocks(selector, blocks) {
     .join('\n');
   
   return `${selector} {\n${declarations}\n}`;
-}
-
-/** 括号平衡校验（防止把残缺块写进 common.less） */
-function isBalanced(less = '') {
-  let depth = 0;
-  for (const ch of String(less)) {
-    if (ch === '{') depth += 1;
-    else if (ch === '}') depth -= 1;
-    if (depth < 0) return false;
-  }
-  return depth === 0;
 }
 
 /**
@@ -1070,6 +1071,13 @@ export function ensureBackgroundContainerDimensions(files = {}) {
     const bgRe = /<(\w+)\b[^>]*\bclass=["']([^"']+)["'][^>]*:style=["'][^"']*backgroundImage[^"']*["'][^>]*>/g;
     let m;
     while ((m = bgRe.exec(tpl)) !== null) {
+      // 🛡️ 2026-10-20（ee06ee24 实锤）：v-for 重复单元 item 豁免。
+      //   病灶：item 首卡 :style 绑背景图 ⇒ 本函数给 item class 前置注入 width/height:100%，
+      //   在 flex-column wrapper 里 = 每项占满容器高 ⇒ 「6 卡只见首卡」。
+      //   且本函数跑在 writeFiles 写盘路径（自愈链之后）⇒ 刀 31 检出时 item 尚无
+      //   height:100%，写盘时才被注入 ⇒ 「门禁审计的内容 ≠ 落盘内容」破窗。
+      //   v-for item 的尺寸由重复单元几何真值（刀 31）/flex 配比管理，绝不可 100%。
+      if (/\bv-for\s*=/.test(m[0])) continue;
       const classes = m[2].split(/\s+/);
       for (const cls of classes) {
         if (cls && cls.startsWith('c-')) classTargets.add(cls);
@@ -1078,6 +1086,7 @@ export function ensureBackgroundContainerDimensions(files = {}) {
     // 也匹配 :style 在 class 前面的情况
     const bgRe2 = /<(\w+)\b[^>]*:style=["'][^"']*backgroundImage[^"']*["'][^>]*\bclass=["']([^"']+)["'][^>]*>/g;
     while ((m = bgRe2.exec(tpl)) !== null) {
+      if (/\bv-for\s*=/.test(m[0])) continue; // 同上：v-for 重复单元豁免
       const classes = m[2].split(/\s+/);
       for (const cls of classes) {
         if (cls && cls.startsWith('c-')) classTargets.add(cls);
@@ -1234,20 +1243,57 @@ export function consolidateSubComponentClasses(files = {}, options = {}) {
   for (const b of resolvedBlocks) dedup.set(b.selector, b);
   const uniqueBlocks = [...dedup.values()];
 
-  const merged = mergeIntoCommonLess(commonLess, uniqueBlocks);
+  // 🛡️ L1-a（2026-10-20 · 195c8d0e 实锤）：**逐块**先过门禁，坏块单独丢弃。
+  //   动机：L0 让合并产物整体过门禁，坏一个块仍会触发**整体回退** ⇒ 一个子组件的
+  //   一处笔误就能让其余 30+ 个正常块全部进不了 common.less。逐块校验把损失从
+  //   「全部」缩小到「那一块」，并且块内可自愈的缺陷（缺 `)` / 孤立 `)` / 漏分号）
+  //   当场修好再参与合并。
+  //   A/B 实测（195c8d0e 真实产物）：36 个真实子组件块全部通过、零改写 ⇒ 无误伤。
+  //   ⚠️ 单块跑 gate 的前提是 `b.text` 为完整 `sel { ... }`（见上文 variants 提取）。
+  const vettedBlocks = [];
+  const rejectedSelectors = [];
+  for (const b of uniqueBlocks) {
+    const vg = gateStandaloneLessWrite(b.text, COMMON_LESS_PATH);
+    if (!vg.ok) {
+      rejectedSelectors.push(b.selector);
+      continue;
+    }
+    vettedBlocks.push(vg.changed ? { ...b, text: vg.content } : b);
+  }
+  if (rejectedSelectors.length > 0) {
+    warn(
+      `[style-class-consolidator] ${rejectedSelectors.length} 个类块未过门禁，已单独丢弃（其余块照常合并）`,
+      { selectors: rejectedSelectors.slice(0, 8) },
+    );
+  }
+  if (vettedBlocks.length === 0) return next;
+
+  const merged = mergeIntoCommonLess(commonLess, vettedBlocks);
   if (!merged.replaced.length && !merged.added.length) return next;
 
-  // 安全校验：合并结果必须括号平衡，否则整体回退（不引入 LESS 语法错误）
-  if (!isBalanced(merged.content)) {
+  // 🛡️ L0 判据单点化（2026-10-20 · 195c8d0e 实锤）：合并产物直接交给**写盘门禁**
+  //   判定（唯一判据，含大括号/块注释/圆括号/深选择器四族）。此前本处调用本文件
+  //   自写的 isBalanced（只数 `{}`）⇒ 放行了圆括号缺 1 的稿，被写盘门禁判死，
+  //   641 行样式整体丢弃。现在：过则接受 gate 的 heal 结果（保证写盘时幂等），
+  //   不过则回退（不改动 common.less）。
+  const gate = gateStandaloneLessWrite(merged.content, COMMON_LESS_PATH);
+  if (!gate.ok) {
     warn(
-      '[style-class-consolidator] 合并后 LESS 括号不平衡，已回退（不改动 common.less）',
+      '[style-class-consolidator] 合并产物未过写盘门禁，已回退（不改动 common.less）',
+      { defects: gate.defects },
     );
     return next;
   }
+  const mergedContent = gate.content;
+  if (gate.fixes.length > 0) {
+    info(
+      `[style-class-consolidator] 合并产物经门禁自愈（${gate.fixes.join(', ')}）`,
+    );
+  }
   // 幂等短路：内容无实质变化则跳过（避免无意义写盘/日志噪音）
-  if (merged.content.trim() === commonLess.trim()) return next;
+  if (mergedContent.trim() === commonLess.trim()) return next;
 
-  next[COMMON_LESS_PATH] = merged.content;
+  next[COMMON_LESS_PATH] = mergedContent;
   info(
     `[style-class-consolidator] 子组件类样式已收敛进 common.less（新增 ${merged.added.length} / 覆盖同名 ${merged.replaced.length}）`,
   );

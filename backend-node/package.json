@@ -14,6 +14,8 @@
     "verify:business-text-zero-impact": "NODE_OPTIONS=\"--max-old-space-size=2048\" node scripts/audit-business-text-zero-impact.mjs",
     "verify:vfor-direction": "NODE_OPTIONS=\"--max-old-space-size=2048\" node scripts/audit-vfor-direction.mjs",
     "verify:terminal-writes": "node scripts/check-terminal-writes.mjs",
+    "verify:product-writes": "node scripts/audit-product-writes.mjs",
+    "verify:product-regression": "NODE_OPTIONS=\"--max-old-space-size=2048\" node scripts/verify-product-regression.mjs",
     "verify:r1-3": "node scripts/r1-3-acceptance.mjs",
     "verify:theme-color": "node scripts/audit-theme-color.mjs",
     "verify:theme-color:recent": "node scripts/audit-theme-color.mjs --recent",

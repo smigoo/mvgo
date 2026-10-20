@@ -314,13 +314,20 @@ export function extractFigmaColorPalette(figmaNodeData) {
       if (!p || p.visible === false || p.type !== 'SOLID' || !p.color) continue;
       const hex = figmaColorToHex(p.color);
       if (!hex) continue;
+      const effOpacity = typeof p.opacity === 'number' ? p.opacity : 1;
       if (isText) {
         textFreq.set(hex, (textFreq.get(hex) || 0) + 1);
       } else {
-        const cur = fillFreq.get(hex) || { count: 0, area: 0, semantic: 0 };
+        const cur = fillFreq.get(hex) || { count: 0, area: 0, semantic: 0, maxOpacity: 0 };
         cur.count += 1;
         cur.area += area;
         cur.semantic += fillSemanticWeight(node);
+        // 🛡️ 2026-10-20（5ef650ff 实锤）：记录该色的**最大不透明度**。
+        //   面板底色 `#e2d084@0.20`（20% 透明 tint，604×161×3 块）面积碾压一切 ⇒
+        //   topPrimary 曾被选成面板黄，真正的品牌/数字强调色落选。低透明度填充是
+        //   「罩染/tint」不是主色 ⇒ 主色候选按 maxOpacity 过滤（见 saturated 处）。
+        //   ⚠️ 只影响主色候选；fillFreq/topBg 仍统计全量（零回归）。
+        cur.maxOpacity = Math.max(cur.maxOpacity, effOpacity);
         fillFreq.set(hex, cur);
       }
     }
@@ -333,15 +340,15 @@ export function extractFigmaColorPalette(figmaNodeData) {
     .sort((a, b) => b.count - a.count);
   // fillColors 保持**面积降序**（topBg = fillColors[0] 依赖「面积最大 = 背景」这一事实）
   const fillColors = [...fillFreq.entries()]
-    .map(([hex, v]) => ({ hex, count: v.count, area: v.area, semantic: v.semantic || 0 }))
+    .map(([hex, v]) => ({ hex, count: v.count, area: v.area, semantic: v.semantic || 0, maxOpacity: v.maxOpacity ?? 1 }))
     .sort((a, b) => b.area - a.area);
 
   const topText = textColors[0]?.hex || null;
   const topBg = fillColors[0]?.hex || null;
 
-  // 主色候选：排除 topText/topBg/近中性色（饱和度 < 0.15）
+  // 主色候选：排除 topText/topBg/近中性色（饱和度 < 0.15）/低透明度罩染色（maxOpacity < 0.5）
   const saturated = fillColors.filter(
-    (f) => f.hex !== topText && f.hex !== topBg && isVividColor(f.hex),
+    (f) => f.hex !== topText && f.hex !== topBg && isVividColor(f.hex) && (f.maxOpacity ?? 1) >= 0.5,
   );
   // 🛡️ 主色选取 = **两级判定**（2026-09-29 · c-traffic-monitor-209472ff 实锤）
   //
@@ -967,7 +974,7 @@ function mcKebabize(s) {
 }
 
 /** §3 规范核心槽位默认值（kebab）；styleTokens 中有对应值者覆盖 */
-const MC_CANONICAL_COLOR_SLOTS = {
+export const MC_CANONICAL_COLOR_SLOTS = {
   light: {
     'color-text-base': '#333333',
     'color-text-secondary': '#666666',

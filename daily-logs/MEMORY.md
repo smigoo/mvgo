@@ -17,6 +17,12 @@
 - 产物三处同步（workspace×2 + 快照）须 diff，含 `resources/styles/index.css`。
 - 资源挂载：`ownerSectionId`⨯`data-section-id` 恒取；幂等护栏 `isResourceRendered`；重复 sid `anchorOwnerRank`。K/L/M/N 详判据 → skill `mvgo-resource-mount-layer-triage`。
 - 副本纪律：同判据 ≥2 份=事故温床；`techStackRequiredPatterns` 单一来源（element-coverage-validator，已导出）。
+- 🔴 **LESS 圆括号自愈三件套（10-20，`0308dd8`）**：`rebalanceOrphanCloseParens`（抹孤立 `)`）+ `healMissingCloseParens`（补缺失 `)`，判据「圆括号不跨 `;`/`}` ⇒ 扫到终结符时栈非空，缺口唯一位于终结符之前」）+ `scanStandaloneLessDefects`（判残留）。**缺 `)` 曾是全链唯一无自愈出口的缺陷**，只能靠 L0-B 重试（195c8d0e 6 轮全败）。验证必须用 `less.render` 真编译硬判据，不能只看 gate 自己 `ok`。
+- 🔴 **块级抽取天然保证 `{}` 平衡**（深度归零）⇒ L1-a「单块被门禁拒绝」分支基本不可达，属防御性路径；写 spec 时别硬造阳性对照。
+- 🔴 **L477 实锤（10-20，✅ 已修 `75fa2a6`）**：`style-class-consolidator#isBalanced` 只数 `{}` 不数圆括号，而写盘门禁 `scanStandaloneLessDefects` 数圆括号 ⇒ 合并器放行「缺 1 个 `)`」的合并稿 → 门禁判死 → 6 轮全跳过 → `_hasLastGood` 只查磁盘（不查分块缓存）→ `code-validator.js:2243` 兜底模板覆盖。**后果：641 行/覆盖 53/56 class 的合格样式表被换成 15 行兜底，19 个布局容器 class 零定义。**
+  - 根治口径（**不要再给副本补一维**）：合并器自写判据**删除**，合并产物直接交 `gateStandaloneLessWrite` 判定并接受其 heal 结果 ⇒ 输出恒能过门禁、写盘退化为幂等。`less-compile-gate` 零内部 import，无循环依赖。
+  - `file-writer` 回退链 = **三级**：磁盘 last-good → `.mc-gen/cache/code-chunks` 合格分块（`cached-chunk-last-good.js`，判据：meta 有登记 + 自身过同一门禁 + 与本轮同 class 前缀）→ 兜底模板。
+  - **凡是「合并/收敛 → 门禁」两段式，两侧判据必须同一实现，不是同一逻辑各写一份。**
 - 🔴 **改 prompt/规范文档前必须做「加载链三查」**：① `grep -rn "loadMd(" src/` 看调用前缀；② `referenceFiles`/`microcode.json` 清单里的 ref 字符串；③ `ls dist/**` 确认构建拷贝。生效规范根 = `backend-node/references/**`（构建整份拷进 `dist/references/`），引用串一律 `references/xxx`。`prompts/agents/**` 与 `prompts/references/**` **无加载点**（死文件）。模式 B 生效版：`references/patterns/css-variable-pattern.md` + `references/specs/style-guide.md`。
 - 🔴 **M4-10/M4-11 判据机制（改主题色判据前必读）**：`mc-check.cjs` L794-820 从 `mc-check-config.json:40-49` 取白名单，**只读 `css-vars.js` 的 `dark`，完全不读 `theme-vars.less`**；不读 meta ⇒ **判据无法按模式分叉**。`darkThemeCoreVars=[colorTextBase,colorPrimary,colorPrimaryBg]`、`darkThemeColorRules`（硬枚举，M4-10 error）、`darkThemeOptionalVars`（滚动条，M4-11）。⚠️ **放三核心真值必须 less#dark 与 js#dark 两处同写**。⚠️ **僵尸规则**：`colorTextSecondary`/`colorPrimaryHover`/`Active`/`BgHover` 有白名单但 M4-10 只遍历三核心 ⇒ **从无判据消费**。内置 skill 副本两份需同改：`backend-node/skills/` + `aidocs/skills/`；文档 `references/checklist.md` 同步。
 - 门禁 `theme-color-guard.js`：`.common()` 禁语义颜色槽位名/字面量色值（`value` 以 `var(` 开头豁免）；业务样式禁 `var()`。生成器缺口：`style-tokens.js#renderMicrocodeThemeVarsLess` L871 `.common()` 原样沿用 LLM prior；自愈器 `less-variable-checker#healCommonColorVars` L465 只清「light+dark 都定义」的颜色。

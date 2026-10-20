@@ -506,6 +506,10 @@ export function normalizeStatGroupLayout(files) {
  * 修复：向规则块末尾注入 `background: @<var>;`（幂等：已有 background 则不触发；
  *   同名复合规则不重复注入）。index.css 由下游 refiner recompileIndexCss 同步，本刀只改 less 源。
  * 阳性对照：temp-components 带病原始产物触发；cd63d1c5 手修版（已注入）不触发。
+ *
+ * 🛡️ 2026-10-20 真值豁免（5ef650ff 实锤）：figma 根容器 fills=[]（透明——底色由
+ *   宿主弹窗/面板透出）时**禁止注入**，否则臆造背景盖住宿主底色（浅发白/深发灰）。
+ *   无真值（旧链路/无 figma）⇒ 维持原行为（fail-open 不回退）。
  */
 const SLOT_CON_BG_PRIORITY = [
   'color-bg-page',
@@ -514,10 +518,12 @@ const SLOT_CON_BG_PRIORITY = [
   'color-bg',
 ];
 
-export function ensureSlotConBackground(files) {
+export function ensureSlotConBackground(files, opts = {}) {
   const out = { ...files };
   const changes = [];
   const skipped = [];
+  // 真值豁免：根透明 ⇒ 不注入（设计意图是透出宿主底色）
+  const rootTransparent = opts?.transparentContainerTruth?.rootTransparent === true;
 
   // 该产物 theme-vars.less 已定义的 less 变量集合
   const themePath = Object.keys(out).find((p) =>
@@ -552,6 +558,10 @@ export function ensureSlotConBackground(files) {
     if (depth !== 0) continue;
     const body = less.slice(braceStart + 1, i - 1);
     if (/\bbackground(?:-color)?\s*:/.test(body)) continue; // 幂等
+    if (rootTransparent) {
+      skipped.push({ file: commonPath, selector: m[1], reason: 'root-transparent-by-figma-truth' });
+      continue;
+    }
     if (!bgVar) {
       skipped.push({ file: commonPath, selector: m[1], reason: 'no-bg-var-defined' });
       continue;
@@ -701,6 +711,62 @@ export function injectRepeatedCardTruth(parsed, figmaRoot) {
   }
   return truth;
 }
+
+/**
+ * 🛡️ 2026-10-20（5ef650ff 实锤）：透明容器真值。
+ *
+ * 病灶：设计稿里 fills=[] 的透明内容容器（如 796:3 slot-icon 整柱——底色由宿主
+ *   浅蓝/深蓝弹窗提供），产物却给对应 wrapper 刷上 `background: @color-bg-container`
+ *   （light #fff / 深色轨猜测灰 #2b2b2b）⇒ 浅色整体发白、深色发灰，盖住宿主底色。
+ *
+ * 判据（纯几何，命名无关）：容器节点（FRAME/GROUP/INSTANCE/COMPONENT）无可见填充，
+ *   且**首个子节点不是同尺寸填充矩形**（后者是「面板底」形态——背景色是设计意图，
+ *   由 buildSectionStyleFacts 的「面板底(几何)」真值下发，不算透明）。
+ *
+ * @returns {null|{transparentIds:string[], total:number}}
+ */
+export function classifyTransparentContainers(figmaRoot) {
+  const root = figmaRoot?.document ?? figmaRoot;
+  if (!root || typeof root !== 'object') return null;
+  const CONTAINER = new Set(['FRAME', 'GROUP', 'INSTANCE', 'COMPONENT']);
+  const transparent = [];
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    const t = String(n.type || '').toUpperCase();
+    if (CONTAINER.has(t) && Array.isArray(n.children) && n.children.length > 0) {
+      const fillsVisible = (n.fills || []).some((f) => f && f.visible !== false);
+      if (!fillsVisible) {
+        const nb = n.absoluteBoundingBox;
+        const first = n.children[0];
+        const fb = first?.absoluteBoundingBox;
+        const ft = String(first?.type || '').toUpperCase();
+        const firstFilled = (first?.fills || []).some((f) => f && f.visible !== false);
+        const sameSize = !!(nb && fb &&
+          Math.abs((fb.x || 0) - (nb.x || 0)) <= 2 && Math.abs((fb.y || 0) - (nb.y || 0)) <= 2 &&
+          Math.abs((fb.width || 0) - (nb.width || 0)) <= 2 && Math.abs((fb.height || 0) - (nb.height || 0)) <= 2);
+        const isPanelBase = (ft === 'RECTANGLE' || ft === 'VECTOR') && firstFilled && sameSize;
+        if (!isPanelBase) transparent.push({ id: String(n.id || ''), name: String(n.name || '') });
+      }
+    }
+    for (const c of n.children || []) walk(c);
+  };
+  walk(root);
+  // 根容器透明标记：根 FRAME fills=[] ⇒ 整柱底色由宿主透出（弹窗/面板场景），
+  //   刀 31（ensureSlotConBackground）见此标记必须停手（5ef650ff 实锤：透明弹窗
+  //   内容柱被注入 @color-bg-container ⇒ 浅发白/深发灰）。
+  const rootTransparent = !(root.fills || []).some((f) => f && f.visible !== false);
+  if (transparent.length === 0 && !rootTransparent) return null;
+  return { transparentIds: transparent.slice(0, 40).map((t) => t.id), total: transparent.length, rootTransparent };
+}
+
+export function injectTransparentContainerTruth(parsed, figmaRoot) {
+  const truth = classifyTransparentContainers(figmaRoot);
+  if (truth && parsed && typeof parsed === 'object') {
+    parsed.transparentContainerTruth = truth;
+  }
+  return truth;
+}
+
 
 /** 交替型 nth-child 规则块扫描：返回 [{selStart, selEnd, bodyStart, bodyEnd, selector, body}] */
 export function findZebraRules(css) {
