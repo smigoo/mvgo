@@ -7,6 +7,8 @@ import {
   healDupClassDirectionConflicts,
   healSlotDuplicateRender,
   healVForOverflowRow,
+  healSelfNestedCardCollapse,
+  collectRenderedSurface,
   healStructuralTruth,
 } from './structural-truth-healers.js';
 
@@ -317,6 +319,181 @@ const nodeList = ref([{ name: 'a' }, { name: 'b' }]);
     };
     const { summary } = healStructuralTruth(files, {}, { logger: NOOP_LOGGER });
     expect(summary.vforOverflowRow).toBe(2);
+  });
+});
+
+describe('刀 36 healSelfNestedCardCollapse（自嵌套双重渲染折叠）', () => {
+  // 复刻 07ae49a2 真实形态：卡容器 38:3260 既被拆成整卡组件（根 = 38:3260），
+  // 又与它的子节点（icon 187:262 / 标签 38:3263）一起被拆成同级组件 ⇒ 同一张卡渲染两遍。
+  const CARD_IDX = `<template>
+  <base-panel panelKey="default-panel">
+    <div class="x-slot-con" style="display:flex;flex-direction:column;">
+      <div data-rowpeers-wrap style="flex:0.192;min-height:0;display:flex;flex-direction:row;gap:64px;">
+<div class="x-container" data-section-id="38:3260" style="min-width:0;flex:1;min-height:0;display:flex;flex-direction:row;align-items:stretch;">
+          <ContentIcon style="flex:0.366;min-width:0;" />
+          <ContentSection style="flex:0.193;min-width:0;" />
+          <ContentSection3 style="flex:0.441;min-width:0;" />
+        </div>
+<div class="x-group" data-section-id="38:3282" style="min-width:0;flex:1;min-height:0;display:flex;flex-direction:row;align-items:stretch;">
+          <ContentIcon2 style="flex:0.366;min-width:0;" />
+          <ContentSection5 style="flex:0.193;min-width:0;" />
+          <ContentSection6 style="flex:0.441;min-width:0;" />
+        </div>
+      </div>
+    </div>
+  </base-panel>
+</template>
+
+<script setup>
+import ContentIcon from './components/ContentIcon.vue'
+import ContentSection from './components/ContentSection.vue'
+import ContentSection3 from './components/ContentSection3.vue'
+import ContentIcon2 from './components/ContentIcon2.vue'
+import ContentSection5 from './components/ContentSection5.vue'
+import ContentSection6 from './components/ContentSection6.vue'
+</script>
+`;
+
+  // 整卡组件：根 = 38:3260，内部渲染 icon + 数值 + 标签（标签有文本）
+  const CARD_SELF_LABELED = `<template>
+  <div class="x-container" data-section-id="38:3260" v-bind="$attrs">
+    <div class="x-icon-box"><img class="x-icon-img" alt="" /></div>
+    <div class="x-label">
+      <span class="x-value">{{ statValue }}</span>
+      <span class="x-text">{{ labelText }}</span>
+    </div>
+  </div>
+</template>
+<script setup>
+const props = defineProps({
+  statValue: { type: String, default: '33' },
+  labelText: { type: String, default: '合作厂商' }
+})
+</script>
+`;
+
+  // 整卡组件（第二张卡）：标签为空 ⇒ 不覆盖兄弟的「在线设备」
+  const CARD_SELF_EMPTY_LABEL = `<template>
+  <div class="x-container" data-section-id="38:3282" v-bind="$attrs">
+    <div class="x-icon-box"><img class="x-icon-img" alt="" /></div>
+    <div class="x-label">
+      <span class="x-value">66</span>
+      <span class="x-text"></span>
+    </div>
+  </div>
+</template>
+<script setup>
+</script>
+`;
+
+  const ICON_A = `<template>
+  <div data-section-id="187:262"><img :src="icon2" class="x-i" alt="" /></div>
+</template>
+`;
+  const ICON_B = `<template>
+  <div data-section-id="187:263"><img :src="icon3" class="x-i" alt="" /></div>
+</template>
+`;
+  const LABEL_A = `<template>
+  <div data-section-id="38:3263"><span class="x-l">合作厂商</span></div>
+</template>
+`;
+  const LABEL_B = `<template>
+  <div data-section-id="38:3285"><span class="x-l">在线设备</span></div>
+</template>
+`;
+
+  const buildFiles = () => ({
+    'package/index.vue': CARD_IDX,
+    'package/components/ContentIcon.vue': ICON_A,
+    'package/components/ContentSection.vue': CARD_SELF_LABELED,
+    'package/components/ContentSection3.vue': LABEL_A,
+    'package/components/ContentIcon2.vue': ICON_B,
+    'package/components/ContentSection5.vue': CARD_SELF_EMPTY_LABEL,
+    'package/components/ContentSection6.vue': LABEL_B,
+  });
+
+  it('① 内容被整卡覆盖的同级实例（icon / 标签）被删除，未被覆盖的保留', () => {
+    const { files: out, changes } = healSelfNestedCardCollapse(buildFiles());
+    const idx = out['package/index.vue'];
+    // 卡 1：整卡已含 icon + 33 + 合作厂商 ⇒ icon 与标签两个同级实例删除
+    expect(idx).not.toMatch(/<ContentIcon\s/);
+    expect(idx).not.toMatch(/<ContentSection3\s/);
+    // 卡 2：整卡标签为空 ⇒ 「在线设备」不覆盖 ⇒ 保留（宁可重复，不可丢内容）
+    expect(idx).not.toMatch(/<ContentIcon2\s/);
+    expect(idx).toMatch(/<ContentSection6\s/);
+    // 自嵌套实例本身保留（它就是该 section 的渲染体）
+    expect(idx).toMatch(/<ContentSection\s[^>]*flex:1/);
+    expect(idx).toMatch(/<ContentSection5\s[^>]*flex:1/);
+    // 变更留痕
+    expect(changes.filter((c) => c.action === 'drop-duplicate-instance')).toHaveLength(3);
+    expect(changes.filter((c) => c.action === 'promote-self-instance')).toHaveLength(2);
+  });
+
+  it('② 失效 import 一并清理，仍在用的不动', () => {
+    const { files: out } = healSelfNestedCardCollapse(buildFiles());
+    const idx = out['package/index.vue'];
+    expect(idx).not.toContain("import ContentIcon from './components/ContentIcon.vue'");
+    expect(idx).not.toContain("import ContentSection3 from './components/ContentSection3.vue'");
+    expect(idx).not.toContain("import ContentIcon2 from './components/ContentIcon2.vue'");
+    expect(idx).toContain("import ContentSection from './components/ContentSection.vue'");
+    expect(idx).toContain("import ContentSection5 from './components/ContentSection5.vue'");
+    expect(idx).toContain("import ContentSection6 from './components/ContentSection6.vue'");
+  });
+
+  it('③ 阳性对照：无自嵌套（容器内只有子节点组件）→ 一字不动', () => {
+    const files = buildFiles();
+    // 把整卡组件的根 section 改成它的真子节点 id ⇒ 不再自嵌套
+    files['package/components/ContentSection.vue'] = CARD_SELF_LABELED.replace(
+      'data-section-id="38:3260"',
+      'data-section-id="38:3262"',
+    );
+    files['package/components/ContentSection5.vue'] = CARD_SELF_EMPTY_LABEL.replace(
+      'data-section-id="38:3282"',
+      'data-section-id="38:3284"',
+    );
+    const { files: out, changes } = healSelfNestedCardCollapse(files);
+    expect(changes).toHaveLength(0);
+    expect(out['package/index.vue']).toBe(CARD_IDX);
+  });
+
+  it('④ 阴性守卫：兄弟实例内容覆盖不了 ⇒ 一个都不删', () => {
+    const files = buildFiles();
+    // 整卡改成不含 icon、也不含任何文本 ⇒ 什么都不覆盖
+    files['package/components/ContentSection.vue'] = `<template>
+  <div class="x-container" data-section-id="38:3260" v-bind="$attrs"><div class="x-empty"></div></div>
+</template>
+`;
+    files['package/components/ContentSection5.vue'] = `<template>
+  <div class="x-container" data-section-id="38:3282" v-bind="$attrs"><div class="x-empty"></div></div>
+</template>
+`;
+    const { files: out, changes } = healSelfNestedCardCollapse(files);
+    expect(changes.filter((c) => c.action === 'drop-duplicate-instance')).toHaveLength(0);
+    expect(out['package/index.vue']).toContain('<ContentIcon ');
+    expect(out['package/index.vue']).toContain('<ContentSection3 ');
+    expect(out['package/index.vue']).toContain('<ContentSection6 ');
+  });
+
+  it('⑤ 幂等：折叠后再跑零改动', () => {
+    const first = healSelfNestedCardCollapse(buildFiles());
+    const second = healSelfNestedCardCollapse(first.files);
+    expect(second.changes).toHaveLength(0);
+    expect(second.files['package/index.vue']).toBe(first.files['package/index.vue']);
+  });
+
+  it('⑥ collectRenderedSurface：静态文本 ∪ props 默认值 ∪ 是否含 img', () => {
+    const s = collectRenderedSurface(CARD_SELF_LABELED);
+    expect([...s.texts].sort()).toEqual(['33', '合作厂商']);
+    expect(s.hasImg).toBe(true);
+    const icon = collectRenderedSurface(ICON_A);
+    expect(icon.texts.size).toBe(0);
+    expect(icon.hasImg).toBe(true);
+  });
+
+  it('⑦ 统一入口接线：刀 36 命中进 summary.selfNestedCollapse', () => {
+    const { summary } = healStructuralTruth(buildFiles(), {}, { logger: NOOP_LOGGER });
+    expect(summary.selfNestedCollapse).toBeGreaterThan(0);
   });
 });
 

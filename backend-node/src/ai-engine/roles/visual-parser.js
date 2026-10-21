@@ -92,6 +92,10 @@ import { mergeInlineRowsIntoSections } from '../utils/inline-row-merger.js'
 export { mergeInlineRowsIntoSections }
 // 🛡️ P1-7（2026-10-01 · c-a812-07a812f7 实锤）：vision 锚点真值校验（幻觉 id 零报警 → 显式诊断）
 import { validateVisionAnchors } from '../utils/vision-anchor-validator.js'
+// 🔴 R22-d（2026-10-21 · c-d79b-66d79bff 实锤）：视觉 section 锚点的**祖先前置**校验。
+// 与 P1-7 的「存在性校验」互补、不可互相替代：本例锚点 `38:3258` **存在**于树中（是普通段里的
+// 「鲁邦通」TEXT），存在性校验绿灯，但它是几何无关节点 ⇒ 排序/语义回填全部拿到错坐标。
+import { auditSectionAnchors } from '../utils/section-anchor-truth.js'
 // 🛡️ A′（2026-09-10）：纵向容器层级重建（纯函数，无 import.meta，jest 可 require）。
 // 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
 import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
@@ -108,21 +112,52 @@ import {
 export { dropHallucinatedSections, applyHallucinationDrop }
 
 /**
+ * 枚举结构对象里全部 `sections` 数组（按对象标识去重）。
+ * 兼容四种形态：`layout.sections` / 顶层 `sections` / `layoutStructure.layout.sections` /
+ * `layoutStructure.sections`——形态适配只写这一处，别在调用侧各写一份。
+ */
+function collectSectionArrays(target) {
+  const arrays = []
+  const seen = new WeakSet()
+  const push = (arr) => {
+    if (!Array.isArray(arr) || seen.has(arr)) return
+    seen.add(arr)
+    arrays.push(arr)
+  }
+  if (target && typeof target === 'object') {
+    push(target.layout?.sections)
+    push(target.sections)
+    push(target.layoutStructure?.layout?.sections)
+    push(target.layoutStructure?.sections)
+  }
+  return arrays
+}
+
+/**
  * 统计「结构对象里所有 sections 数组的条数之和」——仅供日志对比用（判据不依赖它）。
- * 兼容两种形态：扁平 parsed（layout.sections）与包装态（layoutStructure.layout.sections）。
  */
 function readSectionCounts(target) {
-  const arrays = []
-  if (target && typeof target === 'object') {
-    if (target.layout && Array.isArray(target.layout.sections)) arrays.push(target.layout.sections)
-    if (Array.isArray(target.sections)) arrays.push(target.sections)
-    if (target.layoutStructure) {
-      const lay = target.layoutStructure
-      if (lay.layout && Array.isArray(lay.layout.sections)) arrays.push(lay.layout.sections)
-      if (Array.isArray(lay.sections)) arrays.push(lay.sections)
-    }
+  return collectSectionArrays(target).reduce((sum, arr) => sum + arr.length, 0)
+}
+
+/**
+ * 🔴 R22-d（2026-10-21 · c-d79b-66d79bff「合作厂商弹窗」实锤）：对**所有**会进 merger 的
+ * sections 数组做锚点审计（就地写 `figmaAnchorId`，不改 `id`/`figmaNodeId`）。
+ *
+ * 为什么要遍历全部形态：merger 对 `parsed.layout` 与 `parsed.layoutStructure.layout` 分别调用，
+ * 漏一个形态 = 该形态里的幻觉锚点在 `sectionY` 里继续生效（排序错位、静默）。
+ */
+function auditVisionSectionAnchors(parsed, figmaData) {
+  const issues = []
+  const fixes = []
+  let judged = 0
+  for (const arr of collectSectionArrays(parsed)) {
+    const report = auditSectionAnchors(arr, figmaData)
+    judged += report.stats.judged
+    issues.push(...report.issues)
+    fixes.push(...report.fixes)
   }
-  return arrays.reduce((sum, arr) => sum + arr.length, 0)
+  return { issues, fixes, stats: { judged, repaired: fixes.length } }
 }
 
 // 🛡️ P1（2026-09-09）：inlineCompositeRows → headerSlots 推断（纯函数，无 import.meta，jest 可 require）。
@@ -1571,6 +1606,37 @@ ${analysisTask}`
     // 🛡️ Loop 2.1.A（2026-09-10）：不止写旁路字段——把同行块**真正合并进 layout.sections**
     // （horizontal block），否则下游 planner/engineer 不读旁路，结构纠正在写盘前丢失。
     if (figmaData) {
+      // 🔴 R22-d（2026-10-21 · c-d79b-66d79bff「合作厂商弹窗」实锤）：视觉 section 锚点审计。
+      //
+      //   病灶：Vision 的 `section.id` 可以是**存在但语义无关**的 Figma 节点（本例 `38:3258`
+      //   在树里是普通段下的「鲁邦通」TEXT）。上游 `validateVisionAnchors` 只判「在不在树里」
+      //   ⇒ 这种锚点**零报警**通过，但它是几何无关节点，`sectionY` 排序、语义回填、同区域判定
+      //   全部拿到错坐标（表现为「统计卡被排到整页最底部」这类能跑但全错）。
+      //
+      //   判据（类型无关、命名无关）：锚点必须是**自身内容（直接子级引用节点）的祖先**；
+      //   不满足 ⇒ 按最近公共祖先写新字段 `figmaAnchorId`（绝不改写 `id` / `figmaNodeId`，
+      //   它们是 `subcomponent-planner` / `microcode-engineer` / `code-generator` 的查找 key）。
+      //
+      //   位置：必须早于 merger —— merger 的 `sectionY` 与同区域判定都以锚点为输入。
+      try {
+        const anchorAudit = auditVisionSectionAnchors(parsed, figmaData)
+        if (anchorAudit.issues.length > 0) {
+          parsed.sectionAnchorAudit = {
+            judged: anchorAudit.stats.judged,
+            repaired: anchorAudit.stats.repaired,
+            issues: anchorAudit.issues.slice(0, 20),
+            fixes: anchorAudit.fixes.slice(0, 20),
+          }
+          logger.warn('🛡️ 视觉 section 锚点与自身内容不相容（已按 LCA 写入 figmaAnchorId）', {
+            judged: anchorAudit.stats.judged,
+            repaired: anchorAudit.stats.repaired,
+            samples: anchorAudit.issues.slice(0, 6),
+          })
+        }
+      } catch (e) {
+        logger.warn({ err: e?.message }, '[R22-d] 视觉 section 锚点审计失败，跳过')
+      }
+
       try {
         const inlineRows = rebuildSectionsPreservingInlineRows(figmaData)
         if (inlineRows.length) {

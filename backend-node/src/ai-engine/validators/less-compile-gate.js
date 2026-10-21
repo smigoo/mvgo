@@ -685,7 +685,125 @@ export function scanStandaloneLessDefects(source = '') {
     })
   }
 
+  // ⑥ R20（2026-10-21 · 72ede0c9 实锤）：残留的伪类/伪元素选择器损坏 + `{` 后孤立分号。
+  //   healMangledPseudoSelectors 已先跑 ⇒ 走到这里仍残留的（跨行、@规则内等）属无法
+  //   确定性改写的形态 ⇒ 判坏不落盘。二者都是 less `Unrecognised input` 的硬死因。
+  //   判据域与 healer **同一实现口径**：只看「行内首个 `{` 之前的选择器部分」，
+  //   `;` 先出现即视为声明行（否则 `color: #fff` 会被误判）。
+  text.split('\n').forEach((line, index) => {
+    const t = line.trim()
+    if (!t || t.startsWith('@')) return
+    const brace = line.indexOf('{')
+    if (brace === -1) return
+    const head = line.slice(0, brace)
+    if (head.includes(';')) return
+    // ⚠️ 损坏形态必然含空白（`: :` / `: name`）⇒ 用 `\s+`；`\s*` 会误判合法 `::placeholder`
+    if (/:\s+:\s*[-A-Za-z]|:\s+[-A-Za-z]/.test(head)) {
+      defects.push({
+        id: 'LESS-WRITE-006',
+        line: index + 1,
+        message: `伪类/伪元素选择器被拆开（\`::\`→\`: :\` 或 \`:name\`→\`: name\`），less 必报 Unrecognised input：${t.slice(0, 80)}`,
+      })
+    }
+    if (/\{(\s*);/.test(line)) {
+      defects.push({
+        id: 'LESS-WRITE-006',
+        line: index + 1,
+        message: `\`{\` 后紧跟孤立 \`;\`（空声明起始），less 解析器拒收：${t.slice(0, 80)}`,
+      })
+    }
+  })
+
   return defects
+}
+
+/**
+ * 🛡️ R20（2026-10-21 · mc-max-1792553283427-72ede0c9 实锤）：**伪类/伪元素选择器损坏的确定性修复**。
+ *
+ * 背景（真机产物 `common.less:111 / :129`）：
+ *   ```
+ *   &: :-webkit-scrollbar {;      ← 伪元素双冒号被拆成「冒号 空格 冒号」
+ *   &: hover {                    ← 伪类被拆成「冒号 空格 名字」
+ *   ```
+ *   less 报 `Unrecognised input` ⇒ L0-B `LESS-COMPILE-001` ×6 ⇒ BLOCK=8 ⇒ 6 轮重试全败。
+ *   **而现有全部自愈器都看不见它**：`healLessSource` 只数 `{}` 与分号，圆括号族只数
+ *   `()`，伪类选择器的损坏对它们完全透明 —— 对这份文件 `healLessSource` 返回
+ *   `changed:false`（假绿：自愈器认为文件是好的，编译却必败）。
+ *
+ * 三种损坏形态：
+ *   ① `: :name`（伪元素的 `::` 被拆成两个冒号 + 空白）
+ *   ② `: <name>`（伪类的 `:name` 被拆成冒号 + 空白 + 名字；**这是声明形态**，极易误伤）
+ *   ③ `{` 紧跟一个孤立 `;`（`{;`）⇒ 空声明
+ *
+ * 🔴 判据域：**只在「选择器部分」改写**（行内第一个 `{` 之前），声明部分一律不动
+ *   ⇒ `color: #fff` / `background: linear-gradient(...)` / `transition: color .2s`
+ *   天然不受影响。`@media (min-width: 768px) {` 等 @规则行整体跳过。
+ *
+ * 🔴 ① 的正确展开必须**按名字分类**，不能一律补成 `::`：
+ *   `&: :hover` 的本意是伪类 `&:hover`（单冒号），`&: :-webkit-scrollbar` 才是伪元素
+ *   `&::-webkit-scrollbar`（双冒号）。一律补双冒号会把 hover 变成不存在的伪元素
+ *   （选择器永不匹配 ⇒ **样式静默消失**，比编译失败更难查）。
+ *
+ * 幂等：修后不再存在这三种形态（由 `scanStandaloneLessDefects` 的 LESS-WRITE-006 复检）。
+ *
+ * @param {string} source
+ * @returns {{source: string, fixedPseudo: number, fixedStraySemi: number, changed: boolean}}
+ */
+const PSEUDO_ELEMENTS = new Set([
+  'before', 'after', 'first-line', 'first-letter', 'selection', 'placeholder',
+  'backdrop', 'marker', 'file-selector-button', 'cue', 'grammar-error', 'spelling-error',
+  'target-text', 'highlight', 'part', 'slotted', 'file-selector-button',
+  '-webkit-scrollbar', '-webkit-scrollbar-thumb', '-webkit-scrollbar-track',
+  '-webkit-scrollbar-button', '-webkit-scrollbar-corner', '-webkit-input-placeholder',
+  '-webkit-file-upload-button', '-webkit-slider-thumb', '-webkit-slider-runnable-track',
+  '-moz-placeholder', '-ms-input-placeholder', '-moz-selection', '-ms-clear',
+])
+
+export function healMangledPseudoSelectors(source = '') {
+  const src = String(source || '')
+  let fixedPseudo = 0
+  let fixedStraySemi = 0
+
+  const normalizeSelectorPart = (sel) => sel.replace(
+    // ⚠️ 两种损坏形态都**必然含空白**（`: :` / `: name`）⇒ 空白用 `\s+` 而非 `\s*`。
+    //   用 `\s*` 会把**合法的** `::placeholder` / `:hover` 也当成损坏（实测误报，
+    //   连带 `gateStandaloneLessWrite` 把干净文件判死）。
+    // 名字允许以 `-` 开头：`-webkit-scrollbar` / `-moz-placeholder` / `-ms-clear`
+    /:\s+:\s*([-A-Za-z][\w-]*)|:\s+([-A-Za-z][\w-]*)/g,
+    (m, dbl, sgl) => {
+      fixedPseudo += 1
+      const name = dbl || sgl
+      // 双冒号形态：按名单判定；单冒号形态恒为伪类
+      return dbl && PSEUDO_ELEMENTS.has(name) ? `::${name}` : `:${name}`
+    },
+  )
+
+  const lines = src.split('\n')
+  const out = lines.map((line) => {
+    const t = line.trim()
+    if (!t) return line
+    if (t.startsWith('@')) return line // @media / @supports 等 @规则行不参与
+    const brace = line.indexOf('{')
+    if (brace === -1) return line // 无块起始 ⇒ 纯声明/纯文本行，不动
+    const head = line.slice(0, brace)
+    if (head.includes(';')) return line // `;` 已出现 ⇒ `{` 之前是声明，属声明行
+    const fixedHead = normalizeSelectorPart(head)
+    return fixedHead + line.slice(brace)
+  })
+  let result = out.join('\n')
+
+  // ③ `{` 后紧邻孤立 `;` → 删除（仅当 `;` 与 `{` 之间只有空白）
+  result = result.replace(/\{(\s*);/g, (m, ws) => {
+    fixedStraySemi += 1
+    return `{${ws}`
+  })
+
+  return {
+    source: result,
+    fixedPseudo,
+    fixedStraySemi,
+    changed: result !== src,
+  }
 }
 
 /**
@@ -828,6 +946,16 @@ export function gateStandaloneLessWrite(source = '', filePath = '') {
   if (missingParens.changed) {
     content = missingParens.source
     fixes.push(`heal(missing-paren:${missingParens.added})`)
+  }
+
+  // 🛡️ R20（2026-10-21 · 72ede0c9 实锤）：伪元素选择器损坏（`::`→`: :`）与 `{;` 孤立分号。
+  //   此前是全链**无自愈出口**的缺陷：`healLessSource` 只数 `{}`/分号、圆括号族只数 `()`，
+  //   对这份文件返回 changed:false（假绿），less 编译必败 ⇒ L0-B 重试 6 轮全败。
+  //   放在圆括号族之后：先让结构完整，再做选择器级纠正。
+  const pseudo = healMangledPseudoSelectors(content)
+  if (pseudo.changed) {
+    content = pseudo.source
+    fixes.push(`heal(pseudo:${pseudo.fixedPseudo},stray-semi:${pseudo.fixedStraySemi})`)
   }
 
   // 🛡️ 2026-10-19（c-a579d-6a579df0 实锤）：独立样式走全局 CSS 注入，`:deep(...)`

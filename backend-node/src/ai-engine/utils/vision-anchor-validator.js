@@ -18,8 +18,9 @@
  * 纯函数、零依赖（不 import logger，日志由调用方按返回值打），单测直测。
  */
 
-/** Figma 节点 id 形态（`210:45641`） */
-const FIGMA_ID_RX = /^\d+:\d+$/
+// 🔴 单一来源：Figma 节点 id 形态集中在 `section-anchor-truth#FIGMA_ID_RE`
+//   （同一正则在 validator / inline-row-merger / anchor-truth 各写一份 = 判据副本，见 memory 副本纪律）
+import { FIGMA_ID_RE as FIGMA_ID_RX } from './section-anchor-truth.js'
 
 /** 诊断明细上限（防臆造风暴撑爆 visual.json） */
 const MAX_INVALID_DETAIL = 30

@@ -67,6 +67,10 @@ import { checkSectionTruthCoverage } from '../utils/section-content-guard.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
 import { detectUnknownText, resolveTextTruthSeverity, collectFigmaTextRuns } from '../utils/text-truth-guard.js';
+// 🛡️ R19（2026-10-21 · c-bb8-304bb8d3 实锤）：行内多段文字样式的**落位**判据。
+//   与 `collectFigmaTextRuns`（文本集合，管「有没有」）职责不同、不可合并：
+//   本判据管「每段的 color/fontSize/fontWeight 是否落在对的元素上」。
+import { detectRichTextRunIssues } from '../utils/rich-text-run-guard.js';
 import { extractTextSlots } from '../utils/section-leaf-assembler.js';
 // 🛡️ THEME-COLOR（2026-09-04）：样式主题变量化门禁 —— 事实源在 theme-color-guard.js
 // （槽位色值抄写/预设名本地重声明 → BLOCK；设计专色 → WARN。mc-max-1788485095835 实锤）
@@ -760,6 +764,8 @@ export class CodeStructureValidator {
     let layoutDirectionStats = null;
     // 📐 T3 v-for 列表方向守卫运行统计（可达性留痕）
     let vforDirectionStats = null;
+    // 📐 RICH-TEXT 行内多段样式判据统计（可达性留痕：judged=0 时说明真值不可达而非"全对"）
+    let richTextRunStats = null;
 
     // 🛡️ R5: L0-B 空集不得 pass=true（此前空产物恒 pass，绿灯直达发布阶段，
     // 直到 workspace-preview-publisher 才回滚「缺少 package/index.vue」）
@@ -2673,6 +2679,54 @@ export class CodeStructureValidator {
           severity: 'WARN',
           file: '(text-coverage)',
           message: `真值文本覆盖率检测异常（非阻断）：${err?.message || String(err)}`,
+        });
+      }
+    }
+
+    // ========== 🛡️ RICH-TEXT-001/002 行内多段样式落位（2026-10-21 建立 · WARN 观察轮）==========
+    // 事故 c-bb8-304bb8d3：三个同构 section 的 chip 真值「name #333333 + count 段色」，
+    //   产物三套写法各不相同且都错（语义推断补位 / 色塞进恒假的 `&--active` / 跨段串色），
+    //   而 TEXT-TRUTH / TEXT-COVERAGE / truth-color-usage-guard **全部零覆盖**
+    //   （前者只判字符串在不在，后者只判色值有没有出现在子树，都不判「落在哪个 span」）。
+    // 判据（真值源 = text-runs，零图层名参与）：
+    //   · RICH-TEXT-001：某段色在产物全部文件的颜色语料里零出现 ⇒ 该段色必然没落地；
+    //   · RICH-TEXT-002：多段文本以整行字面量挤在同一元素内 ⇒ 结构被压平。
+    //   ⚠️ 严重级本轮统一 **WARN**（不 BLOCK）。理由与 LAYOUT-001 本轮降级同口径：
+    //     换新判据面需真机 A/B 观察误报率；且 BLOCK 会触发 L0-B 重试，多轮全败后
+    //     `file-writer` 兜底模板会**整份覆盖**合格样式（L477 事故形态，比"色不准"更糟）。
+    //     观察期后再按误报率决定是否升级。
+    // ⚠️ 用 `productFiles`（全量产物）：增量校验时 files 是子集，真值行会大面积"缺色"误报。
+    if (options?.figmaNodeData) {
+      try {
+        const rtFiles = Object.create(null);
+        for (const f of productFiles) {
+          if (f && typeof f.path === 'string' && typeof f.content === 'string') {
+            rtFiles[f.path] = f.content;
+          }
+        }
+        const rt = detectRichTextRunIssues(rtFiles, { figmaRoot: options.figmaNodeData });
+        richTextRunStats = rt.stats;
+        for (const it of rt.issues) {
+          issues.push({
+            id: it.id,
+            severity: 'WARN',
+            file: '(rich-text-run-guard)',
+            message:
+              `${it.detail}。要求：一行 N 段 ⇒ 同一父元素下 N 个并列元素（各一个 span），` +
+              `每段的 color / font-size / font-weight 直写在自身；禁止合并成单元素、` +
+              `禁止给整行套单一颜色、禁止挂到初始数据不成立的条件类（如 --active）。`,
+            hint: {
+              suggestion:
+                '按 Figma 真值把该行拆成逐段元素并各自写色/字号/字重；颜色值原样使用，不要换成语义变量近似值',
+            },
+          });
+        }
+      } catch (err) {
+        issues.push({
+          id: 'RICH-TEXT-ERROR',
+          severity: 'WARN',
+          file: '(rich-text-run-guard)',
+          message: `行内多段样式判据执行异常（非阻断）：${err?.message || String(err)}`,
         });
       }
     }

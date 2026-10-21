@@ -241,7 +241,11 @@ export function detectVForListDirectionMismatch(files, layoutStructure, opts = {
 
     for (const { item, parent: wrapperTag, wrapperIsHost } of pairs) {
       // ① item 方向：**无原型真值 ⇒ 不判**（段是集合时 `layout` 是集合排布，不是单元内部）
-      const itemActual = itemTruth.direction ? resolveActualDirection(item, corpus) : null
+      // 🛡️ F16-b：开启「无任何方向声明 ⇒ 按块级默认 block 视为 column」，
+      //   否则 `display:flex` 出现 0 次的列表容器会落进 skippedNoActual 被静默放过。
+      const itemActual = itemTruth.direction
+        ? resolveActualDirection(item, corpus, { inferDefaultBlock: true })
+        : null
       const itemKinds = directionKindsOf(itemActual)
       if (!itemTruth.direction || itemTruth.isGrid) {
         stats.skippedNoTruth += 1
@@ -279,7 +283,7 @@ export function detectVForListDirectionMismatch(files, layoutStructure, opts = {
         stats.skippedWrapperNotHost += 1
         continue
       }
-      const wrapperActual = resolveActualDirection(wrapperTag, corpus)
+      const wrapperActual = resolveActualDirection(wrapperTag, corpus, { inferDefaultBlock: true })
       const wrapperKinds = directionKindsOf(wrapperActual)
       if (!wrapperActual || wrapperActual.kind === 'grid') {
         stats.skippedNoActual += 1
@@ -382,6 +386,44 @@ export function healVForListDirection(files, issues = []) {
         list[i] = { ...f, content: next }
         done = true
         healed.push({ id: it?.id, file: path, class: cls, to: hint.expected, occurrences: fileHits })
+      }
+    }
+    if (!done) {
+      // 🛡️ F16-c（2026-10-21 · c-c8d-195c8d0e 实锤）：**整块都没有 `flex-direction`**
+      //   （`ListList.vue` / `ListList2.vue` 通篇 `display:flex` 出现 0 次）⇒ 翻转无从下手。
+      //   治本：在该 class 规则块首注入 `display:flex; flex-direction:<expected>`。
+      //   只在 class 规则**确实存在**时注入；规则本身不存在 ⇒ 仍判 failed（不凭空造选择器）。
+      const esc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const reInj = new RegExp(`(\\.${esc}(?![\\w-])\\s*\\{)([^{}]*)`, 'g')
+      for (let i = 0; i < list.length; i++) {
+        const f = list[i]
+        const path = String(f?.path || '')
+        if (!/\.(less|css|vue)$/i.test(path)) continue
+        const src = String(f.content || '')
+        let fileHits = 0
+        reInj.lastIndex = 0
+        const next = src.replace(reInj, (m0, head, body) => {
+          // 已有 display:flex ⇒ 只需补方向（保持幂等，不重复注入）
+          if (/display\s*:\s*(inline-)?flex/i.test(body)) {
+            if (/flex-direction\s*:/i.test(body)) return m0
+            fileHits++
+            return `${head} flex-direction: ${hint.expected};${body}`
+          }
+          fileHits++
+          return `${head} display: flex; flex-direction: ${hint.expected};${body}`
+        })
+        if (next !== src) {
+          list[i] = { ...f, content: next }
+          done = true
+          healed.push({
+            id: it?.id,
+            file: path,
+            class: cls,
+            to: hint.expected,
+            occurrences: fileHits,
+            mode: 'inject-display-flex',
+          })
+        }
       }
     }
     if (!done) failed.push({ id: it?.id, class: cls, reason: 'class-rule-not-found' })

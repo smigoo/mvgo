@@ -504,22 +504,122 @@ function applyPxSizeToImgTag(tag, size) {
  * 但未带 figmaBox 像素尺寸（常配 `width/height:100%` + 无界父容器）→ 图标被撑成整面板。
  * 不另插 auto-mounted-icon，只给已有 img 装配 width/height px。已有 px 尺寸则幂等跳过。
  *
- * @returns {{ content: string, patched: boolean }}
+ * 🛡️ 刀 39（2026-10-21 · mc-max-1792563165341-e3ab048a 实锤）：**同一判据必须覆盖
+ * `backgroundImage` 形态**。实证 `ContentIcon.vue`：
+ *   `<div data-section-id="187:262" :style="{ backgroundImage: `url(${icon2})`,
+ *     backgroundSize: '100% 100%', … }">` + `.c-icon{width:100%;height:100%}`
+ * 而真值 `187:262` = 53 × 55.45（mapping.figmaBox）。旧实现正则只认 `:src="${varName}"`
+ * ⇒ 该分支 `patched=false` ⇒ 调用方 `doneKeys.add(key); continue;` **静默放弃**，
+ * 图标被百分比拉伸变形（53×55 → 265×76 卡片大小的框里 100% 100% 铺满）。
+ *
+ * 判据（与 `<img>` 分支同构，不新增第二套逻辑）：
+ *   ① 标签里某 `backgroundImage` 值的引用标识符 === varName；
+ *   ② 该标签的 `backgroundSize` 不是「两个 px 值」（`100% 100%` / `cover` / 缺失都算不合格）；
+ *   ⇒ 改写为真值像素 `${w}px ${h}px`；无该键则在 `backgroundImage` 值后补一个。
+ *
+ * @returns {{ content: string, patched: boolean, mode: 'img'|'bg'|null }}
  */
 export function ensureReferencedIconSize(content, varName, size) {
   if (!content || !varName || !size || Number(size.width) <= 0 || Number(size.height) <= 0) {
-    return { content, patched: false };
+    return { content, patched: false, mode: null };
   }
   const srcRe = new RegExp(`:src\\s*=\\s*["']${varName}["']`);
   const imgRe = /<img\b[^>]*>/gi;
   let patched = false;
-  const next = content.replace(imgRe, (tag) => {
+  let next = content.replace(imgRe, (tag) => {
     if (!srcRe.test(tag)) return tag;
     if (imgTagHasPxSize(tag)) return tag;
     patched = true;
     return applyPxSizeToImgTag(tag, size);
   });
-  return { content: next, patched };
+  if (patched) return { content: next, patched: true, mode: 'img' };
+
+  // 🛡️ 刀 39：`backgroundImage` 形态（LLM 常把图标写成背景图而不是 <img>）
+  const bgTagRe = /<([a-zA-Z][\w-]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
+  let bgPatched = false;
+  next = next.replace(bgTagRe, (tag) => {
+    if (!/\bbackground-?[Ii]mage\b/.test(tag)) return tag;
+    const ref = extractBgImageRef(extractBgImageFragment(tag) || '');
+    if (ref.kind !== 'var' || ref.name !== varName) return tag;
+    if (bgTagHasPxSize(tag)) return tag;
+    const replaced = applyPxSizeToBgImageTag(tag, size);
+    if (replaced === tag) return tag;
+    bgPatched = true;
+    return replaced;
+  });
+  return { content: next, patched: bgPatched, mode: bgPatched ? 'bg' : null };
+}
+
+/** 该标签的 backgroundSize 是否已是「两个 px 值」（即已是真值尺寸形态） */
+function bgTagHasPxSize(tag) {
+  const m = /background-?[Ss]ize\s*:\s*(['"]?)([^'",;}]*)['"]?/.exec(tag || '');
+  if (!m) return false;
+  return /\d+(?:\.\d+)?px\s+\d+(?:\.\d+)?px/.test(m[2] || '');
+}
+
+/**
+ * 把真值像素尺寸写进 `backgroundImage` 形态的标签：
+ *   · 已有 `backgroundSize` 键 ⇒ 替换其值（保留原键名大小写）；
+ *   · 无该键 ⇒ 对象写法（`:style="{ … }"`）在 `backgroundImage` 值后插入一项；
+ *     原生 style 字符串写法则在末尾追加 `;background-size:Wpx Hpx`；
+ *   · 定位不到插入点 ⇒ 原样返回（调用方据此判定未修补，fail-open）。
+ */
+function applyPxSizeToBgImageTag(tag, size) {
+  const w = Math.round(Number(size.width));
+  const h = Math.round(Number(size.height));
+  const px = `${w}px ${h}px`;
+
+  const sizeRe = /(background-?[Ss]ize\s*:\s*)(['"])([^'"]*)\2/;
+  const m = sizeRe.exec(tag);
+  if (m) return tag.replace(m[0], `${m[1]}${m[2]}${px}${m[2]}`);
+
+  // 对象写法：`:style="{ backgroundImage: …, … }"` —— 在 backgroundImage 值结束后插一项
+  if (/:style\s*=\s*"\{|v-bind:style\s*=\s*"\{/.test(tag)) {
+    const keyM = /background-?[Ii]mage\s*:\s*/.exec(tag);
+    if (!keyM) return tag;
+    const valStart = keyM.index + keyM[0].length;
+    let depth = 0;
+    let inStr = null;
+    let end = -1;
+    for (let i = valStart; i < tag.length; i++) {
+      const ch = tag[i];
+      if (inStr) {
+        if (ch === inStr && tag[i - 1] !== '\\') inStr = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') {
+        inStr = ch;
+        continue;
+      }
+      if (ch === '(' || ch === '[' || ch === '{') {
+        depth++;
+        continue;
+      }
+      if (ch === ')' || ch === ']') {
+        depth--;
+        continue;
+      }
+      if (ch === '}' && depth === 0) {
+        end = i;
+        break;
+      }
+      if (ch === ',' && depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    if (end < 0) return tag;
+    return `${tag.slice(0, end)}, backgroundSize: '${px}'${tag.slice(end)}`;
+  }
+
+  // 原生 style 字符串写法
+  if (/\bstyle\s*=\s*"/.test(tag)) {
+    return tag.replace(/\bstyle\s*=\s*"([^"]*)"/, (_m, s) => {
+      const body = String(s).replace(/[;\s]+$/, '');
+      return `style="${body ? `${body};` : ''}background-size:${px}"`;
+    });
+  }
+  return tag;
 }
 
 /**

@@ -1071,19 +1071,32 @@ ${keys.map((k) => `@import './themes/${k}.less';`).join('\n')}
   //   ⇒ 只在根调`.theme-<default>()` 是不够的：**其余主题 mixin 里的变量也得在根可见**。
   //
   //   正解：根作用域依次调用**全部**主题 mixin，使它们的变量对 common.less 可见。
-  //   顺序要求：`dark` 放**最后**（它是 M4-10 枚举兜底，不能盖掉默认主题的设计真值）。
+  //
+  // 🔴🔴 R21（2026-10-21 · c-a6c6fb-a6c6fbd3 实锤，**实测推翻了一个错误直觉**）：
+  //   **LESS 里「mixin 注入的变量」是「先调用者胜出」，不是后者覆盖前者。**
+  //   实测（less 4.x 真编译）：
+  //     · 普通重复赋值 `@c:#000; @c:#fff;`          ⇒ 后者胜出 (#fff)
+  //     · mixin 调用  `.m1(); .m2();`（两者都定义 @c）⇒ **先调用者胜出**（.m1 的值）
+  //   两者语义**相反**，极易混淆 —— 曾据此误判「dark 放最后会盖掉默认主题」，
+  //   实测证明恰恰相反：把 dark 放最后，根作用域仍是**第一个**被调用主题的值。
+  //
+  //   ⇒ 不变式：**默认主题必须最先调用**（紧随 `.common()`），其余主题随后补齐
+  //     （只为让其变量在根可见，不覆盖已定义的）。顺序若被"改成默认收尾"，
+  //     root 会变成**其它主题**的值（浅色稿渲染成深色）。
+  //   回归护栏：`style-tokens.root-theme-order.spec.ts`（含真编译阴性/阳性对照）。
   const _otherThemeCalls = [
     ...keys.filter((k) => k !== defaultTheme && k !== 'dark').map((k) => `.theme-${k}();`),
     ...(keys.includes('dark') ? ['.theme-dark();'] : []),
   ]
   const _rootScopeFallbacks = _otherThemeCalls.length
-    ? `\n// 其余主题：仅为让其变量在根作用域可见（Less mixin 不泄漏变量），供common.less 引用\n${_otherThemeCalls.join('\n')}\n`
+    ? `\n// 其余主题：仅为让其变量在根作用域可见（Less mixin 不泄漏变量），供 common.less 引用。\n// ⚠️ 它们**不会**覆盖上面已注入的变量（mixin 注入 = 先调用者胜出）\n${_otherThemeCalls.join('\n')}\n`
     : ''
 
   return `// 样式入口（系统自动生成，勿手改）
 @import './themes/theme-vars.less';
 
 // 默认主题：必须在**根作用域**生效，否则组件在无主题类祖先的真实 DOM 上样式全部失效
+// 🔴 必须是**第一个**被调用的主题（mixin 注入 = 先调用者胜出，后调的不会覆盖它）
 .common();
 .theme-${defaultTheme}();
 ${_rootScopeFallbacks}

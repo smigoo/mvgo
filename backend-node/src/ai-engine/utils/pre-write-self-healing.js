@@ -20,6 +20,7 @@ import {
   pruneUnmountedResourceImports,
   stripResourceValueMisuse,
   stripResourceWriteback,
+  healImgSrcBindings,
 } from './resource-import-guard.js';
 import {
   normalizeFlexSourceConflicts,
@@ -39,6 +40,18 @@ import { pruneDuplicateStyleDeclsFromShared } from './style-dedup-guard.js';
 //   v-if="false" 占位元素（治 TECHSTACK-NOT-RENDERED 根因：07b4d2a5 实锤 6 个 antd 组件未渲染）。
 import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
 import { healStructuralTruth } from './structural-truth-healers.js';
+import { healContainerBackgroundTruth } from './container-background-truth.js';
+import { healPanelChromeMisplacement } from './panel-chrome-misplacement.js';
+import { healBorderWithoutStrokes } from './border-without-strokes.js';
+// 🛡️ 刀 40（2026-10-21）：同一规则块内同属性重复声明消歧（`display: grid` 被同块后写的
+//   `display: flex` 覆盖 ⇒ 折叠列表纵向单列散架）。只消歧、不修视觉。
+import { dedupeDuplicateDeclsInBlocks } from './block-duplicate-decl-guard.js';
+// 🛡️ 刀 41（2026-10-21）：折叠网格「布局契约」判据 + 自愈（检测与自愈同一实现）。
+//   治「grid 段方向/卡宽/间距没人管 ⇒ 两轮真机方向正好互换」（T3 对 isGrid 直接跳过）。
+import {
+  detectGridListLayoutIssues,
+  healGridListLayout,
+} from './grid-list-layout-contract.js';
 // 🛡️ 刀 25/26（2026-10-12）：LLM「压缩残片」格式损坏自愈——LESS 连续相同 `声明;}` 残片归一
 //   （治 .c-cba840-form 被提前闭合获得 display:flex → 表单横向排列）+ script 独行逗号删除
 //   （治 [vue/compiler-sfc] Unexpected token：mc-max-1791779417789-cba8407d 实锤）。
@@ -226,6 +239,19 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     flex003: 0,
     flex005: 0,
     bgStyleComplete: 0,
+    imgSrcBackfilled: 0,
+    // 刀 38 / 刀 40（2026-10-21）：显式初始化 —— 下游若按固定形状序列化 summary，
+    // 动态赋值的键会因「条件命中才出现」而缺字段（记忆铁律：加新字段必查下游消费）。
+    borderWithoutStrokes: 0,
+    blockDuplicateDecls: 0,
+    gridContractHealed: 0,
+    gridContractFailed: 0,
+    gridContractResidual: 0,
+    // 刀 42（2026-10-21）：面板三件套（底色/圆角/外发光）自愈计数
+    containerBackground: 0,
+    containerPanelRadius: 0,
+    containerPanelGlow: 0,
+    panelChromeMisplaced: 0,
   };
 
   // ① 资源 import 终验兜底注入（幂等只补缺失，绝不删已有）。
@@ -253,6 +279,35 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       result[fp] = ensured;
       summary.runtimeImport++;
       logger?.info?.('🛡️ 运行库 import 兜底补齐（落盘前）', { file: fp });
+    }
+  }
+
+  // ②-b 刀 31 / L3-c（2026-10-21 · c-c8d-195c8d0e 实锤「4 个图标位置全空白」）：
+  //   `<img v-if="icon4" class="..." alt="" />` —— 变量被 `v-if` 引用 ⇒ `isResourceVarMounted`
+  //   判「已挂载」⇒ CODE-022 不报、prune 不删，**全链没有任何一处**要求「引用必须落在 `:src` 上」
+  //   ⇒ 渲染出空 `<img>`。这里按资源变量确定性回填 `:src`。
+  //   判据（与 `findImgSrcBindingGaps` 同一实现）：本文件 import 过 + 标签属性出现该变量
+  //   + 标签无 src + 标签内仅 1 个候选变量。
+  //   必须排在 ③（CODE-022 剪枝）之前：先补 `:src` 再判「未挂载」，语义顺序才对。
+  if (Array.isArray(mapping) && mapping.length > 0) {
+    for (const [fp, fc] of Object.entries(result)) {
+      if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+      try {
+        const r = healImgSrcBindings(fc, mapping);
+        if (r.changed) {
+          result[fp] = r.content;
+          summary.imgSrcBackfilled += r.healed.length;
+          logger?.warn?.('🛡️ L3-c 修复：<img> 缺 :src 已按资源变量回填', {
+            file: fp,
+            healed: r.healed,
+          });
+        }
+      } catch (err) {
+        logger?.warn?.('🛡️ L3-c 修复器异常（非阻断）', {
+          file: fp,
+          error: err?.message || String(err),
+        });
+      }
     }
   }
 
@@ -978,6 +1033,12 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     if (st.summary.slotDupRender > 0) {
       summary.slotDupRender = st.summary.slotDupRender;
     }
+    if (st.summary.selfNestedCollapse > 0) {
+      summary.selfNestedCollapse = st.summary.selfNestedCollapse;
+      logger?.warn?.('🛡️ 刀 36：父容器自嵌套双重渲染已折叠', {
+        count: st.summary.selfNestedCollapse,
+      });
+    }
     if (st.summary.details?.length > 0) {
       summary.structuralTruthDetails = st.summary.details;
     }
@@ -985,6 +1046,143 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     logger?.warn?.('🛡️ 刀 32/33/34 结构真值三刀异常（fail-open）', {
       error: err?.message || String(err),
     });
+  }
+
+  // ⑮ 刀 37 + 刀 42（2026-10-21 · 07ae49a2 / mc-1792580653375-60212fb6 实锤）：容器面板真值纠偏。
+  //   刀 37 病灶：卡 2 的 class 背景写成 `@color-border-yellow` —— 那是**战略合作厂商面板**的底色
+  //   （rgba(226,208,132,.2)），而卡 2 真值 bg 层与卡 1 是同一条水平蓝渐变 ⇒ 一卡淡蓝一卡淡黄。
+  //     判据：色值反查归属（「背景值 == 另一个 section 的背景真值」= 借用他人背景）+ 渐变缺失。
+  //   刀 42 病灶：三段面板容器（38:3137/3162/3206，class `c-60212f-container`）的 inline 只有
+  //   `flex/min-height/display`、class 也只有 `display:flex;width:100%` ⇒ **底色/圆角/外发光
+  //   三件全丢**（用户反馈「三个 section 依旧没有统一样式」）。旧实现「纯色未声明 ⇒ 交主题
+  //   变量」在该层**根本没有槽位**，等于永远不补。现按面板底矩形真值补三件套。
+  //   详 src/ai-engine/utils/container-background-truth.js。
+  try {
+    const bg = healContainerBackgroundTruth(result, { figmaRoot });
+    result = bg.files;
+    if (bg.changes.length > 0) {
+      summary.containerBackground = bg.changes.length;
+      const radiusCount = bg.changes.filter((c) => c.radius != null).length;
+      const glowCount = bg.changes.filter((c) => c.shadow != null).length;
+      if (radiusCount > 0) summary.containerPanelRadius = radiusCount;
+      if (glowCount > 0) summary.containerPanelGlow = glowCount;
+      logger?.warn?.('🛡️ 刀 37/42：容器面板底色/圆角/外发光按 figma 面板底真值补齐/纠偏', {
+        changes: bg.changes,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 37/42 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ⑮-b 刀 42-B（2026-10-21 · mc-1792580653375-60212fb6 实锤）：面板装饰误置到子元素 ⇒ 移除。
+  //   病灶：面板底的三件套（底色 @color-bg-vendor-gold/mint、r12、inset 发光）被写进了
+  //   **标题行**的 class（`.c-60212f-header-text{2,3}`），面板容器本身空白 ⇒ 三段各画成
+  //   一条黄条 / 一块绿砖 / 半截青条（用户：「三个 section 依旧没有统一样式」）。
+  //   判据：元素自身无面板底真值 ∧ 声明了「圆角 R + 发光」∧ 存在**唯一** section 其面板真值
+  //   半径 == R 且发光 RGB 相同 ⇒ 该装饰属于那个面板 ⇒ 从本元素删除三件套。
+  //   详 src/ai-engine/utils/panel-chrome-misplacement.js。
+  try {
+    const pc = healPanelChromeMisplacement(result, { figmaRoot });
+    result = pc.files;
+    if (pc.changes.length > 0) {
+      summary.panelChromeMisplaced = pc.changes.length;
+      logger?.warn?.('🛡️ 刀 42-B：面板装饰（底色/圆角/外发光）误置于子元素，已移除', {
+        changes: pc.changes,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 42-B 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ⑯ 刀 38（2026-10-21 · e3ab048a 实锤）：真值无描边 ⇒ 产物不得有边框。
+  //   病灶：统计卡 1（38:3260，class `.c-e3ab04-stats-con`）写成 `border:1px solid #a0c1ff`
+  //   + `border-radius:4px`，而真值 `strokes=[]`、`#a0c1ff` 全树不存在；同一张卡 2 因走
+  //   刀 37 的「背景缺失」分支被修对 ⇒ 同系列两卡一有框一无框。
+  //   判据：strokes 为空/全隐 ⇒ 删该 section 的 inline 与**独占 class** 的 border/outline；
+  //   `border-radius`（圆角）与 `box-shadow`（figma INNER_SHADOW 真值）一律保留。
+  //   详 src/ai-engine/utils/border-without-strokes.js。
+  try {
+    const bd = healBorderWithoutStrokes(result, { figmaRoot });
+    result = bd.files;
+    if (bd.changes.length > 0) {
+      summary.borderWithoutStrokes = bd.changes.length;
+      logger?.warn?.('🛡️ 刀 38：真值无描边却有边框，已按 figma strokes 真值删除', {
+        changes: bd.changes,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 38 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ⑰ 刀 40（2026-10-21 · mc-1792575046720-2c0767be 实锤）：同一规则块内同属性重复声明消歧。
+  //   病灶：`.c-component-card-grid-list`（common.less:15）同一块内先 `display: grid`
+  //   后 `display: flex` + `flex-direction: column` ⇒ 折叠列表 12 张卡纵向单列堆叠，
+  //   厂商名全在却看起来像「完全没修」。
+  //   判据：同块同属性声明 ≥2 次、值不相等、且**不属合法渐进增强**
+  //   （厂商前缀值 / var()/env() 回退 / !important 混存 / 纯色+渐变双层）⇒ 删前面留最后
+  //   （= 浏览器实际生效值，渲染结果不变，只消除歧义）。
+  //   ⚠️ 本刀**不修视觉**：「折叠段容器必须横向网格」是另一条布局契约判据，混进来就不可证伪。
+  //   详 src/ai-engine/utils/block-duplicate-decl-guard.js。
+  try {
+    const dp = dedupeDuplicateDeclsInBlocks(result);
+    result = dp.files;
+    if (dp.changes.length > 0) {
+      summary.blockDuplicateDecls = dp.changes.length;
+      logger?.warn?.('🛡️ 刀 40：同一规则块内同属性重复声明，已按「后写者胜」消歧', {
+        changes: dp.changes,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 40 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ⑱ 刀 41（2026-10-21 · mc-1792578497809-3a5bb639 实锤）：折叠网格「布局契约」确定性自愈。
+  //   病灶：三段真值完全同构（4 列 × 126×30、列距 20、行距 20），产物却是三套实现，且两轮真机
+  //   跑出来方向**正好互换**（优质 row✅/普通 column❌ → 下一轮反过来）⇒ 方向不是「错」，是**没人管**。
+  //   既有三道判据全不覆盖：LAYOUT-001 只比「是不是 grid / 列数」，T3 方向守卫对 `isGrid`
+  //   直接 `continue`，刀 22-grid 只抓子项 `width: calc(N% …)`（本例是 `flex: 1 1 calc(…%)`）。
+  //   判据 = 纯几何（items[].absoluteBoundingBox 推卡片尺寸/列数/两轴间距），命名无关；
+  //   fail-open：单列（真纵向列表）/ x 不等距 / items<2 ⇒ 不判不改。
+  //   ⚠️ 自愈目标形态取 `display:grid; repeat(N, Wpx)`（非 flex）——LAYOUT-001 对 grid 段要求
+  //   `display:grid`，若改写成 flex 会把门禁转红（两段式铁律：门禁与自愈必须同一世界观）。
+  //   详 src/ai-engine/utils/grid-list-layout-contract.js。
+  try {
+    const sections = Array.isArray(effectiveSections) && effectiveSections.length > 0
+      ? effectiveSections
+      : (ctx?.layoutStructure?.layout?.sections || ctx?.layoutStructure?.sections || []);
+    if (Array.isArray(sections) && sections.length > 0) {
+      const fileArr = Object.entries(result).map(([path, content]) => ({ path, content }));
+      const det = detectGridListLayoutIssues(fileArr, { sections });
+      if (det.issues.length > 0) {
+        const healed = healGridListLayout(fileArr, det.issues);
+        for (const f of healed.files) {
+          if (typeof f.content === 'string' && result[f.path] !== f.content) {
+            result[f.path] = f.content;
+          }
+        }
+        summary.gridContractHealed = healed.healed.length;
+        summary.gridContractFailed = healed.failed.length;
+        logger?.warn?.('🛡️ 刀 41 自愈：折叠网格按几何契约确定性改写', {
+          issues: det.issues.map((i) => ({
+            sectionId: i.sectionId,
+            cls: i.wrapperClass,
+            codes: i.violations.map((v) => v.code),
+          })),
+          healed: healed.healed,
+          failed: healed.failed,
+        });
+        // 复检留痕（0 = 全愈；残留交回 WARN 门禁）
+        const recheck = detectGridListLayoutIssues(healed.files, { sections });
+        if (recheck.issues.length > 0) {
+          summary.gridContractResidual = recheck.issues.length;
+          logger?.warn?.('🛡️ 刀 41 复检残留（交回 WARN 门禁）', {
+            residual: recheck.issues.map((i) => `${i.sectionId}@${i.file}`),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 41 异常（fail-open）', { error: err?.message || String(err) });
   }
 
   return { files: result, summary };

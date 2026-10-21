@@ -4,6 +4,12 @@
  * 纯函数、无 import.meta，供 planner / prompt / COMP-001 / assembler 共用。
  */
 
+// 🛡️ 2026-10-21 刀 42：`effects → box-shadow` 收敛为**单一来源**。
+//   原先本文件内联了一份实现（prompt 下发用），而刀 42 的自愈链也需要同一份真值 ——
+//   两份实现必然漂移（记忆铁律：同判据 ≥2 份 = 事故温床）。差异只有颜色写法
+//   （本文件 alpha=1 时输出 hex，共享实现恒 rgba），二者被 normalizeCssColor 归一为同一 token。
+import { effectsToBoxShadow } from './figma-effects.js';
+
 export function isLayoutContainerSection(sec) {
   if (!sec || typeof sec !== 'object') return false
   if (sec.isLayoutContainer === true) return true
@@ -2171,7 +2177,9 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     // 🛡️ 深度保护：最多拆 2 层嵌套（depth 0=顶层 section、1=嵌套区块、2=内容卡片）。
     //   再往下（图标/文字/数字等原子元素）不再拆成 section，作为 item 保留。
     if (depth > 2) {
-      const leafKids = (parentNode.children || []).filter((c) => c && typeof c === 'object')
+      const leafKids = sortChildrenForReadingOrder(
+        (parentNode.children || []).filter((c) => c && typeof c === 'object'),
+      )
       return { sections: leafKids.map((c) => mapChildNode(c)), hasNested: false }
     }
     
@@ -2204,7 +2212,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       //   不是并列业务 section → 子节点 item 化，不递归成 section。
       //   非 header 容器（slot/con/内容区）才递归推导业务 section。
       const sub = isContentBlock
-        ? { sections: childKids.map((c) => mapChildNode(c)), hasNested: false }
+        ? { sections: sortChildrenForReadingOrder(childKids).map((c) => mapChildNode(c)), hasNested: false }
         : deriveNestedSections(child, depth + 1)
       
       // 🛡️ 2026-09-30 P0-1：容器才下发 gridColumns（叶子暂不下发；理由见 deriveChildGridColumns 注释——
@@ -2243,13 +2251,11 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     
     // 如果没有提升为 section 的子节点，回退到 mapChildNode 保留原始 children 结构
     if (nestedSections.length === 0) {
-      return { sections: directKids.map((c) => mapChildNode(c)), hasNested: false }
+      return { sections: sortChildrenForReadingOrder(directKids).map((c) => mapChildNode(c)), hasNested: false }
     }
 
-    // y 升序（视觉从上到下）
-    nestedSections.sort(
-      (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
-    )
+    // 阅读序（y → x，同 mapChildNode 口径：行内从左到右、跨行从上到下）
+    nestedSections.sort(compareReadingOrder)
 
     // 🛡️ 2026-10-20（#128 ⑦ · 84af4f8f 实锤）：横向并列兄弟检出。
     //   病灶：本函数恒按 y 排序兄弟 ⇒ 隐含「兄弟=纵向堆叠」假设。但设计稿常见
@@ -2303,6 +2309,12 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
         if (tid && !section.sourceNodeIds.includes(tid)) section.sourceNodeIds.push(tid)
         section.children.push(mapChildNode(t))
       }
+      // 🛡️ P2（2026-10-21 · 07ae49a2 实锤）：吸收是 **push 追加**，追加进来的裸 TEXT
+      //   （卡内 `33` / `合作厂商`）必然排到末尾 ⇒ 子项顺序 = 「已提升兄弟的 z-order + 追加的
+      //   孤儿文本」，与真值阅读序无关。下游据此写模板 ⇒ 「33 在上、合作厂商在下」。
+      //   治本：吸收完统一按阅读序（y → x）重排 —— 与 mapChildNode / nestedSections 同一比较器，
+      //   不新增判据、不改任何兄弟本身。
+      section.children = sortChildrenForReadingOrder(section.children)
     }
     // ③-b 独立段轨（头/中/尾真孤儿）
     //   全位化后 standalone 可能同时含头部与尾部孤儿（5ef650ff 实测）⇒ 先按 y 带聚类：
@@ -2372,9 +2384,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
           ...(mergedBox && mergedBox.height ? { figmaHeightPx: mergedBox.height } : {}),
         },
       })
-      nestedSections.sort(
-        (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
-      )
+      nestedSections.sort(compareReadingOrder)
     })
 
     // 🛡️ 图表居中 + 图例分两侧（2026-09-17 · 策略类型分布实锤）：识别
@@ -2413,7 +2423,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     
     // 🛡️ header 语义：标题区子节点 item 化；非 header 容器递归推导业务 section。
     const sub = isHeader
-      ? { sections: directKids.map((c) => mapChildNode(c)), hasNested: false }
+      ? { sections: sortChildrenForReadingOrder(directKids).map((c) => mapChildNode(c)), hasNested: false }
       : deriveNestedSections(child, 1)
     
     // 🛡️ 2026-09-30 P0-1：容器才下发 gridColumns（叶子暂不下发；理由见 deriveChildGridColumns 注释——
@@ -2447,10 +2457,8 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     })
   }
 
-  // y 升序（视觉从上到下）
-  sections.sort(
-    (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
-  )
+  // 阅读序（y → x；与子级同一口径）
+  sections.sort(compareReadingOrder)
 
   return {
     sections,
@@ -2594,12 +2602,46 @@ function deriveChildGridColumns(node, layoutFacts = null) {
   return Number.isFinite(n) && n >= 2 ? n : null
 }
 
+/**
+ * 🛡️ P2（2026-10-21 · 07ae49a2 实锤）：子节点按**阅读序**（y 优先、x 次之）排序后再映射。
+ *
+ * 事故形态：卡 38:3260 的真值子节点为 icon(51496) / `合作厂商` TEXT(51496) / `33` TEXT(51522)，
+ * 但 Figma `children` 是 **z-order（绘制序）**，`33` 排在 `合作厂商` 之前 ⇒ E1 派生的 children
+ * 顺序、prompt 里的子项清单、以及下游 LLM 写模板的顺序全部颠倒 ⇒ 产物「33 在上、合作厂商在下」。
+ *
+ * 判据：几何真值即阅读顺序 —— 行内（同 y）按 x 从左到右；跨行按 y 从上到下。
+ *   这正是网格 row-major、横向 flex-flow、纵向 flex-flow 三者共同的自然序，故**无需**先判容器方向。
+ * 缺 bbox 的节点保持相对原位置并排在末尾（稳定排序，不臆造几何）。
+ */
+function sortChildrenForReadingOrder(children = []) {
+  return children
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => compareReadingOrder(a.c, b.c) || a.i - b.i)
+    .map(({ c }) => c)
+}
+
+/**
+ * 阅读序比较器（y → x）：section-tree 内**唯一**几何排序口径。
+ * 供 E1 的 item 序（mapChildNode）与 section 序（deriveNestedSections）共用，避免两处各写一份。
+ * 缺 bbox 的一侧排末尾（不臆造几何）。
+ */
+export function compareReadingOrder(a, b) {
+  const ab = a?.absoluteBoundingBox || a?.figmaBox || {}
+  const bb = b?.absoluteBoundingBox || b?.figmaBox || {}
+  const ay = Number.isFinite(ab.y) ? Math.round(ab.y) : Number.MAX_SAFE_INTEGER
+  const by = Number.isFinite(bb.y) ? Math.round(bb.y) : Number.MAX_SAFE_INTEGER
+  if (ay !== by) return ay - by
+  const ax = Number.isFinite(ab.x) ? Math.round(ab.x) : Number.MAX_SAFE_INTEGER
+  const bx = Number.isFinite(bb.x) ? Math.round(bb.x) : Number.MAX_SAFE_INTEGER
+  return ax - bx
+}
+
 /** 子节点 → vision body.children 格式（递归保留嵌套结构，供下游 deriveSectionType/countElements 识别 tab/list/chart）。 */
 function mapChildNode(node, depth = 0) {
   if (!node || typeof node !== 'object') return null
   if (depth > 6) return null // 防御深度，避免超深节点树拖慢
   const box = node.absoluteBoundingBox || null
-  const kids = (node.children || [])
+  const kids = sortChildrenForReadingOrder(node.children || [])
     .map((c) => mapChildNode(c, depth + 1))
     .filter(Boolean)
   return {
@@ -2836,27 +2878,8 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
     // 🛡️ 2026-10-20 #133（477e185d 实锤）：面板底矩形常挂 INNER_SHADOW（内发光，
     //   金 #ffc800/绿 #35be52/青 #19b5ba blur=16）。旧实现只下发 bg/radius/border ⇒
     //   LLM 无从得知发光真值 ⇒ 产物零 box-shadow。合并进本真值行（纯增量不占新配额）。
-    const effectsToCss = (effects) => {
-      if (!Array.isArray(effects) || effects.length === 0) return null
-      const shadows = effects.filter(
-        (e) => e && e.visible !== false && /SHADOW/.test(String(e.type || '')),
-      )
-      if (shadows.length === 0) return null
-      return shadows
-        .map((e) => {
-          const inset = String(e.type).toUpperCase() === 'INNER_SHADOW' ? 'inset ' : ''
-          const c = rgbaToCss(e.color, e.color?.a)
-          if (!c) return null
-          const ox = Math.round(e.offset?.x || 0)
-          const oy = Math.round(e.offset?.y || 0)
-          const blur = Math.round(e.radius || 0)
-          const spread = Math.round(e.spread || 0)
-          return `${inset}${ox}px ${oy}px ${blur}px ${spread}px ${c}`
-        })
-        .filter(Boolean)
-        .join(', ')
-    }
-    const shadow = effectsToCss(first.effects) || effectsToCss(rawNode.effects)
+    //   2026-10-21 刀 42：实现收敛到 `figma-effects.js`（自愈链读的是同一份）。
+    const shadow = effectsToBoxShadow(first.effects) || effectsToBoxShadow(rawNode.effects)
     if (!bg && !border && !shadow) return null
     const radius = Number(first.cornerRadius) || 0
     const parts = []

@@ -4,6 +4,9 @@
  */
 
 import { inferBackgroundStyle } from './background-size-inference.js';
+// 🛡️ R19（2026-10-21）：文本 run 真值单一来源。下方 `extractPerCharTextTruth` 与
+//   `injectNodeLevelColorTruth` 一律委托本模块，**禁止再写第二套逐字符求值**。
+import { extractTextRuns, normalizeColor } from './text-runs.js';
 
 const COMPACT_CHART_RE = /(?:donut|ring|pie|gauge|radar|mini|small|compact|spark|仪表|环形|环图|小图)/i;
 
@@ -1655,6 +1658,13 @@ export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
  *   - 多样本聚合推断状态色：`(2/484)` 非 0 → 异常色；`(0/484)` 为 0 → 正常色。
  *   - 严格 fail-closed：无真值 / 结构不匹配 / 已装配过 → 零改动。
  *
+ * 🛡️ R19 分工（2026-10-21，**不是两套重复实现**）：
+ *   · 静态字面量形态（模板里就写着 `(2/484)`）→ `injectNodeLevelColorTruth`（P-12d）
+ *     按 run 边界直接拆 span，颜色/字号/字重随段写死；
+ *   · 运行时动态形态（模板里是 `{{ item.value }}`，值域随数据变）→ **本函数**，
+ *     因为静态拆段不可能，只能装配 helper 把"状态色语义"落到运行时。
+ *   两者判定域互斥（有无字面量），故不合并；但**颜色真值同源**（`utils/text-runs.js`）。
+ *
  * @param {Object<string,string>} files 产物文件表（原地更新 .vue）
  * @param {Array} perCharTruth extractPerCharTextTruth() 产出的分段真值
  * @returns {{applied: boolean, details: Object|null}}
@@ -1814,73 +1824,25 @@ export function extractPerCharTextTruth(figmaNodeData) {
   const out = [];
   if (!figmaNodeData || typeof figmaNodeData !== 'object') return out;
 
-  const rgba = (c) => {
-    if (!c) return null;
-    const r = Math.round((c.r || 0) * 255);
-    const g = Math.round((c.g || 0) * 255);
-    const b = Math.round((c.b || 0) * 255);
-    const a = typeof c.a === 'number' ? c.a : 1;
-    return a >= 0.999 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`;
-  };
-
-  const walk = (n) => {
-    if (!n || typeof n !== 'object') return;
-    const ovs = n.characterStyleOverrides;
-    const table = n.styleOverrideTable;
-    if (
-      n.type === 'TEXT' &&
-      n.characters &&
-      Array.isArray(ovs) &&
-      ovs.length > 0 &&
-      table &&
-      Object.keys(table).length > 0
-    ) {
-      const chars = [...String(n.characters)];
-      const baseFill = (n.fills || []).find((f) => f && f.type === 'SOLID' && f.color);
-      const baseColor = rgba(baseFill && baseFill.color) || null;
-      const baseSize = (n.style && n.style.fontSize) || null;
-      const baseWeight = (n.style && n.style.fontWeight) || null;
-
-      const segments = [];
-      let cur = null;
-      for (let i = 0; i < chars.length; i += 1) {
-        const key = String(ovs[i]);
-        const ov = table[key];
-        const fill = ov && ov.fills && ov.fills[0] && ov.fills[0].color;
-        const color = rgba(fill) || baseColor;
-        const size = (ov && ov.fontSize) || baseSize;
-        const weight = (ov && ov.fontWeight) || baseWeight;
-        const sig = `${color}|${size}|${weight}`;
-        if (cur && cur.sig === sig) {
-          cur.text += chars[i];
-        } else {
-          cur = { sig, text: chars[i], color, fontSize: size, fontWeight: weight };
-          segments.push(cur);
-        }
-      }
-      // 合并后仍多段（确实异色）才纳入
-      if (segments.length > 1) {
-        out.push({
-          nodeId: n.id,
-          characters: String(n.characters),
-          segments: segments.map((s) => ({
-            text: s.text,
-            color: s.color,
-            fontSize: s.fontSize,
-            fontWeight: s.fontWeight,
-          })),
-        });
-      }
-    }
-    for (const c of n.children || []) walk(c);
-  };
-
-  // 🛡️ 输入契约兼容（2026-09-29，D 步）：调用方可能传节点树本体（`document`），也可能传
-  //   带元信息的 wrapper（`{ fileKey, nodeId, tokenHash, cachedAt, document }`）。
-  //   wrapper 顶层没有 `type` / `children` ⇒ 原实现 `walk(figmaNodeData)` 直接得到 **0 条**
-  //   且无任何日志 ⇒ 静默失效（P-11 主路径因此长期空转，只有 CodeFixPipeline 兜底路径生效）。
-  //   与 `extractNodeLevelColorTruth`（A①）/ `extractPerCharTextTruth` 调用点统一口径。
-  walk(figmaNodeData.document || figmaNodeData);
+  // 🛡️ R19（2026-10-21）：逐字符求值已收敛到 `utils/text-runs.js#runsOfTextNode`
+  //   （唯一实现）。本函数只做「多段筛选 + 旧字段形态投影」，不再自建一套 rgba/逐字符循环。
+  //   输入契约（节点树本体 / `{ document }` wrapper）同样由 text-runs 兼容——
+  //   历史上这里曾因 wrapper 顶层无 `type` 而静默得 0 条（两次实锤）。
+  const { byNode } = extractTextRuns(figmaNodeData);
+  for (const [nodeId, runs] of byNode) {
+    // 合并后仍多段（确实异样式）才纳入 —— 与旧实现判据一致
+    if (!Array.isArray(runs) || runs.length < 2) continue;
+    out.push({
+      nodeId,
+      characters: runs.map((r) => r.text).join(''),
+      segments: runs.map((r) => ({
+        text: r.text,
+        color: r.color,
+        fontSize: r.fontSize,
+        fontWeight: r.fontWeight,
+      })),
+    });
+  }
   return out;
 }
 
@@ -2460,63 +2422,29 @@ export function validateResourceBindingLevel(code, resourceDomMapping = []) {
 export function extractNodeLevelColorTruth(figmaNodeData) {
   if (!figmaNodeData || typeof figmaNodeData !== 'object') return [];
 
+  // 🛡️ R19（2026-10-21）：逐字符求值收敛到 `utils/text-runs.js`（唯一实现）。
+  //   旧实现是第三份 per-char walker（index 维度），与 P-11 的段维度各写一遍，
+  //   下游还只能拿 index 无法拿"段" ⇒ 本轮统一为 run。
+  //   输出契约保持向后兼容：
+  //     · `perCharColors` 非空 ⇔ 该节点**确实多段异样式**（P-12d 的准入判据不变，
+  //       避免把全量单色 TEXT 都拉进注入器）；
+  //     · 新增 `runs`（段边界 + 每段 色/字号/字重），供注入器逐段绑定。
+  const { byNode } = extractTextRuns(figmaNodeData);
   const results = [];
-
-  // 递归遍历节点树
-  function traverse(node) {
-    if (!node) return;
-
-    // 检测 TEXT 节点
-    if (node.type === 'TEXT' && node.characters) {
-      // 🛡️ 2026-09-29 真值取值位置修正（c-traffic-monitor-209472ff 实锤）：
-      //   Figma REST `/v1/files/:key/nodes` 的填充在**节点顶层** `node.fills`；
-      //   `node.style` 只承载字体/排版字段（fontFamily / fontSize / lineHeight /
-      //   letterSpacing / textAlign…），**从无 `fills`**。
-      //   原实现读 `node.style?.fills?.[0]?.color` ⇒ 恒 undefined ⇒ 用 dist 实测
-      //   本函数 105/105 条真值的 defaultColor 全部丢失 ⇒「单色 TEXT 节点颜色」
-      //   这条事实源等于不存在 ⇒ 下游只能整段跳过 ⇒ LLM 改套主题槽位调色板。
-      //   保留 `node.style.fills` 作为回落，兼容非 REST 形态的输入（历史缓存等）。
-      const nodeFills = Array.isArray(node.fills) ? node.fills : [];
-      const solidFill = nodeFills.find(
-        (f) => f && f.visible !== false && f.type === 'SOLID' && f.color,
-      );
-      const defaultColor = solidFill?.color || node.style?.fills?.[0]?.color;
-      const perCharOverrides = node.characterStyleOverrides || [];
-      const styleTable = node.styleOverrideTable || {};
-
-      // 提取 per-char 颜色
-      const perCharColors = [];
-      if (perCharOverrides.length > 0) {
-        for (let i = 0; i < perCharOverrides.length; i++) {
-          const tableKey = perCharOverrides[i];
-          const override = styleTable[tableKey];
-          if (override?.color) {
-            perCharColors.push({ index: i, color: override.color });
-          }
-        }
-      }
-
-      results.push({
-        nodeId: node.id,
-        text: node.characters,
-        defaultColor,
-        perCharColors,
-      });
-    }
-
-    // 递归子节点
-    if (node.children) {
-      for (const child of node.children) {
-        traverse(child);
+  for (const [nodeId, runs] of byNode) {
+    if (!Array.isArray(runs) || runs.length === 0) continue;
+    const text = runs.map((r) => r.text).join('');
+    const defaultColor = runs[0].color || null;
+    const perCharColors = [];
+    if (runs.length > 1) {
+      let idx = 0;
+      for (const r of runs) {
+        perCharColors.push({ index: idx, color: r.color });
+        idx += [...r.text].length;
       }
     }
+    results.push({ nodeId, text, defaultColor, perCharColors, runs });
   }
-
-  // 🛡️ 输入契约兼容（2026-09-29）：调用方可能传节点树本体（`document`），也可能传
-  //   带元信息的 wrapper（`{ fileKey, nodeId, tokenHash, cachedAt, document }`）。
-  //   wrapper 顶层没有 `type` / `children` ⇒ 原实现直接 traverse 得到 **0 条**，
-  //   且无任何日志 ⇒ 静默失效（与 `_extractPerCharTextTruthPure` 同一坑）。
-  traverse(figmaNodeData.document || figmaNodeData);
   return results;
 }
 
@@ -2564,15 +2492,20 @@ export function injectNodeLevelColorTruth(files, colorTruth = []) {
       // 检查模板中是否包含该节点的文本
       if (!template.includes(node.text)) continue;
 
-      // 生成颜色样式规则
-      // 如果节点有 per-char 分段，生成多个 class（每个颜色一个）
+      // 段真值（R19）：有 runs 用 runs；旧输入只有 perCharColors 时退回"按色去重"
+      const runs = Array.isArray(node.runs) && node.runs.length > 1 ? node.runs : null;
+
+      // 生成颜色样式规则：每个**实际出现的段色**一个 class（不再生成无人引用的死 class）
       const colorClasses = [];
       const colorMap = new Map(); // color -> className
+      const colorSeeds = runs
+        ? runs.map((r) => ({ color: r.color }))
+        : node.perCharColors.map((pc) => ({ color: normalizeColor(pc.color) || pc.color }));
 
-      for (const pc of node.perCharColors) {
-        const colorKey = pc.color.replace(/[^a-zA-Z0-9]/g, '');
+      for (const pc of colorSeeds) {
+        if (!pc.color) continue;
+        const colorKey = String(pc.color).replace(/[^a-zA-Z0-9]/g, '');
         const className = `color-${colorKey}`;
-        
         if (!colorMap.has(pc.color)) {
           colorMap.set(pc.color, className);
           colorClasses.push({ className, color: pc.color });
@@ -2588,16 +2521,41 @@ export function injectNodeLevelColorTruth(files, colorTruth = []) {
         }
       }
 
-      // 在模板中找到包含该文本的元素，并添加对应的 class 绑定
-      // 策略：查找包含该文本的标签，为其添加第一个颜色 class（简化处理）
-      // 实际场景中，per-char 分段需要更复杂的模板重写（如拆分成多个 span）
-      // 这里采用保守策略：只为主颜色添加 class
+      // ── 绑定：**逐段拆元素**（R19 治本）──────────────────────────────
+      // 旧实现「只为主颜色添加 class」⇒ 一眼看是保守，实质是**分段必然丢失**，
+      // 且把"主色"取成 `colorClasses[0]`（= 第一个出现的段色，不是 base、也不看占比）。
+      // 现在：模板里该文本以**整行字面量**出现时，按 run 边界拆成逐段 span；
+      // 动态绑定形态（`{{ xx }}`）无法静态拆 → 保留首色兜底并记 `partial`，交 prompt/判据。
       if (colorClasses.length > 0) {
         const primaryColorClass = colorClasses[0].className;
-        
-        // 查找包含该文本的标签
-        // 支持两种形式：<tag>text</tag> 和 <tag>{{ text }}</tag>
-        const textRe = new RegExp(`(<[^>]+>)([^<]*${node.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*)(<\\/[^>]+>)`, 'g');
+        const escText = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        if (runs) {
+          const joined = runs.map((r) => r.text).join('');
+          const segRe = new RegExp(`(<[^>]+>)([^<]*${escText(joined)}[^<]*)(<\\/[^>]+>)`, 'g');
+          template = template.replace(segRe, (match, openTag, content, closeTag) => {
+            // 只处理「内容恰好就是该文本」（允许空白差异），防误伤更大段文本
+            if (content.replace(/\s+/g, '') !== joined.replace(/\s+/g, '')) return match;
+            const inner = runs
+              .map((r) => {
+                const cls = colorMap.get(r.color) || primaryColorClass;
+                const st = [
+                  r.fontSize ? `font-size:${r.fontSize}px` : '',
+                  r.fontWeight ? `font-weight:${r.fontWeight}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(';');
+                return `<span class="${cls}"${st ? ` style="${st}"` : ''}>${r.text}</span>`;
+              })
+              .join('');
+            return `${openTag}${inner}${closeTag}`;
+          });
+          if (template !== templateMatch[1]) fileChanged = true;
+          continue; // 已按段处理，不再走单色兜底
+        }
+
+        // 无 run 边界（旧形态）⇒ 保守单色绑定（保持历史行为）
+        const textRe = new RegExp(`(<[^>]+>)([^<]*${escText(node.text)}[^<]*)(<\\/[^>]+>)`, 'g');
         template = template.replace(textRe, (match, openTag, content, closeTag) => {
           // 检查是否已经有 class 属性
           const classMatch = openTag.match(/class="([^"]*)"/);
@@ -2615,7 +2573,7 @@ export function injectNodeLevelColorTruth(files, colorTruth = []) {
           }
           return match;
         });
-        
+
         if (template !== templateMatch[1]) {
           fileChanged = true;
         }

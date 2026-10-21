@@ -146,16 +146,41 @@ export function buildStyleCorpus(files) {
 }
 
 /** 声明块 → `{kind, cols}`；无方向语义返回 null */
-function declToKind(decl) {
+function declToKind(decl, opts = {}) {
   if (!decl) return null
-  const display = String(decl.display || '').trim().toLowerCase()
+  const ownDisplay = String(decl.display || '').trim().toLowerCase()
+  // 🛡️ F16-a：同名 class 的 display 可能写在**另一份规则块**里（CSS 层叠会合并），
+  //   由调用方传入选择器级最终 display 兜底，避免「flex-direction 单独成块」被误判失效。
+  const display = ownDisplay || String(opts.effectiveDisplay || '').trim().toLowerCase()
   const fd = String(decl.flexDirection || '').trim().toLowerCase()
   const colsM = /grid-template-columns\s*:\s*repeat\(\s*(\d+)/i.exec(decl.blockContent || '')
   if (display === 'grid' || colsM) {
     return { kind: 'grid', cols: colsM ? Number(colsM[1]) : null }
   }
-  if (fd === 'row' || fd === 'row-reverse') return { kind: 'row', cols: null }
-  if (fd === 'column' || fd === 'column-reverse') return { kind: 'column', cols: null }
+  const isFlex = display === 'flex' || display === 'inline-flex'
+  if (fd === 'row' || fd === 'row-reverse') {
+    // 🛡️ F16（2026-10-21 · c-c8d-195c8d0e 实锤）：`flex-direction` 只在 flex 容器里生效。
+    //   display 非 flex（未声明 / block / inline…）时该声明**完全无效**，实际是块级流
+    //   ⇒ 子项纵向堆叠 = `column`。旧逻辑直接返 `row` ⇒ 判据假绿（本次「一列到底」即此）。
+    if (isFlex) return { kind: 'row', cols: null }
+    // inline `style` / `:style` 绑定：display 可能来自 class，作者显式写了方向 ⇒ 保留旧语义
+    if (opts.assumeFlexWhenDirectionSet) return { kind: 'row', cols: null }
+    if (opts.allowInertAsColumn) {
+      return { kind: 'column', cols: null, inertFlexDirection: fd }
+    }
+    return null
+  }
+  if (fd === 'column' || fd === 'column-reverse') {
+    // 反向同理：块级流本身就是纵向堆叠，即便声明失效也「碰巧对」，不额外标记
+    return { kind: 'column', cols: null }
+  }
+  // 🛡️ F16-a′：flex 容器未声明 flex-direction ⇒ CSS 初始值 `row`（不是「未知」）。
+  //   旧逻辑返回 null ⇒ 归入 skippedNoActual 静默放过 ⇒ `display:flex` 写对了但方向没写
+  //   也全绿。这里按 CSS 规范给确定答案。
+  if (isFlex) return { kind: 'row', cols: null, inferred: 'flex-default-row' }
+  if (!display && opts.inferDefaultBlock) {
+    return { kind: 'column', cols: null, inferred: 'default-block' }
+  }
   return null
 }
 
@@ -218,21 +243,62 @@ export function collectDirectionKinds(corpus, selector) {
   if (!text || !selector) return []
   const esc = String(selector).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(`${esc}(?![\\w-])\\s*\\{([^{}]*)\\}`, 'g')
-  const kinds = []
+  const blocks = []
   let m
-  while ((m = re.exec(text)) !== null) {
-    const block = m[1] || ''
+  while ((m = re.exec(text)) !== null) blocks.push(m[1] || '')
+  if (blocks.length === 0) return []
+
+  // 🛡️ F16-a：选择器级 display 最终值（层叠后最后一条声明胜出）。
+  //   LLM 常把 `display:flex` 与 `flex-direction:row` 拆进两份同名规则块，
+  //   逐块独立判定会把「只有 flex-direction」的那块误判为失效 ⇒ 假红。
+  let effectiveDisplay = ''
+  for (const block of blocks) {
+    const d = /(?:^|;)\s*display\s*:\s*([^;]+)/i.exec(block)?.[1]
+    if (d) effectiveDisplay = d.trim()
+  }
+
+  const kinds = []
+  for (const block of blocks) {
     const display = /(?:^|;)\s*display\s*:\s*([^;]+)/i.exec(block)?.[1] || null
     const flexDirection = /(?:^|;)\s*flex-direction\s*:\s*([^;]+)/i.exec(block)?.[1] || null
     const colsM = /grid-template-columns\s*:\s*repeat\(\s*(\d+)/i.exec(block)
-    const kind = declToKind({
-      display,
-      flexDirection,
-      blockContent: colsM ? block : '',
-    })
+    const kind = declToKind(
+      {
+        display,
+        flexDirection,
+        blockContent: colsM ? block : '',
+      },
+      { effectiveDisplay, allowInertAsColumn: true },
+    )
     if (kind) kinds.push(kind)
   }
   return kinds
+}
+
+/**
+ * 该选择器全部规则块里**原始** `flex-direction` 去重值。
+ *
+ * 🛡️ F16 配套（2026-10-21）：`declToKind` 会把「非 flex 容器里的 flex-direction」
+ * 归一成 `column`（声明无效），于是 `.a{flex-direction:row}` + `.b{flex-direction:column}`
+ * 这类**原始冲突**在归一后都成了 `column` ⇒ 冲突检测失效 ⇒ 由「不猜」变成「误判」。
+ * 保留原始值集合，冲突仍按「宁可漏报不误杀」返回 null。
+ *
+ * @param {string} corpus
+ * @param {string} selector
+ * @returns {string[]}
+ */
+export function collectRawFlexDirections(corpus, selector) {
+  const text = String(corpus || '')
+  if (!text || !selector) return []
+  const esc = String(selector).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`${esc}(?![\\w-])\\s*\\{([^{}]*)\\}`, 'g')
+  const dirs = new Set()
+  let m
+  while ((m = re.exec(text)) !== null) {
+    const fd = /(?:^|;)\s*flex-direction\s*:\s*([^;]+)/i.exec(m[1] || '')?.[1]
+    if (fd) dirs.add(fd.trim().toLowerCase())
+  }
+  return [...dirs]
 }
 
 /**
@@ -244,20 +310,20 @@ export function collectDirectionKinds(corpus, selector) {
  * （全部去重方向列表）。未声明/跨 class 歧义 ⇒ null。
  * @returns {{kind:'row'|'column'|'grid', cols:number|null, conflicts?:string[]}|null}
  */
-export function resolveActualDirection(tag, corpus) {
+function resolveDeclaredDirection(tag, corpus) {
   const attrs = String(tag?.attrs || tag?.html || tag || '')
 
   // 1) 静态 inline style（优先级最高，命中即定案）
   const staticInline = /(?:^|\s)style\s*=\s*"([^"]*)"/.exec(attrs)
   if (staticInline) {
-    const k = declToKind(parseInlineCss(staticInline[1]))
+    const k = declToKind(parseInlineCss(staticInline[1]), { assumeFlexWhenDirectionSet: true })
     if (k) return k
   }
 
   // 2) `:style` 绑定
   const bound = /(?::style|v-bind:style)\s*=\s*"([^"]*)"/.exec(attrs)
   if (bound) {
-    const k = declToKind(parseStyleBinding(bound[1]))
+    const k = declToKind(parseStyleBinding(bound[1]), { assumeFlexWhenDirectionSet: true })
     if (k) return k
   }
 
@@ -266,9 +332,14 @@ export function resolveActualDirection(tag, corpus) {
   if (!classAttr) return null
   const found = new Map() // `kind:cols` → {kind, cols}
   let conflicts = null // 同名 class 多份规则方向矛盾时的全部去重方向
+  // 归一前的原始 flex-direction（**按 class 分组**）：用于区分「同 class 多份规则矛盾」与
+  // 「不同 class 互相冲突」——前者是可定位、可自愈的缺陷（照判）；后者是无从裁决的歧义（不猜）。
+  const perClassRaw = []
   for (const cls of classAttr.split(/\s+/)) {
     if (!cls || !/^[a-zA-Z][\w-]*$/.test(cls)) continue
     const kinds = collectDirectionKinds(corpus, `.${cls}`)
+    const dirs = collectRawFlexDirections(corpus, `.${cls}`)
+    if (dirs.length) perClassRaw.push(dirs)
     if (kinds.length === 0) continue
     if (kinds.length > 1) {
       const distinct = [...new Set(kinds.map((k) => k.kind))]
@@ -279,9 +350,51 @@ export function resolveActualDirection(tag, corpus) {
   }
   // 多个 class 给出**互相冲突**的方向 ⇒ 歧义 ⇒ 不判（fail-open）
   if (found.size !== 1) return null
+  // 不同 class 的原始 flex-direction 互不相交 ⇒ 无法裁决谁生效 ⇒ 同样不猜
+  for (let i = 0; i < perClassRaw.length; i++) {
+    for (let j = i + 1; j < perClassRaw.length; j++) {
+      if (!perClassRaw[i].some((d) => perClassRaw[j].includes(d))) return null
+    }
+  }
   const resolved = [...found.values()][0]
   if (conflicts && conflicts.length > 1) resolved.conflicts = conflicts
   return resolved
+}
+
+/** 块级标签（默认 `display:block` ⇒ 子项纵向堆叠）。只列确定的，自定义组件名一律不猜。 */
+const BLOCK_LEVEL_TAGS = new Set([
+  'div', 'section', 'article', 'aside', 'main', 'header', 'footer', 'nav',
+  'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'p', 'form', 'fieldset', 'figure',
+  'blockquote', 'pre', 'table', 'tbody', 'thead', 'tr', 'td', 'th',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
+])
+
+/**
+ * 🛡️ F16-b（2026-10-21 · c-c8d-195c8d0e 实锤）：**没有任何方向声明**时按元素默认盒模型推断。
+ *
+ * 病灶：两个 list 组件通篇 `display:flex` 出现 **0 次**（`ListList.vue` / `ListList2.vue`），
+ *   连 `flex-direction` 都没有 ⇒ `resolveActualDirection` 返回 null ⇒ 判据归入
+ *   `skippedNoDecl` 直接放过 ⇒ 真值是 4 列横排、产物是一列到底，却全绿。
+ *
+ * 判据：**只在显式开启时**（`opts.inferDefaultBlock`）对**块级标签**返回 `column`。
+ *   · 自定义组件 / inline 标签 ⇒ 仍返回 null（不猜）；
+ *   · 默认关闭 ⇒ 零回归（LAYOUT-001 不改变既有行为）。
+ *
+ * @param {object} tag {name, attrs}
+ * @param {string} corpus
+ * @param {{inferDefaultBlock?:boolean}} [opts]
+ * @returns {{kind:'row'|'column'|'grid', cols:number|null, conflicts?:string[], inferred?:string}|null}
+ */
+export function resolveActualDirection(tag, corpus, opts = {}) {
+  const declared = resolveDeclaredDirection(tag, corpus)
+  if (declared) return declared
+  if (opts && opts.inferDefaultBlock) {
+    const tagName = String(tag?.name || '').trim().toLowerCase()
+    if (BLOCK_LEVEL_TAGS.has(tagName)) {
+      return { kind: 'column', cols: null, inferred: 'default-block' }
+    }
+  }
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────────────────

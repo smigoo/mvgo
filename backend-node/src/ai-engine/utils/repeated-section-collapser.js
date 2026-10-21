@@ -14,7 +14,14 @@
  *      （等宽高 ±3px + 同行 y ±4px + 逐子形状同构）；
  *   ③ items 数据增强：折叠产物 items[] 每项自带深层文本/颜色/bg/icon（供 v-for prompt
  *      确定性注入，消灭 LLM 手工 iconMap 对位骰子）。
+ *
+ * 🛡️ R19（2026-10-21 · c-bb8-304bb8d3 实锤）：item 文本真值改由 `utils/text-runs.js` 提供
+ *   （唯一来源）。旧实现只有 `texts` + `textStyles` 两个**平行数组**，且颜色是「有才 push」
+ *   ⇒ 某段无色就整列左移，下游按 `/` 拼接必然串色；且完全没有字号/字重。
+ *   现在：有 Figma 真值时以 `_vforData.lines` 为**权威**（每行一组 run，run 自带
+ *   `color/fontSize/fontWeight`），`texts/textStyles` 仅保留给旧消费方做过渡。
  */
+import { extractTextRuns, linesForNode, hasMixedRunStyles } from './text-runs.js';
 
 function getChildren(sec) {
   if (!sec || typeof sec !== 'object') return [];
@@ -164,20 +171,42 @@ function isInterleaved(a, b) {
 }
 
 /**
- * ③ 收集 item 深层确定性数据（供 v-for prompt / 数据注入消费）：
- *   texts（label/value/unit 文本真值）+ textStyles（含颜色的样式）+ resourceFiles（bg/icon 文件）。
+ * ③ 收集 item 深层确定性数据（供 v-for prompt / 数据注入消费）。
+ *
+ * 权威来源（R19）：
+ *   `_vforData.lines` = `[{ y, runs: [{ text, color, fontSize, fontWeight, nodeId }] }]`
+ *   —— 来自 `utils/text-runs.js`，**一行一组 run**，样式与文本天然对齐，
+ *   不再有「两个平行数组 + 条件 push 错位」。
+ * 过渡字段：`texts` / `textStyles`（有真值时由 runs 展平，保证同长；无真值时沿用旧
+ *   vision 采集路径，保持对无 Figma 场景的兼容）。
  */
-function enrichItemData(item) {
+function readTruthLines(item, ctx) {
+  const tr = ctx && ctx.textRuns;
+  if (!tr) return [];
+  const ids = [
+    item.figmaNodeId,
+    item.id,
+    ...(Array.isArray(item.sourceNodeIds) ? item.sourceNodeIds : []),
+  ];
+  for (const id of ids) {
+    if (!id) continue;
+    const ls = linesForNode(tr, id);
+    if (ls.length > 0) return ls;
+  }
+  return [];
+}
+
+function enrichItemData(item, ctx = {}) {
   if (!item || typeof item !== 'object') return item;
   if (item._vforData) return item;
-  const texts = [];
-  const textStyles = [];
+  const legacyTexts = [];
+  const legacyStyles = [];
   const resourceFiles = [];
   const collect = (x, d = 0) => {
     if (!x || typeof x !== 'object' || d > 8) return;
     if (typeof x.text === 'string' && x.text.trim()) {
-      texts.push(x.text.trim());
-      if (x.styles?.color) textStyles.push(String(x.styles.color));
+      legacyTexts.push(x.text.trim());
+      if (x.styles?.color) legacyStyles.push(String(x.styles.color));
     }
     for (const k of ['resourceFile', 'src']) {
       const v = x[k];
@@ -191,14 +220,36 @@ function enrichItemData(item) {
     }
   };
   collect(item);
-  return {
-    ...item,
-    _vforData: {
-      texts: texts.slice(0, 8),
-      textStyles: textStyles.slice(0, 8),
-      resourceFiles: resourceFiles.slice(0, 6),
-    },
+
+  // 🛡️ R19：图真值优先。有真值时 texts/textStyles 由 runs 展平（同长、不串位），
+  //   且额外下发 lines（不受 texts 配额截断）。
+  const truthLines = readTruthLines(item, ctx);
+  const hasTruth = truthLines.length > 0;
+
+  let texts = legacyTexts;
+  let textStyles = legacyStyles;
+  if (hasTruth) {
+    texts = [];
+    textStyles = [];
+    for (const l of truthLines) {
+      for (const r of l.runs) {
+        texts.push(r.text);
+        textStyles.push(r.color || '');
+      }
+    }
+  }
+
+  const data = {
+    texts: texts.slice(0, 8),
+    textStyles: textStyles.slice(0, 8),
+    resourceFiles: resourceFiles.slice(0, 6),
   };
+  if (hasTruth) {
+    data.lines = truthLines.map((l) => ({ y: l.y, runs: l.runs }));
+    // 判据复用 text-runs#hasMixedRunStyles（单一实现，不写副本）
+    data.mixedRunStyles = truthLines.some((l) => hasMixedRunStyles(l.runs));
+  }
+  return { ...item, _vforData: data };
 }
 
 /**
@@ -242,20 +293,86 @@ function isChartContainer(sec) {
   return /@eachrts|@echarts|chart|图表|环形图/.test(name);
 }
 
-function buildCollapsedSection(first, items, type) {
+/**
+ * 🛡️ F1（2026-10-21 · e3ab048a 实锤）：**跨层折叠禁令——展平到最内层重复单元**。
+ *
+ * 事故：`38:3162`（优质厂商）真值是「3 个行容器 × 每行 4 张 126×30 卡」共 12 张。
+ *   `groupSections` 的 ① 精确签名组**只比结构签名、不做任何几何校验**，而
+ *   `normalizeRepeatName` 会把 `Frame 2136639905/906/907` 统一归一成 `frame`
+ *   ⇒ 3 个**行容器**签名相同，被当成「3 个重复卡片」折叠成 `38:3167-list`（items=3）。
+ *   真正的重复卡片在更深层已先被折成内层 list，只能塞进 item 内部 ⇒ LLM 只能看到
+ *   3 项（每项取该行第一张卡的名字：大华股份 / ABB中国 / 启明星辰）。
+ *   同理普通厂商 15 → 4（items = 4 个行容器）。
+ *
+ * 判据（可辩驳、命名无关）：折叠组里每个 item **内部已经存在折叠列表段**
+ *   （item 自身是 list，或它的 children 里有 list）⇒ 该层折叠发生在「行的行」上、
+ *   比真实重复单元高一层 ⇒ 不再降级成「行 item」，而把内层 list 的 `items`
+ *   **展开拼平**，得到最内层的完整枚举。
+ *
+ * 为什么要求「全部」而不是「任一」：混合组（如 [含子列表的卡, 普通卡, 普通卡]）说明
+ *   子列表只是卡片内部的一个局部，卡片才是重复单元 ⇒ 展平会把卡替换成它的子项、语义错位。
+ *   （注：`groupSections` 分组本身要求结构签名同构 ⇒ 实践上组内成员形状一致，混合组极罕见；
+ *   本判据是防御性约束，单测直接覆盖该分支。）
+ */
+function nestedCollapsedLists(item) {
+  if (!item || typeof item !== 'object') return [];
+  if (isCollapsedListSection(item) && Array.isArray(item.items) && item.items.length > 0) {
+    return [item];
+  }
+  return getChildren(item).filter(
+    (c) => isCollapsedListSection(c) && Array.isArray(c.items) && c.items.length > 0,
+  );
+}
+
+export function flattenNestedCollapsedItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return { items, flattened: false };
+  const allNested = items.every((it) => nestedCollapsedLists(it).length > 0);
+  if (!allNested) return { items, flattened: false };
+  const out = [];
+  for (const it of items) {
+    for (const l of nestedCollapsedLists(it)) out.push(...l.items);
+  }
+  return { items: out, flattened: true };
+}
+
+/** 组合并 bbox（geoBox 口径 {w,h,x,y} → absoluteBoundingBox 口径 {width,height,x,y}） */
+function unionBoxOf(list) {
+  const boxes = (Array.isArray(list) ? list : []).map(geoBox).filter(Boolean);
+  if (boxes.length === 0) return null;
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.w));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+function buildCollapsedSection(first, items, type, opts = {}) {
   const title = first.header?.title || first.title || first.name || first.id;
-  return {
+  const Sec = {
     ...first,
     id: `${first.id}-list`,
     type,
     role: type,
     collapsed: true,
-    itemTemplate: first,
-    items: items.map(enrichItemData),
+    // F1：展平后 item 模板必须取「最内层第一个真实重复单元」，否则模板仍是行容器
+    itemTemplate: opts._template || first,
+    items: items.map((it) => enrichItemData(it, { textRuns: opts._textRuns })),
     itemCount: items.length,
     renderHint: 'v-for',
     title: String(title || '').trim(),
   };
+  // 🛡️ F1：展平后外层几何/归属必须按「被合并的所有行」重算——
+  //   否则列表段仍报单行 30px 高（布局比例错），且 sourceNodeIds 只含第一行
+  //   （资源挂载按 ownerSectionId 归属 ⇒ 其余行的图标/背景图全丢）。
+  if (opts._box) {
+    Sec.absoluteBoundingBox = opts._box;
+    Sec.figmaBox = opts._box;
+    Sec.styles = { ...(Sec.styles || {}), figmaHeightPx: opts._box.height };
+  }
+  if (Array.isArray(opts._sourceNodeIds) && opts._sourceNodeIds.length > 0) {
+    Sec.sourceNodeIds = opts._sourceNodeIds;
+  }
+  return Sec;
 }
 
 /**
@@ -312,8 +429,27 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
     const itemsSorted = sortItemsByVisualOrder(items.map((item) => ({ item }))).map((p) => p.item);
     g.idxs.forEach((i) => skip.add(i));
     const first = sections[g.idxs[0]];
-    const type = items.length >= 6 ? 'grid' : 'list';
-    replacements.set(g.idxs[0], buildCollapsedSection(first, itemsSorted, type));
+    // 🛡️ F1：跨层折叠 → 展平到最内层重复单元（判据见 flattenNestedCollapsedItems）
+    const flat = flattenNestedCollapsedItems(itemsSorted);
+    const finalItems = flat.flattened
+      ? sortItemsByVisualOrder(flat.items.map((item) => ({ item }))).map((p) => p.item)
+      : flat.items;
+    const type = finalItems.length >= 6 ? 'grid' : 'list';
+    const flatOpts = flat.flattened
+      ? {
+          ...opts,
+          _template: finalItems[0] || first,
+          _box: unionBoxOf(g.idxs.map((i) => sections[i])),
+          _sourceNodeIds: Array.from(
+            new Set(
+              g.idxs.flatMap((i) =>
+                Array.isArray(sections[i]?.sourceNodeIds) ? sections[i].sourceNodeIds : [],
+              ),
+            ),
+          ),
+        }
+      : opts;
+    replacements.set(g.idxs[0], buildCollapsedSection(first, finalItems, type, flatOpts));
   }
 
   const out = [];
@@ -348,6 +484,13 @@ export function collapseSectionsDeep(sections, opts = {}) {
   const maxDepth = opts.maxDepth ?? 8;
   if (!Array.isArray(sections)) return sections;
 
+  // 🛡️ R19：文本 run 真值只构建一次（`opts.figmaRoot` 可选；无图数据则保持旧路径）。
+  //   构建失败/无图 → null，不影响折叠本身。
+  const textRuns =
+    opts._textRuns ||
+    (opts.figmaRoot ? extractTextRuns(opts.figmaRoot) : null);
+  const innerOpts = textRuns ? { ...opts, _textRuns: textRuns } : opts;
+
   // 🛡️ 收紧（二版）：业务条目尺寸门槛——宽 ≥80 且 高 ≥24。
   //   图例条目 220×32、统计卡 140×74 满足；icon 内 Rectangle（10~18px）不满足，
   //   防小装饰组被误折成 v-for（2:8071 三个 Rectangle 误折叠实锤）。
@@ -378,7 +521,7 @@ export function collapseSectionsDeep(sections, opts = {}) {
     const eligible = withChildrenCollapsed.filter(isBusinessItem);
     if (eligible.length < (opts.minRepeat ?? 3)) return withChildrenCollapsed;
     return collapseRepeatedSiblingSections(withChildrenCollapsed, {
-      ...opts,
+      ...innerOpts,
       _sizeGate: isBusinessItem,
     });
   };

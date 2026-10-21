@@ -155,6 +155,37 @@ import {
   injectPerCharTextSegments as _injectPerCharTextSegmentsPure,
   stripRedundantInnerBgWhenHostHasBg as _stripRedundantInnerBgPure,
 } from '../utils/post-process.js';
+// 🛡️ R19（2026-10-21）：文本 run 真值（行内多段样式）——与折叠段 `_vforData.lines` 同源，
+//   供「非折叠叶子段」的 prompt 下发逐段样式（旧实现只下发一列纯文本，样式零字段）。
+import { extractTextRuns as _extractTextRunsPure, linesForNode as _linesForNode } from '../utils/text-runs.js';
+
+// WeakMap 缓存：同一份 figmaNodeData 在一次生成里会被多个 section 反复查询，
+// 逐次重算整棵树的文本 run 是纯浪费（且会被分块 prompt 反复触发）。
+const _textRunsCache = new WeakMap();
+function _getTextRuns(figmaRoot) {
+  if (!figmaRoot || typeof figmaRoot !== 'object') return null;
+  let v = _textRunsCache.get(figmaRoot);
+  if (!v) {
+    try {
+      v = _extractTextRunsPure(figmaRoot);
+    } catch {
+      v = null;
+    }
+    _textRunsCache.set(figmaRoot, v);
+  }
+  return v;
+}
+/** 取某 section 的文本行真值（先按 figmaNodeId，再按 id）；无真值返回 []。 */
+function _getSectionTextLines(figmaRoot, sec) {
+  const tr = _getTextRuns(figmaRoot);
+  if (!tr || !sec) return [];
+  for (const id of [sec.figmaNodeId, sec.id]) {
+    if (!id) continue;
+    const ls = _linesForNode(tr, id);
+    if (ls.length > 0) return ls;
+  }
+  return [];
+}
 // 🎯 2026-09-29 图表容器双刀（刀1 剥 index.vue inline min-height:0 / 刀2 内层 wrapper 承载 echarts）
 import {
   stripChartInlineMinHeight as _stripChartInlineMinHeight,
@@ -209,6 +240,9 @@ import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
 // 🛡️ P2-12（2026-10-01）：面板标题带几何判据（与 subcomponent-planner 的 header 几何兜底
 //   共用同一阈值单点，见 utils/header-geometry-fallback.js）
 import { isTopThinHeaderBand } from '../utils/header-geometry-fallback.js';
+// 🛡️ R24（2026-10-21 · 07ae49a2 实锤）：空 `<img>` 补资源 src（injectResourceImports 的判据盲区）。
+//   它只注入「代码里真实出现的资源变量」，模型写裸 `<img>` 时无从注入 ⇒ 图片静默留空。
+import { healEmptyImgSrc } from '../utils/resource-img-src-healer.js';
 import {
   injectResourceImports,
   resolveResourceDomMapping,
@@ -992,19 +1026,58 @@ export class MicrocodeEngineer extends BaseAgent {
                 p += `   📊 v-for 数据数组（**共 ${vforItems.length} 项，必须原样照抄，禁止改值/换序/臆造**，模板用 item.xxx 引用）：\n`;
                 const rows = vforItems.slice(0, 12).map((it, idx) => {
                   const d = it?._vforData || {};
-                  const texts = (d.texts || []).join('/');
-                  const colors = (d.textStyles || []).filter(Boolean).join('/');
                   const bg = bgForItem(it);
                   const iconFiles = (d.resourceFiles || []).filter((f) => /^icon/i.test(f));
                   const files = [bg, ...iconFiles].filter(Boolean).join(',');
                   const parts = [];
-                  if (texts) parts.push(`texts: ${texts}`);
-                  if (colors) parts.push(`colors: ${colors}`);
+
+                  // 🛡️ R19（2026-10-21 · c-bb8-304bb8d3 实锤）：**行级 run 真值优先**。
+                  //   病灶：旧实现只下发 `texts: a/b | colors: x/y` 两个平行数组靠 `/` 拼，
+                  //   无下标绑定契约；且 colors 是「有才 push」⇒ 某段无色就整列左移 ⇒ 串色。
+                  //   实测产物三套写法各自猜：语义推断补位 / 色塞进恒假的 `&--active` / 跨段串色。
+                  //   现在：一行一组 run，显式写出「文本 + 该文本自己的 色/字号/字重」。
+                  // 🛡️ R19 补洞（2026-10-21）：`_vforData` 只在**折叠通道**产生。
+                  //   若该段走 `body.items`（vision 回填）通道，items 没有 `_vforData` ⇒
+                  //   旧行为是拼出空行 `[0] { }`，等于**什么都没下发**（静默丢数据）。
+                  //   这里按 item 自己的 figma 节点现场取真值兜底（WeakMap 已缓存整树）。
+                  const lines =
+                    Array.isArray(d.lines) && d.lines.length > 0
+                      ? d.lines
+                      : _getSectionTextLines(input?.figmaNodeData, it);
+                  if (lines.length > 0) {
+                    const lineTxt = lines
+                      .map((l, li) => {
+                        const runs = Array.isArray(l.runs) ? l.runs : [];
+                        const seg = runs
+                          .map((r) => {
+                            const st = [
+                              r.color || 'inherited',
+                              r.fontSize ? `${r.fontSize}px` : null,
+                              r.fontWeight ? `w${r.fontWeight}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' ');
+                            return `「${r.text}」${st}`;
+                          })
+                          .join(' ｜ ');
+                        return `行${li + 1}: ${seg}`;
+                      })
+                      .join('   ;   ');
+                    parts.push(lineTxt);
+                  } else {
+                    const texts = (d.texts || []).join('/');
+                    const colors = (d.textStyles || []).filter(Boolean).join('/');
+                    if (texts) parts.push(`texts: ${texts}`);
+                    if (colors) parts.push(`colors: ${colors}`);
+                  }
                   if (files) parts.push(`files: ${files}`);
                   return `      [${idx}] { ${parts.join(' | ')} }`;
                 });
                 p += rows.join('\n') + '\n';
                 p += `      ⚠️ 数组**顺序必须与上面 [0][1][2] 完全一致**；每项的颜色/文件属于该项自身（[0] 的 files 就是 [0] 的背景图与图标，不许跨项搬）。\n`;
+                if (vforItems.some((it) => (it?._vforData?.lines || []).length > 0)) {
+                  p += `      🚨 「行内多段」铁律（同一行出现多种文字样式时）：一行给出 N 段，模板就必须在**同一父元素**下生成 **N 个并列元素**（通常各一个 \`span\`），段间用容器自身的 \`gap\` 分距；每段的 color / font-size / font-weight **直写在该元素自身**。禁止把多段合并进一个元素、禁止给整行套单一颜色、禁止把某段的颜色挂到 \`--active\` / hover 等【初始数据不满足】的条件类上。\n`;
+                }
               }
             } else {
               // 🛡️ P1 文本真值输出（2026-09-20 · c3c3244f tabs 消失治本）：
@@ -1019,6 +1092,36 @@ export class MicrocodeEngineer extends BaseAgent {
                 p += `   📝 文本真值（**必须全部原样还原，禁止遗漏/改字/臆造**）：${textItems
                   .map((it) => it.text)
                   .join(' / ')}\n`;
+              }
+            }
+
+            // 🛡️ R19（2026-10-21）：**叶子段也要下发逐段样式**。
+            //   病灶：非折叠叶子只拿到「文本真值」一列字符串，**样式一个字段都没有**
+            //   ⇒ 该叶子若含「一行多种文字样式」（如 chip 的 `名称` + `数量`），
+            //   LLM 只能猜色/字号，实测出现"语义推断补位、真值色塞进恒假条件类、跨段串色"。
+            //   真值源 = `utils/text-runs.js`（与折叠段 `_vforData.lines` 同一来源）。
+            {
+              const ls = _getSectionTextLines(input?.figmaNodeData, sec);
+              if (ls.length > 0) {
+                const mixed = ls.some((l) => l.runs.length > 1);
+                p += `   📝 文本行与逐段样式（Figma 真值，**每行 N 段就必须生成 N 个并列元素**）：\n`;
+                for (let li = 0; li < ls.length; li += 1) {
+                  const seg = ls[li].runs
+                    .map((r) =>
+                      `「${r.text}」${[
+                        r.color || 'inherited',
+                        r.fontSize ? `${r.fontSize}px` : null,
+                        r.fontWeight ? `w${r.fontWeight}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}`,
+                    )
+                    .join(' ｜ ');
+                  p += `      行${li + 1}: ${seg}\n`;
+                }
+                if (mixed) {
+                  p += `      🚨 每段的 color / font-size / font-weight 直写在该段自己的元素上；禁止合并成单元素、禁止整行套单一颜色、禁止挂到初始数据不成立的条件类（如 --active）。\n`;
+                }
               }
             }
 
@@ -1159,7 +1262,22 @@ export class MicrocodeEngineer extends BaseAgent {
                 //   拼装改用 parts.join('，')，保证「有事实」时输出与本条原文本**逐字相同**。
                 const parts = [];
                 if (meta.direction) parts.push(`使用 flex-direction: ${meta.direction}`);
+                // 🛡️ L3-a（2026-10-21 · c-c8d-195c8d0e 实锤）：横排容器的自身高度曾被按
+                //   「两个并排子卡高度相加」算（76+76=152，真值 76）⇒ flex 系数 ×1.99 ⇒
+                //   顶部统计区被撑到约 2 倍高。横排语义下自身高度 = 子项高度**最大值**。
+                if (meta.direction === 'row') {
+                  parts.push(
+                    `（**横排容器**：自身高度取子项高度的**最大值 max**，禁止把并排子项高度相加；flex 比例按该最大高度计算）`,
+                  );
+                }
                 if (meta.gap > 0) parts.push(`gap: ${meta.gap}px`);
+                // 🛡️ L3-b（2026-10-21）：段间距不等距时（真值 33/20/20）只下发众数会丢真值，
+                //   把完整序列按序下发，禁止统一成一个值。
+                if (Array.isArray(meta.gapSequence) && meta.gapSequence.length > 1) {
+                  parts.push(
+                    `各段间距依次为 ${meta.gapSequence.join(' / ')}px（严格按序使用，禁止统一成同一个值）`,
+                  );
+                }
                 if (meta.height > 0) {
                   // 🚨 2026-09-07（0907 审计 L1）：统一 flex 事实源——内容区块 grow 用
                   // 归一化系数（meta.flexGrow，平均值=1，比例=设计稿高度比），
@@ -2758,11 +2876,29 @@ export class MicrocodeEngineer extends BaseAgent {
             relBase,
             diag,
           );
+          // 🛡️ R24（2026-10-21 · 07ae49a2 实锤）：空 `<img>` 补资源 src。
+          //   上面那步只注入「代码里真实出现过的资源变量」；模型写裸 `<img class="c-icon" />`
+          //   （真机 4 例）时它没有入参可用 ⇒ 图片静默留空 / 破图。此处按
+          //   `data-section-id` ↔ 资源归属（ownerSectionId / figmaNodeId / 派生 id 前缀）
+          //   确定性补齐，候选不唯一则不动（宁可漏，不可错配）。
+          const imgHealed = healEmptyImgSrc(injected, effectiveMapping, relBase);
+          const patched = imgHealed.changed ? imgHealed.code : injected;
+          if (imgHealed.changed) {
+            this.logger.info('🛡️ R24 空 <img> 已补资源 src', {
+              file: relPath,
+              healed: imgHealed.healed,
+            });
+          } else if (imgHealed.skipped.length > 0) {
+            this.logger.debug?.('R24 空 <img> 未补（fail-open）', {
+              file: relPath,
+              skipped: imgHealed.skipped,
+            });
+          }
           if (diag.residual.length > 0 || diag.unmapped.length > 0) {
             placeholderDiag.push({ file: relPath, ...diag });
           }
-          if (injected !== content) {
-            allFiles[relPath] = injected;
+          if (patched !== content) {
+            allFiles[relPath] = patched;
             injectedCount++;
             this.logger.info(
               '✅ 已自动注入资源import语句（生成内阶段，门禁前）',

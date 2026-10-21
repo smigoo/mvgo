@@ -1203,6 +1203,97 @@ export function isResourceVarMounted(content, varName) {
 }
 
 /**
+ * 🛡️ L3-c（2026-10-21 · c-c8d-195c8d0e 实锤「4 个图标位置全空白」）：
+ * `<img>` 引用了资源变量却没有 `:src` ⇒ 确定性注入 `:src`。
+ *
+ * 病灶：产物写成 `<img v-if="icon4" class="..." alt="" />` —— 变量 `icon4` **确实被引用了**
+ *   （`v-if` 里出现），所以 `isResourceVarMounted` 判「已挂载」⇒ CODE-022 不报、prune 不删，
+ *   全链**没有任何一处**要求「引用必须落在 `:src` 上」。浏览器渲染出的是空 `<img>`。
+ *
+ * 判据（纯文本形态、命名无关）：
+ *   ① 变量必须在**本文件 `<script>` 里 import 过**（否则注入就是悬空引用，必然被门禁判死）；
+ *   ② 该 `<img>` 标签属性里出现该变量（词边界）；
+ *   ③ 该标签**没有** `:src` / `v-bind:src` / `src` 声明（有则尊重作者写法，不改）；
+ *   ④ 标签内只出现**一个**候选资源变量（多个则无法判定该绑哪个，跳过）。
+ *   满足即在该标签名后插入 `:src="<var>"`。
+ *
+ * 幂等；只动 `<template>` 内 `<img>` 开标签；异常/无候选 ⇒ 原样返回。
+ *
+ * @param {string} content .vue 全文
+ * @param {Array} resourceDomMapping 资源映射
+ * @returns {{content:string, changed:boolean, healed:Array<{variable:string, tag:string}>}}
+ */
+export function healImgSrcBindings(content, resourceDomMapping) {
+  const result = { content, changed: false, healed: [] };
+  if (typeof content !== 'string' || !content) return result;
+  const { varToMapping } = buildVarToMapping(resourceDomMapping || []);
+  if (varToMapping.size === 0) return result;
+
+  // ① 只处理本文件真正 import 过的变量
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const script = scriptMatch ? scriptMatch[1] : '';
+  const imported = new Set();
+  for (const varName of varToMapping.keys()) {
+    const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`import\\s+${esc}\\s+from`).test(script)) imported.add(varName);
+  }
+  if (imported.size === 0) return result;
+
+  let next = content;
+  const healed = [];
+  // ② 逐个 <img ...> 开标签
+  next = next.replace(/<img\b((?:"[^"]*"|'[^']*'|[^>])*)>/g, (full, attrs) => {
+    if (/(?::src|v-bind:src|\ssrc)\s*=/.test(attrs)) return full; // ③ 已有 src，尊重作者
+    const hits = [];
+    for (const varName of imported) {
+      const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`\\b${esc}\\b`).test(attrs)) hits.push(varName);
+    }
+    if (hits.length !== 1) return full; // ④ 零候选或多候选 ⇒ 不猜
+    healed.push({ variable: hits[0], tag: full.slice(0, 80) });
+    return `<img :src="${hits[0]}"${attrs}>`;
+  });
+
+  if (healed.length > 0 && next !== content) {
+    result.content = next;
+    result.changed = true;
+    result.healed = healed;
+  }
+  return result;
+}
+
+/**
+ * 🛡️ L3-c 审计（只报不改）：`<img>` 引用资源变量但缺 `:src` 的**全部**位置。
+ *
+ * 与 `healImgSrcBindings` 共用同一判据实现（同一函数内提取，避免两份正则漂移）；
+ * 供门禁/报告使用，不改文本。
+ *
+ * @param {string} content
+ * @param {Array} resourceDomMapping
+ * @returns {Array<{variable:string, tag:string}>}
+ */
+export function findImgSrcBindingGaps(content, resourceDomMapping) {
+  const { varToMapping } = buildVarToMapping(resourceDomMapping || []);
+  if (varToMapping.size === 0 || typeof content !== 'string' || !content) return [];
+  const gaps = [];
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const script = scriptMatch ? scriptMatch[1] : '';
+  for (const varName of varToMapping.keys()) {
+    const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp(`import\\s+${esc}\\s+from`).test(script)) continue;
+    const re = new RegExp(`<img\\b((?:"[^"]*"|'[^']*'|[^>])*)>`, 'g');
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      const attrs = m[1] || '';
+      if (/(?::src|v-bind:src|\ssrc)\s*=/.test(attrs)) continue;
+      if (!new RegExp(`\\b${esc}\\b`).test(attrs)) continue;
+      gaps.push({ variable: varName, tag: m[0].slice(0, 80) });
+    }
+  }
+  return gaps;
+}
+
+/**
  * 🛡️ CODE-022 修复器（2026-09-11 根治方案 R3-2）：资源 import 未挂载 → 确定性删除。
  *
  * 根因：LLM 偶发「import bg1 后模板/脚本 0 处引用」→ CODE-022 BLOCK → 全量重试 →

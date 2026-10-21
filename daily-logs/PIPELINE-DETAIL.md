@@ -150,3 +150,193 @@
   的宽松度差异是**计划层 vs 兜底层**的层级设计，不是缺陷。
 - **立项项**：vue3 产物 0 个 `data-section-id` ⇒ 该路径锚点机制（含 `DETERMINISTIC_ANCHOR_SCORE` 短路）
   是死代码（vue3 无锚点写入方）。
+
+## 2026-10-21 装配层详判据（从 MEMORY.md 迁出，供按需细读）
+
+### A. e3ab048a 实例：行→卡双层重复只折一层（✅ 2026-10-21 已修 F1，未部署）
+
+真值形态 = 段 group → N 个**行容器**（宽 564，每行 4 张 126×30 卡，列距 20、行距 50）→ 卡。
+`deriveNestedSections` 把行容器当「重复 item」折叠，**只留第 1 行、其余整行丢弃**；模板行内部 4 张卡
+又被折成内层 list ⇒ 优质 12→3、普通 15→4；战略段残余 2 段（行1 + 行2）⇒ 三段各拿不同残骸。
+
+- 数字对照（视觉真值 vs 产物）：战略 6→8（含 2 项重复）、优质 12→3、普通 15→4。
+- **根因（已闭合）**：`groupSections` 的①精确签名组**只比结构签名、零几何校验**，而
+  `normalizeRepeatName` 把 `Frame 2136639905/906/907` 统一归一成 `frame` ⇒ 3 个行容器签名相同。
+- **实施（`repeated-section-collapser.js`）**：`flattenNestedCollapsedItems(items)` /
+  `nestedCollapsedLists(item)` / `unionBoxOf(list)`。判据 = 组内**每一项**（自身是 list，或
+  `children` 里有 list）⇒ 该层比真实重复单元高一层 ⇒ 把内层 `items` 展开拼平。
+  **要求「全部」而非「任一」**（混合组说明子列表只是卡内局部）。展平后 `type = 项数≥6 ? 'grid' : 'list'`，
+  `buildCollapsedSection` 走 `opts._template/_box/_sourceNodeIds`：模板取最内层首项、
+  bbox/`figmaHeightPx` 取各行**并集**、sourceNodeIds 取并集（否则资源挂载只认第一行）。
+- **真机重放（`.checkpoint/figma.json`，主判据=厂商名逐项相等）**：优质 `38:3162` **12 项**/1 段 grid、
+  普通 `38:3206` **15 项**/1 段 grid（含末行 3 卡）、战略 `38:3137` **6 项**/**2 段**。
+- ⚠️ **边界（属 F2，非回归）**：展平依赖「每项内部已有折叠 list」，而某行卡数 < `minRepeat` 时
+  该行不折（战略段第 2 行仅 2 卡）⇒ 两行签名不同 ⇒ 整组不展平。普通段末行 3 卡恰好够 `minRepeat=3`。
+- 完整缺陷清单 + 复现命令：`docs/2026-10-21-合作厂商弹窗-e3ab048a-三段还原缺陷与待修清单.md`
+  （§7 实施记录含逐条根因/判据/踩坑/重放表/归因）。
+
+### B. 视觉分析（`visual.json`）路径与三处系统性错误
+
+- **正确路径是 `layoutStructure.layout.sections`**（`layoutStructure` 下还有一层 `layout`），
+  顶层没有 `sections` 键。误读会得出「vision 没产出布局」的错误结论（已发生一次，须避免）。
+- 它做得对的：`layout.type/direction`、4 段骨架、三段 item 名单/顺序/数值、`styles.colors`
+  前三项 = 三段面板底色、`notes` 里「三块各有黄/绿/蓝高亮」= 三段各自的 `INNER_SHADOW`。
+- 三处系统性错误（却恰好是下游真正消费的字段）：
+  ① `body.layout:'horizontal-4-items'` —— 把「N 行 × 每行 4 卡」压平成一维「4 项」；
+  ② `items[].figmaNode` **错位一整级** —— 把行容器 id 当卡片 id（`38:3167` 是行容器，
+     卡片是 `38:3168/3171/3174/3177`，间隔 3 不是 5）；`38:3266` 是 icon VECTOR 却标成
+     文本「合作厂商」（真值文本是 `38:3263`）；
+  ③ `repeatedCardTruth.fill = #679bbe` / `items[].repeatedFill = #ffffff` 是幻觉色
+     （真值三段各不同：`#fffdf1` / `#f6fff7` / `#f2fdff`，且都不是白）。
+- `anchorValidation` 报 100% valid **只证明「id 在真值树里存在」**，不证明类型/角色正确 ⇒
+  与 P1-7 `validateVisionAnchors` 同一盲区（memory 「存在 ≠ 可信」）。
+
+### C. 刀 36 自嵌套折叠的已知盲区
+
+判据 = 元素 `W[S]` 内存在组件实例 I 且 I 的文件根 `data-section-id` 也是 S；修复 = 删「内容被 I
+覆盖」的同级实例 + I 的 `flex:<ratio>`→`flex:1` + 清失效 import。
+
+- **删除前提是「内容覆盖」**：`collectRenderedSurface` = 模板静态文本 ∪ defineProps 默认值 ∪ hasImg。
+- **盲区**：父 div 内还有其他兄弟段时 `surfaceCovers` 不成立 ⇒ 不触发。e3ab048a 战略段即此形态
+  （`div[38:3137]` 内还有 `HeaderText` / `ContentSection8`），代价是标题重复 + 尾部 2 项重复；
+  同源根因其实是 §A（行容器没被聚合），不宜为它单独放宽判据。
+
+### D. 刀 37 的判据与盲区（`container-background-truth.js`）
+
+现有判据：① class 背景解析后等于**另一 section** 的背景真值 ⇒ 借用，覆盖；② 未声明且真值是渐变
+⇒ 缺失，补齐；✅**④ 已声明但 ≠ 本节真值 ⇒ mismatch，覆盖**（2026-10-21 新增，**只对渐变生效**；
+纯色面板 class 引 `@color-border-*` 明暗两套，覆盖成字面量会丢主题）。写 inline `background`
+（不污染 class、幂等）。
+
+- ~~盲区 1「已声明但写错」~~（✅ 已由判据 ④ 闭合）：卡 1 `linear-gradient(180deg,#d4e3ff,#c1d6ff)`
+  + `border:1px solid #a0c1ff`；border 那半由刀 38 兜（见 §E）。真机重放仅 1 处变更（`38:3260 mismatch`）。
+- **盲区 2 渐变方向不可证（已降级为「只比 stops」）**：`figma.json` 常缺 `gradientHandlePositions`
+  （本例 `38:3261`/`38:3283` 均为 `null`）⇒ `fillsToCss` 默认给 `180deg` 属静默硬猜。
+  `resolveSectionBackground()` 返回 `angleGuessed=true` 时：比较用 `stripGradientAngle`（**只比 stops**），
+  覆盖用 `mergeGradientAngle`（**保留产物原有角度**）。⚠️ 不做这个分叉会把卡 2（class 写 180deg、
+  truth 缺 handle 猜 90deg）误判成写错而覆盖掉一个本来正确的背景。
+- **盲区 3 N1 全盲（未修）**：`truth-color-usage-guard`（`mc-component-graph-phase2.js:3819`，只 WARN）
+  判据②「纯色才判，渐变跳过」⇒ 渐变背景/渐变描边全部不判。
+
+### E. 「无 strokes ⇒ 不得写 border」（✅ 2026-10-21 已实施 刀 38）
+
+容器 `strokes=[]` 时产物仍出现 `border:*`（本例 `#a0c1ff` 全树不存在，只等于
+`theme-vars.less:26 @color-bg-design`）。同时**段面板的 `INNER_SHADOW` 不是边框** ⇒ 任何新增自愈器
+都不得把 `box-shadow` 当 `border` 删掉（阴性对照）。
+
+- 实施：新增 `backend-node/src/ai-engine/utils/border-without-strokes.js`，挂
+  `pre-write-self-healing` ⑯（刀 37 之后），计数 `summary.borderWithoutStrokes`。
+- 判据 `isStrokeFree(node)`：`strokes` 为空数组或每项 `!s || s.visible === false` ⇒ 删该元素
+  inline 与**独占 class**（`isClassExclusiveTo`）的 `border*`/`outline*`；类名判定用
+  `BORDER_PROP_RE = /^(?:border|outline)(?:-[a-z]+)*$/i` 且**排除 `radius` 结尾**。
+- 三条边界：`border-radius` 不是边框 / `box-shadow` 不是边框 / 共享 class（任一使用点无
+  `data-section-id` 或属别的 section）一律不动。
+- ⚠️ 实施踩坑：`stripBorderFromInline` 会归一化结尾分号，若用 `!==` 判变更，**每个无边框元素都产生
+  一次假变更**（真机重放实测 6 处）⇒ 必须先 `hasBorderDeclInInline()` 判「真的有没有边框」。
+- spec `utils/__tests__/border-without-strokes.spec.ts` 12 例；真机重放仅 1 处变更（删
+  `.c-e3ab04-stats-con` 的 border），`border-radius:4px` 与面板 `box-shadow: inset` 保留。
+
+### F. 图标尺寸：`backgroundImage` 形态（✅ 2026-10-21 已实施 刀 39）
+
+`resource-mounter#ensureReferencedIconSize`（L509）正则只匹配 `:src="${varName}"`，即只处理
+`<img>`。`backgroundImage:url(x)` + `backgroundSize:'100% 100%'` 的写法完全绕过 ⇒ 真值
+`53×55.45` 被拉伸变形。
+
+- 实施：`ensureReferencedIconSize` 返回 `{content, patched, mode:'img'|'bg'|null}`；`<img>` 分支保持
+  原行为并早返回，随后新增 `backgroundImage` 分支 + `bgTagHasPxSize(tag)` / `applyPxSizeToBgImageTag`。
+- 判据（与 `<img>` 同构）：标签里某 `backgroundImage` 的引用标识符 === varName，且 `backgroundSize`
+  不是「两个 px 值」⇒ 改写为真值 `${w}px ${h}px`；无该键则对象写法在 `backgroundImage` 值后插一项、
+  原生 style 末尾追加。
+- ⚠️ 原症状之所以是「静默」：`patched=false` 时调用方 `doneKeys.add(key); continue;` **直接放弃**，
+  零日志。判「分支没生效」要先确认「分支有没有被调用」（`previewAnalysisRole === 'icon'` 为真）。
+- spec `roles/microcode/resource-mounter-bg-image-size.spec.ts` 8 例（**该文件必须与
+  `resource-mounter.spec.ts` 同目录**，否则 `jest.mock('../../../config/backend-root.js')` 路径错）。
+  真机重放 `patched=true, mode='bg'`，`100% 100%` → `53px 55px`。
+
+### G. 文本样式 R19 补充
+
+- **槽位判据三坑**：`@var` 浅/深多定义 ⇒ 候选集任一命中即放行；只取规则块顶层声明
+  （`&--active` / `:hover` 内的不算）；同段文本多子组件 ⇒ 全错才报。
+- `injectNodeLevelColorTruth` 按 run 边界拆 span；P-11 只服务运行时 `{{ }}` 绑定，两者判定域互斥。
+- 严重级本轮定 **WARN**：BLOCK 会触发 L0-B 重试 → 兜底模板覆盖，比「色不准」更糟。
+- 基线 c-bb8-304bb8d3：`mixed=33 / judged=25 / mismatch=19 / skipUnmapped=8`。
+
+## 判据索引详版（从 MEMORY.md 迁出）
+
+### 多主题色值真值（N 稿）
+- **透传链**：`graph(state.dualTruth)` → `engineer.execute(params.dualTruth:6518)` → **`this.generateCode({...})`
+  显式白名单（曾漏 `dualTruth` ⇒ 分块 prompt 零副稿色值）** → prompt-builder。
+- 带 nodeData 的逐稿数据在 `state.dualTruth.themes`（`themeNodes` 是用户原始输入、无 nodeData）。
+- `fetchNodeData` 返回 **document 本体**（非 `{document}` 包装）；只有 `figma-node-data.json` 缓存才是
+  包装，须 `raw.document || raw` 解包。HTTP 状态在 **`err.figStatus`**（不在 axios `status`）。
+- 真值下发：`utils/color-slot-mapper.js#buildCrossThemeColorFacts`（树路径对齐「主稿色↔各副稿色」
+  + 每稿主色板；同色值组合去重、跨稿无差异不入表、单稿 ⇒ null）+ `formatCrossThemeColorFacts`
+  （markdown 硬约束，明令禁止 `#2b2b2b/#e6e6e6/#333333` 中性灰）；
+  `prompt-builder#buildCrossThemeColorBlock` 注入 theme-vars / common.less / legacy dual 三处。
+- 🔴 `// 自动添加（语义推断）` 注释 = **非真值**（`addMissingVariables` 用 `safeLessVarValue` 按名+明暗猜）
+  ⇒ 被 common.less 引用即「深色稿 ≈ 默认 dark」。审计 `auditSemanticGuessSlots` 挂在
+  `LessVariableChecker.check` **之后**（顺序错了抓不到）。
+- `buildColorSlotMapping`：主通道（主稿 hex 精确命中既有槽位）/ 扩展通道（`@color-custom-N`）/
+  兜底（跨稿无差异保留字面量）；**同一主稿色重复出现须复用槽位**。只处理 common.less 的 **hex
+  字面量** —— LLM 若用自造槽位名则映射无从下手（靠 prompt 端真值下发治本）。
+- 双真值（2026-10-10 D8，仅微码 Max）：`style-tokens.js#buildStyleTokens(input.dualTruth)`；副稿拉取
+  fail-closed 在 `graph-phase2#fetchSecondaryFigmaNode`；判据分叉靠产物标记 `// dualTruth: figma-derived`。
+  坑：① `buildDesignVars` 返回描述符数组须 `key→value` 映射；② 设计变量轨必须按主题分开
+  （`lightDesign`/`darkDesign`）。`resolvePrimarySecondary` 的 `firstInput` **恒为第一个框** ⇒
+  `secondaryNode` 须恒放第二稿。一条命令：`npm run check:dual-truth`。
+
+### 主题色门禁（M4-10 / M4-11）
+- `mc-check.cjs` L794-820 从 `mc-check-config.json:40-49` 取白名单，**只读 `css-vars.js` 的 `dark`，
+  完全不读 `theme-vars.less`**；不读 meta ⇒ 判据无法按模式分叉。
+- `darkThemeCoreVars=[colorTextBase,colorPrimary,colorPrimaryBg]`、`darkThemeColorRules`（硬枚举，
+  M4-10 error）、`darkThemeOptionalVars`（滚动条，M4-11）。
+- ⚠️ 放三核心真值必须 less#dark 与 js#dark 两处同写。
+- ⚠️ **僵尸规则**：`colorTextSecondary`/`colorPrimaryHover`/`Active`/`BgHover` 有白名单但 M4-10 只遍历
+  三核心 ⇒ **从无判据消费**。内置 skill 副本两份需同改（`backend-node/skills/` + `aidocs/skills/`），
+  文档 `references/checklist.md` 同步。
+- `theme-color-guard.js`：`.common()` 禁语义颜色槽位名/字面量色值（`value` 以 `var(` 开头豁免）；
+  业务样式禁 `var()`。生成器缺口：`style-tokens.js#renderMicrocodeThemeVarsLess` L871 `.common()`
+  原样沿用 LLM prior；自愈器 `less-variable-checker#healCommonColorVars` L465 只清「light+dark 都定义」的颜色。
+
+### 技术栈接管 #78
+- `techstack-section-contract.js`（table 契约成功才吸收，fail-open）。
+- `findEntrypointCircularImports`（子组件禁 import 父 index.vue，正解 `$mcComponentBuilder()`）。
+- `style-conflict-detector.js`（只报不改）；`section-content-guard.js#checkTechStackContractTags`
+  （**corpus 级 ElementCoverageValidator 是死代码勿依赖**）。
+
+### 方向类判据（LAYOUT-001 / vfor-list-direction-guard）
+- 🔴 方向类判据必须判定「DOM 节点的真实子项排布」，不能只比 section 自身真值（LAYOUT-001 只比根元素
+  ⇒ 恒不命中）。`utils/vfor-list-direction-guard.js`：wrapper/item 期望按段角色分叉（折叠段 id ⇒
+  wrapper 期望在段 layout、item 期望在子段；叶子段 id ⇒ 反之；集合段 item 不判）；段内嵌套
+  `data-section-id` 子容器交 LAYOUT-001。
+- 自愈已启用：pre-write-self-healing ④-h 刀 30，ctx 需透传 `layoutStructure`
+  （microcode execute 域裸变量；vue3 无真值源 fail-open）。
+- 🔴 **多份同名规则盲区**：`extractFlexProps` 只取首个 `.cls{}` ⇒ 判据与 heal 打到不同份 ⇒ 复检恒红；
+  治本 `collectDirectionKinds` 聚合全部块（矛盾入 `conflicts`）+ heal 翻转**全部出现点**
+  （含 .vue，`(?!\w-)` 边界挡变体）。
+
+### 配额类判据
+- 🔴 **收集与裁剪必须解耦，类型一等公民优先**：收集闸门 `collectCap=max(4×quota,48)`，输出用
+  `pickTextPriorityLines`（TEXT 全留、余量给装饰、按原始序），配额 `max(quota, textCount)`。
+- **写配额逻辑先问「被砍的是不是只有这一条通道能下发」**（文本只有本通道；图片/资源另有
+  `injectResourceImports`）。
+
+### E1 推导与「孤儿文本」
+- 🔴 **E1 推导只提升容器类型**，容器直接子级的裸 TEXT 永不进 section 树（且 E1 整体替代 vision
+  sections ⇒ 整段消失）；补回靠 `collectTailOrphanTextKids`。
+- 深度 >2 的裸 TEXT 走「孤儿独立段」轨：id = `` `${parentId}-orphan-text-${i}` ``，`name` 才是文案
+  （写 spec 断言时用 `text ?? name`）。
+
+### Figma 覆盖/去重三铁律
+`utils/figma-coverage-dedupe.js`：① 锚点展开为后代闭包；② 索引外合成 id（如 `48:5813-list`）不入闭包；
+③ `removed` 跨层级聚合。验证 `npm run verify:coverage-dedupe`。
+
+### 两段式 / LESS / 门禁
+- L477 实锤：`style-class-consolidator#isBalanced` 只数 `{}` 不数圆括号，而写盘门禁
+  `scanStandaloneLessDefects` 数圆括号 ⇒ 合并器放行「缺 1 个 `)`」的合并稿 → 门禁判死 → 6 轮全跳过
+  → `_hasLastGood` 只查磁盘（不查分块缓存）→ `code-validator.js:2243` 兜底模板覆盖
+  （641 行 / 覆盖 53/56 class 的合格样式表被换成 15 行，19 个布局容器 class 零定义）。
+- 根治口径：合并器自写判据**删除**，合并产物直接交 `gateStandaloneLessWrite` 判定并接受其 heal 结果
+  ⇒ 输出恒能过门禁、写盘退化为幂等。`less-compile-gate` 零内部 import，无循环依赖。
+- **凡是「合并/收敛 → 门禁」两段式，两侧判据必须同一实现，不是同一逻辑各写一份。**
+- 改 prompt/规范前必须做「加载链三查」，生效规范根 = `backend-node/references/**`。

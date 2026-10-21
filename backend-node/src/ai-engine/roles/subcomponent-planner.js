@@ -37,6 +37,8 @@ import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
 import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
+// 🛡️ F18（2026-10-21）：行内列数/单项尺寸/间距的算术推导（纯几何）
+import { deriveRowMetrics, deriveGapFromBoxes, deriveGapSequence } from '../utils/row-metrics.js';
 // 🛡️ #78 技术栈接管（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：S2 语义收编 + S3 表格契约。
 //   `@antd/table` 等数据驱动标记区域此前仍被拆成列容器叶子 ⇒ LLM 手写假表格（a-table 0 次）。
 //   治本：直接命中的数据驱动容器吸收 children 为单一 techstack 叶子 + 确定性 columns/
@@ -46,7 +48,9 @@ import { enrichSectionsWithTechStack } from '../utils/techstack-section-contract
 //   本模块是 `deriveSectionsFromFigmaTree` 的**唯一调用方**；依赖方向为
 //   `figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），反向 import 会**成环**
 //   ⇒ 由本模块算好并作为第 2 参传入（见 `plan()` 内 layoutFacts）。
-import { buildNodeLayoutFacts } from '../utils/figma-node-layout-facts.js';
+import { buildNodeLayoutFacts, decideLayoutForBoxes } from '../utils/figma-node-layout-facts.js';
+// 🔴 R23（2026-10-21）：Figma id 形态的唯一来源（勿再写第三份正则）
+import { FIGMA_ID_RE } from '../utils/section-anchor-truth.js';
 // 🛡️ A 方案（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤）：Figma 覆盖去重（治「卡 2 双渲染」）。
 //   同一批卡节点被「vision items 轨」与「collapse 折叠轨」各解释一次 ⇒ 两段并存 ⇒ 重复渲染。
 //   判据与实现详见 utils/figma-coverage-dedupe.js（纯函数、单一事实源）。
@@ -588,13 +592,33 @@ function extractLayoutMetadata(section) {
   // 非对象形态（字符串/缺失）时按空对象处理 —— 与原实现「取不到属性即走默认」等价
   const layout = rawLayout && typeof rawLayout === 'object' ? rawLayout : {};
 
+  // 🛡️ L3-b（2026-10-21 · c-c8d-195c8d0e 实锤 33/20/20 全部丢失）：`itemSpacing` 只在
+  //   `section.layout` 是**对象**形态时存在；真实语料 layout 是字符串（'vertical'）⇒ 取不到
+  //   ⇒ `gap` 恒 0 ⇒ prompt 的 `if (meta.gap > 0)` 永不成立，整条「间距下发」通道空转。
+  //   兜底：按子项 bbox 沿主轴反推（相邻间隙须一致，否则不猜）。
+  const explicitGap = Number(
+    (layout.itemSpacing ?? layout.gap) || 0,
+  );
+  const childBoxes = (Array.isArray(section?.children) ? section.children : []).map(
+    (c) => c && c.absoluteBoundingBox,
+  );
+  const geometricGap =
+    explicitGap > 0
+      ? explicitGap
+      : deriveGapFromBoxes(childBoxes, direction, { mode: 'dominant' });
+  // 不等距（33/20/20 这类）时把完整序列一并下发，避免「只有一个众数」丢真值
+  const gapSequence = explicitGap > 0 ? [] : deriveGapSequence(childBoxes, direction);
+  const hasMixedGaps =
+    gapSequence.length > 1 && new Set(gapSequence).size > 1;
+
   return {
     direction,
     alignItems:
       layout.primaryAxisAlignItems || layout.alignItems || 'flex-start',
     justifyContent:
       layout.counterAxisAlignItems || layout.justifyContent || 'flex-start',
-    gap: layout.itemSpacing || layout.gap || 0,
+    gap: geometricGap,
+    ...(hasMixedGaps ? { gapSequence } : {}),
     // A（2026-08-29）：补区块像素高度，供「子区块高度按比例分配」规则使用。
     // 约束 ai-generation-constraints.md 要求 `flex: <Figma高度px> 1 0`，但此前 layoutMetadata
     // 完全没有 height 字段，导致 prompt 永远拿不到 px 数值、LLM 只能回退 height:100%（多区块溢出根因）。
@@ -1034,6 +1058,16 @@ function inferGridColumnsFromGroupChildren(sec, figmaIndex) {
     if (/^(bg|background|icon|vector|decorator|divider)$/i.test(name)) return false;
     return true;
   });
+  // 🛡️ F18（2026-10-21 · c-c8d-195c8d0e 实锤）：**等宽单行列表**先做算术推导。
+  //   病灶：一行 4 个 chip（`4 × 126 + 3 × 20 = 564`）用 x 聚类会得到「4 列各 1 项」，
+  //   旧判据 `minSize < 2` 直接 NaN ⇒ 列数永久缺失 ⇒ 模型自己拍 `calc(25% - 20px)`。
+  //   判据：同行 + 同高 + 同宽 + 间距一致（全由 `deriveRowMetrics` 单一来源判定）。
+  const rowMetrics = deriveRowMetrics(
+    kids.map((c) => c.absoluteBoundingBox),
+    { minCount: 3 },
+  );
+  if (rowMetrics) return rowMetrics.count;
+
   const cols = clusterItemsByColumnX(kids);
   if (!cols || cols.length < 2) return NaN;
   const sizes = cols.map((c) => c.items.length);
@@ -1044,8 +1078,99 @@ function inferGridColumnsFromGroupChildren(sec, figmaIndex) {
   return cols.length;
 }
 
+/**
+ * 🔴 R23（2026-10-21 · mc-max-1792554799450-66d79bff「合作厂商弹窗」实锤）：**归并后的容器方向复算**。
+ *
+ * 病灶（离线 A/B 实测）：卡片 `38:3260` 的 Figma 原生 children 只有 2 个 ——
+ *   `38:3261`（整卡背景 VECTOR 265×76）+ `187:262`（icon 53×55）；而 `合作厂商`/`33`
+ *   在真值树里是**根级兄弟 TEXT**（x 都在 26997 居右，y 一上一下）。
+ *   ⇒ `buildNodeLayoutFacts` 对这个节点只能拿到「bg + icon」：
+ *     剔背景层后剩 1 项 ⇒ `decideGeometricLayout` 回退用全集 ⇒ side-by-side **0/1 = 0**
+ *     ⇒ 判 `column`（confidence=high）——**方向的错不在判据，而在「判得太早」**：
+ *     判的时候文本还没被归并进卡片。
+ *
+ * 治本口径（不新增判据，只换输入）：
+ *   当**派生结构**（E1）对该节点的 children 做过归并（派生 child 集合 ≠ Figma 原生 child 集合）时，
+ *   用**归并后**的子节点 bbox 复算一次方向，并只覆盖 `geometric-*` 派生的 layout。
+ *
+ * 刻意设的三道闸（每道都可辩驳）：
+ *   ① 只对 E1 派生路径生效（`ctx.e1Derived`）—— vision 路径的 sections 不在此判定域内；
+ *   ② 真实 Auto-Layout（`layoutMode` HORIZONTAL/VERTICAL）**永不覆盖** —— 那是 figma 声明的事实；
+ *   ③ 派生集合与原生集合**相同**时不复算 —— 输入没变，原判据已经生效，复算只会引入抖动。
+ *
+ * @param {object} sec 派生 section（就地改 `layout`/`gridColumns`）
+ * @param {{figmaIndex?:Map, e1Derived?:boolean}} ctx
+ */
+export function refineDerivedContainerLayout(sec, ctx) {
+  if (!ctx?.e1Derived) return;
+  const idx = ctx.figmaIndex;
+  if (!idx || !sec || sec.id == null) return;
+  const rec = idx.get(String(sec.id));
+  if (!rec) return;
+  const raw = rec.rawNode || rec;
+  const mode = String(raw.layoutMode || '').toUpperCase();
+  if (mode === 'HORIZONTAL' || mode === 'VERTICAL') return; // ②
+
+  const rawKidIds = (Array.isArray(raw.children) ? raw.children : [])
+    .map((c) => String(c?.id ?? ''))
+    .filter((id) => FIGMA_ID_RE.test(id));
+  const derivedKidIds = (Array.isArray(sec.children) ? sec.children : [])
+    .map((c) => String(c?.id ?? ''))
+    .filter((id) => FIGMA_ID_RE.test(id));
+  if (derivedKidIds.length < 2) return;
+  // ③ 集合相同 ⇒ 归并没有发生，不重复判
+  if (
+    derivedKidIds.length === rawKidIds.length &&
+    derivedKidIds.every((id) => rawKidIds.includes(id))
+  ) {
+    return;
+  }
+
+  const boxes = derivedKidIds
+    .map((id) => idx.get(id)?.rawNode)
+    .filter((n) => n && (n.absoluteBoundingBox || n.bbox));
+  if (boxes.length < 2) return;
+
+  const decide = decideLayoutForBoxes(
+    boxes,
+    raw.absoluteBoundingBox || raw.bbox || null,
+  );
+  if (!decide) return;
+
+  const next =
+    decide.display === 'grid'
+      ? 'grid'
+      : decide.flexDirection === 'row'
+        ? 'horizontal'
+        : 'vertical';
+  const nextCols =
+    decide.display === 'grid' && Number(decide.gridColumns) >= 2
+      ? Number(decide.gridColumns)
+      : null;
+  if (next === sec.layout && (nextCols == null || nextCols === Number(sec.gridColumns))) {
+    return;
+  }
+
+  logger.info('🛡️ R23 归并后容器方向复算（原生 children 不含内容文本 ⇒ 判定输入不完整）', {
+    sectionId: String(sec.id),
+    name: sec.name,
+    from: sec.layout ?? null,
+    to: next,
+    rawKids: rawKidIds.length,
+    derivedKids: derivedKidIds,
+    ratio: decide.ratio ?? null,
+    confidence: decide.confidence,
+  });
+
+  sec.layout = next;
+  if (nextCols != null) sec.gridColumns = nextCols;
+}
+
 function buildEffectiveSection(sec, idx, ctx) {
   if (isLayoutContainerSection(sec)) {
+    // 🔴 R23：必须在读取 `sec.layout` 的任何判断之前（R2 豁免的 isHorizontalContainer、
+    //   containerLayout、extractLayoutMetadata 全都依赖它）。
+    refineDerivedContainerLayout(sec, ctx);
     // 🛡️ 2026-09-20 R2 豁免（方案A · mc-max-1789811323065 / mc-1789861426638 实锤）：
     //   横向并列容器（layout=horizontal/grid）内有 ≥2 个叶子子节点时，这些子节点互为
     //   「同构并列卡」（如三张统计卡危化品车/重型货车/超高车辆）。它们各自元素多
@@ -1476,6 +1601,8 @@ export class SubcomponentPlanner {
       ? rawSections
       : rawSections.filter((sec) => !isPanelHeader(sec));
     let filteredCount = rawSections.length - sections.length;
+    // 🔴 R23：E1（确定性递归结构）是否真的替代了 vision sections —— 归并后方向复算的判定域闸门
+    let e1Derived = false;
 
     if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
       // 🛡️ 先尝试确定性递归推导（结构事实源）
@@ -1645,6 +1772,7 @@ export class SubcomponentPlanner {
         }
 
         sections = derived.sections;
+        e1Derived = true;
 
         // 🛡️ 纯 chrome 标题栏剥离（2026-09-17 · 环境监测实锤，零硬编码、通用）：
         //   E1 确定性推导对任何名为 header 的 Figma 节点标 type:header，其中「纯装饰标题栏」
@@ -1749,7 +1877,10 @@ export class SubcomponentPlanner {
     //   （texts/textStyles/resourceFiles）供 v-for prompt 确定性注入。
     const beforeCollapse = sections.length;
     const beforeCollapseDeep = JSON.stringify(countSectionsDeep(sections));
-    sections = collapseSectionsDeep(sections);
+    // 🛡️ R19（2026-10-21）：把 Figma 节点树传进折叠器，items 的文本真值改由
+    //   `utils/text-runs.js` 产出 `_vforData.lines`（一行一组 run，带 color/fontSize/fontWeight）。
+    //   旧行为（无 figmaNodeData ⇒ 走 vision 平行数组）保持不变。
+    sections = collapseSectionsDeep(sections, { figmaRoot: opts.figmaNodeData });
     const afterCollapseDeep = JSON.stringify(countSectionsDeep(sections));
     if (afterCollapseDeep !== beforeCollapseDeep || sections.length !== beforeCollapse) {
       logger.info('重复同构 section 已折叠为 list/grid（递归）', {
@@ -1794,8 +1925,18 @@ export class SubcomponentPlanner {
     }
 
     const allInternalSubcomponents = [];
+    // 🔴 R23：仅 E1 路径才需要 figma 索引（vision 路径不参与归并后方向复算），避免无谓遍历
+    const figmaIndexForRefine =
+      e1Derived && opts.figmaNodeData && typeof opts.figmaNodeData === 'object'
+        ? indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData)
+        : null;
     let effectiveSections = sections.map((sec, idx) =>
-      buildEffectiveSection(sec, idx, { enableInternalSplit, allInternalSubcomponents }),
+      buildEffectiveSection(sec, idx, {
+        enableInternalSplit,
+        allInternalSubcomponents,
+        e1Derived,
+        figmaIndex: figmaIndexForRefine,
+      }),
     );
 
     // 🛡️ 治本（2026-09-14 · c-traffic-monitor-34750940 实锤）：无归属壳锚定真实 Figma 节点。

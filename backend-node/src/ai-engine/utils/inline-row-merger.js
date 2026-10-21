@@ -40,6 +40,91 @@ function isGeometricSection(sec) {
 }
 
 import { indexFigmaNodes, getFigmaBox } from './section-tree.js'
+// 🔴 R22-d：`collectSectionFigmaRefs` / `FIGMA_ID_RE` 的唯一来源（勿在本文件另写副本）
+import {
+  collectSectionFigmaRefs as collectSectionFigmaRefsImpl,
+  FIGMA_ID_RE,
+} from './section-anchor-truth.js'
+
+/**
+ * 🛡️ F17（2026-10-21 · mc-max-1792497064987-195c8d0e「合作厂商弹窗」实锤）：
+ * 同行成员 **bbox 包含去重**。
+ *
+ * 病灶：Vision 把「两张统计卡 + 各自卡内的标题/数字」一共 6 个节点报成同一行成员
+ *   （`inlineCompositeRows` = `{id:'796:3', members:[38:3260, 38:3262, 38:3263,
+ *   38:3282, 38:3284, 38:3285]}`）。merger 原样把 6 个成员拍平成 6 个平级 item ⇒
+ *   「卡」这一层消失，标题/数字变成卡的兄弟 ⇒ 产物里 `33`、`合作厂商` 各自成一个块。
+ *   这不是模型理解错：行成员的**包含关系**是纯几何可判的事实，只是没人判。
+ *
+ * 判据（纯几何、命名无关）：
+ *   ① A 完整包含 B（四边容差 2px）且 A 面积 > B 面积 ⇒ B 是 A 的后代，不是同行兄弟；
+ *   ② 多个候选包含者取**面积最小者**（=直接父级）；面积并列 ⇒ 歧义，放弃（宁可漏并不误并）；
+ *   ③ 传递关系按「最小包含者」自然成链（A⊃B⊃C ⇒ C 挂 B）。
+ *
+ * @param {Array<string|number>} members 行成员 figma id（保持输入顺序）
+ * @param {(id:string)=>({x:number,y:number,width:number,height:number}|null)} boxOf
+ * @param {{tolerance?:number}} [opts]
+ * @returns {{roots:string[], childrenOf:Map<string,string[]>}} childrenOf 只含非空项
+ */
+export function groupRowMembersByContainment(members, boxOf, opts = {}) {
+  const tol = Number.isFinite(opts.tolerance) ? opts.tolerance : 2
+  const ids = (Array.isArray(members) ? members : []).map((m) => String(m))
+  // ⚠️ bbox 字段名两套口径：Figma 原始 `absoluteBoundingBox` 用 width/height，
+  //   `section-tree#getFigmaBox` 归一化成 w/h。这里统一成 width/height 再判，
+  //   否则面积恒为 0 ⇒ 包含判定恒 false ⇒ **静默失效**（本篇要防的正是这种假绿）。
+  const normBox = (b) => {
+    if (!b || typeof b !== 'object') return null
+    const x = Number(b.x)
+    const y = Number(b.y)
+    const width = Number(b.width ?? b.w)
+    const height = Number(b.height ?? b.h)
+    if (![x, y, width, height].every(Number.isFinite)) return null
+    return { x, y, width, height }
+  }
+  const infos = ids.map((id) => {
+    let box = null
+    try {
+      box = normBox(boxOf ? boxOf(id) : null)
+    } catch {
+      box = null
+    }
+    return { id, box }
+  })
+  const areaOf = (b) => (Number(b.width) || 0) * (Number(b.height) || 0)
+  const contains = (outer, inner) => {
+    if (!outer || !inner) return false
+    const oa = areaOf(outer)
+    const ia = areaOf(inner)
+    if (!(oa > 0) || !(ia > 0) || !(oa > ia)) return false
+    return (
+      inner.x >= outer.x - tol &&
+      inner.y >= outer.y - tol &&
+      inner.x + (Number(inner.width) || 0) <= outer.x + (Number(outer.width) || 0) + tol &&
+      inner.y + (Number(inner.height) || 0) <= outer.y + (Number(outer.height) || 0) + tol
+    )
+  }
+
+  const parentOf = new Map()
+  for (const inner of infos) {
+    if (!inner.box) continue
+    const outers = infos.filter((o) => o.id !== inner.id && contains(o.box, inner.box))
+    if (outers.length === 0) continue
+    outers.sort((a, b) => areaOf(a.box) - areaOf(b.box))
+    // 面积并列 ⇒ 无法确定直接父级，放弃该成员的去重（保守）
+    if (outers.length > 1 && areaOf(outers[1].box) === areaOf(outers[0].box)) continue
+    parentOf.set(inner.id, outers[0].id)
+  }
+
+  const roots = ids.filter((id) => !parentOf.has(id))
+  const childrenOf = new Map()
+  for (const id of ids) {
+    const p = parentOf.get(id)
+    if (!p) continue
+    if (!childrenOf.has(p)) childrenOf.set(p, [])
+    childrenOf.get(p).push(id)
+  }
+  return { roots, childrenOf }
+}
 
 /** 将共享 index 适配为 merger 的历史 byId 契约；业务裁决仍留在本模块。 */
 function buildFigmaIndex(figmaData) {
@@ -135,6 +220,110 @@ function childCoveredByEvidence(child, ev) {
   return walk(child, 0)
 }
 
+/**
+ * 收集 section **直接子级**引用的 Figma 节点 id。
+ *
+ * ⚠️ 只认 `figmaNode` / `figmaNodeId` / 形如 `12:345` 的 `id`。
+ *   `section.id` 本身**不可**作同区域判据：Vision 在那里写的是自由文本/语义名/幻觉 id
+ *   （c-d79b-66d79bff 实测给了 `38:3258`，Figma 里其实是普通段的「鲁邦通」TEXT）。
+ *
+ * 🔴 R22-d：实现已下沉到 `section-anchor-truth.js`（**单一来源**），此处仅转出，
+ *   避免同一判据两份副本（memory：同判据 ≥2 份 = 事故温床）。
+ */
+function collectSectionFigmaRefs(section) {
+  return collectSectionFigmaRefsImpl(section)
+}
+
+/**
+ * 判定「已存在的 section 是否描述这一行的**同一区域**」。
+ *
+ * 🔴 R22（2026-10-21 · c-d79b-66d79bff「合作厂商弹窗」实锤）：旧判据只有 `s.id === row.id`。
+ *   Vision 的 `section.id` 不可信（本例 `38:3258` 是幻觉）⇒ 永不命中 ⇒ 几何块必然追加 ⇒
+ *   下游「语义壳去重」必然把视觉段整段删除（丢掉 stat-card / layout / icon / label-value 顺序）。
+ *
+ * 两条独立通道，任一命中即同一区域：
+ *   ① **成员集合**（主）：row 收敛后的**全部根成员**都被该 section 直接引用 ⇒ 讲的是同几个节点。
+ *      要求「全部根」是为了不让「一个 tab 的语义壳」把整行吞掉（那只应让行保留）。
+ *      —— 命名无关、几何无关，也不受 section.id 幻觉影响。
+ *   ② **几何兜底**（次）：section 引用节点的 bbox 并集 ∩ row bbox ≥ row 面积的 80%。
+ *      只用于「视觉没写成员 id、但区域明显重叠」的情形；不做双向比较，
+ *      因为「大行里的小卡片」天然 100% 被包住，会误判成同一区域。
+ */
+function sameInlineRowRegion(section, row, roots, index) {
+  if (!section || !row) return false
+  if (section.id != null && String(section.id) === String(row.id)) return true
+  if (String(section.figmaNodeId || '') === String(row.id)) return true
+  const refs = collectSectionFigmaRefs(section)
+  if (refs.size === 0) return false
+  if (Array.isArray(roots) && roots.length > 0 && roots.every((r) => refs.has(String(r)))) return true
+
+  const recordOf = (id) => index?.byId?.get(String(id)) || null
+  const rowBox = getFigmaBox(recordOf(row.id))
+  if (!rowBox || !(rowBox.w > 0) || !(rowBox.h > 0)) return false
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const id of refs) {
+    const b = getFigmaBox(recordOf(id))
+    if (!b) continue
+    minX = Math.min(minX, b.x)
+    minY = Math.min(minY, b.y)
+    maxX = Math.max(maxX, b.x + b.w)
+    maxY = Math.max(maxY, b.y + b.h)
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return false
+  const ix = Math.max(0, Math.min(maxX, rowBox.x + rowBox.w) - Math.max(minX, rowBox.x))
+  const iy = Math.max(0, Math.min(maxY, rowBox.y + rowBox.h) - Math.max(minY, rowBox.y))
+  return (ix * iy) / (rowBox.w * rowBox.h) >= 0.8
+}
+
+/**
+ * 节点是否携带「几何块表达不了」的结构信息。
+ *
+ * 几何块（`buildMemberNode` 产物）每个 item 只有 `id / name / role:'item' / figmaNode / children`，
+ * 没有方向、没有图标语义、没有 label/value 区分、没有面板底引用。所以：
+ *   - `role` 存在且 ≠ 'item'（stat-card / tabs / chart…）
+ *   - `layout` 存在（horizontal / vertical → 卡内排布）
+ *   - `type` 存在（icon / label / value / group / row）
+ *   - `bgPlaceholder` 存在（面板底真值）
+ * 任一出现 ⇒ 几何块是该语义壳的**信息子集**，不可用它替换。
+ *
+ * ⚠️ 刻意**不**把 `resourceFile` 计入：它只说明挂哪个图，不说明结构；既有「header-controls
+ *   因资源尾号命中被剔除」的行为必须保持（那种壳去掉图标不会丢布局语义，几何行的文案证据
+ *   已覆盖同区域）。
+ */
+function hasStructuredNode(node, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 6) return false
+  const role = String(node.role || '').trim()
+  if (role && role !== 'item') return true
+  for (const key of ['layout', 'type', 'bgPlaceholder']) {
+    const v = node[key]
+    if (typeof v === 'string' && v.trim()) return true
+  }
+  const kids = node.children || node.items || node.elements
+  if (Array.isArray(kids)) {
+    for (const k of kids) if (hasStructuredNode(k, depth + 1)) return true
+  }
+  return false
+}
+
+/** 语义壳整体是否携带结构信息（含 e4b4a2d 原有三类：gridColumns / body.items / content-grid） */
+function carriesStructure(section) {
+  if (!section || typeof section !== 'object') return false
+  const gridCols = Number(section.gridColumns ?? section.body?.gridColumns ?? NaN)
+  if (Number.isFinite(gridCols) && gridCols > 1) return true
+  if (Array.isArray(section.body?.items) && section.body.items.length > 0) return true
+  const role = String(section.role || section.body?.role || '').trim()
+  if (role === 'content-grid') return true
+  const kids = [
+    ...(Array.isArray(section.children) ? section.children : []),
+    ...(Array.isArray(section.body?.children) ? section.body.children : []),
+  ]
+  for (const kid of kids) if (hasStructuredNode(kid)) return true
+  return false
+}
+
 export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
   if (!layout || typeof layout !== 'object') return layout
   const sections = Array.isArray(layout.sections) ? layout.sections : []
@@ -198,31 +387,81 @@ export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
     const box = getFigmaBox(node)
     return box && Number.isFinite(box.y) ? box.y : null
   }
-  // 业务 section 的 y：优先用其 figmaNodeId / id 查 figma；查不到返回 Infinity（沉底，保持原序）
+  // 业务 section 的 y 锚点。
+  //
+  // 🔴 R22-b（2026-10-21 · c-d79b-66d79bff 实锤）：旧实现只看 `figmaNodeId || id`。
+  //   Vision 的 `section.id` 可能是**存在但无关**的幻觉节点（本例 `38:3258` 在 Figma 里是
+  //   普通段的「鲁邦通」TEXT，y=52212）—— 它查得到 y，于是统计卡被排到整页最底部。
+  //   判据：自身锚点只在它确实是**包含**其直接子级内容的容器时才可信；否则改用
+  //   「直接子级引用节点 bbox 并集的顶部」（子级 id 是模型真正引用的节点，比 section.id 可靠）。
   const sectionY = (sec) => {
-    const id = sec && (sec.figmaNodeId || sec.id)
-    const y = id ? figmaYOf(id) : null
-    return y == null ? Number.POSITIVE_INFINITY : y
+    const ownId = sec && (sec.figmaNodeId || sec.id)
+    const ownY = ownId ? figmaYOf(ownId) : null
+    const refs = collectSectionFigmaRefs(sec)
+    if (refs.size === 0 || !figmaData) {
+      return ownY == null ? Number.POSITIVE_INFINITY : ownY
+    }
+    const recordOf = (id) => getIndex().byId.get(String(id)) || null
+    const ownBox = ownY == null ? null : getFigmaBox(recordOf(ownId))
+    let minY = Number.POSITIVE_INFINITY
+    let containsAll = ownBox != null
+    for (const id of refs) {
+      const b = getFigmaBox(recordOf(id))
+      if (!b) continue
+      minY = Math.min(minY, b.y)
+      if (!ownBox) continue
+      const tol = 2
+      const inside =
+        b.x >= ownBox.x - tol &&
+        b.y >= ownBox.y - tol &&
+        b.x + b.w <= ownBox.x + ownBox.w + tol &&
+        b.y + b.h <= ownBox.y + ownBox.h + tol
+      if (!inside) containsAll = false
+    }
+    if (!Number.isFinite(minY)) return ownY == null ? Number.POSITIVE_INFINITY : ownY
+    // 自身锚点确实是「装得下自己内容」的容器 ⇒ 用它（更接近 section 顶边）
+    if (ownBox && containsAll) return ownBox.y
+    return minY
   }
-  const newBlocks = []
+  let newBlocks = []
   for (const row of allowedRows) {
     if (!row || !Array.isArray(row.members) || row.members.length < 2) continue
-    // 同一行已存在于 sections（id 命中）则跳过，避免重复追加
-    if (merged.some((s) => s && s.id === row.id)) continue
-    const children = row.members.map((m, i) => {
+    // 🛡️ F17：成员先按 bbox 包含关系收敛（被包含者降为子项），避免「卡 + 卡内文本」被拍平
+    const memberIds = row.members.map((m) => String(m))
+    const grouping = getIndex()
+      ? groupRowMembersByContainment(memberIds, (id) =>
+          getFigmaBox(getIndex().byId.get(String(id))),
+        )
+      : { roots: memberIds, childrenOf: new Map() }
+    // 收敛后仍需 ≥2 个并列项才构成「行」；否则交回 E1 按普通容器处理（不产出扁平块）
+    if (grouping.roots.length < 2) continue
+    // 同一行已存在于 sections（**同一区域**命中）则跳过，避免重复追加。
+    // 🔴 R22：判据由「id 字符串相等」改为 sameInlineRowRegion（成员集合 + 几何兜底），
+    //   原因见该函数注释 —— Vision 的 section.id 是幻觉，旧判据恒不命中。
+    if (merged.some((s) => s && sameInlineRowRegion(s, row, grouping.roots, getIndex()))) continue
+    const orderOf = new Map(memberIds.map((m, i) => [m, i + 1]))
+    const buildMemberNode = (m) => {
       // 🛡️ 覆盖率根因（2026-09-11 · env-monitor 10% 实锤）：name 只写节点号（String(m)）会让覆盖率
       // 把「一氧化碳/洞内照明/洞外光强」等 tab 文案判 missing（节点号 vs 文案子串匹配不上）→ 虚低覆盖率。
       // 治本：从 member 的 figma 子树抽真实文案（TEXT.characters，collectSubtreeEvidence 已收 texts），
       // 拼接作为 name，覆盖率子串即可命中。抽不到文案才回退节点号（保持原行为）。
       const ev = getIndex() ? collectSubtreeEvidence(getIndex(), m) : null
       const texts = ev && ev.texts ? [...ev.texts] : []
+      const kidIds = grouping.childrenOf.get(m) || []
+      const kids = kidIds.map(buildMemberNode)
+      // 被吸入的子项自带文案（卡内标题/数字），拼进父 name 以免覆盖度只看到节点号
+      const kidTexts = kids
+        .map((k) => String(k.name || '').trim())
+        .filter((n) => n && !/^\d+:\d+/.test(n))
       return {
-        id: `${row.id}-m${i + 1}`,
-        name: texts.join('') || String(m),
+        id: `${row.id}-m${orderOf.get(m) || 0}`,
+        name: texts.join('') || kidTexts.join(' / ') || String(m),
         role: 'item',
         figmaNode: m,
+        ...(kids.length ? { children: kids } : {}),
       }
-    })
+    }
+    const children = grouping.roots.map(buildMemberNode)
     newBlocks.push({
       id: row.id,
       name: row.name || 'inline-row',
@@ -252,23 +491,27 @@ export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
   // Vision 把同一行拆成若干语义壳（header-tabs / header-controls），merger 又把该行整体
   // 提升为几何块（89:42，成员含 tabs-list + tabs-icon）→ 两者描述同一片 figma 区域，
   // 下游 planner 会各生成一个子组件 → 同一组 tab/icon 渲染两遍。
-  // 治本：几何行代表 Figma 真值几何（横向 + flex 比例），保留；语义壳若其子元素
-  // 已被某几何行的子树覆盖（id 尾号 / 资源文件名尾号 / 文案 / 语义节点名命中 ≥60%），
-  // 判为重复 → 从 sections 中剔除，保证「同一 figma 节点只落一次」。
+  //
+  // 🔴 R22-c（2026-10-21 · c-d79b-66d79bff 实锤）：原判据是「覆盖即删」——
+  //   `return !(hits > 0 && coverage >= 0.6)`，**从不问几何块是不是信息超集**。
+  //   注释里的前提「几何行代表 Figma 真值几何」对 tab 行成立（只要文案），对**结构化卡片
+  //   不成立**：几何 item 只有 id/name，没有 layout/icon/label-value 顺序/面板底。
+  //   于是「去重」变成了「信息丢失」——一份 stat-card 结构被换成扁平 item。
+  //   治本：把「删」改成三态——纯文本壳才删；携带结构的壳保留，改为**撤掉覆盖它的几何块**
+  //   （几何块信息更少，没有保留价值）；同一行已被更早的壳认领则本壳判重复剔除。
   const evidenceOf = []
   for (const s of merged) {
-    if (isGeometricSection(s) && s.id) evidenceOf.push(collectSubtreeEvidence(getIndex(), s.id))
+    if (isGeometricSection(s) && s.id) {
+      evidenceOf.push({ id: String(s.id), ...collectSubtreeEvidence(getIndex(), s.id) })
+    }
   }
-  for (const b of newBlocks) evidenceOf.push(collectSubtreeEvidence(getIndex(), b.id))
+  for (const b of newBlocks) {
+    evidenceOf.push({ id: String(b.id), ...collectSubtreeEvidence(getIndex(), b.id) })
+  }
 
   let keptSections = merged
   if (evidenceOf.length > 0) {
-    // 🛡️ 信息不丢失（2026-09-21 · c-device-monitor 实锤「device-grid 消失」）：
-    //   语义壳去重时，若语义壳携带结构化信息（gridColumns / items 数组 / role: content-grid）
-    //   而几何行只有扁平文本（collectSubtreeEvidence 把所有设备文本合并成一个字符串），
-    //   直接丢弃语义壳会导致 LLM 拿不到网格结构 → 产物只有背景图无设备列表。
-    //   治本：剔除语义壳前，将其结构化信息并入覆盖它的几何行 body。
-    const lostStructuralFacts = [] // { targetId, gridColumns, items, role }
+    const withdrawnGeoIds = new Set() // 因保留结构化语义壳而撤掉的几何块 id
     keptSections = merged.filter((s) => {
       if (!s || isGeometricSection(s)) return true
       const children = s.body && Array.isArray(s.body.children) ? s.body.children : null
@@ -284,46 +527,20 @@ export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
       }
       const coverage = hits / children.length
       const isSuperseded = hits > 0 && coverage >= SEMANTIC_SUPERSEDE_THRESHOLD
-      if (isSuperseded && coveringEvidence) {
-        // 语义壳被覆盖，检查是否携带结构化信息
-        const shellGridCols = Number(s.gridColumns ?? s.body?.gridColumns ?? NaN)
-        const shellItems = Array.isArray(s.body?.items) ? s.body.items : null
-        const shellRole = String(s.role || s.body?.role || '').trim()
-        const hasStructuralInfo =
-          (Number.isFinite(shellGridCols) && shellGridCols > 1) ||
-          (shellItems && shellItems.length > 0) ||
-          shellRole === 'content-grid'
-        if (hasStructuralInfo) {
-          // 收集结构化事实，待 filter 结束后并入对应几何行
-          lostStructuralFacts.push({
-            targetIds: coveringEvidence.ids,
-            gridColumns: Number.isFinite(shellGridCols) && shellGridCols > 1 ? Math.round(shellGridCols) : null,
-            items: shellItems,
-            role: shellRole || null,
-          })
-        }
+      if (!isSuperseded) return true
+      const coveringId = coveringEvidence && coveringEvidence.id ? String(coveringEvidence.id) : ''
+      // ① 携带几何块表达不了的结构 ⇒ 保留语义壳
+      if (carriesStructure(s)) {
+        // 同一行已被更早的结构化壳认领 ⇒ 本壳是重复的，剔除
+        if (coveringId && withdrawnGeoIds.has(coveringId)) return false
+        if (coveringId) withdrawnGeoIds.add(coveringId)
+        return true
       }
-      return !isSuperseded
+      // ② 纯文本语义壳（几何块能完整表达）⇒ 照旧剔除
+      return false
     })
-    // 并入结构化事实到覆盖它的几何行（在 keptSections + newBlocks 中查找）
-    if (lostStructuralFacts.length > 0) {
-      const allSections = [...keptSections, ...newBlocks]
-      for (const fact of lostStructuralFacts) {
-        // 找到覆盖它的几何行：其 id 在 fact.targetIds 中
-        const target = allSections.find((sec) => sec.id && fact.targetIds.has(sec.id))
-        if (!target || !target.body) continue
-        // 只补充，不覆盖：若几何行 body 已有 gridColumns/items 则跳过
-        if (fact.gridColumns && !(Number(target.body.gridColumns) > 1)) {
-          target.body.gridColumns = fact.gridColumns
-          target.gridColumns = fact.gridColumns
-        }
-        if (fact.items && (!Array.isArray(target.body.items) || target.body.items.length === 0)) {
-          target.body.items = fact.items
-        }
-        if (fact.role && !target.body.role) {
-          target.body.role = fact.role
-        }
-      }
+    if (withdrawnGeoIds.size > 0) {
+      newBlocks = newBlocks.filter((b) => !withdrawnGeoIds.has(String(b.id)))
     }
   }
 

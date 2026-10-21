@@ -1474,8 +1474,14 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
     //   ⇒「variable @color-bg-container is undefined」编译阻断。
     //
     //   正解：暴露段依次调用**全部**主题 mixin（common 优先，主题者覆盖它）。
-    //   这与覆盖层的优先级一致（`&.<key> { .common(); .theme-<key>(); }`）。
-    ..._allThemeMixinNamesForExposure(body),
+    //
+    // 🔴🔴 R21（2026-10-21 · c-a6c6fb-a6c6fbd3 实锤，**实测推翻错误直觉**）：
+    //   **mixin 注入的变量是「先调用者胜出」**（less 4.x 真编译实测；而普通重复赋值
+    //   `@c:#000;@c:#fff;` 才是后者胜出——两者语义相反）。
+    //   ⇒ 默认主题必须**最先**列出，否则 `:root` 会取到其它主题的值。
+    //   ⚠️ 另注：本块只把变量注入 `:root` 作用域，**不会**泄漏给 `common.less`（兄弟规则不可见）；
+    //   真正决定 `common.less` 根取值的是 `index.less` 的顶层调用。
+    ..._allThemeMixinNamesForExposure(body, styleTokens.defaultTheme || 'light'),
     '}',
     '',
   ].join('\n');
@@ -1483,10 +1489,18 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
 
 /**
  * 🔴 2026-10-12：从 body 里取出全部 `.theme-<key>()` mixin 名（供 `:root` 暴露段调用）。
+ *
+ * 🔴 R21（2026-10-21 · c-a6c6fb-a6c6fbd3 实锤，实测推翻了「后赋值覆盖」的直觉）：
+ *   **mixin 注入的变量是「先调用者胜出」** —— `m1(); m2();` 两者都定义 `@c` 时，
+ *   `@c` 取 `m1` 的值（less 4.x 真编译实测）。而普通重复赋值 `@c:#000;@c:#fff;`
+ *   才是后者胜出。**两种语义相反**，是本文件最容易踩的坑。
+ *   ⇒ 默认主题必须**排在第一个**（其余主题随后只为补缺失变量，不覆盖已定义者）。
+ *
  * @param {string} body theme-vars.less 的 mixin 区
- * @returns {string[]}形如 ['  .theme-light();', '  .theme-dark();']
+ * @param {string} defaultKey 默认主题 key（如 'light'）
+ * @returns {string[]} 形如 ['  .theme-light();', '  .theme-dark();']
  */
-function _allThemeMixinNamesForExposure(body) {
+function _allThemeMixinNamesForExposure(body, defaultKey = 'light') {
   const names = new Set();
   const re = /\.([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(\s*\)\s*\{/g;
   let m;
@@ -1495,8 +1509,9 @@ function _allThemeMixinNamesForExposure(body) {
     if (n === 'theme-vars' || !/^theme-/.test(n)) continue;
     names.add(n);
   }
-  // 常见名优先（保证输出稳定）；缺失的按字母序追加
-  const ordered = ['theme-light', 'theme-dark'].filter((n) => names.has(n));
-  const rest = [...names].filter((n) => !ordered.includes(n)).sort();
-  return [...ordered, ...rest].map((n) => `  .${n}();`);
+  const defaultMixin = `theme-${defaultKey}`;
+  // 默认主题**最先**（mixin 注入 = 先调用者胜出）；其余按稳定字母序补齐
+  const rest = [...names].filter((n) => n !== defaultMixin).sort();
+  const ordered = names.has(defaultMixin) ? [defaultMixin, ...rest] : rest;
+  return ordered.map((n) => `  .${n}();`);
 }

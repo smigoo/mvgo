@@ -149,6 +149,26 @@ function decideGeometricLayout(children, opts = {}) {
 }
 
 /**
+ * 🔴 R23（2026-10-21 · 66d79bff 实锤）：对**任意一组 bbox 节点**复用同一套方向判据。
+ *
+ * 为什么要单独开门：`decideGeometricLayout` 只在「走 Figma 原生 children」时被调用，
+ * 而真机上存在「**派生结构把根级兄弟节点归并进容器**」的情况（卡片 `38:3260` 原生只有
+ * bg VECTOR + icon，`合作厂商`/`33` 是根级兄弟 TEXT）。此时原生 children 里剔掉背景层
+ * 只剩 1 项 ⇒ `decideGeometricLayout` 回退用全集 ⇒ 0/1=0 ⇒ 判 column(high)；
+ * 而归并后的真实内容（icon 左 / 文本列右）复算得 2/3=0.667 ⇒ row。
+ *
+ * 本函数**不新增任何判据**，只把同一实现暴露给「归并后结构」使用（副本纪律：判据单一来源）。
+ *
+ * @param {Array<object>} boxes 参与判定的节点（读 `absoluteBoundingBox` / `bbox` / `type`）
+ * @param {object|null} parentBox 父容器 bbox（背景层剔除用）
+ * @param {object} [opts] 透传 `areBoxesSideBySide` 的容差
+ * @returns {{display:'grid'|'flex', gridColumns?:number, flexDirection?:'row'|'column', confidence:'high'|'low', ratio?:number}|null}
+ */
+export function decideLayoutForBoxes(boxes, parentBox = null, opts = {}) {
+  return decideGeometricLayout(boxes, { ...opts, parentBox })
+}
+
+/**
  * 遍历 Figma 节点树，为每个「有子节点」的节点产出布局事实。
  * 🛡️ 约束覆盖范围扩大（2026-09-19）：单子节点容器也生成布局约束（默认 column），
  * 避免 LLM 在单子节点容器上漏写 flex-direction 导致默认 row。

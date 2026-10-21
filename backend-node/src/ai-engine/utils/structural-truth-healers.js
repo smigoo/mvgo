@@ -520,17 +520,265 @@ export function healVForOverflowRow(files) {
   return { files, changes };
 }
 
+// ─────────────────────────────── 刀 36 ───────────────────────────────
+
+/** 取 SFC 模板正文（含注释；多模板取第一段） */
+function templateOf(content) {
+  const m = /<template[^>]*>([\s\S]*)<\/template>/.exec(content || '');
+  return m ? m[1] : null;
+}
+
+/**
+ * 文件「可见内容」签名：模板静态文本 ∪ defineProps 默认字符串。
+ * 只看**人能看见的东西**（静态文本、props 默认值渲染出的文本、是否有 img），
+ * 不解析表达式、不推断数据 —— 判据要窄，宁可漏判不可错删。
+ */
+export function collectRenderedSurface(fileContent) {
+  const tpl = templateOf(fileContent);
+  const texts = new Set();
+  if (!tpl) return { texts, hasImg: false };
+  const noComment = tpl.replace(/<!--[\s\S]*?-->/g, '');
+  const hasImg = /<img\b/.test(noComment);
+  // 标签之间的文本片段；`{{ }}` 绑定位置留空（其值由 props 默认值补）
+  for (const part of noComment.split(/<[^>]*>/)) {
+    const cleaned = part
+      .replace(/\{\{[\s\S]*?\}\}/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned) texts.add(cleaned);
+  }
+  // defineProps 默认值（`default: 'xx'`）—— 绑定的文本在无数据时就是它
+  const dp = /\bdefineProps\s*\(/.exec(fileContent || '');
+  if (dp) {
+    let depth = 1;
+    let i = dp.index + dp[0].length;
+    const start = i;
+    while (i < fileContent.length && depth > 0) {
+      if (fileContent[i] === '(') depth++;
+      else if (fileContent[i] === ')') depth--;
+      i++;
+    }
+    const body = fileContent.slice(start, i - 1);
+    for (const m of body.matchAll(/default\s*:\s*(['"`])([^'"`]*)\1/g)) {
+      const v = m[2].replace(/\s+/g, ' ').trim();
+      if (v) texts.add(v);
+    }
+  }
+  return { texts, hasImg };
+}
+
+/** 组件文件根元素的 data-section-id（模板里第一个声明；组件契约：根即其 section） */
+function resolveComponentRootSection(files, tag) {
+  const path = Object.keys(files).find(
+    (p) => new RegExp(`(^|/)${tag}\\.vue$`).test(p) && typeof files[p] === 'string',
+  );
+  if (!path) return null;
+  const tpl = templateOf(files[path]);
+  if (!tpl) return null;
+  const m = /data-section-id="([^"]+)"/.exec(tpl);
+  return m ? { path, sectionId: m[1] } : null;
+}
+
+/** J 的可见内容是否已被 I 覆盖（文本全包含；J 无文本时退化为「I 有 img」判据） */
+function surfaceCovers(inner, outer) {
+  if (!outer) return false;
+  if (inner.texts.size === 0) {
+    // 纯图形叶子（icon 等）：I 也必须是图形，否则删了就丢图
+    return inner.hasImg ? outer.hasImg : false;
+  }
+  for (const t of inner.texts) {
+    if (![...outer.texts].some((o) => o.includes(t))) return false;
+  }
+  return true;
+}
+
+/** 删除模板块内某实例所在的整行（含缩进）；自闭合与成对标签都支持 */
+function removeInstanceAt(tpl, index, tag) {
+  const lineStart = tpl.lastIndexOf('\n', index) + 1;
+  const indent = tpl.slice(lineStart, index);
+  if (!/^[ \t]*$/.test(indent)) return null; // 不独占一行 ⇒ 不动（保守）
+  let end;
+  const openEnd = tpl.indexOf('>', index);
+  if (openEnd < 0) return null;
+  if (tpl[openEnd - 1] === '/') {
+    end = openEnd + 1;
+  } else {
+    const close = tpl.indexOf(`</${tag}>`, openEnd);
+    if (close < 0) return null;
+    end = close + `</${tag}>`.length;
+  }
+  const lineEnd = tpl.indexOf('\n', end);
+  const stop = lineEnd < 0 ? tpl.length : lineEnd + 1;
+  return { start: lineStart, end: stop };
+}
+
+/**
+ * 刀 36：父容器「自嵌套」双重渲染折叠（2026-10-21 · 07ae49a2 实锤）。
+ *
+ * 事故形态：卡容器 38:3260 既被拆成子组件（根 data-section-id="38:3260" 的整卡组件），
+ *   又和它的三个子节点一起被拆成同级组件 ⇒ index.vue 里
+ *   `<div data-section-id="38:3260">` 内又渲染了一个根也是 38:3260 的组件实例，
+ *   同一张卡渲染两遍（「合作厂商」「优质厂商」各出现两次）。
+ *
+ * 判据（纯产物内结构矛盾，零 figma / 零命名）：
+ *   元素 W 声明 data-section-id=S ∧ W 内存在组件实例 I，其**文件根** data-section-id 也是 S
+ *   ⇒ I 已整体渲染 S，W 内部其余实例与 I 内容重叠。
+ *   对每个同级实例 J（根 ≠ S）：仅当 `collectRenderedSurface(I) ⊇ collectRenderedSurface(J)`
+ *   才删 J —— **内容覆盖是删除的前提**，覆盖不了就保留（宁可重复，不可丢内容）。
+ *
+ * 修复：删被覆盖的同级实例；把 I 的 flex 提为 1（W 是布局容器，独占时按比例会缩到 0.19 卡宽）。
+ * 不判（阳性守卫）：无自嵌套实例 / 实例根 id 与 W 不同（正常的父子组件嵌套）。
+ * 幂等：折叠后 W 内只剩 I 与未被覆盖的实例，复跑无新增变更。
+ */
+export function healSelfNestedCardCollapse(files) {
+  const changes = [];
+  if (!files || typeof files !== 'object') return { files, changes };
+
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !/\.vue$/.test(path)) continue;
+    const origTpl = templateOf(content);
+    if (!origTpl) continue;
+    const tplAt = content.indexOf(origTpl);
+    if (tplAt < 0) continue;
+    let tpl = origTpl;
+    let dirty = false;
+
+    // 逐个 section 容器处理（自外向内无冲突：每个 W 独立重算下标，靠 while 重取模板）
+    for (let guard = 0; guard < 8; guard++) {
+      const found = findSelfNestedContainer(files, tpl);
+      if (!found) break;
+      const { sectionId, selfTag, removeTags, flexTo } = found;
+      if (removeTags.length === 0 && flexTo == null) break; // 无动作 ⇒ 已是终态（幂等）
+      let next = tpl;
+      // ① 从后往前删被覆盖的同级实例（防下标位移）
+      for (const r of removeTags.slice().sort((a, b) => b.index - a.index)) {
+        const span = removeInstanceAt(next, r.index, r.tag);
+        if (!span) continue;
+        next = next.slice(0, span.start) + next.slice(span.end);
+        changes.push({ file: path, action: 'drop-duplicate-instance', sectionId, tag: r.tag });
+      }
+      // ② 自身实例 flex → 1（仅当它当前带比例 flex 且独占容器）
+      if (flexTo != null) {
+        const selfRe = new RegExp(`<${selfTag}\\b[^>]*>`);
+        const sm = selfRe.exec(next);
+        if (sm) {
+          const tagText = sm[0];
+          const patched = tagText.replace(
+            /style="([^"]*)"/,
+            (_all, css) =>
+              `style="${css.replace(/(^|;)\s*flex\s*:\s*[\d.]+/, '$1flex:1')}"`,
+          );
+          if (patched !== tagText) {
+            next = next.replace(tagText, patched);
+            changes.push({ file: path, action: 'promote-self-instance', sectionId, tag: selfTag, flex: flexTo });
+          }
+        }
+      }
+      tpl = next;
+      dirty = true;
+    }
+
+    if (!dirty) continue;
+
+    // ③ 回填模板区（script/style 区不动），再清理失效 import（标签在模板中已不存在）
+    let out = content.slice(0, tplAt) + tpl + content.slice(tplAt + origTpl.length);
+    const body = templateOf(out) || '';
+    out = out
+      .split('\n')
+      .filter((line) => {
+        const im = /^\s*import\s+([A-Z][A-Za-z0-9]*)\s+from\s+['"][^'"]+['"];?\s*$/.exec(line);
+        if (!im) return true;
+        const stillUsed = new RegExp(`<${im[1]}\\b`).test(body);
+        if (!stillUsed) changes.push({ file: path, action: 'drop-unused-import', tag: im[1] });
+        return stillUsed;
+      })
+      .join('\n');
+    files[path] = out;
+  }
+
+  return { files, changes };
+}
+
+/**
+ * 找一个「自嵌套」容器并算好修复动作（刀 36 内部）。
+ * 返回 { sectionId, selfTag, removeTags:[{index,tag}], flexTo } | null
+ */
+function findSelfNestedContainer(files, tpl) {
+  // 模板内所有带 data-section-id 的元素起点
+  const starts = [];
+  const re = /<([a-zA-Z][\w-]*)\b[^>]*\bdata-section-id="([^"]+)"[^>]*>/g;
+  let m;
+  while ((m = re.exec(tpl))) starts.push({ rank: m.index, tag: m[1], sectionId: m[2] });
+
+  for (const w of starts) {
+    const sid = w.sectionId;
+    // 容器块范围：div 用配对深度；其它标签退化为「到下一个同级声明之前」
+    let blockStart = w.rank;
+    let blockEnd = tpl.length;
+    if (w.tag === 'div') {
+      const block = findSectionDivBlock(tpl, sid);
+      if (!block) continue;
+      blockStart = block.start;
+      blockEnd = block.end;
+    } else {
+      const close = tpl.indexOf(`</${w.tag}>`, w.rank);
+      if (close < 0) continue;
+      blockEnd = close + `</${w.tag}>`.length;
+    }
+    const body = tpl.slice(blockStart, blockEnd);
+
+    // 块内组件实例（PascalCase 开标签；相对下标 + 块起点 = 绝对下标）
+    const instances = [];
+    for (const im of body.matchAll(/<([A-Z][A-Za-z0-9]*)\b[^>]*?(\/?)>/g)) {
+      const root = resolveComponentRootSection(files, im[1]);
+      if (!root) continue;
+      instances.push({
+        tag: im[1],
+        rootSection: root.sectionId,
+        index: blockStart + im.index,
+        path: root.path,
+      });
+    }
+    const self = instances.find((i) => i.rootSection === sid);
+    if (!self) continue; // 无自嵌套 ⇒ 不判
+
+    // 同级实例（排除自身；W 内更深层的实例也一并纳入 —— 它们同样与自嵌套内容重叠）
+    const others = instances.filter((i) => i !== self);
+    const outer = collectRenderedSurface(files[self.path] || '');
+    const removeTags = [];
+    for (const o of others) {
+      const inner = collectRenderedSurface(files[o.path] || '');
+      if (surfaceCovers(inner, outer)) removeTags.push({ index: o.index, tag: o.tag });
+    }
+    // flex 提升：仅当自身实例当前是比例 flex 且删除后独占容器
+    const selfTagText = /<([A-Z][A-Za-z0-9]*)\b[^>]*>/.exec(tpl.slice(self.index))?.[0] || '';
+    const flexM = /style="[^"]*\bflex\s*:\s*([\d.]+)/.exec(selfTagText);
+    const flexTo = flexM && Number(flexM[1]) !== 1 && others.length > 0 ? 1 : null;
+    if (removeTags.length === 0 && flexTo == null) continue; // 该容器已终态 ⇒ 继续看下一个
+    return { sectionId: sid, selfTag: self.tag, removeTags, flexTo };
+  }
+  return null;
+}
+
 // ─────────────────────────────── 统一入口 ───────────────────────────────
 
 /**
- * 三刀统一入口（pre-write-self-healing ⑭ 接线）。
- * 返回 { files, summary: { rowpeersWrap, dupClassDirection, slotDupRender, details } }
- * 顺序：刀 34（删插槽重复）→ 刀 32（包裹并列）→ 刀 33（样式归一）——33 必须最后（读最终形态）。
+ * 统一入口（pre-write-self-healing ⑭ 接线）。
+ * 返回 { files, summary: { rowpeersWrap, dupClassDirection, slotDupRender, vforOverflowRow, selfNestedCollapse, details } }
+ * 顺序：刀 34（删插槽重复）→ 刀 32（包裹并列）→ 刀 33（样式归一）→ 刀 35（v-for 溢出翻转）
+ *      → 刀 36（自嵌套折叠，**最后**：它改 DOM 层级，须读最终形态）。
  */
 export function healStructuralTruth(files, ctx = {}, deps = {}) {
   const { logger } = deps;
   let result = files;
-  const summary = { rowpeersWrap: 0, dupClassDirection: 0, slotDupRender: 0, details: [] };
+  const summary = {
+    rowpeersWrap: 0,
+    dupClassDirection: 0,
+    slotDupRender: 0,
+    vforOverflowRow: 0,
+    selfNestedCollapse: 0,
+    details: [],
+  };
 
   try {
     const r34 = healSlotDuplicateRender(result);
@@ -583,6 +831,20 @@ export function healStructuralTruth(files, ctx = {}, deps = {}) {
     }
   } catch (err) {
     logger?.warn?.('🛡️ 刀 35 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  try {
+    const r36 = healSelfNestedCardCollapse(result);
+    result = r36.files;
+    if (r36.changes.length > 0) {
+      summary.selfNestedCollapse = r36.changes.length;
+      summary.details.push(...r36.changes.map((c) => ({ knife: 36, ...c })));
+      logger?.warn?.('🛡️ 刀 36 修复：父容器自嵌套双重渲染，已按内容覆盖折叠同级实例', {
+        changes: r36.changes,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 36 异常（fail-open）', { error: err?.message || String(err) });
   }
 
   return { files: result, summary };
