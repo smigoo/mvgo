@@ -97,6 +97,22 @@ const JS_STATEMENT_RX = /(?:const|let|var|function|=>|return\s|if\s*\(|for\s*\(|
  * @param {string} templateContent
  * @returns {{ used: Set<string>, loopVars: Set<string> }} used=需在 script 中声明的引用；loopVars=v-for 循环变量（模板作用域内，无需声明）
  */
+/**
+ * 指令表达式里要豁免的 JS 关键字（`v-if="typeof x === 'string'"` 不能把 typeof 当变量）。
+ * 只用于指令表达式抽取，不改 TEMPLATE_WHITELIST（那里还服务于组件标签过滤）。
+ */
+const JS_KEYWORDS = new Set([
+  'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'this',
+  'return', 'function', 'await', 'async', 'yield',
+  'let', 'const', 'var', 'if', 'else', 'for', 'while', 'do', 'switch', 'case',
+  'break', 'continue', 'try', 'catch', 'finally', 'throw', 'class', 'extends', 'super',
+  'import', 'export', 'default', 'from', 'as', 'with', 'debugger',
+]);
+
+/** v-if / v-else-if / v-show / v-model（含 :arg 与 .modifier）的属性值 */
+const DIRECTIVE_EXPR_RX =
+  /\bv-(?:else-)?if\s*=\s*"([^"]*)"|\bv-show\s*=\s*"([^"]*)"|\bv-model(?:[:.][\w.-]+)*\s*=\s*"([^"]*)"/g
+
 export function extractTemplateRefs(templateContent) {
   const used = new Set()
   const loopVars = new Set()
@@ -130,6 +146,32 @@ export function extractTemplateRefs(templateContent) {
 
   // 5. PascalCase 组件标签 <TotalTraffic ...>
   for (const m of templateContent.matchAll(/<([A-Z][\w]*)\b/g)) used.add(m[1])
+
+  // 6. 指令表达式：v-if / v-else-if / v-show / v-model
+  //    🔴 2026-10-22（mc-1792642629927-5084c375 实锤）：此前**整类漏抽** ——
+  //    规则 2 只认 `:attr="裸标识符"`，而 `v-if="icon普通厂商"`（未声明）零命中，
+  //    门禁放行后产物在渲染期抛 ReferenceError（整段模块白屏），比缺图标严重得多。
+  //    实测：`extractTemplateRefs('<img v-if="icon普通厂商" :src="icon6">')` 只返回 icon6。
+  for (const m of templateContent.matchAll(DIRECTIVE_EXPR_RX)) {
+    const expr = m[1] ?? m[2] ?? m[3]
+    if (!expr) continue
+    // 先剥字符串字面量，否则 `type === 'a'` 里的 a 会被当成变量
+    const bare = expr
+      .replace(/'(?:[^'\\]|\\.)*'/g, ' ')
+      .replace(/"(?:[^"\\]|\\.)*"/g, ' ')
+      .replace(/`(?:[^`\\]|\\.)*`/g, ' ')
+    // Unicode 标识符：中文变量名是合法 JS 标识符（`icon普通厂商`），ASCII 正则抓不到。
+    // 🔴 只取**根标识符**：前一个非空字符是 `.` ⇒ 它是成员属性名（`Math.random` 的 random、
+    //    `item.visible` 的 visible、`form.name` 的 name），不是需要声明的变量。
+    for (const im of bare.matchAll(/[\p{L}_$][\p{L}\p{N}_$]*/gu)) {
+      const name = im[0]
+      if (JS_KEYWORDS.has(name)) continue
+      let j = im.index - 1
+      while (j >= 0 && /\s/.test(bare[j])) j -= 1
+      if (j >= 0 && bare[j] === '.') continue
+      used.add(name)
+    }
+  }
 
   // 过滤白名单
   for (const name of [...used]) {

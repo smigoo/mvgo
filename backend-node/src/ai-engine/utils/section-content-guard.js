@@ -826,12 +826,32 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
   //    节点上（真机实锤：`icon-3561.png` 同时是 2:3561 与 2:3441 的图标）。若首命中定归属，
   //    属于 2:3441 的组件会被误判为借用 2:3561。判定改为「任一归属节点在 S 子树内即合法」。
   const assetNodesByName = new Map();
+  // 🛡️ 刀 44（2026-10-22 · mc-1792638154357-8a1a0d96 实锤「R24 刚补的图标被本守卫删掉」）：
+  //   资源文件名 → **声明归属 section**（`ownerSectionId`）。
+  //
+  //   为什么必须有这条：`assetNodesByName` 收的是资源的 `figmaNodeId`（**资源节点自身**，
+  //   如 `38:3208`），而 `own` 是 section 的**子树节点集**。二者是不同层级的 id ——
+  //   一旦 section 的 `sourceNodeIds` 没能闭包到资源节点（合成 section / 浅层展开），
+  //   `own.has('38:3208')` 恒 false ⇒ 该 section **自己名下的**图标被判「借用」并删除。
+  //   而 mapping 里 `ownerSectionId: '38:3206'` 就是「这个资源挂在哪个 section」的**权威声明**，
+  //   与 R24（`resource-img-src-healer`）、resource-mount-plan 用的是同一字段。
+  //   ⇒ 归属判定必须同时认三条：资源自身节点 ∈ S 子树 / `ownerSectionId === S` / S 是它的派生子 id。
+  //   不认这条的后果：R24 与资源挂载的一切正确成果都会被本守卫当场抹掉（真机三轮零进展的真因）。
+  const assetOwnerSectionsByName = new Map();
   for (const m of Array.isArray(resourceDomMapping) ? resourceDomMapping : []) {
     const file = m?.resourceFile || m?.fileName || m?.filename;
-    const nodeId = m?.figmaNodeId || m?.nodeId;
-    if (!file || !nodeId) continue;
+    if (!file) continue;
     const base = String(file).split('/').pop();
     if (!base) continue;
+    const ownerSection = m?.ownerSectionId;
+    if (ownerSection) {
+      if (!assetOwnerSectionsByName.has(base)) {
+        assetOwnerSectionsByName.set(base, new Set());
+      }
+      assetOwnerSectionsByName.get(base).add(String(ownerSection).trim());
+    }
+    const nodeId = m?.figmaNodeId || m?.nodeId;
+    if (!nodeId) continue;
     if (!assetNodesByName.has(base)) assetNodesByName.set(base, new Set());
     assetNodesByName.get(base).add(String(nodeId));
   }
@@ -876,6 +896,15 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
     let m;
     while ((m = rx.exec(f.content)) !== null) refs.add(m[1]);
     for (const base of refs) {
+      // 🛡️ 刀 44：先用 mapping 的**声明归属**判一次 —— `ownerSectionId === S`（或 S 是它的
+      //   派生子 id，如 `38:3206-tail-text`）就是 S 自己的资源，与 `figmaNodeId ∈ 子树` 等价。
+      const declaredOwners = assetOwnerSectionsByName.get(base);
+      if (declaredOwners && declaredOwners.size > 0) {
+        const owned = [...declaredOwners].some(
+          (o) => o === sid || sid.startsWith(`${o}-`),
+        );
+        if (owned) continue;
+      }
       const nodeIds = assetNodesByName.get(base);
       if (!nodeIds || nodeIds.size === 0) continue; // 不可解析归属 → 不判
       const nodeList = [...nodeIds];
@@ -886,7 +915,8 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
         resource: base,
         resourceNodeId: nodeList[0],
         ownerNodeIds: nodeList,
-        hint: `资源「${base}」（Figma 节点 ${nodeList.join(' / ')}）不属于 section ${sid} 的子树，属借用`,
+        ownerSectionIds: declaredOwners ? [...declaredOwners] : [],
+        hint: `资源「${base}」（Figma 节点 ${nodeList.join(' / ')}${declaredOwners ? `，声明归属 section ${[...declaredOwners].join('/')}` : ''}）不属于 section ${sid} 的子树，属借用`,
       });
     }
   }

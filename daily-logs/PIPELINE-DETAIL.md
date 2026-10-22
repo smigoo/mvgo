@@ -340,3 +340,84 @@
   ⇒ 输出恒能过门禁、写盘退化为幂等。`less-compile-gate` 零内部 import，无循环依赖。
 - **凡是「合并/收敛 → 门禁」两段式，两侧判据必须同一实现，不是同一逻辑各写一份。**
 - 改 prompt/规范前必须做「加载链三查」，生效规范根 = `backend-node/references/**`。
+
+## 2026-10-22 刀 43：R24 破图三成因（P0-1）
+
+**症状**：真机 `mc-1792635919906-88b9c3a5` 三个面板标题图标全破图，`RES-UNREF` 报 `header-3136` / `icon-战略厂商-3160`。
+
+**三成因（一条判据覆盖不了）**
+
+| 组件 | 模板形态 | 旧判据为何零命中 |
+|---|---|---|
+| `HeaderText.vue` | 裸 `<img class="…-icon" alt="战略厂商" />`，**有** `data-section-id="38:3137-tail-text"` | 离线能修；但生成内阶段 R24（`microcode-engineer:2884`）之后仍有重生成覆盖 ⇒ 产物里还是裸 img |
+| `HeaderText2.vue` | 裸 img，模板**无** `data-section-id` | `no-section-id` 直接放弃 |
+| `HeaderText3.vue` | `:src="icon普通厂商"`（模型自造中文名），`<script setup>` 零 import | `hasSrc=true` 一律当已完成 ⇒ 运行时 `is not defined` |
+
+**判据（`utils/resource-img-src-healer.js`）**
+- `findImgTags` 带 `srcVar`（`simpleBindingName`，允许 Unicode 标识符）；`isDeclared` Unicode 安全（转义 + 无 `\b`）。
+- 目标两类，其余一律不动：A 无任何 src 绑定 → 补 `:src="权威名"`；B `:src` 变量未声明 **且** `normVarName(变量) === normVarName(assignedVarName|semanticVarName|varName)` → 换名 + 补 import。
+- 归属三级：文件内 `data-section-id` 唯一 → `opts.ownerSectionId`（装配层推断）→ 否则 `skipped`。多个不同 section id 恒 `ambiguous-section`，**owner 不得压过它**（spec ⑭ 锁死）。
+- `buildComponentOwnerMap(files)`：栈式扫模板标签，PascalCase 标签的归属 = 最近祖先 `data-section-id`；同组件出现在两个 section ⇒ 剔除。
+- `ownerSectionIdForFile(map, relPath)` + `componentNameOf`：**唯一**换算实现（kebab/snake 归一），两处调用点共用。
+
+**挂载位置（铁律）**：`pre-write-self-healing` 新增 **②-c**，必须排在 ③ CODE-022 剪枝**之前**（先补 `:src` = 挂载，再判「未挂载」）。summary：`imgSrcBackfilledPreWrite` / `imgSrcAliasRenamed` / `imgSrcOwnerResolved`。
+
+**离线验证数字**
+- 真机产物重放：3 文件变动，`icon4` / `icon5`（owner `38:3162`）/ `icon6`（alias `icon普通厂商`），其余 `<img>` 零改动。
+- 资源 import 路径：4 个产物全部 `existsSync` 通过（`package/` → `../resources/images/`；`package/components/` → `../../resources/images/`）。
+- 语料面：150 产物 / 145 含 img ⇒ 45 文件 47 img 命中、6 处 alias、0 报错；`skipNoSection=195`、`skipNoResource=25`（fail-open 正确）。
+
+## 2026-10-22 装配层刀具详判据（从 MEMORY.md 迁出；单行索引在 MEMORY.md）
+
+### 刀 41 折叠网格布局契约（`grid-list-layout-contract.js`）
+- **挂载点 = `file-writer#writeFiles`，且必须在 per-file 循环之前整体跑一次**（判据跨文件统计 class 复用，逐文件跑会把共享 class 误判成独占），结果回灌 `filesForWrite`。原挂 `pre-write-self-healing` ⑱ 时 `data-section-id` 还没补齐 ⇒ 整段 skip。
+- 真值 = `items[].absoluteBoundingBox`（`sec.items`/`sec.body.items` 都认）＋ **Figma 兜底**（plan 段无 items 时按 id 查 `figmaIndex` 取 `children[].bbox`，否则 `skipNoTruth` 静默全盲）。
+- 自愈写 `display:grid; repeat(N, Wpx)`（**不能写 flex**，否则 LAYOUT-001 转红）。
+- 🔴 三条铁律：① class 被别的元素复用绝不改写（`frame-2136639905` 双身份）；② 级联按**样式文件顺序**合并，非 class 属性顺序；③ 赢不了层叠就写**元素级内联**（`ensureHostInlineGrid`：按 `data-section-id` 找宿主 tag，复用刀 51 `upsertInlineDecls` + 刀 38 `stripDeclsFromInline`。基础名共享 + BEM 修饰名并存时，共享块的 `display:flex` 会按文件序顶掉修饰块的 grid，只有内联能定论）。
+- 🔴 行距真值 = y pitch − cardH（50−30=20），不是 pitch；**`rows===1` 时行距未知 ⇒ 不写也不删 `row-gap`/`gap`**。
+- 🔴 卡高两维同时成立：`grid-auto-rows: cardH` ＋ `align-items: stretch`（残留 center ⇒ 子项不拉伸，实测卡高 13.8px vs 真值 30）。新增判据 `grid-align-items`；`canonicalWrapperDecls` 加 `align-items:stretch`。
+- 🔴 grid 实现下 `flex` 系列对子项**惰性** ⇒ 不判 `item-stretch`（只有 `width` 百分比/calc 才真改卡宽）；也不判子项 height。
+- 🔴 判据读样式必须用 `flex-sibling-guard#extractStyleBlocksDeep`（花括号深度+字符串/注释状态扫描，返回 `{selector,body,declText,depth}`；正则版 `extractStyleBlocks` 只认一层嵌套，留给 FLEX-001~005 **不动**）。detect 与 heal 共用同一份（两段式铁律）。
+- 四层病灶链（2026-10-22 逐层实锤修复）：挂载点错位 → 真值缺几何（figmaIndex 兜底）→ 判据读不到声明（Deep 版）→ 自愈赢不了层叠（内联通道）。
+- 宿主 class 无任何规则块时 `appendClassBlock` 在宿主 .vue `<style>` 末尾新建（只挑 `issue.file` 精确匹配）。
+
+### 刀 42 面板三件套 + 宽度兜底
+- A=`container-background-truth.js`（`resolveSectionPanel` 同一次遍历取 bg+`cornerRadius`(+`rectangleCornerRadii` max)+`effectsToBoxShadow`+`fullWidth`；逐属性判定 `missing-solid/radius/glow/width`，**只补空白不猜已有值**）＋ B=`panel-chrome-misplacement.js`（装饰归属反查：自身无面板真值 ∧ `radius==P.radius` ∧ 发光 RGB==P 发光 ∧ owner 唯一 ⇒ 删三件套；元素级 + class 级兜底）。
+- 🔴 旧豁免「纯色未声明 ⇒ 交主题变量」是伪前提（该层无背景槽位 ⇒ 永远不补）；🔴 补 A 不摘 B = 面板里再套同色条，必须成对；🔴 class 级兜底必须收紧成「唯一使用点且无 section 归属」（`orphanTags===1 && sids.size===0`）；`missing-width` = 段宽/figma 父宽 ≥0.95。`figma-effects.js` = effects→box-shadow 单一来源。块改写复用刀 38 `stripDeclsFrom*`（通用谓词版）。
+
+### 刀 50 段内固有几何 / 刀 51 标题行 / 刀 52 父容器堆叠
+- 刀 50（`section-intrinsic-layout.js`，挂 `code-generator#buildDeterministicIndexTemplate` 生成期）：bbox 全可解析 ∧ vertical ∧ 严格堆叠 ∧ 间距≥0 ∧ 不溢出 ⇒ 容器 padding-top/left + 子项 `flex:0 1 auto;height:Npx` + margin-top:gap。比例分配表达不了「固定高+固定间距+padding+剩余留白」。
+- 刀 51（`header-row-geometry.js`，挂 writeFiles）：真值只从 Figma 树推：恰 1 `<img>` → assignedVarName 反查 figmaNodeId → 同父同行（顶边 Δy≤2）仅 1 TEXT 在右侧 ⇒ gap/行高/`padding:0`。🔴 `(?:^|\s):src`（`\b:src` 在空格后不成立）；文案同源证据 = 字面量 或（模板含 `{{ }}` 且本文件 `default:` === Figma 文案）。**漏钉 `justify-content` 时共享表 center 会赢（普通段标题居中实锤）→ 已由刀 53 根治**。
+- 刀 52（`section-stack-contract.js`，挂 writeFiles）：治「段高按 flex:比例摊」。判据只在 DOM 层成立（`data-rowpeers-wrap` 按直接子元素算，wrap box=内部后代并集）。输出：容器 padding-top + 子项 `flex:0 1 <单元高>px;min-height:0` + margin-top:间距。纯几何裁决收敛 `section-intrinsic-layout#resolveStackGeometry`（刀 50/52 同一份）。
+- 🔴🔴 `getFigmaBox` 形态陷阱：只吃 `{absoluteBoundingBox|bbox:{x,y,width,height}}` 或 `{x,y,w,h}`，不吃裸 `{x,y,width,height}`；x/y/w/h 四元齐全，plan 节点常只带尺寸 ⇒ 判 null。`resolveSectionFlexSize` 取 `sourceNodeIds` 并集。
+
+### R24 / 破图 / 内容守卫
+- R24 唯一有效挂载点 = `file-writer.js#writeFiles`（不是 pre-write-self-healing；pre-write 后还有 4 个覆写/回退步骤）。三种破图成因：裸 img / 模板无 `data-section-id`（`buildComponentOwnerMap` 父子推断）/ `:src` 自造名未声明（`normVarName` 归一相等才换名）。
+- 🔴🔴 内容映射守卫必须认 `ownerSectionId`（`section-content-guard.js#checkSectionExclusiveEvidence` 三条并列：节点∈子树 / `ownerSectionId===section` / section 是它的派生子 id）；只比 `figmaNodeId∈子树` 会把合法引用当「借用」删掉（图标破图三轮零进展真因）。文件名→组件名换算只许一份：`ownerSectionIdForFile`。
+- 🔴🔴 `figmaRoot` 曾整条断路（2026-10-22 实锤）：`engineer#writeFiles` 条件变量 `_figmaRootForTruthPalette` 只读未赋值 ⇒ 恒 undefined ⇒ 刀 51 静默全盲。已解耦恒透传。凡几何/真值判据必须挂真机日志计数行（evaluated/singleImg/mapped/matched/healed）。
+
+### 刀 53 同构段确定性接管（2026-10-22 新增）
+- `folded-grid-section-takeover.js` + 接线 `microcode-engineer.js#genSubComponents`（chunk 构建前评估，命中 subPath **跳过 LLM chunk**）。
+- 判据：`detectHeaderRowLeaf`（锚点子树恰 1 TEXT + ≥1 ≤32px 图形、同行 Δy≤2、icon 在左 gap 0..48；**icon 必须在资源映射**否则 fail-open）；`detectGridLeaf`（几何复用刀 41 `buildGridContract`；内容 `resolveCardNodes` 两路径 A=items[].id→figmaIndex / B=`geometryFrom:'figma:<id>'` 直接子项；**部分解析即整体失败**）。
+- 渲染 `renderFoldedGridLeafVue`：数据内联（无 defineProps ⇒ 0 卡结构性不可能）、`justify-content:flex-start` 显式内联、类名 `c-{sem}-fg-{header|grid}-{idSlug}`（section id 派生、组件内唯一 ⇒ 免疫全局注入后写者胜）、颜色 `fillToRgba` 单一口径、`<`→`\u003c` 防 `</script>` 注入。
+- 确定性文件走 `_ensureSubComponentStyleAttrs/_ensureSubComponentStyleImport/injectResourceImports` 最小管线；`fileSectionMap[subPath]=ownerSectionId`；写入异常回退补 LLM chunk。日志 `🛡️ 刀 53 …已评估 {leaves, headerTaken, gridTaken, skipped[]}`。
+- 合成段 id 剥一段后缀回真节点（`38:3137-tail-text`→`38:3137`、`38:3167-list`→`38:3167`）；`-list` 段内容必须走 items 路径（剥后缀只回第一行）。
+- 单测 17/17；真机离线重放 5/7 命中（3 header + 2 整行 grid；`-list` 探针缺 items 属 fixture 问题，真实 plan 自带）。
+
+#### 刀 53 配套：后置污染三源头治理（2026-10-22 round-12~15 实锤）
+- **常量唯一来源** `FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid)-/`（导出于 `folded-grid-section-takeover.js`）：`code-validator.js` / `font-size-normalizer.js` / `layout-facts-injector.js` 一律 import，**禁副本**。
+- **① font-size-normalizer**（`file-writer.js:830` 对 .less/.css/.vue **全文**归一）：把 `font-size:16px` → `calc(@fontSize * 1.1429)` ⇒ DOM 13.71px（真值 16px）。修：`options.skipSelectors`（默认 `DEFAULT_SKIP_SELECTOR_RXS`）+ `protectSkippedBlocks()` 把命中 fg- 的整块占位抠出；`skipSelectors: []` 可显式关闭（阴性对照）。
+- **② layout-facts-injector#injectLayoutFacts**：给 fg- 宿主写 `display:flex;flex-direction:column;flex:1.548 1 0;height/width:100%`，只靠内联优先级侥幸赢。修：命中 fg- 的 className `continue`。
+- **③ 「LLM 照抄 + consolidator 回写」链（最难缠，①②挡不住）**：第二轮生成 LLM 从既有产物上下文看到 fg- 类名 → common.less 编造规则 → `style-class-consolidator` 以「common.less 丰富版」回写子组件 style 块（并补 `v-bind="$attrs"`）。修（两者都在 file-writer#writeFiles，**先 strip 后终裁**）：
+  - `stripFgTakeoverRules()`：剔除样式内容里所有 fg- 规则块（契约：`fg-` 类只允许存在于接管文件自带 style 块）；对所有 `.less/.css/.vue` 调用。
+  - `options.fgTakeoverFiles`（Map<path, 确定性内容>）：在**所有内容级自愈之后、写盘/diff 之前**终裁覆写；microcode-engineer 存 `this._fgTakeoverFiles` 并在 `writeFiles()` 包装（:5341）透传（新入参漏透传 = 静默丢弃，同 truthPalette/sections 族）。
+- ⚠️ `stripFgTakeoverRules` 正则：两段捕获、选择器段排除 `;` 与 `/` `*` —— 否则吞掉前置 `@import`/注释一起误删（单测实锤）。
+- ⚠️ DOM 读数坑：卡容器 computed `font-size=12px` 是继承值（`--fontSize`），真值在卡内 `span`（内联 `t.fs`）⇒ 字号断言必须读 span。
+- 真机终局 round-15 `mc-1792662399514-2b715fa0`：7/7 全对（三段标题 row/flex-start/gap8 + **16px 真值**；四段网格 4/2/12/15 卡、126×30、r6、三色底、jc=start、步长 146；卡内 span 14px、数值色逐段精确）。
+- round-14 出现「标题整段缺失」= 该轮 plan 未把标题段拆成子组件（刀 53 只接管子组件叶），属**单轮随机**，非回归（round-15 恢复）。后续若要根治需把接管扩展到 index.vue 内联叶。
+
+#### 刀 53b：纯文本叶接管（2026-10-22 round-16~17 实锤）
+- 病灶：stat 条数字叶（`38:3262`="33" fs24 fw600 蓝 / `38:3284`="66"）与标题叶（`38:3285`）是**纯文本 plan 叶**，LLM chunk 臆造成无 `:src` 的 `<img>` ⇒ 数字消失+破图同源（ContentSection3/5/6.vue）。
+- `detectTextLeaf`：锚点子树恰 1 非空 TEXT、0 图形（GROUP 纯包装允许）+ color/fs/fw 齐全；walk 用 **Set 去重**（collectAnchorNodes 返回锚点+直接子项，GROUP 锚点父子重复进入 ⇒ texts 翻倍）。渲染纯 span 数据内联、**绝不 img**。`FG_TAKEOVER_CLASS_RX` 扩 `text`（单点三消费者生效）。顺序 grid→header→text；日志 `textTaken`。
+- 🔴 **预览运行时 scoped style 块不生效**（round-16：54 个 stylesheet 无 fg- 规则，span 塌回继承 12px）⇒ 推翻 round-10「font-size 放 style 块」结论：**必须内联**；配套 `font-size-normalizer#protectFgTagInlineStyles()`——fg- 类标签的 style 属性整段占位保护（开标签扫描、属性顺序无关），否则内联 px 被归一成非法 `calc(@fontSize*N)`（round-10）。归一器占位族：C 注释 / L 行注释 / S 规则块 / I 内联，还原顺序 注释→内联→块。
+- 真机 round-17 `mc-1792664016166-36520fb1`：33/66 fs24 fw600 蓝全对、标题 fs16 #333、破图 0/6。遗留：纯 icon 叶（`187:262` texts=0）仍走 LLM 偶发丢失，「纯 icon 叶接管」未做；workspace publisher 链另有归一+flex 注入（内联赢它，暂不追）。

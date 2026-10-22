@@ -15,10 +15,44 @@
  * jest 安全：无 import.meta。
  */
 
+import { FG_TAKEOVER_CLASS_RX } from './folded-grid-section-takeover.js';
+
 /** 默认字体基准（与 theme-vars 的 @font-size-base 一致） */
 export const FONT_BASE_PX = 14;
 /** 契约允许的最小字号（≤该值豁免，视作非字体量） */
 export const MIN_FONT_PX = 5;
+
+/**
+ * 🛡️ 默认豁免的选择器（2026-10-22 round-12 实锤）：刀 53 确定性接管类。
+ * 这类规则的 font-size 由 Figma 真值渲染（`font-size: 16px`），归一成
+ * `calc(@fontSize * 1.1429)` 后实测塌成 13.71px ⇒ 真值失真。
+ * 传 `options.skipSelectors = []` 可显式关闭（测试用）。
+ */
+export const DEFAULT_SKIP_SELECTOR_RXS = [FG_TAKEOVER_CLASS_RX];
+
+/**
+ * 把命中豁免选择器的**整条规则块**占位抠出，保证后续归一正则碰不到它。
+ * @param {string} text
+ * @param {RegExp[]} skipSelectors
+ * @returns {{ text:string, restore:(t:string)=>string }}
+ */
+function protectSkippedBlocks(text, skipSelectors) {
+  const slots = [];
+  const masked = String(text).replace(/([^{};]*)\{([^{}]*)\}/g, (whole, sel) => {
+    if (skipSelectors.some((rx) => rx.test(sel))) {
+      slots.push(whole);
+      return `\u0000S${slots.length - 1}\u0000`;
+    }
+    return whole;
+  });
+  return {
+    text: masked,
+    restore: (t) =>
+      slots.length
+        ? String(t).replace(/\u0000S(\d+)\u0000/g, (_m, i) => slots[Number(i)] ?? '')
+        : String(t),
+  };
+}
 
 function ratioOf(px, base = FONT_BASE_PX) {
   const r = px / base;
@@ -27,16 +61,53 @@ function ratioOf(px, base = FONT_BASE_PX) {
 }
 
 /**
+ * 🛡️ 把 **fg- 类标签的 style 属性**占位抠出（round-16 实锤）。
+ *
+ * 背景：微码预览运行时里 SFC scoped style 块**不生效**（54 个 stylesheet 无 fg- 规则），
+ * font-size 只有内联才能落 DOM；但内联 `font-size:24px` 会被本归一器改写成
+ * `calc(@fontSize * 1.7143)`（LESS 变量在模板 style 属性里是非法 CSS，浏览器丢弃
+ * ⇒ 字号塌回继承值，round-10/16 双实锤）。故 fg- 标签（class 命中 FG_TAKEOVER_CLASS_RX）
+ * 的 style 属性值整段占位保护。`:style` 绑定不在匹配范围（归一正则也不碰 JS 表达式）。
+ * @param {string} text
+ * @returns {{ text:string, restore:(t:string)=>string }}
+ */
+function protectFgTagInlineStyles(text) {
+  const slots = [];
+  const masked = String(text).replace(/<[a-zA-Z][^>]*>/g, (tag) => {
+    if (!FG_TAKEOVER_CLASS_RX.test(tag)) return tag;
+    return tag.replace(/(\bstyle=")([^"]*)(")/g, (_m, pre, styleVal, post) => {
+      slots.push(styleVal);
+      return `${pre}\u0000I${slots.length - 1}\u0000${post}`;
+    });
+  });
+  return {
+    text: masked,
+    restore: (t) =>
+      slots.length
+        ? String(t).replace(/\u0000I(\d+)\u0000/g, (_m, i) => slots[Number(i)] ?? '')
+        : String(t),
+  };
+}
+
+/**
  * 归一单段文本（.less / .css / SFC 的 style 块均适用）。
  * 使用 LESS 变量 @fontSize（由 theme-vars.less 定义为 var(--fontSize)）。
  * @param {string} text
- * @param {{base?:number}} [options]
+ * @param {{base?:number, skipSelectors?:RegExp[]}} [options]
+ *   - skipSelectors：命中这些选择器的规则块整块豁免（默认 `DEFAULT_SKIP_SELECTOR_RXS`）。
  * @returns {{ text:string, changes:Array<{from:string,to:string}> }}
  */
 export function normalizeFontSizeLiterals(text = '', options = {}) {
   const base = options.base || FONT_BASE_PX;
+  const skip = Array.isArray(options.skipSelectors)
+    ? options.skipSelectors
+    : DEFAULT_SKIP_SELECTOR_RXS;
   const changes = [];
-  let out = String(text);
+  const guard = skip.length ? protectSkippedBlocks(text, skip) : null;
+  const inlineGuard = skip.length
+    ? protectFgTagInlineStyles(guard ? guard.text : String(text))
+    : null;
+  let out = inlineGuard ? inlineGuard.text : guard ? guard.text : String(text);
   // 去掉注释，避免注释里的示例被改（处理完再还原）
   const comments = [];
   out = out.replace(/\/\*[\s\S]*?\*\//g, (m) => {
@@ -69,6 +140,9 @@ export function normalizeFontSizeLiterals(text = '', options = {}) {
   // 还原注释
   out = out.replace(/\u0000L(\d+)\u0000/g, (_m, i) => lineComments[Number(i)]);
   out = out.replace(/\u0000C(\d+)\u0000/g, (_m, i) => comments[Number(i)]);
+  // 还原豁免（顺序：先注释 → 内联属性 → 规则块；三者占位前缀不同不会互吃）
+  if (inlineGuard) out = inlineGuard.restore(out);
+  if (guard) out = guard.restore(out);
   return { text: out, changes };
 }
 

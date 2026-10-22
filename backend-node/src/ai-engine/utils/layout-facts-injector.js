@@ -9,6 +9,7 @@
 
 import { buildNodeLayoutFactsReinforcement } from './constraint-reinforcement.js'
 import { stripIllegalCssValues } from './css-sanitizer.js'
+import { FG_TAKEOVER_CLASS_RX } from './folded-grid-section-takeover.js'
 
 /**
  * 🛡️ 模板标签扫描（2026-09-30 §8.10 提为共享导出）
@@ -191,6 +192,13 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
   let content = cssContent
 
   for (const [className, fact] of Object.entries(layoutMapping)) {
+    // 🛡️ 刀 53（2026-10-22 round-12 实锤）：确定性接管类 `c-{sem}-fg-{header|grid}-{idSlug}`
+    //   的 display / flex-direction / flex / 宽高已由 folded-grid-section-takeover **内联 + style 块**
+    //   双重钉死。注入器再写一份 `flex-direction:column;flex:1.548 1 0;height:100%` 会与内联对抗，
+    //   只靠内联优先级侥幸赢 —— 微码全局注入下「后写者胜」不可证 ⇒ 整类跳过注入。
+    if (FG_TAKEOVER_CLASS_RX.test(className)) {
+      continue
+    }
     // 🛡️ R2 后缀变体匹配（2026-09-22）：.c-x-tabs 未命中时尝试 .c-x-tabs-section 等变体
     const matched = matchClassWithSuffixVariant(content, className)
     if (!matched) {

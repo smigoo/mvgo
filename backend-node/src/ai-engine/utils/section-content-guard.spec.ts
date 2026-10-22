@@ -602,6 +602,54 @@ describe('checkSectionExclusiveEvidence · 借用文本/资源（2026-09-29 治�
     expect(r.borrowedAssetIssues).toEqual([]);
   });
 
+  /**
+   * 🛡️ 刀 44（2026-10-22 · mc-1792638154357-8a1a0d96 实锤）：
+   * `ownerSectionId` 是 mapping 里「资源挂哪个 section」的**权威声明**，
+   * 与 `resource-img-src-healer`（R24）/ `resource-mount-plan` 同字段。
+   * 资源自身 `figmaNodeId` 只有在 section 子树闭包能到达它时才 `∈ own`，
+   * 一旦闭包不到（合成 section / 浅层展开）⇒ 自己名下的图标被判借用并删除
+   * （真机：R24 补的 `icon6` 在 5 秒后被本守卫删掉，三轮零进展）。
+   */
+  it('资源声明 ownerSectionId === 本 section ⇒ 不判借用（刀 44 阳性对照）', () => {
+    const map = [
+      {
+        resourceFile: '../resources/images/icon-普通厂商-3208.png',
+        figmaNodeId: '38:3208',
+        ownerSectionId: '2:3680',
+        assignedVarName: 'icon6',
+      },
+    ];
+    const files = [
+      fileFor('2:3680', '<template><div><img :src="icon6" /></div></template>'
+        + '<script setup>import icon6 from \'../../resources/images/icon-普通厂商-3208.png\'</script>'),
+    ];
+    const r = checkSectionExclusiveEvidence({
+      files, plan: makePlan(), figmaRoot, resourceDomMapping: map,
+    });
+    expect(r.borrowedAssetIssues).toEqual([]);
+  });
+
+  it('资源声明 ownerSectionId 属于别的 section ⇒ 仍然判借用（阴性对照，不能变哑巴）', () => {
+    const map = [
+      {
+        resourceFile: '../resources/images/icon-普通厂商-3208.png',
+        figmaNodeId: '38:3208',
+        ownerSectionId: '2:3444',
+        assignedVarName: 'icon6',
+      },
+    ];
+    const files = [
+      fileFor('2:3680', '<template><div><img :src="icon6" /></div></template>'
+        + '<script setup>import icon6 from \'../../resources/images/icon-普通厂商-3208.png\'</script>'),
+    ];
+    const r = checkSectionExclusiveEvidence({
+      files, plan: makePlan(), figmaRoot, resourceDomMapping: map,
+    });
+    expect(r.borrowedAssetIssues).toHaveLength(1);
+    expect(r.borrowedAssetIssues[0].sectionId).toBe('2:3680');
+    expect(r.borrowedAssetIssues[0].ownerSectionIds).toEqual(['2:3444']);
+  });
+
   it('同一图片文件挂在多个节点（去重复用）→ 任一节点属本 section 即不报', () => {
     // 真机实锤：icon-3561.png 同时是 2:3561 与 2:3441 的图标（deduplicatedFrom）
     const files = [

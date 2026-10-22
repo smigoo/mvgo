@@ -271,14 +271,14 @@ function hasPercentageSize(blockText) {
  * @returns {boolean}
  */
 function hasPixelSizeInCommon(commonLess, selector) {
-  // 提取该选择器的块
+  // 🛡️ 刀 48（2026-10-22）：旧版 `/\{([^}]*)\}/` 在第一个子块 `}` 处截断 ——
+  //   嵌套子块里的 px 会被误判成父块的 px ⇒ 保护规则误触发 ⇒ 子组件的百分比块被丢弃
+  //   （= 声明净丢失）。改用 outerBlockBody 深度感知取体（同为单一实现）。
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 'i');
-  const match = commonLess.match(regex);
-  if (!match) return false;
-  
-  // 检查是否有像素值
-  return /\b(width|height)\s*:\s*\d+px/i.test(match[1]);
+  const head = new RegExp(`${escapedSelector}\\s*\\{`, 'i').exec(commonLess);
+  if (!head) return false;
+  const body = outerBlockBody(commonLess.slice(head.index));
+  return /\b(width|height)\s*:\s*\d+px/i.test(body);
 }
 
 /**
@@ -448,41 +448,222 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
 }
 
 /**
- * 合并多个同名 CSS 块的属性（2026-09-19 新增）
+ * 🛡️ 刀 48（2026-10-22 · mc-1792643509867-db2d65f7 实锤）：**块体切分的唯一实现**。
+ *
+ * ── 事故（为什么是「嵌套块声明被当成父块声明」）─────────────────────────
+ * 旧 `mergeCssBlocks` 用 `/\{([^}]*)\}/` 取块体 —— `[^}]` 遇到**第一个 `}`** 就停。
+ * 而 LLM 产物里父类常带嵌套子规则：
+ *   `.parent { display:grid; column-gap:20px; .child { gap:4px; height:30px; … } .label{…} }`
+ * ⇒ 截断发生在 `.child` 的结尾，随后逐行按 `prop: value` 解析时，**子块内部的声明行
+ *   全部匹配**，被当成父块的声明并「后写者胜」覆盖父块：
+ *   · 真机产物 `.c-db2d65-card-grid-list2`（common.less:492）里混入了 item 的
+ *     `gap:4px` → 顶掉 `column-gap:20px`/`row-gap:20px`；`height:30px` → 顶掉 `height:100%`；
+ *     `padding:0 6px`、`background`、`border-radius` 同批泄漏 ⇒ 普通厂商段行距/列距都变 4px、
+ *     容器高被钉死 30px。
+ *
+ * ── 判据（确定性、命名无关）──────────────────────────────────────────
+ * 按花括号深度 + 字符串/注释状态逐字符扫描：
+ *   · 深度 0 的 `;` ⇒ 一条**顶层声明**；
+ *   · 深度 0 遇到 `{` ⇒ 之前累积的缓冲是**子选择器**，其后的内容归子块；
+ *   · 深度 ≥1 的一切字符（含更深的花括号）原样进子块体。
+ * ⇒ 顶层声明与嵌套子块彻底分离，两者互不污染。
+ *
+ * @param {string} body 块体文本（**不含**外层选择器与花括号）
+ * @returns {{decls: string[], nested: Array<{selector:string, body:string}>}}
+ */
+export function splitBlockBody(body) {
+  const text = String(body || '');
+  const decls = [];
+  const nested = [];
+  let buf = '';
+  let depth = 0;
+  let inStr = null;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    // 字符串内：原样累积，直到同种引号收尾（支持 \" 转义）
+    if (inStr) {
+      if (ch === '\\') {
+        buf += ch + (text[i + 1] ?? '');
+        i += 1;
+        continue;
+      }
+      if (ch === inStr) inStr = null;
+      if (depth > 0) nested[nested.length - 1].body += ch;
+      else buf += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inStr = ch;
+      if (depth > 0) nested[nested.length - 1].body += ch;
+      else buf += ch;
+      continue;
+    }
+    // 注释：整段原样带走（不参与声明解析，但保留可读性）
+    if (ch === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      const stop = end < 0 ? text.length : end + 2;
+      const seg = text.slice(i, stop);
+      if (depth > 0) nested[nested.length - 1].body += seg;
+      else buf += seg;
+      i = stop - 1;
+      continue;
+    }
+
+    if (ch === '{') {
+      depth += 1;
+      if (depth === 1) {
+        nested.push({ selector: buf.trim(), body: '' });
+        buf = '';
+      } else {
+        nested[nested.length - 1].body += ch;
+      }
+      continue;
+    }
+    if (ch === '}') {
+      depth -= 1;
+      if (depth > 0) nested[nested.length - 1].body += ch;
+      continue;
+    }
+    if (depth > 0) {
+      nested[nested.length - 1].body += ch;
+      continue;
+    }
+    if (ch === ';') {
+      const d = buf.trim();
+      // 只剥注释再判空 —— 不能用 `^/*` 整条丢弃：`/* 说明 */\n column-gap: 20px;`
+      // 这种「注释在声明之前」的写法会把真声明一起扔掉（单测 ④ 实锤）。
+      if (d) {
+        const clean = d.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+        if (clean) decls.push(clean);
+      }
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  const tail = buf.trim();
+  if (tail) decls.push(tail.replace(/\/\*[\s\S]*?\*\//g, '').trim());
+  return { decls: decls.filter(Boolean), nested };
+}
+
+/**
+ * 从完整规则文本 `sel { body }` 里**深度感知地**取出外层块体。
+ * 旧实现 `/\{([^}]*)\}/` 会在第一个子块的 `}` 处截断（见 splitBlockBody 注释）。
+ * @param {string} blockText
+ * @returns {string} 外层块体；无花括号 ⇒ 原文（调用方按「纯块体」处理）
+ */
+export function outerBlockBody(blockText) {
+  const text = String(blockText || '');
+  const start = text.indexOf('{');
+  if (start < 0) return text;
+  let depth = 0;
+  let inStr = null;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '\\') { i += 1; continue; }
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inStr = ch; continue; }
+    if (ch === '/') {
+      const next = text[i + 1];
+      if (next === '*') { const e = text.indexOf('*/', i + 2); i = e < 0 ? text.length : e + 1; continue; }
+      if (next === '/') { const e = text.indexOf('\n', i + 2); i = e < 0 ? text.length : e; continue; }
+    }
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start + 1, i);
+    }
+  }
+  return text.slice(start + 1);
+}
+
+/** 声明文本数组 → Map（后写者胜；跳过无法解析的碎片） */
+function declsToMap(decls = []) {
+  const map = new Map();
+  for (const d of decls) {
+    const m = /^([^:]+):\s*([\s\S]+)$/.exec(String(d || '').trim());
+    if (!m) continue;
+    map.set(m[1].trim(), m[2].trim());
+  }
+  return map;
+}
+
+/** 子块归一化 key（空白折叠；`&:hover` 等原样作 key） */
+function nestedKey(selector) {
+  return String(selector || '').replace(/\s+/g, ' ').trim();
+}
+
+/** 渲染嵌套子块（缩进 2 空格；含更深嵌套时原文保留） */
+function renderNested(selector, map) {
+  const declText = Array.from(map.entries())
+    .map(([p, v]) => `    ${p}: ${v};`)
+    .join('\n');
+  return `  ${selector} {\n${declText}\n  }`;
+}
+
+/**
+ * 合并多个同名 CSS 块的属性（2026-09-19 新增；2026-10-22 刀 48 重写）
+ *
+ * 重写原因：旧版用 `/\{([^}]*)\}/` 取块体，**嵌套子块内的声明会被并入父块**
+ * （详见 splitBlockBody 的注释与真机数据）。新版：
+ *   · 顶层声明按 prop 合并（后写者胜，CSS 标准行为）；
+ *   · 嵌套子块按「归一化选择器」分组，同样后写者胜，且**原样保留在父块内**；
+ *   · 子块自身还有更深嵌套（depth ≥ 3）时整块原文保留，不做属性级合并（不猜）。
+ *
  * @param {string} selector 选择器（如 '.c-f9e8c1-stat-card'）
- * @param {string[]} blocks 多个块文本（如 ['.c-f9e8c1-stat-card { gap: 44px; }', '.c-f9e8c1-stat-card { gap: 4px; }']）
+ * @param {string[]} blocks 多个块文本（如 ['.c-x { gap: 44px; }', '.c-x { gap: 4px; }']）
  * @returns {string} 合并后的块文本
  */
 function mergeCssBlocks(selector, blocks) {
   if (blocks.length === 0) return '';
   if (blocks.length === 1) return blocks[0];
 
-  // 提取每个块的属性
-  const allDeclarations = new Map();
+  const declMap = new Map();
+  const nestedMap = new Map(); // key → { selector, map } | { selector, raw }
+  const nestedOrder = [];
+
   for (const block of blocks) {
-    const match = block.match(/\{([^}]*)\}/);
-    if (!match) continue;
-    const body = match[1];
-    // 解析属性（支持多行）
-    const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
-    for (const line of lines) {
-      // 提取 property: value
-      const declMatch = line.match(/^([^:]+):\s*([^;]+);?$/);
-      if (declMatch) {
-        const prop = declMatch[1].trim();
-        const value = declMatch[2].trim();
-        // 后出现的属性覆盖先出现的（CSS 标准行为）
-        allDeclarations.set(prop, value);
+    const { decls, nested } = splitBlockBody(outerBlockBody(block));
+    for (const [p, v] of declsToMap(decls)) declMap.set(p, v);
+    for (const n of nested) {
+      const key = nestedKey(n.selector);
+      if (!key) continue;
+      const sub = splitBlockBody(n.body);
+      const deeper = sub.nested.length > 0;
+      const prev = nestedMap.get(key);
+      if (deeper) {
+        // 更深嵌套：原文保留（后写者胜），不做属性级合并
+        nestedMap.set(key, { selector: key, raw: n.body.trim() });
+      } else if (prev && prev.raw === undefined) {
+        for (const [p, v] of declsToMap(sub.decls)) prev.map.set(p, v);
+      } else {
+        nestedMap.set(key, { selector: key, map: declsToMap(sub.decls) });
       }
+      if (!nestedOrder.includes(key)) nestedOrder.push(key);
     }
   }
 
-  // 重新生成块
-  const declarations = Array.from(allDeclarations.entries())
+  const declText = Array.from(declMap.entries())
     .map(([prop, value]) => `  ${prop}: ${value};`)
     .join('\n');
-  
-  return `${selector} {\n${declarations}\n}`;
+
+  const nestedText = nestedOrder
+    .map((key) => {
+      const n = nestedMap.get(key);
+      if (!n) return '';
+      if (n.raw !== undefined) return `  ${n.selector} {\n${n.raw}\n  }`;
+      return renderNested(n.selector, n.map);
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  const bodyText = [declText, nestedText].filter(Boolean).join('\n\n');
+  return `${selector} {\n${bodyText}\n}`;
 }
 
 /**

@@ -31,6 +31,7 @@ import {
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
+import { resolveSectionSize, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 import { sanitizeComponentId, tailHexOf, normalizeUserComponentId } from '../../utils/component-naming.js';
 
@@ -369,39 +370,24 @@ export function flexItemStyleFromHeights(heights, index) {
  * @returns {number} 该维尺寸（px）；无法确定时为 0
  */
 export function resolveSectionFlexSize(sec, figmaIndex, axis = 'width') {
-  if (!sec || typeof sec !== 'object') return 0;
-  const pick = (box) => {
-    if (!box || typeof box !== 'object') return 0;
-    const v = axis === 'height'
-      ? (box.height ?? box.h)
-      : (box.width ?? box.w);
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  };
-
-  // ① 树上自带的 bbox 优先（planner 保留尺寸时的快路径）
-  const own = pick(sec.absoluteBoundingBox) || pick(sec.bbox);
-  if (own > 0) return own;
+  // 🔴 2026-10-22 单一来源收敛：几何解析一律走 `section-intrinsic-layout#resolveSectionSize`
+  //   （与 `resolveSectionBox` 同一条优先级链），本函数只保留最后的 `figmaSectionBox` 兜底。
+  //   此前的本地实现按 `sourceNodeIds` **首个命中**取尺寸 —— 对合成节点
+  //   （`38:3167-list` 覆盖 3 行 / `287:5-left` 覆盖整列）只能拿到**首行/首列**的尺寸，
+  //   是「优质厂商 list 高度真值 130 却按 30 分配」的直接错源。并集口径才能拿到整段尺寸。
+  const size = resolveSectionSize(sec, figmaIndex, axis);
+  if (size > 0) return size;
 
   if (!figmaIndex || typeof figmaIndex.get !== 'function') return 0;
 
-  // ② 按 figmaNodeId / id 精确回查
-  for (const key of [sec.figmaNodeId, sec.id]) {
-    if (!key) continue;
-    const hit = pick(figmaIndex.get(String(key))?.bbox) || pick(figmaIndex.get(String(key))?.rawNode?.absoluteBoundingBox);
-    if (hit > 0) return hit;
-  }
-
-  // ③ 按 sourceNodeIds 回查（拆列合成 id 落在此分支）
-  const ids = Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : [];
-  for (const raw of ids) {
-    const hit = pick(figmaIndex.get(String(raw))?.bbox);
-    if (hit > 0) return hit;
-  }
-
   // ④ 容器节点无自身归属时，回退到其子树最上节点的 box（figmaSectionBox 同源口径）
-  const viaSection = figmaSectionBox(sec, figmaIndex);
-  const viaBox = pick(viaSection);
+  const pick = (b) => {
+    if (!b || typeof b !== 'object') return 0;
+    const raw = axis === 'height' ? (b.height ?? b.h) : (b.width ?? b.w);
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const viaBox = pick(figmaSectionBox(sec, figmaIndex));
   if (viaBox > 0) return viaBox;
 
   return 0;
@@ -436,6 +422,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   // 🛡️ P0 生效自检计数（2026-09-28）：B′ 判据的评估/命中数，供函数收尾统一落日志。
   let __eqEvaluated = 0;
   let __eqHits = 0;
+  // 🛡️ 刀 50 生效自检计数（2026-10-22）：0 命中时必须能区分「没跑 / 跑了没判据成立」。
+  let __intrinsicEvaluated = 0;
+  let __intrinsicHits = 0;
   if (!leaves.length) return null;
 
   const nameOf = assignSectionComponentNames(treeSections);
@@ -670,7 +659,17 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   align-items:stretch 保留（水平容器交叉轴撑满高度）。
         const parentIsHorizontal = parentFlexStyle.includes('min-width:0');
         const ownFlex = parentFlexStyle || `flex:1;${parentIsHorizontal ? 'min-width:0' : 'min-height:0'};`;
-        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}">`);
+        // 🛡️ 刀 50（2026-10-22）：段内固有几何契约优先级最高。
+        //   病灶：垂直段（面板）把**整段高度**按子项 Figma 高度比例分给子项 ⇒ 段的 padding
+        //   （上留白 25 / 左留白 20）、子项间距（16/20）、底部剩余留白全部被摊进比例里，
+        //   三段 161/212/265 各自摊成不同结果，实测 header 高 36/77/97（真值 41）。
+        //   判据纯几何 + 命名无关，详 src/ai-engine/utils/section-intrinsic-layout.js。
+        //   fail-open：任何几何事实缺失/溢出/重叠 ⇒ ok:false ⇒ 走下方既有比例行为（零行为变化）。
+        const intrinsic = resolveIntrinsicLayout(sec, figmaIndex);
+        __intrinsicEvaluated += 1;
+        if (intrinsic.ok) __intrinsicHits += 1;
+        const intrinsicPad = buildIntrinsicContainerStyle(intrinsic);
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}">`);
         // 🛡️ P2 修复（2026-09-17）：水平 flex 子项按 Figma 实际宽度比例分配 flex-grow，
         //   替代旧版统一 flex:1 均分（此前 tabs 46px 和 cons 367px 被 50:50 均分，严重失真）。
         //   计算逻辑：收集所有子节点宽度 → 求和 → 每个子项 flex-grow = width / totalWidth。
@@ -725,7 +724,11 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
           // 🛡️ P0/P2/P3（2026-09-17）：子项按 Figma 宽度/高度比例分配 flex-grow，
           //   解决「统一 flex:1 均分失真」与「无约束 collapse 到 0」。
           //   🛡️ P6 合并：比例不再包 wrapper，直接传给子节点内联到其自身标签。
-          if (isHorizontal) {
+          // 🛡️ 刀 50：固有几何命中时用「固定高度 + 间距」，比例分配在此分支被完全取代
+          //   （两者表达的是互斥的世界观：比例 = 拉伸填满，固定 = 真值 + 剩余留白）。
+          if (intrinsic.ok) {
+            renderBodyNode(child, indent + 1, buildIntrinsicChildStyle(intrinsic, i));
+          } else if (isHorizontal) {
             const flexStyle = equalizeMembers
               ? 'flex:1;min-width:0;'
               : flexItemStyleFromWidths(childWidths, i);
@@ -780,6 +783,12 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     options.logger.info('🛡️ B′ 横向同构卡片单元·已评估', {
       horizontalContainers: __eqEvaluated,
       equalized: __eqHits,
+    });
+    // 🛡️ 刀 50 生效自检：`evaluated` 是「进入容器分支的段数」（本实现里含叶子前的所有容器
+    //   都会评估，含 horizontal/grid/单子项等 fail-open 情形），`applied` 才是真正改写段内几何的段数。
+    options.logger.info('🛡️ 刀 50 段内固有几何·已评估', {
+      evaluated: __intrinsicEvaluated,
+      applied: __intrinsicHits,
     });
   }
   return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };

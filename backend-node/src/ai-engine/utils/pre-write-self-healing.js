@@ -46,6 +46,9 @@ import { healBorderWithoutStrokes } from './border-without-strokes.js';
 // 🛡️ 刀 40（2026-10-21）：同一规则块内同属性重复声明消歧（`display: grid` 被同块后写的
 //   `display: flex` 覆盖 ⇒ 折叠列表纵向单列散架）。只消歧、不修视觉。
 import { dedupeDuplicateDeclsInBlocks } from './block-duplicate-decl-guard.js';
+// 🛡️ 刀 43（2026-10-22）：R24 **不**挂在本链 —— 本链之后还有 4 个覆写/回退步骤会冲掉它，
+//   且真机 8a1a0d96 实测本链零命中。已改挂唯一写盘出口
+//   `roles/microcode/file-writer.js#writeFiles`（见该处注释与 §③ 上方说明）。
 // 🛡️ 刀 41（2026-10-21）：折叠网格「布局契约」判据 + 自愈（检测与自愈同一实现）。
 //   治「grid 段方向/卡宽/间距没人管 ⇒ 两轮真机方向正好互换」（T3 对 isGrid 直接跳过）。
 import {
@@ -311,6 +314,12 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   }
 
+  // ②-c 刀 43：R24 已改挂到**真正的写盘出口** `roles/microcode/file-writer.js#writeFiles`。
+  //   原因（8a1a0d96 真机实锤）：本链之后还有 4 个会覆写/回退内容的步骤
+  //   （CODE-020 类名前缀 / 根容器布局归一 / 覆写后语义校验回退到 allFiles / absolute 遮罩层），
+  //   在本链里跑 R24 会被它们冲掉，且实测零命中。`writeFiles` 是唯一写盘出口、且最后一个
+  //   调用点在上述四步之后 ⇒ 单一挂载点，不再在此重复挂（同判据不开第二份实现）。
+  //
   // ③ CODE-022 修复器（未挂载的资源 import 确定性删除）。
   //
   // 🗑️ 已删除（2026-09-29，删减法）：此前的「③-a CODE-022 图标自愈」（mountUnusedResourceIcons）

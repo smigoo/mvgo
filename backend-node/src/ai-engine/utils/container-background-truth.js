@@ -37,6 +37,12 @@
  *     inline 与任何 class 都没声明 `box-shadow` ⇒ 补发光。
  *   ⇒ 命中 ②/③/④/⑤/⑥/⑦ 时把真值写成该元素的 inline（精确到该元素，不污染 class，幂等）。
  *
+ * ⑧ 刀 42-c（2026-10-22 · mc-1792635568116-472784ae 实锤）：面板横跨父级（段自身宽 ≥ 父宽 95%）
+ *    而元素 inline/class 都没声明 `width` ⇒ 补 `width:100%`。
+ *    病灶：父级 `.c-…-icon-con` 写的是 `align-items:flex-start`（**不拉伸**），面板容器又没有
+ *    `width:100%` ⇒ 面板缩成内容宽（截图里战略段金面板只有半幅宽）。判据纯几何（宽度比），
+ *    只看「面板是否横跨父级」，不看它左右是谁。
+ *
  * 为什么圆角/发光只补「完全没声明」的：`border-radius` 与 `box-shadow` 在多处共用 class
  *   时改写会影响别的元素（`c-component-frame-2136639905` 的双身份教训）。**判据判不了
  *   就先不改** —— 只补空白，不猜已有值对不对（fail-open）。
@@ -198,6 +204,10 @@ export function resolveSectionPanel(secId, figmaIndex) {
   const sec = entry.node;
   const secArea = areaOf(sec.absoluteBoundingBox);
   if (!secArea) return null;
+  // 段自身是否横跨父级（判「面板必须 width:100%」，纯几何、命名无关）
+  const parentBox = figmaIndex.get(String(entry.parentId))?.node?.absoluteBoundingBox;
+  const fullWidth =
+    Number(parentBox?.width) > 0 && Number(sec.absoluteBoundingBox?.width) / parentBox.width >= 0.95;
   for (const child of sec.children || []) {
     const type = String(child?.type || '').toUpperCase();
     if (!GRAPHIC_TYPES.has(type)) continue;
@@ -218,6 +228,7 @@ export function resolveSectionPanel(secId, figmaIndex) {
       kind,
       radius,
       shadow,
+      fullWidth,
       ...(kind === 'gradient' ? { angleGuessed: !hasGradientHandles(child.fills) } : {}),
     };
   }
@@ -335,6 +346,7 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
     background: collectClassProp(css, 'background'),
     'border-radius': collectClassProp(css, 'border-radius'),
     'box-shadow': collectClassProp(css, 'box-shadow'),
+    width: collectClassProp(css, 'width'),
   });
   const globalPropMaps = cssSourcesAll.map(toPropMaps);
   /** 在「本文件 style → 其它源」顺序里找该 class 的某属性声明（首个命中的源胜） */
@@ -433,8 +445,19 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
         }
       }
 
-      if (decls.length === 0) continue;
+      // ── ④ 宽度（⑧）：面板横跨父级（宽 ≥ 父 95%）且没声明 width ⇒ 补 100%
+      //   病灶：父级 `align-items:flex-start` 不拉伸 + 面板无 width ⇒ 面板缩成内容宽
+      //   （真机 mc-1792635568116：战略段金面板只有半幅宽）。用 `(^|;)` 锚定，
+      //   避免把 `min-width` 误判成已声明 width。
+      if (truth.fullWidth && !/(?:^|;)\s*width\s*:/.test(inlineStyle)) {
+        const declaredW = classes.some((cls) => declaredProp(cls, 'width', propMaps));
+        if (!declaredW) {
+          decls.push('width:100%');
+          reasons.push('missing-width');
+        }
+      }
 
+      if (decls.length === 0) continue;
       const css = decls.join(';');
       const newTag = styleAttr
         ? t.tag.replace(styleAttr[0], `style="${css};${styleAttr[1]}"`)

@@ -156,6 +156,7 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
 
   const usages = collectClassUsages(files);
   const classesToStrip = new Map(); // cls → owner sectionId（留痕用）
+  const orphanClasses = new Set(); // 仅由「无 data-section-id 元素」使用的 class（走 class 级兜底）
 
   for (const [path, content] of Object.entries(files)) {
     if (typeof content !== 'string' || !/\.vue$/.test(path)) continue;
@@ -209,6 +210,47 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
     if (dirty) files[path] = next;
   }
 
+  // ②-b class 级兜底（2026-10-22 · mc-1792635089793-2d4305b7 实锤）：
+  //   真机 `.c-2d4305-header-text`（战略标题）挂在 HeaderText.vue 的根 div 上，而该 div
+  //   **漏了 `data-section-id`**（另两段 HeaderText2/3 都有）⇒ 元素级判据拿不到 `sid`，
+  //   `isClassExclusiveTo` 恒 false ⇒ 战略段标题的金色双条没被摘掉（另两段已摘）。
+  //   判据：该 class 的声明本身就是「圆角 R + 发光 K」，且 (R,K) 反查到**唯一** owner A；
+  //   A 的 section 元素**没在用**这个 class（⇒ 它不是面板自己的 class）；
+  //   且没有任何「有自己面板真值」的 section 在用 ⇒ 摘。使用点全部无归属也照摘。
+  if (cssSources.length > 0) {
+    const radiusMap = new Map();
+    const shadowMap = new Map();
+    for (const css of cssSources) {
+      for (const [cls, v] of collectClassProp(css, 'border-radius')) {
+        if (!radiusMap.has(cls)) radiusMap.set(cls, v);
+      }
+      for (const [cls, v] of collectClassProp(css, 'box-shadow')) {
+        if (!shadowMap.has(cls)) shadowMap.set(cls, v);
+      }
+    }
+    for (const [cls, radiusVal] of radiusMap) {
+      if (classesToStrip.has(cls)) continue;
+      const shadowVal = shadowMap.get(cls);
+      if (!shadowVal) continue;
+      const usage = usages.get(cls);
+      if (!usage) continue; // 声明了但没有任何元素使用 ⇒ 死规则，不动
+      // 只认「唯一使用点且该点无 section 归属」：多使用点 = 共享 class，铁律一律不动
+      if (usage.orphanTags !== 1 || usage.sids.size !== 0) continue;
+      const r = radiusNumber(resolveVars(radiusVal));
+      const key = shadowColorKey(resolveVars(shadowVal));
+      if (r == null || !key) continue;
+      const candidates = Array.from(ownersByShadowKey.get(key) || []).filter(
+        (a) => panelBySection.get(a).radius === r,
+      );
+      if (candidates.length !== 1) continue;
+      const owner = candidates[0];
+      if (usage.sids.has(owner)) continue; // 就是面板自己的 class
+      if (Array.from(usage.sids).some((s) => panelBySection.has(s))) continue; // 别的面板在用
+      classesToStrip.set(cls, owner);
+      orphanClasses.add(cls); // 只打标，实际变更由 ④ 按文件如实记录
+    }
+  }
+
   // ④ 改写 class 规则（common.less + 各 SFC 的 style 块）
   if (classesToStrip.size > 0) {
     const list = Array.from(classesToStrip.keys());
@@ -220,7 +262,13 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
           files[path] = stripped;
           for (const cls of list) {
             if (stripDeclsFromClassRules(content, [cls], isPanelChromeProp) !== content) {
-              changes.push({ file: path, sectionId: null, owner: classesToStrip.get(cls), where: 'class', cls });
+              changes.push({
+                file: path,
+                sectionId: null,
+                owner: classesToStrip.get(cls),
+                where: orphanClasses.has(cls) ? 'class-orphan' : 'class',
+                cls,
+              });
             }
           }
         }
@@ -244,7 +292,13 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
         files[path] = out;
         for (const cls of list) {
           if (stripDeclsFromClassRules(content, [cls], isPanelChromeProp) !== content) {
-            changes.push({ file: path, sectionId: null, owner: classesToStrip.get(cls), where: 'class', cls });
+            changes.push({
+                file: path,
+                sectionId: null,
+                owner: classesToStrip.get(cls),
+                where: orphanClasses.has(cls) ? 'class-orphan' : 'class',
+                cls,
+              });
           }
         }
       }

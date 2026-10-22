@@ -169,4 +169,48 @@ describe('normalizeFontSizeLiterals（M5-6/M5-7）', () => {
     expect(twice.changes).toEqual([]);
     expect(twice.text).toBe(once.text);
   });
+
+  // 🛡️ 刀 53（2026-10-22 round-12 实锤）：确定性接管类 `c-{sem}-fg-{header|grid}-{idSlug}`
+  // 的 font-size 由 Figma 真值渲染（`16px`），被归一成 `calc(@fontSize * 1.1429)` 后
+  // 实测塌成 13.71px ⇒ 真值失真。故这类规则块**整块豁免**归一。
+  it('刀 53 fg- 类规则块豁免归一（真值 16px 保住）', () => {
+    const src = '.c-x-fg-header-383137tailtext-title { font-size: 16px; }';
+    const r = normalizeFontSizeLiterals(src);
+    expect(r.text).toBe(src);
+    expect(r.changes).toEqual([]);
+  });
+
+  it('同段内非 fg- 类照常归一（阳性对照：豁免没有把整段关闭）', () => {
+    const src = '.c-x-fg-grid-383140-card { font-size: 16px; }\n.other { font-size: 12px; }';
+    const r = normalizeFontSizeLiterals(src);
+    expect(r.text).toContain('.c-x-fg-grid-383140-card { font-size: 16px; }');
+    expect(r.text).toContain('calc(@fontSize * 0.8571)');
+  });
+
+  it('skipSelectors: [] 可显式关闭豁免（阴性对照：豁免不是硬编码死开关）', () => {
+    const src = '.c-x-fg-header-1-title { font-size: 16px; }';
+    const r = normalizeFontSizeLiterals(src, { skipSelectors: [] });
+    expect(r.text).toContain('calc(@fontSize * 1.1429)');
+  });
+});
+
+describe('fg- 标签内联 style 保护（刀 53b · round-16 实锤）', () => {
+  it('fg- 标签的内联 font-size 不被归一（scoped style 在预览运行时不生效，字号只能内联）', () => {
+    const src = '<span class="c-x-fg-text-383262" style="color:rgba(44,104,255,1);font-size:24px;font-weight:600;">33</span>';
+    const r = normalizeFontSizeLiterals(src);
+    expect(r.text).toBe(src);
+    expect(r.changes).toEqual([]);
+  });
+
+  it('阳性对照：非 fg- 标签的内联 font-size 照常归一（保护没把归一关掉）', () => {
+    const src = '<span class="c-demo-label" style="font-size:24px;">x</span>';
+    const r = normalizeFontSizeLiterals(src);
+    expect(r.text).toContain('calc(@fontSize * 1.7143)');
+  });
+
+  it('class 在 style 之后的标签同样保护（属性顺序无关）', () => {
+    const src = '<div style="font-size:16px;height:16px;" class="c-x-fg-header-1" >t</div>';
+    const r = normalizeFontSizeLiterals(src);
+    expect(r.text).toBe(src);
+  });
 });

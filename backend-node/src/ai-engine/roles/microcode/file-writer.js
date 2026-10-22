@@ -25,6 +25,7 @@ import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFle
 //   实现了它但**全文无调用点** ⇒ 死代码 ⇒ 归一从未生效，硬编码 px 字号直接过检失败）。
 //   顶层静态导入（`writeFiles` 是同步函数，不能动态 import）。
 import { normalizeFontSizeLiterals } from '../../utils/font-size-normalizer.js';
+import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
@@ -52,6 +53,49 @@ import {
 import { MC_CANONICAL_COLOR_SLOTS } from '../../utils/style-tokens.js';
 // 🛡️ 2026-09-29 治本：写盘门禁前置自愈——自闭合标签「` /` 后夹属性」畸形还原（单点实现，双链路共用）
 import { repairSelfClosingSlashInsideTag } from '../../utils/pre-write-self-healing.js';
+// 🛡️ 刀 43（2026-10-22）：R24「空 `<img>` / `:src` 引用未声明变量」的落盘前终验。
+//   `writeFiles` 是所有产物文件的唯一写盘出口、且最后一个调用点在全部覆写/回退步骤之后
+//   ⇒ 只有这里能保证「校验的内容 === 落盘的内容」。
+import {
+  healEmptyImgSrc,
+  buildComponentOwnerMap,
+  ownerSectionIdForFile,
+  collectSectionIds,
+} from '../../utils/resource-img-src-healer.js';
+// 🛡️ 刀 45（2026-10-22）：「section 有图标真值但组件零渲染」—— 连 `<img>` 都没有，
+//   R24 无对象可修。位置与尺寸全部取自 mapping 的 figmaBox/parentBox 真值，缺即不判。
+import { healMissingIconRender } from '../../utils/missing-icon-render-healer.js';
+// 🛡️ 刀 49（2026-10-22 · mc-1792643509867-db2d65f7 实锤）：**图标槽位尺寸契约**。
+//   共享 class 被「图标容器」和「图标本体」共用时（`.c-db2d65-icon` = div 的
+//   `width:100%;flex:1 1 0` + img 的 16×16），img 被拉成 570px。刀 39 依赖
+//   `mapping.figmaBox`，而 `resource-dom-mapping.json` 根本没有该字段 ⇒ 整条路径静默跳过。
+//   本刀真值改用**导入图片的原始像素**（导出 1x，与 Figma bbox 等价），永不缺失。
+//   自愈只写**元素级内联**（inline 恒胜），绝不改写共享 class。
+import { enforceIconSlotSize, resolveImageAbsPath } from '../../utils/icon-slot-size-contract.js';
+import { resolveResourceDomMapping } from '../../utils/resource-import-guard.js';
+// 🛡️ 刀 51（2026-10-22）：**段内标题行几何契约**。刀 50 把段的 padding / 子项间距钉到 Figma
+//   真值后，段内标题行**自身**仍是三套实现（`padding: 0 calc(@fontSize*0.6)`=7.2px、
+//   `gap` 6px/7px、标题 line-height 16px/1.2）⇒ 标题被推到 x=49（真值 44），三段还差 1~2px。
+//   真值只从 Figma 树推（icon 节点的兄弟 TEXT），不需要 plan；判据见
+//   src/ai-engine/utils/header-row-geometry.js。同样是**唯一写盘出口**才有效。
+import { enforceHeaderRowGeometry } from '../../utils/header-row-geometry.js';
+// 🛡️ 刀 52（2026-10-22）：父容器「垂直堆叠」几何契约。刀 50 管段内、刀 51 管标题行，
+//   而**段自身的高度**仍在按 `flex:比例` 摊 —— 见 utils/section-stack-contract.js 的病灶说明。
+//   在写盘出口按 DOM 直接子元素算（`data-rowpeers-wrap` 行组与普通段一视同仁），
+//   判据复用 `section-intrinsic-layout#resolveStackGeometry`（与刀 50 同一份实现）。
+import { enforceStackGeometry } from '../../utils/section-stack-contract.js';
+import { indexFigmaNodes } from '../../utils/section-tree.js';
+// 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格几何契约原挂在
+//   `pre-write-self-healing` ⑱ —— 那一刻段容器的 `data-section-id` **还没补齐**，
+//   `sectionIdOf(hostAttrs)` 取不到 id ⇒ 整段 `continue`。真机日志
+//   `contracts:3/mismatches:2` 里**没有** 38:3140（战略段），而它恰恰是唯一还错的那段。
+//   `writeFiles` 是唯一写盘出口、且此阶段 section 归属已就位 ⇒ 迁到这里重跑一次。
+//   ⚠️ 必须在 **per-file 循环之前**整体跑：判据要跨文件统计 class 复用次数
+//   （`buildClassUsage`），逐文件跑会把「被复用」误判成「独占」。
+import {
+  detectGridListLayoutIssues,
+  healGridListLayout,
+} from '../../utils/grid-list-layout-contract.js';
 
 /**
  * 验证文件路径是否合法
@@ -584,9 +628,166 @@ export function writeFiles(files, outputPath, options = {}) {
   let currentFile = '';
   let currentStep = 'init';
 
+  // 🛡️ 刀 43（2026-10-22 · mc-1792635919906-88b9c3a5 / mc-1792638154357-8a1a0d96 双实锤）：
+  //   R24（空 `<img>` / `:src` 引用未声明变量）的**真正落盘前终验**。
+  //
+  //   为什么必须在这里、而不是 `pre-write-self-healing`：
+  //   该链之后还有 4 个会**覆写或回退内容**的步骤 —— ① CODE-020 模板类名统一补前缀；
+  //   ② 根容器布局归一；③ 「覆写后语义校验命中 ⇒ 回退到 `allFiles`（覆写前版本）」；
+  //   ④ absolute 遮罩层宿主补 position。而 `writeFiles` 是**所有产物文件的唯一写盘出口**，
+  //   其最后一个调用点在上述四步之后 ⇒ 只有这里能保证「门禁校验的内容 === 实际落盘的内容」。
+  //   实测 8a1a0d96：pre-write 阶段零命中（产物三标题仍是裸 img），写盘出口才是唯一有效位。
+  //
+  //   归属表用**本次 files 全量**建（装配层 index.vue → 子组件最近 section 祖先），
+  //   给「模板无 `data-section-id`」的组件兜底；惰性建一次。
+  const _r24Mapping = (() => {
+    try {
+      return resolveResourceDomMapping(options.resourceDomMapping, outputPath);
+    } catch {
+      return null;
+    }
+  })();
+  // 🔴 mapping 为空时 R24 与刀 45 **整条链静默跳过**（历史上因此白丢多轮真机验证）
+  let _r24NoMappingLogged = false;
+  let _r24OwnerMap = null;
+  // 🛡️ 刀 51：Figma 节点索引惰性建一次（14 个 .vue × 全树 walk 太浪费；同一轮产物共用一棵树）
+  let _r51Idx = null;
+  // 🔴 刀 51 的可辩驳留痕（2026-10-22 真机实锤）：`figmaRoot` 上游曾恒为 undefined，
+  //   导致 `_r51Idx.size === 0` 静默跳过 —— 日志里「没有报错」被误读成「没有问题」。
+  //   现在「无树」与「有树但零命中」都要留痕，任何一环断路都能在日志里看见。
+  let _r51NoTreeLogged = false;
+  const _r51Stats = { evaluated: 0, singleImg: 0, mapped: 0, matched: 0, healed: 0 };
+  // 🛡️ 刀 52：父容器堆叠（与刀 51 共用同一棵 Figma 索引；同样必须留痕，否则零命中不可判读）
+  const _r52Stats = { evaluated: 0, mapped: 0, matched: 0, healed: 0 };
+  // 🛡️ 刀 41（挂载点迁移）：折叠网格几何契约 —— 见文件头 import 处的病灶说明。
+  //   留痕同理：`sections` 缺失 / `contracts:0` / `mismatches:0` 必须能在日志里区分。
+  //   `skip*` 四列＝「为什么没判」（真机 2026-10-22：战略段两行 `38:3140/38:3153`
+  //   根本不在 section 树里 ⇒ 一律 skipNoSection，任何几何判据都够不着）。
+  const _r41Stats = {
+    sections: 0,
+    contracts: 0,
+    mismatches: 0,
+    healed: 0,
+    failed: 0,
+    residual: 0,
+    skipNoSection: 0,
+    skipNoTruth: 0,
+    skipNoVFor: 0,
+    skipNoClass: 0,
+  };
+  let _r41TreeLogged = false;
+  // 刀 41 与刀 51/52 共用同一棵 Figma 索引（惰性建一次；真值兜底要用）
+  let _r41Idx = null;
+
+  // ── 刀 41：整体（跨文件）跑一次，改写后的内容回灌到 filesForWrite ─────────────
+  //   为什么是循环外：`detectGridListLayoutIssues` 用 `buildClassUsage(allFiles)` 统计
+  //   每个 class 被几个元素使用，**只改写独占 class**（`frame-2136639905` 双身份铁律）。
+  //   逐文件喂进去 ⇒ 复用统计恒为 1 ⇒ 会去改共享 class。真机 `pre-write` 那次是整体跑，
+  //   这里必须保持一致，否则等于换了一套判据。
+  let filesForWrite = files;
+  try {
+    const _r41Sections = Array.isArray(options.sections) ? options.sections : [];
+    if (_r41Sections.length > 0) {
+      _r41Stats.sections = _r41Sections.length;
+      const _r41Arr = Object.entries(files)
+        .filter(([, c]) => typeof c === 'string' && c)
+        .map(([path, content]) => ({ path, content }));
+      // 🔴 真值兜底（2026-10-22 真机实锤 mc-1792653212647）：section 树里**有** 38:3140 /
+      //   38:3153，但 plan 节点不带 `items` ⇒ 旧实现 `skippedNoTruth:2`，战略段两行从未被判定。
+      //   真值本来就在 Figma 树里；把同一棵索引（与刀 51/52 共用）交给判据按 id 反查。
+      if (!_r41Idx) {
+        _r41Idx = indexFigmaNodes(options.figmaRoot?.document ?? options.figmaRoot ?? null);
+      }
+      const _r41Det = detectGridListLayoutIssues(_r41Arr, {
+        sections: _r41Sections,
+        figmaIndex: _r41Idx && _r41Idx.size > 0 ? _r41Idx : null,
+      });
+      const _r41Ds = _r41Det.stats || {};
+      _r41Stats.contracts = Number(_r41Ds.contracts) || 0;
+      _r41Stats.mismatches = _r41Det.issues.length;
+      _r41Stats.skipNoSection = Number(_r41Ds.skippedNoSection) || 0;
+      _r41Stats.skipNoTruth = Number(_r41Ds.skippedNoTruth) || 0;
+      _r41Stats.skipNoVFor = Number(_r41Ds.skippedNoVFor) || 0;
+      _r41Stats.skipNoClass = Number(_r41Ds.skippedNoClass) || 0;
+      // 🔴 section 树留痕（一次性）：这是「判据够不着某段」的唯一可判读证据。
+      //   真机 2026-10-22 实锤：战略段两行（38:3140 / 38:3153）不在树里 ⇒
+      //   只打 `mismatches:0` 会让人以为「已经对了」，实际是「从来没被看过」。
+      if (logger && !_r41TreeLogged) {
+        _r41TreeLogged = true;
+        const _ids = [];
+        const _walk = (list, depth) => {
+          for (const s of Array.isArray(list) ? list : []) {
+            if (!s || typeof s !== 'object') continue;
+            _ids.push(`${'.'.repeat(Math.min(depth, 4))}${s.id || s.figmaNodeId || '?'}`);
+            if (depth < 3) _walk(s.children || s.body?.children, depth + 1);
+          }
+        };
+        _walk(_r41Sections, 0);
+        logger.info('🛡️ 刀 41 section 树（真值源，判据只能看到这些 id）', {
+          count: _ids.length,
+          ids: _ids.slice(0, 80),
+        });
+      }
+      if (_r41Det.issues.length > 0) {
+        const _r41Healed = healGridListLayout(_r41Arr, _r41Det.issues);
+        const _r41Map = new Map();
+        for (const f of _r41Healed.files || []) {
+          if (f && typeof f.path === 'string' && typeof f.content === 'string') {
+            _r41Map.set(f.path, f.content);
+          }
+        }
+        _r41Stats.healed = (_r41Healed.healed || []).length;
+        _r41Stats.failed = (_r41Healed.failed || []).length;
+        if (_r41Map.size > 0) {
+          filesForWrite = { ...files };
+          for (const [p, c] of _r41Map) {
+            if (filesForWrite[p] !== c) filesForWrite[p] = c;
+          }
+        }
+        if (logger) {
+          logger.warn('🛡️ 刀 41 折叠网格几何契约（写盘出口·循环外整体）', {
+            issues: _r41Det.issues.map((i) => ({
+              sectionId: i.sectionId,
+              file: i.file,
+              cls: i.wrapperClass,
+              codes: (i.violations || []).map((v) => v.code),
+            })),
+            healed: _r41Healed.healed,
+            failed: _r41Healed.failed,
+          });
+        }
+        // 复检留痕：0 = 全愈；残留交回 WARN 门禁（与 pre-write 同口径）
+        //   ⚠️ 必须与 detect 用**同一组入参**（sections + figmaIndex），否则「复检通过」
+        //   可能只是「换了一套判据」——两段式铁律的常见破法。
+        const _r41Re = detectGridListLayoutIssues(
+          Object.entries(filesForWrite).map(([path, content]) => ({ path, content })),
+          { sections: _r41Sections, figmaIndex: _r41Idx && _r41Idx.size > 0 ? _r41Idx : null },
+        );
+        _r41Stats.residual = _r41Re.issues.length;
+        if (_r41Re.issues.length > 0 && logger) {
+          logger.warn('🛡️ 刀 41 复检残留（交回 WARN 门禁）', {
+            residual: _r41Re.issues.map((i) => `${i.sectionId}@${i.file}`),
+          });
+        }
+      }
+    } else if (logger) {
+      // 🔴 缺 sections = 静默全盲（历史事故重演点）：必须留痕，不许「没日志 = 没问题」
+      logger.warn('🛡️ 刀 41 无 sections（fail-open，折叠网格契约无法判定）—— 请检查 writeFiles 的 sections 透传');
+    }
+  } catch (_r41Err) {
+    // fail-open：修不了也必须写盘
+    if (logger) {
+      logger.warn('🛡️ 刀 41 写盘出口跳过（fail-open）', {
+        error: _r41Err?.message || String(_r41Err),
+      });
+    }
+  }
+
   try {
     let pendingThemeVars = '';
-    for (const [relativePath, content] of Object.entries(files)) {
+    // 🔴 数据源是 `filesForWrite`（= files 经刀 41 改写后）：若这里仍用 `files`，
+    //   刀 41 的改写会被**静默丢弃**（它是循环外算好的，不写盘等于白跑一轮）。
+    for (const [relativePath, content] of Object.entries(filesForWrite)) {
       currentFile = relativePath;
       currentStep = 'validating_path';
       // ✅ 验证文件路径
@@ -1201,10 +1402,240 @@ export function writeFiles(files, outputPath, options = {}) {
         }
       }
 
+      // 🛡️ 刀 43 / R24 落盘前终验（本文件顶部已说明为何必须挂在这里）。
+      //   位置要求：在所有内容级自愈之后、`shouldSkipWrite` / `writeFileSync` 之前 ——
+      //   这样「比对的内容」「写盘的内容」「门禁校验的内容」三者恒等。
+      if (
+        relativePath.endsWith('.vue') &&
+        Array.isArray(_r24Mapping) &&
+        _r24Mapping.length > 0
+      ) {
+        try {
+          if (!_r24OwnerMap) _r24OwnerMap = buildComponentOwnerMap(files);
+          const _r24Owner = ownerSectionIdForFile(_r24OwnerMap, relativePath);
+          const _r24RelBase = /^package\/components\//.test(relativePath)
+            ? '../../resources/images/'
+            : '../resources/images/';
+          const _r24 = healEmptyImgSrc(sanitizedContent, _r24Mapping, _r24RelBase, {
+            ownerSectionId: _r24Owner,
+          });
+          if (_r24.changed) {
+            sanitizedContent = _r24.code;
+            currentStep = 'heal_img_src';
+            if (logger) {
+              logger.warn(
+                `🛡️ R24 落盘前终验（写盘出口）: ${relativePath}（<img> 缺失/失效资源绑定已修）`,
+                { ownerSectionId: _r24Owner || undefined, healed: _r24.healed },
+              );
+            }
+          } else if (logger) {
+            // 🔴 可观测性（2026-10-22 · mc-1792640936339-f6660c71 实锤）：
+            //   未命中时原本**完全静默**，导致「离线能修 / 真机没修」无法归因。
+            //   必须同时记录 ① code 里实际存在的 sectionId（判断锚点是否已注入）
+            //   ② owner 兜底值（`no-section-id` 时唯一通道）③ mapping 条数。
+            logger.debug(`R24 写盘出口未命中: ${relativePath}`, {
+              ownerSectionId: _r24Owner || null,
+              sectionIds: collectSectionIds(sanitizedContent),
+              mappingCount: _r24Mapping.length,
+              skipped: _r24.skipped,
+            });
+          }
+        } catch (r24Err) {
+          // fail-open：修不了也要写盘，绝不因自愈异常丢产物
+          if (logger) {
+            logger.warn(
+              `🛡️ R24 写盘出口跳过: ${relativePath}（${r24Err?.message || r24Err}）`,
+            );
+          }
+        }
+      } else if (relativePath.endsWith('.vue') && !_r24NoMappingLogged && logger) {
+        _r24NoMappingLogged = true;
+        logger.warn('🛡️ R24/刀 45 整链跳过：resourceDomMapping 不可用', {
+          file: relativePath,
+          hasOption: Boolean(options?.resourceDomMapping),
+          outputPath,
+        });
+      }
+
+      // 🛡️ 刀 49（2026-10-22 · mc-1792643509867-db2d65f7 实锤）：**图标槽位尺寸契约**。
+      //   位置：R24 之后（R24 可能刚补完 `:src` + import，本步才有对象可判）、
+      //   所有覆写/回退步骤之后 —— 与 R24 同理，只有写盘出口能保证「门禁校验 === 落盘」。
+      //   判据：资源 `<img>` 的内联必须同时满足 width=图片原始宽 / height=原始高 / flex 不拉伸；
+      //   自愈只写元素级内联（inline 恒胜），**绝不改共享 class**。
+      //   fail-open：非 import 变量 / 图片读不到 / `object-fit:cover`（有意裁剪铺满）⇒ 不判。
+      if (relativePath.endsWith('.vue')) {
+        try {
+          const _icon = enforceIconSlotSize(sanitizedContent, {
+            resolveAbs: (imgPath) => resolveImageAbsPath(outputPath, imgPath),
+          });
+          if (_icon.changed) {
+            sanitizedContent = _icon.code;
+            currentStep = 'heal_icon_slot_size';
+            if (logger) {
+              logger.warn(
+                `🛡️ 刀 49 图标槽位尺寸契约（写盘出口）: ${relativePath}`,
+                { healed: _icon.healed },
+              );
+            }
+          } else if (logger && _icon.stats && _icon.stats.skippedUnresolved > 0) {
+            // 可观测性：能解析到图标但图片不在磁盘 —— 否则「离线能修 / 真机没修」无法归因
+            logger.debug(`刀 49 未命中: ${relativePath}`, _icon.stats);
+          }
+        } catch (iconErr) {
+          // fail-open：修不了也要写盘
+          if (logger) {
+            logger.warn(
+              `🛡️ 刀 49 写盘出口跳过: ${relativePath}（${iconErr?.message || iconErr}）`,
+            );
+          }
+        }
+      }
+
+      // 🛡️ 刀 45（2026-10-22 · mc-1792639559460-61f0ebaf 实锤「战略合作厂商面板没有图标」）：
+      //   R24 只在「模板已有 `<img>`」时有效；本步处理**连 `<img>` 都没有**的形态。
+      //   位置（首子/末子）与尺寸全部取自 mapping 的 `figmaBox`/`parentBox` 真值，
+      //   任一缺失 ⇒ 不判（插错比不插更糟）。排在 R24 之后：R24 补完 `:src` 后本步自然跳过。
+      if (
+        relativePath.endsWith('.vue') &&
+        Array.isArray(_r24Mapping) &&
+        _r24Mapping.length > 0
+      ) {
+        try {
+          if (!_r24OwnerMap) _r24OwnerMap = buildComponentOwnerMap(files);
+          const _miOwner = ownerSectionIdForFile(_r24OwnerMap, relativePath);
+          const _miRelBase = /^package\/components\//.test(relativePath)
+            ? '../../resources/images/'
+            : '../resources/images/';
+          const _mi = healMissingIconRender(sanitizedContent, _r24Mapping, _miRelBase, {
+            ownerSectionId: _miOwner,
+          });
+          if (_mi.changed) {
+            sanitizedContent = _mi.code;
+            currentStep = 'heal_missing_icon';
+            if (logger) {
+              logger.warn(
+                `🛡️ 刀 45 写盘出口: ${relativePath}（section 图标真值零渲染 ⇒ 已补 <img>）`,
+                { ownerSectionId: _miOwner || undefined, healed: _mi.healed },
+              );
+            }
+          }
+        } catch (miErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ 刀 45 写盘出口跳过: ${relativePath}（${miErr?.message || miErr}）`,
+            );
+          }
+        }
+      }
+
+      // 🛡️ 刀 51（2026-10-22）：**段内标题行几何契约**。
+      //   位置：R24 / 刀 45 之后 —— 那两步可能刚补出 `<img>`，本步才有「图标」可对齐；
+      //   且必须在所有覆写/回退步骤之后（写盘出口是唯一能保证「校验 === 落盘」的地方）。
+      //   判据：组件里恰 1 个 `<img>`，其绑定的资源变量能在 mapping 里反查到 figmaNodeId；
+      //   该 icon 在 Figma 里同一父节点、同一行有且仅有 1 个 TEXT 且在其右侧
+      //   ⇒ `gap = text.x − (icon.x + icon.w)`、行高 = max(icon.h, text.h)、icon 最左 ⇒ padding 0。
+      //   只写元素级内联（inline 恒胜），**绝不改 class 规则**（`.c-db2d65-icon` 被 3 个元素共用）。
+      if (relativePath.endsWith('.vue')) {
+        try {
+          if (!_r51Idx) {
+            _r51Idx = indexFigmaNodes(
+              options.figmaRoot?.document ?? options.figmaRoot ?? null,
+            );
+          }
+          if (_r51Idx.size > 0) {
+            const _hr = enforceHeaderRowGeometry(
+              { [relativePath]: sanitizedContent },
+              {
+                figmaRoot: options.figmaRoot,
+                resourceDomMapping: _r24Mapping,
+                figmaIndex: _r51Idx,
+              },
+            );
+            const _s51 = _hr.stats || {};
+            _r51Stats.evaluated += Number(_s51.evaluated) || 0;
+            _r51Stats.singleImg += Number(_s51.singleImg) || 0;
+            _r51Stats.mapped += Number(_s51.mapped) || 0;
+            _r51Stats.matched += Number(_s51.matched) || 0;
+            if (_hr.changed) {
+              _r51Stats.healed += (_hr.healed || []).length;
+              sanitizedContent = _hr.files[relativePath];
+              currentStep = 'heal_header_row_geometry';
+              if (logger) {
+                logger.warn(
+                  `🛡️ 刀 51 段内标题行几何契约（写盘出口）: ${relativePath}`,
+                  { healed: _hr.healed },
+                );
+              }
+            }
+          } else if (!_r51NoTreeLogged) {
+            _r51NoTreeLogged = true;
+            if (logger) {
+              logger.warn(
+                '🛡️ 刀 51 无 Figma 树（fail-open，标题行几何无法判定）——请检查 writeFiles 的 figmaRoot 透传',
+                { figmaRootGiven: !!options.figmaRoot },
+              );
+            }
+          }
+        } catch (hrErr) {
+          // fail-open：修不了也要写盘
+          if (logger) {
+            logger.debug(
+              `🛡️ 刀 51 写盘出口跳过: ${relativePath}（${hrErr?.message || hrErr}）`,
+            );
+          }
+        }
+      }
+
+      // 🛡️ 刀 52（2026-10-22）：**父容器垂直堆叠几何契约**。
+      //   刀 50 只管「段内」（段 → 子项）；段**自身**的高度仍是 `flex:比例`（179/227/278 vs
+      //   真值 161/212/265），而两张统计卡同 y 并列 ⇒ 刀 50 判 overlap 整段 fail-open。
+      //   这里按 **DOM 直接子元素**算（行组包裹层 `data-rowpeers-wrap` 与普通段一视同仁），
+      //   判据复用 `section-intrinsic-layout#resolveStackGeometry`（与刀 50 同一份实现）。
+      //   只写元素级内联，绝不改 class（`.c-component-container` 被三段共用）。
+      if (relativePath.endsWith('.vue')) {
+        try {
+          if (!_r51Idx) {
+            _r51Idx = indexFigmaNodes(
+              options.figmaRoot?.document ?? options.figmaRoot ?? null,
+            );
+          }
+          if (_r51Idx.size > 0) {
+            const _st = enforceStackGeometry(
+              { [relativePath]: sanitizedContent },
+              {
+                figmaRoot: options.figmaRoot,
+                figmaIndex: _r51Idx,
+              },
+            );
+            const _s52 = _st.stats || {};
+            _r52Stats.evaluated += Number(_s52.evaluated) || 0;
+            _r52Stats.mapped += Number(_s52.mapped) || 0;
+            _r52Stats.matched += Number(_s52.matched) || 0;
+            if (_st.changed) {
+              _r52Stats.healed += (_st.healed || []).length;
+              sanitizedContent = _st.files[relativePath];
+              currentStep = 'heal_section_stack_geometry';
+              if (logger) {
+                logger.warn(
+                  `🛡️ 刀 52 父容器堆叠几何契约（写盘出口）: ${relativePath}`,
+                  { healed: _st.healed },
+                );
+              }
+            }
+          }
+        } catch (stErr) {
+          // fail-open：修不了也要写盘
+          if (logger) {
+            logger.debug(
+              `🛡️ 刀 52 写盘出口跳过: ${relativePath}（${stErr?.message || stErr}）`,
+            );
+          }
+        }
+      }
+
       const fullPath = join(outputPath, relativePath);
       const dir = dirname(fullPath);
       currentStep = 'ensuring_directory';
-
       // 确保目录存在
       if (!existsSync(dir)) {
         try {
@@ -1235,6 +1666,57 @@ export function writeFiles(files, outputPath, options = {}) {
         }
         skippedFiles.push(relativePath);
         continue;
+      }
+
+      // 🛡️ 刀 53 命名空间隔离（round-13）：fg- 类规则只允许存在于接管文件自带的 style 块。
+      //   common.less / index.css 里的 fg- 规则一律是编造或提升副本，编译后经预览注入
+      //   （特异性 0,3,0）压过子组件 scoped 规则 ⇒ 整块剔除。接管文件随后被终裁覆写，
+      //   故此处的剔除不会影响它们的确定性样式。
+      if (/\.(less|css|vue)$/i.test(relativePath)) {
+        try {
+          const stripped = stripFgTakeoverRules(sanitizedContent);
+          if (stripped.removed > 0) {
+            sanitizedContent = stripped.text;
+            logger.warn('🛡️ 刀 53 剔除编造的 fg- 类规则块', {
+              path: relativePath,
+              removed: stripped.removed,
+            });
+          }
+        } catch (fgStripErr) {
+          logger?.warn?.(`刀 53 规则剔除跳过（${relativePath}）: ${fgStripErr?.message || fgStripErr}`);
+        }
+      }
+
+      // 🛡️ 刀 53 终裁覆写（2026-10-22 round-13 实锤）。
+      //
+      //   病灶：接管文件在 chunk 阶段已由 Figma 真值确定性渲染，但后续环节仍会改写它 ——
+      //   第二轮生成时 LLM 从既有产物上下文看到 `c-{sem}-fg-{header|grid}-*` 类名，
+      //   在 common.less 里为它编造规则（`height:100%;flex-direction:column;flex:1.548 1 0`），
+      //   再被 style-class-consolidator 以「common.less 丰富版」回写进子组件 style 块；
+      //   `font-size:16px` 同时被改写成 `calc(@fontSize * 1.1429)` ⇒ 真机实测 13.71px（真值 16px）。
+      //   逐工具加豁免只能挡住已知的几个，挡不住「LLM 从上下文照抄 + 整合器回写」这条链。
+      //
+      //   治本：接管文件的内容**完全由 Figma 真值决定**，任何后置改写都是失真 ⇒
+      //   在唯一写盘出口、且在所有内容级自愈之后、写盘/diff 之前，用确定性版本终裁覆写。
+      const _fgFinal = options.fgTakeoverFiles;
+      if (_fgFinal) {
+        const isMap = typeof _fgFinal.get === 'function';
+        const has = isMap
+          ? _fgFinal.has(relativePath)
+          : Object.prototype.hasOwnProperty.call(_fgFinal, relativePath);
+        if (has) {
+          const locked = isMap ? _fgFinal.get(relativePath) : _fgFinal[relativePath];
+          if (typeof locked === 'string' && locked) {
+            if (locked !== sanitizedContent) {
+              logger.warn('🛡️ 刀 53 终裁覆写（后置改写被回滚为 Figma 真值渲染版）', {
+                path: relativePath,
+                before: sanitizedContent.length,
+                after: locked.length,
+              });
+            }
+            sanitizedContent = locked;
+          }
+        }
       }
 
       // 🛡️ P1-Slice1（增量补丁式更新）：写前 diff —— 内容未变化则跳过写盘。
@@ -1391,6 +1873,18 @@ export function writeFiles(files, outputPath, options = {}) {
     }
 
     if (logger) {
+      // 🛡️ 刀 51 汇总（每轮一条）：让「零命中」也是一个**可判读的事实**，而不是沉默。
+      if (_r51Stats.evaluated > 0) {
+        logger.info('🛡️ 刀 51 段内标题行几何·已评估', _r51Stats);
+      }
+      if (_r52Stats.evaluated > 0) {
+        logger.info('🛡️ 刀 52 父容器堆叠几何·已评估', _r52Stats);
+      }
+      // 🛡️ 刀 41 汇总：`contracts/mismatches` 都必须留痕 —— 否则「策略段没被管」
+      //   与「策略段已正确」在日志里长得一模一样（这正是上一轮白跑的原因）。
+      if (_r41Stats.sections > 0) {
+        logger.info('🛡️ 刀 41 折叠网格几何·已评估', _r41Stats);
+      }
       logger.info('✅ 文件写入完成', {
         written: writtenFiles.length,
         skipped: skippedFiles.length,

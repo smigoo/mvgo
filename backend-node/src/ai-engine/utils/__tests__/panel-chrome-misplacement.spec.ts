@@ -246,4 +246,46 @@ describe('刀 42-B healPanelChromeMisplacement', () => {
     expect(changes).toHaveLength(0);
     expect(JSON.stringify(files)).toBe(before);
   });
+
+  /**
+   * ⑩ class 级兜底（2026-10-22 · mc-1792635089793-2d4305b7 真机）：战略标题组件根 div
+   *   漏了 `data-section-id`，元素级判据恒 `isClassExclusiveTo=false` ⇒ 摘不掉。真机截图里
+   *   战略段是「面板金框 + 里面又一条金条」，另两段正常 ⇒ 三段看着仍不统一。
+   */
+  it('⑩ 阳性（class 级兜底）：装饰类只被「无 section 归属」的元素使用 ⇒ 也摘', () => {
+    const headerVue = `<template>
+  <div class="c-header-text" v-bind="$attrs"></div>
+</template>
+`;
+    const files = { ...buildFiles(), 'package/components/HeaderText.vue': headerVue };
+    const { files: out, changes } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    const less = out['resources/styles/common.less'];
+    expect(less).not.toContain('border-radius: 12px');
+    expect(less).not.toContain('#ffc800');
+    const hit = changes.find((c) => c.cls === 'c-header-text');
+    expect(hit.where).toBe('class-orphan');
+    expect(hit.owner).toBe('panel-gold');
+  });
+
+  it('⑪ 阴性（class 级兜底）：该 class 正是面板自己的 ⇒ 不动', () => {
+    const indexVue = `<template>
+  <div class="c-header-text" data-section-id="panel-gold" style="display:flex;"></div>
+</template>
+`;
+    const files = { ...buildFiles(), 'package/index.vue': indexVue };
+    const { files: out, changes } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    expect(out['resources/styles/common.less']).toBe(COMMON_LESS);
+    expect(changes).toHaveLength(0);
+  });
+
+  it('⑫ 阴性（class 级兜底）：被另一个「有自己面板真值」的 section 使用 ⇒ 不动', () => {
+    const cardVue = `<template>
+  <div class="c-header-text" data-section-id="card-blue" v-bind="$attrs"></div>
+</template>
+`;
+    const files = { ...buildFiles(), 'package/components/Card.vue': cardVue };
+    const { files: out, changes } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    expect(out['resources/styles/common.less']).toBe(COMMON_LESS);
+    expect(changes).toHaveLength(0);
+  });
 });

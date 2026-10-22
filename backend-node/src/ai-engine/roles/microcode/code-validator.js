@@ -13,6 +13,7 @@ import {
 import { resolveClassPrefixId } from '../../validators/code-structure-validator.js';
 import { detectRootContainerClass } from '../../validators/code-fix-rules.js';
 import { THEME_WRAPPER_TEMPLATES } from '../../utils/mc-skeleton.js';
+import { FG_TAKEOVER_CLASS_RX } from '../../utils/folded-grid-section-takeover.js';
 
 export function detectFileTruncation(files) {
     const issues = [];
@@ -139,6 +140,14 @@ export function extractTemplateClassNames(allFiles, componentName, options = {})
       'icon-',
     ];
 
+    // 🛡️ 刀 53（2026-10-22 round-11 实锤）：确定性接管类命名空间 `c-{sem}-fg-{header|grid}-{idSlug}`。
+    //   这些类的关键属性全部由 folded-grid-section-takeover 渲染器**内联钉死**，样式完全自持 ——
+    //   一旦被当成「模板类硬约束」喂给样式 chunk，LLM 会为它们编造规则
+    //   （实测 `justify-content:space-between`、header 混入卡片底色），经 workspace 编译后的
+    //   index.css 全量生效、内联没钉到的属性被它赢。⇒ 一律排除出类清单（不进 prompt、不生成 stub）。
+    // ⚠️ 正则**唯一来源** = `utils/folded-grid-section-takeover.js#FG_TAKEOVER_CLASS_RX`
+    //   （font-size-normalizer / layout-facts-injector 同 import，禁写副本）。
+
     const vueFiles = Object.entries(allFiles).filter(
       ([p]) => p.endsWith('.vue') && typeof allFiles[p] === 'string',
     );
@@ -156,14 +165,14 @@ export function extractTemplateClassNames(allFiles, componentName, options = {})
         // 也无从配对，激活态静默失效）。
         // 绑定表达式统一交由下方「:class 绑定专用提取」处理：只取字符串字面量与对象键。
         if (/[\[\]{}()'"`?:=!&|+<>]/.test(classValue)) continue;
-        // 纯静态 class 值，空格分隔
-        const tokens = classValue.split(/\s+/);
-        for (const cn of tokens) {
-          // 🛡️ v3.7-fix: 过滤非有效 class 名（避免 [ ] ( ? = 等表达式碎片污染）
-          if (!cn || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(cn)) continue;
-          if (frameworkPrefixes.some((p) => cn.startsWith(p))) continue;
-          fullClassNames.add(cn);
-        }
+      // 纯静态 class 值，空格分隔
+      const tokens = classValue.split(/\s+/);
+      for (const cn of tokens) {
+        // 🛡️ v3.7-fix: 过滤非有效 class 名（避免 [ ] ( ? = 等表达式碎片污染）
+        if (!cn || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(cn)) continue;
+        if (frameworkPrefixes.some((p) => cn.startsWith(p))) continue;
+        fullClassNames.add(cn);
+      }
       }
 
       // 🛡️ 2026-09-16（M1.1）：:class 绑定表达式专用提取。
@@ -222,7 +231,13 @@ export function extractTemplateClassNames(allFiles, componentName, options = {})
       }
     }
 
-    const fullList = [...fullClassNames].sort();
+    // 🛡️ 刀 53（2026-10-22 round-11 实锤，单点过滤）：确定性接管类命名空间
+    //   `c-{sem}-fg-{header|grid}-{idSlug}` **一律排除**出样式 chunk 类清单。
+    //   这些类的关键属性由 folded-grid-section-takeover 渲染器内联钉死、样式自持；
+    //   一旦被当成「模板类硬约束」喂给样式 chunk，LLM 会为它们编造规则（实测
+    //   `justify-content:space-between`、header 混入卡片底色），经 workspace 编译后的
+    //   index.css 全量生效 ⇒ 内联没钉到的属性被它赢。放在出口单点过滤，避免逐处副本。
+    const fullList = [...fullClassNames].filter((c) => !FG_TAKEOVER_CLASS_RX.test(c)).sort();
 
     options.logger?.info?.('🔍 程序化提取模板 class 名完成', {
       totalCount: fullList.length,

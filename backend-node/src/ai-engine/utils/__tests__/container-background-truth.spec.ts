@@ -262,7 +262,8 @@ describe('刀 37 判据 ④：已声明但与真值不符 ⇒ 覆盖', () => {
     const { files: out, changes } = healContainerBackgroundTruth(files, { figmaRoot: buildFigma() });
     const panelLine = out['package/index.vue'].split('\n').find((l) => l.includes('data-section-id="panel-yellow"'));
     expect(panelLine).not.toContain('background');
-    expect(changes.some((c) => c.sectionId === 'panel-yellow')).toBe(false);
+    // 只断言「没有底色变更」：宽度变更（missing-width）属 42-c，不属本判据
+    expect(changes.some((c) => c.sectionId === 'panel-yellow' && c.background)).toBe(false);
   });
 
   it('缺 gradientHandlePositions ⇒ 结果标 angleGuessed（方向不可证，不当确定真值）', () => {
@@ -443,5 +444,46 @@ describe('刀 42 healContainerBackgroundTruth：三件套补齐', () => {
     expect(tag).toContain('background:rgba(226, 208, 132, 0.2)');
     expect(tag).not.toContain('border-radius');
     expect(tag).not.toContain('box-shadow');
+  });
+});
+
+/**
+ * 刀 42-c（2026-10-22 · mc-1792635568116-472784ae 实锤）：面板横跨父级却没 `width:100%`。
+ * 父级 `.c-…-icon-con` 是 `align-items:flex-start`（不拉伸）⇒ 面板缩成内容宽（截图里战略段
+ * 金面板只占半幅）。判据纯几何：段宽 / 父宽 ≥ 0.95。
+ */
+describe('刀 42-c 面板宽度兜底', () => {
+  /** 面板 600 宽、父 1200 ⇒ 半幅；改成 1200 宽 ⇒ 横跨 */
+  const withPanelWidth = (w: number) => {
+    const figma = buildPanelFigma();
+    figma.document.children[0].absoluteBoundingBox = box(0, 0, w, 400);
+    figma.document.children[0].children[0].absoluteBoundingBox = box(0, 0, w, 400);
+    return figma;
+  };
+
+  it('阳性：横跨父级（1200/1200）且没声明 width ⇒ 补 width:100%', () => {
+    // 真机形态：面板 class 里没有 width（只剩 display/flex-direction/min-height）
+    const lessNoWidth = PANEL_LESS.replace(/\n\s*width: 100%;/, '');
+    const { files, changes } = healContainerBackgroundTruth(
+      { ...buildPanelFiles(), 'resources/styles/common.less': lessNoWidth },
+      { figmaRoot: withPanelWidth(1200) },
+    );
+    const tag = panelTag(files['package/index.vue']);
+    expect(tag).toContain('width:100%');
+    expect(changes[0].reason).toContain('missing-width');
+  });
+
+  it('阴性：半幅面板（600/1200）⇒ 不加宽度（可能本就该按比例分宽）', () => {
+    const lessNoWidth = PANEL_LESS.replace(/\n\s*width: 100%;/, '');
+    const { files } = healContainerBackgroundTruth(
+      { ...buildPanelFiles(), 'resources/styles/common.less': lessNoWidth },
+      { figmaRoot: withPanelWidth(600) },
+    );
+    expect(panelTag(files['package/index.vue'])).not.toContain('width:100%');
+  });
+
+  it('阴性：class 已声明 width ⇒ 不改写', () => {
+    const { files } = healContainerBackgroundTruth(buildPanelFiles(), { figmaRoot: withPanelWidth(1200) });
+    expect(panelTag(files['package/index.vue'])).not.toContain('width:100%');
   });
 });

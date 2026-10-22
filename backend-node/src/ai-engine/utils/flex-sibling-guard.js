@@ -99,6 +99,94 @@ const VOID_TAGS = new Set([
 const TAG_RX = /<(\/)?([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 
 /**
+ * 深度感知的样式块提取（**任意嵌套层级**），与上面 `extractStyleBlocks` 的分工：
+ *   · `extractStyleBlocks`（正则版）**只认一层嵌套**，供 FLEX-001~005 等既有门禁使用；
+ *     遇到两层嵌套（`.父 { … .子 { … .孙 { … } } }`）会整体错配，把子块声明当父块、
+ *     或直接丢块。既有门禁的阈值按它调过，**不动**。
+ *   · 本函数按花括号深度 + 字符串/注释状态逐字符扫描，用于「必须读到 class 自身声明」
+ *     的判据（刀 41 折叠网格契约的 detect 与 heal 共用同一份，两段式铁律）。
+ *
+ * 2026-10-22 真机实锤（mc-1792653212647 · ContentSection8）：产物样式是
+ *   `.c-component-frame-2136639906 { display:flex; … .c-component-frame-2136639903 { … .label { … } } }`
+ * 正则版解析出的 selector 是 `display:flex; …`（声明串），于是刀 41 判该段
+ * `display:(未声明)`；**自愈把 `display:grid` 写进去之后复检依旧读不到** ⇒ residual 永久不收敛。
+ *
+ * @param {string} styleContent
+ * @returns {Array<{selector:string, body:string, declText:string, depth:number}>}
+ *   `body` = 花括号内原文（含嵌套）；`declText` = 已按深度剥掉嵌套块后的「本块声明」
+ */
+export function extractStyleBlocksDeep(styleContent) {
+  const out = [];
+  const text = String(styleContent || '');
+  if (!text) return out;
+
+  // 剥顶层无块 @ 指令与 LESS 变量定义（与正则版同口径；带块的 @media 以 `{` 结尾不受影响）
+  const cleaned = text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\n)\s*\/\/[^\n]*/g, '$1')
+    .replace(/@[a-zA-Z][\w-]*\b[^;{]*;/gi, '');
+
+  const stack = []; // [{selector, bodyStart, depth}]
+  let inStr = null;
+  for (let i = 0; i < cleaned.length; i += 1) {
+    const ch = cleaned[i];
+    if (inStr) {
+      if (ch === '\\') { i += 1; continue; }
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inStr = ch; continue; }
+    if (ch === '{') {
+      // 选择器 = 上一个 `{`/`}`/`;` 之后到当前位置的文本
+      const from = (() => {
+        const prev = stack.length > 0 ? stack[stack.length - 1].bodyStart : 0;
+        const seg = cleaned.slice(prev, i);
+        const cut = Math.max(seg.lastIndexOf('}'), seg.lastIndexOf(';'));
+        return cut >= 0 ? prev + cut + 1 : prev;
+      })();
+      stack.push({ selector: cleaned.slice(from, i).trim(), bodyStart: i + 1 });
+      continue;
+    }
+    if (ch === '}') {
+      const top = stack.pop();
+      if (!top) continue;
+      const body = cleaned.slice(top.bodyStart, i);
+      if (top.selector && !top.selector.includes('@')) {
+        out.push({
+          selector: top.selector,
+          body,
+          declText: stripNestedBlocks(body),
+          depth: stack.length,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** 按深度剥掉嵌套块，只留本块声明（注释/字符串内的花括号不参与计数） */
+function stripNestedBlocks(body) {
+  const text = String(body || '');
+  let out = '';
+  let depth = 0;
+  let inStr = null;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '\\') { i += 1; continue; }
+      if (ch === inStr) inStr = null;
+      if (depth === 0) out += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inStr = ch; if (depth === 0) out += ch; continue; }
+    if (ch === '{') { depth += 1; continue; }
+    if (ch === '}') { depth = Math.max(0, depth - 1); continue; }
+    if (depth === 0) out += ch;
+  }
+  return out;
+}
+
+/**
  * 提取样式规则块 { selector { body } }（含一层嵌套），flex 系列检查共用。
  *
  * ⚠️ 2026-09-01 FLEX-005 实锤修复：顶层无块 @ 指令（@import/@charset 等）必须先剥离——

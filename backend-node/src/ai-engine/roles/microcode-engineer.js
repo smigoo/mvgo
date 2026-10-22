@@ -207,6 +207,10 @@ import {
   ensureFlexDisplayInVueSfc,
 } from '../utils/css-sanitizer.js';
 import { buildRetryPrompt } from '../utils/retry-prompt.js';
+// 🛡️ 刀 53（2026-10-22）：同构「标题行+折叠网格」叶段确定性接管 —— 命中的子组件
+// 整文件由 Figma 真值渲染（数据内联/标题左对齐/类名唯一），跳过 LLM chunk。
+// 病灶与判据详见 folded-grid-section-takeover.js 头注释。
+import { collectFoldedGridTakeover } from '../utils/folded-grid-section-takeover.js';
 import { buildSectionContentContract } from '../utils/section-content-guard.js';
 import {
   assessStatRowConfidence,
@@ -242,7 +246,9 @@ import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
 import { isTopThinHeaderBand } from '../utils/header-geometry-fallback.js';
 // 🛡️ R24（2026-10-21 · 07ae49a2 实锤）：空 `<img>` 补资源 src（injectResourceImports 的判据盲区）。
 //   它只注入「代码里真实出现的资源变量」，模型写裸 `<img>` 时无从注入 ⇒ 图片静默留空。
-import { healEmptyImgSrc } from '../utils/resource-img-src-healer.js';
+//   刀 43（2026-10-22 · mc-1792635919906-88b9c3a5 实锤）：模板无 `data-section-id` 的组件
+//   用装配层父子关系（`buildComponentOwnerMap`）补归属。
+import { healEmptyImgSrc, buildComponentOwnerMap, ownerSectionIdForFile } from '../utils/resource-img-src-healer.js';
 import {
   injectResourceImports,
   resolveResourceDomMapping,
@@ -705,6 +711,13 @@ export class MicrocodeEngineer extends BaseAgent {
     // 模板骨架只挂 1 个子组件，而 prompt/子组件生成仍按 3 个（Switch/Tabs/Main）各生成一份 →
     // 重复内容 + 视口挤出。统一在「取用点」去重，与 prompt-builder 同源。
     const effectiveSections = dedupeDuplicateSections(subPlan.effectiveSections || []) || [];
+    // 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格契约原先只在 `pre-write-self-healing`
+    //   跑 —— 那一刻段容器的 `data-section-id` 还没补齐（后被 R22/结构自愈补上），
+    //   于是 `sectionIdOf(hostAttrs)` 取不到 id、整段 `continue`：
+    //   真机日志 `contracts:3/mismatches:2` 里**没有** 38:3140，而落盘 CSS 仍是
+    //   `flex-direction:column;flex-wrap:wrap`（真值 4 列 × 126px、列距 20）。
+    //   与刀 43/49/51 同一条纪律：真值判据必须挂在**写盘出口**。此处记账，由 writeFiles 透传。
+    this._effectiveSectionsForLayout = effectiveSections;
 
     // 🎯 A' Phase 5: 叶子遍历（布局容器不占 .vue 槽，只做纵向包裹）
     const leafSections = collectLeafSections(effectiveSections);
@@ -1985,6 +1998,35 @@ export class MicrocodeEngineer extends BaseAgent {
       const total = startIndex + subComps.length;
       const indexContent = allFiles['package/index.vue'] || '';
 
+      // 🛡️ 刀 53：同构「标题行+折叠网格」叶段确定性接管（chunk 构建前评估一次）。
+      // 命中的叶 → 其子组件文件整文件由 Figma 真值渲染，**不进 LLM chunk**
+      // （数据内联、标题左对齐、类名唯一 —— 三段同构必然一致，LLM 随机维度归零）。
+      // fail-open：判据任何事实缺失 ⇒ 不接管，走既有 LLM 路径（零回归）。
+      const _fgTakeover = collectFoldedGridTakeover({
+        treeSections: microcodePrompt.resolvePlanSections(input),
+        figmaNodeData: input?.figmaNodeData || null,
+        resourceMapping: effectiveMapping || input.resourceDomMapping || [],
+        componentName: input?.componentName || '',
+        logger: this.logger,
+      });
+      const _fgFiles = new Map(); // subPath → {kind, sectionId, baseId, vue}
+      // 🛡️ 终裁快照（round-13）：subPath → 确定性最终内容。交给 writeFiles 在所有
+      //   内容级自愈之后、写盘之前做终裁覆写（挡住「LLM 从既有产物照抄 fg- 类名 →
+      //   common.less 编造规则 → consolidator 回写子组件 style 块」这条链）。
+      this._fgTakeoverFiles = new Map();
+      if (_fgTakeover.map.size > 0) {
+        for (const [tag, tr] of _fgTakeover.map) {
+          const subPath = `package/components/${tag}.vue`;
+          if (subComps.includes(subPath)) _fgFiles.set(subPath, tr);
+        }
+        if (_fgFiles.size > 0) {
+          this.logger.info('🛡️ 刀 53 确定性接管命中子组件', {
+            files: [..._fgFiles.keys()],
+            kinds: [..._fgFiles.values()].map((t) => t.kind),
+          });
+        }
+      }
+
       // 🆕 方案 2：按组构建 chunks，同组子组件共享 scopedInput 缓存
       // 同组子组件通常引用相同的 figma 父节点区域，缓存 scopedInput 避免重复计算
       const _scopedInputCache = new Map();
@@ -1997,6 +2039,8 @@ export class MicrocodeEngineer extends BaseAgent {
       // 仅在资源确实按 section 收窄时才有值；为空时 L7 自动 fail-open 回退启发式。
       for (const group of subGroups) {
         for (const subPath of group.paths) {
+          // 🛡️ 刀 53：确定性接管的叶不进 LLM chunk（文件在下方整体写入）
+          if (_fgFiles.has(subPath)) continue;
           // 🧩 SubcomponentContract：本子组件专属事实（figma 子树/elementStyleMap 子集/sections 子集），
           // 替代全量重复的 215KB figmaNodeData —— 预计单块 -60%+ tokens；匹配失败自动回退全量（保真）。
           // 🛡️ 2026-09-19 缓存污染修复（mc-max-1789811323065 实锤）：原实现按 group.name（目录名）
@@ -2041,6 +2085,54 @@ export class MicrocodeEngineer extends BaseAgent {
           });
           chunkIdx++;
         }
+      }
+      // 🛡️ 刀 53：确定性接管文件整体写入（与 LLM 产物走同一最小修复管线：
+      // style 属性补齐 + @import 补齐 + injectResourceImports（单一事实源，幂等））。
+      // fileSectionMap 归属 = 资源映射的 ownerSectionId（内容守卫 ownerSectionId 三判据口径）。
+      for (const [subPath, tr] of _fgFiles) {
+        try {
+          let fixed = this._ensureSubComponentStyleAttrs(tr.vue);
+          fixed = this._ensureSubComponentStyleImport(fixed);
+          fixed = injectResourceImports(
+            fixed,
+            effectiveMapping || input.resourceDomMapping || [],
+            '../../resources/images/',
+          );
+          allFiles[subPath] = fixed;
+          this._fgTakeoverFiles.set(subPath, fixed);
+          if (tr.baseId) fileSectionMap[subPath] = tr.baseId;
+          this.logger.info(`🛡️ 刀 53 确定性子组件已落盘: ${subPath}`, {
+            kind: tr.kind,
+            sectionId: tr.sectionId,
+          });
+        } catch (fgErr) {
+          // 写入失败 ⇒ 回退 LLM 路径（把该叶重新作为 chunk 补生成），不静默丢内容
+          this.logger.warn('🛡️ 刀 53 确定性写入异常，回退 LLM chunk', {
+            subPath,
+            error: fgErr?.message || String(fgErr),
+          });
+          const tag = subPath.split('/').pop().replace(/\.vue$/, '');
+          const usage = this._extractUsageSnippet(tag, indexContent);
+          chunks.push({
+            title: '子组件 ' + subPath,
+            files: [subPath],
+            index: startIndex + chunks.length,
+            total,
+            segmentType: 'component',
+            contextFiles: usage
+              ? [{ path: `package/index.vue（${tag} 使用处摘要）`, content: usage }]
+              : [{ path: 'package/index.vue', content: indexContent }],
+          });
+        }
+      }
+      if (_fgFiles.size > 0 && input.onProgress) {
+        input.onProgress({
+          fileLifecycle: {
+            phase: 'modeling',
+            summary: `刀 53 确定性接管 ${_fgFiles.size} 个同构段子组件（Figma 真值直出）`,
+            files: [..._fgFiles.keys()].map((path) => ({ path, state: 'done' })),
+          },
+        });
       }
       let cursor = 0;
       // 📊 性能监控：记录每个 chunk 的开始/完成时间、累计耗时
@@ -2860,6 +2952,10 @@ export class MicrocodeEngineer extends BaseAgent {
         let injectedCount = 0;
         // P0-②（2026-09-01）：占位符终验——注入后仍残留的资源占位符逐文件聚合诊断
         const placeholderDiag = [];
+        // 🛡️ 刀 43：装配层归属表（组件名 → 最近祖先 section id）。用于给模板里**没有**
+        //   `data-section-id` 的子组件补 R24 的目标 section（真机 HeaderText2.vue 就是这种）。
+        //   在改写循环**之前**按整份 allFiles 建好：循环会原地改 allFiles，边改边建会漏。
+        const componentOwnerMap = buildComponentOwnerMap(allFiles);
         for (const [relPath, content] of Object.entries(allFiles)) {
           if (!relPath.endsWith('.vue') || typeof content !== 'string')
             continue;
@@ -2881,7 +2977,9 @@ export class MicrocodeEngineer extends BaseAgent {
           //   （真机 4 例）时它没有入参可用 ⇒ 图片静默留空 / 破图。此处按
           //   `data-section-id` ↔ 资源归属（ownerSectionId / figmaNodeId / 派生 id 前缀）
           //   确定性补齐，候选不唯一则不动（宁可漏，不可错配）。
-          const imgHealed = healEmptyImgSrc(injected, effectiveMapping, relBase);
+          const imgHealed = healEmptyImgSrc(injected, effectiveMapping, relBase, {
+            ownerSectionId: ownerSectionIdForFile(componentOwnerMap, relPath),
+          });
           const patched = imgHealed.changed ? imgHealed.code : injected;
           if (imgHealed.changed) {
             this.logger.info('🛡️ R24 空 <img> 已补资源 src', {
@@ -5247,8 +5345,18 @@ export class MicrocodeEngineer extends BaseAgent {
       //   ⚠️ 白名单坑（#123 dualTruth / #127 secondaryNode / #138 rowPeerIds 同族）：
       //   新增入参必须在**每一层**显式透传，否则静默丢弃、零报错。此处为落盘唯一出口。
       ...(this._truthPalette ? { truthPalette: this._truthPalette } : {}),
-      ...(!this._truthPalette && this._figmaRootForTruthPalette
+      // 🛡️ 刀 51/52：figma 树与色板**解耦**透传（色板在不在都要给，否则几何判据全盲）。
+      ...(this._figmaRootForTruthPalette
         ? { figmaRoot: this._figmaRootForTruthPalette }
+        : {}),
+      // 🛡️ 刀 41：折叠网格契约的真值源（section 树）。挂载点已迁到 writeFiles，见上方记账处注释。
+      ...(Array.isArray(this._effectiveSectionsForLayout) && this._effectiveSectionsForLayout.length > 0
+        ? { sections: this._effectiveSectionsForLayout }
+        : {}),
+      // 🛡️ 刀 53 终裁快照（round-13）：接管文件的确定性内容，在所有自愈后终裁覆写。
+      //   与上述入参同族：漏透传即静默丢弃、零报错（MEMORY「加新入参必查下游每层解构」）。
+      ...(this._fgTakeoverFiles && this._fgTakeoverFiles.size > 0
+        ? { fgTakeoverFiles: this._fgTakeoverFiles }
         : {}),
     });
   }
@@ -6711,6 +6819,13 @@ export class MicrocodeEngineer extends BaseAgent {
     //   （旧行为让 @color-group-glow-gold→#333333、@color-accent-gold→#409EFF 等 142 个
     //   变量整体偏离 Figma 真值）。写在实例字段供 this.writeFiles 唯一落盘出口读取；
     //   engineer 实例按任务新建（dynamic-workflow-graph#createRole），不存在跨任务污染。
+    // 🛡️ 刀 51（2026-10-22 真机实锤）：Figma 树的透传**必须与 truthPalette 解耦**。
+    //   原实现（下面的 writeFiles 入参）只在 `!this._truthPalette` 时才传 figmaRoot，而
+    //   `_figmaRootForTruthPalette` 这个字段**从未被赋值**（只在入参处被读取）⇒ 真机里
+    //   figmaRoot 恒 `undefined` ⇒ 刀 51 在 file-writer 里 `_r51Idx.size === 0` 静默跳过、
+    //   零报错零日志。离线探针是手工塞了 figmaRoot 才「看起来生效」——属假绿闭环。
+    //   同一份 figmaNodeData 既供色板也供几何判据，二者无依赖关系。
+    this._figmaRootForTruthPalette = figmaNodeData || null;
     try {
       this._truthPalette = figmaNodeData ? buildTruthPalette(figmaNodeData) : null;
       if (this._truthPalette && this.logger) {

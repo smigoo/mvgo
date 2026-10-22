@@ -24,6 +24,7 @@ import {
   parseDeclMap,
   resolveElementDecls,
 } from '../grid-list-layout-contract.js'
+import { extractStyleBlocksDeep } from '../flex-sibling-guard.js'
 
 // ── 真机几何（38:3167-list / 38:3211-list，x 步长 146=126+20，y 步长 50=30+20）──
 function mkBoxes(count, cols) {
@@ -240,6 +241,54 @@ describe('刀 41 · 折叠网格布局契约', () => {
       expect(c.rows).toBe(1)
       expect(c.rowGap).toBeNull() // 单行不判行距
     })
+
+    // 🔴 2026-10-22 真机实锤（mc-1792653212647）：section 树里**有** 38:3140 / 38:3153，
+    //   但 plan 节点既没有 items 也没有 gridColumns/子 -list ⇒ 旧实现 `skippedNoTruth`，
+    //   战略段两行“从来没被看过”却表现为“没问题”。真值本就在 Figma 树里。
+    it('②b 段无 items 且无 gridColumns ⇒ 按 id 反查 Figma 子项（真值兜底）', () => {
+      const figmaIndex = new Map([
+        [
+          '38:3140',
+          {
+            id: '38:3140',
+            bbox: { x: 26914, y: 51649, width: 564, height: 30 },
+            rawNode: {
+              id: '38:3140',
+              children: [
+                { id: '38:3141', absoluteBoundingBox: { x: 26914, y: 51649, width: 126, height: 30 } },
+                { id: '38:3144', absoluteBoundingBox: { x: 27060, y: 51649, width: 126, height: 30 } },
+                { id: '38:3147', absoluteBoundingBox: { x: 27206, y: 51649, width: 126, height: 30 } },
+                { id: '38:3150', absoluteBoundingBox: { x: 27352, y: 51649, width: 126, height: 30 } },
+              ],
+            },
+          },
+        ],
+      ]);
+      const c = buildGridContract({ id: '38:3140' }, { figmaIndex });
+      expect(c).not.toBeNull();
+      expect(c.geometryFrom).toBe('figma:38:3140');
+      expect([c.cols, c.cardW, c.cardH, c.colGap, c.rows, c.itemCount]).toEqual([4, 126, 30, 20, 1, 4]);
+    });
+
+    it('②c 阴性：Figma 里同样不自洽（只有 1 个子项）⇒ 仍 null（fail-open 不猜）', () => {
+      const figmaIndex = new Map([
+        [
+          'only-one',
+          {
+            id: 'only-one',
+            rawNode: {
+              id: 'only-one',
+              children: [{ id: 'k', absoluteBoundingBox: { x: 0, y: 0, width: 126, height: 30 } }],
+            },
+          },
+        ],
+      ]);
+      expect(buildGridContract({ id: 'only-one' }, { figmaIndex })).toBeNull();
+    });
+
+    it('②d 阴性：不给 figmaIndex ⇒ 回落到 null（行为与旧版一致）', () => {
+      expect(buildGridContract({ id: '38:3140' }, {})).toBeNull();
+    });
   })
 
   describe('③ 阴性：判不了就不判（fail-open）', () => {
@@ -331,12 +380,31 @@ describe('刀 41 · 折叠网格布局契约', () => {
       expect(judgeGridContract(contract12, wrap, item)).toEqual([])
     })
 
-    it('grid 下百分比基数（width: 50% / calc）⇒ item-stretch', () => {
+    it('grid 下百分比宽度（width: 50% / calc）⇒ item-stretch', () => {
       const wrap = parseDeclMap('display: grid; grid-template-columns: repeat(4, 126px); grid-auto-rows: 30px; gap: 20px;')
       const half = parseDeclMap('width: 50%; height: 30px;')
       expect(judgeGridContract(contract12, wrap, half).map((v) => v.code)).toEqual(['item-stretch'])
-      const calc = parseDeclMap('flex: 0 0 calc(25% - 20px); height: 30px;')
+      const calc = parseDeclMap('width: calc(25% - 20px); height: 30px;')
       expect(judgeGridContract(contract12, wrap, calc).map((v) => v.code)).toEqual(['item-stretch'])
+    })
+
+    // 🔴 2026-10-22 真机实锤（mc-1792653212647 · 38:3167-list）：
+    //   容器已改成 `display:grid` 之后，子项残留的 `flex: 0 0 calc(25% - 5px)` 是**惰性**的
+    //   （flex 只作用于 flex 容器的子项）⇒ 旧判据报 item-stretch，而该 class 是**共享 class**，
+    //   自愈物理上改不了 ⇒ 产生永远消不掉的残留（复检 residual=2、门禁永久转红）。
+    it('grid 下 flex 系列惰性：`flex: 0 0 calc(25% - 5px)` ⇒ 零 issue（真机残留真因）', () => {
+      const wrap = parseDeclMap(
+        'display: grid; grid-template-columns: repeat(4, 126px); grid-auto-rows: 30px; gap: 20px;',
+      )
+      const item = parseDeclMap('display: flex; flex-direction: row; flex: 0 0 calc(25% - 5px); background: #f6fff7;')
+      expect(judgeGridContract(contract12, wrap, item)).toEqual([])
+    })
+
+    it('阳性对照：同样的 flex-calc 落在 **flex 实现** 下 ⇒ item-basis（不是惰性）', () => {
+      const wrap = parseDeclMap('display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px;')
+      const item = parseDeclMap('flex: 0 0 calc(25% - 5px); height: 30px;')
+      const codes = judgeGridContract(contract12, wrap, item).map((v) => v.code)
+      expect(codes).toContain('item-basis')
     })
 
     it('grid 缺 `grid-auto-rows` ⇒ grid-auto-rows 违约（单行网格会出巨型卡）', () => {
@@ -354,6 +422,24 @@ describe('刀 41 · 折叠网格布局契约', () => {
       )
       const item = parseDeclMap('height: 100%; width: 100%;') // 真机共享 class 原样
       expect(judgeGridContract(contract12, wrap, item)).toEqual([])
+    })
+
+    // 🔴 2026-10-22 真机实测（mc-1792653940949 · 38:3153）：`grid-auto-rows` 只钉**轨道**高，
+    //   容器残留 `align-items: center`（原 flex 布局）会关掉子项拉伸 ⇒ 卡高坍缩成内容高
+    //   （实测 13.8px vs 真值 30px）。这一维必须与 grid-auto-rows 并列判。
+    it('阳性：grid 容器 `align-items: center` ⇒ grid-align-items（卡高会坍缩）', () => {
+      const wrap = parseDeclMap(
+        'display: grid; grid-template-columns: repeat(4, 126px); grid-auto-rows: 30px; gap: 20px; align-items: center;',
+      )
+      const item = parseDeclMap('height: 100%;')
+      expect(judgeGridContract(contract12, wrap, item).map((v) => v.code)).toEqual(['grid-align-items'])
+    })
+
+    it('阴性：grid 容器 `align-items: stretch` ⇒ 不判', () => {
+      const wrap = parseDeclMap(
+        'display: grid; grid-template-columns: repeat(4, 126px); grid-auto-rows: 30px; gap: 20px; align-items: stretch;',
+      )
+      expect(judgeGridContract(contract12, wrap, parseDeclMap('height: 100%;'))).toEqual([])
     })
 
     it('1fr 轨道：行满（12 项）⇒ 不判；末行不满（15 项）⇒ grid-track-fluid', () => {
@@ -388,6 +474,65 @@ describe('刀 41 · 折叠网格布局契约', () => {
         { sections: [SEC_12] },
       )
       expect(r2.issues).toEqual([])
+    })
+
+    // 🔴 2026-10-22 真机实锤（mc-1792653212647 · ContentSection8）：产物是**两层 LESS 嵌套**
+    //   `.父 { display:flex … .子 { width:126px … .标签 { … } } }`。正则版提取器只认一层嵌套，
+    //   解析出的 selector 变成声明串 ⇒ 判据读不到任何声明（`display:(未声明)`），
+    //   而且**自愈把 display:grid 写进去之后复检依旧读不到** ⇒ residual 永不收敛。
+    const NESTED_LESS = `
+.c-component-nested-parent {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+
+  .c-component-nested-item {
+    display: flex;
+    flex-direction: row;
+    width: 126px;
+    height: 30px;
+
+    .c-component-nested-label {
+      font-size: 14px;
+    }
+  }
+}
+`
+    const NESTED_VUE = `<template>
+  <div data-section-id="38:3153" class="c-component-nested-parent">
+    <div v-for="(item, i) in rows" :key="i" class="c-component-nested-item">{{ item.label }}</div>
+  </div>
+</template>
+<script setup>
+const rows = []
+</script>
+<style lang="less" scoped>
+@import '../../resources/styles/index.less';
+${NESTED_LESS}
+</style>
+`
+
+    it('阳性：两层 LESS 嵌套 ⇒ 判据能读到父块声明（只差 display:grid）', () => {
+      const { issues } = detectGridListLayoutIssues(
+        [{ path: 'package/components/Nested.vue', content: NESTED_VUE }],
+        { sections: [{ id: '38:3153', items: [0, 1].map((i) => ({ absoluteBoundingBox: { x: 26914 + i * 146, y: 51699, width: 126, height: 30 } })) }] },
+      )
+      expect(issues).toHaveLength(1)
+      expect(issues[0].violations.map((v) => v.code)).toEqual(['display'])
+    })
+
+    it('深度解析器：两层嵌套下 declText 只含本块声明（子块声明的 height/width 不污染父块）', () => {
+      const blocks = extractStyleBlocksDeep(NESTED_LESS)
+      const parent = blocks.find((b) => b.selector === '.c-component-nested-parent')
+      expect(parent).toBeTruthy()
+      expect(parent.declText).toContain('display: flex')
+      expect(parent.declText).not.toContain('126px') // 子块 width 不得混入
+      const item = blocks.find((b) => b.selector === '.c-component-nested-item')
+      expect(item).toBeTruthy()
+      expect(item.declText).toContain('width: 126px')
+      expect(item.declText).not.toContain('font-size') // 孙块声明不得混入
     })
   })
 
@@ -464,7 +609,10 @@ describe('刀 41 · 折叠网格布局契约', () => {
       expect(list2).not.toMatch(/\.c-component-frame-2136639905\s*\{/)
     })
 
-    it('.vue 只改 <style> 区、模板与 script 一字不动', () => {
+    // 2026-10-22 收紧后的契约：`.vue` 只允许改两处 —— ① `<style>` 区；
+    // ② **宿主动签自身的 `style` 属性**（元素级内联通道：共享基础类赢不了层叠时只有它能定论）。
+    // 模板其余部分与 script 必须一字不动。
+    it('.vue 只改 <style> 与宿主 style 属性，模板其余/script 一字不动', () => {
       const vue = VUE_12.replace(
         '.c-component-card-grid-item {\n  color: #333333;\n}',
         '.c-component-card-grid-item {\n  flex: 1 1 calc(25% - 20px);\n  color: #333333;\n}',
@@ -475,7 +623,14 @@ describe('刀 41 · 折叠网格布局契约', () => {
       )
       const out = r.files[1].content
       const tpl = out.slice(0, out.indexOf('<style'))
-      expect(tpl).toBe(vue.slice(0, vue.indexOf('<style')))
+      const before = vue.slice(0, vue.indexOf('<style'))
+      expect(tpl).not.toBe(before) // 宿主 style 被补
+      expect(tpl).toContain('display:grid')
+      expect(tpl).toContain('grid-template-columns:repeat(4, 126px)')
+      // 除宿主 style 属性外，模板逐字一致
+      const stripHostStyle = (t) => t.replace(/(<[^>]*data-section-id[^>]*?)(\sstyle\s*=\s*"[^"]*")?(\s*>)/i, '$1$3')
+      expect(stripHostStyle(tpl)).toBe(stripHostStyle(before))
+      expect(r.files[0].content).toContain('display: grid') // class 块在共享 less 里
       expect(out).not.toContain('calc(25% - 20px)')
       expect(out).toContain('color: #333333')
     })
@@ -488,6 +643,93 @@ describe('刀 41 · 折叠网格布局契约', () => {
       expect(r.healed).toHaveLength(0)
       expect(r.failed).toHaveLength(1)
       expect(r.failed[0].reason).toBe('no-rule-block')
+    })
+
+    // 🔴 2026-10-22 真机实锤（mc-1792653212647 · ContentSection7）：宿主
+    //   `<div data-section-id="38:3140" class="…-row">` 在 `<style>` 里**一个声明都没有**
+    //   （LLM 只给子项写了背景色）⇒ 旧实现直接 no-rule-block，判据永远红、没人能修。
+    it('宿主 class 无任何规则块 ⇒ 在宿主 .vue 里新建（created）', () => {
+      const vue = `<template>
+  <div data-section-id="38:3140" class="c-component-row-x">
+    <div v-for="(item, i) in list" :key="i" class="c-component-item-x">{{ item.name }}</div>
+  </div>
+</template>
+<script setup>
+const list = []
+</script>
+<style lang="less" scoped>
+.c-component-item-x {
+  background: #fffdf1;
+}
+</style>
+`
+      const issue = {
+        sectionId: '38:3140',
+        file: 'package/components/RowX.vue',
+        wrapperClasses: ['c-component-row-x'],
+        itemClasses: ['c-component-item-x'],
+        contract: contract12,
+        violations: [{ code: 'display' }, { code: 'col-gap' }],
+      }
+      const r = healGridListLayout([{ path: 'package/components/RowX.vue', content: vue }], [issue])
+      expect(r.failed).toHaveLength(0)
+      expect(r.healed).toHaveLength(1)
+      expect(r.healed[0].created).toBe(true)
+      const out = r.files[0].content
+      const block = /\.c-component-row-x\s*\{([\s\S]*?)\n\}/.exec(out)
+      expect(block).not.toBeNull()
+      expect(block[1]).toContain('display: grid')
+      expect(block[1]).toContain('grid-template-columns: repeat(4, 126px)')
+      expect(block[1]).toContain('grid-auto-rows: 30px')
+      expect(block[1]).toContain('column-gap: 20px')
+      expect(block[1]).toContain('align-items: stretch')
+      // 宿主元素同时拿到**内联**契约（层叠一定赢；只作用这一个元素）
+      const tpl = out.slice(0, out.indexOf('<style'))
+      expect(tpl).toContain('display:grid')
+      const stripHostStyle = (t) => t.replace(/(<[^>]*data-section-id[^>]*?)(\sstyle\s*=\s*"[^"]*")?(\s*>)/i, '$1$3')
+      expect(stripHostStyle(tpl)).toBe(stripHostStyle(vue.slice(0, vue.indexOf('<style'))))
+      // 幂等：再跑一次不再新建、不再改
+      const again = healGridListLayout(r.files, [issue])
+      expect(again.files[0].content).toBe(out)
+    })
+
+    it('阴性：宿主 class 无块且 issue 不带 file ⇒ 仍 failed（不随便挑文件写）', () => {
+      const r = healGridListLayout(
+        [{ path: 'package/components/Other.vue', content: '<template><div/></template><style>.a{color:red}</style>' }],
+        [issue12],
+      )
+      expect(r.healed).toHaveLength(0)
+      expect(r.failed[0].reason).toBe('no-rule-block')
+    })
+
+    // 🔴 2026-10-22 真机实锤（mc-1792654286189 · 38:3211-list）：真值只画了**一行**（4 项），
+    //   产物被折叠成 **15 项 = 4 行**。旧实现给单行契约补 `row-gap: 0px`（并把原 `gap` 删掉）
+    //   ⇒ 4 行挤成 0 间距（实测行距 20 → 0）。行距未知时**不写也不删**。
+    it('单行契约（rows=1）⇒ 不写 row-gap，且不删原有 gap（未知不猜）', () => {
+      const contract1 = buildGridContract({
+        id: '38:3211-list',
+        items: mkBoxes(4, 4), // 只有一行
+      })
+      expect(contract1.rows).toBe(1)
+      const less = `.c-component-single {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}`
+      const issue = {
+        sectionId: '38:3211-list',
+        wrapperClasses: ['c-component-single'],
+        itemClasses: [],
+        contract: contract1,
+        violations: [{ code: 'display' }],
+      }
+      const r = healGridListLayout([{ path: 'a.less', content: less }], [issue])
+      const out = r.files[0].content
+      expect(out).toContain('display: grid')
+      expect(out).toContain('grid-template-columns: repeat(4, 126px)')
+      expect(out).toContain('column-gap: 20px')
+      expect(out).not.toContain('row-gap')
+      expect(out).toContain('gap: 20px') // 行距原值必须留住
     })
 
     it('战略段：`--strategic` 的 flex-direction 残留不构成违约（级联按文件顺序，非属性顺序）', () => {

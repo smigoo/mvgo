@@ -39,8 +39,10 @@
  *    不碰颜色/圆角/字体（那是刀 36/37 的判据域）。
  */
 
-import { collectStyleSources, extractStyleBlocks, targetClassesOf } from './flex-sibling-guard.js'
+import { collectStyleSources, extractStyleBlocksDeep, targetClassesOf } from './flex-sibling-guard.js'
 import { findVForPairs } from './vfor-list-direction-guard.js'
+import { upsertInlineDecls } from './header-row-geometry.js'
+import { stripDeclsFromInline } from './border-without-strokes.js'
 
 /** 像素容差（Figma 坐标含浮点/取整差异） */
 const TOL = 2
@@ -113,12 +115,19 @@ function boxesOf(sec) {
  * 从 section 节点推导「行式网格」几何契约。
  *
  * @param {object} sec section 树节点
+ * @param {object} [opts]
+ * @param {Map} [opts.figmaIndex] `indexFigmaNodes()` 的产物（id → {bbox, rawNode}）。
+ *   用于真值兜底：plan 段节点常常**不带** `items`（折叠发生在子 `-list` 上时尤其如此），
+ *   真机实测战略段 `38:3140`/`38:3153` 在 section 树里存在、但 `boxesOf(sec)===[]`
+ *   ⇒ 旧实现直接 `skippedNoTruth`，任何几何判据都够不着那两行。
+ *   真值本来就在 Figma 树里（`children[].absoluteBoundingBox`），按 id 反查即可，
+ *   属「同一真值源换一条读取路径」，不是猜。
  * @returns {{id:string, cols:number, cardW:number, cardH:number, colGap:number,
  *            rowGap:number|null, rows:number, itemCount:number, lastRowFull:boolean,
  *            isGrid:boolean, geometryFrom:string} | null}
  *          不可判定（items<2 / 单列 / 不等距 / 无卡尺寸）⇒ null
  */
-export function buildGridContract(sec) {
+export function buildGridContract(sec, opts = {}) {
   if (!sec || typeof sec !== 'object') return null
   const layout = String(sec.layout || sec.body?.layout || '').toLowerCase()
   const type = String(sec.type || sec.body?.type || '').toLowerCase()
@@ -143,7 +152,23 @@ export function buildGridContract(sec) {
       geometryFrom = String(child.id ?? '')
     }
   }
+
+  // 🔴 真值兜底（Figma 树）：plan 节点缺 items 时按 id 反查 Figma 节点的直接子项。
+  //   判据仍要求几何自洽（≥2 项、x 等距、卡尺寸一致），不自洽照样 null（fail-open 不猜）。
+  if (boxes.length < 2) {
+    const idx = opts.figmaIndex
+    const hit = idx && typeof idx.get === 'function' ? idx.get(String(sec.id ?? '')) : null
+    const kids = toArray(hit?.rawNode?.children)
+      .map((c) => (c && (c.absoluteBoundingBox || c.bbox)) || null)
+      .filter((b) => b && Number(b.width) > 0 && Number(b.height) > 0)
+    if (kids.length >= 2) {
+      boxes = kids
+      geometryFrom = `figma:${String(sec.id ?? '')}`
+    }
+  }
+
   if (boxes.length < 2) return null
+
 
   const cardW = modeNumber(boxes.map((b) => Math.round(Number(b.width))))
   const cardH = modeNumber(boxes.map((b) => Math.round(Number(b.height))))
@@ -234,10 +259,13 @@ function collectElementDecls(sources, classes) {
   const classSet = new Set(toArray(classes))
   if (classSet.size === 0) return merged
   for (const src of sources || []) {
-    for (const b of extractStyleBlocks(src.content)) {
+    // 🔴 必须用**深度感知**的提取器（`extractStyleBlocksDeep`）：产物常是两层 LESS 嵌套
+    //   `.父 { … .子 { … .标签 { … } } }`，正则版会把子块声明误当父块 / 整块丢弃 ⇒
+    //   刀 41 判 `display:(未声明)`，且**自愈写进去之后复检依旧读不到**（residual 永不收敛）。
+    //   真机实锤：mc-1792653212647 的 ContentSection8。
+    for (const b of extractStyleBlocksDeep(src.content)) {
       if (!selectorMatchesElement(b.selector, classSet)) continue
-      const flat = String(b.body || '').replace(/\{[^{}]*\}/g, '')
-      Object.assign(merged, parseDeclMap(flat))
+      Object.assign(merged, parseDeclMap(b.declText))
     }
   }
   return merged
@@ -426,6 +454,19 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
         want: `${wantH}px`,
       })
     }
+    // 🔴 `grid-auto-rows` 钉的是**轨道**高，钉不住 item 高度：容器若带 `align-items: center`
+    //   （LLM 原 flex 布局残留），子项在行内不再拉伸 ⇒ 卡高坍缩成内容高。
+    //   真机实测 mc-1792653940949 · 38:3153：13.8px vs 真值 30px（同段第一行只因自愈给
+    //   子项补了 `height:30px` 才没露陷）⇒ 这一维必须与 `grid-auto-rows` 并列判。
+    const ai = String(wrap['align-items'] || '').trim().toLowerCase()
+    if (ai && ai !== 'stretch' && ai !== 'normal' && ai !== 'auto') {
+      out.push({
+        code: 'grid-align-items',
+        prop: 'align-items',
+        actual: ai,
+        want: 'stretch',
+      })
+    }
   }
 
   // 间距（列距必判；行距仅在多行时判 —— 单行时 row-gap 无视觉影响）
@@ -468,11 +509,17 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
   const widthPercent = /^(\d{1,3}(?:\.\d+)?)%$/.exec(widthRaw)
   const widthBad = /calc\s*\(/i.test(widthRaw) || (widthPercent && Number(widthPercent[1]) < 100)
   if (isGridImpl) {
-    if (flexPercent || widthBad) {
+    // 🔴 2026-10-22 真机实锤（mc-1792653212647 / 38:3167-list）：`flex` 系列在 **grid 子项上
+    //   根本不生效**（flex 只作用于 flex 容器的子项）⇒ 容器已改成 `display:grid` 之后，
+    //   子项残留的 `flex: 0 0 calc(25% - 5px)` 是**惰性**的，判它只会产出永远消不掉的残留
+    //   （该 class 还是共享 class，物理上不许改）。
+    //   真正会改卡宽的只剩 `width`（百分比 / calc 会覆盖 grid 轨道的拉伸）。
+    //   ⚠️ 若容器是 flex 实现，`flex: 0 0 calc(…)` 仍然要判（见下方 else 分支）。
+    if (widthBad) {
       out.push({
         code: 'item-stretch',
-        prop: 'flex/width',
-        actual: String(item.flex || item.width || '').trim(),
+        prop: 'width',
+        actual: widthRaw,
         want: `flex: 0 0 ${wantW}px 或 width: ${wantW}px`,
       })
     } else if (basis !== null && Math.abs(basis - wantW) > TOL) {
@@ -483,11 +530,15 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
         want: `${wantW}px`,
       })
     }
-  } else if (basis === null || Math.abs(basis - wantW) > TOL) {
+  } else if (flexPercent || basis === null || Math.abs(basis - wantW) > TOL) {
     out.push({
       code: 'item-basis',
       prop: 'flex/width',
-      actual: basis === null ? String(item.flex || item.width || '(未声明)').trim() : `${basis}px`,
+      actual: flexPercent
+        ? String(item.flex || item['flex-basis'] || '').trim()
+        : basis === null
+          ? String(item.flex || item.width || '(未声明)').trim()
+          : `${basis}px`,
       want: `${wantW}px`,
     })
   }
@@ -515,6 +566,7 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
  * @param {Array<{path:string, content:string}>} files 全量产物（需含样式文件）
  * @param {object} opts
  * @param {Array} opts.sections section 树（`layoutStructure.layout.sections` 或 `effectiveSections`）
+ * @param {Map} [opts.figmaIndex] `indexFigmaNodes()` 产物；仅用于「plan 段缺 items」时的真值兜底
  * @returns {{issues:Array, stats:Object}}
  */
 export function detectGridListLayoutIssues(files, opts = {}) {
@@ -530,6 +582,7 @@ export function detectGridListLayoutIssues(files, opts = {}) {
     skippedNoVFor: 0,
     skippedNoClass: 0,
   }
+  const figmaIndex = opts.figmaIndex && typeof opts.figmaIndex.get === 'function' ? opts.figmaIndex : null
   const sections = toArray(opts.sections)
   if (sections.length === 0) return { issues, stats }
   const byId = indexSections(sections)
@@ -561,7 +614,7 @@ export function detectGridListLayoutIssues(files, opts = {}) {
         stats.skippedNoSection += 1
         continue
       }
-      const contract = buildGridContract(sec)
+      const contract = buildGridContract(sec, { figmaIndex })
       if (!contract) {
         stats.skippedNoTruth += 1
         continue
@@ -729,10 +782,17 @@ function canonicalWrapperDecls(contract) {
   ]
   if (contract.rows > 1 && contract.rowGap !== null) {
     decls.push(`row-gap: ${clampInt(contract.rowGap)}px`)
-  } else {
-    decls.push('row-gap: 0px')
   }
+  // 🔴 单行真值 ⇒ **行距未知**（Figma 只画了一行、plan items 也只给一行），
+  //   而实际列表可能被折叠成多行（真机 mc-1792654286189：38:3211-list 真值 4 项、产物 15 项
+  //   = 4 行）。此时写 `row-gap: 0` 会把 4 行挤成 0 间距（实测行距从 20 变 0）。
+  //   判据这一维本来就不判（`rows > 1` 才判 row-gap）⇒ 自愈也不许写，保留元素原值。
   decls.push('align-content: start')
+  // 🔴 2026-10-22 真机实测（mc-1792653940949 · 38:3153）：容器上残留的 `align-items: center`
+  //   （LLM 原 flex 布局的产物）在 **grid 容器**里会关掉子项的行内拉伸 ⇒ 卡高坍缩成内容高
+  //   （实测 13.8px vs 真值 30px；第一行只因自愈给子项补了 `height:30px` 才没露陷）。
+  //   `grid-auto-rows` 只钉**轨道**高、钉不住 item 高度 —— 两者必须同时成立。
+  decls.push('align-items: stretch')
   return decls
 }
 
@@ -748,6 +808,7 @@ const WRAPPER_DROP = [
   'grid-auto-columns',
   'grid-auto-rows',
   'align-content',
+  'align-items',
   'justify-content',
 ]
 
@@ -758,6 +819,12 @@ const WRAPPER_DROP = [
  * @param {Array} issues detectGridListLayoutIssues 的 issues
  * @returns {{files:Array, healed:Array, failed:Array, unchanged:Array}}
  */
+/** 文件里有没有可写样式区（`.vue` 的 `<style>` / `.less` `.css` 全文） */
+function hasStyleRegion(content) {
+  const text = String(content || '')
+  return /<style\b[^>]*>[\s\S]*?<\/style>/i.test(text) || /^\s*[^<]*\{/m.test(text)
+}
+
 /** 样式文本里是否存在该 class 的**顶级规则块**（`:hover` 等不算） */
 function hasClassBlock(cssText, cls) {
   const text = String(cssText || '')
@@ -769,6 +836,76 @@ function hasClassBlock(cssText, cls) {
     if (!/[:&>+~]/.test(m[0].slice(0, -1))) return true
   }
   return false
+}
+
+/**
+ * 在样式区末尾**新建**一个规则块（宿主 class 完全没有规则块时用）。
+ *
+ * 真机实锤（mc-1792653212647 · ContentSection7）：战略段第一行的宿主
+ * `<div data-section-id="38:3140" class="c-component-frame-2136639905-row">`
+ * 在 `<style>` 里**一个声明都没有**（LLM 只给子项写了背景色）⇒ 旧实现 `no-rule-block`
+ * 直接放弃，于是 `display/grid-template-columns` 永远没人写，判据只能一直红。
+ *
+ * 安全性：`wrapperClasses` 已由 `unshared()` 过滤成「只被本元素使用」的 class
+ * ⇒ 新建规则块不会波及别的元素（共享 class 铁律）。样式区内无 `<style>` ⇒ 返回 null。
+ */
+function appendClassBlock(content, path, cls, decls) {
+  const block = `\n.${cls} {\n${decls.map((d) => `  ${d};`).join('\n')}\n}\n`
+  if (/\.(less|css)$/i.test(path)) return `${content}\n${block}`
+  if (!/\.vue$/i.test(path)) return null
+  const re = /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/i
+  const m = re.exec(content)
+  if (!m) return null
+  const inner = `${m[2]}${block}`
+  return content.slice(0, m.index) + m[1] + inner + m[3] + content.slice(m.index + m[0].length)
+}
+
+/**
+ * 把网格契约写进**宿主元素自身的 `style`**（元素级内联恒胜）。
+ *
+ * 为什么必须有这条通道（2026-10-22 真机实锤 mc-1792654504976）：
+ *   宿主元素常带**两个** class —— 基础名 + BEM 修饰名，例如
+ *   `class="c-component-frame-2136639905 c-component-frame-2136639905--strategic"`。
+ *   修饰名的规则块能被安全改写（独占），但基础名 `c-component-frame-2136639905`
+ *   是**共享 class**（同段第三行容器 / 别的卡片项也在用）⇒ 铁律禁止改写。
+ *   层叠按「文件顺序 + 后写者胜」合并 ⇒ 共享基础块里的 `display:flex; align-items:center`
+ *   会把修饰块里的 `display:grid` 顶掉（实测合并结果就是 flex），于是判据永远红、
+ *   自愈永远改不到 —— 这类「改了但赢不了」的情形，只有内联能定论。
+ *
+ * 安全性：内联只作用于**带该 `data-section-id` 的这一个元素**，不波及共享 class。
+ */
+/** 找「带该 `data-section-id` 的宿主标签」（含属性，不含内容） */
+function findHostTag(content, sectionId) {
+  const text = String(content || '')
+  if (!text || !sectionId) return null
+  const esc = String(sectionId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const tagRx = new RegExp(`<[a-zA-Z][\\w-]*(?:[^>"']|"[^"]*"|'[^']*')*data-section-id\\s*=\\s*["']${esc}["'](?:[^>"']|"[^"]*"|'[^']*')*>`, 'i')
+  return tagRx.exec(text)
+}
+
+function ensureHostInlineGrid(content, sectionId, decls, dropProps) {
+  const text = String(content || '')
+  const m = findHostTag(text, sectionId)
+  if (!m) return null
+  let tag = m[0]
+
+  // 先剥「会与本契约打架」的旧声明（`gap` 简写会覆盖 column-gap/row-gap 等）
+  const styleRx = /(\sstyle\s*=\s*)("([^"]*)"|'([^']*)')/i
+  const sm = styleRx.exec(tag)
+  if (sm) {
+    const quote = sm[2][0]
+    const old = sm[3] ?? sm[4] ?? ''
+    const drop = new Set(dropProps.map((p) => p.toLowerCase()))
+    const kept = stripDeclsFromInline(old, (p) => drop.has(String(p || '').toLowerCase()))
+    const rebuilt = kept ? `${sm[1]}${quote}${kept}${quote}` : ''
+    tag = rebuilt
+      ? tag.slice(0, sm.index) + rebuilt + tag.slice(sm.index + sm[0].length)
+      : tag.slice(0, sm.index) + tag.slice(sm.index + sm[0].length)
+  }
+
+  const next = upsertInlineDecls(tag, decls)
+  if (next === m[0]) return null
+  return text.slice(0, m.index) + next + text.slice(m.index + m[0].length)
 }
 
 export function healGridListLayout(files, issues) {
@@ -792,11 +929,55 @@ export function healGridListLayout(files, issues) {
     // 契约声明写进**第一个未被复用的宿主 class**；其余宿主 class 只删冲突声明（防层叠后写者胜）
     const canonicalCls = wrapClasses[0]
     const wrapperAdd = canonicalWrapperDecls(contract)
+    // 行距未知（单行真值）⇒ 不许删 `gap` / `row-gap`：删了等于写 0，
+    // 会把「真值只画了一行、产物却折叠成多行」的列表行距压没（真机 mc-1792654286189 实锤）。
+    const wrapperDrop =
+      contract.rows > 1
+        ? WRAPPER_DROP
+        : WRAPPER_DROP.filter((p) => p !== 'gap' && p !== 'row-gap')
     const itemHeightBad = codes.has('item-height')
     const itemStretch = codes.has('item-stretch') || codes.has('item-basis')
 
     let touched = 0
     let anyBlockFound = false
+    let createdBlock = false
+
+    // 🔴 先判「宿主 class 有没有规则块」，**再做改写**：`touched` 会被「子项改动」带绿，
+    //   若把它当成「宿主已写」的依据，就会出现「子项加了 height、宿主 display 一个字没写」
+    //   却记为已愈（真机 mc-1792653212647 的 38:3140 正是如此：residual 永不收敛）。
+    //   宿主一个块都没有 ⇒ 直接新建（wrapperClasses 已过滤成独占 class，安全）。
+    anyBlockFound = out.some((f) =>
+      wrapClasses.some((cls) => {
+        let hit = false
+        mapStyleRegions(f.content, String(f.path || ''), (css) => {
+          if (hasClassBlock(css, cls)) hit = true
+          return css
+        })
+        return hit
+      }),
+    )
+    if (!anyBlockFound) {
+      // 🔴 只在「宿主元素自己的 .vue」里新建（`issue.file` 精确匹配）：
+      //   随便挑一个 .vue 或全局 .less 新建，等于把布局规则写进别人的命名空间
+      //   —— 与「共享 class 绝不改写」同一条纪律。找不到精确目标 ⇒ failed（不猜）。
+      const target = out.find((f) => String(f.path || '') === String(issue.file || ''))
+      if (target && /\.vue$/i.test(String(target.path || '')) && hasStyleRegion(target.content)) {
+        const created = appendClassBlock(
+          String(target.content || ''),
+          String(target.path || ''),
+          canonicalCls,
+          wrapperAdd,
+        )
+        if (created && created !== target.content) {
+          target.content = created
+          touched += 1
+          createdBlock = true
+          // 新建后宿主声明已就位：改写阶段只删其余宿主 class 的冲突声明
+          anyBlockFound = true
+        }
+      }
+    }
+
     for (const f of out) {
       const p = String(f.path || '')
       const before = f.content
@@ -808,7 +989,7 @@ export function healGridListLayout(files, issues) {
         for (const cls of wrapClasses) {
           next = rewriteClassBlocks(next, cls, (head) =>
             editDeclHead(head, {
-              removeProps: WRAPPER_DROP,
+              removeProps: wrapperDrop,
               add: cls === canonicalCls ? wrapperAdd : [],
             }),
           )
@@ -832,6 +1013,51 @@ export function healGridListLayout(files, issues) {
       if (f.content !== before) touched += 1
     }
 
+    // 🔴 元素级内联通道（最后一个、也是唯一「一定赢」的通道）：
+    //   宿主 class 里可能有一个**共享基础类**（同段别的容器/卡片也在用），铁律禁止改写，
+    //   而它的 `display:flex` 会按层叠顶掉修饰类里的 `display:grid`（真机实测：合并后仍是 flex）。
+    //   只有内联能对「这一个元素」定论，且零波及。
+    const inlineDecls = [
+      { prop: 'display', value: 'grid' },
+      { prop: 'grid-template-columns', value: `repeat(${clampInt(contract.cols)}, ${clampInt(contract.cardW)}px)` },
+      { prop: 'grid-auto-rows', value: `${clampInt(contract.cardH)}px` },
+      { prop: 'column-gap', value: `${clampInt(contract.colGap)}px` },
+    ]
+    if (contract.rows > 1 && contract.rowGap !== null) {
+      inlineDecls.push({ prop: 'row-gap', value: `${clampInt(contract.rowGap)}px` })
+    }
+    inlineDecls.push({ prop: 'align-content', value: 'start' })
+    inlineDecls.push({ prop: 'align-items', value: 'stretch' })
+    const inlineDrop = [
+      'display',
+      'flex',
+      'flex-direction',
+      'flex-wrap',
+      'flex-flow',
+      'gap',
+      'column-gap',
+      'grid-template-columns',
+      'grid-auto-rows',
+      'align-items',
+      'align-content',
+      ...(contract.rows > 1 ? ['row-gap'] : []),
+    ]
+    const hostFile =
+      out.find((f) => String(f.path || '') === String(issue.file || '') && findHostTag(f.content, issue.sectionId)) ||
+      out.find((f) => /\.vue$/i.test(String(f.path || '')) && findHostTag(f.content, issue.sectionId))
+    if (hostFile) {
+      const inlined = ensureHostInlineGrid(
+        String(hostFile.content || ''),
+        issue.sectionId,
+        inlineDecls,
+        inlineDrop,
+      )
+      if (inlined && inlined !== hostFile.content) {
+        hostFile.content = inlined
+        touched += 1
+      }
+    }
+
     if (touched > 0) {
       healed.push({
         sectionId: issue.sectionId,
@@ -840,6 +1066,7 @@ export function healGridListLayout(files, issues) {
         itemClasses,
         codes: [...codes],
         files: touched,
+        ...(createdBlock ? { created: true } : {}),
       })
     } else if (anyBlockFound) {
       // 已是契约形态（或本刀改不动）⇒ 幂等无变更，不算失败
