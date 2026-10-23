@@ -5,7 +5,7 @@
  *   memberOrderIssues 抓到 88:32（当日总流量/24小时反）与 2:3660（34,620/82,379 反）；
  *   duplicateTextIssues 抓到「24小时/当日总流量/流量预测」跨组件重复。
  */
-import { checkSectionContent, buildSectionContentContract, healDuplicateTextIssues, checkSectionExclusiveEvidence, checkSectionTruthCoverage, checkTechStackContractTags } from './section-content-guard.js';
+import { checkSectionContent, buildSectionContentContract, healDuplicateTextIssues, checkSectionExclusiveEvidence, checkSectionTruthCoverage, checkTechStackContractTags, removeTextBinding, removeBorrowedDataRows } from './section-content-guard.js';
 import { assignSectionComponentNames } from './section-tree.js';
 
 // 🚨 checkTechStackContractTags 引入 element-coverage-validator → logger → config/backend-root.js
@@ -1033,5 +1033,126 @@ describe('checkTechStackContractTags · techstack 契约-产物一致性（65808
   it('入参防御：空 files / 无 plan → 空结果', () => {
     expect(checkTechStackContractTags({ files: [], plan })).toEqual({ checked: 0, violations: [] });
     expect(checkTechStackContractTags({ files: [{ path: 'a.vue', content: '<template/>' }], plan: null })).toEqual({ checked: 0, violations: [] });
+  });
+});
+
+/**
+ * 🛡️ 方案 F（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：文本删除**形态扩维**。
+ *
+ * 病灶：守卫算出 `duplicate:8 / borrowed:8` 却**零自愈** —— `removeStaticTextNode` 只认
+ * `>text<` 一种形态，而本单错装文本全是动态形态：
+ *   ① `ContentSection5.vue` `<span>设备名称</span>`（静态，旧实现可删）
+ *   ② `ContentSection3.vue` `{{ statLabel }}` + `ref('运行中')`（Mustache，旧实现删不掉）
+ *   ③ `ContentSection5.vue` 数组数据行 `{ name: '服务区巡检狗K1' }` ×8（旧实现删不掉
+ *      ⇒ 用户看到的「多个 icon」一个都去不掉）
+ */
+describe('方案 F · removeTextBinding / removeBorrowedDataRows（删除形态扩维）', () => {
+  const SFC_MUSTACHE = `<template>
+  <div>
+    <span class="v">{{ statValue }}</span>
+    <span class="l">{{ statLabel }}</span>
+  </div>
+</template>
+
+<script setup>
+import { ref} from 'vue'
+
+const statLabel = ref('运行中')
+const statValue = ref('2')
+</script>
+`;
+
+  const SFC_ROWS = `<template>
+  <div v-for="item in deviceRows" :key="item.name">
+    <span>{{ item.name }}</span>
+  </div>
+</template>
+
+<script setup>
+const deviceRows = ref([
+  { name: '服务区巡检狗K1' },
+  { name: '服务区巡检狗K2' },
+  { name: '服务区巡检狗K3' }
+])
+</script>
+`;
+
+  it('阳性①：静态纯文本 `>text<` ⇒ 删除（既有形态不回退）', () => {
+    const sfc = '<template><div><span class="h">设备名称</span></div></template>';
+    const out = removeTextBinding(sfc, '设备名称');
+    expect(out).not.toBeNull();
+    expect(out).not.toContain('>设备名称<');
+  });
+
+  it('阳性②：`{{ x }}` + `const x = ref(文本)` ⇒ 删节点 + 删声明 + 剪 import', () => {
+    const out = removeTextBinding(SFC_MUSTACHE, '运行中');
+    expect(out).not.toBeNull();
+    expect(out).not.toContain('statLabel');
+    expect(out).not.toContain('{{ statLabel }}');
+    expect(out).toContain('statValue'); // 另一条不受牵连
+  });
+
+  it('阳性②b：连删两条后 `import { ref } from "vue"` 也归零（删引用与剪 import 同处完成）', () => {
+    let acc = removeTextBinding(SFC_MUSTACHE, '运行中');
+    acc = acc ? removeTextBinding(acc, '2') : null;
+    expect(acc).not.toBeNull();
+    expect(acc).not.toContain('statLabel');
+    expect(acc).not.toContain('statValue');
+    expect(acc).not.toContain('ref');
+  });
+
+  it('阳性③：数组数据整行 —— 行内字符串全属借用 ⇒ 整行删（数组本身保留）', () => {
+    const r = removeBorrowedDataRows(
+      SFC_ROWS,
+      new Set(['服务区巡检狗K1', '服务区巡检狗K2', '服务区巡检狗K3']),
+    );
+    expect(r).not.toBeNull();
+    expect(r.removed).toBe(3);
+    expect(r.content).not.toContain('服务区巡检狗');
+    expect(r.content).toContain('ref([');
+  });
+
+  it('阴性①：Mustache 的标识符**还有其它引用** ⇒ 不删（避免破坏别处）', () => {
+    const sfc = `<template><div><span>{{ label }}</span><span v-if="label">x</span></div></template>
+<script setup>
+const label = ref('运行中')
+</script>`;
+    // label 出现 3 次（声明 + mustache + v-if）
+    expect(removeTextBinding(sfc, '运行中')).toBeNull();
+  });
+
+  it('阴性②：声明值与目标文本不符 ⇒ 不删（不猜语义）', () => {
+    expect(removeTextBinding(SFC_MUSTACHE, '离线')).toBeNull();
+  });
+
+  it('阴性③：无 Mustache / 无静态节点 ⇒ null（fail-open）', () => {
+    expect(removeTextBinding('<template><div></div></template>', '任意')).toBeNull();
+    expect(removeTextBinding('', '任意')).toBeNull();
+    expect(removeTextBinding(null, '任意')).toBeNull();
+    expect(removeTextBinding('<template>x</template>', '')).toBeNull();
+  });
+
+  it('阴性④：数组行**部分命中**（同行还有本组件自己的文本）⇒ 整行不删', () => {
+    const sfc = `<script setup>
+const rows = [
+  { name: '服务区巡检狗K1', status: '本组件自己的文本' }
+]
+</script>`;
+    expect(removeBorrowedDataRows(sfc, new Set(['服务区巡检狗K1']))).toBeNull();
+  });
+
+  it('阴性⑤：借用集合为空 / 行内无字符串 ⇒ 不动', () => {
+    expect(removeBorrowedDataRows(SFC_ROWS, new Set())).toBeNull();
+    expect(removeBorrowedDataRows('<script setup>\nconst a = 1\n</script>', new Set(['x']))).toBeNull();
+    expect(removeBorrowedDataRows('', new Set(['x']))).toBeNull();
+  });
+
+  it('🔴 按行独立判定：借用集合少一条 ⇒ 只留那一行（不株连其它行）', () => {
+    const r = removeBorrowedDataRows(
+      SFC_ROWS,
+      new Set(['服务区巡检狗K1', '服务区巡检狗K2']),
+    );
+    expect(r.removed).toBe(2);
+    expect(r.content).toContain('服务区巡检狗K3');
   });
 });

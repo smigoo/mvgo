@@ -11,7 +11,7 @@
         <div class="title-left" v-if="slot['title-left']">
           <slot name="title-left"></slot>
         </div>
-        <div class="header-title">{{ componentName }}</div>
+        <div class="header-title" v-if="!slot['title-left']">{{ componentName }}</div>
         <div class="title-right" v-if="slot['title-right']">
           <slot name="title-right"></slot>
         </div>
@@ -31,7 +31,7 @@
         <div class="title-left" v-if="slot['title-left']">
           <slot name="title-left"></slot>
         </div>
-        <div class="header-title">{{ componentName }}</div>
+        <div class="header-title" v-if="!slot['title-left']">{{ componentName }}</div>
         <div class="title-right" v-if="slot['title-right']">
           <slot name="title-right"></slot>
         </div>

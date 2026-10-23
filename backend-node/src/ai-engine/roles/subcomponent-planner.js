@@ -55,6 +55,14 @@ import { FIGMA_ID_RE } from '../utils/section-anchor-truth.js';
 //   同一批卡节点被「vision items 轨」与「collapse 折叠轨」各解释一次 ⇒ 两段并存 ⇒ 重复渲染。
 //   判据与实现详见 utils/figma-coverage-dedupe.js（纯函数、单一事实源）。
 import { buildFigmaClosureIndex, dedupeSectionsByCoverage } from '../utils/figma-coverage-dedupe.js';
+// 🛡️ A 方案（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：plan 层覆盖门禁。
+//   同一批 Figma 节点被切错/漏切 ⇒ 「丢卡 + 重复 + 错装」三类视觉缺陷。三条判据
+//   （覆盖缺口 / 兄弟重叠 / 纯文本行段锚点膨胀）详见 utils/section-plan-coverage.js：
+//   ③ 确定性修复（137 组件零命中 ⇒ 零回归风险），①② 只诊断留痕（v-for 列表类实测假阳）。
+import {
+  detectPlanCoverageGaps,
+  healOversizedTextRowAnchors,
+} from '../utils/section-plan-coverage.js';
 
 export { isLayoutContainerSection, collectLeafSections };
 
@@ -2052,6 +2060,39 @@ export class SubcomponentPlanner {
     }
 
     applyFlexGrowFallback(effectiveSections);
+
+    // 🛡️ A 方案（2026-10-23 · f98f7463 实锤）：plan 层覆盖门禁（位置：id 唯一化之前，
+    //   「纯文本行段锚点」收敛后的 sourceNodeIds 才参与后续去重与 prompt 下发）。
+    //   ③ 做确定性修复；①② 只留痕 —— 真实语料（137 组件）证明「未覆盖」对 v-for 列表
+    //   是假阳（产物 6 张卡数据全在，只是 plan 只锚了第一张）⇒ 补建 section = 凭空加组件。
+    try {
+      const covHeal = healOversizedTextRowAnchors({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      if (covHeal.healed.length > 0) {
+        effectiveSections = covHeal.sections;
+        logger.warn('🛡️ plan 层覆盖门禁·纯文本行段锚点已收敛', { healed: covHeal.healed });
+      }
+      const cov = detectPlanCoverageGaps({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      // 🔴 计数行是硬要求：没有它，「零命中」与「零问题」不可区分。
+      logger.info('🛡️ plan 层覆盖门禁·已评估', {
+        evaluated: cov.evaluated,
+        uncovered: cov.uncovered.length,
+        overlapping: cov.overlapping.length,
+        oversizedTextRow: cov.oversizedTextRow.length,
+        ...(cov.skipped ? { skippedReason: cov.skippedReason } : {}),
+        ...(cov.uncovered.length ? { uncoveredSample: cov.uncovered.slice(0, 5) } : {}),
+        ...(cov.overlapping.length ? { overlappingSample: cov.overlapping.slice(0, 5) } : {}),
+      });
+    } catch (covErr) {
+      logger.warn('🛡️ plan 层覆盖门禁异常（fail-open 跳过，维持现状）', {
+        error: covErr?.message || String(covErr),
+      });
+    }
 
     // 🛡️ E1 治本（2026-09-16 · c-traffic-monitor-bc0c25aa 实锤）：id 唯一化。
     // vision 对同一容器下多个图表输出重复 id（426:807×3），dedupe 按 sourceNodeIds 正确保留了

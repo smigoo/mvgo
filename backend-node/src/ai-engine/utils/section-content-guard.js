@@ -321,8 +321,9 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
       const rec = byPath.get(wrongPath);
       if (!rec || typeof rec.content !== 'string') continue;
       const text = String(issue.text);
-      const cleaned = removeStaticTextNode(rec.content, text);
-      if (cleaned === null) continue; // 未找到可安全删除的静态文本节点
+      // 🔴 方案 F：形态扩维（静态 → Mustache 整段 → 数组整行），不再只认静态文本
+      const cleaned = removeTextBinding(rec.content, text);
+      if (cleaned === null) continue; // 未找到可安全删除的节点形态
       if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, wrongPath)) {
         continue; // 删除**引入新错误** → 回退（预先存在的问题不再否决）
       }
@@ -409,12 +410,13 @@ export function healBorrowedEvidence({
     if (base && !varByName.has(base)) varByName.set(base, String(v));
   }
 
-  // ── ① 借用文本：从非归属组件删除该静态文本节点 ──
+  // ── ① 借用文本：从非归属组件删除该文本（方案 F：静态 → Mustache 整段）──
   for (const issue of check.borrowedTextIssues) {
     const rec = byPath.get(issue.file);
     if (!rec || typeof rec.content !== 'string') continue;
-    const cleaned = removeStaticTextNode(rec.content, String(issue.text));
-    if (cleaned === null) continue; // 找不到可安全删除的静态节点 → 不猜
+    // 🔴 方案 F：形态扩维（与 healDuplicateTextIssues 同一实现，禁止副本）
+    const cleaned = removeTextBinding(rec.content, String(issue.text));
+    if (cleaned === null) continue; // 找不到可安全删除的形态 → 不猜
     if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, issue.file)) {
       continue;
     }
@@ -423,6 +425,31 @@ export function healBorrowedEvidence({
       text: issue.text,
       removedFrom: issue.file,
       ownerSection: issue.ownerSection,
+    });
+  }
+
+  // ── ①b 借用文本·数组数据整行（方案 F ③）──
+  //    逐条删单条文本不够：`ContentSection5.vue` 用 `{{ item.name }}` + 8 行数据数组
+  //    重渲染了整个「设备名称」列 ⇒ 必须按**文件聚合**借用文本后整行删，
+  //    否则 8 个 icon（用户看到的「多个 icon」）一个都删不掉。
+  const borrowedByFile = new Map();
+  for (const issue of check.borrowedTextIssues) {
+    if (!borrowedByFile.has(issue.file)) borrowedByFile.set(issue.file, new Set());
+    borrowedByFile.get(issue.file).add(String(issue.text));
+  }
+  for (const [file, texts] of borrowedByFile) {
+    const rec = byPath.get(file);
+    if (!rec || typeof rec.content !== 'string') continue;
+    const res = removeBorrowedDataRows(rec.content, texts);
+    if (!res || res.removed === 0) continue;
+    if (validateSfc && introducesNewErrors(validateSfc, rec.content, res.content, file)) {
+      continue; // 删除引入新错误 ⇒ 回退（宁可留着，不制造新问题）
+    }
+    rec.content = res.content;
+    healedText.push({
+      text: `[数据行×${res.removed}]`,
+      removedFrom: file,
+      ownerSection: check.borrowedTextIssues.find((i) => i.file === file)?.ownerSection ?? null,
     });
   }
 
@@ -575,6 +602,154 @@ function splitTopLevelObjectProps(body) {
   return ranges
     .map(([s, e]) => ({ start: s, end: e, text: body.slice(s, e) }))
     .filter((p) => p.text.trim() !== '');
+}
+
+/**
+ * 🛡️ 方案 F（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：文本删除**形态扩维**。
+ *
+ * 病灶：守卫算出 `duplicate:8 / borrowed:8` 却**零自愈**。根因是 `removeStaticTextNode`
+ * 只认「标签之间纯静态文本」（`>text<`）一种形态，而本单所有错装文本都是**动态形态**：
+ *   · `ContentSection3.vue` → `{{ statLabel }}` + `ref('运行中')`
+ *   · `ContentSection5.vue` → `{{ item.name }}`（v-for）+ 数组数据行 `{ name: '服务区巡检狗K1' }`
+ * ⇒ `cleaned === null` ⇒ 逐条 `continue`，缺陷原样发货。
+ *
+ * 三类形态（**宁漏不误删**，判不了就返回 null 交给调用方 fail-open）：
+ *   ① **静态纯文本**（现状）：`>text<`，且左右无其它中文（避免子串误删）；
+ *   ② **`{{ expr }}` Mustache 整段**：expr 必须是简单标识符或 `.` 路径，且其根标识符在
+ *      script 里的声明**恰为**该文本（`const x = ref('文本')` / `const x = '文本'`），
+ *      且该标识符**全文仅出现 2 次**（声明 1 + 本处引用 1）⇒ 删节点 + 删声明行；
+ *   ③ **数组数据整行**（`removeBorrowedDataRows`，独立函数）：对象行内**所有**字符串字面量
+ *      都在借用集合内 ⇒ 删整行；部分命中 ⇒ 跳过（不猜）。
+ *
+ * ⚠️ 定位：**兜底**而非主路径 —— 方案 B/C 生效后这些组件根本不由 LLM 生成。
+ *    本函数的价值是覆盖「组件在 plan 名集合内（刀 55 不拦）+ 文本是真值（刀 54 不拦）」
+ *    的借用场景（本单页脚组件重渲染表格内容正属此类）。
+ *
+ * @param {string} content SFC 源码
+ * @param {string} text 要删除的文本
+ * @returns {string|null} 新内容；无可安全删除的形态 ⇒ null
+ */
+export function removeTextBinding(content, text) {
+  if (typeof content !== 'string' || !content || text == null) return null;
+  const t = String(text).trim();
+  if (!t) return null;
+  // ① 静态纯文本（既有形态，优先）
+  const asStatic = removeStaticTextNode(content, t);
+  if (asStatic !== null) return asStatic;
+  // ② {{ expr }} Mustache 整段 + 同步删声明
+  return removeMustacheBinding(content, t);
+}
+
+/** 标识符在全文的出现次数（词边界）。 */
+function countIdent(content, ident) {
+  const rx = new RegExp(`\\b${ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+  return (content.match(rx) || []).length;
+}
+
+/** 取标量声明的字面量值：`const x = ref('v')` / `const x = 'v'` ⇒ 'v'；否则 null。 */
+function scalarDeclValue(content, ident) {
+  const esc = ident.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = new RegExp(
+    `(?:const|let|var)\\s+${esc}\\s*=\\s*(?:ref\\(\\s*|reactive\\(\\s*)?['"]([^'"]*)['"]`,
+  );
+  const m = rx.exec(content);
+  return m ? String(m[1]) : null;
+}
+
+/**
+ * ② `{{ expr }}` Mustache 整段删除（+ 同步删 script 声明行，避免「声明未使用」硬闸）。
+ *
+ * 判据（三条同时成立，宁漏）：
+ *   ① expr 是简单标识符或 `.` 路径（`item.name` 也匹配，但其根 `item` 不会有
+ *      `const item = ref('文本')` 声明 ⇒ 自然被 ② 挡下）；
+ *   ② 根标识符的声明值 **trim 后恰等于** 目标文本；
+ *   ③ 根标识符全文**仅出现 2 次**（声明 + 本处引用）⇒ 无其它引用可破坏。
+ */
+function removeMustacheBinding(content, text) {
+  const rx = />[\s]*\{\{\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\}\}[\s]*</g;
+  const matches = [...content.matchAll(rx)];
+  if (matches.length === 0) return null;
+  for (const m of matches) {
+    const root = m[1].split('.')[0];
+    const declared = scalarDeclValue(content, root);
+    if (declared === null) continue;
+    if (String(declared).trim() !== text) continue;
+    if (countIdent(content, root) !== 2) continue; // 还有其它引用 ⇒ 不删
+    // 删 Mustache 节点（保留空标签，与 ① 同口径）
+    let out = content.slice(0, m.index) + '><' + content.slice(m.index + m[0].length);
+    // 同步删声明行，杜绝「声明未使用」。
+    // 🔴 正则必须用**标识符 root**，不是目标文本 esc —— 二者混用会只清空 mustache、
+    //    留下未使用的 `const statLabel = ref('运行中')`（比不删更糟，离线探针实锤）。
+    const rootEsc = root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declRx = new RegExp(
+      `\\n?[ \\t]*(?:const|let|var)\\s+${rootEsc}\\s*=\\s*(?:ref|reactive)?\\s*\\(?\\s*['"][^'"]*['"][^\\n]*\\n?`,
+    );
+    const after = out.replace(declRx, (whole) => (/\n/.test(whole) ? '\n' : ''));
+    // 🔴 声明行必须删掉才允许落地：只删 mustache 会留下未使用声明 ⇒ 视为不可用
+    if (after === out) continue;
+    // 🔴 次序铁律：删引用与剪 import 必须**同处**完成 —— 删掉唯一的 `ref('…')` 声明后
+    //    `import { ref } from 'vue'` 就成「已 import 但零引用」。只处理 ref/reactive 两个
+    //    标识符（computed/watch/onMounted 等一律不动），且要求全文再无 `ref(` 调用。
+    const final = pruneUnusedReactiveImport(after);
+    return final === content ? null : final;
+  }
+  return null;
+}
+
+/**
+ * 删掉 `import { ref[ , reactive] } from 'vue'` 里**已零调用**的标识符；列表空 ⇒ 删整行。
+ * 只认 ref / reactive，且判据是「全文再无 `name(` 调用」（宁漏：其它具名导入原样保留）。
+ */
+function pruneUnusedReactiveImport(content) {
+  const rx = /import\s*\{([^}]*)\}\s*from\s*['"]vue['"]\s*;?/;
+  const m = rx.exec(content);
+  if (!m) return content;
+  const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+  const rest = content.slice(0, m.index) + content.slice(m.index + m[0].length);
+  const unused = names.filter(
+    (n) => (n === 'ref' || n === 'reactive') && !new RegExp(`\\b${n}\\s*\\(`).test(rest),
+  );
+  if (unused.length === 0) return content;
+  const keep = names.filter((n) => !unused.includes(n));
+  const replacement = keep.length ? `import { ${keep.join(', ')} } from 'vue'` : '';
+  const tail = content.slice(m.index + m[0].length);
+  const cut = replacement === '' ? (tail.startsWith('\r\n') ? 2 : tail.startsWith('\n') ? 1 : 0) : 0;
+  return content.slice(0, m.index) + replacement + tail.slice(cut);
+}
+
+/**
+ * ③ 数组数据整行删除（方案 F 第三类）。
+ *
+ * 判据（宁漏）：**对象行内所有字符串字面量的值全部 ∈ borrowed** 才删该行；
+ * 只要有一个不属于借用集合 ⇒ 整行跳过（说明这行至少有一部分是本组件的真内容）。
+ * 只处理**单行、无嵌套**的对象字面量（`{ ... }`），且不删数组本身。
+ *
+ * @param {string} content SFC 源码
+ * @param {Set<string>|Array<string>} borrowed 借用文本集合
+ * @returns {{content:string, removed:number}|null}
+ */
+export function removeBorrowedDataRows(content, borrowed) {
+  if (typeof content !== 'string' || !content) return null;
+  const set = borrowed instanceof Set ? borrowed : new Set((Array.isArray(borrowed) ? borrowed : []).map((x) => String(x)));
+  if (set.size === 0) return null;
+
+  const lines = content.split('\n');
+  const keep = [];
+  let removed = 0;
+  for (const line of lines) {
+    const m = /^\s*\{[^{}]*\},?\s*$/.exec(line);
+    if (m) {
+      const strs = [...line.matchAll(/['"]([^'"]*)['"]/g)].map((x) => String(x[1]).trim());
+      // 行内必须有 ≥1 个字符串，且**全部**属于借用集合 ⇒ 整行删
+      if (strs.length > 0 && strs.every((s) => set.has(s))) {
+        removed += 1;
+        continue;
+      }
+    }
+    keep.push(line);
+  }
+  if (removed === 0) return null;
+  return { content: keep.join('\n'), removed };
 }
 
 /** 从后往前应用区间编辑（避免 offset 漂移）。 */

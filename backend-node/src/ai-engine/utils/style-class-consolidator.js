@@ -84,10 +84,13 @@ function extractStyleBlocks(sfc = '') {
  *  新实现：首行识别为类选择器即「开始一块」并持续累积后续行，直到 `{` 出现（进入块体）、
  *  再直到 `}` 配对返回顶层才定稿——跨行多选择器被完整保留为单一块。
  *
+ * 🛡️ 刀 53h（2026-10-23）：升级为**导出**——`orphan-style-rule-guard.js` 复用同一实现做
+ * 「孤儿规则」判定（块枚举）。**禁止在任何调用方另写一份块切分**（副本 ≥2 份 = 事故温床）。
+ *
  * @param {string} less 样式文本
  * @returns {Array<{selector: string, text: string}>}
  */
-function splitTopLevelClassBlocks(less = '') {
+export function splitTopLevelClassBlocks(less = '') {
   const lines = String(less).split('\n');
   const blocks = [];
   let buf = '';
@@ -214,7 +217,16 @@ function extractClassBlocks(less = '', selectors = []) {
   return out;
 }
 
-function removeClassBlocks(less = '', selectors = []) {
+/**
+ * 🛡️ 刀 53h（2026-10-23）：升级为**导出**——`orphan-style-rule-guard.js` 复用同一实现做
+ * 「孤儿规则」删除（与 `splitTopLevelClassBlocks` 块枚举同解析口径：按行 + 花括号深度 +
+ * 选择器 token 命中）。**禁止在任何调用方另写一份块删除**（副本 ≥2 份 = 事故温床）。
+ *
+ * @param {string} less 原 Less 文本
+ * @param {string[]} selectors 待删除的类选择器（如 ['.c-x']）
+ * @returns {string}
+ */
+export function removeClassBlocks(less = '', selectors = []) {
   if (!selectors.length) return less;
   const lines = String(less).split('\n');
   const out = [];

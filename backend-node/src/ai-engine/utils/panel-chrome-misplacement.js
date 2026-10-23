@@ -307,3 +307,131 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
 
   return { files, changes };
 }
+
+/**
+ * 🛡️ 刀 57 / 方案 E（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：面板标题槽位归属。
+ *
+ * 病灶：`index.vue` 把 Figma 标题组件放进 `<template #header-right>`，而 default-panel
+ * 的 chrome **无条件**渲染 `<div class="header-title">{{ componentName }}</div>`（且
+ * `declare.json.title` == Figma 标题文本）⇒ **双标题**。
+ *
+ * 判据（五条同时成立，全部确定性、可证伪）：
+ *   ① 主组件（含 `<base-panel`）存在 `<template #header-right>`，其直接内容是**单个**
+ *      组件标签（允许空白/HTML 注释，无其它元素与文本）；
+ *   ② 该组件文件在产物内且带 `data-section-id="<sid>"`；
+ *   ③ plan 段树中 sid 段 `type === 'header'`（面板标题段的结构事实）；
+ *   ④ sid 的 Figma 子树**恰含 1 个非空 TEXT**（标题形态）；
+ *   ⑤ 同文件尚无 `#title-left` 使用（已有则不猜）。
+ * ⇒ heal：`#header-right` → `#title-left`（只改这一处 slot 名，内容不动）。
+ *
+ * 配套（前端 chrome 让位）：`default-panel/index.vue` 的 `header-title` 在提供
+ * `title-left` 槽时隐藏（`v-if="!slot['title-left']"`）。现有产物 0 个使用 title-left ⇒ 零回归。
+ *
+ * fail-open：任一条不满足 ⇒ 不动。vue3 链路无 base-panel ⇒ 天然不触发。
+ *
+ * @param {Record<string,string>} files 产物文件集
+ * @param {object} ctx `{ plan, figmaRoot }`（plan = {effectiveSections}；缺 ⇒ skip）
+ * @returns {{ files, changes: Array, evaluated: number, skippedReason?: string }}
+ */
+export function healPanelTitleSlot(files, { plan, figmaRoot } = {}) {
+  const changes = [];
+  if (!files || typeof files !== 'object') return { files, changes, evaluated: 0 };
+  const sections = Array.isArray(plan?.effectiveSections) ? plan.effectiveSections : null;
+  if (!sections || sections.length === 0) {
+    return { files, changes, evaluated: 0, skippedReason: 'no-plan-sections' };
+  }
+  if (!figmaRoot) return { files, changes, evaluated: 0, skippedReason: 'no-figma-root' };
+
+  const indexPath = Object.keys(files).find(
+    (p) => /(?:^|\/)index\.vue$/.test(p) && typeof files[p] === 'string' && /<base-panel\b/.test(files[p]),
+  );
+  if (!indexPath) return { files, changes, evaluated: 0, skippedReason: 'no-base-panel-index' };
+  let content = files[indexPath];
+  if (!/#title-left/.test(content)) {
+    // ⑤ 同文件已有 title-left 使用 ⇒ 不猜（避免覆盖语义不同的既有挂载）
+    // ① 找 header-right slot：直接内容 = 单组件标签
+    const slotRe = /<template\s+#header-right\s*>([\s\S]*?)<\/template>/g;
+    const candidates = [];
+    let m;
+    while ((m = slotRe.exec(content)) !== null) {
+      const inner = m[1].replace(/<!--[\s\S]*?-->/g, '').trim();
+      const tag = /^<([A-Z][\w]*)\b[^>]*\/>$|^<([A-Z][\w]*)\b[^>]*>\s*<\/\3>$/.exec(inner);
+      // 只接受 PascalCase 组件标签（排除原生元素与多元素内容）
+      const name = tag ? (tag[1] || tag[3]) : null;
+      if (name) candidates.push({ name, slotStart: m.index, slotEnd: m.index + m[0].length, slotText: m[0] });
+    }
+    if (candidates.length === 0) {
+      return { files, changes, evaluated: 0, skippedReason: 'no-single-component-header-right' };
+    }
+
+    // plan 段树扁平化（含嵌套 children）
+    const flat = [];
+    const walk = (list) => {
+      for (const s of list || []) {
+        if (s?.id != null) flat.push(s);
+        if (s?.children?.length) walk(s.children);
+      }
+    };
+    walk(sections);
+
+    for (const cand of candidates) {
+      const compPath = Object.keys(files).find(
+        (p) => p === `package/components/${cand.name}.vue`,
+      );
+      const compContent = compPath ? files[compPath] : null;
+      if (typeof compContent !== 'string') continue; // ② 组件文件不在产物内 ⇒ 不猜
+      const sidM = /data-section-id="([^"]+)"/.exec(compContent);
+      if (!sidM) continue;
+      const sid = String(sidM[1]);
+      // ③ plan 段 type === 'header'
+      const sec = flat.find((s) => String(s.id) === sid);
+      if (!sec || sec.type !== 'header') continue;
+      // ④ sid 的 Figma 子树恰含 1 个非空 TEXT
+      const node = findNodeById(figmaRoot, sid);
+      if (!node) continue;
+      let textCount = 0;
+      const countTexts = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (typeof n.characters === 'string' && n.characters.trim().length > 0) {
+          textCount += 1;
+          return;
+        }
+        for (const c of n.children || []) countTexts(c);
+      };
+      countTexts(node);
+      if (textCount !== 1) continue;
+
+      const slotText = cand.slotText;
+      const healed = slotText.replace(/#header-right/, '#title-left');
+      content = content.slice(0, cand.slotStart) + healed + content.slice(cand.slotEnd);
+      changes.push({
+        file: indexPath,
+        component: cand.name,
+        sectionId: sid,
+        from: 'header-right',
+        to: 'title-left',
+      });
+      // slot 位移后重扫（防同文件多处）——简单起见只处置第一处命中后 break
+      break;
+    }
+    if (changes.length > 0) {
+      files[indexPath] = content;
+    }
+  }
+  return { files, changes, evaluated: 1 };
+}
+
+/** 在 figma 树（document 本体或包装）里按 id 找节点。 */
+function findNodeById(figmaRoot, id) {
+  const root = figmaRoot?.document ?? figmaRoot;
+  if (!root || typeof root !== 'object') return null;
+  const target = String(id);
+  const stack = [root];
+  while (stack.length) {
+    const n = stack.pop();
+    if (!n || typeof n !== 'object') continue;
+    if (String(n.id) === target) return n;
+    for (const c of n.children || []) stack.push(c);
+  }
+  return null;
+}

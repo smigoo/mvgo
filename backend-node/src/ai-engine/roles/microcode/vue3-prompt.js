@@ -16,6 +16,9 @@ import { formatResourceMapping } from '../../utils/resource-mapping-formatter.js
 import { buildChartSpecPromptRules } from '../../utils/chart-spec.js';
 // 🧩 WP2（2026-10-08）：资源绑定契约（RC1/RC3/RC5/RC7，两线共用单一来源）
 import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contract.js';
+// 🛡️ 刀 53 家族（vue3 接线 2026-10-23）：下发「会被确定性接管的子组件名」。
+//   与 `vue3-engineer.js` 里的接管评估共用**同一个纯函数**（单一事实源，不写第二套判据）。
+import { collectFoldedGridTakeover } from '../../utils/folded-grid-section-takeover.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
@@ -124,6 +127,40 @@ export function buildVue3CodePrompt(input, chunkSpec, options = {}) {
       internalSubcomponents,
     } = options.resolveSubComponentPlan(input);
     const leafSections = collectLeafSections(effectiveSections);
+    // 🛡️ 刀 53 vue3 接线（2026-10-23）：下发「确定性子组件命名清单」。
+    //   病灶：`vue3-prompt.js` 此前从不约束子组件命名（规划期的 `requiredSubComps` 是死变量，
+    //   新 planner 已不再产出 `items` ⇒ 恒空），子组件清单只能从 LLM 生成的 index.vue 反解
+    //   （`vue3-engineer.js` 的 `_detectSubComponents` + 模板标签）⇒ 名字与 plan 派生名对不上
+    //   ⇒ 刀 53 家族（按 plan 派生命名定位子组件）在 vue3 恒零命中 = 假绿。
+    //   治本：与 `vue3-engineer.js` 共用 `collectFoldedGridTakeover` 这一**唯一判据事实源**，
+    //   把名字下发为强制文件名 ⇒ 刀 53 的 tag→subPath 映射在 vue3 也成立。
+    //   软约束口径：只要求「覆盖到这些区域时必须用给定文件名」，不强求拆分粒度。
+    //   ⚙️ A/B 开关（评测用，默认开）：`MVGO_VUE3_NAMING_CONTRACT=0` 关掉命名契约下发。
+    //   存在意义：**没有它就无法做 A/B** —— 两臂必须能在同一进程内产出「只有这一块不同」
+    //   的 prompt，否则「改名导致命中率变化」无法归因到命名块本身。
+    //   （离线评测台：scripts/ab-vue3-prompt.mjs；真机 A/B：两臂各跑一次同 URL 任务。）
+    //   ⚠️ 只下发「会被确定性接管」的段名，**不下发全部叶子名**：离线 A/B 实测
+    //   （scripts/ab-vue3-prompt.mjs，137 组件）全量下发平均 7.3 个、最多 20 个文件名，
+    //   且仅 33% 与产物实际命名重合 ⇒ 约束面过大、会强行改写 LLM 的拆分粒度。
+    //   只下发接管名（实测通常 0~3 个）⇒ 约束面最小，且这正是刀 53 真正需要的映射。
+    const namingContractEnabled = process.env.MVGO_VUE3_NAMING_CONTRACT !== '0';
+    let deterministicSubCompNames = [];
+    if (namingContractEnabled) {
+      try {
+        const tk = collectFoldedGridTakeover({
+          treeSections: effectiveSections,
+          figmaNodeData: input?.figmaNodeData || null,
+          resourceMapping: input?.resourceDomMapping || [],
+          componentName: componentName || '',
+          logger: null,
+        });
+        deterministicSubCompNames = [...tk.map.keys()].filter(
+          (n) => typeof n === 'string' && /^[A-Z][A-Za-z0-9]*$/.test(n),
+        );
+      } catch {
+        deterministicSubCompNames = [];
+      }
+    }
 
     // vue3 规范注入（截断防止 prompt 过大）
     const spec = (key, max) => {
@@ -382,6 +419,21 @@ ${formatSectionTreeForPrompt(effectiveSections)}
 ${internalSubcomponents?.length > 0 ? `   **内部子组件说明**：图表子组件使用 echarts 渲染，根元素设置 width: 100%; height: 100%，禁止 margin。\n` : ''}`
       : `- 💡 **建议拆分子组件（非强制）**：以下 section 建议你按功能拆为独立 \`package/components/*.vue\`，可酌情合并：
 ${formatSectionTreeForPrompt(effectiveSections)}\n`
+    : ''
+}
+${
+  deterministicSubCompNames.length > 0
+    ? `- 🧩 **子组件文件名（强制）**：这些区域**必须**使用给定的文件名与标签名（系统按 Figma 结构规划派生，改名会导致系统无法把确定性真值装配进对应文件）：
+${deterministicSubCompNames.map((n) => `   - \`package/components/${n}.vue\`（标签 \`<${n} />\`）`).join('\n')}
+   其余子组件可自由命名；若某个区域你判断无需单独成文件，可省略（系统不会为其补建）。`
+    : ''
+}
+${
+  // 📌 区段锚点：与「命名契约」**解耦**下发 —— 锚点不是刀 53 专属，它是资源挂载（N3
+  //   `selectAnchorMountCandidate` 已按 ownerSectionId ⨯ data-section-id 判分）与内容
+  //   守卫的公共锚。仅挂在命名块里会因「本单零接管」而白白丢掉（实测 15 组件仅 1 个有接管）。
+  namingContractEnabled && effectiveSections.length > 0
+    ? `- 📌 **区段锚点（强制）**：每个子组件的最外层元素必须带 \`data-section-id\`，值取自上方 section 树中该 section 的 id（如 \`data-section-id="43:4785"\`）。它是系统与 Figma 真值对齐的唯一锚点，缺失会导致资源挂载与内容校验失效。`
     : ''
 }
 - defineProps({...}) 对象语法带类型与默认值；defineEmits([...])

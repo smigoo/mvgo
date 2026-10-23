@@ -1443,6 +1443,56 @@ export function healVueEmbeddedStyleBraces(content) {
  * @param {string} themeVarsContent - theme-vars.less 内容（提取 mixin 内变量表）
  * @returns {string} 修复后内容（无需修复时返回原串）
  */
+/**
+ * 🔴🔴 2026-10-23 治本（mc-max-1792739994368-e2c61f62 实锤）：mixin 变量改写的
+ * **CSS var() 浏览器兜底字面量表（设计基准值）**。
+ *
+ * 事故链：theme-vars.less 经 M5-6 归一后，mixin 内 `@fontSize` 的 def 是
+ * `var(--fontSize)` 透传形态；healThemeMixinVarRefs 原样塞进 fallback 产出
+ * `var(--fontSize, var(--fontSize))` **自引用双写** → 喂给
+ * healBusinessStyleVarsInCss 的 VAR_RE 被懒匹配拆半 ⇒ 丢括号残骸
+ * `calc(@fontSize) * 1.7143);` ⇒ LESS 门禁 `Operation on an invalid type`
+ * ⇒ 整任务失败（common.less:201，本轮真机日志逐字实证）。
+ *
+ * ⚠️ 与 style-tokens.js#MC_SIZE_LITERAL_DEFAULTS **语义不同**，勿合并：
+ *   那张表是「Less 变量值落字面量」（fontSize=12px）；本表是「CSS var() 缺失时
+ *   浏览器兜底」，fontSize 必须是设计基准 **14px**（FONT_BASE_PX /
+ *   font-size-normalizer 基准 / theme-vars 头注「默认 14px」同口径）。
+ */
+const MIXIN_VAR_CSS_FALLBACKS = {
+  fontSize: '14px',
+  fontWeightStrong: '600',
+  lineHeight: '1.5',
+  borderRadius: '4px',
+  borderRadiusBase: '8px',
+  borderRadiusSmall: '4px',
+  spacing: '4px',
+  spacingXs: '4px',
+  spacingSm: '8px',
+  spacingMd: '12px',
+  spacingLg: '16px',
+  spacingXl: '24px',
+};
+
+/**
+ * mixin 变量改写的安全 fallback 取值（三级，取不到 ⇒ null = fail-open 跳过替换）：
+ *   ① def 非 var() 形态（字面量/表达式）⇒ 照旧用（既有行为不变）；
+ *   ② def 是 `var(--x, <字面量>)` ⇒ 剥内层字面量；
+ *   ③ def 是 `var(--x)` 无内层 fallback ⇒ 查设计基准表；
+ *   ④ 都没有 ⇒ null —— 宁可不改，绝不产出 `var(--x, var(--x))` 自引用双写。
+ */
+function safeMixinVarFallback(name, def) {
+  const d = String(def || '').trim();
+  if (!d) return null;
+  if (!/^var\(/i.test(d)) return d;
+  const inner = /^var\(\s*--[\w-]+\s*,\s*([^()]+?)\s*\)\s*;?\s*$/i.exec(d);
+  if (inner && inner[1].trim()) return inner[1].trim();
+  if (Object.prototype.hasOwnProperty.call(MIXIN_VAR_CSS_FALLBACKS, name)) {
+    return MIXIN_VAR_CSS_FALLBACKS[name];
+  }
+  return null;
+}
+
 export function healThemeMixinVarRefs(content, themeVarsContent) {
   if (typeof content !== 'string' || !content.includes('@')) return content;
   if (typeof themeVarsContent !== 'string' || !themeVarsContent.includes('@')) {
@@ -1496,7 +1546,12 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
         // 一律不匹配，杜绝「短槽位名吞长槽位名前缀」。
         const re = new RegExp(`@${name}(?![\\w-])(?!\\s*:)(?!\\{)`, 'g');
         if (re.test(outLine)) {
-          outLine = outLine.replace(re, `var(--${name}, ${def})`);
+          // 🔴🔴 2026-10-23 治本（e2c61f62 实锤）：def 为 var() 透传形态时原样塞 fallback
+          //   会产 `var(--x, var(--x))` 自引用双写 ⇒ 下游 VAR_RE 拆半丢括号 ⇒ LESS 门禁炸。
+          //   fallback 三级取值（内层字面量 → 设计基准表 → fail-open 跳过）。
+          const fb = safeMixinVarFallback(name, def);
+          if (fb === null) continue;
+          outLine = outLine.replace(re, `var(--${name}, ${fb})`);
           changed = true;
         }
       }

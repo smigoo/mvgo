@@ -32,6 +32,7 @@ import {
   injectVue3ResourceUrls,
   healPropImageFallbacks,
   filterAvailableResources,
+  injectResourceImports,
 } from '../utils/resource-import-guard.js';
 import {
   validateResourceAttribution,
@@ -58,6 +59,13 @@ import { buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 // 🛡️ E1 治本（2026-09-16）：语义化样式事实 + 中英文挂载桥接（与微码同源）
 import { buildSectionStyleFacts, semanticClassKeywords } from '../utils/section-tree.js';
+// 🛡️ 刀 53 家族（2026-10-23 vue3 接线）：与 microcode 共用同一判据族与同一终裁出口。
+//   ⚠️ vue3 子组件名由 LLM 自由命名（plan 派生的 tag 对不上）⇒ 必须走 `matchFgTakeoverTargets`
+//   两级匹配，不可照搬 microcode 的「tag 即文件名」（会恒零命中 = 假绿）。
+import {
+  collectFoldedGridTakeover,
+  matchFgTakeoverTargets,
+} from '../utils/folded-grid-section-takeover.js';
 // 🛡️ 阶段4（2026-09-17）：v-for 重复单元识别（共享背景精确挂到 item，与微码同源）
 import { findVForItemTag, healAbsoluteOverlayParents } from './microcode/resource-mounter.js';
 // 🛡️ §七 B17（2026-09-28）：背景四件套几何口径统一（与微码 injectBgStyleBinding 同源，消除 mc/vue3 双实现分叉）
@@ -753,8 +761,42 @@ export class Vue3Engineer extends MicrocodeEngineer {
           }
         }
       }
+      // 🛡️ 刀 53 家族（vue3 接线 2026-10-23）：同构叶段确定性接管（chunk 构建前评估一次）。
+      //   判据族、渲染器、终裁出口与 microcode **完全同一实现**，此处只多一层「vue3 命名
+      //   自由」的映射（`matchFgTakeoverTargets`）。fail-open：任何一级不中 ⇒ 走既有 LLM
+      //   路径，零回归；且必须打计数行，否则「零命中」与「零问题」不可区分。
+      const _fgTakeover = collectFoldedGridTakeover({
+        treeSections: effectiveSections,
+        figmaNodeData: input?.figmaNodeData || null,
+        resourceMapping: input?.resourceDomMapping || [],
+        componentName: input?.componentName || '',
+        logger: this.logger,
+      });
+      // 名命中 ⇒ 可在生成前跳过 LLM chunk（省一次调用且杜绝随机维度）
+      const _fgByName = new Map();
+      // 终裁快照（与 microcode 同字段名）⇒ `this.writeFiles` 自动带上 fgTakeoverFiles，
+      // 挡住「后置管线（样式归一 / 事实注入 / consolidator 回写）污染确定性产物」这条链。
+      this._fgTakeoverFiles = new Map();
+      if (_fgTakeover.map.size > 0) {
+        const pre = matchFgTakeoverTargets({
+          takeoverMap: _fgTakeover.map,
+          subPaths: subComps,
+        });
+        for (const [p, tr] of pre.byName) _fgByName.set(p, tr);
+        this.logger.info('🛡️ 刀 53 确定性接管（vue3）·已评估', {
+          leaves: _fgTakeover.evaluated,
+          candidates: _fgTakeover.map.size,
+          subPaths: subComps.length,
+          byName: pre.byName.size,
+          unmatched: pre.unmatched.length,
+          kinds: [..._fgTakeover.map.values()].map((t) => t.kind),
+        });
+      }
+
       let idx = 2;
       for (const subPath of subComps) {
+        // 🛡️ 刀 53：名命中的子组件不进 LLM chunk（文件在下方整体写入）
+        if (_fgByName.has(subPath)) continue;
         // 🧩 SubcomponentContract：vue3 子组件同样按 usage 关键词裁剪事实（省 60%+ tokens，fail-open 保真）
         const subTagName = subPath
           .split('/')
@@ -792,6 +834,51 @@ export class Vue3Engineer extends MicrocodeEngineer {
         const resSub = await runChunk(subChunk, this._buildVue3ChunkMiddle);
         const safeResSub = resSub && typeof resSub === 'object' ? resSub : { files: {}, debug: {} };
         Object.assign(allFiles, safeResSub.files || {});
+      }
+
+      // 🛡️ 刀 53（vue3）：确定性接管文件整体写入 —— 与 LLM 产物走同一最小修复管线
+      //   （style 属性补齐 + @import 补齐 + injectResourceImports，单一事实源、幂等）。
+      //   名命中（生成前已跳过 chunk）+ section-id 命中（生成后覆写）两级并集。
+      if (_fgTakeover.map.size > 0) {
+        const post = matchFgTakeoverTargets({
+          takeoverMap: _fgTakeover.map,
+          subPaths: subComps,
+          fileContents: allFiles,
+        });
+        const targets = new Map([..._fgByName, ...post.byName, ...post.bySectionId]);
+        let _fgWritten = 0;
+        let _fgFailed = 0;
+        for (const [subPath, tr] of targets) {
+          try {
+            let fixed = this._ensureSubComponentStyleAttrs(tr.vue);
+            fixed = this._ensureSubComponentStyleImport(fixed);
+            fixed = injectResourceImports(
+              fixed,
+              input?.resourceDomMapping || [],
+              '../../resources/images/',
+            );
+            allFiles[subPath] = fixed;
+            this._fgTakeoverFiles.set(subPath, fixed);
+            _fgWritten += 1;
+            this.logger.info(`🛡️ 刀 53 确定性子组件已落盘（vue3）: ${subPath}`, {
+              kind: tr.kind,
+              sectionId: tr.sectionId,
+            });
+          } catch (fgErr) {
+            _fgFailed += 1;
+            this.logger.warn('🛡️ 刀 53 确定性写入异常（vue3，保留 LLM 产物）', {
+              subPath,
+              error: fgErr?.message || String(fgErr),
+            });
+          }
+        }
+        this.logger.info('🛡️ 刀 53 确定性接管（vue3）·落盘', {
+          byName: _fgByName.size + post.byName.size,
+          bySectionId: post.bySectionId.size,
+          written: _fgWritten,
+          failed: _fgFailed,
+          unmatched: post.unmatched.length,
+        });
       }
 
       // 诊断落盘

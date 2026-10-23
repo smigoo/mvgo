@@ -869,9 +869,18 @@ export function collectThemeSlotNames(themeVars) {
 export function healBusinessStyleVarsInCss(css, slotNames) {
   if (typeof css !== 'string' || !slotNames || slotNames.size === 0) return css;
   const VAR_RE = /var\(\s*--([a-zA-Z][\w-]*)\s*(?:,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*)?\)/g;
+  // 🔴🔴 2026-10-23 治本（mc-max-1792739994368-e2c61f62 实锤）：fallback 里**嵌套 var()**
+  //   （如 `var(--fontSize, var(--fontSize))` 双写自引用）时，VAR_RE 的懒惰 `[^)]+?`
+  //   会把内层 var 的左半吞进 fallback、闭括号配到**内层** `)` ⇒ 匹配段少一个右括号
+  //   ⇒ 替换 `@fontSize` 后产出 `calc(@fontSize) * 1.7143);`（丢括号残骸 + 孤儿 `)`）
+  //   ⇒ LESS 门禁 `Operation on an invalid type` → 整任务失败。
+  //   防线：fallback 含 `var(` ⇒ 整段原样保留（fail-open），嵌套双写交给源头
+  //   `healThemeMixinVarRefs`（刀 A）不再产生；此处绝不猜着拆。
+  const isNestedVarFallback = (fb) => /var\(/i.test(String(fb || ''));
   // 原替换逻辑（kebab → exact-name → fallback），抽出来供声明行/普通行复用
   const replaceIn = (text) =>
     text.replace(VAR_RE, (m, varName, fallback) => {
+      if (isNestedVarFallback(fallback)) return m; // 🔵 嵌套 var ⇒ 保守整段保留
       const kebab = camelToKebab(varName);
       if (slotNames.has(kebab)) return '@' + kebab;
       // 🛡️ 2026-09-26 治本 0.3-a：`.common()` 里的槽名是 **camelCase**（@fontSize / @fontWeightStrong），
@@ -893,6 +902,7 @@ export function healBusinessStyleVarsInCss(css, slotNames) {
       const decl = line.match(/^\s*@([a-zA-Z][\w-]*)\s*:/);
       if (!decl) return replaceIn(line);
       return line.replace(VAR_RE, (m, varName, fallback) => {
+        if (isNestedVarFallback(fallback)) return m; // 🔵 嵌套 var ⇒ 保守整段保留
         const kebab = camelToKebab(varName);
         const slotName = slotNames.has(kebab) ? kebab : slotNames.has(varName) ? varName : null;
         if (slotName !== null && slotName === decl[1]) return m; // 🛡️ 同名桥接，保留原样

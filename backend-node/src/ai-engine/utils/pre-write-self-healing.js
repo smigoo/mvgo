@@ -41,11 +41,17 @@ import { pruneDuplicateStyleDeclsFromShared } from './style-dedup-guard.js';
 import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
 import { healStructuralTruth } from './structural-truth-healers.js';
 import { healContainerBackgroundTruth } from './container-background-truth.js';
-import { healPanelChromeMisplacement } from './panel-chrome-misplacement.js';
+import { healPanelChromeMisplacement, healPanelTitleSlot } from './panel-chrome-misplacement.js';
 import { healBorderWithoutStrokes } from './border-without-strokes.js';
 // 🛡️ 刀 40（2026-10-21）：同一规则块内同属性重复声明消歧（`display: grid` 被同块后写的
 //   `display: flex` 覆盖 ⇒ 折叠列表纵向单列散架）。只消歧、不修视觉。
 import { dedupeDuplicateDeclsInBlocks } from './block-duplicate-decl-guard.js';
+// 🛡️ 刀 54（2026-10-23）：硬编码文本门禁 + 处置（产物可见文本必须是 Figma 真值文本）。
+import { detectHardcodedText, healHardcodedText } from './hardcoded-text-gate.js';
+// 🛡️ 刀 55（2026-10-23）：plan 之外的编造副本组件确定性移除。
+import { detectOrphanDuplicateComponents, healOrphanDuplicateComponents } from './plan-orphan-guard.js';
+// 删除/改写产物前的语法回退校验（与 section-content-guard 同铁律：引入新错误即回退）。
+import { validateVueSfc } from './sfc-syntax-validation.js';
 // 🛡️ 刀 43（2026-10-22）：R24 **不**挂在本链 —— 本链之后还有 4 个覆写/回退步骤会冲掉它，
 //   且真机 8a1a0d96 实测本链零命中。已改挂唯一写盘出口
 //   `roles/microcode/file-writer.js#writeFiles`（见该处注释与 §③ 上方说明）。
@@ -255,6 +261,18 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     containerPanelRadius: 0,
     containerPanelGlow: 0,
     panelChromeMisplaced: 0,
+    // 刀 57（2026-10-23 · 方案 E）：面板标题槽位归属（header-right → title-left）
+    panelTitleSlotReslot: 0,
+    // 刀 54（2026-10-23）：硬编码文本门禁（显式初始化 —— 下游按固定形状序列化 summary，
+    // 动态赋值的键会因「条件命中才出现」而缺字段；记忆铁律：加新字段必查下游消费）。
+    hardcodedTextHits: 0,
+    hardcodedTextHealed: 0,
+    hardcodedTextStripped: 0,
+    hardcodedTextResidual: 0,
+    // 刀 55（2026-10-23）：plan 外编造副本组件
+    orphanHits: 0,
+    orphanRemoved: 0,
+    orphanResidual: 0,
   };
 
   // ① 资源 import 终验兜底注入（幂等只补缺失，绝不删已有）。
@@ -1103,6 +1121,30 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     logger?.warn?.('🛡️ 刀 42-B 异常（fail-open）', { error: err?.message || String(err) });
   }
 
+  // ⑮-c 刀 57 / 方案 E（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：面板标题槽位归属。
+  //   病灶：index.vue 把 Figma 标题组件（plan type=header、子树恰 1 TEXT）放进
+  //   `<template #header-right>`，而 default-panel chrome 无条件渲染 componentName 标题
+  //   （declare.json.title == Figma 标题文本）⇒ 双标题。
+  //   判据（五条同时成立，确定性）：slot 直接内容为单组件标签 + 组件文件带 data-section-id
+  //   + plan 段 type==='header' + Figma 子树恰 1 TEXT + 同文件无既有 title-left。
+  //   ⇒ heal：`#header-right` → `#title-left`（只改 slot 名）；chrome 侧由前端
+  //   default-panel 的 `v-if="!slot['title-left']"` 让位（零现有使用 ⇒ 零回归）。
+  try {
+    const planForTitleSlot = effectiveSections ? { effectiveSections } : null;
+    if (planForTitleSlot) {
+      const ts = healPanelTitleSlot(result, { plan: planForTitleSlot, figmaRoot });
+      result = ts.files;
+      if (ts.changes.length > 0) {
+        summary.panelTitleSlotReslot = ts.changes.length;
+        logger?.warn?.('🛡️ 刀 57：面板标题被塞进 header-right，已改挂 title-left', {
+          changes: ts.changes,
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 57 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
   // ⑯ 刀 38（2026-10-21 · e3ab048a 实锤）：真值无描边 ⇒ 产物不得有边框。
   //   病灶：统计卡 1（38:3260，class `.c-e3ab04-stats-con`）写成 `border:1px solid #a0c1ff`
   //   + `border-radius:4px`，而真值 `strokes=[]`、`#a0c1ff` 全树不存在；同一张卡 2 因走
@@ -1192,6 +1234,109 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   } catch (err) {
     logger?.warn?.('🛡️ 刀 41 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ⑲ 刀 54（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：「产物可见文本必须是 Figma 真值文本」。
+  //   病灶：`CardGrid.vue` 状态列写死英文 `status:'disabled'`（真值 `43:4862`「禁用」）并用作判色键；
+  //   `ContentSection3.vue`（**无** data-section-id，LLM 凭空复制邻卡）写死 `ref('运行中')` / `ref('2')`。
+  //   既有防线全不覆盖：do-not-invent 只校验 vision 下发的禁止对 + 图表形态；section-content-guard
+  //   只判借用/重复/归属；business-text-rules#isTextAllowedByRules 判据写好了却**零消费者**（死代码）。
+  //   判据：**Figma 全树** TEXT 文本为唯一真值集（不依赖 plan / 不依赖 section 归属 ⇒ 无 id 的
+  //   编造组件同样在网内），产物里会渲染成可见文本的字面量（静态文本 / 展示属性 / ref / const /
+  //   v-for 数据源数组字段值）凡 ∉ 真值 ∪ 白名单 ⇒ 硬编码。
+  //   处置：能确定性 heal（唯一编辑距离候选）就换成真值；否则剥离（产物里不留非真值内容文本）；
+  //   array-value 额外要求「同字段多数值属真值」才剥离（宁漏不误删）；剩余转 residual 只留痕。
+  //   ⚠️ fail-open：无 figmaRoot / 真值集为空 ⇒ 不判不改（无真值源不能猜）。
+  //   详 src/ai-engine/utils/hardcoded-text-gate.js。
+  try {
+    const fileArr = Object.entries(result)
+      .filter(([p, c]) => p.endsWith('.vue') && typeof c === 'string')
+      .map(([path, content]) => ({ path, content }));
+    const det = detectHardcodedText({ files: fileArr, figmaRoot });
+    summary.hardcodedTextHits = det.hits || 0;
+    // 🔴 计数行铁律：无真值源（fail-open）也必须留痕，否则「零命中」与「零问题」不可区分。
+    logger?.info?.('🛡️ 刀 54 硬编码文本门禁·已评估', {
+      evaluated: det.evaluated,
+      hits: det.hits,
+      skipped: det.skipped,
+      truthCount: det.truthCount,
+      skippedReason: det.skippedReason || null,
+    });
+    if (det.hits > 0) {
+      const hr = healHardcodedText({
+        files: fileArr,
+        figmaRoot,
+        validateSfc: (c, p) => validateVueSfc(c, p),
+      });
+      const outArr = Array.isArray(hr.files) ? hr.files : Object.entries(hr.files).map(([path, content]) => ({ path, content }));
+      for (const f of outArr) {
+        if (typeof f.content === 'string' && result[f.path] !== f.content) result[f.path] = f.content;
+      }
+      summary.hardcodedTextHealed = hr.healed.length;
+      summary.hardcodedTextStripped = hr.stripped.length;
+      summary.hardcodedTextResidual = hr.residual.length;
+      logger?.warn?.('🛡️ 刀 54：产物文本不在 Figma 真值集内，已按真值确定性处置', {
+        healed: hr.healed.map((h) => ({ file: h.path, from: h.from, to: h.to, kind: h.kind })),
+        stripped: hr.stripped.map((s) => ({ file: s.path, text: s.text, kind: s.kind })),
+        residual: hr.residual.map((s) => ({ file: s.path, text: s.text, kind: s.kind, reason: s.reason || null })),
+      });
+      // 复检留痕（0 = 全愈；残留交回 WARN 门禁）
+      const recheck = detectHardcodedText({ files: outArr, figmaRoot });
+      if (recheck.hits > 0) {
+        summary.hardcodedTextResidual = Math.max(summary.hardcodedTextResidual, recheck.hits);
+        logger?.warn?.('🛡️ 刀 54 复检残留（交回 WARN 门禁）', {
+          residual: recheck.issues.map((i) => `${i.path}[${i.kind}]${JSON.stringify(i.text)}`),
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 54 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ⑳ 刀 55（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：plan 之外的编造副本组件。
+  //   病灶：`ContentSection3.vue` **没有** data-section-id，是 LLM 凭空复制 `43:4898` 的第 2 份
+  //   ⇒ 统计行出现两张「运行中/2」。三道既有防线全不覆盖：刀 53 按「plan section → 组件名」
+  //   接管（无 section ⇒ 从不进 map）；刀 54 判「文本 ∉ 真值」（「运行中」是真值 ⇒ 合法放行）；
+  //   section-content-guard 的 duplicate 处置只认 `>纯文本<`（`{{ statLabel }}` 删不掉）。
+  //   判据：组件 X 不在 plan 组件名集合里 **且** X 的可见文本集合是某个 plan 内组件 Y 的
+  //   **子集**（删掉零信息损失）**且** Y 唯一 ⇒ 删文件 + 从 index.vue 摘掉标签与 import。
+  //   fail-open：无 effectiveSections / X 带来新内容 / 宿主不唯一 / 删除引入新错误 ⇒ 不删。
+  //   详 src/ai-engine/utils/plan-orphan-guard.js。
+  try {
+    const planForOrphan = Array.isArray(effectiveSections) && effectiveSections.length > 0
+      ? { effectiveSections }
+      : null;
+    const fileArr2 = Object.entries(result)
+      .filter(([p, c]) => p.endsWith('.vue') && typeof c === 'string')
+      .map(([path, content]) => ({ path, content }));
+    const od = detectOrphanDuplicateComponents({ files: fileArr2, plan: planForOrphan });
+    summary.orphanHits = od.hits || 0;
+    // 🔴 计数行铁律：无 plan（fail-open）也留痕，否则零命中与零问题不可区分。
+    logger?.info?.('🛡️ 刀 55 plan 外编造组件门禁·已评估', {
+      evaluated: od.evaluated,
+      hits: od.hits,
+      planNames: od.planNames,
+      skippedReason: od.skippedReason || null,
+    });
+    if (od.hits > 0) {
+      const or = healOrphanDuplicateComponents({
+        files: fileArr2,
+        plan: planForOrphan,
+        validateSfc: (c, p) => validateVueSfc(c, p),
+      });
+      const outArr2 = Array.isArray(or.files) ? or.files : Object.entries(or.files).map(([path, content]) => ({ path, content }));
+      const next = {};
+      for (const f of outArr2) next[f.path] = f.content;
+      result = next;
+      summary.orphanRemoved = or.removed.length;
+      summary.orphanResidual = or.residual.length;
+      logger?.warn?.('🛡️ 刀 55：plan 之外的编造副本组件已确定性移除（含 index.vue 引用摘除）', {
+        removed: or.removed.map((r) => ({ file: r.path, duplicateOf: r.duplicateOf, texts: r.texts })),
+        residual: or.residual.map((r) => ({ file: r.orphanPath, reason: r.reason })),
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 55 异常（fail-open）', { error: err?.message || String(err) });
   }
 
   return { files: result, summary };

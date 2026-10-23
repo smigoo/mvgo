@@ -2751,55 +2751,11 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
   const root = figmaNodeData?.document ?? figmaNodeData
   const index = indexFigmaNodes(root)
 
-  // 颜色 → CSS
-  const rgbaToCss = (c, opacity) => {
-    if (!c || typeof c.r !== 'number') return null
-    const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255)
-    const op = typeof opacity === 'number' ? Math.round(opacity * 100) / 100 : 1
-    return op < 1 ? `rgba(${r},${g},${b},${op})` : `#${((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1)}`
-  }
-  // fills → CSS（纯色优先，其次渐变，带方向 + 透明度）
-  const fillsToCss = (fills, fillOpacity) => {
-    if (!Array.isArray(fills) || fills.length === 0) return null
-    const visible = fills.filter((f) => f.visible !== false)
-    const solid = visible.find((f) => f.type === 'SOLID' && f.color)
-    if (solid) return rgbaToCss(solid.color, solid.opacity ?? fillOpacity)
-    const grad = visible.find((f) => f.type?.startsWith('GRADIENT_') && f.gradientStops?.length >= 2)
-    if (grad) {
-      const stops = grad.gradientStops
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((s) => `${rgbaToCss(s.color, s.opacity ?? grad.opacity ?? fillOpacity ?? 1)} ${Math.round(s.position * 100)}%`)
-        .join(', ')
-      const angle = grad.type === 'GRADIENT_LINEAR'
-        ? `${gradAngleDeg(grad)}deg, `
-        : grad.type === 'GRADIENT_RADIAL' ? 'radial, ' : 'conic, '
-      return `linear-gradient(${angle}${stops})`
-    }
-    return null
-  }
-  // 🛡️ d70a19bf 实锤：图例条 fill.opacity=0.1 + 同色 1px strokes。此前只记 fills，
-  //   描边丢失 → LLM 把半透明底写成不透明 hex，条变成实心色块。
-  const strokesToCss = (strokes) => {
-    if (!Array.isArray(strokes) || strokes.length === 0) return null
-    const visible = strokes.filter((s) => s.visible !== false)
-    const solid = visible.find((s) => s.type === 'SOLID' && s.color)
-    if (!solid) return null
-    return rgbaToCss(solid.color, solid.opacity)
-  }
-  const gradAngleDeg = (grad) => {
-    const h = grad.gradientHandlePositions || []
-    if (h.length >= 2) {
-      const x0 = h[0].x ?? 0, y0 = h[0].y ?? 0
-      const x1 = h[1].x ?? 1, y1 = h[1].y ?? 0
-      const dx = x1 - x0, dy = y1 - y0
-      if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
-        const deg = (Math.atan2(dy, dx) * 180) / Math.PI
-        return Math.round(deg)
-      }
-    }
-    return 180
-  }
+  // 🛡️ 2026-10-23（刀 53 外观扩维）：`rgbaToCss` / `fillsToCss` / `strokesToCss` /
+  //   `gradAngleDeg` 四个局部箭头函数**无任何闭包捕获**（只用参数），已提升为模块级
+  //   导出（见文件尾部 `cssRgba` / `fillsToCss` / `strokesToCss` / `gradientAngleDeg`），
+  //   供 `folded-grid-section-takeover.js` 复用 —— 禁止在刀具里造第二份 fills/strokes
+  //   解析实现（副本 ≥2 份 = 事故温床：真值解析口径必须单一）。本处行为逐字不变。
 
   // 收集叶子 section（有 type 语义的，容器跳过）
   const leaves = []
@@ -3715,4 +3671,119 @@ export function fillToRgba(fill) {
   const rawOp = fill.opacity !== undefined ? fill.opacity : (c.a !== undefined ? c.a : 1)
   const op = Math.round(rawOp * 100) / 100
   return `rgba(${r},${g},${b},${op})`
+}
+
+/**
+ * 🛡️ 外观真值 CSS 化（2026-10-23，刀 53 外观扩维的**单一事实源**）。
+ *
+ * 这四个函数原为 `buildSectionStyleFacts` 的局部箭头函数（零闭包捕获），
+ * 现提升为模块级导出，供 `folded-grid-section-takeover.js` 复用 —— 避免刀具自造
+ * 第二份 fills/strokes 解析（真值口径必须单一，副本 ≥2 份 = 事故温床）。
+ * 函数体逐字未变，`buildSectionStyleFacts` 的行为与提升前完全一致。
+ */
+
+/** Figma 颜色对象 → CSS 色值（alpha<1 用 rgba，否则 #hex）。 */
+function cssRgba(c, opacity) {
+  if (!c || typeof c.r !== 'number') return null
+  const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255)
+  const op = typeof opacity === 'number' ? Math.round(opacity * 100) / 100 : 1
+  return op < 1 ? `rgba(${r},${g},${b},${op})` : `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+}
+
+/**
+ * 渐变方向（`gradientHandlePositions` → CSS deg；缺省 180 = 自上而下）。
+ * 与 `figma-connector#_gradientAngleDeg` 同一算法（atan2）。
+ */
+export function gradientAngleDeg(grad) {
+  const h = (grad && grad.gradientHandlePositions) || []
+  if (h.length >= 2) {
+    const x0 = h[0].x ?? 0, y0 = h[0].y ?? 0
+    const x1 = h[1].x ?? 1, y1 = h[1].y ?? 0
+    const dx = x1 - x0, dy = y1 - y0
+    if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
+      const deg = (Math.atan2(dy, dx) * 180) / Math.PI
+      return Math.round(deg)
+    }
+  }
+  return 180
+}
+
+/**
+ * Figma fills → CSS background 值（**纯色优先，其次渐变**，带方向 + 透明度）。
+ *
+ * @param {Array} fills Figma fills 数组
+ * @param {number} [fillOpacity] 节点级 opacity（fill 未带 opacity 时的回落）
+ * @returns {string|null}
+ */
+export function fillsToCss(fills, fillOpacity) {
+  if (!Array.isArray(fills) || fills.length === 0) return null
+  const visible = fills.filter((f) => f.visible !== false)
+  const solid = visible.find((f) => f.type === 'SOLID' && f.color)
+  if (solid) return cssRgba(solid.color, solid.opacity ?? fillOpacity)
+  const grad = visible.find((f) => f.type?.startsWith('GRADIENT_') && f.gradientStops?.length >= 2)
+  if (grad) {
+    const stops = grad.gradientStops
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((s) => `${cssRgba(s.color, s.opacity ?? grad.opacity ?? fillOpacity ?? 1)} ${Math.round(s.position * 100)}%`)
+      .join(', ')
+    const angle = grad.type === 'GRADIENT_LINEAR'
+      ? `${gradientAngleDeg(grad)}deg, `
+      : grad.type === 'GRADIENT_RADIAL' ? 'radial, ' : 'conic, '
+    return `linear-gradient(${angle}${stops})`
+  }
+  return null
+}
+
+/**
+ * Figma strokes → CSS 描边色（首个可见 SOLID；非 SOLID ⇒ null）。
+ * 🛡️ d70a19bf 实锤：图例条 fill.opacity=0.1 + 同色 1px strokes。此前只记 fills，
+ *   描边丢失 → LLM 把半透明底写成不透明 hex，条变成实心色块。
+ *
+ * @param {Array} strokes Figma strokes 数组
+ * @returns {string|null}
+ */
+export function strokesToCss(strokes) {
+  if (!Array.isArray(strokes) || strokes.length === 0) return null
+  const visible = strokes.filter((s) => s.visible !== false)
+  const solid = visible.find((s) => s.type === 'SOLID' && s.color)
+  if (!solid) return null
+  return cssRgba(solid.color, solid.opacity)
+}
+
+/**
+ * 节点「外观三件套」真值（刀 53 外观扩维：bg / border / 内边距）。
+ *
+ * - `bg`：节点首个可见 fill（纯色或渐变）→ CSS background 值；无 ⇒ null（**不猜**）
+ * - `border`：首个可见 SOLID stroke + `strokeWeight` → `{width,color}`；无 ⇒ null
+ * - `pad`：Auto Layout `paddingTop/Right/Bottom/Left`（缺项按 0）；非 Auto Layout ⇒ null
+ *
+ * 🔴 全部字段「取不到就是 null」，调用方据此**省略该属性**，绝不填默认色。
+ *
+ * @param {object} node Figma 原始节点
+ * @returns {{ bg:string|null, border:{width:number,color:string}|null, pad:{t:number,r:number,b:number,l:number}|null }}
+ */
+export function nodeAppearanceTruth(node) {
+  const n = node && typeof node === 'object' ? node : {}
+  const bg = fillsToCss(n.fills, typeof n.opacity === 'number' ? n.opacity : undefined)
+  let border = null;
+  {
+    const color = strokesToCss(n.strokes)
+    const w = Number(n.strokeWeight)
+    // 🔴 无可见描边 / 权重非法 ⇒ null（「0px 白边」比没有更糟：会画出框线）
+    if (color && Number.isFinite(w) && w > 0) border = { width: Math.round(w * 100) / 100, color }
+  }
+  let pad = null;
+  {
+    const t = n.paddingTop, r = n.paddingRight, b = n.paddingBottom, l = n.paddingLeft
+    if ([t, r, b, l].some((x) => x != null)) {
+      pad = {
+        t: Number.isFinite(Number(t)) ? Math.round(Number(t)) : 0,
+        r: Number.isFinite(Number(r)) ? Math.round(Number(r)) : 0,
+        b: Number.isFinite(Number(b)) ? Math.round(Number(b)) : 0,
+        l: Number.isFinite(Number(l)) ? Math.round(Number(l)) : 0,
+      }
+    }
+  }
+  return { bg, border, pad }
 }

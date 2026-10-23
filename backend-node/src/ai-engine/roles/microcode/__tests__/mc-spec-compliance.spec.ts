@@ -88,19 +88,24 @@ describe('M5-6 治本：业务 .less 顶层注入 theme-vars 声明', () => {
     expect(injectThemeVarDeclsForLess(business, null)).toBe(business);
   });
 
-  it('回归锚点：不注入时现状确实会产出自指 fallback（证明注入必要）', () => {
+  it('回归锚点：刀 A 后不再产自指 fallback，fallback 落设计基准 14px', () => {
     const business = '.device-root {\n  font-size: @fontSize;\n}\n';
     const withoutFix = healThemeMixinVarRefs(business, THEME_VARS_MIXIN);
 
-    // 这条断言是「旧行为」的记录：若哪天它不再成立，说明上游改了，可同步简化治本逻辑
-    expect(withoutFix).toMatch(SELF_REF);
+    // 🔴🔴 2026-10-23 刀 A（mc-max-1792739994368-e2c61f62 治本）：源头不再产
+    //   `var(--x, var(--x))` **自引用双写**（旧断言 `toMatch(SELF_REF)` 记录的正是该事故
+    //   行为，已随治本同步翻转为阴性断言）。fallback 改为三级取值：
+    //   内层字面量 → 设计基准表（fontSize=14px）→ fail-open 跳过。
+    //   注入仍是首选路径（保响应式），此处证明「即使不注入也不再产生畸形」。
+    expect(withoutFix).not.toMatch(SELF_REF);
+    expect(withoutFix).toContain('var(--fontSize, 14px)');
   });
 
-  it('顶层已声明的 theme-vars 场景：现状会过度替换，注入后保持合规', () => {
+  it('顶层已声明的 theme-vars 场景：自愈不再改坏，注入后保持合规', () => {
     const business = '.device-root {\n  font-size: @fontSize;\n}\n';
-    // 顶层已声明本就合规，但现状自愈仍会改坏
+    // 🔴 刀 A 后「不注入」这条路径也不再产出非法自引用（旧行为记录已翻转）
     const withoutFix = healThemeMixinVarRefs(business, THEME_VARS_TOPLEVEL);
-    expect(withoutFix).toMatch(SELF_REF);
+    expect(withoutFix).not.toMatch(SELF_REF);
 
     const injected = injectThemeVarDeclsForLess(business, THEME_VARS_TOPLEVEL);
     const after = healThemeMixinVarRefs(injected, THEME_VARS_TOPLEVEL);

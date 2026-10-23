@@ -664,7 +664,7 @@ watch(activeTab, (newTab) => {})
 // `font-size: @fontSize` → variable undefined → 候选标红。
 // ============================================================
 
-import { healThemeMixinVarRefs } from './code-healer.js'
+import { healThemeMixinVarRefs, healThemeMixinVarRefsInVue } from './code-healer.js'
 
 const THEME_VARS = `.common() {
   @fontSize: 14px;
@@ -737,6 +737,65 @@ describe('healThemeMixinVarRefs —— mixin 闭包变量引用改写为 var()',
     expect(out).toContain('background: var(--color-bg, rgba(237, 244, 251, 1));')
     // 关键：绝不出现非法 -card 后缀（旧 bug 会产出 var(--color-bg, ...)-card）
     expect(out).not.toContain(')-card')
+  })
+})
+
+// ============================================================
+// 🆕 2026-10-23 治本（mc-max-1792739994368-e2c61f62 实锤）：
+//   mixin def 为 var() 透传形态（M5-6 归一后常态）时的安全 fallback。
+//   旧实现产 `var(--fontSize, var(--fontSize))` 自引用双写 → 下游
+//   healBusinessStyleVarsInCss 的 VAR_RE 懒匹配拆半丢括号 →
+//   `calc(@fontSize) * 1.7143);` → LESS 门禁 Operation on an invalid type。
+// ============================================================
+
+describe('healThemeMixinVarRefs —— var() 透传 def 的安全 fallback（2026-10-23 治本）', () => {
+  const TV_PASSTHROUGH = `.common() {
+  @fontSize: var(--fontSize);
+}
+`
+  it('① 阳性：def 是 var(--fontSize) 透传 ⇒ fallback 落设计基准 14px（不产自引用双写）', () => {
+    const src = `.a { font-size: calc(@fontSize * 1.7143); }
+.b { font-size: @fontSize; }`
+    const out = healThemeMixinVarRefs(src, TV_PASSTHROUGH)
+    expect(out).toContain('calc(var(--fontSize, 14px) * 1.7143)')
+    expect(out).toContain('font-size: var(--fontSize, 14px)')
+    // 🔴 绝不出现自引用双写（事故直接成因）
+    expect(out).not.toMatch(/var\(--[\w-]+,\s*var\(/)
+  })
+
+  it('② 阳性：def 是 var(--x, 12px) ⇒ 剥内层字面量 fallback', () => {
+    const tv = `.common() {
+  @fontSize: var(--fontSize, 13px);
+}
+`
+    const out = healThemeMixinVarRefs('.a { font-size: @fontSize; }', tv)
+    expect(out).toContain('var(--fontSize, 13px)')
+    expect(out).not.toMatch(/var\(--[\w-]+,\s*var\(/)
+  })
+
+  it('③ 阴性：def 是 var() 透传且无设计基准表项 ⇒ fail-open 跳过（不猜、不产双写）', () => {
+    const tv = `.common() {
+  @color-x: var(--color-x);
+}
+`
+    const src = '.a { color: @color-x; }'
+    expect(healThemeMixinVarRefs(src, tv)).toBe(src)
+  })
+
+  it('④ 回归：def 是字面量/表达式（非 var）⇒ 既有行为不变', () => {
+    // THEME_VARS（上方）里 @fontSize: 14px 字面量
+    const out = healThemeMixinVarRefs('.a { font-size: @fontSize; }', THEME_VARS)
+    expect(out).toContain('var(--fontSize, 14px)')
+  })
+
+  it('⑤ SFC 版同修（healThemeMixinVarRefsInVue 复用同一实现，<style> 内同形态不产双写）', () => {
+    const vue = `<template><div class="a"/></template>
+<style lang="less" scoped>
+.a { font-size: calc(@fontSize * 1.7143); }
+</style>`
+    const out = healThemeMixinVarRefsInVue(vue, TV_PASSTHROUGH)
+    expect(out).toContain('calc(var(--fontSize, 14px) * 1.7143)')
+    expect(out).not.toMatch(/var\(--[\w-]+,\s*var\(/)
   })
 })
 

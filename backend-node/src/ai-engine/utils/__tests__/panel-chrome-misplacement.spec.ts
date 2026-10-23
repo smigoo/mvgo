@@ -12,6 +12,7 @@ import {
   radiusNumber,
   isPanelChromeProp,
   healPanelChromeMisplacement,
+  healPanelTitleSlot,
 } from '../panel-chrome-misplacement.js';
 
 const box = (x, y, w, h) => ({ x, y, width: w, height: h });
@@ -287,5 +288,124 @@ describe('刀 42-B healPanelChromeMisplacement', () => {
     const { files: out, changes } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
     expect(out['resources/styles/common.less']).toBe(COMMON_LESS);
     expect(changes).toHaveLength(0);
+  });
+});
+
+/**
+ * 刀 57 / 方案 E（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：双标题。
+ *   index.vue 把 Figma 标题组件挂 `#header-right`，default-panel chrome 又无条件渲染
+ *   `{{ componentName }}`（title == Figma 标题文本）⇒ 同一标题出现两次。
+ * 五判据全中 ⇒ `#header-right` → `#title-left`（只改 slot 名，内容不动）。
+ */
+describe('刀 57 · healPanelTitleSlot 面板标题槽位归属', () => {
+  const TS_PLAN = { effectiveSections: [{ id: '807:3', type: 'header' }] };
+
+  const tsFigma = (textCount = 1) => ({
+    document: {
+      id: 'root',
+      type: 'FRAME',
+      children: [
+        {
+          id: '807:3',
+          type: 'FRAME',
+          children: Array.from({ length: textCount }, (_, i) => ({
+            id: `807:${5 + i}`,
+            type: 'TEXT',
+            characters: i === 0 ? '设备列表' : '设备列表2',
+          })),
+        },
+      ],
+    },
+  });
+
+  const tsIndex = (slotInner) => `<template>
+  <base-panel title="设备列表">
+    <template #header-right>
+      ${slotInner}
+    </template>
+    <ContentSection />
+  </base-panel>
+</template>
+`;
+
+  const tsFiles = (slotInner = '<HeaderSection />') => ({
+    'package/index.vue': tsIndex(slotInner),
+    'package/components/HeaderSection.vue': '<template>\n  <div data-section-id="807:3">设备列表</div>\n</template>\n',
+  });
+
+  it('① 阳性：五判据全中 ⇒ #header-right → #title-left（内容一字不动）', () => {
+    const { files, changes } = healPanelTitleSlot(tsFiles(), { plan: TS_PLAN, figmaRoot: tsFigma() });
+    const out = files['package/index.vue'];
+    expect(out).toContain('#title-left');
+    expect(out).not.toContain('#header-right');
+    // slot 内容不动
+    expect(out).toContain('<HeaderSection />');
+    expect(files['package/components/HeaderSection.vue']).toContain('data-section-id="807:3"');
+    expect(changes).toEqual([
+      { file: 'package/index.vue', component: 'HeaderSection', sectionId: '807:3', from: 'header-right', to: 'title-left' },
+    ]);
+  });
+
+  it('② 幂等：heal 后同文件已含 #title-left ⇒ 复跑零变更', () => {
+    const first = healPanelTitleSlot(tsFiles(), { plan: TS_PLAN, figmaRoot: tsFigma() });
+    const second = healPanelTitleSlot(first.files, { plan: TS_PLAN, figmaRoot: tsFigma() });
+    expect(second.changes).toHaveLength(0);
+    expect(second.files['package/index.vue']).toBe(first.files['package/index.vue']);
+  });
+
+  it('③ 阴性：slot 直接内容是多元素 ⇒ 不猜', () => {
+    const { files, changes } = healPanelTitleSlot(
+      tsFiles('<HeaderSection /><span>x</span>'),
+      { plan: TS_PLAN, figmaRoot: tsFigma() },
+    );
+    expect(changes).toHaveLength(0);
+    expect(files['package/index.vue']).toContain('#header-right');
+  });
+
+  it('④ 阴性：slot 内容是原生元素（非 PascalCase 组件）⇒ 不猜', () => {
+    const { changes } = healPanelTitleSlot(tsFiles('<div class="x"></div>'), { plan: TS_PLAN, figmaRoot: tsFigma() });
+    expect(changes).toHaveLength(0);
+  });
+
+  it('⑤ 阴性：组件文件无 data-section-id ⇒ 不猜', () => {
+    const files = tsFiles();
+    files['package/components/HeaderSection.vue'] = '<template>\n  <div>设备列表</div>\n</template>\n';
+    const { changes } = healPanelTitleSlot(files, { plan: TS_PLAN, figmaRoot: tsFigma() });
+    expect(changes).toHaveLength(0);
+  });
+
+  it('⑥ 阴性：plan 段 type 非 header（如 content）⇒ 不猜', () => {
+    const plan = { effectiveSections: [{ id: '807:3', type: 'content' }] };
+    const { changes } = healPanelTitleSlot(tsFiles(), { plan, figmaRoot: tsFigma() });
+    expect(changes).toHaveLength(0);
+  });
+
+  it('⑦ 阴性：sid 段不在 plan ⇒ 不猜', () => {
+    const plan = { effectiveSections: [{ id: '999:1', type: 'header' }] };
+    const { changes } = healPanelTitleSlot(tsFiles(), { plan, figmaRoot: tsFigma() });
+    expect(changes).toHaveLength(0);
+  });
+
+  it('⑧ 阴性：Figma 子树 TEXT 数 ≠ 1（0 个 / 2 个）⇒ 不猜', () => {
+    expect(healPanelTitleSlot(tsFiles(), { plan: TS_PLAN, figmaRoot: tsFigma(0) }).changes).toHaveLength(0);
+    expect(healPanelTitleSlot(tsFiles(), { plan: TS_PLAN, figmaRoot: tsFigma(2) }).changes).toHaveLength(0);
+  });
+
+  it('⑨ 阴性：无 plan / 无 figmaRoot / index 无 base-panel ⇒ fail-open 且带 skippedReason', () => {
+    expect(healPanelTitleSlot(tsFiles(), { figmaRoot: tsFigma() })).toMatchObject({ changes: [], skippedReason: 'no-plan-sections' });
+    expect(healPanelTitleSlot(tsFiles(), { plan: TS_PLAN })).toMatchObject({ changes: [], skippedReason: 'no-figma-root' });
+    const files = tsFiles();
+    files['package/index.vue'] = files['package/index.vue'].replace('<base-panel', '<my-panel');
+    expect(healPanelTitleSlot(files, { plan: TS_PLAN, figmaRoot: tsFigma() }))
+      .toMatchObject({ changes: [], skippedReason: 'no-base-panel-index' });
+  });
+
+  it('⑩ 阳性：注释 + 自闭合标签 + document 包装树形态照常命中（真机形态）', () => {
+    // 真机 index.vue：slot 内带 HTML 注释；figmaRoot 直接传 .document 本体（非包装）
+    const files = tsFiles('<!-- 标题 -->\n      <HeaderSection />');
+    const figmaDoc = tsFigma().document;
+    const { changes } = healPanelTitleSlot(files, { plan: TS_PLAN, figmaRoot: figmaDoc });
+    expect(changes).toHaveLength(1);
+    expect(changes[0].to).toBe('title-left');
   });
 });

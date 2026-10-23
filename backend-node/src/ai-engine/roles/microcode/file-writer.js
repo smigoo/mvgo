@@ -26,6 +26,13 @@ import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFle
 //   顶层静态导入（`writeFiles` 是同步函数，不能动态 import）。
 import { normalizeFontSizeLiterals } from '../../utils/font-size-normalizer.js';
 import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.js';
+// 🛡️ 刀 53h（2026-10-23 · cd8938f8 实锤）：**接管后样式失配**的第三态收尾。
+//   刀 53 家族接管叶段时用确定性模板渲染（`c-<sem>-fg-<kind>-<id>`），**完全不读**旧 LLM
+//   模板 ⇒ 旧类名到新类名**没有映射可依**（故不能「重命名保其值」）。旧规则于是成为
+//   「零引用孤儿」：既失效、注释语义还可能写错，纯误导。本刀在写盘出口做**孤儿判定**
+//   （零 DOM/字面/动态引用 ⇒ 删块 + 留痕），并**复用** class-facts + style-class-consolidator
+//   的同一份解析（禁造第三份）。只改 .less 源：.css 由下游 `recompileIndexCss` 自动重生成。
+import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
@@ -678,6 +685,20 @@ export function writeFiles(files, outputPath, options = {}) {
   let _r41TreeLogged = false;
   // 刀 41 与刀 51/52 共用同一棵 Figma 索引（惰性建一次；真值兜底要用）
   let _r41Idx = null;
+  // 🛡️ 刀 53h（2026-10-23 · cd8938f8 实锤）：接管后**孤儿样式规则**处置（第三态收尾）。
+  //   留痕要求与刀 41 同理：`scanned===0`（无 styles 文件）与 `removed.length===0`
+  //   （有 styles 但无孤儿）必须能在日志里区分 —— 禁「没日志 = 没问题」。
+  //   `kept/skipped` 存的是**理由**，用于事后复算「为什么留」（可辩驳判据）。
+  const _r53hStats = {
+    scannedFiles: 0,
+    blocks: 0,
+    candidates: 0,
+    removed: [],
+    kept: [],
+    skipped: [],
+    residual: 0,
+    dynamicPrefixes: [],
+  };
 
   // ── 刀 41：整体（跨文件）跑一次，改写后的内容回灌到 filesForWrite ─────────────
   //   为什么是循环外：`detectGridListLayoutIssues` 用 `buildClassUsage(allFiles)` 统计
@@ -779,6 +800,43 @@ export function writeFiles(files, outputPath, options = {}) {
     if (logger) {
       logger.warn('🛡️ 刀 41 写盘出口跳过（fail-open）', {
         error: _r41Err?.message || String(_r41Err),
+      });
+    }
+  }
+
+  // ── 刀 53h：孤儿样式规则整体（跨文件）处置一次，结果回灌到 filesForWrite ──────
+  //   为什么是循环外：判据要跨文件查引用（`resolveDomClass` 命中 / 定义文件之外的
+  //   字面引用 / 动态插值前缀干），逐文件喂进去会把「被别的文件引用」误判成零引用 ⇒ 误删。
+  //   为什么能安全删：刀 53 家族接管叶段用的是确定性模板（不读旧 LLM 内容）⇒ 旧类名若
+  //   在**全量产物**里零引用，就是纯粹的失效+误导残留。**只改 .less**：`.css` 是编译产物，
+  //   下游 refiner 的 `recompileIndexCss` 会自动重生成（手改 css 必被覆盖）。
+  try {
+    const { map, stats } = dropOrphanStyleRules(filesForWrite);
+    Object.assign(_r53hStats, stats);
+    if (map && map.size > 0) {
+      filesForWrite = { ...filesForWrite };
+      for (const [p, c] of map) {
+        if (filesForWrite[p] !== c) filesForWrite[p] = c;
+      }
+    }
+    if (logger) {
+      logger.warn('🛡️ 刀 53h 孤儿样式规则处置（写盘出口·循环外整体）', {
+        scannedFiles: _r53hStats.scannedFiles,
+        blocks: _r53hStats.blocks,
+        candidates: _r53hStats.candidates,
+        removed: _r53hStats.removed,
+        removedCount: _r53hStats.removed.length,
+        keptCount: _r53hStats.kept.length,
+        skippedCount: _r53hStats.skipped.length,
+        dynamicPrefixes: _r53hStats.dynamicPrefixes,
+        residual: _r53hStats.residual,
+      });
+    }
+  } catch (_r53hErr) {
+    // fail-open：修不了也必须写盘
+    if (logger) {
+      logger.warn('🛡️ 刀 53h 写盘出口跳过（fail-open）', {
+        error: _r53hErr?.message || String(_r53hErr),
       });
     }
   }

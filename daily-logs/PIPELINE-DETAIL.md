@@ -421,3 +421,277 @@
 - `detectTextLeaf`：锚点子树恰 1 非空 TEXT、0 图形（GROUP 纯包装允许）+ color/fs/fw 齐全；walk 用 **Set 去重**（collectAnchorNodes 返回锚点+直接子项，GROUP 锚点父子重复进入 ⇒ texts 翻倍）。渲染纯 span 数据内联、**绝不 img**。`FG_TAKEOVER_CLASS_RX` 扩 `text`（单点三消费者生效）。顺序 grid→header→text；日志 `textTaken`。
 - 🔴 **预览运行时 scoped style 块不生效**（round-16：54 个 stylesheet 无 fg- 规则，span 塌回继承 12px）⇒ 推翻 round-10「font-size 放 style 块」结论：**必须内联**；配套 `font-size-normalizer#protectFgTagInlineStyles()`——fg- 类标签的 style 属性整段占位保护（开标签扫描、属性顺序无关），否则内联 px 被归一成非法 `calc(@fontSize*N)`（round-10）。归一器占位族：C 注释 / L 行注释 / S 规则块 / I 内联，还原顺序 注释→内联→块。
 - 真机 round-17 `mc-1792664016166-36520fb1`：33/66 fs24 fw600 蓝全对、标题 fs16 #333、破图 0/6。遗留：纯 icon 叶（`187:262` texts=0）仍走 LLM 偶发丢失，「纯 icon 叶接管」未做；workspace publisher 链另有归一+flex 注入（内联赢它，暂不追）。
+
+#### 刀 53c：纯 icon 叶接管（2026-10-23 round-18 实锤）
+- 病灶：`187:262`/`187:263`（stat 条图标 GROUP，内部十几个 VECTOR、0 TEXT）不属于前三判据任何一域（标题行要 1 TEXT+icon、纯文本叶要 1 TEXT 无图形）⇒ 全 fail-open 走 LLM ⇒ **偶发整段丢失**（round-17 左卡 MISSING）。
+- `detectIconLeaf`：子树 **0 TEXT** + 锚点自身在资源映射里（`resourceFile` + 变量名 + `downloadStatus !== 'failed'`）⇒ 接管；尺寸取 Figma bbox 真值（53×55，LLM 之前猜 53×56）。渲染 `<img>` 尺寸/object-fit 全内联（scoped style 不生效），import 由 `injectResourceImports` 补。
+- `FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|text|icon)-/`（**唯一来源**，四消费者：code-validator / font-size-normalizer / layout-facts-injector + 判据自身渲染器）。
+- 判定顺序 **grid → header → text → icon**（互斥域递减）；日志字段 `iconTaken`。
+- 真机 round-18 `mc-1792718336301-cad5cd6e`：leaves13 / header3 / grid4 / text4 / **icon2**；文本叶全真值（33/66 fs24 fw600 蓝）、icon 叶 53×55 `imgOk=true`、破图 0/6。互斥性重放：icon 叶 icon-HIT+text-miss、文本叶反之。
+
+## 2026-10-23 LESS 编译门禁「Operation on an invalid type」根治（e2c61f62；commit `73420b3`）
+
+**症状**：`resources/styles/common.less:201:3 Operation on an invalid type`；报错行产物形态
+`font-size: calc(@fontSize) * 1.7143);`（乘号在 `calc()` 外 + 多一右括号）。
+
+**根因双层（必须同治，单修任一层其余路径仍会复发）**
+| 层 | 位置 | 缺陷 |
+|---|---|---|
+| 源头 | `roles/microcode/code-healer.js#healThemeMixinVarRefs` | 把 mixin 闭包 `@fontSize` 改写为 `var(--fontSize, <def>)` 时未防 `def` 已是 `var(--fontSize)`（theme-vars 里 @fontSize 定义即 var 透传）⇒ **自指双写** `var(--fontSize, var(--fontSize))` |
+| 防线 | `utils/theme-color-guard.js#healBusinessStyleVarsInCss` | `VAR_RE` 用惰性 `[^)]+?` 匹配 `var(--x, fallback)`，嵌套 var fallback 时**提前截断**（内层 var 一半进 fallback、括号错配）⇒ 吞右括号 |
+
+**刀 A（源头，+57）**：`MIXIN_VAR_CSS_FALLBACKS` 设计基准表 + `safeMixinVarFallback(name, def)` 三级取值：
+① `def` 是字面量 ⇒ 原样；② `def` 是 `var(--y, z)` ⇒ 取内层 `z`；③ `def` 是纯 `var(--y)` 无内层 ⇒ 查设计基准表；
+**表里没有 ⇒ return null ⇒ 该行跳过不改写**（fail-open：宁保留 `@name` 也不产自指双写）。
+🔴 这是本刀的**关键设计**——「不确定就不改」而非「兜个默认值」。`healThemeMixinVarRefsInVue`（:1843 导出）复用同实现。
+
+**刀 B（防线，+10）**：`isNestedVarFallback(fb) = /var\(/i.test(fb)`；在 `replaceIn`（normal-line）与
+declaration 分支**两处入口最先判定** ⇒ fallback 含嵌套 var 时整段 `return m`（不替换 `@slot`、不降级取 fallback）。
+
+**验收探针**：`scripts/verify-calc-e2c61f62.mjs`（只读，16 断言）。语料自检优先走
+`temp-components/<sid>/<taskId>/.mc-gen/cache/code-chunks`（**权威副本**，非 `frontend/workspace/...` 交付副本）。
+- S0 chunk13 原文含 `calc(@fontSize * 1.7143)` 且无畸形 / A1 阴性自指双写计数 0 / A2 阳性 fallback 落 `14px`
+- B1 阴性嵌套 var 零改动 + **B2 阳性对照字面量仍转 `@fontSize`**（证明 B1 非恒真，即刀 B 不是把功能关掉）
+- E1 全链阴性零畸形 / E2 全链阳性含正确字号形态
+- E3 `less.render` 真编译通过（3963B；产物 CSS 字号链路 `calc(var(--fontSize) * 1.7143)`）
+- E4 **阳性对照：修前畸形形态必须编译失败** —— 实测抛 `Operation on an invalid type`，与真机报错同源
+
+🔴 **坑 1：E2 断言过窄 ⇒ 真绿被误报假红**。全链里 `injectThemeVarDeclsForLess` 已在局部声明 `@fontSize`
+⇒ heal **不再改写** ⇒ 合法产物形态实为 `calc(@fontSize * 1.7143)`，而非 `calc(var(--fontSize ...`。
+断言须同时接受两种合法形态。
+
+🔴 **坑 2：spec 里 `await import('./x.js')` ⇒ `A dynamic import callback was invoked without
+--experimental-vm-modules`（TypeError）**。改**静态 ESM import**（`import { healThemeMixinVarRefsInVue } from './code-healer.js'`）。
+
+🔴 **坑 3：过宽否定断言** `expect(out).not.toMatch(/1\.7143\);/)` 会把**合法** calc 收尾 `);` 判为畸形。
+否定断言必须锚到明确的畸形特征（如 `/calc\(@\w+\)\s*\*/`），不能用泛化的闭合括号片段。
+
+**回归口径**：三 spec 合计 166/166；全量 `36 failed/3945 passed` vs 基线 `36 failed/3936 passed`
+（failed 数与 suite 逐字一致、全在既有 flaky 名单）⇒ **零新增失败**，+9 为新增通过。
+`nest build` exit=0，dist 验 `safeMixinVarFallback`×2 / `isNestedVarFallback`×3。
+
+### 补充：两处假绿通道（原探针 16/16 绿仍不足以定因）
+
+1. 🔴🔴 **`injectThemeVarDeclsForLess` 对 `fontSize` 不注入**（实测注入增量 0 字节）。
+   机制：`extractThemeScopedNames()` 扫 `.theme-dark()`/`.theme-light()` 内的声明名进 `themeScoped` 黑名单
+   （A-① 主题作用域豁免：值随主题变化者不在业务文件顶层重声明）。而 `fontSize` **同时**声明在
+   `.theme-dark()` 里 ⇒ 即便 `.common()` 里也有，也被黑名单吃掉 ⇒ 不注入 ⇒ `localDeclared` 不含
+   `fontSize` ⇒ `healThemeMixinVarRefs` **必然触发**。
+   ⚠️ `extractThemeScopedNames` 的 mixin 名正则只有 `.(theme-dark|theme-light)`，**不含 `.theme-theme_2()`**
+   ⇒ N 主题（theme_2/theme_3…）里的声明不进黑名单。当前不影响本单（fontSize 在 dark/light 都有），
+   但换一个「只在 theme_2 里声明」的槽位时行为会不同 —— 排查时注意。
+   ⇒ 教训：**不能凭「有注入机制」推断源头改写被绕过**；必须实测 `注入增量` 断言（探针 F1）。
+
+2. 🔴 **手工构造的畸形串只是旁证，不是因果证据**。定因必须能在**真实语料那一行**上重放出真机产物。
+   做法（探针 R 节）：把修前两刀做成 fixture ——
+   - 旧刀 A：`text.replace(/@fontSize(?![\w-])(?!\s*:)(?!\{)/g, 'var(--fontSize, ' + def + ')')`（def 原样塞）
+   - 旧刀 B：`VAR_RE` **去掉** `isNestedVarFallback` 守卫
+   在 `  font-size: calc(@fontSize * 1.7143);` 上重放 ⇒ 第 1 轮得到
+   `  font-size: calc(@fontSize) * 1.7143);`（与真机 `common.less:201` 逐字一致）。
+   🔴 并发现该链路 **非幂等**：第 2 轮 `calc(@fontSize)) * 1.7143);`，每轮多一个孤儿 `)` ——
+   因为匹配只吃掉内层 `)`、替换文本里没有对应 `)`，残骸留在原位。这解释了「必然炸门禁」而非偶发，
+   也提示：**任何「替换后括号计数不守恒」的 heal 都必须配幂等性断言**（多轮重放）。
+   fixture 须显式标注「仅供对照，非生产实现」，否则会被误当第二份判据副本（事故温床）。
+
+## 2026-10-23 接管后样式失配（cd8938f8 实锤；**孤儿侧已由刀 53h 闭环**，契约扩维持续；全量报告 `.workbuddy/reports/2026-10-23-layout-fidelity-cd8938f8.md`）
+
+被测：`mc-max-1792745153977-cd8938f8`（Figma `43:4782 cp-设备列表` 510×617）。
+权威副本 = `frontend/workspace/custom-components/c-device-cd8938f8`（`temp-components/<sid>/...` 已不存在）。
+版本锚 `codeVersion.gitHash=baeba88`、`writtenAt=1792745245218`。
+
+### 机理（两类）
+1. **接管渲染器无「外观维度」**：`backend-node/src/ai-engine/utils/folded-grid-section-takeover.js:857-909`（table 分支）
+   的数据模型 `tr.cols[].cells[]` 只承载 `{text, color, fs, fw}` —— **不是忘了写 background，是模型里没有这个维度**。
+   `statrow`（`:815-836`）与 `grid`（`:986-997`）、`header`（`:965-984`）同族分支同样只吐布局 + 文字样式内联。
+   ⇒ 表格斑马纹 / 表头底色 / 1px 白网格线 / 单元格内边距 / 统计卡渐变底**全部丢失**。
+2. **接管改模板 class 但不维护 stylesheet**：刀 53 家族把模板类名换成 `c-device-fg-table-434785-*` /
+   `-fg-statrow-434893list-*` / `-fg-header-8073*`，旧 CSS 规则原地留下 ⇒ 出现第三态「既失效又误导」。
+
+### 量化（探针口径，只读）
+模板 class **48** / 命中样式 **11** / 零样式裸类名 **37** / 真实 CSS 类名 **13** / 业务孤儿 **2**
+（`resources/styles/index.css:44-61` 的 `.c-device-content-section4-col`：`height:44px; background:#e2ecfe;
+border:1px solid #ffffff;` 与 `:first-child { background:#bdd5ff }` —— **值与 Figma 真值逐位一致**却已失联）。
+命中清单：`c-device-con-con / slot-con / frame-2136639911-con / frame-2136639921-con / detail-root /
+detail-text / group-2136638436 / legend-con / legend-item / legend-text / legend-dot`。
+
+🔴 **探针坑**：截模板必须用 `src.lastIndexOf('</template>')`。用 `src.split('</template>')[0]` 会命中
+`<template #title-left>` 的**闭合**标签 ⇒ 只取到插槽那几行、漏掉整段主体 ⇒ 统计假阴（初版得「43/7」，
+修正后「48/11/37」）。噪声类 `.png/.less/.light/.dark/.theme_2/.common` 必须剔除，否则孤儿数假高。
+
+### Figma 真值要点
+- 每个单元格是 **FRAME 带 fill + stroke**：`43:4786` 179×44 `#bdd5ff` + 白 stroke；`43:4788` `#e2ecfe` + 白 stroke；
+  `43:4855` 98×44 `#d6e5ff` + 白 stroke。列容器 `43:4785/4812/4831/4850` = 179/98/98/98 ×388，
+  `43:4784 HORIZONTAL spacing=-1` ⇒ 9 行 × 44 − 8×1 = 388（1px 白边互相压盖）。
+- 首列格内 `81:37 RECTANGLE "image 473938"` 28×28（x 偏移 16）+ 兄弟 `81:38 TEXT 服务区巡检狗K1`（x 偏移 54）。
+- 根 `43:4782 GROUP 无 fill`；真正的底是 `43:4783 "bg"` 510×617 `GRADIENT_LINEAR` op=0.9 + stroke
+  `rgba(160,193,255,1)` —— **从未下载成图**。
+- 统计卡 `43:4892 HORIZONTAL spacing=34`；`43:4893/4898/4903` 各 134×66，bg 组 `48:5909/187:265/187:266`
+  各含 2 个 `GRADIENT_LINEAR VECTOR`（134×56 + 134×10）；数值 TEXT 24px fw400（`rgba(57,101,255,1)` /
+  `rgba(0,172,46,1)` / `rgba(255,115,0,1)`）、标签 14px fw400 `#333`。
+- 尾部同 y 带 `y=52138`：`43:4869` 53×14 @x=29636 / `43:4875` 39×14 @x=29708 / `43:4878` 84×14 @x=30001 /
+  `43:4911` icon 8×8 @x=30095,52141；`43:5688` RECTANGLE 6×218 r=3 `rgba(20,105,169,1)` @x=30113。
+- 图例：`43:4871 ELLIPSE` 8×8 `rgba(0,199,43,1)` @x=29636 **在** `43:4870 TEXT "运行中"` @x=29647 **之前**；
+  文本 `rgba(84,104,129,1)` = `#546881` fs14 fw400。
+
+### 产物侧其余实锤（A2~A10）
+- 根背景挂错：`bg-5909.png`（= 第 1 张统计卡的 bg 组 `48:5909`）挂在组件根（`index.vue:6` + `:24`）。
+- 表格首列设备图标零渲染（`81:37`）；`component-meta.json` `RES-UNREF` 清单 4 条中 `icon-4911` **误报**
+  （`ContentDetail.vue:9` 实际有引用）。
+- 图例「运行中」重复：`ContentSection4.vue:3-4` 硬编码 + `ContentSection5.vue:11` `legendItems=[运行中,离线]`。
+- 尾部四节点真值同 y 横排，产物是 `flex-direction:column` 下三个 `flex:0.028` 兄弟 ⇒ 纵排三行。
+- 表格被 `index.vue:11-12` 按 `flex:0.380`(表格) : `flex:0.620`(`CardGrid`，`display:none`) 切分 ⇒ 只占 38%。
+- 表格 396px 溢出 8px（产物无负间距）。
+- 🔴 `chunk-meta.json` 只记 7 个 LLM 分块，缺 `ContentSection/ListSection/HeaderSection/CardGrid`
+  ⇒ 这 4 个文件确系刀 53 确定性接管产物（「接管 vs LLM」的硬边界证据）。
+
+### 布局分析侧（`.checkpoint/visual.json#layoutStructure.layout.sections`）
+顶层只有 `header / stat-cards / device-table` **三段**；尾部一行（图例 + 链接）**没有独立段**。
+- `stat-cards` 段系统性偏离：`layout:vertical`（真值横排）、`repeatedFill:"#a6ceff"`（真值双 GRADIENT_LINEAR）、
+  label `#ffffff`（真值 `#333`）、value `36/bold`（真值 `24/400`）、value 色 `#0362a6`/`#00c72b`（真值
+  `rgba(57,101,255,1)`/`rgba(0,172,46,1)`；`#00c72b` 其实是**图例 dot** 的绿）、`flexGrow` `1.286/0.857/1.286`
+  （真值三卡等宽 134px）、`figmaHeightPx` `21/14`（真值卡高 66）。
+  **特征高度一致**：`flexGrow` = 42/28 **文本宽度比**、`figmaHeightPx` = **文本高度**、`repeatedFill` = **图例 dot 色**
+  ⇒ 元素绑定错位到 **TEXT 子节点**，而非卡片 GROUP。
+- **对照**：同一份 `visual.json` 的 `device-table` 段**很准**（表头 4 列齐、每行 `icon + 4×text` 齐、列宽/行高在）
+  ⇒ 错误**集中于「items 类卡片组的元素绑定」**，非全链路失效。
+- `coverageReport.coverageRate=96`、`anchorValidation 19/19` —— 门禁全绿但视觉有明显差异 ⇒ 门禁缺两维度：
+  ① 叶段真值有 bg/border 而产物零声明；② 同 y 兄弟被渲染为纵向 stack。
+
+### 治本方向（1 契约扩维 / 3~6 未实施；**2 已由刀 53h 落地**，见下节）
+1. 接管渲染器数据契约扩维：`tr.cols[].cells[]` 增 `{bg, border, pad:{t,r,b,l}}`，从 `fills/strokes/padding*`
+   取真值并**内联输出**（与 font-size 同套路，规避微码预览 scoped style 失效）⇒ 落 `folded-grid-section-takeover.js`
+   table/statrow/grid/header 四分支。
+2. ✅ **已实施（刀 53h）**：接管时同步处置 stylesheet。🔴 落地时**否掉了「重命名保其值」分支**（根因见下节
+   「为何只能走孤儿判定」）⇒ 实为**显式删除零引用孤儿 + 留痕**（消灭第三态：既失效又误导）。
+3. 同 y 兄弟合并判据（**父段级**）：父段无 `layoutMode`（GROUP）时用子节点 y 带聚类判同排，产出横排容器段。
+4. 图标型 cell 支持：cell 出现 `RECTANGLE + TEXT` 兄弟时契约要能带 icon（复用刀 53c 的 img 渲染）。
+5. 资源挂载：`43:4783` 需下载；`bg-5909` 只能挂到对应统计卡；`theme-vars.less` 相对层级修正 + 零消费定义剔除。
+6. 门禁补维度：① 叶段「真值 bg/border 非空 ∧ 产物零声明」= 告警；② 同 y 兄弟纵向 stack = 告警。
+
+### 刀 53h 孤儿样式规则处置（写盘出口；`utils/orphan-style-rule-guard.js`；2026-10-23 落地）
+
+#### 🔴 为何只能走「孤儿判定」，不能走「重命名保其值」
+治本方向 §2 原写「旧规则**重命名为新 fg- 类名并保其值**」——**落地前证伪**：
+`folded-grid-section-takeover.js#collectFoldedGridTakeover` **完全不读**旧 LLM 模板内容，改从 section tree **确定性渲染**
+⇒ 「旧类名 → 新 `c-<sem>-fg-<kind>-<id>`」之间**没有任何映射可依**。故只能做孤儿判定：
+零引用 ⇒ 删块 + 留痕（`.c-device-content-section4` / `-col` 的值「与真值逐位一致」也只能删——**它已永久失联**，
+留着只会误导后人以为它在生效）。要「保其值」须先做 §1 契约扩维把值搬进渲染器，那是**另一刀**。
+
+#### 判定模型（`findOrphanStyleRules`）
+枚举 `.less`（`resources/styles/**`）里每个顶层类块（`splitTopLevelClassBlocks`）。**选择器头全部类名均孤儿 ⇒ 整块删**
+（`.a, .b {}` 有一个被引用即整块保留）。三类保留（任一命中即保留整块）：
+- `dom-referenced`：`resolveDomClass` 命中 **或** `fact.bases[base]` 有基名分组（含修饰符 `--x` 的变体）。
+- `literal-elsewhere`：`new RegExp(\`(^|[^A-Za-z0-9_-])${escapeRx(cls)}([^A-Za-z0-9_-]|$)\`)` 在**定义文件之外**的引用池命中。
+- `dynamic-prefix`：`cls.toLowerCase().startsWith(stem)`，`stem` 来自 `collectDynamicClassPrefixes`（见下「死分支」）。
+
+跳过（不删也不算孤儿）五类：`not-class-selector` / `less-mixin`（`LESS_MIXIN_HEAD_RX`）/ `fg-takeover-namespace`
+（`FG_TAKEOVER_CLASS_RX` 命中，`-fg-` 命名空间归接管器管）/ `no-class-token` / `dynamic-selector`（块头原文含 `$`/`` ` ``/`{}`）。
+
+#### 🔴 单一来源（禁造第三份解析）
+- 枚举 = `style-class-consolidator.js#splitTopLevelClassBlocks`（既有导出）。
+- 删除 = 同文件 `#removeClassBlocks`（本次**升为 export**，实现**零改动**；JSDoc 标注「单点实现，禁止调用方另写一份」）。
+- DOM 事实 = `class-facts.js#collectClassFacts` / `resolveDomClass`（既有）。
+- `.css` **不手改** = 下游 `recompileIndexCss`（`layout-style-refiner.js:521` / `layout-refiner.js:452` / `style-refiner.js:570` /
+  `lite.service.ts:638`；调用者 `mc-component-graph-phase2.js:4477/4557/4581` 串行）会自动重编 ⇒ **只改 `.less` 源**。
+
+#### 挂点
+`file-writer.js` **循环外整体一次**（照抄刀 41 形态：`:806-841`，位于刀 41 执行块之后、逐文件循环 `:843` 之前）：
+先对 `filesForWrite` 跑一次 `dropOrphanStyleRules` → 回灌变化文件 → 留痕。fail-open（异常只 warn）。
+
+#### 🔴 探针/判据护栏（三条）
+1. **引用池必须排除 `.css` / `.json`**：`.css` 是编译产物、`component-meta.json` 会**回显类名**（实测 2 处）⇒ 纳入即「永不判孤儿」假绿。
+   `REF_POOL_RE` 含 `vue|js|mjs|cjs|ts|mts|cts|jsx|tsx|less|scss|sass|styl|html|htm`，**刻意不含 css/json**。
+2. **插值前缀干保护**：`c-daily-overview-c310c7e3/package/index.vue:23` 有 `` `c-daily-overview-card--${card.key}` ``
+   （实测真存在）。`collectDomTokensFromTemplate` 的 token 白名单 `/^-?[a-zA-Z][\w-]*$/` 会**丢弃**含 `${` 的整段
+   ⇒ 静态 DOM 事实里**没有**该变体 ⇒ 不额外保护就会误删 `--` 变体块。故用 `collectDynamicClassPrefixes` 单独提「插值前缀干」
+   （`DYN_PREFIX_TEMPLATE_RX` / `DYN_PREFIX_CONCAT_RX`，要求 `stem.length ≥ 4` 且 `endsWith('-')`）。
+3. **删后复检**：`dropOrphanStyleRules` 删除后重枚举，`still.length` 累加进 `stats.residual`（=0 才算干净）；
+   `remove-noop` 进 `skipped`；异常 fail-open 返回空 map。
+
+#### 🔴 两处死分支教训（自查发现，非测试暴露）
+- **`dynamic-selector` 曾真死**：`hasDynamicFragment` 原挂在 `classes` token 上，而 token 正则 `\.[a-zA-Z][\w-]*`
+  **永不捕获** `$` / `` ` `` ⇒ 恒不触发。修：新增 `headHead(blockText)`（取块头首个 `{` 前**原文**）改判 `hasDynamicFragment(headHead(b.text))`；
+  `headClassTokens` / `isMixinHead` 一并复用 `headHead`。**教训：判「动态」必须判选择器头原文，不能挂在 token 上。**
+- **`dynamic-sibling` 恒不触发**：原判 `fact.bases[base]` 存在，被 `referencedByDom` 的**同一子句完全覆盖** ⇒ 死分支。
+  改造为真正生效的 `dynamic-prefix`（`collectDynamicClassPrefixes` + `startsWith`）。spec 阴性④专门构造「静态无该 token」做阳性对照。
+
+#### 真机探针证据（只读，产物 `c-device-cd8938f8`）
+`FILES 22 / domFiles 8 / scanned 6 / blocks 17 / candidates 13`；
+`REMOVED = common.less :: .c-device-content-section4 | .c-device-content-section4-col`（**恰好 2 条业务孤儿**，与报告一致）；
+`KEPT 11`（全 `dom-referenced`）；`SKIPPED 4`（全 `less-mixin`：`.common/.theme-light/.theme-theme_2/.theme-dark`）；
+`CHANGED = ['resources/styles/common.less'] residual 0`。**`dynamic-prefix` 重构前后逐项不变**。
+
+#### 验证证据
+- spec 12 例全绿（`utils/__tests__/orphan-style-rule-guard.spec.ts`）：阳性①真机同形双孤儿删+留痕；阳性②真删块含嵌套
+  `&:first-child` + 只回灌变化文件；阴性①`-fg-` 命名空间；阴性②Less mixin；阴性③跨文件字面引用；**阴性④插值前缀变体（阳性对照）**；
+  阴性⑤选择器含 `${`；**阴性⑥`.json`/`.css` 不算引用（防假绿）**；护栏 `scannedFiles=0`；分组选择器整块保留；fail-open。
+- 联合回归 87/87（`orphan-style-rule-guard` + `folded-grid-section-takeover` + `plan-orphan-guard`）。
+- 路径级基线对照：同命令同 189 套范围，改动前后**均 9 个非本刀 suite 失败、集合完全一致**（全在既有 flaky / `env -i` logger 环境类名单）⇒ 无新增失败。
+- `npm run build` 成功（写戳 `git=baeba88`）；dist 核验 `dist/ai-engine/utils/orphan-style-rule-guard.js` 存在、
+  `file-writer.js` 含 `dynamicPrefixes`×2 / 刀 53h 留痕串 5 处。
+
+#### 🔴 已知残留（本刀不处理）
+- **注释横幅不属于任何块**：`splitTopLevelClassBlocks` 剥离行注释（`line.replace(/\/\/.*$/, '')`）⇒ 删块后
+  `.c-device-content-section4` 上方的 `// 电量数据列…` 注释**残留**。若该注释语义写错，会留下误导文字。
+  要清需扩展块模型（把注释归属到紧邻块），属**独立刀**。
+- `component-meta.json` 里失效类名回显仍在（本刀只清理 `.less` 源；元数据回显是另一层）。
+
+## 刀 54 / 55 / 56 / 57 与方案 F 详判据（2026-10-23；单行索引在 MEMORY.md）
+
+### 刀 55 plan 外编造副本（`utils/plan-orphan-guard.js`）
+判据：组件名 ∉ `assignSectionComponentNames(plan.effectiveSections)` 名集合 ∧ 可见文本集合是某 plan 内组件 Y 的
+**子集** ∧ Y **唯一** ⇒ 判编造副本；确定性删文件 + 摘 `index.vue` 标签/import（复用刀 54 的文本抽取器，
+**避免两份实现**）。挂 `pre-write-self-healing` ⑳（`planForOrphan = effectiveSections ? {effectiveSections} : null`，
+无 plan ⇒ fail-open）。
+
+### A 方案 plan 层覆盖门禁（`utils/section-plan-coverage.js`）
+挂 `subcomponent-planner.js` plan 落定处（`applyFlexGrowFallback` 后、`uniqueSectionIds` 前，**双链路同一入口**）。
+三判据：① 覆盖缺口 / ② 兄弟重叠 **只诊断留痕**；③ 纯文本行段锚点膨胀（合成 id + children 全 TEXT + 锚点含容器
+⇒ 用 children 的 TEXT id 重建 `sourceNodeIds`）**确定性修复**。
+🔴 **①② 不做补建**：v-for 假阳实锤 —— `c-aiot-dpjh-bsjd-4e35965c` 5 张卡 30 条文本「未覆盖」但产物
+`ContentSection.vue:34-38` 6 卡数据全在（plan 只锚第 1 张）⇒ 补建 = 给 ~42% 组件凭空加组件 + 双渲染。
+③ 在 137 组件上**零命中** ⇒ 零回归风险。
+
+### 刀 54 硬编码文本门禁（`utils/hardcoded-text-gate.js`）
+truth = **Figma 全树** TEXT 全集（**不依赖 plan/section 归属** ⇒ 无 id 的编造组件也在网内）；
+扫产物可见文本字面量（静态文本 / 展示属性 / `ref` / `const` / **v-for 数据源数组**字段值）∉ truth ∪ 白名单 ⇒ 硬编码；
+heal（唯一编辑距离候选，**禁语义推断**）→ strip → residual；两级「宁漏不误删」阀：
+`group-majority-untruth`（同字段多数非真值）+ `file-majority-untruth`（整文件多数非真值）。
+**多位数字不放行**（N1 是诊断型不改写 ⇒ 臆造数字只能靠本刀拦；仅放行单个数字字符）。
+挂 `pre-write-self-healing` ⑲（**双链路**，`figmaRoot` ctx 已有 ⇒ 勿加调用方入参）。
+既有 `do-not-invent` / `section-content-guard` 都不判文本来源；`business-text-rules#isTextAllowedByRules`
+判据存在但**零消费者**（死代码）。
+
+### 刀 53e 列式表格整表接管（`detectTableLeaf`）
+判定顺序 grid→header→statrow→**table**→text→icon（statrow 每卡 2 TEXT / table 每列 ≥3 TEXT ⇒ 天然互斥）；
+**两阶段分组同 statrow**（按 `parentId`，memberIndex 最小者渲染整表，其余 `display:none`）。
+渲染：column 包行、行内 row 包列，表头行 + `v-for` 数据行；列宽按 **`width/列宽和`** 转百分比
+（用父宽会因 1px 咬合让总和 >100%）。`FG_TAKEOVER_CLASS_RX` 加 `table` ⇒ 4 消费者自动生效。
+本单实测：整表 4 列 × 9 行含表头、行高 44、总高 388。
+🟡 「页脚组件重渲染表格内容」**不在本刀射程**（它在 plan 名集合内 ⇒ 刀 55 不拦、文本是真值 ⇒ 刀 54 不拦）
+⇒ 只能靠内容守卫「借用文本」自愈（方案 F）。
+
+### 方案 F 文本删除形态扩维（`section-content-guard.js`）
+旧 `removeStaticTextNode` 只认 `>text<` ⇒ 守卫算出 duplicate/borrowed 却零自愈。新 `removeTextBinding` 三类：
+① 静态；② `{{ expr }}` Mustache 整段（三条同时成立：expr 简单标识符/`.` 路径 + 根标识符声明值 trim 后恰等于目标文本
++ **全文仅出现 2 次**）；③ `removeBorrowedDataRows` 数组整行（行内字符串**全部** ∈ 借用集合才删，部分命中整行跳过，
+**按行独立**）。
+🔴 声明行删除正则必须用**标识符 root** 而非目标文本（混用会只删 mustache、留下未使用声明 = 比不删更糟，探针实锤）
+⇒ 加「声明没删掉就 continue，不许只删一半落地」。
+🔴 删引用与剪 import **同处完成**：删掉唯一 `ref('…')` 后要剪 `import { ref }`（`pruneUnusedReactiveImport`，
+**只认 ref/reactive**，判据 = 全文再无 `name(`）。接线：`healDuplicateTextIssues` + `healBorrowedEvidence` 同用一份；
+borrowed 侧**按文件聚合**文本后整行删（逐条删删不掉 8 行数据）。
+
+### 刀 56 字面量漂移（`hardcoded-text-gate.js#pickSiblingTruthCandidate`）
+同字段 CJK 真值兄弟 + truth 中**唯一**最小编辑距离缺失真值 ⇒ `healHardcodedText` **全文**替换字符串字面量
+（数组值 + `=== 'x'` 判色键一并改，CSS class 名不动）；**先于 strip**（strip 清空值留永假比较键 = 文字颜色双丢）。
+🔴 三判据补丁：字面量 ∈ truth 不配对（真值「停用」被错配实锤）；heal 循环 `next` 初值须 `null`
+（content 会把 strip/residual 变死代码）；spec fixture 须让 name 值进 truth（否则撞 file-majority 阀整文件 residual 假阴）。
+本单实测 disabled→禁用、文本残留 0（剩 2 处全是 CSS class 后缀 `--disabled`，正确保留）。
+
+### 刀 57 面板标题槽位归属（`panel-chrome-misplacement.js#healPanelTitleSlot`）
+双标题治本 —— 五判据（`#header-right` 直接内容 = 单 PascalCase 组件标签 / 组件带 `data-section-id` /
+plan 段 `type==='header'` / Figma 子树恰 1 非空 TEXT / 同文件无既有 `#title-left`）⇒ slot 改挂 `#title-left`；
+挂 `pre-write-self-healing` ⑮-c。配套 default-panel `header-title` 加 `v-if="!slot['title-left']"` 让位
+（现有产物 0 个用 ⇒ 零回归）。本单实测 HeaderSection(807:3) 命中。
+🔴 前端 `build:safe` 堆上限须 ≥4096（2048 必 OOM，峰值 >2GB）。

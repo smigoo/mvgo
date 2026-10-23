@@ -839,4 +839,41 @@ describe('collectThemeSlotNames / healBusinessStyleVarsInCss（2026-09-29 P0-C �
     expect(out).toContain('color: @color-text-base;');
     expect(out).toContain('font-size: @fontSize;');
   });
+
+  // ============================================================
+  // 🆕 2026-10-23 治本（mc-max-1792739994368-e2c61f62 实锤）：
+  //   fallback 嵌套 var() 时 VAR_RE 懒匹配 `[^)]+?` 吞内层 var 左半、
+  //   闭括号配到内层 `)` ⇒ 替换后丢一个括号 ⇒
+  //   `calc(@fontSize) * 1.7143);` → LESS 门禁 Operation on an invalid type。
+  //   防线：fallback 含 var( ⇒ 整段原样保留（fail-open）。
+  // ============================================================
+  it('🔴 嵌套 var fallback：var(--x, var(--x)) 双写自引用 ⇒ 整段保留，绝不拆半丢括号（事故现场形态）', () => {
+    const css = '.c-device-card-grid-value {\n  font-size: calc(var(--fontSize, var(--fontSize)) * 1.7143);\n}';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    // 事故形态必须消失：不产出 calc(@fontSize) *（乘法在 calc 外）
+    expect(out).not.toMatch(/calc\(\s*@[\w-]+\s*\)\s*\*/);
+    // 整段保留（fail-open，交给源头 healThemeMixinVarRefs 治本不产生）
+    // 🔴 注意 `* 1.7143);` 是 calc 的**合法闭括号 + 分号**，不是孤儿残骸——
+    //    事故残骸的特征是「乘法落在 calc 外」（即上方 854 行的形态），已单独断言，
+    //    勿再用 `not.toMatch(/1\.7143\);/)` 误伤合法原文（2026-10-23 实证）。
+    expect(out).toContain('var(--fontSize, var(--fontSize)) * 1.7143');
+  });
+
+  it('嵌套 var fallback 无 calc 包裹（font-size: var(--x, var(--x))）⇒ 同样整段保留', () => {
+    const css = '.a { font-size: var(--fontSize, var(--fontSize)); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toBe(css);
+  });
+
+  it('回归：字面量 fallback 照常转换（var(--fontSize, 14px) → @fontSize，运行期响应保留）', () => {
+    const css = '.a { font-size: calc(var(--fontSize, 14px) * 1.7143); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('calc(@fontSize * 1.7143)');
+  });
+
+  it('回归：无 fallback 的 var(--x) 照常转换（不受嵌套守卫影响）', () => {
+    const css = '.a { font-size: var(--fontSize); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('font-size: @fontSize;');
+  });
 })
