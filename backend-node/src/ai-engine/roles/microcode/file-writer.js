@@ -184,6 +184,34 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
     sanitized = sanitized.replace(/^[ \t]*<\/?[A-Za-z][\w-]*(?:\s[^>]*)?>[ \t]*(?:\r?\n|$)/gm, '');
   }
 
+  // 4J. 🎯 2026-10-25 治本（mc-max-1792934332868-389dd460 真机实锤）：
+  // **脚本文件**里混入 SFC 标签——LLM 把「某个 <script> 块」当**独立文件**输出时，
+  // 尾部闭合标签随内容一起落盘（4L/4L-b 只管 .less/.css，`.js` 此前**零防护**）。
+  //
+  // 事故现场 `package/runtime.js`（7 行 / 466B）尾行 `</script>`：
+  //   · chunk 原文（`.mc-gen/cache/code-chunks/3-package_runtime.js`）= 首行 ` ```js `
+  //     + 正文 + 尾行 `</script>`；首围栏被本函数第 1 步剥掉，**尾标签无人管**
+  //     （第 2 步只认 ```，且 `stripLlmTailGarbage` 显式跳过 `.js`）。
+  //   · 预览端 vue3-sfc-loader 对 `.js` 固定按 script 模式解析
+  //     （内部 `case ".js": createJSModule(src, false)`）⇒ 顶层 `export` 抛
+  //     `'import' and 'export' may appear only with 'sourceType: "module"' (6:0)`
+  //     ⇒「组件加载失败」；报错坐标指向真实的 `export` 行 ⇒ 掩盖了尾行 `</script>`。
+  //   · 该文件**同时**踩两个坑（残留标签 + ESM 判别），故两层都要治——预览侧的
+  //     ESM 升级见 `frontend/src/utils/sfc-loader-esm-js.js`，两边判据独立、互不替代。
+  //
+  // 判据刻意比 4L-b（任意标签名）更窄——JS 里 `<div>` 是合法内容（模板字符串拼 HTML）：
+  //   ① 只认 template / script / style 三个 **SFC 块名**；
+  //   ② 行级匹配（`^…$`）⇒ `const s = '</script>'` 这类**行内**字面量天然豁免；
+  //   ③ 独占一行的 SFC 块标签在脚本文件里**不可能合法存在**（无配对开标签即无法闭合）。
+  // 误伤审计（同 4L-b 口径）：全语料 `frontend/workspace/custom-components` +
+  //   `temp-components` 的 `.js/.mjs/.ts` 扫「独占一行 SFC 标签」，除本事故件外命中即逐个人工核。
+  if (/\.(js|mjs|cjs|jsx|ts|tsx)$/i.test(filePath)) {
+    sanitized = sanitized.replace(
+      /^[ \t]*<\/?(?:template|script|style)\b[^>]*>[ \t]*(?:\r?\n|$)/gm,
+      '',
+    );
+  }
+
   // 4. 对 .vue 文件：去除 </style> / </script> / </template> 之后的说明性文本/markdown残留
   if (filePath.endsWith('.vue')) {
     // 标准 Vue SFC 中 </style> 应是最后一个块，它之后的任何内容全部丢弃

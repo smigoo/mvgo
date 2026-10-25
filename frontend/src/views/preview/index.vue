@@ -252,6 +252,8 @@ import {
   PREVIEW_FAIL_KIND,
 } from '@/utils/loadVue3Runtime'
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
+// 🛡️ 2026-10-25：`.js` 内 ESM 语法的判定（单一真相源，与 Vue3 路径共用）
+import { resolveJsModuleTypeOverride } from '@/utils/sfc-loader-esm-js'
 import { buildSnapshotFileUrl, hasPreviewEntry, resolvePreviewDescriptor } from '@/utils/preview-resolver'
 import http from '@/core/http'
 import appConfig from '@/config'
@@ -1472,6 +1474,22 @@ async function loadProd() {
       // 块由 precompileVueLess 编译内联，避免「内容在但样式全丢」。
       if (!isVue3 && rel.endsWith('index.vue') && precompiledCssOk) {
         src = src.replace(/<style[\s\S]*?<\/style>/gi, '')
+      }
+      // 🛡️ 2026-10-25 治本（mc-max-1792934332868-389dd460 真机实锤）：LLM 会产出
+      // **ESM 形式的 `.js` 模块**（事故件 package/index.vue 写了
+      // `import { runtimeBuilder } from './runtime.js'`），而 vue3-sfc-loader 对 `.js`
+      // 固定按 script 模式解析（内部 `case ".js": createJSModule(src, false)`）
+      // ⇒ 顶层 export 直接抛 `'import' and 'export' may appear only with
+      // 'sourceType: "module"' (6:0)` ⇒ 整组件「加载失败（组件自身问题）」。
+      // `.mjs`/`.ts` 走的是 module 模式，唯独 `.js` 没有这个「升级」口子。
+      // 处置：判定为 ESM（**双闸**：有行首 import/export 标记 ∧ script 模式确实解析不了）
+      // 时，让 getFile 返回 `{ type, getContentData }` 覆写分派类型 ——
+      // vue3-sfc-loader 的 `getResource` 原生支持该形态（dist :426-429
+      // `type: res.type !== undefined ? res.type : extname(...)`）⇒ 送入 `.mjs` 分支。
+      // 🔴 只对 `.js` 生效 + 双闸 ⇒ 真正 CJS 的 `.js` 行为逐字节不变（零回归）。
+      const esmTypeOverride = resolveJsModuleTypeOverride(rel, src)
+      if (esmTypeOverride) {
+        return { type: esmTypeOverride, getContentData: async () => src }
       }
       return src
     },
