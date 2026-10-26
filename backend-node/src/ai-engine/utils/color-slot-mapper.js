@@ -207,7 +207,7 @@ ${palettes}
  * @param {{stripRoot?: boolean}} [opts] stripRoot=true 时根节点名不进路径（跨稿对齐用：
  *   两稿 frame 不同名是常态 —— 绝对路径含根名 ⇒ 同源复制稿也 100% 错位，实测
  *   dpjh-bsjd 双稿 unmatched:35/35、108/108 全灭，2026-10-20 实锤）
- * @returns {Array<{path:string, hex:string, area:number}>}
+ * @returns {Array<{path:string, hex:string, alpha:number, area:number}>}
  */
 function flattenTreeList(nodeData, { stripRoot = false } = {}) {
   const out = []
@@ -222,9 +222,18 @@ function flattenTreeList(nodeData, { stripRoot = false } = {}) {
       const rgb = [c.r, c.g, c.b].map((x) => Math.round((x || 0) * 255))
       const hex = `#${rgb.map((x) => x.toString(16).padStart(2, '0')).join('')}`
       const alpha = f.opacity === undefined ? 1 : f.opacity
-      if (alpha <= 0.5) break // 高透明填充不参与
+      // 🔴 2026-10-26 治本（RC1-a · a0f93b25 实锤「深色主题和默认 dark 一模一样」）：
+      //   旧阈值 `alpha <= 0.5` **精确丢掉设计主色** —— 该稿 111 个 SOLID 填充中 108 个
+      //   opaque、仅 3 个半透明且**全部落在 0.2–0.35**（gold 0.2 / green 0.32 / blue 0.35），
+      //   正是三块面板底色。被丢弃 ⇒ 面板色拿不到槽位 ⇒ 留在 common.less 当字面量 ⇒
+      //   覆盖层 `&.theme_x { @import (multiple) '../common.less' }` 重编译仍是同一字面量
+      //   ⇒ 切主题颜色不变。
+      //   实测分布为**干净双峰**（(0,0.2) 段 0 个、(0.35,1) 段 0 个）⇒ 阈值取 0.1 有实测余量：
+      //   只滤掉「真正不可见」的填充，不误伤任何一片设计色。
+      if (alpha <= 0.1) break // 近乎全透明的填充不参与（具体阈值依据见上）
       const bb = node.absoluteBoundingBox || {}
-      out.push({ path: key, hex, area: (bb.width || 0) * (bb.height || 0) })
+      // 🔴 alpha 必须随行携带：跨稿比对/槽位值都要保真，否则 rgba 面板色被当作不透明色
+      out.push({ path: key, hex, alpha, area: (bb.width || 0) * (bb.height || 0) })
       break
     }
     for (const ch of node.children || []) walk(ch, key, depth + 1)
@@ -267,6 +276,63 @@ function alignTrees(primaryList, secondaryList) {
 const normalizeHex = (hex) => String(hex || '').trim().toLowerCase()
 
 /**
+ * 颜色令牌切分（common.less 落盘替换用）：`#rgb` / `#rrggbb` / `#rrggbbaa` / `rgb()` / `rgba()`。
+ * 只做**切分**，语义判定全交给 `canonicalizeColorToken`（单一事实源，避免两处口径漂移）。
+ */
+const COLOR_TOKEN_RX =
+  /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*[\d.]+\s*)?\)/g
+
+/** alpha 归一（0.2 / 0.32 / 0.35 这类 Figma 实测值可稳定复现为同一字符串） */
+const roundAlpha = (a) => Math.round((Number(a) || 0) * 1000) / 1000
+
+/** 不透明 → `#rrggbb`；半透明 → `rgba(r, g, b, a)`。两侧（映射建表 / 产物替换）必须同口径。 */
+function rgbaLiteral(r, g, b, a) {
+  return `rgba(${r}, ${g}, ${b}, ${roundAlpha(a)})`
+}
+
+/**
+ * 从 flattenTreeList 条目算**颜色键**（映射表的 key）：
+ *   alpha >= 1 ⇒ `#rrggbb`（与历史口径逐字节一致，既有 spec/产物零回归）
+ *   alpha <  1 ⇒ `rgba(r, g, b, a)`（alpha 进 key —— 否则 0.2 的 gold 与不透明 gold 撞键，
+ *               二者会互相夺槽位，且 slotValues 丢掉 alpha ⇒ 主题切换后颜色「实了/虚了」）
+ */
+function cssColorKey(entry) {
+  const hex = String(entry?.hex || '')
+  const alpha = entry?.alpha === undefined ? 1 : entry.alpha
+  if (alpha >= 1) return hex
+  const h = hex.replace('#', '')
+  return rgbaLiteral(
+    parseInt(h.slice(0, 2), 16) || 0,
+    parseInt(h.slice(2, 4), 16) || 0,
+    parseInt(h.slice(4, 6), 16) || 0,
+    alpha,
+  )
+}
+
+/**
+ * 把任意 CSS 颜色字面量规范化为映射表口径的颜色键；无法判定 → null（调用方**不替换**）。
+ * 刻意只认 `#rgb` / `#rrggbb` / `rgb()` / `rgba()`：8 位 hex（`#rrggbbaa`）与 `var()` 不猜。
+ */
+function canonicalizeColorToken(token) {
+  const t = String(token || '').trim()
+  if (!t) return null
+  if (t[0] === '#') {
+    const h = t.slice(1).toLowerCase()
+    if (h.length === 3) return `#${h.split('').map((c) => c + c).join('')}`
+    if (h.length === 6) return `#${h}`
+    return null
+  }
+  const m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(t)
+  if (!m) return null
+  const rgb = [m[1], m[2], m[3]].map((x) => Math.round(Number(x)))
+  if (rgb.some((x) => !Number.isFinite(x))) return null
+  const alpha = m[4] === undefined ? 1 : Number(m[4])
+  if (!Number.isFinite(alpha)) return null
+  if (alpha >= 1) return `#${rgb.map((x) => x.toString(16).padStart(2, '0')).join('')}`
+  return rgbaLiteral(rgb[0], rgb[1], rgb[2], alpha)
+}
+
+/**
  * 构建颜色 → 槽位变量映射表。
  *
  * @param {Object} opts
@@ -277,8 +343,10 @@ const normalizeHex = (hex) => String(hex || '').trim().toLowerCase()
  * @param {string} opts.primaryKey
  *        主稿 key（themeMeta[0].key）
  * @returns {{ replacements: Map<string,string>, customSlots: Object, stats: Object }}
- *          replacements: 主稿 hex(小写) → less 变量名（不含 @）
- *          customSlots:  varName(不含 @) → { [themeKey]: value }
+ *          replacements: 主稿**颜色键** → less 变量名（不含 @）
+ *            颜色键 = 不透明时 `#rrggbb`（历史口径不变）、半透明时 `rgba(r, g, b, a)`
+ *            —— alpha 必须进键，否则 `rgba(gold, 0.2)` 与不透明 gold 撞键互相夺槽位
+ *          customSlots:  varName(不含 @) → { [themeKey]: 该稿颜色值(hex 或 rgba) }
  */
 export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) {
   const EMPTY = { replacements: new Map(), customSlots: {}, perThemeByPrimaryHex: {}, stats: { pairs: 0, canonical: 0, custom: 0, unmatched: 0 } }
@@ -293,6 +361,9 @@ export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) 
 
   // 🛡️ 2026-10-20 治本：对齐改走 alignTrees 三级降级（剥根段路径 → 先序位置）。
   //   旧实现用「含根名的绝对路径」查表，两稿 frame 不同名即 100% unmatched（真机实锤）。
+  // ⚠️ 2026-10-26（RC1-a 连带）：阈值放宽后主稿列表会多出 0.2–0.35 的半透明填充。
+  //   L1 按路径对齐不受影响；L2（先序位次兜底）在两稿该层填充数不一致时**索引会错位**
+  //   ⇒ 已知风险，靠 stats.alignment 的 matched/total 与调用方 WARN 观测（不额外兜底）。
   const primaryList = flattenTreeList(primary.nodeData, { stripRoot: true })
   const alignedList = secondaries.map((t) => ({
     key: t.key,
@@ -303,7 +374,7 @@ export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) 
 
   const replacements = new Map()
   const customSlots = {}
-  // 🆕 2026-10-20（#128 ③）：主稿 hex → 各稿实测色 全量表（canonical/custom 通道共用）。
+  // 🆕 2026-10-20（#128 ③）：主稿颜色键 → 各稿实测色 全量表（canonical/custom 通道共用）。
   //   供 realignThemeVarsSlotValues 做「自造槽位二次矫正」：LLM 自造槽位名不在
   //   replacements 里，但其在主稿 mixin 中的值可作为锚反查本表 ⇒ 矫正副稿 mixin 值。
   const perThemeByPrimaryHex = {}
@@ -314,41 +385,54 @@ export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) 
 
   for (const pInfo of primaryList) {
     const mainHex = normalizeHex(pInfo.hex)
+    const mainKey = cssColorKey(pInfo)
     // 每个副稿在同位置的对齐色值（取第一个命中）
     const perSecondary = []
     for (const al of alignedList) {
       const hit = al.pairs.get(pInfo)
-      if (hit) perSecondary.push({ themeKey: al.key, hex: normalizeHex(hit.secondary.hex) })
+      if (hit) {
+        perSecondary.push({
+          themeKey: al.key,
+          hex: normalizeHex(hit.secondary.hex),
+          key: cssColorKey(hit.secondary), // 副稿 alpha 按自身实测保真（不臆造主稿 alpha）
+        })
+      }
     }
     if (perSecondary.length === 0) {
       statUnmatched++
       continue
     }
     // 有「任一副稿与主稿不同」才算有效色值对（全同 ⇒ 该色值不随主题变，保留字面量）
-    const differs = perSecondary.some((p) => p.hex !== mainHex)
+    // 🔴 2026-10-26（RC1-b）：比对用**颜色键**（含 alpha），不只比 hex ——
+    //   两稿同为 gold 但 alpha 0.2 → 0.45 也是「随主题变」，只比 hex 会判「全同」而跳过。
+    const differs = perSecondary.some((p) => p.key !== mainKey)
     if (!differs) {
       statUnmatched++
       continue
     }
-    // 先到先得（同 mainHex 多路径只留首条，与 replacements 复用语义一致）
-    if (!perThemeByPrimaryHex[mainHex]) {
-      const entry = { [primary.key]: mainHex }
-      for (const p of perSecondary) if (!(p.themeKey in entry)) entry[p.themeKey] = p.hex
-      perThemeByPrimaryHex[mainHex] = entry
+    // 先到先得（同 mainKey 多路径只留首条，与 replacements 复用语义一致）
+    if (!perThemeByPrimaryHex[mainKey]) {
+      const entry = { [primary.key]: mainKey }
+      for (const p of perSecondary) if (!(p.themeKey in entry)) entry[p.themeKey] = p.key
+      perThemeByPrimaryHex[mainKey] = entry
     }
 
     if (primarySlots[mainHex]) {
       // 主通道：精确命中既有槽位
-      replacements.set(mainHex, primarySlots[mainHex])
-      statCanonical++
-      continue
+      // ⚠️ 仅对**不透明**色开放：槽位值（themeSlots）是 hex 形态，无法表达 alpha；
+      //   半透明色强行套进 hex 槽位 ⇒ alpha 丢失（面板变实心）。故半透明一律走扩展通道。
+      if (mainKey === mainHex) {
+        replacements.set(mainKey, primarySlots[mainHex])
+        statCanonical++
+        continue
+      }
     }
     // 🛡️ 2026-10-19（c-aiot-dpjh-bsjd-c27cb2eb 实锤）：同一主稿色在多条树路径上重复出现
     //   时，旧实现**每条路径都新建**一个 color-custom-N（#10ba27→#26ce3c 一档色值对
     //   被重复建成 custom-3/5/7/10/12 五个同值孤儿槽位）。同一色值对应同一槽位：
     //   已建过 ⇒ 直接复用（幂等去重），slotValues 已在首轮写全各稿值。
-    if (replacements.has(mainHex)) {
-      const reused = replacements.get(mainHex)
+    if (replacements.has(mainKey)) {
+      const reused = replacements.get(mainKey)
       if (typeof reused === 'string' && reused.startsWith('color-custom-')) statCustom++
       else statCanonical++
       continue
@@ -357,10 +441,12 @@ export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) 
     //   命名 color-custom-N（语义命名无法自动化，先序号；与 @color-error 等自定义槽位同模式）
     customSeq++
     const varName = `color-custom-${customSeq}`
-    replacements.set(mainHex, varName)
-    const slotValues = { [primary.key]: pInfo.hex }
+    replacements.set(mainKey, varName)
+    // 🔴 槽位值同样用颜色键 ⇒ 半透明槽位在 theme-vars.less 里落成 `rgba(r, g, b, a)`
+    //   （Less 原生支持该字面量，无需额外函数）
+    const slotValues = { [primary.key]: mainKey }
     for (const p of perSecondary) {
-      if (!(p.themeKey in slotValues)) slotValues[p.themeKey] = p.hex
+      if (!(p.themeKey in slotValues)) slotValues[p.themeKey] = p.key
     }
     customSlots[varName] = slotValues
     statCustom++
@@ -369,13 +455,14 @@ export function buildColorSlotMapping({ themeEntries, themeSlots, primaryKey }) 
   return {
     replacements,
     customSlots,
-    perThemeByPrimaryHex, // 🆕 主稿 hex(小写) → { [themeKey]: hex }（含主稿自身）
+    perThemeByPrimaryHex, // 🆕 主稿颜色键（hex 或 rgba）→ { [themeKey]: 该稿颜色键 }（含主稿自身）
     stats: {
       pairs: primaryList.length,
       canonical: statCanonical,
       custom: statCustom,
       unmatched: statUnmatched,
       alignment, // 🆕 2026-10-20：逐副稿对齐模式/命中率（全败 ⇒ 调用方应升 WARN）
+      translucent: primaryList.filter((p) => (p.alpha === undefined ? 1 : p.alpha) < 1).length, // 🆕 2026-10-26：半透明参与数（RC1-a 放宽阈值后的可观测面）
     },
   }
 }
@@ -436,7 +523,14 @@ export function realignThemeVarsSlotValues({ themeVarsContent, perThemeByPrimary
   for (const [slot, v0raw] of primaryMixin.vars) {
     if (!slot.startsWith('color-')) continue // 只矫正颜色槽位（尺寸/字重不碰）
     const v0 = normalizeHex(v0raw)
-    if (!/^#[0-9a-f]{6}$/.test(v0)) continue // 仅 6 位 hex 锚
+    // 🔴 2026-10-26（RC1-c）：**rgba 槽位不参与二次矫正**（刻意保留的窄条件）。
+    //   理由：`@color-custom-N` 的半透明值由 buildColorSlotMapping 直接按各稿实测写入
+    //   （`applyColorSlotMapping` 第 1 步），写进去就是真值，**无需再矫正**；而本函数的
+    //   锚定依据是「主稿 mixin 里能反查到真值表的 6 位 hex」，rgba 无法作锚。
+    //   若强行放开：① 会与「现状值非 hex 不碰」互相矛盾（见下方 :cur 判定）；
+    //   ② 可能把 LLM 刻意写的 rgba 渐变节点改成纯色。既有 spec
+    //   「窄条件：非颜色槽位 / 现状值非 hex / 真值表外主题一律不碰」锁的就是这条边界。
+    if (!/^#[0-9a-f]{6}$/.test(v0)) continue // 仅 6 位 hex 锚（rgba 槽位由此天然跳过）
     const perTheme = table[v0]
     if (!perTheme) continue
     for (const mx of mixins) {
@@ -445,7 +539,7 @@ export function realignThemeVarsSlotValues({ themeVarsContent, perThemeByPrimary
       if (!target) continue
       const cur = mx.vars.get(slot)
       if (cur === undefined) continue
-      if (!/^#[0-9a-f]{6}$/i.test(cur)) continue // 现状非 6 位 hex 字面量不碰
+      if (!/^#[0-9a-f]{6}$/i.test(cur)) continue // 现状非 6 位 hex 字面量不碰（rgba/var() 视为刻意写法）
       if (normalizeHex(cur) === normalizeHex(target)) continue // 已是真值（幂等）
       if (!plan.has(mx.key)) plan.set(mx.key, new Map())
       plan.get(mx.key).set(slot, { from: cur, to: target })
@@ -538,15 +632,20 @@ export function applyColorSlotMapping({ outputPath, mapping, fsMod, pathMod }) {
   if (!existsSync(commonPath)) return result
   let common = readFileSync(commonPath, 'utf-8')
   let replacedCount = 0
-  for (const [hex, varName] of mapping.replacements) {
-    // 精确 6 位 hex（大小写不敏感）；变量引用形如 @color-text-base（less 变量作用域：
-    // common.less 由 index.less / themes/*.less @import，调用方已 .common()/.theme-X() ⇒ 变量可见）
-    const re = new RegExp(`#${hex.replace('#', '')}\\b`, 'gi')
-    common = common.replace(re, () => {
-      replacedCount++
-      return `@${varName}`
-    })
-  }
+  // 🔴 2026-10-26 治本（RC1-b · a0f93b25 实锤 `replacedCount:0`）：
+  //   旧实现只拼 `#rrggbb` 的精确 hex 正则 ⇒ `rgba(226, 208, 132, 0.2)` 这类半透明字面量
+  //   **全线逃逸**（该稿产物 common.less 三块面板色全是 rgba，命中 0）。
+  //   正解：先**切分颜色令牌**，再逐个规范化为映射表口径的颜色键查表 ——
+  //   这样 hex 大小写 / 3 位 hex / `rgb()` / `rgba()` 空格差异都走同一条判定，
+  //   且「识别不到就不替换」（`canonicalizeColorToken` 返回 null 即原样保留，不造假绿）。
+  common = common.replace(COLOR_TOKEN_RX, (token) => {
+    const key = canonicalizeColorToken(token)
+    if (!key) return token
+    const varName = mapping.replacements.get(key)
+    if (!varName) return token
+    replacedCount++
+    return `@${varName}`
+  })
   if (replacedCount > 0) {
     writeFileSync(commonPath, common, 'utf-8')
     result.replacedCount = replacedCount

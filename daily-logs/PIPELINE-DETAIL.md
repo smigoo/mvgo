@@ -695,3 +695,80 @@ plan 段 `type==='header'` / Figma 子树恰 1 非空 TEXT / 同文件无既有 
 挂 `pre-write-self-healing` ⑮-c。配套 default-panel `header-title` 加 `v-if="!slot['title-left']"` 让位
 （现有产物 0 个用 ⇒ 零回归）。本单实测 HeaderSection(807:3) 命中。
 🔴 前端 `build:safe` 堆上限须 ≥4096（2048 必 OOM，峰值 >2GB）。
+
+## 2026-10-25 从 MEMORY.md 迁出的索引详版（MEMORY.md 瘦身用；单行索引仍在 MEMORY.md）
+
+### 基础族判据详版（①~⑤）
+① 两段式铁律「合并/收敛 → 门禁」两侧必须同一实现；LESS 圆括号三件套须经 `less.render` 真编译。
+② 主题色门禁白名单只读 `css-vars.js` 的 dark 表；`less#dark` 与 `js#dark` 必须同写。
+③ 多主题真值在 `dualTruth.themes[].nodeData`；带 `// 自动添加（语义推断）` 注释的**不是**真值。
+④ E1 只提升容器类型；孤儿段的 `name` 才是文案（断言用 `text ?? name`）。
+⑤ 覆盖缺口只算**叶子 section**且判定在 **TEXT 级**；Figma 根不算叶子容器。
+`collectLeafSections` 只递归 `isLayoutContainerSection` 为真的段（`isLayoutContainer:true` 或 `layoutSource==='container-rebuild'`）⇒ fixture 造容器段必须带该标记。
+
+### 装配层「接管后样式失配」详版（cd8938f8）
+- 机理：刀 53 家族接管改写模板 class，但不维护 stylesheet ⇒ ① 接管段全裸样式；② 旧规则成孤儿（第三态「既失效又误导」）。
+- 实测：模板 class 48 / 命中样式 11 / 裸类名 37 / 业务孤儿 2（`.c-device-content-section4`、`-col`，其 `#e2ecfe`/`#bdd5ff` 与真值逐位一致却已失联）。
+- 刀 53h（`8f7acc0`）：`utils/orphan-style-rule-guard.js` 挂 `file-writer.js#writeFiles` 循环外整体一次（刀 41 后、逐文件循环前），回灌 `filesForWrite`；真机 13 候选 → 2 删 / 11 留 / 4 mixin 跳过 / residual 0。
+  🔴 只能走**孤儿判定**不能重命名（接管渲染器不读旧模板 ⇒ 无类名映射）；引用池**必须排除 `.css`/`.json`**（否则「永不判孤儿」假绿）；只改 `.less`（`.css` 由下游 `recompileIndexCss` 重生成）。
+- 契约扩维（`01868d8`）：`folded-grid-section-takeover.js` 的 table/statrow/grid/header 四分支补 `{bg,border,pad}` 并内联输出；`section-tree.js` 导出 `fillsToCss/strokesToCss/nodeAppearanceTruth`。根因 = 数据契约缺维（原模型只有 `{text,color,fs,fw}` ⇒ 斑马纹/表头底色/白网格线/卡渐变底全丢）。
+- 两处死分支：① 判「动态选择器」须看**选择器头原文**（token 正则永不捕获 `$`/`` ` ``）；② 判「动态变体保护」须用**插值前缀干**（`` `c-x--${k}` `` → `c-x--`），挂 `fact.bases` 会被 `referencedByDom` 覆盖 = 恒不触发。判定手法：模板 class 集合 ⊖ `.css/.less` 选择器集合（剔 `.png/.less/.light/.dark/.theme_2/.common` 噪声）；截模板必须 `lastIndexOf('</template>')`。
+- 分析侧同单实锤：`stat-cards` 段元素绑定错位到 TEXT 子节点，同文件 `device-table` 段准确 ⇒ 错误集中于「items 类卡片组」；门禁全绿（96/19-19）却漏两类。
+
+### 诊断手法详版
+- 门禁三查 = 守卫形状全语料量化 / 日志 id 留痕 / 离线探针三态。🔴 0 命中必配阳性对照，且变异须打在**真正生效的那一层**；改判据先纯函数 A/B；判据叠两层后前层对照会被后层掩盖 ⇒ 加兜底后重造对照。**改的人和验的人用同一正则 = 假绿闭环**。
+- 归因：路径级 `git stash push -m <tag> -- <全集>` → 基线 → **立即 pop**（或两态差分对跑）。
+- 判生产 dist 一致 = 逐文件 md5 清单 diff（`tr -s ' '` 归一化）；僵尸进程 `ps -eo pid,cmd | grep -E '…' | grep -v grep | wc -l`。
+
+### 刀 53 家族 / 刀 54-57 索引详版
+- 刀 53 判定顺序（`folded-grid-section-takeover.js:1322-1345`）：网格 → 标题行 → **统计行** → **表格** → 纯文本 → 纯 icon。`detectHeaderRowLeaf`（`:165-234`）判据 = 恰 1 TEXT + ≥1 ≤32px 图标 + 图标在文本左侧同 y（Δy≤2）+ gap 0..48 + 图标须在 `resourceMapping` 且 `downloadStatus !== 'failed'`。
+- 刀 53d/53e 两阶段（`statRowPending`/`tablePending`）：按 `parentId` 分组，组内 `memberIndex` 最小者渲染、其余渲 `display:none` 空壳。`folded-grid-section-takeover.js:1308-1316/1370/1396-1401` 注释明写「真值 x 最小的成员/列**未必在 plan 里**（本单 plan 只切了 `43:4785` 与折叠段 `43:4812-list`）⇒ 若要求 memberIndex===0 才渲染，本单会整表变空」。
+- 🔴 空档（本单 ab7bb76c）：`43:4869`/`43:4875` = `TEXT + ELLIPSE` 圆点图例，被 `text:hasGraphic(ELLIPSE:43:4871)` 否掉 text 分支、`icon:hasText(1)` 否掉 icon 分支 ⇒ **无刀认领**。
+- 刀 53 家族接 vue3（`b16a2a6`）：判据族/渲染器/终裁出口与 microcode 同一实现（`_fgTakeoverFiles` 由 `writeFiles` 自动带）。🔴 唯一差异 = vue3 子组件名 LLM 自由 ⇒ **禁止照搬 microcode「tag 即文件名」**（恒零命中 = 假绿）；映射唯一实现 `matchFgTakeoverTargets`（名命中跳 chunk / 产物 `data-section-id` 命中覆写；主组件 `package/index.vue` 硬护栏）。prompt 侧 `b0d4ae4`：只下发接管名 + 锚点规则与命名解耦。开关 `MVGO_VUE3_NAMING_CONTRACT=0`；评测台 `scripts/ab-vue3-prompt.mjs`（无密钥 ⇒ 下发名须从 A 臂 prompt 反解）。
+- 方案 F（`section-content-guard.js#removeTextBinding`）：三类形态（静态 / Mustache 整段 / `removeBorrowedDataRows` 整行）+ 声明行删除正则用标识符 root + 删引用与剪 import 同处完成 + borrowed 按文件聚合。
+- 刀 54（`utils/hardcoded-text-gate.js`）：truth = Figma 全树 TEXT 全集（不依赖 plan 归属）；两级阀 `group-majority-untruth` + `file-majority-untruth`；**多位数字不放行**；挂 ⑲（双链路）。`business-text-rules#isTextAllowedByRules` 零消费者（死代码）。
+- 刀 55（`utils/plan-orphan-guard.js`）：名 ∉ plan 名集合 ∧ 文本集合是某 plan 组件 Y **子集** ∧ Y 唯一 ⇒ 删文件 + 摘 index.vue 标签/import（复用刀 54 文本抽取器）。挂 ⑳；无 plan ⇒ fail-open。
+- A 方案覆盖门禁（`utils/section-plan-coverage.js`）：挂 `subcomponent-planner.js` plan 落定处（双链路同一入口）。①② 覆盖缺口/兄弟重叠**只诊断不补建**（v-for 假阳实锤）；③ 纯文本行段锚点膨胀确定性修复（137 组件零命中）。
+- 🔴🔴 方案文档判据只能当假设：f98f7463 C 方案写「列容器同宽 ±2」，实测 4 列 179/98/98/98 ⇒ 照抄恒零命中假绿。落地版 = 同高±2 + 同 y±2 + x 严格递增（允许 ≤2px 咬合）+ 各列 TEXT 数相同且 ≥3 + 跨列逐行 y 对齐 ±2 + **父的全部直接子项都在同一行带**（`band.length===sibs.length`）。
+
+### sourceType 事故详版（mc-max-1792934332868-389dd460；`d3d103a`+`db6c46a`）
+- 表现：`'import' and 'export' may appear only with 'sourceType: "module"' (6:0)`；产物 `runtime.js` 第 6 行 `export {...}`、第 7 行游离 `</script>`。
+- 根因：vue3-sfc-loader@0.9.5 `handleModuleInternal` `case ".js": createJSModule(src, false)` = script；`.mjs`/`.ts` 传 `true` = module ⇒ `.js` 顶层 ESM 必抛。🔴 `</script>` 两模式都解析不了 ⇒ 单层修不了。
+- 治理：① 管线侧 `file-writer.js#sanitizeFileContent` **4J 分支**（`:187-213`，插在 4L-b 之后、`.vue` 分支之前）只剥「独占一行的 `</?template|script|style>`」（比 4L-b 窄：JS 里 `<div>` 合法；行级豁免行内字面量）；② 加载器侧新建 `frontend/src/utils/sfc-loader-esm-js.js#resolveJsModuleTypeOverride` 双闸（只 `.js` ∧ 行首 ESM 标记 ∧ `new Function` 抛 SyntaxError）⇒ `getFile` 返 `{type:'.mjs',getContentData}` 走 `getResource` 类型覆写口。🔴 `createJSModule` 未从包导出 ⇒ 类型覆写口是唯一挂点。两侧接入 `views/preview/index.vue`（微码生产路径）+ `utils/loadVue3Runtime.js`（Vue3 路径）。
+- 🔴 `.js` 在三管线零防护（`sanitizeFileContent` 只 `.less/.css/.vue`；`stripLlmTailGarbage` 显式跳 `.js`；`microcode-engineer` 语法循环只 `.vue`）。
+- 验证：spec 10/10 + 前端离线 16/16；两态差分 **必先 `wc -l` 确认捕获非空**（`2>&1 > f` 顺序错 ⇒ 0 字节 ⇒ diff 假绿）。
+
+## 2026-10-26 从 MEMORY.md 再迁出（MEMORY.md 二次瘦身；单行索引仍在 MEMORY.md）
+
+### P1-A `plan-body-child-id-audit.js` 详版（案例 mc-max-1792934367321-ab7bb76c）
+- 病灶：vision 给的 `body.children[].id` 出现 ① 自引用（`child.id` 恰等于该 section 的 Figma 锚点 id）② 同父复用（同一 body 内同 id ≥2 次且 name 各异）。后果 = 下游按 id 到 Figma 树取真值全落空 ⇒ 没有任何刀接管该段。
+- 实测：`807:3` 的 `body.children` = `[{id:43:4879,name:标题装饰线},{id:43:4879,name:菱形图标},{id:807:3,name:标题文字,text:具身机器人设备列表}]`（3 项 2 个 id，且含自引用）。
+- **只诊断不改数据**：id 错位后无法确定性反推正确 id（需 Figma 树 + 几何回溯 + 语义匹配三者联合；`43:4788`→真值 frame 是 `43:4784`，猜 `43:4785` 会把整表挂到第一行）⇒ 只留痕，既有降级路径（刀 53 两段式 / coverage 门禁 / 锚点守卫）保持原样。
+- **挂点铁律**：必须在 E1 `deriveSectionsFromFigmaTree` **之前**（`subcomponent-planner.js` `rawSections` 定义后、E1 调用前）。E1 会用 Figma 树重建结构把 `body` 拍平 ⇒ 之后校验永远零命中（假绿）。
+- 判据 A1 `self-reference` + A2 `duplicate-sibling`；锚点解析优先级 `figmaAnchorId → figmaNodeId → id`；id 必须过 `section-anchor-truth.js#FIGMA_ID_RE`（`/^\d+:\d+$/`）⇒ 合成段 id（`43:4791-list` / `807:2-tail-text`）天然不匹配，不误判。
+- 不做 `not-a-descendant` —— 与 `section-anchor-truth.js#auditSectionAnchors` 的 `anchor-not-ancestor` 判据同构，遵守「同构判据不得写第二份」。
+- 计数行硬要求：`evaluated/bodySections/entries/selfReference/duplicateSibling`，否则「零命中」与「没跑」不可区分。`MAX_ISSUES=40`、`SAMPLE_LIMIT=6`、`CHILD_DEPTH=1`。
+- spec：`utils/__tests__/plan-body-child-id-audit.spec.ts` 15/15（A1 3 例 / A2 3 例含「name null 不构成 name 不同」阴性 / 锚点解析优先级 4 例 / 健壮性计数行 5 例）。
+
+### P0「面板标题段被还原」根因链详版（mc-max-1792934367321-ab7bb76c）
+1. `visual-parser` 把 Figma `807:3 header` 当普通内容节写入 plan：`sections[0]={id:'807:3',name:'面板标题栏',role:'常驻',headerRelation:'title-itself',title:'具身机器人设备列表'}`。
+2. `section-tree` 给该节 `type='header'`（`isHeader = /header/i.test(name)`，Figma 节点名正是 `header`）。
+3. `chromeOnly` 标记 = `headerIsChromeOnly(child)`，但 `807:3` 子树含 `43:4879` **FRAME**（`BUSINESS_CONTAINER_TYPES` 命中）⇒ `business=true` ⇒ `chromeOnly=false` ⇒ **不被 `stripChromeOnly` 剥离**（关键盲区）。
+4. 刀 53 同构段接管 `headerTaken:1` → `HeaderSection.vue`（`data-section-id="807:3"`）。
+5. `code-generator` 发射 `<template #header-right><HeaderSection /></template>`。
+6. 刀 57 `healPanelTitleSlot`（`panel-chrome-misplacement.js:336`）五判据全中 → `#header-right` 改挂 `#title-left`；前端 `default-panel` 的 `header-title` 因 `v-if="!slot['title-left']"` 让位 ⇒ **Figma 设计稿标题取代 componentName**。
+- 🔴 漏网真因：`isPanelHeader`（`subcomponent-planner.js:417`，`PANEL_HEADER_PATTERN = /panel[-_ ]?header|标题栏|^header$/i` ∧ `countElements(sec) < 4`）**只作用于 vision `rawSections`**；E1 分支用 `derived.sections` 整体替换 `sections` ⇒ 取而代之只受 `stripChromeOnly`（`type==='header' && chromeOnly===true`）管辖 ⇒ 漏网。
+- 🔴 可复用线索：`inline-header-slot-inferrer.js#ensureHeaderSlots` 会算出 `headerSectionIds`（含 `title-itself` 段），但 `visual-parser.js:3629` **只在 logger 打印，未写回 `parsed`** ⇒ 该「应剥 chrome 段」清单被丢弃。
+- 张力：`ai-generation-constraints.md:223-235` 明禁生成面板标题栏/文字/装饰线，与刀 57 取向相反（已知）。
+- 候选治本：① plan 层抑制「面板标题段」（`role=常驻 ∧ headerRelation=title-itself ∧ 子树 TEXT 与 componentName/componentTitle 同义`）；② 刀 57 fail-closed（删组件 + 保留 chrome）。🔴 不可把「含 FRAME 的业务 header」误删 —— `headerIsChromeOnly` 的「FRAME=业务」保守判定正是漏网原因，放宽须配阳性/阴性双向对照。
+
+### 通用铁律详版（MEMORY.md 二次瘦身迁出）
+- 🔴 **透传自检三铁律**：① 区间锚点命中数 === 1；② 每一跳都要有阳性对照；③ 计数用「含字段行数」。
+- 🔴 方向类判据判「DOM 真实子项排布」，不判声明顺序；heal 必须翻转**全部**出现点；配额判据的「收集」与「裁剪」必须解耦。
+- 🔴 `:deep()` / `scoped` 在微码全局注入（`resources/styles/index.css` 统合）下是**死规则** ⇒ 确定性产物类名必须组件内唯一。
+- 🔴 **装配层刀具唯一有效挂载点 = `file-writer.js#writeFiles`**（pre-write-self-healing 之后仍有 4 个覆写/回退步骤）；刀 41 必须 per-file 循环前整体跑；刀 50/52 几何裁决共用 `resolveStackGeometry`。
+- 🔴 **加新入参必查下游每层解构 + 白名单 / initialState**（漏一层 = 静默丢弃、零报错）。`generateCode` 用 `input.x`、`execute` 用裸变量。
+- 🔴 `splitTitleValueByStyle`（`section-tree.js`）入参形状 = `{text, fontSize, y}`，**不是 Figma 原始节点**；喂错 ⇒ 恒 null ⇒ 判据假性零命中。
+- 🔴 `getFigmaBox` 形态陷阱：必须四元齐全（x/y/width/height），裸 `{width,height}` 判 null；`resolveSectionFlexSize` 取 `sourceNodeIds` 并集。
+- 🔴 卡内横竖排 / 间距一律**几何判定**：x 区间不交叠且 y 区间有交集 ⇒ 横排；间距按实际序取正向值（**禁止两侧公式取 min**）。
+- 🔴 改 prompt / 规范前「**加载链三查**」：生效根是 `references/**`；`prompts/agents|references/**` 是死文件。

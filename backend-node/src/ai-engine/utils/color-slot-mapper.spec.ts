@@ -580,3 +580,150 @@ ${theme2Body}
     ])
   })
 })
+
+// ──────────────────────────────────────────────────────────────
+// 🔴 2026-10-26 RC1：alpha 必须与色值成对保真（a0f93b25 实锤）
+//
+// 病灶（三处同源，本组锁前两处；第三处 .vue 内联样式另案）：
+//   ① flattenTreeList `alpha <= 0.5` 直接丢弃填充 —— 该稿 111 个 SOLID 里仅 3 个半透明，
+//      全部落在 0.2–0.35（三块面板底色），恰好是设计主色 ⇒ 被丢 ⇒ 面板色无槽位。
+//   ② applyColorSlotMapping 只拼 `#rrggbb` 正则 ⇒ common.less 的 `rgba(...)` 全线逃逸
+//      ⇒ 真机 `replacedCount:0`。
+// 阳性对照用真实形态 rgba(226, 208, 132, 0.2)（gold 面板），阴性对照锁「不透明路径不变」。
+// ──────────────────────────────────────────────────────────────
+describe('RC1 · 半透明色参与跨稿映射（a0f93b25 实锤）', () => {
+  // 不透明 / 半透明混合 fill 的节点
+  const solidA = (hex, alpha, w = 10, h = 10) => {
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    return {
+      type: 'RECTANGLE',
+      name: 'r',
+      fills: [{ type: 'SOLID', color: { r: rgb[0], g: rgb[1], b: rgb[2] }, opacity: alpha }],
+      absoluteBoundingBox: { width: w, height: h },
+    }
+  }
+  const box = (name, children) => ({
+    type: 'FRAME',
+    name,
+    fills: [],
+    absoluteBoundingBox: { width: 100, height: 100 },
+    children,
+  })
+
+  it('🩺 阳性：alpha=0.2 的面板色进入映射（旧阈值 0.5 会整条丢弃）', () => {
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: box('cp', [box('panel', [solidA('#e2d084', 0.2)])]) },
+        { key: 'theme_2', nodeData: box('cp', [box('panel', [solidA('#3a3320', 0.2)])]) },
+      ],
+      themeSlots: { light: {}, theme_2: {} },
+      primaryKey: 'light',
+    })
+    // 颜色键保真 alpha（不是裸 hex）
+    expect(r.replacements.has('rgba(226, 208, 132, 0.2)')).toBe(true)
+    expect(r.stats.translucent).toBe(1)
+    const varName = r.replacements.get('rgba(226, 208, 132, 0.2)')
+    expect(varName).toBe('color-custom-1')
+    // 槽位值两侧各自保真（不臆造主稿 alpha）
+    expect(r.customSlots[varName]).toEqual({
+      light: 'rgba(226, 208, 132, 0.2)',
+      theme_2: 'rgba(58, 51, 32, 0.2)',
+    })
+  })
+
+  it('🩺 阳性：alpha 差异本身即「随主题变」（只比 hex 会误判全同而跳过）', () => {
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: box('cp', [solidA('#00ff00', 0.2)]) },
+        { key: 'theme_2', nodeData: box('cp', [solidA('#00ff00', 0.45)]) },
+      ],
+      themeSlots: { light: {}, theme_2: {} },
+      primaryKey: 'light',
+    })
+    expect(r.replacements.size).toBe(1)
+    expect(r.customSlots['color-custom-1']).toEqual({
+      light: 'rgba(0, 255, 0, 0.2)',
+      theme_2: 'rgba(0, 255, 0, 0.45)',
+    })
+  })
+
+  it('🩺 阴性：仅 alpha<=0.1 的近全透明填充被排除（0.2 不再被排除）', () => {
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: box('cp', [solidA('#e2d084', 0.05)]) },
+        { key: 'theme_2', nodeData: box('cp', [solidA('#111111', 0.05)]) },
+      ],
+      themeSlots: { light: {}, theme_2: {} },
+      primaryKey: 'light',
+    })
+    expect(r.replacements.size).toBe(0)
+    expect(r.stats.pairs).toBe(0)
+  })
+
+  it('🩺 阴性：不透明路径逐字节不变（键仍是 #rrggbb，落 custom-1 而非 rgba 键）', () => {
+    const r = buildColorSlotMapping({
+      themeEntries: [
+        { key: 'light', nodeData: box('cp', [solidA('#10ba27', 1)]) },
+        { key: 'theme_2', nodeData: box('cp', [solidA('#26ce3c', 1)]) },
+      ],
+      themeSlots: { light: {}, theme_2: {} },
+      primaryKey: 'light',
+    })
+    expect([...r.replacements.keys()]).toEqual(['#10ba27'])
+    expect(r.customSlots['color-custom-1']).toEqual({ light: '#10ba27', theme_2: '#26ce3c' })
+    expect(r.stats.translucent).toBe(0)
+  })
+
+  it('🩺 阳性落盘：common.less 的 rgba 字面量被替换为槽位变量（旧实现 replacedCount:0）', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'csm-alpha-'))
+    await mkdir(join(dir, 'resources/styles/themes'), { recursive: true })
+    await writeFile(
+      join(dir, 'resources/styles/themes/theme-vars.less'),
+      '.theme-light() {\n}\n\n.theme-theme_2() {\n}\n',
+    )
+    await writeFile(
+      join(dir, 'resources/styles/common.less'),
+      [
+        '.panel-gold {',
+        '  background: rgba(226, 208, 132, 0.2);',
+        // 空格/大小写容差（同一令牌判定口径）
+        '  box-shadow: inset 0 0 16px 0 rgba( 255 , 200 , 0 , 1 );',
+        '}',
+        '.keep { color: var(--colorTextBase); background: #12345678; }',
+      ].join('\n'),
+    )
+    const mapping = buildColorSlotMapping({
+      themeEntries: [
+        {
+          key: 'light',
+          nodeData: box('cp', [
+            box('p', [solidA('#e2d084', 0.2)]),
+            box('s', [solidA('#ffc800', 1)]),
+          ]),
+        },
+        {
+          key: 'theme_2',
+          nodeData: box('cp', [
+            box('p', [solidA('#3a3320', 0.2)]),
+            box('s', [solidA('#7a5f00', 1)]),
+          ]),
+        },
+      ],
+      themeSlots: { light: {}, theme_2: {} },
+      primaryKey: 'light',
+    })
+    const r = applyColorSlotMapping({ outputPath: dir, mapping, fsMod, pathMod })
+    const after = fsMod.readFileSync(join(dir, 'resources/styles/common.less'), 'utf-8')
+    expect(r.replacedCount).toBe(2)
+    expect(after).toContain('background: @color-custom-1;')
+    expect(after).toContain('box-shadow: inset 0 0 16px 0 @color-custom-2;')
+    // 识别不到 → 原样保留（不造假绿）
+    expect(after).toContain('var(--colorTextBase)')
+    expect(after).toContain('#12345678')
+
+    // 幂等：再跑一次 0 替换
+    const r2 = applyColorSlotMapping({ outputPath: dir, mapping, fsMod, pathMod })
+    expect(r2.replacedCount).toBe(0)
+    await rm(dir, { recursive: true, force: true })
+  })
+})

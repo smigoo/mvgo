@@ -33,6 +33,9 @@ import {
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { resolveSectionSize, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
+// 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
+//   才能把它们从 flex 归一化分母里剔除。判据单一来源 = 接管器本身（不在本文件重判）。
+import { collectFoldedGridTakeover } from '../../utils/folded-grid-section-takeover.js';
 import { sanitizeComponentId, tailHexOf, normalizeUserComponentId } from '../../utils/component-naming.js';
 
 export function assembleIndexVue(templateContent, scriptContent, input, options = {}) {
@@ -446,6 +449,50 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     input?.figmaNodeData?.document || input?.figmaNodeData || null,
   );
 
+  // 🛡️ P1-B 治本（2026-10-26 · mc-max-1792934367321-ab7bb76c 实锤）：刀 53 抑制成员的
+  //   宽/高必须从 **flex 归一化分母** 里剔除。
+  //
+  //   ## 病灶（真渲染实测，非推理）
+  //   该单 `43:4784` 是 flex row，两列真值宽 179 / 291 ⇒ `flex:0.380` / `flex:0.620`；
+  //   `43:4812-list`（CardGrid）被表格两阶段决策抑制，整段渲染为 `display:none` 空壳。
+  //   实测（puppeteer 三组对照）：
+  //     · `display:none` 兄弟 **不占位**（rect 0×0），但幸存者也不因此变宽（177.83px）；
+  //     · 把它从 DOM **物理删除** ⇒ 幸存者宽度**逐像素不变**（同为 177.83px）；
+  //     · 只有把幸存者 flex 因子**重归一化**（0.380 → 1.000）才真吃满（177.83 → 468px）。
+  //   根因不是「占位」，而是 CSS Flexbox 的 `<1` 特例：因子总和 <1 时浏览器把可用空间
+  //   乘以该总和再分配 ⇒ 少一个兄弟 ≠ 幸存者变大，**必须让幸存者之和回到 1.0**。
+  //   ⇒ 对抑制成员填 0（不贡献 total），幸存者 `w/total` 自动归一化到 1.000。
+  //
+  //   ## 单一事实源纪律
+  //   `suppressed` 由 `collectFoldedGridTakeover`（刀 53 唯一判据源）给出，本文件只消费、
+  //   不重判。取 `sectionId` 作键（各 detector 均返回 `String(sec.id)`，与命名无关）；
+  //   **同一棵树**：这里传的 `treeSections` 与下游 `nameOf` 完全一致 —— 若改用原始
+  //   `effectiveSections`，`dedupeDuplicateSections` 造成的叶子增删会让 tag/id 错位
+  //   （本单实测：原始树 `ContentSection`=43:4898，dedupe 后 `ContentSection`=43:4785）⇒ 归零到错误的子项。
+  //
+  //   fail-open：任何异常 ⇒ 空集 ⇒ 走既有比例行为（零回归）。
+  //   不传 logger：接管器自己的计数行由上游（microcode-engineer）落，避免重复留痕。
+  const suppressedSectionIds = new Set();
+  let __p1bTakeoverLeaves = 0;
+  try {
+    const __tk = collectFoldedGridTakeover({
+      treeSections,
+      figmaNodeData: input?.figmaNodeData || null,
+      resourceMapping: input?.resourceDomMapping || [],
+      componentName: input?.componentName || '',
+    });
+    __p1bTakeoverLeaves = __tk.map.size;
+    for (const tr of __tk.map.values()) {
+      if (tr && tr.suppressed === true && tr.sectionId != null) {
+        suppressedSectionIds.add(String(tr.sectionId));
+      }
+    }
+  } catch {
+    // fail-open：判据不可用 ⇒ 不做分母剔除
+  }
+  const isSizeExcluded = (sec) =>
+    suppressedSectionIds.size > 0 && suppressedSectionIds.has(String(sec?.id ?? ''));
+
   const headerLeaves = leaves.filter((s) => s.type === 'header');
   const bodyLeaves = leaves.filter((s) => s.type !== 'header');
 
@@ -677,10 +724,14 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         // 🛡️ P2/P3 修复（2026-09-17）：水平容器按宽度比例、垂直容器按高度比例分配 flex-grow。
         //   此前垂直容器完全没有高度约束 → 子项 collapse 到 0（8529b7e2 echarts-bar-con 高度为 0 实锤）。
         const childWidths = isHorizontal
-          ? (sec.children || []).map((c) => resolveSectionFlexSize(c, figmaIndex, 'width'))
+          ? (sec.children || []).map((c) =>
+              isSizeExcluded(c) ? 0 : resolveSectionFlexSize(c, figmaIndex, 'width'),
+            )
           : [];
         const childHeights = !isHorizontal
-          ? (sec.children || []).map((c) => resolveSectionFlexSize(c, figmaIndex, 'height'))
+          ? (sec.children || []).map((c) =>
+              isSizeExcluded(c) ? 0 : resolveSectionFlexSize(c, figmaIndex, 'height'),
+            )
           : [];
         
         // 🛡️ B′（2026-09-28 · 命名无关）：命中「横向并列的同构卡片单元」判据时**等分**，
@@ -766,7 +817,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       topBodyRoots.push(root);
     }
     if (topBodyRoots.length > 1) {
-      const topHeights = topBodyRoots.map((s) => resolveSectionFlexSize(s, figmaIndex, 'height'));
+      const topHeights = topBodyRoots.map((s) =>
+        isSizeExcluded(s) ? 0 : resolveSectionFlexSize(s, figmaIndex, 'height'),
+      );
       for (let i = 0; i < topBodyRoots.length; i++) {
         renderBodyNode(topBodyRoots[i], 0, flexItemStyleFromHeights(topHeights, i));
       }
@@ -789,6 +842,13 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     options.logger.info('🛡️ 刀 50 段内固有几何·已评估', {
       evaluated: __intrinsicEvaluated,
       applied: __intrinsicHits,
+    });
+    // 🛡️ P1-B 生效自检：`takeoverLeaves` = 接管器评估到的叶数（0 ⇒ 判据没跑或无可接管段，
+    //   与「跑了但无抑制成员」区分）；`excluded` = 真正从 flex 分母剔除的成员数。
+    options.logger.info('🛡️ P1-B 抑制成员 flex 分母剔除·已评估', {
+      takeoverLeaves: __p1bTakeoverLeaves,
+      excluded: suppressedSectionIds.size,
+      ids: [...suppressedSectionIds],
     });
   }
   return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };

@@ -157,23 +157,63 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
       }
     }
     
-    return (
-      `- figma 节点 \`${nodeId}\`（${name}）${classHint}：其容器 CSS **必须**写为 ` +
-      `\`display: ${fact.display}; flex-direction: ${fact.flexDirection};\`` +
-      `（Figma 几何真值来源：${fact.source}，置信度：${fact.confidence}）。` +
-      `⚠️ 禁止省略 display、禁止用 absolute 还原定位、禁止改成其他方向。`
-    )
-  })
+  // 🛡️ 方向三态守卫（2026-10-26 · A2 配套）：`flexDirection` 不是必有字段 ——
+  //   ① grid 事实（`display:'grid'`）只带 `gridColumns`，**没有** flexDirection；
+  //   ② 将来任何「方向证据不足」的路径都可能给出 null。
+  //   原实现无条件拼 `flex-direction: ${fact.flexDirection}` ⇒ prompt 里会出现
+  //   `display: grid; flex-direction: undefined;`（非法值），LLM 照抄即污染产物。
+  //   与 `layout-facts-injector#updateFlexProps` 的白名单口径保持一致：
+  //   只认 row / column / row-reverse / column-reverse，其余一律不下发方向。
+  const V = /^(row|column|row-reverse|column-reverse)$/
+  const dir =
+    typeof fact.flexDirection === 'string' && V.test(fact.flexDirection.trim().toLowerCase())
+      ? fact.flexDirection.trim().toLowerCase()
+      : null
+  const cssDecl = dir ? `display: ${fact.display}; flex-direction: ${dir};` : `display: ${fact.display};`
+  // 🛡️ 方向注记三态（2026-10-26 · A2 配套）：
+  //   ① 有合法方向 → 只强调别改方向；
+  //   ② `display:grid` → grid **不用** flex-direction（写了是冗余且会误导 LLM 当成 flex 容器），
+  //      改提示用 grid-template-columns 还原列数；
+  //   ③ flex 但方向事实缺失 → 明确交回 LLM 按几何自行定，别臆造别的判据。
+  const isGrid = String(fact.display || '').trim().toLowerCase() === 'grid'
+  const dirNote = dir
+    ? '禁止省略 display、禁止用 absolute 还原定位、禁止改成其他方向。'
+    : isGrid
+      ? `禁止省略 display、禁止用 absolute 还原定位；⚠️ 该节点是 **grid 容器**，` +
+        `**不要**写 flex-direction，列数请用 grid-template-columns 按 ${fact.gridColumns ? `${fact.gridColumns} 列` : 'Figma 几何'}还原。`
+      : '禁止省略 display、禁止用 absolute 还原定位；⚠️ 该节点**无可靠主轴方向事实**，方向由你依据父子几何自行决定，不得与本节点已有的方向冲突。'
+
+  return (
+    `- figma 节点 \`${nodeId}\`（${name}）${classHint}：其容器 CSS **必须**写为 ` +
+    `\`${cssDecl}\`` +
+    `（Figma 几何真值来源：${fact.source}，置信度：${fact.confidence}）。` +
+    `⚠️ ${dirNote}`
+  )
+})
 
   if (returnMapping) {
     return mapping
   }
 
+  // 🛡️ 前言条件化（2026-10-26 · A2 配套）：grid 事实没有方向字段，若前言仍写
+  //   「必须原样写入 display / flex-direction」就会**自相矛盾**（逐节点行只说 display:grid）。
+  //   LLM 面对矛盾前言倾向于自己编一个方向 ⇒ 反而制造臆造。故按实际是否有方向事实分两支。
+  const DIR_RX = /^(row|column|row-reverse|column-reverse)$/
+  const hasDirection = entries.some(([, fact]) => {
+    const d = fact && fact.flexDirection
+    return typeof d === 'string' && DIR_RX.test(d.trim().toLowerCase())
+  })
+  const preamble = hasDirection
+    ? '以下容器的布局方向由 Figma 节点几何**确定性给出**，不是建议。你生成对应 figma 节点（id 见上）的 class 时，\n' +
+      '**必须**原样写入 `display` / `flex-direction`，不得省略、不得改成 `absolute`、不得反向。'
+    : '以下容器的布局模型（`display`）由 Figma 节点几何**确定性给出**，不是建议。你生成对应 figma 节点（id 见上）的 class 时，\n' +
+      '**必须**原样写入 `display`，不得省略、不得改成 `absolute`。\n' +
+      '⚠️ 本批事实**不含**主轴方向，禁止凭排版习惯臆造 `flex-direction`。'
+
   return `
 ## 🛡️ 布局模型确定性约束（Figma 几何真值 · 覆盖 LLM 默认，禁止违背）
 
-以下容器的布局方向由 Figma 节点几何**确定性给出**，不是建议。你生成对应 figma 节点（id 见上）的 class 时，
-**必须**原样写入 \`display\` / \`flex-direction\`，不得省略、不得改成 \`absolute\`、不得反向。
+${preamble}
 
 ${lines.join('\n')}
 `

@@ -2,8 +2,11 @@
  * 🛡️ 软失败评分（2026-09-11）：L0-B 门禁 issue 列表 → 单一 0-100 分 + 维度拆解。
  * 用途：fail-closed 门禁 BLOCK 重试耗尽时，不再写「失败」，而是降级完成 + 展示评分明细
  * （结构 / 资源 / 类名 / 语义 四个维度的小分 + issue 清单），供前端呈现「完成（降级）」。
- * 纯函数、无 import.meta，供 graph 与测试共用。
+ * 纯函数、无副作用；⛔ 不得引入 import.meta / 文件系统依赖（jest CJS 环境共用）。
+ * 唯一依赖：gate-severity.js（同为纯函数、无 import.meta），用于「WARN 升级后 BLOCK」的口径同源。
  */
+
+import { isEscalatedBlockId } from './gate-severity.js';
 
 const DIMENSION_RULES = [
   { dim: '结构', test: /^(CODE-001|CODE-021|COMP-|FLEX-|STRUCT-|EMPTY_ARTIFACT|SFC-COMPILE|CODE-012)/ },
@@ -81,12 +84,17 @@ const HARD_PUBLISH_BLOCK_IDS = new Set([
 
 /**
  * 判断 issue 列表中是否存在「禁止发布」的硬闸 BLOCK。
+ * 层 7（2026-10-26）：另认「WARN 升级后的合成 BLOCK」——id 形如 `<id>-ESCALATED` 且
+ * 该 `<id>` 在当前生效的升级策略 BLOCK 集合内（口径同源 gate-severity.js，
+ * 避免 graph 升级了而 publisher 不认的双真相）。
  * @param {Array<{id:string, severity:string}>} issues
  * @returns {boolean}
  */
 export function hasHardPublishBlock(issues = []) {
   const list = Array.isArray(issues) ? issues : [];
   return list.some(
-    (i) => i?.severity === 'BLOCK' && HARD_PUBLISH_BLOCK_IDS.has(i?.id),
+    (i) =>
+      i?.severity === 'BLOCK' &&
+      (HARD_PUBLISH_BLOCK_IDS.has(i?.id) || isEscalatedBlockId(i?.id)),
   );
 }

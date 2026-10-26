@@ -95,6 +95,8 @@ import {
 //S11: 文档页面元素覆盖率校验器（L0-B 扩展）
 import { ElementCoverageValidator, collectTechStackMarkers } from '../validators/element-coverage-validator.js';
 import { computeGateScore, hasHardPublishBlock } from '../utils/gate-score.js';
+// 🛡️ 层 7（2026-10-26 · 方案 A）：门禁分级 —— WARN 升级策略单一真相源（逐 id 决策）。
+import { resolveWarnEscalations } from '../utils/gate-severity.js';
 // 🛡️ #128 流程四件套 ②/③：fail-open 显性化台账（降级/WARN 升级事件落 component-meta.json）
 import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
@@ -735,6 +737,7 @@ export function createPhase2Graph(config = {}) {
       _v3Config: v3Config,
       _l0ConsecutiveFailures: 0, // L0-A (preview) 连续失败计数器
       _l0CodeConsecutiveFailures: 0, // L0-B (code) 连续失败计数器
+      _warnStreak: {}, // 🛡️ 层 7：WARN 跨轮连续计数（id → streak），供 WARN 升级判定消费
       violationCount: 0, // 越权计数器
       validatorRetryCount: 0, // L0-A 已重试次数
       codeValidatorRetryCount: 0, // L0-B 已重试次数
@@ -4760,6 +4763,7 @@ export function createPhase2Graph(config = {}) {
         },
         codeValidatorRetryCount: 0,
         _l0CodeConsecutiveFailures: 0,
+        _warnStreak: {}, // 🛡️ 层 7：增量复用视为干净起点，与相邻计数键同步重置
         _l0CodeDegraded: false,
         _l0CodeRetryGuidance: '',
         _structureOrderResult: null,
@@ -5044,13 +5048,66 @@ export function createPhase2Graph(config = {}) {
       });
     }
 
+    // 🛡️ 2026-10-20（#128 流程四件套 ③）→ 层 7（2026-10-26）：WARN 升级机制 = 门禁分级。
+    //   病灶：只 WARN 不修的判据（如 FLEX-004 量纲混用、TEXT-AXIS 文本轴错）长期「看见但放行」，
+    //   模型每轮重试都不修，WARN 在日志里刷屏却无人升级 ⇒ 带病产物出厂。
+    //   机制：同一 WARN id 连续 ≥ afterStreak 轮 L0-B 检出（跨重试未愈合）⇒ 按策略表 action 处置：
+    //     · WARN  → 仅 failOpenEvents 留痕（原语义）
+    //     · BLOCK → 注入合成 BLOCK（id=<id>-ESCALATED）+ pass=false ⇒ 重试耗尽经
+    //               hasHardPublishBlock → l0b-fail（fail-closed，禁止发布）
+    //   🔴 注入后**不清** `_bypassed`/`_degraded`（否则重试预算被降级路径重置 ⇒ 预算复位死循环）。
+    //   🔴 必须排在下方「降级旁路」**之前**（与 vue3 图同构）：降级会把 pass 强制回 true 并置
+    //      `_bypassed=true`，随后条件边以 `!pass && !_bypassed` 为闸 ⇒ 若升级在其后，注入的
+    //      BLOCK 永远到不了 hasHardPublishBlock（= 零生效；高重试预算下可复现）。
+    //   注入的 BLOCK 不在此处拼 retryGuidance —— 下方 `!result.pass && !result._bypassed` 的
+    //   通用 blockIssues 循环会自然带上它们（含 gate-severity 自带的「[WARN 升级] …」说明）。
+    //   策略表唯一真相源：utils/gate-severity.js（逐 id 决策，见该文件 rationale）。
+    //   开关：MVGO_GATE_WARN_ESCALATE=0 / MVGO_GATE_ESCALATE_MAX / MVGO_GATE_ESCALATE_BLOCK_IDS。
+    const _esc = resolveWarnEscalations({
+      issues: result.issues,
+      prevStreak: state._warnStreak,
+    });
+    const _warnStreak = _esc.warnStreak;
+    if (_esc.escalated.length > 0) {
+      logger.warn(
+        `🛡️ WARN 升级：以下判据连续 ≥${_esc.afterStreak} 轮检出且模型未修（已留痕 component-meta.json）`,
+        { escalated: _esc.escalated.map((e) => `${e.id}×${e.streak}→${e.action}`) },
+      );
+      for (const e of _esc.escalated) {
+        appendFailOpenEvent(state.outputPath, {
+          rule: `WARN-ESCALATED:${e.id}`,
+          reason: `判据 ${e.id} 连续 ${e.streak} 轮 L0-B 检出（WARN 未愈合）⇒ 策略动作 ${e.action}`,
+          detail: {
+            streak: e.streak,
+            action: e.action,
+            samples: (result.issues || [])
+              .filter((i) => i.id === e.id)
+              .slice(0, 3)
+              .map((i) => `${i.file || ''}: ${String(i.message || '').slice(0, 120)}`),
+          },
+        });
+      }
+      if (_esc.blockIssues.length > 0) {
+        result.issues = [...(result.issues || []), ..._esc.blockIssues];
+        result.blockCount = (result.blockCount || 0) + _esc.blockIssues.length;
+        result.pass = false;
+        logger.error('🛡️ WARN 升级为 BLOCK：重试耗尽将 fail-closed（禁止发布）', {
+          blockIds: _esc.blockIssues.map((b) => b.id),
+        });
+      }
+    }
+
     // 降级检查：硬性 BLOCK（scoped 属性缺失 / 文件结构完整性）不可被 bypass
     const consecutiveCodeFailures = state._l0CodeConsecutiveFailures || 0;
     const bypassThreshold = state._v3Config?.l0BypassAfterFailures || 3;
 
     if (!result.pass && consecutiveCodeFailures >= bypassThreshold) {
       const hardBlockIssues = (result.issues || []).filter(
-        (i) => i.severity === 'BLOCK' && i.id === 'CODE-001',
+        (i) =>
+          i.severity === 'BLOCK' &&
+          (i.id === 'CODE-001' ||
+            // 层 7：WARN 升级来的 BLOCK 同样不可被降级旁路（否则升级=零生效）
+            String(i.id || '').endsWith('-ESCALATED')),
       );
       if (hardBlockIssues.length > 0) {
         logger.warn(
@@ -5174,42 +5231,6 @@ export function createPhase2Graph(config = {}) {
     // 🛡️ 软失败评分（2026-09-11）：重试耗尽不再写「失败」，而是降级完成 + 展示评分明细。
     // 评分 = 单一 0-100 分 + 维度拆解（结构/资源/类名/语义），挂到 result 供条件边/complete 消费。
     result.gateScore = computeGateScore(result.issues);
-
-    // 🛡️ 2026-10-20（#128 流程四件套 ③）：WARN 升级机制。
-    //   病灶：只 WARN 不修的判据（如 PERCENT-HEIGHT、TEXT-001 历史形态）长期「看见但放行」，
-    //   模型每轮重试都不修，WARN 在日志里刷屏却无人升级 ⇒ 带病产物出厂。
-    //   机制（确定性、不直接改 BLOCK）：同一 WARN id 连续 ≥2 轮 L0-B 检出（跨重试未愈合）⇒
-    //   升级留痕 component-meta.json failOpenEvents[]（rule=WARN-ESCALATED:*）+ logger.warn。
-    //   是否升级为 BLOCK/heal 由各规则独立决策（如 TEXT-001 已走 ⑥ 的 BLOCK 化）。
-    const _warnIds = [
-      ...new Set(
-        (result.issues || [])
-          .filter((i) => i && i.severity === 'WARN' && i.id)
-          .map((i) => String(i.id)),
-      ),
-    ];
-    const _prevStreak = state._warnStreak || {};
-    const _warnStreak = {};
-    for (const id of _warnIds) _warnStreak[id] = (_prevStreak[id] || 0) + 1;
-    const _escalated = Object.entries(_warnStreak).filter(([, n]) => n >= 2);
-    if (_escalated.length > 0) {
-      logger.warn('🛡️ WARN 升级：以下判据连续 ≥2 轮检出且模型未修（已留痕 component-meta.json）', {
-        escalated: _escalated.map(([id, n]) => `${id}×${n}`),
-      });
-      for (const [id, n] of _escalated) {
-        appendFailOpenEvent(state.outputPath, {
-          rule: `WARN-ESCALATED:${id}`,
-          reason: `判据 ${id} 连续 ${n} 轮 L0-B 检出（WARN 未愈合，需人工评估升级为 BLOCK/heal）`,
-          detail: {
-            streak: n,
-            samples: (result.issues || [])
-              .filter((i) => i.id === id)
-              .slice(0, 3)
-              .map((i) => `${i.file || ''}: ${String(i.message || '').slice(0, 120)}`),
-          },
-        });
-      }
-    }
 
     return {
       codeValidationResult: result,
@@ -5382,9 +5403,13 @@ export function createPhase2Graph(config = {}) {
       // 🛡️ 发布硬闸（2026-09-13）：021/022/023 这类「预览必然空白/缺块」的确定性硬伤，软失败
       // 不得降级放行——命中即走 l0b-fail fail-closed，禁止 publish / 标 completed。
       if (hasHardPublishBlock(r.issues)) {
-        logger.error('🛡️ L0-B 硬闸 BLOCK（021/022/023）且重试耗尽：禁止发布，转 fail-closed', {
+        logger.error('🛡️ L0-B 硬闸 BLOCK（021/022/023 + WARN 升级）且重试耗尽：禁止发布，转 fail-closed', {
           hardBlocks: (r.issues || [])
-            .filter((i) => i.severity === 'BLOCK' && /^CODE-02[123]/.test(i.id))
+            .filter(
+              (i) =>
+                i.severity === 'BLOCK' &&
+                (/^CODE-02[123]/.test(i.id) || String(i.id || '').endsWith('-ESCALATED')),
+            )
             .map((i) => i.id),
         });
         state._l0HardBlock = true;

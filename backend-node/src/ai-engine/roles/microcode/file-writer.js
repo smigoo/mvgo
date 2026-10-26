@@ -2164,38 +2164,16 @@ export function buildCssVarsFile(options = {}) {
   //   键名安全：themeSlots 的 key 已过 slugifyThemeName（剔除空格/特殊符号，中文保留），
   //   故 `const 浅色 = {...}` / `export { 浅色 }` 均为合法 JS。
   //   ⚠️ 单稿/旧双主题（无 themeSlots 或键名为 light/dark）⇒ 完全不追加，输出逐字节一致。
-  const _themeSlots = tokens?.themeSlots;
-  const _extraThemeKeys = [];
-  const _extraThemeBodies = [];
-  if (_themeSlots && typeof _themeSlots === 'object') {
-    // 🔴🔴 2026-10-12 治本 B 延伸（真机实锤：切到 theme_2 先深色后变浅）：
-    //   `light` / `dark` 各自叠加了 `SEMANTIC_COLORS_LIGHT/DARK`（:1406 / :1392），
-    //   但**自定义主题（themeSlots 的键）只写裸 slots** ⇒ 缺语义色。
-    //   而 iframe 的 `applyPreviewCssVars` 用 `{...cssVars.common, ...cssVars[theme]}`
-    //   ⇒ theme_2 查不到语义色 ⇒ **回落到 common 的浅色值**（`colorTextSecondary:'#666666'`）
-    //   ⇒ 运行期把编译期的深色值**覆盖回浅色** ⇒ 「先变深、几秒后变浅」。
-    //
-    //   正解：按该主题的明暗（`themeMeta[].brightness`）叠加对应语义色，与 light/dark 同口径。
-    const _themeMetaByKey = new Map(
-      (Array.isArray(tokens?.themeMeta) ? tokens.themeMeta : []).map((t) => [t.key, t]),
-    );
-    for (const [k, slots] of Object.entries(_themeSlots)) {
-      // light/dark 已单独输出（body 里用的是兼容字段），跳过避免重复声明
-      if (k === 'light' || k === 'dark') continue;
-      // 🔴 明暗判据：优先 themeMeta 的 brightness；缺省回退 key 名
-      const meta = _themeMetaByKey.get(k);
-      const isDark =
-        meta?.brightness === 'dark' ??
-        (meta?.brightness === 'light' ? false : /dark|深色|夜|night/i.test(k));
-      const body = buildCssVarsObjectBody({
-        ...(slots || {}),
-        ...(isDark ? SEMANTIC_COLORS_DARK : SEMANTIC_COLORS_LIGHT),
-      });
-      if (!body) continue;
-      _extraThemeKeys.push(k);
-      _extraThemeBodies.push(`const ${k} = {\n${body}\n};\n`);
-    }
-  }
+  //
+  //   🔴🔴 2026-10-26 治本（RC2 · a0f93b25 实锤「深色主题和默认 dark 一模一样」）：
+  //   本函数早已支持 N 主题导出，但 `buildDeclareJsFile` **硬编码** `import { common, dark, light }`
+  //   + `cssVars: { common, dark, light }` ⇒ 自定义 key（theme_2）**不进 cssVars** ⇒ 运行期
+  //   `cssVars['theme_2']` 为 undefined ⇒ `applyPreviewCssVars` 的
+  //   `{ ...common, ...cssVars[theme] }` 退化成只剩 common ⇒ 整组件渲染成默认主题。
+  //   现在两侧统一走 `resolveCustomThemeExports`（单一事实源），谁都不许再手写主题名列表。
+  const _customThemeExports = resolveCustomThemeExports(tokens);
+  const _extraThemeKeys = _customThemeExports.map((e) => e.key);
+  const _extraThemeBodies = _customThemeExports.map((e) => `const ${e.key} = {\n${e.body}\n};\n`);
   const exportNames = `common, dark${light ? ', light' : ''}${
     _extraThemeKeys.length ? `, ${_extraThemeKeys.join(', ')}` : ''
   }`;
@@ -2238,25 +2216,83 @@ function buildCssVarsObjectBody(obj) {
 }
 
 /**
+ * 🔴 2026-10-26（RC2）**导出主题名的单一事实源** —— css-vars.js 与 declare.js 必须同源。
+ *
+ * 病灶：两侧各写一份主题名列表 ⇒ `buildCssVarsFile` 支持 N 主题、`buildDeclareJsFile`
+ * 却硬编码 `common, dark, light` ⇒ css-vars.js 里明明导出了 `theme_2`，declare.js 没 import。
+ * 运行期 `applyPreviewCssVars` 走 `cssVars[theme]` 查表 ⇒ 得到 undefined ⇒
+ * `{ ...common, ...undefined }` = 只有 common ⇒ **切主题 class 变了、颜色一个都不变**
+ * （a0f93b25 的 `declare.js` 9 行逐字节可证）。
+ *
+ * 返回「light/dark 之外的自定义主题」，按 themeSlots 声明顺序（顺序影响产物字节，勿排序）。
+ * body 在此处算好一并返回：调用侧只要 body 非空才导出，就不会出现
+ * 「declare.js 声明了 import、css-vars.js 却没声明该 const」的断链。
+ *
+ * @param {Object|null} tokens styleTokens（含 themeSlots / themeMeta）
+ * @returns {Array<{key:string, body:string}>}
+ */
+function resolveCustomThemeExports(tokens) {
+  const themeSlots = tokens && typeof tokens === 'object' ? tokens.themeSlots : null;
+  if (!themeSlots || typeof themeSlots !== 'object') return [];
+  // 🔴 2026-10-12 治本 B 延伸（真机实锤：切到 theme_2 先深色后变浅）：
+  //   `light` / `dark` 各自叠加了 `SEMANTIC_COLORS_LIGHT/DARK`，但自定义主题只写裸 slots
+  //   ⇒ 缺语义色 ⇒ iframe 的 `{...common, ...cssVars[theme]}` 回落到 common 的浅色值
+  //   （如 `colorTextSecondary:'#666666'`）⇒ 运行期把编译期深色覆盖回浅色。
+  //   正解：按 `themeMeta[].brightness` 叠加对应语义色，与 light/dark 同口径。
+  //   ⚠️ 注意 `meta?.brightness === 'dark' ?? (...)` 的 `??` 实际**不生效**
+  //   （`===` 恒返回 boolean，永不为 nullish）；此处照搬既有语义，**不顺手改**——
+  //   改了会让「无 brightness 的自定义主题」从 light 语义翻成按名字猜，属行为变更，另案处理。
+  const themeMetaByKey = new Map(
+    (Array.isArray(tokens.themeMeta) ? tokens.themeMeta : []).map((t) => [t.key, t]),
+  );
+  const out = [];
+  for (const [k, slots] of Object.entries(themeSlots)) {
+    // light/dark 已单独输出（body 里用的是兼容字段），跳过避免重复声明
+    if (!k || k === 'light' || k === 'dark') continue;
+    const meta = themeMetaByKey.get(k);
+    const isDark =
+      meta?.brightness === 'dark' ??
+      (meta?.brightness === 'light' ? false : /dark|深色|夜|night/i.test(k));
+    const body = buildCssVarsObjectBody({
+      ...(slots || {}),
+      ...(isDark ? SEMANTIC_COLORS_DARK : SEMANTIC_COLORS_LIGHT),
+    });
+    if (!body) continue;
+    out.push({ key: k, body });
+  }
+  return out;
+}
+
+/**
  * M4-1/M4-2：生成 declare.js（声明构建脚本，$createMcDeclare + 传入 cssVars）。
  * ⚠️ 格式与管线既有运行时一致：`$createMcDeclare` 由构建环境全局注入（不 import 包），
  *    配置走 `import declareConfig from './declare.json'`（declare.json 的 themeConfig/
  *    businessEvents/cssVariableConfig 靠它生效）；M4-2 要求传入 cssVars → 同步 import
- *    resources/config/css-vars.js 的三个主题对象并传入。
+ *    resources/config/css-vars.js 的主题对象并传入。
  *    不再接收 componentId 参数（componentId 由 declareConfig 携带）——此前调用处引用
  *    未定义变量 componentId → ReferenceError 被非阻断 catch 吞掉，全天 21 次生成全部
  *    静默失败（2026-09-03 实锤），css-vars.js 从未落盘。
- * @param {Object} [options] 保留参数位（兼容旧调用签名），当前无需任何字段
+ *
+ * 🔴 2026-10-26（RC2）：`import` 与 `cssVars` 的主题名**必须**与 css-vars.js 的导出同源，
+ *   否则自定义主题不进 cssVars ⇒ 运行期查表 undefined ⇒ 切主题无反应。
+ *   `common, dark, light` 保持恒定（`light` 恒在：历史产物虽可能无 light 导出，
+ *   declare.js 一直声明它，改成条件化属行为变更）；仅在其后按序追自定义主题。
+ *   ⚠️ 缺省（无 styleTokens.themeSlots / 只有 light·dark）⇒ 输出**逐字节等价**旧版
+ *   （lite 路径两处 `buildMcSkeleton({ componentName, rootClass })` 不传 styleTokens，零回归）。
+ *
+ * @param {Object} [options] 同 buildCssVarsFile（需要 options.styleTokens）
  * @returns {string} declare.js 完整内容
  */
 export function buildDeclareJsFile(options = {}) {
+  const customKeys = resolveCustomThemeExports(options?.styleTokens).map((e) => e.key);
+  const themeNames = ['common', 'dark', 'light', ...customKeys].join(', ');
   return `import declareConfig from './declare.json'
-import { common, dark, light } from './resources/config/css-vars.js'
+import { ${themeNames} } from './resources/config/css-vars.js'
 // 设置微码组件信息（cssVars 为 M4-2 必传项）
 let declareInfo = $createMcDeclare({
   metaUrl: import.meta.url,
   declareConfig,
-  cssVars: { common, dark, light }
+  cssVars: { ${themeNames} }
 })
 // 导出组件配置信息
 export default declareInfo

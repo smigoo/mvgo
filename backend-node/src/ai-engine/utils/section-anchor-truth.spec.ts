@@ -11,6 +11,21 @@
  */
 import { auditSectionAnchors, collectSectionFigmaRefs } from './section-anchor-truth.js'
 
+/** B 批后的 stats 全键形状（🔴 每个计数键都必须存在，便于真机日志按固定 schema 采集） */
+function stats(overrides: Record<string, number> = {}) {
+  return {
+    judged: 0,
+    skippedNoRefs: 0,
+    skippedSemanticAnchor: 0,
+    phantomRefs: 0,
+    anchorUnknown: 0,
+    notAncestor: 0,
+    repaired: 0,
+    unrepaired: 0,
+    ...overrides,
+  }
+}
+
 /** 真值树：root 1:1 → page 2:2 → { row 3:3 → {cardA 4:4 → {textA 5:5, valA 6:6}, cardB 7:7}, unrelatedText 8:8 } */
 function makeFigma() {
   return {
@@ -110,7 +125,7 @@ describe('R22-d auditSectionAnchors：锚点必须是自身内容的祖先', () 
       kind: 'anchor-not-ancestor',
     })
     expect(report.issues[0].refs.sort()).toEqual(['4:4', '7:7'])
-    expect(report.stats).toEqual({ judged: 1, repaired: 1 })
+    expect(report.stats).toEqual(stats({ judged: 1, notAncestor: 1, repaired: 1 }))
     expect(sections[0].figmaAnchorId).toBe('3:3')
   })
 
@@ -126,7 +141,7 @@ describe('R22-d auditSectionAnchors：锚点必须是自身内容的祖先', () 
     const report = auditSectionAnchors(sections, makeFigma())
 
     expect(report.issues).toHaveLength(0)
-    expect(report.stats).toEqual({ judged: 1, repaired: 0 })
+    expect(report.stats).toEqual(stats({ judged: 1 }))
     expect(sections[0].figmaAnchorId).toBeUndefined()
   })
 
@@ -211,6 +226,111 @@ describe('R22-d auditSectionAnchors：锚点必须是自身内容的祖先', () 
     expect(auditSectionAnchors(null, makeFigma()).issues).toEqual([])
     expect(auditSectionAnchors([], makeFigma()).stats.judged).toBe(0)
     expect(auditSectionAnchors([makeStatSection()], null).issues).toEqual([])
+  })
+
+  // ── B 批加固（2026-10-26 · 58de7d47 真机实锤）─────────────────────────────
+
+  test('B① 真机复刻：幻影 ref 不再制造假阳 issue（36:1693 段）', () => {
+    // 真值：root 36:1693 → 801:3 GROUP；vision 声明子级含**不存在**的 36:1696
+    const figma = {
+      document: {
+        id: '36:1693',
+        name: 'cp-设备详情',
+        type: 'FRAME',
+        children: [
+          {
+            id: '801:3',
+            name: 'slot-icon',
+            type: 'GROUP',
+            children: [{ id: '36:1698', name: '编码', type: 'TEXT', characters: '编码' }],
+          },
+        ],
+      },
+    }
+    const sections = [
+      {
+        id: '36:1693',
+        name: '设备头部信息',
+        body: { children: [{ id: '801:3' }, { id: '36:1696' }] },
+      },
+    ]
+    const report = auditSectionAnchors(sections, figma)
+
+    // 树内 ref（801:3）确实在 36:1693 之下 ⇒ 无 issue；幻影 ref 只计数不报
+    expect(report.issues).toHaveLength(0)
+    expect(report.stats).toEqual(stats({ judged: 1, phantomRefs: 1 }))
+    expect(sections[0].figmaAnchorId).toBeUndefined()
+  })
+
+  test('B① 幻影 ref 计入 missingRefs，并补进 issue detail（不另发 issue）', () => {
+    const sections = [
+      { id: '8:8', name: '混合区', children: [{ id: '4:4' }, { id: '999:9' }] },
+    ]
+    const report = auditSectionAnchors(sections, makeFigma())
+
+    expect(report.issues).toHaveLength(1)
+    expect(report.issues[0].missingRefs).toEqual(['999:9'])
+    expect(report.issues[0].refs.sort()).toEqual(['4:4', '999:9'])
+    expect(report.issues[0].detail).toContain('999:9')
+    // 「ref 不在树中」不产生独立 issue kind（单一来源 = validateVisionAnchors）
+    expect(report.issues.every((i: any) => i.kind !== 'ref-unknown')).toBe(true)
+  })
+
+  test('B② 证据不完整（有幻影 ref）⇒ 拒绝自动修复，记 unrepaired=phantom-refs', () => {
+    const sections = [
+      { id: '8:8', name: '混合区', children: [{ id: '4:4' }, { id: '999:9' }] },
+    ]
+    const report = auditSectionAnchors(sections, makeFigma())
+
+    expect(sections[0].figmaAnchorId).toBeUndefined()
+    expect(report.fixes).toHaveLength(0)
+    expect(report.unrepaired).toHaveLength(1)
+    expect(report.unrepaired[0]).toMatchObject({
+      sectionId: '8:8',
+      claimed: '8:8',
+      kind: 'anchor-not-ancestor',
+      candidateLca: '4:4',
+      reason: 'phantom-refs',
+    })
+    expect(report.stats).toEqual(stats({ judged: 1, notAncestor: 1, phantomRefs: 1, unrepaired: 1 }))
+  })
+
+  test('B② 候选 LCA 退到树根 ⇒ 拒绝落地（避免段锚到整页几何），记 unrepaired=lca-is-root', () => {
+    const figma = {
+      document: {
+        id: '1:1',
+        name: 'doc',
+        type: 'DOCUMENT',
+        children: [
+          { id: '2:2', name: 'A', type: 'FRAME', children: [{ id: '3:3', name: 'a', type: 'TEXT', characters: 'a' }] },
+          { id: '4:4', name: 'B', type: 'FRAME', children: [{ id: '5:5', name: 'b', type: 'TEXT', characters: 'b' }] },
+        ],
+      },
+    }
+    // 跨根级两分支引用 ⇒ LCA = 1:1（树根）
+    const sections = [{ id: '9:9', name: '跨页区', children: [{ id: '3:3' }, { id: '5:5' }] }]
+    const report = auditSectionAnchors(sections, figma)
+
+    expect(sections[0].figmaAnchorId).toBeUndefined()
+    expect(report.fixes).toHaveLength(0)
+    expect(report.unrepaired[0]).toMatchObject({
+      sectionId: '9:9',
+      kind: 'anchor-unknown',
+      candidateLca: '1:1',
+      reason: 'lca-is-root',
+    })
+    expect(report.stats).toEqual(stats({ judged: 1, anchorUnknown: 1, unrepaired: 1 }))
+  })
+
+  test('B③ stats 全键初始化：跳过路径同样给出确定值', () => {
+    expect(auditSectionAnchors(null, makeFigma()).stats).toEqual(stats())
+    expect(auditSectionAnchors([], makeFigma()).stats).toEqual(stats())
+    expect(auditSectionAnchors([makeStatSection()], null).stats).toEqual(stats())
+    // 无引用 ⇒ skippedNoRefs；语义 id ⇒ skippedSemanticAnchor
+    expect(auditSectionAnchors([{ id: '8:8' }], makeFigma()).stats).toEqual(stats({ skippedNoRefs: 1 }))
+    expect(
+      auditSectionAnchors([makeStatSection({ id: 'section-cards' })], makeFigma()).stats,
+    ).toEqual(stats({ skippedSemanticAnchor: 1 }))
   })
 
   test('collectSectionFigmaRefs：只收 Figma 形态 id，语义名/资源名不算引用', () => {

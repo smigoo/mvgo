@@ -359,4 +359,67 @@ import logo from '../resources/images/header-1697.png'
     expect(summary.transparentContainerBg).toBeUndefined();
     expect(warn.mock.calls.some((c) => String(c[0]).includes('TRANSPARENT-CONTAINER-BG'))).toBe(false);
   });
+
+  // ────────────────────── ㉑ 层 4+5 布局真值守卫（2026-10-26） ──────────────────────
+  // 真机 mc-max-1792985029695-58de7d47 三处病灶同源：样式文本在「双写 + 跨文件优先级」下自相矛盾。
+  // 桩真值树走 `.document`（离线重放铁律）。
+  const layoutTruthRoot = {
+    document: {
+      children: [
+        // 36:1726 = GROUP Mask group，真值 98×98（与 common.less 的 min-height:98px 逐位一致）
+        { id: '36:1726', absoluteBoundingBox: { x: 0, y: 0, width: 98, height: 98 }, children: [] },
+      ],
+    },
+  };
+
+  it('㉑ 接线：无 figmaRoot ⇒ J1 仍生效（无需真值），J2/J3 跳过并留痕 skippedReason', () => {
+    const { files: out, summary } = runPreWriteSelfHealing(
+      {
+        'package/index.vue': `<template><div class="c-x-grid" data-section-id="36:1698"/></template>
+<style lang="less" scoped>.c-x-grid { flex-wrap: wrap; display: grid; }</style>`,
+      },
+      {} as any,
+      { logger: noopLogger },
+    );
+    expect(summary.layoutTruthInertRemoved).toBe(1);
+    expect(summary.layoutTruthHits).toBe(1);
+    expect(summary.layoutTruthSkippedReason).toBe('no-truth-bbox');
+    expect(out['package/index.vue']).not.toMatch(/flex-wrap/);
+    // 成对断言：display 本身必须完整存活（防「保留分支推裸值」的产物损坏型 bug 复发）
+    expect(out['package/index.vue']).toMatch(/display:\s*grid/);
+  });
+
+  it('㉑ 接线：有 figmaRoot ⇒ J3 剥掉抹除真值尺寸的 scoped min-height（shared 真值生效）', () => {
+    const { files: out, summary } = runPreWriteSelfHealing(
+      {
+        // shared 表锚定真值 98px
+        'resources/styles/common.less': '.c-mask { width: 100%; min-height: 98px; }',
+        // SFC scoped 把它抹成 0（无单位 0 —— 首版判据漏网的真机形态）
+        'package/components/ContentMask.vue': `<template><div class="c-mask" data-section-id="36:1726"/></template>
+<style lang="less" scoped>.c-mask { display: flex; flex-direction: column; min-height: 0; }</style>`,
+      },
+      { figmaRoot: layoutTruthRoot } as any,
+      { logger: noopLogger },
+    );
+    expect(summary.layoutTruthTruthOverrideStripped).toBe(1);
+    const mask = out['package/components/ContentMask.vue'];
+    expect(mask).not.toMatch(/min-height/);
+    // 成对断言：非 min-* 声明必须原样保留
+    expect(mask).toMatch(/display:\s*flex/);
+    expect(mask).toMatch(/flex-direction:\s*column/);
+    // shared 的真值锚绝不能被动
+    expect(out['resources/styles/common.less']).toMatch(/min-height:\s*98px/);
+  });
+
+  it('㉑ 幂等：连续跑两次，第二次 J1/J2/J3 全 0', () => {
+    const files = {
+      'package/index.vue': `<template><div class="c-x-grid" data-section-id="36:1698"/></template>
+<style lang="less" scoped>.c-x-grid { flex-wrap: wrap; display: grid; }</style>`,
+    };
+    const first = runPreWriteSelfHealing(files, {} as any, { logger: noopLogger });
+    const second = runPreWriteSelfHealing(first.files, {} as any, { logger: noopLogger });
+    expect(first.summary.layoutTruthInertRemoved).toBe(1);
+    expect(second.summary.layoutTruthInertRemoved).toBe(0);
+    expect(second.summary.layoutTruthHits).toBe(0);
+  });
 });

@@ -50,6 +50,14 @@ import { dedupeDuplicateDeclsInBlocks } from './block-duplicate-decl-guard.js';
 import { detectHardcodedText, healHardcodedText } from './hardcoded-text-gate.js';
 // 🛡️ 刀 55（2026-10-23）：plan 之外的编造副本组件确定性移除。
 import { detectOrphanDuplicateComponents, healOrphanDuplicateComponents } from './plan-orphan-guard.js';
+// 🛡️ 层 4+5（2026-10-26 · 方案 A/mc-max-1792985029695-58de7d47 实锤）：布局真值守卫。
+//   层 4 = 同块互斥布局指令消歧（display:grid 下的 flex-direction/flex-wrap 恒 inert）
+//          + 绝对 px 超真值轴尺寸收敛（gap 跨轴 93px > 真值宽 32px）；
+//   层 5 = 真值尺寸被 SFC scoped 静默抹掉（shared `min-height:98px` 输给 scoped `min-height:0`
+//          —— 跨文件由**优先级**裁决而非「CSS 取较大值」，R5 白名单假设被真机证伪）。
+//   J1 无需真值；J2/J3 需 figmaRoot bbox。fail-open + 计数行铁律。
+//   详 src/ai-engine/utils/layout-truth-guard.js。
+import { runLayoutTruthGuard } from './layout-truth-guard.js';
 // 删除/改写产物前的语法回退校验（与 section-content-guard 同铁律：引入新错误即回退）。
 import { validateVueSfc } from './sfc-syntax-validation.js';
 // 🛡️ 刀 43（2026-10-22）：R24 **不**挂在本链 —— 本链之后还有 4 个覆写/回退步骤会冲掉它，
@@ -273,6 +281,14 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     orphanHits: 0,
     orphanRemoved: 0,
     orphanResidual: 0,
+    // 层 4+5（2026-10-26）：布局真值守卫。显式初始化 —— 下游按固定形状序列化 summary，
+    // 动态赋值的键会因「条件命中才出现」而缺字段；零命中必须与「未接线」可区分。
+    layoutTruthEvaluated: 0,
+    layoutTruthInertRemoved: 0,
+    layoutTruthGeometryClamped: 0,
+    layoutTruthTruthOverrideStripped: 0,
+    layoutTruthHits: 0,
+    layoutTruthSkippedReason: null,
   };
 
   // ① 资源 import 终验兜底注入（幂等只补缺失，绝不删已有）。
@@ -1337,6 +1353,34 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   } catch (err) {
     logger?.warn?.('🛡️ 刀 55 异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ㉑ 层 4+5（2026-10-26 · mc-max-1792985029695-58de7d47 实锤）：布局真值守卫。
+  //   必须排在所有「写样式」步骤（①–⑳）之后：本步是对**最终样式文本**做确定性消歧/收敛，
+  //   前置任何一步若再写样式都会把本步结果重新污染。
+  //   ① J1 同块互斥布局指令（**无需真值**）：按最终 display 判定 ——
+  //        `display: grid` ⇒ 删 flex-direction/flex-wrap/flex-flow；`display:flex` ⇒ 删 grid-*。
+  //        真机病灶：`.c-device-list-section` 同时有 `display: grid` 与 `flex-wrap: wrap`
+  //        （ListSection.vue 与 common.less 双写），flex 语汇恒 inert、纯噪声且诱发误读。
+  //   ② J2 绝对 px 超真值轴尺寸（需 bbox）：`gap: 6px 93px` 跨轴 93px > 真值宽 32px ⇒ 删跨轴；
+  //        `min-*` 超真值轴 ⇒ 收敛为真值轴尺寸。两侧恒安全（单列时跨轴 gap 本就被忽略）。
+  //   ③ J3 真值尺寸被 SFC scoped 抹掉（需 bbox + shared 锚定真值）：shared `min-height:98px`
+  //       与真值一致、scoped 声明更小值 ⇒ 剥 scoped 那条。跨文件由**优先级**裁决（scoped (0,2,0)
+  //        胜 shared (0,1,0)），真值尺寸被静默吃掉 —— R5「CSS 取较大值」假设在此不成立。
+  //   fail-open：无 figmaRoot ⇒ J1 仍生效、J2/J3 跳过；异常吞掉但留痕。
+  try {
+    const lt = runLayoutTruthGuard(result, { figmaRoot: ctx.figmaRoot, logger });
+    if (lt && lt.summary && lt.files) {
+      result = lt.files;
+      summary.layoutTruthEvaluated = lt.summary.evaluated || 0;
+      summary.layoutTruthInertRemoved = lt.summary.j1InertRemoved || 0;
+      summary.layoutTruthGeometryClamped = lt.summary.j2GeometryClamped || 0;
+      summary.layoutTruthTruthOverrideStripped = lt.summary.j3TruthOverrideStripped || 0;
+      summary.layoutTruthHits = lt.summary.hits || 0;
+      summary.layoutTruthSkippedReason = lt.summary.skippedReason || null;
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 层4+5 布局真值守卫异常（fail-open）', { error: err?.message || String(err) });
   }
 
   return { files: result, summary };

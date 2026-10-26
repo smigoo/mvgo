@@ -17,6 +17,7 @@ import {
   stripFgTakeoverRules,
   detectStatRowLeaf,
   detectTableLeaf,
+  detectLegendDotTextLeaf,
   buildParentMap,
   matchFgTakeoverTargets,
   FG_TAKEOVER_CLASS_RX,
@@ -1240,5 +1241,238 @@ describe('刀 53 外观扩维 · detectStatRowLeaf（统计卡渐变底 + 描边
     expect(vue).not.toContain('background:');
     expect(vue).not.toContain('border:');
     expect(vue).toContain('总设备'); // 真值文本不受影响
+  });
+});
+
+/**
+ * 🛡️ 刀 53f：图例「圆点 + 短文本」叶接管（mc-max-1792934367321-ab7bb76c 实锤）。
+ *
+ * 夹具 = 事故件真值几何，一个数字都不改：
+ *   `43:4869` = GROUP(53×14) @ (29636,52138)
+ *     ├ TEXT `43:4870` "运行中" 42×14 @ (29647,52138) → cy 52145
+ *     └ ELLIPSE `43:4871` 8×8  @ (29636,52141)       → cy 52145（gap=3）
+ *   `43:4875` = GROUP(39×14) @ (29708,52138)，同构（TEXT 43:4876 "离线" / ELLIPSE 43:4877）
+ * 真机日志 2026-10-25T13:20:52Z 的跳过原因（text:hasGraphic(ELLIPSE) + icon:hasText(1)）
+ * 正是本判据要填的缝。
+ */
+describe('刀 53f detectLegendDotTextLeaf / 图例圆点叶', () => {
+  /** 图例组：圆点在**几何左侧**，但子项数组序是 [TEXT, ELLIPSE]（真值如此 ⇒ 判据不得依赖序）。 */
+  const legendItem = (
+    id: string,
+    x: number,
+    y: number,
+    dotId: string,
+    textId: string,
+    chars: string,
+    opts: any = {},
+  ) => {
+    const dotX = opts.dotX === undefined ? x : opts.dotX;
+    const dotW = opts.dotW === undefined ? 8 : opts.dotW;
+    const dotH = opts.dotH === undefined ? 8 : opts.dotH;
+    const textX = opts.textX === undefined ? x + 11 : opts.textX;
+    const dot: any = {
+      id: dotId,
+      type: 'ELLIPSE',
+      absoluteBoundingBox: { x: dotX, y: y + 3, width: dotW, height: dotH },
+      fills: opts.noFill ? [] : [solid(opts.dotHex || '#ff7300')],
+    };
+    const t: any = text(textId, chars, textX, y, chars.length * 14, 14, '#536881', 14, 400);
+    if (opts.dropWeight) delete t.style.fontWeight;
+    const kids: any[] = [t, dot];
+    if (opts.extra) kids.push(opts.extra);
+    return {
+      id,
+      type: 'GROUP',
+      name: `Group ${id}`,
+      absoluteBoundingBox: { x, y, width: 53, height: 14 },
+      children: kids,
+    };
+  };
+  /** 父容器 FRAME 持有 N 枚图例组（parentOf 需要真实父节点才能查兄弟）。 */
+  const doc = (items: any[], parentId = '807:2') => ({
+    id: 'root',
+    type: 'FRAME',
+    children: [{ id: parentId, type: 'FRAME', children: items }],
+  });
+  const TWO = () => [
+    legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '运行中'),
+    legendItem('43:4875', 29708, 52138, '43:4877', '43:4876', '离线'),
+  ];
+  const idxOf = (items: any[], parentId = '807:2') => indexFigmaNodes(doc(items, parentId));
+
+  it('阳性：真值几何 → 点 8×8 + 色值 + 间距 3 + 文本三件套', () => {
+    const idx = idxOf(TWO());
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('legend');
+    expect(r.sectionId).toBe('43:4869');
+    expect(r.baseId).toBe('43:4869');
+    expect(r.text).toBe('运行中');
+    expect(r.dotW).toBe(8);
+    expect(r.dotH).toBe(8);
+    expect(r.dotColor).toBe('rgba(255,115,0,1)');
+    expect(r.gap).toBe(3);
+    expect(r.color).toBe('rgba(83,104,129,1)');
+    expect(r.fontSize).toBe(14);
+    expect(r.fontWeight).toBe(400);
+    expect(r.height).toBe(14);
+  });
+
+  it('阳性：同父两枚**各自独立**接管（不需要两阶段抑制）', () => {
+    const idx = idxOf(TWO());
+    const parentOf = buildParentMap(idx);
+    const a: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, parentOf);
+    const b: any = detectLegendDotTextLeaf({ id: '43:4875' }, idx, parentOf);
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    expect(a.text).toBe('运行中');
+    expect(b.text).toBe('离线');
+    // 两者渲染后互不覆盖：类名按 section id 派生 ⇒ 唯一
+    expect(renderFoldedGridLeafVue(a, 'device')).toContain('c-device-fg-legend-434869');
+    expect(renderFoldedGridLeafVue(b, 'device')).toContain('c-device-fg-legend-434875');
+  });
+
+  it('🔴 阳性对照（病灶复现）：同一叶被 text / icon / header 三判据全拒 —— 这就是要填的缝', () => {
+    const idx = idxOf(TWO());
+    const sec = { id: '43:4869' };
+    const t: any = detectTextLeaf(sec, idx);
+    const ic: any = detectIconLeaf(sec, idx, []);
+    const h: any = detectHeaderRowLeaf(sec, idx, []);
+    expect(t.ok).toBe(false);
+    expect(t.reason).toMatch(/hasGraphic\(ELLIPSE:43:4871\)/);
+    expect(ic.ok).toBe(false);
+    expect(ic.reason).toBe('hasText(1)');
+    expect(h.ok).toBe(false);
+    // 三条与真机日志逐字对齐（2026-10-25T13:20:52Z）
+    expect(h.reason).toBe('iconNotMappedOrNotLeftOfTextOnSameRow');
+  });
+
+  it('渲染：CSS 圆（无 img）+ 宽高/色值/间距/字号**内联** + 命名空间被覆盖', () => {
+    const idx = idxOf(TWO());
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    const vue = renderFoldedGridLeafVue(r, 'device');
+    // 🔴 事故件病灶：`.dot` 只有 background 没有 width/height ⇒ 圆点 0×0。故尺寸必须内联。
+    expect(vue).toContain(
+      'width:8px;height:8px;border-radius:50%;background:rgba(255,115,0,1);flex:none;',
+    );
+    expect(vue).toContain('display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:3px;');
+    expect(vue).toContain('height:14px;');
+    expect(vue).toContain('color:rgba(83,104,129,1);font-size:14px;font-weight:400');
+    expect(vue).toContain('const text = "运行中"');
+    // 圆点是纯色 ELLIPSE，既无路径也无需 PNG ⇒ 绝不渲 img
+    expect(vue).not.toContain('<img');
+    // 🔴 命名空间：漏了 legend 片段，font-size-normalizer / 布局注入器 / 校验器
+    //    三个消费者就不会豁免本文件 ⇒ 真值被改写（副本口径 ⇒ 单点扩维）
+    expect(FG_TAKEOVER_CLASS_RX.test('c-device-fg-legend-434869')).toBe(true);
+  });
+
+  // ───────── 阴性：零误伤（每条都是「拒绝接管」的正当理由，不是 bug） ─────────
+  it('阴性①（图例定义）：同父仅 1 组 ⇒ 可能是状态徽标，不接管', () => {
+    const idx = idxOf([legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '已连接')]);
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('dotTextSiblings=1(need 2)');
+  });
+
+  it('阴性②（核心纪律）：圆点无可见 SOLID 填充 ⇒ 不画（绝不填兜底色）', () => {
+    const idx = idxOf([
+      legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '运行中', { noFill: true }),
+      legendItem('43:4875', 29708, 52138, '43:4877', '43:4876', '离线'),
+    ]);
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('dotFillMissing');
+  });
+
+  it('阴性③：文本缺 fontWeight ⇒ textStyleIncomplete（不猜）', () => {
+    const idx = idxOf([
+      legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '运行中', { dropWeight: true }),
+      legendItem('43:4875', 29708, 52138, '43:4877', '43:4876', '离线'),
+    ]);
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('textStyleIncomplete');
+  });
+
+  it('阴性④：圆点在文字**右侧**（几何反向）⇒ noDotTextPair', () => {
+    const idx = idxOf([
+      legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '运行中', {
+        dotX: 29690, textX: 29647,
+      }),
+      legendItem('43:4875', 29708, 52138, '43:4877', '43:4876', '离线'),
+    ]);
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('noDotTextPair');
+  });
+
+  it('阴性⑤：圆点过大（20×20）⇒ 不是「点」⇒ noDotTextPair', () => {
+    const idx = idxOf([
+      legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '运行中', { dotW: 20, dotH: 20 }),
+      legendItem('43:4875', 29708, 52138, '43:4877', '43:4876', '离线'),
+    ]);
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('noDotTextPair');
+  });
+
+  it('阴性⑥：组内多一个 VECTOR（图标/箭头）⇒ 不是「点+文」纯组 ⇒ noDotTextPair', () => {
+    const extra = { id: '43:4999', type: 'VECTOR', absoluteBoundingBox: { x: 29700, y: 52138, width: 8, height: 8 } };
+    const idx = idxOf([
+      legendItem('43:4869', 29636, 52138, '43:4871', '43:4870', '运行中', { extra }),
+      legendItem('43:4875', 29708, 52138, '43:4877', '43:4876', '离线'),
+    ]);
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('noDotTextPair');
+  });
+
+  it('🔴 阴性⑦（锚点纪律）：锚点集合里含别人的图例组 ⇒ 也不得代渲染', () => {
+    // `807:2-tail-text` 这类合成叶的 sourceNodeIds 会把父级全部子项带进来（含 43:4869）。
+    // 若照兄弟判据那样遍历 collectAnchorNodes 全集，本叶会把 43:4869 的图例重复渲染一遍。
+    const idx = idxOf(TWO());
+    const r: any = detectLegendDotTextLeaf(
+      { id: '807:2-tail-text', sourceNodeIds: ['807:2-tail-text', '807:2', '43:4869'] },
+      idx,
+      buildParentMap(idx),
+    );
+    expect(r.ok).toBe(false);
+    // 容器被严格解析成真父节点 807:2（2 个 GROUP 子项、0 个 TEXT）⇒ 不构成点+文组
+    expect(r.reason).toBe('noDotTextPair');
+  });
+
+  it('阴性⑧：父节点不在 parentOf（无法验证同构）⇒ fail-open，不猜', () => {
+    const idx = idxOf(TWO());
+    const r: any = detectLegendDotTextLeaf({ id: '43:4869' }, idx, new Map());
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('noParentForRepeatCheck');
+  });
+
+  it('fail-open：无 Figma 索引 / 节点不存在时不抛异常', () => {
+    expect(() => detectLegendDotTextLeaf({ id: '43:4869' }, new Map(), new Map())).not.toThrow();
+    const r: any = detectLegendDotTextLeaf({ id: 'nope:1' }, new Map(), new Map());
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('noAnchorNode');
+  });
+
+  it('端到端：collectFoldedGridTakeover 把两枚图例叶记为 legendTaken=2', () => {
+    const items = TWO();
+    const out = collectFoldedGridTakeover({
+      treeSections: [{ id: 'root', isLayoutContainer: true, children: [{ id: '43:4869' }, { id: '43:4875' }] }],
+      figmaNodeData: doc(items),
+      resourceMapping: [],
+      componentName: 'c-device',
+    });
+    expect(out.legendHits).toBe(2);
+    expect(out.skipped).toHaveLength(0);
+    expect(out.map.size).toBe(2);
+    for (const [, tr] of out.map) {
+      expect(tr.kind).toBe('legend');
+      // 图例不走两阶段抑制（每枚独立渲染）⇒ 产物不得出现 display:none 空壳。
+      // 🔴 断言「可观测产物」而非 P1-B 新增的 `suppressed` 字段：本 spec 属 P2，
+      //    不得依赖 P1-B 落地，否则单独回滚 P1-B 会让 P2 spec 转红（坏 commit 独立性）。
+      expect(tr.vue).not.toContain('display:none');
+      expect(tr.vue).toContain('-fg-legend-');
+    }
   });
 });

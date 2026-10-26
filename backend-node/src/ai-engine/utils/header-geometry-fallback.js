@@ -16,10 +16,20 @@
  *   fail-open：已有 header 事实 / bbox 缺失 / 判据不满足 → 原样返回零影响。
  *
  * @param {Array} sections - 顶层 section 列表（原地修改：命中项补 type/header 字段）
+ * @param {{headerFactStripped?: boolean}} [opts]
+ *   `headerFactStripped=true` = 调用方已按确定性判据剥掉了 chrome header
+ *   （该 header 由 base-panel 宿主渲染）。此时「全树无 header 事实」的前提不成立
+ *   ——事实存在，只是不在 sections 里，故本兜底必须整条跳过。
+ *   🔴 2026-10-26（ab7bb76c P0 治本连带）：`headerIsChromeOnly` 判据细化后
+ *   `807:3` 首次被判 chromeOnly 并剥离，若不同步加此闸门，兜底会把紧随其下的
+ *   「顶部统计概览」薄条（y=51637 h=66，占内容域 12.9% ≤ 30%）误标成 header，
+ *   闸门缺失 = 用一个新误判换掉一个旧误判。
  * @returns {{id: string, name: string, relYRatio: number, hRatio: number}|null} 命中信息（未命中 null）
  */
-export function applyHeaderGeometryFallback(sections) {
+export function applyHeaderGeometryFallback(sections, opts = {}) {
   if (!Array.isArray(sections) || sections.length < 2) return null;
+  // 调用方已确认存在 header 事实（chrome header 已被剥离、由宿主渲染）→ 不干预
+  if (opts && opts.headerFactStripped === true) return null;
   // 已有 header 事实（含嵌套，容器内 sub-header 也算）→ 不干预
   const hasHeaderFact = (list) => {
     for (const s of list || []) {

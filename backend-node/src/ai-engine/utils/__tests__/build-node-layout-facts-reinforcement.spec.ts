@@ -53,6 +53,61 @@ describe('buildNodeLayoutFactsReinforcement — B\' P3 提示约束', () => {
     const facts = { '3:1': { display: null, flexDirection: 'row' } }
     expect(buildNodeLayoutFactsReinforcement(facts, figmaNodeData)).toBe('')
   })
+
+  it('⭐ grid 事实（无 flexDirection）⇒ 不得下发 flex-direction（防 undefined/null 注入）', () => {
+    // 2026-10-26 · A2 配套：`display:'grid'` 的事实只带 gridColumns，没有 flexDirection。
+    // 原实现无条件拼 `flex-direction: ${fact.flexDirection}` ⇒ prompt 里写
+    // `display: grid; flex-direction: undefined;`，LLM 照抄即污染产物。
+    const facts = {
+      '4:10': { display: 'grid', gridColumns: 4, source: 'geometric-grid-inference', confidence: 'high' },
+    }
+    const out = buildNodeLayoutFactsReinforcement(facts, figmaNodeData)
+    expect(out).toContain('display: grid;')
+    // ① 全文不得出现非法键值（这一条与前言措辞无关，永真有效）
+    expect(out).not.toMatch(/flex-direction\s*:\s*(undefined|null|NaN|inherit|''|"")/)
+    expect(out).not.toContain('undefined')
+    // ② 该节点那一行**不得出现 flex-direction 声明**（允许出现「不要写 flex-direction」这类禁止语）
+    const nodeLine = out.split('\n').find((l) => l.includes('`4:10`')) || ''
+    expect(nodeLine).not.toBe('')
+    expect(nodeLine).toContain('display: grid;')
+    expect(nodeLine).not.toMatch(/flex-direction\s*:/)
+    // ②-b grid 行要给出正确的替代指引（列数走 grid-template-columns）
+    expect(nodeLine).toContain('grid-template-columns')
+    // ③ 前言也不得再要求「必须原样写入 display / flex-direction」（grid 无方向，会自相矛盾）
+    expect(out).not.toContain('必须**原样写入 `display` / `flex-direction`')
+    expect(out).toContain('禁止凭排版习惯臆造')
+  })
+
+  it('⭐ 混合事实（grid + 有方向的 flex）⇒ 前言仍要求方向，但 grid 行不写方向', () => {
+    const facts = {
+      '4:10': { display: 'grid', gridColumns: 4, source: 'geometric-grid-inference', confidence: 'high' },
+      '2:7889': { display: 'flex', flexDirection: 'row', source: 'geometric-inference', confidence: 'high' },
+    }
+    const out = buildNodeLayoutFactsReinforcement(facts, figmaNodeData)
+    // 有方向事实存在时前言保留完整要求
+    expect(out).toContain('必须**原样写入 `display` / `flex-direction`')
+    expect(out).not.toMatch(/flex-direction\s*:\s*(undefined|null)/)
+    const gridLine = out.split('\n').find((l) => l.includes('`4:10`')) || ''
+    expect(gridLine).toContain('display: grid;')
+    expect(gridLine).not.toMatch(/flex-direction\s*:/)
+    const flexLine = out.split('\n').find((l) => l.includes('`2:7889`')) || ''
+    expect(flexLine).toContain('display: flex; flex-direction: row;')
+  })
+
+  it('⭐ flex 但 flexDirection 非法（null/undefined/垃圾值）⇒ 只下发 display', () => {
+    for (const bad of [null, undefined, 'inherit', '', 0]) {
+      const facts = { '4:11': { display: 'flex', flexDirection: bad, source: 'x', confidence: 'low' } }
+      const out = buildNodeLayoutFactsReinforcement(facts, figmaNodeData)
+      expect(out).toContain('display: flex;')
+      expect(out).not.toMatch(/flex-direction\s*:\s*(null|undefined)/)
+    }
+  })
+
+  it('flex-direction 合法值大小写/空白归一后仍下发', () => {
+    const facts = { '4:12': { display: 'flex', flexDirection: '  COLUMN ', source: 'x', confidence: 'high' } }
+    const out = buildNodeLayoutFactsReinforcement(facts, figmaNodeData)
+    expect(out).toContain('display: flex; flex-direction: column;')
+  })
 })
 
 describe('compileDesignFacts — B\' P2 接入 nodeLayoutFacts', () => {

@@ -52,7 +52,7 @@ import { buildGridContract } from './grid-list-layout-contract.js';
  * 因此 font-size-normalizer / layout-facts-injector / code-validator **必须 import 本常量**，
  * 禁止各自写正则副本（副本 ≥2 份 = 事故温床）。
  */
-export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|text|icon|statrow|table)-/;
+export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|text|icon|statrow|table|legend)-/;
 
 /** fg- 类名的**裸片段**（去两侧 `/`），供需要拼接正则的场合复用，杜绝副本。 */
 const FG_CLASS_SRC = FG_TAKEOVER_CLASS_RX.source;
@@ -295,7 +295,8 @@ export function detectTextLeaf(sec, figmaIndex) {
   const nodes = collectAnchorNodes(sec, figmaIndex);
   if (nodes.length === 0) return { ok: false, reason: 'noAnchorNode' };
   // 递归收集锚点子树（GROUP 纯包装允许；其余类型 = 图形 ⇒ fail）
-  const GRAPHIC_RX = /^(VECTOR|RECTANGLE|FRAME|INSTANCE|ELLIPSE|LINE|BOOLEAN_OPERATION|COMPONENT|SLICE|STAR|POLYGON|RECT)$/i;
+  // 🔴 图形类型口径来自模块级 `GRAPHIC_NODE_RX`（与图例判据共用，禁止各写一份）
+  const GRAPHIC_RX = GRAPHIC_NODE_RX;
   const texts = [];
   let graphic = null;
   // 🔴 去重：collectAnchorNodes 返回「锚点 + 直接子项」，父与子会重复进入本函数
@@ -331,6 +332,165 @@ export function detectTextLeaf(sec, figmaIndex) {
     fontSize: ti.fs,
     fontWeight: ti.fw,
     height: tb ? Math.round(tb.h) : null,
+  };
+}
+
+/**
+ * 图例「圆点 + 短文本」判据的几何阈值（**唯一来源**，spec 断言从这里取，禁止照抄数字）。
+ *
+ * - {@link LEGEND_DOT_MAX}=16：圆点长边上限。真值 8×8；放到 16 是为容纳 10/12px 的点。
+ *   再大就该是头像/徽标而不是「点」，其语义与渲染形态都不同 ⇒ 不猜。
+ * - {@link LEGEND_GAP_MAX}=24：点与文字的**紧邻**水平间距上限。真值 3。
+ *   放宽到 24 仍远小于「图标 + 标题」的左图标间距上限（header 判据 48）——
+ *   图例的点必须贴着文字，否则可能是「图标 + 独立标签」两个语义单元。
+ * - {@link LEGEND_ROW_DY}=2：同行的容忍度（与 header 判据同口径），比的是**垂直中心**。
+ */
+const LEGEND_DOT_MAX = 16;
+const LEGEND_GAP_MAX = 24;
+const LEGEND_ROW_DY = 2;
+
+/**
+ * 图形节点类型（GROUP/CANVAS 不在此列 ⇒ 纯包装允许）。
+ * 🔴 由 `detectTextLeaf` 与 `detectLegendDotTextLeaf` **共用**：此前它是 `detectTextLeaf`
+ *   内的局部正则，图例判据若另写一份，「什么算图形」就会有两套口径（副本 ≥2 份 = 温床）。
+ */
+const GRAPHIC_NODE_RX =
+  /^(VECTOR|RECTANGLE|FRAME|INSTANCE|ELLIPSE|LINE|BOOLEAN_OPERATION|COMPONENT|SLICE|STAR|POLYGON|RECT)$/i;
+
+/**
+ * 「圆点 + 短文本」**单一判据**：容器节点的**直接子项**恰为「1 个 ELLIPSE + 1 个 TEXT」，
+ * 且几何满足同行 + 点在左 + 紧邻 ⇒ 返回真值三元组，否则 null。
+ *
+ * 🔴 本函数是**唯一**算这套几何的地方：`detectLegendDotTextLeaf` 用它判自己、
+ *   也用它判兄弟（同父下 ≥2 组同构）。禁止在调用侧另写一份比较 ——
+ *   「父说 2 组同构、子说自己不是」的自相矛盾就是这样长出来的。
+ *
+ * @param {object|null} container Figma 原始节点
+ * @returns {{dot:object, text:object, dotBox:object, textBox:object, gap:number}|null}
+ */
+function readDotTextPair(container) {
+  if (!container || typeof container.characters === 'string') return null;
+  const kids = (container.children || []).filter((c) => c && c.visible !== false);
+  // 恰 2 个子项：多一个图形（图标/箭头/背景）就不再是「点+文」纯组 ⇒ 不认
+  if (kids.length !== 2) return null;
+  const texts = kids.filter(
+    (c) => typeof c.characters === 'string' && c.characters.trim().length > 0,
+  );
+  const dots = kids.filter((c) => String(c.type || '').toUpperCase() === 'ELLIPSE');
+  if (texts.length !== 1 || dots.length !== 1) return null;
+  const db = bboxOf(dots[0]);
+  const tb = bboxOf(texts[0]);
+  if (!db || !tb) return null;
+  if (!(db.w > 0 && db.h > 0)) return null;
+  if (Math.max(db.w, db.h) > LEGEND_DOT_MAX) return null;
+  // 同行：比垂直中心（真值 点 cy=52145 / 文 cy=52145 ⇒ Δ0）
+  if (Math.abs(db.y + db.h / 2 - (tb.y + tb.h / 2)) > LEGEND_ROW_DY) return null;
+  // 点必须在**文字左侧**且紧邻（子项数组序不可信：真值序是 [TEXT, ELLIPSE]，几何才是判据）
+  if (db.x + db.w > tb.x) return null;
+  const gap = Math.round(tb.x - (db.x + db.w));
+  if (!(gap >= 0 && gap <= LEGEND_GAP_MAX)) return null;
+  return { dot: dots[0], text: texts[0], dotBox: db, textBox: tb, gap };
+}
+
+/**
+ * 🛡️ 图例「圆点 + 短文本」叶判据（刀 53f，2026-10-26 mc-max-1792934367321-ab7bb76c 实锤）。
+ *
+ * ## 病灶：两枚同构图例组掉进了三个判据**之间的缝**里
+ *
+ * 真值（`visual.json#layoutStructure.inlineCompositeRows` 逐字标注）：
+ *   - `43:4869` = horizontal `members:[43:4871(●8×8), 43:4870("运行中")]`；
+ *   - `43:4875` = horizontal `members:[43:4877(●8×8), 43:4876("离线")]`。
+ * 三者全灭（真机日志 2026-10-25T13:20:52Z 逐字）：
+ *   - `text:hasGraphic(ELLIPSE:43:4871)` —— 纯文本判据要求子树 0 图形；
+ *   - `icon:hasText(1)` —— 纯 icon 判据要求子树 0 TEXT；
+ *   - `header:iconNotMappedOrNotLeftOfTextOnSameRow` —— 标题行判据要求圆点**已导出
+ *     PNG 且映射到资源变量**，而纯色 ELLIPSE 无路径数据、资源映射里根本没有它。
+ *
+ * 落到 LLM 自由发挥的后果（事故件产物实锤）：
+ *   - `ContentSection5`：`.dot` **有 background 无 width/height** ⇒ 圆点 0×0 不可见；
+ *   - `ContentSection4`：整组被臆造成「数值卡」（`value="1"` + `label="离线"`），
+ *     连 `-dot`/`-text` 都没有，且内联 `flex-direction:column` 与 style 块 `row` 对打。
+ *
+ * ## 判据（严格 fail-open：任一事实缺失即不接管，绝不兜底）
+ *
+ *   ① **容器就是本叶自身的锚点节点**（`sec.id` 直接命中 / 合成 id 剥一段后缀回真节点），
+ *      **不**沿用其它判据的 `collectAnchorNodes` 全集遍历 —— 理由见下方 🔴；
+ *   ② 容器直接子项恰「1 ELLIPSE + 1 TEXT」（{@link readDotTextPair}）；
+ *   ③ 圆点有可见 SOLID 填充（拿不到色值就不画，绝不填兜底色）；
+ *   ④ 文本 run 三件套齐全（color/fs/fw，复用 `textRun`）；
+ *   ⑤ **同父下 ≥2 组同构**（同一个 {@link readDotTextPair} 判兄弟）⇒ 才承认这是「图例」。
+ *
+ * 🔴 为什么容器必须是「本叶自身的锚点」而不是锚点集合里的任意节点：
+ *   `807:2-tail-text` 这类合成叶的 `sourceNodeIds` 会把**父级全部子项**带进锚点集合，
+ *   其中就含有 `43:4869` 这枚图例组。若照兄弟判据那样遍历集合取首个命中，
+ *   本叶会把**别人**的图例再渲染一遍（重复 DOM，且比不接管更糟）。
+ *   实测该叶的跳过原因是 `text:hasGraphic(FRAME:43:4784)`（45 个 TEXT）——
+ *   它的锚点过宽是另一个病灶，不在本刀范围。
+ *
+ * 🔴 为什么要求「同父 ≥2 组」：单枚「● + 文本」也可能只是状态徽标（如「● 已连接」），
+ *   其语义 ≠ 图例；而图例的定义性特征就是**多枚同构**。这条闸门与 43:4869/43:4875
+ *   互为阳性对照（真值兄弟数 = 2）。
+ *
+ * @param {object} sec plan 叶段
+ * @param {Map} figmaIndex indexFigmaNodes 结果
+ * @param {Map<string,string>} parentOf buildParentMap 结果（兄弟视角）
+ * @returns {{ok:true, kind:'legend', ...truth} | {ok:false, reason:string}}
+ */
+export function detectLegendDotTextLeaf(sec, figmaIndex, parentOf) {
+  // ① 严格解析本叶自身锚点（不吃 sourceNodeIds 的子树）
+  const ids = [sec?.id, sec?.figmaNodeId]
+    .filter((x) => x != null && x !== '')
+    .map(String);
+  let container = null;
+  for (const id of ids) {
+    let entry = figmaIndex.get(id) || null;
+    if (!entry) {
+      const base = id.replace(/-[A-Za-z0-9:._-]+$/, '');
+      if (base && base !== id) entry = figmaIndex.get(base) || null;
+    }
+    if (entry?.rawNode) {
+      container = entry.rawNode;
+      break;
+    }
+  }
+  if (!container) return { ok: false, reason: 'noAnchorNode' };
+
+  // ② 点+文纯组
+  const pair = readDotTextPair(container);
+  if (!pair) return { ok: false, reason: 'noDotTextPair' };
+
+  // ③ 圆点色值真值
+  const dotColor = firstSolidFillRgba(pair.dot);
+  if (!dotColor) return { ok: false, reason: 'dotFillMissing' };
+
+  // ④ 文本 run 真值
+  const ti = textRun(pair.text);
+  if (!ti) return { ok: false, reason: 'textStyleIncomplete' };
+
+  // ⑤ 同父 ≥2 组同构（图片例语义；同一 readDotTextPair 判兄弟）
+  const parentId = parentOf?.get?.(String(container.id));
+  if (!parentId) return { ok: false, reason: 'noParentForRepeatCheck' };
+  const parentNode = figmaIndex.get(String(parentId))?.rawNode || null;
+  if (!parentNode) return { ok: false, reason: 'parentNotIndexed' };
+  const likeSiblings = (parentNode.children || []).filter(
+    (c) => c?.visible !== false && readDotTextPair(c) !== null,
+  ).length;
+  if (likeSiblings < 2) return { ok: false, reason: `dotTextSiblings=${likeSiblings}(need 2)` };
+
+  return {
+    ok: true,
+    kind: 'legend',
+    sectionId: String(sec.id ?? ''),
+    baseId: String(container.id),
+    dotW: Math.round(pair.dotBox.w),
+    dotH: Math.round(pair.dotBox.h),
+    dotColor,
+    gap: pair.gap,
+    text: ti.text,
+    color: ti.color,
+    fontSize: ti.fs,
+    fontWeight: ti.fw,
+    height: Math.round(Math.max(pair.textBox.h, pair.dotBox.h)),
   };
 }
 
@@ -1195,6 +1355,32 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       '',
     ].join('\n');
   }
+  if (tr.kind === 'legend') {
+    // 🔴 图例叶（刀 53f）：圆点用 **CSS 圆**（真值 ELLIPSE 纯色，无路径数据 ⇒ 不需要
+    //   也不可能有 PNG）；尺寸/色值/间距/字号全部内联 —— 预览运行时 scoped style 不生效，
+    //   放进 style 块 = 圆点塌成 0×0（事故件 `.dot` 只有 background 没有宽高，正是这个坑）。
+    //   `flex:none` 钉死圆点不被 flex 收缩，`align-items:center` 保证点与文本垂直居中。
+    const cls = `c-${sem}-fg-legend-${idSlug(tr.sectionId)}`;
+    return [
+      '<template>',
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:${tr.gap}px;${tr.height ? `height:${tr.height}px;` : ''}min-width:0;padding:0;">`,
+      `    <span class="${cls}-dot" style="display:block;width:${tr.dotW}px;height:${tr.dotH}px;border-radius:50%;background:${tr.dotColor};flex:none;"></span>`,
+      `    <span class="${cls}-text" style="color:${tr.color};font-size:${tr.fontSize}px;font-weight:${tr.fontWeight};line-height:1;white-space:nowrap;">{{ text }}</span>`,
+      '  </div>',
+      '</template>',
+      '',
+      '<script setup>',
+      `const text = ${jsonStr(tr.text)}`,
+      '</script>',
+      '',
+      '<style lang="less" scoped>',
+      `.${cls} { min-width: 0; }`,
+      `.${cls}-dot { border-radius: 50%; }`,
+      `.${cls}-text { font-size: ${tr.fontSize}px; }`,
+      '</style>',
+      '',
+    ].join('\n');
+  }
   if (tr.kind === 'text') {
     // 🔴 纯文本叶（刀 53b）：span + 真值内联 color/size/weight（scoped style 块在预览
     //   运行时不生效 ⇒ 字号必须内联，归一器经 protectFgTagInlineStyles 豁免）。
@@ -1284,12 +1470,12 @@ export function renderFoldedGridLeafVue(tr, semantic) {
  * @param {Array} p.resourceMapping effectiveMapping（资源映射，icon 反查用）
  * @param {string} p.componentName input.componentName（类名语义前缀）
  * @param {object} [p.logger]
- * @returns {{ map: Map<string, {kind:string, sectionId:string, baseId:string, vue:string}>,
- *            evaluated: number, headerHits: number, gridHits: number,
+ * @returns {{ map: Map<string, {kind:string, sectionId:string, baseId:string, suppressed:boolean, vue:string}>,
+ *            evaluated: number, headerHits: number, gridHits: number, legendHits: number,
  *            skipped: Array<{id:string, reason:string}> }}
  */
 export function collectFoldedGridTakeover(p = {}) {
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -1317,10 +1503,13 @@ export function collectFoldedGridTakeover(p = {}) {
   for (const sec of collectLeafSections(treeSections)) {
     if (!sec?.id) continue;
     out.evaluated += 1;
-    // 🔴 判定顺序：网格 → 标题行 → **统计行** → 纯文本 → 纯 icon（刀 53b/53c/53d）
-    //    —— 互斥域递减（cards≥2 / 1 TEXT+icon / 兄弟同构二元组 / 1 TEXT 无图形 /
-    //    0 TEXT 且已导出 PNG）。统计行必须**早于** text/icon：它的成员各自含 2 个
-    //    TEXT（不可能是 text 叶），但父级聚类判据更严格，先判可锁定整行归属。
+    // 🔴 判定顺序：网格 → 标题行 → **统计行** → 表格 → 纯文本 → 纯 icon → 图例
+    //    （刀 53b/53c/53d/53e/53f）—— 互斥域递减（cards≥2 / 1 TEXT+已映射 icon /
+    //    兄弟同构 N 元组 / 同表多列 / 1 TEXT 无图形 / 0 TEXT 且已导出 PNG /
+    //    1 ELLIPSE + 1 TEXT 的 ≥2 组同构）。统计行/表格必须**早于** text/icon：
+    //    它们的成员各自含 2 个 TEXT（不可能是 text 叶），但父级聚类判据更严格，
+    //    先判可锁定整行/整表归属。图例**放最后**：与 text/icon 两两互斥，
+    //    末位 ⇒ 结构上不可能抢走既有命中（只救原本被 skip 的叶）。
     let tr = detectGridLeaf(sec, figmaIndex);
     if (!tr.ok) {
       const h = detectHeaderRowLeaf(sec, figmaIndex, p.resourceMapping);
@@ -1342,8 +1531,16 @@ export function collectFoldedGridTakeover(p = {}) {
             const ic = detectIconLeaf(sec, figmaIndex, p.resourceMapping);
             if (ic.ok) tr = ic;
             else {
-              out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};text:${t.reason};icon:${ic.reason}` });
-              continue;
+              // 🔴 图例（刀 53f）**必须放在最后**：text 要求子树 0 图形、icon 要求
+              //   子树 0 TEXT、legend 要求「恰 1 图形 + 恰 1 TEXT」——三者两两互斥，
+              //   故末位只可能救「原本被 skip 的叶」，**结构上不可能抢走既有命中**
+              //   （阴性零误伤是结构保证，不靠断言兜）。
+              const lg = detectLegendDotTextLeaf(sec, figmaIndex, parentOf);
+              if (lg.ok) tr = lg;
+              else {
+                out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason}` });
+                continue;
+              }
             }
           }
           }
@@ -1358,11 +1555,17 @@ export function collectFoldedGridTakeover(p = {}) {
     if (tr.kind === 'header') out.headerHits += 1;
     else if (tr.kind === 'text') out.textHits += 1;
     else if (tr.kind === 'icon') out.iconHits += 1;
+    else if (tr.kind === 'legend') out.legendHits += 1;
     else out.gridHits += 1;
     out.map.set(String(tag), {
       kind: tr.kind,
       sectionId: tr.sectionId,
       baseId: tr.baseId,
+      // 🛡️ P1-B（2026-10-26）：显式暴露「本成员是否被两阶段决策抑制」。
+      //   下游装配层（code-generator#buildDeterministicIndexTemplate）需要据此把该成员
+      //   的宽/高从 flex 归一化分母里剔除；此前只能靠 `vue.includes('display:none')` 嗅探
+      //   字符串，属把「渲染产物」当「判据」的反模式（改一个类名就静默失效）。
+      suppressed: false,
       vue: renderFoldedGridLeafVue(tr, semantic),
     });
   }
@@ -1390,6 +1593,8 @@ export function collectFoldedGridTakeover(p = {}) {
         kind: 'statrow',
         sectionId: effective.sectionId,
         baseId: effective.baseId,
+        // i>0 ⇒ 渲染 display:none 空壳 ⇒ 装配层须把其宽度从 flex 分母剔除（P1-B）
+        suppressed: i !== 0,
         vue: renderFoldedGridLeafVue(effective, semantic),
       });
     });
@@ -1418,6 +1623,8 @@ export function collectFoldedGridTakeover(p = {}) {
         kind: 'table',
         sectionId: effective.sectionId,
         baseId: effective.baseId,
+        // i>0 ⇒ 渲染 display:none 空壳 ⇒ 装配层须把其宽度从 flex 分母剔除（P1-B）
+        suppressed: i !== 0,
         vue: renderFoldedGridLeafVue(effective, semantic),
       });
     });
@@ -1429,6 +1636,7 @@ export function collectFoldedGridTakeover(p = {}) {
     gridTaken: out.gridHits,
     textTaken: out.textHits,
     iconTaken: out.iconHits,
+    legendTaken: out.legendHits,
     statRowTaken: out.statRowHits,
     statRowSuppressed: out.statRowSuppressed,
     tableTaken: out.tableHits,

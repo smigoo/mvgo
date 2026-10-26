@@ -1,68 +1,75 @@
-# mvgo 速查（2026-10-23e｜详判据 `PIPELINE-DETAIL.md`｜归档 `MEMORY-full-archive-*`｜排障走 `mvgo-*-triage` Skill｜事件细节 `YYYY-MM-DD.md`）
+# mvgo 速查（2026-10-26f｜详判据 `PIPELINE-DETAIL.md`｜历史归档 `MEMORY-full-archive-*`｜排障走 `mvgo-*-triage` Skill｜事件细节 `YYYY-MM-DD.md`）
 
-> 只放**一定会踩的**单行索引；带文件/行号/判据细节的一律去 `PIPELINE-DETAIL.md` 对应小节。
+> 只放**一定会踩的**索引行；带文件/行号/判据细节一律去 `PIPELINE-DETAIL.md`。
+> 🆕 **当前状态（2026-10-26 16:46）**：**生产已部署到 `37d0983`**（用户「开工」放行第 3 步）。`go.microvideo.cn:13030` 热更完成：`pm2 reload` → 新 PID **11504**（旧 450438），build-stamp `37d0983`，回滚锚 `dist.bak.37d0983-20261026-164559`；验收全绿（`/api` 200 / `/api/tasks` 401 / 单进程无僵尸 / EADDRINUSE 0 / 模块加载致命错误 0）。**线上由此从 `69a54aa`（落后 17 天）跃到 `37d0983`**，ab7bb76c 四病灶 + A 批（层 4/5/7 `c91224e`）+ B 批（层 1/2 `37d0983`）全部生效。主仓指针 `b0f6adf0`（`04524b38 → 37d09836`）**仅本地** —— 主仓唯一远端 github 是日同步镜像、与本地已分叉非 ff，**未推**。**下一步 = 真机计数行核验**（需跑一次组件生成），HANDOFF 见 `HANDOFF-组件生成管线-2026-10-26.md`。🔴 **2026-10-26 17:30 核验受阻**：三任务打在**本地陈旧进程**（PID 39290 起于 11:02 < dist 重建 15:51）⇒ 新计数行恒 0；生产零生成（`out.log` 179316 行与基线逐字节相同）。**需二选一放行**：(a) 重启本地 `:13030` 后本地跑；(b) 生产触发（已是 `37d0983`）。四套新 spec 82 例已全绿（证明计数行会发）。
+> 🆕 **当前状态（2026-10-26 17:51）**：**真机计数行核验已完成**（用户放行重启本地 `:13030`）。`kill 39290` → `start-node.js` 起新 PID **62623**（`✅ 与源码一致` `git=37d0983`）→ 代跑生成 `**mc-1793008064107-07542a2f**`（`nodeId 36:1693`，191.7s，`completed`，产物 `c-device-07542a2f`）⇒ **四条计数行全部打印**（重启前恒 0）：①`视觉 section 锚点审计` `judged:1/phantomRefs:0/unrepaired:0`；②`vision 文案-锚点对账` `evaluated:29/matched:29/mismatched:0/ratio:100`；③`布局真值守卫` `evaluated:68,71/hits:0/truthBoxes:41`（开关 ON）；④`P1-B 抑制成员` `takeoverLeaves:0/excluded:0`。`text-truth` **归零** ✅；层 7 升级真实命中（`escalated:["LAYOUT-001×2→WARN","RICH-TEXT-001×2→WARN","THEME-SPECIAL-COLOR×2→WARN"]`）。
+> 🔴 **同时暴露两处待办**：(a) ③`hits:0` 是**无病灶**非判据失效（`evaluated` 非零 + `skippedReason:null`），**真机阳性命中仍缺**，阳性对照目前只在离线 spec；(b) **`COMP-002 内容归属错装` ×4**（`ContentSection/ContentText/Text2/Text3.vue`）—— L0-B iteration7 `pass=false BLOCK=4` → iteration9 `pass=true BLOCK=0`（自愈重试清掉），但遗留 8 WARN 含 **`TEXT-COVERAGE` 真值 29 条仅覆盖 13 条=45%** + `LAYOUT-001`（`801:3` 设计纵排 vs 产物横排）⇒ 与用户报障二同源；`COMP-002`（产物骨架 vs section 真值）与 `content-anchor`（vision JSON 挂 id）**分工不同，vision 干净≠产物干净**。
+> 🔴 **部署包必剔三样**（本次差点随包上线）：`dist/workspace`（本地垃圾，生产真身在 `backend-node/workspace` —— dist 的**兄弟**目录，`src/config/backend-root.ts:42` 恒不读 `dist/workspace`）、`.DS_Store`、`app.controller.spec.*`。打包用 `--exclude='*/.DS_Store' --exclude='.DS_Store' --exclude='dist/workspace' --exclude='dist/app.controller.spec.*'`。
 
 ## 硬约束
 - 🔴 不得自行部署（重启 :13030/:2610、同步生产、`git push`）→ 等指令；交付必须说「已改完，未部署」。
-- 🔴 治本非产物直改；自愈器须可辩驳判据 + 阳性对照；判据同构单一来源（副本 ≥2 份 = 事故温床）。
-- 🔴 文本命名无关（契约 09-30）：只认 `type` TEXT/CHARACTER。角色唯一来源 `splitTitleValueByStyle`（不可辨返 null）。
+- 🔴 治本非产物直改；自愈器须可辩驳判据 + 阳性对照；判据同构单一来源。
+- 🔴 文本命名无关：只认 `type` TEXT/CHARACTER；角色唯一来源 `splitTitleValueByStyle`（不可辨返 null）。⚠️ `ai-generation-constraints.md:223-235` 明禁生成面板标题栏/文字 ⇒ 与刀 57 取向相反（张力）。
 
 ## 环境
-- 根 `/Users/smigoo/工作/mvgo`：backend-node(:13030) / frontend(:2610，`build:safe`)。
-- 🔴 node 版本号会变，先 `ls ~/.workbuddy/binaries/node/versions/`。跑 npm/node 必须 `env -i PATH="…/<ver>/bin:/usr/local/bin:/usr/bin:/bin" HOME=/Users/smigoo NODE_OPTIONS="--max-old-space-size=2048" <cmd>`（否则 shim 卡死/137）。jest 加 `--runInBand --forceExit`（禁配 `--maxWorkers`）。
-- 鉴权 `token` 头（非 Bearer）；`/api/tasks` 在 `data.tasks`；不设 `FIELD_ENCRYPTION_KEY`；AI 凭证 `data/ai-config.json`。
-- 生产网关仅 GET/POST；前端 base `/mvgo/` + history。`nest build` 任一类型错中止整个 emit；判 dist = `grep -E` 新符号。
-- 🔴 真机起后端**必须** `node <仓库根>/start-node.js`（`node dist/main.js` 会静默退出 502）。日志 `server.log`（追加、UTC）。
+- 根 `/Users/smigoo/工作/mvgo`：backend-node(:13030) / frontend(:2610，`build:safe`，堆上限须 4096)。
+- 🔴 先 `ls ~/.workbuddy/binaries/node/versions/` 取版本；npm/node 一律 `env -i` 清 env（完整配方见 user-MEMORY；否则 shim 卡死/137）；jest 加 `--runInBand --forceExit`。
+- 鉴权 `token` 头；`/api/tasks` 在 `data.tasks`；不设 `FIELD_ENCRYPTION_KEY`；AI 凭证 `data/ai-config.json`；前端 base `/mvgo/`。`nest build` 任一类型错中止整个 emit；判 dist = `grep -E` 新符号。
+- 🔴 真机起后端**必须** `node <仓库根>/start-node.js`（`dist/main.js` 静默退出 502）；日志 `server.log`（UTC）。真机 DOM 验证 = `/preview/<componentId>?sessionId=<sid>&groupId=<gid>`（`:2610`）；`.mc-gen/screenshots/*-rendered.png` 不可当验收。
+- 🔴 离线重放三坑：① 权威副本 `temp-components/<sessionId>/<taskId>/`；② `figma-node-data.json` 遍历走 **`.document`**；③ plan 真实入参 = `.checkpoint/visual.json.layoutStructure`（`.checkpoint/analysis.json.subComponentPlan` 更硬）。
 
-## 判据索引（单行；详版见 PIPELINE-DETAIL 同名小节）
-- 🔴 基础族判据（详版见 PIPELINE-DETAIL「判据索引详版」）：① 两段式铁律「合并/收敛 → 门禁」两侧同一实现，LESS 圆括号三件套须 `less.render` 真编译；② 主题色门禁白名单只读 `css-vars.js` dark，less#dark 与 js#dark 同写；③ 多主题真值在 `dualTruth.themes[].nodeData`，`// 自动添加（语义推断）` = 非真值；④ E1 只提升容器类型，孤儿段 `name` 才是文案（断言 `text ?? name`）；⑤ 覆盖缺口只算**叶子 section**且**判定在 TEXT 级**，Figma 根不算叶子容器。
-- 🔴 改 prompt/规范前「加载链三查」：生效根 `references/**`；`prompts/agents|references/**` 是死文件。
-- 🔴🔴 LESS「Operation on an invalid type」（e2c61f62，`73420b3`，已闭环）：源头 `code-healer#healThemeMixinVarRefs` 自指双写 + 防线 `theme-color-guard#healBusinessStyleVarsInCss` 惰性 `[^)]+?` 吞右括号。刀 A = `safeMixinVarFallback` 三级取值 + 不认得 `return null` 跳过；刀 B = `isNestedVarFallback` 两处入口最先判、整段 `return m`。探针 `scripts/verify-calc-e2c61f62.mjs`（19 断言，含 E4 阳性对照）⇒ 详「LESS 编译门禁根治」。
-- 🔴🔴 加新入参必查下游每层解构 + 白名单/initialState（漏一层 = 静默丢弃零报错）。`generateCode` 用 `input.x`、`execute` 用裸变量。
-- 🔴🔴 「组件加载失败 / `'import' and 'export' may appear only with sourceType: "module"'」（mc-max-1792934332868-389dd460，`d3d103a`+`db6c46a`，已闭环）：**vue3-sfc-loader 按扩展名定 sourceType**（`.js`=script / `.mjs`|`.ts`=module）⇒ `.js` 里顶层 ESM 必抛。双层同治、判据独立：① 管线侧 `file-writer.js#sanitizeFileContent` **4J 分支**剥「独占一行的 `</?template|script|style>`」（比 4L-b 窄：JS 里 `<div>` 合法；行级豁免行内字面量）；② 加载器侧 `frontend/src/utils/sfc-loader-esm-js.js#resolveJsModuleTypeOverride` 双闸（只 `.js` ∧ 行首 ESM 标记 ∧ `new Function` 抛 SyntaxError）⇒ `getFile` 返 `{type:'.mjs',getContentData}` 走 `getResource` 类型覆写口。🔴 `</script>` 两模式都解析不了 ⇒ 单层修不了。🔴 `.js` 在三管线零防护（`sanitizeFileContent` 只 `.less/.css/.vue`；`stripLlmTailGarbage` 显式跳 `.js`；`microcode-engineer` 语法循环只 `.vue`）。🔴 `createJSModule` 未从包导出 ⇒ 类型覆写口是唯一挂点。探针：spec 10/10 + 前端离线 16/16；两态差分 **必先 `wc -l` 确认捕获非空**（`2>&1 > f` 顺序错 ⇒ 0 字节 ⇒ diff 假绿）。
-- 🔴 透传自检三铁律：区间锚点命中===1 / 每跳阳性对照 / 计数用「含字段行数」。方向类判据判「DOM 真实子项排布」；heal 翻转全部出现点。配额判据收集与裁剪解耦。
-- 🔴 E1 只提升容器类型；`:deep()`/`scoped` 在微码全局注入下是死规则 ⇒ 确定性产物类名必须组件内唯一。
-- 🔴 装配层刀具唯一有效挂载点 = `file-writer.js#writeFiles`（pre-write 后还有 4 个覆写/回退步骤）；刀 41 须 per-file 循环前整体跑；刀 50/52 几何裁决共用 `resolveStackGeometry`。R24 破图三成因 + 内容守卫 `ownerSectionId` 三判据 + `figmaRoot` 断路 ⇒ 详「R24 / 破图 / 内容守卫」。
-- 🔴🔴 几何/真值判据必须挂真机日志计数行（evaluated/hits/skipped），否则零命中与零问题不可区分；离线探针手工塞入参 = 假绿闭环。
-- ✅ 装配层刀具：F1 展平 / 37④渐变 / 38 边框 / 39 bg尺寸 / 40 重复声明 / 41 折叠网格 / 42 面板三件套 / 48 嵌套块 / 49 图标槽位 / 50 段内几何 / 51 标题行 / 52 父容器堆叠 / 53 同构段确定性接管 / 53b 纯文本叶 / 53c 纯 icon 叶 / 53d 统计行整行接管 / 53e 列式表格整表接管 ⇒ 详 PIPELINE-DETAIL。
-- 🔴🔴 **刀 53 家族接管改模板 class 却不维护 stylesheet** ⇒ 接管段全裸样式 + 旧规则成孤儿（见「接管后样式失配」；**孤儿侧已由刀 53h 闭环**）。
-- 🔴🔴 `splitTitleValueByStyle`（section-tree.js）入参形状 = `{text, fontSize, y}`，**不是 Figma 原始节点**；喂错 ⇒ 恒 null ⇒ 判据假性零命中。
-- 🔴 卡内横竖排/间距一律**几何判定**（x 区间不交叠且 y 区间有交集 ⇒ 横排；间距按实际序取正向值，禁止两侧公式取 min）。
-- 🔴 刀 53d/53e「整行/整表」按 `parentId` 分组**两阶段决策**：组内 memberIndex 最小者渲染，其余 `display:none`。真值 x 最小成员常不在 plan ⇒ 只认 index===0 会让整行变空。
-- ✅ 刀 55 plan 外编造副本（`utils/plan-orphan-guard.js`）：名 ∉ plan 名集合 ∧ 文本集合是某 plan 组件 Y **子集** ∧ Y 唯一 ⇒ 删文件 + 摘 index.vue 标签/import（复用刀 54 文本抽取器，避免两份实现）。挂 ⑳，无 plan ⇒ fail-open ⇒ 详「刀 54/55/56/57」。
-- ✅ A 方案 plan 层覆盖门禁（`utils/section-plan-coverage.js`）：挂 `subcomponent-planner.js` plan 落定处（双链路同一入口）。①② 覆盖缺口/兄弟重叠**只诊断**；③ 纯文本行段锚点膨胀**确定性修复**。🔴 ①② **不做补建**（v-for 假阳实锤）。③ 137 组件零命中 ⇒ 详「刀 54/55/56/57」。
-- ✅ 刀 53 家族已接 vue3（`b16a2a6`）：判据族/渲染器/终裁出口与 microcode 同一实现（`_fgTakeoverFiles` 由 `writeFiles` 自动带）。🔴 唯一差异 = **vue3 子组件名 LLM 自由** ⇒ **禁止照搬 microcode「tag 即文件名」**（恒零命中 = 假绿）；映射唯一实现 `matchFgTakeoverTargets`（名命中跳 chunk / 产物 `data-section-id` 命中覆写；主组件 `package/index.vue` 硬护栏）。prompt 侧 `b0d4ae4`：**只下发接管名** + 锚点规则与命名解耦。开关 `MVGO_VUE3_NAMING_CONTRACT=0`；评测台 `scripts/ab-vue3-prompt.mjs`（无密钥 ⇒ 下发名须从 A 臂 prompt 反解）。
-- 🔴 `collectLeafSections` **只递归 `isLayoutContainerSection` 为真的段**（`isLayoutContainer:true` 或 `layoutSource==='container-rebuild'`）⇒ fixture 构造容器段必须带该标记。
-- 🔴🔴 `getFigmaBox` 形态陷阱（四元齐全，裸 `{width,height}` 判 null）；`resolveSectionFlexSize` 取 sourceNodeIds 并集。
-- ✅ 刀 54 硬编码文本门禁（`utils/hardcoded-text-gate.js`）：truth = Figma 全树 TEXT 全集（不依赖 plan 归属）；两级阀 `group-majority-untruth` + `file-majority-untruth`；**多位数字不放行**；挂 ⑲（双链路）。`business-text-rules#isTextAllowedByRules` 零消费者（死代码）⇒ 详「刀 54/55/56/57」。
-- 🔴 真机 DOM 验证入口 = `/preview/<componentId>?sessionId=<sid>&groupId=<gid>`（`:2610`）；`.mc-gen/screenshots/*-rendered.png` 是早期快照不可当验收。
-- 🔴 **离线重放语料三陷阱**：① 权威副本在 `temp-components/<sessionId>/<taskId>/`（`frontend/workspace/custom-components/` 是交付副本，可能被修过）；② `figma-node-data.json` 顶层 `{fileKey,nodeId,cachedAt,document}` ⇒ 遍历必须走 **`.document`**；③ plan 真实入参 = **`.checkpoint/visual.json.layoutStructure`**，`.checkpoint/analysis.json.subComponentPlan` = 真机落盘 plan（比 server.log 更硬）。
-- ✅ 方案 F 文本删除形态扩维（`section-content-guard.js#removeTextBinding`）：三类（静态 / Mustache 整段 / `removeBorrowedDataRows` 整行）+ **声明行删除正则用标识符 root** + 删引用与剪 import 同处完成 + borrowed **按文件聚合** ⇒ 详「刀 54/55/56/57」。
-- 🔴🔴 **方案文档里的判据只能当假设，不许照抄**：f98f7463 C 方案写「列容器同宽 ±2」，实测 4 列宽 179/98/98/98 ⇒ 照抄恒零命中假绿。落地版：同高±2 + 同 y±2 + x 严格递增（允许 ≤2px 咬合）+ 各列 TEXT 数相同且 ≥3 + 跨列逐行 y 对齐 ±2 + **父的全部直接子项都在同一行带**（`band.length===sibs.length`）。
-- ✅ 刀 53e 列式表格整表接管（`detectTableLeaf`）：判定顺序 grid→header→statrow→**table**→text→icon；列宽按 **`width/列宽和`** 转百分比。`FG_TAKEOVER_CLASS_RX` 加 `table` ⇒ 4 消费者自动生效 ⇒ 详「刀 54/55/56/57」。
-- ✅ 刀 56 字面量漂移（`hardcoded-text-gate.js#pickSiblingTruthCandidate`）：同字段 CJK 真值兄弟 + truth 中**唯一**最小编辑距离缺失真值 ⇒ 全文替换字面量；**先于 strip**（否则文字颜色双丢）。🔴 字面量 ∈ truth 不配对；heal 循环 `next` 初值须 `null`；spec fixture 须让 name 值进 truth ⇒ 详「刀 54/55/56/57」。
-- ✅ 刀 57 面板标题槽位归属（`panel-chrome-misplacement.js#healPanelTitleSlot`）：五判据 ⇒ slot 改挂 `#title-left`；挂 ⑮-c；default-panel `header-title` 加 `v-if="!slot['title-left']"`（现有产物 0 个用 ⇒ 零回归）。🔴 前端 build:safe 堆上限须 ≥4096（2048 必 OOM）⇒ 详「刀 54/55/56/57」。
+## 索引（详版一律见 PIPELINE-DETAIL）
+- 🔴 基础族判据 / LESS invalid type / sourceType 事故 / 透传自检三铁律 / `:deep()` 死规则 / 装配层挂载点 = `file-writer.js#writeFiles` / R24 破图 / `getFigmaBox` 四元陷阱 / 卡内横竖排几何判定 ⇒ 均见 P-DETAIL 同名小节。
+- 🔴🔴 几何/真值判据必须挂真机日志计数行（evaluated/hits/skipped）；离线探针手工塞入参 = 假绿闭环。
+- 🔴 刀 53 判定顺序 `grid→header→statrow→table→text→icon→legend(刀 53f)`；statrow/table 按 `parentId` 分组两阶段决策（memberIndex 最小者渲染、其余 `display:none` 空壳）；plan 缺项降级是**有意设计**。
+- 🔴🔴 刀 53 家族接管改模板 class 却不维护 stylesheet（孤儿侧已由刀 53h 闭环）；~~P1-B 未做~~ ✅ 已做；~~P2 无刀认领~~ ✅ 刀 53f `detectLegendDotTextLeaf` 已接（末位、互斥结构保证零误伤）。
+- ✅ **刀 53f 图例「圆点+短文本」**：`text:hasGraphic` 与 `icon:hasText` 互否的缝。🔴 容器必须严格解析**本叶自身锚点**，禁 `collectAnchorNodes`（合成叶 `sourceNodeIds` 含别人子项 ⇒ 重复渲染）；`readDotTextPair` 是几何唯一来源（自己与兄弟共用）；要求同父 ≥2 组同构（单枚是状态徽标）。🔴 真值子项序是 `[TEXT, ELLIPSE]` ⇒ 禁依赖序。渲染用 **CSS 圆全内联**（scoped style 预览不生效 ⇒ 0×0 事故）。
+- ✅ 刀 54 文本门禁 / 刀 55 编造副本 / 刀 56 字面量漂移（**先于 strip**）/ 刀 57 面板标题槽位（挂 ⑮-c）/ A 方案覆盖门禁（①② 只诊断）/ 方案 F 删除形态 ⇒ 详 P-DETAIL「刀 54/55/56/57」。
+- 🔴🔴 **方案文档里的判据只能当假设，不许照抄**（f98f7463「列容器同宽 ±2」实测 179/98/98/98 ⇒ 恒零命中假绿）。
+- ✅ 刀 53 家族已接 vue3（`b16a2a6`）：🔴 vue3 子组件名 LLM 自由 ⇒ 禁照搬「tag 即文件名」；映射唯一实现 `matchFgTakeoverTargets`；开关 `MVGO_VUE3_NAMING_CONTRACT=0`。
+- 🆕 **P1-A `plan-body-child-id-audit.js`**（ab7bb76c）：vision `body.children[].id` 自引用/同父复用 ⇒ 无刀接管。**只诊断**；挂点必须在 E1 **之前**（之后被拍平 ⇒ 假绿）。A1 self-reference + A2 duplicate-sibling；锚点 `figmaAnchorId→figmaNodeId→id`；id 须过 `FIGMA_ID_RE`。
+- 🆕 **P0 面板标题段被还原**（ab7bb76c）：`807:3` 含 FRAME ⇒ `headerIsChromeOnly` 判 `chromeOnly=false` ⇒ 逃过 `stripChromeOnly`；`isPanelHeader` 只作用于 vision `rawSections` ⇒ 详 P-DETAIL。
 
-## 接管后样式失配（cd8938f8 实锤，2026-10-23；全量报告 `.workbuddy/reports/2026-10-23-layout-fidelity-cd8938f8.md`）
-- 🔴🔴 **接管改模板 class 却不维护 stylesheet** ⇒ 接管段全裸样式 + 旧规则成孤儿（第三态「既失效又误导」）。实测：模板 class **48** / 命中样式 **11** / 裸类名 **37** / 业务孤儿 **2**（`.c-device-content-section4`、`-col`，其 `#e2ecfe`/`#bdd5ff` 与真值逐位一致却已失联）。
-- ✅ **刀 53h 已闭环「孤儿侧」（commit `8f7acc0`）**：`utils/orphan-style-rule-guard.js`，挂 `file-writer.js#writeFiles` 循环外整体一次（刀 41 后、逐文件循环前），回灌 `filesForWrite`；真机 13 候选 → **2 删 / 11 留 / 4 mixin 跳过 / residual 0**。🔴 只能走**孤儿判定**不能重命名（接管渲染器不读旧模板 ⇒ 无类名映射）；引用池**必须排除 `.css`/`.json`**（否则「永不判孤儿」假绿）；只改 `.less`（`.css` 由下游 `recompileIndexCss` 重生成）。⇒ 详 PIPELINE-DETAIL「刀 53h」。
-- ✅ **方向 1 契约扩维（commit `01868d8`）**：`folded-grid-section-takeover.js` table/statrow/grid/header 四分支补 `{bg,border,pad}` 并**内联输出**；`section-tree.js` 导出 `fillsToCss/strokesToCss/nodeAppearanceTruth`。🔴 根因 = **数据契约缺维**（原模型只有 `{text,color,fs,fw}` ⇒ 斑马纹/表头底色/白网格线/卡渐变底全丢）；该代码曾属**未提交悬挂态**，本会话补提交。
-- 🔴 两处**死分支**（勿挂错层）：① 判「动态选择器」须看**选择器头原文**（token 正则永不捕获 `$`/`` ` ``）；② 判「动态变体保护」须用**插值前缀干**（`` `c-x--${k}` `` → `c-x--`），挂 `fact.bases` 会被 `referencedByDom` 覆盖 = 恒不触发。🔴 判定手法：模板 `class` 集合 ⊖ `.css/.less` 选择器集合（剔 `.png/.less/.light/.dark/.theme_2/.common` 噪声）；截模板必须 `lastIndexOf('</template>')`。
-- 🔴 分析侧同单实锤：`stat-cards` 段元素绑定错位到 **TEXT 子节点**（`flexGrow`=文本宽度比、`figmaHeightPx`=文本高、`repeatedFill #a6ceff`=图例 dot 色），同文件 `device-table` 段准确 ⇒ **错误集中于「items 类卡片组」**；门禁全绿（96/19-19）却漏两类（叶段真值有 bg/border 而产物零声明；同 y 兄弟被渲成纵向 stack）⇒ 详「接管后样式失配」。
+## 第 6 层令牌化（a0f93b25「深色主题和默认 dark 一模一样」；已提交 `bc24a91`，未部署）
+- ✅ **RC1 `color-slot-mapper.js`**：`flattenTreeList` 带 alpha、阈值 `0.5`→`0.1`（实测双峰，半透明面板 0.2/0.32/0.35 被旧阈值整批丢）；颜色键 `cssColorKey`（不透明 `#rrggbb` 口径不变、半透明 `rgba()`）贯穿 key/value/`differs`；`applyColorSlotMapping` 改 `COLOR_TOKEN_RX` 令牌化 ⇒ **根治真机 `replacedCount:0`**（旧正则只认 `#hex`，rgba 全线逃逸）。半透明**刻意不给 canonical 通道**（themeSlots 值是 hex，强套会让面板变实心）。
+- ✅ **RC2 `file-writer.js`**：`resolveCustomThemeExports(tokens)` 作导出主题名**单一事实源**，`buildCssVarsFile` 与 `buildDeclareJsFile` 共用（body 空即不导出 ⇒ 结构上杜绝「declare import 了/css-vars 没声明」断链）。缺省逐字节等价旧版（lite 两处 `buildMcSkeleton` 不传 styleTokens）。
+- 🔴 `meta?.brightness === 'dark' ?? (...)` 的 `??` **不生效**（`===` 恒 boolean）⇒ 无 brightness 自定义主题走 light 语义；**照搬不改**（改了属行为变更）。
+- 🔴 **RC1' 未收口**：产物 `.vue` 内联 `style="color:rgba(...)"` 是主导面（9 种全 alpha=1，8 种命中 light 槽位且 theme_2 有深色真值 ⇒ 真值算对、产物零引用）；内联不经 Less ⇒ 写不了 `@color-custom-N` ⇒ 文字色仍不跟随主题。生成者 `folded-grid-section-takeover.js:1191/1192/1255/1368/1392/1419`。上游 `prompt-builder.js:2630` vs `:2883` 两条互斥硬指令。
 
-## 诊断手法（详 PIPELINE-DETAIL「诊断手法」/「本机 shell 陷阱」/「环境 / 运维」）
-- 门禁三查（守卫形状全语料量化 / 日志 id 留痕 / 离线探针三态）；🔴 0 命中必配阳性对照（变异须打在真正生效的那一层）；改判据先纯函数 A/B；判据叠两层后前层对照会被后层掩盖 ⇒ 加兜底后重造对照。改的人和验的人用同一正则 = 假绿闭环。
-- 🔴 **prompt 阴性断言禁用例行通配字面量**（如 `package/components/`）；只认**下发块标题串**；A/B 评测台须从 **A 臂 prompt 文本反解**下发名。
-- 🔴 既有 flaky/failed（别算自己引入）：`thinking-escalation` / `build-node-layout-facts-integration` / `manifest-auditor` / `file-writer` 2 例 / `less-variable-checker` 1 例 / `quality-score-v1` 1 例 / `pipeline-regression-0908` P5-1~4 / `-0907-l6` T6b/T6c。归因：路径级 `git stash push -m <tag> -- <全集>` → 基线 → **立即 pop**（或两态差分对跑）。spec 禁 tryRequire 假绿；引 validator/logger 链 ⇒ `jest.mock('../../config/backend-root.js', …, {virtual:true})`。
-- 🔴🔴 **全量 `env -i` 基线恒有 22 套失败 / 36 例**（10-23 实测）——别当回归。全是**环境类**：`join(dataDir…)` 得 undefined（`json-parser`/`safe-logger`/`code-parser`/`model-config` 链）+ logger mock 路径（`generation-context-assembler-rowpeers`）+ Nest 服务套无 env（`config.*`/`component.service`/`phase2.service`/`tasks-config-snapshot`/`api-binding.service`/`http-exception.filter`）+ 上述 flaky 名单。归因法：`git checkout <base> -- <被改文件>`（+移开新增文件）→ 跑 → **`git checkout HEAD -- .` 恢复**，两态 `FAIL` 集合 `diff` 须为空。
-- 判生产 dist 一致 = 逐文件 md5 清单 diff（`tr -s ' '` 归一化）；僵尸进程 `ps -eo pid,cmd | grep -E '…' | grep -v grep | wc -l`。
+## 接管后样式失配（cd8938f8；报告 `.workbuddy/reports/2026-10-23-layout-fidelity-cd8938f8.md`）
+- ✅ 刀 53h（`8f7acc0`）闭环孤儿侧（只能孤儿判定不能重命名；引用池须排除 `.css`/`.json`）；✅ 契约扩维（`01868d8`）补 `{bg,border,pad}`。两处死分支 + 判定手法 ⇒ 详 P-DETAIL。
+
+## 诊断手法
+- 门禁三查（守卫形状全语料量化 / 日志 id 留痕 / 离线探针三态）；0 命中必配阳性对照（打在真正生效那层）；改判据先纯函数 A/B。**改的人和验的人用同一正则 = 假绿闭环**。
+- 🔴 判刀具是否命中必须全日志 grep 刀具名；prompt 阴性断言禁用例行通配字面量。
+- 🔴 flaky 名单（别算自己引入）：`thinking-escalation`/`build-node-layout-facts-integration`/`manifest-auditor`/`file-writer`/`less-variable-checker`/`quality-score-v1`/`pipeline-regression-0908`/`-0907-l6` ⇒ 详 P-DETAIL。
+- 🔴🔴 全量 `env -i` 基线恒有 22 套失败 / 36 例（全环境类）——别当回归。归因：`git stash push -m <tag> -- <全集>` → 基线 → 立即 pop；两态 FAIL 集合 diff 须空。
+
+## B 批通用管线（层 1 结构 SSOT 锚点 / 层 2 内容守恒；已部署 `37d0983`，真机 29/0 已验证）
+- ✅ 层 1 `section-anchor-truth.js#auditSectionAnchors`：幻影 ref 分离（`refsInTree`/`missingRefs` ⇒ `stats.phantomRefs`，祖先判定只在 `refsInTree` 上做）+ 修复门槛（`no-lca`/`lca-is-root`/`phantom-refs` ⇒ 落 `unrepaired`，不写坏锚）。`emptyStats` 导出为 `emptyAnchorStats()` 供聚合侧复用。
+- ✅ 层 2 `vision-content-anchor-consistency.js`：**形态门禁单一来源** `isDeclaredContentEntry` / `readDeclaredTexts` / `collectDeclaredTexts`（同级条目 `id` 过 `FIGMA_ID_RE` ∧ `CONTENT_TEXT_FIELDS` 至少一非空 ⇒ 才算 vision 声称的可见文案；`CONTENT_TEXT_FIELDS=['text','characters','content']`，刻意不含 `name/title/role/type/layout/description/reason`）。`_extractVisionTexts` 收敛为 `collectDeclaredTexts(parsed)` 薄封装；`collectDeclaredPairs` 复用同一判定。
+- 🆕 dist 端到端真机（58de7d47）：层 2b **29 串 / 可疑 0**（旧口径 475/44、键白名单 80/41）；全树口径 vs 仅 sections 口径**集合差 0** ⇒ 取全树（保留 `charts`/`headerSlots`/`elements` 非 section 位置的 OCR 误读检测力）。层 1 `{judged:3, phantomRefs:1, notAncestor:0}`。
+- 🔴 诊断分工：`text-truth` = 「文案**读错**了吗」；`content-anchor` = 「文案**挂对 id** 了吗」。真机上 text-truth 应归零，缺陷由 content-anchor 承载。
+- 🔴 两守卫计数行 `视觉 section 锚点审计·已评估` / `vision 文案-锚点对账·已评估` 无论命中与否全打；`sectionAnchorAudit` 含 `phantomRefs`/`unrepaired`/`unrepairedDetail`。
 
 ## 陷阱
-- 🔴 BSD grep：多模式用 `-E`（`\|` **静默空**，老坑已踩 N 次）；`\b` 同样不支持（用 `[^A-Za-z]`）；`sed -i ''`；`git commit -m` 禁 `$(...)` + 子仓指针须 `git add <submodule>`；heredoc `${}` 会展开 ⇒ 用 Write。
-- 取图 `/api/component/:id/file?path=<rel>&raw=1`；`mc-preview.png` = 设计图、`.mc-gen/screenshots/<taskId>-rendered.png` = 产物预览。
-- 🔴 生产部署三件套：`COPYFILE_DISABLE=1 tar --no-xattrs` / 回滚锚 `dist.bak.<短sha>-<时间戳>`（按 `.build-stamp` 认锚）/ 验收 = 新 PID + 启动晚于 dist mtime + 符号 grep + `api=200`/`tasks=401` + 无僵尸。
-- 离线探针跑 `figma-node-data.json`：`node <probe> <json路径> "<id>:depth=N"`（argv[2] 必须是路径）。
+- 🔴🔴 **「本地跑一次验证」前必核 `本地进程启动时间 vs dist mtime`**：Node 只在启动时加载模块 ⇒ 源码改完 + `nest build` 重建 dist 后，**不重启本地 `:13030` 服务跑的还是旧码**。实测三任务打在本机 PID 39290（起于 11:02）而 dist 重建于 15:51 ⇒ A/B 批新计数行**恒 0**，差点误判「判据不生效」。判据：新计数行 0 而**旧守卫照打**（如 R22-d 老 WARN、刀 54/55、P1-A/P1-B）= 进程陈旧，非代码问题。
+- 🔴 **生产日志真身 = `/root/.pm2/logs/backend-node-out.log`**；`backend-node/server.log` 在生产只有 355 行（空壳），**别拿它核计数行**。本地才是 `backend-node/server.log`。生产 pm2 `created at`（=`08:45:59.652Z`）可直接当「进程启动时间」用。
+- 🔴 BSD grep 多模式用 `-E`（`\|` 静默空）；`sed -i ''`；`git commit -m` 禁 `$(...)`；子仓指针须 `git add <submodule>`；heredoc `${}` 会展开 ⇒ 用 Write。
+- 🔴 **幂等守卫做「加固前 vs 加固后」对比前必须剥掉其修复产物**（如 checkpoint 里已被写入的 `figmaAnchorId`），否则复跑 `repaired:0` 会被误读成「修好了」= 假绿。
+- 🔴 **多挂载点聚合 stats 必须复用源模块导出的键表**（`emptyAnchorStats()`），不得自拼键列表 —— 源模块扩键时聚合侧静默丢键（曾致 `phantomRefs`/`unrepaired` 在日志中完全不可见）。
+- 🔴 主仓 `mvgo` **无 `.gitmodules`**：`backend-node`/`frontend`/`docs` 是被当 **gitlink（mode 160000）** 追踪的嵌套仓 ⇒ `git submodule status` 恒报 `no submodule mapping` / `could not get object info`，**别被误导**；指针推进只能用 `git add <目录>`。推主仓前先 `git fetch`：唯一远端 `github` 是**日同步镜像**且与本地**已分叉**（本地领先 200+ 笔）⇒ 非 ff，**禁 force push**，按惯例只本地提交。
+- 🔴 两态差分必先 `wc -l` 确认捕获非空（`2>&1 > f` 顺序错 ⇒ 0 字节 ⇒ diff 假绿）。
+- 🔴 生产部署三件套：`COPYFILE_DISABLE=1 tar --no-xattrs` / 回滚锚 `dist.bak.<短sha>-<时间戳>` / 验收 = 新 PID + 晚于 dist mtime + 符号 grep + `api=200`/`tasks=401` + 无僵尸。
+- 🔴 `布局真值守卫 hits:0` ≠ 守卫正常：只要 `evaluated` 非零 + `skippedReason:null`，只能证明**接线生效**；**0 命中仍需真机阳性样本**（含 J1/J2/J3 病灶的设计稿），否则与「判据恒不触发」不可区分。
+- 🔴 **`COMP-002 内容归属错装` ≠ `content-anchor` 对账**：前者判**产物 .vue 骨架**是否渲染了本 section 的真值文案（`mc-component-graph` L0-B）；后者判 **vision JSON** 的文案是否挂对 id。实测两者可同时「对账干净 + 产物串味」⇒ 别用 `contentAnchorAudit.mismatched:0` 证明产物内容正确。
+- 🔴 计数行核验的**唯一可靠基线** = 重启前 `wc -l server.log` 快照 + `sed -n '<BASE+1>,$p'` 窗口；跨组件比对（如「旧 `excluded:3` vs 新 `excluded:0`」）**不构成 A/B**，必须同 nodeId。
+
+## 🆕 ② 根因：文本真值三级衰减 24 → 12 → 1（2026-10-26 侦察，未修）
+- 🔴 **T1 配额吃文本**：`roles/subcomponent-planner.js:1417` `plainTextItems` 的 `.slice(0, 12)` 无差别作用于所有 section ⇒ figma 24 个 TEXT 只剩 12 条（后 6 行整段丢）。`elementCount` 仍 24 ⇒ 计划不自洽。同类第二处（首处 `5160a2ec`「全国」修在 `pickTextPriorityLines`）。
+- 🔴 **T2 无事实臆造方向**：figma GROUP 无 `layoutMode` ⇒ 无方向真值，但 `deriveChildLayout`（`section-tree.js:2606`）读几何聚类的 `flexDirection=row` ⇒ plan horizontal ⇒ 产物 row，vision 是 vertical ⇒ LAYOUT-001。**`section-tree.js:2627-2632` 断言 LAYOUT-001 是死代码 = 已过时**（真机有留痕）。
+- 🔴 **T3 声称拆却没拆**：`shouldSplitInternally=true` + `internalSubcomponents=[]` ⇒ grid 组被写成 stub（只渲 1 条）。
+- 🔴 权威副本在 `workspace/custom-components/<componentId>/.checkpoint/`；`temp-components/<sid>/<taskId>/` 会被轮换删除。
 
 ## 文本样式（R19）
-- 🔴 唯一真值源 `utils/text-runs.js`；判「落位」不判「存在」；三坑（浅/深多定义、只取顶层声明、多子组件全错才报）；严重级 WARN。（详 PIPELINE-DETAIL「G. 文本样式 R19 补充」）
-
+- 🔴 唯一真值源 `utils/text-runs.js`；判「落位」不判「存在」；严重级 WARN。

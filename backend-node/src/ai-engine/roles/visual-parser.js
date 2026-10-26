@@ -95,7 +95,15 @@ import { validateVisionAnchors } from '../utils/vision-anchor-validator.js'
 // 🔴 R22-d（2026-10-21 · c-d79b-66d79bff 实锤）：视觉 section 锚点的**祖先前置**校验。
 // 与 P1-7 的「存在性校验」互补、不可互相替代：本例锚点 `38:3258` **存在**于树中（是普通段里的
 // 「鲁邦通」TEXT），存在性校验绿灯，但它是几何无关节点 ⇒ 排序/语义回填全部拿到错坐标。
-import { auditSectionAnchors } from '../utils/section-anchor-truth.js'
+import { auditSectionAnchors, emptyAnchorStats } from '../utils/section-anchor-truth.js'
+// 🔴 R25-a（2026-10-26 · B 批 · mc-max-1792985029695-58de7d47 实锤）：vision 声明的
+//   「锚点 id ↔ 可见文案」与 Figma 真值对账（内容串味：文案读对、id 按行序贴错）。
+//   同时从这里取「形态门禁」文案采集器 `collectDeclaredTexts`，替换本文件旧的
+//   「递归收所有字符串、只排 5 个技术键」的全污染口径（真机 475 串 / 可疑 44 → 29 串 / 0）。
+import {
+  auditContentAnchorConsistency,
+  collectDeclaredTexts,
+} from '../utils/vision-content-anchor-consistency.js'
 // 🛡️ A′（2026-09-10）：纵向容器层级重建（纯函数，无 import.meta，jest 可 require）。
 // 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
 import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
@@ -150,14 +158,20 @@ function readSectionCounts(target) {
 function auditVisionSectionAnchors(parsed, figmaData) {
   const issues = []
   const fixes = []
-  let judged = 0
+  const unrepaired = []
+  // 🔴 键表来自层 1 的 `emptyAnchorStats()`（单一来源）——聚合侧不得自己拼键表，
+  //   否则层 1 扩键时这里静默丢键（真机曾因此让 `phantomRefs`/`unrepaired` 不可见）。
+  const stats = emptyAnchorStats()
   for (const arr of collectSectionArrays(parsed)) {
     const report = auditSectionAnchors(arr, figmaData)
-    judged += report.stats.judged
+    for (const key of Object.keys(stats)) {
+      stats[key] += (report.stats && report.stats[key]) || 0
+    }
     issues.push(...report.issues)
     fixes.push(...report.fixes)
+    unrepaired.push(...(report.unrepaired || []))
   }
-  return { issues, fixes, stats: { judged, repaired: fixes.length } }
+  return { issues, fixes, unrepaired, stats }
 }
 
 // 🛡️ P1（2026-09-09）：inlineCompositeRows → headerSlots 推断（纯函数，无 import.meta，jest 可 require）。
@@ -1620,16 +1634,25 @@ ${analysisTask}`
       //   位置：必须早于 merger —— merger 的 `sectionY` 与同区域判定都以锚点为输入。
       try {
         const anchorAudit = auditVisionSectionAnchors(parsed, figmaData)
+        // 🔴 计数行铁律：无论命中与否、是否含跳过/空输入路径，**一律**打 `已评估` 行。
+        //   否则「零命中」既可能是「判据不生效」也可能是「真没问题」，离线不可辨（假绿温床）。
+        logger.info('🛡️ 视觉 section 锚点审计·已评估', {
+          ...anchorAudit.stats,
+          issues: anchorAudit.issues.length,
+        })
         if (anchorAudit.issues.length > 0) {
           parsed.sectionAnchorAudit = {
             judged: anchorAudit.stats.judged,
             repaired: anchorAudit.stats.repaired,
+            // B 批加固新增观测面（幻影 ref / 拒绝修复），随 stats 一并留痕
+            phantomRefs: anchorAudit.stats.phantomRefs,
+            unrepaired: anchorAudit.stats.unrepaired,
             issues: anchorAudit.issues.slice(0, 20),
             fixes: anchorAudit.fixes.slice(0, 20),
+            unrepairedDetail: anchorAudit.unrepaired.slice(0, 20),
           }
           logger.warn('🛡️ 视觉 section 锚点与自身内容不相容（已按 LCA 写入 figmaAnchorId）', {
-            judged: anchorAudit.stats.judged,
-            repaired: anchorAudit.stats.repaired,
+            ...anchorAudit.stats,
             samples: anchorAudit.issues.slice(0, 6),
           })
         }
@@ -3729,6 +3752,78 @@ ${analysisTask}`
         logger.warn('vision 锚点真值校验失败（非阻断）', { error: e?.message })
       }
 
+      // 🔴 R25-a（2026-10-26 · B 批 · mc-max-1792985029695-58de7d47 实锤）：
+      //   vision 声明的「锚点 id ↔ 可见文案」与 Figma 真值**逐对账**。
+      //
+      //   病灶（真机实锤）：属性列表段 `36:1698` 声明 24 对 `{id, text}` —— **文案读对了**
+      //   （爆闪灯 / 感动科技 / 江苏通行宝…），但 id 按**行序**顺延贴（1699,1700,1701…），
+      //   真值 id 序里插了非连续节点（`81:3`/`81:5`/`81:4`/`81:6`）⇒ 第 2 项起整体错位，
+      //   产物把「所属产品 = 爆闪灯」渲染出来。实测 24 对里 1 命中 / 23 错配（ratio 4.2%）。
+      //
+      //   为什么三道既有守卫全漏（互补关系，不可互相替代）：
+      //     · `auditSectionAnchors`（R22-d）只看**段级**锚点是否为子级引用的祖先，不看 `{id,text}` 配对；
+      //     · `validateVisionAnchors`（P1-7）只看 id **在不在树里** —— 真机 41 checked / 39 valid
+      //       = 95.1%，id 全部存在，只是配错文案；
+      //     · `coverageReport` 只看**本段真值文案是否出现** —— 24 条文案确实都出现了，只是挂错 id。
+      //   ⇒ 只有「声明对 ↔ 真值」这一层能发现。
+      //
+      //   纪律：**只诊断、不修复** —— 真机 vision 的文案序（逐行 label,value 交替）与真值
+      //   树序（先 12 个 label、再 12 个 value）**不同**，任何「按序重贴 id」的确定性修复都会
+      //   猜错并静默丢内容。此处只留痕 + 产出诊断，由调用方决定留痕 / BLOCK / 重跑 vision。
+      const contentAnchorAudit =
+        parsed.contentAnchorAudit && parsed.contentAnchorAudit.evaluated != null
+          ? parsed.contentAnchorAudit
+          : auditContentAnchorConsistency({
+              // 多处权威挂载点（与层 1 同一枚举）拼成一维：`collectDeclaredPairs` 内部按
+              // `id\u0000text` 全局去重，天然避免跨挂载点重复计数。
+              sections: collectSectionArrays(parsed).flat(),
+              figmaNodeData: figmaData,
+            })
+      if (contentAnchorAudit && typeof contentAnchorAudit === 'object') {
+        parsed.contentAnchorAudit = {
+          evaluated: contentAnchorAudit.evaluated,
+          matched: contentAnchorAudit.matched,
+          mismatched: contentAnchorAudit.mismatched,
+          notInTree: contentAnchorAudit.notInTree,
+          ratio: contentAnchorAudit.ratio,
+          skipped: contentAnchorAudit.skipped,
+          skippedReason: contentAnchorAudit.skippedReason,
+          issues: (contentAnchorAudit.issues || []).slice(0, 20),
+        }
+        appliedKeys.add('contentAnchorAudit')
+        // 🔴 计数行铁律：无论命中与否、是否 skipped（无 sections / 无真值树 / 无声明对），
+        //   **一律**打 `已评估` 行 —— 否则「零错配」不可辨（真没问题 vs 判据没生效）。
+        logger.info('🛡️ vision 文案-锚点对账·已评估', {
+          evaluated: contentAnchorAudit.evaluated,
+          matched: contentAnchorAudit.matched,
+          mismatched: contentAnchorAudit.mismatched,
+          notInTree: contentAnchorAudit.notInTree,
+          ratio: contentAnchorAudit.ratio,
+          skipped: contentAnchorAudit.skipped,
+          skippedReason: contentAnchorAudit.skippedReason,
+        })
+        if (contentAnchorAudit.mismatched > 0) {
+          logger.warn('🛡️ vision 文案与锚点 id 不相容（内容串味：文案读对、id 贴错）', {
+            evaluated: contentAnchorAudit.evaluated,
+            mismatched: contentAnchorAudit.mismatched,
+            ratio: contentAnchorAudit.ratio,
+            samples: (contentAnchorAudit.issues || []).slice(0, 6),
+          })
+          pushDiagnostic(
+            'content-anchor',
+            `vision 有 ${contentAnchorAudit.mismatched}/${contentAnchorAudit.evaluated} 条「锚点 id ↔ 文案」与 Figma 真值不相容（文案读对但 id 贴错），下游不应按该 id 取文案`,
+            {
+              evaluated: contentAnchorAudit.evaluated,
+              matched: contentAnchorAudit.matched,
+              mismatched: contentAnchorAudit.mismatched,
+              notInTree: contentAnchorAudit.notInTree,
+              ratio: contentAnchorAudit.ratio,
+              samples: (contentAnchorAudit.issues || []).slice(0, 10),
+            },
+          )
+        }
+      }
+
       const textTruth = parsed.textTruthValidation || this._validateVisionTextAgainstFigma(parsed, figmaData)
       if (textTruth && typeof textTruth === 'object') {
         parsed.textTruthValidation = textTruth
@@ -4138,40 +4233,25 @@ ${analysisTask}`
   }
 
   /**
-   * 从 vision 分析结果提取所有文字内容
+   * 从 vision 分析结果提取**声称可见的文案**（形态门禁口径）。
+   *
+   * 🔴 R25-a（2026-10-26 · mc-max-1792985029695-58de7d47 实锤）：旧实现递归收**所有**字符串值、
+   *   只排除 5 个技术键 —— 真机实测采集 475 串 / 其中 44 条被判「可疑文字」，全部是噪声：
+   *   pipeline 自己的注解与图层名被当成 vision 的可见文案（「设备详情面板」「包含设备图标」
+   *   「视觉元素存在但 headerSlots 为空」…），而 vision 真正声明的 29 条文案**一条不差**读对了。
+   *   ⇒ 该「可疑文字」诊断被噪声淹没，同时把 `text-truth` 诊断的可信度打成零。
+   *
+   * 修法：不再自己遍历，直接复用层 2（`vision-content-anchor-consistency`）的**形态门禁**
+   *   采集器 —— 只有「同级条目 `id` 匹配 `FIGMA_ID_RE` ∧ 字段 ∈ text/characters/content」的
+   *   条目才算「vision 声称的可见文案」（判据单一来源，与文案-锚点对账同一份门禁）。
+   *
+   *   真机回归：475 串 / 44 可疑 → **29 串 / 0 可疑**；且与「仅 sections 口径」集合差为 0
+   *   （不丢非 section 位置的检测力，只掉噪声）。
+   *
    * @param {object} parsed Vision 分析结果
-   * @returns {string[]} 文字数组
+   * @returns {string[]} 文案数组（已按 `id\u0000text` 去重）
    */
   _extractVisionTexts(parsed) {
-    const texts = [];
-    
-    // 递归遍历对象，提取所有字符串值
-    const walk = (obj) => {
-      if (!obj || typeof obj !== 'object') return;
-      
-      if (Array.isArray(obj)) {
-        for (const item of obj) {
-          if (typeof item === 'string' && item.trim()) {
-            texts.push(item);
-          } else if (typeof item === 'object') {
-            walk(item);
-          }
-        }
-      } else {
-        for (const [key, value] of Object.entries(obj)) {
-          if (typeof value === 'string' && value.trim()) {
-            // 跳过技术字段（如 theme、backgroundBrightness 等）
-            if (!['theme', 'backgroundBrightness', 'type', 'direction', 'layoutSource'].includes(key)) {
-              texts.push(value);
-            }
-          } else if (typeof value === 'object') {
-            walk(value);
-          }
-        }
-      }
-    };
-    
-    walk(parsed);
-    return texts;
+    return collectDeclaredTexts(parsed)
   }
 }

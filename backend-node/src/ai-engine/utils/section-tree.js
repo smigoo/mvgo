@@ -1764,20 +1764,68 @@ export function headerIsChromeOnly(node) {
   if (!Array.isArray(kids) || kids.length === 0) return false
   let textCount = 0
   let business = false
-  const BUSINESS_CONTAINER_TYPES = new Set([
-    'FRAME',
-    'INSTANCE',
-    'COMPONENT',
-    'COMPONENT_SET',
+  /** 组件实例/组件定义 ⇒ 一定承载业务，不做任何细分（保守保留）。 */
+  const BUSINESS_CONTAINER_TYPES = new Set(['INSTANCE', 'COMPONENT', 'COMPONENT_SET'])
+  /**
+   * 🔴 装饰形状类型（2026-10-26 · ab7bb76c P0 治本）：
+   *   纯几何图形，自身不承载业务语义。**命名判据对它们一律豁免** ——
+   *   `VECTOR "icon-关闭"` 是面板外壳的关闭按钮，不是业务控件；此前它命中
+   *   `BUSINESS_NAME_RE` 的 `icon` 分支，把「装饰图标 + 单标题文本」的纯
+   *   标题栏判成业务 header ⇒ 逃过 `stripChromeOnly` ⇒ 顶掉 componentName 成双标题。
+   */
+  const DECORATIVE_SHAPE_TYPES = new Set([
+    'VECTOR',
+    'RECTANGLE',
+    'ELLIPSE',
+    'LINE',
+    'STAR',
+    'POLYGON',
+    'BOOLEAN_OPERATION',
+    'SLICE',
   ])
   const BUSINESS_NAME_RE = /tab|stat|button|switch|select|input|list|grid|card|icon|指标|切换|统计|按钮|导航|菜单|下拉|搜索|筛?选/i
+  /**
+   * 纯装饰容器判定（FRAME 细分，2026-10-26 · ab7bb76c P0 治本）：
+   *   子树内 **无非空文案节点** ∧ **无组件实例** ∧ **无交互语义命名的非形状节点**
+   *   ⇒ 该 FRAME 只是装饰图形的打包层（如 `标题img` / `标题-线` / 菱形图标），
+   *   不构成业务内容，应穿透而不是直接判 business。
+   *
+   *   此前 `FRAME` 被一刀切列入业务容器 ⇒ 任何标题栏只要包了一层装饰 FRAME
+   *   就永远判 business（807:3 的真实漏网机制）。
+   *   判据完全类型驱动（除命名语义那一支），与设计稿命名无关。
+   */
+  const isDecorativeFrame = (n) => {
+    const stack = [...(n.children || [])]
+    while (stack.length > 0) {
+      const c = stack.pop()
+      if (!c || typeof c !== 'object') continue
+      const t = String(c.type || '').toUpperCase()
+      if (t === 'TEXT') return false
+      if (BUSINESS_CONTAINER_TYPES.has(t)) return false
+      // 形状节点的名字是图层名（icon-关闭 / Rectangle 22），不参与业务判定
+      if (!DECORATIVE_SHAPE_TYPES.has(t) && BUSINESS_NAME_RE.test(String(c.name || ''))) {
+        return false
+      }
+      for (const k of c.children || []) stack.push(k)
+    }
+    return true
+  }
   const walk = (n) => {
     if (!n || typeof n !== 'object' || business) return
     const t = String(n.type || '').toUpperCase()
     const name = String(n.name || '')
-    // 业务容器类型 → 有业务内容，立即终止
+    // 业务容器类型（实例/组件定义）→ 有业务内容，立即终止
     if (BUSINESS_CONTAINER_TYPES.has(t)) {
       business = true
+      return
+    }
+    // FRAME 细分：装饰打包层穿透，其余（含文案/实例/交互命名）判业务
+    if (t === 'FRAME') {
+      if (!isDecorativeFrame(n) || BUSINESS_NAME_RE.test(name)) {
+        business = true
+        return
+      }
+      for (const c of n.children || []) walk(c)
       return
     }
     if (t === 'TEXT') {
@@ -1788,8 +1836,9 @@ export function headerIsChromeOnly(node) {
       }
       return
     }
-    // 交互/业务语义命名（GROUP 等包裹层下）→ 有业务内容
-    if (BUSINESS_NAME_RE.test(name)) {
+    // 交互/业务语义命名（GROUP 等包裹层下）→ 有业务内容。
+    // 🔴 装饰形状（裸 VECTOR/RECTANGLE/…）豁免：图层名不是业务语义。
+    if (!DECORATIVE_SHAPE_TYPES.has(t) && BUSINESS_NAME_RE.test(name)) {
       business = true
       return
     }

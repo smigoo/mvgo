@@ -17,6 +17,35 @@ describe('hasHardPublishBlock（发布硬闸 021/022/023）', () => {
   test('021 为 WARN（非 BLOCK）→ false', () => {
     expect(hasHardPublishBlock([{ id: 'CODE-021', severity: 'WARN' }])).toBe(false);
   });
+
+  // 🛡️ 层 7（方案 A）：WARN 升级注入的合成 BLOCK（<id>-ESCALATED）也必须进发布硬闸，
+  //    否则「升级」在重试耗尽后仍会被软失败降级放行（= 零生效）。
+  describe('层 7：WARN 升级 BLOCK（<id>-ESCALATED）', () => {
+    test('策略内 id 的 -ESCALATED → true', () => {
+      expect(hasHardPublishBlock([{ id: 'FLEX-004-ESCALATED', severity: 'BLOCK' }])).toBe(true);
+      expect(hasHardPublishBlock([{ id: 'TEXT-AXIS-ESCALATED', severity: 'BLOCK' }])).toBe(true);
+    });
+
+    test('策略外 id 的 -ESCALATED → false（逐 id 决策，不得放宽）', () => {
+      expect(hasHardPublishBlock([{ id: 'STYLE-002-ESCALATED', severity: 'BLOCK' }])).toBe(false);
+      expect(hasHardPublishBlock([{ id: 'FLEX-002-ESCALATED', severity: 'BLOCK' }])).toBe(false);
+    });
+
+    test('severity 非 BLOCK 的 -ESCALATED → false', () => {
+      expect(hasHardPublishBlock([{ id: 'FLEX-004-ESCALATED', severity: 'WARN' }])).toBe(false);
+    });
+
+    test('env 覆盖：MVGO_GATE_ESCALATE_BLOCK_IDS=none → 全部 -ESCALATED 失效', () => {
+      const prev = process.env.MVGO_GATE_ESCALATE_BLOCK_IDS;
+      process.env.MVGO_GATE_ESCALATE_BLOCK_IDS = 'none';
+      try {
+        expect(hasHardPublishBlock([{ id: 'FLEX-004-ESCALATED', severity: 'BLOCK' }])).toBe(false);
+      } finally {
+        if (prev === undefined) delete process.env.MVGO_GATE_ESCALATE_BLOCK_IDS;
+        else process.env.MVGO_GATE_ESCALATE_BLOCK_IDS = prev;
+      }
+    });
+  });
 });
 
 describe('computeGateScore（软失败评分）', () => {
