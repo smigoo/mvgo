@@ -1084,6 +1084,31 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
       if (!nodeIds || nodeIds.size === 0) continue; // 不可解析归属 → 不判
       const nodeList = [...nodeIds];
       if (nodeList.some((id) => own.has(id))) continue; // 任一归属节点在本 section 子树 → 合法
+      // 🛡️ 刀 10（2026-10-27 · mc-max-1793096891762-ad8939a5 实锤）：资源归属节点是
+      //   本 section 锚点的**祖先**且其 bbox **包含**锚点 ⇒ 视觉包含关系，不是借用。
+      //   事故链：刀 4 接管叶 `36:1726`（Mask group）按真值借用直接父级 `36:1725` 的
+      //   img-1725.png 渲染（二者 bbox 全等），本守卫判「借用」⇒ 剪 import + 摘 :src
+      //   ⇒ 产物图片丢失（空白框）。宁漏不误删：合成 sid（不在 Figma 树）不适用本豁免。
+      if (index.has(sid)) {
+        const ab = index.get(sid)?.bbox;
+        const contained = ab && nodeList.some((nid) => {
+          let p = index.get(sid)?.parentId;
+          let g = 0;
+          while (p && g++ < 60) {
+            if (nid === p) {
+              const pb = index.get(p)?.bbox;
+              return !!pb
+                && pb.x <= ab.x + 0.5
+                && pb.y <= ab.y + 0.5
+                && pb.x + pb.width >= ab.x + ab.width - 0.5
+                && pb.y + pb.height >= ab.y + ab.height - 0.5;
+            }
+            p = index.get(p)?.parentId;
+          }
+          return false;
+        });
+        if (contained) continue;
+      }
       result.borrowedAssetIssues.push({
         file: f.path,
         sectionId: sid,

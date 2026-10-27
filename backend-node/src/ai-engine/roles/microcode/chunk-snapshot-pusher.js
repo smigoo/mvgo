@@ -1,4 +1,5 @@
 import { collectMissingVueImports } from '../../utils/vue-import-closure.js';
+import { validateVueSfc } from '../../utils/sfc-syntax-validation.js';
 
 /**
  * P1-Slice2（增量补丁式更新）：分块快照推送器。
@@ -140,6 +141,33 @@ export async function pushChunkSnapshot({
       }
       return;
     }
+  }
+
+  // ②d 语法有效性守卫（2026-10-27 事故 mc-max-1793100110825-0833ff36）：
+  // 中间态 chunk 可能「结构完整（②b 放行）+ import 闭包闭合（②c 放行）但脚本/模板
+  // 语法错误」（LLM 片段截断等，自愈/终裁末轮才修复）⇒ 推成候选后预览报
+  // 「Unexpected token, expected "," (17:15)」，刷新后被终态覆盖才消失。
+  // 判据与写盘门禁同源（validateVueSfc，禁止另写一套解析）：任一 .vue 语法错误 ⇒
+  // 本次不推送（累积产物已合并，末轮修复后的推送自然放行）。
+  const syntaxBad = [];
+  for (const [p, c] of Object.entries(safeAllFiles)) {
+    if (!/\.vue$/i.test(p) || typeof c !== 'string' || c.length === 0) continue;
+    const r = validateVueSfc(c, p);
+    // ⚠️ 只认 SFC 结构/template/script 三类语法错误；style（less 变量解析）在内存中间态
+    //   有已知假阳（P1-4 误杀实锤：@import 剥离连带 theme-vars 未定义）⇒ 不参与推送闸。
+    const fatal = (r.errors || []).filter((e) => !/ style: /.test(String(e)));
+    if (fatal.length > 0) syntaxBad.push(`${p} :: ${String(fatal[0]).slice(0, 120)}`);
+    if (syntaxBad.length >= 5) break;
+  }
+  if (syntaxBad.length > 0) {
+    if (warn) {
+      warn('候选快照暂不推送：存在语法错误 .vue（生成中间态，待自愈/终裁修复）', {
+        stage,
+        syntaxBad,
+        hint: '与写盘门禁同一判据（validateVueSfc）；避免预览指向语法损坏的中间产物',
+      });
+    }
+    return;
   }
 
   try {

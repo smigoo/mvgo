@@ -1372,7 +1372,7 @@ export function refineDerivedContainerLayout(sec, ctx) {
     return;
   }
 
-  logger.info('🛡️ R23 归并后容器方向复算（原生 children 不含内容文本 ⇒ 判定输入不完整）', {
+  logger.info('🛡️ R23 归并后容器方向复算（原生无内容文本，或既有事实非高置信 ⇒ 判定输入不完整）', {
     sectionId: String(sec.id),
     name: sec.name,
     from: sec.layout ?? null,
@@ -1564,6 +1564,15 @@ function buildEffectiveSection(sec, idx, ctx) {
         : {}),
       internalSubcomponents: [],
       shouldSplitInternally: false,
+      // 🛡️ 内部语义树透传（容器分支 · 2026-10-27）：vision `body.children` 的内部结构
+      //   （label-value 配对 / stat-card 的 title+value+背景图 / table-header 每列 /
+      //   list-item 每格）。与 `body.items`（扁平文本清单）**互补双轨**：
+      //   items 管「有哪些文案」，internalTree 管「这些文案怎么配成对/行/列」。
+      //   缺字段不产键 ⇒ 下游按 `Array.isArray(sec.internalTree?.children)` 判据
+      //   天然 fail-open，无副作用。
+      ...(Array.isArray(sec.internalTree?.children) && sec.internalTree.children.length > 0
+        ? { internalTree: sec.internalTree }
+        : {}),
     };
   }
 
@@ -1783,6 +1792,15 @@ function buildEffectiveSection(sec, idx, ctx) {
     layoutMetadata,
     internalSubcomponents,
     shouldSplitInternally: collapsed ? false : scoreResult.shouldSplit,
+    // 🛡️ 内部语义树透传（叶子分支 · 2026-10-27）：同容器分支说明。
+    //   `81:7` 这类「语义规则、几何不规则」的结构（12 对 label-value，x 间距实测
+    //   `[15,13,43,188,14,14,14,43]` 非等距 ⇒ `buildGridContract#uniformPitch` 恒 null
+    //   ⇒ `noGridContract`）此前只剩 24 条平铺 items，产物只能猜成 4 列 × 6 行。
+    //   本字段把 vision 已给对的内部树原样带下去，供下游（网格契约语义通道 /
+    //   prompt 的结构描述）消费。缺字段不产键，零副作用。
+    ...(Array.isArray(sec.internalTree?.children) && sec.internalTree.children.length > 0
+      ? { internalTree: sec.internalTree }
+      : {}),
     ...(tabStructured.tabStructure ? { tabStructure: tabStructured.tabStructure } : {}),
     // 🛡️ #138（同容器分支）：E1 互挂兄弟真值透传——叶子级横向并列（左图右文头部等）同样
     //   需要送达下游刀32。缺字段不产键，零副作用。
@@ -2057,11 +2075,35 @@ export class SubcomponentPlanner {
           collectHosts(derived.sections);
 
           let f1Filled = 0;
+          // 🛡️ 内部语义树回挂（2026-10-27 · d072d085 / 2ec8acc7 实锤）：
+          //   vision 的 `body.children` 是「内部结构」的**唯一语义真值源**——
+          //   `label-value`（label+value 配对）、`stat-card`（title+value+背景图）、
+          //   `table-header`（每列）、`list-item`（每格）。此前它只跟着
+          //   `s.body = sem.body` 走「按 figmaNodeId||id」的一段匹配，而 vision 的 id
+          //   常把「聚合级 section」贴成「容器里某个**子节点**的 id」：
+          //     · d072d085：属性网格整体（12 对 + gridColumns:2）被贴成 `36:1699`，
+          //       而 `36:1699` 真值只是网格里那个「所属产品」TEXT ⇒ 语义树落到一个
+          //       最终被吸收进 `81:7.body.items` 的叶子上，且 `_consumed` 让 F1 的
+          //       **文本重合度**匹配整段跳过 ⇒ plan 只剩 24 条平铺 `{text,figmaNode}`，
+          //       产物只能猜成 4 列 × 6 行。
+          //   本条按**文本重合度**找宿主（复用 F1 的同一 `best`、不另造第二套判据），
+          //   只写**新字段 `internalTree`**、绝不碰 `body` ⇒ 对既有下游零行为变化。
+          let internalTreeEvaluated = 0;
+          let internalTreeWithNodes = 0;
+          let internalTreeAttached = 0;
+          let internalTreeDrilled = 0;
+          const internalTreeAttachedHosts = [];
           for (const [key, sem] of visionSemantic.entries()) {
-            if (sem._consumed) continue;
+            const hasStructuredBody =
+              !!sem.body &&
+              typeof sem.body === 'object' &&
+              (Array.isArray(sem.body.children) || Array.isArray(sem.body.items));
+            // 一段匹配已消费且**无**内部结构 ⇒ 与旧版逐字等价（跳过）
+            if (sem._consumed && !hasStructuredBody) continue;
             const semTexts = new Set();
             collectDeepTexts(sem, semTexts);
             if (semTexts.size < 2) continue;
+            internalTreeEvaluated++;
             // 找最佳宿主：文本重合率 ≥0.6，取重合率最高、同分取最深（最特异）
             let best = null;
             for (const h of hosts) {
@@ -2079,6 +2121,105 @@ export class SubcomponentPlanner {
               }
             }
             if (!best) continue;
+
+            // —— 内部语义树回挂（新字段，纯加法）——
+            //   不吃 `_consumed` 门槛：一段匹配可能把语义贴到了错的 id 上（见上），
+            //   文本重合度才是「这段语义属于哪个 E1 节点」的正确判据。
+            if (hasStructuredBody) {
+              const body = sem.body;
+              const nodes = Array.isArray(body.children)
+                ? body.children
+                : Array.isArray(body.items)
+                  ? body.items
+                  : [];
+              if (nodes.length > 0) {
+                internalTreeWithNodes++;
+                const gridCols = Number(body.gridColumns);
+                best.s.internalTree = {
+                  source: 'vision',
+                  // 留痕用（**不作主键**：vision 的 id 与容器常不一致）
+                  sourceSectionId: String(key || ''),
+                  layout: body.layout == null ? null : String(body.layout),
+                  ...(Number.isFinite(gridCols) && gridCols > 1
+                    ? { gridColumns: Math.round(gridCols) }
+                    : {}),
+                  nodeCount: nodes.length,
+                  // 原样保留 vision 的内部树（含 type/text/styles/nested children），
+                  // 不在本层做任何裁剪或重排 —— 裁剪是下游各刀的事。
+                  children: nodes,
+                };
+                internalTreeAttached++;
+                // —— 同构重复列表下钻 ——
+                //   宿主是**容器**时（vision 的 section 描述的是整排卡），内部树挂在容器上
+                //   语义正确，但容器不产 `.vue` 文件；而下游「items 覆盖去重」会把
+                //   `43:4898`/`43:4903` 折掉、只留 `43:4893` 作代表 ⇒ 代表叶子必须自带
+                //   自己那一份 item，否则下游（如 stat-card 的背景图 / 列数）永远读不到。
+                //   判据刻意保守，三条**全满足**才下钻，否则只保留容器级（不猜）：
+                //     ① items 同 type/role（同构重复，非同构异构容器不可拆）
+                //     ② host.children 数量 == items 数量（1:1 对应）
+                //     ③ 每个子节点至少命中 1 条文本（有实证归属才下钻）
+                const drillKids = Array.isArray(best.s.children) ? best.s.children : [];
+                const itemTypes = new Set(
+                  nodes.map((it) => String(it?.type || it?.role || '')),
+                );
+                if (
+                  nodes.length >= 2 &&
+                  drillKids.length === nodes.length &&
+                  itemTypes.size === 1 &&
+                  [...itemTypes][0]
+                ) {
+                  const itemTexts = (x, out = new Set(), d = 0) => {
+                    if (!x || typeof x !== 'object' || d > 8) return out;
+                    if (typeof x.text === 'string' && x.text.trim()) out.add(x.text.trim());
+                    for (const k of ['children', 'items', 'parts']) {
+                      const v = x[k];
+                      for (const c of Array.isArray(v) ? v : v ? [v] : []) itemTexts(c, out, d + 1);
+                    }
+                    return out;
+                  };
+                  const usedItems = new Set();
+                  for (const kid of drillKids) {
+                    if (!kid || typeof kid !== 'object') continue;
+                    const kidTexts = subtreeTexts(kid);
+                    if (kidTexts.size === 0) continue;
+                    let bestItem = null;
+                    let bestHit = 0;
+                    for (const it of nodes) {
+                      if (usedItems.has(it)) continue;
+                      let hit = 0;
+                      for (const t of itemTexts(it)) if (kidTexts.has(t)) hit++;
+                      if (hit > bestHit) {
+                        bestHit = hit;
+                        bestItem = it;
+                      }
+                    }
+                    if (bestItem && bestHit >= 1) {
+                      usedItems.add(bestItem);
+                      kid.internalTree = {
+                        ...best.s.internalTree,
+                        nodeCount: 1,
+                        children: [bestItem],
+                      };
+                      internalTreeDrilled++;
+                    }
+                  }
+                }
+                if (internalTreeAttachedHosts.length < 5) {
+                  internalTreeAttachedHosts.push({
+                    visionId: String(key || ''),
+                    hostId: String(best.s.id || ''),
+                    nodeCount: nodes.length,
+                    gridColumns:
+                      Number.isFinite(gridCols) && gridCols > 1
+                        ? Math.round(gridCols)
+                        : null,
+                    overlap: Math.round(best.overlap * 100) + '%',
+                  });
+                }
+              }
+            }
+            // 一段匹配已回填 body ⇒ 不再重复回填（保持旧行为逐字等价）
+            if (sem._consumed) continue;
 
             const items = sem.body?.items;
             if (Array.isArray(items) && items.length > 1 && Array.isArray(best.s.children) && best.s.children.length > 0) {
@@ -2116,6 +2257,16 @@ export class SubcomponentPlanner {
               mode: Array.isArray(items) && items.length > 1 ? 'items下钻' : '整body',
             });
           }
+          // 计数行**无条件打印**（无论是否命中）：真机核验唯一可靠依据。
+          //   `evaluated` 非零 ⇒ 判据接线生效；`attached` 0 且 `evaluated` 非零
+          //   ⇒ 判据无病灶（不是接线失败），两者必须一起看。
+          logger.info('🛡️ vision 内部语义树回挂·已评估', {
+            evaluated: internalTreeEvaluated,
+            withNodes: internalTreeWithNodes,
+            attached: internalTreeAttached,
+            drilled: internalTreeDrilled,
+            ...(internalTreeAttachedHosts.length ? { sample: internalTreeAttachedHosts } : {}),
+          });
           if (f1Filled > 0) {
             logger.info(`🛡️ F1 二段匹配完成：${f1Filled} 个 E1 section 获得 vision 卡片语义（文本真值匹配）`);
           }

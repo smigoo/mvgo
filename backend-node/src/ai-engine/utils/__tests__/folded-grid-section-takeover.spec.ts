@@ -206,9 +206,22 @@ describe('刀 53 detectHeaderRowLeaf', () => {
   it('阴性：两个 TEXT（非标题行形态）⇒ fail-open', () => {
     const doc2 = JSON.parse(JSON.stringify(FIGMA_DOC));
     doc2.children.push(text('38:9999', '多余文本', 200, 25, 40, 16, '#333333', 14, 400));
-    const r = detectHeaderRowLeaf(sec, indexFigmaNodes(doc2), ICON_MAPPING);
+    // 🔴 2026-10-27 锚点收口后的配套修正：本用例的**意图**是「本叶锚点内含 2 个 TEXT
+    //   ⇒ 不是标题行」。原 fixture 把多余文本放到**父容器**里、靠旧的「合成 id 剥后缀
+    //   吸收父容器」才被判到 —— 那正是 8bbcf027 的病灶（拿别人的事实判本叶）。
+    //   故把多余文本放进**本叶自己的 sourceNodeIds**，意图不变、判别力更强。
+    const sec2 = { ...sec, sourceNodeIds: [...sec.sourceNodeIds, '38:9999'] };
+    const r = detectHeaderRowLeaf(sec2, indexFigmaNodes(doc2), ICON_MAPPING);
     expect(r.ok).toBe(false);
     expect(r.reason).toContain('texts=2');
+  });
+
+  it('父容器里未被本叶认领的 TEXT 不得让本叶失败（8bbcf027 病灶的反向断言）', () => {
+    const doc2 = JSON.parse(JSON.stringify(FIGMA_DOC));
+    doc2.children.push(text('38:9999', '别人的文本', 200, 25, 40, 16, '#333333', 14, 400));
+    const r = detectHeaderRowLeaf(sec, indexFigmaNodes(doc2), ICON_MAPPING);
+    expect(r.ok).toBe(true);
+    expect(r.title).toBe('战略合作厂商');
   });
 });
 
@@ -434,11 +447,18 @@ describe('detectTextLeaf / 纯文本叶接管（刀 53b · round-16 实锤）', 
     expect(r.reason).toMatch(/hasGraphic/);
   });
 
-  it('阴性：2 个 TEXT → fail-open', () => {
+  it('阳性：2 个 TEXT 各占一行 → column 接管，段间距取相邻 bbox 差值', () => {
     const doc = { children: [{ id: '0:0', type: 'CANVAS', children: [{ id: 'g3', type: 'GROUP', children: [text('a', '合作厂商', 0, 0, 64, 24, '#333333', 16, 400), text('b', '33', 0, 30, 28, 28, '#2c68ff', 24, 600)] }] }] };
     const r = detectTextLeaf(secOf('g3'), indexFigmaNodes(doc));
-    expect(r.ok).toBe(false);
-    expect(r.reason).toBe('texts=2(need 1)');
+    expect(r.ok).toBe(true);
+    expect(r.direction).toBe('column');
+    expect(r.runs.map((run) => [run.text, run.gapBefore])).toEqual([['合作厂商', 0], ['33', 6]]);
+    expect(r.height).toBe(58);
+    const vue = renderFoldedGridLeafVue(r, 'device');
+    expect(vue).toContain('flex-direction:column;');
+    expect(vue).toContain('margin-top:6px;');
+    expect(vue).toContain('{{ runs[0].text }}');
+    expect(vue).toContain('{{ runs[1].text }}');
   });
 
   it('阴性：缺 fontWeight → fail-open（不猜）', () => {
@@ -489,6 +509,62 @@ describe('detectIconLeaf / 纯 icon 叶接管（刀 53c · round-17 实锤）', 
     expect(r.iconW).toBe(53);
     expect(r.iconH).toBe(55);
     expect(r.baseId).toBe('38:3260');
+  });
+
+  // 真机 8bbcf027：36:1725(img,已导出) → 36:1726(Mask group,plan 叶)
+  //   → 36:1729(RECTANGLE, IMAGE fill)，三者 bbox 全为 98×98。
+  const MASK_BOX = { x: 24745, y: 51499, width: 98, height: 98 };
+  const maskRect = (id: string, fills: any[]) => ({ id, type: 'RECTANGLE', absoluteBoundingBox: { ...MASK_BOX }, fills });
+  const parentImageDoc = (opts: { parentWidth?: number; hasImageFill?: boolean } = {}) => {
+    const mask = {
+      id: '36:1726',
+      type: 'GROUP',
+      name: 'Mask group',
+      absoluteBoundingBox: { ...MASK_BOX },
+      children: [
+        maskRect('36:1727', [solid('#e2ebff')]),
+        maskRect('36:1728', [solid('#b8d8ff')]),
+        maskRect('36:1729', opts.hasImageFill === false ? [solid('#3965ff')] : [{ type: 'IMAGE', visible: true, imageRef: 'a01c53a4f5e6ae2d2cb2d63b25bd12d8a9a4e123' }]),
+      ],
+    };
+    return {
+      id: '36:1693',
+      type: 'FRAME',
+      children: [{ id: '801:3', type: 'GROUP', children: [{ id: '36:1725', type: 'GROUP', name: 'img', absoluteBoundingBox: { ...MASK_BOX, width: opts.parentWidth ?? MASK_BOX.width }, children: [mask] }] }],
+    };
+  };
+  const MASK_SEC = { id: '36:1726', sourceNodeIds: ['36:1726', '36:1727', '36:1728', '36:1729'] };
+  const PARENT_IMAGE_MAP = (status = 'success') => [{ figmaNodeId: '36:1725', ownerSectionId: '801:3', resourceFile: '../resources/images/img-1725.png', assignedVarName: 'img1', downloadStatus: status }];
+
+  it('阳性：锚点未导出但直接父级已映射，且本叶含同 bbox IMAGE fill ⇒ 接管', () => {
+    const r = detectIconLeaf(MASK_SEC, indexFigmaNodes(parentImageDoc()), PARENT_IMAGE_MAP());
+    expect(r.ok).toBe(true);
+    expect(r.iconVar).toBe('img1');
+    expect(r.iconFile).toBe('img-1725.png');
+    expect(r.iconW).toBe(98);
+    expect(r.iconH).toBe(98);
+    expect(r.baseId).toBe('801:3');
+    const vue = renderFoldedGridLeafVue(r, 'device');
+    expect(vue).toContain("import img1 from '../../resources/images/img-1725.png'");
+    expect(vue).toContain('width:98px;height:98px;object-fit:contain');
+  });
+
+  it('阴性：父级映射存在但 bbox 不完全相同 ⇒ 不得借错资源', () => {
+    const r = detectIconLeaf(MASK_SEC, indexFigmaNodes(parentImageDoc({ parentWidth: 100 })), PARENT_IMAGE_MAP());
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('anchorNotExportedAsImage');
+  });
+
+  it('阴性：本叶无同 bbox IMAGE fill ⇒ 不得只因父级有图就接管', () => {
+    const r = detectIconLeaf(MASK_SEC, indexFigmaNodes(parentImageDoc({ hasImageFill: false })), PARENT_IMAGE_MAP());
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('anchorNotExportedAsImage');
+  });
+
+  it('阴性：父级资源 missing ⇒ 沿用原 fail-open', () => {
+    const r = detectIconLeaf(MASK_SEC, indexFigmaNodes(parentImageDoc()), PARENT_IMAGE_MAP('missing'));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('anchorNotExportedAsImage');
   });
 
   it('阴性：子树含 TEXT → fail-open（不吃标题/数字叶）', () => {
@@ -1114,9 +1190,15 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     expect(r.cols[1].cells[0].icon).toBeNull();
     const vue = renderFoldedGridLeafVue(r, 'device');
     expect(vue).toContain("import icon1 from '../../resources/images/image_473938-37.png'");
-    expect(vue).toContain('row.c0.iconVar');
     expect(vue).toContain('"iconVar": "icon1"');
     expect(vue).toContain('"iconGap": 8');
+    // 🔴🔴 图标必须经**运行时查表**取：`rows` 是 JSON 字面量（`inlineJson`），`iconVar`
+    //   存的是变量名的**字符串**（`"icon1"`）⇒ 直接 `:src="row.c0.iconVar"` 会求值成
+    //   `src="icon1"`（相对 URL → 404），而 `import icon1` 全成死代码。
+    //   实锤：c-device-6d79e69d 表格首列 8 行图标全破图。
+    expect(vue).toContain('const ICON_MAP = { icon1, icon2, icon3 }');
+    expect(vue).toContain(':src="ICON_MAP[row.c0.iconVar]"');
+    expect(vue).not.toContain(':src="row.c0.iconVar"');
   });
 
   it('🔴 阴性①（核心纪律）：行节点无 fills/strokes/padding ⇒ 属性整体不写（绝不填兜底色）', () => {
@@ -1142,6 +1224,9 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     expect(r.cols[0].cells[0].icon).toBeNull();
     const vue = renderFoldedGridLeafVue(r, 'device');
     expect(vue).not.toContain('import icon1');
+    // 零副作用：无可用图标 ⇒ 不产查表、不产 `<img>`
+    expect(vue).not.toContain('ICON_MAP');
+    expect(vue).not.toContain('<img');
     expect(vue).toContain('background:#bdd5ff;'); // 外观不受图标缺口影响
   });
 
@@ -1155,6 +1240,8 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     const vue = renderFoldedGridLeafVue(r, 'device');
     expect(vue).not.toContain('import iconX');
     expect(vue).toContain('"iconVar": null');
+    // 冲突名下无一可用 ⇒ 查表也不产（否则是永远取不到值的空表）
+    expect(vue).not.toContain('ICON_MAP');
   });
 });
 

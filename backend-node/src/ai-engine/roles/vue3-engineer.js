@@ -66,6 +66,7 @@ import {
   collectFoldedGridTakeover,
   matchFgTakeoverTargets,
 } from '../utils/folded-grid-section-takeover.js';
+import { pruneTakeoverCoveredLeaves } from '../utils/takeover-overlap-guard.js';
 // 🛡️ 阶段4（2026-09-17）：v-for 重复单元识别（共享背景精确挂到 item，与微码同源）
 import { findVForItemTag, healAbsoluteOverlayParents } from './microcode/resource-mounter.js';
 // 🛡️ §七 B17（2026-09-28）：背景四件套几何口径统一（与微码 injectBgStyleBinding 同源，消除 mc/vue3 双实现分叉）
@@ -879,6 +880,36 @@ export class Vue3Engineer extends MicrocodeEngineer {
           failed: _fgFailed,
           unmatched: post.unmatched.length,
         });
+
+        // 🛡️ 刀 13（2026-10-27 · mv-max-1793101716713-f33d8c12 实锤）：接管叶重复覆盖守卫。
+        //   vue3 的 index 由 LLM 自由装配：LLM 自造组件（DeviceDetailHeader，标祖先段
+        //   data-section-id="801:3"）已完整实现该区域，接管叶（801:3-orphan-text-0/1）
+        //   却仍被 index 引用 ⇒ 同内容双份渲染。判据与处置见
+        //   utils/takeover-overlap-guard.js（只摘 index 标签引用，文件本体保留）。
+        try {
+          const dedup = pruneTakeoverCoveredLeaves({
+            indexContent: allFiles['package/index.vue'] || '',
+            files: allFiles,
+            takeoverTargets: targets,
+          });
+          if (dedup.removed.length > 0) {
+            allFiles['package/index.vue'] = dedup.content;
+            this.logger.warn('🛡️ 刀 13 接管叶重复覆盖·已从 index 摘除（vue3）', {
+              removed: dedup.removed,
+              hint: 'LLM 自造组件已完整覆盖该区域（祖先 section-id ∧ 真值文本全覆盖）；摘除接管叶引用消除双份渲染',
+            });
+          } else {
+            this.logger.info('🛡️ 刀 13 接管叶重复覆盖守卫（vue3）·已评估', {
+              targets: targets.size,
+              removed: 0,
+            });
+          }
+        } catch (dedupErr) {
+          // fail-open：守卫异常不阻断主流程
+          this.logger.warn('🛡️ 刀 13 重复覆盖守卫异常（vue3，非阻断）', {
+            error: dedupErr?.message || String(dedupErr),
+          });
+        }
       }
 
       // 诊断落盘

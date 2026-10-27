@@ -284,3 +284,75 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
     })
   })
 })
+
+describe('同 bbox 叠层（刀 6 · 2026-10-27 · 8bbcf027 `36:1726` 实锤）', () => {
+  it('⭐ 全部子项 bbox 完全相同（Mask group 3 矩形 98×98 同坐标）→ display:stack，无 flexDirection', () => {
+    // 真值链：36:1725(img) → 36:1726(Mask group) → 36:1727/1728/1729 三个 RECTANGLE，
+    // 三者与父 bbox 全等 (24745,51499) 98×98 —— 实为层叠（底 + 封面 + 图），
+    // 旧判据给 flex/column/high（549 个容器全中此假事实），注入后叠层被拉成纵流。
+    const mask = {
+      id: '36:1726',
+      type: 'GROUP',
+      absoluteBoundingBox: box(24745, 51499, 98, 98),
+      children: [
+        child('36:1727', 24745, 51499, 98, 98),
+        child('36:1728', 24745, 51499, 98, 98),
+        child('36:1729', 24745, 51499, 98, 98),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [mask] } })
+    expect(facts['36:1726']).toEqual({
+      display: 'stack',
+      source: 'geometric-stack-inference',
+      confidence: 'high',
+    })
+  })
+
+  it('⭐ icon 包装典型形态：2 个同 bbox 子项（VECTOR + mask RECTANGLE）→ stack', () => {
+    // 全语料 549 个命中的主流形态（icon GROUP，2 子项全等 bbox 40×40）。
+    const icon = {
+      id: '48:5808',
+      type: 'GROUP',
+      absoluteBoundingBox: box(20851, 51623, 40, 40),
+      children: [
+        child('48:5809', 20851, 51623, 40, 40),
+        child('48:5810', 20851, 51623, 40, 40),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [icon] } })
+    expect(facts['48:5808']).toEqual({
+      display: 'stack',
+      source: 'geometric-stack-inference',
+      confidence: 'high',
+    })
+  })
+
+  it('反向：同 bbox 子项之外还有偏移子项 ⇒ 不是 stack（回几何判定）', () => {
+    const node = {
+      id: '50:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 98, 98),
+      children: [
+        child('50:2', 0, 0, 98, 98),
+        child('50:3', 0, 0, 98, 98),
+        child('50:4', 10, 10, 48, 48),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['50:1'].display).not.toBe('stack')
+  })
+
+  it('反向：子项 bbox 仅 1px 差 ⇒ 不是 stack（不引入近似阈值，只认完全相等）', () => {
+    const node = {
+      id: '51:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 98, 98),
+      children: [
+        child('51:2', 0, 0, 98, 98),
+        child('51:3', 0, 1, 98, 98),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['51:1'].display).not.toBe('stack')
+  })
+})

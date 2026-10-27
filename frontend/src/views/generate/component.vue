@@ -176,11 +176,15 @@
                       v-for="(item, idx) in urlHistory"
                       :key="idx"
                       class="dropdown-item"
-                      :class="{ active: figmaUrl === item }"
+                      :class="{ active: figmaUrl === item.url && componentType === item.target && generationTier === item.tier }"
                       @mousedown.prevent="selectUrlHistory(item)"
                     >
                       <span class="item-icon"><LinkOutlined /></span>
-                      <span class="item-url" :title="item">{{ item }}</span>
+                      <span class="item-url" :title="item.url">{{ item.url }}</span>
+                      <span v-if="item.target || item.tier" class="item-tags">
+                        <span v-if="item.target" class="item-tag">{{ item.target === 'vue3' ? 'Vue3' : '微码' }}</span>
+                        <span v-if="item.tier" class="item-tag">{{ item.tier === 'lite' ? 'Lite' : 'Max' }}</span>
+                      </span>
                     </div>
                   </div>
                 </Transition>
@@ -788,10 +792,27 @@ async function loadHistory() {
 }
 
 // ── Figma URL 历史记录（localStorage） ──
+// 🛡️ 2026-10-27：条目从纯 URL 升级为 { url, target, tier, time } ——
+//   同一 URL 按「规范（microcode/vue3）× 档位（max/lite)」各算一条记录
+//   （此前只按 URL 去重，同 URL 换个规范/档位的生成在历史里被合并成一条）。
+interface UrlHistoryItem {
+  url: string
+  target?: 'microcode' | 'vue3'
+  tier?: 'lite' | 'max'
+  time?: number
+}
+function normalizeUrlHistory(raw: any[]): UrlHistoryItem[] {
+  // 兼容旧格式（纯 string[]）→ 无 target/tier 的条目照常展示（无标签）
+  return (Array.isArray(raw) ? raw : [])
+    .map((it): UrlHistoryItem | null =>
+      typeof it === 'string' ? { url: it } : it && typeof it.url === 'string' ? it : null,
+    )
+    .filter((it): it is UrlHistoryItem => it !== null)
+}
 function loadUrlHistory() {
   try {
     const raw = localStorage.getItem('figma-url-history')
-    urlHistory.value = raw ? JSON.parse(raw) : []
+    urlHistory.value = raw ? normalizeUrlHistory(JSON.parse(raw)) : []
   } catch {
     urlHistory.value = []
   }
@@ -799,17 +820,27 @@ function loadUrlHistory() {
 
 function saveToUrlHistory(url: string) {
   if (!url) return
-  const current = [...urlHistory.value]
-  const idx = current.indexOf(url)
-  if (idx !== -1) current.splice(idx, 1)
-  current.unshift(url)
+  const entry: UrlHistoryItem = {
+    url,
+    target: componentType.value,
+    tier: generationTier.value,
+    time: Date.now(),
+  }
+  // 去重 key = url + 规范 + 档位（同组合再次生成 ⇒ 提到最前并刷新时间，不占新条目）
+  const current = urlHistory.value.filter(
+    (it) => !(it.url === entry.url && it.target === entry.target && it.tier === entry.tier),
+  )
+  current.unshift(entry)
   if (current.length > 10) current.length = 10
   urlHistory.value = current
   localStorage.setItem('figma-url-history', JSON.stringify(current))
 }
 
-function selectUrlHistory(url: string) {
-  figmaUrl.value = url
+function selectUrlHistory(item: UrlHistoryItem) {
+  figmaUrl.value = item.url
+  // 恢复该条记录的规范与档位（一条记录 = 一次具体生成的完整上下文）
+  if (item.target) componentType.value = item.target
+  if (item.tier) generationTier.value = item.tier
   showUrlHistory.value = false
 }
 
@@ -1015,7 +1046,7 @@ const sourceOptions = [
 ]
 const selectedPanelType = ref('default-panel')
 const figmaUrl = ref('')
-const urlHistory = ref<string[]>([])
+const urlHistory = ref<UrlHistoryItem[]>([])
 const showUrlHistory = ref(false)
 const isGenerating = ref(false)
 const configCollapsed = ref(false) // 生成中时左侧配置面板是否收起
@@ -2977,6 +3008,21 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.dropdown-item .item-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.dropdown-item .item-tag {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
 }
 .dropdown-fade-enter-active {
   transition:

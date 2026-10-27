@@ -152,6 +152,8 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
         //   → grid 节点全部落进 flex 分支 → 写出 `display:grid; flex-direction:undefined;`
         //   （grid-template-columns 也永远注入不了）。grid 列数是几何真值，必须随映射透传。
         ...(fact.gridColumns ? { gridColumns: fact.gridColumns } : {}),
+        // 刀 6：stack 事实透传显式标记，供注入器/审计不依赖字符串 sniffing
+        ...(fact.display === 'stack' ? { stacked: true } : {}),
         source: fact.source,
         confidence: fact.confidence,
       }
@@ -169,14 +171,27 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
     typeof fact.flexDirection === 'string' && V.test(fact.flexDirection.trim().toLowerCase())
       ? fact.flexDirection.trim().toLowerCase()
       : null
-  const cssDecl = dir ? `display: ${fact.display}; flex-direction: ${dir};` : `display: ${fact.display};`
+  // 🛡️ 刀 6（2026-10-27 · 8bbcf027 `36:1726` 实锤）：stack = 同 bbox 层叠容器
+  //   （子节点几何完全重叠，典型 Mask group / icon 包装）。方向事实**不存在**，
+  //   容器 CSS 的合法表达是 `display:grid` + 每个直接子节点 `grid-area: 1 / 1`；
+  //   绝不能下发 `display: stack`（非法值）或 flex-direction（把叠层拉成纵流）。
+  const isStack = String(fact.display || '').trim().toLowerCase() === 'stack'
+  const cssDecl = isStack
+    ? 'display: grid;'
+    : dir
+      ? `display: ${fact.display}; flex-direction: ${dir};`
+      : `display: ${fact.display};`
   // 🛡️ 方向注记三态（2026-10-26 · A2 配套）：
   //   ① 有合法方向 → 只强调别改方向；
   //   ② `display:grid` → grid **不用** flex-direction（写了是冗余且会误导 LLM 当成 flex 容器），
   //      改提示用 grid-template-columns 还原列数；
   //   ③ flex 但方向事实缺失 → 明确交回 LLM 按几何自行定，别臆造别的判据。
   const isGrid = String(fact.display || '').trim().toLowerCase() === 'grid'
-  const dirNote = dir
+  const dirNote = isStack
+    ? '⚠️ 该节点是**同 bbox 层叠容器**（全部子节点几何完全重叠，典型 Mask group / icon 包装）：' +
+      '容器写 `display: grid`，且**每个直接子节点**必须写 `grid-area: 1 / 1` 使其层叠覆盖；' +
+      '禁止写 flex-direction、禁止 absolute、禁止把子节点纵向/横向排列。'
+    : dir
     ? '禁止省略 display、禁止用 absolute 还原定位、禁止改成其他方向。'
     : isGrid
       ? `禁止省略 display、禁止用 absolute 还原定位；⚠️ 该节点是 **grid 容器**，` +

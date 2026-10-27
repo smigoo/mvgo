@@ -91,8 +91,12 @@ function uniqueSorted(nums) {
   return [...new Set(nums)].sort((a, b) => a - b)
 }
 
-/** 相邻差是否等距 ⇒ 返回 pitch，否则 null（不等距 = 乱排，绝不猜） */
-function uniformPitch(values) {
+/**
+ * 相邻差是否等距 ⇒ 返回 pitch，否则 null（不等距 = 乱排，绝不猜）。
+ * 导出原因：刀 53g（属性网格）需要**同一套**等距判据判行/列锚点间距 —— 判据必须
+ * 单一来源，不许在消费侧另写一份「±2 容差」的近似实现（改一处忘一处 = 假绿闭环）。
+ */
+export function uniformPitch(values) {
   if (values.length < 2) return null
   const diffs = []
   for (let i = 1; i < values.length; i++) diffs.push(values[i] - values[i - 1])

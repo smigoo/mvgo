@@ -36,7 +36,7 @@ import {
   // 外观三件套真值（bg/border/pad）—— 单一来源，刀具不得自造 fills/strokes 解析
   nodeAppearanceTruth,
 } from './section-tree.js';
-import { buildGridContract } from './grid-list-layout-contract.js';
+import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js';
 
 /**
  * 🛡️ 刀 53 命名空间识别器（**唯一来源**，2026-10-22 round-12 实锤后提取）。
@@ -52,7 +52,14 @@ import { buildGridContract } from './grid-list-layout-contract.js';
  * 因此 font-size-normalizer / layout-facts-injector / code-validator **必须 import 本常量**，
  * 禁止各自写正则副本（副本 ≥2 份 = 事故温床）。
  */
-export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|text|icon|statrow|table|legend)-/;
+/**
+ * 刀 53 确定性接管产物的类名签名（**唯一来源**：字号归一豁免、孤儿样式守卫、
+ * 布局事实注入豁免等全部从这里取）。
+ * 🔴 新增 kind 必须**同步**登记到这里 —— 否则该 kind 的内联 `font-size` 不被
+ *    `font-size-normalizer#protectFgTagInlineStyles` 保护 ⇒ 字号塌回 `@fontSize`
+ *    （d072d085 实锤病灶之一），且 `DEFAULT_SKIP_SELECTOR_RXS` 也会漏掉它。
+ */
+export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend)-/;
 
 /** fg- 类名的**裸片段**（去两侧 `/`），供需要拼接正则的场合复用，杜绝副本。 */
 const FG_CLASS_SRC = FG_TAKEOVER_CLASS_RX.source;
@@ -104,6 +111,25 @@ function bboxOf(node) {
   return { x, y, w, h };
 }
 
+/** 两盒是否逐字段相等（图片父包装借用只允许同盒，禁止用容差猜邻近资源）。 */
+function sameBox(a, b) {
+  return Boolean(a && b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
+}
+
+/** 子树内是否存在「占满指定盒」的可见 IMAGE fill。 */
+function hasFullBoxImageFill(root, box) {
+  if (!root || !box) return false;
+  const seen = new Set();
+  const walk = (n) => {
+    if (!n || seen.has(n) || n.visible === false) return false;
+    seen.add(n);
+    const fills = Array.isArray(n.fills) ? n.fills : [];
+    if (fills.some((f) => f?.visible !== false && f.type === 'IMAGE') && sameBox(bboxOf(n), box)) return true;
+    return (n.children || []).some(walk);
+  };
+  return walk(root);
+}
+
 /** 首个可见 SOLID 填充 → rgba()（fillToRgba 单一口径，含 opacity）。非 SOLID ⇒ null。 */
 function firstSolidFillRgba(node) {
   const fills = Array.isArray(node?.fills) ? node.fills : [];
@@ -125,19 +151,37 @@ function collectAnchorNodes(sec, figmaIndex) {
     sec?.figmaNodeId,
     sec?.figmaNode,
   ];
-  for (const raw of ids) {
-    if (raw == null || raw === '') continue;
-    const id = String(raw);
-    let entry = figmaIndex.get(id) || null;
-    if (!entry) {
-      const base = id.replace(/-[A-Za-z0-9:._-]+$/, '');
-      if (base && base !== id) entry = figmaIndex.get(base) || null;
-    }
-    if (!entry?.rawNode) continue;
+  const absorb = (entry) => {
+    if (!entry?.rawNode) return false;
     if (!out.has(String(entry.rawNode.id))) out.set(String(entry.rawNode.id), entry.rawNode);
     for (const c of entry.rawNode.children || []) {
       if (c?.id && !out.has(String(c.id))) out.set(String(c.id), c);
     }
+    return true;
+  };
+
+  // ① 精确锚点优先：命中即**不再**做任何剥后缀兜底。
+  for (const raw of ids) {
+    if (raw == null || raw === '') continue;
+    absorb(figmaIndex.get(String(raw)) || null);
+  }
+  if (out.size > 0) return [...out.values()];
+
+  // ② 仅当**完全无精确锚点**时才允许「合成 id 剥后缀」兜底。
+  //   🔴 2026-10-27（mc-max-1793079162063-8bbcf027 实锤）：原实现是**逐 id**兜底，
+  //   于是 `801:3-orphan-text-0`（sourceNodeIds=['36:1724'] 精确可解析）仍会把
+  //   `sec.id` 剥成父容器 `801:3`，将其 9 个直接子项全当本叶内容 ⇒ 判据在**别人**
+  //   的事实上求值：真机日志 `header:texts=5(need 1)`（本叶仅 1 TEXT）、
+  //   `text:hasGraphic(RECTANGLE:36:1695)`（别区域的描述卡底）、`icon:hasText(30)`
+  //   （全组件 TEXT 总数）⇒ 7 叶 0 接管。orphan-text 叶的 sourceNodeIds 才是
+  //   精确事实，父容器不是。53f 图例判据已因同一坑改为「严格本叶锚点」，此处收口。
+  //   兜底仍保留：sourceNodeIds 全是幻影 id（真值树不存在）时，维持原 fail-open 能力。
+  for (const raw of ids) {
+    if (raw == null || raw === '') continue;
+    const id = String(raw);
+    const base = id.replace(/-[A-Za-z0-9:._-]+$/, '');
+    if (!base || base === id) continue;
+    absorb(figmaIndex.get(base) || null);
   }
   return [...out.values()];
 }
@@ -150,11 +194,14 @@ function textRun(t) {
   const fw = st.fontWeight == null ? null : Number(st.fontWeight);
   if (!color || !Number.isFinite(fs) || fs <= 0 || fw == null) return null;
   const b = bboxOf(t);
+  const lhRaw = Number(st.lineHeightPx);
   return {
     text: String(t.characters),
     color,
     fs: Math.round(fs * 100) / 100,
     fw,
+    // 真值行高（px）。缺失 ⇒ null，调用方保持原有单行形态（fail-open，不臆造行高）。
+    lh: Number.isFinite(lhRaw) && lhRaw > 0 ? lhRaw : null,
     box: b,
   };
 }
@@ -274,20 +321,57 @@ export function detectIconLeaf(sec, figmaIndex, resourceMapping) {
       iconH: Math.round(b.h),
     };
   }
+
+  // 🔴 父级图片包装借用（2026-10-27 · 8bbcf027 `36:1726` 实锤）：plan 叶是 Mask group，
+  //   资源映射落在直接父级 `36:1725(img)`，而本叶子项 `36:1729` 是同 bbox IMAGE fill。
+  //   只允许「直接父级已映射成功 + 父子 bbox 完全相等 + 本叶有同 bbox IMAGE fill」，
+  //   三事实缺一不可；否则仍按原样 fail-open，绝不用相近父容器猜资源。
+  for (const n of nodes) {
+    const b = bboxOf(n);
+    if (!b || !hasFullBoxImageFill(n, b)) continue;
+    const parentId = figmaIndex.get(String(n.id))?.parentId;
+    if (!parentId) continue;
+    const parent = figmaIndex.get(String(parentId))?.rawNode || null;
+    const pb = bboxOf(parent);
+    if (!sameBox(pb, b)) continue;
+    const m = mapping.find(
+      (e) =>
+        String(e?.figmaNodeId) === String(parentId) &&
+        e?.resourceFile &&
+        e?.downloadStatus !== 'failed' &&
+        e?.downloadStatus !== 'missing',
+    );
+    if (!m) continue;
+    return {
+      ok: true,
+      kind: 'icon',
+      sectionId: String(sec.id ?? ''),
+      baseId: m?.ownerSectionId ? String(m.ownerSectionId) : String(parentId),
+      iconVar: String(m.assignedVarName || m.semanticVarName || ''),
+      iconFile: String(m.resourceFile).split('/').pop(),
+      iconW: Math.round(b.w),
+      iconH: Math.round(b.h),
+    };
+  }
   return { ok: false, reason: 'anchorNotExportedAsImage' };
 }
 
 /**
  * 纯文本叶判据（刀 53b，2026-10-22 mc-1792662399514-2b715fa0 实锤）：
- * 锚点子树**恰 1 个 TEXT、0 个图形节点**（GROUP 纯包装允许）。
+ * 锚点子树**至少 1 个 TEXT、0 个图形节点**（GROUP 纯包装允许）。
  *
  * 病灶：顶部 stat 条的数字叶（`38:3262`="33" fs24 fw600 蓝、`38:3284`="66"）与
  * 标题叶（`38:3285`="在线设备"）被 LLM chunk 臆造成**无 `:src` 的 `<img>`**
  * ⇒ 数字整段消失 + 破图占位 alt 文字（用户截图实锤）。纯文本叶的确定性渲染
  * 只有 span + 真值样式，无任何可随机维度 ⇒ 整文件接管。
  *
- * fail-open：TEXT 数≠1、出现任何图形类型（VECTOR/RECTANGLE/FRAME/INSTANCE/
- * ELLIPSE/BOOLEAN 等）、颜色/字号/字重任一缺失 ⇒ 不接管（LLM 原路径）。
+ * N 段扩展（第 3 刀）：N=1 保持原契约；N>1 仅接管「全部同一行」或「每段独占一行」，
+ * 每段保留独立文本/样式，间距取相邻 bbox 差值。混合多行多列不属于线性文本，必须 fail-open
+ * 给后续 kvgrid，不能拍平成一维数组。
+ *
+ * fail-open：0 TEXT、出现任何图形类型（VECTOR/RECTANGLE/FRAME/INSTANCE/
+ * ELLIPSE/BOOLEAN 等）、颜色/字号/字重任一缺失；N>1 时任一 bbox 缺失、盒体重叠或
+ * 混合多行多列 ⇒ 不接管（LLM 原路径）。
  *
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
@@ -318,10 +402,65 @@ export function detectTextLeaf(sec, figmaIndex) {
   };
   for (const n of nodes) walk(n);
   if (graphic) return { ok: false, reason: `hasGraphic(${graphic})` };
-  if (texts.length !== 1) return { ok: false, reason: `texts=${texts.length}(need 1)` };
+  if (texts.length === 0) return { ok: false, reason: 'texts=0(need>=1)' };
+  if (texts.length > 1) {
+    const items = texts.map((node) => ({ node, run: textRun(node) }));
+    if (items.some((it) => !it.run)) return { ok: false, reason: 'textStyleIncomplete' };
+    if (items.some((it) => !it.run.box)) return { ok: false, reason: 'textBoxMissing' };
+    // 同一行 = 全部文本盒存在共同垂直交集；每段一行 = 按 y 排序后盒体互不垂直重叠。
+    // 其余是混合多行多列/叠层，不做线性化猜测（尤其不能抢走后面的 kvgrid）。
+    const commonTop = Math.max(...items.map((it) => it.run.box.y));
+    const commonBottom = Math.min(...items.map((it) => it.run.box.y + it.run.box.h));
+    const sameRow = commonTop < commonBottom;
+    const byY = [...items].sort((a, b) => a.run.box.y - b.run.box.y || a.run.box.x - b.run.box.x);
+    const separateRows = byY.every((it, i) => i === 0 || it.run.box.y >= byY[i - 1].run.box.y + byY[i - 1].run.box.h);
+    if (!sameRow && !separateRows) return { ok: false, reason: 'textRunsNotLinear' };
+    const direction = sameRow ? 'row' : 'column';
+    items.sort(sameRow
+      ? (a, b) => a.run.box.x - b.run.box.x || a.run.box.y - b.run.box.y
+      : (a, b) => a.run.box.y - b.run.box.y || a.run.box.x - b.run.box.x);
+    const runs = [];
+    for (let i = 0; i < items.length; i++) {
+      const { node, run } = items[i];
+      const prev = items[i - 1]?.run.box;
+      const gapBefore = i === 0
+        ? 0
+        : sameRow
+          ? run.box.x - (prev.x + prev.w)
+          : run.box.y - (prev.y + prev.h);
+      if (gapBefore < 0) return { ok: false, reason: 'textRunsOverlap' };
+      runs.push({
+        id: String(node.id),
+        text: run.text,
+        color: run.color,
+        fontSize: run.fs,
+        fontWeight: run.fw,
+        lineHeight: run.lh,
+        width: Math.round(run.box.w * 100) / 100,
+        height: Math.round(run.box.h * 100) / 100,
+        multiline: Boolean(run.lh && run.box.h > run.lh * 1.5),
+        gapBefore: Math.round(gapBefore * 100) / 100,
+      });
+    }
+    return {
+      ok: true,
+      kind: 'text',
+      sectionId: String(sec.id ?? ''),
+      baseId: runs[0].id,
+      direction,
+      runs,
+      height: sameRow
+        ? Math.max(...runs.map((run) => run.height))
+        : runs.reduce((sum, run) => sum + run.height + run.gapBefore, 0),
+    };
+  }
   const ti = textRun(texts[0]);
   if (!ti) return { ok: false, reason: 'textStyleIncomplete' };
   const tb = bboxOf(texts[0]);
+  // 🔴 多行判定只认真值几何：盒高 > 行高 × 1.5 ⇒ 必然多行（真值 36:1719 = 496×90、
+  //   fs14 / lineHeightPx30 ⇒ 90 > 45 ⇒ 3 行）。行高缺失 ⇒ 不多行（保持原单行形态）。
+  //   不这么做会把「长描述」渲染成 `white-space:nowrap; line-height:1` 的一行溢出。
+  const multiline = Boolean(tb && ti.lh && tb.h > ti.lh * 1.5);
   return {
     ok: true,
     kind: 'text',
@@ -332,6 +471,8 @@ export function detectTextLeaf(sec, figmaIndex) {
     fontSize: ti.fs,
     fontWeight: ti.fw,
     height: tb ? Math.round(tb.h) : null,
+    lineHeight: ti.lh,
+    multiline,
   };
 }
 
@@ -669,16 +810,21 @@ export function detectStatRowLeaf(sec, figmaIndex, parentOf, resourceMapping) {
       gap: gaps.length ? Math.max(0, Math.min(...gaps)) : 0,
       innerDir: horizontal ? 'row' : 'column',
       innerGap,
-      members: sorted.map((p) => {
-        // 卡外观真值：本体 `fills`/`strokes` 优先；取不到 ⇒ 子树最大非图标图形
+      members: sorted.map((p, mi) => {
+        // 卡外观真值：本体 `fills`/`strokes` 优先；取不到 ⇒ 子树最大「底候选」
         // （真值卡底与描边都在 VECTOR 上）⇒ 再取不到即 null（不写该属性，绝不填兜底色）。
         const app = nodeAppearanceTruth(p.node);
         let bg = app.bg;
         let border = cssBorder(app.border);
+        let bgImageFile = null;
         if (!bg || !border) {
           const sub = subtreeBackground(p.node, resourceMapping);
           if (sub) {
-            if (!bg) bg = sub.css;
+            // 🔴 图片与 CSS 是**互斥**通道：`subtreeBackground` 只返回其中一个。
+            //    图片命中时不得再写 `background:${sub.css}`（那会用「近似底」覆盖真图，
+            //    正是 2ec8acc7 丢顶部亮条的同型错误）。
+            if (sub.image?.file) bgImageFile = sub.image.file;
+            else if (!bg) bg = sub.css;
             if (!border) border = cssBorder(sub.border);
           }
         }
@@ -694,6 +840,8 @@ export function detectStatRowLeaf(sec, figmaIndex, parentOf, resourceMapping) {
           // 卡内左右序：按 x（横排）/ y（纵排）升序，杜绝「值左标题右」臆造
           titleFirst: horizontal ? p.tb.x <= p.vb.x : p.tb.y <= p.vb.y,
           bg,
+          bgImageFile,
+          bgImageVar: bgImageFile ? `fgStatBg${mi}` : null,
           border,
           pad: cssPadding(app.pad),
           r: cornerRadiusOf(p.node),
@@ -1075,20 +1223,82 @@ function resolveMappedIcon(node, resourceMapping, maxSize = 64) {
 }
 
 /**
- * 卡/格「自绘底」真值：子树内**面积最大的、非 TEXT 且非已导出图标**的图形节点的
- * 外观 → `{ css, r, border }`（本单统计卡底 = VECTOR 渐变 134×56，且描边
- * `#a0c1ff` 也在该 VECTOR 上而非卡节点上 —— 故 border 必须一并回传）。
+ * 「背景用途」的资源标记（**唯一来源**）。
+ *
+ * 🔴 事故（2026-10-27 · 2ec8acc7 实锤）：`subtreeBackground` 原先用
+ * `mapping.some(e => e.figmaNodeId === n.id)` 判「这是图标 ⇒ 跳过」。但资源映射里
+ * **背景图也是被下载的资源**（`48:5909` → `bg-5909.png`，`recommendedUsage:
+ * 'backgroundStyle'`、`bgRole:'container'`）⇒ 背景节点被当成图标跳过，退回它内部
+ * **单根** VECTOR（`43:4894`，`GRADIENT op=0.5`）⇒ 三张统计卡的底只剩 50% 那一层，
+ * 顶部 10px 亮条（`43:4897`，`op=1`）整层丢失。用户报障「三个数据是有背景图的」即此。
+ *
+ * 「是不是图标」与「是不是背景」必须分开判，不能只看「在不在映射里」。
+ */
+const BG_RESOURCE_FLAGS = {
+  usage: new Set(['backgroundStyle', 'backgroundBlock']),
+  role: new Set(['bg', 'container']),
+};
+
+/** 该节点是否被映射标记为**背景用途**（不含图标）。 */
+function isBackgroundResource(node, mapping) {
+  return mapping.some(
+    (e) =>
+      String(e?.figmaNodeId) === String(node?.id) &&
+      (BG_RESOURCE_FLAGS.usage.has(String(e?.recommendedUsage || '')) ||
+        BG_RESOURCE_FLAGS.usage.has(String(e?.usage || '')) ||
+        BG_RESOURCE_FLAGS.role.has(String(e?.previewAnalysisRole || '')) ||
+        BG_RESOURCE_FLAGS.role.has(String(e?.bgRole || ''))),
+  );
+}
+
+/** 该节点是否被映射为**已可用的背景图片**（有文件且确实下载到）。 */
+function backgroundImageOf(node, mapping) {
+  return (
+    mapping.find(
+      (e) =>
+        String(e?.figmaNodeId) === String(node?.id) &&
+        String(e?.resourceFile || '') &&
+        String(e?.downloadStatus || '') !== 'failed' &&
+        String(e?.downloadStatus || '') !== 'missing' &&
+        (BG_RESOURCE_FLAGS.usage.has(String(e?.recommendedUsage || '')) ||
+          BG_RESOURCE_FLAGS.usage.has(String(e?.usage || '')) ||
+          BG_RESOURCE_FLAGS.role.has(String(e?.previewAnalysisRole || '')) ||
+          BG_RESOURCE_FLAGS.role.has(String(e?.bgRole || ''))),
+    ) || null
+  );
+}
+
+/**
+ * 卡/格「自绘底」真值：子树内**面积最大的**底候选。
+ *
+ * 两类候选，二者择一（**不合成**，避免「近似底 + 真图」双重绘制）：
+ *   · `image`：命中「背景用途」且已下载 ⇒ 整卡底的**导出快照**（含叠加的全部图层）。
+ *   · `css`：子树内面积最大的、非 TEXT 且非已导出图标的图形节点的外观。
+ *
+ * 🔴 图片优先于 CSS 的**判据**（可辩驳，不是偏好）：图片面积 ≥ CSS 候选面积。
+ *    图片是父 GROUP 整块导出、CSS 候选是它内部的某一根矢量 ⇒ 图片必然更完整；
+ *    反之若「图片只是卡片里的一小块装饰、CSS 才是整卡底」，面积判据会把它挡掉。
  *
  * 🔴 口径复用 `nodeAppearanceTruth`（单一来源），不在此另造 fills/strokes 解析。
  *
- * @returns {{ css:string, r:number, border:{width:number,color:string}|null }|null}
+ * @returns {{image:{file:string}, css:null, r:number, border:object|null}
+ *          |{image:null, css:string, r:number, border:object|null}
+ *          |null}
  */
 function subtreeBackground(node, resourceMapping) {
   const mapping = toArray(resourceMapping);
-  const isIcon = (n) => mapping.some((e) => String(e?.figmaNodeId) === String(n?.id));
+  const isIcon = (n) =>
+    mapping.some(
+      (e) =>
+        String(e?.figmaNodeId) === String(n?.id) &&
+        // 🔴 背景资源**不是**图标：漏这一条就等于把整卡底当图标跳过（见上「事故」）
+        !isBackgroundResource(n, mapping),
+    );
   const seen = new Set();
-  let best = null;
-  let bestArea = 0;
+  let imgBest = null;
+  let imgArea = 0;
+  let cssBest = null;
+  let cssArea = 0;
   const walk = (n, d) => {
     if (!n || seen.has(n) || d > 2) return;
     seen.add(n);
@@ -1096,18 +1306,40 @@ function subtreeBackground(node, resourceMapping) {
       if (!c || typeof c.characters === 'string') continue;
       const b = bboxOf(c);
       const area = b ? b.w * b.h : 0;
-      if (area > bestArea && !isIcon(c)) {
+      const imgRes = backgroundImageOf(c, mapping);
+      if (imgRes && area > imgArea) {
+        imgBest = {
+          file: String(imgRes.resourceFile).split('/').pop(),
+          r: cornerRadiusOf(c),
+          border: nodeAppearanceTruth(c).border,
+        };
+        imgArea = area;
+      }
+      if (!isIcon(c) && area > cssArea) {
         const t = nodeAppearanceTruth(c);
         if (t.bg) {
-          best = { css: t.bg, r: cornerRadiusOf(c), border: t.border };
-          bestArea = area;
+          cssBest = { css: t.bg, r: cornerRadiusOf(c), border: t.border };
+          cssArea = area;
         }
       }
       walk(c, d + 1);
     }
   };
   walk(node, 0);
-  return best;
+  // 图片优先的判据：面积 ≥ CSS 候选（图片是整块导出，必然覆盖 CSS 那根矢量）
+  if (imgBest && imgArea >= cssArea) {
+    return {
+      image: { file: imgBest.file },
+      css: null,
+      // 🔴 圆角/描边**必须**从 CSS 候选继承：导出图只含填充层，Figma 的
+      //    `strokes` 不进 PNG（实测 bg-5909.png 左缘像素 = 中心像素，无描边色）
+      //    ⇒ 只看图片节点（GROUP，无 strokes）会把真值描边整条丢掉。
+      r: cssBest ? cssBest.r : imgBest.r,
+      border: (cssBest && cssBest.border) || imgBest.border,
+    };
+  }
+  if (cssBest) return { image: null, css: cssBest.css, r: cssBest.r, border: cssBest.border };
+  return null;
 }
 
 /**
@@ -1142,11 +1374,328 @@ export function detectGridLeaf(sec, figmaIndex) {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * 🛡️ 刀 53g 属性网格叶判据（label-value grid）· 2026-10-27
+ *
+ * ── 病灶（d072d085 实锤）──────────────────────────────────────────────
+ * `81:7`「设备属性信息」真值 = **2 组 × 6 行 × 12 对 label:value**，
+ * 但它在刀 53 家族里 **七项判据全不命中**：
+ *   `grid:noGridContract`（24 个 TEXT、9 个 x 唯一值、12 种宽度 ⇒
+ *   `buildGridContract#uniformPitch` 恒 null）、`header:texts=24(need 1)`、
+ *   `statrow:notStatRowMember`、`table:notTableColumn`、`text:texts=24(need 1)`、
+ *   `icon:hasText(24)`、`legend:noDotTextPair`
+ * ⇒ 整段交回 LLM ⇒ 产物猜成 **4 列**（真值 2 列）。
+ *
+ * 这是「**语义规则、几何不规则**」结构的盲区：几何给不出等距栅格，只有语义
+ * （vision 明确声明 12 个 `label-value` + `gridColumns:2`）才看得出配对关系。
+ * 载体 = 刀 53g 前身（plan 层 `internalTree`，`5e4ad69`）。
+ *
+ * ── 判据（双源交叉，全部可辩驳）───────────────────────────────────────
+ * 语义源（vision）：`sec.internalTree.children` 全部 `type==='label-value'`、
+ *   `gridColumns>=2`、配对数 = 行数 × 列数。
+ * 几何源（Figma，真值）：`sec.id` 直接子 TEXT 按**文本**反查——
+ *   🔴 **绝不用 vision 的 `id` 做几何锚点**：实测 `81:7` 的 12 个条目 id
+ *   整体偏移一位（vision 写 `36:1700`=「所属产品」，真值 `36:1700`=「所属路公司」）。
+ *   🔴 也**绝不用 `style.textAlignHorizontal`**：真值 24 个 TEXT 全是 `LEFT`，
+ *   但它们的**盒子右缘**对齐在两个固定值（24801 / 25074）⇒ 视觉上 label 是右对齐。
+ *   对齐事实只能从盒子几何取。
+ * 三条全满足才接管，任一不满足 ⇒ fail-open（不猜，退回 LLM 原路径）：
+ *   ① 每列 label 盒**右缘一致**（±2）⇒ label 右对齐事实成立
+ *   ② 行锚（label y）聚类数 = 行数、列锚（value x）聚类数 = 列数
+ *   ③ 行距等距（复用刀 41 `uniformPitch`，同一容差）
+ *
+ * ── 分发位置 ────────────────────────────────────────────────────────
+ * 放在判定链**最末位**（legend 之后）：与刀 53f 同一论证——本判据要求
+ * 「internalTree 显式声明 label-value ≥4 对」这一强前提，结构性上不与
+ * statrow（`stat-card`）/ table（`table-header`+`list`）/ text（1 TEXT）/
+ * icon（0 TEXT）/ legend（1 图形+1 TEXT）重叠，末位 ⇒ **只可能救原本被 skip 的叶**。
+ * ------------------------------------------------------------------ */
+
+/** 属性网格条目的唯一语义类型名（新增别名必须**显式**改这里，不许模糊匹配）。 */
+const KV_LEAF_TYPE = 'label-value'
+
+/** 几何容差（与刀 41 `TOL` 同口径；Figma 坐标含浮点/取整差异）。 */
+const KV_TOL = 2
+
+/** 值 → 簇（±tol 视为同一锚点）。返回 `[{anchor, members:[原索引]}]`，按 anchor 升序。 */
+function clusterByTolerance(values, tol = KV_TOL) {
+  const sorted = values.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v)
+  const clusters = []
+  for (const { v, i } of sorted) {
+    const last = clusters[clusters.length - 1]
+    if (last && Math.abs(v - last.anchor) <= tol) last.members.push(i)
+    else clusters.push({ anchor: v, members: [i] })
+  }
+  return clusters
+}
+
+/** 真值行高读取（两条 kv 路径共用，口径一致）。 */
+function kvLineHeightOf(n) {
+  const v = Number(n?.style?.lineHeightPx)
+  return Number.isFinite(v) ? Math.max(1, Math.round(v)) : null
+}
+
+/**
+ * 🔴 路径 B（2026-10-27 · `81:7` 实锤）：**没有 `internalTree` 时**从 Figma 几何直接
+ * 推导 label-value 网格，不再依赖 vision 的词表声明。
+ *
+ * 为什么需要它：`detectKvGridLeaf` 原实现的唯一输入是 `sec.internalTree.children`，
+ * 且要求每项 `type==='label-value'`。`internalTree` 是 vision 自由输出 —— 缺失、
+ * 换词（key-value/property）或 id 错位都会让判据恒 `kvPairs=0`。
+ * 真机 `81:7`：真值 **6 行 × 4 TEXT = 12 对属性**，却 `kvPairs=0(need>=4)` ⇒ 不接管。
+ *
+ * 判据（全部来自 Figma 真值，可证伪；任一不满足 ⇒ 不接管）：
+ *   ① 直接子 TEXT ≥ 8（≥4 对）；
+ *   ② 按 y 聚类得 ≥2 行，且**每行文本数相同、为偶数、≥4**（≥2 对/行，与原 cols>=2 同口径）；
+ *   ③ 行内按 x 排序后两两成对，且 **label 右缘 ≤ value.x + KV_TOL**（label 必在 value 左侧）；
+ *   ④ 每对 color/fs/fw/bbox 齐全（`textRun` 缺失 ⇒ 不猜）。
+ * 后续的列锚/行锚/右对齐/等距/贴边校验**与 vision 路径完全共用**，不另起一套。
+ *
+ * @returns {{ok:true, resolved:Array, cols:number} | {ok:false}}
+ */
+function deriveKvResolvedFromGeometry(anchor, anchorBox, texts) {
+  const fail = { ok: false }
+  if (!anchor || !anchorBox) return fail
+  if (texts.length < 8) return fail
+  const items = texts.map((n) => ({ n, box: bboxOf(n) }))
+  if (items.some((it) => !it.box)) return fail
+  const rowClusters = clusterByTolerance(items.map((it) => Math.round(it.box.y)))
+  if (rowClusters.length < 2) return fail // 单行不是网格
+  const counts = rowClusters.map((c) => c.members.length)
+  if (!counts.every((c) => c === counts[0])) return fail // 每行文本数必须一致
+  const perRow = counts[0]
+  if (perRow < 4 || perRow % 2 !== 0) return fail // 每行至少 2 对，且必须成对
+  const cols = perRow / 2
+  // 🔴 单位必须一致：perRow 是「每行 TEXT 数」，cols 是「每行对数」（= perRow/2）。
+  if (rowClusters.length * perRow !== items.length) return fail
+  const resolved = []
+  for (const rc of rowClusters) {
+    const line = rc.members.map((i) => items[i]).sort((a, b) => a.box.x - b.box.x)
+    for (let k = 0; k < line.length; k += 2) {
+      const l = line[k]
+      const v = line[k + 1]
+      if (l.box.x + l.box.w > v.box.x + KV_TOL) return fail // label 必须在 value 左侧
+      const lr = textRun(l.n)
+      const vr = textRun(v.n)
+      if (!lr || !vr || !lr.box || !vr.box) return fail
+      resolved.push({
+        label: lr,
+        value: vr,
+        labelLh: kvLineHeightOf(l.n),
+        valueLh: kvLineHeightOf(v.n),
+      })
+    }
+  }
+  if (resolved.length < 4) return fail
+  return { ok: true, resolved, cols }
+}
+
+/**
+ * 属性网格叶判据（label-value grid）。
+ *
+ * @param {object} sec section 树节点（`internalTree` 可选；缺失时走 Figma 几何推导）
+ * @param {Map} figmaIndex `indexFigmaNodes()` 产物
+ * @returns {{ok:true, kind:'kvgrid', ...truth} | {ok:false, reason:string}}
+ */
+export function detectKvGridLeaf(sec, figmaIndex) {
+  const tree = sec?.internalTree
+  const pairs = Array.isArray(tree?.children) ? tree.children : []
+
+  // —— 几何真值（Figma）：sec.id 自身 + 直接子 TEXT（两条路径共用，故提前）——
+  const entry = figmaIndex && typeof figmaIndex.get === 'function'
+    ? figmaIndex.get(String(sec?.id ?? ''))
+    : null
+  const anchor = entry?.rawNode
+  const anchorBox = bboxOf(anchor)
+  const texts = (anchor?.children || []).filter(
+    (n) => typeof n?.characters === 'string' && n.characters.trim(),
+  )
+
+  let resolved = null
+  let cols = 0
+
+  if (pairs.length > 0) {
+    // ===== 路径 A：vision `internalTree` 声明（行为与此前完全一致）=====
+    if (pairs.length < 4) return { ok: false, reason: `kvPairs=${pairs.length}(need>=4)` }
+    const types = new Set(pairs.map((p) => String(p?.type || p?.role || '')))
+    if (types.size !== 1 || !types.has(KV_LEAF_TYPE)) {
+      return { ok: false, reason: `kvTypeMixed(${[...types].join('|')})` }
+    }
+    cols = Number(tree.gridColumns)
+    if (!(cols >= 2)) return { ok: false, reason: 'kvColsMissing' }
+    if (pairs.length % cols !== 0) return { ok: false, reason: `kvNotRect(${pairs.length}/${cols})` }
+
+    // —— 语义真值（vision）：只取文本，id 一律不采信 ——
+    const wanted = []
+    for (const p of pairs) {
+      const kids = Array.isArray(p?.children) ? p.children : []
+      const lt = String(kids.find((k) => String(k?.type || '') === 'label')?.text ?? '').trim()
+      const vt = String(kids.find((k) => String(k?.type || '') === 'value')?.text ?? '').trim()
+      if (!lt || !vt) return { ok: false, reason: 'kvTextMissing' }
+      wanted.push({ lt, vt })
+    }
+
+    if (!anchorBox) return { ok: false, reason: 'kvAnchorBoxMissing' }
+    // 每对恰好 2 个 TEXT（label + value）：数量不等 ⇒ 有图标/装饰/复合值，不猜
+    if (texts.length !== pairs.length * 2) {
+      return { ok: false, reason: `kvTexts=${texts.length}(need ${pairs.length * 2})` }
+    }
+    const used = new Set()
+    const pick = (txt) => texts.find((n) => n.characters.trim() === txt && !used.has(n)) || null
+    resolved = []
+    for (const w of wanted) {
+      const l = pick(w.lt)
+      if (!l) return { ok: false, reason: `kvLabelMissing:${w.lt}` }
+      used.add(l)
+      const v = pick(w.vt)
+      if (!v) return { ok: false, reason: `kvValueMissing:${w.vt}` }
+      used.add(v)
+      const lr = textRun(l)
+      const vr = textRun(v)
+      if (!lr || !vr) return { ok: false, reason: `kvRunMissing:${w.lt}` }
+      // `textRun` 只校验 color/fs/fw，**不**校验 bbox —— 而本判据全部几何都从 bbox 来
+      // （列锚/行锚/label 右缘/定宽），缺 bbox 必须 fail-open，不许按 0 参与聚类
+      // （按 0 会把所有项聚成一簇 ⇒「恰好」凑出 1 列 1 行的假契约）。
+      if (!lr.box || !vr.box) return { ok: false, reason: `kvBoxMissing:${w.lt}` }
+      resolved.push({
+        label: lr,
+        value: vr,
+        labelLh: kvLineHeightOf(l),
+        valueLh: kvLineHeightOf(v),
+      })
+    }
+    if (used.size !== texts.length) return { ok: false, reason: 'kvTextsUnaccounted' }
+  } else {
+    // ===== 路径 B：无 internalTree ⇒ Figma 几何推导 =====
+    // 推导不过 ⇒ 返回**与此前完全相同**的理由，保证非 kv 叶的日志/行为零变化。
+    const derived = deriveKvResolvedFromGeometry(anchor, anchorBox, texts)
+    if (!derived.ok) return { ok: false, reason: 'kvPairs=0(need>=4)' }
+    resolved = derived.resolved
+    cols = derived.cols
+  }
+
+  // —— 行列聚类（value.x = 列锚；label.y = 行锚）——
+  const rows = resolved.length / cols
+  const colClusters = clusterByTolerance(resolved.map((r) => r.value.box.x))
+  if (colClusters.length !== cols) {
+    return { ok: false, reason: `kvColsMismatch(${colClusters.length}!=${cols})` }
+  }
+  const rowClusters = clusterByTolerance(resolved.map((r) => r.label.box.y))
+  if (rowClusters.length !== rows) {
+    return { ok: false, reason: `kvRowsMismatch(${rowClusters.length}!=${rows})` }
+  }
+  const colOf = new Map()
+  colClusters.forEach((c, ci) => c.members.forEach((i) => colOf.set(i, ci)))
+  const rowOf = new Map()
+  rowClusters.forEach((c, ci) => c.members.forEach((i) => rowOf.set(i, ci)))
+  const seen = new Set()
+  for (let i = 0; i < resolved.length; i++) {
+    const k = `${rowOf.get(i)}:${colOf.get(i)}`
+    if (seen.has(k)) return { ok: false, reason: `kvCellDuplicate(${k})` }
+    seen.add(k)
+  }
+  if (seen.size !== resolved.length) return { ok: false, reason: 'kvCellIncomplete' }
+
+  // —— 列事实：label 右缘一致（右对齐）+ 列内 label 定宽 + value 定锚 ——
+  const columns = []
+  for (let ci = 0; ci < cols; ci++) {
+    const idxs = resolved.map((_, i) => i).filter((i) => colOf.get(i) === ci)
+    if (!idxs.length) return { ok: false, reason: `kvColEmpty(${ci})` }
+    const rights = idxs.map((i) => resolved[i].label.box.x + resolved[i].label.box.w)
+    if (clusterByTolerance(rights).length !== 1) {
+      return { ok: false, reason: `kvLabelNotRightAligned(col${ci})` }
+    }
+    const labelGap = Math.round(colClusters[ci].anchor - rights[0])
+    if (!(labelGap >= 0) || labelGap > 64) return { ok: false, reason: `kvLabelGap(${labelGap})` }
+    columns.push({
+      labelGap,
+      // 列内 label 定宽 = 该列最宽 label（右对齐 ⇒ 各行右缘仍落在同一处，与真值等价）
+      labelW: Math.round(Math.max(...idxs.map((i) => resolved[i].label.box.w))),
+      valueW: Math.round(Math.max(...idxs.map((i) => resolved[i].value.box.w))),
+    })
+  }
+  const labelGaps = columns.map((c) => c.labelGap)
+  if (Math.max(...labelGaps) - Math.min(...labelGaps) > KV_TOL) {
+    return { ok: false, reason: 'kvLabelGapUnstable' }
+  }
+  const labelGap = Math.round(labelGaps.reduce((s, g) => s + g, 0) / labelGaps.length)
+
+  // —— 行事实：行距等距（复用刀 41 同一实现）——
+  const rowPitch = rows > 1 ? uniformPitch(rowClusters.map((c) => Math.round(c.anchor))) : null
+  if (rows > 1 && rowPitch === null) return { ok: false, reason: 'kvRowPitchNotUniform' }
+  const rowH = Math.max(
+    ...resolved.map((r) => Math.max(
+      r.labelLh ?? r.label.box.h,
+      r.valueLh ?? r.value.box.h,
+      r.label.box.h,
+      r.value.box.h,
+    )),
+  )
+  const rowGap = rowPitch === null ? 0 : Math.round(rowPitch - rowH)
+  if (!(rowGap >= 0) || rowGap > 200) return { ok: false, reason: `kvRowGap(${rowGap})` }
+
+  // —— 列分布形态：首列贴容器左 ∧ 末列贴容器右 ⇒ space-between（**事实**，非样式偏好）——
+  const cellW = columns.map((c) => c.labelW + labelGap + c.valueW)
+  const firstLeft = Math.min(...resolved.map((r) => r.label.box.x))
+  const lastRight = Math.max(...resolved.map((r) => r.value.box.x + r.value.box.w))
+  const flushLeft = Math.abs(firstLeft - anchorBox.x) <= KV_TOL
+  const flushRight = Math.abs(anchorBox.x + anchorBox.w - lastRight) <= KV_TOL
+  let justify = 'start'
+  let colGap = 0
+  if (flushLeft && flushRight) {
+    justify = 'space-between'
+  } else {
+    const colPitch = uniformPitch(colClusters.map((c) => Math.round(c.anchor)))
+    if (colPitch === null) return { ok: false, reason: 'kvColPitchNotUniform' }
+    const gaps = cellW.map((w) => colPitch - w)
+    if (Math.max(...gaps) - Math.min(...gaps) > KV_TOL) {
+      return { ok: false, reason: 'kvColGapUnstable' }
+    }
+    colGap = Math.max(0, Math.round(gaps[0]))
+  }
+
+  // —— 单元按**行优先**输出（真值视觉顺序：逐行左→右）——
+  const cells = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = resolved.findIndex((_, k) => rowOf.get(k) === r && colOf.get(k) === c)
+      const pr = resolved[i]
+      cells.push({
+        col: c,
+        label: pr.label.text,
+        labelColor: pr.label.color,
+        labelFs: pr.label.fs,
+        labelFw: pr.label.fw,
+        labelLh: pr.labelLh ?? pr.label.box.h,
+        value: pr.value.text,
+        valueColor: pr.value.color,
+        valueFs: pr.value.fs,
+        valueFw: pr.value.fw,
+        valueLh: pr.valueLh ?? pr.value.box.h,
+      })
+    }
+  }
+
+  return {
+    ok: true,
+    kind: 'kvgrid',
+    sectionId: String(sec.id ?? ''),
+    baseId: String(sec.id ?? ''),
+    cols,
+    rows,
+    rowGap,
+    colGap,
+    justify,
+    labelGap,
+    columns: columns.map((c) => ({ labelW: c.labelW })),
+    cells,
+  }
+}
+
 /** script 内联 JSON（转义 `<`，防 `</script>` 提前闭合）。 */
 function inlineJson(value) {
   return JSON.stringify(value, null, 2).replace(/</g, '\\u003c');
 }
-
 /** section id → CSS 安全片段（类名唯一性来源：同组件内不同叶绝不撞名）。 */
 function idSlug(id) {
   return String(id || 'x').replace(/[^a-zA-Z0-9]/g, '');
@@ -1192,20 +1741,42 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       const vSpan = `<span class="${cls}-v${i}" style="color:${m.valueColor};font-size:${m.valueFs}px;font-weight:${m.valueFw};line-height:1;white-space:nowrap;">{{ v${i} }}</span>`;
       // 卡外观真值内联（真值：`GRADIENT_LINEAR` 底 + `#a0c1ff` 描边 + 圆角）；
       // 取不到即不写该属性 —— 绝不填兜底色（会画出真值里不存在的卡底）。
-      const cardAppearance = [
-        m.bg ? `background:${m.bg};` : '',
+      // 🔴 底走**图片通道**时（`bgImageVar`）不得再写 `background:${m.bg}`：
+      //   图片是整卡底的导出快照（含叠加图层），CSS 近似底只会把它盖掉。
+      //   `background-size:100% 100%` 钉死拉伸到卡尺寸，`no-repeat` 防平铺。
+      // 🔴🔴 图片 URL 必须走 **`:style` 绑定**，绝不能拼进静态 `style="..."`：
+      //   静态 style 是纯 CSS 文本，Vue 不做变量求值 ⇒ 浏览器拿到的是相对 URL
+      //   `url(fgStatBg0)` → 404 ⇒ 整卡零背景。593cf7f 就是在这里翻车的：图片通道
+      //   逻辑（选图/面积判据/描边继承）全对，只差绑定形态，于是「三个统计卡有背景图」
+      //   这个用户报障修完仍在，且 `import fgStatBg<i>` 三行全成死代码。
+      //   静态段只留 CSS 常量（size/repeat），图片 URL 由绑定段给出；两段属性不重叠，
+      //   Vue 合并 static style 与 `:style` 时不会互相覆盖（同属性才是 bound 优先）。
+      const cardStatic = [
+        m.bgImageVar
+          ? 'background-size:100% 100%;background-repeat:no-repeat;'
+          : m.bg ? `background:${m.bg};` : '',
         m.border ? `border:${m.border};` : '',
         m.pad ? `padding:${m.pad};` : 'padding:0;',
         m.r ? `border-radius:${m.r}px;` : '',
       ].join('');
+      const cardBindStyle = m.bgImageVar
+        ? ` :style="{ backgroundImage: 'url(' + ${m.bgImageVar} + ')' }"`
+        : '';
       lines.push(
-        `    <div class="${cls}-card${i}" style="display:flex;flex-direction:${tr.innerDir};align-items:center;justify-content:center;gap:${tr.innerGap}px;width:${tr.cardW}px;height:${tr.cardH}px;flex:none;box-sizing:border-box;${cardAppearance}">`,
+        `    <div class="${cls}-card${i}" style="display:flex;flex-direction:${tr.innerDir};align-items:center;justify-content:center;gap:${tr.innerGap}px;width:${tr.cardW}px;height:${tr.cardH}px;flex:none;box-sizing:border-box;${cardStatic}"${cardBindStyle}>`,
         `      ${m.titleFirst ? tSpan : vSpan}`,
         `      ${m.titleFirst ? vSpan : tSpan}`,
         '    </div>',
       );
     });
     lines.push('  </div>', '</template>', '', '<script setup>');
+    // 卡底图片 import（变量名由判据侧分配 `fgStatBg<i>`，与 LLM 侧的 `bgN`/`iconN`
+    // 命名空间隔离 ⇒ 不可能与 `injectResourceImports` 注入的绑定撞名）
+    tr.members.forEach((m) => {
+      if (m.bgImageVar && m.bgImageFile) {
+        lines.push(`import ${m.bgImageVar} from '../../resources/images/${m.bgImageFile}'`);
+      }
+    });
     tr.members.forEach((m, i) => {
       lines.push(`const t${i} = ${jsonStr(m.title)}`);
       lines.push(`const v${i} = ${jsonStr(m.value)}`);
@@ -1258,28 +1829,16 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     });
     // 行节距真值为负（`itemSpacing=-1`，压叠 1px）⇒ 用 margin-top 表达（flex 的
     // row-gap 会把负值 clamp 成 0，真值 388 会变 396）。
-    lines.push(
-      '    </div>',
-      `    <div v-for="(row, ri) in rows" :key="ri" class="${cls}-tr" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;height:${tr.rowH}px;flex:none;${tr.rowGap ? `margin-top:${tr.rowGap}px;` : ''}">`,
-    );
-    tr.cols.forEach((c, i) => {
-      lines.push(
-        `      <div class="${cls}-td${i}" :style="{ boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, flex: '0 0 ${c.widthPct}%', padding: row.c${i}.pad || 0, background: row.c${i}.bg || undefined, border: row.c${i}.border || undefined }">`,
-        `        <img v-if="row.c${i}.iconVar" :src="row.c${i}.iconVar" alt="" :style="{ width: row.c${i}.iconW + 'px', height: row.c${i}.iconH + 'px', objectFit: 'contain', flex: 'none', marginRight: row.c${i}.iconGap == null ? undefined : row.c${i}.iconGap + 'px' }" />`,
-        `        <span class="${cls}-td${i}-t" :style="{ color: row.c${i}.color, fontSize: row.c${i}.fs + 'px', fontWeight: row.c${i}.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ row.c${i}.text }}</span>`,
-        '      </div>',
-      );
-    });
-    lines.push(
-      '    </div>',
-      '  </div>',
-      '</template>',
-      '',
-      '<script setup>',
-    );
-    tr.cols.forEach((c, i) => lines.push(`const h${i} = ${jsonStr(c.header.text)}`));
-    // 图标 import：按 varName 去重（同一 varName 指向不同 file ⇒ 冲突，全不渲染 ——
-    // 绝不猜测「取哪一个」）；varName 非法 JS 标识符同样跳过（降级不渲图标，不炸脚本）。
+    //
+    // 图标 import 与「名字 → 模块绑定」查表：按 varName 去重（同一 varName 指向不同
+    // file ⇒ 冲突，全不渲染 —— 绝不猜测「取哪一个」）；varName 非法 JS 标识符同样跳过
+    // （降级不渲图标，不炸脚本）。
+    // 🔴 必须在**模板生成之前**算出来：模板要按「本列有没有可用图标」决定是否产 `<img>`
+    //   以及 `:src` 走查表还是直取。
+    // 🔴🔴 图标 URL 必须经运行时查表 `ICON_MAP[名]`，模板里绝不能直接绑名字：
+    //   `rows` 是 JSON 字面量（`inlineJson`），`iconVar` 存的是**变量名的字符串**
+    //   （`"icon4"`）⇒ 直接 `:src="row.c0.iconVar"` 求值成 `src="icon4"`（相对 URL 404），
+    //   而 `import icon4` 全成死代码。实锤：c-device-6d79e69d 表格首列 8 行图标全破图。
     const iconFiles = new Map();
     const iconConflicts = new Set();
     const IDENT_RX = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -1292,10 +1851,43 @@ export function renderFoldedGridLeafVue(tr, semantic) {
         else if (!prev) iconFiles.set(ic.varName, ic.file);
       }
     }
-    for (const [varName, file] of iconFiles) {
-      if (!iconConflicts.has(varName)) {
-        lines.push(`import ${varName} from '../../resources/images/${file}'`);
+    const usableIconVars = [...iconFiles.keys()].filter((v) => !iconConflicts.has(v));
+    const usableIconSet = new Set(usableIconVars);
+    const colHasIcon = (c) =>
+      (c.cells || []).some((cell) => cell.icon && usableIconSet.has(cell.icon.varName));
+    lines.push(
+      '    </div>',
+      `    <div v-for="(row, ri) in rows" :key="ri" class="${cls}-tr" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;height:${tr.rowH}px;flex:none;${tr.rowGap ? `margin-top:${tr.rowGap}px;` : ''}">`,
+    );
+    tr.cols.forEach((c, i) => {
+      lines.push(
+        `      <div class="${cls}-td${i}" :style="{ boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, flex: '0 0 ${c.widthPct}%', padding: row.c${i}.pad || 0, background: row.c${i}.bg || undefined, border: row.c${i}.border || undefined }">`,
+      );
+      // 无可用图标的列不产 `<img>`（零副作用：既不写永不为真的绑定，也不引空查表）
+      if (colHasIcon(c)) {
+        lines.push(`        <img v-if="row.c${i}.iconVar" :src="ICON_MAP[row.c${i}.iconVar]" alt="" :style="{ width: row.c${i}.iconW + 'px', height: row.c${i}.iconH + 'px', objectFit: 'contain', flex: 'none', marginRight: row.c${i}.iconGap == null ? undefined : row.c${i}.iconGap + 'px' }" />`);
       }
+      lines.push(
+        `        <span class="${cls}-td${i}-t" :style="{ color: row.c${i}.color, fontSize: row.c${i}.fs + 'px', fontWeight: row.c${i}.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ row.c${i}.text }}</span>`,
+        '      </div>',
+      );
+    });
+    lines.push(
+      '    </div>',
+      '  </div>',
+      '</template>',
+      '',
+      '<script setup>',
+    );
+    tr.cols.forEach((c, i) => lines.push(`const h${i} = ${jsonStr(c.header.text)}`));
+    // 图标 import（判据见模板段前的 `iconFiles` / `iconConflicts` 计算，此处只落盘）
+    for (const v of usableIconVars) {
+      lines.push(`import ${v} from '../../resources/images/${iconFiles.get(v)}'`);
+    }
+    // 名字 → 模块绑定。模板 `:src="ICON_MAP[row.cN.iconVar]"` 的唯一来源：
+    // `rows` 里存的是字符串名（JSON 字面量无法承载模块绑定），查表是唯一正确的桥。
+    if (usableIconVars.length > 0) {
+      lines.push(`const ICON_MAP = { ${usableIconVars.join(', ')} }`);
     }
     // 行优先：每行按列序取真值（含各自颜色/字号/字重 ⇒ 「禁用」橙色不会丢；含外观
     // 三件套与首列图标 ⇒ 斑马纹/白网格线/图标不会丢）
@@ -1327,6 +1919,56 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       '',
       '<style lang="less" scoped>',
       `.${cls} { min-width: 0; }`,
+      '</style>',
+      '',
+    );
+    return lines.join('\n');
+  }
+  if (tr.kind === 'kvgrid') {
+    // 🔴 属性网格叶（刀 53g）：`label: value` 成对排布（真值 d072d085 `81:7` =
+    //   2 组 × 6 行 × 12 对）。**全部几何内联**（预览运行时 SFC scoped style 不生效，
+    //   与 font-size 同套路）；`label` 用「定宽 + text-align:right」复刻真值的
+    //   **右缘对齐**事实（真值 24 个 TEXT 的盒子右缘钉在两个固定 x，而
+    //   `style.textAlignHorizontal` 全是 LEFT ⇒ 对齐只能靠盒子几何表达，不能靠 text-align 声明）。
+    // 🔴 列分布用 `justify-content`（space-between 或固定 column-gap），由判据按
+    //   「首列贴容器左 ∧ 末列贴容器右」的**事实**选定，不再让 LLM 猜列数（真值 2 列 vs 旧产物 4 列）。
+    const cls = `c-${sem}-fg-kvgrid-${idSlug(tr.sectionId)}`;
+    const gridStyle = [
+      'display:grid',
+      `grid-template-columns:repeat(${tr.cols}, max-content)`,
+      `justify-content:${tr.justify}`,
+      tr.colGap > 0 ? `column-gap:${tr.colGap}px` : '',
+      tr.rowGap > 0 ? `row-gap:${tr.rowGap}px` : '',
+      'align-content:start',
+      'align-items:start',
+      'padding:0',
+    ].filter(Boolean).join(';');
+    const lines = [
+      '<template>',
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="${gridStyle};">`,
+    ];
+    tr.cells.forEach((c, i) => {
+      const lw = tr.columns[c.col]?.labelW ?? c.labelW;
+      lines.push(
+        `    <div class="${cls}-cell" style="display:flex;flex-direction:row;align-items:baseline;gap:${tr.labelGap}px;">`,
+        `      <span class="${cls}-label" style="flex:0 0 ${lw}px;text-align:right;color:${c.labelColor};font-size:${c.labelFs}px;font-weight:${c.labelFw};line-height:${c.labelLh}px;white-space:nowrap;">{{ l${i} }}</span>`,
+        `      <span class="${cls}-value" style="color:${c.valueColor};font-size:${c.valueFs}px;font-weight:${c.valueFw};line-height:${c.valueLh}px;white-space:nowrap;">{{ v${i} }}</span>`,
+        '    </div>',
+      );
+    });
+    lines.push('  </div>', '</template>', '', '<script setup>');
+    tr.cells.forEach((c, i) => {
+      lines.push(`const l${i} = ${jsonStr(c.label)}`);
+      lines.push(`const v${i} = ${jsonStr(c.value)}`);
+    });
+    lines.push(
+      '</script>',
+      '',
+      '<style lang="less" scoped>',
+      `.${cls} { min-width: 0; }`,
+      `.${cls}-cell { min-width: 0; }`,
+      `.${cls}-label { flex: none; }`,
+      `.${cls}-value { min-width: 0; }`,
       '</style>',
       '',
     );
@@ -1386,6 +2028,61 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     //   运行时不生效 ⇒ 字号必须内联，归一器经 protectFgTagInlineStyles 豁免）。
     //   **绝不渲染 img** —— 本判据的存在意义就是堵「纯文本叶被 LLM 臆造成无 :src 破图」。
     const cls = `c-${sem}-fg-text-${idSlug(tr.sectionId)}`;
+    // 🔴 N 段文本：每段独立真值样式与相邻间距；不能用统一 gap 抹平非等距，也不能拼成
+    //   一个字符串（会丢「编码」与「爆闪灯」的不同颜色）。单段旧产物仍走下方原分支。
+    if (Array.isArray(tr.runs) && tr.runs.length > 1) {
+      const direction = tr.direction === 'column' ? 'column' : 'row';
+      const marginProp = direction === 'column' ? 'margin-top' : 'margin-left';
+      const lines = [
+        '<template>',
+        `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:${direction};align-items:${direction === 'column' ? 'flex-start' : 'center'};justify-content:flex-start;min-width:0;${tr.height ? `height:${tr.height}px;` : ''}padding:0;">`,
+      ];
+      tr.runs.forEach((run, i) => {
+        const margin = i > 0 ? `${marginProp}:${run.gapBefore}px;` : '';
+        const multiline = Boolean(run.multiline && run.lineHeight);
+        const width = multiline ? `width:${run.width}px;` : '';
+        const lineHeight = multiline ? `${run.lineHeight}px` : '1';
+        const whiteSpace = multiline ? 'normal' : 'nowrap';
+        lines.push(
+          `    <span style="display:block;flex:none;${width}${margin}color:${run.color};font-size:${run.fontSize}px;font-weight:${run.fontWeight};line-height:${lineHeight};white-space:${whiteSpace};">{{ runs[${i}].text }}</span>`,
+        );
+      });
+      lines.push(
+        '  </div>',
+        '</template>',
+        '',
+        '<script setup>',
+        `const runs = ${inlineJson(tr.runs.map((run) => ({ text: run.text })))}`,
+        '</script>',
+        '',
+        '<style lang="less" scoped>',
+        `.${cls} { min-width: 0; }`,
+        '</style>',
+        '',
+      );
+      return lines.join('\n');
+    }
+    // 🔴 多行文本（2026-10-27 · 36:1719 长描述实锤）：必须允许换行并用真值行高，
+    //   否则 `nowrap + line-height:1` 把 3 行正文压成一行溢出。单行分支**逐字不变**。
+    if (tr.multiline && tr.lineHeight) {
+      return [
+        '<template>',
+        `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;align-items:flex-start;justify-content:flex-start;min-width:0;${tr.height ? `height:${tr.height}px;` : ''}padding:0;">`,
+        `    <span style="display:block;width:100%;color:${tr.color};font-size:${tr.fontSize}px;font-weight:${tr.fontWeight};line-height:${tr.lineHeight}px;white-space:normal;">{{ text }}</span>`,
+        '  </div>',
+        '</template>',
+        '',
+        '<script setup>',
+        `const text = ${jsonStr(tr.text)}`,
+        '</script>',
+        '',
+        '<style lang="less" scoped>',
+        `.${cls} { min-width: 0; }`,
+        `.${cls}-text { font-size: ${tr.fontSize}px; }`,
+        '</style>',
+        '',
+      ].join('\n');
+    }
     return [
       '<template>',
       `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;align-items:center;justify-content:flex-start;min-width:0;${tr.height ? `height:${tr.height}px;` : ''}padding:0;">`,
@@ -1475,7 +2172,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
  *            skipped: Array<{id:string, reason:string}> }}
  */
 export function collectFoldedGridTakeover(p = {}) {
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -1505,10 +2202,10 @@ export function collectFoldedGridTakeover(p = {}) {
     out.evaluated += 1;
     // 🔴 判定顺序：网格 → 标题行 → **统计行** → 表格 → 纯文本 → 纯 icon → 图例
     //    （刀 53b/53c/53d/53e/53f）—— 互斥域递减（cards≥2 / 1 TEXT+已映射 icon /
-    //    兄弟同构 N 元组 / 同表多列 / 1 TEXT 无图形 / 0 TEXT 且已导出 PNG /
+    //    兄弟同构 N 元组 / 同表多列 / 线性 N TEXT 无图形 / 0 TEXT 且已导出 PNG /
     //    1 ELLIPSE + 1 TEXT 的 ≥2 组同构）。统计行/表格必须**早于** text/icon：
-    //    它们的成员各自含 2 个 TEXT（不可能是 text 叶），但父级聚类判据更严格，
-    //    先判可锁定整行/整表归属。图例**放最后**：与 text/icon 两两互斥，
+    //    它们的成员各自含 2 个 TEXT；即使成员几何可被线性 text 接管，父级聚类判据
+    //    也更严格，先判可锁定整行/整表归属。图例**放最后**：与 text/icon 两两互斥，
     //    末位 ⇒ 结构上不可能抢走既有命中（只救原本被 skip 的叶）。
     let tr = detectGridLeaf(sec, figmaIndex);
     if (!tr.ok) {
@@ -1538,8 +2235,18 @@ export function collectFoldedGridTakeover(p = {}) {
               const lg = detectLegendDotTextLeaf(sec, figmaIndex, parentOf);
               if (lg.ok) tr = lg;
               else {
-                out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason}` });
-                continue;
+                // 🔴 属性网格（刀 53g）**同样放末位**，与图例同一论证：本判据要求
+                //   「plan 的 internalTree 显式声明 label-value（≥4 对、同 type、
+                //   列数可整除）」，与 statrow（`stat-card`）/ table（`table-header`+
+                //   `list`）/ icon（子树 0 TEXT）/ legend（恰 1 图形 + 恰 1 TEXT）
+                //   结构性互斥；text 虽支持 N 段，但只接受同一行或每段独占一行，
+                //   kvgrid 的混合多行多列会被 textRunsNotLinear 明确拒绝 ⇒ 不会被抢走。
+                const kv = detectKvGridLeaf(sec, figmaIndex);
+                if (kv.ok) tr = kv;
+                else {
+                  out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason}` });
+                  continue;
+                }
               }
             }
           }
@@ -1556,6 +2263,9 @@ export function collectFoldedGridTakeover(p = {}) {
     else if (tr.kind === 'text') out.textHits += 1;
     else if (tr.kind === 'icon') out.iconHits += 1;
     else if (tr.kind === 'legend') out.legendHits += 1;
+    // 🔴 刀 53g 必须**显式**分支：否则会落进下面的 `else` 被算成 gridHits，
+    //   而「gridHits 里有几个是属性网格」正是真机核验唯一依据 ⇒ 计数失真 = 假绿。
+    else if (tr.kind === 'kvgrid') out.kvGridHits += 1;
     else out.gridHits += 1;
     out.map.set(String(tag), {
       kind: tr.kind,

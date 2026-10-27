@@ -772,3 +772,188 @@ plan 段 `type==='header'` / Figma 子树恰 1 非空 TEXT / 同文件无既有 
 - 🔴 `getFigmaBox` 形态陷阱：必须四元齐全（x/y/width/height），裸 `{width,height}` 判 null；`resolveSectionFlexSize` 取 `sourceNodeIds` 并集。
 - 🔴 卡内横竖排 / 间距一律**几何判定**：x 区间不交叠且 y 区间有交集 ⇒ 横排；间距按实际序取正向值（**禁止两侧公式取 min**）。
 - 🔴 改 prompt / 规范前「**加载链三查**」：生效根是 `references/**`；`prompts/agents|references/**` 是死文件。
+
+## 2026-10-27 从 MEMORY.md 三次瘦身（布局管线 T4 四刀；单行索引仍在 MEMORY.md）
+
+### T4 第 1 刀 · plan 保留 vision 内部语义树 `internalTree`（`5e4ad69`，未部署）
+- **病灶**：plan `body.items` 只有 `{text, figmaNode}` ⇒ `81:7` 的 61 元素 / 3 层被拍成 24 条平铺；vision 已给出的 12 对 `label-value` + `gridColumns:2` **在 plan 里无载体** ⇒ 下游任何刀都拼不回 2 列。
+- **改法（`roles/subcomponent-planner.js`，152 行纯加法，绝不碰 `body`）**：
+  - F1 门槛放宽为 `sem._consumed && !hasStructuredBody`；
+  - 命中宿主挂**新字段** `internalTree = { source, sourceSectionId, layout, gridColumns?, nodeCount, children }`；
+  - 同构下钻三条件：`items` 同 type ∧ `children.length === items.length` ∧ 每子节点命中 ≥1 文本；
+  - 容器/叶子双 return 透传（**缺键不产键** ⇒ fail-open，老 plan 逐字等价）；
+  - 计数行 `vision 内部语义树回挂·已评估`。
+- 真语料实证：`81:7` → `gridColumns=2 / nodeCount=12 / {label-value:12}`；`2ec8acc7` → `43:4893 {stat-card:1}`（`drilled:3`）；`807:2 → {legend-item:2, link:1}`；`43:4784 → {table-header, list}`。
+- 🔴 **下钻判据② 数量不等必须不钻**：`43:4784` 有 4 张卡，vision body 只有 2 条（`table-header` + `list`）⇒ 该叶子 `43:4785` 保持无 `internalTree` 是**正解**。强行钻会把 header 挂到卡1、list 挂到卡2，比不钻更错。这类「容器有、叶子是 N 张同构卡之一」的**继承**属消费端，尚未实现。
+- 🔴 `801:3` 附带拿到 `{image, text, tag-row}` = 「头部左图右文被堆纵」所缺的结构真值。
+
+### T4 第 2 刀 · 刀 53g 属性网格 `kvgrid`（`55920b3`，未部署）
+- **病灶**：`81:7` 属「语义规则、几何不规则」——24 个 TEXT、9 个 x 唯一值、12 种宽度 ⇒ `uniformPitch` 恒 null ⇒ `noGridContract`；刀 53 七项判据全不命中 ⇒ 整段交 LLM ⇒ 产物猜 4 列（真值 2 列）。
+- **改法**：新增 `detectKvGridLeaf` + `kind='kvgrid'` 渲染，**双源交叉**：
+  - 语义源 = `sec.internalTree`（全 `label-value` ∧ `gridColumns >= 2` ∧ 可整除）；
+  - 几何源 = Figma 直接子 TEXT，**按文本反查**（绝不用 vision id）。
+  - 门禁 5 条：每列 label 右缘一致（±2）/ 行·列聚类数 / 行距等距（复用 `uniformPitch`，已改 `export`）/ `texts === pairs*2` / 每格 (row,col) 唯一。
+  - 列分布由事实选：`flushLeft ∧ flushRight ⇒ space-between`；否则用 `uniformPitch` 求列距并要各列 `pitch − cellW` 一致 ⇒ 固定 `column-gap`。
+  - 分发在判定链**最末位**（legend 之后）⇒ 结构上只可能救原本被 skip 的叶。
+- 真语料 `81:7`：`cols=2 rows=6 rowGap=10 justify=space-between labelGap=15 labelW=[56,70]`，12 格**行优先**、文案与 Figma 逐字一致。
+- 🔴🔴 **vision 的 id 在 `81:7` 整体偏移一位**（vision `36:1700` = 「所属产品」，真值 `36:1700` = 「所属路公司」）⇒ 几何锚点只能用文本反查。
+- 🔴 **`style.textAlignHorizontal` 不可信**：24 个 TEXT 全 `LEFT`，但对齐实质是**盒子右缘**钉在 `24801 / 25074`（value 左缘 `24816 / 25089`，间距恒 15；行距 24、文本高 14 ⇒ rowGap 10）。
+- 🔴 **新增 kind 必须同步登记 `FG_TAKEOVER_CLASS_RX`**（唯一来源被 4 处消费：`font-size-normalizer` 内联字号保护 + `DEFAULT_SKIP_SELECTOR_RXS`、`code-validator` 清单过滤、`layout-facts-injector` 跳过注入、`orphan-style-rule-guard`）；漏登记 ⇒ 字号塌回 `@fontSize`。
+- 🔴 新增 kind 必须在 `collectFoldedGridTakeover` 计数链**显式分支**，否则落进 `else` 算成 `gridHits` ⇒ 计数失真 = 假绿。
+- 🔴 **只加 `buildGridContract` 语义通道修不好本例**（上一轮的方案判断错误）：契约存在后仍卡在 `resolveCardNodes`（24 items vs 12 卡）+ `cardTruth`（配对无底色 ⇒ `firstSolidFillRgba` null）⇒ `ok:false`。**先跑 skip 归因再定方案**。
+- 🔴 探针传空 `resourceMapping` 会让 `header:0` / `icon:0` 看起来像「判据从未生效」——缺参假象，别当发现上报。
+- spec：`utils/__tests__/folded-grid-kvgrid.spec.ts` 16 例（阳性 3 / 阴性 7 / 渲染 4 / 端到端 2）。夹具刻度复刻真值 `BOX{1000,500,440,62}`、`VALUE_X=[1071,1344]`、`LABEL_RIGHT=[1056,1329]`、`ROW_Y=[500,524,548]`；`internalTree(order)` 支持打乱 vision 数组顺序 ⇒ 证明输出几何驱动、不靠数组序；条目 id 故意写成 `36:${1700+i}`（错位）⇒ 证明不采信。
+
+### T4 第 3 刀 · 统计卡卡底走「图片通道」（`593cf7f`，未部署）
+- **病灶**：`2ec8acc7` 三卡真值是**整卡底一张 PNG**（`48:5909` → `bg-5909.png`，134×66，`recommendedUsage:'backgroundBlock'`），产物只渲内部单根 `43:4894`（`GRADIENT op=0.5`，134×56）⇒ 顶部 10px 亮条（`43:4897`）整层丢失。
+- **根因（通用 bug）**：`subtreeBackground.isIcon` 原判「节点在资源映射里 ⇒ 是图标 ⇒ 跳过」，但**背景图也是被下载的资源** ⇒ 整卡底被当装饰跳过。
+- **改法**：`BG_RESOURCE_FLAGS = { usage:['backgroundStyle','backgroundBlock'], role:['bg','container'] }` + `isBackgroundResource()` + `backgroundImageOf()`（且 `resourceFile` 有值 ∧ `downloadStatus ∉ {failed, missing}`）；`subtreeBackground` 改为**双候选择一不合成**（图片面积 ≥ CSS 面积 ⇒ 走图片、`css:null`）；`detectStatRowLeaf` 成员新增 `bgImageFile` / `bgImageVar`（`fgStatBg<i>`），图片命中时 `bg` 保持 `null`；渲染写 `background-image:url(var); background-size:100% 100%; background-repeat:no-repeat`，`<script setup>` 逐卡 import。
+- 🔴 **导出 PNG 不含 `strokes`**（PNG 解码实测 `bg-5909.png` 左缘像素 = 中心像素）⇒ 描边只能从 CSS 候选继承。
+- spec：`folded-grid-stat-bg-image.spec.ts` 9 例（图片被采用且 `bg===null` 互斥 / 🔴 回归「不退到 50% 矢量」/ `missing` 回落 CSS / 无映射逐字等价 / `8×8 < 主体 134×56` 面积判装饰 / 描边继承 `1px solid #a0c1ff` / 渲染 3）。
+
+### T4 第 4 刀 · `low` 置信方向闸（`06ed935`，未部署）
+- **病灶**：`figma-node-layout-facts.js#decideGeometricLayout` 对 `confidence:'low'` **无条件兜底 `row`**（注释理由「不标准文件仍 flex，横排被堆纵是最常见的失败」）。该理由只覆盖**一半**失效；另一半是**真值纵排却被兜底成横排** ⇒ 整段纵排压成一条窄列。
+- `2ec8acc7` 的 `807:2`（`slot-con` 483×515，真值三段 y=51637/51728/52138）：R23 归并后 pair 数 6→10、side-by-side 1→3 ⇒ `ratio 0.3(low)` ⇒ 兜底 row ⇒ 「三张统计卡 / 表格 / 图例 / 链接」全横排进一行，表格压成右侧窄条。
+- **修法（两事实合取，不是「按组件 id 特例」，也不是简单删兜底）**：
+  ```js
+  const tallContainer = pw > 0 && ph > pw
+  const flexDirection = confidence === 'low'
+    ? (direction === 'column' && tallContainer ? 'column' : 'row')
+    : direction
+  ```
+  ① 几何多数判 `column` ∧ ② 容器自身「高 > 宽」⇒ 保留 `column`；其余保持原兜底 `row`（零新翻面）。
+  **为什么必须合取**：单看 ① 会把 `2:8419`（388×30 的 header，ratio 0.464）翻成纵排。
+- **量化（168 组件 / 9534 容器 / low 777 个）**：「几何判 column」105 个，其中容器高>宽**正好 10 个**（去重后仅 `807:2` 一种设计）；其余 95 个（`2:8419`×20 / `2:3438` / `2:3446` / `2:3496`）保持 row 不变；「几何判 row」的 672 个**构造上不可能**被本闸碰到（`direction` 必须为 `column` 才进闸）。
+- **两态 diff 实证**（全量 plan 快照各 3382 行）：输出恰 **40 行 = 10 组**，全部 `807:2 horizontal → vertical`，其余 3372 行零变化。
+- `parentBox` 传递链：`decideLayoutForBoxes(boxes, parentBox)` → `decideGeometricLayout({...opts, parentBox})` → `opts.parentBox`；真实调用点 `subcomponent-planner.js:1287 / 1341` 均传 `absoluteBoundingBox`。
+- spec：`layout-low-confidence-direction.spec.ts` 8 例（基线 `ratio 0.4/low` 复算 / 阳性 `807:2` 形态 / 阴性 4：`2:8419` 宽容器仍 row、无 `parentBox` 保持 row、高容器但几何判 row 仍 row、高置信不受影响 / grid 分支不经本闸 / `807:2` 真实形态 483×515、7 子含越界 `43:5688` 回归护栏）。
+  - 🔴 `subcomponent-planner-r23-merged-layout.spec.ts` ⑩ 由「A2 废弃思路反证」**转为护栏**：原断言「补 tail-text ⇒ row」记录的是旧兜底缺陷，修好后得 `column`，断言随之改为 `column`（若有人把兜底改回无条件 row，立刻转红）。
+  - 🔴 写该 spec 的坑：`WIDE`(388×30) 父框下 3 个大子节点会被 `excludeBackgroundLayers`（面积 ≥90% 父面积）剔为背景层 ⇒ 配对塌成 `high`，测的就不是本闸了。夹具必须用小尺寸兄弟。
+
+### 布局管线仍遗留（按优先级）
+1. `43:4785` 这类「容器有 `internalTree`、叶子是 N 张同构卡之一」的**继承**属消费端，未实现。
+2. `LAYOUT-001` 与 `布局真值守卫` 的**真值源**仍需更换（现用 `section.layout`，即 `decideLayoutForBoxes` 产出 ⇒ 用错真值校验错产物）。
+3. `ratio = C(k,2)/C(N,2)` 度量本身仍缺陷（只是被闸挡住）——应换「按 y 行 / x 列聚类分段」。
+4. `flexGrow` 方向语义错（恒按高度归一，方向 row 时主轴 = 宽度 ⇒ 比例全废）。
+5. vision 边界三刀（删 `layout`；`visualElements.colors/background/styles` 降级 hint；`interactions[].figmaNodeId` 必填 + `INTERACTION-001` 门禁）。
+
+### A1 文本配额 / A2 不臆造方向 详版（`0013ba8`，未部署；单行索引在 MEMORY.md「②」节）
+- **T1 配额吃文本（A1）**：`roles/subcomponent-planner.js` 的 `plainTextItems` 用 `.slice(0, 12)` **无差别**作用于所有 section ⇒ figma 24 个 TEXT 只剩 12 条，而 `elementCount` 仍 24 ⇒ **计划不自洽**。同类第二处（首处 `5160a2ec` 修在 `pickTextPriorityLines`）。
+  - **A1 改定**：`TEXT_ITEM_QUOTA = { grid: 48, horizontal: 24, default: 12 }` + `TEXT_ROW_TOLERANCE_PX = 6`，按行取 `takeTextItemsByRow(hits, cap)`。
+- **T2 无事实臆造方向（A2）**：figma GROUP 无 `layoutMode` ⇒ 无方向真值，但 `deriveChildLayout`（`section-tree.js:2606`）读几何聚类得 `flexDirection=row` ⇒ plan horizontal ⇒ 产物 row，而 vision 说 vertical ⇒ LAYOUT-001。
+  - 🔴 `section-tree.js:2627-2632` 断言「LAYOUT-001 是死代码」**已过时**。
+  - **A2 定稿（三次迭代）：闸⑤「事实优先闸」= 两条件合取** —— `raw.children` 含 `TEXT`（条件 A）∧ 既有 A 类事实 `confidence === 'high'`（条件 B，用同一实现 `decideLayoutForBoxes` 复算）⇒ 双满足才 `return`（跳过复算、保留既有方向）。`subcomponent-planner.js:1289`，import 在 `:51`。
+  - 实测基线：`801:3` 原生 9 子 = `column/high(0.1944)`（真事实）；`807:2` 原生 7 子 = `row/low(0.3333)`（**仅 A 会误拦**）；`801:3` 在 R23 派生 4 真 id = `row/low(0.5)`（**臆造反向**，正需本闸拦下）。
+  - 全语料（常驻脚本 `scripts/audit-r23-gate5-truth-gate.mjs`，与判据同实现）：165 组件 / 29 含伪 id ⇒ **A∧B 拦 16**（`565:3`×13 不变 + `801:3`×3 修复，含真机 `mc-1793008064107-07542a2f`）/ **A∧¬B 放 9**（全 `807:2`，R23 正向修复保留）/ **¬A 放 4**（全 `287:6`，闸② `derivedKidIds<2` 先拦）。
+  - 🔴 `figma-node-layout-facts.js:147` 的 `flexDirection = confidence==='low' ? 'row' : direction`（low⇒row 兜底放大效应）= 必须引入条件 B 的根因；该兜底已于 `06ed935` 收窄为两事实合取（见 T4 第 4 刀）。
+  - 🔴 `indexFigmaNodes`（`section-tree.js:434`）返回包装体 `{id,name,type,bbox,parentId,rawNode}` ⇒ 查子节点必须读 `entry.rawNode.children`。
+- **T3 声称拆却没拆**：`shouldSplitInternally=true` + `internalSubcomponents=[]` ⇒ grid 组被写成 stub（只渲 1 条）。
+
+## 2026-10-27 从 MEMORY.md 四次瘦身（第 6 层令牌化 / B 批通用管线；单行索引仍在 MEMORY.md）
+
+### 第 6 层令牌化（`bc24a91`，未部署）
+
+- ✅ **RC1 `color-slot-mapper.js`**：阈值 `0.5`→`0.1`（半透明面板 0.2 / 0.32 / 0.35 被旧阈值整批丢）；
+  `cssColorKey` 贯穿 key / value / `differs`；改 `COLOR_TOKEN_RX` 令牌化 ⇒ 根治真机 `replacedCount:0`。
+  半透明**刻意不给 canonical 通道**（多主题下不同底色叠出来的观感不同，硬给 canonical 会串色）。
+- ✅ **RC2 `file-writer.js`**：`resolveCustomThemeExports(tokens)` 作导出主题名**单一事实源**；缺省时逐字节等价旧版。
+- 🔴 `meta?.brightness === 'dark' ?? (...)` 里的 `??` **不生效**（`===` 恒返回 boolean，`??` 只挡 `null/undefined`）；
+  **照搬不改**（改了会动既有行为，且与本层目标无关）。
+- 🔴 **RC1' 未收口**：产物 `.vue` 内联 `style="color:rgba(...)"` 不经 Less ⇒ 写不了 `@color-custom-N`
+  ⇒ 文字色不跟随主题。生成者 `folded-grid-section-takeover.js:1191/1255/1368/1392/1419`；
+  上游 `prompt-builder.js:2630` vs `:2883` 互斥硬指令（一处要求内联、一处要求走 Less）。
+
+### B 批通用管线（层 1 / 层 2；已部署 `37d0983`，真机 29/0 已验证）
+
+- ✅ **层 1 `section-anchor-truth.js#auditSectionAnchors`**：幻影 ref 分离（祖先判定只在 `refsInTree` 上做）
+  + 修复门槛（`no-lca` / `lca-is-root` / `phantom-refs` ⇒ 计入 `unrepaired`）。
+  `emptyAnchorStats()` 导出给聚合侧复用（见 MEMORY.md「多挂载点聚合」陷阱）。
+- ✅ **层 2 `vision-content-anchor-consistency.js`**：形态门禁单一来源 `isDeclaredContentEntry`
+  （同级条目 `id` 过 `FIGMA_ID_RE` ∧ `['text','characters','content']` 至少一非空；
+  **刻意不含** `name/title/role/type/layout/description/reason`）。取**全树**口径，不只看当前 section。
+- 🔴 分工：`text-truth` = 「文案**读错**了吗」；`content-anchor` = 「文案**挂对 id** 了吗」。
+- 🔴 **`COMP-002` ≠ `content-anchor` 对账**：前者判**产物 .vue 骨架**是否渲染本 section 真值文案
+  （`mc-component-graph` L0-B）；后者判 **vision JSON** 挂 id。可以「对账干净 + 产物串味」
+  ⇒ **别用 `mismatched:0` 证明产物正确**。
+- 🔴 两守卫计数行 `视觉 section 锚点审计·已评估` / `vision 文案-锚点对账·已评估` 无论命中与否全打
+  （0 命中时 `skippedReason` 必须显式，否则无法区分「接线未生效」与「无病灶」）。
+
+## 2026-10-27 刀 5 · 宽容器真纵排（`da0f71d`，未部署；单行索引在 MEMORY.md「方向判据」节）
+
+### 病灶：`low` 方向闸只认「容器高 > 宽」，宽容器真纵排漏检
+
+`06ed935` 把 low 兜底收窄成「几何判 column ∧ 容器高>宽 ⇒ column」，但漏了一类：
+**容器是宽的、内容却真的纵向堆成两段**。视觉裁判实测两例：
+
+- `2:3438` 387×142 ×19 —— 标题带「车型分布」在上，两张分布卡（江阴靖江长江隧道 / 江阴大桥）在下
+- `2:3446` 192×114 ×38 —— 标题带「江阴靖江长江隧道」在上，客车/环形图/货车内容带在下
+
+两者 `ratio` 都 < 0.5（几何本来判 column），只因 `h ≤ w` 被兜底翻成 `row` ⇒ 产物把
+「标题 + 内容」压成一行。对照例 `2:8419` 388×30 ×38 真值 `row`（设备监测 + 三组数值一行）。
+
+### 修法：第三条事实 `hasStackedContentBands`
+
+1. 剔除装饰子项：宽或高 < 8px（细长条 / 滚动条）、宽高都 < 10px（孤立极小图标）；
+2. 按 y 重叠聚带（重叠 > 较矮者高度的 50% 算同带）；
+3. 要求带数 ≥ 2，且**首带之后最厚那条带** 高 ≥ 50% 父高 ∧ 横向覆盖 ≥ 60% 父宽。
+
+第 3 条的两个阈值不是拍的：`2:3438` thickH 80% / `2:3446` 70% / `2:8419` 27%（6px 下划线）⇒
+50% 分得开；厚度门槛单独不够时，宽度门槛再挡「薄块 + 窄块」的伪两段。
+
+### 爆炸半径（实测，不是估）
+
+- 候选池（无 layoutMode ∧ ≥2 子 ∧ low ∧ ratio<0.5 ∧ 非高容器）= **95 个容器**
+- 结构签名去重后只有 **3 种结构**：`2:8419`388×30 / `2:3438`387×142 / `2:3446`192×114
+- 判据触发 = 后两种 ⇒ **翻 57 个**，`2:8419` 那 38 个一位不动
+- 修后重跑同一脚本：候选池从 95 掉到 **38**（只剩 2:8419 一族），触发 0 —— 目标集清空
+
+### 验证
+
+- `direction-truth-fixtures.spec.ts`：阳性 **20/22 → 22/22**；三态对照保留
+  - 阴性转置：20/22 反转，**2 个已知轴不对称例外**（`2:3438` / `2:3446` 转置后成高容器，
+    走 tallContainer 那条仍判 column）—— 用名字钉住，不静默排除
+  - 变异：真值取反 ⇒ ok 22→1（唯一残留 81:7 grid 不变量）
+- `layout-low-confidence-direction.spec.ts`：+7 例（阳性 2 / 阴性 5）
+- **源码级变异**：摘掉 `stackedBands` ⇒ 7 例转红，还原 ⇒ 全绿
+- ai-engine 全量两态：FAIL 集合 **30 = 30，diff 为空**（全是既有环境类 flaky）
+
+### 🔴 两个方法论教训
+
+1. **对照图只用于初筛，定稿必须逐张看放大图**。首轮在 4×6 拼图上把 `2:3446` 判成 `row`，
+   逐张看 3× 裁剪才纠正成 `column`。一例判错连带整份结论失真（产线准确率从 20/22 被算成 21/22，
+   缺陷规模从 2 例 57 个容器被低估成 1 例）。
+2. **报告生成器不能写成「请你填表」**。原 `sample-direction-truth-cases.mjs` 生成的
+   `.md` 里是空表格 + `判读: ____`，重跑一次就把裁决冲掉 ⇒ 已把 `VERDICT`（truth/why/统计）
+   内嵌进脚本，报告自带结论表与一览表。
+
+---
+
+## 2026-10-27e 刀 53d/53e 资源绑定形态收口（`b3f4d81`）+ CODE-028 守卫（`0f7e605`）
+
+### 病灶（c-device-6d79e69d 真机实锤，用户报障「统计没有背景图 / 表格内的 img 也没有」）
+| # | 位置 | 错形态 | 后果 |
+|---|---|---|---|
+| ① | `folded-grid-section-takeover.js` statrow 渲染（原 L1543） | `background-image:url(${m.bgImageVar})` 拼进**静态 `style="..."`** | 静态 style 是纯 CSS 文本，Vue 不做变量求值 ⇒ 浏览器按相对 URL 请求 → 404 ⇒ 三卡零背景；`import fgStatBg0/1/2` 三行全是死代码 |
+| ② | 同文件 table 渲染（原 L1623） | `:src="row.c${i}.iconVar"`，而 `rows` 由 `inlineJson` 序列化成 JSON、`iconVar` 存**变量名字符串** `"icon4"` | 求值成 `src="icon4"` → 404 ⇒ 首列 8 行图标全破图；`import icon4` 死代码 |
+
+🔴 ① 不是新问题：`593cf7f`（同日 10:55）的选图逻辑（bg 资源 vs 图标分离 / 面积判据 / 描边从 CSS 候选继承）全对，**只差绑定形态**，且它新增的 spec 第 193 行 `expect(vue).toContain('background-image:url(fgStatBg0)')` 把错形态断言成正确 ⇒ 修完用户报障仍在 = 假绿闭环。
+
+### 改法
+1. statrow：`cardStatic`（只放 `background-size:100% 100%` / `no-repeat` / border / padding / radius）+ `cardBindStyle = ' :style="{ backgroundImage: \'url(\' + fgStatBg<i> + \')\' }"'`。两段属性不重叠 ⇒ Vue 合并 static style 与 `:style` 不互相覆盖（同属性才 bound 优先）。
+2. table：`usableIconVars` / `usableIconSet` / `colHasIcon(c)` + `const ICON_MAP = { icon1, icon2, icon3 }`，模板 `:src="ICON_MAP[row.c${i}.iconVar]"`。**图标 import 判据必须提前到模板生成之前**（模板要按「本列有没有可用图标」决定是否产 `<img>`）；无可用图标的列不产 `<img>`、无图标时不产 `ICON_MAP`（零副作用，两处阴性 spec 锁住）。冲突名（同 varName 指不同 file）仍全不渲、且不产空表。
+
+### spec 反转（关键）
+- `folded-grid-stat-bg-image.spec.ts`：断言绑定形态；新增两条反向断言 —— ① 病灶确切形态 `background-image:url(fgStatBg` 不得出现；② **通用防复发**：`url(` 之后不得直接跟裸标识符（合法只有 `url(' + var + ')` / `url('字面量')` / `url(data:/http:/#/../)`）。缺 ② 会再次「把 bug 断言成正确」。
+- `folded-grid-section-takeover.spec.ts`：补 `const ICON_MAP = { icon1, icon2, icon3 }`、`:src="ICON_MAP[row.c0.iconVar]"`、`not.toContain(':src="row.c0.iconVar"')`；阴性②③补 `not ICON_MAP` / `not '<img'`。
+
+### CODE-028 守卫（补 CODE-022 的洞）
+- **洞在哪**：`isResourceVarMounted` 判据 = 「剥 import 行 + 剥注释后全文还剩 `\bname\b`」。静态 style 里的 `fgStatBg0` 恰好命中 ⇒ 判「已挂载」⇒ 门禁放行、`pruneUnmountedResourceImports` 也不删 ⇒ **变量引用了、import 在、图不显示**，全链一致认为合规。CODE-027 docblock 还把 `:style="{backgroundImage:'url('+bg+')'}"` 当正确写法举例 ⇒ 「绑定 vs 静态」这个区分从未被任何守卫编码。
+- **判据三条件合取**（`utils/resource-import-guard#findStaticStyleUrlVars`）：
+  ① 只扫 `<template>` 内静态 `style="..."`：`/(?<![-\w:])\bstyle\s*=\s*(["'])([^"']*)\1/g` —— `:style` / `v-bind:style` / `data-style` 全排除；
+  ② `url\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)` —— 裸标识符紧跟 `)`；相对路径 / 引号字面量 / `#id` / `data:` / `https:` 不匹配；
+  ③ 该标识符本文件 `<script>` 从图片扩展名 import 过（否则不越界）。
+- **落位理由**：放 validator 会被 `logger → config/backend-root` 的 `import.meta.url` 链拖垮单测（`SyntaxError: Identifier '__filename' has already been declared`）。判据放零依赖 utils，validator 只再导出 + 挂 WARN。
+- **全语料**：216 组件 / 1473 `.vue` ⇒ 命中 **1** 文件（`c-device-6d79e69d/.../ListSection.vue` 的 fgStatBg0/1/2）、误报 **0**。
+
+### 验证口径
+folded-grid 三支 104 例 PASS + CODE-028 16 例 PASS；源码级变异（实现回 HEAD / spec 保持新）⇒ 3 例转红；两态回归 82 spec FAIL 集合 diff 为空；`npm run build` ✅ + dist 符号核查 + 旧形态 grep 0。

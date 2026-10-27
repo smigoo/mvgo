@@ -208,6 +208,20 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
     const effectiveClassName = matched.className
     const extracted = matched.extracted
 
+    // 🛡️ 刀 6（2026-10-27 · 8bbcf027 `36:1726` 实锤）：同 bbox 叠层事实（display:'stack'）
+    //   **整类跳过方向注入**。容器级 CSS 单独表达不了「子项全部叠放」（需子项
+    //   `grid-area:1/1` 配合，属模板层职责，prompt 侧已下发层叠写法）；旧行为会把
+    //   `flex-direction:column` 写进宿主类 ⇒ 层叠子项被拉成纵流。此处宁可不写，
+    //   也绝不写错。命中必打日志（零命中与没跑可区分）。
+    if (fact.display === 'stack') {
+      if (logger) {
+        logger.info(
+          `🛡️ LAYOUT-FACTS-STACK: ${effectiveClassName} 同 bbox 叠层，跳过 display/flex-direction 注入（避免叠层被拉成纵流）`,
+        )
+      }
+      continue
+    }
+
     // 🛡️ 网格事实（2026-09-22 治本）：nodeLayoutFacts 几何聚类命中均匀网格 → 注入 grid，
     //   而非 flex-direction（side-by-side 判据对网格系统性误判 column）。
     if (fact.display === 'grid' && fact.gridColumns >= 2) {

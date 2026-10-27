@@ -33,6 +33,9 @@
 
 import { collectLeafSections, assignSectionComponentNames, dedupeDuplicateSections } from './section-tree.js';
 import { extractSfcTemplate } from './sfc-template-extractor.js';
+// 🛡️ 刀 9（2026-10-27）：宿主外壳名单唯一事实源（base-panel/mc-panel 由宿主全局注册，
+// 产物只删别名 import 行，**绝不删模板标签**）
+import { HOST_SHELL_TAG_RE } from './mount-target-scoring.js';
 
 /**
  * kebab-case / snake_case → PascalCase
@@ -301,6 +304,12 @@ export function detectUnmaterializedSections(files, componentPlan) {
  * `components/X.vue` 的形态。这样同一套判定同时约束 detect（报告）与 strip（修复），
  * 杜绝「检测用归一化、剥离用 startsWith 却永远 false」的逻辑错位（此前两次事故的根因）。
  *
+ * 🛡️ 刀 9（2026-10-27 · mc-max-1793096943263-6c77f76f 实锤）：LLM 偶发写**别名 import**
+ * `import BasePanel from '@/components/base-panel.vue'`——文件不存在 ⇒ 预览 404 load-error，
+ * 而旧识别正则字符类不含 `@` ⇒ 永远不认这条引用 ⇒ detect 不报、strip 不剥。
+ * 本函数新增 `@/` 语义：**从 package 根解析**（预览侧 `@/` 映射组件包根），
+ * 候选 `package/<rest>` 与 `<rest>` 双试；识别正则同步放行 `@/` 前缀（detect/strip 同一处）。
+ *
  * @param {string} fromFile 发起引用的文件（绝对路径，如 package/components/ContentSection.vue）
  * @param {string} rel specifier（去引号后的原始串，可能含 ./ 或 ../）
  * @param {Set<string>} present 文件集路径集合（已存在的文件绝对路径）
@@ -311,6 +320,14 @@ export function resolveSpecifierToPath(fromFile, rel, present) {
     .replace(/['"]/g, '')
     .trim();
   if (!/\.vue$/i.test(clean)) return null;
+
+  // 🛡️ 刀 9：`@/` 别名 = 组件包根（预览侧映射语义），不从 fromFile 目录解析
+  if (clean.startsWith('@/')) {
+    const rest = clean.slice(2);
+    const candidates = [`package/${rest}`, rest];
+    for (const c of candidates) if (present.has(c)) return c;
+    return candidates[0]; // 未命中 ⇒ 返回规范期望路径，供调用方判悬空
+  }
 
   // ① 按 fromFile 目录解析（相对语义，支持 ../）
   const stack = fromFile.split('/').slice(0, -1);
@@ -353,8 +370,9 @@ export function detectDanglingComponentRefs(files) {
       const filePath = String(f.path);
       const content = String(f.content);
       // 引用形态：静态 import / 动态 import() / require()，均要求 specifier 以 .vue 结尾
+      // 刀 9：前缀放行 `@/` 别名（捕获组含前缀，交由 resolveSpecifierToPath 判语义）
       const re =
-        /(?:import\s+(?:[\w$*{},\s]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"](?:\.\/)?([\w./-]+\.vue)['"]/g;
+        /(?:import\s+(?:[\w$*{},\s]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"]((?:\.\/|@\/)?[\w./-]+\.vue)['"]/g;
       for (const m of content.matchAll(re)) {
         const rel = m[1];
         const resolved = resolveSpecifierToPath(filePath, rel, present);
@@ -365,7 +383,8 @@ export function detectDanglingComponentRefs(files) {
         seen.add(key);
         out.push({
           file: filePath,
-          ref: rel.replace(/\.vue$/, ''),
+          // 刀 9：捕获组现含 ./ 或 @/ 前缀 ⇒ ref 统一剥前缀（保持既有报告口径不变）
+          ref: rel.replace(/^(?:\.\/|@\/)/, '').replace(/\.vue$/, ''),
           expected: resolved || rel,
         });
       }
@@ -427,8 +446,9 @@ export function stripDanglingComponentRefs(files, fileList, mutate = true) {
     for (const [filePath, content] of Object.entries(files)) {
       if (typeof content !== 'string' || !/\.vue$/i.test(filePath)) continue;
       // 与 detectDanglingComponentRefs 完全一致的引用识别正则（同集合）。
+      // 刀 9：前缀放行 `@/` 别名（捕获组含前缀）。
       const re =
-        /(?:import\s+(?:[\w$*{},\s]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"](?:\.\/)?([\w./-]+\.vue)['"]/g;
+        /(?:import\s+(?:[\w$*{},\s]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"]((?:\.\/|@\/)?[\w./-]+\.vue)['"]/g;
       const danglingNames = new Set();
       const specs = new Set();
       for (const m of content.matchAll(re)) {
@@ -446,8 +466,13 @@ export function stripDanglingComponentRefs(files, fileList, mutate = true) {
       let next = content;
       for (const spec of specs) {
         const name = spec.replace(/\.vue$/, '').split('/').pop();
-        const specEsc = spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const specAlt = `(?:\\./)?${specEsc}`;
+        // 刀 9：spec 可能带 `@/` 前缀 ⇒ 剥前缀后再拼删除正则，删除形态兼容 ./ 与 @/ 两种写法
+        const bare = spec.replace(/^(?:\.\/|@\/)/, '');
+        const bareEsc = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const specAlt = `(?:\\./|@\\/)?${bareEsc}`;
+        // 🛡️ 刀 9：宿主外壳（base-panel/mc-panel，宿主全局注册）——只删 import/声明，**绝不删模板标签**
+        //   （删标签会把 index.vue 的 `<base-panel>` 外壳整个拔掉 = 内容全丢）。
+        const isHostShell = HOST_SHELL_TAG_RE.test(String(name || ''));
         // ① 整行删除 `const X = defineAsyncComponent(() => import('./X.vue'))`
         //    （含可选 await / 泛型包裹），避免残留 `= null` 死声明喂给 CODE-021 / Vue 警告。
         next = next.replace(
@@ -479,16 +504,18 @@ export function stripDanglingComponentRefs(files, fileList, mutate = true) {
           new RegExp(`(?:import|require)\\(\\s*['"]${specAlt}['"]\\s*\\)`, 'g'),
           `null /* 悬空子组件 ${name}（文件未生成） */`,
         );
-        // ⑤ 模板自闭合标签 <X /> 或 <X/>
-        next = next.replace(
-          new RegExp(`<${name}\\b[^>]*?/>`, 'g'),
-          '',
-        );
-        // ⑥ 模板成对标签 <X ...>...</X>
-        next = next.replace(
-          new RegExp(`<${name}\\b[^>]*>[\\s\\S]*?<\\/${name}>`, 'g'),
-          '',
-        );
+        // ⑤ 模板自闭合标签 <X /> 或 <X/>（宿主外壳跳过：标签由宿主全局组件承接）
+        if (!isHostShell) {
+          next = next.replace(
+            new RegExp(`<${name}\\b[^>]*?/>`, 'g'),
+            '',
+          );
+          // ⑥ 模板成对标签 <X ...>...</X>
+          next = next.replace(
+            new RegExp(`<${name}\\b[^>]*>[\\s\\S]*?<\\/${name}>`, 'g'),
+            '',
+          );
+        }
       }
       if (next !== content) {
         target[filePath] = next;

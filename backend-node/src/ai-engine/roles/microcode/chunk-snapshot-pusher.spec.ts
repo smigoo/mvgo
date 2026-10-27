@@ -77,8 +77,8 @@ describe('P1-Slice2 · 分块快照推送（先合并再推送，杜绝并行 wo
 
     // 两个 worker 并行（genSubComponents 默认并发 2）
     await Promise.all([
-      simulateWorker(pushChunkSnapshot, allFiles, { 'package/components/A.vue': 'A' }, pushed),
-      simulateWorker(pushChunkSnapshot, allFiles, { 'package/components/B.vue': 'B' }, pushed),
+      simulateWorker(pushChunkSnapshot, allFiles, { 'package/components/A.vue': '<template><i>A</i></template>' }, pushed),
+      simulateWorker(pushChunkSnapshot, allFiles, { 'package/components/B.vue': '<template><i>B</i></template>' }, pushed),
     ])
 
     const last = pushed[pushed.length - 1]
@@ -87,8 +87,8 @@ describe('P1-Slice2 · 分块快照推送（先合并再推送，杜绝并行 wo
       'package/components/A.vue',
       'package/components/B.vue',
     ])
-    expect(last.files['package/components/A.vue']).toBe('A')
-    expect(last.files['package/components/B.vue']).toBe('B')
+    expect(last.files['package/components/A.vue']).toBe('<template><i>A</i></template>')
+    expect(last.files['package/components/B.vue']).toBe('<template><i>B</i></template>')
   })
 
   it('⭐ 快照指针单调不回退：3 个并行 worker 的推送文件数必须累积递增', async () => {
@@ -100,7 +100,7 @@ describe('P1-Slice2 · 分块快照推送（先合并再推送，杜绝并行 wo
         simulateWorker(
           pushChunkSnapshot,
           allFiles,
-          { [`package/components/${name}.vue`]: name },
+          { [`package/components/${name}.vue`]: `<template><i>${name}</i></template>` },
           pushed,
         ),
       ),
@@ -292,6 +292,88 @@ describe('②c .vue import 闭包守卫（2026-09-15 · mc-max-1789446564243-f64
         '</script>',
       ].join('\n'),
     }
+    const pushed: any[] = []
+    await push(allFiles, pushed)
+    expect(pushed).toHaveLength(1)
+  })
+})
+
+describe('②d 语法有效性守卫（2026-10-27 · mc-max-1793100110825-0833ff36 实锤）', () => {
+  // 事故：中间态产物「结构完整（②b 放行）+ import 闭包闭合（②c 放行）但 script 语法错误」
+  // 被推成 candidate → 预览报「Unexpected token, expected "," (17:15)」，刷新后被终态覆盖消失。
+  const push = async (allFiles: Record<string, string>, pushed: any[], logger?: any) =>
+    pushChunkSnapshot({
+      allFiles,
+      resFiles: { 'package/index.vue': allFiles['package/index.vue'] },
+      onFilesReady: async (d) => { pushed.push(d) },
+      stage: 'microcode-engineer',
+      logger: logger || { warn: jest.fn() },
+    })
+
+  const VALID = [
+    '<template><div>{{ msg }}</div></template>',
+    '<script setup>',
+    "const msg = 'ok'",
+    '</script>',
+  ].join('\n')
+
+  it('⭐ 阳性（实锤复刻）：script 语法错误的中间态不推送，且 warn 留痕', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': [
+        '<template><div>{{ msg }}</div></template>',
+        '<script setup>',
+        "const msg = 'a'",
+        "const broken = { foo: 'bar'", // ← 实锤形态：对象字面量未闭合（17:15 类）
+        '</script>',
+      ].join('\n'),
+    }
+    const pushed: any[] = []
+    const logger = { warn: jest.fn() }
+    await push(allFiles, pushed, logger)
+    expect(pushed).toEqual([])
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('语法错误'),
+      expect.objectContaining({ syntaxBad: expect.any(Array) }),
+    )
+  })
+
+  it('末轮修复后自然放行（同一 allFiles 对象，先阻断后放行）', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': [
+        '<template><div>{{ msg }}</div></template>',
+        '<script setup>',
+        'const broken = { foo:',
+        '</script>',
+      ].join('\n'),
+    }
+    const pushed: any[] = []
+    await push(allFiles, pushed)
+    expect(pushed).toEqual([])
+    // 自愈/终裁修复后覆盖同一路径（① 已合并进累积产物）
+    allFiles['package/index.vue'] = VALID
+    await push(allFiles, pushed)
+    expect(pushed).toHaveLength(1)
+    expect(pushed[0].files['package/index.vue']).toBe(VALID)
+  })
+
+  it('反向：仅 style 类错误不阻断推送（P1-4 假阳前科：内存中间态 less 变量未定义）', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': [
+        '<template><div>{{ msg }}</div></template>',
+        '<script setup>',
+        "const msg = 'ok'",
+        '</script>',
+        // 内存阶段相对 @import 被剥离 ⇒ 主题变量定义丢失 ⇒ less 报变量未定义（style 类）
+        '<style lang="less">.a { color: @undefined-theme-var; }</style>',
+      ].join('\n'),
+    }
+    const pushed: any[] = []
+    await push(allFiles, pushed)
+    expect(pushed).toHaveLength(1)
+  })
+
+  it('回归：全合法产物照常推送（②b/②c 行为不变）', async () => {
+    const allFiles: Record<string, string> = { 'package/index.vue': VALID }
     const pushed: any[] = []
     await push(allFiles, pushed)
     expect(pushed).toHaveLength(1)

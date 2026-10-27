@@ -2259,6 +2259,98 @@ describe('TEXT-COVERAGE 真值文本覆盖率', () => {
     )
     expect(byId(res, 'TEXT-COVERAGE')).toHaveLength(0)
   })
+
+  // 🛡️ 刀 8（2026-10-27 · 8bbcf027 实锤）：注释吞真值 = 假绿。
+  // 真值 3 条含「编码」，产物正文只渲染 1 条，注释「// 设备编码区块…设备总数」含另外 2 条 ⇒
+  //   旧口径（全文直扫）3/3=100% 放行；新口径（剥注释）1/3=33% BLOCK。
+  it('刀 8 阳性：注释吞真值不计覆盖（1/3=33% → BLOCK，且点名「编码」）', () => {
+    const figma3 = {
+      document: {
+        id: 'r',
+        name: 'root',
+        type: 'FRAME',
+        children: ['设备类型', '设备总数', '编码'].map((c, i) => ({
+          id: `t${i}`,
+          type: 'TEXT',
+          characters: c,
+        })),
+      },
+    }
+    const body = '<span>设备类型</span>'
+    const res = V.validate(
+      [
+        {
+          path: 'package/components/ContentSection.vue',
+          content: `<template><div class="c-test-cons">${body}</div></template>
+<script setup>
+// 设备编码区块：仅渲染本 section 真值文案，含设备总数
+const a = 1
+</script>`,
+        },
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [], figmaNodeData: figma3 },
+    )
+    const hits = byId(res, 'TEXT-COVERAGE')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].severity).toBe('BLOCK')
+    expect(hits[0].message).toContain('编码')
+    expect(byId(res, 'TEXT-COVERAGE-STATS')[0].message).toContain('覆盖 1 条')
+  })
+
+  // 反向：刀 53 文本接管把真值放在 script 数据（模板是 {{ runs[0].text }}），
+  // 剥注释后扫 script 必须计为覆盖 —— 若改「只扫模板」此例会崩溃。
+  it('刀 8 反向：接管产物 script 数据里的真值计为覆盖', () => {
+    const res = V.validate(
+      [
+        {
+          path: 'package/components/ContentSection.vue',
+          content: `<template><div class="c-test-cons"><span v-for="(r,i) in runs" :key="i">{{ r.text }}</span></div></template>
+<script setup>
+const runs = [
+  { text: '设备类型' }, { text: '设备总数' }, { text: '完好率' },
+  { text: '南北接线设备' }, { text: '异常数' },
+]
+</script>`,
+        },
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [], figmaNodeData: figma },
+    )
+    expect(byId(res, 'TEXT-COVERAGE')).toHaveLength(0)
+    const stats = byId(res, 'TEXT-COVERAGE-STATS')
+    expect(stats).toHaveLength(1)
+    expect(stats[0].message).toContain('覆盖 5 条')
+  })
+
+  // 计数行：无论命中与否都必须落 TEXT-COVERAGE-STATS（区分「全绿」与「根本没跑」）
+  it('刀 8：通过路径也打计数行（INFO）', () => {
+    const res = run(TRUTH)
+    const stats = byId(res, 'TEXT-COVERAGE-STATS')
+    expect(stats).toHaveLength(1)
+    expect(stats[0].severity).toBe('INFO')
+    expect(stats[0].message).toContain('真值 5 条')
+  })
+
+  // 反向：字符串里的 URL // 不得被当行注释剥掉（剥坏会连带误删其中的中文路径段）
+  it('刀 8 反向：产物里的 URL 字符串不受剥注释影响', () => {
+    const body = TRUTH.map((t) => `<span>${t}</span>`).join('')
+    const res = V.validate(
+      [
+        {
+          path: 'package/components/ContentSection.vue',
+          content: `<template><div class="c-test-cons">${body}</div></template>
+<script setup>
+const link = 'https://example.cn//监控大屏'
+</script>`,
+        },
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [], figmaNodeData: figma },
+    )
+    expect(byId(res, 'TEXT-COVERAGE')).toHaveLength(0)
+    expect(byId(res, 'TEXT-COVERAGE-STATS')[0].message).toContain('覆盖 5 条')
+  })
 })
 
 describe('IMG-SRC-001 裸 img 无图源（#128 ⑧ · 84af4f8f 族实锤，BLOCK）', () => {

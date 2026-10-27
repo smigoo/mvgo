@@ -1203,6 +1203,71 @@ export function isResourceVarMounted(content, varName) {
 }
 
 /**
+ * 🛡️ CODE-028（2026-10-27 · 593cf7f 实锤）：静态 `style` 里的裸 `url(<资源变量名>)` 检出。
+ *
+ * 病灶（c-device-6d79e69d 真机实锤）：渲染器把统计卡底写成
+ *   `<div style="...background-image:url(fgStatBg0);background-size:100% 100%;...">`
+ * 静态 `style` 是纯 CSS 文本，Vue **不做变量求值** ⇒ 浏览器按相对 URL 请求
+ * `/xxx/url(fgStatBg0)` → 404 ⇒ 三张卡零背景；而 `import fgStatBg0` 三行全成死代码。
+ *
+ * 🔴 为什么 CODE-022 拦不住（这才是洞）：`isResourceVarMounted` 的判据是「剥掉 import 行 +
+ * 剥注释后全文还剩 `\bname\b`」——静态 style 里的 `fgStatBg0` 恰好命中 ⇒ 判「已挂载」
+ * ⇒ 门禁放行、落盘前 prune 也不删 ⇒ **变量引用了、import 在、图不显示**，全链一致认为合规。
+ *
+ * 判据（纯文本、命名无关、三条件合取）：
+ *   ① 只扫 `<template>` 内的**静态** `style="..."`（`:style` / `v-bind:style` 是合法绑定，跳过）；
+ *   ② `url(` 之后紧跟**裸标识符**再紧跟 `)` —— `url('../x.png')` / `url(../x.png)` /
+ *      `url(data:…)` / `url(#id)` / `url(https://…)` 一律不匹配；
+ *   ③ 该标识符必须在本文件 `<script>` 里**从图片文件 import** 过（否则不是「本想绑定」而是
+ *      普通无效 CSS 值，交给既有校验；本函数不越界，避免误报）。
+ *
+ * 只报不拦（WARN 级）：形态一旦出现，改法有多种（改 `:style` 绑定 / 背景转 `<img>` / 删除），
+ * 由生成侧或自愈决定，门禁不替它选。
+ *
+ * 为什么放本模块而不是 validator：validator 的 import 链会拉起 logger → backend-root
+ * （`import.meta.url` 与 `__filename` 在 jest 下冲突，模块级 SyntaxError）⇒ 无法单测。
+ * 本模块只依赖 fs/path，与 `isResourceVarMounted` 同族同层，纯文本判据单一来源。
+ *
+ * @param {string} content .vue 全文
+ * @returns {string[]} 命中「静态 style 裸 url(资源变量)」的变量名（去重、保持首次出现序）
+ */
+export function findStaticStyleUrlVars(content = '') {
+  if (!content || typeof content !== 'string') return [];
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const scriptBody = scriptMatch ? scriptMatch[1] : '';
+  if (!scriptBody) return [];
+
+  // 本文件从图片文件 import 的绑定（与 CODE-022 / CODE-027 同一 import 形态；
+  // 这里不限定路径含 bg/icon/img —— `image_473938-37.png` 这类命名同样会是资源）。
+  const imported = new Set();
+  const importRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
+  let m;
+  while ((m = importRe.exec(scriptBody))) imported.add(m[1]);
+  if (imported.size === 0) return [];
+
+  const templateMatch = content.match(/<template>([\s\S]*)<\/template>/i);
+  if (!templateMatch) return [];
+  const tpl = templateMatch[1];
+
+  const hits = [];
+  // 静态 style（前一个字符不是 `:` / `-` / 标识符字符）：
+  //   `:style` / `v-bind:style` 是合法绑定 ⇒ 跳过；
+  //   `data-style` 之类自定义属性不是 CSS ⇒ 也跳过（`-` 排除）。
+  const styleRe = /(?<![-\w:])\bstyle\s*=\s*(["'])([^"']*)\1/g;
+  while ((m = styleRe.exec(tpl))) {
+    const value = m[2];
+    const urlRe = /url\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)/g;
+    let u;
+    while ((u = urlRe.exec(value))) {
+      const name = u[1];
+      if (imported.has(name) && !hits.includes(name)) hits.push(name);
+    }
+  }
+  return hits;
+}
+
+/**
  * 🛡️ L3-c（2026-10-21 · c-c8d-195c8d0e 实锤「4 个图标位置全空白」）：
  * `<img>` 引用了资源变量却没有 `:src` ⇒ 确定性注入 `:src`。
  *

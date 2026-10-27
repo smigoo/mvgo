@@ -108,6 +108,28 @@ describe('buildNodeLayoutFactsReinforcement — B\' P3 提示约束', () => {
     const out = buildNodeLayoutFactsReinforcement(facts, figmaNodeData)
     expect(out).toContain('display: flex; flex-direction: column;')
   })
+
+  it('⭐ stack 事实（刀 6 同 bbox 叠层）⇒ 下发 grid+grid-area:1/1 层叠指令，不写 flex-direction / 非法 display:stack', () => {
+    // 2026-10-27 · 8bbcf027 `36:1726`：Mask group 3 子矩形 bbox 全等 = 层叠。
+    // 旧事实 flex/column/high 会把叠层拉成纵流；prompt 必须给出可执行的层叠写法
+    // （容器 display:grid + 每个直接子节点 grid-area:1/1），而不是非法的 display:stack。
+    const facts = {
+      '36:1726': { display: 'stack', source: 'geometric-stack-inference', confidence: 'high' },
+    }
+    const out = buildNodeLayoutFactsReinforcement(facts, figmaNodeData)
+    const nodeLine = out.split('\n').find((l) => l.includes('`36:1726`')) || ''
+    expect(nodeLine).not.toBe('')
+    expect(nodeLine).toContain('display: grid;')
+    expect(nodeLine).toContain('grid-area: 1 / 1')
+    expect(nodeLine).not.toMatch(/flex-direction\s*:/)
+    expect(out).not.toContain('display: stack')
+    expect(out).not.toContain('undefined')
+    // 结构化映射：display 保留 stack（供 injector 识别后跳过方向注入），并显式标 stacked
+    const mapping = buildNodeLayoutFactsReinforcement(facts, figmaNodeData, 'c-device-x', true)
+    const m = Object.values(mapping)[0]
+    expect(m.display).toBe('stack')
+    expect(m.stacked).toBe(true)
+  })
 })
 
 describe('compileDesignFacts — B\' P2 接入 nodeLayoutFacts', () => {

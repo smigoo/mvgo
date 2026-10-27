@@ -115,34 +115,54 @@ describe('R23 归并后容器方向复算', () => {
  * 🛡️ A2（2026-10-26）：**不臆造方向**。
  *
  * 病灶（真机 `mc-max-1793005714013-2cf7079c` / `...47b42841` 设备详情 `801:3`）：
- *   `801:3` 是 `GROUP`，无 `layoutMode`，原生 **9 个子节点里有 5 个 TEXT**
+ *   `801:3` 是 `GROUP`、无 `layoutMode`，原生 **9 个子节点里有 5 个 TEXT**
  *   ⇒ `buildNodeLayoutFacts` 用原生 9 子判得 `column(high)` —— **这是对的**。
- *   R23 却把它改成了 `horizontal`：因为 E1 归并把那些 TEXT 收进
- *   `801:3-orphan-text-N` 伪 id，`FIGMA_ID_RE` 过滤后派生侧只剩 3 个真 id
- *   ⇒ pair 总数 36⇒3、side-by-side 1⇒0 ⇒ `ratio=0.3333 ⇒ low`
- *   ⇒ 命中 `figma-node-layout-facts.js:147` 的 `low ⇒ 'row'` 兜底 ⇒ 臆造横向。
+ *   R23 却把它改成了 `horizontal`：E1 归并后派生集合只剩 4 个真 id
+ *   （`36:1725`/`36:1722`/`36:1698`/`81:7`，其余内容文本被收进 `-orphan-text-N` 伪 id
+ *   并被 `FIGMA_ID_RE` 过滤掉）⇒ pair 总数 36⇒6、side-by-side 7⇒3
+ *   ⇒ `ratio=0.5 ⇒ low` ⇒ 命中 `figma-node-layout-facts.js:147` 的 `low ⇒ 'row'` 兜底 ⇒ 臆造横向。
  *
- * ⚠️ 正确的判别面是**输入前提**，不是置信度（R23 原案 `1:10` 本身就跑在 low 上）。
+ * 🎯 判别面 = **闸⑤ 事实优先（两条件合取）**：
+ *   条件 A：原生 `children` 含 `type==='TEXT'` 的**内容文本**；
+ *   条件 B：既有 A 类事实 `confidence === 'high'`（用**同一实现** `decideLayoutForBoxes` 复算）；
+ *   两条件**同时满足** ⇒ 既有方向就是可信事实，不复算。缺一不可：
+ *     · 只看 A 不行 —— `807:2` 原生确有 1 个 TEXT，但既有事实是 `row/`**low**
+ *       （7 项落模糊带 ⇒ 命中 `:147` 的 `low ⇒ row` 兜底，**不是判出来的**；真机几何 dump 为竖排：
+ *       header 51637/h66 → 内容框 51728/h388 → 底部行 52138，另有 6×218 竖分隔条）
+ *       ⇒ 拦住 R23 等于把「猜出来的 row」当事实保留 ⇒ 9 个组件反向回归。
+ *     · 只看 B 也不行 —— R23 立身原案（卡片 `38:3260`：原生只有 bg VECTOR + icon，
+ *       文本是根级兄弟）既有事实**也是** `column/high`（0/1=0 的假高置信），
+ *       复算得 `row/low` 才是对的 ⇒ 单看置信度会直接推翻原案。
+ *   ⇒ 两条件合取后：原案原生无 TEXT ⇒ 放行；`801:3` 两条都满足 ⇒ 拦住。
  *
- * 全语料实测（208 个真机 checkpoint / 431 个 section）给出的真实边界：
- *   · 含派生伪 id 的 section 共 29 个，**25 个原生 children 含 TEXT** ——
- *     `801:3`×3（臆造 horizontal）、`807:2`×12 + `565:3`×13（本就正确的 vertical）；
- *   · 余下 4 个 `287:6` 派生真 id 仅 1 条，先被闸② 拦掉；
- *   ⇒ 闸⑤「原生含内容 TEXT ⇒ 不复算」拦住全部 25 个，且拦住的方向与既有判定完全一致。
+ * 全语料实测（165 个组件 / 29 个含派生伪 id 的 section；`scripts/tmp-a2-gate5b-scan.mjs`）：
+ *   · A∧B ⇒ 拦 **16**：`565:3`×13（基线 `column/high`，现网已 vertical ⇒ 不变）
+ *                       + `801:3`×3（基线 vertical，现网被 R23 臆造 horizontal ⇒ 本闸修复）；
+ *   · A∧¬B ⇒ 放 **9**：全为 `807:2`（基线 `row/low`，现网 vertical ⇒ R23 保留其正向修复）；
+ *   · ¬A ⇒ 放 **4**：全为 `287:6`（基线 `column/high(0.000)`）—— 闸⑤ 与它们无关，
+ *     行为与改动前完全一致。
+ *   ⇒ 拦下的方向与既有判定一致，且不牺牲 R23 对 `807:2` 的正向修复。
  *
- * 🚫 已废弃的 A2 初版思路（补回伪 id 几何再复算）：`807:2` 的唯一伪 id 是 `-tail-text`
+ * ⚠️ 判别面是**输入前提（原生是否已含内容文本）× 既有事实置信度**，
+ *   **不是**派生侧复算结果的置信度：R23 的立身原案（`1:10` 三子项 `2/3=0.667 ⇒ low ⇒ row`）
+ *   **本身就跑在 low 上**，若按「复算 low 就不覆盖」设闸会直接推翻它。
+ *
+ * 🚫 已废弃的 A2 初版思路「补回伪 id 几何再复算」：`807:2` 的唯一伪 id 是 `-tail-text`
  *   （末尾游离单行文本），补进判定后 pair 6⇒10、side-by-side 1⇒3
  *   ⇒ `ratio 0.1667(high/column) ⇒ 0.3(low)` ⇒ `low ⇒ row` 兜底
  *   ⇒ **把本来正确的 `vertical` 翻成 `horizontal`**。⑩ 用例把这条反证固化下来。
  *
  * 对照设计（防假绿）：
- *   ⑦ 闸⑤ 阳性：`801:3`（原生含 TEXT）⇒ 维持 vertical
- *   ⑦-b 闸⑤ 是拦因（关键）：同夹具但原生 TEXT 全换成非 TEXT、派生只留 3 真 id
- *       ⇒ **确实翻成 horizontal**，证明 ⑦ 的「不翻」来自闸⑤，不是链路坏了
- *   ⑧ 闸④ 阴性：原生无 TEXT + 伪 id 解不出几何 ⇒ 跳过不覆盖
- *   ⑨ 闸④ 兜底：原生无 TEXT + 伪 id 可解 ⇒ 补证据参与复算（判 vertical）
- *   ⑩ 误伤回归：`807:2` 真机几何（原生 1 TEXT + `-tail-text`）⇒ 维持 vertical；
- *       并直接用 `decideLayoutForBoxes` 反证「若走补证据会得 row」
+ *   ⑦  闸⑤ A∧B ⇒ 拦：`801:3`（原生 5 TEXT + 既有 high）派生取**真机 R23 时刻的 4 真 id**
+ *       ⇒ 维持 vertical（若无闸⑤，该派生集会算得 `row/low` ⇒ horizontal，故本用例有判别力）
+ *   ⑦-b 条件 A 反证：同夹具但原生 TEXT 全降级（¬A）⇒ 闸⑤ 不拦 ⇒ **确实翻成 horizontal**
+ *       （证明 ⑦ 的「不翻」来自闸⑤，而不是复算链路坏掉）
+ *   ⑦-c 条件 B 反证（关键）：`807:2`（原生 1 TEXT 但既有 low）⇒ 闸⑤ 放行 ⇒ R23 复算翻成 vertical
+ *   ⑧  闸④ 阴性：原生无 TEXT + 伪 id 无自带几何且 `sourceNodeIds` 也解不出 ⇒ 跳过不覆盖
+ *   ⑨  闸④ 兜底：原生无 TEXT + 伪 id 可经 `sourceNodeIds` 解出 ⇒ 补证据参与复算（判 vertical）
+ *   ⑨-b 兜底反向对照：同样原生无 TEXT，但删掉 4 条孤儿带 ⇒ 翻成 horizontal（证明 ⑨ 是补证据而非关功能）
+ *   ⑩  误伤回归：`807:2` 真机几何 + `-tail-text` ⇒ 直接用同一实现 `decideLayoutForBoxes`
+ *       反证「若走补证据会得 row/low」⇒ 故该思路不可作主修
  */
 function deviceDetail801Figma(): any {
   const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
@@ -220,6 +240,15 @@ function derived801Children(opts: { withPseudoGeometry?: boolean; resolvableSour
   ]
 }
 
+/**
+ * `801:3` 的**真机 R23 时刻**派生集合：4 个真 id（`36:1698` 是原生 TEXT 之一，
+ * 被归并保留下来的那条）—— 与真机日志 `derivedKids:["36:1725","36:1722","36:1698","81:7"]`
+ * 逐字一致。⚠️ 不带伪 id：真机 R23 运行时 `-orphan-text-N` 尚未生成。
+ */
+function derived801Real4(): any[] {
+  return [{ id: '36:1725' }, { id: '36:1722' }, { id: '36:1698' }, { id: '81:7' }]
+}
+
 /** 把 801:3 原生 children 的 TEXT 全降级成非 TEXT（模拟 `38:3260`「原生无内容文本」形态） */
 function deviceDetail801NoRawText(): any {
   const figma: any = deviceDetail801Figma()
@@ -256,68 +285,44 @@ function device807Figma(): any {
   }
 }
 
-/** 派生 5 子：4 个容器真 id + 1 条 `-tail-text` 伪 id（src=43:4878） */
-function derived807Children(): any[] {
-  return [
-    { id: '43:4892' },
-    { id: '43:4784' },
-    { id: '43:4869' },
-    { id: '43:4875' },
-    { id: '807:2-tail-text', type: 'text', sourceNodeIds: ['43:4878'] },
-  ]
+/**
+ * `807:2` 的**真机 R23 时刻**派生集合：4 个容器真 id（无 `-tail-text`）。
+ * ⚠️ 真机日志 `derivedKids:["43:4892","43:4784","43:4869","43:4875"]` 即此；
+ *   `-tail-text` 是 R23 **之后**才补上的，用它做输入属仿真失真（见 `derived807WithTail`）。
+ */
+function derived807Real4(): any[] {
+  return [{ id: '43:4892' }, { id: '43:4784' }, { id: '43:4869' }, { id: '43:4875' }]
 }
 
-describe('A2 不臆造方向 · 闸⑤ 适用前提（原生含内容 TEXT ⇒ 不复算）', () => {
-  test('⑦ 阳性：801:3 原生含 5 个 TEXT ⇒ 维持 vertical（真机 buildNodeLayoutFacts 的真值）', () => {
-    const sec: any = { id: '801:3', name: 'slot-icon', layout: 'vertical', children: derived801Children() }
+/** `807:2` 派生 5 子：4 真 id + 1 条 `-tail-text` 伪 id（src=43:4878）—— 仅供 ⑩ 反证使用 */
+function derived807WithTail(): any[] {
+  return [...derived807Real4(), { id: '807:2-tail-text', type: 'text', sourceNodeIds: ['43:4878'] }]
+}
+
+describe('A2 不臆造方向 · 闸⑤ 事实优先（A：原生含内容 TEXT  ∧  B：既有事实 high ⇒ 不复算）', () => {
+  test('⑦ A∧B ⇒ 拦：801:3 原生 5 TEXT + 既有 column/high ⇒ 维持 vertical', () => {
+    // 派生取真机 R23 时刻的 4 真 id ⇒ 若闸⑤ 不生效会算得 row/low ⇒ horizontal（本用例有判别力）
+    const sec: any = { id: '801:3', name: 'slot-icon', layout: 'vertical', children: derived801Real4() }
     refineDerivedContainerLayout(sec, ctxOf(deviceDetail801Figma()))
     expect(sec.layout).toBe('vertical')
   })
 
-  test('⑦-b 拦因对照（关键）：同夹具但原生 TEXT 全降级 + 派生只留 3 真 id ⇒ 确实翻成 horizontal', () => {
-    // 这一条证明 ⑦ 的「不翻」来自闸⑤ 生效，而不是复算链路坏掉
-    const sec: any = {
-      id: '801:3',
-      name: 'slot-icon',
-      layout: 'vertical',
-      children: [{ id: '36:1725' }, { id: '36:1722' }, { id: '81:7' }],
-    }
+  test('⑦-b 条件 A 反证：同夹具原生 TEXT 全降级（¬A）⇒ 闸⑤ 不拦 ⇒ 确实翻成 horizontal', () => {
+    // 证明 ⑦ 的「不翻」来自闸⑤ 生效，而不是复算链路坏掉
+    const sec: any = { id: '801:3', name: 'slot-icon', layout: 'vertical', children: derived801Real4() }
     refineDerivedContainerLayout(sec, ctxOf(deviceDetail801NoRawText()))
     expect(sec.layout).toBe('horizontal')
   })
 
-  test('⑦-c 闸⑤ 前提下即便伪 id 几何齐备也不复算（闸序：⑤ 先于 ④）', () => {
-    const sec: any = {
-      id: '801:3',
-      name: 'slot-icon',
-      layout: 'vertical',
-      children: derived801Children({ withPseudoGeometry: true }),
-    }
-    refineDerivedContainerLayout(sec, ctxOf(deviceDetail801Figma()))
-    expect(sec.layout).toBe('vertical')
-  })
-
-  test('⑩ 误伤回归：807:2 原生含 1 个 TEXT + tail-text ⇒ 维持 vertical', () => {
-    const sec: any = { id: '807:2', name: 'dialog-card', layout: 'vertical', children: derived807Children() }
+  test('⑦-c 条件 B 反证（关键）：807:2 原生含 1 TEXT 但既有 row/low（¬B）⇒ 放行 ⇒ R23 翻成 vertical', () => {
+    // 只看条件 A 会把这条拦掉 ⇒ 保留错误的 horizontal（真机 9 个 807:2 组件反向回归）
+    const sec: any = { id: '807:2', name: 'dialog-card', layout: 'horizontal', children: derived807Real4() }
     refineDerivedContainerLayout(sec, ctxOf(device807Figma()))
     expect(sec.layout).toBe('vertical')
   })
-
-  test('⑩-b 反证：807:2 若走「补伪 id 证据再复算」会得 row ⇒ 故该思路已废弃', () => {
-    const figma = device807Figma()
-    const idx = indexFigmaNodes(figma) as any
-    const realKids = ['43:4892', '43:4784', '43:4869', '43:4875']
-    const nodes = realKids.map((id) => idx.get(id)?.rawNode).filter(Boolean)
-    // 补进 tail-text 的并集框（src 只有 43:4878 一个 TEXT）
-    const tailBox = { x: 30001, y: 52138, width: 84, height: 14 }
-    nodes.push({ id: '807:2-tail-text', type: 'TEXT', absoluteBoundingBox: tailBox })
-    const decide = decideLayoutForBoxes(nodes, figma.children[0].absoluteBoundingBox)
-    expect(decide?.flexDirection).toBe('row') // ← 正是这个结果说明不能这么做
-    expect(decide?.confidence).toBe('low')
-  })
 })
 
-describe('A2 不臆造方向 · 闸④ 输入完整性（原生无 TEXT 时的兜底）', () => {
+describe('A2 不臆造方向 · 闸④ 输入完整性（闸⑤ 放行后的兜底）', () => {
   test('⑧ 阴性：伪 id 既无自带几何、sourceNodeIds 也解不出 ⇒ 跳过不覆盖', () => {
     const sec: any = {
       id: '801:3',
@@ -350,5 +355,30 @@ describe('A2 不臆造方向 · 闸④ 输入完整性（原生无 TEXT 时的�
     }
     refineDerivedContainerLayout(sec, ctxOf(deviceDetail801NoRawText()))
     expect(sec.layout).toBe('horizontal')
+  })
+})
+
+describe('A2 废弃思路反证 → 已转为「low 置信方向闸」回归护栏（807:2 形态）', () => {
+  // 历史：本用例曾是「补回伪 id 几何会误伤 807:2」的反证 —— 当时 `decideGeometricLayout`
+  // 对 `confidence:'low'` **无条件兜底 `row`**，于是 807:2 补 tail-text 后
+  // （pair 6→10、side-by-side 1→3 ⇒ ratio 0.3 low）被翻成 `row` ⇒ 正确方向被误伤 ⇒
+  // 「补伪 id 几何」不能当 A2 的主修。
+  //
+  // 2026-10-27（mc-1793064994649-2ec8acc7 实锤）：该兜底已收窄为「两事实合取」——
+  // 仅当 ① 几何多数判 column ∧ ② 容器自身高>宽 才保留 column，其余仍兜底 row。
+  // 807:2（483×515）两条都满足 ⇒ 现在得 `column`，反证前提不再成立。
+  // 本用例因此改为**该闸的回归护栏**：807:2 这个具体形态补伪 id 后必须仍是 column，
+  // 一旦有人把兜底改回「无条件 row」，这里会立刻转红。
+  test('⑩ 807:2 补 tail-text 后仍判 column/low（low 置信方向闸生效）', () => {
+    const figma = device807Figma()
+    const idx = indexFigmaNodes(figma) as any
+    const nodes = derived807Real4()
+      .map((c) => idx.get(c.id)?.rawNode)
+      .filter(Boolean)
+    // 补进 tail-text 的并集框（src 只有 43:4878 一个 TEXT）
+    nodes.push({ id: '807:2-tail-text', type: 'TEXT', absoluteBoundingBox: { x: 30001, y: 52138, width: 84, height: 14 } })
+    const decide = decideLayoutForBoxes(nodes, figma.children[0].absoluteBoundingBox)
+    expect(decide?.flexDirection).toBe('column') // ← 真值纵排（三段 y=51637/51728/52138）
+    expect(decide?.confidence).toBe('low')
   })
 })

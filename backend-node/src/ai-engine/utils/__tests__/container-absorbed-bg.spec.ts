@@ -1,0 +1,138 @@
+/**
+ * 刀 7（2026-10-27 · 8bbcf027 `36:1695` 实锤）：容器吸收背景层判据单测。
+ *
+ * 病灶：`36:1695`（547×193 `#E1EBFF` r12 RECTANGLE）被吸收进容器 `801:3` 的
+ * sourceNodeIds，但无任何叶子认领它 ⇒ 描述卡底在产物里 0 次出现。
+ * 判据全走 Figma 真值（bbox/fills/cornerRadius），逐事实缺失即 fail-open。
+ */
+import { resolveAbsorbedBgLayers } from '../container-absorbed-bg.js'
+import { indexFigmaNodes } from '../section-tree.js'
+
+// 真值几何（8bbcf027 checkpoint 逐字段抄录）
+const CONTAINER_BOX = { x: 24745, y: 51499, width: 547, height: 493 }
+const BG_BOX = { x: 24745, y: 51799, width: 547, height: 193 }
+const BG_FILL = {
+  type: 'SOLID',
+  visible: true,
+  color: { r: 0.8811598420143127, g: 0.9216160774230957, b: 1, a: 1 },
+}
+
+function rect(id, box, extra = {}) {
+  return { id, type: 'RECTANGLE', absoluteBoundingBox: box, fills: [BG_FILL], ...extra }
+}
+function text(id, x, y, w, h) {
+  return { id, type: 'TEXT', characters: 'x', absoluteBoundingBox: { x, y, width: w, height: h } }
+}
+function container(children, box = CONTAINER_BOX) {
+  return { id: '801:3', type: 'GROUP', absoluteBoundingBox: box, children }
+}
+function figmaOf(root) {
+  // ⚠️ indexFigmaNodes 不解包 {document}（解包是调用方职责）⇒ 直接传根节点
+  return indexFigmaNodes(root)
+}
+
+describe('resolveAbsorbedBgLayers — 刀 7 容器吸收背景层', () => {
+  it('⭐ 真值复刻：未被认领的 SOLID RECTANGLE（描述卡底）→ 1 层，rgba/r12/三边锚定', () => {
+    // 容器内：bg(36:1695) + 两段描述文本（分别被 orphan-text-2/3 认领）
+    const root = container([
+      rect('36:1695', BG_BOX, { cornerRadius: 12 }),
+      text('36:1708', 24772, 51824, 64, 16),
+      text('36:1719', 24772, 51849, 496, 90),
+    ])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '36:1695', '36:1708', '36:1719'] }
+    const claimed = new Set(['36:1708', '36:1719']) // 叶子认领集
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), claimed)
+    expect(r.layers.length).toBe(1)
+    const l = r.layers[0]
+    expect(l.id).toBe('36:1695')
+    expect(l.background).toBe('rgba(225,235,255,1)')
+    expect(l.borderRadius).toBe(12)
+    // 左/右/底三边与容器对齐 ⇒ 边锚定；顶部不触 ⇒ 真值高度
+    expect(l.edgeCss).toBe('left:0;right:0;bottom:0;height:193px;')
+    expect(l.top).toBe(300) // 51799-51499，仅作审计字段
+  })
+
+  it('反向：矩形已被叶子认领 ⇒ 不出层', () => {
+    const root = container([rect('36:1695', BG_BOX, { cornerRadius: 12 })])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '36:1695'] }
+    const claimed = new Set(['36:1695'])
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), claimed)
+    expect(r.layers).toEqual([])
+  })
+
+  it('反向：IMAGE fill ⇒ 不出层（图片走资源通道，不是本判据职责）', () => {
+    const imgFill = { type: 'IMAGE', visible: true }
+    const root = container([rect('9:1', BG_BOX, { fills: [imgFill] })])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:1'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers).toEqual([])
+  })
+
+  it('反向：fill 不可见 / 无 fill ⇒ 不出层', () => {
+    const root = container([
+      rect('9:2', BG_BOX, { fills: [{ ...BG_FILL, visible: false }] }),
+      rect('9:3', BG_BOX, { fills: [] }),
+    ])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:2', '9:3'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers).toEqual([])
+  })
+
+  it('反向：矩形越出容器 bbox ⇒ 不出层（归属语义不同，绝不用部分重叠猜）', () => {
+    const root = container([rect('9:4', { ...BG_BOX, y: 51990 })]) // 底边越出 51992
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:4'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers).toEqual([])
+  })
+
+  it('反向：非 RECTANGLE（ELLIPSE/FRAME）⇒ 不出层（窄判据，不泛化）', () => {
+    const root = container([
+      { id: '9:5', type: 'ELLIPSE', absoluteBoundingBox: BG_BOX, fills: [BG_FILL] },
+      { id: '9:6', type: 'FRAME', absoluteBoundingBox: BG_BOX, fills: [BG_FILL], children: [] },
+    ])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:5', '9:6'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers).toEqual([])
+  })
+
+  it('反向：容器自身 id 不会出层', () => {
+    const root = {
+      id: '801:3', type: 'GROUP', absoluteBoundingBox: CONTAINER_BOX, fills: [BG_FILL],
+      children: [text('1:1', 24772, 51824, 64, 16)],
+    }
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '1:1'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set(['1:1']))
+    expect(r.layers).toEqual([])
+  })
+
+  it('边锚定变体：整罩容器（bbox 全等）⇒ 四边 0', () => {
+    const root = container([rect('9:7', CONTAINER_BOX)])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:7'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers.length).toBe(1)
+    expect(r.layers[0].edgeCss).toBe('left:0;right:0;top:0;bottom:0;')
+  })
+
+  it('边锚定变体：仅顶边贴合 ⇒ top:0 + 真值高度', () => {
+    const box = { x: 24745, y: 51499, width: 547, height: 100 }
+    const root = container([rect('9:8', box)])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:8'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers[0].edgeCss).toBe('left:0;right:0;top:0;height:100px;')
+  })
+
+  it('边锚定变体：四边都不贴合 ⇒ 真值偏移 + 真值尺寸', () => {
+    const box = { x: 24765, y: 51809, width: 500, height: 150 }
+    const root = container([rect('9:9', box)])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:9'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers[0].edgeCss).toBe('left:20px;width:500px;top:310px;height:150px;')
+  })
+
+  it('fail-open：figmaIndex 为空 / 容器 bbox 缺失 / sourceNodeIds 缺失 ⇒ 空层不抛错', () => {
+    expect(resolveAbsorbedBgLayers({ id: '801:3' }, null, new Set()).layers).toEqual([])
+    const root = { id: '801:3', type: 'GROUP', children: [] } // 无 bbox
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:9'] }
+    expect(resolveAbsorbedBgLayers(sec, figmaOf(root), new Set()).layers).toEqual([])
+  })
+})

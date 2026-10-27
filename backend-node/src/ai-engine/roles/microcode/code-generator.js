@@ -31,7 +31,9 @@ import {
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
-import { resolveSectionSize, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
+import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
+import { planRowBands } from '../../utils/row-band-cluster.js';
+import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
 //   才能把它们从 flex 归一化分母里剔除。判据单一来源 = 接管器本身（不在本文件重判）。
@@ -428,6 +430,12 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   // 🛡️ 刀 50 生效自检计数（2026-10-22）：0 命中时必须能区分「没跑 / 跑了没判据成立」。
   let __intrinsicEvaluated = 0;
   let __intrinsicHits = 0;
+  // 🛡️ 刀 7（2026-10-27 · 8bbcf027 `36:1695` 实锤）：容器吸收背景层计数。
+  let __absorbedBgCandidates = 0;
+  let __absorbedBgLayers = 0;
+  // 🛡️ 刀 12（2026-10-27 · ad8939a5 `801:3` 实锤）：2D 行簇重建计数。
+  let __rowBandEvaluated = 0;
+  let __rowBandHits = 0;
   if (!leaves.length) return null;
 
   const nameOf = assignSectionComponentNames(treeSections);
@@ -448,6 +456,39 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   const figmaIndex = indexFigmaNodes(
     input?.figmaNodeData?.document || input?.figmaNodeData || null,
   );
+
+  // 🛡️ 刀 7（2026-10-27）：叶子认领集 —— 容器 sourceNodeIds 里「未被任何叶子认领」
+  //   的可见 SOLID 矩形 = 被吸收的背景层（无载体 ⇒ 产物丢色，实锤 `36:1695` #E1EBFF）。
+  //   判据单一来源：`container-absorbed-bg.js#resolveAbsorbedBgLayers`（纯函数、逐事实 fail-open）。
+  const claimedNodeIds = new Set();
+  for (const l of leaves) {
+    if (!l) continue;
+    claimedNodeIds.add(String(l.id ?? ''));
+    for (const id of Array.isArray(l.sourceNodeIds) ? l.sourceNodeIds : []) {
+      claimedNodeIds.add(String(id));
+    }
+  }
+  // 🛡️ 刀 7 归属唯一化（2026-10-27 · c-a0f93b-a0f93b25 实锤）：同一矩形可能被**嵌套容器**
+  //   的 sourceNodeIds 重复吸收（外层 `796:3` 与内层 `38:3137` 都含 `38:3138`）⇒ 逐容器
+  //   各出一层 = 双层叠加。规则：**plan 树上最近的容器**（deepest）独占该层。
+  //   故自底向上预分配（子容器先判），渲染时只消费自己名下的层。
+  const bgLayersByContainer = new Map();
+  {
+    const consumedBgIds = new Set();
+    const assignBg = (list) => {
+      for (const s of list || []) {
+        if (!s || !isLayoutContainerSection(s)) continue;
+        assignBg(s.children); // 子容器优先（deepest wins）
+        const r = resolveAbsorbedBgLayers(s, figmaIndex, claimedNodeIds);
+        __absorbedBgCandidates += r.evaluated;
+        const owned = r.layers.filter((layer) => !consumedBgIds.has(layer.id));
+        for (const layer of owned) consumedBgIds.add(layer.id);
+        __absorbedBgLayers += owned.length;
+        if (owned.length) bgLayersByContainer.set(String(s.id), owned);
+      }
+    };
+    assignBg(treeSections);
+  }
 
   // 🛡️ P1-B 治本（2026-10-26 · mc-max-1792934367321-ab7bb76c 实锤）：刀 53 抑制成员的
   //   宽/高必须从 **flex 归一化分母** 里剔除。
@@ -716,7 +757,22 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         __intrinsicEvaluated += 1;
         if (intrinsic.ok) __intrinsicHits += 1;
         const intrinsicPad = buildIntrinsicContainerStyle(intrinsic);
-        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}">`);
+        // 🛡️ 刀 7（2026-10-27 · 8bbcf027 `36:1695` 实锤）：容器 sourceNodeIds 里未被
+        //   叶子认领的可见 SOLID 底卡 ⇒ 渲染为绝对定位背景层（边锚定 + z-index:-1 沉底）。
+        //   归属已在上方自底向上预分配（最近容器独占），此处只消费自己名下的层。
+        //   容器需 position:relative 作定位参照；无层 ⇒ 产物逐字不变（零回归）。
+        // 🛡️ 刀 7b（2026-10-27 · ad8939a5 真机实锤）：z-index:-1 的层在**未形成层叠上下文**
+        //   的 relative 容器里会参与最近祖先层叠上下文 ⇒ 沉到 base-panel 面板底之下 = 不可见
+        //   （CSS 涂序：负 z-index 涂在「同一层叠上下文」祖先背景之后）。isolation:isolate
+        //   让容器自成层叠上下文，把 -1 层圈在容器内（高于祖先背景、低于容器内容）。
+        const absorbedLayers = bgLayersByContainer.get(String(sec.id)) || [];
+        const relativeStyle = absorbedLayers.length > 0 ? 'position:relative;isolation:isolate;' : '';
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${relativeStyle}">`);
+        for (const layer of absorbedLayers) {
+          lines.push(
+            `${pad}  <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
+          );
+        }
         // 🛡️ P2 修复（2026-09-17）：水平 flex 子项按 Figma 实际宽度比例分配 flex-grow，
         //   替代旧版统一 flex:1 均分（此前 tabs 46px 和 cons 367px 被 50:50 均分，严重失真）。
         //   计算逻辑：收集所有子节点宽度 → 求和 → 每个子项 flex-grow = width / totalWidth。
@@ -770,7 +826,38 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             });
           }
         }
-        for (let i = 0; i < (sec.children || []).length; i++) {
+        // 🛡️ 刀 12：垂直容器先评 2D 行簇（仅 vertical 事实分支；horizontal/grid/null 不动）。
+        //   任一子项几何不可解析 / 被 P1-B 剔除 ⇒ fail-open null ⇒ 走既有逐子项高度比例。
+        let bandTree = null;
+        if (!intrinsic.ok && layoutKind === 'vertical' && (sec.children || []).length >= 3) {
+          __rowBandEvaluated += 1;
+          const entries = [];
+          let bandOk = true;
+          for (const c of sec.children) {
+            if (isSizeExcluded(c)) { bandOk = false; break; }
+            const b = resolveSectionBox(c, figmaIndex);
+            if (!b) { bandOk = false; break; }
+            entries.push({ ref: c, box: b });
+          }
+          if (bandOk) {
+            bandTree = planRowBands(entries);
+            if (bandTree) {
+              __rowBandHits += 1;
+              options?.logger?.info?.('🛡️ 刀 12 2D 行簇命中：垂直容器内含横向带', {
+                sectionId: sec.id,
+                bands: bandTree.children.length,
+                children: (sec.children || []).length,
+              });
+            }
+          }
+        }
+        if (bandTree) {
+          const bandHeights = bandTree.children.map((n) => n.box.h);
+          for (let i = 0; i < bandTree.children.length; i++) {
+            renderBandNode(bandTree.children[i], indent + 1, flexItemStyleFromHeights(bandHeights, i));
+          }
+        }
+        for (let i = 0; !bandTree && i < (sec.children || []).length; i++) {
           const child = sec.children[i];
           // 🛡️ P0/P2/P3（2026-09-17）：子项按 Figma 宽度/高度比例分配 flex-grow，
           //   解决「统一 flex:1 均分失真」与「无约束 collapse 到 0」。
@@ -798,6 +885,33 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         const leafStyle = parentFlexStyle || 'flex:1;min-height:0;';
         lines.push(`${pad}<${tagFor(sec, 'ContentSection')} style="${leafStyle}" />`);
       }
+    };
+    // 🛡️ 刀 12（2026-10-27 · ad8939a5 `801:3` 实锤）：2D 行簇渲染。
+    //   病灶：垂直容器把「左图右文」横向带与纵流子段**一起纵切**（img 拉通栏、
+    //   FIXED 72×22 的 pill `36:1722` 被拉成 100% 宽条）。真值是 2D 复合：
+    //   纵流的某些带内部是横向排列。判据单一来源 `utils/row-band-cluster.js`
+    //   （纯几何 XY-cut，fail-open null ⇒ 走既有比例路径，零行为变化）。
+    //   带/组用匿名 wrapper div（无 data-section-id）：section 身份不变，
+    //   覆盖率/接管/资源挂载等全部守卫零影响；叶子的渲染仍走 renderBodyNode。
+    const renderBandNode = (node, indent, flexStyle) => {
+      const pad = '      ' + '  '.repeat(indent);
+      if (!node || !Array.isArray(node.children)) {
+        renderBodyNode(node && node.ref, indent, flexStyle);
+        return;
+      }
+      const isRowBand = node.direction === 'row';
+      const sizes = node.children.map((ch) => (isRowBand ? ch.box.w : ch.box.h));
+      lines.push(
+        `${pad}<div class="c-${semantic}-band" style="${flexStyle}display:flex;flex-direction:${node.direction};${isRowBand ? 'align-items:stretch;' : ''}">`,
+      );
+      for (let i = 0; i < node.children.length; i++) {
+        renderBandNode(
+          node.children[i],
+          indent + 1,
+          isRowBand ? flexItemStyleFromWidths(sizes, i) : flexItemStyleFromHeights(sizes, i),
+        );
+      }
+      lines.push(`${pad}</div>`);
     };
     // 🛡️ 顶层 section 高度比例（2026-09-28 · c-traffic-monitor-afd08494 实锤）：
     //   此前 `renderBodyNode(root, 0)` **不传 parentFlexStyle** → 顶层节点一律走
@@ -843,6 +957,18 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       evaluated: __intrinsicEvaluated,
       applied: __intrinsicHits,
     });
+    // 🛡️ 刀 7 生效自检：`candidates` = 容器里「未认领且类型为 RECTANGLE」的节点数，
+    //   `layers` = 真正出层的背景数（其余被 fill/bbox/越界判掉）。0/0 也要落行。
+    options.logger.info('🛡️ 刀 7 容器吸收背景层·已评估', {
+      candidates: __absorbedBgCandidates,
+      layers: __absorbedBgLayers,
+    });
+    // 🛡️ 刀 12 生效自检：`evaluated` = 进入评估的垂直容器数（≥3 子项才评），
+    //   `applied` = 真判出 2D 行簇并改写的容器数。0/0 也要落行。
+    options.logger.info('🛡️ 刀 12 2D 行簇重建·已评估', {
+      evaluated: __rowBandEvaluated,
+      applied: __rowBandHits,
+    });
     // 🛡️ P1-B 生效自检：`takeoverLeaves` = 接管器评估到的叶数（0 ⇒ 判据没跑或无可接管段，
     //   与「跑了但无抑制成员」区分）；`excluded` = 真正从 flex 分母剔除的成员数。
     options.logger.info('🛡️ P1-B 抑制成员 flex 分母剔除·已评估', {
@@ -852,6 +978,42 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     });
   }
   return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };
+}
+
+/**
+ * 刀14（2026-10-27 · mc-3538d75b 实锤）：根 <template> 块嵌套计数配对定位。
+ *
+ * 病灶：旧实现用非贪婪正则 /<template\b[^>]*>[\s\S]*?<\/template>/i 定位根模板块，
+ * LLM 的 index.vue 模板内含 base-panel 插槽（`<template #header_right>…</template>`）时，
+ * 正则截断在**插槽的 `</template>`** 处（实锤产物第 8 行），只替换了第 1–8 行；
+ * 原模板剩余部分（`</div>`×3、`</base-panel>`、收尾 `</template>`）整段残留在确定性骨架之后，
+ * `stripSurplusBlockClosers` 只剔 `</template>` 不管 `</div>` ⇒ SFC 47:8/48:6/49:4
+ * Invalid end tag，重试 2/2 耗尽 fail-closed（同结构三次复现）。
+ *
+ * 修法：从第一个顶层 `<template>` 起按 `<template\b…>` / `</template>` 计数配对，
+ * 深度归 0 处才是根块真正边界；配对不上（模板本身残缺）→ 返回 null，调用方 fail-open。
+ * 自闭合 `<template … />` 不占深度。
+ *
+ * @param {string} src Vue SFC 全文
+ * @returns {{start:number, end:number}|null} 根 <template>…</template> 的字符区间
+ */
+export function findRootTemplateBlock(src) {
+  const openRx = /<template\b[^>]*>/i;
+  const m = openRx.exec(src);
+  if (!m) return null;
+  const tokenRx = /<template\b[^>]*>|<\/template\s*>/gi;
+  tokenRx.lastIndex = m.index;
+  let depth = 0;
+  let t;
+  while ((t = tokenRx.exec(src)) !== null) {
+    if (t[0].charAt(1) === '/') {
+      depth--;
+      if (depth === 0) return { start: m.index, end: tokenRx.lastIndex };
+    } else if (!/\/\s*>$/.test(t[0])) {
+      depth++;
+    }
+  }
+  return null;
 }
 
 /**
@@ -880,9 +1042,15 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
   const src = typeof content === 'string' ? content : '';
   if (!src) return { content: src, applied: false, facts: null, reason: 'empty-content' };
 
-  const templateRe = /<template\b[^>]*>[\s\S]*?<\/template>/i;
-  if (!templateRe.test(src)) {
-    return { content: src, applied: false, facts: null, reason: 'no-template-block' };
+  const block = findRootTemplateBlock(src);
+  if (!block) {
+    const hasOpen = /<template\b[^>]*>/i.test(src);
+    return {
+      content: src,
+      applied: false,
+      facts: null,
+      reason: hasOpen ? 'template-unbalanced' : 'no-template-block',
+    };
   }
 
   let det = null;
@@ -896,7 +1064,7 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
     return { content: src, applied: false, facts: null, reason: 'no-plan-sections' };
   }
 
-  let out = src.replace(templateRe, det.template);
+  let out = src.slice(0, block.start) + det.template + src.slice(block.end);
   out = ensureSubComponentImport(out, options);
   out = pruneDeadSubComponentImports(out, options);
 

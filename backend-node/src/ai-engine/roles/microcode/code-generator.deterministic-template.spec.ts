@@ -44,7 +44,8 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
+import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
+import { stripSurplusBlockClosers } from './file-writer.js'
 import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
 
@@ -329,6 +330,119 @@ describe('层① 确定性 index.vue 模板装配', () => {
     const facts = buildDeterministicIndexTemplate(input)
     expect(facts!.template).toContain('<template #header-right>')
     expect(facts!.template).toContain('<HeaderSection />')
+  })
+
+  describe('刀 7 容器吸收背景层（8bbcf027 `36:1695` 实锤）', () => {
+    // 真值几何逐字段抄录：容器 801:3 (24745,51499) 547×493；
+    // 底卡 36:1695 (24745,51799) 547×193 #E1EBFF r12 —— 左右底三边与容器贴合。
+    const CONTAINER_BOX = { x: 24745, y: 51499, width: 547, height: 493 }
+    const BG_FILL = {
+      type: 'SOLID', visible: true,
+      color: { r: 0.8811598420143127, g: 0.9216160774230957, b: 1, a: 1 },
+    }
+    const figmaNodeData = {
+      document: {
+        id: '0:0', type: 'FRAME',
+        children: [{
+          id: '801:3', type: 'GROUP', name: 'slot-icon', absoluteBoundingBox: CONTAINER_BOX,
+          children: [
+            { id: '36:1695', type: 'RECTANGLE', absoluteBoundingBox: { x: 24745, y: 51799, width: 547, height: 193 }, fills: [BG_FILL], cornerRadius: 12 },
+            { id: '36:1708', type: 'TEXT', characters: '产品描述', absoluteBoundingBox: { x: 24772, y: 51824, width: 64, height: 16 } },
+            { id: '36:1719', type: 'TEXT', characters: '长描述', absoluteBoundingBox: { x: 24772, y: 51849, width: 496, height: 90 } },
+          ],
+        }],
+      },
+    }
+    const secs = [{
+      id: '801:3', name: 'slot-icon', isLayoutContainer: true, layout: 'vertical',
+      sourceNodeIds: ['801:3', '36:1695', '36:1708', '36:1719'],
+      children: [
+        { id: '801:3-orphan-text-2', type: 'content', sourceNodeIds: ['36:1708'], absoluteBoundingBox: { width: 64, height: 16 } },
+        { id: '801:3-orphan-text-3', type: 'content', sourceNodeIds: ['36:1719'], absoluteBoundingBox: { width: 496, height: 90 } },
+      ],
+    }]
+
+    test('⭐ 未被认领的 SOLID 底卡 ⇒ 容器 position:relative + 绝对定位背景层（真值 rgba/r12/边锚定）', () => {
+      const input = { ...makeInput(secs), figmaNodeData }
+      const tpl = buildDeterministicIndexTemplate(input)!.template
+      expect(tpl).toContain('data-absorbed-bg="36:1695"')
+      expect(tpl).toContain('background:rgba(225,235,255,1);')
+      expect(tpl).toContain('border-radius:12px;')
+      expect(tpl).toContain('left:0;right:0;bottom:0;height:193px;')
+      expect(tpl).toContain('z-index:-1;')
+      // 容器 div 必须 position:relative（绝对定位参照）
+      expect(tpl).toMatch(/data-section-id="801:3" style="[^"]*position:relative;/)
+      // 刀 7b（ad8939a5 真机实锤）：relative 不成层叠上下文 ⇒ z-index:-1 层沉到 base-panel
+      // 面板底之下不可见 ⇒ 容器必须 isolation:isolate 把负层圈在本容器内
+      expect(tpl).toMatch(/data-section-id="801:3" style="[^"]*isolation:isolate;/)
+      // 背景层必须先于容器内首个子组件标签（沉底语义；子组件名由 assignSectionComponentNames 派生）
+      const firstChildTag = tpl.search(/<Content\w+ /)
+      expect(firstChildTag).toBeGreaterThan(-1)
+      expect(tpl.indexOf('data-absorbed-bg="36:1695"')).toBeLessThan(firstChildTag)
+    })
+
+    test('反向：无 figmaNodeData ⇒ 零行为变化（fail-open，模板不含背景层）', () => {
+      const tpl = buildDeterministicIndexTemplate(makeInput(secs))!.template
+      expect(tpl).not.toContain('data-absorbed-bg')
+      expect(tpl).not.toContain('position:relative')
+    })
+
+    test('反向：底卡被叶子认领 ⇒ 不出层', () => {
+      const claimed = [{
+        ...secs[0],
+        sourceNodeIds: ['801:3', '36:1695', '36:1708', '36:1719'],
+        children: [
+          { id: '801:3-orphan-text-3', type: 'content', sourceNodeIds: ['36:1719', '36:1695'], absoluteBoundingBox: { width: 496, height: 90 } },
+        ],
+      }]
+      const input = { ...makeInput(claimed), figmaNodeData }
+      const tpl = buildDeterministicIndexTemplate(input)!.template
+      expect(tpl).not.toContain('data-absorbed-bg')
+    })
+
+    test('⭐ 嵌套容器重复吸收同一矩形（c-a0f93b 实锤）⇒ 最近容器独占，只出一层', () => {
+      // 外层 796:3 与内层 38:3137 的 sourceNodeIds 都含矩形 38:3138。
+      const rect = { id: '38:3138', type: 'RECTANGLE', absoluteBoundingBox: { x: 100, y: 209, width: 300, height: 161 }, fills: [BG_FILL], cornerRadius: 8 }
+      const nestedFigma = {
+        document: {
+          id: '0:0', type: 'FRAME',
+          children: [{
+            id: '796:3', type: 'GROUP', absoluteBoundingBox: { x: 100, y: 100, width: 300, height: 500 },
+            children: [
+              {
+                id: '38:3137', type: 'GROUP', absoluteBoundingBox: { x: 100, y: 209, width: 300, height: 161 },
+                children: [
+                  rect,
+                  { id: '38:3139', type: 'TEXT', characters: 't', absoluteBoundingBox: { x: 120, y: 230, width: 60, height: 16 } },
+                ],
+              },
+            ],
+          }],
+        },
+      }
+      const nestedSecs = [{
+        id: '796:3', name: 'slot-outer', isLayoutContainer: true, layout: 'vertical',
+        sourceNodeIds: ['796:3', '38:3137', '38:3138', '38:3139'],
+        children: [{
+          id: '38:3137', name: 'inner', isLayoutContainer: true, layout: 'vertical',
+          sourceNodeIds: ['38:3137', '38:3138', '38:3139'],
+          absoluteBoundingBox: { width: 300, height: 161 },
+          children: [
+            { id: '38:3139-t', type: 'content', sourceNodeIds: ['38:3139'], absoluteBoundingBox: { width: 60, height: 16 } },
+          ],
+        }],
+      }]
+      const input = { ...makeInput(nestedSecs), figmaNodeData: nestedFigma }
+      const tpl = buildDeterministicIndexTemplate(input)!.template
+      // 只出一层，且挂在**内层**容器（38:3137 的 div 内、四边 0）
+      expect(tpl.match(/data-absorbed-bg="38:3138"/g)!.length).toBe(1)
+      expect(tpl).toContain('left:0;right:0;top:0;bottom:0;')
+      // 外层容器不得带 position:relative（它名下无层）
+      const outerLine = tpl.split('\n').find((l) => l.includes('data-section-id="796:3"')) || ''
+      expect(outerLine).not.toContain('position:relative')
+      const innerLine = tpl.split('\n').find((l) => l.includes('data-section-id="38:3137"')) || ''
+      expect(innerLine).toContain('position:relative')
+    })
   })
 })
 
@@ -629,5 +743,217 @@ const switchSelected = ref('active')
     const r = applyDeterministicIndexTemplate('<script setup>const a=1</script>', mkInput(envPlan()), {})
     expect(r.applied).toBe(false)
     expect(r.reason).toBe('no-template-block')
+  })
+})
+
+describe('刀12 · 2D 行簇重建（ad8939a5 `801:3` 实锤：左图右文被纵切七段）', () => {
+  const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
+  // 801:3 真值几何（.checkpoint/figma.json）：头部带 = img(98×98) ｜ 右列（标题/编码行/pill），
+  // 下方依次 = 参数网格 81:7、产品描述 label、描述正文。容器 vertical（几何判 column 不错，
+  // 错在纵流内部的横向带没表达）。
+  const headSection = {
+    id: '801:3',
+    name: 'slot-icon',
+    type: 'body',
+    isLayoutContainer: true,
+    layout: 'vertical',
+    absoluteBoundingBox: B(24745, 51499, 547, 493),
+    children: [
+      { id: '36:1725', name: 'img', type: 'content', absoluteBoundingBox: B(24745, 51499, 98, 98) },
+      { id: '801:3-orphan-text-0', name: 'GD-Robot-04', type: 'text', absoluteBoundingBox: B(24864, 51514, 147, 24) },
+      { id: '36:1722', name: 'Frame pill', type: 'content', absoluteBoundingBox: B(24905, 51553, 72, 22) },
+      { id: '801:3-orphan-text-1', name: '编码 / 爆闪灯', type: 'text', absoluteBoundingBox: B(24864, 51556, 173, 16) },
+      { id: '81:7', name: 'Group grid', type: 'content', absoluteBoundingBox: B(24745, 51630, 440, 135.25) },
+      { id: '801:3-orphan-text-2', name: '产品描述', type: 'text', absoluteBoundingBox: B(24772, 51824, 64, 16) },
+      { id: '801:3-orphan-text-3', name: '描述正文', type: 'text', absoluteBoundingBox: B(24772, 51849, 496, 90) },
+    ],
+  }
+
+  it('⭐ 阳性：纵向容器内横向带被重建为 row wrapper（img 不再独占一行通栏）', () => {
+    const facts = buildDeterministicIndexTemplate(makeInput([headSection], 'device'))
+    expect(facts).not.toBeNull()
+    const tpl = facts!.template
+    // ① 行簇 wrapper 存在（匿名 div，无 data-section-id）
+    expect(tpl).toContain('flex-direction:row')
+    // ② 行带 wrapper 在 801:3 容器之后；叶标签序 = 行簇阅读序：
+    //    [img, 标题, pill, 编码行(orphan-1)]（首带）→ [网格 81:7] → [描述 label] → [描述正文]
+    const conAt = tpl.indexOf('data-section-id="801:3"')
+    const rowAt = tpl.indexOf('flex-direction:row')
+    expect(conAt).toBeGreaterThanOrEqual(0)
+    expect(rowAt).toBeGreaterThan(conAt)
+    const leafTags = [...tpl.matchAll(/<([A-Z]\w+) style="flex:/g)].map((m) => ({ tag: m[1], at: m.index! }))
+    expect(leafTags).toHaveLength(7)
+    // 首带 4 叶全在 row wrapper 之后；网格（第 5 叶）在其后（不再与 img 同级纵切通栏）
+    expect(leafTags[0].at).toBeGreaterThan(rowAt)
+    expect(leafTags[4].at).toBeGreaterThan(leafTags[3].at)
+    // ③ 行带内 img 与右列按真值宽度比分 flex（98/(98+173)=0.362；右列并集宽 173 ⇒ 0.638）
+    expect(tpl).toContain('flex:0.362;min-width:0;')
+    expect(tpl).toContain('flex:0.638;min-width:0;')
+    // ④ 带高比例：头带 98/(98+135.25+16+90) ≈ 0.289（与既有「子项高度和」口径一致）
+    expect(tpl).toContain('flex:0.289;min-height:0;')
+  })
+
+  it('阴性：纯纵流容器（无任何带成行）⇒ 模板与刀前逐字一致（无 row wrapper）', () => {
+    const pureVertical = {
+      ...headSection,
+      children: [
+        { id: 'a', name: 'A', type: 'content', absoluteBoundingBox: B(0, 0, 547, 100) },
+        { id: 'b', name: 'B', type: 'content', absoluteBoundingBox: B(0, 120, 547, 100) },
+        { id: 'c', name: 'C', type: 'content', absoluteBoundingBox: B(0, 240, 547, 100) },
+      ],
+    }
+    const tpl = buildDeterministicIndexTemplate(makeInput([pureVertical], 'device'))!.template
+    expect(tpl).not.toContain('c-device-band')
+    expect(tpl).not.toContain('flex-direction:row')
+  })
+
+  it('fail-open：子项几何不可解析 ⇒ 回退既有比例路径（无 band wrapper）', () => {
+    const partial = {
+      ...headSection,
+      children: [
+        { id: 'a', name: 'A', type: 'content', absoluteBoundingBox: B(24745, 51499, 98, 98) },
+        { id: 'b', name: 'B', type: 'content' }, // 无几何
+        { id: 'c', name: 'C', type: 'content', absoluteBoundingBox: B(24772, 51849, 496, 90) },
+      ],
+    }
+    const tpl = buildDeterministicIndexTemplate(makeInput([partial], 'device'))!.template
+    expect(tpl).not.toContain('c-device-band')
+  })
+})
+
+describe('刀14 · 根 <template> 块嵌套计数配对（mc-3538d75b 实锤：插槽截断残留 </div> → Invalid end tag）', () => {
+  // 实锤复刻：mc-max-1793103916900-3538d75b 第三次生成的 LLM index.vue（chunk 缓存
+  // 2-package_index.vue，63 行，本体平衡），根模板内含 <template #header_right> 插槽。
+  // 旧 lazy 正则只替换到插槽闭合（第 8 行）⇒ 第 9–37 行（</div>×3、</base-panel>、
+  // 收尾 </template>）整段残留在确定性骨架之后 ⇒ SFC 47:8/48:6/49:4 Invalid end tag。
+  const llmIndexVueWithSlot = () => `<template>
+  <base-panel panelKey="default-panel">
+    <!-- 头部右侧：关闭按钮 -->
+    <template #header_right>
+      <div class="c-device-header-close">
+        <img :src="icon2" class="c-device-icon-close" alt="关闭" />
+      </div>
+    </template>
+
+    <!-- 主体内容区 -->
+    <div class="c-device-content" :style="{ backgroundImage: 'url(' + bg1 + ')' }">
+      <StatCardsRow />
+      <div class="c-device-table-area">
+        <DeviceNameColumn />
+        <BatteryColumn />
+      </div>
+      <div class="c-device-footer">
+        <LegendItem legendType="running" />
+        <TailText />
+      </div>
+    </div>
+  </base-panel>
+</template>
+
+<script setup>
+import { onMounted } from 'vue'
+const { componentProps, runtimeBuilder } = $mcComponentBuilder()
+import StatCardsRow from './components/StatCardsRow.vue'
+import DeviceNameColumn from './components/DeviceNameColumn.vue'
+import BatteryColumn from './components/BatteryColumn.vue'
+import LegendItem from './components/LegendItem.vue'
+import TailText from './components/TailText.vue'
+onMounted(() => {
+  runtimeBuilder.publishEvent('device-onload', { componentId: 'device', timestamp: Date.now() })
+})
+</script>
+
+<style lang="less" scoped>
+@import '../resources/styles/index.less';
+</style>`
+
+  const listPlan = () => ({
+    isForced: true,
+    minFiles: 6,
+    effectiveSections: [
+      { id: '43:4800', title: 'con', type: 'container', isLayoutContainer: true,
+        layout: 'vertical', elementCount: 20,
+        children: [
+          { id: '43:4801', title: 'stat-row', type: 'content', elementCount: 5 },
+          { id: '43:4812', title: 'device-list', type: 'content', elementCount: 10 },
+        ] },
+    ],
+  })
+  const mkListInput = () => ({
+    componentName: 'device',
+    panelType: 'default-panel',
+    subComponentPlan: listPlan(),
+  })
+
+  it('findRootTemplateBlock：嵌套插槽不截断，区间覆盖到根块真正的 </template>', () => {
+    const src = llmIndexVueWithSlot()
+    const block = findRootTemplateBlock(src)!
+    expect(block).not.toBeNull()
+    const sliced = src.slice(block.start, block.end)
+    // 区间必须以根 </template> 收尾，且内部完整含插槽块与 </base-panel>
+    expect(sliced.startsWith('<template>')).toBe(true)
+    expect(sliced.trimEnd().endsWith('</template>')).toBe(true)
+    expect(sliced).toContain('<template #header_right>')
+    expect(sliced).toContain('</base-panel>')
+    // 区间之后只剩 script/style —— 不得残留任何模板内容
+    const rest = src.slice(block.end)
+    expect(rest).not.toContain('</div>')
+    expect(rest).not.toContain('</base-panel>')
+    expect(rest).not.toContain('</template>')
+    expect(rest).toContain('<script setup>')
+  })
+
+  it('实锤复刻：含插槽的 LLM index.vue 嫁接后模板平衡、LLM 旧模板零残留', () => {
+    const r = applyDeterministicIndexTemplate(llmIndexVueWithSlot(), mkListInput(), {})
+    expect(r.applied).toBe(true)
+    const out = r.content
+
+    // ① 结构平衡：template 开/闭计数相等（旧实现此处会多出 1 个 </template> 与 3 个 </div>）
+    const opens = (out.match(/<template\b(?![^>]*\/>)[^>]*>/gi) || []).length
+    const closes = (out.match(/<\/template\s*>/gi) || []).length
+    expect(closes).toBe(opens)
+
+    // ② LLM 自拟模板的容器/标签零残留（确定性骨架接管）
+    expect(out).not.toContain('c-device-content')
+    expect(out).not.toContain('c-device-table-area')
+    expect(out).not.toContain('c-device-footer')
+    expect(out).toContain('data-section-id="43:4800"')
+    expect(out).toContain('c-device-slot-con')
+
+    // ③ 确定性骨架自带的插槽保留（骨架有 header 插槽时应在产物里），script 填值保留
+    expect(out).toContain('const { componentProps, runtimeBuilder } = $mcComponentBuilder()')
+    expect(out).toContain("runtimeBuilder.publishEvent('device-onload'")
+
+    // ④ 下游 stripSurplusBlockClosers 不再有事可做（幂等零改动）
+    const closers = stripSurplusBlockClosers(out)
+    expect(closers.removed).toEqual([])
+  })
+
+  it('反向：模板残缺（有 <template> 无配对闭合）→ fail-open 原样返回 template-unbalanced', () => {
+    const broken = '<template>\n  <div>未闭合\n<script setup>const a = 1</script>'
+    const r = applyDeterministicIndexTemplate(broken, mkListInput(), {})
+    expect(r.applied).toBe(false)
+    expect(r.reason).toBe('template-unbalanced')
+    expect(r.content).toBe(broken)
+  })
+
+  it('回归：无插槽的 LLM index.vue 行为不变（同 #719 B 语义）', () => {
+    const plain = `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-device-root"><LlmMadeUp /></div>
+  </base-panel>
+</template>
+
+<script setup>
+import LlmMadeUp from './components/LlmMadeUp.vue'
+const marker = ref('keep-me')
+</script>`
+    const r = applyDeterministicIndexTemplate(plain, mkListInput(), {})
+    expect(r.applied).toBe(true)
+    expect(r.content).not.toContain('LlmMadeUp')
+    expect(r.content).toContain("const marker = ref('keep-me')")
+    const opens = (r.content.match(/<template\b(?![^>]*\/>)[^>]*>/gi) || []).length
+    const closes = (r.content.match(/<\/template\s*>/gi) || []).length
+    expect(closes).toBe(opens)
   })
 })

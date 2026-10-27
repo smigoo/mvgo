@@ -53,7 +53,7 @@ import {
 } from '../utils/component-naming.js';
 // 🛡️ CODE-018（2026-08-31）：子组件资源依赖声明检查 —— 复用方案 3 落地的共享纯函数
 // （单一事实源在 resource-import-guard.js，microcode-engineer 编译前置校验与 L0-B 门禁共用）
-import { validateSubcomponentResourceDeps, filterAvailableResources, buildResourceUsageCorpus, isResourceUsedInCorpus, isResourceVarMounted } from '../utils/resource-import-guard.js';
+import { validateSubcomponentResourceDeps, filterAvailableResources, buildResourceUsageCorpus, isResourceUsedInCorpus, isResourceVarMounted, findStaticStyleUrlVars } from '../utils/resource-import-guard.js';
 // 🛡️ TEXT-001（2026-09-01）：文本兄弟顺序漂移 —— 事实源在 text-order-guard.js
 // （code-fix-rules 自愈与 L0-B 门禁三处消费同一实现，不新增并行判定）
 import { detectTextOrderDrift } from '../utils/text-order-guard.js';
@@ -67,6 +67,9 @@ import { checkSectionTruthCoverage } from '../utils/section-content-guard.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
 import { detectUnknownText, resolveTextTruthSeverity, collectFigmaTextRuns } from '../utils/text-truth-guard.js';
+// 🛡️ 刀 8（2026-10-27）：产物侧覆盖语料必须剥注释后再扫 —— 事实源在 strip-vue-comments.js
+// （8bbcf027 实锤：注释「// 设备编码区块…」吞掉真值「编码」⇒ TEXT-COVERAGE 假绿）
+import { stripVueComments } from '../utils/strip-vue-comments.js';
 // 🛡️ R19（2026-10-21 · c-bb8-304bb8d3 实锤）：行内多段文字样式的**落位**判据。
 //   与 `collectFigmaTextRuns`（文本集合，管「有没有」）职责不同、不可合并：
 //   本判据管「每段的 color/fontSize/fontWeight 是否落在对的元素上」。
@@ -578,6 +581,12 @@ export function findUnmountedResourceVars(content = '') {
   }
   return unmounted;
 }
+
+// 🛡️ CODE-028（2026-10-27 · 593cf7f 实锤）：静态 `style` 里的裸 `url(<资源变量名>)`。
+// 判据实现在 `utils/resource-import-guard#findStaticStyleUrlVars`（零 AI 依赖、可单测；
+// 放本文件会被 logger → backend-root 的 `import.meta.url` 链拖垮单测）。此处只做再导出，
+// 保持既有 import 方（含 spec）无需改路径。
+export { findStaticStyleUrlVars };
 
 /**
  * 🛡️ CODE-027（2026-09-16）：静态资源 `.value` 误用检测。
@@ -2610,7 +2619,12 @@ export class CodeStructureValidator {
     //
     // 判据（阈值来自全语料审计，口径 = text-truth-guard#collectFigmaTextRuns）：
     //   覆盖率 = |真值中文串(≥2字) 被产物覆盖| / |真值中文串总数|
+    //   产物侧语料：剥注释（stripVueComments）后扫 template+script+style 的 CJK run
+    //     （刀 8 · 2026-10-27：旧口径全文直扫，注释吞真值 ⇒ 假绿，8bbcf027「编码」实锤）。
     //   覆盖判定与 TEXT-TRUTH 同口径：去空白 + 子串双向匹配（吸收截断/空格差异）。
+    //     （刀 8 三口径全语料审计 174 组件：剥注释口径 vs 旧口径零降档、揭开实锤假绿；
+    //       严格相等口径仅多 1 个 WARN 降档但破坏与 TEXT-TRUTH 的判据同构、且对 rich-text
+    //       拆段有假缺失风险 ⇒ 维持子串双向，不动阈值。）
     //   审计（36 个真实任务抽样）覆盖率最低 **66.7%**，无一低于 50% ⇒ 下列阈值样本零误伤：
     //     · coverage < 0.40 → BLOCK（灾祸级丢失）
     //     · 0.40 ≤ coverage < 0.60 → WARN（提示，不阻断，避免误伤）
@@ -2629,7 +2643,14 @@ export class CodeStructureValidator {
           const prodRuns = new Set();
           for (const f of covFileList) {
             if (!String(f?.path || '').endsWith('.vue') || typeof f?.content !== 'string') continue;
-            for (const m of f.content.matchAll(/[\u4e00-\u9fa5]{2,}/g)) {
+            // 🛡️ 刀 8（2026-10-27 · 8bbcf027 实锤）：先剥注释再扫 CJK。
+            //   旧口径全文直扫 ⇒ 注释里的中文（如「// 设备编码区块：仅渲染本 section 真值文案」）
+            //   把未渲染的真值串计为已覆盖 = 假绿。剥除走 strip-vue-comments.js 单一来源。
+            //   ⚠️ 不能改成「只扫模板文本节点」：刀 53 文本接管把真值放在 script 数据里
+            //   （`const runs=[{text:'编码'}]` + 模板 `{{ runs[0].text }}`），只扫模板会让
+            //   接管组件覆盖率崩溃 ⇒ 口径 = 剥注释后扫 template+script+style。
+            const stripped = stripVueComments(f.content);
+            for (const m of stripped.matchAll(/[\u4e00-\u9fa5]{2,}/g)) {
               const n = m[0].replace(/\s+/g, '');
               if (n) prodRuns.add(n);
             }
@@ -2649,14 +2670,29 @@ export class CodeStructureValidator {
             if (hit) covered += 1;
           }
           const coverage = covered / truthRuns.size;
+          // 未覆盖清单（STATS 与 WARN/BLOCK 共用同一份，保证「放行时也能看到缺哪几条」）
+          const missingAll = [...truthRuns]
+            .filter((t) => {
+              if (prodRuns.has(t)) return false;
+              for (const p of prodRuns) if (p && (t.includes(p) || p.includes(t))) return false;
+              return true;
+            });
+          // 🛡️ 刀 8：通过也打计数行（INFO，无病灶与判据失效可区分）——旧实现只在 <0.6 才 push，
+          //   「全绿」与「根本没跑」在日志里不可区分（布局真值守卫 hits:0 教训同款）。
+          //   附未覆盖清单：96% 放行但缺「编码」这类假绿（8bbcf027）只有在这里才留痕。
+          issues.push({
+            id: 'TEXT-COVERAGE-STATS',
+            severity: 'INFO',
+            file: '(产物文字 vs Figma 真值)',
+            message:
+              `TEXT-COVERAGE 已评估：真值 ${truthRuns.size} 条，覆盖 ${covered} 条` +
+              `（${Math.round(coverage * 100)}%），阈值 <40% BLOCK / <60% WARN` +
+              (missingAll.length > 0
+                ? `；未覆盖（前 ${Math.min(missingAll.length, 8)} 条）：${missingAll.slice(0, 8).join('、')}`
+                : ''),
+          });
           if (coverage < 0.6) {
-            const missing = [...truthRuns]
-              .filter((t) => {
-                if (prodRuns.has(t)) return false;
-                for (const p of prodRuns) if (p && (t.includes(p) || p.includes(t))) return false;
-                return true;
-              })
-              .slice(0, 8);
+            const missing = missingAll.slice(0, 8);
             issues.push({
               id: 'TEXT-COVERAGE',
               severity: coverage < 0.4 ? 'BLOCK' : 'WARN',
@@ -3076,6 +3112,45 @@ export class CodeStructureValidator {
             hint: {
               suggestion:
                 '静态 import 图片是 URL 字符串，直接使用变量名（不要 .value）',
+            },
+          });
+        }
+      }
+    }
+
+    // ========== 🛡️ CODE-028: 静态 style 里的裸 url(资源变量)（WARN，2026-10-27 · 593cf7f 实锤）==========
+    // 静态 `style="..."` 是纯 CSS 文本，Vue 不做变量求值 ⇒ `url(fgStatBg0)` 被浏览器当相对
+    // URL → 404 ⇒ 整卡零背景，而 import 全成死代码。CODE-022 因「全文出现变量名即算已挂载」
+    // 恰好放行这种形态（最坏组合：引用了、import 在、图不显示，全链认为合规）。
+    // 先 WARN 观察：形态一旦出现改法有多种（改 :style 绑定 / 背景转 <img> / 删除），门禁不替它选。
+    {
+      const vueTargets = (files || []).filter((f) => {
+        if (!f || typeof f.content !== 'string') return false;
+        const p = String(f.path || '').replace(/\\/g, '/');
+        if (!p.endsWith('.vue')) return false;
+        return (
+          p.endsWith('package/index.vue') ||
+          p.includes('/package/components/') ||
+          p.startsWith('package/components/')
+        );
+      });
+      for (const vueFile of vueTargets) {
+        const filePath = String(vueFile.path || '').replace(/\\/g, '/');
+        let staticUrlVars = [];
+        try {
+          staticUrlVars = findStaticStyleUrlVars(vueFile.content);
+        } catch {
+          continue; // 检测器异常不阻断（纯 WARN 观察期）
+        }
+        if (staticUrlVars.length > 0) {
+          issues.push({
+            id: 'CODE-028',
+            severity: 'WARN',
+            file: filePath,
+            message: `静态 style 里的裸 url(资源变量)：${filePath} 的 style="..." 中出现 ${staticUrlVars.join('、')}。静态 style 是纯 CSS 文本，Vue 不做变量求值 ⇒ 浏览器按相对 URL 请求 → 404 ⇒ 背景/图标整块不显示，且对应 import 全成死代码。应改成 :style 绑定（:style="{ backgroundImage: 'url(' + ${staticUrlVars[0]} + ')' }"）或改用 <img :src>`,
+            hint: {
+              suggestion:
+                '把静态 style 中 url(变量名) 挪到 :style 绑定里（backgroundImage 拼接），尺寸/平铺等 CSS 常量可留在静态 style',
             },
           });
         }

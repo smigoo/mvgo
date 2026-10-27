@@ -120,6 +120,36 @@ function decideGeometricLayout(children, opts = {}) {
   const boxes = filtered.length >= 2 ? filtered : all
   if (boxes.length < 2) return null
 
+  // 🛡️ 刀 6（2026-10-27 · 8bbcf027 `36:1726` 实锤）：**同 bbox 叠层**优先于一切方向判定。
+  //
+  // 病灶：Mask group / icon 包装的子项（底 + 封面 + mask 矩形）bbox 完全相等，
+  //   它们之间根本不存在「主轴方向」——是**层叠**。旧路径里 areBoxesSideBySide 对全等盒
+  //   恒否 ⇒ ratio=0 ⇒ 高置信 `column` 假事实（全语料 174 组件实测 **549 个容器**全中），
+  //   注入器再把 `flex-direction:column` 写进宿主类 ⇒ 层叠子项被拉成纵流。
+  // 判据：≥2 个内容子项的 bbox **完全相等**（x/y/width/height 逐字段相等，不设近似阈值）。
+  //   用剔除背景层后的 `boxes`（含「过滤后不足 2 回退全集」的结果）：Mask group 的
+  //   子项与父同尺寸时会被背景层规则全剔、回退全集，此处仍能命中。
+  // 输出 `display:'stack'`：**没有 flexDirection**（方向事实不存在，不是未知）。
+  const firstBox = (() => {
+    const b = boxes[0].absoluteBoundingBox || boxes[0].bbox
+    return b || null
+  })()
+  if (firstBox) {
+    const allIdentical = boxes.every((c) => {
+      const b = c.absoluteBoundingBox || c.bbox
+      return (
+        b &&
+        b.x === firstBox.x &&
+        b.y === firstBox.y &&
+        b.width === firstBox.width &&
+        b.height === firstBox.height
+      )
+    })
+    if (allIdentical) {
+      return { display: 'stack', confidence: 'high' }
+    }
+  }
+
   // 🛡️ 均匀网格优先（side-by-side 比例对网格系统性误判 column）
   const gridCols = detectGridColumns(boxes)
   if (gridCols >= 2) {
@@ -143,9 +173,125 @@ function decideGeometricLayout(children, opts = {}) {
   const ratio = sideBySide / total
   const direction = sideBySide > total / 2 ? 'row' : 'column'
   const confidence = ratio >= 0.75 || ratio <= 0.25 ? 'high' : 'low'
-  // 模糊方向默认 row（用户定调：不标准文件仍 flex，横排被堆纵是最常见的失败）
-  const flexDirection = confidence === 'low' ? 'row' : direction
+  // 🛡️ 2026-10-27 · mc-1793064994649-2ec8acc7 实锤：low 置信下**不再无条件兜底 row**。
+  //
+  // 历史兜底理由「不标准文件仍 flex，横排被堆纵是最常见的失败」只覆盖了**一半**失效；
+  // 另一半（真值纵排却被兜底成横排）会把整段纵排内容压成一条窄列。本单 `807:2`
+  // 就是这一半：`slot-con` 483×515，真值三段纵向（y=51637 / 51728 / 52138），
+  // 归并后 pair 数 6→10、side-by-side 1→3 ⇒ `ratio 0.3(low)` ⇒ 兜底成 `row`
+  // ⇒ 产物把「三张统计卡 / 表格 / 图例 / 链接」全部横排进一行，表格被压成右侧窄条。
+  //
+  // ⇒ 只在**几何事实成立**时改用 `column`，其余一律保持原兜底 `row`：
+  //     ① 几何多数判 `column`（`direction === 'column'`，即 side-by-side 不足半数）
+  //     ② 且满足下列任一：**容器自身**「高 > 宽」（纵向主轴的容器里横排必然溢出成窄条）
+  //        或 刀 5 的「内容堆成 ≥2 条带」证据（覆盖宽容器真纵排，见下）
+  //   为什么 ① 必须配 ②：单看 ① 会把 `2:8419`（388×30 的 header，ratio 0.464）翻成纵排。
+  //   全语料量化（168 组件 / 9534 个容器 / low 置信 777 个）：
+  //     · 「几何判 column」共 105 个，其中容器高>宽的**正好 10 个**（全是同一 `807:2` 设计）
+  //     · 其余 95 个是宽容器：`2:8419`×38（真值 row）/ `2:3438`×19 / `2:3446`×38（真值 column）
+  //       ⇒ 刀 5 之后这 95 个里 57 个翻成 column（正确的两种），38 个保持 row（正确）
+  //   ⇒ 爆炸半径 = 10 个（②-a）+ 57 个（②-b），其余「几何判 row」的 672 个构造上碰不到。
+  const parentBox = opts.parentBox
+  const pw = Number(parentBox?.width)
+  const ph = Number(parentBox?.height)
+  const tallContainer = Number.isFinite(pw) && Number.isFinite(ph) && pw > 0 && ph > pw
+  // 🛡️ 2026-10-27 · 刀 5：`tallContainer` 这一条只覆盖「竖长方形」容器，**宽容器真纵排**漏检。
+  //
+  // 视觉裁判（设计稿裁剪目视判读，见 `__tests__/fixtures/direction-truth-cases.ts`）实测：
+  // 全语料「low ∧ 几何判 column ∧ 宽容器」只有 **95 个容器 / 3 种结构**，其中
+  //   · `2:3438` 387×142 ×19 —— 真值 `column`（标题带 + 两张分布卡横排），闸不覆盖 ⇒ 错判 row
+  //   · `2:3446` 192×114 ×38 —— 真值 `column`（标题带 + 客车/环形图/货车内容带）⇒ 错判 row
+  //   · `2:8419` 388×30  ×38 —— 真值 `row`（设备监测 + 三组数值一行）⇒ 保持 row 是对的
+  // ⇒ 缺的是**「内容确实堆成 ≥2 条带」这个几何证据**，而不是「容器够不够高」。
+  //
+  // 第三条事实（`hasStackedContentBands`）= 剔除装饰后按 y 重叠聚带，要求：
+  //   ① 带数 ≥ 2（真的纵向分层）
+  //   ② 首带之后**最厚的一条带**高 ≥ 50% 父高 ∧ 横向覆盖 ≥ 60% 父宽
+  //      —— ② 是挡 `2:8419` 的关键：它的「第二带」只有 6px 下划线（thickH≈27%），
+  //      而 `2:3438` 是 80%、`2:3446` 是 70%。只判「带数 ≥ 2」会把下划线当第二段内容。
+  // 爆炸半径实测：95 个里翻 57 个（= 上面前两种结构），`2:8419` 那 38 个一位不动。
+  const stackedBands = !tallContainer && direction === 'column' && confidence === 'low'
+    ? hasStackedContentBands(boxes, parentBox)
+    : false
+  const flexDirection =
+    confidence === 'low'
+      ? direction === 'column' && (tallContainer || stackedBands)
+        ? 'column'
+        : 'row'
+      : direction
   return { display: 'flex', flexDirection, confidence, ratio }
+}
+
+/**
+ * 内容是否真的**纵向堆成 ≥2 条带**（刀 5 的第三条事实，只服务 low 置信方向闸）。
+ *
+ * 与「行/列带聚类度量」的区别（那个已被视觉裁判否掉，2/22 = 9.1%）：
+ *   · 本函数**只输出布尔证据**，不取代 `ratio` 度量，也不给方向结论；
+ *   · 先剔装饰（细长条 / 孤立极小图标）—— 那正是 bands 度量失败的根因
+ *     （`807:2` 的 6px 滚动条被当成第二列带、`2:8419` 的下划线被当成一条带）；
+ *   · 不用父容器尺寸之外的比例阈值去「猜」，只量「这一带有多厚、有多宽」。
+ *
+ * @param {Array<object>} boxes 已剔除背景层的内容子项（读 `absoluteBoundingBox` / `bbox`）
+ * @param {object} parentBox 父容器 bbox
+ * @returns {boolean}
+ */
+function hasStackedContentBands(boxes, parentBox) {
+  const pw = Number(parentBox?.width)
+  const ph = Number(parentBox?.height)
+  if (!Number.isFinite(pw) || !Number.isFinite(ph) || pw <= 0 || ph <= 0) return false
+
+  const boxOf = (c) => {
+    const b = c?.absoluteBoundingBox || c?.bbox
+    const x = Number(b?.x)
+    const y = Number(b?.y)
+    const width = Number(b?.width)
+    const height = Number(b?.height)
+    return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0
+      ? { x, y, width, height }
+      : null
+  }
+  // 装饰元素：细长条（宽或高 < 8px）、孤立极小图标（宽高都 < 10px）。
+  // 两者都不是「一段内容」，把它们算进来会凭空造出第二条带。
+  const isDecoration = (b) =>
+    b.width < 8 || b.height < 8 || (b.width < 10 && b.height < 10)
+
+  const content = (boxes || [])
+    .map(boxOf)
+    .filter(Boolean)
+    .filter((b) => !isDecoration(b))
+  if (content.length < 2) return false
+
+  // 按 y 重叠聚带：与上一条带的首项重叠超过「较矮者高度的一半」算同一条带。
+  const sorted = [...content].sort((a, b) => a.y - b.y)
+  const bands = []
+  let cur = []
+  for (const b of sorted) {
+    if (cur.length === 0) {
+      cur = [b]
+      continue
+    }
+    const ref = cur[0]
+    const ov = Math.min(ref.y + ref.height, b.y + b.height) - Math.max(ref.y, b.y)
+    const minSize = Math.min(ref.height, b.height)
+    if (ov > 0.5 * minSize) cur.push(b)
+    else {
+      bands.push(cur)
+      cur = [b]
+    }
+  }
+  if (cur.length) bands.push(cur)
+  if (bands.length < 2) return false
+
+  const spanOf = (band) => ({
+    width:
+      Math.max(...band.map((b) => b.x + b.width)) - Math.min(...band.map((b) => b.x)),
+    height:
+      Math.max(...band.map((b) => b.y + b.height)) - Math.min(...band.map((b) => b.y)),
+  })
+  // 首带是标题/头部，判据看**首带之后**那一段内容；取最厚的一条（多段时只要有一段够厚即可）
+  const rest = bands.slice(1).map(spanOf)
+  const thick = rest.reduce((m, b) => (b.height > m.height ? b : m), rest[0])
+  return thick.height >= 0.5 * ph && thick.width >= 0.6 * pw
 }
 
 /**
@@ -218,7 +364,11 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
         })
         if (decide) {
           fact = {
-            ...(decide.display === 'grid'
+            ...(decide.display === 'stack'
+              ? // 刀 6 同 bbox 叠层：无 flexDirection（方向事实不存在），
+                // 下游注入器/prompt 各自按 stack 分支处理，禁止当 flex 容器下发。
+                { display: 'stack', source: 'geometric-stack-inference' }
+              : decide.display === 'grid'
               ? { display: 'grid', gridColumns: decide.gridColumns, source: 'geometric-grid-inference' }
               : { display: 'flex', flexDirection: decide.flexDirection, source: 'geometric-inference' }),
             confidence: decide.confidence,
