@@ -19,6 +19,7 @@ import { enforceTabStructure } from './tab-structure-guard.js';
 import {
   collapseSectionsDeep,
   isCollapsedListSection,
+  extractRichBodyItems,
 } from '../utils/repeated-section-collapser.js';
 import {
   isLayoutContainerSection,
@@ -1461,8 +1462,18 @@ export function takeTextItemsByRow(hits, cap) {
   return kept
 }
 
-function buildEffectiveSection(sec, idx, ctx) {
-  if (isLayoutContainerSection(sec)) {
+// 🛡️ 刀 20a/21a 富卡 items 判据：单一来源已迁至 repeated-section-collapser.js
+//   （extractRichBodyItems，刀 22 起 figma-coverage-dedupe 同源复用），见文件头 import。
+
+export function buildEffectiveSection(sec, idx, ctx) {
+  // 🛡️ 刀 21c（mc-max-1793181937804-3e301cdb 实锤）：collapseSectionsDeep 的折叠产物
+  //   （`-list` 叶：顶层 items + collapsed/renderHint，且残留首卡 children）会被
+  //   isLayoutContainerSection 判成容器 ⇒ 容器分支白名单重建把顶层 items/renderHint
+  //   全丢、collapsed 硬写 false ⇒ 列表再次坍缩成首卡。判据单一来源
+  //   isCollapsedListSection（顶层 items 契约，与 20a 的 body.items 轨互补）。
+  //   命中 ⇒ 跳过容器分支直接走叶子分支（collapsed 透传链既有口径，残留首卡
+  //   children 由叶子分支收口丢弃——其内容已富化进 items，不丢事实）。
+  if (isLayoutContainerSection(sec) && !isCollapsedListSection(sec)) {
     // 🔴 R23：必须在读取 `sec.layout` 的任何判断之前（R2 豁免的 isHorizontalContainer、
     //   containerLayout、extractLayoutMetadata 全都依赖它）。
     refineDerivedContainerLayout(sec, ctx);
@@ -1491,6 +1502,79 @@ function buildEffectiveSection(sec, idx, ctx) {
     const children = (sec.children || []).map((child, i) =>
       buildEffectiveSection(child, i, ctx),
     );
+    // 🛡️ 刀 20a（2026-10-28 · mc-max-1793174936204-657661ca 实锤）：vision items 轨
+    //   容器在容器分支被白名单重建丢掉 body.items ⇒ 6 卡列表坍缩成 1 卡、5 卡文本全丢
+    //   （plan 层覆盖门禁 uncovered=5 看得见的结构性丢失）。
+    //   判据（全部确定性事实，零硬编码）：
+    //     ① sec.body.items ≥2 且每项是富卡对象（含 content/elements | stats | icon）；
+    //     ② 现有 children 的 id 全部落在 items 的节点引用集内（children 只是卡的
+    //        再推导，无额外内容）——否则保留 children（宁可多渲染，不可漏渲染）。
+    //   命中 ⇒ children 替换为单个 collapsed list 叶（契约与 repeated-section-collapser
+    //   的 buildCollapsedSection 同构），下游刀 20b（fg-list 接管）按真值 N 项展开渲染。
+    const richItems = extractRichBodyItems(sec);
+    if (richItems) {
+      const itemNodeIds = new Set();
+      const collectIt = (v) => {
+        if (!v || typeof v !== 'object') return;
+        if (typeof v.id === 'string') itemNodeIds.add(v.id);
+        if (typeof v.figmaNode === 'string') itemNodeIds.add(v.figmaNode);
+        for (const k of Object.keys(v)) {
+          const val = v[k];
+          if (Array.isArray(val)) val.forEach(collectIt);
+          else if (val && typeof val === 'object') collectIt(val);
+        }
+      };
+      richItems.forEach(collectIt);
+      const childIds = (sec.children || []).map((c) => String(c?.id ?? ''));
+      const childrenAbsorbed =
+        childIds.length > 0 && childIds.every((id) => itemNodeIds.has(id));
+      if (childrenAbsorbed) {
+        // 列表几何 = 各卡 frame 真值并集（figmaIndex 缺事实 ⇒ null，下游按
+        // sourceNodeIds 并集回查，同样 fail-open）
+        let unionBox = null;
+        const fi = ctx?.figmaIndex;
+        if (fi) {
+          const boxes = richItems
+            .map((it) => {
+              const e = fi.get(String(it.id ?? '')) || fi.get(String(it.icon?.figmaNode ?? ''));
+              const b = e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox;
+              return b && Number.isFinite(b.x) && Number.isFinite(b.y) ? b : null;
+            })
+            .filter(Boolean);
+          if (boxes.length === richItems.length) {
+            const x = Math.min(...boxes.map((b) => b.x));
+            const y = Math.min(...boxes.map((b) => b.y));
+            const r = Math.max(...boxes.map((b) => b.x + b.width));
+            const bt = Math.max(...boxes.map((b) => b.y + b.height));
+            unionBox = { x, y, width: r - x, height: bt - y };
+          }
+        }
+        // 合成 raw 折叠叶后**走一遍叶子分支**（collapsed 透传链：items/itemCount/
+        // renderHint/responsibility 全部由叶子分支既有口径产出，不手搓字段）
+        const rawListLeaf = {
+          id: `${sec.id}-list`,
+          name: `${sec.title || sec.name || '列表'}`,
+          title: sec.header?.title || sec.title || sec.name || '',
+          type: 'list',
+          layout: 'vertical',
+          collapsed: true,
+          renderHint: 'v-for',
+          itemCount: richItems.length,
+          itemTemplate: richItems[0],
+          items: richItems,
+          sourceNodeIds: collectSourceNodeIds(sec),
+          ...(unionBox
+            ? {
+                absoluteBoundingBox: unionBox,
+                figmaBox: unionBox,
+                styles: { figmaHeightPx: unionBox.height },
+              }
+            : {}),
+        };
+        children.length = 0;
+        children.push(buildEffectiveSection(rawListLeaf, 0, ctx));
+      }
+    }
     const title = sec.header?.title || sec.title || sec.name || '';
     // 🛡️ 2026-09-30 复审 P0-1：原为 `sec.layout || 'vertical'` ⇒ 把「无事实（null）」臆造成
     //   `vertical` 下传，再被 `code-generator` 写成 `display:flex;flex-direction:column` 内联样式
@@ -1520,6 +1604,16 @@ function buildEffectiveSection(sec, idx, ctx) {
       layoutSource: 'container-rebuild',
       children,
       collapsed: false,
+      // 🛡️ 刀 20a 配套：列表容器自身几何必须按「N 卡并集」参与父级 flex，
+      //   否则容器仍按首卡 72px 申报（figma id 与首卡 frame 撞名）⇒ 列表被压扁。
+      ...(children.length === 1 &&
+      children[0]?.collapsed === true &&
+      children[0]?.figmaBox
+        ? {
+            absoluteBoundingBox: children[0].figmaBox,
+            figmaBox: children[0].figmaBox,
+          }
+        : {}),
       // 🛡️ P2-10（2026-10-01 · c-device-monitor-27021b77 实锤）：容器 section 此前**不带**
       //   sourceNodeIds（本函数 container 分支漏了该字段，R1-1 的 collectSourceNodeIds 只在
       //   叶子分支调用）⇒ 即便 id 是真实 Figma 节点（`89:40` con / `89:38` switch /
@@ -1576,11 +1670,26 @@ function buildEffectiveSection(sec, idx, ctx) {
     };
   }
 
-  const collapsed = isCollapsedListSection(sec);
+  // 🛡️ 刀 21a（mc-max-1793181937804-3e301cdb 实锤）：vision 直接把同构列表收成
+  //   **叶子**（无 children、无 collapsed/renderHint、items 挂在 body.items），
+  //   `isCollapsedListSection` 只认顶层 items ⇒ 漏判 ⇒ 当普通叶子交给 LLM ⇒
+  //   6 卡又坍缩成 1 卡。治本：叶子分支先用共享判据 extractRichBodyItems 识别
+  //   富卡 items 轨，命中即按 collapsed list 归一（items 提升到顶层透传，
+  //   renderHint/itemCount 由下方既有口径产出，不手搓）。
+  //   🔴 方向闸（爆炸半径审计 87 任务实锤）：horizontal/grid 形态的富卡叶子
+  //   （横向统计卡/属性网格 17 例）**不归一**——fg-list 是纵列 v-for 接管，
+  //   横向场景归一会改错布局（它们另有 grid/statrow/kvgrid 接管链）；layout 缺
+  //   事实（null）同样不归一（缺事实不臆造）。仅 vision 明确 vertical 才归一。
+  const leafLayoutFact = String(sec.layout || sec.body?.layout || '').toLowerCase();
+  const richBodyItems =
+    leafLayoutFact === 'vertical' ? extractRichBodyItems(sec) : null;
+  const effectiveItems = Array.isArray(sec.items) ? sec.items : richBodyItems;
+  const collapsed = isCollapsedListSection(sec) || richBodyItems != null;
   const rawType = collapsed ? String(sec.type || 'list') : deriveSectionType(sec);
   const title = sec.header?.title || sec.title || sec.name || '';
   const elementCount = collapsed
-    ? Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0)
+    ? Number(sec.itemCount) ||
+      (Array.isArray(effectiveItems) ? effectiveItems.length : 0)
     : countElements(sec);
   const responsibility = collapsed
     ? `${TYPE_RESPONSIBILITY[rawType] || '列表项布局区'}：1 个 item 模板 + v-for 渲染 ${elementCount} 项，禁止拆成 ${elementCount} 个子组件文件`
@@ -1759,7 +1868,7 @@ function buildEffectiveSection(sec, idx, ctx) {
     collapsed,
     renderHint: collapsed ? 'v-for' : undefined,
     itemCount: collapsed ? elementCount : undefined,
-    items: collapsed ? sec.items : undefined,
+    items: collapsed ? effectiveItems : undefined,
     // 🛡️ 下游消费契约：prompt-builder/constraint-reinforcement/code-structure-validator
     //   统一按 `section.body.gridColumns` 取值，故这里把脊柱字段收敛到 body。
     //   🛡️ F1（2026-09-20）：改为**合并**而非替换——原实现整段重写 body，把 F1 回填的
@@ -1781,7 +1890,13 @@ function buildEffectiveSection(sec, idx, ctx) {
             //    ⚠️ 只覆盖 `items` 一个键，**不动** body 的其它字段（故与 ① 不冲突）。
             //    历史：此前条件是 `plainTextItems.length > 0 && !sec.body` ⇒ 有 vision body 的
             //    section（所有 header，如 tab 所在的 sub-header）永远拿不到确定性文本。
-            ...(plainTextItems.length > 0 ? { items: plainTextItems } : {}),
+            // 🛡️ 刀 21e（mc-max-1793181937804-3e301cdb 实锤）：collapsed 列表叶**豁免覆盖**——
+            //    其残留首卡 children 递归出的 plainTextItems 会把 vision 富卡 items
+            //    （content.elements/stat/icon 全结构）覆盖成扁平 [{text,figmaNode}] ⇒
+            //    下游 detectListLeaf 内容轨全空 ⇒ emptyItem 接管失败。collapsed 叶的
+            //    文本真值由专职字段 `items` 透传（见上 1831 行注释契约），body.items
+            //    保留 vision 富卡轨作内容源。
+            ...(plainTextItems.length > 0 && !collapsed ? { items: plainTextItems } : {}),
           },
         }
       : {}),

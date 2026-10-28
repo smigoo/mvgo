@@ -28,6 +28,31 @@
  * 本模块纯函数、无 import.meta、无副作用，供 subcomponent-planner 挂点复用（单一事实源）。
  */
 
+/** 刀 22：折叠列表段（collapsed/-list/v-for）形态判定，与路径无关（供吸收者资格复用）。 */
+function isCollapsedListShape(sec) {
+  if (!sec || typeof sec !== 'object') return false
+  const id = String(sec.id ?? '')
+  return /-list$/.test(id) || sec.collapsed === true || sec.renderHint === 'v-for'
+}
+
+/**
+ * 🛡️ 刀 22（mc-max-1793185156712-b2086a9c 实锤）：折叠列表段只允许被
+ *   「自身就携带列表内容」的兄弟吸收。覆盖闭包是 figma 后代闭包 ⇒ 列表的
+ *   **父容器锚点天然 100% 覆盖**折叠段（父 id 的后代闭包 ⊇ 全部卡）；若父容器
+ *   自身不带 items（本次 E1 把 48:5798 推成容器、vision body.items 未回填到它），
+ *   删掉折叠段 = 唯一起内容轨消失 ⇒ 6 卡全丢只剩首卡。
+ *   携带者判据（语义=「逐项内容真的在这里」，与 planner 富卡判据**用途不同**：
+ *   planner 归一要区分富卡/扁平文本，这里只问「逐项内容是否存在」⇒ 任意形态
+ *   items ≥2 即算携带）：collapsed/-list/v-for、顶层 items≥2、或 body.items≥2。
+ *   历史阳性保持：91544b38/0397a327 的吸收者 48:5798 带 body.items ⇒ 仍删。
+ */
+function isListContentCarrier(sec) {
+  if (!sec || typeof sec !== 'object') return false
+  if (isCollapsedListShape(sec)) return true
+  if (Array.isArray(sec.items) && sec.items.length >= 2) return true
+  return Array.isArray(sec.body?.items) && sec.body.items.length >= 2
+}
+
 /**
  * 建 Figma 节点 → 「自身 + 全部后代 id」闭包索引。
  *
@@ -183,6 +208,9 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path) {
         continue
       }
       if (!isSubset(cov[i], cov[j])) continue
+      // 🛡️ 刀 22：被删者是折叠列表段而吸收者自身不携带列表内容 ⇒ 不删
+      //   （否则唯一起内容轨消失，整列坍缩成首卡，b2086a9c 实锤）
+      if (isCollapsedListShape(sections[i]) && !isListContentCarrier(sections[j])) continue
       droppedBy.set(i, j)
       break
     }
@@ -207,6 +235,8 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path) {
       if (cov[j].size < cov[i].size) continue // 只被「覆盖更全」者吸收
       const ratio = overlapRatio(cov[i], cov[j])
       if (ratio < PARTIAL_OVERLAP_THRESHOLD) continue
+      // 🛡️ 刀 22：同一段——吸收者必须是列表内容携带者
+      if (!isListContentCarrier(sections[j])) continue
       if (ratio > bestRatio || (Math.abs(ratio - bestRatio) < 1e-9 && cov[j].size > cov[bestJ]?.size)) {
         bestRatio = ratio
         bestJ = j

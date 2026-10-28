@@ -10,6 +10,31 @@
  */
 
 import { MC_FRAMEWORK_PRESET_VARS, MC_DARK_THEME_COLOR_ENUM } from './file-writer.js';
+import { FG_TAKEOVER_CLASS_RX } from '../../utils/folded-grid-section-takeover.js';
+
+/**
+ * 🛡️ 刀 19（2026-10-28）：M5-7 与生成侧归一器判据同构。
+ * fg- 接管类的字号是 Figma 真值渲染（归一会失真，round-10/12/16 实锤），
+ * font-size-normalizer.js 对 fg- 规则块 + fg- 内联 style 双重豁免，本校验同口径：
+ * 先抠除这两类命中，再扫硬编码 px（抠除保留换行，定位行号不漂移）。
+ */
+function maskFgTakeoverForFontSize(all) {
+  // 🔴 顺序敏感：必须先掩 fg- 标签内联 style（消除其中 `;`），再掩规则块。
+  // 反过来的话，规则块选择子 `[^{};]*` 会从内联 style 的 `;` 后面起配，
+  // 把标签尾部吞进「规则块」，残留的 `font-size:Npx` 仍会误报（刀19 spec 实锤）。
+  return String(all)
+    .replace(/<[a-zA-Z][^>]*>/g, (tag) =>
+      FG_TAKEOVER_CLASS_RX.test(tag)
+        ? tag.replace(
+            /(\bstyle=")([^"]*)(")/g,
+            (_m, pre, val, post) => pre + val.replace(/[^\n]/g, '') + post,
+          )
+        : tag,
+    )
+    .replace(/([^{};]*)\{([^{}]*)\}/g, (whole, sel) =>
+      FG_TAKEOVER_CLASS_RX.test(sel) ? whole.replace(/[^\n]/g, '') : whole,
+    );
+}
 
 const OK = 'ok';
 
@@ -256,7 +281,10 @@ export function checkMcComponent(files = {}, declare = null, options = {}) {
     return all.includes('@fontSize') ? OK : fail('有 font-size 但未使用 @fontSize 变量');
   });
   run('M5-7', '禁止硬编码字体大小（按需）', () => {
-    const all = Object.values(files).filter((c) => typeof c === 'string').join('\n');
+    // 🛡️ 刀 19：fg- 接管真值字号豁免（判据同构 font-size-normalizer）
+    const all = maskFgTakeoverForFontSize(
+      Object.values(files).filter((c) => typeof c === 'string').join('\n'),
+    );
     const bad = [...all.matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px/g)].filter((m) => parseFloat(m[1]) > 5);
     return bad.length ? fail(`存在 ${bad.length} 处硬编码 font-size > 5px`) : OK;
   });

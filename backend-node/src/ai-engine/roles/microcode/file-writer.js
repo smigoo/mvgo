@@ -137,6 +137,62 @@ export function isValidFilePath(path) {
 }
 
 /**
+ * 🛡️ 刀15（2026-10-28 · mv-1793103939639-b9319f42 实锤）：DSML 工具调用残片区剥除。
+ *
+ * 事故：LLM 把工具调用协议残片 + 对话段落写进 common.less——
+ *   第 13 行 `</｜｜DSML｜｜ parameter>`（全角 ｜=U+FF5C，DeepSeek DSML 协议残片），
+ *   紧跟「我已完成上一轮生成内容的复现…请问你希望我做什么？例如：1. **修复 bg1…**」
+ *   → LESS 编译 `Unrecognised input`（common.less:13:1）→ 门禁 BLOCK，任务失败。
+ * 4L-b 的行级裸标签正则只认半角 ASCII（`[\w-]` 匹配不到全角 ｜）→ 穿透。
+ *
+ * 判据（触发条件极窄，命中即真污染）：
+ *   ① 标记行：整行 `<` 起 `>` 尾、含 `DSML` 且含 `｜｜`/`||` 包裹——合法产物绝不出现；
+ *   ② 对话续行：标记行之后逐行删除，直到「合法代码行」——
+ *      判定 = 无 CJK 且（含 `{`/`}`/`;` 或以 `//`、`/*`、`@`、`.`、`#` 开头或 `ident:` 形态）。
+ *      对话行可能内嵌 `:style="{…}"` 片段 ⇒ 必须合取「无 CJK」，不能只看 `{`。
+ *      同构口径：只覆盖本次实锤的中文对话形态；英文对话交 LESS/SFC 门禁 + 重试兜底。
+ *
+ * 纯文本变换、幂等；不命中标记行 ⇒ 零改动。
+ *
+ * @param {string} src
+ * @returns {string}
+ */
+export function stripDsmlResidue(src) {
+  const s = String(src || '');
+  if (!s || !/DSML/.test(s)) return s;
+
+  const isDsmlMarkLine = (line) =>
+    /^[ \t]*<\/?[^>]*DSML[^>]*>[ \t]*$/.test(line) && /(｜｜|\|\|)/.test(line);
+  // 合法代码行：无 CJK，且（含块/语句字符，或注释/选择器/at-rule/属性形态）
+  const isCodeLine = (line) => {
+    if (/[一-鿿]/.test(line)) return false;
+    const t = line.trim();
+    if (!t) return false; // 空行在污染区内随块删除
+    if (/[{};]/.test(t)) return true;
+    if (/^(\/\/|\/\*|\*\/|@|\.|#)/.test(t)) return true;
+    if (/^[\w-]+\s*:/.test(t)) return true;
+    return false;
+  };
+
+  const lines = s.split('\n');
+  const out = [];
+  let i = 0;
+  let stripped = false;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (isDsmlMarkLine(line)) {
+      stripped = true;
+      i++;
+      while (i < lines.length && !isCodeLine(lines[i])) i++;
+      continue;
+    }
+    out.push(line);
+    i++;
+  }
+  return stripped ? out.join('\n') : s;
+}
+
+/**
  * 清理文件内容中的 markdown 标记
  * @param {string} content - 原始内容
  * @param {string} filePath - 文件路径（用于 .vue 文件特殊处理）
@@ -153,6 +209,9 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
 
   // 1.5.去除 <thinking>...</thinking> 块（LLM 推理文本泄漏到 Vue 文件中）
   sanitized = sanitized.replace(/<thinking>[\s\S]*?<\/thinking>\s*/g, '');
+
+  // 1.7. 🛡️ 刀15：DSML 工具调用残片区剥除（判据与实锤见 stripDsmlResidue JSDoc）。
+  sanitized = stripDsmlResidue(sanitized);
 
   // 2. 去除结尾的 markdown 代码围栏（单独成行的 ```）
   sanitized = sanitized.replace(/\n?\s*```\s*$/g, '');
@@ -181,7 +240,10 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
     // 误伤审计（2026-10-05）：frontend/workspace/custom-components 全量 572 组件 / 2799 个 .less
     // → 命中 **1 处 = 本事故文件**；`</svg>` 2 处（c-device-monitor-54038a3a:332、a0167230:323）
     //   均在 url() 内同行 ⇒ 天然豁免。合取「阳性 1 / 误伤 0」。
-    sanitized = sanitized.replace(/^[ \t]*<\/?[A-Za-z][\w-]*(?:\s[^>]*)?>[ \t]*(?:\r?\n|$)/gm, '');
+    // 4L-c. 🛡️ 刀15（2026-10-28 · mv-b9319f42）：字符类扩全角 ASCII 变体（！-~），
+    // 兜住 `</｜｜DSML｜｜ parameter>` 这类全角标签行（｜=U+FF5C 不在 [\w-] 内）。
+    // 用显式 \u 转义而非字面全角字符，防文件编码漂移。
+    sanitized = sanitized.replace(/^[ \t]*<\/?[A-Za-z\uFF01-\uFF5E][\w\uFF01-\uFF5E-]*(?:\s[^>]*)?>[ \t]*(?:\r?\n|$)/gm, '');
   }
 
   // 4J. 🎯 2026-10-25 治本（mc-max-1792934332868-389dd460 真机实锤）：
@@ -1934,6 +1996,10 @@ export function writeFiles(files, outputPath, options = {}) {
       try {
         const tvPath = 'resources/styles/themes/theme-vars.less';
         const full = join(outputPath, tvPath);
+        // 🛡️ 刀 18：files map 可能不含 theme-vars.less（themes/ 目录从未建立），
+        // 直接 writeFileSync 会 ENOENT——回写前先确保目录存在（与主写盘循环同构）。
+        const tvDir = dirname(full);
+        if (!existsSync(tvDir)) mkdirSync(tvDir, { recursive: true });
         const existing = existsSync(full)
           ? readFileSync(full, 'utf-8')
           : files[tvPath] || '';

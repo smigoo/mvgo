@@ -44,7 +44,7 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
+import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
 import { stripSurplusBlockClosers } from './file-writer.js'
 import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
@@ -955,5 +955,124 @@ const marker = ref('keep-me')
     const opens = (r.content.match(/<template\b(?![^>]*\/>)[^>]*>/gi) || []).length
     const closes = (r.content.match(/<\/template\s*>/gi) || []).length
     expect(closes).toBe(opens)
+  })
+})
+
+describe('刀16 · 兄弟间距真值注入（6bba7218 实锤：纵流 33/20/20px + 行带内横向 64px 全贴死）', () => {
+  const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
+  // 实锤几何（.mc-gen/cache/figma-node-data.json）：容器 796:3(26894,51483,604,787)
+  // 带1 = 3260(26900,51483,265,76) | 3282(27229,51483,265,76) → 横向间距 64px
+  // 纵排：带1底 51559 → 3137(…,51592,604,161) 间距33 → 3162(…,51773,604,212) 间距20
+  //       → 3206(…,52005,604,265) 间距20，底 52270 = 容器底
+  const gapPlan = () => ({
+    isForced: true,
+    minFiles: 8,
+    effectiveSections: [
+      { id: '796:3', title: 'slot-icon', type: 'container', isLayoutContainer: true,
+        layout: 'vertical', elementCount: 30,
+        absoluteBoundingBox: B(26894, 51483, 604, 787),
+        children: [
+          { id: '38:3260', title: 'g1', type: 'content', elementCount: 5, absoluteBoundingBox: B(26900, 51483, 265, 76) },
+          { id: '38:3282', title: 'g2', type: 'content', elementCount: 5, absoluteBoundingBox: B(27229, 51483, 265, 76) },
+          { id: '38:3137', title: 'card1', type: 'content', elementCount: 6, absoluteBoundingBox: B(26894, 51592, 604, 161) },
+          { id: '38:3162', title: 'card2', type: 'content', elementCount: 6, absoluteBoundingBox: B(26894, 51773, 604, 212) },
+          { id: '38:3206', title: 'card3', type: 'content', elementCount: 6, absoluteBoundingBox: B(26894, 52005, 604, 265) },
+        ] },
+    ],
+  })
+  const mkGapInput = () => ({
+    componentName: 'device',
+    panelType: 'default-panel',
+    subComponentPlan: gapPlan(),
+  })
+
+  it('⭐ 实锤复刻：纵向兄弟 margin-top 33/20/20、行带内横向 margin-left 64、flex 比例保持', () => {
+    const facts = buildDeterministicIndexTemplate(mkGapInput())
+    expect(facts).not.toBeNull()
+    const tpl = facts!.template
+    // 行带内：第二组 margin-left:64px
+    expect(tpl).toContain('margin-left:64px')
+    // 纵向兄弟：33/20/20
+    expect(tpl).toContain('margin-top:33px')
+    expect((tpl.match(/margin-top:20px/g) || []).length).toBe(2)
+    // flex 比例链不变（分母照旧，margin 与 grow 相容）
+    expect(tpl).toContain('flex:0.500')
+  })
+
+  it('反向：兄弟贴合（gap=0）⇒ 零 margin，零行为变化', () => {
+    const p = gapPlan()
+    // 只让 card1→card2→card3 之间贴合（带结构与带间距 33px 不动，
+    // 避免 y 聚带容差把贴合的 card 并进行带、改变刀12 结构）
+    p.effectiveSections[0].children[3].absoluteBoundingBox = B(26894, 51753, 604, 212) // 贴住 card1 底
+    p.effectiveSections[0].children[4].absoluteBoundingBox = B(26894, 51965, 604, 265) // 贴住 card2 底
+    const tpl = buildDeterministicIndexTemplate({ componentName: 'device', panelType: 'default-panel', subComponentPlan: p })!.template
+    // 卡片间 20px 消失
+    expect(tpl).not.toContain('margin-top:20px')
+    // 带间距 33px 与横向 64px 仍在（几何未动）
+    expect(tpl).toContain('margin-top:33px')
+    expect(tpl).toContain('margin-left:64px')
+  })
+
+  it('反向：几何缺失（无 bbox）⇒ 零 margin，回退既有比例路径', () => {
+    const p = gapPlan()
+    for (const c of p.effectiveSections[0].children) delete (c as any).absoluteBoundingBox
+    const tpl = buildDeterministicIndexTemplate({ componentName: 'device', panelType: 'default-panel', subComponentPlan: p })!.template
+    expect(tpl).not.toContain('margin-top:')
+    expect(tpl).not.toContain('margin-left:')
+  })
+
+  it('siblingGapStyle 单元：重叠（负 gap）/ 亚像素 / 缺 box 全部返回空串', () => {
+    expect(siblingGapStyle({ x: 0, y: 0, w: 10, h: 10 }, { x: 0, y: 5, w: 10, h: 10 }, 'vertical')).toBe('')
+    expect(siblingGapStyle({ x: 0, y: 0, w: 10, h: 10 }, { x: 0, y: 10.4, w: 10, h: 10 }, 'vertical')).toBe('')
+    expect(siblingGapStyle(null, { x: 0, y: 20, w: 10, h: 10 }, 'vertical')).toBe('')
+    expect(siblingGapStyle({ x: 0, y: 0, w: 10, h: 10 }, { x: 30, y: 0, w: 10, h: 10 }, 'horizontal')).toBe('margin-left:20px;')
+    expect(siblingGapStyle({ x: 0, y: 0, w: 10, h: 10 }, { x: 0, y: 33, w: 10, h: 10 }, 'vertical')).toBe('margin-top:23px;')
+  })
+})
+
+describe('刀17 · 横向容器 2D 列簇 + 交叉轴居中（6bba7218 `38:3260` 实锤：icon ｜ 纵排文本块被平铺横排且贴顶）', () => {
+  const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
+  // 实锤几何：38:3260(26900,51483,265,76) horizontal，三子项：
+  // icon 187:262(26920,51496,53,55.4) ｜ 标题 38:3263(26997.7,51496,64,24) ｜ 数字 38:3262(26997,51521.9,28,28)
+  const statGroup = () => ({
+    isForced: true,
+    minFiles: 5,
+    effectiveSections: [
+      { id: '38:3260', title: 'g', type: 'container', isLayoutContainer: true,
+        layout: 'horizontal', elementCount: 10,
+        absoluteBoundingBox: B(26900, 51483, 265, 76),
+        children: [
+          { id: '187:262', title: 'icon', type: 'content', elementCount: 3, absoluteBoundingBox: B(26920, 51496, 53, 55.4) },
+          { id: '38:3263', title: '合作厂商', type: 'content', elementCount: 1, absoluteBoundingBox: B(26997.7, 51496, 64, 24) },
+          { id: '38:3262', title: '33', type: 'content', elementCount: 1, absoluteBoundingBox: B(26997, 51521.9, 28, 28) },
+        ] },
+    ],
+  })
+
+  it('⭐ 实锤复刻：标题/数字聚成纵排组、icon 与组横排、align-self:center 落到直接子项', () => {
+    const facts = buildDeterministicIndexTemplate({ componentName: 'device', panelType: 'default-panel', subComponentPlan: statGroup() })
+    expect(facts).not.toBeNull()
+    const tpl = facts!.template
+    // ① 2D 列簇命中：band wrapper 存在且根为 row
+    expect(tpl).toContain('c-device-band')
+    expect(tpl).toContain('flex-direction:row')
+    // ② 纵排组存在（标题/数字在 column 组内）：模板里出现嵌套 band（row 内 column）
+    expect(tpl).toContain('flex-direction:column')
+    // ③ 居中：直接子项带 align-self:center（icon 与文本块中心≈容器中心）
+    expect((tpl.match(/align-self:center/g) || []).length).toBe(2)
+    // ④ 组内纵排间距（刀16 叠加）：数字 margin-top ≈ 2px（51521.9-51520=1.9）
+    expect(tpl).toContain('margin-top:2px')
+  })
+
+  it('反向：纯横行三并列卡 ⇒ 2D 不命中、无 band、无 align-self', () => {
+    const p = statGroup()
+    p.effectiveSections[0].children = [
+      { id: 'a', title: 'A', type: 'content', elementCount: 1, absoluteBoundingBox: B(26900, 51496, 60, 50) },
+      { id: 'b', title: 'B', type: 'content', elementCount: 1, absoluteBoundingBox: B(26990, 51496, 60, 50) },
+      { id: 'c', title: 'C', type: 'content', elementCount: 1, absoluteBoundingBox: B(27080, 51496, 60, 50) },
+    ]
+    const tpl = buildDeterministicIndexTemplate({ componentName: 'device', panelType: 'default-panel', subComponentPlan: p })!.template
+    expect(tpl).not.toContain('c-device-band')
+    expect(tpl).not.toContain('align-self:center')
   })
 })

@@ -469,6 +469,34 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
  * @param {{minRepeat?: number, enableGeo?: boolean, maxDepth?: number}} [opts]
  * @returns {Array<object>}
  */
+/**
+ * 🛡️ 富卡 items 判据（单一来源 · 刀 20a/21a/23 消费同构）：
+ *   vision `body.items` 中的「富卡」项——含结构化卡内容（content.elements |
+ *   stats | stat | icon | texts | textRuns | children 子树）。
+ *   纯文本扁平项（{text,figmaNode} 形态）/装饰项不算富卡。
+ * 🛡️ 刀 23（mc-max-1793185156712-b2086a9c 实锤）语义调整：every → **过滤**。
+ *   vision 可能把列表卡与杂项（尾部文本/滚动条装饰）混在同一 body.items
+ *   （9 项 = 6 卡 + 3 杂项），every 全富才认 ⇒ 整轨漏判。改为「富卡项 ≥2
+ *   ⇒ 返回富卡子集」；杂项由其它 section 承载（footer 等），不丢内容。
+ */
+export function extractRichBodyItems(sec) {
+  const items = sec?.body?.items;
+  if (!Array.isArray(items)) return null;
+  const rich = items.filter(
+    (it) =>
+      it &&
+      typeof it === 'object' &&
+      (Array.isArray(it.content?.elements) ||
+        Array.isArray(it.stats) ||
+        (it.stat && typeof it.stat === 'object') ||
+        it.icon ||
+        Array.isArray(it.texts) ||
+        Array.isArray(it.textRuns) ||
+        Array.isArray(it.children)),
+  );
+  return rich.length >= 2 ? rich : null;
+}
+
 export function isCollapsedListSection(sec) {
   if (!sec || typeof sec !== 'object') return false;
   if (sec.collapsed === true) return true;

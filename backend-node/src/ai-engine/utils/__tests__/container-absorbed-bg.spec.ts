@@ -135,4 +135,33 @@ describe('resolveAbsorbedBgLayers — 刀 7 容器吸收背景层', () => {
     const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:9'] }
     expect(resolveAbsorbedBgLayers(sec, figmaOf(root), new Set()).layers).toEqual([])
   })
+
+  // ── 刀 20c（2026-10-28 · 657661ca 实锤）：滚动条滑块不吸收 ─────────────
+  it('刀20c：细长贴右缘 rect（滚动条滑块 6×218）⇒ 跳过，不画假滚动条', () => {
+    // 真值复刻：48:5904 {x: 容器右缘-6, w:6, h:218} rgba(55,149,221,0.37)
+    const bar = rect('48:5904', {
+      x: CONTAINER_BOX.x + CONTAINER_BOX.width - 6,
+      y: CONTAINER_BOX.y + 100,
+      width: 6,
+      height: 218,
+    }, { cornerRadius: 3 })
+    const root = container([bar])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '48:5904'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers).toEqual([])
+  })
+
+  it('刀20c 反向：同尺寸但**不贴右缘**的细长 rect ⇒ 仍吸收（不误伤装饰条）', () => {
+    const deco = rect('9:10', {
+      x: CONTAINER_BOX.x + 40,
+      y: CONTAINER_BOX.y + 100,
+      width: 6,
+      height: 218,
+    })
+    const root = container([deco])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:10'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers.length).toBe(1)
+    expect(r.layers[0].id).toBe('9:10')
+  })
 })

@@ -128,3 +128,71 @@ export function planRowBands(entries) {
   if (rowed === 0) return null; // 没有任何带成行 ⇒ 不动
   return group('column', children);
 }
+
+/**
+ * 🛡️ 刀 17a（2026-10-28 · 6bba7218 `38:3260` 实锤）：planRowBands 的对称入口——
+ * **横排容器内含纵排组**（icon ｜ 纵排文本块「标题上+数字下」）。
+ *
+ * 病灶：刀 12 只评 vertical 容器（y 聚带先行）。`38:3260`（统计卡组 265×76，GROUP）
+ * 被 R23 复算为 horizontal ⇒ 不评估 ⇒ icon/标题/数字 三叶子被平铺横排
+ * （标题与数字本应上下纵排、与 icon 横向并列）。真值 2D 结构：
+ *   x 聚组 ⇒ icon(26920–26973) ｜ 文本块(26997–27061.7) 两组；
+ *   文本块内 y 聚带 ⇒ 标题(51496–51520) ｜ 数字(51521.9–51549.9) 两带成列。
+ *
+ * 判据与 planRowBands 完全对称（同 TOL、同 buildNode 换轴递归、同 fail-open）：
+ *   ① x 聚组先行；<2 组 ⇒ 纯纵列，属 vertical 分支管辖 ⇒ null；
+ *   ② 全组单元素 ⇒ 纯横行 = horizontal 既有现状 ⇒ null；
+ *   ③ 至少一组内部 y 切出 ≥2 带（成列）⇒ 命中；否则 null（零行为变化）。
+ *
+ * @param {Array<{ref:any, box:{x:number,y:number,w:number,h:number}}>} entries
+ * @returns {null | BandNode} 根 direction='row'
+ */
+export function planColumnGroups(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (list.length < 3) return null;
+  if (!list.every((e) => isValidBox(e && e.box))) return null;
+  const items = list.map((e, i) => ({ ref: e.ref, box: e.box, i }));
+  const groups = clusterX(items);
+  if (groups.length < 2) return null; // 单组 = 纯纵列
+  if (groups.every((g) => g.length === 1)) return null; // 纯横行 = 现状
+  let columned = 0;
+  const children = groups.map((g) => {
+    if (g.length === 1) return leaf(g[0]);
+    // 组内先行 y 切；buildNode prefer='column'（切不出会自行换轴/兜底）
+    if (clusterY(g).length >= 2) columned += 1;
+    return buildNode(g, 'column', 1).node;
+  });
+  if (columned === 0) return null; // 没有任何组成列 ⇒ 不动
+  return group('row', children);
+}
+
+/**
+ * 🛡️ 刀 17b（2026-10-28 · 6bba7218 实锤）：横向容器交叉轴居中判据。
+ *
+ * 病灶：横排组（统计卡）产物 `align-items:stretch` 顶对齐，真值内容块
+ * （icon 中心 51523.7 / 文本块中心 51523）相对带中心（51521）偏移 ≤3px = **垂直居中**。
+ * GROUP 无 Auto Layout 属性 ⇒ 只能纯几何推导：全部直接子项中心相对容器中心偏移小
+ * 且内容高度明显小于容器（有留白可居）⇒ 交叉轴 center。
+ *
+ * 判据（命名无关、fail-open ''）：
+ *   ① 容器 box 与全部子项 box 合法；
+ *   ② 每个子项 |中心偏移| ≤ max(4px, 容器高 × 8%)；
+ *   ③ 每个子项高 < 容器高 × 92%（≈ 填满时 stretch 与 center 等效，不加 = 零行为变化）。
+ *
+ * @param {Array<{x,y,w,h}>} childBoxes
+ * @param {{x,y,w,h}} containerBox
+ * @param {boolean} [self] true ⇒ 出 `align-self`（落单个子项）；false ⇒ `align-items`（落容器）
+ * @returns {string} 'align-items:center;' / 'align-self:center;' 或 ''
+ */
+export function crossAxisCenterStyle(childBoxes, containerBox, self = false) {
+  if (!isValidBox(containerBox)) return '';
+  const list = Array.isArray(childBoxes) ? childBoxes : [];
+  if (list.length === 0 || !list.every(isValidBox)) return '';
+  const cCenter = containerBox.y + containerBox.h / 2;
+  const tol = Math.max(4, containerBox.h * 0.08);
+  for (const b of list) {
+    if (Math.abs(b.y + b.h / 2 - cCenter) > tol) return '';
+    if (b.h >= containerBox.h * 0.92) return '';
+  }
+  return self ? 'align-self:center;' : 'align-items:center;';
+}

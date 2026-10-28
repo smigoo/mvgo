@@ -14,7 +14,7 @@ jest.mock('../../../config/backend-root.js', () => ({
   logsDir: '/tmp/mvgo-test-logs',
 }), { virtual: true })
 
-import { sanitizeFileContent, safeLessVarValue, buildCssVarsFile } from './file-writer.js';
+import { sanitizeFileContent, stripDsmlResidue, safeLessVarValue, buildCssVarsFile } from './file-writer.js';
 
 describe('sanitizeFileContent · 样式文件 SFC 标签剥离（2026-09-14 治本）', () => {
   const pollutedLess = [
@@ -168,3 +168,87 @@ describe('buildCssVarsFile · fontSize 不再有魔法数 12（2026-09-28）', (
     expect(buildCssVarsFile({ fontSize: 16 })).toContain('fontSize: $mcCssBuilder.getCssSize(16)');
   });
 });
+
+describe('刀15 · DSML 工具调用残片区剥除（mv-1793103939639-b9319f42 实锤）', () => {
+  // 实锤复刻：mv 任务 common.less 第 13 行起混入 `</｜｜DSML｜｜ parameter>` + 中文对话段
+  // （对话行内嵌 `:style="{…}"` 片段——专治「只看 { 就停」的弱判据）。
+  const polluted = [
+    '// 设备详情面板共享业务样式（按功能语义命名）',
+    '',
+    '// 主组件与子组件通过 @import 引入本文件',
+    '',
+    '// 面板根容器：浅蓝到淡蓝渐变，带描边与圆角',
+    '',
+    '// 设备属性网格容器：4 列 × 6 行，行主序排列',
+    '',
+    '// 单个字段项：label + value 横向排列',
+    '</｜｜DSML｜｜ parameter>',
+    '',
+    '我已完成上一轮生成内容的复现（为保留上下文以便后续修复）。请问你希望我做什么？例如：',
+    '',
+    '1. **修复 `bg1` 幽灵引用（CODE-025）**——但那需要修改的是"注入后"实际生成的 index.vue（当前脚本片段未使用 `bg1`，实际报错来自被截断/未展示的完整版本里的 `:style="{ backgroundImage: url(bg1) }"`）。',
+    '',
+    '.device-info-grid {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  gap: 12px;',
+    '  width: 100%;',
+    '}',
+    '',
+  ].join('\n');
+
+  it('⭐ 实锤：DSML 标记行 + 中文对话段整块剥除，前后合法内容零损伤', () => {
+    const out = sanitizeFileContent(polluted, 'resources/styles/common.less');
+    expect(out).not.toContain('DSML');
+    expect(out).not.toContain('我已完成');
+    expect(out).not.toContain('幽灵引用');
+    // 合法 less 块完整保留
+    expect(out).toContain('.device-info-grid {');
+    expect(out).toContain('gap: 12px;');
+    // 前面的合法中文注释保留（污染区之前的内容不动）
+    expect(out).toContain('// 单个字段项：label + value 横向排列');
+  });
+
+  it('半角 ||DSML|| 变体同样剥除', () => {
+    const src = '.a { color: red; }\n</||DSML|| invoke>\n这是一段对话泄漏\n.b { color: blue; }\n';
+    const out = sanitizeFileContent(src, 'common.less');
+    expect(out).not.toContain('DSML');
+    expect(out).not.toContain('对话泄漏');
+    expect(out).toContain('.b { color: blue; }');
+  });
+
+  it('反向：无 DSML 的合法 less 零改动（含中文注释、url() 行内 <svg>）', () => {
+    const legit = [
+      '// 合法中文注释：保留',
+      '.c-x {',
+      "  background: url('data:image/svg+xml;utf8,<svg viewBox=\"0 0 1 1\"></svg>');",
+      '  color: #333;',
+      '}',
+    ].join('\n');
+    expect(sanitizeFileContent(legit, 'common.less')).toBe(legit);
+  });
+
+  it('反向：stripDsmlResidue 对无 DSML 文本恒等（fail-open）', () => {
+    const s = '.a{color:red}\n我有一段中文但不在 DSML 块里（假设形态，不该被碰）\n';
+    // 无 DSML 标记行 ⇒ 零改动（即便有中文行——触发条件是标记行，不是中文）
+    expect(stripDsmlResidue(s)).toBe(s);
+  });
+
+  it('幂等：剥一次后再跑不变', () => {
+    const once = sanitizeFileContent(polluted, 'common.less');
+    expect(sanitizeFileContent(once, 'common.less')).toBe(once);
+  });
+
+  it('4L-c：全角标签行在 .less 中被剥离（无对话段的孤立形态）', () => {
+    const src = '.a { color: red; }\n</｜｜style｜｜>\n.b { color: blue; }\n';
+    const out = sanitizeFileContent(src, 'common.less');
+    expect(out).not.toContain('｜');
+    expect(out).toContain('.b { color: blue; }');
+  });
+
+  it('4L-c 不误伤 .vue/.js：半角标签行的既有行为不变（4L-b 只作用样式文件）', () => {
+    const vueSrc = '<template>\n  <div class="x">你好</div>\n</template>\n\n<script setup>\nconst a = 1\n</script>\n';
+    const out = sanitizeFileContent(vueSrc, 'package/index.vue');
+    expect(out).toContain('<div class="x">你好</div>');
+  });
+})

@@ -76,6 +76,17 @@ export function resolveAbsorbedBgLayers(sec, figmaIndex, claimedIds) {
 
     const b = boxOf(node)
     if (!b) continue
+    // 🛡️ 刀 20c（2026-10-28 · 657661ca 实锤）：滚动条滑块/轨道不是背景层——
+    //   细长条贴容器右缘（宽 ≤12px、长宽比 ≥4、右缘贴边 ±4px）被吸收后画成
+    //   装饰 div ⇒ 视觉上有滚动条但列表不能滚（假滚动）。真值滚由刀 20b 列表
+    //   容器的 overflow-y:auto 承担。判据纯几何，不猜语义。
+    if (
+      b.width <= 12 &&
+      b.height >= 4 * b.width &&
+      Math.abs(b.x + b.width - (cBox.x + cBox.width)) <= 4
+    ) {
+      continue
+    }
     // 越出容器 ⇒ 归属语义不同，跳过
     if (
       b.x < cBox.x ||

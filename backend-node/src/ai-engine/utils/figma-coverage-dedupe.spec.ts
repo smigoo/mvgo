@@ -191,3 +191,48 @@ describe('dedupeSectionsByCoverage', () => {
     expect(twice.removed).toHaveLength(0)
   })
 })
+
+describe('刀22：折叠列表段的吸收者必须是列表内容携带者（mc-max-1793185156712-b2086a9c 实锤）', () => {
+  const idx = () => buildFigmaClosureIndex(makeFigma())!
+  // 本次形态：E1 把 48:5798 推成**容器**（无 body.items），折叠段 48:5813-list
+  // 是 6 卡内容的唯一载体；父容器锚点的后代闭包天然全包含 ⇒ 旧判据误删 ⇒ 全列只剩首卡
+  const bareContainer = () => ({
+    id: '48:5798',
+    isLayoutContainer: true,
+    sourceNodeIds: ['48:5798', '48:5813'],
+    children: [{ id: '48:5799' }],
+  })
+
+  test('⭐ 阳性：吸收者无 items（裸容器）⇒ 折叠段保留（一段）', () => {
+    const r = dedupeSectionsByCoverage([bareContainer(), listSection()], idx())
+    expect(r.sections).toHaveLength(2)
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('⭐ 阳性：二段判据同样守——裸容器 75%+ 重叠也不删', () => {
+    const con = { id: '565:3', children: [bareContainer(), listSection(['48:5888'])] }
+    const r = dedupeSectionsByCoverage([con], idx())
+    expect((r.sections[0] as any).children).toHaveLength(2)
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('反向回归：吸收者带 body.items≥2（91544b38 形态）⇒ 仍删（既有 ① 保持）', () => {
+    const r = dedupeSectionsByCoverage([itemsSection(), listSection()], idx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]?.id).toBe('48:5813-list')
+  })
+
+  test('反向：吸收者顶层 items≥2 ⇒ 仍删', () => {
+    const carrier = { ...bareContainer(), items: [{ id: '48:5798' }, { id: '48:5813' }] }
+    const r = dedupeSectionsByCoverage([carrier, listSection()], idx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]?.id).toBe('48:5813-list')
+  })
+
+  test('反向：非折叠段（普通 section）不受新闸影响 ⇒ 全包含仍删', () => {
+    const plain = { id: '48:5813', sourceNodeIds: ['48:5813', '48:5814'] }
+    const r = dedupeSectionsByCoverage([itemsSection(), plain], idx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]?.id).toBe('48:5813')
+  })
+})

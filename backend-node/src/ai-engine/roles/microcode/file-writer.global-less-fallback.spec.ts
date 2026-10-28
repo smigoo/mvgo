@@ -78,6 +78,37 @@ describe('file-writer 跨文件缺失 less 变量全局兜底', () => {
     expect(tv.match(/@color-primary\s*:/g)?.length).toBe(1);
   });
 
+  it('刀 18 实锤：files map 无 theme-vars.less（themes/ 目录不存在）→ 回写自建目录落盘，不再 ENOENT', () => {
+    dir = mkTmp();
+    const files: Record<string, string> = {
+      // 注意：没有 resources/styles/themes/theme-vars.less —— 主写盘循环不会建 themes/ 目录
+      'resources/styles/common.less': '.a { color: @color-orphan; }\n',
+    };
+    const result = writeFiles(files, dir, {});
+    const tvPath = join(dir, 'resources/styles/themes/theme-vars.less');
+    expect(existsSync(tvPath)).toBe(true);
+    const tv = readFileSync(tvPath, 'utf-8');
+    expect(tv).toContain('@color-orphan:');
+    expect(result.written).toContain('resources/styles/themes/theme-vars.less');
+    // 内存 files map 与磁盘同内容（R1 单一事实源）
+    expect(files['resources/styles/themes/theme-vars.less']).toBe(tv);
+  });
+
+  it('刀 18 反向：目录已存在（正常路径）时幂等，不破坏既有内容', () => {
+    dir = mkTmp();
+    const files: Record<string, string> = {
+      'resources/styles/themes/theme-vars.less': '.common() {\n  @x: 1px;\n}\n',
+      'resources/styles/common.less': '.a { color: @color-orphan; }\n',
+    };
+    writeFiles(files, dir, {});
+    const tv = readFileSync(
+      join(dir, 'resources/styles/themes/theme-vars.less'),
+      'utf-8',
+    );
+    expect(tv).toContain('@x: 1px;');
+    expect(tv).toContain('@color-orphan:');
+  });
+
   it('资源变量（assignedVarName）不被兜底注入', () => {
     dir = mkTmp();
     const files: Record<string, string> = {

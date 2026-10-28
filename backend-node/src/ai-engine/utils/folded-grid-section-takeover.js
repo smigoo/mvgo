@@ -59,7 +59,7 @@ import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js'
  *    `font-size-normalizer#protectFgTagInlineStyles` 保护 ⇒ 字号塌回 `@fontSize`
  *    （d072d085 实锤病灶之一），且 `DEFAULT_SKIP_SELECTOR_RXS` 也会漏掉它。
  */
-export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend)-/;
+export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list)-/;
 
 /** fg- 类名的**裸片段**（去两侧 `/`），供需要拼接正则的场合复用，杜绝副本。 */
 const FG_CLASS_SRC = FG_TAKEOVER_CLASS_RX.source;
@@ -1692,6 +1692,271 @@ export function detectKvGridLeaf(sec, figmaIndex) {
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+ * 刀 20b（2026-10-28 · mc-max-1793174936204-657661ca 实锤）：同构列表接管。
+ *
+ * ## 病灶
+ * vision items 轨给出「节点列表 body.items = 6 张同构卡」，但 LLM 只渲染第 1 张
+ * （其余 5 张文本全丢、卡面 rect 被刀 7 当背景吸收成空壳、滚动条 rect 画成
+ * 装饰 ⇒「假滚动」）。TEXT-COVERAGE 两轮报 31%/44%，第二轮落 WARN 档放行。
+ *
+ * ## 判据（全部来自真值，零硬编码）
+ *   ① sec 是折叠列表叶（collapsed/v-for，契约同 repeated-section-collapser）；
+ *   ② items ≥2 且每项可解出 ≥1 条文本或 ≥1 组 stat（content.elements / stats /
+ *      texts / textRuns 任一通道）；
+ *   ③ 同构：每项文本段数一致（不一致 = 非同构列表，fail-open 不猜）。
+ *   几何（卡高/间距）由 figmaIndex 按 item.id/icon.figmaNode 回查；查不到即
+ *   不写该属性（内容自然流），绝不用兜底值。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** 单条文本真值归一：{ t, c, fs, fw }（缺样式即 null 字段，渲染端缺啥省啥） */
+function normListText(el) {
+  const t = String(el?.text ?? el?.characters ?? '').trim();
+  if (!t) return null;
+  const st = el?.styles || el?.style || {};
+  // 字号真值兼容数值与 '16px' 字符串形态（vision 子树轨实测为字符串，刀 23）
+  const fsNum =
+    typeof st.fontSize === 'string' ? Number.parseFloat(st.fontSize) : Number(st.fontSize);
+  return {
+    t,
+    c: st.color || null,
+    fs: Number.isFinite(fsNum) ? fsNum : null,
+    fw: st.fontWeight || null,
+  };
+}
+
+/** 刀 23：children 子树轨递归收集文本节点（树序即 vision 阅读序）；装饰节点跳过。 */
+function collectSubtreeTexts(node, out) {
+  if (!node || typeof node !== 'object') return;
+  const type = String(node.type || node.role || '').toLowerCase();
+  if (type === 'decoration') return;
+  const n = normListText(node);
+  if (n) out.push(n);
+  for (const c of Array.isArray(node.children) ? node.children : []) {
+    collectSubtreeTexts(c, out);
+  }
+}
+
+/** 刀 23：子树轨 icon 节点定位（role/type === icon），供 resourceMapping 反查。 */
+function findSubtreeIconNodeId(node) {
+  if (!node || typeof node !== 'object') return null;
+  const type = String(node.type || node.role || '').toLowerCase();
+  if (type === 'icon' && node.id) return String(node.id);
+  for (const c of Array.isArray(node.children) ? node.children : []) {
+    const r = findSubtreeIconNodeId(c);
+    if (r) return r;
+  }
+  return null;
+}
+
+/** 单项归一：{ texts, stats, icon:{file,w,h}, fill } */
+function normListItem(it) {
+  const texts = [];
+  const els = Array.isArray(it?.content?.elements)
+    ? it.content.elements
+    : Array.isArray(it?.texts)
+      ? it.texts
+      : Array.isArray(it?.textRuns)
+        ? it.textRuns
+        : [];
+  for (const el of els) {
+    const n = normListText(el);
+    if (n) texts.push(n);
+  }
+  // 🛡️ 刀 23（b2086a9c 实锤）：children 子树轨——卡内容是嵌套子树
+  //   （bg/icon/常驻组 → text 叶），无 content.elements/texts/textRuns。
+  if (texts.length === 0 && Array.isArray(it?.children)) {
+    collectSubtreeTexts(it, texts);
+  }
+  const stats = [];
+  // 🛡️ 刀 21b（mc-max-1793181937804-3e301cdb 实锤）：vision 另一种 stat 形态——
+  //   对象映射 `stat: { online: {value, unit, styles}, offline: {...} }`（非数组）。
+  //   label 取 unit 真值（「在线」/「离线」），缺 unit 不留 label，绝不拿键名
+  //   （英文语义名）冒充文案。键序即 vision 给出的事实顺序。
+  const statEntries = Array.isArray(it?.stats)
+    ? it.stats
+    : it?.stat && typeof it.stat === 'object'
+      ? Object.values(it.stat)
+      : [];
+  for (const s of statEntries) {
+    const v = String(s?.value ?? '').trim();
+    if (!v) continue;
+    const st = s?.styles || {};
+    stats.push({
+      v,
+      l: String(s?.label ?? s?.unit ?? '').trim(),
+      vc: st.color || null,
+      vfs: Number.isFinite(Number(st.fontSize)) ? Number(st.fontSize) : null,
+      vfw: st.fontWeight || null,
+      lc: s?.labelStyles?.color || null,
+      lfs: Number.isFinite(Number(s?.labelStyles?.fontSize))
+        ? Number(s.labelStyles.fontSize)
+        : null,
+    });
+  }
+  let icon = null;
+  if (it?.icon && typeof it.icon === 'object') {
+    const res = String(it.icon.resource || it.icon.resourceFile || '');
+    const file = res.split('/').pop();
+    if (file) {
+      icon = {
+        file,
+        w: Number.isFinite(Number(it.icon.width)) ? Number(it.icon.width) : null,
+        h: Number.isFinite(Number(it.icon.height)) ? Number(it.icon.height) : null,
+      };
+    }
+  }
+  return { texts, stats, icon, fill: it?.repeatedFill || null };
+}
+
+export function detectListLeaf(sec, figmaIndex, resourceMapping) {
+  const fail = (reason) => ({ ok: false, reason });
+  if (!sec || typeof sec !== 'object') return fail('noSection');
+  if (sec.collapsed !== true && sec.renderHint !== 'v-for') return fail('notCollapsedList');
+  const items = Array.isArray(sec.items) ? sec.items : null;
+  if (!items || items.length < 2) return fail('items<2');
+  // 🛡️ 刀 21d（mc-max-1793181937804-3e301cdb 实锤）：顶层 items 可能是 E1 富化
+  //   **树节点**（children 子树里是 TEXT/icon，无 content.elements/stat）⇒ 归一全空；
+  //   而 vision 富卡轨完整保留在 `sec.body.items`（F1 回填）。双轨合并判据：
+  //   顶层归一有任一空项 且 body.items 同长度（同构对齐防错配）且归一全非空
+  //   ⇒ 内容轨改用 body.items；**几何轨仍用顶层 items**（E1 卡盒真值，含
+  //   absoluteBoundingBox/id 可回查）。零硬编码：不满足对齐条件维持原失败口径。
+  let norm = items.map(normListItem);
+  const isEmpty = (n) => n.texts.length === 0 && n.stats.length === 0;
+  // 🛡️ 刀 21d（mc-max-1793181937804-3e301cdb 实锤）：顶层 items 可能是 E1 富化
+  //   **树节点**（children 子树里是 TEXT/icon，无 content.elements/stat）⇒ 归一全空；
+  //   而 F1 回填把每项自己的 vision 富卡挂在 `item.body.items[0]`（per-item 单轨）。
+  //   判据：逐项比较——body.items 恰 1 条（防错配）且其归一**内容更全**
+  //   （texts+stats 条数严格更多）⇒ 用其内容轨；**几何轨仍用顶层 items**
+  //   （E1 卡盒真值）。刀 23 后顶层子树也能抽出文本（兜底轨），故条件从
+  //   「空才回退」改为「更全者胜出」——确定性条数比较，零语义猜测。
+  norm = norm.map((n, i) => {
+    const inner = items[i]?.body?.items;
+    if (Array.isArray(inner) && inner.length === 1) {
+      const m = normListItem(inner[0]);
+      // 结构优先：带 stats 的轨承载「左文本+右数值」分区结构（margin-left:auto
+      // 右列渲染），优于纯文本纵排；同结构再比总条数。权重常数是判据而非事实。
+      const score = (x) =>
+        (x.stats.length > 0 ? 1000 : 0) + x.texts.length + x.stats.length;
+      if (score(m) > score(n)) return m;
+    }
+    return n;
+  });
+  if (norm.some(isEmpty)) {
+    const bodyItems =
+      Array.isArray(sec.body?.items) && sec.body.items.length === items.length
+        ? sec.body.items
+        : null;
+    if (bodyItems) {
+      const bodyNorm = bodyItems.map(normListItem);
+      if (!bodyNorm.some(isEmpty)) norm = bodyNorm;
+    }
+  }
+  if (norm.some(isEmpty)) return fail('emptyItem');
+  const t0 = norm[0].texts.length;
+  if (!norm.every((n) => n.texts.length === t0)) return fail('heteroTextCount');
+
+  // 🛡️ 刀 23（b2086a9c 实锤）：children 子树轨的 icon 不在 item.icon，而在子树
+  //   role/type==='icon' 节点上（无 resource 文件名）⇒ 用节点 id 反查
+  //   resourceMapping（figmaNodeId → resourceFile，与 header/icon 接管同口径）。
+  //   查不到 ⇒ icon 留 null（缺事实不猜），不阻断列表接管。
+  const mapping = toArray(resourceMapping);
+  const iconNodeIds = items.map((it, i) => {
+    if (norm[i].icon) return null;
+    const nodeId =
+      findSubtreeIconNodeId(it) || findSubtreeIconNodeId(it?.body?.items?.[0]);
+    if (nodeId) {
+      const m = mapping.find(
+        (e) =>
+          String(e?.figmaNodeId) === nodeId &&
+          e?.resourceFile &&
+          e?.downloadStatus !== 'failed',
+      );
+      if (m) {
+        norm[i].icon = {
+          file: String(m.resourceFile).split('/').pop(),
+          w: Number.isFinite(Number(m.width)) ? Number(m.width) : null,
+          h: Number.isFinite(Number(m.height)) ? Number(m.height) : null,
+        };
+        return nodeId;
+      }
+    }
+    // 子树轨 vision 节点 id 不可信（b2086a9c 实测全是伪造重复 id）⇒ 回退：
+    //   卡 figma 子树内**唯一**带资源映射的节点即 icon（多命中 = 有背景图等
+    //   歧义 ⇒ 不猜，留 null）。判据=归属唯一性，零语义猜测。
+    const cardEntry = figmaIndex?.get(String(it?.id ?? ''));
+    const hits = [];
+    const walkR = (nn) => {
+      if (!nn || typeof nn !== 'object') return;
+      const hit = mapping.find(
+        (e) =>
+          String(e?.figmaNodeId) === String(nn.id) &&
+          e?.resourceFile &&
+          e?.downloadStatus !== 'failed',
+      );
+      if (hit) hits.push({ node: nn, m: hit });
+      for (const c of Array.isArray(nn.children) ? nn.children : []) walkR(c);
+    };
+    walkR(cardEntry?.rawNode);
+    if (hits.length === 1) {
+      norm[i].icon = {
+        file: String(hits[0].m.resourceFile).split('/').pop(),
+        w: Number.isFinite(Number(hits[0].m.width)) ? Number(hits[0].m.width) : null,
+        h: Number.isFinite(Number(hits[0].m.height)) ? Number(hits[0].m.height) : null,
+      };
+      return String(hits[0].node.id);
+    }
+    return null;
+  });
+
+  // 几何真值：卡盒逐 id 回查（item.id → icon.figmaNode）。全部命中才下发
+  // 卡高/间距；任一缺失 ⇒ 不写几何（自然流），不猜兜底值。
+  const boxes = items.map((it) => {
+    // E1 富化树节点自带卡盒真值（刀 21d：优先直读，免回查）；否则按 id 回查
+    const direct = it?.absoluteBoundingBox;
+    const e =
+      direct && Number.isFinite(direct.x) && Number.isFinite(direct.y)
+        ? { bbox: direct }
+        : figmaIndex?.get(String(it?.id ?? '')) ||
+          figmaIndex?.get(String(it?.icon?.figmaNode ?? ''));
+    const b = e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox;
+    return b && Number.isFinite(b.x) && Number.isFinite(b.y) &&
+      Number.isFinite(b.width) && Number.isFinite(b.height)
+      ? b
+      : null;
+  });
+  const geoReady = boxes.every(Boolean);
+  let cardH = null;
+  let gaps = null;
+  let padL = null;
+  if (geoReady) {
+    cardH = Math.round(boxes[0].height);
+    const byY = boxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
+    gaps = byY.slice(1).map((p, k) => {
+      const prev = byY[k].b;
+      return Math.round(p.b.y - (prev.y + prev.height));
+    });
+    // icon 左内距真值：icon 盒左边 − 卡盒左边（首项可解即下发；不可解不写）
+    //   刀 23：子树轨 icon 用反查到的节点 id 回查几何
+    const iconId0 = items[0]?.icon?.figmaNode
+      ? String(items[0].icon.figmaNode)
+      : iconNodeIds[0] || null;
+    const iconNode0 = iconId0 ? figmaIndex?.get(iconId0) : null;
+    const ib = iconNode0?.bbox || iconNode0?.absoluteBoundingBox || iconNode0?.rawNode?.absoluteBoundingBox;
+    if (ib && Number.isFinite(ib.x)) padL = Math.round(ib.x - boxes[0].x);
+  }
+  return {
+    ok: true,
+    kind: 'list',
+    sectionId: String(sec.id ?? ''),
+    baseId: String(sec.id ?? ''),
+    items: norm,
+    cardH,
+    gaps,
+    padL,
+  };
+}
+
 /** script 内联 JSON（转义 `<`，防 `</script>` 提前闭合）。 */
 function inlineJson(value) {
   return JSON.stringify(value, null, 2).replace(/</g, '\\u003c');
@@ -1712,6 +1977,76 @@ function jsonStr(s) {
  */
 export function renderFoldedGridLeafVue(tr, semantic) {
   const sem = String(semantic || 'component');
+  // 🔴 同构列表（刀 20b）：N 项 v-for 真值展开。文案/色值/字号逐项内联进
+  //   FG_LIST_ITEMS（script const），卡高/间距/左内距全部几何真值；缺事实的属性
+  //   一律不写（undefined 绑定），绝不兜底。滚动：min-height:0 + overflow-y:auto
+  //   ⇒ 内容超高时是真滚动，不画假滚动条。
+  if (tr.kind === 'list') {
+    const cls = `c-${sem}-fg-list-${idSlug(tr.sectionId)}`;
+    // 图标：同文件去重共用一个 import 变量；ITEMS 里直接引用变量（非字符串，
+    //   避免表格 kind 的 ICON_MAP 查表弯路——本数组是 JS 字面量可直接持引用）。
+    const fileToVar = new Map();
+    const importLines = [];
+    const itemIconExpr = tr.items.map((it) => {
+      if (!it.icon) return 'null';
+      if (!fileToVar.has(it.icon.file)) {
+        const v = `fgListIcon${fileToVar.size}`;
+        fileToVar.set(it.icon.file, v);
+        importLines.push(`import ${v} from '../../resources/images/${it.icon.file}'`);
+      }
+      return fileToVar.get(it.icon.file);
+    });
+    const itemLit = tr.items.map((it, i) => {
+      const texts = `[${it.texts
+        .map(
+          (t) =>
+            `{ t: ${jsonStr(t.t)}, c: ${t.c ? jsonStr(t.c) : 'null'}, fs: ${t.fs ?? 'null'}, fw: ${t.fw ? jsonStr(t.fw) : 'null'} }`,
+        )
+        .join(', ')}]`;
+      const stats = `[${it.stats
+        .map(
+          (s) =>
+            `{ v: ${jsonStr(s.v)}, l: ${jsonStr(s.l)}, vc: ${s.vc ? jsonStr(s.vc) : 'null'}, vfs: ${s.vfs ?? 'null'}, vfw: ${s.vfw ? jsonStr(s.vfw) : 'null'}, lc: ${s.lc ? jsonStr(s.lc) : 'null'}, lfs: ${s.lfs ?? 'null'} }`,
+        )
+        .join(', ')}]`;
+      return `  { texts: ${texts}, stats: ${stats}, icon: ${itemIconExpr[i]}, iconW: ${it.icon?.w ?? 'null'}, iconH: ${it.icon?.h ?? 'null'}, fill: ${it.fill ? jsonStr(it.fill) : 'null'} }${i < tr.items.length - 1 ? ',' : ''}`;
+    });
+    const gapsLit = Array.isArray(tr.gaps)
+      ? `const FG_LIST_GAPS = ${inlineJson(tr.gaps)};`
+      : 'const FG_LIST_GAPS = null;';
+    const lines = [
+      '<template>',
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:column;min-height:0;overflow-y:auto;">`,
+      `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;" :style="{${tr.cardH ? ` height: '${tr.cardH}px',` : ''} marginTop: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined, background: it.fill || undefined }">`,
+      `      <img v-if="it.icon" :src="it.icon" :style="{ width: it.iconW ? it.iconW + 'px' : undefined, height: it.iconH ? it.iconH + 'px' : undefined, objectFit: 'contain', flex: 'none'${tr.padL != null ? `, marginLeft: '${tr.padL}px'` : ''} }" alt="" />`,
+      `      <div style="display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1 1 auto;">`,
+      `        <span v-for="(t, __j) in it.texts" :key="__j" :style="{ color: t.c || undefined, fontSize: t.fs ? t.fs + 'px' : undefined, fontWeight: t.fw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ t.t }}</span>`,
+      `      </div>`,
+      `      <div v-if="it.stats.length" style="margin-left:auto;display:flex;flex-direction:row;flex:none;">`,
+      `        <div v-for="(s, __k) in it.stats" :key="__k" style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;">`,
+      `          <span :style="{ color: s.vc || undefined, fontSize: s.vfs ? s.vfs + 'px' : undefined, fontWeight: s.vfw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.v }}</span>`,
+      `          <span v-if="s.l" :style="{ color: s.lc || undefined, fontSize: s.lfs ? s.lfs + 'px' : undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.l }}</span>`,
+      `        </div>`,
+      `      </div>`,
+      `    </div>`,
+      `  </div>`,
+      '</template>',
+      '',
+      '<script setup>',
+      ...importLines,
+      `const FG_LIST_ITEMS = [`,
+      ...itemLit,
+      `];`,
+      gapsLit,
+      '</script>',
+      '',
+      '<style lang="less" scoped>',
+      `.${cls} { min-width: 0; }`,
+      '</style>',
+      '',
+    ];
+    return lines.join('\n');
+  }
   // 🔴 统计行（刀 53d）：整行由 x 最小成员渲染全部 N 卡（真值尺寸/色值/字号/卡内序
   //   全部内联）；非首个成员渲染 `display:none` 空壳 ⇒ 不参与父容器 flex 布局，
   //   杜绝「N 个组件各画一遍」的重复卡。
@@ -2172,7 +2507,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
  *            skipped: Array<{id:string, reason:string}> }}
  */
 export function collectFoldedGridTakeover(p = {}) {
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -2222,6 +2557,13 @@ export function collectFoldedGridTakeover(p = {}) {
             tablePending.push({ sec, tr: tb });
             continue;
           } else {
+          // 🔴 同构列表（刀 20b）：位序在 grid/header/statrow/table 之后、text 之前。
+          //   折叠列表是 planner 显式结构契约（collapsed/v-for + enriched items），
+          //   先于「按 figma 子树猜」的 text/icon 检测消费；grid/statrow/table 在前
+          //   ⇒ 既有折叠网格/表格行为不受影响（它们先判，命中即走）。
+          const ls = detectListLeaf(sec, figmaIndex, p.resourceMapping);
+          if (ls.ok) tr = ls;
+          else {
           const t = detectTextLeaf(sec, figmaIndex);
           if (t.ok) tr = t;
           else {
@@ -2244,11 +2586,12 @@ export function collectFoldedGridTakeover(p = {}) {
                 const kv = detectKvGridLeaf(sec, figmaIndex);
                 if (kv.ok) tr = kv;
                 else {
-                  out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason}` });
+                  out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};list:${ls.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason}` });
                   continue;
                 }
               }
             }
+          }
           }
           }
         }
@@ -2265,6 +2608,8 @@ export function collectFoldedGridTakeover(p = {}) {
     else if (tr.kind === 'legend') out.legendHits += 1;
     // 🔴 刀 53g 必须**显式**分支：否则会落进下面的 `else` 被算成 gridHits，
     //   而「gridHits 里有几个是属性网格」正是真机核验唯一依据 ⇒ 计数失真 = 假绿。
+    // 🔴 刀 20b 必须**显式**分支（同 53g 教训）：否则落进 else 被算成 gridHits ⇒ 计数失真。
+    else if (tr.kind === 'list') out.listHits += 1;
     else if (tr.kind === 'kvgrid') out.kvGridHits += 1;
     else out.gridHits += 1;
     out.map.set(String(tag), {

@@ -3,7 +3,7 @@
  * 实锤来源：mc-max-1793096891762-ad8939a5 `.checkpoint/figma.json` 的 `801:3`
  * （设备头部 547×493，左图右文 + 参数网格 + 产品描述，被纵切七段）。
  */
-import { planRowBands } from './row-band-cluster.js'
+import { planRowBands, planColumnGroups, crossAxisCenterStyle } from './row-band-cluster.js'
 
 // 801:3 内容子项真实 bbox（背景层 36:1695 已被刀 7 吸收，不参与）
 const B = (x: number, y: number, w: number, h: number) => ({ x, y, w, h })
@@ -125,5 +125,79 @@ describe('刀12 · planRowBands（2D 行簇重建）', () => {
       { ref: 'c', box: B(0, 120, 250, 40) },
     ])
     expect(tree).toBeNull() // 唯一多元素带切不出行 ⇒ 整体 null
+  })
+})
+
+describe('刀17a · planColumnGroups（横排内含纵排组，6bba7218 `38:3260` 实锤）', () => {
+  // 实锤几何（.mc-gen/cache/figma-node-data.json）：组 38:3260(26900,51483,265,76)
+  // icon 187:262(26920,51496,53,55.4) ｜ 标题 38:3263(26997.7,51496,64,24) ｜ 数字 38:3262(26997,51521.9,28,28)
+  const G3260 = [
+    { ref: '187:262-icon', box: B(26920, 51496, 53, 55.4) },
+    { ref: '38:3263-标题', box: B(26997.7, 51496, 64, 24) },
+    { ref: '38:3262-数字', box: B(26997, 51521.9, 28, 28) },
+  ]
+
+  it('⭐ 阳性（实锤复刻）：根 row = [icon 叶, column 组(标题, 数字)]', () => {
+    const tree = planColumnGroups(G3260)
+    expect(tree).not.toBeNull()
+    expect(tree.direction).toBe('row')
+    expect(tree.children).toHaveLength(2)
+    // 组1 = icon 叶
+    expect(tree.children[0].ref).toBe('187:262-icon')
+    // 组2 = column(标题, 数字) 纵排
+    const g2 = tree.children[1]
+    expect(g2.direction).toBe('column')
+    expect(g2.children.map((c: any) => c.ref)).toEqual(['38:3263-标题', '38:3262-数字'])
+    // 组盒并集：文本块 51496–51549.9
+    expect(g2.box.h).toBeCloseTo(53.9, 1)
+  })
+
+  it('反向：纯横行三并列卡 ⇒ null（horizontal 既有分支管辖）', () => {
+    const row = [
+      { ref: 'a', box: B(0, 0, 100, 50) },
+      { ref: 'b', box: B(120, 0, 100, 50) },
+      { ref: 'c', box: B(240, 0, 100, 50) },
+    ]
+    expect(planColumnGroups(row)).toBeNull()
+  })
+
+  it('反向：纯纵列 ⇒ null（vertical 分支管辖）', () => {
+    const col = [
+      { ref: 'a', box: B(0, 0, 100, 50) },
+      { ref: 'b', box: B(0, 60, 100, 50) },
+      { ref: 'c', box: B(0, 120, 100, 50) },
+    ]
+    expect(planColumnGroups(col)).toBeNull()
+  })
+
+  it('反向：缺几何 fail-open null', () => {
+    const bad = [G3260[0], G3260[1], { ref: 'c', box: null }]
+    expect(planColumnGroups(bad as any)).toBeNull()
+  })
+})
+
+describe('刀17b · crossAxisCenterStyle（横向容器交叉轴居中，6bba7218 实锤）', () => {
+  const CONT = B(26900, 51483, 265, 76) // 带中心 51521
+
+  it('⭐ 阳性：icon+文本块 中心偏移 ≤3px、高度 55.4/53.9 < 92% ⇒ center', () => {
+    const kids = [B(26920, 51496, 53, 55.4), B(26997, 51496, 64.7, 53.9)]
+    expect(crossAxisCenterStyle(kids, CONT)).toBe('align-items:center;')
+    expect(crossAxisCenterStyle(kids, CONT, true)).toBe('align-self:center;')
+  })
+
+  it('反向：一子项填满（h ≥ 92% 容器）⇒ 空串（stretch 等效，零行为变化）', () => {
+    const kids = [B(26920, 51483, 53, 76), B(26997, 51496, 64.7, 53.9)]
+    expect(crossAxisCenterStyle(kids, CONT)).toBe('')
+  })
+
+  it('反向：一子项中心偏移超容差 ⇒ 空串', () => {
+    const kids = [B(26920, 51496, 53, 55.4), B(26997, 51483, 64.7, 12)] // 中心 51489 偏 32
+    expect(crossAxisCenterStyle(kids, CONT)).toBe('')
+  })
+
+  it('反向：容器/子项 box 非法、空列表 ⇒ 空串 fail-open', () => {
+    expect(crossAxisCenterStyle([], CONT)).toBe('')
+    expect(crossAxisCenterStyle([B(26920, 51496, 53, 55.4)], null as any)).toBe('')
+    expect(crossAxisCenterStyle([{ x: 0, y: 0, w: 0, h: 10 } as any], CONT)).toBe('')
   })
 })

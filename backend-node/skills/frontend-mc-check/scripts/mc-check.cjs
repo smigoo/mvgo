@@ -1197,6 +1197,26 @@ function checkHardcodedColor(dir, styleSources) {
   return results
 }
 
+// ─── 刀 19（2026-10-28）：M5-7 与生成侧归一器判据同构 ─────────────────────────
+// 刀 53 确定性接管类（c-*-fg-*）的 font-size 是 Figma 真值渲染，归一/改写会失真
+//（round-10/12/16 三实锤：scoped 归一塌成 13.71px、内联 LESS 变量被浏览器丢弃）。
+// 生成侧 font-size-normalizer.js 对 fg- 规则块与 fg- 内联 style 双重豁免；
+// 本检查器此前用裸正则逐行扫，把「按设计保留的真值字号」误报为 error（c-af858 实锤）。
+// 判据单一来源：src/ai-engine/utils/folded-grid-section-takeover.js#FG_TAKEOVER_CLASS_RX。
+// 本 skill 为独立可分发 zip，无法 import 后端源码，故内嵌同一正则文本；
+// 同构性由 backend-node spec（mc-check-m5-7-fg-exemption.spec.ts）锁死，改动源正则必须同步此处。
+const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list)-/
+
+/**
+ * 把命中 fg- 接管类的**整条规则块**抠除（保留换行，行号不漂移），
+ * 与 font-size-normalizer.js#protectSkippedBlocks 同构。
+ */
+function maskFgTakeoverBlocks(content) {
+  return String(content).replace(/([^{};]*)\{([^{}]*)\}/g, (whole, sel) =>
+    FG_TAKEOVER_CLASS_RX.test(sel) ? whole.replace(/[^\n]/g, '') : whole
+  )
+}
+
 // ─── M5-6: @fontSize 变量声明与使用检查 / M5-7: 禁止硬编码字体大小 ─────────────
 function checkFontSizeUsage(dir, styleSources) {
   const results = []
@@ -1229,7 +1249,10 @@ function checkFontSizeUsage(dir, styleSources) {
   const hardcodedFontSizes = []
   let hasPxFontSize = false
   styleSources.forEach(({ file, content }) => {
-    content.split('\n').forEach((line, i) => {
+    // 🛡️ 刀 19：先抠除 fg- 接管类规则块（真值字号豁免，判据同构见上）
+    maskFgTakeoverBlocks(content)
+      .split('\n')
+      .forEach((line, i) => {
       const trimmed = line.trim()
       // 跳过注释行和 CSS 自定义属性行
       if (

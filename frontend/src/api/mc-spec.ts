@@ -128,7 +128,10 @@ export async function fixMcSpecItem(
   const data = unwrap(res) ?? res
   // ⚠️ agent 失败时后端仍返回 HTTP 200，但 success=false（如 API Key 未配置）。
   // 不判断就会出现「提示修复完成、重查却没变」的假成功。
-  if (data && data.success === false) {
+  // 🔴 2026-10-28 实锤：ResponseEnvelopeInterceptor 把扁平返回的 success 剥到信封顶层，
+  //   data 内不再有 success 字段 ⇒ 只查 data.success 会漏判。信封+内层双层判失败。
+  const envelopeFailed = res && typeof res === 'object' && res.success === false
+  if (envelopeFailed || (data && data.success === false)) {
     const detail = Array.isArray(data.toolErrors) && data.toolErrors.length
       ? data.toolErrors.join('；')
       : data.content || data.error || ''

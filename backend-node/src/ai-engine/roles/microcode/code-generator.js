@@ -32,7 +32,7 @@ import {
 } from '../../utils/resource-import-guard.js';
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
-import { planRowBands } from '../../utils/row-band-cluster.js';
+import { planRowBands, planColumnGroups, crossAxisCenterStyle } from '../../utils/row-band-cluster.js';
 import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
@@ -335,6 +335,44 @@ export function flexItemStyleFromWidths(widths, index) {
 }
 
 /**
+ * 🛡️ 刀16（2026-10-28 · mc-max-1793156075793-6bba7218 实锤）：兄弟间距真值注入。
+ *
+ * 病灶：确定性装配只传导「尺寸比例」（flexItemStyleFromWidths/Heights），从不产出
+ * 兄弟间距——纵流兄弟（统计卡行→黄卡 33px、黄卡→绿卡 20px、绿卡→青卡 20px）与
+ * 行带内横向兄弟（两统计卡组 64px）全部贴死。真值间距不均一 ⇒ 不能用父级 gap，
+ * 只能逐兄弟按几何差产 margin（与刀50 段内间距同族，刀50 管段内、刀16 管兄弟）。
+ *
+ * flex 相容性：grow 分配的是「容器 − Σmargins」的剩余空间，真值里 Σ内容+Σ间距=容器
+ * ⇒ 保持既有 h/Σh 分母不变 + margin 注入即可 1:1 还原，比例链不受影响。
+ *
+ * 判据纯几何、命名无关：双 box 合法（x/y/w/h 有限）且 gap ≥ 1px 才产 margin；
+ * 重叠/贴合/缺几何 ⇒ ''（零行为变化）。
+ *
+ * @param {{x,y,w,h}|null} prevBox 前一兄弟 box
+ * @param {{x,y,w,h}|null} curBox 当前兄弟 box
+ * @param {'vertical'|'horizontal'} axis 主轴方向
+ * @returns {string} `margin-top:Npx;` / `margin-left:Npx;` / ''
+ */
+export function siblingGapStyle(prevBox, curBox, axis) {
+  const ok = (b) =>
+    b &&
+    Number.isFinite(b.x) &&
+    Number.isFinite(b.y) &&
+    Number.isFinite(b.w) &&
+    Number.isFinite(b.h) &&
+    b.w > 0 &&
+    b.h > 0;
+  if (!ok(prevBox) || !ok(curBox)) return '';
+  const gap =
+    axis === 'vertical'
+      ? curBox.y - (prevBox.y + prevBox.h)
+      : curBox.x - (prevBox.x + prevBox.w);
+  if (!Number.isFinite(gap) || gap < 1) return '';
+  const prop = axis === 'vertical' ? 'margin-top' : 'margin-left';
+  return `${prop}:${Math.round(gap)}px;`;
+}
+
+/**
  * 🛡️ P3（2026-09-17 · 8529b7e2 实锤）：垂直 flex 子项按 Figma 高度比例分配 flex-grow。
  * 解决垂直容器子项完全无高度约束 → collapse 到 0 的核心问题。
  * 与 flexItemStyleFromWidths 对称：子项高度比例 = height / totalHeight。
@@ -436,6 +474,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   // 🛡️ 刀 12（2026-10-27 · ad8939a5 `801:3` 实锤）：2D 行簇重建计数。
   let __rowBandEvaluated = 0;
   let __rowBandHits = 0;
+  let __gapApplied = 0; // 刀16 兄弟间距真值注入计数
   if (!leaves.length) return null;
 
   const nameOf = assignSectionComponentNames(treeSections);
@@ -826,10 +865,13 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             });
           }
         }
-        // 🛡️ 刀 12：垂直容器先评 2D 行簇（仅 vertical 事实分支；horizontal/grid/null 不动）。
-        //   任一子项几何不可解析 / 被 P1-B 剔除 ⇒ fail-open null ⇒ 走既有逐子项高度比例。
+        // 🛡️ 刀 12：垂直容器先评 2D 行簇（planRowBands：y 聚带先行）。
+        // 🛡️ 刀 17a（2026-10-28 · 6bba7218 `38:3260` 实锤）：horizontal 容器对称评估
+        //   planColumnGroups（x 聚组先行）——横排内含纵排组（icon ｜ 纵排文本块）
+        //   此前被平铺横排（标题与数字应上下纵排）。
+        //   任一子项几何不可解析 / 被 P1-B 剔除 ⇒ fail-open null ⇒ 走既有逐子项比例。
         let bandTree = null;
-        if (!intrinsic.ok && layoutKind === 'vertical' && (sec.children || []).length >= 3) {
+        if (!intrinsic.ok && (layoutKind === 'vertical' || isHorizontal) && (sec.children || []).length >= 3) {
           __rowBandEvaluated += 1;
           const entries = [];
           let bandOk = true;
@@ -840,21 +882,55 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             entries.push({ ref: c, box: b });
           }
           if (bandOk) {
-            bandTree = planRowBands(entries);
+            bandTree = isHorizontal ? planColumnGroups(entries) : planRowBands(entries);
             if (bandTree) {
               __rowBandHits += 1;
-              options?.logger?.info?.('🛡️ 刀 12 2D 行簇命中：垂直容器内含横向带', {
-                sectionId: sec.id,
-                bands: bandTree.children.length,
-                children: (sec.children || []).length,
-              });
+              options?.logger?.info?.(
+                isHorizontal
+                  ? '🛡️ 刀 17a 2D 列簇命中：横向容器内含纵排组'
+                  : '🛡️ 刀 12 2D 行簇命中：垂直容器内含横向带',
+                {
+                  sectionId: sec.id,
+                  bands: bandTree.children.length,
+                  children: (sec.children || []).length,
+                },
+              );
             }
           }
         }
         if (bandTree) {
-          const bandHeights = bandTree.children.map((n) => n.box.h);
+          // 根方向决定兄弟轴：刀12 根=column（带间纵排按高度）、刀17a 根=row（组间横排按宽度）
+          const rootIsRow = bandTree.direction === 'row';
+          const bandSizes = bandTree.children.map((n) => (rootIsRow ? n.box.w : n.box.h));
+          // 🛡️ 刀 17b：横排根（统计卡「icon｜纵排文本块」类）交叉轴居中判据
+          //   （真值内容块中心 ≈ 容器中心 ⇒ center；填满/偏移大 ⇒ 保持 stretch 零变化）。
+          //   根 group 无 wrapper ⇒ 以 align-self 落到每个直接子项（等效 align-items:center）。
+          const rootCenter = rootIsRow
+            ? crossAxisCenterStyle(
+                bandTree.children.map((n) => n.box),
+                resolveSectionBox(sec, figmaIndex),
+                true,
+              )
+            : '';
           for (let i = 0; i < bandTree.children.length; i++) {
-            renderBandNode(bandTree.children[i], indent + 1, flexItemStyleFromHeights(bandHeights, i));
+            // 🛡️ 刀16：带/组间兄弟间距（真值主轴差）
+            const bandGap =
+              i > 0
+                ? siblingGapStyle(
+                    bandTree.children[i - 1].box,
+                    bandTree.children[i].box,
+                    rootIsRow ? 'horizontal' : 'vertical',
+                  )
+                : '';
+            if (bandGap) __gapApplied += 1;
+            renderBandNode(
+              bandTree.children[i],
+              indent + 1,
+              (rootIsRow
+                ? flexItemStyleFromWidths(bandSizes, i)
+                : flexItemStyleFromHeights(bandSizes, i)) + bandGap,
+              rootCenter,
+            );
           }
         }
         for (let i = 0; !bandTree && i < (sec.children || []).length; i++) {
@@ -870,10 +946,30 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             const flexStyle = equalizeMembers
               ? 'flex:1;min-width:0;'
               : flexItemStyleFromWidths(childWidths, i);
-            renderBodyNode(child, indent + 1, flexStyle);
+            // 🛡️ 刀16：横向兄弟间距（真值 x 差）
+            const g =
+              i > 0
+                ? siblingGapStyle(
+                    resolveSectionBox(sec.children[i - 1], figmaIndex),
+                    resolveSectionBox(child, figmaIndex),
+                    'horizontal',
+                  )
+                : '';
+            if (g) __gapApplied += 1;
+            renderBodyNode(child, indent + 1, flexStyle + g);
           } else {
             const flexStyle = flexItemStyleFromHeights(childHeights, i);
-            renderBodyNode(child, indent + 1, flexStyle);
+            // 🛡️ 刀16：纵向兄弟间距（真值 y 差）
+            const g =
+              i > 0
+                ? siblingGapStyle(
+                    resolveSectionBox(sec.children[i - 1], figmaIndex),
+                    resolveSectionBox(child, figmaIndex),
+                    'vertical',
+                  )
+                : '';
+            if (g) __gapApplied += 1;
+            renderBodyNode(child, indent + 1, flexStyle + g);
           }
         }
         lines.push(`${pad}</div>`);
@@ -893,22 +989,38 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   （纯几何 XY-cut，fail-open null ⇒ 走既有比例路径，零行为变化）。
     //   带/组用匿名 wrapper div（无 data-section-id）：section 身份不变，
     //   覆盖率/接管/资源挂载等全部守卫零影响；叶子的渲染仍走 renderBodyNode。
-    const renderBandNode = (node, indent, flexStyle) => {
+    //   🛡️ 刀 17b：alignSelf（如 'align-self:center;'）逐子项透传——根 group 无 wrapper
+    //   （根方向与容器 div 主轴一致、由容器承载），交叉轴居中只能落在各直接子项上
+    //   （align-self 覆盖容器 stretch，逐项 = 等效 align-items）。
+    const renderBandNode = (node, indent, flexStyle, alignSelf = '') => {
       const pad = '      ' + '  '.repeat(indent);
       if (!node || !Array.isArray(node.children)) {
-        renderBodyNode(node && node.ref, indent, flexStyle);
+        renderBodyNode(node && node.ref, indent, flexStyle + alignSelf);
         return;
       }
       const isRowBand = node.direction === 'row';
       const sizes = node.children.map((ch) => (isRowBand ? ch.box.w : ch.box.h));
       lines.push(
-        `${pad}<div class="c-${semantic}-band" style="${flexStyle}display:flex;flex-direction:${node.direction};${isRowBand ? 'align-items:stretch;' : ''}">`,
+        `${pad}<div class="c-${semantic}-band" style="${flexStyle}${alignSelf}display:flex;flex-direction:${node.direction};${isRowBand ? 'align-items:stretch;' : ''}">`,
       );
       for (let i = 0; i < node.children.length; i++) {
+        // 🛡️ 刀16：带内兄弟间距（row 带看 x 差、column 组看 y 差）
+        const innerGap =
+          i > 0
+            ? siblingGapStyle(
+                node.children[i - 1].box,
+                node.children[i].box,
+                isRowBand ? 'horizontal' : 'vertical',
+              )
+            : '';
+        if (innerGap) __gapApplied += 1;
         renderBandNode(
           node.children[i],
           indent + 1,
-          isRowBand ? flexItemStyleFromWidths(sizes, i) : flexItemStyleFromHeights(sizes, i),
+          (isRowBand ? flexItemStyleFromWidths(sizes, i) : flexItemStyleFromHeights(sizes, i)) +
+            innerGap,
+          // 居中只作用根的直接子项（嵌套组不再继承——组内对齐由组自身判据决定）
+          '',
         );
       }
       lines.push(`${pad}</div>`);
@@ -935,7 +1047,17 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         isSizeExcluded(s) ? 0 : resolveSectionFlexSize(s, figmaIndex, 'height'),
       );
       for (let i = 0; i < topBodyRoots.length; i++) {
-        renderBodyNode(topBodyRoots[i], 0, flexItemStyleFromHeights(topHeights, i));
+        // 🛡️ 刀16：顶层兄弟纵向间距（真值 y 差）
+        const topGap =
+          i > 0
+            ? siblingGapStyle(
+                resolveSectionBox(topBodyRoots[i - 1], figmaIndex),
+                resolveSectionBox(topBodyRoots[i], figmaIndex),
+                'vertical',
+              )
+            : '';
+        if (topGap) __gapApplied += 1;
+        renderBodyNode(topBodyRoots[i], 0, flexItemStyleFromHeights(topHeights, i) + topGap);
       }
     } else {
       for (const root of topBodyRoots) renderBodyNode(root, 0);
@@ -969,6 +1091,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       evaluated: __rowBandEvaluated,
       applied: __rowBandHits,
     });
+    // 🛡️ 刀 16 生效自检：`applied` = 真正注入兄弟 margin 的位置数（0 = 全贴合/缺几何）。
+    options.logger.info('🛡️ 刀 16 兄弟间距真值注入·已评估', { applied: __gapApplied });
     // 🛡️ P1-B 生效自检：`takeoverLeaves` = 接管器评估到的叶数（0 ⇒ 判据没跑或无可接管段，
     //   与「跑了但无抑制成员」区分）；`excluded` = 真正从 flex 分母剔除的成员数。
     options.logger.info('🛡️ P1-B 抑制成员 flex 分母剔除·已评估', {
