@@ -1,0 +1,58 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - img "company" [ref=e8]
+        - generic [ref=e10]:
+          - img "logo" [ref=e12]
+          - generic [ref=e13]:
+            - heading "感智｜晓界工坊" [level=1] [ref=e14]
+            - generic [ref=e15]: $ Figma → 微码组件
+      - navigation [ref=e17]:
+        - link "组件开发" [ref=e18] [cursor=pointer]:
+          - /url: /generator/components
+        - link "组件库" [ref=e19] [cursor=pointer]:
+          - /url: /components
+        - link "接口开发" [ref=e20] [cursor=pointer]:
+          - /url: /generator/api
+        - link "任务中心" [ref=e21] [cursor=pointer]:
+          - /url: /tasks
+        - link "大屏布局" [ref=e22] [cursor=pointer]:
+          - /url: /screen
+        - link "管理后台" [ref=e23] [cursor=pointer]:
+          - /url: /admin/operation-log
+      - generic [ref=e24]:
+        - button "切换到工作台模式" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+          - generic: TEST
+          - text: 工作台
+        - button "设置" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - text: 设置
+        - button "切换到深色" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - text: 切换到深色
+        - generic [ref=e36] [cursor=pointer]:
+          - img [ref=e38]
+          - generic [ref=e41]: dev-local
+    - main [ref=e42]
+    - contentinfo [ref=e43]:
+      - generic [ref=e44]: © 2026 感智晓界工坊 · 感动科技 | 智能体工作室
+      - navigation [ref=e45]:
+        - link "架构介绍" [ref=e46] [cursor=pointer]:
+          - /url: /generator/intro
+        - link "页面开发" [ref=e47] [cursor=pointer]:
+          - /url: /generator/page-skeleton
+        - link "工作流编排" [ref=e48] [cursor=pointer]:
+          - /url: /generator/workflow
+        - link "更新日志" [ref=e49] [cursor=pointer]:
+          - /url: /help/changelog
+        - link "系统公告" [ref=e50] [cursor=pointer]:
+          - /url: /announcements
+        - link "建议反馈" [ref=e51] [cursor=pointer]:
+          - /url: https://aio.microvideo.cn/tzy/biz/formCustSql/formCustSqlView/njgd_yjfk
+  - generic "任务监控（按住拖拽可移动位置）" [ref=e52]:
+    - generic [ref=e53]:
+      - img [ref=e54]
+      - generic [ref=e57]: 监控
+    - generic [ref=e58]: ›
