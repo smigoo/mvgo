@@ -51,7 +51,13 @@ import { enrichSectionsWithTechStack } from '../utils/techstack-section-contract
 //   ⇒ 由本模块算好并作为第 2 参传入（见 `plan()` 内 layoutFacts）。
 import { buildNodeLayoutFacts, decideLayoutForBoxes } from '../utils/figma-node-layout-facts.js';
 // 🔴 R23（2026-10-21）：Figma id 形态的唯一来源（勿再写第三份正则）
-import { FIGMA_ID_RE } from '../utils/section-anchor-truth.js';
+// 🔴 刀33（2026-10-29）：`sectionAnchorKey` 是「section 声明锚点 → 索引键」的**单一来源**
+//   （优先级 `figmaAnchorId` → `figmaNodeId` → `id`）。此前本模块三处 Map 键写成
+//   `String(s.figmaNodeId || s.id)`，**漏读 `figmaAnchorId`** ⇒ vision 聚合段（锚点是容器
+//   `565:3`、`figmaNodeId` 为空、`id` 却是首卡叶子 id）被索引到首卡名下，于是
+//   ①「节点列表」标题语义 ②6 项 `body.items` ③容器高度 全部错挂到首卡
+//   （mc-max-1793266461373-e7290dc5 实锤）。判据不得在本文件重写第二份。
+import { FIGMA_ID_RE, sectionAnchorKey } from '../utils/section-anchor-truth.js';
 // 🛡️ A 方案（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤）：Figma 覆盖去重（治「卡 2 双渲染」）。
 //   同一批卡节点被「vision items 轨」与「collapse 折叠轨」各解释一次 ⇒ 两段并存 ⇒ 重复渲染。
 //   判据与实现详见 utils/figma-coverage-dedupe.js（纯函数、单一事实源）。
@@ -1551,6 +1557,28 @@ export function buildEffectiveSection(sec, idx, ctx) {
         }
         // 合成 raw 折叠叶后**走一遍叶子分支**（collapsed 透传链：items/itemCount/
         // renderHint/responsibility 全部由叶子分支既有口径产出，不手搓字段）
+        // 🛡️ 刀 28③（mc-max-1793250243785-4cc3d366 / 54ae6ee3 实锤）：折叠段
+        //   sourceNodeIds 必须含**全部成员卡组的 figma 子树闭包**。此前只带
+        //   collectSourceNodeIds(sec)（首卡子树 20 节点）⇒ 装配层叶子认领集
+        //   （claimedIds，精确 id 匹配、不做闭包展开）缺卡 2-6 ⇒ 卡 2-6 的卡面
+        //   rect/icon 底块被判「未认领可见 SOLID RECTANGLE」⇒ 刀 7 absorbed-bg
+        //   双份渲染。itemNodeIds（上面已收集的 6 个卡组 id）逐个经 figmaIndex
+        //   展开为子树全集；索引缺失 ⇒ 至少保留锚点 id 本身（fail-open 不猜）。
+        const listSourceNodeIds = (() => {
+          const out = new Set(collectSourceNodeIds(sec).map(String));
+          const walk = (n, d = 0) => {
+            if (!n || typeof n !== 'object' || d > 20) return;
+            if (n.id != null && String(n.id)) out.add(String(n.id));
+            for (const c of Array.isArray(n.children) ? n.children : []) walk(c, d + 1);
+          };
+          for (const id of itemNodeIds) {
+            const e = ctx?.figmaIndex?.get(String(id));
+            const rn = e?.rawNode || e?.node || null;
+            if (rn) walk(rn);
+            else out.add(String(id));
+          }
+          return Array.from(out);
+        })();
         const rawListLeaf = {
           id: `${sec.id}-list`,
           name: `${sec.title || sec.name || '列表'}`,
@@ -1562,7 +1590,7 @@ export function buildEffectiveSection(sec, idx, ctx) {
           itemCount: richItems.length,
           itemTemplate: richItems[0],
           items: richItems,
-          sourceNodeIds: collectSourceNodeIds(sec),
+          sourceNodeIds: listSourceNodeIds,
           ...(unionBox
             ? {
                 absoluteBoundingBox: unionBox,
@@ -1866,6 +1894,21 @@ export function buildEffectiveSection(sec, idx, ctx) {
     // 🛡️ 栅格列数事实：仅当视觉分析明确给出才透传（缺失时下游保持自由发挥，不硬编码默认值）
     ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
     collapsed,
+    // 🛡️ 刀 28c（mc-max-1793250243785-4cc3d366 实锤）：collapsed 列表叶的几何必须
+    //   透传。刀 20a 合成的 rawListLeaf 带整列并集 absoluteBoundingBox/figmaBox
+    //   （532px），但本 return 白名单重建把几何字段全丢 ⇒ 上方容器分支的
+    //   「刀 20a 配套」宿主几何补丁读 `children[0].figmaBox` 恒 undefined ⇒
+    //   宿主容器仍按自身 figma bbox（首卡 72px）申报 ⇒ 532px 列表挤进 72px 壳。
+    //   窄透传：仅 collapsed 叶、仅几何三件套（事实已在 sec 上，不缺不产键）。
+    ...(collapsed && sec.absoluteBoundingBox
+      ? {
+          absoluteBoundingBox: sec.absoluteBoundingBox,
+          figmaBox: sec.figmaBox || sec.absoluteBoundingBox,
+          ...(Number.isFinite(Number(sec.styles?.figmaHeightPx))
+            ? { styles: { figmaHeightPx: Number(sec.styles.figmaHeightPx) } }
+            : {}),
+        }
+      : {}),
     renderHint: collapsed ? 'v-for' : undefined,
     itemCount: collapsed ? elementCount : undefined,
     items: collapsed ? effectiveItems : undefined,
@@ -2105,7 +2148,7 @@ export class SubcomponentPlanner {
         const collectSemantic = (secs) => {
           for (const s of secs || []) {
             if (!s || typeof s !== 'object') continue;
-            const key = String(s.figmaNodeId || s.id || '');
+            const key = sectionAnchorKey(s);
             if (key && !visionSemantic.has(key)) {
               visionSemantic.set(key, s);
             }
@@ -2121,7 +2164,7 @@ export class SubcomponentPlanner {
         const enrich = (secs) => {
           for (const s of secs) {
             if (!s || typeof s !== 'object') continue;
-            const sem = visionSemantic.get(String(s.figmaNodeId || s.id || ''));
+            const sem = visionSemantic.get(sectionAnchorKey(s));
             if (sem) {
               // vision 语义 id 优先（chart 的「江阴靖江长江隧道」等 LLM 语义命名）
               if (sem.id && sem.id !== s.id) s.id = sem.id;
@@ -2445,7 +2488,7 @@ export class SubcomponentPlanner {
         }
         let injected = 0;
         sections = sections.map((s) => {
-          const box = heightById.get(String(s.figmaNodeId || s.id || ''));
+          const box = heightById.get(sectionAnchorKey(s));
           if (box && box.height > 0) {
             injected += 1;
             return {

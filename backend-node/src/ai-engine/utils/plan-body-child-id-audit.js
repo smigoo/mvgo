@@ -48,7 +48,7 @@
  *      天然不匹配 ⇒ 不会被误判。
  */
 
-import { FIGMA_ID_RE } from './section-anchor-truth.js';
+import { FIGMA_ID_RE, sectionAnchorCandidates } from './section-anchor-truth.js';
 
 /** 🔴 单一来源：Figma 节点 id 形态（勿再写第二份正则） */
 function isFigmaId(v) {
@@ -70,9 +70,12 @@ function nodeChildren(node) {
 /**
  * section 的 Figma 锚点：`figmaAnchorId`（上游锚点守卫的修复落点）优先，
  * 其次 `figmaNodeId`（vision 显式声明），最后 `id`。都不是合法 Figma id ⇒ null。
+ *
+ * 候选优先级来自**单一来源** `section-anchor-truth#sectionAnchorCandidates`，
+ * 本函数只负责「逐个做 Figma-id 形态校验」这一步（与 `sectionAnchorKey` 的区别）。
  */
 function resolveAnchorId(section) {
-  for (const cand of [section?.figmaAnchorId, section?.figmaNodeId, section?.id]) {
+  for (const cand of sectionAnchorCandidates(section)) {
     if (isFigmaId(cand)) return cand;
   }
   return null;

@@ -245,13 +245,15 @@
                       v-for="t in figmaHistoryTasks"
                       :key="t.sessionId"
                       class="url-history-item url-history-item--task"
-                      :title="t.themeCount > 1 ? `多主题任务（设计主题 ${t.themeCount} 套）——点击整体还原主链接与各主题卡` : '单主题任务——点击填入主链接（仅 1 套设计主题 + 默认一体化主题）'"
+                      :title="t.themeCount > 1 ? `${t.kindLabel} · 多主题任务（设计主题 ${t.themeCount} 套）——点击整体还原类型/档位 + 主链接与各主题卡` : `${t.kindLabel} · 单主题任务——点击还原类型/档位 + 主链接`"
                       @click="restoreHistoryTask(t)"
                     >
                       <span class="task-hist-dot" :class="`is-${t.status}`"></span>
                       <span class="task-hist-main">
                         <span class="task-hist-name">
                           <span class="task-hist-name__text">{{ t.name }}</span>
+                          <!-- 🔴 2026-10-29：档位/类型徽章（微码 Max / Lite / Vue3 / 页面），每条任务一眼可辨 -->
+                          <span class="task-hist-kind" :class="t.kindClass">{{ t.kindLabel }}</span>
                           <!-- 🔴 2026-10-20：单/多主题都打标签（与任务详情页徽章同口径：
                                themeCount 只数设计稿真值主题，不含系统内置一体化 dark 占位） -->
                           <span v-if="t.themeCount > 1" class="task-hist-badge">多主题（设计主题 · {{ t.themeCount }} + 默认一体化主题）</span>
@@ -436,13 +438,14 @@
                             v-for="t in figmaHistoryTasks"
                             :key="t.sessionId"
                             class="url-history-item url-history-item--task"
-                            :title="t.themeCount > 1 ? `多主题任务（设计主题 ${t.themeCount} 套）——点击整体还原主链接与各主题卡` : '单主题任务——点击填入主链接（仅 1 套设计主题 + 默认一体化主题）'"
+                            :title="t.themeCount > 1 ? `${t.kindLabel} · 多主题任务（设计主题 ${t.themeCount} 套）——点击整体还原类型/档位 + 主链接与各主题卡` : `${t.kindLabel} · 单主题任务——点击还原类型/档位 + 主链接`"
                             @click.stop="restoreHistoryTask(t)"
                           >
                             <span class="task-hist-dot" :class="`is-${t.status}`"></span>
                             <span class="task-hist-main">
                               <span class="task-hist-name">
                                 <span class="task-hist-name__text">{{ t.name }}</span>
+                                <span class="task-hist-kind" :class="t.kindClass">{{ t.kindLabel }}</span>
                                 <span v-if="t.themeCount > 1" class="task-hist-badge">多主题（设计主题 · {{ t.themeCount }} + 默认一体化主题）</span>
                                 <span v-else class="task-hist-badge is-single">单主题（设计主题 · 1 + 默认一体化主题）</span>
                               </span>
@@ -3657,15 +3660,38 @@ function visualQualityWarningTitle(w: any) {
 function figmaUrlFromKeyNode(fileKey: string, nodeId?: string) {
   return `https://www.figma.com/file/${fileKey}${nodeId ? `?node-id=${encodeURIComponent(nodeId)}` : ''}`
 }
-/** 最近生成任务里带 Figma 来源的条目 → 重建链接 + 按 url 去重（重试会产生同链接多条） */
+/**
+ * 🔴 2026-10-29：历史条目「档位/类型」徽章 —— 每条任务标明 微码 Max / 微码 Lite / Vue3 / 页面。
+ * 判据顺序：taskType 页面 → target Vue3 → generationTier（后端 getAllTasks 已返回；
+ * 旧任务缺档位时用 sessionId 前缀兜底：page- / mv- / mc-lite / mc-max）。
+ */
+function taskKindInfo(t: any): { label: string; cls: string } {
+  const sid = String(t?.sessionId || '')
+  const tier = String(t?.generationTier || '')
+  const target = String(t?.target || t?.componentType || '')
+  if (t?.taskType === 'page' || sid.startsWith('page-')) return { label: '页面', cls: 'is-page' }
+  if (target === 'vue3' || sid.startsWith('mv-')) return { label: 'Vue3', cls: 'is-vue3' }
+  if (tier === 'lite' || sid.startsWith('mc-lite')) return { label: '微码 Lite', cls: 'is-lite' }
+  if (tier === 'max' || sid.startsWith('mc-max')) return { label: '微码 Max', cls: 'is-max' }
+  return { label: '微码', cls: 'is-mc' }
+}
+/**
+ * 最近生成任务里带 Figma 来源的条目 → 重建链接 + 去重。
+ * 🔴 2026-10-29：去重键 = **链接 + 目标类型（kind）**。此前只用链接去重，导致
+ *   「同一个设计稿 → 微码」与「同一个设计稿 → Vue3」被折叠成一条（用户实测：
+ *   一次微码 + 一次 Vue3 只出现 1 条历史）。语义上这是两次**不同的产物**，必须各占一条；
+ *   只有「同链接 + 同类型」（重试 / 重复提交）才合并。
+ */
 const figmaHistoryTasks = computed(() => {
   const seen = new Set<string>()
   const out: any[] = []
   for (const t of recent.value) {
     if (!t.fileKey) continue
     const url = figmaUrlFromKeyNode(t.fileKey, t.nodeId)
-    if (seen.has(url)) continue
-    seen.add(url)
+    const kind = taskKindInfo(t)
+    const dedupeKey = `${url}::${kind.cls}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
     const themes = Array.isArray(t.themeNodes) && t.themeNodes.length > 0 ? t.themeNodes : null
     // 列表条目上可见的「主题摘要」：多主题任务显示 各主题名+节点，单稿显示主节点
     const themeSummary = themes
@@ -3673,12 +3699,12 @@ const figmaHistoryTasks = computed(() => {
           .map((tn: any, i: number) => `${tn.name || (i === 0 ? '默认' : `主题${i + 1}`)} ${tn.nodeId || ''}`.trim())
           .join(' · ')
       : ''
-    out.push({ ...t, url, themeCount: themes ? themes.length : 1, themeSummary })
+    out.push({ ...t, url, themeCount: themes ? themes.length : 1, themeSummary, kindLabel: kind.label, kindClass: kind.cls })
   }
   return out
 })
 /**
- * 🔴 2026-10-20：任务维度**整体还原** —— 点击历史条目恢复主链接 + 多主题卡。
+ * 🔴 2026-10-20：任务维度**整体还原** —— 点击历史条目恢复主链接 + 多主题卡 + 类型/档位。
  *   多主题任务（themeNodes>1）自动开启多主题模式并重建各主题卡（名称/深浅/面板/链接）；
  *   当前档位不满足（非微码+Max）时自动切档，保证还原结果与原任务同构。
  */
@@ -3686,6 +3712,19 @@ const N_THEME_PANEL_SET = new Set(['default-panel', 'model-panels', 'aio-panel']
 function restoreHistoryTask(t: any) {
   figmaUrl.value = t.url
   sourceMode.value = 'figma'
+  // 🔴 2026-10-29：还原**类型 + 档位**。历史条目现在带 kindClass（微码/Vue3/页面）；
+  //   不同一条目只是链接不同，类型不同才是不同产物 —— 点 Vue3 那条若仍留在「微码」，
+  //   生成出的东西与历史任务不是同一类。档位优先用任务真值，缺失时按 kind 兜底。
+  if (!busy.value) {
+    if (t?.kindClass === 'is-vue3') compType.value = 'vue3'
+    else if (t?.kindClass === 'is-max' || t?.kindClass === 'is-lite' || t?.kindClass === 'is-mc') {
+      compType.value = 'microcode'
+    }
+    const tier = String(t?.generationTier || '')
+    if (tier === 'lite' || tier === 'max') genTier.value = tier
+    else if (t?.kindClass === 'is-lite') genTier.value = 'lite'
+    else if (t?.kindClass === 'is-max') genTier.value = 'max'
+  }
   const themes = Array.isArray(t?.themeNodes) ? t.themeNodes : null
   if (themes && themes.length > 1 && !busy.value) {
     if (!nThemeSupported.value) {
@@ -3746,6 +3785,11 @@ async function fetchRecent() {
       themeNodes: Array.isArray(t.themeNodes) ? t.themeNodes : null,
       //  P0-3: 视觉分析降级标志（视觉超时→Figma 兜底 或 完全降级）
       visualDegraded: t.visualDegraded === true || !!t.result?._visualDegraded,
+      // 🔴 2026-10-29：档位/类型字段透传（历史下拉「微码 Max / Lite / Vue3 / 页面」徽章数据源）
+      generationTier: t.generationTier || '',
+      sourceType: t.sourceType || '',
+      taskType: t.taskType || '',
+      target: t.target || '',
       visualLayoutSource: t.visualLayoutSource || t.result?._visualLayoutSource || null,
       visualDegradeReason: t.visualDegradeReason || t.result?._visualDegradeReason || '',
       // 🛡️ 2026-09-30: 低覆盖率「降级放行」质量提示（非阻断）→ 「内容可能不完整 + 归因到视觉模型」提示条
@@ -5875,6 +5919,33 @@ html[data-theme='dark'] .spinner--lg {
 .task-hist-badge.is-single {
   background: rgba(144, 147, 153, 0.14);
   color: var(--txt-3, #909399);
+}
+/* 🔴 2026-10-29：档位/类型徽章 —— 每条历史任务标明 微码 Max / Lite / Vue3 / 页面 */
+.task-hist-kind {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+.task-hist-kind.is-lite {
+  background: rgba(13, 148, 136, 0.1);
+  color: #0d9488;
+}
+.task-hist-kind.is-vue3 {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+.task-hist-kind.is-page {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+.task-hist-kind.is-mc {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
 }
 .task-hist-node {
   overflow: hidden;

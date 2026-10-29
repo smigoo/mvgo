@@ -265,7 +265,20 @@ export function collectClassProp(css, prop) {
     }
     if (depth !== 0) break;
     const body = css.slice(bodyStart, i - 1);
-    const hit = propRx.exec(body);
+    // 只认规则体**顶层（depth 0）**的声明：嵌套后代规则里的属性属于后代，不能记到本 class
+    // 头上。否则 `.a { .a-item { background: X } }` 会把 X 误记成 `.a` 的背景
+    // （刀 32 实锤：`.c-device-grid { … .c-device-grid-item { background: @color-grid-row-bg } }`
+    // 被读成 `.c-device-grid` 自有白底 ⇒ 颜色归属律假阳性）。字符串/注释里的花括号
+    // 与括号配对本身同样不识别，属既有同等限制，此处不额外处理。
+    let top = '';
+    let d = 0;
+    for (let j = 0; j < body.length; j++) {
+      const ch = body[j];
+      if (ch === '{') d++;
+      else if (ch === '}') d--;
+      else if (d === 0) top += ch;
+    }
+    const hit = propRx.exec(top);
     if (hit && !out.has(m[1])) out.set(m[1], hit[1].trim());
   }
   return out;

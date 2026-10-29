@@ -1076,3 +1076,76 @@ describe('刀17 · 横向容器 2D 列簇 + 交叉轴居中（6bba7218 `38:3260`
     expect(tpl).not.toContain('align-self:center')
   })
 })
+
+describe('刀29c 集成：collapsed 叶几何包含认领 ⇒ 卡面 rect 不出 absorbed-bg（mc-max-1793255115028-7ec263c9 实锤）', () => {
+  // vision item id 幻觉为卡内层 GROUP（48:5816 真身是 card2 48:5813 的内部组）⇒
+  // sourceNodeIds 闭包拿不到真实卡面 rect（48:5814/5829）⇒ 刀7 曾画 5 个空壳色带。
+  // 判据：collapsed 叶的渲染盒内节点全部入认领集（container-absorbed-bg 单一实现）。
+  const figma = {
+    id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 500, height: 700 },
+    children: [
+      { id: '565:3', type: 'FRAME', absoluteBoundingBox: { x: 20831, y: 51606, width: 470, height: 571 }, children: [
+        { id: '48:5798', type: 'GROUP', absoluteBoundingBox: { x: 20831, y: 51606, width: 470, height: 72 }, children: [
+          { id: '48:5799', type: 'RECTANGLE', absoluteBoundingBox: { x: 20831, y: 51606, width: 470, height: 72 }, fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 0.43 }] },
+        ] },
+        { id: '48:5813', type: 'GROUP', absoluteBoundingBox: { x: 20831, y: 51698, width: 470, height: 72 }, children: [
+          { id: '48:5814', type: 'RECTANGLE', absoluteBoundingBox: { x: 20831, y: 51698, width: 470, height: 72 }, fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 0.43 }] },
+        ] },
+        { id: '48:5828', type: 'GROUP', absoluteBoundingBox: { x: 20831, y: 51790, width: 470, height: 72 }, children: [
+          { id: '48:5829', type: 'RECTANGLE', absoluteBoundingBox: { x: 20831, y: 51790, width: 470, height: 72 }, fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 0.43 }] },
+        ] },
+        { id: '565:3-tail', type: 'TEXT', absoluteBoundingBox: { x: 20831, y: 52140, width: 200, height: 16 }, characters: '共 6 个节点' },
+      ] },
+    ],
+  };
+  const sections = [
+    {
+      id: '565:3', type: 'container', isLayoutContainer: true, layout: 'vertical', layoutSource: 'container-rebuild',
+      absoluteBoundingBox: { x: 20831, y: 51606, width: 470, height: 571 },
+      figmaBox: { x: 20831, y: 51606, width: 470, height: 571 },
+      // 真实形态：容器 src = figma 子树全闭包（含卡面 rect id）⇒ 刀7 会逐一枚举；
+      //   卡面被 collapsed 叶认领 ⇒ 不出 absorbed-bg 层（29c 阳性）。
+      sourceNodeIds: ['565:3', '48:5798', '48:5799', '48:5813', '48:5814', '48:5828', '48:5829'],
+      children: [
+        {
+          id: '48:5798', type: 'container', isLayoutContainer: true, layout: 'vertical', layoutSource: 'container-rebuild',
+          absoluteBoundingBox: { x: 20831, y: 51606, width: 470, height: 256 },
+          figmaBox: { x: 20831, y: 51606, width: 470, height: 256 },
+          sourceNodeIds: ['48:5798'],
+          children: [
+            {
+              id: '48:5798-list', type: 'list', collapsed: true, renderHint: 'v-for', itemCount: 3,
+              absoluteBoundingBox: { x: 20831, y: 51606, width: 470, height: 256 },
+              figmaBox: { x: 20831, y: 51606, width: 470, height: 256 },
+              styles: { figmaHeightPx: 256 },
+              // 幻觉内层组 id：闭包不含 48:5814/5829（真实卡面 rect）
+              sourceNodeIds: ['48:5798', '48:5816', '48:5831'],
+              items: [
+                { id: '48:5798', texts: [{ t: '甲' }] },
+                { id: '48:5816', texts: [{ t: '乙' }] },
+                { id: '48:5831', texts: [{ t: '丙' }] },
+              ],
+            },
+          ],
+        },
+        { id: '565:3-tail', type: 'footer', title: '尾', sourceNodeIds: ['565:3-tail'] },
+      ],
+    },
+  ];
+  const input = { ...makeInput(sections), figmaNodeData: figma };
+
+  it('⭐ 阳性：叶盒内卡面 rect（48:5814/5829）被认领 ⇒ 产物无 absorbed-bg 色带', () => {
+    const facts = buildDeterministicIndexTemplate(input as any);
+    expect(facts).not.toBeNull();
+    const tpl = facts!.template;
+    expect(tpl).not.toContain('data-absorbed-bg="48:5814"');
+    expect(tpl).not.toContain('data-absorbed-bg="48:5829"');
+  });
+
+  it('反向联动：宿主容器高度取并集几何（224），不是 figma 首卡 72', () => {
+    const facts = buildDeterministicIndexTemplate(input as any);
+    const tpl = facts!.template;
+    const hostLine = tpl.split('\n').find((l) => l.includes('data-section-id="48:5798"')) || '';
+    expect(hostLine).toContain('height:256px');
+  });
+});

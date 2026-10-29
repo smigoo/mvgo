@@ -4,6 +4,7 @@
  */
 
 import { inferBackgroundStyle } from './background-size-inference.js';
+import { removeClassBlocks } from './style-class-consolidator.js';
 // 🛡️ R19（2026-10-21）：文本 run 真值单一来源。下方 `extractPerCharTextTruth` 与
 //   `injectNodeLevelColorTruth` 一律委托本模块，**禁止再写第二套逐字符求值**。
 import { extractTextRuns, normalizeColor } from './text-runs.js';
@@ -1110,10 +1111,21 @@ export function stripHeaderChromeDecorations(code, options = {}) {
   );
   let rest = code.slice(tplEnd);
   if (deadClasses.length > 0) {
-    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const classAlt = deadClasses.map((c) => '\\.' + esc(c) + '\\b').join('|');
-    const cssRuleRe = new RegExp('(^|\\n)[^{}@]*?(' + classAlt + ')[^{}]*?\\{[^}]*\\}', 'g');
-    rest = rest.replace(cssRuleRe, (m) => (m.startsWith('\n') ? '\n' : ''));
+    // 🛡️ 刀 27（mc-max-1793242612233-74cadb8a 实锤）：旧实现用正则
+    //   `(^|\n)[^{}@]*?(.dead)[^{}]*?\{[^}]*\}` 删死规则——`[^}]*\}` 在**嵌套
+    //   Less 规则**（.deco { … .deco-img { … } }）上只吃到大括号内层第一个 `}`，
+    //   外层 `}` 残留 ⇒ style 9开10闭 ⇒ 写盘门禁 Unrecognised input ⇒
+    //   HeaderSection 被跳过 ⇒ CODE-023 悬空标签 ⇒ L0-B fail-closed 整单失败。
+    //   改走 removeClassBlocks（style-class-consolidator 括号配平单一实现，
+    //   与刀 53h 孤儿规则剔除同源），只处理 <style> 段，script 不碰。
+    const styleM = rest.match(/<style\b[^>]*>[\s\S]*<\/style>/);
+    if (styleM) {
+      const cleaned = removeClassBlocks(
+        styleM[0],
+        deadClasses.map((c) => '.' + c),
+      );
+      rest = rest.replace(styleM[0], cleaned);
+    }
   }
 
   const out = code.slice(0, tplStart) + newTpl + rest;

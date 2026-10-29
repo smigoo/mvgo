@@ -3830,6 +3830,33 @@ export function createPhase2Graph(config = {}) {
         } else if (!n1.skipped) {
           logger.info('✅ 真值色值全部落地', { truthCount: n1.truthCount });
         }
+
+        // 🛡️ 2026-10-29（刀32 · 6eafb2f7 / 07ae49a2 实锤）：**容器背景色归属律**（只报不改）。
+        //   N1 只判「色值是否出现在产物」，不管落点——con-con 容器写卡级高亮 #a6ceff
+        //   （那是后代卡 1 的高亮底 48:5799）照样判「落地成功」。刀32 单查落点：
+        //   带 data-section-id 的元素声明的背景色，必须 ∈ 自身 fills ∪ 祖先链（含自身）真值；
+        //   若只存在于**后代子树**或**兄弟子树** ⇒ 借用错挂（把局部色提为容器/整卡底）。
+        //   V 既不在合法来源、也不在后代/兄弟 ⇒ 设计稿里压根没这色 ⇒ 属臆造色，归 N1 /
+        //   do-not-invent 管，本守卫单向越界不报（fail-open）。
+        //   只 WARN：主题变量引用的容器底色可能是「有意为之的主题化底色」，强改会丢主题能力。
+        //   复用上方已收集的 _n1Files（package + resources 下 .vue/.less/.css/.js），不重复遍历。
+        try {
+          const { auditSectionColorAttribution } = await import(
+            '../utils/section-color-attribution-guard.js'
+          );
+          const r32 = auditSectionColorAttribution(_n1Files, state.figmaNodeData);
+          if (!r32.skipped && r32.findings.length > 0) {
+            logger.warn('⚠️ 容器背景色归属异常（借用了后代/兄弟子树的局部色）', {
+              judged: r32.stats.judged,
+              count: r32.findings.length,
+              findings: r32.findings.slice(0, 20),
+            });
+          } else if (!r32.skipped) {
+            logger.info('✅ 容器背景色归属正常', { judged: r32.stats.judged });
+          }
+        } catch (e) {
+          logger.warn('⚠️ 容器背景色归属审计失败（非阻断）', { error: e?.message || e });
+        }
       } catch (e) {
         logger.warn('⚠️ 真值色值落地审计失败（非阻断）', { error: e?.message || e });
       }

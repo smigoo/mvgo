@@ -33,7 +33,7 @@ import {
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
 import { planRowBands, planColumnGroups, crossAxisCenterStyle } from '../../utils/row-band-cluster.js';
-import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle } from '../../utils/container-absorbed-bg.js';
+import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle, claimCollapsedLeafContainedIds } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
 //   才能把它们从 flex 归一化分母里剔除。判据单一来源 = 接管器本身（不在本文件重判）。
@@ -507,6 +507,13 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       claimedNodeIds.add(String(id));
     }
   }
+  // 🛡️ 刀 29c（mc-max-1793255115028-7ec263c9 实锤）：collapsed/v-for 列表叶按
+  //   **几何包含**认领其渲染盒内的全部 figma 节点（vision item id 幻觉为卡内层
+  //   GROUP 时，sourceNodeIds 闭包拿不到兄弟卡真实面 rect ⇒ 刀7 absorbed-bg
+  //   空壳色带）。判据实现单一来源：container-absorbed-bg.js
+  //   #claimCollapsedLeafContainedIds（纯几何 containment，与本文件刀 7 越出
+  //   检查同一坐标系）。
+  claimCollapsedLeafContainedIds(claimedNodeIds, leaves, figmaIndex, resolveSectionBox);
   // 🛡️ 刀 7 归属唯一化（2026-10-27 · c-a0f93b-a0f93b25 实锤）：同一矩形可能被**嵌套容器**
   //   的 sourceNodeIds 重复吸收（外层 `796:3` 与内层 `38:3137` 都含 `38:3138`）⇒ 逐容器
   //   各出一层 = 双层叠加。规则：**plan 树上最近的容器**（deepest）独占该层。

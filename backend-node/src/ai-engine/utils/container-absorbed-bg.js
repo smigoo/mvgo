@@ -125,3 +125,46 @@ export function buildAbsorbedBgLayerStyle(layer) {
     'z-index:-1;'
   )
 }
+
+/**
+ * 🛡️ 刀 29c（mc-max-1793255115028-7ec263c9 实锤）：collapsed/v-for 列表叶的
+ *   **几何包含认领**。病灶：vision items 的 id 可能是卡内层 GROUP（48:5816 真身是
+ *   card2 `48:5813` 的内部组，figma 已核实）⇒ sourceNodeIds 闭包（刀 28③ 按 id
+ *   展开）拿不到兄弟卡的真实面 rect（48:5814/5829/…）⇒ 刀 7 把卡 2-6 卡面判
+ *   「未认领」⇒ absorbed-bg 空壳色带。判据纯几何（containment，与本文件刀 7
+ *   的越出检查同源）：box 完整可解析的 collapsed 叶 ⇒ figmaIndex 里 bbox 完整
+ *   落在叶盒内的节点 id 全部入认领集。v-for 整段渲染盒内的可见层都属于该列表
+ *   的渲染领土，零语义猜测。纯函数，fail-open（叶盒缺失 ⇒ 原样返回输入集）。
+ *
+ * @param {Set<string>} claimedIds 现有认领集（会被原地扩充并返回）
+ * @param {Array} leaves 全部叶子 section
+ * @param {Map} figmaIndex `indexFigmaNodes` 产物
+ * @param {(sec:object, idx:Map)=>{x:number,y:number,w:number,h:number}|null} resolveBox
+ *   几何解析器（装配层传 `resolveSectionBox`，与本文件刀 7 越出检查同一坐标系）
+ * @returns {Set<string>} 扩充后的认领集
+ */
+export function claimCollapsedLeafContainedIds(claimedIds, leaves, figmaIndex, resolveBox) {
+  const claimed = claimedIds instanceof Set ? claimedIds : new Set()
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return claimed
+  if (typeof figmaIndex[Symbol.iterator] !== 'function') return claimed
+  for (const l of Array.isArray(leaves) ? leaves : []) {
+    if (!l || (l.collapsed !== true && l.renderHint !== 'v-for')) continue
+    const box = typeof resolveBox === 'function' ? resolveBox(l, figmaIndex) : null
+    if (!box || !(box.w > 0) || !(box.h > 0)) continue
+    for (const [fid, rec] of figmaIndex) {
+      const id = String(fid)
+      if (claimed.has(id)) continue
+      const b = rec?.bbox || rec?.rawNode?.absoluteBoundingBox
+      if (!b || ![b.x, b.y, b.width, b.height].every(Number.isFinite)) continue
+      if (
+        b.x >= box.x &&
+        b.y >= box.y &&
+        b.x + b.width <= box.x + box.w &&
+        b.y + b.height <= box.y + box.h
+      ) {
+        claimed.add(id)
+      }
+    }
+  }
+  return claimed
+}

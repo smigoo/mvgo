@@ -4,6 +4,7 @@ import {
   injectResourceImports,
   healUnavailableResourceRefs,
   stripResourceWriteback,
+  collectDeclaredBindings,
 } from './resource-import-guard.js';
 
 /**
@@ -821,3 +822,47 @@ const x = 1`)
     expect(stripResourceWriteback(src)).toBe(src)
   })
 })
+
+/**
+ * 🛡️ 刀30c（2026-10-29，mv-max-1793255130119-ab4e3051 实锤）：
+ * defineProps 键采集的两个潜伏缺陷导致 R2 幽灵引用误杀——
+ * ① splitTopLevel 把 `<`/`>` 计入配对，prop 默认值里的箭头函数 `default: () => ({})`
+ *   的 `=>` 被误当泛型闭合符 → depth -1 → 后续顶层逗号全部失配 → 键丢失；
+ * ② props 键前的行注释与首键粘在同一顶层分段，split(':')[0] 取到注释文本而非键名。
+ * 后果：模板引用 prop（bgImage）被 CODE-025 R2 判「幽灵引用」BLOCK，L0-B 重试耗尽整任务失败。
+ */
+describe('刀30c：defineProps 键采集（箭头默认值 + 键前注释）', () => {
+  it('阳性：箭头默认值 + 键前行注释 → 全部 prop 键入 declared', () => {
+    const code = `const props = defineProps({
+   // 节点数据：{ name, address, online, offline, icon }
+  nodeData: { type: Object, default: () => ({}) },
+   // 是否为当前激活（高亮）卡片
+  isActive: { type: Boolean, default: false },
+   // 状态底纹背景图（由父级注入的 bg 变量）
+  bgImage: { type: String, default: '' }
+})
+const emit = defineEmits(['select'])`;
+    const declared = collectDeclaredBindings(code);
+    expect(declared.has('nodeData')).toBe(true);
+    expect(declared.has('isActive')).toBe(true);
+    expect(declared.has('bgImage')).toBe(true);
+  });
+
+  it('反向：泛型 defineProps 键采集不回归（<> 移除配对后逗号仍在 {} 深度内）', () => {
+    const code = `const props = defineProps<{ icon1: string; bg2: number }>()`;
+    const declared = collectDeclaredBindings(code);
+    expect(declared.has('icon1')).toBe(true);
+    expect(declared.has('bg2')).toBe(true);
+  });
+
+  it('反向：注释里出现的资源形名不入 declared（剥离而非全文匹配）', () => {
+    const code = `const props = defineProps({
+  // 父级注入 bg1 / icon2 资源
+  title: { type: String, default: '' }
+})`;
+    const declared = collectDeclaredBindings(code);
+    expect(declared.has('title')).toBe(true);
+    expect(declared.has('bg1')).toBe(false);
+    expect(declared.has('icon2')).toBe(false);
+  });
+});

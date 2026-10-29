@@ -5,7 +5,7 @@
  * sourceNodeIds，但无任何叶子认领它 ⇒ 描述卡底在产物里 0 次出现。
  * 判据全走 Figma 真值（bbox/fills/cornerRadius），逐事实缺失即 fail-open。
  */
-import { resolveAbsorbedBgLayers } from '../container-absorbed-bg.js'
+import { resolveAbsorbedBgLayers , claimCollapsedLeafContainedIds} from '../container-absorbed-bg.js'
 import { indexFigmaNodes } from '../section-tree.js'
 
 // 真值几何（8bbcf027 checkpoint 逐字段抄录）
@@ -165,3 +165,45 @@ describe('resolveAbsorbedBgLayers — 刀 7 容器吸收背景层', () => {
     expect(r.layers[0].id).toBe('9:10')
   })
 })
+
+describe('刀29c — claimCollapsedLeafContainedIds 几何包含认领（mc-max-1793255115028-7ec263c9 实锤）', () => {
+  // 病灶：vision item id 是卡内层 GROUP（48:5816 真身是 card2 48:5813 的内部组）
+  // ⇒ sourceNodeIds 闭包拿不到兄弟卡真实面 rect（48:5814/5829/…）⇒ 刀7 判未认领
+  // ⇒ absorbed-bg 空壳色带。判据：collapsed 叶的渲染盒内 ⇒ 全部 figma 节点入认领集。
+  const mkIndex = () => {
+    const entries = [
+      ['565:3', { x: 20831, y: 51606, width: 470, height: 571 }],
+      ['48:5798', { x: 20831, y: 51606, width: 470, height: 72 }],
+      ['48:5813', { x: 20831, y: 51698, width: 470, height: 72 }],
+      ['48:5814', { x: 20831, y: 51698, width: 470, height: 72 }], // 卡2 面 rect（真实 id 不在 sourceNodeIds）
+      ['48:5829', { x: 20831, y: 51790, width: 470, height: 72 }], // 卡3 面 rect
+      ['48:5890', { x: 21289, y: 51700, width: 6, height: 218 }],  // 滚动条（叶盒内 ⇒ 被列表渲染）
+      ['565:3-tail', { x: 20831, y: 52140, width: 470, height: 16 }], // 尾部（叶盒外）
+    ];
+    return new Map(entries.map(([id, bbox]) => [id, { id, bbox, rawNode: { id, absoluteBoundingBox: bbox } }]));
+  };
+  const box = { x: 20831, y: 51606, w: 470, h: 517 }; // 整列并集（不含尾部）
+  const resolveBox = () => box;
+  const leaf = { id: '48:5798-list', collapsed: true, renderHint: 'v-for', sourceNodeIds: ['48:5816'] };
+
+  it('⭐ 阳性：叶盒内卡面 rect/滚动条全部入认领集，盒外尾部不入', () => {
+    const claimed = claimCollapsedLeafContainedIds(new Set(['48:5798-list']), [leaf], mkIndex(), resolveBox);
+    expect(claimed.has('48:5814')).toBe(true);
+    expect(claimed.has('48:5829')).toBe(true);
+    expect(claimed.has('48:5890')).toBe(true);
+    expect(claimed.has('48:5813')).toBe(true);
+    expect(claimed.has('565:3-tail')).toBe(false);
+  });
+
+  it('反向：非折叠叶不参与包含认领', () => {
+    const plain = { id: '565:2', sourceNodeIds: ['565:2'] };
+    const claimed = claimCollapsedLeafContainedIds(new Set(), [plain], mkIndex(), resolveBox);
+    expect(claimed.has('48:5814')).toBe(false);
+  });
+
+  it('反向：叶盒缺失（resolveBox 返回 null）⇒ 原样返回，fail-open', () => {
+    const claimed = claimCollapsedLeafContainedIds(new Set(['x']), [leaf], mkIndex(), () => null);
+    expect(claimed.has('x')).toBe(true);
+    expect(claimed.has('48:5814')).toBe(false);
+  });
+});

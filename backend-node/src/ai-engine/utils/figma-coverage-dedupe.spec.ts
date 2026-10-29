@@ -236,3 +236,37 @@ describe('刀22：折叠列表段的吸收者必须是列表内容携带者（mc
     expect(r.removed[0]?.id).toBe('48:5813')
   })
 })
+
+describe('刀28b：非列表段的吸收证据不含 items 锚点展开（mc-max-1793252160457-54ae6ee3 实锤）', () => {
+  const idx = () => buildFigmaClosureIndex(makeFigma())!
+  // 本轮形态：vision 把尾部文本「共 6 个节点」(48:5888) 也塞成 items 条目 ⇒
+  // items 段（48:5798）闭包被杂散锚点吹大 ⇒ 尾部文本段被「全包含」误删（footer 消失）。
+  // items[].id 是 vision 自由发挥锚点，不得充当「覆盖非列表兄弟」的证据；
+  // 折叠列表段候选不受影响（91544b38 阳性保持）。
+  const inflatedItemsSection = () => ({
+    id: '48:5798',
+    sourceNodeIds: ['48:5798', '48:5813'],
+    body: { items: [{ id: '48:5798' }, { id: '48:5813' }, { id: '48:5888' }] },
+    children: [{ id: '48:5799' }],
+  })
+
+  test('⭐ 阳性：footer 锚点仅出现在吸收者 items 里 ⇒ 保留', () => {
+    const footer = { id: '565:3-tail-text', sourceNodeIds: ['48:5888'] }
+    const r = dedupeSectionsByCoverage([inflatedItemsSection(), footer], idx())
+    expect(r.sections).toHaveLength(2)
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('反向：折叠列表段仍按完整闭包吸收（91544b38 阳性保持）', () => {
+    const r = dedupeSectionsByCoverage([inflatedItemsSection(), listSection()], idx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]?.id).toBe('48:5813-list')
+  })
+
+  test('反向：非列表段被严格闭包全包含（sourceNodeIds 直接锚定，非 items 证据）⇒ 仍删', () => {
+    const plain = { id: '48:5813', sourceNodeIds: ['48:5813'] }
+    const r = dedupeSectionsByCoverage([inflatedItemsSection(), plain], idx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]?.id).toBe('48:5813')
+  })
+})

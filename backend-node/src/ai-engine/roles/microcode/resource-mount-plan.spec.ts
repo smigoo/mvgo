@@ -226,12 +226,20 @@ import CardGrid from './components/CardGrid.vue'
     const files = makeFiles()
     const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: figma })
     const r = mountPlannedResources(files, plan)
-    expect(r.mounted).toHaveLength(1) // 同 var+target 去重，只挂一次
+    // 同 var+target 去重，只挂一次；且这一次必须是 **v-for item**（逐卡）挂载
+    expect(r.mounted).toHaveLength(1)
+    expect(r.mounted[0].keyword).toBe('v-for-item')
+    expect(r.mounted[0].file).toBe('package/components/CardGrid.vue')
     const out = files['package/components/CardGrid.vue']
     expect((out.match(/import bg3 from/g) || []).length).toBe(1)
     expect((out.match(/url\(' \+ bg3 \+ '\)/g) || []).length).toBe(1)
     expect(out).not.toContain('bg4')
     expect(out).not.toContain('bg5')
+    // 🛡️ 刀33 第3步：owner=null 的第 3 条 mount（figmaNodeId 不在树内 → 落 index.vue 根）
+    //   是**同一张共享底图** ⇒ 必须让位给 per-item 宿主（CardGrid.vue 的 v-for item），
+    //   绝不能再把逐卡背景挂到只渲染一次的根组件（旧实现正是如此：根背景 100% 拉伸）。
+    expect(files['package/index.vue']).toBe(indexVue)
+    expect(r.diagnostics.map((x: any) => x.reason)).toContain('per-item-host-external')
   })
 
   it('mountTarget 在 owner 文件不命中 → 记诊断，禁止跨文件/根回退', () => {
@@ -628,5 +636,212 @@ describe('mountPlannedResources §六 #4 · owner 同族对齐（治 owner 名�
     mountPlannedResources(allFiles, plan, { logger: { warn() {}, info() {} } })
     expect(allFiles['package/components/TabsSection.vue']).toContain('bg1')
     expect(allFiles['package/index.vue']).not.toContain('bg1')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════
+// 刀33 第3步 · per-item 背景资源让位外部 v-for 宿主
+// 真实形态：mc-max-1793281736684-802b780c（折叠段接管把列表渲染搬进 ListSection.vue）
+// 真机复跑取证：mc-1793286461778-8ad1ccc1 —— `.mc-gen/resource-dom-mapping.json` 里
+//   `image_313-5800.png`(bg1) **只有 1 条** ⇒ 判据不得依赖「同资源被 N 个节点共享」，
+//   否则真机恒假＝死代码（见 resource-mount-plan.js findExternalVForItemHost 留痕）。
+// ══════════════════════════════════════════════════════════════
+describe('刀33 第3步 · per-item 背景资源让位外部 v-for 宿主', () => {
+  /**
+   * 折叠段接管产物：v-for item 在**子组件**里（ListSection.vue），
+   * item 行由接管层逐项渲染背景图（刀33 第1/2步 A 侧行为）。
+   */
+  const LIST_SEC = `<template>
+  <div data-section-id="48:5798-list" class="c-x-fg-list-485798list">
+    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="c-x-fg-list-485798list-item" style="border-radius:6px;" :style="{ backgroundColor: it.fill || undefined, backgroundImage: 'url(' + bg1 + ')' }">
+      <span>{{ it.t }}</span>
+    </div>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/image_313-5800.png'
+const FG_LIST_ITEMS = []
+</script>`
+
+  /** index.vue：只有容器（list-con 的 data-section-id = **重复单元** 48:5798，不是列表容器）。 */
+  const IDX_PLAIN = `<template>
+  <div class="c-x-slot-con">
+    <div class="c-x-list-con" data-section-id="48:5798"><ListSection /></div>
+  </div>
+</template>
+<script setup>
+import ListSection from './components/ListSection.vue'
+</script>`
+
+  const sections: any[] = [
+    { id: '48:5798', type: 'list', responsibility: '节点列表', sourceNodeIds: ['48:5798'] },
+  ]
+
+  /** 6 张卡共享同一张图条 ⇒ 同 resourceFile 固化单变量 bg1（共享形态；判据不依赖条数）。 */
+  const sharedMapping = () =>
+    [0, 1, 2, 3, 4, 5].map((i) => ({
+      assignedVarName: 'bg1',
+      resourceFile: 'image_313-5800.png',
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+      figmaNodeId: `48:${5800 + i * 15}`,
+      ownerSectionId: '48:5798',
+      mountTarget: 'slot-con',
+      bgRole: 'sub-state',
+      figmaBox: { x: 20837, y: 51606, width: 459, height: 29 },
+      parentBox: { x: 20831, y: 51606, width: 470, height: 72 },
+    }))
+
+  it('阳性：本文件无 v-for item 且外部宿主存在 → index.vue 让位（fail-closed，不挂容器）', () => {
+    const files: any = {
+      'package/index.vue': IDX_PLAIN,
+      'package/components/ListSection.vue': LIST_SEC,
+    }
+    const plan = buildResourceMountPlan(sections, sharedMapping(), { figmaRoot: null })
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    // 一条都不挂：事实链（list-con=重复单元）+ sub-state 静态回退（slot-con）两条误挂路径都被拦
+    expect(r.mounted).toHaveLength(0)
+    const d = r.diagnostics.find((x: any) => x.reason === 'per-item-host-external')
+    expect(d).toBeTruthy()
+    expect(d.host).toBe('package/components/ListSection.vue')
+    // 本文件零污染（不 import 资源、不注入 :style）
+    expect(files['package/index.vue']).toBe(IDX_PLAIN)
+    // 外部宿主自己保留逐项绑定（不受本文件让位影响）
+    expect(files['package/components/ListSection.vue']).toContain('bg1')
+  })
+
+  it('反向①：外部无 per-item 宿主（子组件未引用该资源）→ 不让位，仍走事实链（不劣化）', () => {
+    const files: any = {
+      'package/index.vue': IDX_PLAIN,
+      'package/components/ListSection.vue': LIST_SEC.replace(/bg1/g, 'bgOther'),
+    }
+    const plan = buildResourceMountPlan(sections, sharedMapping(), { figmaRoot: null })
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    expect(r.diagnostics.map((x: any) => x.reason)).not.toContain('per-item-host-external')
+    expect(r.mounted.length).toBeGreaterThan(0)
+    expect(r.mounted[0].reason).toBe('section-anchor-fact-chain')
+    expect(files['package/index.vue']).toContain('bg1')
+  })
+
+  it('反向②：本文件自带 v-for item → 拦截不触发（判据恰为「本文件无 v-for item」）', () => {
+    const idxWithVFor = `<template>
+  <div class="c-x-slot-con">
+    <div class="c-x-list-con" data-section-id="48:5798">
+      <div v-for="(it, i) in items" :key="i" class="c-x-list-con-item">{{ it.t }}</div>
+    </div>
+  </div>
+</template>
+<script setup>
+const items = []
+</script>`
+    const files: any = { 'package/index.vue': idxWithVFor }
+    const plan = buildResourceMountPlan(sections, sharedMapping(), { figmaRoot: null })
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    expect(r.diagnostics.map((x: any) => x.reason)).not.toContain('per-item-host-external')
+    expect(r.mounted.length).toBeGreaterThan(0)
+    // 本文件既有 v-for item ⇒ 不属于「本文件无 per-item 宿主」情形 ⇒ 让位判据不得介入；
+    // 交给既有分支，且既有优先级不变：§六#4 数据事实链（锚点 48:5798 命中）优先。
+    expect(r.mounted[0].file).toBe('package/index.vue')
+    expect(r.mounted[0].keyword).toBe('data-section-id=48:5798')
+    expect(files['package/index.vue']).toContain('bg1')
+  })
+
+  it('反向②b：本文件自带 v-for item 且无锚点/非 sub-state → 不拦，落到 v-for item 逐项挂载', () => {
+    // 掐掉所有更高优先级出口（锚点事实链 / sub-state 状态分支 / container 状态分支），
+    // 使唯一可达分支 = `sharedCount > 1` 的 v-for item 逐项挂载 —— 这条正是拦截必须放行的路径。
+    const idxWithVFor = `<template>
+  <div class="c-x-slot-con">
+    <div class="c-x-list-con">
+      <div v-for="(it, i) in items" :key="i" class="c-x-list-con-item">{{ it.t }}</div>
+    </div>
+  </div>
+</template>
+<script setup>
+const items = []
+</script>`
+    const mapping = sharedMapping().map((m) => ({
+      ...m,
+      ownerSectionId: undefined,
+      bgRole: undefined,
+    }))
+    const files: any = { 'package/index.vue': idxWithVFor }
+    const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: null })
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    expect(r.diagnostics.map((x: any) => x.reason)).not.toContain('per-item-host-external')
+    expect(r.mounted).toHaveLength(1)
+    expect(r.mounted[0].keyword).toBe('v-for-item')
+    // 绑定必须落在 v-for item 行（逐项），而不是外层容器
+    const itemLine = files['package/index.vue']
+      .split('\n')
+      .find((l: string) => l.includes('c-x-list-con-item'))
+    expect(itemLine).toContain('bg1')
+  })
+
+  it('真机形态（单条 mapping，sharedBy=1）→ 仍让位（判据不依赖 sharedBy>1，杜绝死代码）', () => {
+    // 🔴 复跑实锤 mc-1793286461778-8ad1ccc1：折叠 dedup 后 bg1 在映射表里**只有 1 条**。
+    //   旧判据前置 `sharedBy.length > 1` 据此恒假 ⇒ 拦截永不触发（死代码）。
+    //   本条与真机同构：单条 bg mapping + index.vue 无 v-for item + 子组件含 bg1 且带 v-for item。
+    const mapping = [
+      {
+        assignedVarName: 'bg1',
+        resourceFile: 'image_313-5800.png',
+        previewAnalysisRole: 'bg',
+        downloadStatus: 'success',
+        figmaNodeId: '48:5800',
+        ownerSectionId: '48:5798',
+        mountTarget: 'slot-con',
+        bgRole: 'sub-state',
+      },
+    ]
+    const files: any = {
+      'package/index.vue': IDX_PLAIN,
+      'package/components/ListSection.vue': LIST_SEC,
+    }
+    const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: null })
+    expect(plan.byFile.get('image_313-5800.png').sharedBy).toHaveLength(1)
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    const d = r.diagnostics.find((x: any) => x.reason === 'per-item-host-external')
+    expect(d).toBeTruthy()
+    expect(d.host).toBe('package/components/ListSection.vue')
+    expect(r.mounted).toHaveLength(0)
+    expect(files['package/index.vue']).toBe(IDX_PLAIN)
+  })
+
+  it('反向③：外部文件引用了该 var 但**无 v-for item** → 不让位（存在性判据严格，不误让位）', () => {
+    // 外部宿主探测要求「引用该 var ∧ 含 v-for item」两个条件同时成立。只有引用、没有
+    // per-item 模板时，本文件若让位 ⇒ 无人逐项挂载 ⇒ 资源彻底消失。故必须让位失败（返回
+    // null），退回既有事实链路径（fail-open，行为不劣于旧实现）。
+    const SEC_NO_VFOR = `<template>
+  <div data-section-id="48:5798-list" class="c-x-fg-list-485798list">
+    <div class="c-x-fg-list-485798list-item" :style="{ backgroundImage: 'url(' + bg1 + ')' }">单条</div>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/image_313-5800.png'
+</script>`
+    const files: any = {
+      'package/index.vue': IDX_PLAIN,
+      'package/components/ListSection.vue': SEC_NO_VFOR,
+    }
+    const plan = buildResourceMountPlan(sections, sharedMapping(), { figmaRoot: null })
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    expect(r.diagnostics.map((x: any) => x.reason)).not.toContain('per-item-host-external')
+    expect(r.mounted.length).toBeGreaterThan(0)
+    expect(files['package/index.vue']).toContain('bg1')
+  })
+
+  it('反向④：无 sectionAnchorId（事实链不命中）→ 拦截仍生效，`slot-con` 静态回退不再误挂', () => {
+    const mapping = sharedMapping().map((m) => ({ ...m, ownerSectionId: undefined }))
+    const files: any = {
+      'package/index.vue': IDX_PLAIN,
+      'package/components/ListSection.vue': LIST_SEC,
+    }
+    const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: null })
+    // 无 ownerSectionId ⇒ 锚点解析不到 ⇒ sectionAnchorId 为 null（sub-state 分支是这条路径的出口）
+    expect(plan.byFile.get('image_313-5800.png').mounts[0].sectionAnchorId).toBeNull()
+    const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
+    expect(r.diagnostics.map((x: any) => x.reason)).toContain('per-item-host-external')
+    expect(r.mounted).toHaveLength(0)
+    expect(files['package/index.vue']).toBe(IDX_PLAIN)
   })
 })

@@ -957,3 +957,83 @@ plan 段 `type==='header'` / Figma 子树恰 1 非空 TEXT / 同文件无既有 
 
 ### 验证口径
 folded-grid 三支 104 例 PASS + CODE-028 16 例 PASS；源码级变异（实现回 HEAD / spec 保持新）⇒ 3 例转红；两态回归 82 spec FAIL 集合 diff 为空；`npm run build` ✅ + dist 符号核查 + 旧形态 grep 0。
+
+
+## 附：刀 8–32 全量明细（原 MEMORY.md L7 逐字迁入，2026-10-29）
+
+- 🚧 **本地已提交、未部署**：`0013ba8`→…→`b3f4d81`（刀53d/e 绑定形态）→`0f7e605`（CODE-028）→`3aa99b2`（刀53 N段文本接管）→`5bdd731`（刀53 icon 父级图片包装借用）→`d686047`（刀6 同 bbox 叠层 stack：≥2 子项 bbox 逐字段全等 ⇒ display:stack 无方向，549 容器）→`c6cd125`（刀7 容器吸收背景层：未认领可见 SOLID RECTANGLE ⇒ 边锚定 absolute+z-index:-1，最近容器独占，63/174 组件 278 层）→**`15a930b`**（刀8 TEXT-COVERAGE 假绿治本，见下）→ **`8cb6773`**（真机验收三刀：刀9 `@/` 别名 import 治本+宿主外壳保标签；刀10 借用资源守卫祖先视觉包含豁免；刀7b 吸收层容器补 isolation:isolate）→ **`082b416`**（刀11 候选快照语法闸：推送前 validateVueSfc 扫全部 .vue、style 类剔除，0833ff36 实锤）→ **`781aedd`**（刀12 2D 行簇重建：`row-band-cluster.js` XY-cut 递归，纵流内横向带成行，801:3 实锤；🔴 pill 固有宽度契约未做）→ **`5880b28`**（刀13 vue3 接管叶重复覆盖守卫：`takeover-overlap-guard.js`，f33d8c12 实锤；真值文本从 tr.vue script 常量提取）→ **`7f92b54`**（刀14 装配嫁接根 template 嵌套配对：`findRootTemplateBlock` 计数配对替换 lazy 正则，治 mc-3538d75b 插槽 `</template>` 截断残留 `</div>` ⇒ Invalid end tag；🔴 lazy `[\s\S]*?</template>` 家族缺陷已有 sfc-template-extractor 三例前科，嫁接场景必须配对定位）→ **`931ec7e`**（刀15 DSML 残片剥除：`stripDsmlResidue` 标记行+对话续行块删，续行判据=无 CJK 合取代代码法特征；4L-c 裸标签字符类扩全角 `‑~`，治 mv-b9319f42 common.less 混入 `</｜｜DSML｜｜ parameter>`+中文对话 ⇒ LESS Unrecognised input）→ **`e35f0b5`**（刀16 兄弟间距真值注入：`siblingGapStyle` 纯几何 margin-top/left，4 处兄弟循环；治 6bba7218 模块贴死——纵流 33/20/20 + 行带内横向 64 全 0；🔴 真值间距不均一 ⇒ 不能用父级 gap；flex 相容性=grow 分配扣 margin 后空间）→ **`b9041cf`**（刀17 横向容器 2D 列簇+交叉轴居中：`planColumnGroups`（x 聚组先行）+ horizontal 容器纳入 2D 评估 + `crossAxisCenterStyle`（中心偏移≤max(4px,8%)且高<92%⇒align-self:center）；治 6bba7218 统计卡「icon|纵排文本块」被平铺横排+贴顶；🔴 根 group 无 wrapper ⇒ 居中只能 align-self 落子项）→ **`a07bb1a`**（刀18 theme-vars.less 回写 ENOENT：files map 缺 theme-vars 时 themes/ 目录未建 ⇒ 回写前 mkdirSync(recursive) 与主写盘循环同构）→ **`52f793d`**（刀19 M5-7 硬编码字号假阳性：检查判据与归一器同源 FG_TAKEOVER_CLASS_RX，mc-check.cjs 内嵌同正则由 spec 同构锁锁死+validator 直 import；🔴 掩码顺序敏感：先内联 style 后规则块，防 `;` 起配吞标签）+ frontend **`6111294`**（AI 修复假成功：信封把扁平 success 剥到顶层，fixMcSpecItem 双层判失败）→ **`36cdbb7`+`f326601`**（刀20 同构列表坍缩治本：20a planner 容器分支 vision items 轨被白名单丢（id 撞名双轨）⇒ richItems+childrenAbsorbed 判据改走单子叶 collapsed 路径；20b takeover 新 kind `list`（v-for+FG_LIST_ITEMS 字面量全真值+overflow-y:auto 真滚动+逐项 marginTop 不用父 gap），RX 扩 list、mc-check 内嵌副本同步；20c container-absorbed-bg 跳过滚动条滑块 rect（宽≤12 且高≥4×宽且贴右缘±4）；实锤 657661ca 6 卡列表坍缩成 1 卡+假滚动；爆炸半径 84 任务命中 4 个全同设计零杂散）→ **`e909916`**（刀21 坍缩二阶段：21a 叶子分支 vision 直收富卡叶归一（方向闸仅 vertical，审计 87 任务 horizontal/grid 17 例防误伤）；21c 折叠产物 `...first` 透传容器标记被判容器丢 items ⇒ isCollapsedListSection 前置守卫；21d E1 树节点内容轨空 ⇒ per-item body.items[0] 回退+几何直读顶层 bbox；21e collapsed 叶豁免 plainTextItems 覆盖 body.items；21b stat 对象映射 {online:{value,unit}}；实锤 3e301cdb 重放 listHits=1 六项全真值）→ **`54571bf`**（刀22+23 坍缩三阶段：dedupe 吸收者资格闸——折叠段只能被带列表内容的兄弟吸收，父容器后代闭包天然全覆盖会误删唯一起内容轨；刀23 children 子树轨：富卡判据 every→过滤、子树文本递归收集+px 字号解析、icon 卡内唯一映射节点归属判据、per-item 回退更全者胜出且 stats 结构轨优先；实锤 b2086a9c 重放 6 卡+6 icon 全解析）。→ **`b562ba1`**（刀24 fg-list 渲染产物语法闸：itemLit 逐项缺逗号致 ListSection.vue 语法错误→候选快照不推送→P1-2 孤儿剔除整文件丢失；spec 用写盘门禁同判据 validateVueSfc 锁死；实锤 1e6d7e4e，三 checkpoint 重放全 valid）。→ **`674c306`**（刀25+26：折叠产物恒带整列并集几何+全成员 sourceNodeIds——治列表容器被压成首卡 72px 假滚动；富卡 stats text 形态归一 value??text——治劣轨顶掉富卡；flatten spec 旧断言即病灶编码随判据同构更新；实锤 329a3781，四 checkpoint secH 532 全 valid）。本地 :13030 已重启供测试（刀14–26 生效，→ **`b5aedaf`**（刀27 T1' 死样式剔除括号配平：旧正则 `[^{}]*\{[^}]*\}` 遇嵌套 Less 残留外层 `}` ⇒ HeaderSection 门禁拒收 ⇒ CODE-023 fail-closed；改走 removeClassBlocks 同源实现；🔴 变异还原禁 `git checkout --` 未提交文件）。本地 :13030 PID 64844（刀14–28 生效；本地 Mongo 需 brew services start mongodb-community 常驻）。→ **`17fab6b`**（刀28 四连：28a normListItem children role 结构轨[icon resourceFile/stat-value/content 分区]，治 texts 6 纵堆溢出；28b dedupe 非列表段吸收证据剔 items[].id 展开，治 tail-text 误删；28c collapsed 叶几何透传救活刀20a 宿主补丁[此前恒空转]；28③ 折叠叶 src=全成员子树展开，治刀7 absorbed-bg）→ **`f8a832f`**（刀29 三修，7ec263c9 实锤：29a extractRichBodyItems children 轨卡结构签名闸——治 vision 混 layout 杂项段致 heteroTextCount 拒收整列退回手写；29b normalizeSectionNode 几何三件套透传——#138 同款第二断点家族，planner 修对≠真机生效；29c claimCollapsedLeafContainedIds 几何包含认领——治幻觉 id 闭包拿不到卡面 rect 致 absorbed-bg 色带）→ **`90bf78f`**（刀30 vue3 三假阳性治本，ab4e3051 实锤：30a styleEvidence backdrop 回退补 strokes/radius[根 GROUP 装饰在铺满 bg 子节点]；30b backgroundTruth 真值色编译=CODE-007 期望色最高优先[vision colors[0] 张冠李戴]；30c splitTopLevel 摘 <> 配对[箭头 `=>` 令 depth-1]+defineProps 剥注释——治 R2 误杀 prop）→ **`09004e7`**（刀31 四修，6eafb2f7 实锤：31a 折叠携带 vision 语义树[children 形态 graft 存活]——治拍平轨顶掉角色轨成 36 行纵堆；31b detectListLeaf 结构比分 stats*1000；31c 中文角色词表归一+资源事实兜底；31d fill 回查子树面积最大 SOLID 防 8×8 红块）→ **`b52346d`**（刀32 容器背景色归属律守卫 `section-color-attribution-guard.js`，6eafb2f7/07ae49a2 实锤：N1 只判「色值是否出现在产物全文本」不管落点 ⇒ con-con 容器写后代卡高亮 `#a6ceff` 照样判成功；V 必须 ∈ 自身 fills ∪ 自身背景层 ∪ **祖先链各节点同两项**，只存在于后代子树⇒descendant / 兄弟子树⇒sibling 皆报；既不在合法集也不在后代/兄弟 ⇒ 臆造色不越界（fail-open 归 N1）；判据零硬编码；🔴 **已定为 WARN-only，是否升 BLOCK(CODE-029) 待用户裁决**；附修三方共用 `container-background-truth#collectClassProp` 嵌套误读——按花括号配对取整段 body ⇒ 把后代规则属性记到祖先 class 头上，即刀32 首轮假阳性根因；spec 12+1 用例、变异 3/3 转红、真实 A/B 206 目录 clean=200/hit=6 全人工核验为真病灶、两态 FAIL 集合 DIFF-EMPTY[+13 全绿]）。主仓指针未推进（停在 `681e572c`）。本地 :13030 现为 **PID 80699**（刀14–32 生效，2026-10-29 重启）。
+
+---
+
+## 刀33 第1步：两处外科修复（2026-10-29，**已提交 `435016a`、未部署未 push**）
+
+用户拍板：**结构骨架 = vision / 精确尺寸（容器宽高、bbox）= Figma**；实施步序选 **「先第1步：两处外科修复」**（第2步 `opts.structureSource` 开关、第3步 174/206 组件两态回归暂缓）。
+
+### 背景矛盾：E1 骨架 vs vision 骨架
+- `roles/subcomponent-planner.js:2113-2138` `deriveSectionsFromFigmaTree`（纯 Figma 树确定性递归）**替代** vision 做结构骨架，vision 仅做语义回填。
+- `e1Derived` 闸门使用点仅 4 处：`:1218`（`if (!ctx?.e1Derived) return;`，`refineDerivedContainerLayout` 第 1 道闸）、`:2124`（`let e1Derived = false`）、`:2432`（`e1Derived = true`）、`:2601/2608`（ctx 透传）⇒ vision 骨架下 `refineDerivedContainerLayout` 自动不生效。
+- `:2473-2500` 的 else 分支（E1 推导失败才走）本就是「保留 vision sections + 按 `String(s.figmaNodeId || s.id || '')` 注入 `absoluteBoundingBox` / `styles.figmaHeightPx`」的互补模式 —— **只是键漏了 `figmaAnchorId`**，可直接升格主路径。
+
+### 改动 1：planner 三处 enrich 键补 `figmaAnchorId` 优先级
+- 靶点（改动前均为 `String(s.figmaNodeId || s.id || '')`）：`:2145`（`collectSemantic` 建 `visionSemantic` 索引）、`:2161`（enrich 取值）、`:2485`（`:2473-2500` 高度注入 `heightById` 取值）。
+- 单一来源新建：`utils/section-anchor-truth.js` 新增
+  - `sectionAnchorCandidates(section)` → `[section?.figmaAnchorId, section?.figmaNodeId, section?.id]`
+  - `sectionAnchorKey(section)` → 首个非空字符串键
+  - 🔴 **刻意不做 Figma-id 形态校验**：planner 索引里有合成段 id（`43:4791-list` / `807:2-tail-text`），校验会把合成 id 变空键 ⇒ **fail-open 转 fail-closed**。
+- `plan-body-child-id-audit.js`：`:51` import 补 `sectionAnchorCandidates`（消掉改 `resolveAnchorId` 后遗留的 `ReferenceError`）；`resolveAnchorId`（`:77-82`）改为遍历 `sectionAnchorCandidates` 取首个 `isFigmaId` 命中。
+- `figmaAnchorId` 写入方：`visual-parser.js` 调 `auditSectionAnchors`（LCA 修复，只写新字段、幂等）。全语料实测：**70/70 anchor ≠ id 且 70/70 存在于对应 figma.json 真值树**（扫 `backend-node/workspace` + `frontend/workspace` ⇒ 417 visual.json / 11143 sections / 70 anchor / 0 不存在）。
+- 🔴 **未改**：`visual-parser.js:3493` 的 `const figmaNodeId = c.figmaNodeId || c.id || s.figmaNodeId || s.id || ''` 属「header 控件 id 解析」另一轨，会动下游 slot 过滤，超出本轮批准范围。
+
+### 改动 2：collapser 折叠形态补方向判据（`utils/repeated-section-collapser.js`）
+- 病灶 A（原 `:449`）：`const type = finalItems.length >= 6 ? 'grid' : 'list'` —— **全库唯一赋 type 处，纯数量、零方向判据**；`section-tree.js#decideBaseName` 据此映射 `CardGrid` / `ListSection`。
+- 病灶 B（本轮探测新发现，与 A 同源）：折叠段 `layout` 是**首卡继承**（`buildCollapsedSection` 以 `...first` 展开 ⇒ 拿到的是首卡**内部**方向），且唯一会复算容器方向的 `refineDerivedContainerLayout` 开头 `idx.get(String(sec.id))` 对合成 id `<firstId>-list` **查不到 ⇒ 直接 return**。
+- 实测后果：6 卡纵排产物 `type:'list'` 却 `layout:'horizontal'` ⇒ 下游 `layout-direction-guard` / `vfor-list-direction-guard` 把 v-for 外层强制 row ⇒ **6 卡横向溢出（只见 1 张）**，正是用户报障形态。
+- **仅改 type 不够** ⇒ 必须同源派生 layout。
+- 改法：
+  1. `:24` 后新增 `import { decideLayoutForBoxes } from './figma-node-layout-facts.js';`（依赖方向已 grep 确认无环：collapser → layout-facts → section-tree → figma-effects）。
+  2. `:339` 后（`unionBoxOf` 之后）新增 `decideCollapsedShape(items, parentBox)`：用 `geoBox` 取各项 box → `decideLayoutForBoxes` 判方向 → 映射
+     - `display==='grid'` ⇒ `{type:'grid', layout:'grid', gridColumns?}`（cols≥2 才带）
+     - `display==='flex'` ⇒ `{type:'list', layout: flexDirection==='row' ? 'horizontal' : 'vertical'}`
+     - `display==='stack'` ⇒ `{type:'list'}`（**叠层方向事实不存在，不臆造 layout**）
+     - 无 bbox（<2 个 box）⇒ `{type: list.length>=6 ? 'grid' : 'list'}`（**保留旧数量兜底**）
+  3. `:497` 调用点：`geoBasis = flat.flattened ? g.idxs.map(i=>sections[i]) : finalItems`；`collapsedBox = unionBoxOf(geoBasis)`；`shape = decideCollapsedShape(finalItems, collapsedBox)`；`flatOpts` 透传 `_box: collapsedBox` / `_shape: shape`。
+  4. `buildCollapsedSection`（`:420`）内 `Sec` 字面量后新增：`if (opts._shape?.layout) { Sec.layout = opts._shape.layout; Sec.gridColumns = opts._shape.gridColumns ?? undefined; }` —— **无事实不写，保留 `...first` 原值（fail-open）**。
+- 判据零硬编码：完全复用既有单一来源 `decideLayoutForBoxes`，映射逐字同构 R23 复算（grid→grid / row→horizontal / column→vertical）。
+- `figma-node-layout-facts.js#decideLayoutForBoxes` 内部顺序：① 同 bbox 叠层（`display:'stack'`，无 flexDirection）② 均匀网格 `detectGridColumns`（≥4 box、≥2 列且每列 ≥2、列间差 ≤1）③ `areBoxesSideBySide` 两两比例。
+
+### 新增 spec：`utils/__tests__/repeated-section-collapser-shape.spec.ts`（7 用例，**7/7 PASS**）
+| # | 场景 | 期望 |
+|---|---|---|
+| ① | 6 卡纵排一列 | `type=list`、`layout=vertical`（旧：grid + 继承 horizontal） |
+| ② | 6 卡 3 行 × 2 列 | `type=grid`、`layout=grid`、`gridColumns=2` |
+| ③ | 12 卡 3 行 × 4 列（跨层展平路径） | `type=grid`、`layout=grid`、`gridColumns=4` |
+| ④ | 6 卡横排一行 | `type=list`、`layout=horizontal`（单行不是网格） |
+| ⑤ | 6 卡同 bbox 叠层 | `type=list` 且**不写 layout**（不臆造） |
+| ⑥ | 反向：6 项无 bbox | `type=grid`（数量兜底）、layout 不被改写 |
+| ⑦ | 反向：3 项纵排 | `type=list`、`layout=vertical`（数量不参与） |
+
+### 既有 spec 影响面核算（改动后全部通过）
+- `repeated-section-collapser-flatten.spec.ts`：① 12 卡 3×4 ⇒ 几何=grid ⇒ `type==='grid'` 仍成立、`itemTemplate.id==='38:3167-c0'` 仍成立；② 6 卡横排 ⇒ 得 `list`，但该用例**未断言 type**（只断 `itemCount=6` / `bbox`）。
+- `roles/__tests__/subcomponent-planner-collapse.spec.ts`：device 12 卡 + 12 装饰 fixture 无 bbox ⇒ 数量兜底 ⇒ `lists[0].type==='grid'` 仍成立。
+- `roles/__tests__/subcomponent-planner-items-collapse.spec.ts`：`:153` `leaf.type==='list'` 走 `rawListLeaf` 硬编码 `'list'`，不经 `:449` ⇒ 不受影响。
+- `repeated-section-collapser-geo.spec.ts`：只断 `itemCount`，未断 type ⇒ 不受影响。
+- 实测跑批：`subcomponent-planner-collapse|subcomponent-planner-items-collapse|repeated-section-collapser-flatten|repeated-section-collapser-geo|repeated-section-collapser-shape|plan-body-child-id-audit|section-anchor-truth|folded-grid-anchor-resolution` ⇒ **8 套件 / 87 用例全 PASS**（0.53s）。
+
+### 折叠产物下游消费者（改前必查）
+`section-tree.js#decideBaseName`（type→组件名）、`layout-direction-guard.js#resolveTruthLayout`（读 `sec.layout || sec.body.layout`：grid→isGrid）、`vfor-list-direction-guard.js#isCollapsedListSection`（`-list$`/`collapsed`/`renderHint==='v-for'`）、微码 `microcode-engineer.js:982-989`、`grid-list-layout-contract.js#buildGridContract`（`isGrid = layout==='grid' || type==='grid'`）、`constraint-reinforcement.js:189`。
+
+### 验收（2026-10-29 19:20 收口，commit `435016a`）
+- ✅ **改动 1 侧 spec**（`section-anchor-truth.spec.ts:364-413`，7 例）：三元组顺序固定 / 阳性=`figmaAnchorId` / 逐级回退 / **反向 fail-open 守护**（合成 id 原样作键）/ 边界 `0`·`false` 视为非空 / 与 `auditSectionAnchors` 同源 / 幂等前提 ⇒ 该套件 **25 PASS**（HEAD 版 18 ⇒ 净增 7）。
+- ✅ **真实样本 A/B（e7290dc5）**：NEW = `48:5798 container → 48:5798-list(type=list, layout=vertical, items=6, renderHint=v-for) + 565:3-tail-text`，effCount 2 / internalCount 0；OLD(HEAD) = `565:3 container → 48:5798 container → 48:5801(layout=horizontal, items=6 **横排**) + 48:5813-list(vertical, n=5) + 565:3-tail-text`，internalCount 2（`48:5801-group1/2`）⇒ 原「1+5 并列」收回到同一段。
+- ✅ **源码级变异三连**（每个变异后跑对应 spec；`.checkpoint` 样本 + `/tmp/old-ab/*.HEAD.js` 备份）：
+  - **E**（`sectionAnchorCandidates` 打回旧语义 `[figmaNodeId, id]`）⇒ `section-anchor-truth.spec.ts` + `plan-body-child-id-audit.spec.ts` **9 例转红**（刀33 新增 5 + R22-d 3 + auditPlanBodyChildIds 1）⇒ 单一来源是真接线、非新壳。
+  - **B**（改动2 NEW + 改动1 回退）⇒ 输出与 HEAD 全等 ⇒ **改动2 单独无效果，依赖改动1 提供折叠靶点**（两修复有依赖序）。
+  - **C**（改动1 NEW + 改动2 回退）⇒ 折叠段 type 由 `list` 变回 `grid`（数量兜底）、layout 仍 `vertical`（继承首项）⇒ 可见差异定位在 **type 修正**。
+- ✅ **几何阳性对照**：喂 6 张真实卡 bbox（12 个 470×72 节点，ys=51606/51698/…/52066）给 `decideLayoutForBoxes` ⇒ `{display:'flex', flexDirection:'column', confidence:'high'}`（非 grid）⇒ `flex→vertical` 映射锚在真实几何上，非硬编码。
+- ✅ **套件**：受影响 **18 套件 / 142 用例 PASS**；新增两点定点（`section-anchor-truth` 25 + `repeated-section-collapser-shape` 7）⇒ **32/32 PASS**。
+- ✅ **两态全量回归**：NEW `21 failed / 302 passed / 323` 套件、`36 failed / 4453 passed / 4489` 用例；OLD `36 failed / 4438 passed / 4474` 用例；**FAIL 集合 diff 为空**（`sed -E 's#^src/##'` 归一 basename 后各 21 唯一套件，全在已知 flaky/环境名单；计数行双写的假象已排除）。**Δ通过 +15** = shape 7 + anchor-truth 新增 7 + 临时 replay 1。
+- ✅ `npm run build` ✅（6s；`build-stamp git=b52346d`；`references copied to dist`）。
+- ✅ 本地 commit **`435016a`**（6 files，+348/−15）。**未部署（:13030 未重启）、未 push；主仓 gitlink 指针未推进（main 记录 `b562ba18`，滞后约 30 刀）。**
+- 落点勘误：planner 三处键**改动后**实际行号为 `:2151`（`collectSemantic` 建索引）/ `:2167`（enrich 取值）/ `:2491`（兜底高度注入），上文写的 `:2145/:2161/:2485` 是改动前坐标。
+- ⬜ 真机渲染核验（折叠产物 `data-section-id` / `v-for` / `flex-direction:column` 真机可见）待做。
+- ⬜ 第2步 `opts.structureSource`（`'vision'`/`'figma'` 开关）+ 第3步 174/206 组件两态回归（**用户未批**）。

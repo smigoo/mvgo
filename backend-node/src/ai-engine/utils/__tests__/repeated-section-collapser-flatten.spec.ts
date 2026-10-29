@@ -89,8 +89,10 @@ describe('F1 跨层折叠 → 展平到最内层重复单元', () => {
     expect(out[0].items).toHaveLength(6)
     // 未展平 ⇒ 模板就是第一张卡本身
     expect(out[0].itemTemplate.id).toBe('c0')
-    // 未展平 ⇒ 不重算 bbox（沿用组内首项）
-    expect(out[0].absoluteBoundingBox).toEqual(box(126, 30, 100, 0))
+    // 刀 25 起：未展平同样重算 bbox = 全成员并集（首项透传只是首卡尺寸，
+    // 是 329a3781「列表容器被压成单卡高」的实锤病灶）——6 卡横排 x 步进 146，
+    // 并集 x0..(5*146+126)=856，高 30
+    expect(out[0].absoluteBoundingBox).toEqual({ x: 0, y: 100, width: 856, height: 30 })
   })
 
   it('③ 阴性：混合组（1 张含子列表 + 2 张普通卡）⇒ 不展平，保持 3 项', () => {

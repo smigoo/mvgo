@@ -73,6 +73,44 @@ function stripBgKeysFromTag(tag, varName) {
 }
 
 /**
+ * 🛡️ 刀33 第3步（per-item 宿主存在性探测 · 2026-10-29 · mc-max-1793281736684-802b780c 实锤）：
+ *   在**其它文件**里找「同时满足 ① 引用该资源变量、② 含 v-for item 模板」的文件。
+ *
+ * 语义：折叠段接管把列表渲染搬进独立子组件（ListSection.vue）后，本文件（index.vue）没有
+ *   任何 v-for item ⇒ 事实链锚点（`data-section-id=<重复单元>`）命中的是**重复单元**本身而非
+ *   列表容器，挂上去等于「整块只画一次」；而该资源的 per-item 宿主（v-for item）在别的文件里。
+ *
+ * 本探测只回答一个**存在性事实**：外部 per-item 宿主确实存在且已引用本资源 ⇒ 本文件应当让位。
+ *   找不到 ⇒ 返回 null，调用方不得让位（行为不劣于旧实现）。
+ *
+ * 🔴 判据修正留痕（2026-10-29 真机取证 · mc-1793286461778-8ad1ccc1）：
+ *   初版另有前置条件 `g.sharedBy.length > 1`，但该条件在真机**恒为假**——折叠 dedup 后
+ *   `.mc-gen/resource-dom-mapping.json` 里 `image_313-5800.png`(bg1) **只有 1 条**；真机里
+ *   条数 >1 的只有 `icon-5823.png`(×5) 且其 role 是 `icon` ⇒ `bg ∧ sharedBy>1` 是空集合，
+ *   初版判据是**死代码**。故改为纯存在性判据（见调用点 :510 附近注释）。
+ *
+ * ⚠️ 不可收紧为「var 必须出现在 v-for item **开标签内**」：`findVForItemTag` 的正则
+ *   `[^>]*?` 非贪婪，会被 item 行内的 `marginTop: __i > 0` 的 `>` 截断 ⇒ 返回的 tag 里
+ *   读不到 `bg1`（离线实测）。只能按「文件级：含该 var ∧ 含 v-for item」判。
+ *
+ * @param {Record<string, string>} allFiles 产物文件表（路径 → 内容）
+ * @param {string} varName 资源变量名（如 bg1）
+ * @param {string} selfFile 当前文件路径（排除自身）
+ * @returns {{ file: string, tag: string } | null}
+ */
+function findExternalVForItemHost(allFiles, varName, selfFile) {
+  if (!allFiles || typeof allFiles !== 'object' || !varName) return null;
+  const rx = new RegExp(`\\b${varName}\\b`);
+  for (const [fp, fc] of Object.entries(allFiles)) {
+    if (fp === selfFile || typeof fc !== 'string' || !fc) continue;
+    if (!rx.test(fc)) continue;
+    const tag = findVForItemTag(fc);
+    if (tag) return { file: fp, tag };
+  }
+  return null;
+}
+
+/**
  * 🛡️ 2026-09-29：按 `data-section-id="<anchor>"` 取回**开标签全文**（含属性）。
  *
  * 原实现用正则
@@ -459,6 +497,54 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       };
       let result = null;
 
+      // 🛡️ 刀33 第3步（per-item 资源不落本文件 · 2026-10-29 · mc-max-1793281736684-802b780c 实锤）：
+      //   折叠段接管把列表渲染搬进独立子组件（ListSection.vue）后，本文件（index.vue）没有
+      //   任何 v-for item ⇒ 下方两条分支都会误挂到「整块只画一次」的位置：
+      //     · §六#4 事实链锚点 `data-section-id=<重复单元>`（实测 48:5798）命中的是**重复单元**
+      //       本身（不是列表容器）⇒ 挂 list-con；
+      //     · `bgRole=sub-state` 的 `mountSubStateBackground` 失败后静态回退按关键词再挂到
+      //       更外层容器（实测 slot-con）⇒ 二次误挂。
+      //   实测（同任务内相隔 32ms）：
+      //     🎯 [资源挂载] bg1 经事实链 data-section-id=48:5798 精确挂载 {"file":"package/index.vue"}
+      //     🛡️ 独立状态组件无 :class active 绑定，已静态挂背景 {"varName":"bg1","mountTarget":"slot-con"}
+      //   ⇒ bg1 同时挂 list-con + slot-con，而 v-for item 处 0 次。
+      //
+      //   🔴 判据修正（2026-10-29 真机取证 · mc-1793286461778-8ad1ccc1）：初版前置条件
+      //   `g.sharedBy.length > 1`（同 resourceFile 被 N 个 figma 节点共享）在真机**恒为假**：
+      //   折叠 dedup 后 `.mc-gen/resource-dom-mapping.json` 里 `image_313-5800.png`(bg1)
+      //   **只有 1 条**（figmaNodeId 48:5800）；真机里条数 >1 的只有 `icon-5823.png`(×5)，
+      //   而其 `previewAnalysisRole === 'icon'` ⇒ `bg ∧ sharedBy>1` 是**空集合** ⇒ 初版判据
+      //   是死代码（bg1 照旧被事实链挂进 index.vue，产物 `:style` 仍挂）。
+      //   ⇒ 改用**存在性事实**（零猜测、零阈值）：本文件无 v-for item，而产物中**确实存在**
+      //   另一个文件同时 ① 引用本资源变量、② 含 v-for item ⇒ 该资源的 per-item 宿主已就绪，
+      //   本文件让位（fail-closed：不挂、不猜容器）。外部宿主不存在/未引用本 var 时不拦
+      //   ⇒ 行为不劣于旧实现（见 findExternalVForItemHost 的收紧陷阱留痕）。
+      if (
+        g.kind === 'bg' &&
+        typeof content === 'string' &&
+        !findVForItemTag(content)
+      ) {
+        const host = findExternalVForItemHost(
+          allFiles,
+          varName,
+          targetFile,
+        );
+        if (host) {
+          diagnostics.push({
+            reason: 'per-item-host-external',
+            file: targetFile,
+            var: varName,
+            host: host.file,
+          });
+          options.logger?.info?.(
+            `🎯 [资源挂载] ${varName} 为 per-item 资源（外部宿主 ${host.file} 的 v-for item 已引用），本文件 ${targetFile} 无 v-for item ⇒ 不挂本文件（避免整块只画一次错位）`,
+            { file: targetFile },
+          );
+          doneKeys.add(key);
+          continue;
+        }
+      }
+
       // 🛡️ 事实优先级表 §六 #4（2026-09-28）：**数据事实链优先** —— 资源节点最近祖先里那个
       //   「确实是 section」的 id（`mount.sectionAnchorId`）→ 在**实际产物**里找
       //   `data-section-id="<anchor>"` 的元素 → 命中即精确挂载（零名字猜测）。
@@ -720,6 +806,17 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
                 options.logger?.info?.(`🎯 [资源挂载] ${varName} 共享背景（${sharedCount} 卡）挂到 v-for item（已从面板根迁徙）`, {
                   file: targetFile,
                 });
+                // 🛡️ 刀33 第3步配套修正（2026-10-29 · 全量回归实锤）：本分支此前只 `continue`，
+                //   既不 push 也不 add(key) ⇒ ① 一次**真实发生**的挂载不计入 `mounted`
+                //   （调用方进度条 "已按计划挂载 N 个资源" 少报，mc 产物核验也看不到这条）；
+                //   ② 同 key 的后续 mount 不被 `doneKeys` 去重 ⇒ 被重复处理一次，
+                //   重复那次的 fallback 正是「同一资源被二次注入/误挂根容器」的来源
+                //   （实测 `resource-mount-plan.spec.ts`「共享底图 3 个 mount 同 target」里，
+                //    mount#1 正确挂到 v-for item 但未记账，重复 mount#2 未命中目标，
+                //    mount#3（owner=null→index.vue）反而把同一背景挂进根组件）。
+                //   ⇒ 与 §六#4 事实链分支（:589-590）对齐：成功即记账 + 去重。
+                doneKeys.add(key);
+                mounted.push(result);
                 continue;
               }
             }

@@ -2392,3 +2392,129 @@ describe('IMG-SRC-001 裸 img 无图源（#128 ⑧ · 84af4f8f 族实锤，BLOCK
     expect(runImg(`const s = "<img class=x>"`, 'package/util.ts')).toHaveLength(0)
   })
 })
+
+/**
+ * 🛡️ 刀30a+30b 集成（2026-10-29，mv-max-1793255130119-ab4e3051 实锤）：
+ * 该 vue3 任务照 Figma 真值落地（渐变根背景 rgba(212,227,255,0.9)→rgba(193,214,255,0.9)
+ * + border rgba(160,193,255,1) + border-radius 4px），却被 CODE-007+014+025 三假阳性
+ * BLOCK 至 L0-B 重试耗尽。根因：根是 GROUP、装饰真值在铺满 bg 子节点上，而
+ * styleEvidence 的 backdrop 回退只覆盖 fills/effects（漏 strokes/radius），
+ * CODE-007 期望色又只有 vision 源（colors[0] 张冠李戴成主题蓝 rgba(3,98,166,1)）。
+ * 本 describe 用 compileDesignFacts 的真实输出形态（同构锁）复刻该组件做端到端校验。
+ */
+describe('刀30：vue3 根装饰真值（GROUP+backdrop）三假阳性集成', () => {
+  // 与 design-facts-compiler 输出同构（spec 同 fixture 语义，不改第二实现）
+  const DESIGN_FACTS_GROUP_BACKDROP = {
+    root: {
+      nodeId: '48:5796',
+      styleEvidence: {
+        background: { allowed: true, source: 'figma-api', evidenceCount: 1 },
+        border: { allowed: true, source: 'figma-api', evidenceCount: 1 },
+        borderRadius: { allowed: true, value: 4, source: 'figma-api' },
+        boxShadow: { allowed: false, source: 'figma-api', evidenceCount: 0 },
+      },
+      backgroundTruth: {
+        colors: ['rgba(212,227,255,0.9)', 'rgba(193,214,255,0.9)'],
+        source: 'figma-api',
+      },
+    },
+  }
+
+  const INDEX_VUE_TRUTHFUL = `<template>
+  <div class="deploy-nodes-root">
+    <div class="deploy-body"></div>
+  </div>
+</template>
+<script setup>
+</script>
+<style lang="less" scoped>
+.deploy-nodes-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(212, 227, 255, 0.9) 0%, rgba(193, 214, 255, 0.9) 100%);
+  border: 1px solid rgba(160, 193, 255, 1);
+  border-radius: 4px;
+}
+</style>`
+
+  const NODE_CARD_PROP_BG = `<template>
+  <div class="node-card" :style="{ backgroundImage: \`url(\${bgImage})\` }">
+    <img class="icon" :src="icon1" alt="" />
+  </div>
+</template>
+<script setup>
+const props = defineProps({
+   // 状态底纹背景图（由父级注入的 bg 变量）
+  bgImage: { type: String, default: '' }
+})
+import icon1 from '../resources/images/icon-1.png'
+</script>
+<style lang="less" scoped>
+.node-card { width: 100%; }
+</style>`
+
+  const runVue3 = (files: any[], options: any = {}) =>
+    CodeStructureValidator.validate(files, 'mv-test-ab4e3051', {
+      target: 'vue3',
+      resourceDomMapping: [],
+      ...options,
+    })
+
+  it('阳性：真值落地产物（渐变+border+radius）+ backdrop styleEvidence + truth 期望色 → 三码全清', () => {
+    const res = runVue3(
+      [
+        { path: 'package/index.vue', content: INDEX_VUE_TRUTHFUL },
+        { path: 'package/components/NodeCard.vue', content: NODE_CARD_PROP_BG },
+      ],
+      {
+        designFacts: DESIGN_FACTS_GROUP_BACKDROP,
+        layoutStructure: { styles: { colors: ['rgba(3,98,166,1)'] } },
+      },
+    )
+    expect(blocksOf(res, 'CODE-007')).toHaveLength(0)
+    expect(blocksOf(res, 'CODE-014')).toHaveLength(0)
+    expect(blocksOf(res, 'CODE-025')).toHaveLength(0)
+  })
+
+  it('反向：摘掉 backgroundTruth（vision colors[0] 主题蓝在场）→ CODE-007 转红', () => {
+    const factsNoTruth = JSON.parse(JSON.stringify(DESIGN_FACTS_GROUP_BACKDROP))
+    factsNoTruth.root.backgroundTruth = { colors: [], source: 'figma-api' }
+    const res = runVue3(
+      [{ path: 'package/index.vue', content: INDEX_VUE_TRUTHFUL }],
+      {
+        designFacts: factsNoTruth,
+        layoutStructure: { styles: { colors: ['rgba(3,98,166,1)'] } },
+      },
+    )
+    expect(blocksOf(res, 'CODE-007').length).toBeGreaterThan(0)
+  })
+
+  it('反向：styleEvidence 全 false（旧 backdrop 漏网形态）→ CODE-014 转红', () => {
+    const factsNoEvidence = JSON.parse(JSON.stringify(DESIGN_FACTS_GROUP_BACKDROP))
+    factsNoEvidence.root.styleEvidence.border = { allowed: false, source: 'figma-api', evidenceCount: 0 }
+    factsNoEvidence.root.styleEvidence.borderRadius = { allowed: false, value: null, source: 'figma-api' }
+    const res = runVue3(
+      [{ path: 'package/index.vue', content: INDEX_VUE_TRUTHFUL }],
+      { designFacts: factsNoEvidence },
+    )
+    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+  })
+
+  it('反向：臆造 box-shadow（真值无阴影证据）→ CODE-014 仍 BLOCK', () => {
+    const res = runVue3(
+      [
+        {
+          path: 'package/index.vue',
+          content: INDEX_VUE_TRUTHFUL.replace(
+            'border-radius: 4px;',
+            'border-radius: 4px;\n  box-shadow: 0 2px 8px rgba(0,0,0,0.3);',
+          ),
+        },
+      ],
+      { designFacts: DESIGN_FACTS_GROUP_BACKDROP },
+    )
+    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+  })
+})

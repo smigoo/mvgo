@@ -83,10 +83,45 @@ function collectBackdropEvidence(root) {
     // 命名命中优先；形状节点仅在其确实带装饰时才作数
     const cFills = visiblePaints(child.fills)
     const cEffects = visibleEffects(child.effects)
-    if (cFills.length === 0 && cEffects.length === 0) continue
-    return { fills: cFills, effects: cEffects, nodeName: child.name || null }
+    const cStrokes = visiblePaints(child.strokes)
+    const cRadius = normalizeRadius(child)
+    if (cFills.length === 0 && cEffects.length === 0 && cStrokes.length === 0 && !hasPositiveRadius(cRadius)) continue
+    return {
+      fills: cFills,
+      effects: cEffects,
+      strokes: cStrokes,
+      radius: cRadius,
+      nodeName: child.name || null,
+    }
   }
   return null
+}
+
+/**
+ * 🛡️ 刀30b（2026-10-29，mv-max-1793255130119-ab4e3051 实锤）：根背景真值色编译。
+ *
+ * CODE-007 的期望色旧来源只有 vision（layoutStructure/visualElements/colors[0]）——
+ * 本设计 vision 把主题蓝 rgba(3,98,166,1)（标题文字色）当 colors[0]，而 Figma 真值根背景是
+ * 渐变 rect（#d4e3ff→#c1d6ff @0.9）→ 期望色张冠李戴 → 照真值落地的渐变产物被 BLOCK。
+ * 这里从 figma fills（自身或 backdrop）确定性编译期望色：SOLID→rgba、GRADIENT→各 stop rgba，
+ * 数值取整（alpha 2 位），与 normalizeCssLiteral 口径兼容。
+ */
+function compileBackgroundTruthColors(fills) {
+  const out = []
+  const push = (c, opacity) => {
+    if (!c || typeof c !== 'object') return
+    const a = Math.round(((c.a ?? 1) * (opacity ?? 1) + Number.EPSILON) * 100) / 100
+    const lit =
+      `rgba(${Math.round((c.r ?? 0) * 255)},${Math.round((c.g ?? 0) * 255)},${Math.round((c.b ?? 0) * 255)},${a})`
+    if (!out.includes(lit)) out.push(lit)
+  }
+  for (const paint of visiblePaints(fills)) {
+    if (paint.type === 'SOLID') push(paint.color, paint.opacity)
+    else if (String(paint.type || '').startsWith('GRADIENT')) {
+      for (const stop of paint.gradientStops || []) push(stop?.color, paint.opacity)
+    }
+  }
+  return out
 }
 
 /**
@@ -104,8 +139,13 @@ export function compileDesignFacts({ figmaNodeData, visualAnalysis } = {}) {
   const fills = ownFills.length > 0 ? ownFills : backdrop?.fills || ownFills
   const effects =
     ownEffects.length > 0 ? ownEffects : backdrop?.effects || ownEffects
-  const strokes = ownStrokes
-  const radius = normalizeRadius(root)
+  // 🛡️ 刀30a（2026-10-29，mv-max-1793255130119-ab4e3051 实锤）：描边/圆角同源回退。
+  //   根 GROUP 自身 strokes/radius 为空，但全尺寸 bg 子节点（48:5797「bg」RECTANGLE）
+  //   带 SOLID 描边 #a0c1ff + cornerRadius 4 → 产物照真值落地 border/border-radius
+  //   却被 CODE-014 判「臆造」BLOCK（styleEvidence 只看根自身 → border.allowed=false）。
+  const ownRadius = normalizeRadius(root)
+  const strokes = ownStrokes.length > 0 ? ownStrokes : backdrop?.strokes || ownStrokes
+  const radius = hasPositiveRadius(ownRadius) ? ownRadius : backdrop?.radius ?? null
   const shadowEffects = effects.filter((effect) =>
     ['DROP_SHADOW', 'INNER_SHADOW'].includes(effect.type),
   )
@@ -141,6 +181,11 @@ export function compileDesignFacts({ figmaNodeData, visualAnalysis } = {}) {
           source: 'figma-api',
           evidenceCount: shadowEffects.length,
         },
+      },
+      // 🛡️ 刀30b：根背景真值色（SOLID/GRADIENT stops），CODE-007 期望色最高优先来源
+      backgroundTruth: {
+        colors: compileBackgroundTruthColors(fills),
+        source: 'figma-api',
       },
     },
     charts: normalizeCharts(visualAnalysis?.charts || visualAnalysis?.layoutStructure?.charts),

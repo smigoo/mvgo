@@ -17,6 +17,7 @@ jest.mock('../../logger/index.js', () => ({
 }))
 
 import { subcomponentPlanner, buildEffectiveSection } from '../subcomponent-planner.js';
+import { indexFigmaNodes } from '../../utils/section-tree.js';
 const mkItem = (id, iconNode, name) => ({
   id,
   layout: 'horizontal',
@@ -350,5 +351,55 @@ describe('刀23 planner：body.items 混合（富卡 + 杂项）⇒ 过滤归一
       body: { items: [mkSubtreeCard('甲节点'), { type: 'text', text: 'a' }, { type: 'text', text: 'b' }] },
     }, 0, CTX9);
     expect(out.collapsed).toBe(false);
+  });
+});
+
+describe('刀28c/28③ planner：collapsed 叶几何透传 + sourceNodeIds 全成员子树（4cc3d366/54ae6ee3 实锤）', () => {
+  // 病灶①（28c）：rawListLeaf 带整列并集几何，但叶子分支白名单重建丢几何字段 ⇒
+  //   容器分支「刀20a 配套」宿主补丁读 children[0].figmaBox 恒 undefined ⇒
+  //   宿主仍按自身 bbox（首卡 72px）申报 ⇒ 列表挤进 72px 壳。
+  // 病灶②（28③）：折叠段 src 只含首卡子树 ⇒ 装配 claimedIds 缺卡 2-6 ⇒
+  //   刀7 absorbed-bg 双份渲染。
+  it('⭐ 阳性：折叠叶几何透传 + 宿主几何被并集覆盖 + src 含全部成员子树', () => {
+    const res = subcomponentPlanner.plan(mkLayout([{ id: '10:3', name: '图标', layout: 'horizontal' }]), { figmaNodeData: FIGMA });
+    const leaf = find(res.effectiveSections, (s) => s.id === '10:1-list');
+    expect(leaf).toBeTruthy();
+    // 28c：整列并集几何透传（两卡 0..72 / 92..164 ⇒ 并集高 164）
+    expect(leaf.absoluteBoundingBox).toMatchObject({ x: 0, y: 0, width: 400, height: 164 });
+    expect(leaf.figmaBox?.height).toBe(164);
+    // 28c：宿主容器几何被刀20a 配套补丁覆盖为整列并集（不再按自身 figma bbox）
+    const host = find(res.effectiveSections, (s) => s.id === '10:1');
+    expect(host?.figmaBox?.height ?? host?.absoluteBoundingBox?.height).toBe(164);
+    // 28③：sourceNodeIds 含全部成员卡组子树（claimedIds 精确匹配消费）
+    for (const id of ['10:2', '10:3', '10:5', '10:6']) {
+      expect(leaf.sourceNodeIds).toContain(id);
+    }
+  });
+
+  it('反向：figma 索引缺失成员 ⇒ 至少保留锚点 id（fail-open 不猜）', () => {
+    // 直调 buildEffectiveSection：figma 树只含卡1（10:2 子树），卡2（10:5）索引缺失
+    const partial = {
+      id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 300 },
+      children: [
+        { id: '10:2', name: 'card1', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 72 }, children: [
+          { id: '10:3', name: 'icon', type: 'FRAME', absoluteBoundingBox: { x: 20, y: 16, width: 40, height: 40 }, children: [] },
+        ] },
+      ],
+    };
+    const sec = {
+      id: '10:1', name: '节点列表', layout: 'vertical', isLayoutContainer: true,
+      children: [{ id: '10:3', name: '图标', layout: 'horizontal' }],
+      body: { layout: 'vertical', items: [mkItem('10:2', '10:3', '甲节点'), mkItem('10:5', '10:6', '乙节点')] },
+    };
+    const out = buildEffectiveSection(sec, 0, {
+      figmaIndex: indexFigmaNodes(partial),
+      allInternalSubcomponents: [],
+    });
+    const leaf = (out.children || []).find((c) => c.id === '10:1-list');
+    expect(leaf).toBeTruthy();
+    // 索引可解析成员 ⇒ 子树全展开；缺失成员（10:5）⇒ 锚点 id 兜底保留
+    expect(leaf.sourceNodeIds).toContain('10:2');
+    expect(leaf.sourceNodeIds).toContain('10:3');
+    expect(leaf.sourceNodeIds).toContain('10:5');
   });
 });

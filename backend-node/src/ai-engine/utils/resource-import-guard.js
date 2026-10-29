@@ -192,6 +192,13 @@ export function collectDeclaredBindings(code) {
     if (end < 0) continue
     let arg = code.slice(openIdx + 1, end).trim()
     if (arg.startsWith('{') && arg.endsWith('}')) arg = arg.slice(1, -1)
+    // 🛡️ 刀30（2026-10-29，mv-max-1793255130119-ab4e3051 实锤）：剥注释再切分。
+    //   props 键前的行注释（`// 节点数据：…`）会与首键粘在同一顶层分段，
+    //   split(':')[0] 取到的是注释文本而非键名 → 全部 prop 名丢失 → 模板引用 prop
+    //   （如 bgImage）被 R2 幽灵引用误杀（CODE-025 BLOCK，L0-B 重试耗尽整任务失败）。
+    arg = arg
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
     for (const part of splitTopLevel(arg, [',', ';'])) {
       const name = part.trim().split(':')[0]?.trim().replace(/\?$/, '')
       if (name && /^[A-Za-z_$][\w$]*$/.test(name)) declared.add(name)
@@ -208,7 +215,11 @@ function splitTopLevel(text, seps) {
   const parts = []
   let depth = 0
   let cur = ''
-  const pairs = { '{': '}', '[': ']', '(': ')', '<': '>' }
+  // 🛡️ 刀30（2026-10-29，ab4e3051 实锤）：**不得**把 `<`/`>` 计入配对——
+  //   prop 默认值里的箭头函数 `default: () => ({})` 的 `=>` 会被误当泛型闭合符
+  //   令 depth -1 → 后续顶层逗号全部失配 → isActive/bgImage 等键丢失
+  //   → 模板引用 prop 被 R2 幽灵引用误杀。泛型实参内的逗号本就位于 `{...}` 深度内，无需 `<>` 配对。
+  const pairs = { '{': '}', '[': ']', '(': ')' }
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
     if (pairs[ch] !== undefined) { depth += 1; cur += ch; continue }

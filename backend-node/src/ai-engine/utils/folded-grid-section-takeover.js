@@ -37,6 +37,13 @@ import {
   nodeAppearanceTruth,
 } from './section-tree.js';
 import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js';
+// 🛡️ 刀33：列表 item 的**卡盒真值**回收要按「行填充色」归一比较（与 N1 真值色值门禁
+//   同一口径，禁止自造颜色归一），故引入 `normalizeCssColor`（纯函数、零依赖，无环）。
+import { normalizeCssColor } from './truth-color-usage-guard.js';
+// 🛡️ 刀33：item 内「图条」背景四件套（size/position/repeat）**必须**复用资源挂载层
+//   同一份纯函数判据（`inferBackgroundStyle`），否则 item 挂载形态与容器挂载形态
+//   会分叉成两套 geometry（正是「容器画一遍、item 画另一遍」的温床）。
+import { inferBackgroundStyle } from './background-size-inference.js';
 
 /**
  * 🛡️ 刀 53 命名空间识别器（**唯一来源**，2026-10-22 round-12 实锤后提取）。
@@ -1749,6 +1756,24 @@ function findSubtreeIconNodeId(node) {
   return null;
 }
 
+/** 刀 28a：子树角色提取结果载体（role 是 vision 给的事实，零语义猜测）。 */
+function roleOf(node) {
+  return String(node?.role || node?.type || '').toLowerCase();
+}
+
+// 🛡️ 刀31c（2026-10-29，mc-max-1793258602028-6eafb2f7 实锤）：vision 角色词表
+//   跨 run 不稳定（54ae6ee3 用 icon/content/stat-value；6eafb2f7 用 图标/label/stat +
+//   value/label）。这里是**归一映射**（词表对齐，非语义猜测）：未命中词表的 role
+//   保持原样走旧判据，不认识的结构一律落空回退拍平轨（缺事实不猜）。
+const ROLE_ICON_SET = new Set(['icon', '图标', 'icon-wrap', 'avatar']);
+const ROLE_CONTENT_SET = new Set(['content', 'label', 'texts', 'text-block', '文本', '内容', '信息']);
+const ROLE_STAT_SET = new Set(['stat', 'stat-value', 'stats', '统计', '数值', '数据']);
+const ROLE_VALUE_SET = new Set(['value', '数值', '值']);
+const ROLE_LABEL_SET = new Set(['label', '标签']);
+const isIconRole = (r) => ROLE_ICON_SET.has(r);
+const isContentRole = (r) => ROLE_CONTENT_SET.has(r);
+const isStatRole = (r) => ROLE_STAT_SET.has(r);
+
 /** 单项归一：{ texts, stats, icon:{file,w,h}, fill } */
 function normListItem(it) {
   const texts = [];
@@ -1762,6 +1787,65 @@ function normListItem(it) {
   for (const el of els) {
     const n = normListText(el);
     if (n) texts.push(n);
+  }
+  // 🛡️ 刀 28a（mc-max-1793252160457-54ae6ee3 实锤）：children 子树**角色结构轨**——
+  //   vision 把卡内分区标成 role：icon（自带 resourceFile/width/height）/
+  //   content（label 文本对）/ stat-value（value+label 子节点）。旧实现用
+  //   collectSubtreeTexts 把全部后代文本拍平 ⇒ 统计值/标签混进 texts 纵堆、
+  //   stats=0、icon 节点自带 resourceFile 不读 ⇒ null ⇒ 卡内布局全失效
+  //   （6 行文本堆进 72px 卡高溢出叠字）。按 role 分区提取：texts 只收
+  //   content 子树；stats 收 stat-value 子树的 value/label（带各自 styles）；
+  //   icon 读子树 icon 节点自带资源事实。无任何角色结构 ⇒ 回退刀 23 拍平轨
+  //   （b2086a9c 形态：伪造 id + 无 role，保持不破）。
+  let roleStats = null;
+  let roleIcon = null;
+  if (Array.isArray(it?.children)) {
+    const contentTexts = [];
+    const statsTmp = [];
+    for (const child of it.children) {
+      if (!child || typeof child !== 'object') continue;
+      const r = roleOf(child);
+      // 🛡️ 刀31c：role 归一词表 + 资源事实兜底（child 自带 resourceFile ⇒ icon，
+      //   与 28a 读法同口径；词表未覆盖但带资源事实的 icon 不再静默落空）。
+      if (isIconRole(r) || (child.resourceFile || child.resource)) {
+        const res = String(child?.resourceFile || child?.resource || '');
+        const file = res.split('/').pop();
+        if (file && !roleIcon) {
+          roleIcon = {
+            file,
+            w: Number.isFinite(Number(child.width)) ? Number(child.width) : null,
+            h: Number.isFinite(Number(child.height)) ? Number(child.height) : null,
+          };
+        }
+      } else if (isContentRole(r)) {
+        collectSubtreeTexts(child, contentTexts);
+      } else if (isStatRole(r)) {
+        let v = null;
+        let l = null;
+        for (const d of Array.isArray(child.children) ? child.children : []) {
+          const dr = roleOf(d);
+          if (ROLE_VALUE_SET.has(dr) && !v) v = d;
+          else if (ROLE_LABEL_SET.has(dr) && !l) l = d;
+        }
+        const vn = v && normListText(v);
+        if (vn) {
+          const ln = l && normListText(l);
+          statsTmp.push({
+            v: vn.t,
+            l: ln ? ln.t : '',
+            vc: vn.c,
+            vfs: vn.fs,
+            vfw: vn.fw,
+            lc: ln ? ln.c : null,
+            lfs: ln ? ln.fs : null,
+          });
+        }
+      }
+    }
+    if (contentTexts.length > 0 || statsTmp.length > 0) {
+      texts.push(...contentTexts);
+      roleStats = statsTmp;
+    }
   }
   // 🛡️ 刀 23（b2086a9c 实锤）：children 子树轨——卡内容是嵌套子树
   //   （bg/icon/常驻组 → text 叶），无 content.elements/texts/textRuns。
@@ -1778,8 +1862,18 @@ function normListItem(it) {
     : it?.stat && typeof it.stat === 'object'
       ? Object.values(it.stat)
       : [];
+  // 🛡️ 刀 28a：角色结构轨的 stats 并入（与 it.stats/it.stat 形态互斥——
+  //   有显式 stats 字段时角色轨不重复；角色轨无 stats 时保持空数组）。
+  if (stats.length === 0 && Array.isArray(roleStats) && roleStats.length > 0) {
+    stats.push(...roleStats);
+  }
   for (const s of statEntries) {
-    const v = String(s?.value ?? '').trim();
+    // 🛡️ 刀 26（mc-max-1793191766917-329a3781 实锤）：vision 富卡第三种 stat
+    //   形态——`stats: [{label:'在线', text:'3,792', styles:{...}}]`（值字段是
+    //   `text` 而非 `value`）。缺这一读法 ⇒ 富卡归一 stats=0 条 ⇒ 「更全者胜出」
+    //   比分 2 < 子树扁平轨 6 ⇒ 富卡（含样式/icon/fill）被劣轨顶掉。value/text
+    //   同为数值真值字段，零语义猜测。
+    const v = String(s?.value ?? s?.text ?? '').trim();
     if (!v) continue;
     const st = s?.styles || {};
     stats.push({
@@ -1795,6 +1889,9 @@ function normListItem(it) {
     });
   }
   let icon = null;
+  // 🛡️ 刀 28a：子树 icon 节点自带 resourceFile 是最直接事实，优先于
+  //   resourceMapping 反查（mapping 缺该节点 id 时不再丢 icon）。
+  if (roleIcon) icon = roleIcon;
   if (it?.icon && typeof it.icon === 'object') {
     const res = String(it.icon.resource || it.icon.resourceFile || '');
     const file = res.split('/').pop();
@@ -1842,6 +1939,12 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     }
     return n;
   });
+  // 🛡️ 刀31b（2026-10-29，mc-max-1793258602028-6eafb2f7 实锤）：整 body vision 轨
+  //   与顶层 figma 轨**逐项比分**（同 21d 口径：stats>0 权重 1000 + 条数），取代旧
+  //   「仅空项才回退」——旧口径下 figma 拍平轨 texts=6（非空）把角色分区轨
+  //   （texts=2+stats=2，卡内布局结构）顶掉 ⇒ 纵堆。比分平局/更低 ⇒ 维持顶层轨。
+  const structuralScore = (x) =>
+    (x.stats.length > 0 ? 1000 : 0) + x.texts.length + x.stats.length;
   if (norm.some(isEmpty)) {
     const bodyItems =
       Array.isArray(sec.body?.items) && sec.body.items.length === items.length
@@ -1851,8 +1954,59 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
       const bodyNorm = bodyItems.map(normListItem);
       if (!bodyNorm.some(isEmpty)) norm = bodyNorm;
     }
+  } else if (Array.isArray(sec.body?.items) && sec.body.items.length === items.length) {
+    const bodyNorm = sec.body.items.map(normListItem);
+    norm = norm.map((n, i) => {
+      const b = bodyNorm[i];
+      if (!b || isEmpty(b)) return n;
+      return structuralScore(b) > structuralScore(n) ? b : n;
+    });
   }
   if (norm.some(isEmpty)) return fail('emptyItem');
+
+  // 🛡️ 刀31d（2026-10-29，mc-max-1793258602028-6eafb2f7 实锤）：fill 数据轨补真值——
+  //   vision repeatedFill 缺失（本 run 全 null）时按卡 figma 子树回查：本体首个可见
+  //   SOLID fill 优先，取不到 ⇒ 子树内首个带可见 SOLID fill 的矩形节点（卡底真值
+  //   常是卡内衬底 rect，如 48:5799 #a6ceff 首卡高亮）。fillToRgba 单一口径，
+  //   vision repeatedFill 在场时仍以 vision 为准（不覆盖）。
+  norm.forEach((n, i) => {
+    if (n.fill) return;
+    const it = items[i];
+    const entry =
+      figmaIndex?.get(String(it?.figmaNodeId ?? '')) ||
+      figmaIndex?.get(String(it?.id ?? '')) ||
+      (Array.isArray(it?.sourceNodeIds)
+        ? figmaIndex?.get(String(it.sourceNodeIds[0]))
+        : null);
+    const raw = entry?.rawNode || entry?.node || null;
+    if (!raw) return;
+    const own = firstSolidFillRgba(raw);
+    if (own) {
+      n.fill = own;
+      return;
+    }
+    // 卡底衬底 rect 通常是子树内**面积最大**的 SOLID 填充节点（48:5799 实锤）；
+    //   BFS 首个命中会抓到小装饰色块 ⇒ 收集全部候选取面积最大者（零语义判据）。
+    const candidates = [];
+    const stack = Array.isArray(raw.children) ? [...raw.children] : [];
+    while (stack.length) {
+      const c = stack.shift();
+      const rgba = firstSolidFillRgba(c);
+      if (rgba) {
+        const b = c?.absoluteBoundingBox || c?.bbox || null;
+        const area =
+          b && Number.isFinite(b.width) && Number.isFinite(b.height)
+            ? b.width * b.height
+            : 0;
+        candidates.push({ rgba, area });
+      }
+      if (Array.isArray(c?.children)) stack.push(...c.children);
+    }
+    if (candidates.length > 0) {
+      candidates.sort((a, z) => z.area - a.area);
+      n.fill = candidates[0].rgba;
+    }
+  });
   const t0 = norm[0].texts.length;
   if (!norm.every((n) => n.texts.length === t0)) return fail('heteroTextCount');
 
@@ -1909,41 +2063,157 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     return null;
   });
 
-  // 几何真值：卡盒逐 id 回查（item.id → icon.figmaNode）。全部命中才下发
-  // 卡高/间距；任一缺失 ⇒ 不写几何（自然流），不猜兜底值。
-  const boxes = items.map((it) => {
-    // E1 富化树节点自带卡盒真值（刀 21d：优先直读，免回查）；否则按 id 回查
+  // ── 几何真值：卡盒 = **能解释该行 fill 的自绘底祖先盒** ───────────────────
+  // 🛡️ 刀33（2026-10-29 · c-aiot-dpjh-bsjd-fg-list-485798list-item 用户报障实锤）：
+  //   vision item 锚点**层级错位** —— `items[i].id` 指向的是卡内的**内层内容组**
+  //   （`48:5801`，430×41），而带 `repeatedFill` 自绘底的**卡盒**是它的祖先
+  //   （`48:5798`，470×72 / 圆角 6）。直接拿 `items[i].id` 的盒当卡盒 ⇒ 三处几何全错：
+  //     · 卡高 41（真值 72）
+  //     · 卡间距 51（真值 20 = 步长 92 − 卡高 72）
+  //     · icon 左内距 0（真值 20 = 图标盒左边 − 卡盒左边）
+  //   判据（零硬编码：纯几何 + 颜色**单一来源**归一，无阈值、无兜底）：
+  //     ① 锚 = 该行 `fill` 归一（`normalizeCssColor`，与 N1 真值色值门禁同口径）；
+  //     ② 从 item 起始节点沿 `parentOf` 上溯，取**第一个**「子树内（含自身）存在归一后
+  //        与锚相等的可见 SOLID 填充」的节点 = 该行自绘底所在层；
+  //     ③ 该节点盒必须**能容纳本行且不含其它行**（否则命中的是列表容器而非卡盒）；
+  //     ④ 行间卡盒尺寸不一致 / 任一行为空 ⇒ 不下发 cardH/gaps（自然流，绝不猜）。
+  const toBox = (b) =>
+    b &&
+    Number.isFinite(b.x) &&
+    Number.isFinite(b.y) &&
+    Number.isFinite(b.width) &&
+    Number.isFinite(b.height)
+      ? { x: b.x, y: b.y, w: b.width, h: b.height }
+      : null;
+  const parentOf = buildParentMap(figmaIndex);
+  const boxContains = (outer, inner) =>
+    outer.x <= inner.x &&
+    outer.y <= inner.y &&
+    outer.x + outer.w >= inner.x + inner.w &&
+    outer.y + outer.h >= inner.y + inner.h;
+  /** 子树（含自身）内首个归一后 == `target` 的可见 SOLID 填充节点；无 ⇒ null。 */
+  const findFillAnchorNode = (node, target) => {
+    if (!node || !target) return null;
+    const seen = new Set();
+    const stack = [node];
+    while (stack.length) {
+      const n = stack.shift();
+      if (!n || seen.has(n)) continue;
+      seen.add(n);
+      if (n.visible === false) continue;
+      const own = firstSolidFillRgba(n);
+      if (own && normalizeCssColor(own) === target) return n;
+      for (const c of Array.isArray(n.children) ? n.children : []) stack.push(c);
+    }
+    return null;
+  };
+  /**
+   * 单行卡盒真值。**不可证 ⇒ 回落该行自身盒**（无从证明错位就不改，保持旧口径）。
+   * @returns {{box:object|null, node:object|null, fillNode:object|null}}
+   */
+  const resolveCardBox = (it, rowBox, fill, allRowBoxes) => {
+    const target = normalizeCssColor(fill);
+    let cur = String(it?.id ?? '');
+    if (!cur || !target || !figmaIndex) return { box: rowBox, node: null, fillNode: null };
+    let guard = 0;
+    while (cur && guard++ < 64) {
+      const entry = figmaIndex.get(cur);
+      const node = entry?.rawNode || entry?.node || null;
+      if (node) {
+        const hit = findFillAnchorNode(node, target);
+        if (hit) {
+          const cb = toBox(entry?.bbox || node.absoluteBoundingBox || node.bbox);
+          const ok =
+            !!cb &&
+            (!rowBox || (cb.w >= rowBox.w && cb.h >= rowBox.h)) &&
+            // 「恰好容纳本行」：若还含别的行 ⇒ 上溯到的是列表容器，不是卡盒
+            !allRowBoxes.some((rb) => rb && rb !== rowBox && boxContains(cb, rb));
+          return ok ? { box: cb, node, fillNode: hit } : { box: rowBox, node: null, fillNode: null };
+        }
+      }
+      cur = parentOf.get(cur) || null;
+    }
+    return { box: rowBox, node: null, fillNode: null };
+  };
+  // 行盒（几何轨，旧口径）：E1 富化树节点直读优先（刀 21d），否则按 item id / icon 节点回查
+  const rowBoxes = items.map((it) => {
     const direct = it?.absoluteBoundingBox;
     const e =
       direct && Number.isFinite(direct.x) && Number.isFinite(direct.y)
         ? { bbox: direct }
         : figmaIndex?.get(String(it?.id ?? '')) ||
           figmaIndex?.get(String(it?.icon?.figmaNode ?? ''));
-    const b = e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox;
-    return b && Number.isFinite(b.x) && Number.isFinite(b.y) &&
-      Number.isFinite(b.width) && Number.isFinite(b.height)
-      ? b
-      : null;
+    return toBox(e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox);
   });
-  const geoReady = boxes.every(Boolean);
+  const cards = items.map((it, i) => resolveCardBox(it, rowBoxes[i], norm[i].fill, rowBoxes));
+  const cardBoxes = cards.map((c, i) => c.box || rowBoxes[i]);
+  const geoReady =
+    cardBoxes.length > 0 &&
+    cardBoxes.every(Boolean) &&
+    cardBoxes.every(
+      (b) =>
+        Math.round(b.w) === Math.round(cardBoxes[0].w) &&
+        Math.round(b.h) === Math.round(cardBoxes[0].h),
+    );
   let cardH = null;
   let gaps = null;
   let padL = null;
+  let radius = null;
+  let itemBg = null;
   if (geoReady) {
-    cardH = Math.round(boxes[0].height);
-    const byY = boxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
+    cardH = Math.round(cardBoxes[0].h);
+    const byY = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
     gaps = byY.slice(1).map((p, k) => {
       const prev = byY[k].b;
-      return Math.round(p.b.y - (prev.y + prev.height));
+      return Math.round(p.b.y - (prev.y + prev.h));
     });
-    // icon 左内距真值：icon 盒左边 − 卡盒左边（首项可解即下发；不可解不写）
+    // icon 左内距真值：icon 盒左边 − **卡盒**左边（首项可解即下发；不可解不写）
     //   刀 23：子树轨 icon 用反查到的节点 id 回查几何
     const iconId0 = items[0]?.icon?.figmaNode
       ? String(items[0].icon.figmaNode)
       : iconNodeIds[0] || null;
     const iconNode0 = iconId0 ? figmaIndex?.get(iconId0) : null;
-    const ib = iconNode0?.bbox || iconNode0?.absoluteBoundingBox || iconNode0?.rawNode?.absoluteBoundingBox;
-    if (ib && Number.isFinite(ib.x)) padL = Math.round(ib.x - boxes[0].x);
+    const ib = toBox(
+      iconNode0?.bbox || iconNode0?.absoluteBoundingBox || iconNode0?.rawNode?.absoluteBoundingBox,
+    );
+    if (ib) padL = Math.round(ib.x - cardBoxes[0].x);
+    // 卡圆角真值：自绘底 SOLID 填充节点的圆角（本单 48:5799 RECT cr=6）。
+    //   取不到 / 为 0 ⇒ 不写（绝不填兜底圆角）。
+    const r = cards[0].fillNode ? cornerRadiusOf(cards[0].fillNode) : 0;
+    if (r > 0) radius = r;
+    // 每卡自绘**图条**真值：卡盒子树内**唯一**被映射标记为「背景用途」的可下载资源
+    //   （与 statrow 的 `subtreeBackground` 同族判据；图标因 `isBackgroundResource` 为假被排除）。
+    //   多命中（歧义）/ 无 varName ⇒ 不下发（不猜）。四件套复用资源挂载层同一纯函数。
+    if (cards[0].node) {
+      const map = toArray(resourceMapping);
+      const hits = [];
+      const seen = new Set();
+      const walkNode = (n) => {
+        if (!n || seen.has(n)) return;
+        seen.add(n);
+        const hit = map.find(
+          (e) =>
+            String(e?.figmaNodeId) === String(n.id) &&
+            e?.resourceFile &&
+            e?.downloadStatus !== 'failed' &&
+            isBackgroundResource(n, map),
+        );
+        if (hit) hits.push(hit);
+        for (const c of Array.isArray(n.children) ? n.children : []) walkNode(c);
+      };
+      walkNode(cards[0].node);
+      if (hits.length === 1) {
+        const hit = hits[0];
+        const varName = String(hit.assignedVarName || hit.semanticVarName || '');
+        if (varName) {
+          itemBg = {
+            varName,
+            file: String(hit.resourceFile).split('/').pop(),
+            style: inferBackgroundStyle(hit),
+          };
+        }
+      }
+    }
   }
   return {
     ok: true,
@@ -1954,6 +2224,8 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     cardH,
     gaps,
     padL,
+    radius,
+    itemBg,
   };
 }
 
@@ -1996,6 +2268,23 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       }
       return fileToVar.get(it.icon.file);
     });
+    // 🛡️ 刀33：每卡「图条」真值（卡盒内自绘底图）。变量名**取资源映射层的
+    //   `assignedVarName`** ⇒ 资源挂载层的 `bgBindingOwnership` 见之判 `self`（幂等），
+    //   不会与容器挂载互相打架（自造命名空间会被判 `other` 而 fail-closed 并留诊断噪声）。
+    //   🔴 图片 URL 只能走 `:style` 绑定，绝不能拼进静态 `style="..."`（静态段是纯 CSS
+    //   文本，`bg1` 不会被求值 ⇒ 浏览器拿到相对 URL `url(bg1)` → 404 → 整卡零背景，593cf7f 事故）。
+    const itemBg = tr.itemBg && tr.itemBg.varName ? tr.itemBg : null;
+    if (itemBg) {
+      importLines.push(`import ${itemBg.varName} from '../../resources/images/${itemBg.file}'`);
+    }
+    // 静态段只放 CSS 常量（size/position/repeat 与圆角）；URL 由 `:style` 段给出，
+    //   两段属性不重叠 ⇒ Vue 合并 static style 与 `:style` 时不会互相覆盖。
+    const itemStatic =
+      (tr.radius ? `border-radius:${tr.radius}px;` : '') +
+      (itemBg
+        ? `background-size:${itemBg.style.size};background-repeat:${itemBg.style.repeat};background-position:${itemBg.style.position};`
+        : '');
+    const itemBindBg = itemBg ? `, backgroundImage: 'url(' + ${itemBg.varName} + ')'` : '';
     const itemLit = tr.items.map((it, i) => {
       const texts = `[${it.texts
         .map(
@@ -2017,7 +2306,10 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     const lines = [
       '<template>',
       `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:column;min-height:0;overflow-y:auto;">`,
-      `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;" :style="{${tr.cardH ? ` height: '${tr.cardH}px',` : ''} marginTop: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined, background: it.fill || undefined }">`,
+      // 🔴 卡底走 `backgroundColor` **长写**（非 `background` 简写）：简写会把上面静态段的
+      //   `background-size/position/repeat` 一并重置为初始值 ⇒ 图条尺寸/定位全丢。
+      //   长写与静态段四属性零重叠 ⇒ Vue 合并 static style 与 `:style` 时互不覆盖。
+      `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;${itemStatic}" :style="{${tr.cardH ? ` height: '${tr.cardH}px',` : ''} marginTop: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined, backgroundColor: it.fill || undefined${itemBindBg} }">`,
       `      <img v-if="it.icon" :src="it.icon" :style="{ width: it.iconW ? it.iconW + 'px' : undefined, height: it.iconH ? it.iconH + 'px' : undefined, objectFit: 'contain', flex: 'none'${tr.padL != null ? `, marginLeft: '${tr.padL}px'` : ''} }" alt="" />`,
       `      <div style="display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1 1 auto;">`,
       `        <span v-for="(t, __j) in it.texts" :key="__j" :style="{ color: t.c || undefined, fontSize: t.fs ? t.fs + 'px' : undefined, fontWeight: t.fw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ t.t }}</span>`,

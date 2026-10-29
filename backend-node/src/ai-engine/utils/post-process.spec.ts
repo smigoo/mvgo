@@ -928,3 +928,80 @@ describe('B-1b: createChartClassBlockIfAbsent 真的检查「缺失」', () => {
     expect(out).toContain('min-height: 160px');
   });
 });
+
+describe('刀27 T1\' 死样式剔除括号配平（mc-max-1793242612233-74cadb8a 实锤）', () => {
+  // 病灶：旧死规则剔除用正则 `[^{}]*\{[^}]*\}`——嵌套 Less 规则
+  // （.deco { … .deco-img { … } }）只吃到大括号内层第一个 `}`，外层 `}` 残留
+  // ⇒ style 开闭失衡 ⇒ 写盘门禁 Unrecognised input ⇒ HeaderSection 被跳过
+  // ⇒ CODE-023 悬空标签 ⇒ L0-B fail-closed 整单失败。
+  const NESTED_VUE = `<template>
+  <div class="c-x-header">
+    <div class="c-x-header-title">
+      <div class="c-x-header-deco">
+        <img :src="icon1" alt="" class="c-x-header-deco-img" />
+      </div>
+      <span class="c-x-header-text">部署节点概览</span>
+    </div>
+  </div>
+</template>
+<script setup>
+const a = { b: 1 };
+</script>
+<style lang="less" scoped>
+.c-x-header {
+  display: flex;
+  .c-x-header-title {
+    display: flex;
+    gap: 8px;
+    .c-x-header-deco {
+      width: 20px;
+      height: 20px;
+      .c-x-header-deco-img {
+        width: 20px;
+        display: block;
+      }
+    }
+    .c-x-header-text {
+      font-size: 14px;
+    }
+  }
+}
+</style>
+`;
+
+  it('⭐ 阳性：嵌套死规则整块配平删除（style 开闭相等、门禁级合法）', () => {
+    const out = stripHeaderChromeDecorations(NESTED_VUE, {
+      isHeaderSlotFile: true,
+      headerTexts: ['部署节点概览'],
+    });
+    const style = (out.match(/<style[^>]*>([\s\S]*?)<\/style>/) || [])[1] || '';
+    const opens = style.split('{').length - 1;
+    const closes = style.split('}').length - 1;
+    expect(opens).toBe(closes); // 旧实现此处 3 开 4 闭（deco 外层 } 残留）
+    expect(style).not.toMatch(/header-deco/);
+    expect(style).toMatch(/header-text/);
+    expect(style).toMatch(/header-title/); // 活规则的自有声明不被误吃
+    expect(style).toMatch(/gap:\s*8px/);
+  });
+
+  it('反向：死类在模板仍被引用 ⇒ 不删其规则（deadClasses 为空集）', () => {
+    // deco 元素模板保留（含绑定 ⇒ 业务锚点，不剥）⇒ 样式规则也必须保留
+    const keepVue = NESTED_VUE.replace(
+      'class="c-x-header-deco"',
+      'class="c-x-header-deco" :data-k="k"',
+    );
+    const out = stripHeaderChromeDecorations(keepVue, {
+      isHeaderSlotFile: true,
+      headerTexts: ['部署节点概览'],
+    });
+    expect(out).toMatch(/header-deco-img/);
+  });
+
+  it('反向：<script> 段同名花括号结构不受影响（只清 style 段）', () => {
+    const out = stripHeaderChromeDecorations(NESTED_VUE, {
+      isHeaderSlotFile: true,
+      headerTexts: ['部署节点概览'],
+    });
+    expect(out).toContain('const a = { b: 1 };');
+  });
+});

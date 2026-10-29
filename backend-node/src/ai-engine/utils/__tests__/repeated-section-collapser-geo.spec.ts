@@ -237,3 +237,41 @@ describe('①b chart 容器豁免（整改 P8，防御项）', () => {
     expect(flat.filter((s) => isCollapsedListSection(s))).toHaveLength(1)
   })
 })
+
+describe('刀25 折叠产物整列几何（mc-max-1793191766917-329a3781 实锤）', () => {
+  // 病灶：非跨层折叠路径下，`...first` 透传 ⇒ 折叠段 absoluteBoundingBox/
+  // sourceNodeIds 只含首卡（470x72），装配层据此把列表容器压成单卡高
+  // （overflow-y:auto 假窗口 ⇒「只有第一条有数据，后面全是空的」）。
+  // 治本：折叠产物恒带成员并集几何 + 全成员 sourceNodeIds（零语义，纯并集）。
+  const cardN = (i: number) => ({
+    ...card(`48:${5798 + i * 10}`, `Group 213663841${i}`, box(470, 72, 100 + i * 92), `节点${i}`, '28', '#fff', 'icon.png'),
+    sourceNodeIds: [`48:${5798 + i * 10}`, `48:${5799 + i * 10}`],
+  })
+
+  test('⭐ 阳性：非跨层折叠 ⇒ absoluteBoundingBox = 全成员并集（高=整列跨度）', () => {
+    const sections = [0, 1, 2].map(cardN)
+    const out = collapseRepeatedSiblingSections(sections) as any[]
+    expect(out).toHaveLength(1)
+    const sec = out[0]
+    expect(isCollapsedListSection(sec)).toBe(true)
+    // 并集：x0 y100，底 = 100+2*92+72 = 356 ⇒ height 256（首卡 72 的三卡整列）
+    expect(sec.absoluteBoundingBox).toEqual({ x: 0, y: 100, width: 470, height: 256 })
+    expect(sec.styles.figmaHeightPx).toBe(256)
+  })
+
+  test('⭐ 阳性：sourceNodeIds = 全成员并集（非仅首卡子树）', () => {
+    const sections = [0, 1, 2].map(cardN)
+    const out = collapseRepeatedSiblingSections(sections) as any[]
+    const ids = out[0].sourceNodeIds as string[]
+    expect(ids).toHaveLength(6)
+    expect(ids).toContain('48:5818') // 卡3 子树节点必须在（旧实现只有首卡 48:5798/48:5799）
+  })
+
+  test('反向：成员无 sourceNodeIds ⇒ 回退成员 id 并集（不留空）', () => {
+    const sections = [0, 1, 2].map((i) =>
+      card(`48:${5798 + i * 10}`, `Group 213663841${i}`, box(470, 72, 100 + i * 92), `节点${i}`, '28', '#fff', 'icon.png'),
+    )
+    const out = collapseRepeatedSiblingSections(sections) as any[]
+    expect(out[0].sourceNodeIds).toEqual(['48:5798', '48:5808', '48:5818'])
+  })
+})

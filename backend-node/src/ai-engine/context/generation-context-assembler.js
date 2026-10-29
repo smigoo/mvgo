@@ -53,6 +53,39 @@ function normalizeSectionNode(section) {
     sourceNodeIds: Array.isArray(section.sourceNodeIds)
       ? section.sourceNodeIds.map((s) => String(s)).filter(Boolean)
       : undefined,
+    // 🛡️ 刀 29b（mc-max-1793255115028-7ec263c9 实锤）：几何三件套透传。
+    //   此前白名单重建剥掉 absoluteBoundingBox/figmaBox ⇒ engineer 的
+    //   resolveSubComponentPlan 优先取本函数产物（generationInput.componentPlan）
+    //   ⇒ 刀 28c 落在 plan 上的「整列并集几何」（宿主 470x517）丢失 ⇒ 装配
+    //   回查 figma id（首卡 GROUP 72px）⇒ 列表挤进 72px 壳。与 #138 rowPeerIds
+    //   同款第二断点。缺字段不产键，零副作用（纯几何事实，命名无关）。
+    ...(section.absoluteBoundingBox &&
+      Number.isFinite(Number(section.absoluteBoundingBox.width)) &&
+      Number.isFinite(Number(section.absoluteBoundingBox.height))
+      ? {
+          absoluteBoundingBox: {
+            x: Number(section.absoluteBoundingBox.x) || 0,
+            y: Number(section.absoluteBoundingBox.y) || 0,
+            width: Number(section.absoluteBoundingBox.width),
+            height: Number(section.absoluteBoundingBox.height),
+          },
+        }
+      : {}),
+    ...(section.figmaBox &&
+      Number.isFinite(Number(section.figmaBox.width)) &&
+      Number.isFinite(Number(section.figmaBox.height))
+      ? {
+          figmaBox: {
+            x: Number(section.figmaBox.x) || 0,
+            y: Number(section.figmaBox.y) || 0,
+            width: Number(section.figmaBox.width),
+            height: Number(section.figmaBox.height),
+          },
+        }
+      : {}),
+    ...(Number.isFinite(Number(section.styles?.figmaHeightPx))
+      ? { styles: { figmaHeightPx: Number(section.styles.figmaHeightPx) } }
+      : {}),
     // 🛡️ #138 续（2026-10-20 · 60dee79d/d7abdee8 实锤）：E1 互挂兄弟真值第二断点。
     //   planner 已透传 rowPeerIds，但此处 normalizeSectionNode 白名单重建再次剥掉 ⇒
     //   engineer 的 resolveSubComponentPlan **优先取 generationInput.componentPlan**（本函数产物）

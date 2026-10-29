@@ -9,7 +9,13 @@
  * 本 spec 的判据一律「判落位」：既验 issue（报得对），也验**不误伤**（阳性对照），
  * 并硬断言修复**只写新字段** `figmaAnchorId`。
  */
-import { auditSectionAnchors, collectSectionFigmaRefs } from './section-anchor-truth.js'
+import {
+  auditSectionAnchors,
+  collectSectionFigmaRefs,
+  sectionAnchorCandidates,
+  sectionAnchorKey,
+  FIGMA_ID_RE,
+} from './section-anchor-truth.js'
 
 /** B 批后的 stats 全键形状（🔴 每个计数键都必须存在，便于真机日志按固定 schema 采集） */
 function stats(overrides: Record<string, number> = {}) {
@@ -346,5 +352,68 @@ describe('R22-d auditSectionAnchors：锚点必须是自身内容的祖先', () 
     expect([...refs].sort()).toEqual(['4:4', '5:5', '7:7'])
     // section 自身 id 不作引用（它可能就是幻觉锚点）
     expect(refs.has('8:8')).toBe(false)
+  })
+})
+
+// ── 刀33（2026-10-29 · mc-max-1793266461373-e7290dc5 实锤）────────────────────
+// 锚点优先级此前散落三处（本模块 claimed / plan-body-child-id-audit#resolveAnchorId /
+// subcomponent-planner 的两处 Map 键），第三处漏读 figmaAnchorId ⇒ vision 聚合段的语义与
+// 高度被错挂到「首卡叶子」。下面锁死单一来源的**行为契约**。
+
+describe('刀33 sectionAnchorCandidates / sectionAnchorKey：锚点优先级单一来源', () => {
+  test('candidates 恒为三元组且顺序固定（figmaAnchorId → figmaNodeId → id）', () => {
+    expect(sectionAnchorCandidates({ figmaAnchorId: '1:1', figmaNodeId: '2:2', id: '3:3' })).toEqual([
+      '1:1',
+      '2:2',
+      '3:3',
+    ])
+    // 缺字段 ⇒ undefined 占位，顺序不变
+    expect(sectionAnchorCandidates({ id: '3:3' })).toEqual([undefined, undefined, '3:3'])
+    expect(sectionAnchorCandidates(null)).toEqual([undefined, undefined, undefined])
+  })
+
+  test('🔴 阳性：三者齐全 ⇒ key = figmaAnchorId（上游锚点修复优先于 vision 原始声明）', () => {
+    // e7290dc5 形态：vision 段锚点 565:3，语义落到首卡 48:5798（id），figmaNodeId 空
+    expect(sectionAnchorKey({ figmaAnchorId: '565:3', figmaNodeId: undefined, id: '48:5798' })).toBe('565:3')
+  })
+
+  test('逐级回退：figmaAnchorId 空 ⇒ figmaNodeId；两者皆空 ⇒ id', () => {
+    expect(sectionAnchorKey({ figmaAnchorId: '', figmaNodeId: '7:7', id: '48:5798' })).toBe('7:7')
+    expect(sectionAnchorKey({ figmaAnchorId: null, figmaNodeId: undefined, id: '48:5798' })).toBe('48:5798')
+  })
+
+  test('🔴 反向（fail-open 守护）：合成段 id 不被形态校验掉，原样作键', () => {
+    // 合成 id 不是 Figma 形态 ⇒ 若在此处做 FIGMA_ID_RE 校验会返回空键 ⇒ 索引全丢
+    expect(FIGMA_ID_RE.test('43:4791-list')).toBe(false)
+    expect(sectionAnchorKey({ id: '43:4791-list' })).toBe('43:4791-list')
+    expect(sectionAnchorKey({ id: '807:2-tail-text' })).toBe('807:2-tail-text')
+  })
+
+  test('边界：0 / false 视为非空（与旧 `||` 语义的刻意差异），undefined/null/"" 跳过', () => {
+    // 旧写法 `s.figmaNodeId || s.id` 会把 0 / '' 当假值跳过；新实现只跳 null/undefined/空串
+    expect(sectionAnchorKey({ figmaAnchorId: 0, id: '5:5' })).toBe('0')
+    expect(sectionAnchorKey({ figmaAnchorId: '   ', id: '5:5' })).toBe('   ') // 不 trim（不做整形）
+    expect(sectionAnchorKey({})).toBe('')
+    expect(sectionAnchorKey({ figmaAnchorId: '', figmaNodeId: '', id: '' })).toBe('')
+  })
+
+  test('与 auditSectionAnchors 同源：issue.anchorId = 候选里首个 Figma 形态值', () => {
+    const sections = [makeStatSection({ figmaAnchorId: '999:9' })]
+    // 🔴 必须在审计**之前**取候选：审计成功后 figmaAnchorId 会被改写成修复落点
+    const firstFigmaShape = sectionAnchorCandidates(sections[0]).find(
+      (v) => typeof v === 'string' && FIGMA_ID_RE.test(v),
+    )
+    const report = auditSectionAnchors(sections, makeFigma())
+    expect(report.issues).toHaveLength(1)
+    expect(report.issues[0].anchorId).toBe('999:9')
+    expect(report.issues[0].anchorId).toBe(firstFigmaShape)
+    expect(sectionAnchorCandidates(sections[0])[0]).toBe('3:3') // 审计后首选候选已换成 LCA
+  })
+
+  test('幂等前提：修复后 key 切到 figmaAnchorId，再次审计不产生新 fix', () => {
+    const sections = [makeStatSection()]
+    auditSectionAnchors(sections, makeFigma())
+    expect(sectionAnchorKey(sections[0])).toBe('3:3') // key 已切到修复落点
+    expect(auditSectionAnchors(sections, makeFigma()).fixes).toHaveLength(0)
   })
 })

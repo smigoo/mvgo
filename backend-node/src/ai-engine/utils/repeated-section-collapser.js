@@ -22,6 +22,12 @@
  *   `color/fontSize/fontWeight`），`texts/textStyles` 仅保留给旧消费方做过渡。
  */
 import { extractTextRuns, linesForNode, hasMixedRunStyles } from './text-runs.js';
+// 🛡️ 刀33（2026-10-29 · mc-max-1793266461373-e7290dc5 实锤）：折叠产物的 `type`
+//   （`grid` / `list`）改由**几何方向事实**决定，数量仅兜底。方向判据复用既有单一来源
+//   `figma-node-layout-facts#decideLayoutForBoxes`（「不新增任何判据，只把同一实现暴露出去」）
+//   ⇒ 本模块**不写第二份**「横排/网格」判定。依赖方向：本模块 → layout-facts → section-tree
+//   → figma-effects（无环）。
+import { decideLayoutForBoxes } from './figma-node-layout-facts.js';
 
 function getChildren(sec) {
   if (!sec || typeof sec !== 'object') return [];
@@ -346,6 +352,71 @@ function unionBoxOf(list) {
   return { x, y, width: right - x, height: bottom - y };
 }
 
+/**
+ * 🛡️ 刀33（2026-10-29 · mc-max-1793266461373-e7290dc5 实锤）：折叠产物的**形态事实**
+ *   （`type` + `layout` + `gridColumns`）—— **几何方向优先，数量仅兜底**。
+ *
+ * ## 病灶 1：`type` 是纯数量判据
+ *   旧实现 `finalItems.length >= 6 ? 'grid' : 'list'` 是全库**唯一**赋 type 处，
+ *   纯数量、零方向判据。于是「6 张卡纵排成一列」被判成 `grid` ⇒ `section-tree` 映射
+ *   `CardGrid`（多列网格），真值是纵排 `ListSection`。任何「合并列表项」的改动都会撞上
+ *   这条数量悬崖（PLAN B 实测：6 项纵排 → 误判 grid）。
+ *
+ * ## 病灶 2：`layout` 是**首卡继承**的，且无人修正（本次探测确认）
+ *   `buildCollapsedSection` 以 `...first` 展开 ⇒ 折叠段的 `layout` = **首个成员自身的**
+ *   方向（卡片内部方向），不是「成员之间」的排布方向。而唯一会复算容器方向的
+ *   `subcomponent-planner#refineDerivedContainerLayout` 开头就 `idx.get(String(sec.id))`
+ *   —— 折叠段 id 是 `<firstId>-list`（合成 id），**查不到** ⇒ 直接 return。
+ *   实测（6 张卡纵排）：产物 `type:'list'` 但 `layout:'horizontal'` ⇒ 下游
+ *   `layout-direction-guard` / `vfor-list-direction-guard` 会按 `layout` 把 v-for 外层
+ *   强制成 `row` ⇒ **6 卡横向溢出（只见 1 张）**。这正是用户报的形态。
+ *
+ * ## 判据（**复用既有单一来源** `decideLayoutForBoxes`，不新增第二份方向判据）
+ *   ① 成员有 bbox（≥2 个）：按几何方向事实判定，映射与 R23 复算**逐字同构**
+ *      （`subcomponent-planner.js` 的 `next`/`nextCols`）：
+ *      · `display:'grid'`（均匀网格）        ⇒ `type:'grid'`、`layout:'grid'`、`gridColumns`
+ *      · `display:'flex'` row / column      ⇒ `type:'list'`、`layout:'horizontal'|'vertical'`
+ *      · `display:'stack'`（同 bbox 叠层，**方向事实不存在**）⇒ `type:'list'`，**不写 `layout`**
+ *        （不臆造方向：叠层不是横排也不是纵排，保留原值交下游）
+ *   ② 无 bbox / 不足 2 个（vision 手写段、合成段、无几何 fixture）：
+ *      **保持旧行为** —— `type` 走数量兜底（≥6 → `grid`）、`layout` 不写（**无真值不判方向**）。
+ *      既不破坏既有断言，也不改变既有设计。
+ *
+ * @param {Array<object>} items 折叠后的成员项
+ * @param {object|null} parentBox 折叠容器并集 bbox（`{x,y,width,height}`，背景层剔除用）
+ * @returns {{type:'grid'|'list', layout?:string, gridColumns?:number}}
+ */
+function decideCollapsedShape(items, parentBox = null) {
+  const list = Array.isArray(items) ? items : [];
+  const boxes = [];
+  for (const it of list) {
+    const b = geoBox(it); // {w,h,x,y}
+    if (!b) continue;
+    boxes.push({
+      absoluteBoundingBox: { x: b.x, y: b.y, width: b.w, height: b.h },
+      type: it?.type,
+    });
+  }
+  if (boxes.length >= 2) {
+    const fact = decideLayoutForBoxes(boxes, parentBox, {});
+    if (fact && fact.display === 'grid') {
+      const cols = Number(fact.gridColumns);
+      return {
+        type: 'grid',
+        layout: 'grid',
+        ...(Number.isFinite(cols) && cols >= 2 ? { gridColumns: Math.round(cols) } : {}),
+      };
+    }
+    if (fact && fact.display === 'flex') {
+      return { type: 'list', layout: fact.flexDirection === 'row' ? 'horizontal' : 'vertical' };
+    }
+    if (fact && fact.display === 'stack') {
+      return { type: 'list' };
+    }
+  }
+  return { type: list.length >= 6 ? 'grid' : 'list' };
+}
+
 function buildCollapsedSection(first, items, type, opts = {}) {
   const title = first.header?.title || first.title || first.name || first.id;
   const Sec = {
@@ -361,6 +432,27 @@ function buildCollapsedSection(first, items, type, opts = {}) {
     renderHint: 'v-for',
     title: String(title || '').trim(),
   };
+  // 🛡️ 刀33（2026-10-29）：`...first` 带进来的 `layout` 是**首卡内部方向**，不是「成员之间」
+  //   的排布方向（折叠段合成 id `<firstId>-list` 查不到 figma 索引 ⇒
+  //   `refineDerivedContainerLayout` 永不复算它）。成员几何已给出方向事实时以事实为准。
+  //   无事实（`_shape.layout` 缺省）⇒ 不写，保留 `...first` 原值（fail-open 不臆造）。
+  if (opts._shape?.layout) {
+    Sec.layout = opts._shape.layout;
+    // 非网格 ⇒ 明确清掉可能从首卡继承的列数（否则下游按 `sec.gridColumns` 臆造网格列）
+    Sec.gridColumns = opts._shape.gridColumns ?? undefined;
+  }
+  // 🛡️ 刀31a（2026-10-29，mc-max-1793258602028-6eafb2f7 实锤）：父 section 的 vision
+  //   语义树（F1 回填的 body.items，带角色分区 图标/label/stat/value）随折叠存活——
+  //   否则折叠产物 items 全来自 figma 递归（无 role），normListItem 角色轨静默落空、
+  //   拍平轨 texts=6 纵堆、stats/icon/fill 全 null。判据：父 body.items 与折叠成员
+  //   同长度（同构对齐防错配）且折叠产物自身尚无 items 内容轨。
+  if (
+    Array.isArray(opts._visionItems) &&
+    opts._visionItems.length === items.length &&
+    !Array.isArray(Sec.body?.items)
+  ) {
+    Sec.body = { ...(Sec.body || {}), items: opts._visionItems };
+  }
   // 🛡️ F1：展平后外层几何/归属必须按「被合并的所有行」重算——
   //   否则列表段仍报单行 30px 高（布局比例错），且 sourceNodeIds 只含第一行
   //   （资源挂载按 ownerSectionId 归属 ⇒ 其余行的图标/背景图全丢）。
@@ -434,21 +526,38 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
     const finalItems = flat.flattened
       ? sortItemsByVisualOrder(flat.items.map((item) => ({ item }))).map((p) => p.item)
       : flat.items;
-    const type = finalItems.length >= 6 ? 'grid' : 'list';
-    const flatOpts = flat.flattened
-      ? {
-          ...opts,
-          _template: finalItems[0] || first,
-          _box: unionBoxOf(g.idxs.map((i) => sections[i])),
-          _sourceNodeIds: Array.from(
-            new Set(
-              g.idxs.flatMap((i) =>
-                Array.isArray(sections[i]?.sourceNodeIds) ? sections[i].sourceNodeIds : [],
-              ),
-            ),
+    // 🛡️ 刀 25（mc-max-1793191766917-329a3781 实锤）：非跨层折叠路径也必须给
+    //   折叠产物整列并集几何 + 全成员 sourceNodeIds——否则 `...first` 透传的
+    //   absoluteBoundingBox/sourceNodeIds 只是首卡（72px），装配层据此把列表
+    //   容器压成单卡高（overflow-y:auto 假窗口 ⇒「只有第一条有数据」）。
+    //   判据零语义：成员 box 并集 + 成员 sourceNodeIds 并集（缺省回退成员 id）。
+    const geoBasis = flat.flattened ? g.idxs.map((i) => sections[i]) : finalItems;
+    const collapsedBox = unionBoxOf(geoBasis);
+    // 🛡️ 刀33：形态事实（type / layout / gridColumns）由**几何方向**决定
+    //   （`decideCollapsedShape`，判据单一来源 `decideLayoutForBoxes`），数量仅兜底
+    //   —— 治「6 张卡纵排被误判成 CardGrid 并被强制横排」。并集几何同时作 `_box` 下传。
+    const shape = decideCollapsedShape(finalItems, collapsedBox);
+    const type = shape.type;
+    const flatOpts = {
+      ...opts,
+      ...(flat.flattened ? { _template: finalItems[0] || first } : {}),
+      // 🛡️ 刀31a：宿主 vision 语义树（body.items）透传给折叠产物
+      _visionItems: Array.isArray(opts._visionItems) ? opts._visionItems : null,
+      _box: collapsedBox,
+      // 🛡️ 刀33：几何方向事实（缺省 = 无真值 ⇒ 不写，保 `...first` 原值）
+      _shape: shape,
+      _sourceNodeIds: Array.from(
+        new Set(
+          geoBasis.flatMap((it) =>
+            Array.isArray(it?.sourceNodeIds) && it.sourceNodeIds.length > 0
+              ? it.sourceNodeIds
+              : it?.id
+                ? [it.id]
+                : [],
           ),
-        }
-      : opts;
+        ),
+      ),
+    };
     replacements.set(g.idxs[0], buildCollapsedSection(first, finalItems, type, flatOpts));
   }
 
@@ -482,6 +591,25 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
 export function extractRichBodyItems(sec) {
   const items = sec?.body?.items;
   if (!Array.isArray(items)) return null;
+  // 🛡️ 刀 29a（mc-max-1793255115028-7ec263c9 实锤）：children 子树轨必须有
+  //   **卡结构签名**（子树含 role/type 为 icon / stat-value / value 的节点）才算富卡。
+  //   旧判据 `Array.isArray(it.children)` 太宽：vision 把「底部统计区」这类
+  //   纯 label 文本组（children=2 条 label，无 icon/统计结构）也判成富卡 ⇒
+  //   richItems=7 与 6 卡异构 ⇒ 下游 detectListLeaf heteroTextCount 拒绝接管
+  //   ⇒ 整列退回 LLM 手写（卡2-6 空心）。卡形态（b2086a9c/54ae6ee3/7ec263c9 实测）
+  //   子树都含 icon 角色节点 ⇒ 阳性保持；纯文本组 ⇒ 剔出富卡子集（其内容由
+  //   其它 section 如 footer 承载，不丢事实——刀 23 过滤语义不变）。
+  const subtreeHasCardSignature = (it) => {
+    const stack = Array.isArray(it?.children) ? [...it.children] : [];
+    while (stack.length) {
+      const n = stack.pop();
+      if (!n || typeof n !== 'object') continue;
+      const r = String(n.role || n.type || '').toLowerCase();
+      if (r === 'icon' || r === 'stat-value' || r === 'stat' || r === 'value') return true;
+      if (Array.isArray(n.children)) stack.push(...n.children);
+    }
+    return false;
+  };
   const rich = items.filter(
     (it) =>
       it &&
@@ -492,7 +620,7 @@ export function extractRichBodyItems(sec) {
         it.icon ||
         Array.isArray(it.texts) ||
         Array.isArray(it.textRuns) ||
-        Array.isArray(it.children)),
+        (Array.isArray(it.children) && subtreeHasCardSignature(it))),
   );
   return rich.length >= 2 ? rich : null;
 }
@@ -530,7 +658,7 @@ export function collapseSectionsDeep(sections, opts = {}) {
     return b.w >= 80 && b.h >= 24;
   };
 
-  const recurse = (secs, depth) => {
+  const recurse = (secs, depth, visionItems = null) => {
     if (!Array.isArray(secs) || secs.length === 0) return secs;
     // 先递归处理每个子节点的 children（深层优先）
     const withChildrenCollapsed = secs.map((sec) => {
@@ -538,7 +666,15 @@ export function collapseSectionsDeep(sections, opts = {}) {
       if (sec.collapsed) return sec; // 已折叠不再下钻
       if (isChartContainer(sec)) return sec; // 🛡️ 1b：chart 容器内部不下钻（Ellipse 组交 chart-builder）
       if (!Array.isArray(sec.children) || sec.children.length === 0) return sec;
-      const collapsedKids = recurse(sec.children, depth + 1);
+      // 🛡️ 刀31a：宿主 vision 语义树随下钻透传——F1 回填的 body 可能是 items 形态
+      //   （body.items）或 children 形态（body.children，6eafb2f7 实锤），两者皆可。
+      const hostVision =
+        Array.isArray(sec.body?.items) && sec.body.items.length > 0
+          ? sec.body.items
+          : Array.isArray(sec.body?.children) && sec.body.children.length > 0
+            ? sec.body.children
+            : null;
+      const collapsedKids = recurse(sec.children, depth + 1, hostVision);
       if (collapsedKids !== sec.children) {
         return { ...sec, children: collapsedKids };
       }
@@ -551,6 +687,7 @@ export function collapseSectionsDeep(sections, opts = {}) {
     return collapseRepeatedSiblingSections(withChildrenCollapsed, {
       ...innerOpts,
       _sizeGate: isBusinessItem,
+      _visionItems: visionItems,
     });
   };
 

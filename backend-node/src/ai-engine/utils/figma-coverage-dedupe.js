@@ -79,7 +79,7 @@ export function buildFigmaClosureIndex(figmaNodeData) {
 }
 
 /** 递归收集 section 子树里所有「锚点 id」（id / figmaNodeId / figmaNode / items[].id / body.items[].id）。 */
-function collectAnchorIds(node, acc = new Set(), depth = 0) {
+function collectAnchorIds(node, acc = new Set(), depth = 0, includeItemAnchors = true) {
   if (!node || typeof node !== 'object' || depth > 8) return acc
   for (const k of ['id', 'figmaNodeId', 'figmaNode']) {
     const v = node[k]
@@ -91,10 +91,18 @@ function collectAnchorIds(node, acc = new Set(), depth = 0) {
     }
   }
   // vision 列表轨：body.items / items 每项带 Figma 卡组 id（91544b38 实测 item.id 即卡组 id）
-  for (const k of ['items', 'body']) {
-    const list = k === 'body' ? node.body?.items : node.items
-    if (!Array.isArray(list)) continue
-    for (const it of list) collectAnchorIds(it, acc, depth + 1)
+  // 🛡️ 刀 28b（mc-max-1793252160457-54ae6ee3 实锤）：items[].id 是 vision 自由发挥
+  //   的锚点，可能指向**本节 figma 子树之外**的节点（本轮 vision 把尾部文本
+  //   「共 6 个节点 48:5888 / 接入设备 10810 48:5889」也塞成 items 条目）⇒
+  //   吸收者闭包被杂散锚点吹大 ⇒ 尾部文本段被「全包含」误删（footer 消失）。
+  //   分级：判「非列表段是否被吸收」时只用 includeItemAnchors=false 的严格闭包
+  //   （自身锚点子树），items 展开证据仅用于「折叠列表段」候选（91544b38 阳性保持）。
+  if (includeItemAnchors) {
+    for (const k of ['items', 'body']) {
+      const list = k === 'body' ? node.body?.items : node.items
+      if (!Array.isArray(list)) continue
+      for (const it of list) collectAnchorIds(it, acc, depth + 1, includeItemAnchors)
+    }
   }
   return acc
 }
@@ -106,10 +114,11 @@ function collectAnchorIds(node, acc = new Set(), depth = 0) {
  * @param {Map<string, Set<string>>} closureIndex
  * @returns {Set<string>}
  */
-export function sectionCoverageSet(section, closureIndex) {
+export function sectionCoverageSet(section, closureIndex, opts = {}) {
+  const includeItemAnchors = opts.includeItemAnchors !== false
   const out = new Set()
   if (!section || typeof section !== 'object' || !(closureIndex instanceof Map)) return out
-  const anchors = collectAnchorIds(section)
+  const anchors = collectAnchorIds(section, new Set(), 0, includeItemAnchors)
   for (const id of anchors) {
     const closure = closureIndex.get(id)
     // ⚠️ 索引外的 id **必须丢弃、不得原样计入**：折叠段会合成 `48:5813-list` 这类 id
@@ -120,7 +129,7 @@ export function sectionCoverageSet(section, closureIndex) {
   }
   for (const child of Array.isArray(section.children) ? section.children : []) {
     if (!child || typeof child !== 'object') continue
-    for (const x of sectionCoverageSet(child, closureIndex)) out.add(x)
+    for (const x of sectionCoverageSet(child, closureIndex, opts)) out.add(x)
   }
   return out
 }
@@ -190,24 +199,40 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path) {
   const cov = sections.map((s) =>
     s && typeof s === 'object' ? sectionCoverageSet(s, closureIndex) : new Set(),
   )
+  // 🛡️ 刀 28b：吸收者「严格闭包」缓存（不含 items[].id 展开，见 collectAnchorIds 注释）。
+  //   被删者是非列表段时，吸收证据只能用严格闭包——vision items 杂散锚点不得充当
+  //   「覆盖兄弟文本段」的证据（54ae6ee3 尾部文本被误删实锤）。
+  const strictCovCache = new Map()
+  const strictCovOf = (j) => {
+    if (!strictCovCache.has(j)) {
+      strictCovCache.set(
+        j,
+        sectionCoverageSet(sections[j], closureIndex, { includeItemAnchors: false }),
+      )
+    }
+    return strictCovCache.get(j)
+  }
   const droppedBy = new Map() // i -> j（吸收者下标）
   const partialBy = new Map() // i -> 二段判据的重叠比例（一段命中者不在此表）
   for (let i = 0; i < sections.length; i++) {
     if (!sections[i] || typeof sections[i] !== 'object') continue
     if (cov[i].size === 0) continue // 无 Figma 归属 ⇒ 不参与（永不误删）
+    const iIsList = isCollapsedListShape(sections[i])
     for (let j = 0; j < sections.length; j++) {
       if (i === j || droppedBy.has(j)) continue
       if (!sections[j] || typeof sections[j] !== 'object') continue
       if (cov[j].size === 0) continue
+      // 🛡️ 刀 28b：非列表段的吸收者证据 = 严格闭包（items 锚点展开不计）
+      const big = iIsList ? cov[j] : strictCovOf(j)
       // 只被「覆盖更全」者吸收；等闭包时只被靠前者吸收（保证幂等、结果稳定）
-      if (cov[j].size < cov[i].size) continue
-      if (cov[j].size === cov[i].size && j > i) continue
+      if (big.size < cov[i].size) continue
+      if (big.size === cov[i].size && j > i) continue
       // 🛡️ 等闭包 + 双方都是 layout 容器 ⇒ 不删（真机 c-aiot-dpjh-bsjd-3b06a019：顶层
       //   565:2 ⨯ 565:3 覆盖完全一致但一个是 header 一个是内容容器，误删等于整块内容消失）
-      if (cov[j].size === cov[i].size && isLayoutContainerLike(sections[i]) && isLayoutContainerLike(sections[j])) {
+      if (big.size === cov[i].size && isLayoutContainerLike(sections[i]) && isLayoutContainerLike(sections[j])) {
         continue
       }
-      if (!isSubset(cov[i], cov[j])) continue
+      if (!isSubset(cov[i], big)) continue
       // 🛡️ 刀 22：被删者是折叠列表段而吸收者自身不携带列表内容 ⇒ 不删
       //   （否则唯一起内容轨消失，整列坍缩成首卡，b2086a9c 实锤）
       if (isCollapsedListShape(sections[i]) && !isListContentCarrier(sections[j])) continue

@@ -180,7 +180,17 @@ function extractRootBackgroundExpectation(options = {}) {
   const firstColorString = Array.isArray(layoutColors)
     ? layoutColors.find((c) => typeof c === 'string' && extractColorLiterals(c).length > 0)
     : '';
-  const candidates = [layoutBg, visualBg, bgResource?.cssValue, firstColorString].filter(Boolean);
+  // 🛡️ 刀30b（2026-10-29，mv-max-1793255130119-ab4e3051 实锤）：figma 真值色最高优先。
+  //   本设计 vision colors[0]=主题蓝 #0362a6（张冠李戴），真值根背景是渐变 #d4e3ff→#c1d6ff——
+  //   照真值落地的产物反被 BLOCK。truth 色存在时 vision 源退居补充（any-match 语义不冲突）。
+  const truthColors = options?.designFacts?.root?.backgroundTruth?.colors || [];
+  const candidates = [
+    ...(Array.isArray(truthColors) ? truthColors : []),
+    layoutBg,
+    visualBg,
+    bgResource?.cssValue,
+    firstColorString,
+  ].filter(Boolean);
   // 只提取明确色值纳入期望；纯文字描述无法落地成 CSS 字面量，不强制比对。
   const normalized = [];
   for (const candidate of candidates) {

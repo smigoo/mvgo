@@ -164,6 +164,23 @@ describe('刀 37 判据构件', () => {
     expect(parseLessVars(THEME_VARS).get('color-border-yellow')).toBe('rgba(226, 208, 132, 0.2)');
   });
 
+  it('collectClassBackgrounds：嵌套后代规则的 background 不记到祖先 class 头上', () => {
+    // 刀 32 实锤形态：容器自身无背景，只有子规则有 ⇒ 容器不应有 background 条目
+    const nested = `.c-grid {
+  width: 100%;
+  flex-direction: column;
+
+  .c-grid-item {
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+  }
+}
+`;
+    const map = collectClassBackgrounds(nested);
+    expect(map.get('c-grid')).toBeUndefined();
+    expect(map.get('c-grid-item')).toBe('#ffffff');
+  });
+
   it('normalizeCss：忽略大小写/空格', () => {
     expect(normalizeCss('rgba(226, 208, 132, 0.2)')).toBe(normalizeCss('RGBA(226,208,132,.2)'.replace('.2', '0.2')));
   });

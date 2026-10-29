@@ -14,9 +14,10 @@
  *   否则无论它是 TEXT / VECTOR / 别的什么，锚点都不可信 —— 不需要猜节点类型白名单。
  *
  * 修复（只增不改）：把修正后的锚点写到**新字段** `figmaAnchorId`（最近公共祖先 LCA），
- *   **绝不改写 `id` / `figmaNodeId`**。原因：`subcomponent-planner` 用
- *   `String(s.figmaNodeId || s.id)` 作为 `heightById` / `visionSemantic` 的 key，
- *   改这两个字段会让既有查找静默落空（典型案例：白名单重建剥字段，见 memory #123/#127/#138）。
+ *   **绝不改写 `id` / `figmaNodeId`**。原因：既有查找（`heightById` / `visionSemantic`）与
+ *   本字段是**两条独立轨道**，改 `id` 会让上游语义、下游几何的来源同时被污染，无法 A/B。
+ *   （2026-10-29 刀33 起，`subcomponent-planner` 的查找键改走 `sectionAnchorKey`，
+ *   `figmaAnchorId` 已是**首选**键 —— 本字段终于被消费，但 `id` / `figmaNodeId` 仍原样保留。）
  *
  * 幂等：判定用 `figmaAnchorId || figmaNodeId || id` 作为"当前声明锚点"，修复后再次运行
  *   会以 `figmaAnchorId` 为准 ⇒ 无 issue、无新 fix。
@@ -27,6 +28,42 @@ import { indexFigmaNodes, getFigmaBox } from './section-tree.js'
 
 /** Figma 节点 id 形态（`12:345`）—— 只有这种形态才是在「宣称自己是 Figma 节点」 */
 export const FIGMA_ID_RE = /^\d+:\d+$/
+
+/**
+ * 🔴 section 声明锚点的**候选序列（优先级单一来源）**：
+ *   `figmaAnchorId`（上游锚点守卫的修复落点）→ `figmaNodeId`（vision 显式声明）→ `id`。
+ *
+ * 本函数只返回**候选值本身**、不做任何形态校验、不做 trim —— 让消费方各自决定
+ * 「要不要校验形态」（如锚点审计只认 `FIGMA_ID_RE` 形态）与「取第几个非空」。
+ *
+ * 为什么必须是单一来源（2026-10-29 刀33）：这条优先级此前散落在三处
+ *   （本模块 `auditSectionAnchors` 的 `claimed`、`plan-body-child-id-audit#resolveAnchorId`、
+ *   以及 `subcomponent-planner` 的 `String(s.figmaNodeId || s.id)`）。前两处读了
+ *   `figmaAnchorId`，第三处**漏读** ⇒ vision 聚合段的语义/高度被错挂到「首卡叶子」上
+ *   （mc-max-1793266461373-e7290dc5 实锤：「节点列表」标题 + 6 项 items 落到首卡）。
+ *   三处各写一遍就是三条会各自漂移的判据，故统一收敛到本函数。
+ */
+export function sectionAnchorCandidates(section) {
+  return [section?.figmaAnchorId, section?.figmaNodeId, section?.id]
+}
+
+/**
+ * section 的**索引键**（供 `visionSemantic` / `heightById` 等 Map 查找使用）：
+ * 取候选序列里第一个「非空」值，原样转字符串（等价于旧写法
+ * `String(s.figmaNodeId || s.id || '')` 但**多读了 `figmaAnchorId`**）。
+ *
+ * 🔴 刻意**不做 Figma-id 形态校验**：planner 的索引里既有真实节点 id，也有合成段 id
+ *   （`43:4791-list` / `807:2-tail-text`）—— 校验会把合成 id 变成空键，改变既有查找行为
+ *   （fail-open 转 fail-closed）。要形态校验请用 `plan-body-child-id-audit#resolveAnchorId`。
+ */
+export function sectionAnchorKey(section) {
+  for (const cand of sectionAnchorCandidates(section)) {
+    if (cand == null) continue
+    const s = String(cand)
+    if (s.length > 0) return s
+  }
+  return ''
+}
 
 /**
  * 收集 section **直接子级**引用的 Figma 节点 id。
@@ -159,9 +196,10 @@ export function auditSectionAnchors(sections, figmaRoot) {
     }
 
     // 当前声明的锚点：修复产物优先（幂等锚点）
-    const repaired = typeof section.figmaAnchorId === 'string' ? section.figmaAnchorId.trim() : ''
-    const explicit = typeof section.figmaNodeId === 'string' ? section.figmaNodeId.trim() : ''
-    const rawId = typeof section.id === 'string' ? section.id.trim() : ''
+    // （候选优先级单一来源 `sectionAnchorCandidates`，此处只做形态校验）
+    const [repaired, explicit, rawId] = sectionAnchorCandidates(section).map((v) =>
+      typeof v === 'string' ? v.trim() : '',
+    )
     const claimed = repaired || explicit || (FIGMA_ID_RE.test(rawId) ? rawId : '')
 
     // 语义 id（如 `section-cards`）是合法的，不算锚点声明 ⇒ 不判
