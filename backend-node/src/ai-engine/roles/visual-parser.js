@@ -498,6 +498,9 @@ ${(isMicrocode
 3. **每个 TEXT 文本节点**（标签、数值、单位、百分比、刻度）都要单独输出，即使字号 <14px 也不能遗漏或合并。
 4. **Tab/导航项**：每个 tab 都要独立输出为 child 元素，禁止合并成「3 个 tab」。
 5. **图标**：每个独立图标都要单独输出，禁止合并成「若干图标」。
+6. **视觉阅读顺序**：sections 数组必须严格按视觉阅读顺序排列（纵向从上到下；同一行带从左到右），不得按 Figma 子节点数组顺序、节点 id 或任意类型分组重排。
+7. **底部段锚点**：footer 不得锚定整个组件根节点；必须锚定底部图例、汇总或链接实际所在的子区域。锚点只提供几何事实，不得因此把 footer 移到其他 section 前面或改变其类型。
+8. **多列表格**：多列表格必须作为一个 type="table" section 输出，锚定整表容器；必须显式给出表头 headers、列数 columnCount，以及逐列 cells（每列包含表头与按视觉行顺序排列的数据单元）。禁止把多列表格拆成普通 list，禁止只输出首列或把一行多列拍平成纵排文本。
 
 **判断标准**：设计稿里能数出几个独立的框/文字/图标，JSON 里就应有几个对应的独立元素。覆盖率按「你输出的独立元素数 / 设计稿节点数」计算，合并或遗漏会导致覆盖率不达标而重试。
 
@@ -1663,19 +1666,24 @@ ${analysisTask}`
       try {
         const inlineRows = rebuildSectionsPreservingInlineRows(figmaData)
         if (inlineRows.length) {
+          const rawVisionSections = (parsed.layout?.sections || parsed.layoutStructure?.layout?.sections || [])
+          const rawVisionIds = rawVisionSections.map((s) => String(s?.id || ''))
           parsed.inlineCompositeRows = inlineRows
           if (parsed.layoutStructure && !parsed.layoutStructure.inlineCompositeRows) {
             parsed.layoutStructure.inlineCompositeRows = inlineRows
           }
-          // 真正改写结构表（顶层 layout）—— 传入 figmaData 启用层级收敛（只保留最外层并行块）
+          // 🔴 vision 主路径只消费 inlineRows 旁路事实；禁止几何行注入/删除/重排 section。
           if (parsed.layout) {
-            parsed.layout = mergeInlineRowsIntoSections(parsed.layout, inlineRows, figmaData)
+            parsed.layout = mergeInlineRowsIntoSections(parsed.layout, inlineRows, figmaData, {
+              preserveVisionStructure: true,
+            })
           }
           if (parsed.layoutStructure && parsed.layoutStructure.layout) {
             parsed.layoutStructure.layout = mergeInlineRowsIntoSections(
               parsed.layoutStructure.layout,
               inlineRows,
               figmaData,
+              { preserveVisionStructure: true },
             )
             // 🛡️ A′（2026-09-10）：merger 之后补容器层级重建。merger 只提升「左右并列」
             // 子节点为 section、丢弃「上下堆叠」的父容器（如 device slot-con 89:40）。
@@ -1686,6 +1694,20 @@ ${analysisTask}`
               figmaData,
             )
           }
+          const finalVisionSections = (parsed.layout?.sections || parsed.layoutStructure?.layout?.sections || [])
+          const finalVisionIds = finalVisionSections.map((s) => String(s?.id || ''))
+          const rawIdSet = new Set(rawVisionIds)
+          const finalIdSet = new Set(finalVisionIds)
+          const anchorKeys = finalVisionSections.map((s) => String(s?.figmaAnchorId || s?.figmaNodeId || s?.id || '')).filter(Boolean)
+          logger.info('🛡️ vision-structure-guard·已评估', {
+            rawSections: rawVisionSections.length,
+            finalSections: finalVisionSections.length,
+            injected: finalVisionIds.filter((id) => !rawIdSet.has(id)).length,
+            removed: rawVisionIds.filter((id) => !finalIdSet.has(id)).length,
+            reordered: rawVisionIds.length === finalVisionIds.length && rawVisionIds.some((id, i) => id !== finalVisionIds[i]),
+            duplicateAnchors: anchorKeys.length - new Set(anchorKeys).size,
+            inlineRows: inlineRows.length,
+          })
         }
       } catch (e) {
         logger.warn({ err: e?.message }, '[L2] rebuildSectionsPreservingInlineRows 失败，跳过兜底')

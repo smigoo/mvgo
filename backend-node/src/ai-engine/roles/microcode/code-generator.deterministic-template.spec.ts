@@ -138,6 +138,34 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(tpl).not.toMatch(/antd-tab-con[\s\S]*flex:1;min-width:0;[\s\S]*flex:1;min-width:0;/)
   })
 
+  test('ef5c7ed3：无锚点 footer 用确定性接管的文本高度，不再回退 flex:1 拉出大空白', () => {
+    const text = (id: string, characters: string, x: number) => ({
+      id, type: 'TEXT', characters,
+      absoluteBoundingBox: { x, y: 100, width: 80, height: 18 },
+      fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }],
+      style: { fontSize: 14, fontWeight: 400 },
+    })
+    const figmaNodeData = {
+      id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 118 },
+      children: [
+        { id: 'main', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 100 }, children: [] },
+        text('footer-a', '共 6 个节点', 0),
+        text('footer-b', '接入设备 10810', 100),
+      ],
+    }
+    const sections = [
+      { id: 'main', type: 'body', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 100 } },
+      { id: 'footer', type: 'stats', body: { children: [
+        { type: 'text', text: '共 6 个节点' },
+        { type: 'text', text: '接入设备 10810' },
+      ] } },
+    ]
+    const tpl = buildDeterministicIndexTemplate({ ...makeInput(sections), figmaNodeData })!.template
+    expect(tpl).toContain('<MainSection style="flex:0.847;min-height:0;" />')
+    expect(tpl).toContain('<StatsSection style="flex:0.153;min-height:0;" />')
+    expect(tpl).not.toContain('<StatsSection style="flex:1;min-height:0;" />')
+  })
+
   test('无计划子组件 → 返回 null（回退 LLM 生成）', () => {
     expect(buildDeterministicIndexTemplate(makeInput([]))).toBeNull()
     expect(buildDeterministicIndexTemplate({ componentName: 'x', subComponentPlan: null } as any)).toBeNull()

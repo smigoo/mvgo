@@ -31,7 +31,7 @@ export const FIGMA_ID_RE = /^\d+:\d+$/
 
 /**
  * 🔴 section 声明锚点的**候选序列（优先级单一来源）**：
- *   `figmaAnchorId`（上游锚点守卫的修复落点）→ `figmaNodeId`（vision 显式声明）→ `id`。
+ *   `figmaAnchorId`（上游锚点守卫的修复落点）→ `figmaNodeId` / `figmaNode`（vision 显式声明）→ `id`。
  *
  * 本函数只返回**候选值本身**、不做任何形态校验、不做 trim —— 让消费方各自决定
  * 「要不要校验形态」（如锚点审计只认 `FIGMA_ID_RE` 形态）与「取第几个非空」。
@@ -44,7 +44,7 @@ export const FIGMA_ID_RE = /^\d+:\d+$/
  *   三处各写一遍就是三条会各自漂移的判据，故统一收敛到本函数。
  */
 export function sectionAnchorCandidates(section) {
-  return [section?.figmaAnchorId, section?.figmaNodeId, section?.id]
+  return [section?.figmaAnchorId, section?.figmaNodeId, section?.figmaNode, section?.id]
 }
 
 /**
@@ -197,10 +197,10 @@ export function auditSectionAnchors(sections, figmaRoot) {
 
     // 当前声明的锚点：修复产物优先（幂等锚点）
     // （候选优先级单一来源 `sectionAnchorCandidates`，此处只做形态校验）
-    const [repaired, explicit, rawId] = sectionAnchorCandidates(section).map((v) =>
+    const [repaired, explicit, explicitNode, rawId] = sectionAnchorCandidates(section).map((v) =>
       typeof v === 'string' ? v.trim() : '',
     )
-    const claimed = repaired || explicit || (FIGMA_ID_RE.test(rawId) ? rawId : '')
+    const claimed = repaired || explicit || explicitNode || (FIGMA_ID_RE.test(rawId) ? rawId : '')
 
     // 语义 id（如 `section-cards`）是合法的，不算锚点声明 ⇒ 不判
     if (!claimed) {

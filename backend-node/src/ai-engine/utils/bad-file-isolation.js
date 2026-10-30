@@ -1,3 +1,5 @@
+import { detectUnmaterializedSections } from './section-coverage-guard.js';
+
 /**
  * 🛡️ P1-4：坏文件隔离降级的**决策层**（纯函数，2026-08-30）
  *
@@ -58,4 +60,18 @@ export function planBadFileIsolation(allFiles, badPaths) {
   if (removed.length === 0) return { ok: false, reason: '坏文件不在产物集中' };
 
   return { ok: true, files, removed };
+}
+
+/**
+ * 发布完整性摘要：P1-4 允许保留健康产物，但调用方必须显式得到“不完整”状态。
+ * 同时覆盖非 P1-4 的规划段漏生成，避免 success:true 被误读为全部 section 已交付。
+ */
+export function evaluateArtifactCompleteness(allFiles, componentPlan, degradedFiles = []) {
+  const files = Object.entries(allFiles || {}).map(([path, content]) => ({ path, content }));
+  const unmaterializedSections = detectUnmaterializedSections(files, componentPlan);
+  const degraded = (Array.isArray(degradedFiles) ? degradedFiles : []).filter(Boolean);
+  return {
+    artifactIncomplete: degraded.length > 0 || unmaterializedSections.length > 0,
+    unmaterializedSections,
+  };
 }

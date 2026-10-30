@@ -9,6 +9,17 @@ import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
 import { GenerateLiteDto } from './dto/generate-lite.dto';
 // 🆕 2026-10-12 N 主题：Lite 侧的主题装配（槽位名与规范一致，只扩套数）
 import type { LiteThemeEntry } from '../lite/utils/lite-multi-theme';
+// 🛡️ 2026-10-30 治本（画布口径）：设计画布尺寸与 prompt 换算倍率**单一来源**。
+// 旧实现：截图无条件「栅格 / 2」（HiDPI 假说），又把折半值回喂 prompt 铁律
+// ⇒ 画布与倍率同源自洽，产物整体缩到一半且无法被一致性检查发现
+//（mc-lite-1793331286822-99dd9b08 = 原组件尺寸的一半）。
+import {
+  FIGMA_EXPORT_SCALE,
+  resolveDesignCanvas,
+  normalizeRasterScale,
+  isCanvasScaleConsistent,
+  DEFAULT_RASTER_SCALE,
+} from './utils/design-canvas';
 import { repairJson as repairJsonUtil } from './repair-json.util';
 import {
   LiteErrorCode,
@@ -24,6 +35,10 @@ import { join, dirname, relative, sep } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'fs';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
+import { MIN_BODY_FONT_PX, MIN_BODY_FONT_RATIO } from '../ai-engine/utils/font-size-normalizer.js';
+// 🛡️ 字号落盘下限守卫（与 microcode-engineer writeFiles 后处理链同一实现）
+//    历史缺口：该守卫原先只挂在 writeFiles 里，而 Lite 链路全库不调 writeFiles ⇒ Lite 零兜底。
+import { ensureMinFontSize, formatFontGuardLog } from '../ai-engine/utils/font-size-guard.js';
 import { recompileIndexCss } from '../ai-engine/utils/index-css-recompiler.js';
 import { repairScopedThirdPartySelectors } from '../ai-engine/utils/css-sanitizer.js';
 import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDeclarations } from '../ai-engine/utils/sfc-semantics.js';
@@ -210,31 +225,45 @@ export class LiteService {
       }
       const { buffer, mime, ext } = imageResult;
       const { width: rasterWidth, height: rasterHeight } = await this.precheck(buffer, mime);
-      // Figma 预览接口返回的是节点逻辑尺寸（CSS px）；导出图使用 scale=1，
-      // 因此 PNG 像素只用于图片校验，不能作为组件设计画布尺寸。
-      // 截图来源同理：用户截图通常来自 HiDPI/Retina 屏幕（DPR=2），PNG 像素是
-      // 逻辑尺寸的 2 倍。统一按 2x 还原为 CSS 逻辑尺寸，否则生成的组件会偏大 2 倍。
-      // figma 源尺寸优先级：dto.previewWidth（前端显式传）> 节点 absoluteBoundingBox（getNode 实时取）> 栅格/2 兜底
-      const width =
-        sourceType === 'figma' && Number(dto.previewWidth) > 0
-          ? Math.round(Number(dto.previewWidth))
-          : sourceType === 'figma' && Number(imageResult.logicalWidth) > 0
-            ? Number(imageResult.logicalWidth)
-            : sourceType === 'screenshot'
-              ? Math.round(rasterWidth / 2)
-              : sourceType === 'html'
-                ? rasterWidth
-                : Math.round(rasterWidth / 2);
-      const height =
-        sourceType === 'figma' && Number(dto.previewHeight) > 0
-          ? Math.round(Number(dto.previewHeight))
-          : sourceType === 'figma' && Number(imageResult.logicalHeight) > 0
-            ? Number(imageResult.logicalHeight)
-            : sourceType === 'screenshot'
-              ? Math.round(rasterHeight / 2)
-              : sourceType === 'html'
-                ? rasterHeight
-                : Math.round(rasterHeight / 2);
+      // 🛡️ 2026-10-30 治本（画布口径）：画布尺寸与 prompt 换算倍率**单一来源**。
+      // 旧实现：截图/兜底分支无条件 `Math.round(栅格 / 2)`（HiDPI 假说），又把折半值
+      // 当 logicalWidth 回喂 buildAnalysisPrompt 的「尺寸标定铁律」⇒ 画布 ÷2 与
+      // 倍率「≈2.0 倍导出」同源自洽，产物整体恰好缩到一半，且任何一致性检查都发现
+      // 不了（实锤 mc-lite-1793331286822-99dd9b08 = 原组件所有尺寸的一半）。
+      // 现在倍率是**显式输入**：dto.rasterScale（默认 1x），不由栅格像素反推。
+      const rasterScale = normalizeRasterScale(dto.rasterScale, DEFAULT_RASTER_SCALE);
+      const canvas = resolveDesignCanvas({
+        sourceType,
+        rasterWidth,
+        rasterHeight,
+        previewWidth: dto.previewWidth,
+        previewHeight: dto.previewHeight,
+        logicalWidth: imageResult.logicalWidth,
+        logicalHeight: imageResult.logicalHeight,
+        rasterScale,
+      });
+      const width = canvas.width;
+      const height = canvas.height;
+      // 真机日志判据行（离线探针不可信）：真机跑一次即可核对画布口径与倍率。
+      this.logger.log(
+        `[design-canvas] sourceType=${sourceType} 栅格=${rasterWidth}x${rasterHeight} 画布=${width}x${height} rasterScale=${canvas.rasterScale} origin=${canvas.origin}`,
+      );
+      // 画布与倍率自洽守卫（旧实现永远发现不了的那个缺口）：两者被分两处独立推导时
+      // 会互相印证，此处一旦不自洽立即告警，不静默放行。
+      if (!isCanvasScaleConsistent(canvas, rasterWidth)) {
+        this.logger.warn(
+          `设计画布与栅格倍率不自洽：栅格 ${rasterWidth}x${rasterHeight} / 画布 ${width}x${height} = ${(rasterWidth / Math.max(width, 1)).toFixed(2)}，声明 rasterScale=${canvas.rasterScale}（origin=${canvas.origin}）`,
+          {
+            sourceType,
+            rasterWidth,
+            rasterHeight,
+            width,
+            height,
+            rasterScale: canvas.rasterScale,
+            origin: canvas.origin,
+          },
+        );
+      }
 
       const uploadDir = join(outputPath, '_upload');
       await mkdir(uploadDir, { recursive: true });
@@ -279,6 +308,7 @@ export class LiteService {
             rasterWidth,
             rasterHeight,
             imageResult.figmaTexts,
+            canvas.rasterScale,
           ),
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
@@ -501,9 +531,27 @@ export class LiteService {
         );
         
         // 提取样式并准备 index.vue 最终内容
-        const { vueFinal, businessStyles, styleStats } = 
+        const _extracted =
           await extractAndPrepareLiteMicrocodeStyles(vueCode, finalComponentName);
-        
+        let vueFinal = _extracted.vueFinal;
+        let businessStyles = _extracted.businessStyles;
+        const styleStats = _extracted.styleStats;
+
+        // 🛡️ 字号落盘下限守卫（Lite 写入点①/④）：businessStyles 最终落到
+        //    resources/styles/common.less（微码样式真实落点），index.vue 只留 @import，
+        //    因此两者都必须过守卫。幂等、只升不降。
+        {
+          const _fontGuard = ensureMinFontSize({
+            'package/index.vue': vueFinal,
+            'resources/styles/common.less': businessStyles,
+          });
+          vueFinal = _fontGuard.files['package/index.vue'];
+          businessStyles = _fontGuard.files['resources/styles/common.less'];
+          // 🔴 hits:0 也要打：区分「守卫没执行」与「执行了但零命中」
+          const _fontGuardLog = formatFontGuardLog(_fontGuard, 'lite');
+          this.logger.log(_fontGuardLog.message, _fontGuardLog.meta);
+        }
+
         await writeFile(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
 
         await writeFile(
@@ -591,6 +639,14 @@ ${businessStyles}
           `；字号${styleStats.fontNormalized ? '已归一' : '无需归一'}`,
         );
       } else {
+        // 🛡️ 字号落盘下限守卫（Lite 写入点②/④，vue3 分支）
+        //    vue3 产物不做字号归一（无 @fontSize 变量），字号是裸 px —— 由守卫的第二形态分支
+        //    （MIN_FONT_PX < px < MIN_BODY_FONT_PX → 提升到 MIN_BODY_FONT_PX）实际拦截。
+        //    实测依据：真实病灶裸 px 8/9/10 喂进本分支，修复前 hits:0 rawUnderMin:4 产物不变。
+        const _fontGuardVue3 = ensureMinFontSize({ 'package/index.vue': vueCode });
+        vueCode = _fontGuardVue3.files['package/index.vue'];
+        const _fontGuardVue3Log = formatFontGuardLog(_fontGuardVue3, 'lite');
+        this.logger.log(_fontGuardVue3Log.message, _fontGuardVue3Log.meta);
         await writeFile(join(packageDir, 'index.vue'), vueCode, 'utf-8');
       }
 
@@ -1642,7 +1698,7 @@ ${originalCode}`;
       const imageUrl = await figmaClient.exportImage(
         parsed.fileKey,
         parsed.nodeId,
-        { format: 'png', scale: 1 },
+        { format: 'png', scale: FIGMA_EXPORT_SCALE },
       );
 
       if (!imageUrl) {
@@ -1687,10 +1743,11 @@ ${originalCode}`;
         );
       }
 
-      // 🔧 节点逻辑尺寸（2026-09-01）：Figma API absoluteBoundingBox 是 CSS 逻辑坐标，
-      // 与导出图 scale=2 的栅格像素解耦。lite 页面（LiteGenerate）不传 previewWidth 时，
-      // 用它替代「栅格宽度」作为组件设计画布尺寸，避免组件按 2 倍栅格生成/预览。
-      // getNode 失败不阻塞导出：返回 null，由调用方按 rasterWidth/2 兜底。
+      // 🔧 节点逻辑尺寸（2026-09-01）：Figma API absoluteBoundingBox 是 CSS 逻辑坐标。
+      // 🛡️ 2026-10-30 校正：导出图现为 scale=FIGMA_EXPORT_SCALE（=1，1:1 栅格），
+      // 逻辑坐标与栅格像素本就同尺度；此处逻辑尺寸仍优先，用于 LiteGenerate 未传
+      // previewWidth 时替代栅格宽度作为画布（避免任何来源的栅格被误折半）。
+      // getNode 失败不阻塞导出：返回 null，由调用方按 resolveDesignCanvas 兜底。
       let logicalWidth: number | null = null;
       let logicalHeight: number | null = null;
       let figmaTexts: string[] | null = null;
@@ -1700,7 +1757,7 @@ ${originalCode}`;
         if (bbox && Number(bbox.width) > 0 && Number(bbox.height) > 0) {
           logicalWidth = Math.round(Number(bbox.width));
           logicalHeight = Math.round(Number(bbox.height));
-          this.logger.log(`Figma 节点逻辑尺寸: ${logicalWidth}x${logicalHeight}（scale=2 导出栅格 ${buffer.length} bytes）`);
+          this.logger.log(`Figma 节点逻辑尺寸: ${logicalWidth}x${logicalHeight}（导出倍率 scale=${FIGMA_EXPORT_SCALE}）`);
         }
         // 🔧 文本图层真值（2026-09-01）：同一 getNode 响应含完整子树的 TEXT 节点
         // characters，是设计稿文案的确定性事实源。视觉模型对小字号多字标签反复误读
@@ -1710,7 +1767,7 @@ ${originalCode}`;
           this.logger.log(`Figma 文本图层真值: ${figmaTexts.length} 条（注入视觉分析对照）`);
         }
       } catch (nodeErr: any) {
-        this.logger.warn(`获取 Figma 节点尺寸失败（非阻塞，走栅格/2 兜底）: ${nodeErr?.message}`);
+        this.logger.warn(`获取 Figma 节点尺寸失败（非阻塞，走 resolveDesignCanvas 栅格/倍率兜底）: ${nodeErr?.message}`);
       }
 
       return {
@@ -2108,19 +2165,32 @@ ${originalCode}`;
     rasterWidth?: number,
     rasterHeight?: number,
     figmaTexts?: string[] | null,
+    rasterScale?: number | null,
   ): string {
-    // 🔧 尺寸标定（2026-09-01）：截图多为 scale=1 栅格（figma 导出 / Retina 截图），
-    // 模型直接按栅格像素估字号/间距会整体偏大 ~2 倍（实锤 mc-lite-1788258227940：
-    // brief「大数字36-48px」→ 产物 900px 内容塞进 425px 画布）。把逻辑画布尺寸喂给
-    // 模型，强制它按逻辑 CSS px 输出所有尺寸估计。
-    const scaleNote =
-      logicalWidth && logicalHeight && rasterWidth && rasterHeight
-        ? `\n【尺寸标定铁律（必须遵守）】
-- 本截图是 ${rasterWidth}×${rasterHeight} 像素的栅格图，对应逻辑画布仅 ${logicalWidth}×${logicalHeight} CSS px（约 ${(rasterWidth / logicalWidth).toFixed(1)} 倍导出）。
-- typography.size、spacing、regions.size 中所有像素数值**必须按逻辑 CSS px 输出**（≈ 图上观测像素 ÷ ${(rasterWidth / logicalWidth).toFixed(1)}），并给出具体数值（如 "标题约16px、正文约11px、数字约14px"），禁止直接照抄图上看到的像素值。
-- 估尺寸时以逻辑画布为参照：某元素约占画布宽度的几分之几 → 换算成逻辑 px。
+    // 🔧 尺寸标定（2026-09-01 引入 / 🛡️ 2026-10-30 治本）：换算倍率必须与画布口径
+    // **同源**——rasterScale 由 resolveDesignCanvas 一次派生，不得由「栅格 / 逻辑画布」
+    // 反推。旧实现正是反推：画布被折半后倍率同步变成 2.0 倍，模型于是把观测像素再 ÷2，
+    // 与折半画布互相印证 ⇒ 产物整体恰好缩到一半，且一致性检查永远发现不了
+    //（实锤 mc-lite-1793331286822-99dd9b08 = 原组件所有尺寸的一半）。
+    // 反例仍在（故保留 >1 分支）：mc-lite-1788258227940 —— 栅格确实大于逻辑画布时，
+    // 若不标定，模型按栅格像素估尺寸（brief「大数字36-48px」→ 900px 内容塞进 425px 画布）。
+    // rasterScale=1 时反复强调「1:1、直接按观测像素输出」，禁止任何除法。
+    const scale = normalizeRasterScale(rasterScale, DEFAULT_RASTER_SCALE);
+    let scaleNote = '';
+    if (logicalWidth && logicalHeight && rasterWidth && rasterHeight) {
+      scaleNote =
+        scale === 1
+          ? `\n【尺寸标定铁律（必须遵守）】
+- 本截图为 ${rasterWidth}×${rasterHeight} 像素，与逻辑画布 ${logicalWidth}×${logicalHeight} CSS px **1:1（1:1 栅格）**，图上 1 像素 = 1 CSS px。
+- typography.size、spacing、regions.size 中所有像素数值**直接按图上观测像素输出即可**（禁止再做除法或折半），并给出具体数值（如 "标题约16px、正文约11px、数字约14px"）。
+- 估尺寸时以逻辑画布 ${logicalWidth}×${logicalHeight} 为参照：某元素约占画布宽度的几分之几 → 换算成逻辑 px。
 `
-        : '';
+          : `\n【尺寸标定铁律（必须遵守）】
+- 本截图是 ${rasterWidth}×${rasterHeight} 像素的栅格图（${scale}x），对应逻辑画布 ${logicalWidth}×${logicalHeight} CSS px。
+- typography.size、spacing、regions.size 中所有像素数值**必须按逻辑 CSS px 输出**（≈ 图上观测像素 ÷ ${scale}），并给出具体数值（如 "标题约16px、正文约11px、数字约14px"），禁止直接照抄图上看到的像素值。
+- 估尺寸时以逻辑画布为参照：某元素约占画布宽度的几分之几 → 换算成逻辑 px。
+`;
+    }
     const textTruthNote =
       Array.isArray(figmaTexts) && figmaTexts.length > 0
         ? `\n【文案真值对照表（取自 Figma 文本图层，优先级高于图像识别）】
@@ -2237,6 +2307,39 @@ ${scaleNote}${textTruthNote}
     return { genText, ...first };
   }
 
+  /**
+   * 🛡️ 字号下限铁律（2026-10-30）：生成阶段就把「真值 + 下限」写进 prompt，后处理只兜底。
+   *
+   * 背景（实锤 c-deployment-node-overview-74d5fe95）：断点 brief.typography.size 已明确是
+   * 「标题约15px、正文约13px、数字约15px、次要信息约11px」，但 prompt 的 P0-4「空间不足优先
+   * 缩字号」条款没有任何下限，LLM 无视真值把正文压到 8px（归一后 `calc(@fontSize * 0.5714)`），
+   * 产物不可读。仅靠 writeFiles 后处理钳制属治标，必须在生成阶段把真值摆到模型眼前。
+   *
+   * 数值单一来源 = font-size-normalizer 的 MIN_BODY_FONT_PX / MIN_BODY_FONT_RATIO，
+   * 与 microcode-engineer `ensureMinFontSize` 的默认 minRatio 同源——改常量两处同时生效。
+   *
+   * @param brief 阶段2 视觉分析结果；有 typography.size 时原样列入「字号真值」段
+   */
+  private buildFontFloorRule(brief?: any): string {
+    const typoSize =
+      brief && typeof brief === 'object' && typeof brief.typography?.size === 'string'
+        ? brief.typography.size.trim()
+        : '';
+    // 真值段：把视觉分析给的逻辑 px 层级贴到模型眼前，避免它「自己再估一遍」然后统一压缩
+    const truthBlock = typoSize
+      ? `【本次字号真值（来自视觉分析，已按逻辑 CSS px 标定；逐级还原，禁止统一压缩）】
+${typoSize}
+- 产物中每个层级的 \`font-size\` 必须落在上表对应值 ±1px 内；**禁止把多个层级压成同一字号**，也**禁止整体乘以同一个缩小系数**。
+`
+      : '';
+    return `${truthBlock}【字号下限铁律（P0，空间不足一律禁止压字号）】
+- 字号层级按【结构化拆解】的 typography.size 逐级还原，并保持层级差（标题 > 数值 > 正文 > 辅助文字）。
+- **任何可见正文 / 标签 / 数值文字的字号不得低于 ${MIN_BODY_FONT_PX}px**（= 基准 14px × ${MIN_BODY_FONT_RATIO}；微码 LESS 写法即 \`calc(@fontSize * ${MIN_BODY_FONT_RATIO})\`）。该下限只约束最低层级，**不得把所有文字统一抬成同一字号**（那等于丢掉 typography 层级）。
+- 横向/纵向空间不足时，**优先压缩 padding、间距 gap、图标尺寸、装饰留白**；仍放不下就减少装饰元素或改用换行/省略，**禁止把文字压到下限以下硬塞**（实锤：正文被压到 8px 后整屏不可读，且归一成 0.5714 系数后无法检索）。
+- 若上述预算冲突与【设计画布逻辑尺寸】内放不下同时成立，以「文字可读」优先：允许内部滚动（\`min-height: 0\` + \`overflow-y: auto\`），不得靠缩字号消除溢出。
+`;
+  }
+
   /** 阶段 3 prompt：基于截图 + 简报生成单文件 Vue3 组件 */
   private buildCodegenPrompt(
     brief: any,
@@ -2246,6 +2349,7 @@ ${scaleNote}${textTruthNote}
     designHeight?: number,
   ): string {
     const briefJson = JSON.stringify(brief || {}, null, 2);
+    const fontFloorRule = this.buildFontFloorRule(brief);
     const extra = [dto.requirementDoc, dto.notes]
       .filter(Boolean)
       .join('\n');
@@ -2262,7 +2366,7 @@ ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} ×
 参考截图可能是 2 倍导出像素，只用于视觉识别，不得把图片像素作为组件 CSS 尺寸。
 组件根节点必须使用 width: 100%、height: 100%、box-sizing: border-box，不得自行设置固定 max-width。
 **高度预算分解铁律（P0-4）**：写 CSS 前必须先做高度预算分解：可用高度 H = ${designHeight}px - 根容器 padding×2；逐区块分配后，grid 行高 = (主内容区高度 - (行数-1)×gap) ÷ 行数，卡片内元素必须适配行高（图标 ≤ 行高×0.45）；竖排文字按钮（writing-mode:vertical-rl）必须加 \`white-space: nowrap\` 防中间断列，按钮高度按**最长标签**预算（最长字数 ×(字号+letterSpacing) + padding×2 ≤ 按钮高），任一字数排不下就统一缩字号——禁止断列导致阅读顺序乱（实锤：供配电→电供/配），且 N 个按钮总高 + (N-1)×gap + 徽标预留 ≤ sidebar 分配高度，超出**优先缩字号**、按钮高随字号同比缩小，任何压缩后仍须满足 按钮高 ≥ 最长字数 ×(字号+letterSpacing) + padding×2（禁止只压按钮高不缩字号导致文字被裁），禁止末尾按钮被面板底部裁切；角标/计数徽标用负偏移挂在按钮外侧时，必须为所在栏预留空间（padding-top ≥ 外溢高度）+ 父链 overflow:visible + 徽标 z-index 高于相邻区块，禁止被上一区块裁切；徽标还必须完全落在面板水平边界内（left ≥ 0），栏宽不足时缩徽标字号或改为栏内右上角内嵌，禁止溢出面板边界。禁止不做预算直接堆固定尺寸。**宽度预算同理（P0-4）**：grid 列宽 = (可用宽 - (列数-1)×gap) ÷ 列数，卡片内文字必须适配列宽（设备名称 字数×字号 ≤ 列宽 - 卡片padding×2 - 图标宽，超出就缩字号，禁止横向裁切/省略）；顶部统计条必须**单行**放下（所有标签+数值总宽 ≤ 可用宽，超出就缩字号/间距，禁止换行）；根容器及任何区块的 scrollWidth/scrollHeight 不得大于 clientWidth/clientHeight（底部行文字被裁半即不合格，预算超 H 优先压缩 grid 行高）。
-` : ''}【结构化拆解】
+` : ''}${fontFloorRule}【结构化拆解】
 ${briefJson}
 ${extra ? `【布局补充】\n${extra}\n` : ''}
 ${userAddendum}
@@ -2375,6 +2479,7 @@ ${userAddendum}
   ): string {
     const briefJson = JSON.stringify(brief || {}, null, 2);
     const classPrefix = `c-${componentName}-`;
+    const fontFloorRule = this.buildFontFloorRule(brief);
     // 🛡️ 2026-09-30 治本：工作台演示主题面板（深色/浅色）→ 用户显式选择的主题必须覆盖 vision 推断
     const themeOverride = dto.backgroundBrightness
       ? `\n**演示面板主题（用户显式指定，P0 覆盖）**：当前使用${dto.backgroundBrightness === 'dark' ? '深色' : '浅色'}演示面板。组件根容器必须使用${dto.backgroundBrightness === 'dark' ? '深色底（如 #1a1a2e / #2d2d3f）+ 浅色正文' : '浅色底（如 #FFFFFF / #F5F8FC）+ 深色正文'}。此设置优先于【结构化拆解】中的 theme 字段与截图背景推断。`
@@ -2401,7 +2506,7 @@ ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} ×
   对称溢出铁律：根容器及任何区块的 scrollHeight 不得大于 clientHeight（与 scrollWidth 同标准），底部行文字被裁半即不合格——预算总和超 H 时优先压缩 grid 行高/卡片内边距，禁止静默溢出。
   **宽度预算同理**：grid 列宽 = (可用宽 - (列数-1)×gap) ÷ 列数，卡片内文字必须适配列宽（名称 字数×字号 ≤ 列宽 - 卡片padding×2 - 图标宽，超出就缩字号，禁止横向裁切）；顶部统计条必须**单行**放下（标签+数值总宽 ≤ 可用宽，超出就缩字号，禁止换行）。
   **禁止不做预算直接堆「看起来舒服」的固定尺寸**（实测：14px 竖排按钮 × 6 + 110px 卡片 × 4 必然超出 389px 内容区，底部两行被裁）。
-` : ''}【结构化拆解】
+` : ''}${fontFloorRule}【结构化拆解】
 ${briefJson}
 ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
 
@@ -3379,12 +3484,31 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         const { extractAndPrepareLiteMicrocodeStyles } = await import(
           '../ai-engine/utils/lite-style-extractor.js'
         );
-        const { vueFinal, businessStyles } =
-          await extractAndPrepareLiteMicrocodeStyles(vueCode, finalComponentName);
+        const _extracted = await extractAndPrepareLiteMicrocodeStyles(vueCode, finalComponentName);
+        let vueFinal = _extracted.vueFinal;
+        let businessStyles = _extracted.businessStyles;
+
+        // 🛡️ 字号落盘下限守卫（Lite 写入点③/④，续跑分支）
+        {
+          const _fontGuard = ensureMinFontSize({
+            'package/index.vue': vueFinal,
+            'resources/styles/common.less': businessStyles,
+          });
+          vueFinal = _fontGuard.files['package/index.vue'];
+          businessStyles = _fontGuard.files['resources/styles/common.less'];
+          const _fontGuardLog = formatFontGuardLog(_fontGuard, 'lite');
+          this.logger.log(_fontGuardLog.message, _fontGuardLog.meta);
+        }
+
         writeFileSync(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
 
         await this.writeMicrocodeAssets(outputPath, declareJson, finalComponentName, sessionId, businessStyles);
       } else {
+        // 🛡️ 字号落盘下限守卫（Lite 写入点④/④，续跑 vue3 分支）
+        const _fontGuardVue3 = ensureMinFontSize({ 'package/index.vue': vueCode });
+        vueCode = _fontGuardVue3.files['package/index.vue'];
+        const _fontGuardVue3Log = formatFontGuardLog(_fontGuardVue3, 'lite');
+        this.logger.log(_fontGuardVue3Log.message, _fontGuardVue3Log.meta);
         writeFileSync(join(packageDir, 'index.vue'), vueCode, 'utf-8');
       }
 
@@ -3550,27 +3674,12 @@ ${businessStyles}
   }
 
   /**
-   * 🛡️ P1.8（2026-09-11）微码 index.vue 落盘前处理（单一实现）：
-   *   ① 补 `@import '../resources/styles/index.less'`（mc-check M4-8：样式入口引用）
-   *   ② 硬编码字号归一为 `@fontSize` / `calc(@fontSize * ratio)`（LESS 变量；M5-6/M5-7）
+   * 🔴 2026-10-30 已删除「死代码」`prepareMicrocodeVueContent`。
+   *   它自称「微码 index.vue 落盘前处理（单一实现）」，实际全库 **0 调用**（从未接线），
+   *   正是「以为有落盘兜底、实际没有」这一假象的来源之一。它原本要做的两件事现在各有归属：
+   *     ① 补 `@import '../resources/styles/index.less'` → `lite-style-extractor` 提取时注入
+   *     ② 硬编码字号归一为 `@fontSize` → `lite-style-extractor` / `microcode/file-writer` 调用
+   *        `normalizeFontSizeLiterals`（M5-6/M5-7）
+   *   字号**下限**兜底则由 `utils/font-size-guard.js` 承担，四个写盘点均已接线。
    */
-  private async prepareMicrocodeVueContent(vueCode: string, isMicrocode: boolean): Promise<string> {
-    if (!isMicrocode || typeof vueCode !== 'string') return vueCode;
-    const { normalizeFontSizeLiterals } = await import(
-      '../ai-engine/utils/font-size-normalizer.js'
-    );
-    let out = vueCode;
-    if (!/@import\s+['"][^'"]*resources\/styles\/index\.less['"]/.test(out)) {
-      const styleTagRe = /<style([^>]*)>/i;
-      if (styleTagRe.test(out)) {
-        out = out.replace(
-          styleTagRe,
-          (m: string) => `${m}\n@import '../resources/styles/index.less';`,
-        );
-      } else {
-        out += `\n<style lang="less" scoped>\n@import '../resources/styles/index.less';\n</style>\n`;
-      }
-    }
-    return normalizeFontSizeLiterals(out).text;
-  }
 }

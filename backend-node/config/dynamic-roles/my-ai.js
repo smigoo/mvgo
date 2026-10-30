@@ -1,6 +1,6 @@
 /**
  * 我的AI分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-09-02T16:56:35.144Z
+ * 模板: llm-analyzer | 创建: 2026-10-30T11:07:39.691Z
  * 输入: input
  * 输出: result
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'my-ai',
       description: 'AI测试',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

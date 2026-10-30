@@ -1,10 +1,10 @@
 /**
  * planner.plan() 视觉结构治本回归（2026-09-14 · c-traffic-monitor-21e2afd6 实锤）。
  *
- * 两件事都只有一个事实源：Figma 节点的 absoluteBoundingBox。
- *   ① 顺序：effectiveSections 必须按 Figma y 排（vision 数组序会把「车型分布」排在两张柱状图之前）；
- *   ② 比例：flexGrow 必须是「高度 / 本层平均高度」（vision 自报 3.73 / 0.952 是臆造，
- *      两张图 Figma 高度其实都是 131px）。
+ * 结构顺序与几何比例分属两个事实源：
+ *   ① 顺序：effectiveSections 必须保持 vision 数组序，Figma 不得重排 section；
+ *   ② 比例：flexGrow 必须按 Figma absoluteBoundingBox 高度归一（vision 自报
+ *      3.73 / 0.952 是臆造，两张图 Figma 高度其实都是 131px）。
  *
  * 不放进 planner-p2.spec：该套件静态 import logger → backend-root.js 的 import.meta，
  * jest CJS 下整套件加载失败（既有基线）。本文件 mock logger 切断该边。
@@ -108,17 +108,17 @@ function plan(extra: any = {}) {
   })
 }
 
-describe('planner 视觉结构：Figma 坐标是顺序与比例的唯一事实源', () => {
-  test('effectiveSections 按 Figma y 升序（车型分布回到两张柱状图之后）', () => {
+describe('planner 视觉结构：vision 决定顺序，Figma 提供几何事实', () => {
+  test('effectiveSections 保持 vision 原序，即使与 Figma y 顺序冲突也不重排', () => {
     const { effectiveSections } = plan()
     expect(effectiveSections.map((s) => s.id)).toEqual([
       '2:3550',
       '88:32',
       '2:3660',
-      'slot-hourly-chart-jinjiang',
-      'slot-hourly-chart-bridge',
       '2:3438',
       '2:3565',
+      'slot-hourly-chart-jinjiang',
+      'slot-hourly-chart-bridge',
       'slot-流量预测',
     ])
   })

@@ -1,6 +1,6 @@
 /**
  * 规范驱动分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-09-02T16:56:35.177Z
+ * 模板: llm-analyzer | 创建: 2026-10-30T11:07:40.287Z
  * 输入: componentName
  * 输出: spec
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'p2-ai-spec',
       description: '带组件规范参考的AI节点',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

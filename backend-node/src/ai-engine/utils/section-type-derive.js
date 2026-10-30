@@ -59,6 +59,13 @@ export function deriveSectionType(sec) {
   const explicit = sec?.type || sec?.header?.type;
   if (explicit) return String(explicit).toLowerCase();
 
+  // 显式表格语义优先于 id 关键词：`section-table` 含 `tab`，旧实现会误判 tabs。
+  // body.children 的 control/role 同样是 vision 已声明的结构事实，不靠名称猜。
+  const tableNodes = [sec, ...(Array.isArray(sec?.body?.children) ? sec.body.children : [])];
+  if (tableNodes.some((n) => String(n?.role || n?.control || '').toLowerCase() === 'table')) {
+    return 'table';
+  }
+
   const idPart = String(sec?.id || '').replace(/^section[-_]?/i, '');
   const haystack =
     `${idPart} ${sec?.name || ''} ${sec?.header?.title || ''}`.toLowerCase();

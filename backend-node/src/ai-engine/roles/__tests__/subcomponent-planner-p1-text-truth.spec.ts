@@ -19,6 +19,11 @@ jest.mock('../../../config/backend-root.js', () => ({
 
 import { SubcomponentPlanner } from '../subcomponent-planner.js'
 
+// 🛡️ 2026-10-30 第2步：默认结构骨架已切 vision。本套件判据针对 E1（Figma 树骨架）
+// 路径（P1 文本真值保留），统一锁定 structureSource='figma' 保留回归防护，断言语义不变。
+const planE1 = (layout: any, opts: any = {}) =>
+  new SubcomponentPlanner().plan(layout, { structureSource: 'figma', ...opts });
+
 /**
  * 构造「sub-t 容器 → tabs-list（4 条 tab 文本 + 2 bg）→ tabs-icon」的 Figma 树，
  * 对齐 c3c3244f 环境监测真实结构（2:7879 → 89:42 → 2:7889 / 89:43）。
@@ -83,7 +88,7 @@ describe('P1 文本真值保留（tabs 文本不丢失）', () => {
 
   test('普通叶子 tabs-list 的 4 条文本收进 body.items（不因收口丢失）', () => {
     const figma = envMonitorFigma()
-    const result: any = planner.plan(
+    const result: any = planE1(
       { layout: { sections: [] }, sections: [] },
       { figmaNodeData: figma, minSectionsForced: 1 },
     )

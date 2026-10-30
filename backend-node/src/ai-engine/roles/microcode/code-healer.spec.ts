@@ -23,6 +23,7 @@ import {
   healUnquotedObjectKeysInVue,
   healClassPrefixedDataKeys,
 } from './code-healer.js'
+import { evaluateArtifactCompleteness } from '../../utils/bad-file-isolation.js'
 
 /** 构造完整日志器（safeLogger 对完整日志器 identity 返回，便于断言原始调用参数） */
 function makeLogger() {
@@ -1280,3 +1281,34 @@ describe('healLessColorFnVarArgs：LESS 颜色函数的 var() 参数 → 编译�
     expect(healLessColorFnVarArgs('').changes).toHaveLength(0);
   });
 });
+
+describe('evaluateArtifactCompleteness —— 降级可保留产物但不得伪装完整', () => {
+  const componentPlan = {
+    isForced: true,
+    effectiveSections: [
+      { id: 'list', type: 'content', title: '节点列表' },
+      { id: 'summary', type: 'stats', title: '底部统计' },
+    ],
+  }
+  const files = {
+    'package/index.vue': '<template><ContentSection /></template><script setup>import ContentSection from "./components/ContentSection.vue"</script>',
+    'package/components/ContentSection.vue': '<template><div>节点列表</div></template>',
+  }
+
+  it('规划段未物化或 P1-4 降级 ⇒ artifactIncomplete=true 并给出缺失段', () => {
+    const r = evaluateArtifactCompleteness(files, componentPlan, ['package/components/StatsSection.vue'])
+    expect(r.artifactIncomplete).toBe(true)
+    expect(r.unmaterializedSections.map((s) => s.id)).toEqual(['summary'])
+  })
+
+  it('全部规划段已物化且无降级 ⇒ artifactIncomplete=false', () => {
+    const complete = {
+      ...files,
+      'package/index.vue': '<template><ContentSection /><StatsSection /></template><script setup>import ContentSection from "./components/ContentSection.vue";import StatsSection from "./components/StatsSection.vue"</script>',
+      'package/components/StatsSection.vue': '<template><div>底部统计</div></template>',
+    }
+    const r = evaluateArtifactCompleteness(complete, componentPlan, [])
+    expect(r.artifactIncomplete).toBe(false)
+    expect(r.unmaterializedSections).toEqual([])
+  })
+})

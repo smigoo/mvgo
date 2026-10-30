@@ -18,7 +18,8 @@
 - 🔴 刀53 家族序 `grid→header→statrow→table→text→icon→legend→kvgrid`；新 kind 须登记 `FG_TAKEOVER_CLASS_RX`+计数链分支；vue3 映射唯一 `matchFgTakeoverTargets`。
 - 🔴🔴 刀53d/e：资源变量**绝不拼进静态 style/JSON**（`:style="{backgroundImage:'url('+var+')'}"`）；CODE-028 补 CODE-022。
 - 🔴🔴 几何/真值判据必挂真机日志计数行（离线探针塞入参=假绿）；**改的人=验的人用同一正则=假绿**；方案文档判据只当假设（f98f7463「同宽±2」恒零命中）。
-- 刀8/9–32、T4、令牌化、A1-A2、方向判据、LESS、透传三铁律、`:deep()`、`writeFiles`、R24、`getFigmaBox`、R19 ⇒ **P-DETAIL**。
+- 🔴 **字号下限守卫必须覆盖双形态**（`ai-engine/utils/font-size-guard.js`，lite 4 写盘点 + engineer writeFiles 共用）：① `calc(@fontSize*X)`（微码，extractor 归一后）② **裸 px**（Lite **vue3** 分支不做归一，真机实证裸 px 8/9/10 → 旧实现 `hits:0 changes:0` 产物一字未改＝死守卫）。`MIN_FONT_PX(5)<px<MIN_BODY_FONT_PX(10.5)` → 提 10.5，≤5px 豁免（隐藏文本），rem/em/% 不覆盖。日志 `hits:N calc:C rawpx:M minRatio:0.75 minPx:10.5 rawUnderMin:K`（**rawUnderMin 已改为「改后残留」，恒 0**，非 0=形态漏网）。判据＝`lite.font-size-guard-wiring.spec.ts` 行为断言（病灶阶梯过守卫零残留）+ 反证（合规 11/13/15 不得抬高）。
+- 🔴 刀8/9–32、T4、令牌化、A1-A2、方向判据、LESS、透传三铁律、`:deep()`、`writeFiles`、R24、`getFigmaBox`、R19 ⇒ **P-DETAIL**。
 
 ## 环境
 - 根 `/Users/smigoo/工作/mvgo`：backend-node(:13030)／frontend(:2610，`build:safe` 堆 4096)。

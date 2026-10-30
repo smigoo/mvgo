@@ -29,6 +29,11 @@ import {
   TEXT_ROW_TOLERANCE_PX,
 } from '../subcomponent-planner.js'
 
+// 🛡️ 2026-10-30 第2步：默认结构骨架已切 vision。本套件判据针对 E1（Figma 树骨架）
+// 路径（A1 文本真值配额），统一锁定 structureSource='figma' 保留回归防护，断言语义不变。
+const planE1 = (layout: any, opts: any = {}) =>
+  new SubcomponentPlanner().plan(layout, { structureSource: 'figma', ...opts });
+
 /**
  * 4 列 × 6 行 = 24 条 TEXT 的 GROUP（对齐 81:7 `Group 2136638454` 440×135.25）。
  * 列 x 间距 120 / 列宽 100 ⇒ `detectGridColumns` 的 `bx - prevX > avgW*0.5` 稳定分 4 列。
@@ -114,7 +119,7 @@ describe('A1 文本真值配额', () => {
   })
 
   test('① 阳性：grid 24 条文本全部保留（不再砍成 12）', () => {
-    const result: any = planner.plan(
+    const result: any = planE1(
       { layout: { sections: [] }, sections: [] },
       { figmaNodeData: grid24Figma(), minSectionsForced: 1 },
     )
@@ -132,7 +137,7 @@ describe('A1 文本真值配额', () => {
   })
 
   test('② 阴性：竖排正文 20 条仍按 12 截断（不是一律放开）', () => {
-    const result: any = planner.plan(
+    const result: any = planE1(
       { layout: { sections: [] }, sections: [] },
       { figmaNodeData: column20Figma(), minSectionsForced: 1 },
     )

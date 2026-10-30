@@ -673,8 +673,23 @@ const FG_LIST_ITEMS = []
 import ListSection from './components/ListSection.vue'
 </script>`
 
+  // 🔴 真机两段树（mc-1793287232957-71c64e28 取证）：container 48:5798 非叶，
+  //   子叶 48:5798-list 的 sourceNodeIds 包含 48:5800（bg1 的 figmaNodeId）
+  //   ⇒ resolveOwner 返回 ListSection（不是 null）⇒ compFile = ListSection.vue。
+  //   旧 fixture 只有单叶 {id:'48:5798', src:['48:5798']} ⇒ owner=null ⇒ compFile=index.vue
+  //   ⇒ 守卫检查的是 index.vue（假绿），真机守卫检查 ListSection.vue（短路死）。
   const sections: any[] = [
-    { id: '48:5798', type: 'list', responsibility: '节点列表', sourceNodeIds: ['48:5798'] },
+    {
+      id: '48:5798', type: 'container', responsibility: '内容区',
+      sourceNodeIds: ['48:5798'],
+      isLayoutContainer: true,
+      children: [
+        {
+          id: '48:5798-list', type: 'list', responsibility: '节点列表',
+          sourceNodeIds: ['48:5798', '48:5799', '48:5800', '48:5815', '48:5830', '48:5845', '48:5860', '48:5875'],
+        },
+      ],
+    },
   ]
 
   /** 6 张卡共享同一张图条 ⇒ 同 resourceFile 固化单变量 bg1（共享形态；判据不依赖条数）。 */
@@ -746,14 +761,13 @@ const items = []
     expect(files['package/index.vue']).toContain('bg1')
   })
 
-  it('反向②b：本文件自带 v-for item 且无锚点/非 sub-state → 不拦，落到 v-for item 逐项挂载', () => {
+  it('反向②b：owner 文件自带 v-for item 且无锚点/非 sub-state → 不拦，落到 v-for item 逐项挂载', () => {
     // 掐掉所有更高优先级出口（锚点事实链 / sub-state 状态分支 / container 状态分支），
     // 使唯一可达分支 = `sharedCount > 1` 的 v-for item 逐项挂载 —— 这条正是拦截必须放行的路径。
-    const idxWithVFor = `<template>
-  <div class="c-x-slot-con">
-    <div class="c-x-list-con">
-      <div v-for="(it, i) in items" :key="i" class="c-x-list-con-item">{{ it.t }}</div>
-    </div>
+    // 🔴 新 fixture（真机两段树）：owner=ListSection ⇒ 本用例的「本文件」= ListSection.vue。
+    const listWithVFor = `<template>
+  <div data-section-id="48:5798-list" class="c-x-fg-list">
+    <div v-for="(it, i) in items" :key="i" class="c-x-fg-list-item">{{ it.t }}</div>
   </div>
 </template>
 <script setup>
@@ -764,16 +778,16 @@ const items = []
       ownerSectionId: undefined,
       bgRole: undefined,
     }))
-    const files: any = { 'package/index.vue': idxWithVFor }
+    const files: any = { 'package/components/ListSection.vue': listWithVFor }
     const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: null })
     const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
     expect(r.diagnostics.map((x: any) => x.reason)).not.toContain('per-item-host-external')
     expect(r.mounted).toHaveLength(1)
     expect(r.mounted[0].keyword).toBe('v-for-item')
     // 绑定必须落在 v-for item 行（逐项），而不是外层容器
-    const itemLine = files['package/index.vue']
+    const itemLine = files['package/components/ListSection.vue']
       .split('\n')
-      .find((l: string) => l.includes('c-x-list-con-item'))
+      .find((l: string) => l.includes('c-x-fg-list-item'))
     expect(itemLine).toContain('bg1')
   })
 
@@ -830,15 +844,23 @@ import bg1 from '../../resources/images/image_313-5800.png'
     expect(files['package/index.vue']).toContain('bg1')
   })
 
-  it('反向④：无 sectionAnchorId（事实链不命中）→ 拦截仍生效，`slot-con` 静态回退不再误挂', () => {
-    const mapping = sharedMapping().map((m) => ({ ...m, ownerSectionId: undefined }))
+  it('反向④：无锚点 + owner=null（节点不在任何 section src）→ 早退守卫拦截 slot-con 静态回退', () => {
+    // 🔴 新 fixture（真机两段树）下，sharedMapping 的 figmaNodeId 都在 48:5798-list.src 中
+    //   ⇒ owner=ListSection（含 v-for）⇒ 早退守卫短路。本用例刻意让 figmaNodeId 不在
+    //   任何 section src 中 ⇒ owner=null ⇒ compFile=index.vue ⇒ 早退守卫可触发。
+    //   测试目标：无锚点时 sub-state 静态回退（slot-con）仍被早退守卫拦截。
+    const mapping = sharedMapping().map((m, i) => ({
+      ...m,
+      figmaNodeId: `48:${9900 + i}`, // 不在 48:5798-list.src 中
+      ownerSectionId: undefined,
+    }))
     const files: any = {
       'package/index.vue': IDX_PLAIN,
       'package/components/ListSection.vue': LIST_SEC,
     }
     const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: null })
-    // 无 ownerSectionId ⇒ 锚点解析不到 ⇒ sectionAnchorId 为 null（sub-state 分支是这条路径的出口）
     expect(plan.byFile.get('image_313-5800.png').mounts[0].sectionAnchorId).toBeNull()
+    expect(plan.byFile.get('image_313-5800.png').mounts[0].owner).toBeNull()
     const r = mountPlannedResources(files, plan, { logger: { warn() {}, info() {} } })
     expect(r.diagnostics.map((x: any) => x.reason)).toContain('per-item-host-external')
     expect(r.mounted).toHaveLength(0)

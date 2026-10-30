@@ -361,15 +361,16 @@ describe('R22-d auditSectionAnchors：锚点必须是自身内容的祖先', () 
 // 高度被错挂到「首卡叶子」。下面锁死单一来源的**行为契约**。
 
 describe('刀33 sectionAnchorCandidates / sectionAnchorKey：锚点优先级单一来源', () => {
-  test('candidates 恒为三元组且顺序固定（figmaAnchorId → figmaNodeId → id）', () => {
-    expect(sectionAnchorCandidates({ figmaAnchorId: '1:1', figmaNodeId: '2:2', id: '3:3' })).toEqual([
+  test('candidates 顺序固定（figmaAnchorId → figmaNodeId → figmaNode → id）', () => {
+    expect(sectionAnchorCandidates({ figmaAnchorId: '1:1', figmaNodeId: '2:2', figmaNode: '4:4', id: '3:3' })).toEqual([
       '1:1',
       '2:2',
+      '4:4',
       '3:3',
     ])
     // 缺字段 ⇒ undefined 占位，顺序不变
-    expect(sectionAnchorCandidates({ id: '3:3' })).toEqual([undefined, undefined, '3:3'])
-    expect(sectionAnchorCandidates(null)).toEqual([undefined, undefined, undefined])
+    expect(sectionAnchorCandidates({ id: '3:3' })).toEqual([undefined, undefined, undefined, '3:3'])
+    expect(sectionAnchorCandidates(null)).toEqual([undefined, undefined, undefined, undefined])
   })
 
   test('🔴 阳性：三者齐全 ⇒ key = figmaAnchorId（上游锚点修复优先于 vision 原始声明）', () => {

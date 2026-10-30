@@ -1,6 +1,6 @@
 /**
  * Figma 组件分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-09-02T16:56:35.068Z
+ * 模板: llm-analyzer | 创建: 2026-10-30T11:07:39.690Z
  * 输入: figmaNodeData
  * 输出: componentCount, components
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'figma-analyzer',
       description: '从 Figma 设计稿节点树分析组件数量与清单',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

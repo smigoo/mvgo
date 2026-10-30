@@ -23,6 +23,23 @@ export const FONT_BASE_PX = 14;
 export const MIN_FONT_PX = 5;
 
 /**
+ * 🛡️ 正文字号下限比例（2026-10-30）—— **单一来源，禁止任何地方再硬编码 0.75**。
+ *
+ * 背景（实锤 c-deployment-node-overview-74d5fe95）：Lite prompt 的 P0-4「空间不足优先缩字号」
+ * 条款没有任何下限，LLM 为把内容塞进画布直接把正文压到 8px（归一后 = `calc(@fontSize * 0.5714)`），
+ * 产物不可读。只靠后处理钳制属于治标，必须在**生成阶段**就把下限写进 prompt。
+ *
+ * 三个消费方必须引用本常量（改一处即全局生效，避免分叉）：
+ *   ① microcode-engineer `ensureMinFontSize` 的默认 minRatio（后处理兜底）
+ *   ② lite.service `buildCodegenPrompt` / `buildMicrocodeCodegenPrompt` 的字号下限铁律（生成阶段约束）
+ *   ③ 对应 spec 的一致性断言
+ */
+export const MIN_BODY_FONT_RATIO = 0.75;
+
+/** 正文字号下限（px）= FONT_BASE_PX × MIN_BODY_FONT_RATIO ⇒ 14 × 0.75 = 10.5px */
+export const MIN_BODY_FONT_PX = Number((FONT_BASE_PX * MIN_BODY_FONT_RATIO).toFixed(2));
+
+/**
  * 🛡️ 默认豁免的选择器（2026-10-22 round-12 实锤）：刀 53 确定性接管类。
  * 这类规则的 font-size 由 Figma 真值渲染（`font-size: 16px`），归一成
  * `calc(@fontSize * 1.1429)` 后实测塌成 13.71px ⇒ 真值失真。

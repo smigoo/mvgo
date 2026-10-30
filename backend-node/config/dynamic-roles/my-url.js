@@ -1,6 +1,6 @@
 /**
  * 我的URL解析（Agent Builder 自动生成，请勿手改）
- * 模板: url-parser | 创建: 2026-09-02T16:56:35.176Z
+ * 模板: url-parser | 创建: 2026-10-30T11:07:40.286Z
  * 输入: figmaUrl
  * 输出: fileKey, nodeId
  */

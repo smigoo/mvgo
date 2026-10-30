@@ -111,6 +111,27 @@ function findExternalVForItemHost(allFiles, varName, selfFile) {
 }
 
 /**
+ * 🛡️ 刀33 第3步（统一 per-item 让位判据 · 2026-10-30 · mc-1793287232957-71c64e28 实锤）：
+ *   封装「落点无 v-for item ∧ 外部存在 per-item 宿主 ⇒ 让位」为单一判据，
+ *   供**所有 bg 写入分支**在确定落点后、写入前统一调用。
+ *
+ *   真机教训：初版只在「早退守卫」里检查 `content`（计划 owner 文件），
+ *   但事实链分支（§六#4）的落点是**全库扫描**得到的另一个文件 ⇒ 守卫看错了文件。
+ *   ⇒ 必须在每个分支的**实际落点**上重新评估，而非只看 owner 文件。
+ *
+ * @param {Record<string, string>} allFiles 产物文件表
+ * @param {string} varName 资源变量名
+ * @param {string} candidateFile 候选落点文件路径
+ * @param {string} candidateContent 候选落点文件内容
+ * @returns {{ file: string, tag: string } | null} 命中则返回外部宿主（应让位），否则 null
+ */
+function findPerItemYieldHost(allFiles, varName, candidateFile, candidateContent) {
+  if (typeof candidateContent !== 'string') return null;
+  if (findVForItemTag(candidateContent)) return null; // 落点本身是 per-item 宿主 ⇒ 正常挂
+  return findExternalVForItemHost(allFiles, varName, candidateFile);
+}
+
+/**
  * 🛡️ 2026-09-29：按 `data-section-id="<anchor>"` 取回**开标签全文**（含属性）。
  *
  * 原实现用正则
@@ -519,16 +540,10 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       //   另一个文件同时 ① 引用本资源变量、② 含 v-for item ⇒ 该资源的 per-item 宿主已就绪，
       //   本文件让位（fail-closed：不挂、不猜容器）。外部宿主不存在/未引用本 var 时不拦
       //   ⇒ 行为不劣于旧实现（见 findExternalVForItemHost 的收紧陷阱留痕）。
-      if (
-        g.kind === 'bg' &&
-        typeof content === 'string' &&
-        !findVForItemTag(content)
-      ) {
-        const host = findExternalVForItemHost(
-          allFiles,
-          varName,
-          targetFile,
-        );
+      // 🛡️ 刀33 第3步补（2026-10-30）：统一走 findPerItemYieldHost（单一判据），
+      //   本处守「计划 owner 文件」路径；事实链落点路径见下方 :580 处的同款守卫。
+      if (g.kind === 'bg') {
+        const host = findPerItemYieldHost(allFiles, varName, targetFile, content);
         if (host) {
           diagnostics.push({
             reason: 'per-item-host-external',
@@ -578,6 +593,26 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             });
             options.logger?.warn?.(
               `🛡️ [资源挂载] ${varName} 的锚点元素 data-section-id=${anchor} 已被外来背景占用（${own}），放弃挂载（fail-closed）`,
+              { file: fp },
+            );
+            doneKeys.add(key);
+            result = null;
+            break;
+          }
+          // 🛡️ 刀33 第3步补（2026-10-30 · mc-1793287232957-71c64e28 实锤）：
+          //   事实链落点 `fp` 可能 ≠ 计划 owner 文件（全库扫描 ⇒ 落点由锚点位置决定）。
+          //   真机：owner=ListSection（含 v-for ⇒ 早退守卫短路），但事实链落点=index.vue
+          //   （无 v-for）⇒ 必须在**实际落点**上重新执行 per-item 让位判据。
+          const yieldHost = findPerItemYieldHost(allFiles, varName, fp, fc);
+          if (yieldHost) {
+            diagnostics.push({
+              reason: 'per-item-host-external',
+              file: fp,
+              var: varName,
+              host: yieldHost.file,
+            });
+            options.logger?.info?.(
+              `🎯 [资源挂载] ${varName} 为 per-item 资源（外部宿主 ${yieldHost.file} 的 v-for item 已引用），事实链落点 ${fp} 无 v-for item ⇒ 不挂本文件（避免整块只画一次错位）`,
               { file: fp },
             );
             doneKeys.add(key);

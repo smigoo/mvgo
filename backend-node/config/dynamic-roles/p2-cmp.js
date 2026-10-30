@@ -1,6 +1,6 @@
 /**
  * 双图比对（Agent Builder 自动生成，请勿手改）
- * 模板: vision-compare（视觉模式） | 创建: 2026-09-02T16:56:35.178Z
+ * 模板: vision-compare（视觉模式） | 创建: 2026-10-30T11:07:40.289Z
  * 输入: figmaImage, renderedImage
  * 输出: similarity, differences
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'p2-cmp',
       description: '',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

@@ -58,8 +58,12 @@ export function resolveSubComponentPlan(generationInput, subComponentPlan) {
  * 把根模板截断到具名插槽（如 <template #header-right>…</template>）为止，漏掉真正的
  * 组件体（含大写自定义子组件标签）。正确做法是「第一个非插槽 <template> 开标签 →
  * 文件最后一个 </template>」之间的内容（根模板必然包裹所有插槽，其闭合标签在最后）。
+ *
+ * 🆕 2026-10-30：改为 `export`。消费方 `resource-mounter.js#fixInlineSectionFlex`（规则⑥）
+ *  需要把「子组件标签 → 其根 class」解析成与 buildSectionHeightsMap **完全同源**的口径，
+ *  否则内联 flex 改写与映射表会各算一套 → 查表恒 miss（静默失效）。导出即可共用一份。
  */
-function extractRootTemplate(src) {
+export function extractRootTemplate(src) {
   const s = String(src || '');
   const openRe = /<template(\s[^>]*)?>/g;
   let rootOpenEnd = -1;

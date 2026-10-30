@@ -26,6 +26,11 @@ jest.mock('../../../config/backend-root.js', () => ({
 
 import { SubcomponentPlanner } from '../subcomponent-planner.js'
 
+// 🛡️ 2026-10-30 第2步：默认结构骨架已切 vision。本套件判据针对 E1（Figma 树骨架）
+// 路径（内部语义树回挂），统一锁定 structureSource='figma' 保留回归防护，断言语义不变。
+const planE1 = (layout: any, opts: any = {}) =>
+  new SubcomponentPlanner().plan(layout, { structureSource: 'figma', ...opts });
+
 /**
  * 属性网格的真值几何（对齐 d072d085 的 `81:7`）：
  *   x 唯一值多个、间距非等距 `[15,13,43,188,…]` ⇒ `buildGridContract#uniformPitch` 恒 null
@@ -116,7 +121,7 @@ describe('内部语义树回挂（vision body.children → plan.internalTree）'
   })
 
   test('vision id 撞上容器内 TEXT 真 id 时，内部树仍按文本重合度挂到正确宿主', () => {
-    const result: any = planner.plan(propertyGridVision(), {
+    const result: any = planE1(propertyGridVision(), {
       figmaNodeData: propertyGridFigma(),
       minSectionsForced: 1,
     })
@@ -143,7 +148,7 @@ describe('内部语义树回挂（vision body.children → plan.internalTree）'
   })
 
   test('内部树是纯加法：body 仍是扁平文本 items，行为不回归', () => {
-    const result: any = planner.plan(propertyGridVision(), {
+    const result: any = planE1(propertyGridVision(), {
       figmaNodeData: propertyGridFigma(),
       minSectionsForced: 1,
     })
@@ -174,7 +179,7 @@ describe('内部语义树回挂（vision body.children → plan.internalTree）'
         ],
       },
     }
-    const result: any = planner.plan(vision, {
+    const result: any = planE1(vision, {
       figmaNodeData: propertyGridFigma(),
       minSectionsForced: 1,
     })

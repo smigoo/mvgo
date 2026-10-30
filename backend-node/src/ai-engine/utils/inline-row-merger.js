@@ -24,6 +24,7 @@
  * @param {Array} inlineRows - rebuildSectionsPreservingInlineRows 产出
  *        [{ id, name, layout:'horizontal', members:[figmaNodeId,...] }]
  * @param {object} [figmaData] - Figma 节点树根（含 document 或 children），用于层级收敛
+ * @param {object} [opts] - preserveVisionStructure=true 时仅保留 vision 骨架，inlineRows 不注入、不删除、不重排
  * @returns {object} 新的 layout（不修改入参）
  */
 
@@ -324,10 +325,17 @@ function carriesStructure(section) {
   return false
 }
 
-export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
+export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData, opts = {}) {
   if (!layout || typeof layout !== 'object') return layout
   const sections = Array.isArray(layout.sections) ? layout.sections : []
   if (!Array.isArray(inlineRows) || inlineRows.length === 0) {
+    return { ...layout, sections: sections.slice() }
+  }
+  // 🔴 结构主权边界（mc-max-1793349445991-9e0b7a97）：原始 vision 已正确给出
+  // header → list → footer，旧 merger 又把两个同锚点 565:3 几何行注入顶层并按
+  // Figma y 重排 ⇒ 同一 6 卡列表被刀53与 LLM 各物化一次。vision 主路径下
+  // inlineCompositeRows 只能作辅助事实，不得改变 section 数量、层级、顺序或内容。
+  if (opts.preserveVisionStructure === true) {
     return { ...layout, sections: sections.slice() }
   }
 

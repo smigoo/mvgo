@@ -165,6 +165,18 @@ export class GenerateLiteDto {
   @Min(1)
   previewHeight?: number;
 
+  /**
+   * 图源栅格倍率（截图 / HTML 来源），默认 1（1x）。
+   * - 1 = 设备像素即 CSS px（Figma scale=1 导出图、普通 1x 截图、HTML 渲染图）
+   * - 2 = Retina/HiDPI 2x 截图 —— 必须由调用方**显式**声明；服务端不再对栅格像素
+   *   做任何猜测（旧实现无条件 ÷2，曾把 1x 截图的产物整体缩到一半：
+   *   mc-lite-1793331286822-99dd9b08 = 原组件所有尺寸的一半）。
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  rasterScale?: number;
+
   /** AI 配置覆盖（vision apiKey/baseURL/model 等），缺省走服务端默认 */
   @IsOptional()
   @IsObject()

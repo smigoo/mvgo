@@ -278,6 +278,101 @@ export function collectSectionRegions(figmaData) {
 }
 
 /**
+ * 🛠️ 2026-10-30 视觉行归并（mc-max-1793349441153-c3b958e0 实锤）。
+ *
+ * 病灶：`collectSectionRegions` 返回的是**图元级**节点，而 vision 的 sections 是**视觉语义级**。
+ * 一个视觉区块在 Figma 里常被拆成多个平级图元（例：底部「图例 + 详情链接」= Group 图例1 +
+ * Group 图例2 + TEXT 点击查看详情 + icon 箭头，四者 y 全为 52138），一旦数量错位就对不上。
+ *
+ * 实锤数据（slot-con 807:2，483×515，根 7 个直接子节点）：
+ *   [0] Frame 2136639921  y=51728 h=388   ← 设备列表（第 2 行）
+ *   [1] Group 2136638436  y=52138 h=14
+ *   [2] Group 2136638438  y=52138 h=14
+ *   [3] TEXT 点击查看详情 y=52138 h=14
+ *   [4] Frame 2136639911  y=51637 h=66    ← 统计卡片组（第 1 行）
+ *   [5] icon              y=52141 h=8     ← 装饰
+ *   [6] Rectangle 3462423 y=51815 h=218 w=6 ← 滚动条装饰
+ *   → regions=7 vs sections=3 → 数量不等 → A4 整体 return 0（写入数量实测 = 0）
+ *   → 全链路无系数 → mounter 退等分 → 产物 `flex:1.000 / flex:1 / flex:1`
+ *   → 渲染 171 / 171 / 171，与设计稿 66 / 388 / 14 完全不符。
+ *
+ * 修法（两步，均只在「数量不等」时作为兜底启用）：
+ *  ① 剔除装饰图元：细长（max/min ≥ 8 且短边 ≤ 10px）或极小（≤10×10）→ 滚动条 / 小图标；
+ *  ② 纵向行归并：按 y 排序后，与当前行 bottom+gap 相交的并入同一行，行高 = 行内 bbox 并集高度。
+ * 归并后恰好等于 sections 数才采纳，否则原样退回（保留原 header 容错 / 复合展开链）。
+ *
+ * @param {Array<object>} regions collectSectionRegions 的输出
+ * @returns {Array<object>} 归并后的「视觉行」节点（按 y 升序，附 absoluteBoundingBox）
+ */
+export function mergeVisualRows(regions) {
+  if (!Array.isArray(regions) || regions.length === 0) return []
+  /** 同一视觉行的最大纵向间隙（px）。实测 66 与 388 两行间距 25px、388 与图例间距 22px，取 8 不误合。 */
+  const ROW_GAP_PX = 8
+  /** 装饰图元短边上限：滚动条 w=6、图标 8×8 */
+  const DECOR_MAX_SIDE_PX = 10
+  /** 细长比：h/w ≥ 8（或 w/h ≥ 8）才算细长，避免把 14px 高的图例条误剔 */
+  const DECOR_ASPECT = 8
+
+  const boxed = []
+  for (const node of regions) {
+    const bb = node?.absoluteBoundingBox
+    if (!bb) continue
+    const w = Number(bb.width)
+    const h = Number(bb.height)
+    if (!(w > 0) || !(h > 0)) continue
+    const x = Number(bb.x) || 0
+    const y = Number(bb.y) || 0
+    // ① 装饰图元剔除（滚动条 / 小图标）：细长或极小
+    const short = Math.min(w, h)
+    const long = Math.max(w, h)
+    const isSliver = short <= DECOR_MAX_SIDE_PX && long / short >= DECOR_ASPECT
+    const isTiny = w <= DECOR_MAX_SIDE_PX && h <= DECOR_MAX_SIDE_PX
+    if (isSliver || isTiny) continue
+    boxed.push({ node, x, y, w, h, top: y, bottom: y + h, left: x, right: x + w })
+  }
+  if (boxed.length === 0) return []
+
+  // ② 按 y（同 y 再按 x）排序 —— 🔴 Figma children 文档顺序 ≠ 视觉顺序，
+  //    不排序会把第 2 行的 388 配给第 1 个 section（本案 regions[0] 才是第 2 行）
+  boxed.sort((a, b) => a.top - b.top || a.left - b.left)
+
+  const rows = []
+  for (const it of boxed) {
+    const last = rows[rows.length - 1]
+    if (last && it.top <= last.bottom + ROW_GAP_PX) {
+      last.bottom = Math.max(last.bottom, it.bottom)
+      last.left = Math.min(last.left, it.left)
+      last.right = Math.max(last.right, it.right)
+      last.nodes.push(it.node)
+    } else {
+      rows.push({ top: it.top, bottom: it.bottom, left: it.left, right: it.right, nodes: [it.node] })
+    }
+  }
+
+  return rows.map((row) => {
+    const host = row.nodes[0]
+    const merged = row.nodes.length > 1
+    const name = row.nodes
+      .map((n) => String(n?.name || '').trim())
+      .filter(Boolean)
+      .join(' + ')
+    return {
+      ...host,
+      name: name || host?.name,
+      absoluteBoundingBox: {
+        x: row.left,
+        y: row.top,
+        width: row.right - row.left,
+        height: row.bottom - row.top,
+      },
+      // 🔴 合成行不能带 children：否则后段「复合 region 展开」会把它再拆开，抵消归并效果
+      children: merged ? undefined : host?.children,
+      _mergedCount: merged ? row.nodes.length : undefined,
+    }
+  })
+}
+
+/**
  * A4（section 级）：让 device-switch 这类**单容器 section** 按父列比例被约束。
  *
  * 链接策略（实测 2026-09-03，c-monitor-3）：
@@ -318,11 +413,21 @@ export function applyFigmaSectionRatios(sections, figmaData) {
   // 文档顺序首项即视觉顶部）时，剥掉首个再 1:1；其余数量不等场景维持跳过不猜。
   const HEADER_RE = /^(header|头部|title|标题|top|top-bar|title-bar)[-_]?$/i
   let pairRegions = regions
-  if (restSections.length >= 2 && regions.length === restSections.length + 1) {
-    const first = regions[0]
+  // 🛠️ 2026-10-30 视觉行归并兜底（mc-max-1793349441153-c3b958e0 实锤，见 mergeVisualRows）。
+  // 仅在「regions 比 sections 多」时启用；归并后恰好对齐才采纳，否则原样退回走下面的旧容错链。
+  // 🔴 归并结果按 y 升序，顺带修掉「文档顺序 ≠ 视觉顺序」的串列风险；数量本就相等时不动，
+  //    以保证既有已验证行为（132 个 region/section 直配用例）零回归。
+  if (restSections.length >= 2 && pairRegions.length > restSections.length) {
+    const mergedRows = mergeVisualRows(pairRegions)
+    if (mergedRows.length === restSections.length) {
+      pairRegions = mergedRows
+    }
+  }
+  if (restSections.length >= 2 && pairRegions.length === restSections.length + 1) {
+    const first = pairRegions[0]
     const bb = first?.absoluteBoundingBox
     if (HEADER_RE.test(String(first?.name || '').trim()) && bb && bb.height > 0 && bb.height <= 80) {
-      pairRegions = regions.slice(1)
+      pairRegions = pairRegions.slice(1)
     }
   }
   // 🛠️ 2026-09-04 复合 region 展开（mc-max-1788485095835-e1432017 实锤）：

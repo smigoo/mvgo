@@ -1,6 +1,6 @@
 /**
  * 视觉分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer（视觉模式） | 创建: 2026-09-02T16:56:35.181Z
+ * 模板: llm-analyzer（视觉模式） | 创建: 2026-10-30T11:07:40.292Z
  * 输入: previewImage, designTree
  * 输出: layoutStructure
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'p2-visual',
       description: '',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

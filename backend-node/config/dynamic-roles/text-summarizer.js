@@ -1,6 +1,6 @@
 /**
  * 文本总结（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-09-02T16:56:35.181Z
+ * 模板: llm-analyzer | 创建: 2026-10-30T11:07:40.293Z
  * 输入: text
  * 输出: summary, keyPoints
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'text-summarizer',
       description: '对抓取/输入的长文本输出结构化总结',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

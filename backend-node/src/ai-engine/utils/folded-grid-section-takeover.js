@@ -364,6 +364,43 @@ export function detectIconLeaf(sec, figmaIndex, resourceMapping) {
 }
 
 /**
+ * vision 纯文本声明 → Figma TEXT 精确回查（29c2c476 底部汇总）。
+ *
+ * 只消费 body.children 的直接文本或 parts 拼接文本；每项必须在整棵树中恰命中一个
+ * 相同 characters 的 TEXT。缺项、重复命中、同一节点被重复消费、含非文本子结构均返回 null。
+ * 该路径只在没有有效锚点、原锚点无文本或锚到图形时启用，不替代正常锚点，也不按相似文本猜测。
+ */
+function resolveDeclaredTextNodes(sec, figmaIndex) {
+  const declared = Array.isArray(sec?.body?.children) ? sec.body.children : null;
+  if (!declared || declared.length === 0 || !(figmaIndex instanceof Map)) return null;
+  const allTexts = [];
+  const seen = new Set();
+  for (const entry of figmaIndex.values()) {
+    const n = entry?.rawNode;
+    if (!n || seen.has(n) || typeof n.characters !== 'string' || !n.characters.trim()) continue;
+    seen.add(n);
+    allTexts.push(n);
+  }
+  const used = new Set();
+  const resolved = [];
+  for (const child of declared) {
+    if (!child || typeof child !== 'object') return null;
+    let value = '';
+    if (typeof child.text === 'string' && child.text.trim()) value = child.text;
+    else if (Array.isArray(child.parts) && child.parts.length > 0) {
+      if (child.parts.some((p) => typeof p?.text !== 'string' || !p.text.trim())) return null;
+      value = child.parts.map((p) => p.text).join('');
+    } else return null;
+    const wanted = value.trim();
+    const hits = allTexts.filter((n) => n.characters.trim() === wanted);
+    if (hits.length !== 1 || used.has(hits[0])) return null;
+    used.add(hits[0]);
+    resolved.push(hits[0]);
+  }
+  return resolved.length === declared.length ? resolved : null;
+}
+
+/**
  * 纯文本叶判据（刀 53b，2026-10-22 mc-1792662399514-2b715fa0 实锤）：
  * 锚点子树**至少 1 个 TEXT、0 个图形节点**（GROUP 纯包装允许）。
  *
@@ -383,8 +420,11 @@ export function detectIconLeaf(sec, figmaIndex, resourceMapping) {
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
 export function detectTextLeaf(sec, figmaIndex) {
-  const nodes = collectAnchorNodes(sec, figmaIndex);
-  if (nodes.length === 0) return { ok: false, reason: 'noAnchorNode' };
+  let nodes = collectAnchorNodes(sec, figmaIndex);
+  if (nodes.length === 0) {
+    nodes = resolveDeclaredTextNodes(sec, figmaIndex) || [];
+    if (nodes.length === 0) return { ok: false, reason: 'noAnchorNode' };
+  }
   // 递归收集锚点子树（GROUP 纯包装允许；其余类型 = 图形 ⇒ fail）
   // 🔴 图形类型口径来自模块级 `GRAPHIC_NODE_RX`（与图例判据共用，禁止各写一份）
   const GRAPHIC_RX = GRAPHIC_NODE_RX;
@@ -408,6 +448,17 @@ export function detectTextLeaf(sec, figmaIndex) {
     for (const c of n.children || []) walk(c);
   };
   for (const n of nodes) walk(n);
+  // 原锚点失效时，vision 的完整纯文本声明仍可确定性物化；样式与几何改由
+  // 精确命中的 Figma TEXT 提供。判据失败则沿用原错误，绝不退回模糊匹配。
+  if (graphic || texts.length === 0) {
+    const declaredNodes = resolveDeclaredTextNodes(sec, figmaIndex);
+    if (declaredNodes) {
+      nodes = declaredNodes;
+      texts.length = 0;
+      graphic = null;
+      for (const n of nodes) walk(n);
+    }
+  }
   if (graphic) return { ok: false, reason: `hasGraphic(${graphic})` };
   if (texts.length === 0) return { ok: false, reason: 'texts=0(need>=1)' };
   if (texts.length > 1) {
@@ -903,7 +954,70 @@ export function detectStatRowLeaf(sec, figmaIndex, parentOf, resourceMapping) {
  * @param {Array} [resourceMapping] effectiveMapping（行图标反查用）
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
+/** vision 已声明的表头（只读结构语义，不用它直接猜几何）。 */
+function declaredTableHeaders(sec) {
+  const candidates = [sec, ...(Array.isArray(sec?.body?.children) ? sec.body.children : [])];
+  for (const candidate of candidates) {
+    const headers = candidate?.tableStyle?.headers;
+    if (!Array.isArray(headers) || headers.length < 2) continue;
+    const normalized = headers.map((h) => String(h ?? '').trim());
+    if (normalized.every(Boolean)) return normalized;
+  }
+  return null;
+}
+
+/**
+ * 用唯一表头文本的最近公共祖先回查整表锚点。
+ * 只负责定位候选；最终是否接管仍由原 detectTableLeafByAnchors 的 Figma 几何/样式判据决定。
+ * 任一表头缺失或重复 ⇒ null，绝不把歧义文本提升成整表。
+ */
+function resolveDeclaredTableLca(sec, figmaIndex, parentOf) {
+  const headers = declaredTableHeaders(sec);
+  if (!headers || !(parentOf instanceof Map) || parentOf.size === 0) return null;
+  const headerIds = [];
+  for (const header of headers) {
+    const matches = [];
+    for (const [id, rec] of figmaIndex) {
+      const node = rec?.rawNode;
+      if (node?.type === 'TEXT' && String(node?.characters ?? '').trim() === header) {
+        matches.push(String(id));
+      }
+    }
+    if (matches.length !== 1) return null;
+    headerIds.push(matches[0]);
+  }
+  const isAncestor = (ancestor, id) => {
+    let cur = String(id);
+    for (let depth = 0; cur && depth < 128; depth++) {
+      if (cur === ancestor) return true;
+      cur = parentOf.get(cur) || '';
+    }
+    return false;
+  };
+  let candidate = headerIds[0];
+  while (candidate && !headerIds.every((id) => isAncestor(candidate, id))) {
+    candidate = parentOf.get(candidate) || '';
+  }
+  return candidate || null;
+}
+
 export function detectTableLeaf(sec, figmaIndex, parentOf, resourceMapping) {
+  const direct = detectTableLeafByAnchors(sec, figmaIndex, parentOf, resourceMapping);
+  if (direct.ok) return direct;
+  const tableAnchor = resolveDeclaredTableLca(sec, figmaIndex, parentOf);
+  if (!tableAnchor) return direct;
+  const promoted = detectTableLeafByAnchors(
+    { ...sec, sourceNodeIds: [tableAnchor], figmaNodeId: tableAnchor, figmaNode: tableAnchor },
+    figmaIndex,
+    parentOf,
+    resourceMapping,
+  );
+  return promoted.ok
+    ? { ...promoted, sectionId: String(sec.id ?? ''), anchorRepair: 'declared-headers-lca' }
+    : direct;
+}
+
+function detectTableLeafByAnchors(sec, figmaIndex, parentOf, resourceMapping) {
   const nodes = collectAnchorNodes(sec, figmaIndex);
   if (nodes.length === 0) return { ok: false, reason: 'noAnchorNode' };
   if (!parentOf || parentOf.size === 0) return { ok: false, reason: 'noParentMap' };
@@ -1774,9 +1888,25 @@ const isIconRole = (r) => ROLE_ICON_SET.has(r);
 const isContentRole = (r) => ROLE_CONTENT_SET.has(r);
 const isStatRole = (r) => ROLE_STAT_SET.has(r);
 
+/** number + label/unit parts → 单项统计；多个数值属歧义，fail-open 不猜。 */
+function normListPartsStat(entry) {
+  if (!Array.isArray(entry?.parts)) return null;
+  const numbers = entry.parts.filter((p) => String(p?.type || '').toLowerCase() === 'number');
+  const label = entry.parts.find((p) => ['label', 'unit'].includes(String(p?.type || '').toLowerCase()));
+  if (numbers.length !== 1) return null;
+  const vn = normListText(numbers[0]);
+  const ln = label ? normListText(label) : null;
+  if (!vn) return null;
+  return {
+    v: vn.t, l: ln ? ln.t : '', vc: vn.c, vfs: vn.fs, vfw: vn.fw,
+    lc: ln ? ln.c : null, lfs: ln ? ln.fs : null,
+  };
+}
+
 /** 单项归一：{ texts, stats, icon:{file,w,h}, fill } */
 function normListItem(it) {
   const texts = [];
+  const contentStats = [];
   const els = Array.isArray(it?.content?.elements)
     ? it.content.elements
     : Array.isArray(it?.texts)
@@ -1785,6 +1915,12 @@ function normListItem(it) {
         ? it.textRuns
         : [];
   for (const el of els) {
+    // 🛡️ parts 形态：value 容器自身无 text，数值/标签在 parts 的角色节点中。
+    if (Array.isArray(el?.parts)) {
+      const stat = normListPartsStat(el);
+      if (stat) contentStats.push(stat);
+      continue;
+    }
     const n = normListText(el);
     if (n) texts.push(n);
   }
@@ -1857,17 +1993,31 @@ function normListItem(it) {
   //   对象映射 `stat: { online: {value, unit, styles}, offline: {...} }`（非数组）。
   //   label 取 unit 真值（「在线」/「离线」），缺 unit 不留 label，绝不拿键名
   //   （英文语义名）冒充文案。键序即 vision 给出的事实顺序。
+  const directPartsStats = [it?.value, it?.offline].filter((s) => Array.isArray(s?.parts));
   const statEntries = Array.isArray(it?.stats)
     ? it.stats
     : it?.stat && typeof it.stat === 'object'
       ? Object.values(it.stat)
-      : [];
+      : directPartsStats.length > 0
+        ? directPartsStats
+        : it?.value && typeof it.value === 'object'
+          ? Object.values(it.value)
+          : [];
+  // 显式 stats/stat 优先；缺失时才消费 content.elements.parts / children 角色轨，杜绝双份。
+  if (statEntries.length === 0 && contentStats.length > 0) stats.push(...contentStats);
   // 🛡️ 刀 28a：角色结构轨的 stats 并入（与 it.stats/it.stat 形态互斥——
   //   有显式 stats 字段时角色轨不重复；角色轨无 stats 时保持空数组）。
   if (stats.length === 0 && Array.isArray(roleStats) && roleStats.length > 0) {
     stats.push(...roleStats);
   }
   for (const s of statEntries) {
+    // 顶层 value.parts + offline.parts 与 content.elements.parts 共用同一归一，
+    // 保证数值、标签及样式口径一致；显式 stats/stat 仍优先，绝不双份追加。
+    if (Array.isArray(s?.parts)) {
+      const stat = normListPartsStat(s);
+      if (stat) stats.push(stat);
+      continue;
+    }
     // 🛡️ 刀 26（mc-max-1793191766917-329a3781 实锤）：vision 富卡第三种 stat
     //   形态——`stats: [{label:'在线', text:'3,792', styles:{...}}]`（值字段是
     //   `text` 而非 `value`）。缺这一读法 ⇒ 富卡归一 stats=0 条 ⇒ 「更全者胜出」
@@ -1876,16 +2026,19 @@ function normListItem(it) {
     const v = String(s?.value ?? s?.text ?? '').trim();
     if (!v) continue;
     const st = s?.styles || {};
+    const unitRun = s?.unit && typeof s.unit === 'object' ? normListText(s.unit) : null;
     stats.push({
       v,
-      l: String(s?.label ?? s?.unit ?? '').trim(),
+      l: unitRun ? unitRun.t : String(s?.label ?? s?.unit ?? '').trim(),
       vc: st.color || null,
       vfs: Number.isFinite(Number(st.fontSize)) ? Number(st.fontSize) : null,
       vfw: st.fontWeight || null,
-      lc: s?.labelStyles?.color || null,
-      lfs: Number.isFinite(Number(s?.labelStyles?.fontSize))
-        ? Number(s.labelStyles.fontSize)
-        : null,
+      lc: unitRun ? unitRun.c : s?.labelStyles?.color || null,
+      lfs: unitRun
+        ? unitRun.fs
+        : Number.isFinite(Number(s?.labelStyles?.fontSize))
+          ? Number(s.labelStyles.fontSize)
+          : null,
     });
   }
   let icon = null;
@@ -1909,6 +2062,9 @@ function normListItem(it) {
 export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   const fail = (reason) => ({ ok: false, reason });
   if (!sec || typeof sec !== 'object') return fail('noSection');
+  // vision 的结构类型优先：显式表格即使带 body.items/折叠标记，也只能走 table 接管。
+  // 表格判据事实不足时 fail-open 给后续检测，不得把一行多列拍平成纵排普通列表。
+  if (String(sec.type || '').toLowerCase() === 'table') return fail('explicitTable');
   if (sec.collapsed !== true && sec.renderHint !== 'v-for') return fail('notCollapsedList');
   const items = Array.isArray(sec.items) ? sec.items : null;
   if (!items || items.length < 2) return fail('items<2');
@@ -2113,7 +2269,7 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
    */
   const resolveCardBox = (it, rowBox, fill, allRowBoxes) => {
     const target = normalizeCssColor(fill);
-    let cur = String(it?.id ?? '');
+    let cur = String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '');
     if (!cur || !target || !figmaIndex) return { box: rowBox, node: null, fillNode: null };
     let guard = 0;
     while (cur && guard++ < 64) {
@@ -2141,7 +2297,7 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     const e =
       direct && Number.isFinite(direct.x) && Number.isFinite(direct.y)
         ? { bbox: direct }
-        : figmaIndex?.get(String(it?.id ?? '')) ||
+        : figmaIndex?.get(String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '')) ||
           figmaIndex?.get(String(it?.icon?.figmaNode ?? ''));
     return toBox(e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox);
   });
@@ -2210,10 +2366,17 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
             varName,
             file: String(hit.resourceFile).split('/').pop(),
             style: inferBackgroundStyle(hit),
+            sourceFill: norm[0].fill || null,
           };
         }
       }
     }
+  }
+  // 图条事实来自首卡，但绑定域必须由逐卡状态证明：仅与来源卡填充一致的项共享。
+  // 不同激活填充 ⇒ 不扩散；所有项填充一致 ⇒ 仍允许全部共享，不硬编码「只有首项」。
+  const itemBgFill = normalizeCssColor(itemBg?.sourceFill);
+  if (itemBgFill) {
+    for (const n of norm) n.bg = normalizeCssColor(n.fill) === itemBgFill;
   }
   return {
     ok: true,
@@ -2284,7 +2447,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       (itemBg
         ? `background-size:${itemBg.style.size};background-repeat:${itemBg.style.repeat};background-position:${itemBg.style.position};`
         : '');
-    const itemBindBg = itemBg ? `, backgroundImage: 'url(' + ${itemBg.varName} + ')'` : '';
+    const itemBindBg = itemBg ? `, backgroundImage: it.bg ? 'url(' + ${itemBg.varName} + ')' : undefined` : '';
     const itemLit = tr.items.map((it, i) => {
       const texts = `[${it.texts
         .map(
@@ -2298,7 +2461,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
             `{ v: ${jsonStr(s.v)}, l: ${jsonStr(s.l)}, vc: ${s.vc ? jsonStr(s.vc) : 'null'}, vfs: ${s.vfs ?? 'null'}, vfw: ${s.vfw ? jsonStr(s.vfw) : 'null'}, lc: ${s.lc ? jsonStr(s.lc) : 'null'}, lfs: ${s.lfs ?? 'null'} }`,
         )
         .join(', ')}]`;
-      return `  { texts: ${texts}, stats: ${stats}, icon: ${itemIconExpr[i]}, iconW: ${it.icon?.w ?? 'null'}, iconH: ${it.icon?.h ?? 'null'}, fill: ${it.fill ? jsonStr(it.fill) : 'null'} }${i < tr.items.length - 1 ? ',' : ''}`;
+      return `  { texts: ${texts}, stats: ${stats}, icon: ${itemIconExpr[i]}, iconW: ${it.icon?.w ?? 'null'}, iconH: ${it.icon?.h ?? 'null'}, fill: ${it.fill ? jsonStr(it.fill) : 'null'}, bg: ${it.bg === true} }${i < tr.items.length - 1 ? ',' : ''}`;
     });
     const gapsLit = Array.isArray(tr.gaps)
       ? `const FG_LIST_GAPS = ${inlineJson(tr.gaps)};`
@@ -2361,7 +2524,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     }
     const lines = [
       '<template>',
-      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:${tr.gap}px;padding:0;">`,
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:${tr.gap}px;width:100%;padding:0;">`,
     ];
     tr.members.forEach((m, i) => {
       const tSpan = `<span class="${cls}-t${i}" style="color:${m.titleColor};font-size:${m.titleFs}px;font-weight:${m.titleFw};line-height:1;white-space:nowrap;">{{ t${i} }}</span>`;
@@ -2390,7 +2553,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
         ? ` :style="{ backgroundImage: 'url(' + ${m.bgImageVar} + ')' }"`
         : '';
       lines.push(
-        `    <div class="${cls}-card${i}" style="display:flex;flex-direction:${tr.innerDir};align-items:center;justify-content:center;gap:${tr.innerGap}px;width:${tr.cardW}px;height:${tr.cardH}px;flex:none;box-sizing:border-box;${cardStatic}"${cardBindStyle}>`,
+        `    <div class="${cls}-card${i}" style="display:flex;flex-direction:${tr.innerDir};align-items:center;justify-content:center;gap:${tr.innerGap}px;flex:1;min-width:0;height:${tr.cardH}px;box-sizing:border-box;${cardStatic}"${cardBindStyle}>`,
         `      ${m.titleFirst ? tSpan : vSpan}`,
         `      ${m.titleFirst ? vSpan : tSpan}`,
         '    </div>',
@@ -2799,7 +2962,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
  *            skipped: Array<{id:string, reason:string}> }}
  */
 export function collectFoldedGridTakeover(p = {}) {
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -2846,6 +3009,7 @@ export function collectFoldedGridTakeover(p = {}) {
         } else {
           const tb = detectTableLeaf(sec, figmaIndex, parentOf, p.resourceMapping);
           if (tb.ok) {
+            if (tb.anchorRepair === 'declared-headers-lca') out.tableAnchorRepairs += 1;
             tablePending.push({ sec, tr: tb });
             continue;
           } else {
@@ -2908,6 +3072,7 @@ export function collectFoldedGridTakeover(p = {}) {
       kind: tr.kind,
       sectionId: tr.sectionId,
       baseId: tr.baseId,
+      height: Number.isFinite(Number(tr.height)) ? Number(tr.height) : null,
       // 🛡️ P1-B（2026-10-26）：显式暴露「本成员是否被两阶段决策抑制」。
       //   下游装配层（code-generator#buildDeterministicIndexTemplate）需要据此把该成员
       //   的宽/高从 flex 归一化分母里剔除；此前只能靠 `vue.includes('display:none')` 嗅探
@@ -2988,6 +3153,7 @@ export function collectFoldedGridTakeover(p = {}) {
     statRowSuppressed: out.statRowSuppressed,
     tableTaken: out.tableHits,
     tableSuppressed: out.tableSuppressed,
+    tableAnchorRepairs: out.tableAnchorRepairs,
     skipped: out.skipped.slice(0, 16),
   });
   return out;

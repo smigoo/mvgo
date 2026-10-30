@@ -28,6 +28,36 @@ describe('Loop 2.1.A mergeInlineRowsIntoSections', () => {
     expect(out.sections).toHaveLength(2)
   })
 
+  test('vision 结构主权：inline rows 只作辅助事实，不注入、不删除、不按 Figma y 重排（9e0b7a97）', () => {
+    const visionLayout = {
+      type: 'vertical-stack',
+      sections: [
+        { id: 'section-header', role: 'header', children: [] },
+        { id: '48:5798', role: 'list', body: { layout: 'vertical', items: [{ id: '48:5801' }, { id: '48:5813' }] } },
+        { id: 'section-footer', role: 'footer', body: { layout: 'horizontal', children: [{ text: '共 6 个节点' }] } },
+      ],
+    }
+    const duplicatedRows = [
+      { id: '565:3', name: 'slot-con', members: ['48:5828', '48:5843', '48:5904'] },
+      { id: '565:3', name: 'slot-con', members: ['48:5888', '48:5889'] },
+    ]
+    const figmaData = {
+      document: {
+        id: 'root',
+        children: [
+          { id: '565:3', absoluteBoundingBox: { x: 0, y: 0, width: 510, height: 571 }, children: [] },
+        ],
+      },
+    }
+    const before = JSON.parse(JSON.stringify(visionLayout))
+    const out = mergeInlineRowsIntoSections(visionLayout, duplicatedRows, figmaData, {
+      preserveVisionStructure: true,
+    })
+    expect(out.sections).toEqual(before.sections)
+    expect(out.sections.map((s) => s.id)).toEqual(['section-header', '48:5798', 'section-footer'])
+    expect(visionLayout).toEqual(before)
+  })
+
   test('同行兄弟合并为 horizontal block 的 children', () => {
     const out = mergeInlineRowsIntoSections(baseLayout, rows)
     const inlineBlock = out.sections.find((s) => s.id === 'parent-1')

@@ -9,6 +9,7 @@
  * figma-connector._rgbaToHex / prompt-builder.toCssColor / section-tree.rgbaToCss 口径一致。
  * visual-parser.extractFigmaHints 复用了本纯函数。
  */
+import { readFileSync } from 'node:fs'
 import { fillToRgba } from '../../utils/section-tree.js'
 
 describe('fillToRgba —— fill 级透明度（opacity）提取', () => {
@@ -41,5 +42,24 @@ describe('fillToRgba —— fill 级透明度（opacity）提取', () => {
     expect(fillToRgba(null)).toBeNull()
     expect(fillToRgba({ type: 'SOLID', visible: true, color: null })).toBeNull()
     expect(fillToRgba({ type: 'SOLID', visible: true, color: { g: 1, b: 1 } })).toBeNull()
+  })
+})
+
+describe('VisualParser 结构主权契约（7d7925d2）', () => {
+  it('要求视觉阅读顺序、footer 子区域锚点和完整表格列结构', () => {
+    // visual-parser 运行时使用 import.meta，当前 ts-jest CJS 环境不能导入；
+    // 这里对实际 prompt 源文本做接线断言，表格行为由 takeover 公共接口测试覆盖。
+    const source = readFileSync(`${__dirname}/../visual-parser.js`, 'utf8')
+
+    expect(source).toContain('sections 数组必须严格按视觉阅读顺序排列')
+    expect(source).toContain('footer 不得锚定整个组件根节点')
+    expect(source).toContain('多列表格必须作为一个 type="table" section 输出')
+    expect(source).toContain('逐列 cells')
+  })
+
+  it('inline-row merger 必须以 preserveVisionStructure 模式接线，禁止后处理越权改骨架', () => {
+    const source = readFileSync(`${__dirname}/../visual-parser.js`, 'utf8')
+    expect(source).toContain('preserveVisionStructure: true')
+    expect(source).toContain('vision-structure-guard')
   })
 })

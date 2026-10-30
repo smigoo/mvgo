@@ -33,6 +33,15 @@ describe('deriveSectionType（header 收窄）', () => {
     expect(deriveSectionType({ id: 'x', name: '标签页切换' })).toBe('tabs');
   });
 
+  test('e7c4197c：显式 table 语义优先于 section-table 中的 tab 子串', () => {
+    expect(deriveSectionType({ id: 'section-table', name: '设备列表', role: 'table' })).toBe('table');
+    expect(deriveSectionType({
+      id: 'section-table',
+      body: { children: [{ role: 'table', control: 'table' }] },
+    })).toBe('table');
+    expect(deriveSectionType({ id: 'section-tabs', name: '标签页切换' })).toBe('tabs');
+  });
+
   test('header-stats 复合词 → stats（顺序敏感不误判 header）', () => {
     expect(deriveSectionType({ id: 'x', name: 'header-stats' })).toBe('stats');
   });

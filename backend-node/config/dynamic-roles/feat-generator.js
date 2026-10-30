@@ -1,6 +1,6 @@
 /**
  * 功能组件生成（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-09-02T16:56:35.064Z
+ * 模板: llm-analyzer | 创建: 2026-10-30T11:07:39.689Z
  * 输入: analysis, requirement
  * 输出: componentCode, notes
  */
@@ -19,7 +19,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: 'feat-generator',
       description: '基于代码分析和需求生成新组件代码',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

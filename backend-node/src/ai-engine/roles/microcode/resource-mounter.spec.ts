@@ -571,6 +571,149 @@ describe('fixSectionHeightsForResource 规则④：固定 px 尺寸区块禁 fle
   })
 })
 
+/**
+ * 🆕 规则⑥：template 内联 flex 权威化（2026-10-30 · mc-max-1793349441153-c3b958e0 实锤）。
+ *
+ * 病灶：规则②~⑤ 只改写 CSS 选择器块，不碰内联 style；而产物把 section 高度写进了内联
+ * （`<StatsSection style="flex:1.000;min-height:0;" />`，来源 code-generator.js
+ * flexItemStyleFromHeights 取不到高度时写 `flex:1`）。内联优先于类选择器 ⇒ 规则② 写对也
+ * 被覆盖；且 StatsSection 根 `c-slot-con-fg-statrow-434893` 在 resources/ 下 0 条 CSS 规则。
+ * 真值：Figma 66 / 388 / 14px → A4 归一化系数 0.423 / 2.487 / 0.09。
+ */
+describe('fixSectionHeightsForResource 规则⑥：template 内联 flex 权威化（2026-10-30）', () => {
+  const SECTION_HEIGHTS = {
+    'c-slot-con-fg-statrow-434893': 0.423,
+    'c-slot-con-tabs-section': 2.487,
+    'c-slot-con-content-section': 0.09,
+  }
+  const INDEX_VUE = [
+    '<template>',
+    '  <base-panel panelKey="default-panel">',
+    '    <div class="c-slot-con-slot-con c-mc-max-1793349441153-c3b958e0" style="display:flex; flex-direction:column">',
+    '      <StatsSection style="flex:1.000;min-height:0;" />',
+    '      <TabsSection style="flex:1;min-height:0;" />',
+    '      <ContentSection style="flex:1;min-height:0;" />',
+    '      <div class="c-slot-con-deco" style="flex:1;min-height:0">deco</div>',
+    '    </div>',
+    '  </base-panel>',
+    '</template>',
+    '<script setup>',
+    "import StatsSection from './components/StatsSection.vue'",
+    "import TabsSection from './components/TabsSection.vue'",
+    "import ContentSection from './components/ContentSection.vue'",
+    '</script>',
+  ].join('\n')
+  const FILES: Record<string, string> = {
+    'package/index.vue': INDEX_VUE,
+    'package/components/StatsSection.vue': [
+      '<template>',
+      '  <div data-section-id="43:4893" class="c-slot-con-fg-statrow-434893" style="display:flex;flex-direction:row;">',
+      '    <div class="c-slot-con-stat-card" style="flex:1;min-width:0;height:66px"></div>',
+      '  </div>',
+      '</template>',
+    ].join('\n'),
+    'package/components/TabsSection.vue': [
+      '<template>',
+      '  <div data-section-id="table-section" class="c-slot-con-tabs-section" v-bind="$attrs"></div>',
+      '</template>',
+    ].join('\n'),
+    'package/components/ContentSection.vue': [
+      '<template>',
+      '  <div data-section-id="footer-section" class="c-slot-con-content-section" v-bind="$attrs"></div>',
+      '</template>',
+    ].join('\n'),
+  }
+  const CTX6 = {
+    path: 'package/index.vue',
+    sectionHeights: SECTION_HEIGHTS,
+    files: FILES,
+  }
+
+  it('⭐ 实锤输入：三子组件内联 flex:1.000/1/1 → 改写为权威系数（真值 0.423/2.487/0.09）', () => {
+    const out = fixSectionHeightsForResource(INDEX_VUE, CTX6)
+    expect(out).toContain('flex: 0.423 1 0;')
+    expect(out).toContain('flex: 2.487 1 0;')
+    expect(out).toContain('flex: 0.09 1 0;')
+    // 旧值必须全部消失（否则几何仍按等分渲染）
+    expect(out).not.toContain('flex:1.000;')
+    expect(out).not.toContain('flex:1;min-height:0;')
+    // 内联的 min-height:0 等其余声明保留
+    expect(out).toContain('min-height:0;')
+    // 装饰元素的内联 flex:1（不在映射里）不得被动
+    expect(out).toContain('<div class="c-slot-con-deco" style="flex:1;min-height:0">deco</div>')
+  })
+
+  it('幂等：再跑一遍输出不变', () => {
+    const once = fixSectionHeightsForResource(INDEX_VUE, CTX6)
+    const twice = fixSectionHeightsForResource(once, CTX6)
+    expect(twice).toBe(once)
+  })
+
+  it('命中不到映射 → 原样不动（不猜、不注入）', () => {
+    const ctx = { ...CTX6, sectionHeights: { 'c-other-root': 1.5 } }
+    expect(fixSectionHeightsForResource(INDEX_VUE, ctx)).toBe(INDEX_VUE)
+  })
+
+  it('像素量级内联 flex（flex:131 1 0）→ 不碰（与规则② / FLEX-005 同纪律）', () => {
+    const pixelInput = INDEX_VUE.replace('flex:1.000;min-height:0;', 'flex:131 1 0;')
+    const out = fixSectionHeightsForResource(pixelInput, CTX6)
+    expect(out).toContain('flex:131 1 0;')
+    expect(out).not.toContain('flex: 0.423 1 0;')
+  })
+
+  it('无 files（无法解析标签根 class）→ 原样不动', () => {
+    const out = fixSectionHeightsForResource(INDEX_VUE, {
+      path: 'package/index.vue',
+      sectionHeights: SECTION_HEIGHTS,
+    })
+    expect(out).toBe(INDEX_VUE)
+  })
+
+  it('非 index.vue（子组件文件）→ 不在本规则作用域', () => {
+    const out = fixSectionHeightsForResource(INDEX_VUE, {
+      ...CTX6,
+      path: 'package/components/StatsSection.vue',
+    })
+    expect(out).toBe(INDEX_VUE)
+  })
+
+  it('单文件组件：直接子元素首 class 命中映射同样改写', () => {
+    const mono = [
+      '<template>',
+      '  <div class="c-mono-root" style="display:flex;flex-direction:column">',
+      '    <div class="c-slot-con-fg-statrow-434893" style="flex:1;min-height:0"></div>',
+      '    <div class="c-slot-con-tabs-section" style="flex:1;min-height:0"></div>',
+      '  </div>',
+      '</template>',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(mono, {
+      path: 'package/index.vue',
+      sectionHeights: SECTION_HEIGHTS,
+      files: { 'package/index.vue': mono },
+    })
+    expect(out).toContain('flex: 0.423 1 0')
+    expect(out).toContain('flex: 2.487 1 0')
+  })
+
+  it('模板区外的内联 flex（<script>/<style> 内）不得改写', () => {
+    const leaky = [
+      '<template>',
+      '  <div class="c-x-root"><StatsSection style="flex:1" /></div>',
+      '</template>',
+      '<script setup>',
+      "const s = 'style=\"flex:1\"'",
+      '</script>',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(leaky, {
+      path: 'package/index.vue',
+      sectionHeights: SECTION_HEIGHTS,
+      files: { ...FILES, 'package/index.vue': leaky },
+    })
+    expect(out).toContain('<StatsSection style="flex: 0.423 1 0;" />')
+    expect(out).toContain("const s = 'style=\"flex:1\"'")
+  })
+})
+
 describe('ensureHeaderSlots P1-3: headerSlots/sections 重叠去重', () => {
   // 多行 baseCode 匹配注入正则 `/<base-panel[^>]*>\s*\n/`
   const baseCode = [

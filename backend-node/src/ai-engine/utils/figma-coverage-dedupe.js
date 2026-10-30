@@ -185,17 +185,17 @@ const PARTIAL_OVERLAP_THRESHOLD = 0.75
  *   ⚠️ `removed` **跨层级聚合**（嵌套子树里被删的段也在内）——真机 48:5813-list 就是在
  *   容器 565:3 的 children 层被删的，只统计顶层会静默留痕为空（2026-10-15 首版踩坑）。
  */
-export function dedupeSectionsByCoverage(sections, closureIndex) {
+export function dedupeSectionsByCoverage(sections, closureIndex, opts = {}) {
   if (!Array.isArray(sections)) return { sections, removed: [] }
   if (!(closureIndex instanceof Map) || closureIndex.size === 0) {
     return { sections, removed: [] }
   }
   const removed = []
-  const out = dedupeLevelByCoverage(sections, closureIndex, removed, '')
+  const out = dedupeLevelByCoverage(sections, closureIndex, removed, '', opts)
   return { sections: out, removed }
 }
 
-function dedupeLevelByCoverage(sections, closureIndex, removed, path) {
+function dedupeLevelByCoverage(sections, closureIndex, removed, path, opts = {}) {
   const cov = sections.map((s) =>
     s && typeof s === 'object' ? sectionCoverageSet(s, closureIndex) : new Set(),
   )
@@ -236,6 +236,13 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path) {
       // 🛡️ 刀 22：被删者是折叠列表段而吸收者自身不携带列表内容 ⇒ 不删
       //   （否则唯一起内容轨消失，整列坍缩成首卡，b2086a9c 实锤）
       if (isCollapsedListShape(sections[i]) && !isListContentCarrier(sections[j])) continue
+      // 🛡️ 2026-10-30 第2步（仅 vision 骨架路径开启）：吸收者必须**自身携带逐项内容**，
+      //   否则不得把平级兄弟判为「重复解释」删除。vision sections 是**平铺**且段 id 常取
+      //   容器 id（如「底部图例与链接」=807:2），其 Figma 后代闭包天然包含统计卡/表格等
+      //   平级业务段 ⇒ 旧「全包含即重复」会把整块业务段误删（P0 语料 ab7bb76c 实测：
+      //   beforeTop 3 → afterTop 1，统计卡与表格全消失）。判据与刀22 同源
+      //   （isListContentCarrier），E1（figma）路径不开启、行为不变。
+      if (opts.requireContentCarrier && !isListContentCarrier(sections[j])) continue
       droppedBy.set(i, j)
       break
     }
@@ -293,7 +300,7 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path) {
       const childPath = `${path}/${String(s.id ?? '')}`
       return {
         ...s,
-        children: dedupeLevelByCoverage(s.children, closureIndex, removed, childPath),
+        children: dedupeLevelByCoverage(s.children, closureIndex, removed, childPath, opts),
       }
     })
 }

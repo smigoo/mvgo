@@ -18,6 +18,12 @@ jest.mock('../../logger/index.js', () => ({
 
 import { subcomponentPlanner, buildEffectiveSection } from '../subcomponent-planner.js';
 import { indexFigmaNodes } from '../../utils/section-tree.js';
+
+// 🛡️ 2026-10-30 第2步：默认结构骨架已切 vision（用户拍板「结构骨架=vision」）。
+// 本套件判据针对 E1（Figma 树骨架）路径（容器坍缩 / 折叠叶几何透传），
+// 统一锁定 structureSource='figma' 以保留该路径的回归防护，断言语义不变。
+const planE1 = (layout: any, opts: any = {}) =>
+  subcomponentPlanner.plan(layout, { structureSource: 'figma', ...opts });
 const mkItem = (id, iconNode, name) => ({
   id,
   layout: 'horizontal',
@@ -72,7 +78,7 @@ function find(list, pred) {
 
 describe('刀20a planner：vision items 轨容器坍缩修复', () => {
   it('⭐ 实锤复刻：children（卡1 子树 id 落在 items 引用集内）⇒ 替换为 collapsed list 叶', () => {
-    const res = subcomponentPlanner.plan(mkLayout([{ id: '10:3', name: '图标', layout: 'horizontal' }]), { figmaNodeData: FIGMA });
+    const res = planE1(mkLayout([{ id: '10:3', name: '图标', layout: 'horizontal' }]), { figmaNodeData: FIGMA });
     const leaf = find(res.effectiveSections, (s) => s.id === '10:1-list');
     expect(leaf).toBeTruthy();
     expect(leaf.collapsed).toBe(true);
@@ -94,7 +100,7 @@ describe('刀20a planner：vision items 轨容器坍缩修复', () => {
           absoluteBoundingBox: { x: 10, y: 174, width: 80, height: 16 } },
       ],
     });
-    const res = subcomponentPlanner.plan(mkLayout(null), { figmaNodeData: figma });
+    const res = planE1(mkLayout(null), { figmaNodeData: figma });
     expect(find(res.effectiveSections, (s) => s.id === '10:1-list')).toBeNull();
     // 卡片与底栏都必须仍在树上（不坍缩、不丢失）
     expect(find(res.effectiveSections, (s) => s.id === '10:2')).toBeTruthy();
@@ -104,7 +110,7 @@ describe('刀20a planner：vision items 轨容器坍缩修复', () => {
   it('反向：body.items 是扁平文本清单（非富卡）⇒ 不触发', () => {
     const ls = mkLayout([{ id: '10:3', name: '图标' }]);
     ls.layout.sections[0].body.items = [{ text: '甲' }, { text: '乙' }];
-    const res = subcomponentPlanner.plan(ls, { figmaNodeData: FIGMA });
+    const res = planE1(ls, { figmaNodeData: FIGMA });
     expect(find(res.effectiveSections, (s) => s.id === '10:1-list' && s.collapsed === true)).toBeNull();
   });
 });
@@ -142,7 +148,7 @@ describe('刀21a planner：vision 直接把列表收成叶子（body.items 富�
   });
 
   it('⭐ 实锤复刻：叶子 + body.items 富卡（stat 映射形态）⇒ 归一 collapsed list（items 顶层透传）', () => {
-    const res = subcomponentPlanner.plan(
+    const res = planE1(
       mkLeafLayout([mkLeafItem('甲节点', '地址甲', '3,792'), mkLeafItem('乙节点', '地址乙', '128')]),
       { figmaNodeData: LEAF_FIGMA },
     );
@@ -160,7 +166,7 @@ describe('刀21a planner：vision 直接把列表收成叶子（body.items 富�
   });
 
   it('反向：叶子 + 扁平文本清单（非富卡）⇒ 不归一（collapsed=false）', () => {
-    const res = subcomponentPlanner.plan(
+    const res = planE1(
       mkLeafLayout([{ text: '甲' }, { text: '乙' }]),
       { figmaNodeData: LEAF_FIGMA },
     );
@@ -173,7 +179,7 @@ describe('刀21a planner：vision 直接把列表收成叶子（body.items 富�
   it('反向：叶子无 body.items ⇒ 行为不变（collapsed=false）', () => {
     const ls = mkLeafLayout(null);
     delete ls.layout.sections[0].body;
-    const res = subcomponentPlanner.plan(ls, { figmaNodeData: LEAF_FIGMA });
+    const res = planE1(ls, { figmaNodeData: LEAF_FIGMA });
     const leaf = find(res.effectiveSections, (s) => s.id === '10:1');
     expect(leaf).toBeTruthy();
     expect(leaf.collapsed).toBe(false);
@@ -296,19 +302,19 @@ describe('刀21a 方向闸：horizontal/grid 富卡叶子不归一（爆炸半�
   });
 
   it('反向：layout=horizontal-2-columns ⇒ 不归一（collapsed=false）', () => {
-    const res = subcomponentPlanner.plan(mkHz('horizontal-2-columns'), { figmaNodeData: HZ_FIGMA });
+    const res = planE1(mkHz('horizontal-2-columns'), { figmaNodeData: HZ_FIGMA });
     const leaf = find(res.effectiveSections, (s) => s.id === '20:1');
     expect(leaf).toBeTruthy();
     expect(leaf.collapsed).toBe(false);
   });
 
   it('反向：layout=grid ⇒ 不归一', () => {
-    const res = subcomponentPlanner.plan(mkHz('grid'), { figmaNodeData: HZ_FIGMA });
+    const res = planE1(mkHz('grid'), { figmaNodeData: HZ_FIGMA });
     expect(find(res.effectiveSections, (s) => s.id === '20:1')?.collapsed).toBe(false);
   });
 
   it('反向：layout 缺事实（无字段）⇒ 不归一', () => {
-    const res = subcomponentPlanner.plan(mkHz(null), { figmaNodeData: HZ_FIGMA });
+    const res = planE1(mkHz(null), { figmaNodeData: HZ_FIGMA });
     expect(find(res.effectiveSections, (s) => s.id === '20:1')?.collapsed).toBe(false);
   });
 });
@@ -361,7 +367,7 @@ describe('刀28c/28③ planner：collapsed 叶几何透传 + sourceNodeIds 全�
   // 病灶②（28③）：折叠段 src 只含首卡子树 ⇒ 装配 claimedIds 缺卡 2-6 ⇒
   //   刀7 absorbed-bg 双份渲染。
   it('⭐ 阳性：折叠叶几何透传 + 宿主几何被并集覆盖 + src 含全部成员子树', () => {
-    const res = subcomponentPlanner.plan(mkLayout([{ id: '10:3', name: '图标', layout: 'horizontal' }]), { figmaNodeData: FIGMA });
+    const res = planE1(mkLayout([{ id: '10:3', name: '图标', layout: 'horizontal' }]), { figmaNodeData: FIGMA });
     const leaf = find(res.effectiveSections, (s) => s.id === '10:1-list');
     expect(leaf).toBeTruthy();
     // 28c：整列并集几何透传（两卡 0..72 / 92..164 ⇒ 并集高 164）

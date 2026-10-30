@@ -50,6 +50,10 @@ import {
 } from './file-writer.js';
 import { join } from 'node:path';
 import { removeOverlappingSlotDom } from '../../utils/slot-dom-deduper.js';
+// 🆕 规则⑥（2026-10-30）：内联 flex 权威化需要「子组件标签 → 其根 class」的解析口径，
+// 与 buildSectionHeightsMap（figma-section-heights.js）**同源**——共用同一份 extractRootTemplate，
+// 避免「映射表按 A 口径建、内联改写按 B 口径查」导致查表恒 miss（静默失效）。
+import { extractRootTemplate } from '../../utils/figma-section-heights.js';
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i`。
 //   该常量与 `microcode-engineer.js` 的死代码副本、`utils/mount-target-scoring.js` 的私有副本
@@ -3053,13 +3057,138 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
       return whole;
     });
 
+  // 🆕 规则⑥（2026-10-30 · mc-max-1793349441153-c3b958e0 实锤）：template 内联 flex 权威化。
+  // 规则②~⑤ 全部只改写 **CSS 选择器块**（`RULE_BLOCK_RE`），**完全不碰 template 内联 style**。
+  // 而确定性模板把 section 高度写进了内联（`<StatsSection style="flex:1.000;min-height:0;" />`）。
+  // 内联优先级高于类选择器 ⇒ 规则② 即便写对也被内联覆盖；本产物 StatsSection 根 class
+  // `c-slot-con-fg-statrow-434893` 更是在 `resources/` 下 **0 条 CSS 规则**（规则② 无落点）。
+  // ⇒ 内联 style 是唯一必然存在、且优先级最高的落点。
+  let out6 = out5;
+  if (sectionHeights) {
+    out6 = fixInlineSectionFlex(out5, { sectionHeights, files: ctx?.files, path, logger });
+    if (out6 !== out5) changed = true;
+  }
+
   if (changed && logger) {
     logger.warn(
       '🛡️ 语义分流修复：flex-grow 臆造值 / height:100% section 根 → 等比例分配；固定 px 尺寸区块 → flex: 0 0 auto；布局事实缺则补（display/grid/flex-direction）',
       { file: path },
     );
   }
-  return changed ? out5 : content;
+  return changed ? out6 : content;
+}
+
+/**
+ * 🆕 规则⑥（2026-10-30 · mc-max-1793349441153-c3b958e0 实锤）：template 内联 flex 权威化。
+ *
+ * 病灶（高度失真的**第二处断点**）：
+ *   `fixSectionHeightsForResource` 的规则②~⑤ 全部只改写 CSS 选择器块（`RULE_BLOCK_RE`），
+ *   **不碰 template 内联 style**。而确定性模板把 section 高度直接写进了内联：
+ *     `<StatsSection style="flex:1.000;min-height:0;" />`
+ *   （来源 `code-generator.js` `flexItemStyleFromHeights` —— 取不到高度时写
+ *   `flex:1;min-height:0;`，即产物 `flex:1.000 / 1 / 1` 的来处）。
+ *   内联优先于类选择器 ⇒ 规则② 在 CSS 里写入权威系数 `flex: 2.487 1 0` 也会被内联 `flex:1`
+ *   覆盖；且实测该产物 StatsSection 根 class `c-slot-con-fg-statrow-434893` 在 `resources/`
+ *   下 **0 条 CSS 规则** ⇒ 规则② 根本没有落点。⇒ 内联 style 是唯一必然存在的落点。
+ *
+ * 口径（与 `buildSectionHeightsMap` **同源**，不新造映射）：
+ *   ① 多子组件：`<StatsSection/>` → `package/components/StatsSection.vue` 的根 class
+ *      → `sectionHeights[根 class]`；
+ *   ② 单文件组件：元素自身首 class → `sectionHeights[首 class]`。
+ *   ③ 查不到映射 ⇒ **不动**（不猜、不注入）。
+ *
+ * 纪律：
+ *   - 只认 ratio 量级 grow（`0 < g <= RATIO_MAX`）；像素量级（`flex: 131 1 0`）不碰，
+ *     与规则② / FLEX-005 同一口径（`classifyGrowScale`）。
+ *   - 只在模板区（`<template>` → `<script|<style` 边界）内改写。
+ *   - 只在 `index.vue` 生效——section 标签的宿主只有它，子组件文件里不会出现这些标签。
+ *   - 幂等：改写后 grow 已是权威系数，再跑一遍输出不变。
+ *
+ * @param {string} content 单个文件内容（.vue）
+ * @param {{sectionHeights?:Record<string,number>, files?:Record<string,string>, path?:string, logger?:object}} ctx
+ * @returns {string} 修复后内容
+ */
+export function fixInlineSectionFlex(content, ctx = {}) {
+  const sectionHeights = ctx?.sectionHeights;
+  if (!sectionHeights || typeof sectionHeights !== 'object') return content;
+  if (typeof content !== 'string' || !content) return content;
+  const files = ctx?.files;
+  // 无文件集 ⇒ 无法把大写标签解析到其子组件根 class ⇒ 不猜，直接不动。
+  if (!files || typeof files !== 'object') return content;
+  const path = String(ctx?.path || '');
+  // section 标签的宿主只有 index.vue；显式收窄，避免在无关文件上做无意义遍历。
+  if (!/(^|\/)index\.vue$/i.test(path)) return content;
+
+  const tplStart = content.search(/<template\b[^>]*>/i);
+  if (tplStart < 0) return content;
+  const rest = content.slice(tplStart);
+  const endRel = rest.search(/<script[\s>]|<style[\s>]/i);
+  const tplEnd = endRel > 0 ? tplStart + endRel : content.length;
+
+  const ratioMax = Number(FLEX_GROW_SCALES?.RATIO_MAX) || 19;
+  // 与 buildSectionHeightsMap 共用 extractRootTemplate —— 口径漂移会让查表恒 miss（静默失效）。
+  const rootClassOfVue = (src) => {
+    if (typeof src !== 'string' || !src) return '';
+    const stpl = extractRootTemplate(src);
+    if (!stpl) return '';
+    return (
+      stpl.match(/<[^>]+?class\s*=\s*["']([^"']+)["']/)?.[1]
+        ?.trim()
+        .split(/\s+/)[0] || ''
+    );
+  };
+  const lookup = (cls) => {
+    if (!cls) return 0;
+    const v = sectionHeights[cls];
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  };
+
+  // 标签级匹配（引号感知，避免 `class="a b"` 被空格切开）
+  const TAG_RE = /<([A-Za-z][A-Za-z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)(\/?)>/g;
+  // 前置边界 `(^|[;\s])`：`display:flex`（前缀 `:`）、`flex-direction:`（`-`）、
+  // `justify-content:flex-start`（`:`）均不命中，只认真正的 CSS `flex` 简写声明。
+  const FLEX_DECL_RE =
+    /(^|[;\s])flex\s*:\s*(\d+(?:\.\d+)?)(\s+[01])?(\s+(?:0|auto|0%))?\s*;?/gi;
+
+  const out = content.replace(TAG_RE, (whole, tag, attrs, selfClose, offset) => {
+    if (offset < tplStart || offset >= tplEnd) return whole;
+    const sm =
+      attrs.match(/style\s*=\s*"([^"]*)"/) || attrs.match(/style\s*=\s*'([^']*)'/);
+    if (!sm) return whole;
+    const styleVal = sm[1];
+    if (!/(^|[;\s])flex\s*:/i.test(styleVal)) return whole;
+
+    // 解析该标签映射到的 section 根 class（与 buildSectionHeightsMap 同源口径）
+    let cls = '';
+    if (/^[A-Z]/.test(tag)) {
+      cls = rootClassOfVue(files[`package/components/${tag}.vue`]);
+    }
+    if (!cls) {
+      const cm =
+        attrs.match(/class\s*=\s*"([^"]*)"/) || attrs.match(/class\s*=\s*'([^']*)'/);
+      cls = cm ? String(cm[1]).trim().split(/\s+/)[0] : '';
+    }
+    const px = lookup(cls);
+    if (px <= 0) return whole; // 命中不到映射 → 不动（不猜）
+
+    const newStyle = styleVal.replace(FLEX_DECL_RE, (mm, pre, g, s, b) => {
+      const gv = Number(g);
+      if (!(gv > 0) || gv > ratioMax) return mm; // 像素量级 / 非正 → 不碰
+      const shrink = s ? s.trim() : '1';
+      const basis = b ? b.trim() : '0';
+      return `${pre}flex: ${px} ${shrink} ${basis};`;
+    });
+    if (newStyle === styleVal) return whole;
+    return whole.replace(sm[0], sm[0].replace(styleVal, newStyle));
+  });
+
+  if (out !== content && ctx?.logger?.warn) {
+    ctx.logger.warn(
+      '🎯 规则⑥：template 内联 flex 已按 sectionHeights 权威系数改写（防内联覆盖 CSS 权威比例）',
+      { file: path },
+    );
+  }
+  return out;
 }
 
 /**

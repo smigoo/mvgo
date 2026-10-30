@@ -72,6 +72,12 @@ describe('刀20b detectListLeaf — 同构列表接管判据', () => {
     expect(r.reason).toBe('notCollapsedList');
   });
 
+  it('反向：vision 显式 table 即使带折叠 items 也不得被普通列表拍平', () => {
+    const r = detectListLeaf({ ...LIST_SEC, type: 'table' }, indexFigmaNodes(FIGMA));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('explicitTable');
+  });
+
   it('反向：items<2 ⇒ 不接管', () => {
     const r = detectListLeaf({ ...LIST_SEC, items: [LIST_SEC.items[0]] }, indexFigmaNodes(FIGMA));
     expect(r.ok).toBe(false);
@@ -223,6 +229,113 @@ describe('刀21b normListItem — stat 对象映射形态（mc-max-1793181937804
     expect(r.items[0].stats).toHaveLength(0);
     // texts 仍在 ⇒ 不是 emptyItem
     expect(r.items[0].texts).toHaveLength(2);
+  });
+});
+
+describe('696105e8 normListItem — value.parts + offline.parts 顶层统计形态', () => {
+  const items = LIST_SEC.items.map((item, i) => ({
+    ...item,
+    stats: undefined,
+    value: { parts: [
+      { type: 'number', text: i === 0 ? '3,792' : '2,138', styles: { fontSize: 18, fontWeight: 'bold', color: '#25ce3c' } },
+      { type: 'unit', text: '在线', styles: { fontSize: 12, color: '#546881' } },
+    ] },
+    offline: { parts: [
+      { type: 'number', text: i === 0 ? '28' : '12', styles: { fontSize: 18, color: '#ff7300' } },
+      { type: 'unit', text: '离线', styles: { fontSize: 12, color: '#546881' } },
+    ] },
+  }))
+
+  it('⭐ 阳性：两组 parts 均归一为统计，值/标签/样式逐项保留且不重复', () => {
+    const r = detectListLeaf({ ...LIST_SEC, items }, indexFigmaNodes(FIGMA))
+    expect(r.ok).toBe(true)
+    expect(r.items[0].stats).toEqual([
+      { v: '3,792', l: '在线', vc: '#25ce3c', vfs: 18, vfw: 'bold', lc: '#546881', lfs: 12 },
+      { v: '28', l: '离线', vc: '#ff7300', vfs: 18, vfw: null, lc: '#546881', lfs: 12 },
+    ])
+    expect(r.items[1].stats.map((s) => [s.v, s.l])).toEqual([['2,138', '在线'], ['12', '离线']])
+    const vue = renderFoldedGridLeafVue(r, 'c-demo')
+    expect(vue.match(/3,792/g)).toHaveLength(1)
+    expect(vue).toContain('离线')
+  })
+
+  it('阴性：显式 stats 优先，不能再把 value/offline parts 追加成双份', () => {
+    const explicit = items.map((item) => ({
+      ...item,
+      stats: [{ value: '7', label: '自定义', styles: { fontSize: 16 } }],
+    }))
+    const r = detectListLeaf({ ...LIST_SEC, items: explicit }, indexFigmaNodes(FIGMA))
+    expect(r.ok).toBe(true)
+    expect(r.items[0].stats.map((s) => [s.v, s.l])).toEqual([['7', '自定义']])
+  })
+})
+
+describe('ef5c7ed3 normListItem — value 映射 + 合成 item id 的 figmaNode 真值锚', () => {
+  const items = LIST_SEC.items.map((item, i) => ({
+    ...item,
+    id: `48:5798-item-${i + 1}`,
+    figmaNode: item.id,
+    stats: undefined,
+    value: {
+      online: {
+        text: i === 0 ? '3,792' : '2,138',
+        type: 'number',
+        styles: { fontSize: 24, fontWeight: 'bold', color: '#108e10' },
+        unit: { text: '在线', styles: { fontSize: 12, color: '#666666' } },
+      },
+      offline: {
+        text: i === 0 ? '28' : '12',
+        type: 'number',
+        styles: { fontSize: 18, fontWeight: 'bold', color: '#e54444' },
+        unit: { text: '离线', styles: { fontSize: 12, color: '#666666' } },
+      },
+    },
+  }))
+
+  it('⭐ value.online/offline 保留数值与 unit 对象；合成 id 仍按 figmaNode 解出 72/20/20', () => {
+    const r = detectListLeaf({ ...LIST_SEC, items }, indexFigmaNodes(FIGMA))
+    expect(r.ok).toBe(true)
+    expect(r.items[0].stats).toEqual([
+      expect.objectContaining({ v: '3,792', l: '在线', vfs: 24, lc: '#666666', lfs: 12 }),
+      expect.objectContaining({ v: '28', l: '离线', vfs: 18, lc: '#666666', lfs: 12 }),
+    ])
+    expect(r.items[1].stats.map((s) => s.v)).toEqual(['2,138', '12'])
+    expect(r.cardH).toBe(72)
+    expect(r.gaps).toEqual([20])
+    expect(r.padL).toBe(20)
+  })
+})
+
+describe('9e0b7a97 normListItem — content.elements parts 的 number+unit 形态', () => {
+  const items = LIST_SEC.items.map((item, i) => ({
+    ...item,
+    stats: undefined,
+    content: {
+      ...item.content,
+      elements: [
+        ...item.content.elements,
+        { type: 'value', parts: [
+          { type: 'number', text: i === 0 ? '3,792' : '2,138', styles: { fontSize: 18, fontWeight: 'bold', color: '#00b42a' } },
+          { type: 'unit', text: ' 在线', styles: { fontSize: 12, color: '#536881' } },
+        ] },
+        { type: 'value', parts: [
+          { type: 'number', text: i === 0 ? '28' : '12', styles: { fontSize: 14, fontWeight: 'bold', color: '#ff4d4f' } },
+          { type: 'unit', text: ' 离线', styles: { fontSize: 12, color: '#536881' } },
+        ] },
+      ],
+    },
+  }));
+
+  it('阳性：unit 是统计标签真值，不得丢成空字符串', () => {
+    const r = detectListLeaf({ ...LIST_SEC, items }, indexFigmaNodes(FIGMA));
+    expect(r.ok).toBe(true);
+    expect(r.items[0].stats).toEqual([
+      expect.objectContaining({ v: '3,792', l: '在线', lc: '#536881', lfs: 12 }),
+      expect.objectContaining({ v: '28', l: '离线', lc: '#536881', lfs: 12 }),
+    ]);
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    expect(vue).toContain('在线');
+    expect(vue).toContain('离线');
   });
 });
 
@@ -790,11 +903,21 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     expect(res.radius).toBe(6);
     expect(res.items[0].fill).toBe('#a6ceff');
     expect(res.items[1].fill).toBe('rgba(255,255,255,0.43)');
+    expect(res.items[0].bg).toBe(true);
+    expect(res.items.slice(1).every((it) => it.bg === false)).toBe(true);
     expect(res.itemBg.varName).toBe('bg1');
     expect(res.itemBg.file).toBe('image_313-5800.png');
     expect(res.itemBg.style.size).toBe('459px 29px');
     expect(res.itemBg.style.position).toBe('6px 0px');
     expect(res.itemBg.style.repeat).toBe('no-repeat');
+  });
+
+  it('阴性对照：逐项填充与来源卡一致 ⇒ 不硬编码只留首项，允许全部共享图条', () => {
+    const sec = { ...SEC, items: mkItems(N, () => '#a6ceff') };
+    const allActive = { ...FIGMA_CARD, children: Array.from({ length: N }, (_, i) => mkCard(i, 72, 'a6ceff')) };
+    const res = detectListLeaf(sec as any, indexFigmaNodes(allActive as any), MAP) as any;
+    expect(res.ok).toBe(true);
+    expect(res.items.every((it) => it.bg === true)).toBe(true);
   });
 
   it('⭐ 阳性：渲染产物 —— 圆角/图条四件套进静态段，URL 只走 :style 绑定', () => {
@@ -803,7 +926,7 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     expect(vue).toContain("import bg1 from '../../resources/images/image_313-5800.png'");
     expect(vue).toContain('border-radius:6px;');
     expect(vue).toContain('background-size:459px 29px;background-repeat:no-repeat;background-position:6px 0px;');
-    expect(vue).toContain("backgroundImage: 'url(' + bg1 + ')'");
+    expect(vue).toContain("backgroundImage: it.bg ? 'url(' + bg1 + ')' : undefined");
     // 🔴 卡底必须走 backgroundColor **长写**：`:style` 里的 `background` 简写会把静态段
     //   的 background-size/position/repeat 一并重置 ⇒ 图条尺寸定位全丢（593cf7f 同族）。
     expect(vue).toContain('backgroundColor: it.fill || undefined');
@@ -859,5 +982,53 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     const vue = renderFoldedGridLeafVue(res, 'c-demo');
     expect(vue).not.toContain('border-radius');
     expect(vue).not.toContain('backgroundImage');
+  });
+});
+
+describe('刀34：content.elements.parts 在线/离线真值（29c2c476）', () => {
+  const mkPartsItem = (name: string, online: string, offline: string) => ({
+    layout: 'horizontal', repeatedFill: '#fff',
+    content: { layout: 'horizontal', elements: [
+      { type: 'label', text: name, styles: { fontSize: 20, color: '#0362a6' } },
+      { type: 'value', parts: [
+        { type: 'number', text: online, styles: { fontSize: 18, fontWeight: 'bold', color: '#25ce3c' } },
+        { type: 'label', text: '在线', styles: { fontSize: 12, color: '#546881' } },
+      ] },
+      { type: 'value', parts: [
+        { type: 'number', text: offline, styles: { fontSize: 18, color: '#ff7300' } },
+        { type: 'label', text: '离线', styles: { fontSize: 12, color: '#546881' } },
+      ] },
+    ] },
+  });
+  const sec = {
+    id: 'parts', type: 'list', collapsed: true, renderHint: 'v-for', itemCount: 2,
+    items: [mkPartsItem('甲节点', '3,792', '28'), mkPartsItem('乙节点', '2,138', '12')],
+  };
+
+  it('阳性：parts number/label ⇒ stats 双列及逐项样式，不再 stats=[]', () => {
+    const res = detectListLeaf(sec as any, null, []) as any;
+    expect(res.ok).toBe(true);
+    expect(res.items[0].texts.map((t) => t.t)).toEqual(['甲节点']);
+    expect(res.items[0].stats.map((s) => [s.v, s.l])).toEqual([['3,792', '在线'], ['28', '离线']]);
+    expect(res.items[0].stats[0]).toMatchObject({ vc: '#25ce3c', vfs: 18, vfw: 'bold', lc: '#546881', lfs: 12 });
+    expect(res.items[1].stats.map((s) => s.v)).toEqual(['2,138', '12']);
+    const vue = renderFoldedGridLeafVue(res, 'c-demo');
+    expect(vue).toContain('3,792');
+    expect(vue).toContain('在线');
+    const valid = validateVueSfc(vue, 'ListSection.vue');
+    expect(valid.errors).toEqual([]);
+  });
+
+  it('阴性：parts 含多个 number ⇒ 歧义不猜；显式 stats 仍优先不重复', () => {
+    const ambiguous = mkPartsItem('甲', '1', '2');
+    ambiguous.content.elements[1].parts.push({ type: 'number', text: '99' });
+    const withExplicit = {
+      ...mkPartsItem('乙', '3', '4'),
+      stats: [{ label: '自定义', value: '5', styles: { fontSize: 16 } }],
+    };
+    const res = detectListLeaf({ ...sec, items: [ambiguous, withExplicit] } as any, null, []) as any;
+    expect(res.ok).toBe(true);
+    expect(res.items[0].stats.map((s) => s.v)).toEqual(['2']);
+    expect(res.items[1].stats.map((s) => [s.v, s.l])).toEqual([['5', '自定义']]);
   });
 });

@@ -4,7 +4,9 @@ import {
   collectSectionRegions,
   elementMatchPatterns,
   findFigmaNodeForElement,
+  applyFigmaSectionRatios,
   applyFigmaElementHeightRatios,
+  mergeVisualRows,
 } from './figma-height-ratio.js'
 
 /**
@@ -517,5 +519,96 @@ describe('复合 region 展开（2026-09-04 不同构场景）', () => {
     for (const s of parsed.layoutStructure.layout.sections) {
       expect(s.styles).toBeUndefined()
     }
+  })
+})
+
+/**
+ * A4 视觉行归并回归（2026-10-30，mc-max-1793349441153-c3b958e0 实锤）。
+ *
+ * 病灶：collectSectionRegions 返回**图元级**节点，vision sections 是**视觉语义级**。
+ * 一个视觉区块在 Figma 里常被拆成多个平级图元（底部图例 = Group+Group+TEXT+icon，y 全为 52138），
+ * 外加滚动条 / 小图标等装饰图元 → regions 数远超 sections 数 → 原实现「数量不等即跳过不猜」
+ * → A4 写入 0 → mounter 退等分 → 产物 flex:1.000 / 1 / 1，渲染 171/171/171，
+ * 与设计稿 66/388/14 完全不符。
+ *
+ * 修法：数量不等时先做「装饰剔除 + 纵向行归并」，对齐 sections 数才采纳（按 y 升序配对，
+ * 顺带修掉 Figma children 文档顺序 ≠ 视觉顺序 的串列风险）。
+ */
+describe('mergeVisualRows —— 视觉行归并（regions 粒度 → 视觉语义粒度）', () => {
+  /** 实锤数据：slot-con 807:2，根 483×515，直接子节点 7 个（文档顺序 ≠ 视觉顺序） */
+  const slotConDoc = () => ({
+    name: 'slot-con',
+    id: '807:2',
+    type: 'FRAME',
+    absoluteBoundingBox: { x: 0, y: 51637, width: 483, height: 515 },
+    children: [
+      { id: 'f2', name: 'Frame 2136639921', type: 'FRAME', absoluteBoundingBox: { x: 7, y: 51728, width: 470, height: 388 } },
+      { id: 'g1', name: 'Group 2136638436', type: 'GROUP', absoluteBoundingBox: { x: 8, y: 52138, width: 53, height: 14 } },
+      { id: 'g2', name: 'Group 2136638438', type: 'GROUP', absoluteBoundingBox: { x: 90, y: 52138, width: 39, height: 14 } },
+      { id: 't1', name: '点击查看详情', type: 'TEXT', absoluteBoundingBox: { x: 380, y: 52138, width: 84, height: 14 } },
+      { id: 'f1', name: 'Frame 2136639911', type: 'FRAME', absoluteBoundingBox: { x: 7, y: 51637, width: 470, height: 66 } },
+      { id: 'ic', name: 'icon', type: 'FRAME', absoluteBoundingBox: { x: 466, y: 52141, width: 8, height: 8 } },
+      { id: 'rb', name: 'Rectangle 346242323', type: 'RECTANGLE', absoluteBoundingBox: { x: 477, y: 51815, width: 6, height: 218 } },
+    ],
+  })
+
+  it('7 个图元归并为 3 个视觉行（66 / 388 / 14），剔除滚动条与 8×8 图标', () => {
+    const regions = collectSectionRegions(slotConDoc())
+    expect(regions).toHaveLength(7) // 原实现输出：图元级 7 个
+
+    const rows = mergeVisualRows(regions)
+    expect(rows).toHaveLength(3)
+    // 🔴 必须按 y 升序：文档顺序首项是 y=51728 的第 2 行，直接 1:1 会串列
+    expect(rows.map((r: any) => r.absoluteBoundingBox.height)).toEqual([66, 388, 14])
+    expect(rows.map((r: any) => r.absoluteBoundingBox.y)).toEqual([51637, 51728, 52138])
+    // 装饰图元不被保留为独立行
+    expect(rows.some((r: any) => r.name === 'icon')).toBe(false)
+    expect(rows.some((r: any) => /Rectangle 346242323/.test(String(r.name)))).toBe(false)
+    // 合成行不带 children（否则后段「复合 region 展开」会把它再拆开）
+    expect(rows[2].children).toBeUndefined()
+    // g1 + g2 + t1 三个（8×8 icon 在前置装饰剔除阶段就已移除，不进归并）
+    expect((rows[2] as any)._mergedCount).toBe(3)
+  })
+
+  it('端到端：applyFigmaSectionRatios 写入 3 个比例系数（0.423 / 2.487 / 0.090）', () => {
+    const sections: any[] = [
+      { name: '统计卡片组' },
+      { name: '设备列表' },
+      { name: '底部图例与链接' },
+    ]
+    expect(applyFigmaSectionRatios(sections, { document: slotConDoc() })).toBe(3)
+
+    expect(sections[0].styles.figmaHeightPx).toBe(66)
+    expect(sections[1].styles.figmaHeightPx).toBe(388)
+    expect(sections[2].styles.figmaHeightPx).toBe(14)
+
+    const avg = (66 + 388 + 14) / 3
+    expect(sections[0].styles.flexGrow).toBeCloseTo(66 / avg, 2) // ≈0.423
+    expect(sections[1].styles.flexGrow).toBeCloseTo(388 / avg, 2) // ≈2.487
+    expect(sections[2].styles.flexGrow).toBeCloseTo(14 / avg, 2) // ≈0.090
+    for (const s of sections) {
+      expect(s.styles.flexGrow).toBeLessThan(3) // 比例量级（~1），非像素量级 → 不触 FLEX-005
+      expect(s.styles.flexGrow).toBeGreaterThan(0)
+      expect(s.styles.flexShrink).toBe(1)
+      expect(s.styles.flexBasis).toBe(0)
+      expect(s.styles.height).toBeUndefined() // 禁止写区块固定高度
+    }
+  })
+
+  it('数量本就相等时不启用归并（不误合相邻真实区块）', () => {
+    // 两个真实区块，纵向间隙 2px（< ROW_GAP 8）——若盲目归并会合并成 1 行导致错位
+    const doc = {
+      name: 'cp',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 200 },
+      children: [
+        { id: 'a', name: 'card-a', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 99 } },
+        { id: 'b', name: 'card-b', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 101, width: 420, height: 99 } },
+      ],
+    }
+    const sections: any[] = [{ name: '甲' }, { name: '乙' }]
+    expect(applyFigmaSectionRatios(sections, { document: doc })).toBe(2)
+    expect(sections[0].styles.figmaHeightPx).toBe(99)
+    expect(sections[1].styles.figmaHeightPx).toBe(99)
   })
 })

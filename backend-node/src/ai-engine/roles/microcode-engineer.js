@@ -78,6 +78,13 @@ function enforcePanelKeyInFiles(files, panelType) {
   }
   return { files: next, replaced };
 }
+
+// 🛡️ 字号下限守卫：实现已提为单一来源 utils/font-size-guard.js（engineer 与 lite 共用同一份，
+//    禁止在此文件内再写一份局部实现 —— 曾经正是因为写在这里，Lite 链路才整条漏保）。
+import {
+  ensureMinFontSize,
+  formatFontGuardLog,
+} from '../utils/font-size-guard.js';
 import * as resourceMountPlan from './microcode/resource-mount-plan.js';
 // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B，文字颜色白字黑底根治）
 import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
@@ -348,7 +355,7 @@ import {
   planSegmentMerge,
 } from '../utils/chunk-meta-files.js';
 // 🛡️ P1-4（2026-08-30）：坏文件隔离降级的决策层（纯函数，可单测）
-import { planBadFileIsolation } from '../utils/bad-file-isolation.js';
+import { planBadFileIsolation, evaluateArtifactCompleteness } from '../utils/bad-file-isolation.js';
 // 🛡️ P2-1（2026-08-30）：背景尺寸四件套推断（纯函数，可单测；修 R11 覆盖率不足与 repeat 误判）
 import {
   inferBackgroundStyle,
@@ -3857,9 +3864,16 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.warn('🔧 悬空引用剥离异常（非阻断）', { error: _stripErr?.message || String(_stripErr) });
       }
 
+      const artifactCompleteness = evaluateArtifactCompleteness(
+        allFiles,
+        input.componentPlan,
+        input._degradedFiles || [],
+      );
       this.logger.info('✅ 组件代码分块生成完成', {
         fileCount: Object.keys(allFiles).length,
         complexity,
+        artifactIncomplete: artifactCompleteness.artifactIncomplete,
+        unmaterializedSections: artifactCompleteness.unmaterializedSections.map((s) => s.id),
         degradedScriptParts: input._degradedScriptParts || [],
         // 🛡️ P1-4：被隔离降级的坏文件清单（供任务状态/前端「不完整，可二次生成」标签）
         degradedFiles: input._degradedFiles || [],
@@ -3867,6 +3881,8 @@ export class MicrocodeEngineer extends BaseAgent {
       });
       return {
         success: true,
+        artifactIncomplete: artifactCompleteness.artifactIncomplete,
+        unmaterializedSections: artifactCompleteness.unmaterializedSections,
         files: allFiles,
         // 🆕 Loop 0.5/1：把 Working Manifest（含 contracts[]）带回 execute 层，供落盘终验兜底
         // 按契约注入主组件 import（避免 forceAll 冲掉收窄结果）。
@@ -5326,6 +5342,12 @@ export class MicrocodeEngineer extends BaseAgent {
       targetFiles = ensureButtonMinHeight(targetFiles);
       // 🛡️ 根因 H 修复（2026-09-19）：确保带背景图的容器有 width:100%; height:100%（card-bg 等背景容器需要明确尺寸才能撑开）
       targetFiles = ensureBackgroundContainerDimensions(targetFiles);
+      // 🛡️ 字号下限守卫（2026-10-30）：LLM 压缩字号到 8-10px ⇒ 统一提升到 ≈10.5px
+      const _fontGuard = ensureMinFontSize(targetFiles);
+      targetFiles = _fontGuard.files;
+      // 🔴 hits:0 也要打：否则「守卫没执行」与「执行了但零命中」在日志上同形，无法用日志当判据
+      const _fontGuardLog = formatFontGuardLog(_fontGuard, 'max');
+      this.logger.info(_fontGuardLog.message, _fontGuardLog.meta);
     } catch (e) {
       // 🛡️ 2026-09-04 C：logger 判空 + 记录调用栈（生产曾现 reading 'log' 且无堆栈无法溯源）
       const errText = `[style-class-consolidator] 收敛失败，按原样写盘: ${e?.message || e}`;
@@ -9089,6 +9111,8 @@ export default component
         autoFixes: fixes, //返回自动修复的问题列表
         degradedScriptParts: codeResult.degradedScriptParts || [], // 🛡️ 脚本子段降级清单（供任务状态/前端「不完整」标签）
         degradedFiles, // 🛡️ P1-4 坏文件隔离降级清单（与 degradedScriptParts 并列，计入统一产物完整度）
+        artifactIncomplete: codeResult.artifactIncomplete === true || gateSkippedFiles.length > 0,
+        unmaterializedSections: codeResult.unmaterializedSections || [],
         // 🛡️ #10 静默失败降级：gateSkippedFiles 暴露到任务级 result（经 execute → tasks.service 落库）
         // 前端据此展示「N 个文件被写盘门禁跳过」+ 缺失清单，避免静默丢失
         gateSkippedFiles: gateSkippedFiles.length > 0 ? gateSkippedFiles : undefined,

@@ -440,6 +440,54 @@ describe('detectTextLeaf / 纯文本叶接管（刀 53b · round-16 实锤）', 
     expect(r.text).toBe('66');
   });
 
+  it('阳性（29c2c476）：vision 锚点误指图形时，按底部完整文本精确回查 Figma 并物化', () => {
+    const doc = { children: [{ id: '0:0', type: 'CANVAS', children: [
+      { id: '48:5884', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 40, height: 40 } },
+      text('48:5888', '共 6 个节点', 0, 80, 72, 16, '#88afdf', 14, 400),
+      text('48:5889', '接入设备 10810', 363, 80, 107, 16, '#0362a6', 14, 700),
+    ] }] };
+    const sec = {
+      id: '48:5884',
+      body: { children: [
+        { role: 'text', text: '共 6 个节点' },
+        { role: 'text', parts: [{ type: 'label', text: '接入设备 ' }, { type: 'number', text: '10810' }] },
+      ] },
+    };
+    const r = detectTextLeaf(sec, indexFigmaNodes(doc));
+    expect(r.ok).toBe(true);
+    expect(r.direction).toBe('row');
+    expect(r.runs.map((run) => run.text)).toEqual(['共 6 个节点', '接入设备 10810']);
+    expect(renderFoldedGridLeafVue(r, 'deployment')).toContain('接入设备 10810');
+  });
+
+  it('阳性（9e0b7a97）：footer 完全无锚点时，仍按完整文本唯一回查并物化', () => {
+    const doc = { children: [{ id: '0:0', type: 'CANVAS', children: [
+      text('48:5888', '共 6 个节点', 0, 80, 72, 16, '#88afdf', 14, 400),
+      text('48:5889', '接入设备 10810', 363, 80, 107, 16, '#0362a6', 14, 700),
+    ] }] };
+    const sec = {
+      id: 'section-footer',
+      body: { children: [
+        { role: 'text', text: '共 6 个节点' },
+        { role: 'text', parts: [{ type: 'label', text: '接入设备 ' }, { type: 'number', text: '10810' }] },
+      ] },
+    };
+    const r = detectTextLeaf(sec, indexFigmaNodes(doc));
+    expect(r.ok).toBe(true);
+    expect(r.direction).toBe('row');
+    expect(r.runs.map((run) => run.text)).toEqual(['共 6 个节点', '接入设备 10810']);
+  });
+
+  it('阴性：vision 文本在 Figma 重复出现时锚点又无效 ⇒ 歧义不猜', () => {
+    const doc = { children: [{ id: '0:0', type: 'CANVAS', children: [
+      { id: '48:5884', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 40, height: 40 } },
+      text('a', '共 6 个节点', 0, 80, 72, 16, '#88afdf', 14, 400),
+      text('b', '共 6 个节点', 200, 80, 72, 16, '#88afdf', 14, 400),
+    ] }] };
+    const sec = { id: '48:5884', body: { children: [{ role: 'text', text: '共 6 个节点' }] } };
+    expect(detectTextLeaf(sec, indexFigmaNodes(doc)).ok).toBe(false);
+  });
+
   it('阴性：子树含图形节点 → fail-open（数字叶不会误吞 icon 区）', () => {
     const doc = { children: [{ id: '0:0', type: 'CANVAS', children: [{ id: 'g2', type: 'GROUP', children: [text('t2', '33', 0, 0, 28, 28, '#2c68ff', 24, 600), { id: 'v2', type: 'VECTOR', absoluteBoundingBox: { x: 0, y: 0, width: 8, height: 8 } }] }] }] };
     const r = detectTextLeaf(secOf('g2'), indexFigmaNodes(doc));
@@ -659,7 +707,8 @@ describe('detectStatRowLeaf / 统计行整行接管（刀 53d · 2026-10-23 f98f
     const r = detectStatRowLeaf({ id: '43:4898' }, IDX_S, PARENT_S);
     const whole = renderFoldedGridLeafVue({ ...r, memberIndex: 0 }, 'device');
     expect(whole).toContain('gap:34px');
-    expect(whole).toContain('width:134px;height:66px');
+    expect(whole).toContain('width:100%');
+    expect(whole).toContain('flex:1;min-width:0;height:66px');
     expect(whole).toContain('总设备');
     expect(whole).toContain('"8"');
     expect(whole).toContain('离线');
@@ -960,6 +1009,59 @@ describe('刀 53e · detectTableLeaf（列式表格整表接管）', () => {
     // 列宽百分比：分母取**列宽和**（真值列间 1px 咬合 ⇒ 用父宽会让总和 >100%）
     const sum = r.cols.reduce((s, c) => s + c.widthPct, 0);
     expect(Math.abs(sum - 100)).toBeLessThan(0.5);
+  });
+
+  it('阳性①b：vision 明确 table 且锚定整表容器 ⇒ 消费整表，不退化为普通列表', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const tableSec = {
+      ...sec('tbl'),
+      headers: HEAD,
+      columnCount: 4,
+      cells: colTexts,
+    };
+    const r = detectTableLeaf(tableSec, idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('table');
+    expect(r.parentId).toBe('tbl');
+    expect(r.memberIndex).toBe(0);
+    expect(r.cols.map((c) => c.header.text)).toEqual(HEAD);
+    const vue = renderFoldedGridLeafVue(r, 'device');
+    expect(vue).toContain('v-for="(row, ri) in rows"');
+    expect(vue).toContain('服务区巡检狗K3');
+  });
+
+  it('e7c4197c：vision 表格误锚首行 ⇒ 用唯一表头 LCA 回查整表，仍只物化一张表', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const root = table(colTexts);
+    const idx = idxOf(root);
+    const tableSec = {
+      id: 'section-table',
+      type: 'table',
+      sourceNodeIds: ['c0-r1'],
+      body: { children: [{ role: 'table', control: 'table', tableStyle: { headers: HEAD } }] },
+    };
+    const r = detectTableLeaf(tableSec, idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.sectionId).toBe('section-table');
+    expect(r.parentId).toBe('tbl');
+    expect(r.anchorRepair).toBe('declared-headers-lca');
+    expect(r.rowCount).toBe(3);
+    expect(r.cols.map((c) => c.header.text)).toEqual(HEAD);
+    const collected = collectFoldedGridTakeover({ treeSections: [tableSec], figmaNodeData: root });
+    expect(collected.tableAnchorRepairs).toBe(1);
+  });
+
+  it('阴性：表头文本不能唯一回查 ⇒ 不提升锚点，维持原 fail-open', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const root = table(colTexts);
+    root.children.push(text('duplicate-header', '电量', 600, 0, 60, 14, '#333333', 14, 500));
+    const idx = idxOf(root);
+    const tableSec = {
+      id: 'section-table', type: 'table', sourceNodeIds: ['c0-r1'],
+      body: { children: [{ role: 'table', tableStyle: { headers: HEAD } }] },
+    };
+    expect(detectTableLeaf(tableSec, idx, buildParentMap(idx)).ok).toBe(false);
   });
 
   it('阳性②：锚点是第 2 列 ⇒ memberIndex=1（供两阶段分组决定谁渲染整表）', () => {

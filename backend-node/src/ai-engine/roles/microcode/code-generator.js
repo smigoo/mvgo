@@ -560,7 +560,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   //   fail-open：任何异常 ⇒ 空集 ⇒ 走既有比例行为（零回归）。
   //   不传 logger：接管器自己的计数行由上游（microcode-engineer）落，避免重复留痕。
   const suppressedSectionIds = new Set();
+  const takeoverHeightBySectionId = new Map();
   let __p1bTakeoverLeaves = 0;
+  let __takeoverHeightFallbacks = 0;
   try {
     const __tk = collectFoldedGridTakeover({
       treeSections,
@@ -573,12 +575,24 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       if (tr && tr.suppressed === true && tr.sectionId != null) {
         suppressedSectionIds.add(String(tr.sectionId));
       }
+      if (tr?.sectionId != null && Number.isFinite(Number(tr.height)) && Number(tr.height) > 0) {
+        takeoverHeightBySectionId.set(String(tr.sectionId), Number(tr.height));
+      }
     }
   } catch {
     // fail-open：判据不可用 ⇒ 不做分母剔除
   }
   const isSizeExcluded = (sec) =>
     suppressedSectionIds.size > 0 && suppressedSectionIds.has(String(sec?.id ?? ''));
+  // 无锚点文本段等 planner 无法给高的叶子，可复用接管器已唯一回查到的 Figma 高度。
+  // 只在原尺寸链返回 0 时补事实，不覆盖已有几何，也不给无真值段猜高度。
+  const resolveHeightWithTakeover = (sec) => {
+    const original = resolveSectionFlexSize(sec, figmaIndex, 'height');
+    if (original > 0) return original;
+    const height = takeoverHeightBySectionId.get(String(sec?.id ?? '')) || 0;
+    if (height > 0) __takeoverHeightFallbacks += 1;
+    return height;
+  };
 
   const headerLeaves = leaves.filter((s) => s.type === 'header');
   const bodyLeaves = leaves.filter((s) => s.type !== 'header');
@@ -832,7 +846,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
           : [];
         const childHeights = !isHorizontal
           ? (sec.children || []).map((c) =>
-              isSizeExcluded(c) ? 0 : resolveSectionFlexSize(c, figmaIndex, 'height'),
+              isSizeExcluded(c) ? 0 : resolveHeightWithTakeover(c),
             )
           : [];
         
@@ -1051,7 +1065,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     }
     if (topBodyRoots.length > 1) {
       const topHeights = topBodyRoots.map((s) =>
-        isSizeExcluded(s) ? 0 : resolveSectionFlexSize(s, figmaIndex, 'height'),
+        isSizeExcluded(s) ? 0 : resolveHeightWithTakeover(s),
       );
       for (let i = 0; i < topBodyRoots.length; i++) {
         // 🛡️ 刀16：顶层兄弟纵向间距（真值 y 差）
@@ -1106,6 +1120,10 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       takeoverLeaves: __p1bTakeoverLeaves,
       excluded: suppressedSectionIds.size,
       ids: [...suppressedSectionIds],
+    });
+    options.logger.info('🛡️ 接管高度回填·已评估', {
+      candidates: takeoverHeightBySectionId.size,
+      applied: __takeoverHeightFallbacks,
     });
   }
   return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };

@@ -65,6 +65,21 @@ export function applyHeaderGeometryFallback(sections, opts = {}) {
     (a, b) => a.absoluteBoundingBox.y - b.absoluteBoundingBox.y,
   )[0];
   const b = top.absoluteBoundingBox;
+  // 🔴 vision 布局主权：显式业务内容不得被「顶部薄条」几何兜底改写成面板 header。
+  // 只认明确结构角色/类型，不按名称猜；真正标题栏与控件条不受影响。
+  const businessTypes = new Set(['stats', 'list', 'table', 'chart', 'grid', 'footer']);
+  const businessRoles = new Set(['stat-card', 'list-item', 'table-header', 'chart']);
+  const hasBusinessContent = (node) => {
+    if (!node || typeof node !== 'object') return false;
+    if (businessTypes.has(String(node.type || '').toLowerCase())) return true;
+    if (businessRoles.has(String(node.role || '').toLowerCase())) return true;
+    for (const child of [...(node.children || []), ...(node.items || [])]) {
+      if (hasBusinessContent(child)) return true;
+    }
+    if (node.body && typeof node.body === 'object' && hasBusinessContent(node.body)) return true;
+    return false;
+  };
+  if (businessTypes.has(String(top.type || '').toLowerCase()) || hasBusinessContent(top.body)) return null;
   const relY = b.y - minY;
   const h = b.height;
   if (relY < rootH * HEADER_BAND_REL_Y_RATIO && h <= rootH * HEADER_BAND_MAX_HEIGHT_RATIO) {

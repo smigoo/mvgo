@@ -23,6 +23,27 @@ describe('applyHeaderGeometryFallback（header 几何兜底 · 命名无关）',
     expect(sections[1].type).toBe('chart');
   });
 
+  it('🔴 vision 业务主权：顶部 stat-card 薄条不得被改标 header（7d7925d2）', () => {
+    const sections = [
+      {
+        id: '43:4893', name: '统计卡片区', absoluteBoundingBox: box(0, 0, 470, 66),
+        body: { children: [{ role: 'stat-card', body: { children: [{ type: 'value', text: '8' }] } }] },
+      },
+      { id: '43:4788', name: '设备列表', absoluteBoundingBox: box(0, 84, 470, 345) },
+    ];
+    expect(applyHeaderGeometryFallback(sections)).toBeNull();
+    expect(sections[0].type).toBeUndefined();
+  });
+
+  it('阴性：普通顶部控件条无业务角色 ⇒ 几何兜底仍生效', () => {
+    const sections = [
+      { id: 'a', absoluteBoundingBox: box(0, 0, 470, 34), body: { children: [{ role: 'controls' }] } },
+      { id: 'b', absoluteBoundingBox: box(0, 50, 470, 200) },
+    ];
+    expect(applyHeaderGeometryFallback(sections)).not.toBeNull();
+    expect(sections[0].type).toBe('header');
+  });
+
   it('已有 header 事实（嵌套也算）→ 不干预', () => {
     const sections = [
       { id: 'a', name: '顶部栏', absoluteBoundingBox: box(0, 0, 460, 34), children: [] },
