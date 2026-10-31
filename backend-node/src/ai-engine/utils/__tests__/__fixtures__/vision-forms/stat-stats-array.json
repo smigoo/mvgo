@@ -1,0 +1,59 @@
+{
+  "id": "stat-stats-array",
+  "source": "mc-max-…-8200b273 / 657661ca",
+  "kind": "stat-right-value",
+  "semantic": "列表项统计右值形态①：item.stats[] 数组（value/label 平铺）",
+  "form": {
+    "id": "48:5798",
+    "type": "list",
+    "collapsed": true,
+    "renderHint": "v-for",
+    "itemCount": 2,
+    "items": [
+      {
+        "id": "10:2",
+        "layout": "horizontal",
+        "role": "stat-card",
+        "icon": { "placeholder": "ic", "figmaNode": "10:3", "position": "left", "resource": "icon-10-2.png", "width": 40, "height": 40 },
+        "content": {
+          "layout": "vertical", "position": "right",
+          "elements": [
+            { "type": "label", "text": "甲节点", "figmaNode": "10:2", "position": "top", "styles": { "fontSize": 16, "fontWeight": "bold", "color": "#333333" } },
+            { "type": "label", "text": "地址-甲节点", "figmaNode": "10:2", "position": "bottom", "styles": { "fontSize": 12, "color": "#666666" } }
+          ]
+        },
+        "stats": [
+          { "type": "online", "value": "3,792", "label": "在线", "styles": { "fontSize": 18, "fontWeight": "bold", "color": "#52c41a" } },
+          { "type": "offline", "value": "28", "label": "离线", "styles": { "fontSize": 18, "color": "#ff7300" } }
+        ]
+      },
+      {
+        "id": "10:5",
+        "layout": "horizontal",
+        "role": "stat-card",
+        "icon": { "placeholder": "ic", "figmaNode": "10:6", "position": "left", "resource": "icon-10-5.png", "width": 40, "height": 40 },
+        "content": {
+          "layout": "vertical", "position": "right",
+          "elements": [
+            { "type": "label", "text": "乙节点", "figmaNode": "10:5", "position": "top", "styles": { "fontSize": 16, "fontWeight": "bold", "color": "#333333" } },
+            { "type": "label", "text": "地址-乙节点", "figmaNode": "10:5", "position": "bottom", "styles": { "fontSize": 12, "color": "#666666" } }
+          ]
+        },
+        "stats": [
+          { "type": "online", "value": "2,138", "label": "在线", "styles": { "fontSize": 18, "fontWeight": "bold", "color": "#52c41a" } },
+          { "type": "offline", "value": "12", "label": "离线", "styles": { "fontSize": 18, "color": "#ff7300" } }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "ok": true,
+    "statsV": ["3,792", "28"],
+    "statsL": ["在线", "离线"],
+    "texts": ["甲节点", "地址-甲节点"]
+  },
+  "perturbations": [
+    { "op": "deleteRole", "expect": { "ok": true, "statsV": ["3,792", "28"], "statsL": ["在线", "离线"] } },
+    { "op": "stylesToStyle", "expect": { "ok": true, "statsV": ["3,792", "28"], "statsL": ["在线", "离线"] } }
+  ]
+}

@@ -3,7 +3,7 @@
 
 ## 当前状态
 - ✅ 生产 `37d0983`（`go.microvideo.cn:13030`，回滚锚 `dist.bak.37d0983-20261026-164559`），线上全绿。
-- 🚧 本地已提交未部署 `0013ba8`→`b52346d`（刀32）约 30 刀；**刀33 第1步已改完**。本地 `:13030` PID 80699。刀↔commit 全表⇒P-DETAIL 末节。
+- 🚧 本地已提交未部署 `0013ba8`→`b52346d`（刀32）约 30 刀；**刀33 第1步已改完**；**刀33b＝方案A（用户指定 componentId 不被追尾段）已改完未提交**（`component-naming.js` +117 纯新增 `decideDeclareComponentIdFinal`；`microcode-engineer.js#normalizeDeclareJson` 只赋值+检查点自愈；`code-validator.js:1657` 透传 `userComponentId`；spec 26/26，两态回归 added=∅）。本地 `:13030` PID 80699。刀↔commit 全表⇒P-DETAIL 末节。
 - 🔴 主仓 push 未做（远端日同步镜像已分叉，禁 force），指针停 `681e572c`；刀32 WARN-only，升 BLOCK(CODE-029) 待裁决。
 - 🔴 遗留：`布局真值守卫 hits:0`=无病灶非失效；`COMP-002` 未修。部署包必剔 `dist/workspace`、`.DS_Store`、`dist/app.controller.spec.*`。
 
@@ -31,6 +31,6 @@
 - 门禁三查；0 命中必配阳性对照；改判据先纯函数 A/B。基线恒 23 套件/44 用例环境失败（别当回归）；两态 FAIL 集合 diff 须空且先 `wc -l` 确认非空。flaky⇒P-DETAIL。
 - 🔴🔴 「本地跑一次」前必核进程启动时间 vs dist mtime。
 - 🔴 BSD grep：多模式必 `-E`（`\|` 静默空）；`sed -i ''`；commit -m 禁 `$(...)`；heredoc `${}` 展开⇒用 Write。
-- 🔴🔴 git daily auto-sync 会拆改到一半的工作区⇒A/B 基线用刀前明确 commit id（禁 `git show HEAD:`）；两态回归前先 commit；临时脚本跑完 rm；变异/还原禁 `git checkout --` 未提交文件。
+- 🔴🔴 git daily auto-sync 会拆改到一半的工作区⇒A/B 基线用刀前明确 commit id（禁 `git show HEAD:`）；两态回归前先 commit；临时脚本跑完 rm；变异/还原禁 `git checkout --` 未提交文件。**并行编辑污染⇒两态跑前后必做 src 全量 `md5 -r` diff、排除非本轮文件（2026-10-31 实测：高度修复 WIP 在回归窗口内被外部改动，制造假回归差异）**。
 - 🔴🔴 worktree 回归三假象：无 `dist/`⇒套件假失败；无未跟踪样本（`workspace/**/.checkpoint`）⇒静默 skip；`ln -sfn <dir> <已存在目录>` 塞进目录⇒须逐项 `ln -s`。
 - 🔴 `parseLessVars` 要变量**独占一行**；`normalizeCssColor` 对渐变/url 返 null⇒须单独 helper 用例；`container-background-truth#collectClassProp` 为刀32/37/panel-chrome **三方共用**。

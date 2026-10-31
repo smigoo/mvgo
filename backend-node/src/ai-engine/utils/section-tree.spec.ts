@@ -424,6 +424,34 @@ describe('dedupeDuplicateSections（planner 双重解释去重）', () => {
     expect(r.map((s) => s.id)).toEqual(['2:8419', '89:38', '89:37']);
   });
 
+  it('56445358：无锚点 footer 是 vision 独立业务段，不得按 elementCount 当碎片壳删除', () => {
+    const real = [
+      { id: '43:4890', type: 'stats', elementCount: 3, sourceNodeIds: ['43:4893', '43:4898', '43:4903'] },
+      { id: '43:4788', type: 'table', elementCount: 8, sourceNodeIds: ['43:4788'] },
+      { id: 'footer-legend', type: 'footer', elementCount: 3, sourceNodeIds: [], styles: { figmaHeightPx: 14 } },
+    ]
+    const r = dedupeDuplicateSections(real)
+    expect(r.map((s) => s.id)).toEqual(['43:4890', '43:4788', 'footer-legend'])
+  })
+
+  it('b55af39e：footer 与统计段误共享节点时仍保留 vision 的独立 footer', () => {
+    const real = [
+      { id: '48:5890', type: 'stats', elementCount: 4, sourceNodeIds: ['48:5890', '48:5891', '565:2'] },
+      { id: '48:5798', type: 'list', elementCount: 6, sourceNodeIds: ['48:5798'] },
+      { id: '48:5888', type: 'footer', elementCount: 2, sourceNodeIds: ['48:5888', '48:5889', '48:5890'] },
+    ]
+    expect(dedupeDuplicateSections(real).map((s) => s.id)).toEqual(['48:5890', '48:5798', '48:5888'])
+  })
+
+  it('e99a736f：无锚点声明表格不得按唯一 table 子节点计作碎片壳删除', () => {
+    const real = [
+      { id: '43:4893', type: 'stats', elementCount: 9, sourceNodeIds: ['43:4893', '43:4898'] },
+      { id: 'table-section', type: 'table', elementCount: 1, sourceNodeIds: [], body: { headers: ['设备名称', '电量'], children: [{ type: 'table' }] } },
+      { id: 'footer-section', type: 'footer', elementCount: 6, sourceNodeIds: [] },
+    ]
+    expect(dedupeDuplicateSections(real).map((s) => s.id)).toEqual(['43:4893', 'table-section', 'footer-section'])
+  })
+
   it('端到端·真实数据 485d724d：超集壳保留，丢竞争类有归属切片', () => {
     // 来自 c-device-monitor-485d724d 的真实 effectiveSections（节选）。
     // 壳 section-main-content(ec=32,src=[]) 覆盖整块 > 有归属兄弟合计 10 → 超集，丢 tabs/switch 切片。

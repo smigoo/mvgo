@@ -10,8 +10,9 @@
  *   装配器 code-generator#headerLeaves 就是空集 ⇒ #header-right 不生成、
  *   上月/本年等头部控件全落内容区。几何事实不可辩驳：顶部横条内的按钮就是头部控件。
  *
- *   纯函数、零依赖（不 import logger —— 日志由调用方按返回值打），
- *   供 subcomponent-planner 消费、单测直测。
+ *   纯函数（不 import logger —— 日志由调用方按返回值打），供 subcomponent-planner
+ *   消费、单测直测。词表与显式发言读取自 Phase B-1 起统一走 vision-facts.js
+ *   单一事实源（治理方案 §Phase B，词表收拢防第 4 份）。
  *
  *   fail-open：已有 header 事实 / bbox 缺失 / 判据不满足 → 原样返回零影响。
  *
@@ -26,6 +27,14 @@
  *   闸门缺失 = 用一个新误判换掉一个旧误判。
  * @returns {{id: string, name: string, relYRatio: number, hRatio: number}|null} 命中信息（未命中 null）
  */
+// 🛡️ Phase A-2（2026-10-31 治理方案）：业务内容判据收拢至 section-semantics.js
+//   #isBusinessContent 单一实现（原内联闭包删除）；显式发言读取仍走 vision-facts。
+import {
+  declaredHeaderRelation,
+  hasStatValueElement,
+} from './vision-facts.js';
+import { isBusinessContent } from './section-semantics.js';
+
 export function applyHeaderGeometryFallback(sections, opts = {}) {
   if (!Array.isArray(sections) || sections.length < 2) return null;
   // 调用方已确认存在 header 事实（chrome header 已被剥离、由宿主渲染）→ 不干预
@@ -67,19 +76,21 @@ export function applyHeaderGeometryFallback(sections, opts = {}) {
   const b = top.absoluteBoundingBox;
   // 🔴 vision 布局主权：显式业务内容不得被「顶部薄条」几何兜底改写成面板 header。
   // 只认明确结构角色/类型，不按名称猜；真正标题栏与控件条不受影响。
-  const businessTypes = new Set(['stats', 'list', 'table', 'chart', 'grid', 'footer']);
-  const businessRoles = new Set(['stat-card', 'list-item', 'table-header', 'chart']);
-  const hasBusinessContent = (node) => {
-    if (!node || typeof node !== 'object') return false;
-    if (businessTypes.has(String(node.type || '').toLowerCase())) return true;
-    if (businessRoles.has(String(node.role || '').toLowerCase())) return true;
-    for (const child of [...(node.children || []), ...(node.items || [])]) {
-      if (hasBusinessContent(child)) return true;
-    }
-    if (node.body && typeof node.body === 'object' && hasBusinessContent(node.body)) return true;
-    return false;
-  };
-  if (businessTypes.has(String(top.type || '').toLowerCase()) || hasBusinessContent(top.body)) return null;
+  // （Phase A-2：实现收拢至 section-semantics.js#isBusinessContent，逐字迁移）
+  // top 自身的 role/type 也是 vision 结构事实，不能只检查 body 后代；
+  // 否则顶层 role='stat-card'、body 仅 label/value 的统计卡会被误塞进 header 插槽。
+  if (isBusinessContent(top)) return null;
+  // 🛡️ 4851eedd（mc-max-1793430567896 实锤）：vision 已显式声明本段 header 关系时
+  //   不得翻案。`headerRelation:'no-header'` 是 vision 的结构发言——"本段不是面板
+  //   头部"。本兜底的定位是**填 vision 沉默**（"无任何 header 类型事实"），不是
+  //   覆盖 vision 显式结论；否则统计段被强标 header 塞进 #header-right。
+  //   （Phase B-1：读取口径收拢至 vision-facts#declaredHeaderRelation）
+  if (declaredHeaderRelation(top) === 'no-header') return null;
+  // 🛡️ 4851eedd 同单：统计卡的第二种合法形态——卡内是 content.elements 的
+  //   value+label 结构（无 role:'stat-card' 标签）。value 角色是业务统计语义，
+  //   面板头部控件条（icon-button/label）不会有它；命中即业务内容，不标 header。
+  //   （Phase B-1：识别口径收拢至 vision-facts#hasStatValueElement）
+  if (hasStatValueElement(top)) return null;
   const relY = b.y - minY;
   const h = b.height;
   if (relY < rootH * HEADER_BAND_REL_Y_RATIO && h <= rootH * HEADER_BAND_MAX_HEIGHT_RATIO) {

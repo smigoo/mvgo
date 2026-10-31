@@ -1,0 +1,58 @@
+{
+  "id": "stat-parts-unit-top-string",
+  "source": "mc-max-1793454777941-85ec897d（48:5798 真机实测）",
+  "kind": "stat-right-value",
+  "semantic": "列表项统计右值形态⑤'：item.stats[] 项 parts 内仅 number、标签在顶层 unit 字符串（deepseek-v4.1-flash 形态漂移，2026-10-31 实锤：标签全丢 ⇒ 数值挤压渲染）",
+  "form": {
+    "id": "48:5798",
+    "type": "list",
+    "collapsed": true,
+    "renderHint": "v-for",
+    "itemCount": 2,
+    "items": [
+      {
+        "layout": "horizontal",
+        "role": "stat-card",
+        "repeatedFill": "#a6ceff",
+        "icon": { "placeholder": "icon-node", "position": "left", "resource": "icon-5808.png", "width": 40, "height": 40 },
+        "content": {
+          "layout": "vertical", "position": "right",
+          "elements": [
+            { "type": "label", "text": "甲节点", "position": "top", "style": { "fontSize": 16, "fontWeight": "bold", "color": "#1a3a6b" } },
+            { "type": "label", "text": "地址-甲节点", "position": "bottom", "style": { "fontSize": 12, "color": "#5a7a9a" } }
+          ]
+        },
+        "stats": [
+          { "type": "value", "parts": [ { "text": "3,792", "type": "number", "styles": { "fontSize": 16, "fontWeight": "bold", "color": "#1890ff" } } ], "unit": "在线" },
+          { "type": "value", "parts": [ { "text": "28", "type": "number", "styles": { "fontSize": 16, "fontWeight": "bold", "color": "#ff4d4f" } } ], "unit": "离线" }
+        ]
+      },
+      {
+        "layout": "horizontal",
+        "role": "stat-card",
+        "repeatedFill": null,
+        "icon": { "placeholder": "icon-node", "position": "left", "resource": "icon-5809.png", "width": 40, "height": 40 },
+        "content": {
+          "layout": "vertical", "position": "right",
+          "elements": [
+            { "type": "label", "text": "乙节点", "position": "top", "style": { "fontSize": 16, "fontWeight": "bold", "color": "#1a3a6b" } },
+            { "type": "label", "text": "地址-乙节点", "position": "bottom", "style": { "fontSize": 12, "color": "#5a7a9a" } }
+          ]
+        },
+        "stats": [
+          { "type": "value", "parts": [ { "text": "2,138", "type": "number", "styles": { "fontSize": 16, "fontWeight": "bold", "color": "#1890ff" } } ], "unit": "在线" },
+          { "type": "value", "parts": [ { "text": "12", "type": "number", "styles": { "fontSize": 16, "fontWeight": "bold", "color": "#ff4d4f" } } ], "unit": "离线" }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "ok": true,
+    "statsV": ["3,792", "28"],
+    "statsL": ["在线", "离线"],
+    "texts": ["甲节点", "地址-甲节点"]
+  },
+  "perturbations": [
+    { "op": "deleteRole", "expect": { "ok": true, "statsV": ["3,792", "28"], "statsL": ["在线", "离线"] } }
+  ]
+}

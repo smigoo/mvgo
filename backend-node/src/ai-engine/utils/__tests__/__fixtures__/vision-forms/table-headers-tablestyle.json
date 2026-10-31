@@ -1,0 +1,15 @@
+{
+  "id": "table-headers-tablestyle",
+  "source": "真机多单（tableStyle 形态，装配器归一口径同源）",
+  "kind": "table-headers",
+  "semantic": "表头契约形态②：tableStyle.headers 包裹",
+  "form": {
+    "id": "43:4788",
+    "name": "设备列表",
+    "tableStyle": { "headers": ["设备名称", "电量"] }
+  },
+  "expect": { "headers": ["设备名称", "电量"], "sectionType": "table" },
+  "perturbations": [
+    { "op": "typeNullTop", "expect": { "headers": ["设备名称", "电量"], "sectionType": "table" } }
+  ]
+}

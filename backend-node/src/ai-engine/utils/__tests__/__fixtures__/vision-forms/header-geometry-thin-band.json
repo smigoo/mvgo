@@ -1,0 +1,13 @@
+{
+  "id": "header-geometry-thin-band",
+  "source": "mc-max-1790693732608-b6e018d6（兜底阳性对照）",
+  "kind": "header-fallback",
+  "semantic": "阴性对照：纯几何顶部薄条（vision 全沉默）⇒ 兜底仍标 header（只填沉默的『沉默』侧）",
+  "form": [
+    { "id": "top-bar", "name": "顶部薄条", "absoluteBoundingBox": { "x": 0, "y": 0, "width": 470, "height": 66 } },
+    { "id": "43:4788", "name": "设备列表", "absoluteBoundingBox": { "x": 0, "y": 91, "width": 470, "height": 388 } },
+    { "id": "807:2", "name": "底部图例与链接", "absoluteBoundingBox": { "x": 0, "y": 501, "width": 470, "height": 14 } }
+  ],
+  "expect": { "hit": true, "hitId": "top-bar", "firstSectionType": "header" },
+  "perturbations": []
+}

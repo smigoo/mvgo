@@ -1,0 +1,16 @@
+{
+  "id": "semantic-footer-id",
+  "source": "mc-max-1793429316224-a100e890 / 769789af",
+  "kind": "semantic-footer",
+  "semantic": "footer 语义 id 前缀（footer-*）优先于 summary 关键词；role:'常驻' 是 chrome 语义不冲突",
+  "form": {
+    "id": "footer-summary",
+    "name": "底部汇总",
+    "role": "常驻"
+  },
+  "expect": { "sectionType": "footer", "recoveryAllowed": true },
+  "perturbations": [
+    { "op": "deleteRole", "expect": { "sectionType": "footer", "recoveryAllowed": true } },
+    { "op": "idToNumeric", "expect": { "sectionType": "footer", "recoveryAllowed": true } }
+  ]
+}

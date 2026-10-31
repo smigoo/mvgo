@@ -1650,6 +1650,11 @@ export async function validateAndFixGeneratedFiles(
             displayName,
             nodeData,
             styleTokens: options.styleTokens || null,
+            // 🆕 2026-10-31（刀 33b · P0 契约修复）：必须透传用户指定 componentId。
+            //   此前漏传 ⇒ normalizeDeclareJson 不认识它，把上游已按用户输入定稿的终态
+            //   c-list1 当「缺尾段非规范 id」再 sanitize → c-list1-cf43d973，
+            //   违背「同名重生成 id 恒定」（实锤 mc-max-1793416305379-cf43d973）。
+            userComponentId: options.userComponentId || null,
           },
         );
         if (normalized) {

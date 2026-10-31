@@ -36,8 +36,16 @@ import {
 // 🛡️ H DOM contract（2026-09-22）：collapsed 卡 item 级几何分组事实（文本纵/横排 + icon 实测尺寸）
 import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
-import { deriveSectionType } from '../utils/section-type-derive.js';
+import { deriveSectionType, declaredTableHeaders } from '../utils/section-type-derive.js';
+import { mergeVisualRows } from '../utils/figma-height-ratio.js';
 import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
+// 🛡️ Phase B（2026-10-31 治理方案）：显式事实协议「只填沉默、不翻案」。
+//   几何恢复类兜底执行前，必须检查 vision 是否已就同一问题显式发言；
+//   发言与推导冲突 ⇒ 跳过恢复（只填 vision 沉默，不覆盖 vision 显式结论）。
+import {
+  footerGeometryRecoveryAllowed,
+  tableGeometryRecoveryAllowed,
+} from '../utils/vision-facts.js';
 // 🛡️ F18（2026-10-21）：行内列数/单项尺寸/间距的算术推导（纯几何）
 import { deriveRowMetrics, deriveGapFromBoxes, deriveGapSequence } from '../utils/row-metrics.js';
 // 🛡️ #78 技术栈接管（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：S2 语义收编 + S3 表格契约。
@@ -121,6 +129,86 @@ function unionBoxes(boxes) {
 }
 
 /**
+ * 表格数据行只覆盖首列时，沿共同祖先恢复含表头的整表盒。
+ * 只在全部行均可锚定、且存在严格高于数据行并集的非根祖先时采纳；
+ * 同高取最宽者（第一列与整表常同高），找不到即 fail-open。
+ */
+function resolveWholeTableBoxFromItems(anchoredItems, candidate, figmaIndex, heightById) {
+  if (!candidate || anchoredItems.length < 2 || !figmaIndex) return null;
+  const chains = anchoredItems.map(({ key }) => {
+    const chain = [];
+    let cur = String(key || '');
+    for (let depth = 0; cur && depth < 64; depth++) {
+      const parentId = figmaIndex.get(cur)?.parentId;
+      if (!parentId) break;
+      chain.push(String(parentId));
+      cur = String(parentId);
+    }
+    return chain;
+  });
+  if (chains.some((c) => c.length === 0)) return null;
+  const shared = chains[0].filter((id) => chains.every((c) => c.includes(id)));
+  const boxes = anchoredItems.map((x) => x.box);
+  const containsAll = (b) =>
+    b.x <= Math.min(...boxes.map((x) => x.x)) &&
+    b.y <= Math.min(...boxes.map((x) => x.y)) &&
+    b.x + b.width >= Math.max(...boxes.map((x) => x.x + x.width)) &&
+    b.y + b.height >= Math.max(...boxes.map((x) => x.y + x.height));
+  const candidates = shared
+    .filter((id) => figmaIndex.get(id)?.parentId) // 组件根不是表格整体，禁止回灌
+    .map((id) => heightById.get(id))
+    .filter((b) => b && containsAll(b) && b.height > candidate.height && b.width >= candidate.width);
+  if (candidates.length === 0) return null;
+  const minHeight = Math.min(...candidates.map((b) => b.height));
+  return candidates
+    .filter((b) => b.height === minHeight)
+    .sort((a, b) => b.width - a.width)[0] || null;
+}
+
+/** footer 根锚点失效时，用唯一文本锚点 + 同行兄弟恢复视觉行几何。 */
+function resolveFooterTextRowBox(sec, figmaIndex) {
+  if (deriveSectionType(sec) !== 'footer' || !figmaIndex) return null;
+  // 🛡️ Phase B 显式事实协议：vision 已显式发言本段 type/role ≠ footer 时，
+  //   不得替 vision 恢复 footer 行几何（只填沉默、不翻案）。
+  if (!footerGeometryRecoveryAllowed(sec)) return null;
+  const nodes = [
+    ...(Array.isArray(sec?.body?.children) ? sec.body.children : []),
+    ...(Array.isArray(sec?.body?.items) ? sec.body.items : []),
+    ...(Array.isArray(sec?.items) ? sec.items : []),
+  ];
+  const texts = [...new Set(nodes.map((n) => String(n?.text || '').trim()).filter(Boolean))];
+  for (const text of texts) {
+    const matches = [];
+    for (const [id, rec] of figmaIndex) {
+      const raw = rec?.rawNode || rec;
+      if (raw?.type === 'TEXT' && String(raw?.characters || '').trim() === text) {
+        matches.push({ id, rec, raw });
+      }
+    }
+    // 重复文本无法定位（统计区与图例常有同名标签），跳过不猜。
+    if (matches.length !== 1) continue;
+    const { id, rec } = matches[0];
+    const parentId = rec?.parentId;
+    const parent = parentId ? figmaIndex.get(String(parentId)) : null;
+    const siblings = parent?.rawNode?.children;
+    const anchor = rec?.bbox;
+    if (!Array.isArray(siblings) || !anchor) continue;
+    const rows = mergeVisualRows(siblings)
+      .map((row) => row?.absoluteBoundingBox)
+      .filter((b) =>
+        b &&
+        b.x <= anchor.x &&
+        b.y <= anchor.y &&
+        b.x + b.width >= anchor.x + anchor.width &&
+        b.y + b.height >= anchor.y + anchor.height
+      )
+      .sort((a, b) => a.width * a.height - b.width * b.height);
+    if (rows[0]) return rows[0];
+  }
+  return null;
+}
+
+/**
  * 🛡️ 2026-10-30 第2步补：vision 聚合段的 Figma 尺寸真值必须取「逐项并集」。
  *   只取锚点 bbox 会把「6 卡列表」压成**首卡 72px**（真实重放实测：
  *   `48:5798 type=list items=6 但 figmaHeightPx=72`），与刀25/26 在 E1 折叠产物上
@@ -131,13 +219,52 @@ function unionBoxes(boxes) {
 function resolveVisionSectionBox(sec, heightById, opts = {}) {
   const anchorBox = opts.skipAnchor ? null : heightById.get(sectionAnchorKey(sec)) || null;
   const items = [...(sec?.body?.items || []), ...(sec?.items || [])];
-  const itemBoxes = items
-    .map((it) => heightById.get(sectionAnchorKey(it)) || null)
+  const anchoredItems = items
+    .map((it) => {
+      const key = sectionAnchorKey(it);
+      const box = heightById.get(key) || null;
+      return box ? { key, box } : null;
+    })
     .filter(Boolean);
-  if (itemBoxes.length >= 2) {
-    return unionBoxes([anchorBox, ...itemBoxes].filter(Boolean)) || anchorBox;
+  const itemBoxes = anchoredItems.map((x) => x.box);
+  const candidate = itemBoxes.length >= 2
+    ? unionBoxes([anchorBox, ...itemBoxes].filter(Boolean)) || anchorBox
+    : anchorBox;
+  const resolvedHeight = Number(sec?.styles?.figmaHeightPx);
+  if (!(resolvedHeight > 0)) {
+    // 顶层 headers+items 的表格只有数据行锚点，逐项并集会漏掉表头；
+    // 必须由整表共同祖先补全，不能把首列 345px 当成整表 388px。
+    // 🛡️ Phase B 显式事实协议：vision 显式 type ≠ table 时不得整表恢复（不翻案）。
+    if (
+      deriveSectionType(sec) === 'table' &&
+      tableGeometryRecoveryAllowed(sec) &&
+      anchoredItems.length === items.length
+    ) {
+      const whole = resolveWholeTableBoxFromItems(anchoredItems, candidate, opts.figmaIndex, heightById);
+      if (whole) return whole;
+    }
+    // footer 误锚组件根时没有可用 candidate；唯一文本与同行兄弟可恢复视觉行。
+    return candidate || resolveFooterTextRowBox(sec, opts.figmaIndex);
   }
-  return anchorBox;
+  if (candidate?.height === resolvedHeight) return candidate;
+
+  // 精确 id 也可能只是整段的首行/首卡。已有整体高度来自 A4 区域配对或逐项并集，
+  // 不得被 coverage 锚点覆盖；沿真实 parentId 链找回同高祖先，保证高度与 box 同源。
+  let cur = opts.skipAnchor ? null : sectionAnchorKey(sec);
+  const idx = opts.figmaIndex;
+  let matchedAncestor = null;
+  for (let depth = 0; cur && idx && depth < 64; depth++) {
+    const parentId = idx.get(String(cur))?.parentId;
+    if (!parentId) break;
+    const parentBox = heightById.get(String(parentId));
+    // 同高列容器与整表都可能匹配；取链上最宽者，避免停在第一列。
+    if (parentBox?.height === resolvedHeight && parentBox.width >= (matchedAncestor?.width || 0)) {
+      matchedAncestor = parentBox;
+    }
+    cur = String(parentId);
+  }
+  // 找不到整体盒时 fail-open：保留既有 figmaHeightPx，不注入部分盒污染段间距。
+  return matchedAncestor;
 }
 
 /**
@@ -544,7 +671,10 @@ function isPureDecorationSection(sec) {
  * base-panel 承接；出现任何额外业务文本、列表或未知结构都保留原 section。
  */
 function isSameRowPanelChrome(sec) {
-  if (sec?.headerRelation !== 'title-same-row' || sec?.slotCandidate !== 'header-right') {
+  if (
+    sec?.headerRelation !== 'title-same-row' ||
+    !['header-right', 'title-left', 'title-right'].includes(String(sec?.slotCandidate || ''))
+  ) {
     return false;
   }
   const title = String(sec?.header?.title || '').trim();
@@ -1869,8 +1999,13 @@ export function buildEffectiveSection(sec, idx, ctx) {
   const richBodyItems =
     leafLayoutFact === 'vertical' ? extractRichBodyItems(sec) : null;
   const effectiveItems = Array.isArray(sec.items) ? sec.items : richBodyItems;
-  const collapsed = isCollapsedListSection(sec) || richBodyItems != null;
-  const rawType = collapsed ? String(sec.type || 'list') : deriveSectionType(sec);
+  const declaredType = deriveSectionType(sec);
+  // 表格的 items 是数据行，不是普通列表卡；一旦按 collapsed list 处理，
+  // type 会被改写为 list，且顶层 headers 会在叶子白名单中丢失。
+  const collapsed = declaredType === 'table'
+    ? false
+    : isCollapsedListSection(sec) || richBodyItems != null;
+  const rawType = collapsed ? String(sec.type || 'list') : declaredType;
   const title = sec.header?.title || sec.title || sec.name || '';
   const elementCount = collapsed
     ? Number(sec.itemCount) ||
@@ -1915,6 +2050,7 @@ export function buildEffectiveSection(sec, idx, ctx) {
   const effectiveResponsibility = isHorizontalTab
     ? '标签页切换区（顶部横向 tab，下方为对应内容区，禁止竖向侧栏布局）'
     : responsibility;
+  const tableHeaders = effectiveType === 'table' ? declaredTableHeaders(sec) : null;
 
   // 🛡️ 栅格列数事实透传（2026-09-14 · a612a9f7 实锤）：视觉分析
   //   preview-analysis.json 的 section 已含 `layout`（如 "grid"）与 `gridColumns`（如 3，
@@ -2051,6 +2187,19 @@ export function buildEffectiveSection(sec, idx, ctx) {
     // 🛡️ 栅格列数事实：仅当视觉分析明确给出才透传（缺失时下游保持自由发挥，不硬编码默认值）
     ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
     collapsed,
+    // 整体几何与高度必须成对透传：只保留 388 而留下首行 box，会把真实段间距算错。
+    ...(sec.absoluteBoundingBox
+      ? {
+          absoluteBoundingBox: sec.absoluteBoundingBox,
+          figmaBox: sec.figmaBox || sec.absoluteBoundingBox,
+        }
+      : {}),
+    // 🛡️ section 高度单一事实源：A4/vision 主路径已从 Figma 区域或逐项并集解析出
+    //   整体高度时，必须穿过本白名单，供 applyFigmaHeightGrow 消费；否则它会退化为
+    //   sourceNodeIds 中 min-y 的首行/首卡高度（67a9452b 表格 388→44 实锤）。
+    ...(!collapsed && Number.isFinite(Number(sec.styles?.figmaHeightPx))
+      ? { styles: { figmaHeightPx: Number(sec.styles.figmaHeightPx) } }
+      : {}),
     // 🛡️ 刀 28c（mc-max-1793250243785-4cc3d366 实锤）：collapsed 列表叶的几何必须
     //   透传。刀 20a 合成的 rawListLeaf 带整列并集 absoluteBoundingBox/figmaBox
     //   （532px），但本 return 白名单重建把几何字段全丢 ⇒ 上方容器分支的
@@ -2073,7 +2222,7 @@ export function buildEffectiveSection(sec, idx, ctx) {
     //   统一按 `section.body.gridColumns` 取值，故这里把脊柱字段收敛到 body。
     //   🛡️ F1（2026-09-20）：改为**合并**而非替换——原实现整段重写 body，把 F1 回填的
     //   items/bgPlaceholder/backgroundImage 等卡片语义抹掉（三卡只剩 {layout}）。
-    ...(layoutFact || hasGridColumns || plainTextItems.length > 0
+    ...(layoutFact || hasGridColumns || plainTextItems.length > 0 || tableHeaders
       ? {
           body: {
             ...(layoutFact ? { layout: layoutFact } : {}),
@@ -2083,6 +2232,8 @@ export function buildEffectiveSection(sec, idx, ctx) {
             //    与下方 `items` 是**互补双轨**（items=扁平文本清单；children=结构化子项），
             //    不是同一事实的重复表达。
             ...(sec.body || {}),
+            // 顶层 headers 归一到 body，供 context assembler 与表格接管器共用同一契约。
+            ...(tableHeaders ? { headers: tableHeaders } : {}),
             // ② 再覆盖 `items`：**确定性文本真值**无条件覆盖 vision 的 items。
             //    理由：vision 常把一整组文本命名成拼接串（如把 `@antd/tab` 的两项合成
             //    「江阴靖江长江隧道江阴大桥」），而递归 TEXT 真值已把它们拆开 ⇒ 确定性胜出。
@@ -2183,10 +2334,17 @@ function applyFigmaHeightGrow(nodes, figmaIndex) {
     for (const s of list) {
       // header section 归 base-panel 标题栏插槽，不参与列内 flex 分配，也不该污染平均值。
       if (s?.type === 'header') continue;
-      // vision 子段误锚组件根时，根盒已在注入层判无效；这里不得经 sourceNodeIds 重新取回。
-      if (s?.geometryAnchorInvalid) continue;
-      const box = figmaSectionBox(s, figmaIndex);
-      if (box && box.height > 0) measured.push({ s, height: box.height });
+      const resolvedHeight = Number(s.styles?.figmaHeightPx);
+      // vision 子段误锚组件根时，根盒已在注入层判无效；不得经 sourceNodeIds 重新取回。
+      // 但 A4 已从其他真实 Figma 行独立解析出高度时仍可使用——禁的是根盒回灌，
+      // 不是丢弃已验证的非根几何，否则三段会错误退化成两段归一。
+      if (s?.geometryAnchorInvalid && !(resolvedHeight > 0)) continue;
+      // 已解析的 Figma 整体高度优先：A4 区域配对 / vision 主路径的逐项并集均写在这里。
+      // figmaSectionBox 的 min-y 语义服务于排序，其首行/首卡高度不得覆盖整体高度；
+      // 只有整体事实缺失时才回退到该旧路径（fail-open，保留既有组件行为）。
+      const box = resolvedHeight > 0 ? null : figmaSectionBox(s, figmaIndex);
+      const height = resolvedHeight > 0 ? resolvedHeight : Number(box?.height);
+      if (height > 0) measured.push({ s, height });
     }
     if (measured.length >= 2) {
       const avg =
@@ -2681,7 +2839,7 @@ export class SubcomponentPlanner {
         sections = sections.map((s) => {
           const rootInvalid = isVisionComponentRootAnchor(s, figmaRoot, sections.length);
           if (rootInvalid) rootAnchorInvalid += 1;
-          const box = resolveVisionSectionBox(s, heightById, { skipAnchor: rootInvalid });
+          const box = resolveVisionSectionBox(s, heightById, { skipAnchor: rootInvalid, figmaIndex });
           const marked = rootInvalid ? { ...s, geometryAnchorInvalid: 'component-root' } : s;
           if (box && box.height > 0) {
             injected += 1;

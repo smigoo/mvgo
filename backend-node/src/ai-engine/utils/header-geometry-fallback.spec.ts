@@ -35,6 +35,18 @@ describe('applyHeaderGeometryFallback（header 几何兜底 · 命名无关）',
     expect(sections[0].type).toBeUndefined();
   });
 
+  it('🔴 dfe50968：顶层 role=stat-card 即使 body 只有 label/value 也不得误标 header', () => {
+    const sections = [
+      {
+        id: '43:4893', name: '总设备', role: 'stat-card', absoluteBoundingBox: box(0, 0, 134, 66),
+        body: { children: [{ role: 'label', text: '总设备' }, { role: 'value', text: '8' }] },
+      },
+      { id: '43:4788', name: '设备表格', absoluteBoundingBox: box(0, 91, 470, 388) },
+    ];
+    expect(applyHeaderGeometryFallback(sections)).toBeNull();
+    expect(sections[0].type).toBeUndefined();
+  });
+
   it('阴性：普通顶部控件条无业务角色 ⇒ 几何兜底仍生效', () => {
     const sections = [
       { id: 'a', absoluteBoundingBox: box(0, 0, 470, 34), body: { children: [{ role: 'controls' }] } },

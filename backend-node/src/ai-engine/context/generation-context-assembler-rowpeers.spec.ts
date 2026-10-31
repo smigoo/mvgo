@@ -72,6 +72,82 @@ describe('normalizeSectionNode 透传 rowPeerIds（#138 续）', () => {
   })
 })
 
+describe('bc38e1e6：normalizeSectionNode 透传最小表格表头契约', () => {
+  test('body.headers 与 body.children[].headers 均可穿过 generationInput.componentPlan', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [
+          {
+            id: 'direct', type: 'table',
+            body: { headers: ['设备名称', '电量'], cells: [{ values: ['不应回流'] }] },
+          },
+          {
+            id: 'nested', type: 'table',
+            body: {
+              children: [{
+                id: 'table-container', type: 'table', headers: ['速度(m/s)', '启用状态'],
+                items: [{ name: '不应回流' }],
+              }, { id: 'plain-row', role: 'table-row' }],
+              backgroundImage: { src: '不应回流.png' },
+            },
+          },
+          { id: 'plain', type: 'text', body: { children: [{ text: '普通内容' }] } },
+        ],
+      },
+    })
+    const [direct, nested, plain] = input.componentPlan.effectiveSections
+    expect(direct.body).toEqual({ headers: ['设备名称', '电量'] })
+    expect(nested.body).toEqual({ children: [{ headers: ['速度(m/s)', '启用状态'] }] })
+    expect(Object.prototype.hasOwnProperty.call(plain, 'body')).toBe(false)
+  })
+
+  test('40b65d9f：按列声明（body.children[].role=table-column + header）归一为 body.headers', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [
+          {
+            id: '43:4788', type: 'table',
+            body: {
+              layout: 'table',
+              children: [
+                { id: 'a', role: 'table-column', header: '设备名称', cells: [{ text: '不应回流' }] },
+                { id: 'b', role: 'table-column', header: '电量', cells: [{ text: '92' }] },
+              ],
+            },
+          },
+          {
+            id: 'partial', type: 'table',
+            body: { children: [
+              { id: 'a', role: 'table-column', header: '设备名称' },
+              { id: 'b', role: 'table-column' },
+            ] },
+          },
+        ],
+      },
+    })
+    const [perColumn, partial] = input.componentPlan.effectiveSections
+    expect(perColumn.body).toEqual({ headers: ['设备名称', '电量'] })
+    // 残缺列声明不产契约键
+    expect(Object.prototype.hasOwnProperty.call(partial, 'body')).toBe(false)
+  })
+
+  test('顶层 headers/tableStyle.headers 同样保留，缺失时不产空契约键', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [
+          { id: 'raw', headers: ['A', 'B'] },
+          { id: 'styled', tableStyle: { headers: ['C', 'D'], striped: true } },
+          { id: 'empty', body: { layout: 'vertical' } },
+        ],
+      },
+    })
+    const [raw, styled, empty] = input.componentPlan.effectiveSections
+    expect(raw.headers).toEqual(['A', 'B'])
+    expect(styled.tableStyle).toEqual({ headers: ['C', 'D'] })
+    expect(Object.prototype.hasOwnProperty.call(empty, 'body')).toBe(false)
+  })
+})
+
 describe('刀29b：normalizeSectionNode 透传几何三件套（mc-max-1793255115028-7ec263c9 实锤）', () => {
   // 断点链：planner 刀28c 给宿主/折叠叶带整列并集几何（470x517）
   // → normalizeComponentPlan 白名单重建剥掉 absoluteBoundingBox/figmaBox

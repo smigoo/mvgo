@@ -270,6 +270,46 @@ describe('696105e8 normListItem — value.parts + offline.parts 顶层统计形�
   })
 })
 
+describe('8200b273 normListItem — valueGroup.elements 成对右值区', () => {
+  const items = LIST_SEC.items.map((item, i) => ({
+    ...item,
+    stats: undefined,
+    valueGroup: {
+      layout: 'horizontal', position: 'right',
+      elements: [
+        { type: 'value', text: i === 0 ? '3,792' : '2,138', styles: { fontSize: 18, fontWeight: 'bold', color: '#2ecc71' } },
+        { type: 'label', text: '在线', styles: { fontSize: 12, color: '#888888' } },
+        { type: 'value', text: i === 0 ? '• 28' : '• 12', styles: { fontSize: 14, color: '#e74c3c' } },
+        { type: 'label', text: '离线', styles: { fontSize: 12, color: '#888888' } },
+      ],
+    },
+  }))
+
+  it('⭐ 阳性：两组 value+label 全部保留，渲染不再只剩节点名与地址', () => {
+    const r = detectListLeaf({ ...LIST_SEC, items }, indexFigmaNodes(FIGMA))
+    expect(r.ok).toBe(true)
+    expect(r.items[0].stats).toEqual([
+      { v: '3,792', l: '在线', vc: '#2ecc71', vfs: 18, vfw: 'bold', lc: '#888888', lfs: 12 },
+      { v: '• 28', l: '离线', vc: '#e74c3c', vfs: 14, vfw: null, lc: '#888888', lfs: 12 },
+    ])
+    const vue = renderFoldedGridLeafVue(r, 'c-demo')
+    expect(vue).toContain('3,792')
+    expect(vue).toContain('• 28')
+    expect(vue.match(/在线/g)).toHaveLength(2)
+    expect(vue.match(/离线/g)).toHaveLength(2)
+  })
+
+  it('阴性：value/label 序列不完整 ⇒ 整组不猜，不错配相邻统计', () => {
+    const malformed = items.map((item) => ({
+      ...item,
+      valueGroup: { elements: item.valueGroup.elements.slice(0, 3) },
+    }))
+    const r = detectListLeaf({ ...LIST_SEC, items: malformed }, indexFigmaNodes(FIGMA))
+    expect(r.ok).toBe(true)
+    expect(r.items[0].stats).toEqual([])
+  })
+})
+
 describe('ef5c7ed3 normListItem — value 映射 + 合成 item id 的 figmaNode 真值锚', () => {
   const items = LIST_SEC.items.map((item, i) => ({
     ...item,
@@ -1030,5 +1070,80 @@ describe('刀34：content.elements.parts 在线/离线真值（29c2c476）', () 
     expect(res.ok).toBe(true);
     expect(res.items[0].stats.map((s) => s.v)).toEqual(['2']);
     expect(res.items[1].stats.map((s) => [s.v, s.l])).toEqual([['5', '自定义']]);
+  });
+});
+
+describe('769789af normListItem — value.elements[].parts 容器统计形态', () => {
+  // 真实形态（mc-max-1793431342807）：成对数值不在 content.elements、不在顶层
+  // value.parts，而是 item.value = {layout, position, elements:[{type:'value',
+  // parts:[{type:'number'},{type:'unit'}]}]}。旧 statEntries 回退链对 value 容器
+  // 走 Object.values ⇒ ['horizontal','right',elementsArray] 垃圾条目静默跳过 ⇒
+  // stats 全空 ⇒ 在线/离线整列丢失。
+  const mkValueElItem = (name: string, addr: string, online: string, offline: string) => ({
+    layout: 'horizontal',
+    role: 'stat-card',
+    repeatedFill: '#a6ceff',
+    icon: { placeholder: 'icon-node', position: 'left', resource: 'icon-5808.png', width: 40, height: 40 },
+    content: {
+      layout: 'vertical', position: 'right',
+      elements: [
+        { type: 'label', text: name, position: 'top', style: { fontSize: '16px', fontWeight: 'bold', color: 'rgba(0,0,0,1)' } },
+        { type: 'label', text: addr, position: 'bottom', style: { fontSize: '12px', color: 'rgba(102,102,102,1)' } },
+      ],
+    },
+    value: {
+      layout: 'horizontal', position: 'right',
+      elements: [
+        { type: 'value', parts: [
+          { text: online, type: 'number', style: { fontSize: '18px', fontWeight: 'bold', color: 'rgba(0,180,42,1)' } },
+          { text: '在线', type: 'unit', style: { fontSize: '12px', color: 'rgba(102,102,102,1)' } },
+        ] },
+        { type: 'value', parts: [
+          { text: offline, type: 'number', style: { fontSize: '18px', fontWeight: 'bold', color: 'rgba(255,0,0,1)' } },
+          { text: '离线', type: 'unit', style: { fontSize: '12px', color: 'rgba(102,102,102,1)' } },
+        ] },
+      ],
+    },
+  });
+  const VALUE_EL_SEC = {
+    id: '48:5798', type: 'list', collapsed: true, renderHint: 'v-for', itemCount: 2,
+    items: [
+      mkValueElItem('甲节点', '地址甲', '3,792', '28'),
+      mkValueElItem('乙节点', '地址乙', '128', '6'),
+    ],
+  };
+
+  it('⭐ 阳性：value.elements[].parts ⇒ stats 双条真值（number+unit，px 字符串字号）', () => {
+    const r = detectListLeaf(VALUE_EL_SEC, indexFigmaNodes(FIGMA));
+    expect(r.ok).toBe(true);
+    expect(r.items).toHaveLength(2);
+    expect(r.items[0].stats).toHaveLength(2);
+    expect(r.items[0].stats[0]).toMatchObject({ v: '3,792', l: '在线', vc: 'rgba(0,180,42,1)', vfs: 18 });
+    expect(r.items[0].stats[1]).toMatchObject({ v: '28', l: '离线' });
+    expect(r.items[1].stats.map((s: any) => s.v)).toEqual(['128', '6']);
+    // texts 只收 content 两行标签，数值不得混进 texts 纵堆
+    expect(r.items[0].texts.map((t: any) => t.t)).toEqual(['甲节点', '地址甲']);
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    expect(vue).toContain('3,792');
+    expect(vue).toContain('离线');
+  });
+
+  it('反向：value.elements 项缺 number parts ⇒ 跳过不编造（残项不炸）', () => {
+    const sec = {
+      ...VALUE_EL_SEC,
+      items: VALUE_EL_SEC.items.map((it: any) => ({
+        ...it,
+        value: { layout: 'horizontal', elements: [
+          { type: 'value', parts: [
+            { text: '3,792', type: 'number', style: { fontSize: '18px', color: 'rgba(0,180,42,1)' } },
+            { text: '在线', type: 'unit', style: { fontSize: '12px' } },
+          ] },
+          { type: 'value', text: '残缺项' },
+        ] },
+      })),
+    };
+    const r = detectListLeaf(sec, indexFigmaNodes(FIGMA));
+    expect(r.ok).toBe(true);
+    expect(r.items[0].stats.map((s: any) => s.v)).toEqual(['3,792']);
   });
 });

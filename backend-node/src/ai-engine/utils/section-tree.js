@@ -105,6 +105,12 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
     }
     if (conflictIdx >= 0) {
       const prev = out[conflictIdx]
+      // vision 的独立页脚不是共享锚点的重复解释。锚点可能误指正文节点，
+      // 不能再用 elementCount 裁决删除 footer；结构保留，几何修复留给 planner。
+      if (String(sec.type || '').toLowerCase() === 'footer') {
+        out.push(sec)
+        continue
+      }
       // 🛡️ ⑤（2026-09-26 · 离线复现实锤）：**两个 chart section 共享 sourceNodeIds 时不得按
       //   elementCount 收敛**。vision 会把「同一 Figma 容器下的多个不同图表」标成同一个 section
       //   （E1 注释已记录该形态），`injectChartSectionIfMissing` 的 chartsTruth 分支因此产出
@@ -278,7 +284,7 @@ export function dedupeByWholeRegionShell(sections) {
       : []
     const count = Number(sec.elementCount) || 0
     const rec = { idx: i, sec, count, type: String(sec.type || '').toLowerCase() }
-    if (srcIds.length === 0) shells.push(rec)
+    if (srcIds.length === 0 && !['header', 'footer', 'table'].includes(rec.type)) shells.push(rec)
     else owned.push(rec)
   }
   if (shells.length === 0 || owned.length < 2) return sections

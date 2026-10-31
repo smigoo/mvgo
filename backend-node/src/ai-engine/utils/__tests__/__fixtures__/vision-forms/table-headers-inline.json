@@ -1,0 +1,17 @@
+{
+  "id": "table-headers-inline",
+  "source": "mc-max-…-56445358（整表 388）",
+  "kind": "table-headers",
+  "semantic": "表头契约形态①：section 顶层 headers 数组",
+  "form": {
+    "id": "43:4788",
+    "name": "设备列表",
+    "role": "table",
+    "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"]
+  },
+  "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" },
+  "perturbations": [
+    { "op": "deleteRole", "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" } },
+    { "op": "typeNullTop", "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" } }
+  ]
+}

@@ -8,6 +8,52 @@ import { compileDesignFacts } from './design-facts-compiler.js'
 import { resolveContextConflicts } from './context-conflict-resolver.js'
 import { applyContextBudget } from './context-budget.js'
 
+function normalizeTableHeaderContract(section) {
+  const headers = (owner) => Array.isArray(owner?.headers) ? owner.headers.map((h) => String(h)) : undefined
+  const tableStyle = (owner) => Array.isArray(owner?.tableStyle?.headers)
+    ? { headers: owner.tableStyle.headers.map((h) => String(h)) }
+    : undefined
+  const bodyChildren = Array.isArray(section?.body?.children)
+    ? section.body.children.map((child) => {
+        const childHeaders = headers(child)
+        const childTableStyle = tableStyle(child)
+        if (!childHeaders && !childTableStyle) return null
+        return {
+          ...(childHeaders ? { headers: childHeaders } : {}),
+          ...(childTableStyle ? { tableStyle: childTableStyle } : {}),
+        }
+      }).filter(Boolean)
+    : []
+  const bodyHeaders = headers(section?.body)
+  const bodyTableStyle = tableStyle(section?.body)
+  // 🛡️ 40b65d9f（mc-max-1793429330206 实锤）：第三种表头形态——按列声明。
+  //   body.children[].{role:'table-column', header} 每列自带表头文本；旧白名单
+  //   既不回流该 body，也不归一成 headers 数组 ⇒ 真机接管器 declaredTableHeaders
+  //   恒空 ⇒ LCA 回查失效 ⇒ table:notTableColumn 落入 LLM 自由渲染。
+  //   这里把逐列 header 归一成共享契约的 body.headers（单一事实源仍是
+  //   section-type-derive.js#declaredTableHeaders 的读取口径）。
+  const rawChildren = Array.isArray(section?.body?.children) ? section.body.children : []
+  const perColumn = rawChildren.map((c) => String(c?.header ?? '').trim())
+  const allColumns =
+    rawChildren.length >= 2 &&
+    rawChildren.every((c) => String(c?.role || '').toLowerCase() === 'table-column') &&
+    perColumn.every(Boolean)
+  const columnHeaders = allColumns ? perColumn : undefined
+  const body = bodyHeaders || bodyTableStyle || bodyChildren.length > 0 || columnHeaders
+    ? {
+        ...(bodyHeaders ? { headers: bodyHeaders } : {}),
+        ...(bodyTableStyle ? { tableStyle: bodyTableStyle } : {}),
+        ...(columnHeaders ? { headers: columnHeaders } : {}),
+        ...(bodyChildren.length > 0 ? { children: bodyChildren } : {}),
+      }
+    : undefined
+  return {
+    ...(headers(section) ? { headers: headers(section) } : {}),
+    ...(tableStyle(section) ? { tableStyle: tableStyle(section) } : {}),
+    ...(body ? { body } : {}),
+  }
+}
+
 function normalizeSectionNode(section) {
   if (!section || typeof section !== 'object') return null
   const children = Array.isArray(section.children)
@@ -46,6 +92,10 @@ function normalizeSectionNode(section) {
     renderHint: section.renderHint || null,
     itemCount: Number.isFinite(section.itemCount) ? section.itemCount : null,
     items: Array.isArray(section.items) ? section.items : undefined,
+    // 🛡️ bc38e1e6：表格接管在真实链路优先读 generationInput.componentPlan；
+    //   白名单若剥掉 body.headers / body.children[].headers，analysis 单独回放虽绿，
+    //   真机仍退化为 table:notTableColumn。只透传最小表头契约，不回流 cells/items/bg 大字段。
+    ...normalizeTableHeaderContract(section),
     isLayoutContainer: section.isLayoutContainer === true,
     layout: section.layout || null,
     layoutSource: section.layoutSource || null,

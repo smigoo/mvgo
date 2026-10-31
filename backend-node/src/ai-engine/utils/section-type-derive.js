@@ -14,40 +14,16 @@
  * 让其回落为 content/stats。header-right 的最终归属由 headerSlots 契约决定，不再是词猜。
  */
 
-// 从 section.id / name 推断 type 的关键词表（英文 id 片段 + 中文 name 片段）
-// 注意：顺序敏感！复合词（如 header-stats）要排在单一词（如 header）之前，
-// 否则 "header-stats" 会先命中 "header" 导致类型误判（2026-09-04 实锤）。
-export const TYPE_KEYWORDS = [
-  ['stats', ['header-stats', 'stat', 'metric', 'summary', 'overview', '统计', '概览', '指标']],
-  ['header', ['header', 'titlebar', '标题栏', '页头']],
-  ['footer', ['footer', 'bottom', '底部', '页脚']],
-  ['tabs', ['tab', '标签', '切换']],
-  ['chart', ['chart', 'graph', 'trend', '图表', '趋势', '曲线', '环形图', '饼图', '柱状图', '柱形图', '折线图', '雷达图', '散点图', '面积图', '漏斗图', '仪表盘', '仪表图', 'eachrts', 'echarts']],
-  ['grid', ['grid', '网格']],
-  ['list', ['list', '列表', '清单']],
-  ['card', ['card', '卡片']],
-  ['sidebar', ['sidebar', 'aside', '侧边']],
-  [
-    'nav',
-    [
-      'nav',
-      'navigation',
-      '导航',
-      '菜单',
-      '侧边',
-      '菜单栏',
-      '纵向导航',
-      '竖向导航',
-    ],
-  ],
-  ['toolbar', ['toolbar', 'action', '工具栏', '操作栏']],
-  ['body', ['body', 'content', 'main', '主体', '内容']],
-];
+// 🛡️ Phase B-1（2026-10-31 治理方案）：角色/关键词词表收拢至 vision-facts.js 单一来源。
+//   本模块保留 deriveSectionType 的优先级链；TYPE_KEYWORDS / declaredTableHeaders
+//   薄壳 re-export（既有 spec/planner/接管器/装配器消费方不改 import 路径）。
+import {
+  TYPE_KEYWORDS,
+  INLINE_HEADING_RE,
+  declaredTableHeaders,
+} from './vision-facts.js';
 
-// 内容区「小标题」负向表（刀 5a）：这些是业务区块内标题行，不是 base-panel 标题栏，
-// 命中即不作为 header（回落 content/stats，或继续匹配其他业务类型）。
-const INLINE_HEADING_RE =
-  /(sub[-_ ]?header|小标题|副标题|子标题|分组标题|section[-_ ]?title)/;
+export { TYPE_KEYWORDS, declaredTableHeaders };
 
 /**
  * 推断 section 语义类型。
@@ -56,20 +32,28 @@ const INLINE_HEADING_RE =
  * @returns {string} 小写 type（'' 表示未知）
  */
 export function deriveSectionType(sec) {
-  const explicit = sec?.type || sec?.header?.type;
-  if (explicit) return String(explicit).toLowerCase();
-
-  // 显式表格语义优先于 id 关键词：`section-table` 含 `tab`，旧实现会误判 tabs。
-  // body.children 的 control/role 同样是 vision 已声明的结构事实，不靠名称猜。
+  // vision 已声明的表格契约优先于历史 type 和 id 子串：table-section 含 tab，
+  // 且下游旧规划可能已误写 type=tabs；完整 headers 足以确定它是表格而非标签页。
+  if (declaredTableHeaders(sec)) return 'table';
   const tableNodes = [sec, ...(Array.isArray(sec?.body?.children) ? sec.body.children : [])];
-  if (tableNodes.some((n) => String(n?.role || n?.control || '').toLowerCase() === 'table')) {
+  if (tableNodes.some((n) => [n?.role, n?.control, n?.type]
+    .some((value) => String(value || '').toLowerCase() === 'table'))) {
     return 'table';
   }
+
+  const explicit = sec?.type || sec?.header?.type;
+  if (explicit) return String(explicit).toLowerCase();
 
   const idPart = String(sec?.id || '').replace(/^section[-_]?/i, '');
   const haystack =
     `${idPart} ${sec?.name || ''} ${sec?.header?.title || ''}`.toLowerCase();
   if (!haystack.trim()) return '';
+
+  // 🛡️ a100e890（mc-max-1793429316224 实锤）：vision 语义 id 的 `footer-*` 前缀是
+  //   显式结构声明，优先于 stats 关键词子串（`footer-summary` 含 `summary` ⇒
+  //   旧实现误判 stats ⇒ planner footer 文本锚高度恢复被跳过 ⇒ 确定性模板
+  //   footer flex:1 与列表等分）。与显式表格契约同口径：id 前缀 > 关键词。
+  if (/^footer[-_]/.test(idPart)) return 'footer';
 
   // 🛡️ 刀 5a：内容区小标题不作为 header（避免进 #header-right 双轨/过拆）。
   const isInlineHeading = INLINE_HEADING_RE.test(haystack);

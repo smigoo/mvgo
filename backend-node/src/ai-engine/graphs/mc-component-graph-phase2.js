@@ -29,6 +29,11 @@ import { postRefineResourceImportGuard } from '../utils/resource-import-guard.js
 // P2 收编：saveCheckpoint 原在本文件重复实现一份，与 vue3 graph 逐字节相同 → 统一到 utils
 import { saveCheckpoint as saveCheckpointShared } from '../utils/save-checkpoint.js';
 import { MicrocodeEngineer } from '../roles/microcode-engineer.js';
+// 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账（任务级一行日志 + checkpoint）
+import {
+  buildRejectSummary,
+  formatRejectSummaryLine,
+} from '../utils/reject-summary.js';
 //S9: 文档分析编排器（CJS 模块，ESM 默认导入互操作）
 import docAnalyzerModule from '../../phase2/doc/doc-analyzer.js';
 import { AdversarialChecker } from '../roles/adversarial-checker.js';
@@ -1307,6 +1312,18 @@ export function createPhase2Graph(config = {}) {
         headerSlotValidation,
       });
 
+      // 🛡️ Phase D1（2026-10-31 治理方案）：vision 出口契约审计落盘（只观测，不阻断）
+      //   🔴 真机修正（mc-max-1793452481019 实锤）：parser 把 contractAudit 挂在
+      //   parsed（= result.layoutStructure）上，顶层 result.contractAudit 恒 undefined
+      //   ⇒ checkpoint 从不落盘。读取位置补双路归一。
+      const __contractAudit =
+        result.contractAudit || result.layoutStructure?.contractAudit || null;
+      if (__contractAudit) {
+        state._saveCheckpoint?.('contract-audit', __contractAudit);
+        // 🛡️ Phase E：暂存到 state，供生成节点聚合 reject-summary
+        state._contractAudit = __contractAudit;
+      }
+
       // 🛡️ P1: 视觉可信度评估（防止「解析成功但内容矛盾」进入生成）
       let visualTrust = evaluateVisualTrustVerdict(result);
       state._visualTrustVerdict = visualTrust.verdict;
@@ -1765,6 +1782,18 @@ export function createPhase2Graph(config = {}) {
         // 重试预算耗尽，转为异常
         logger.error(`🚫 资源归属校验失败且无重试预算：${result.errorMessage}`);
         throw new Error(result.errorMessage);
+      }
+
+      // 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账——刀53 takeover 统计
+      //   （含 skipped[].reason 与 0 命中可见）+ D1 契约审计缺失，任务级一行日志
+      //   + `.checkpoint/reject-summary.json`。只观测、不阻断；双源皆空不落盘。
+      const rejectSummary = buildRejectSummary({
+        takeoverAudit: result?.takeoverAudit || null,
+        contractAudit: state._contractAudit || null,
+      });
+      if (rejectSummary) {
+        state._saveCheckpoint?.('reject-summary', rejectSummary);
+        logger.info(formatRejectSummaryLine(rejectSummary));
       }
 
       return {

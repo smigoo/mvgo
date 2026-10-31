@@ -92,6 +92,9 @@ import { mergeInlineRowsIntoSections } from '../utils/inline-row-merger.js'
 export { mergeInlineRowsIntoSections }
 // 🛡️ P1-7（2026-10-01 · c-a812-07a812f7 实锤）：vision 锚点真值校验（幻觉 id 零报警 → 显式诊断）
 import { validateVisionAnchors } from '../utils/vision-anchor-validator.js'
+// 🛡️ Phase D1（2026-10-31 治理方案）：vision 出口契约审计（观测）——
+//   既有审计家族新成员，输出 {evaluated, missing, conflicts}；只记日志不阻断。
+import { auditVisionContract } from '../utils/vision-contract-audit.js'
 // 🔴 R22-d（2026-10-21 · c-d79b-66d79bff 实锤）：视觉 section 锚点的**祖先前置**校验。
 // 与 P1-7 的「存在性校验」互补、不可互相替代：本例锚点 `38:3258` **存在**于树中（是普通段里的
 // 「鲁邦通」TEXT），存在性校验绿灯，但它是几何无关节点 ⇒ 排序/语义回填全部拿到错坐标。
@@ -3897,6 +3900,34 @@ ${analysisTask}`
         appliedKeys.add('resourceDiagnostics')
         pushDiagnostic('resource', '存在不可用资源映射，后续应避免引用失败资源', { count: resourceDiagnostics.length })
       }
+    }
+
+    // 🛡️ Phase D1（2026-10-31 治理方案 §Phase D）：vision 出口契约审计（观测）。
+    //   家族新成员：类型可判定 / headerRelation 声明 / 统计成组 / 表头契约 / 样式真值。
+    //   只观测——记日志 + 随产物携带（graph 落 .checkpoint/contract-audit.json），
+    //   不阻断、不重解析；软阻断两周后按 missing 率数据决定。
+    //   挂在全部家族成员之后（真正出口），figmaData 缺失也审（纯结构检查）。
+    try {
+      const contractAudit = auditVisionContract(parsed)
+      parsed.contractAudit = contractAudit
+      appliedKeys.add('contractAudit')
+      if (contractAudit.missing.length > 0) {
+        logger.warn('🛡️ vision 出口契约审计（观测）：存在缺失项', {
+          sections: contractAudit.evaluated.sections,
+          missingCount: contractAudit.missing.length,
+          byCode: contractAudit.missing.reduce((acc, m) => {
+            acc[m.code] = (acc[m.code] || 0) + 1
+            return acc
+          }, {}),
+          samples: contractAudit.missing.slice(0, 8),
+        })
+      } else {
+        logger.info('🛡️ vision 出口契约审计（观测）：全部通过', {
+          sections: contractAudit.evaluated.sections,
+        })
+      }
+    } catch (e) {
+      logger.warn('vision 出口契约审计失败（非阻断）', { error: e?.message })
     }
 
     if (diagnostics.length > 0) parsed.analysisDiagnostics = diagnostics

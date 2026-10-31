@@ -264,8 +264,9 @@ describe('P1-B ② 阳性：抑制成员从 flex 分母剔除，幸存者归一�
 
     // 幸存者（memberIndex=0，= sec-a / 179px）：分母只剩自己 ⇒ 179/179 = 1.000
     expect(first).toContain('flex:1.000;min-width:0;')
-    // 被抑制成员（memberIndex=1）：宽度填 0 ⇒ 纯函数回退 flex:1（组件根 display:none，惰性无害）
-    expect(second).toContain('flex:1;min-width:0;')
+    // 被抑制成员（memberIndex=1）：既不贡献分母，自身也必须是零布局因子；
+    // 不能让通用「当前项=0 ⇒ flex:1」兜底重新把它写回空间分配。
+    expect(second).toContain('flex:0;min-width:0;')
 
     // 🔴 反向断言：修复前的 0.381 / 0.619 必须**彻底消失**
     expect(facts!.template).not.toContain('flex:0.381;')

@@ -61,3 +61,94 @@ describe('applyHeaderGeometryFallback · headerFactStripped 闸门', () => {
     expect(applyHeaderGeometryFallback(sections, { headerFactStripped: false })).toBeNull();
   });
 });
+
+describe('4851eedd：vision 显式发言不得被几何兜底覆盖', () => {
+  /** 真实形态：设备统计 = body.items[] 三卡，卡内 content.elements value+label，无 role/type */
+  const statItemsSection = () => ({
+    id: '43:4890',
+    name: '设备统计',
+    headerRelation: 'no-header',
+    absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 },
+    body: {
+      layout: 'horizontal-3-columns',
+      items: ['总设备', '运行中', '离线'].map((label, i) => ({
+        id: `43:48${93 + i * 5}`,
+        name: label,
+        layout: 'horizontal',
+        content: {
+          layout: 'horizontal',
+          elements: [
+            { type: 'value', text: '8', styles: { fontSize: 28, color: 'rgba(57,101,255,1)' } },
+            { type: 'label', text: label, styles: { fontSize: 14 } },
+          ],
+        },
+      })),
+    },
+  });
+
+  const statsFirst = () => [
+    statItemsSection(),
+    section('43:4788', '设备列表', 91, 388),
+    section('43:4890-footer', '底部图例与链接', 501, 14),
+  ];
+
+  it('headerRelation=no-header（vision 显式结论）⇒ 不标 header、不改写结构', () => {
+    const sections = statsFirst();
+    const hit = applyHeaderGeometryFallback(sections);
+    expect(hit).toBeNull();
+    expect(sections[0].type).toBeUndefined();
+    expect(sections[0].header).toBeUndefined();
+  });
+
+  it('value+label 元素结构（vision 沉默 headerRelation 时）⇒ 识别为统计业务内容，不标 header', () => {
+    const sections = statsFirst();
+    delete sections[0].headerRelation;
+    const hit = applyHeaderGeometryFallback(sections);
+    expect(hit).toBeNull();
+    expect(sections[0].type).toBeUndefined();
+  });
+
+  // 🛡️ 单闸门隔离判据（Phase B-3 变异验证用）：fixture 不带 value 元素，
+  //   使第一闸门（declaredHeaderRelation）成为唯一防线——摘除它 ⇒ 本条必红。
+  it('headerRelation=no-header、无 value 元素（纯 label 文本条）⇒ 不标 header（第一闸门独立生效）', () => {
+    const pureTextLabel = () => ({
+      id: '43:4890',
+      name: '设备统计',
+      headerRelation: 'no-header',
+      absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 },
+      body: {
+        layout: 'horizontal',
+        items: ['总设备', '运行中', '离线'].map((label, i) => ({
+          id: `43:48${93 + i * 5}`,
+          name: label,
+          layout: 'horizontal',
+          content: {
+            layout: 'horizontal',
+            elements: [{ type: 'label', text: label, styles: { fontSize: 14 } }],
+          },
+        })),
+      },
+    });
+    const sections = [
+      pureTextLabel(),
+      section('43:4788', '设备列表', 91, 388),
+      section('43:4890-footer', '底部图例与链接', 501, 14),
+    ];
+    const hit = applyHeaderGeometryFallback(sections);
+    expect(hit).toBeNull();
+    expect(sections[0].type).toBeUndefined();
+    expect(sections[0].header).toBeUndefined();
+  });
+
+  it('阴性对照：纯几何薄条（无 headerRelation、无业务结构）⇒ 仍标 header（原行为不回归）', () => {
+    const sections = [
+      section('top-bar', '顶部薄条', 0, 66),
+      section('43:4788', '设备列表', 91, 388),
+      section('807:2', '底部图例与链接', 501, 14),
+    ];
+    const hit = applyHeaderGeometryFallback(sections);
+    expect(hit).not.toBeNull();
+    expect(hit.id).toBe('top-bar');
+    expect(sections[0].type).toBe('header');
+  });
+});

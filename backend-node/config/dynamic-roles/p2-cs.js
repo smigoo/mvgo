@@ -1,6 +1,6 @@
 /**
  * 代码结构校验（Agent Builder 自动生成，请勿手改）
- * 模板: code-structure | 创建: 2026-10-30T11:07:40.289Z
+ * 模板: code-structure | 创建: 2026-10-31T04:20:32.687Z
  * 输入: code
  * 输出: pass, errors
  */

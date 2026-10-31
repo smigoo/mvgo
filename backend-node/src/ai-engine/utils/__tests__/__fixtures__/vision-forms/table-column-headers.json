@@ -1,0 +1,27 @@
+{
+  "id": "table-column-headers",
+  "source": "mc-max-1793429330206-40b65d9f",
+  "kind": "table-headers",
+  "semantic": "表头契约形态④（按列声明）：body.children[].{role:'table-column', header}",
+  "form": {
+    "id": "43:4788",
+    "name": "设备列表",
+    "body": {
+      "children": [
+        { "id": "a", "role": "table-column", "header": "设备名称" },
+        { "id": "b", "role": "table-column", "header": "电量" },
+        { "id": "c", "role": "table-column", "header": "速度(m/s)" },
+        { "id": "d", "role": "table-column", "header": "启用状态" }
+      ]
+    }
+  },
+  "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" },
+  "perturbations": [
+    { "op": "typeNullTop", "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" } },
+    {
+      "op": "itemsToChildren",
+      "expect": { "headers": null, "sectionType": "list" },
+      "knownGap": "declaredTableHeaders 只读 body.children 容器；body.items 容器形态未支持 ⇒ 契约丢失（fail-open 不产生错误表头结论），id/name 关键词回落 'list'。Phase A 收拢 canonicalTableHeaders 时评估 items 容器支持。"
+    }
+  ]
+}

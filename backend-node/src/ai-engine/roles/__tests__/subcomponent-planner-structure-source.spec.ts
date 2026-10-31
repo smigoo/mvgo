@@ -265,6 +265,32 @@ describe('vision 原生 panel-header 识别（9e0b7a97：不再依赖几何行�
     expect(res.effectiveSections.map((s: any) => s.id)).toEqual(['48:5798', 'section-footer'])
   })
 
+  it('b55af39e：title-left 的同行纯 chrome 同样由 base-panel 承接', () => {
+    const titleLeftChrome = {
+      layout: { sections: [
+        {
+          ...layout.layout.sections[0],
+          role: '常驻', name: '头部标题栏',
+          headerRelation: 'title-same-row', slotCandidate: 'title-left',
+          header: {
+            title: '部署节点概览',
+            controls: [{ name: '全国', value: '全国', role: 'label' }],
+          },
+          children: undefined,
+          body: { children: [
+            { role: 'decoration', type: 'decoration' },
+            { role: 'icon', type: 'icon' },
+            { role: 'text', type: 'text', text: '全国' },
+            { role: 'icon', type: 'icon', name: '关闭图标' },
+          ] },
+        },
+        ...layout.layout.sections.slice(1),
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(titleLeftChrome)
+    expect(res.effectiveSections.map((s: any) => s.id)).toEqual(['48:5798', 'section-footer'])
+  })
+
   it('阴性：title-same-row 含额外业务 body ⇒ 保留 section，仅控件进 header slot', () => {
     const withBusinessBody = {
       layout: { sections: [
@@ -435,6 +461,223 @@ describe('🔴 vision 布局主权：根锚点只切几何，Figma 不重排结�
   })
 })
 
+describe('Figma section 整体高度是 flex 比例唯一事实源', () => {
+  it('67a9452b：表格 388px 不得被首个表格行 44px 覆盖', () => {
+    const ROOT = {
+      id: '807:2', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 483, height: 515 },
+      children: [
+        { id: '43:4892', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 }, children: [
+          { id: '43:4893', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 134, height: 66 }, children: [] },
+          { id: '43:4898', type: 'GROUP', absoluteBoundingBox: { x: 168, y: 0, width: 134, height: 66 }, children: [] },
+          { id: '43:4903', type: 'GROUP', absoluteBoundingBox: { x: 336, y: 0, width: 134, height: 66 }, children: [] },
+        ] },
+        { id: '43:4784', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 470, height: 388 }, children: [
+          { id: '43:4788', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 149, width: 100, height: 44 } },
+          { id: '43:4791', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 193, width: 100, height: 44 } },
+        ] },
+        { id: '43:4869', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 501, width: 53, height: 14 }, children: [] },
+      ],
+    }
+    const vision = {
+      layout: { sections: [
+        {
+          id: '43:4893', figmaAnchorId: '43:4892', role: 'stats-row',
+          styles: { flexGrow: 0.423, figmaHeightPx: 66 },
+          body: { children: [{ id: '43:4893' }, { id: '43:4898' }, { id: '43:4903' }] },
+        },
+        {
+          id: 'table-section', role: 'table',
+          styles: { flexGrow: 2.487, figmaHeightPx: 388 },
+          body: { children: [{ id: '43:4788', role: 'table-row' }, { id: '43:4791', role: 'table-row' }] },
+        },
+        {
+          id: '807:2', role: 'footer', styles: { flexGrow: 0.09, figmaHeightPx: 14 },
+          body: { children: [] },
+        },
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: ROOT })
+    const byId = (id: string) => findSection(res.effectiveSections, id)
+    expect(byId('43:4893').layoutMetadata.flexGrow).toBe(0.423)
+    expect(byId('table-section').layoutMetadata.flexGrow).toBe(2.487)
+    expect(byId('table-section').layoutMetadata.height).toBe(388)
+    expect(byId('807:2').layoutMetadata.flexGrow).toBe(0.09)
+  })
+
+  it('56445358：section.id 精确指向首行时，沿父链找回 388px 整表盒，不覆盖整体高度', () => {
+    const ROOT = {
+      id: '807:2', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 483, height: 515 },
+      children: [
+        { id: '43:4892', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 }, children: [
+          { id: '43:4890', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 }, children: [] },
+        ] },
+        { id: '43:4784', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 470, height: 388 }, children: [
+          { id: '43:4785', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 179, height: 388 }, children: [
+            { id: '43:4788', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 134, width: 179, height: 44 }, children: [] },
+          ] },
+        ] },
+        { id: 'footer-text', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 501, width: 53, height: 14 } },
+      ],
+    }
+    const vision = {
+      layout: { sections: [
+        { id: '43:4890', role: 'stats', styles: { figmaHeightPx: 66 }, body: { children: [] } },
+        { id: '43:4788', role: 'table', styles: { figmaHeightPx: 388 }, body: { layout: 'table', headers: ['设备名称', '电量'], children: [{ id: 'row-k1', role: 'table-row' }, { id: 'row-k2', role: 'table-row' }] } },
+        { id: 'footer-legend', role: 'footer', styles: { figmaHeightPx: 14 }, body: { children: [] } },
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: ROOT })
+    const table = findSection(res.effectiveSections, '43:4788')
+    expect(table.layoutMetadata.height).toBe(388)
+    expect(table.styles.figmaHeightPx).toBe(388)
+    expect(table.absoluteBoundingBox).toEqual({ x: 0, y: 91, width: 470, height: 388 })
+  })
+
+  it('整体高度找不到匹配祖先时，保留已有高度且不回灌首行盒', () => {
+    const ROOT = {
+      id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 500 }, children: [
+        { id: 'stats', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 }, children: [] },
+        { id: '43:4784', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 470, height: 300 }, children: [
+          { id: '43:4788', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 134, width: 179, height: 44 }, children: [] },
+        ] },
+        { id: 'footer-text', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 480, width: 53, height: 14 } },
+      ],
+    }
+    const vision = { layout: { sections: [
+      { id: 'stats', role: 'stats', styles: { figmaHeightPx: 66 }, body: { children: [] } },
+      { id: '43:4788', role: 'table', styles: { figmaHeightPx: 388 }, body: { layout: 'table', headers: ['设备名称', '电量'], children: [{ id: 'row-k1', role: 'table-row' }, { id: 'row-k2', role: 'table-row' }] } },
+      { id: 'footer-legend', role: 'footer', styles: { figmaHeightPx: 14 }, body: { children: [] } },
+    ] } }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: ROOT })
+    const table = findSection(res.effectiveSections, '43:4788')
+    expect(table.layoutMetadata.height).toBe(388)
+    expect(table.absoluteBoundingBox).toBeUndefined()
+  })
+
+  it('dfe50968：顶层 headers+items 保持 table，恢复 388 整表与 14px footer 视觉行', () => {
+    const ROOT = {
+      id: '807:2', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 483, height: 515 },
+      children: [
+        { id: '43:4784', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 470, height: 388 }, children: [
+          { id: '43:4785', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 179, height: 388 }, children: [
+            { id: '43:4786', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 91, width: 179, height: 44 }, children: [] },
+            { id: '43:4788', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 134, width: 179, height: 44 }, children: [] },
+            { id: '43:4791', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 177, width: 179, height: 44 }, children: [] },
+          ] },
+          { id: '43:4812', type: 'FRAME', absoluteBoundingBox: { x: 178, y: 91, width: 292, height: 388 }, children: [] },
+        ] },
+        { id: '43:4869', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 501, width: 53, height: 14 }, children: [] },
+        { id: '43:4878', type: 'TEXT', characters: '点击查看详情', absoluteBoundingBox: { x: 386, y: 501, width: 84, height: 14 } },
+      ],
+    }
+    const vision = {
+      layout: { sections: [
+        {
+          id: '43:4788', name: '设备列表表格', role: 'table', layout: 'table',
+          headers: ['设备名称', '电量'],
+          items: [{ id: '43:4788', name: 'K1', cells: [] }, { id: '43:4791', name: 'K2', cells: [] }],
+        },
+        {
+          id: '807:2', name: '底部图例与详情', role: 'footer', layout: 'horizontal',
+          body: { children: [{ role: 'link', text: '点击查看详情' }] },
+        },
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: ROOT })
+    const table = findSection(res.effectiveSections, '43:4788')
+    const footer = findSection(res.effectiveSections, '807:2')
+    expect(table.type).toBe('table')
+    expect(table.collapsed).toBe(false)
+    expect(table.body.headers).toEqual(['设备名称', '电量'])
+    expect(table.layoutMetadata.height).toBe(388)
+    expect(table.absoluteBoundingBox).toEqual({ x: 0, y: 91, width: 470, height: 388 })
+    expect(footer.layoutMetadata.height).toBe(14)
+    expect(footer.absoluteBoundingBox).toEqual({ x: 0, y: 501, width: 470, height: 14 })
+  })
+
+  it('阴性：普通 list 的逐项几何不得被表格祖先恢复规则扩成父容器', () => {
+    const ROOT = {
+      id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 500 }, children: [
+        { id: 'list', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 388 }, children: [
+          { id: 'col', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 179, height: 388 }, children: [
+            { id: 'r1', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 43, width: 179, height: 44 }, children: [] },
+            { id: 'r2', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 86, width: 179, height: 44 }, children: [] },
+          ] },
+        ] },
+        { id: 'other', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 410, width: 470, height: 14 }, children: [] },
+      ],
+    }
+    const vision = { layout: { sections: [
+      { id: 'r1', name: '普通列表', type: 'list', role: 'list', items: [{ id: 'r1' }, { id: 'r2' }] },
+      { id: 'other', name: '底部', role: 'footer' },
+    ] } }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: ROOT })
+    const list = findSection(res.effectiveSections, 'r1')
+    expect(list.type).toBe('list')
+    expect(list.layoutMetadata.height).toBe(87)
+    expect(list.absoluteBoundingBox.height).toBe(87)
+  })
+
+  it('26eb1c1e：列表并集 532/footer 16 不得被首卡 72/混入的头部装饰 30 覆盖', () => {
+    const figma = figmaTreeWithSixCards()
+    figma.children.push(
+      { id: '48:5888', type: 'TEXT', characters: '共 6 个节点', absoluteBoundingBox: { x: 20, y: 52161, width: 72, height: 16 } },
+      { id: '48:5889', type: 'TEXT', characters: '接入设备 10810', absoluteBoundingBox: { x: 383, y: 52161, width: 107, height: 16 } },
+      { id: '48:5890', type: 'FRAME', absoluteBoundingBox: { x: 20, y: 51551, width: 470, height: 30 }, children: [] },
+    )
+    const items = [0, 1, 2, 3, 4, 5].map((i) => ({ id: `48:${5798 + i * 15}` }))
+    const vision = {
+      layout: { sections: [
+        {
+          id: '48:5798', role: 'list', styles: { figmaHeightPx: 532 },
+          body: { layout: 'vertical-6-items', items },
+        },
+        {
+          id: '48:5888', role: 'footer', styles: { figmaHeightPx: 16 },
+          body: { children: [{ id: '48:5888' }, { id: '48:5889' }, { id: '48:5890' }] },
+        },
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: figma })
+    const list = findSection(res.effectiveSections, '48:5798')
+    const footer = findSection(res.effectiveSections, '48:5888')
+    expect(list.layoutMetadata.height).toBe(532)
+    expect(footer.layoutMetadata.height).toBe(16)
+    expect(list.layoutMetadata.flexGrow).toBe(1.942)
+    expect(footer.layoutMetadata.flexGrow).toBe(0.058)
+  })
+
+  it('a100e890：语义 id footer-summary 无 role 无 styles ⇒ type=footer 且文本锚恢复 16px', () => {
+    // 真实形态：vision 不带 role:'footer'、不带 styles；高度唯一事实源是
+    // footer 文本（共 6 个节点 / 接入设备 10810）的 Figma 行几何。
+    const figma = figmaTreeWithSixCards()
+    figma.children.push(
+      { id: '48:5888', type: 'TEXT', characters: '共 6 个节点', absoluteBoundingBox: { x: 20, y: 52161, width: 72, height: 16 } },
+      { id: '48:5889', type: 'TEXT', characters: '接入设备 10810', absoluteBoundingBox: { x: 383, y: 52161, width: 107, height: 16 } },
+    )
+    const items = [0, 1, 2, 3, 4, 5].map((i) => ({ id: `48:${5798 + i * 15}` }))
+    const vision = {
+      layout: { sections: [
+        {
+          id: '48:5798', name: '节点列表', layout: 'vertical',
+          body: { layout: 'vertical-6-items', items },
+        },
+        {
+          id: 'footer-summary', name: '底部汇总', layout: 'horizontal',
+          body: { children: [
+            { id: 'footer-1', role: 'text', text: '共 6 个节点' },
+            { id: 'footer-2', role: 'text', text: '接入设备 10810' },
+          ] },
+        },
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: figma })
+    const footer = findSection(res.effectiveSections, 'footer-summary')
+    expect(footer.type).toBe('footer')
+    expect(footer.styles?.figmaHeightPx).toBe(16)
+  })
+})
+
 describe('接线判据：开关真的接在 E1 推导上（不是新壳）', () => {
   function assertWiring(text: string) {
     expect(text).toMatch(/normalizeStructureSource\(opts\.structureSource\)/)
@@ -452,7 +695,7 @@ describe('接线判据：开关真的接在 E1 推导上（不是新壳）', () 
     // vision 顺序与根锚点守卫：Figma 只补事实，不得重排/回灌根盒
     expect(text).toMatch(/effectiveStructureSource === STRUCTURE_SOURCE_FIGMA\s*\?\s*sortSectionsByFigmaY/)
     expect(text).toContain("geometryAnchorInvalid: 'component-root'")
-    expect(text).toMatch(/if \(s\?\.geometryAnchorInvalid\) continue/)
+    expect(text).toMatch(/if \(s\?\.geometryAnchorInvalid && !\(resolvedHeight > 0\)\) continue/)
   }
 
   it('subcomponent-planner.js 满足接线判据', () => {

@@ -1,0 +1,16 @@
+{
+  "id": "semantic-table-section-tabs",
+  "source": "mc-max-…-e99a736f（刀5c 裁决单）",
+  "kind": "table-headers",
+  "semantic": "语义 id table-section + 下游残留 type='tabs'：表头契约优先级高于 type 字段",
+  "form": {
+    "id": "table-section",
+    "name": "设备列表",
+    "type": "tabs",
+    "body": { "headers": ["设备名称", "电量"] }
+  },
+  "expect": { "headers": ["设备名称", "电量"], "sectionType": "table" },
+  "perturbations": [
+    { "op": "typeNullTop", "expect": { "headers": ["设备名称", "电量"], "sectionType": "table" } }
+  ]
+}

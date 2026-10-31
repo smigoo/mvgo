@@ -1,6 +1,6 @@
 /**
  * 写文件（Agent Builder 自动生成，请勿手改）
- * 模板: text-writer | 创建: 2026-10-30T11:07:40.287Z
+ * 模板: text-writer | 创建: 2026-10-31T04:20:32.685Z
  * 输入: outputPath, content
  * 输出: written, path, ok
  */

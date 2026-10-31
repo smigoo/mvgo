@@ -1,6 +1,6 @@
 /**
  * 格式化器（Agent Builder 自动生成，请勿手改）
- * 模板: formatter | 创建: 2026-10-30T11:07:39.700Z
+ * 模板: formatter | 创建: 2026-10-31T04:20:32.683Z
  * 输入: name, count
  * 输出: text
  */

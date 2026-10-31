@@ -733,6 +733,13 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   pannel-content → slot-con → 容器(比例+方向) → 子元素(比例) 全程 flex。
     const renderBodyNode = (sec, indent, parentFlexStyle = '') => {
       const pad = '      ' + '  '.repeat(indent);
+      // 🛡️ P1-B 收尾：suppressed 叶已被首个同组成员整行/整表接管，最终只保留其
+      // display:none 子组件身份，不再参与空间分配。仅在尺寸数组里填 0 不够——
+      // flexItemStyleFromHeights/Widths 对「当前项=0」会回退 flex:1，重新造出空白槽。
+      // 在这里统一终裁，同时覆盖顶层/嵌套/单子项路径；原始 section 不删除、不重排。
+      const consumedLayoutStyle = isSizeExcluded(sec)
+        ? `flex:0;${parentFlexStyle.includes('min-width:0') ? 'min-width:0' : 'min-height:0'};`
+        : '';
       if (isLayoutContainerSection(sec)) {
         // 🛡️ 容器 class 语义化：中文容器名（中间图表/统计数据）映射为英文 class，
         //   否则 [^a-zA-Z0-9-] 会把中文全删光 → 退化成无语义的 c-xxx-container。
@@ -806,7 +813,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   min 约束对齐父容器主轴（水平父→min-width:0 / 垂直父→min-height:0）。
         //   align-items:stretch 保留（水平容器交叉轴撑满高度）。
         const parentIsHorizontal = parentFlexStyle.includes('min-width:0');
-        const ownFlex = parentFlexStyle || `flex:1;${parentIsHorizontal ? 'min-width:0' : 'min-height:0'};`;
+        const ownFlex = consumedLayoutStyle || parentFlexStyle || `flex:1;${parentIsHorizontal ? 'min-width:0' : 'min-height:0'};`;
         // 🛡️ 刀 50（2026-10-22）：段内固有几何契约优先级最高。
         //   病灶：垂直段（面板）把**整段高度**按子项 Figma 高度比例分给子项 ⇒ 段的 padding
         //   （上留白 25 / 左留白 20）、子项间距（16/20）、底部剩余留白全部被摊进比例里，
@@ -999,7 +1006,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   Vue3 组件标签上的 style 经 attrs 继承透传到子组件根元素，子组件根
         //   自身就是 flex item，无需 wrapper 中转。无分配时回退 flex:1;min-height:0
         //   （顶层叶子直挂 slot-con 的兜底，slot-con 是 column 容器）。
-        const leafStyle = parentFlexStyle || 'flex:1;min-height:0;';
+        const leafStyle = consumedLayoutStyle || parentFlexStyle || 'flex:1;min-height:0;';
         lines.push(`${pad}<${tagFor(sec, 'ContentSection')} style="${leafStyle}" />`);
       }
     };

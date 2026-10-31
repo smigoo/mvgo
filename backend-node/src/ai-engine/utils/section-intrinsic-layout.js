@@ -170,8 +170,9 @@ export function resolveSectionBox(sec, figmaIndex) {
 /**
  * 段在某一维上的尺寸（**单一实现**，`code-generator#resolveSectionFlexSize` 已收敛到此处）。
  *
- * 与 `resolveSectionBox` 同一条优先级链，唯一差别：允许「只有尺寸、没有原点」的 plan 节点
- * （planner 常见形态）。`sourceNodeIds` 多个候选取**并集**后取该维 —— 合成段
+ * 高度维先消费 A4/逐项并集已解析的 `styles.figmaHeightPx`（section 整体事实），
+ * 缺失时才走 `resolveSectionBox` 回查链；宽度仍直接走该链。尺寸回查允许
+ * 「只有尺寸、没有原点」的 plan 节点（planner 常见形态）。`sourceNodeIds` 多个候选取**并集**后取该维 —— 合成段
  * （`38:3167-list` 三行 / `287:5-left` 整列）才能拿到整段尺寸，首个命中只拿到首行/首列。
  *
  * @param {Object} sec 段节点
@@ -180,6 +181,13 @@ export function resolveSectionBox(sec, figmaIndex) {
  * @returns {number} 该维尺寸（px）；无法确定时为 0
  */
 export function resolveSectionSize(sec, figmaIndex, axis = 'width') {
+  // A4/逐项并集已解析的 section 整体高度是最高优先级事实。
+  // 不得再被 figmaNodeId/id 精确锚点覆盖：该锚点可能只是首行、表格容器，
+  // 甚至是 geometryAnchorInvalid 的组件根；coverage 引用也不等于整段几何。
+  if (axis === 'height') {
+    const resolvedHeight = Number(sec?.styles?.figmaHeightPx);
+    if (Number.isFinite(resolvedHeight) && resolvedHeight > 0) return resolvedHeight;
+  }
   const box = resolveBoxInternal(sec, figmaIndex, true);
   if (!box) return 0;
   const v = axis === 'height' ? box.h : box.w;

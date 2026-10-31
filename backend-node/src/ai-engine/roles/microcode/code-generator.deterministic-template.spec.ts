@@ -659,6 +659,126 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
     expect(tpl).toContain('flex:0.200;min-height:0;')
   })
 
+  test('67a9452b：最终装配优先消费 planner 已解析的整段高度，不被首行/组件根覆盖', () => {
+    // 真实回放形态：planner 已给出 stats/table/footer = 66/388/14；
+    // Figma 精确锚点却分别指向 66 的统计卡、345 的表格容器、515 的组件根。
+    // 旧装配链优先精确锚点，最终错误生成 66/345/515 → .071/.373/.556。
+    const sections = [
+      { id: 'stats', type: 'stats', styles: { figmaHeightPx: 66 } },
+      { id: 'table', type: 'table', styles: { figmaHeightPx: 388 } },
+      { id: 'footer', type: 'footer', styles: { figmaHeightPx: 14 } },
+    ]
+    const input = makeInput(sections, 'height-source')
+    ;(input as any).figmaNodeData = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 515 },
+        children: [
+          { id: 'stats', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 66 } },
+          { id: 'table', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 66, width: 470, height: 345 } },
+          { id: 'footer', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 470, height: 515 } },
+        ],
+      },
+    }
+    const tpl = buildDeterministicIndexTemplate(input)!.template
+    // 66:388:14 → 0.141 / 0.829 / 0.030
+    expect(tpl).toContain('<StatsSection style="flex:0.141;min-height:0;" />')
+    expect(tpl).toContain('<ContentTable style="flex:0.829;min-height:0;" />')
+    expect(tpl).toContain('<ContentFooter style="flex:0.030;min-height:0;" />')
+    expect(tpl).not.toContain('flex:0.373;min-height:0;')
+    expect(tpl).not.toContain('flex:0.556;min-height:0;')
+  })
+
+  test('56445358：整表盒恢复后，三段比例、25px 间距和无锚点 footer 同时保留', () => {
+    const sections = [
+      {
+        id: '43:4890', type: 'stats', elementCount: 3,
+        sourceNodeIds: ['43:4893', '43:4898', '43:4903'],
+        styles: { figmaHeightPx: 66 },
+        absoluteBoundingBox: { x: 29636, y: 51637, width: 470, height: 66 },
+      },
+      {
+        id: '43:4788', type: 'table', elementCount: 8, sourceNodeIds: ['43:4788'],
+        styles: { figmaHeightPx: 388 },
+        absoluteBoundingBox: { x: 29636, y: 51728, width: 470, height: 388 },
+      },
+      {
+        id: 'footer-legend', type: 'footer', elementCount: 3, sourceNodeIds: [],
+        styles: { figmaHeightPx: 14 },
+      },
+    ]
+    const input = makeInput(sections)
+    ;(input as any).figmaNodeData = {
+      id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 29636, y: 51637, width: 483, height: 515 },
+      children: [
+        { id: '43:4892', type: 'FRAME', absoluteBoundingBox: { x: 29636, y: 51637, width: 470, height: 66 }, children: [] },
+        { id: '43:4784', type: 'FRAME', absoluteBoundingBox: { x: 29636, y: 51728, width: 470, height: 388 }, children: [
+          { id: '43:4788', type: 'FRAME', absoluteBoundingBox: { x: 29636, y: 51771, width: 179, height: 44 }, children: [] },
+        ] },
+        { id: 'footer-text', type: 'TEXT', absoluteBoundingBox: { x: 29636, y: 52138, width: 53, height: 14 } },
+      ],
+    }
+    const tpl = buildDeterministicIndexTemplate(input)!.template
+    expect(tpl).toContain('<StatsSection style="flex:0.141;min-height:0;" />')
+    expect(tpl).toContain('<ContentSection style="flex:0.829;min-height:0;margin-top:25px;" />')
+    expect(tpl).toContain('<ContentFooterLegend style="flex:0.030;min-height:0;" />')
+    expect(tpl).not.toContain('margin-top:68px')
+  })
+
+  test('dfe50968：已合并统计段不占 flex 空间，原始 section 身份与正常段比例同时保留', () => {
+    const statCard = (id: string, x: number, title: string, value: string) => ({
+      id, type: 'GROUP', absoluteBoundingBox: { x, y: 51637, width: 134, height: 66 },
+      children: [
+        { id: `${id}-title`, type: 'TEXT', characters: title,
+          absoluteBoundingBox: { x: x + 20, y: 51658, width: 42, height: 21 },
+          fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }],
+          style: { fontSize: 14, fontWeight: 400 } },
+        { id: `${id}-value`, type: 'TEXT', characters: value,
+          absoluteBoundingBox: { x: x + 86, y: 51656, width: 14, height: 28 },
+          fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.4, b: 1 } }],
+          style: { fontSize: 24, fontWeight: 400 } },
+      ],
+    })
+    const statIds = ['43:4893', '43:4898', '43:4903']
+    const sections = [
+      ...statIds.map((id, i) => ({
+        id, type: 'stats', sourceNodeIds: [id], styles: { figmaHeightPx: 66 },
+        absoluteBoundingBox: { x: 29636 + i * 168, y: 51637, width: 134, height: 66 },
+      })),
+      { id: 'table', type: 'table', styles: { figmaHeightPx: 388 },
+        absoluteBoundingBox: { x: 29636, y: 51728, width: 470, height: 388 } },
+      { id: 'footer', type: 'footer', styles: { figmaHeightPx: 14 },
+        absoluteBoundingBox: { x: 29636, y: 52138, width: 200, height: 14 } },
+    ]
+    const input = { ...makeInput(sections, 'stat-layout'), figmaNodeData: {
+      id: 'root', type: 'FRAME', children: [{
+        id: '43:4892', type: 'FRAME',
+        absoluteBoundingBox: { x: 29636, y: 51637, width: 470, height: 66 },
+        children: [
+          statCard('43:4893', 29636, '总设备', '8'),
+          statCard('43:4898', 29804, '运行中', '2'),
+          statCard('43:4903', 29972, '离线', '1'),
+        ],
+      }],
+    } }
+    const facts = buildDeterministicIndexTemplate(input as any)!
+    // 合并不删除/重排 vision section；最终装配只改变它们是否参与空间分配。
+    expect(facts.sectionRoots.map((s) => s.id)).toEqual([...statIds, 'table', 'footer'])
+    const lineOf = (id: string) => {
+      const component = facts.sectionRoots.find((s) => s.id === id)!.component
+      return facts.template.split('\n').find((line) => line.includes(`<${component} `)) || ''
+    }
+    expect(lineOf('43:4893')).toContain('flex:0.141;min-height:0;')
+    expect(lineOf('43:4898')).toContain('flex:0;min-height:0;')
+    expect(lineOf('43:4903')).toContain('flex:0;min-height:0;')
+    expect(lineOf('43:4898')).not.toContain('flex:1')
+    expect(lineOf('43:4903')).not.toContain('flex:1')
+    expect(lineOf('43:4898')).not.toContain('margin-')
+    expect(lineOf('43:4903')).not.toContain('margin-')
+    expect(lineOf('table')).toContain('flex:0.829;min-height:0;margin-top:25px;')
+    expect(lineOf('footer')).toContain('flex:0.030;min-height:0;')
+  })
+
   test('无高度事实时顶层多 section 行为不变（回落 flex:1，零回归）', () => {
     const sections = [
       { id: 'a', type: 'container', isLayoutContainer: true, layout: 'vertical',

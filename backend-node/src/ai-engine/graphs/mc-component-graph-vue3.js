@@ -28,6 +28,11 @@ import { postRefineResourceImportGuard } from '../utils/resource-import-guard.js
 // P2 收编：saveCheckpoint 原在本文件重复实现一份，与 phase2 graph 逐字节相同 → 统一到 utils
 import { saveCheckpoint as saveCheckpointShared } from '../utils/save-checkpoint.js';
 import { Vue3Engineer } from '../roles/vue3-engineer.js';
+// 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账（任务级一行日志 + checkpoint）
+import {
+  buildRejectSummary,
+  formatRejectSummaryLine,
+} from '../utils/reject-summary.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
@@ -690,6 +695,18 @@ export function createPhase2Graph(config = {}) {
         analysisEvidence: result.analysisEvidence || [],
       });
 
+      // 🛡️ Phase D1（2026-10-31 治理方案）：vision 出口契约审计落盘（只观测，不阻断）
+      //   🔴 真机修正（mc-max-1793452481019 实锤）：parser 把 contractAudit 挂在
+      //   parsed（= result.layoutStructure）上，顶层 result.contractAudit 恒 undefined
+      //   ⇒ checkpoint 从不落盘。读取位置补双路归一。
+      const __contractAudit =
+        result.contractAudit || result.layoutStructure?.contractAudit || null;
+      if (__contractAudit) {
+        state._saveCheckpoint?.('contract-audit', __contractAudit);
+        // 🛡️ Phase E：暂存到 state，供生成节点聚合 reject-summary
+        state._contractAudit = __contractAudit;
+      }
+
       return {
         layoutStructure: result.layoutStructure,
         visualElements: result.visualElements,
@@ -854,6 +871,18 @@ export function createPhase2Graph(config = {}) {
         message: `✅ 代码${action}完成`,
         status: 'completed',
       });
+
+      // 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账——刀53 takeover 统计
+      //   （含 skipped[].reason 与 0 命中可见）+ D1 契约审计缺失，任务级一行日志
+      //   + `.checkpoint/reject-summary.json`。只观测、不阻断；双源皆空不落盘。
+      const rejectSummary = buildRejectSummary({
+        takeoverAudit: result?.takeoverAudit || null,
+        contractAudit: state._contractAudit || null,
+      });
+      if (rejectSummary) {
+        state._saveCheckpoint?.('reject-summary', rejectSummary);
+        logger.info(formatRejectSummaryLine(rejectSummary));
+      }
 
       return {
         generatedFiles: result.writtenFiles,

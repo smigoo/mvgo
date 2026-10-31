@@ -218,6 +218,11 @@ import { buildRetryPrompt } from '../utils/retry-prompt.js';
 // 整文件由 Figma 真值渲染（数据内联/标题左对齐/类名唯一），跳过 LLM chunk。
 // 病灶与判据详见 folded-grid-section-takeover.js 头注释。
 import { collectFoldedGridTakeover } from '../utils/folded-grid-section-takeover.js';
+// 🛡️ Phase E（2026-10-31 治理方案）：接管评估归一 + 单行日志（utils/reject-summary.js）
+import {
+  pickTakeoverAudit,
+  formatTakeoverAuditLine,
+} from '../utils/reject-summary.js';
 import { buildSectionContentContract } from '../utils/section-content-guard.js';
 import {
   assessStatRowConfidence,
@@ -306,15 +311,14 @@ function _unionTemplateTagSubComponents(subComps, indexVueContent) {
 // 🆕 2026-09-04：组件语义命名（唯一 componentId = c-<语义段>-<sessionId 尾 8 hex>，
 // CSS class 前缀/onload 事件与带 hash 的 componentId 解耦用 classPrefixOf）
 import {
-  buildComponentId,
   classPrefixOf,
   semanticSegmentOf,
-  semanticTokenFrom,
   isEncodedSessionId,
   zhToSemanticEn,
   resolveComponentIdCheckpoint,
   applyDeclareCheckpoint,
   sanitizeComponentId,
+  decideDeclareComponentIdFinal,
   normalizeBusinessEventKeys,
 } from '../utils/component-naming.js';
 // 🛡️ 2026-09-03（管线 A 方案）：写盘前把子组件类样式收敛进 common.less
@@ -2016,6 +2020,13 @@ export class MicrocodeEngineer extends BaseAgent {
         componentName: input?.componentName || '',
         logger: this.logger,
       });
+      // 🛡️ Phase E（2026-10-31 治理方案）：接管评估无条件单行可见 + 统计子集回写。
+      //   「接管 0 命中」必须与「零问题」可区分——排障纪律要求 0 命中看 reject-summary
+      //   并配阳性对照，因此这里**零命中也打行**，绝不只在命中时才说话。
+      this._fgTakeoverAudit = pickTakeoverAudit(_fgTakeover);
+      if (this._fgTakeoverAudit) {
+        this.logger.info(`🛡️ 刀53 接管评估: ${formatTakeoverAuditLine(this._fgTakeoverAudit)}`);
+      }
       const _fgFiles = new Map(); // subPath → {kind, sectionId, baseId, vue}
       // 🛡️ 终裁快照（round-13）：subPath → 确定性最终内容。交给 writeFiles 在所有
       //   内容级自愈之后、写盘之前做终裁覆写（挡住「LLM 从既有产物照抄 fg- 类名 →
@@ -5498,68 +5509,40 @@ export class MicrocodeEngineer extends BaseAgent {
     // 命中检查点（走 if 分支、跳过 else）时块内 let 未执行 → 末尾引用抛 ReferenceError
     // （2026-09-09 实锤：告警 "无法解析 declare.json 进行后校验 {_forceChanged is not defined}"）。
     let _forceChanged = false;
-    if (_checkpointId && _sessionId) {
-      // 🛡️ 刀 9（2026-09-13）：检查点 id 也必须过「可剥离闸门」。
-      // 历史脏检查点（四段 c-device-monitor-00g6b7vh-075b13a4）若原样沿用，
-      // classPrefixOf 剥不掉随机中段 → CODE-003 双前缀会随重跑复发。
-      // 净化后若与检查点不一致 → 判定检查点为脏值，回写内存检查点自愈。
-      const _cleanCkptId = sanitizeComponentId(_checkpointId, {
-        sessionId: _sessionId,
-        fallbackToken: componentName || displayName || '',
-      });
-      d.componentId = _cleanCkptId;
-      changed = true;
-      if (_cleanCkptId !== _checkpointId) {
-        _forceChanged = true;
-        _componentIdCheckpoints.set(_sessionId, _cleanCkptId);
-      }
-      // 检查点已命中 → 跳过所有 normalization 逻辑
-      const _ckptPrefix = classPrefixOf(_cleanCkptId) || 'c-component';
-      // 跳转到 class 前缀处理之后（line ~3874 的逻辑将被检查点短路后的代码取用）
-    } else {
-    // （非检查点分支）
-    if (_sessionId && _llmComponentId) {
-      // 🛡️ 刀 9（2026-09-13·修正）：先经「可剥离闸门」判定，而非拿原始 id 的尾 hex 比对。
-      // 原实现只看 `-([0-9a-f]{8})$ === sessionId 尾` 就判 _alreadyUnique=true 直接绕过修复，
-      // 但四段脏 id `c-env-monitor-6ajwy8yn-b81edc3b` 的尾 b81edc3b 恰好等于 session 尾，
-      // 于是随机中段 6ajwy8yn 被原样保留 → classPrefixOf 剥离失败 → CODE-003 双前缀复发。
-      // 新判据：对 id 走 sanitizeComponentId 收敛，收敛结果 === 原 id 才算「已规范」。
-      const _sanitized = sanitizeComponentId(_llmComponentId, {
-        sessionId: _sessionId,
-        fallbackToken: componentName || displayName || '',
-      });
-      const _alreadyUnique = _sanitized === _llmComponentId;
-      if (!_alreadyUnique) {
-        d.componentId = _sanitized;
-        changed = true;
-        _forceChanged = true;
-      }
-    } else if (_sessionId) {
-    } else if (_sessionId) {
-      // LLM 未产出 componentId → 从 displayName 语义派生唯一 id
-      const _seg = semanticTokenFrom({
-        displayName: displayName || '',
-        zhName: displayName || '',
-        figmaName: nodeData?.name || '',
-        fallbackToken: componentName || '',
-      });
-      d.componentId = buildComponentId(_seg || 'component', _sessionId);
-      changed = true;
-      _forceChanged = true;
-    } else {
-      // 兼容路径（无 sessionId 的兜底/模板调用）：保留旧归一行为
-      const normId = this._normalizeComponentId(
+    // 🆕 2026-10-31（刀 33b · P0 契约修复）：componentId 终态裁定收敛到单一来源
+    //   `decideDeclareComponentIdFinal`（utils/component-naming.js）。此处**只赋值**，
+    //   不再自行判断优先级 —— 历史缺陷正是这一段漏了「用户指定 id」优先级：上游
+    //   code-generator 已按 userComponentId 输出终态 c-list1（server.log「定稿」行），
+    //   这里又把它当「缺尾段的非规范 id」再 sanitize 一次 → c-list1-cf43d973
+    //   （server.log「已重建为确定性格式」行），违背 P0「同名重生成 id 恒定」承诺。
+    const _idDecision = decideDeclareComponentIdFinal({
+      userComponentId: opts.userComponentId || '',
+      checkpointId: _checkpointId,
+      sessionId: _sessionId,
+      llmComponentId: _llmComponentId,
+      displayName: displayName || '',
+      figmaName: nodeData?.name || '',
+      fallbackToken: componentName || displayName || '',
+      compatComponentId: this._normalizeComponentId(
         componentId || componentName || 'unknown-component',
-      );
-      if (!d.componentId) {
-        d.componentId = normId;
-        changed = true;
-      } else if (!/^(c|cp|mv|page)-/.test(d.componentId)) {
-        d.componentId = `c-${String(d.componentId).replace(/^[-]+/, '')}`;
-        changed = true;
-      }
-    } // end of inner else (compat path)
-    } // end of outer else (non-checkpoint branch)
+      ),
+    });
+    if (_idDecision.changed && _idDecision.componentId) {
+      d.componentId = _idDecision.componentId;
+      changed = true;
+    }
+    if (_idDecision.forceChanged) _forceChanged = true;
+    // 🛡️ 检查点自愈（治本关键）：用户指定 id、或检查点脏值被闸门收敛时，**必须**回写内存
+    //   检查点。否则下一轮走「检查点优先」路径会把脏 id（c-list1-cf43d973）原样复活，
+    //   本期修复在重跑/断点续跑场景下形同虚设。
+    if (
+      _sessionId &&
+      _idDecision.componentId &&
+      (_idDecision.source === 'user' ||
+        (_idDecision.source === 'checkpoint' && _idDecision.forceChanged))
+    ) {
+      _componentIdCheckpoints.set(_sessionId, _idDecision.componentId);
+    }
     // 🆕 class/事件前缀解耦：所有以 componentId 派生的「短前缀」统一剥离尾 8 hex
     const _prefixId = classPrefixOf(d.componentId) || 'c-component';
 
@@ -6130,6 +6113,10 @@ export class MicrocodeEngineer extends BaseAgent {
     displayName = null,
     nodeData = null,
     nodeLayoutFacts = null,
+    // 🆕 2026-10-31（刀 33b）：高级选项 P0 用户指定 componentId。必须透传到
+    //   code-validator → normalizeDeclareJson，否则后者不认识 userComponentId，
+    //   会把已终态 c-list1 再 sanitize 成 c-list1-cf43d973（实锤 mc-max-1793416305379-cf43d973）。
+    userComponentId = null,
   ) {
     return microcodeValidator.validateAndFixGeneratedFiles(
       files,
@@ -6147,6 +6134,7 @@ export class MicrocodeEngineer extends BaseAgent {
         quoteBareObjectKeysInVue: this._quoteBareObjectKeysInVue.bind(this),
         normalizeDeclareJson: this.normalizeDeclareJson.bind(this),
         extractHeaderTitle: this._extractHeaderTitle.bind(this),
+        userComponentId: userComponentId || null,
         buildIndexLessTemplate: (b) => this._buildIndexLessTemplate(b),
         unwrapThemeScopedCommonLess:
           this._unwrapThemeScopedCommonLess.bind(this),
@@ -8455,6 +8443,9 @@ export default declareInfo
         // 落盘校验阶段直接 ReferenceError: input is not defined → 整任务 failed。
         // 正确来源：generationInput.designFacts.nodeLayoutFacts（design-facts-compiler 产出）。
         generationInput?.designFacts?.nodeLayoutFacts || null,
+        // 🆕 2026-10-31（刀 33b）：高级选项 P0 用户指定 componentId → declare 透传
+        //   （execute 形参 :6806 解构所得，此处必须显式传入，否则整链静默失效）
+        userComponentId || null,
       );
 
       // 🛡️ 合并分块阶段自动修复记录（TAIL-GARBAGE 尾部垃圾剥离 / P1-4 坏文件隔离降级）。
@@ -9118,6 +9109,8 @@ export default component
         gateSkippedFiles: gateSkippedFiles.length > 0 ? gateSkippedFiles : undefined,
         // 🛡️ R2-2：六条产物不变量结果（violations/passed/summary），供任务 meta 与前端展示
         artifactInvariants: _artifactInvariants || undefined,
+        // 🛡️ Phase E：接管评估统计子集（graph 层聚合 reject-summary 落盘）
+        takeoverAudit: this._fgTakeoverAudit || undefined,
         _attributionGuidance: codeResult._attributionGuidance || null, // 🛡️ 资源归属指导（供 graph 写回 state）
       };
     } catch (error) {

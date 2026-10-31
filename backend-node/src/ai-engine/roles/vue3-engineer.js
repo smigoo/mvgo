@@ -66,6 +66,11 @@ import {
   collectFoldedGridTakeover,
   matchFgTakeoverTargets,
 } from '../utils/folded-grid-section-takeover.js';
+// 🛡️ Phase E（2026-10-31 治理方案）：接管评估归一 + 单行日志（utils/reject-summary.js）
+import {
+  pickTakeoverAudit,
+  formatTakeoverAuditLine,
+} from '../utils/reject-summary.js';
 import { pruneTakeoverCoveredLeaves } from '../utils/takeover-overlap-guard.js';
 // 🛡️ 阶段4（2026-09-17）：v-for 重复单元识别（共享背景精确挂到 item，与微码同源）
 import { findVForItemTag, healAbsoluteOverlayParents } from './microcode/resource-mounter.js';
@@ -773,6 +778,12 @@ export class Vue3Engineer extends MicrocodeEngineer {
         componentName: input?.componentName || '',
         logger: this.logger,
       });
+      // 🛡️ Phase E（2026-10-31 治理方案）：接管评估无条件单行可见 + 统计子集回写
+      //   （与 microcode-engineer 同款——「0 命中」必须与「零问题」可区分）。
+      this._fgTakeoverAudit = pickTakeoverAudit(_fgTakeover);
+      if (this._fgTakeoverAudit) {
+        this.logger.info(`🛡️ 刀53 接管评估: ${formatTakeoverAuditLine(this._fgTakeoverAudit)}`);
+      }
       // 名命中 ⇒ 可在生成前跳过 LLM chunk（省一次调用且杜绝随机维度）
       const _fgByName = new Map();
       // 终裁快照（与 microcode 同字段名）⇒ `this.writeFiles` 自动带上 fgTakeoverFiles，
@@ -2263,6 +2274,8 @@ export class Vue3Engineer extends MicrocodeEngineer {
           planReason: subPlan.reason,
         },
         autoFixes: [],
+        // 🛡️ Phase E：接管评估统计子集（graph 层聚合 reject-summary 落盘）
+        takeoverAudit: this._fgTakeoverAudit || undefined,
         // 🛡️ R2-2：六条产物不变量结果（violations/passed/summary），供任务 meta 与前端展示
         artifactInvariants: _artifactInvariants || undefined,
         // 🛡️ 资源归属指导（方案5）：经 graph 写回 state，供重试轮次注入。

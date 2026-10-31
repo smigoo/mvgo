@@ -299,6 +299,123 @@ export function sanitizeComponentId(rawId = '', opts = {}) {
 }
 
 /**
+ * 🆕 2026-10-31（刀 33b · P0 契约修复）：declare componentId **终态裁定**（唯一事实源）。
+ *
+ * 缺陷背景（实锤 mc-max-1793416305379-cf43d973，组件 c-list1）：
+ *   `code-generator#resolveDeclareComponentId` 已按用户指定输出终态 `c-list1`；
+ *   但下游 `normalizeDeclareJson` 不认识 userComponentId，把这个「无尾段」的**合法终态**
+ *   当成「缺尾段的非规范 id」再 sanitizeComponentId 一次 ⇒ `c-list1` → `c-list1-cf43d973`，
+ *   违背 P0 高级选项承诺「同名重生成 id 恒定」（契约见 normalizeUserComponentId 的 JSDoc）。
+ *
+ * 优先级（本函数即该优先级的唯一来源；engineer 侧只赋值、不再自行判断）：
+ *   ① user        用户指定 id = 终态，**禁止**再 sanitize、**禁止**被检查点覆盖；
+ *   ② checkpoint  检查点（仍过「可剥离闸门」，防历史四段脏 id 复发 CODE-003）；
+ *   ③ sanitize    LLM 给的 id 过闸门，收敛结果 === 原 id 才算「已规范」（刀 9 判据，勿放宽）；
+ *   ④ derive      LLM 未给 id → 由 displayName / figmaName 语义派生确定性 id；
+ *   ⑤ compat      无 sessionId 的兼容路径（模板/兜底调用），保持旧归一行为。
+ *
+ * @param {Object} [o]
+ * @param {string} [o.userComponentId] 高级选项 P0 用户指定 id（原始输入，未归一化）
+ * @param {string} [o.checkpointId]    resolveComponentIdCheckpoint 命中的检查点 id
+ * @param {string} [o.sessionId]       任务 sessionId（决定尾 8hex）
+ * @param {string} [o.llmComponentId]  declare.json 现值（= d.componentId，同时用于「是否已规范」比对）
+ * @param {string} [o.displayName]     组件中文显示名（derive 优先来源）
+ * @param {string} [o.figmaName]       Figma 图层机名（derive 次选来源）
+ * @param {string} [o.fallbackToken]   derive / sanitize 的兜底 token
+ * @param {string} [o.compatComponentId] 兼容路径的归一结果（由调用方 `_normalizeComponentId` 算出）
+ * @returns {{componentId:string, source:string, changed:boolean, forceChanged:boolean}}
+ *   source ∈ user | checkpoint | sanitize | derive | compat | compat-keep | none；
+ *   changed = 需不需要写回 declare.componentId；forceChanged = 是否属「被重建」
+ *   （engineer 据此打重建留痕日志 + 自愈内存检查点）。
+ */
+export function decideDeclareComponentIdFinal({
+  userComponentId = '',
+  checkpointId = '',
+  sessionId = '',
+  llmComponentId = '',
+  displayName = '',
+  figmaName = '',
+  fallbackToken = '',
+  compatComponentId = '',
+} = {}) {
+  const sid = String(sessionId || '').trim();
+  const fallback = String(fallbackToken || '').trim();
+  const current = String(llmComponentId || '').trim();
+
+  // ① 用户指定 id = 终态（无尾段 ⇒ classPrefixOf 原样返回 ⇒ 天然可剥离，且重生成恒定）
+  const userId = normalizeUserComponentId(userComponentId);
+  if (userId) {
+    return {
+      componentId: userId,
+      source: 'user',
+      changed: userId !== current,
+      forceChanged: userId !== current,
+    };
+  }
+
+  // ② 检查点优先（保持 刀 9 原行为：无条件重写 + 脏值走闸门收敛）
+  const ckpt = String(checkpointId || '').trim();
+  if (ckpt && sid) {
+    const clean = sanitizeComponentId(ckpt, {
+      sessionId: sid,
+      fallbackToken: fallback,
+    });
+    return {
+      componentId: clean,
+      source: 'checkpoint',
+      changed: true,
+      forceChanged: clean !== ckpt,
+    };
+  }
+
+  // ③ LLM 给的 id 走「可剥离闸门」，收敛结果 === 原 id 才算已规范
+  if (sid && current) {
+    const clean = sanitizeComponentId(current, {
+      sessionId: sid,
+      fallbackToken: fallback,
+    });
+    const alreadyUnique = clean === current;
+    return {
+      componentId: alreadyUnique ? current : clean,
+      source: 'sanitize',
+      changed: !alreadyUnique,
+      forceChanged: !alreadyUnique,
+    };
+  }
+
+  // ④ LLM 未产出 componentId → 从 displayName / figmaName 语义派生
+  if (sid) {
+    const seg = semanticTokenFrom({
+      displayName: String(displayName || ''),
+      zhName: String(displayName || ''),
+      figmaName: String(figmaName || ''),
+      fallbackToken: fallback,
+    });
+    return {
+      componentId: buildComponentId(seg || 'component', sid),
+      source: 'derive',
+      changed: true,
+      forceChanged: true,
+    };
+  }
+
+  // ⑤ 兼容路径（无 sessionId 的模板/兜底调用）：保留旧归一行为
+  const compat = String(compatComponentId || '').trim();
+  if (!current) {
+    return { componentId: compat, source: 'compat', changed: true, forceChanged: false };
+  }
+  if (!/^(c|cp|mv|page)-/.test(current)) {
+    return {
+      componentId: `c-${current.replace(/^[-]+/, '')}`,
+      source: 'compat',
+      changed: true,
+      forceChanged: false,
+    };
+  }
+  return { componentId: current, source: 'compat-keep', changed: false, forceChanged: false };
+}
+
+/**
  * 🛡️ 刀 8b（2026-09-13）：判定「装饰性随机尾段」——base36 随机串特征。
  *
  * 历史缺陷：sessionId 缺失时 safeGenerateDeclareJson 用

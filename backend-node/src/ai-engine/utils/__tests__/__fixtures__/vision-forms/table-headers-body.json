@@ -1,0 +1,15 @@
+{
+  "id": "table-headers-body",
+  "source": "真机多单（body.headers 形态）",
+  "kind": "table-headers",
+  "semantic": "表头契约形态③：body.headers 包裹",
+  "form": {
+    "id": "table-section",
+    "name": "设备列表",
+    "body": { "headers": ["设备名称", "电量"] }
+  },
+  "expect": { "headers": ["设备名称", "电量"], "sectionType": "table" },
+  "perturbations": [
+    { "op": "typeNullTop", "expect": { "headers": ["设备名称", "电量"], "sectionType": "table" } }
+  ]
+}

@@ -1052,6 +1052,52 @@ describe('刀 53e · detectTableLeaf（列式表格整表接管）', () => {
     expect(collected.tableAnchorRepairs).toBe(1);
   });
 
+  it('40b65d9f：按列表头声明（role=table-column + header）+ 首行锚 ⇒ LCA 回查整表', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const root = table(colTexts);
+    const idx = idxOf(root);
+    // 真实形态：section 锚在第一列首个数据行；表头只存在于 body.children[].header（每列一个）
+    const tableSec = {
+      id: '43:4788',
+      type: 'table',
+      sourceNodeIds: ['c0-r1'],
+      body: {
+        layout: 'table',
+        children: HEAD.map((h, ci) => ({ id: `col-${ci}`, role: 'table-column', header: h })),
+      },
+    };
+    const r = detectTableLeaf(tableSec, idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('table');
+    expect(r.sectionId).toBe('43:4788');
+    expect(r.parentId).toBe('tbl');
+    expect(r.anchorRepair).toBe('declared-headers-lca');
+    expect(r.memberCount).toBe(4);
+    expect(r.rowCount).toBe(3);
+    expect(r.rowH).toBe(ROW_H);
+    expect(r.cols.map((c) => c.header.text)).toEqual(HEAD);
+    const collected = collectFoldedGridTakeover({ treeSections: [tableSec], figmaNodeData: root });
+    expect(collected.tableHits).toBe(1);
+    expect(collected.tableAnchorRepairs).toBe(1);
+  });
+
+  it('56445358：真实 vision body.headers 同样可回查整表，列内必须纵向表头+数据行', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const root = table(colTexts);
+    const idx = idxOf(root);
+    const tableSec = {
+      id: '43:4788', type: 'table', sourceNodeIds: ['c0-r1'],
+      body: { layout: 'table', headers: HEAD, children: [{ role: 'table-row' }] },
+    };
+    const r = detectTableLeaf(tableSec, idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.anchorRepair).toBe('declared-headers-lca');
+    expect(r.parentId).toBe('tbl');
+    const vue = renderFoldedGridLeafVue(r, 'device');
+    expect(vue).toContain('display:flex;flex-direction:column');
+    expect(vue).toContain('v-for="(row, ri) in rows"');
+  });
+
   it('阴性：表头文本不能唯一回查 ⇒ 不提升锚点，维持原 fail-open', () => {
     const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
     const root = table(colTexts);

@@ -1,0 +1,37 @@
+{
+  "id": "header-relation-no-header",
+  "source": "mc-max-1793430567896-4851eedd",
+  "kind": "header-fallback",
+  "semantic": "vision 显式 headerRelation='no-header'：几何薄条兜底不得翻案（统计段不进 #header-right）",
+  "form": [
+    {
+      "id": "43:4890",
+      "name": "设备统计",
+      "headerRelation": "no-header",
+      "absoluteBoundingBox": { "x": 0, "y": 0, "width": 470, "height": 66 },
+      "body": {
+        "layout": "horizontal-3-columns",
+        "items": [
+          { "id": "43:4893", "name": "总设备", "layout": "horizontal", "content": { "layout": "horizontal", "elements": [
+            { "type": "value", "text": "8", "styles": { "fontSize": 28, "color": "rgba(57,101,255,1)" } },
+            { "type": "label", "text": "总设备", "styles": { "fontSize": 14 } }
+          ] } },
+          { "id": "43:4898", "name": "运行中", "layout": "horizontal", "content": { "layout": "horizontal", "elements": [
+            { "type": "value", "text": "5", "styles": { "fontSize": 28, "color": "rgba(57,101,255,1)" } },
+            { "type": "label", "text": "运行中", "styles": { "fontSize": 14 } }
+          ] } },
+          { "id": "43:4903", "name": "离线", "layout": "horizontal", "content": { "layout": "horizontal", "elements": [
+            { "type": "value", "text": "1", "styles": { "fontSize": 28, "color": "rgba(57,101,255,1)" } },
+            { "type": "label", "text": "离线", "styles": { "fontSize": 14 } }
+          ] } }
+        ]
+      }
+    },
+    { "id": "43:4788", "name": "设备列表", "absoluteBoundingBox": { "x": 0, "y": 91, "width": 470, "height": 388 } },
+    { "id": "43:4890-footer", "name": "底部图例与链接", "absoluteBoundingBox": { "x": 0, "y": 501, "width": 470, "height": 14 } }
+  ],
+  "expect": { "hit": false, "firstSectionType": null },
+  "perturbations": [
+    { "op": "stylesToStyle", "expect": { "hit": false, "firstSectionType": null } }
+  ]
+}

@@ -1,6 +1,6 @@
 /**
  * 双图比对（Agent Builder 自动生成，请勿手改）
- * 模板: vision-compare（视觉模式） | 创建: 2026-10-30T11:07:40.289Z
+ * 模板: vision-compare（视觉模式） | 创建: 2026-10-31T04:20:32.686Z
  * 输入: figmaImage, renderedImage
  * 输出: similarity, differences
  */

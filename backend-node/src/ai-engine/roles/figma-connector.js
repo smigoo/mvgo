@@ -15,6 +15,7 @@ import {
 import { join, dirname } from 'path';
 import { createHash } from 'node:crypto';
 import { createLogger } from '../logger/index.js';
+import { backendRoot } from '../../config/backend-root.js';
 import tunnel from 'tunnel';
 import {
   getFigmaRateLimiter,
@@ -87,6 +88,17 @@ export class FigmaConnector {
     }
     this.figmaToken = config.figmaToken;
     this.cacheEnabled = config.cacheEnabled !== false;
+    // 🛡️ 节点数据磁盘缓存（2026-10-31 真机实锤驱动）：Figma files/:key/nodes 对大文件
+    //    实测 121s（GTcJm0DKQvcJvcOZTh5n1l:48:5796 直测），管线超时 120s 卡临界线 ⇒
+    //    同节点重投三连超时失败（abe42624）。预览图早有本地缓存复用先例（2026-09-16），
+    //    节点数据补同款：TTL 内命中零网络回源；token 变更不复用；TTL 可配（0=禁用）。
+    this._nodeCacheDir =
+      config.cacheDir || join(backendRoot, 'data', 'figma-node-cache');
+    this._nodeCacheTtlMs = Number(
+      config.nodeCacheTtlMs ??
+        process.env.FIGMA_NODE_CACHE_TTL_MS ??
+        30 * 60 * 1000,
+    );
 
     // 代理配置（Figma API 在某些网络环境下必须走代理）- 保留系统配置
     const proxyUrl =
@@ -317,7 +329,20 @@ export class FigmaConnector {
     // 转换nodeId格式：2-8417 -> 2:8417
     const apiNodeId = nodeId.replace(/-/g, ':');
     const url = `https://api.figma.com/v1/files/${fileKey}/nodes?ids=${apiNodeId}`;
-    const timeoutMs = 120000; // 120 秒超时（大组件节点树数据量大，代理环境需更长）
+    // 🛡️ 2026-10-31：120s → 180s（同文件实测 121s 返回，120s 卡临界线 ⇒ 间歇性超时）
+    const timeoutMs = 180000;
+
+    // 🛡️ 节点数据磁盘缓存读路径：TTL 内命中零网络（见构造函数注释）。
+    //    key = fileKey_nodeId(冒号转横杠)_tokenHash8 —— token 变更自动失效，与预览图缓存同纪律。
+    const cacheHit = this._readNodeCache(fileKey, apiNodeId);
+    if (cacheHit !== null) {
+      logger.info('✅ Figma节点数据缓存命中，跳过 API', {
+        fileKey,
+        nodeId,
+        ageMs: cacheHit.ageMs,
+      });
+      return cacheHit.document;
+    }
 
     try {
       //走统一限流出站方法（含 429 全局冷却 + 长退避重试）
@@ -331,6 +356,8 @@ export class FigmaConnector {
         throw new Error(`Node ${nodeId} not found`);
       }
       logger.info('✅ Figma节点数据获取成功');
+      // 🛡️ 成功后回写缓存（深拷贝落盘；失败不缓存）
+      this._writeNodeCache(fileKey, apiNodeId, nodeData.document);
       return nodeData.document;
     } catch (error) {
       // 保留原有 401/403 友好提示
@@ -352,6 +379,55 @@ export class FigmaConnector {
       const figErr = new Error(userMsg);
       figErr.figStatus = figStatus;
       throw figErr;
+    }
+  }
+
+  /** 节点缓存文件路径：{cacheDir}/{fileKey}_{nodeId横杠化}_{tokenHash8}.json */
+  _nodeCachePath(fileKey, apiNodeId) {
+    const tokenHash = createHash('sha256')
+      .update(this.figmaToken || '')
+      .digest('hex')
+      .slice(0, 8);
+    return join(
+      this._nodeCacheDir,
+      `${String(fileKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_${String(apiNodeId).replace(/:/g, '-')}_${tokenHash}.json`,
+    );
+  }
+
+  /**
+   * 读节点缓存：TTL 内命中返回 {document, ageMs}；未命中/过期/禁用/畸形返回 null。
+   * 返回的 document 为深拷贝（防调用方原地修改污染缓存）。
+   */
+  _readNodeCache(fileKey, apiNodeId) {
+    if (!this.cacheEnabled || !(this._nodeCacheTtlMs > 0)) return null;
+    const p = this._nodeCachePath(fileKey, apiNodeId);
+    try {
+      if (!existsSync(p)) return null;
+      const raw = JSON.parse(readFileSync(p, 'utf8'));
+      if (!raw?.document || typeof raw.document !== 'object') return null;
+      const ageMs = Date.now() - Number(raw.savedAt || 0);
+      if (!(Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= this._nodeCacheTtlMs)) {
+        return null;
+      }
+      return { document: JSON.parse(JSON.stringify(raw.document)), ageMs };
+    } catch (e) {
+      logger.warn('节点缓存读取失败（视为未命中）', { error: e.message });
+      return null;
+    }
+  }
+
+  /** 写节点缓存（成功拉取后调用；失败仅告警不抛——缓存是优化不是依赖） */
+  _writeNodeCache(fileKey, apiNodeId, document) {
+    if (!this.cacheEnabled || !(this._nodeCacheTtlMs > 0)) return;
+    const p = this._nodeCachePath(fileKey, apiNodeId);
+    try {
+      mkdirSync(this._nodeCacheDir, { recursive: true });
+      writeFileSync(
+        p,
+        JSON.stringify({ document, savedAt: Date.now(), fileKey, nodeId: apiNodeId }),
+      );
+    } catch (e) {
+      logger.warn('节点缓存写入失败（非阻断）', { error: e.message });
     }
   }
 

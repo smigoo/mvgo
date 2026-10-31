@@ -1,0 +1,76 @@
+{
+  "id": "stat-value-elements-parts",
+  "source": "mc-max-1793431342807-769789af",
+  "kind": "stat-right-value",
+  "semantic": "列表项统计右值形态④：item.value.elements[].parts[]（number+unit 角色对，px 字符串字号）",
+  "form": {
+    "id": "48:5798",
+    "type": "list",
+    "collapsed": true,
+    "renderHint": "v-for",
+    "itemCount": 2,
+    "items": [
+      {
+        "layout": "horizontal",
+        "role": "stat-card",
+        "repeatedFill": "#a6ceff",
+        "icon": { "placeholder": "icon-node", "position": "left", "resource": "icon-5808.png", "width": 40, "height": 40 },
+        "content": {
+          "layout": "vertical", "position": "right",
+          "elements": [
+            { "type": "label", "text": "甲节点", "position": "top", "style": { "fontSize": "16px", "fontWeight": "bold", "color": "rgba(0,0,0,1)" } },
+            { "type": "label", "text": "地址-甲节点", "position": "bottom", "style": { "fontSize": "12px", "color": "rgba(102,102,102,1)" } }
+          ]
+        },
+        "value": {
+          "layout": "horizontal", "position": "right",
+          "elements": [
+            { "type": "value", "parts": [
+              { "text": "3,792", "type": "number", "style": { "fontSize": "18px", "fontWeight": "bold", "color": "rgba(0,180,42,1)" } },
+              { "text": "在线", "type": "unit", "style": { "fontSize": "12px", "color": "rgba(102,102,102,1)" } }
+            ] },
+            { "type": "value", "parts": [
+              { "text": "28", "type": "number", "style": { "fontSize": "18px", "fontWeight": "bold", "color": "rgba(255,0,0,1)" } },
+              { "text": "离线", "type": "unit", "style": { "fontSize": "12px", "color": "rgba(102,102,102,1)" } }
+            ] }
+          ]
+        }
+      },
+      {
+        "layout": "horizontal",
+        "role": "stat-card",
+        "repeatedFill": "#a6ceff",
+        "icon": { "placeholder": "icon-node", "position": "left", "resource": "icon-5809.png", "width": 40, "height": 40 },
+        "content": {
+          "layout": "vertical", "position": "right",
+          "elements": [
+            { "type": "label", "text": "乙节点", "position": "top", "style": { "fontSize": "16px", "fontWeight": "bold", "color": "rgba(0,0,0,1)" } },
+            { "type": "label", "text": "地址-乙节点", "position": "bottom", "style": { "fontSize": "12px", "color": "rgba(102,102,102,1)" } }
+          ]
+        },
+        "value": {
+          "layout": "horizontal", "position": "right",
+          "elements": [
+            { "type": "value", "parts": [
+              { "text": "2,138", "type": "number", "style": { "fontSize": "18px", "fontWeight": "bold", "color": "rgba(0,180,42,1)" } },
+              { "text": "在线", "type": "unit", "style": { "fontSize": "12px", "color": "rgba(102,102,102,1)" } }
+            ] },
+            { "type": "value", "parts": [
+              { "text": "12", "type": "number", "style": { "fontSize": "18px", "fontWeight": "bold", "color": "rgba(255,0,0,1)" } },
+              { "text": "离线", "type": "unit", "style": { "fontSize": "12px", "color": "rgba(102,102,102,1)" } }
+            ] }
+          ]
+        }
+      }
+    ]
+  },
+  "expect": {
+    "ok": true,
+    "statsV": ["3,792", "28"],
+    "statsL": ["在线", "离线"],
+    "texts": ["甲节点", "地址-甲节点"]
+  },
+  "perturbations": [
+    { "op": "deleteRole", "expect": { "ok": true, "statsV": ["3,792", "28"], "statsL": ["在线", "离线"] } }
+  ]
+}
