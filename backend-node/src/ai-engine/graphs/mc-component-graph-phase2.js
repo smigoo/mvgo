@@ -105,6 +105,9 @@ import { resolveWarnEscalations } from '../utils/gate-severity.js';
 // 🛡️ #128 流程四件套 ②/③：fail-open 显性化台账（降级/WARN 升级事件落 component-meta.json）
 import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
+// 🛡️ Phase H（2026-11-02）：TEXT-TRUTH ASCII 口径日志行（hits:0 也打——否则「口径没接线」
+// 与「接线了零命中」在日志上同形）。统计值由 CodeStructureValidator.validate 产出。
+import { formatTextTruthAsciiLog } from '../utils/text-truth-guard.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
 import { OrphanComponentDetector } from '../validators/orphan-component-detector.js';
@@ -3350,6 +3353,71 @@ export function createPhase2Graph(config = {}) {
             status: 'warning',
           });
         }
+        // 🔴 R8-1（2026-11-02 · 50d7793f 实锤）：幻觉段整段收敛——guard 已从 index.vue
+        //   移除挂载/import 并把组件从 files 剔除，此处删盘上组件文件（无挂载引用，删失败不阻断）。
+        const _collapsed = healResult.collapsedSections || [];
+        for (const c of _collapsed) {
+          try {
+            const { unlinkSync: _unlink } = await import('fs');
+            _unlink(pathJoin(state.outputPath, c.file));
+          } catch (e) {
+            logger.warn('🧹 R8-1 幻觉段组件文件删除失败（不阻断）', { file: c.file, error: e?.message || String(e) });
+          }
+          logger.warn('🧹 R8-1 幻觉段已整段收敛（vision 重复声明无锚点段：挂载+import+组件三处移除）', c);
+          state.onProgress?.({
+            stage: '内容映射校验',
+            message: `🧹 幻觉段已整段收敛：${c.sectionId}（${c.file}）`,
+            status: 'warning',
+          });
+        }
+        // 🔴 R8-1 保护档：真锚段剥后空壳——显式计数留痕（不收敛、不静默）
+        const _emptyShells = healResult.emptyShellSections || [];
+        if (_emptyShells.length > 0) {
+          logger.warn('🛡️ R8-1 保护档：剥后空壳段（真锚段保守不收敛，显式计数放弃）', {
+            total: _emptyShells.length,
+            hits: _emptyShells.slice(0, 10),
+          });
+        }
+      }
+
+      // 🔴 R8-5（2026-11-02 · ea3798f8 实锤）空壳对账·独立扫描：不依附重复文本前提
+      //   （healDuplicateTextIssues 在 duplicateTextIssues=0 时早退 ⇒ 从头无文本产出的
+      //   幻觉空壳段 801:10/801:23 静默落盘占 flex 高度 ⇒ 用户实拍 2/3 空白）。
+      //   判据/动作与 R8-1 单一来源（isHallucinatedSection/tryCollapseSectionMount）。
+      try {
+        const { collapseHallucinatedEmptySections } = await import(
+          '../utils/section-content-guard.js'
+        );
+        const r85 = collapseHallucinatedEmptySections({
+          files,
+          plan: state.subComponentPlan,
+          figmaRoot: figmaRootForGuard,
+          validateSfc: (c, p) => validateVueSfc(c, p),
+        });
+        for (const c of r85.collapsedSections || []) {
+          try {
+            const { unlinkSync: _unlink85 } = await import('fs');
+            _unlink85(pathJoin(state.outputPath, c.file));
+          } catch (e) {
+            logger.warn('🧹 R8-5 空壳组件文件删除失败（不阻断）', { file: c.file, error: e?.message || String(e) });
+          }
+          logger.warn('🧹 R8-5 空壳对账：幻觉空壳段已整段收敛（独立扫描，无重复文本前提）', c);
+          state.onProgress?.({
+            stage: '内容映射校验',
+            message: `🧹 空壳对账收敛：${c.sectionId}（${c.file}）`,
+            status: 'warning',
+          });
+        }
+        const _shells85 = r85.emptyShellSections || [];
+        if (_shells85.length > 0) {
+          logger.warn('🛡️ R8-5 保护档：独立扫描空壳段（真锚段保守不收敛，显式计数放弃）', {
+            scanned: r85.scanned,
+            total: _shells85.length,
+            hits: _shells85.slice(0, 10),
+          });
+        }
+      } catch (e85) {
+        logger.warn('R8-5 空壳对账执行失败（不阻断）', { error: e85?.message || String(e85) });
       }
 
       // 🎯 2026-09-30 治本③：借用证据（文本/资源）**确定性处置**。
@@ -4894,6 +4962,14 @@ export function createPhase2Graph(config = {}) {
         gateSkippedFiles,
       },
     );
+
+    // 🛡️ Phase H（2026-11-02）：TEXT-TRUTH ASCII 口径计数观测（**不改分级**，只留痕）。
+    // 🔴 hits:0 也必须打：`enabled:false` = 本链路未传 figmaNodeData（口径没跑）；
+    //    `enabled:true hits:0` = 跑了且干净。二者在日志上必须可区分。
+    {
+      const _asciiLog = formatTextTruthAsciiLog(result.textTruthAsciiStats, 'max');
+      logger.info(_asciiLog.message, _asciiLog.meta);
+    }
 
     // P0：逐 SFC + 共享 LESS 真实编译门禁（与 Vue3 图 mc-component-graph-vue3.js:2098 对齐）。
     // 微码组件 index.vue 内联 <style lang="less"> 此前未做任何静态校验，LESS 语法错误

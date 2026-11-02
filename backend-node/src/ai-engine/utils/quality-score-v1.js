@@ -205,6 +205,15 @@ export function extractDeclaredStyleLiteralsWithLocation(files = []) {
   let fontUsesVariable = false
   const fontVarRe = /font-size\s*:\s*(?:@fontSize|var\(--fontSize|calc\(@fontSize|calc\(var\(--fontSize)/gi
 
+  // 🔴 2026-11-02 修复（实证 mc-max-1793629839483-bf86ddba）：fg-takeover 产物的 fg 样式
+  // 大量写在模板内联 style="..." 与 :style="{...}"，此前只扫 <style> 块 ⇒ 真实存在的值被判
+  // missed（#3965ff≡rgba(57,101,255,1) 内联实存却扣分）。正则在下方 .vue 分支内使用。
+  const inlineStyleAttrRe = /\s(?::)?style\s*=\s*"([^"]*)"/gi
+  const inlineSpaceKeyRe = /(?:row-gap|rowGap|column-gap|columnGap|gap|padding|margin)[a-zA-Z-]*\s*:\s*([^,;}"]+)/gi
+  const inlineFontKeyRe = /(?:font-size|fontSize)\s*:\s*([^,;}"]+)/gi
+  const inlineRadiusKeyRe = /(?:border-radius|borderRadius)\s*:\s*([^,;}"]+)/gi
+  const pxTokenRe = /(-?[\d.]+px)/gi
+
   for (const f of files) {
     const content = String(f?.content || '')
     const p = String(f?.path || '')
@@ -222,6 +231,62 @@ export function extractDeclaredStyleLiteralsWithLocation(files = []) {
         const before = content.slice(0, matchIndex)
         const startLine = (before.match(/\n/g) || []).length + 1
         styleBlocks.push({ styleText: styleText + '\n', startLine })
+      }
+      // 模板内联样式补扫：静态 style="..."（CSS 声明）+ 绑定 :style="{...}"（对象字面量）。
+      // 仅取字符串字面量；row.c0.pad 等动态表达式天然提不出 px/色值，不会误采。
+      // 只扫模板 style 属性值，不扫 <script>，避免 2026-09-22 修掉的
+      // 「非样式上下文颜色字面量导致分数波动」问题复发。
+      for (const t of content.matchAll(/<template[^>]*>([\s\S]*?)<\/template>/gi)) {
+        const tpl = t[1]
+        const tplBaseLine = (content.slice(0, t.index ?? 0).match(/\n/g) || []).length + 1
+        for (const m of tpl.matchAll(inlineStyleAttrRe)) {
+          const styleText = m[1]
+          const baseLine = tplBaseLine + (tpl.slice(0, m.index ?? 0).match(/\n/g) || []).length
+          if (!styleText || !/[;:{}]/.test(styleText)) continue
+          let cm
+          colorRe.lastIndex = 0
+          while ((cm = colorRe.exec(styleText))) {
+            colors.push(
+              makeDeclaredEntry(
+                cm[0].replace(/\s+/g, ''),
+                p,
+                baseLine + offsetToLine(styleText, cm.index),
+                '(inline-style)',
+                'fills'
+              )
+            )
+          }
+          let sm
+          inlineSpaceKeyRe.lastIndex = 0
+          while ((sm = inlineSpaceKeyRe.exec(styleText))) {
+            const field = (sm[0].match(/^[a-zA-Z-]+/i) || ['spacing'])[0]
+            const line = baseLine + offsetToLine(styleText, sm.index)
+            const valText = sm[1]
+            pxTokenRe.lastIndex = 0
+            let tm
+            while ((tm = pxTokenRe.exec(valText))) {
+              spacing.push(makeDeclaredEntry(tm[1], p, line, '(inline-style)', field))
+            }
+          }
+          inlineFontKeyRe.lastIndex = 0
+          while ((sm = inlineFontKeyRe.exec(styleText))) {
+            const px = parsePx(sm[1])
+            if (px != null) {
+              const line = baseLine + offsetToLine(styleText, sm.index)
+              fonts.push(makeDeclaredEntry(`${px}px`, p, line, '(inline-style)', 'font-size'))
+            }
+          }
+          inlineRadiusKeyRe.lastIndex = 0
+          while ((sm = inlineRadiusKeyRe.exec(styleText))) {
+            const line = baseLine + offsetToLine(styleText, sm.index)
+            const valText = sm[1]
+            pxTokenRe.lastIndex = 0
+            let tm
+            while ((tm = pxTokenRe.exec(valText))) {
+              radii.push(makeDeclaredEntry(tm[1], p, line, '(inline-style)', 'border-radius'))
+            }
+          }
+        }
       }
     } else {
       continue // .js / .json / .ts 等非样式文件 → 跳过
@@ -627,6 +692,49 @@ export function extractActualStructure(files = []) {
  * @param {Array} files - collectGeneratedFilesFromDir 返回的文件列表
  * @returns {Set<string>} - 所有 data-section-id 值的集合
  */
+/**
+ * 提取 SFC 中所有**最外层** `<template>` 块的内容（depth 配平扫描）
+ *
+ * 🔴 2026-11-02 修复（实证 59 目录 / 324 条挂载假失配，如 c-aiot-dpjh-bsjd-* 系列
+ * base 0/6 → 6/6）：此前用非贪婪 `/<template[^>]*>([\s\S]*?)<\/template>/` 提取，
+ * 而产物的 `<base-panel><template #header-right>…` 是**常态**结构 ⇒ 提取在**第一个内层
+ * `</template>`** 处截断（实测单文件 5015 → 98 字符），根级 section 的 data-section-id
+ * 全落在被截掉的尾部 ⇒ resourceMount 维度对**已正确挂载**的产物也恒判未挂载。
+ *
+ * 实现：① 先剥 script/style（其中字符串可能含 `</template>` 干扰）；② 按
+ * `<template` / `</template>` 嵌套深度配平，只收 depth 0→1 的最外层块；
+ * ③ 自闭合 `<template ... />` 不计数；④ 未闭合（产物被截断）时容错收剩余内容。
+ */
+function extractRootTemplateBlocks(content) {
+  const src = String(content || '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+  const blocks = []
+  const tagRe = /<\/?template\b/gi
+  let depth = 0
+  let start = -1
+  let m
+  while ((m = tagRe.exec(src))) {
+    if (!m[0].startsWith('</')) {
+      const gt = src.indexOf('>', m.index)
+      if (gt < 0) break
+      const selfClosing = src.slice(m.index, gt).trimEnd().endsWith('/')
+      if (depth === 0 && !selfClosing) start = gt + 1
+      if (!selfClosing) depth++
+      tagRe.lastIndex = gt + 1
+    } else {
+      if (depth > 0) depth--
+      if (depth === 0 && start >= 0) {
+        blocks.push(src.slice(start, m.index))
+        start = -1
+      }
+    }
+  }
+  // 容错：未闭合时把剩余内容也收进来（避免因产物截断而整块丢失）
+  if (start >= 0 && depth > 0) blocks.push(src.slice(start))
+  return blocks
+}
+
 export function extractActualResourceMounts(files = []) {
   const sectionIds = new Set()
   const sectionIdRe = /data-section-id\s*=\s*["']([^"']+)["']/gi
@@ -638,8 +746,8 @@ export function extractActualResourceMounts(files = []) {
     if (!/\.vue$/i.test(p)) continue
 
     let templateContent = ''
-    for (const m of content.matchAll(/<template[^>]*>([\s\S]*?)<\/template>/gi)) {
-      templateContent += m[1] + '\n'
+    for (const block of extractRootTemplateBlocks(content)) {
+      templateContent += block + '\n'
     }
     if (!templateContent) continue
 
@@ -661,15 +769,18 @@ export function extractActualResourceMounts(files = []) {
  *
  * @param {Array|null} resourceMapping - resource-dom-mapping.json 内容
  * @param {Set<string>} actualSectionIds - extractActualResourceMounts 返回的集合
- * @returns {{ scored: boolean, score: number|null, expected: number, matched: number, missed: Array }}
+ * @returns {{ scored: boolean, score: number|null, expected: number, matched: number, missed: Array, unanchored?: Array, reason?: string }}
+ *   - expected：**可判定**的挂载条目数（已剔除 class 锚/无锚的不可判定条目）
+ *   - unanchored：被剔除的不可判定条目（无法确定期望挂载目标，判据不成立）
+ *   - 若全部条目都不可判定 ⇒ scored:false（维度不进等权平均，避免假 0 分）
  */
 export function scoreResourceMount(resourceMapping, actualSectionIds) {
   if (!Array.isArray(resourceMapping) || resourceMapping.length === 0) {
     return { scored: false, score: null, expected: 0, matched: 0, missed: [] }
   }
 
-  // 过滤出需要检查的背景图挂载条目
-  const expectedMounts = resourceMapping.filter((entry) => {
+  // 过滤出需要检查的背景图挂载条目（bgRole / backgroundImage 用法）
+  const bgEntries = resourceMapping.filter((entry) => {
     if (!entry || typeof entry !== 'object') return false
     // 跳过 skipMount 为 true 的条目（如大型容器背景，故意不挂载）
     if (entry.skipMount === true) return false
@@ -681,32 +792,117 @@ export function scoreResourceMount(resourceMapping, actualSectionIds) {
     return hasBgRole || hasBgImageUsage
   })
 
+  if (bgEntries.length === 0) {
+    return { scored: false, score: null, expected: 0, matched: 0, missed: [], unanchored: [] }
+  }
+
+  // 🔴 2026-11-02 修复（实证 mc-max-1793629839483-bf86ddba）：此前用 entry.figmaNodeId
+  // （资源图片**自身**的节点 id，如 48:5909）当 data-section-id 匹配目标，而 mapping 里
+  // 真正的挂载目标是 targetDomSelector（如 [data-section-id="43:4893"]）/ ownerSectionId——
+  // 资源自身 id 几乎从不出现在产物 DOM ⇒ 背景图挂载正确也恒判 0（该任务三卡全挂对仍 0/3）。
+  // 另：shared alias（isSharedAlias，如三张相同统计卡共用一图 deduplicatedFrom=48:5909）的
+  // 自身 target/owner section 可能已被归并进主资源的 section（刀53 statrow 归并后
+  // 43:4898/43:4903 不复存在）⇒ alias 需回退主资源条目的候选再判。
+  const sectionIdFromSelector = (sel) => {
+    const m = /\[data-section-id="([^"]+)"\]/.exec(String(sel || ''))
+    return m ? m[1] : null
+  }
+  const primaryByNodeId = new Map()
+  for (const e of resourceMapping) {
+    if (e && typeof e === 'object' && e.figmaNodeId) primaryByNodeId.set(e.figmaNodeId, e)
+  }
+  const candidatesFor = (entry, depth = 0) => {
+    const candidates = []
+    const fromSelector = sectionIdFromSelector(entry.targetDomSelector)
+    if (fromSelector) candidates.push(fromSelector)
+    if (entry.ownerSectionId) candidates.push(entry.ownerSectionId)
+    // shared alias：自身候选全部不存在的场景，回退主资源（去重来源）条目的候选
+    if (
+      entry.isSharedAlias === true &&
+      entry.deduplicatedFrom &&
+      depth < 1
+    ) {
+      const primary = primaryByNodeId.get(entry.deduplicatedFrom)
+      if (primary && primary !== entry) {
+        for (const c of candidatesFor(primary, depth + 1)) candidates.push(c)
+      }
+    }
+    return [...new Set(candidates.filter(Boolean))]
+  }
+
+  // 🔴 2026-11-02 修复（实证 759 条 / 107 目录，如 c-device-monitor-* 系列 14/14 全失配）：
+  //   ① **锚点可用性前置过滤**：这批条目的 targetDomSelector 是 **class 选择器**
+  //      （如 ".bg-container"）而非 [data-section-id="…"] 形态，且**没有 ownerSectionId**。
+  //      class 名由 LLM 自定（targetDomHint 仅是语义提示），无法确定性映射到 data-section-id
+  //      ⇒ 这些条目**不可判定**（判据不成立），必须移出分母；否则整维度假 0 分，
+  //      在六维等权平均（computeStyleScore:1023）里把 styleScore 直接拉低。
+  //   ② **移除 figmaNodeId 兜底**：全量实测该兜底命中 0 次（资源自身 id 从不出现在产物的
+  //      data-section-id 上），保留只会把不可判定条目伪装成「可判定且未挂载」。
+  const expectedMounts = []
+  const unanchored = []
+  for (const entry of bgEntries) {
+    const candidates = candidatesFor(entry)
+    if (candidates.length > 0) {
+      expectedMounts.push({ entry, candidates })
+    } else {
+      unanchored.push({
+        figmaNodeId: entry.figmaNodeId || null,
+        name: entry.name || null,
+        targetDomSelector: entry.targetDomSelector || '(none)',
+        reason: `无法确定期望挂载目标（targetDomSelector="${entry.targetDomSelector || ''}" 非 [data-section-id="…"] 形态且无 ownerSectionId）⇒ 不参与评分`,
+      })
+    }
+  }
+
   if (expectedMounts.length === 0) {
-    return { scored: false, score: null, expected: 0, matched: 0, missed: [] }
+    return {
+      scored: false,
+      score: null,
+      expected: 0,
+      matched: 0,
+      missed: [],
+      unanchored,
+      reason: 'no-anchored-mount',
+    }
+  }
+
+  // 🔴 2026-11-02 后缀容错（实证 90 条，如候选 "48:5798" vs 产物 "48:5798-list"）：
+  //   合并列表段会给 section id 加 `-list` 后缀，而 mapping 记录的是原始节点 id
+  //   ⇒ 精确比对恒失配。按 `-list` 归一后双向比对（归一后相同的 id 视为同一 section）。
+  const normalizeSectionId = (s) => String(s || '').replace(/-list$/i, '')
+  const actualByNormalized = new Map()
+  for (const a of actualSectionIds) {
+    const n = normalizeSectionId(a)
+    if (n && !actualByNormalized.has(n)) actualByNormalized.set(n, a)
+  }
+  const matchSectionId = (candidates) => {
+    for (const c of candidates) {
+      if (actualSectionIds.has(c)) return c
+      const n = actualByNormalized.get(normalizeSectionId(c))
+      if (n && n !== c) return n
+    }
+    return null
   }
 
   let matched = 0
   const missed = []
 
-  for (const entry of expectedMounts) {
-    const figmaNodeId = entry.figmaNodeId
-    if (!figmaNodeId) continue
-
-    // 检查该 figmaNodeId 是否存在于实际的 data-section-id 中
-    if (actualSectionIds.has(figmaNodeId)) {
+  for (const { entry, candidates } of expectedMounts) {
+    const hit = matchSectionId(candidates)
+    if (hit) {
       matched++
     } else {
       // 未匹配：记录详细信息
       missed.push({
-        figmaNodeId,
+        figmaNodeId: entry.figmaNodeId,
         targetDomSelector: entry.targetDomSelector || '(unknown)',
         name: entry.name || '(unnamed)',
-        reason: `背景图 "${entry.name || figmaNodeId}" 应挂载到 data-section-id="${figmaNodeId}"，但产物中未找到该 ID`,
+        reason: `背景图 "${entry.name || entry.figmaNodeId || '(unnamed)'}" 期望挂载到 [${candidates.join(' / ')}]，但产物中均未找到`,
       })
     }
   }
 
-  const ratio = expectedMounts.length > 0 ? matched / expectedMounts.length : 0
+  const ratio = matched / expectedMounts.length
   const score = clampScore(ratio * 100)
 
   return {
@@ -715,6 +911,7 @@ export function scoreResourceMount(resourceMapping, actualSectionIds) {
     expected: expectedMounts.length,
     matched,
     missed: missed.slice(0, 12),
+    unanchored,
   }
 }
 

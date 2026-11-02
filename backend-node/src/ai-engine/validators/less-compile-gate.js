@@ -672,6 +672,25 @@ export function scanStandaloneLessDefects(source = '') {
     })
   })
 
+  // ⑤ 🛡️ R8-3（2026-11-02 · 3a7d3fb3 实锤）：畸形「属性名拼接」声明残留
+  //   （`background: box-shadow: X` —— LLM 把 Figma effect 拼进值位置）。heal
+  //   已先行抽取内层 ⇒ 走到这里仍残留的是 heal 锚定不到的形态（压缩写法等）
+  //   ⇒ less 编译必报 Unrecognised input，判坏跳过写盘（保 last-good）。
+  //   🔴 与 healNestedPropertyDeclarations **同锚同形**（声明位置 `[;{]` 起）：
+  //   无锚定的宽松形态会把 `.a:first-child:hover {` 这类双伪类选择器误判死。
+  const nestedRe = /([;{]\s*)([-a-zA-Z]+)(\s*):(\s*)([-a-zA-Z]+)(\s*):(\s)/
+  {
+    const nm = nestedRe.exec(cleaned)
+    if (nm) {
+      const line = cleaned.slice(0, nm.index).split('\n').length
+      defects.push({
+        id: 'LESS-WRITE-006',
+        line,
+        message: `畸形「属性名拼接」声明残留（prop: prop: value，heal 未能抽取）：${(nm[0] || '').trim().slice(0, 60)}`,
+      })
+    }
+  }
+
   // ④ 2026-10-19（c-a579d-6a579df0 实锤）：残留 `:deep(` / `::v-deep(`。
   //   gateStandaloneLessWrite 已先跑 stripDeepSelectors ⇒ 走到这里仍残留的只有
   //   「未闭合无法改写」的形态 —— 全局注入下是死规则，判坏不落盘。
@@ -898,6 +917,46 @@ export function stripDeepSelectors(source = '') {
 }
 
 /**
+ * 🛡️ R8-3（2026-11-02 · mc-max-1793607686262-3a7d3fb3 实锤）：畸形「属性名拼接」声明自愈。
+ *
+ * 病灶：LLM 把 Figma effect（内发光 box-shadow）错误拼进 `background:` 的值位置——
+ *   `background: box-shadow: inset 0px 0px 16px 0px rgba(25, 181, 186, 0.67);`
+ *   既有自愈族（braces/parens/missing-paren/pseudo/deep）对「属性名拼接」全部
+ *   changed:false（假绿），终裁也不判 ⇒ 直接落盘 ⇒ 落盘后异步 LessCompileGate
+ *   真编译 `Unrecognised input` ⇒ LESS_COMPILE_GATE_BLOCKED ⇒ 整单终态失败。
+ *
+ * 判据（宁漏不误伤）：
+ *   · 只匹配**声明起点**（`;` / `{` 之后）的 `outerProp: innerProp:` 形态；
+ *   · 内层冒号后**必须有空白**（`data:image/...`、`https://...` 等 URI scheme
+ *     形态冒号后紧跟路径 ⇒ 不命中，防误抽协议前缀）；
+ *   · `[-a-zA-Z]+` 不含引号/空白 ⇒ 字符串字面量（`content: "a: b: c"`）天然不匹配；
+ *   · 修复语义 = 抽出内层声明、弃外层壳（`background: box-shadow: X` → `box-shadow: X`；
+ *     多层 `a: b: c: d` 循环剥离，上限 3 层防失控）。
+ * 漏修形态（内层冒号后无空白的压缩写法等）交给 LESS-WRITE-006 终裁判死，不臆修。
+ *
+ * @param {string} source
+ * @returns {{source: string, changed: boolean, count: number}}
+ */
+export function healNestedPropertyDeclarations(source = '') {
+  let out = String(source || '')
+  let total = 0
+  // 声明起点锚定：`;` 或 `{` 之后（含起始位置）；外层壳与内层名均为 CSS 属性名形态；
+  // 内层冒号后必须紧跟空白（URI scheme 防线）。
+  const NESTED_DECL_RE = /([;{]\s*)([-a-zA-Z]+)(\s*):(\s*)([-a-zA-Z]+)(\s*):(\s)/g
+  for (let round = 0; round < 3; round++) {
+    let count = 0
+    out = out.replace(NESTED_DECL_RE, (_m, lead, outer, sp1, sp2, inner, sp3, tailWs) => {
+      count++
+      // 抽内层：lead + inner + sp3 + ':' + 原尾部空白
+      return `${lead}${inner}${sp3}:${tailWs}`
+    })
+    if (count === 0) break
+    total += count
+  }
+  return { source: out, changed: total > 0, count: total }
+}
+
+/**
  * 🛡️ P1-5（2026-10-01）：独立 `.less` 的**写盘前等价门禁**。
  *
  * 背景（mc-max-1790828667794-869be6fe 实锤）：`.vue` 有 `validateVueSfc` 写盘门禁（失败即跳过该文件），
@@ -965,6 +1024,15 @@ export function gateStandaloneLessWrite(source = '', filePath = '') {
   if (deep.count > 0) {
     content = deep.source
     fixes.push(`strip-deep:${deep.count}`)
+  }
+
+  // 🛡️ R8-3（2026-11-02 · 3a7d3fb3 实锤）：畸形「属性名拼接」声明抽取。
+  //   放在选择器级纠正之后、终裁 scan 之前：结构完整 + 选择器干净后再修声明，
+  //   残留形态由 LESS-WRITE-006 判死（同锚同形，绝不带病落盘）。
+  const nested = healNestedPropertyDeclarations(content)
+  if (nested.changed) {
+    content = nested.source
+    fixes.push(`heal(nested-prop:${nested.count})`)
   }
 
   const defects = scanStandaloneLessDefects(content)

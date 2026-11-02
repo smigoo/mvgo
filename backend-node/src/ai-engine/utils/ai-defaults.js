@@ -6,11 +6,31 @@
  *           ⚠️ 零硬编码回退原则：model 为空时必须抛出清晰错误，引导用户去配置面板。
  */
 
+import { createHash } from 'crypto'
 import { getProviderPool } from './provider-pool.js'
 import { isReasoningModel } from './model-config.js'
 import { createLogger } from '../logger/index.js'
 
 const logger = createLogger({ name: 'ai-defaults' })
+
+/**
+ * 🛡️ 注册归属 scope（2026-11-02 跨用户串配置根治）。
+ *
+ * 生产实锤（mc-max-1793601836580-ae77ba7d）：ProviderPool 进程级单例的槽位跨任务残留，
+ * phase2 启动先 pick 导致 panqiang 任务用到 liuqh 的 deepseek-v4-pro@api.deepseek.com 凭证。
+ *
+ * scope = 按用户主配置（apiKey|baseURL|model）指纹生成的确定性短哈希：
+ *  - 同一用户重复 resolve → 同一 scope（池内故障转移不受影响）
+ *  - 不同用户 → 不同 scope（读到他人注册一律视为空，回落到自身配置）
+ *  - 相同凭证（同账号）同 scope → 本就是同一账户，无越权面
+ */
+function _poolScopeOf(primary) {
+  if (!primary || !primary.apiKey) return null
+  return createHash('sha256')
+    .update(`${primary.apiKey}|${primary.baseURL || ''}|${primary.model || ''}`)
+    .digest('hex')
+    .slice(0, 16)
+}
 
 // 进程生命周期内同模型只打一次「thinking disabled」日志，避免每次任务重复刷 WARN
 const _loggedThinkingDisabled = new Set()
@@ -249,13 +269,16 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
   //    熔断 open 后 30s 恢复，坏 provider 又参与 pick，导致反复撞同一面墙（日志实证连续 3 次超时/空串）。
   //    此前未配置 circuitBreaker 时 failureThreshold=0 完全禁用，主 provider 挂起后永不降级（超时白等 10 分钟）。
   const breakerCfg = config.circuitBreaker ?? { failureThreshold: 2, cooldownMs: 120000 }
-  
+
   // 调度策略：weighted-spread 让主模型也参与加权随机，避免单模型独占；primary-first 主模型独占（默认）
   const pickStrategy = config.pickStrategy === 'weighted-spread' ? 'weighted-spread' : 'primary-first'
-  
-  pool.setProviders(list, breakerCfg, { primaryId, role, pickStrategy })
 
-  const p = pool.pick(role)
+  // 🛡️ 注册归属 scope（2026-11-02 跨用户串配置根治）：本用户主配置指纹，槽位打标 + 随结果带出
+  const poolScope = _poolScopeOf(primary)
+
+  pool.setProviders(list, breakerCfg, { primaryId, role, pickStrategy, scope: poolScope })
+
+  const p = pool.pick(role, { scope: poolScope })
   if (!p || !p.apiKey) return null
   return {
     apiKey: p.apiKey,
@@ -263,6 +286,7 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
     model: p.model || '',
     providerType: p.providerType || 'auto',
     providerId: p.id,
+    poolScope,
     ...(p.temperature !== undefined && p.temperature !== null && p.temperature !== '' ? { temperature: Number(p.temperature) } : {}),
     // 🔧 per-provider 思考开关透传（base-agent 构造兜底 this.thinkingType）
     ...(p.thinkingType ? { thinkingType: p.thinkingType } : {}),

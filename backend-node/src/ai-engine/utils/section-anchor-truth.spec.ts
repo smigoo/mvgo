@@ -28,6 +28,7 @@ function stats(overrides: Record<string, number> = {}) {
     notAncestor: 0,
     repaired: 0,
     unrepaired: 0,
+    siblingCovered: 0,
     ...overrides,
   }
 }
@@ -361,16 +362,14 @@ describe('R22-d auditSectionAnchors：锚点必须是自身内容的祖先', () 
 // 高度被错挂到「首卡叶子」。下面锁死单一来源的**行为契约**。
 
 describe('刀33 sectionAnchorCandidates / sectionAnchorKey：锚点优先级单一来源', () => {
-  test('candidates 顺序固定（figmaAnchorId → figmaNodeId → figmaNode → id）', () => {
-    expect(sectionAnchorCandidates({ figmaAnchorId: '1:1', figmaNodeId: '2:2', figmaNode: '4:4', id: '3:3' })).toEqual([
-      '1:1',
-      '2:2',
-      '4:4',
-      '3:3',
-    ])
+  test('candidates 顺序固定（figmaAnchorId → figmaNodeId → nodeId → figmaNode → id）', () => {
+    // R1（2026-11-02）：nodeId 作为 figmaNodeId 的别名入表（第 3 位），归属/几何两轨同表单点维护
+    expect(
+      sectionAnchorCandidates({ figmaAnchorId: '1:1', figmaNodeId: '2:2', nodeId: '6:6', figmaNode: '4:4', id: '3:3' }),
+    ).toEqual(['1:1', '2:2', '6:6', '4:4', '3:3'])
     // 缺字段 ⇒ undefined 占位，顺序不变
-    expect(sectionAnchorCandidates({ id: '3:3' })).toEqual([undefined, undefined, undefined, '3:3'])
-    expect(sectionAnchorCandidates(null)).toEqual([undefined, undefined, undefined, undefined])
+    expect(sectionAnchorCandidates({ id: '3:3' })).toEqual([undefined, undefined, undefined, undefined, '3:3'])
+    expect(sectionAnchorCandidates(null)).toEqual([undefined, undefined, undefined, undefined, undefined])
   })
 
   test('🔴 阳性：三者齐全 ⇒ key = figmaAnchorId（上游锚点修复优先于 vision 原始声明）', () => {
@@ -416,5 +415,123 @@ describe('刀33 sectionAnchorCandidates / sectionAnchorKey：锚点优先级单�
     auditSectionAnchors(sections, makeFigma())
     expect(sectionAnchorKey(sections[0])).toBe('3:3') // key 已切到修复落点
     expect(auditSectionAnchors(sections, makeFigma()).fixes).toHaveLength(0)
+  })
+
+  // ── R1（2026-11-02）：nodeId 别名入表后的行为契约 ──────────────────────────
+
+  test('R1 别名：合法 nodeId 在 figmaNodeId 缺位时补位为声明锚点（此前被审计忽略）', () => {
+    const sections = [makeStatSection({ id: 'section-cards', nodeId: '8:8' })]
+    const report = auditSectionAnchors(sections, makeFigma())
+    expect(report.issues).toHaveLength(1)
+    expect(report.issues[0].anchorId).toBe('8:8')
+  })
+
+  test('R1 防御：语义垃圾 nodeId 不顶替锚点声明（回退到下一候选，零漂移）', () => {
+    const sections = [makeStatSection({ id: '8:8', nodeId: 'not-a-node' })]
+    const report = auditSectionAnchors(sections, makeFigma())
+    expect(report.issues[0].anchorId).toBe('8:8') // 仍是 id，行为与 R1 前逐字一致
+  })
+})
+
+// ── R2（2026-11-02 · mc-max-1793597679970-646085b2「合作厂商弹窗」实锤）────────
+// 病灶：修复门槛不挡「LCA 覆盖兄弟段」——统计区锚点 38:3260（首卡 265×76）被修成
+// 796:3（整内容容器 604×787，内含 3 个兄弟段锚点）⇒ 几何取 787 高、内容仍是 76 的子树
+// ⇒ 撕裂段（统计区独占 91% 高度、内容只剩一张图标）。
+
+describe('R2 auditSectionAnchors：LCA 覆盖兄弟段声明锚点 ⇒ 拒修', () => {
+  /** 646085b2 树形复刻：容器 9:9 → { 首卡 10:1(rect 10:2 + icon 10:3), 次卡 10:4, 厂商组 11:1/11:2/11:3 } */
+  function makeTornFigma() {
+    return {
+      document: {
+        id: '1:1',
+        name: 'root',
+        type: 'DOCUMENT',
+        children: [
+          {
+            id: '2:2',
+            name: 'page',
+            type: 'FRAME',
+            children: [
+              {
+                id: '9:9',
+                name: 'slot-icon',
+                type: 'GROUP',
+                children: [
+                  {
+                    id: '10:1',
+                    name: 'stat-card-1',
+                    type: 'GROUP',
+                    children: [
+                      { id: '10:2', name: 'rect', type: 'RECTANGLE', children: [] },
+                      { id: '10:3', name: 'icon', type: 'VECTOR', children: [] },
+                    ],
+                  },
+                  { id: '10:4', name: 'stat-card-2', type: 'GROUP', children: [] },
+                  { id: '11:1', name: 'vendor-1', type: 'GROUP', children: [{ id: '11:11', name: 't', type: 'TEXT', characters: '华为', children: [] }] },
+                  { id: '11:2', name: 'vendor-2', type: 'GROUP', children: [{ id: '11:12', name: 't', type: 'TEXT', characters: '中兴', children: [] }] },
+                  { id: '11:3', name: 'vendor-3', type: 'GROUP', children: [{ id: '11:13', name: 't', type: 'TEXT', characters: '海尔', children: [] }] },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+  }
+
+  function makeTornSections() {
+    return [
+      { id: '10:1', name: '统计区', body: { children: [{ id: '10:2' }, { id: '10:4' }] } },
+      { id: '11:1', name: '厂商组1', body: { children: [{ id: '11:11' }] } },
+      { id: '11:2', name: '厂商组2', body: { children: [{ id: '11:12' }] } },
+      { id: '11:3', name: '厂商组3', body: { children: [{ id: '11:13' }] } },
+    ]
+  }
+
+  test('🔴 真机复刻：统计区锚点 10:1 的修复 LCA(9:9) 覆盖 3 个兄弟段锚点 ⇒ 拒修', () => {
+    const sections = makeTornSections()
+    const report = auditSectionAnchors(sections, makeTornFigma())
+
+    expect(report.issues).toHaveLength(1)
+    expect(report.fixes).toHaveLength(0)
+    expect(sections[0].figmaAnchorId).toBeUndefined()
+    expect(report.unrepaired).toHaveLength(1)
+    expect(report.unrepaired[0]).toMatchObject({
+      sectionId: '10:1',
+      claimed: '10:1',
+      kind: 'anchor-not-ancestor',
+      candidateLca: '9:9',
+      reason: 'lca-covers-sibling-sections',
+    })
+    expect(report.unrepaired[0].coveredAnchors!.sort()).toEqual(['11:1', '11:2', '11:3'])
+    expect(report.stats).toEqual(stats({ judged: 4, notAncestor: 1, unrepaired: 1, siblingCovered: 1 }))
+  })
+
+  test('🔴 确定性：段顺序反转 ⇒ 同样拒修（预采集与遍历顺序无关）', () => {
+    const sections = makeTornSections().reverse()
+    const report = auditSectionAnchors(sections, makeTornFigma())
+    expect(report.fixes).toHaveLength(0)
+    expect(report.unrepaired[0]).toMatchObject({ sectionId: '10:1', reason: 'lca-covers-sibling-sections' })
+  })
+
+  test('🔴 阴性（刀33 聚合修复正当）：同样统计区单段存在 ⇒ 照常修复（判据不是恒拒）', () => {
+    const sections = [makeTornSections()[0]]
+    const report = auditSectionAnchors(sections, makeTornFigma())
+    expect(report.fixes).toHaveLength(1)
+    expect(sections[0].figmaAnchorId).toBe('9:9')
+    expect(report.stats).toEqual(stats({ judged: 1, notAncestor: 1, repaired: 1 }))
+  })
+
+  test('阴性：修复落点之外的兄弟段锚点不算覆盖，正常修复', () => {
+    // makeFigma：统计区段（8:8 锚）修到 3:3；另一段声明锚点 8:8 在 3:3 子树**之外**
+    // （8:8 与 3:3 同层）⇒ 不构成覆盖，修复照常落地
+    const pair = [
+      makeStatSection(), // → 修到 3:3
+      { id: '8:8', name: '独立文本段', body: { children: [{ id: '8:8' }] } }, // 自身祖先，合法
+    ]
+    const report = auditSectionAnchors(pair, makeFigma())
+    expect(report.fixes).toHaveLength(1)
+    expect(pair[0].figmaAnchorId).toBe('3:3')
+    expect(report.stats.siblingCovered).toBe(0)
   })
 })

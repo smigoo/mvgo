@@ -16,6 +16,7 @@ import {
   findFigmaNodeData,
   detectComponentType,
   scoreComponentDir,
+  scoreResourceMount,
 } from '../quality-score-v1.js';
 
 describe('computeSpecScore', () => {
@@ -97,15 +98,59 @@ describe('computeStyleScore', () => {
 });
 
 describe('extractDeclaredStyleLiterals', () => {
+  // 2026-11-02 修正：2026-09-22 起只扫样式上下文，无 path 文件不提取（裸 content 不再命中），
+  // 此用例自此随基线失败（HEAD 实证 1 failed），补 path 恢复其校验本意。
   it('从 CSS 声明抽 color/spacing/font/radius', () => {
     const files = [
-      { content: 'background: #ff0000; margin: 8px 12px; font-size: 16px; border-radius: 4px;' },
+      {
+        path: 'resources/styles/common.less',
+        content: 'background: #ff0000; margin: 8px 12px; font-size: 16px; border-radius: 4px;',
+      },
     ];
     expect(extractDeclaredStyleLiterals(files)).toMatchObject({
       color: ['#ff0000'],
       spacing: ['8px', '12px'],
       font: ['16px'],
       radius: ['4px'],
+    });
+  });
+
+  // 🔴 回归锁（2026-11-02，实证 mc-max-1793629839483-bf86ddba）：fg-takeover 产物的 fg 样式
+  // 大量写在模板内联 style="..." / :style="{...}"，此前只扫 <style> 块 ⇒ 真实存在的值被判
+  // missed（#3965ff≡rgba(57,101,255,1) 内联实存却扣分；gap:34px/10px、margin-top:-1px 同理）。
+  describe('模板内联样式补扫（2026-11-02 修复）', () => {
+    const vueFile = {
+      path: 'package/components/Stats.vue',
+      content: `<template>
+  <div data-section-id="43:4893" style="display:flex;gap:34px;padding:0;">
+    <div class="card" style="gap:10px;background:#bdd5ff;border:1px solid #ffffff;">
+      <span style="color:rgba(57,101,255,1);font-size:24px;font-weight:400;">{{ v0 }}</span>
+    </div>
+    <div :style="{ boxSizing: 'border-box', padding: '10px 16px', fontSize: '14px', marginRight: row.gap == null ? undefined : row.gap + 'px' }"></div>
+    <div :style="{ backgroundImage: 'url(' + fgStatBg0 + ')' }"></div>
+  </div>
+</template>
+<style>.card{color:#333333;margin-top:8px;}</style>`,
+    };
+
+    it('静态 style 与 :style 字符串字面量均被提取', () => {
+      const r = extractDeclaredStyleLiterals([vueFile]);
+      expect(r.color).toContain('#bdd5ff');
+      expect(r.color).toContain('#ffffff');
+      expect(r.color).toContain('rgba(57,101,255,1)');
+      expect(r.spacing).toContain('34px');
+      expect(r.spacing).toContain('10px');
+      expect(r.spacing).toContain('16px');
+      expect(r.font).toContain('24px');
+      expect(r.font).toContain('14px');
+    });
+
+    it('动态表达式（row.gap + "px"）不误采；<style> 块提取不受影响', () => {
+      const r = extractDeclaredStyleLiterals([vueFile]);
+      // 所有 spacing 条目都必须是干净的 px 字面量（不带引号/表达式残留）
+      expect(r.spacing.every((s) => /^-?[\d.]+px$/.test(s))).toBe(true);
+      expect(r.spacing).toContain('8px'); // <style> 块
+      expect(r.color).toContain('#333333'); // <style> 块
     });
   });
 });
@@ -214,6 +259,61 @@ describe('scoreComponentDir (vue3 分流)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('scoreResourceMount', () => {
+  // 🔴 回归锁（2026-11-02，实证 mc-max-1793629839483-bf86ddba）：此前用 entry.figmaNodeId
+  // （资源图自身 id）当 data-section-id 匹配目标 ⇒ 三卡背景图全挂对仍恒判 0/3；
+  // shared alias（三卡共用一图）的自身 section 被归并后需回退主资源条目判定。
+  const mapping = [
+    {
+      figmaNodeId: '48:5909', name: 'bg', bgRole: 'container', downloadStatus: 'success',
+      targetDomSelector: '[data-section-id="43:4893"]', ownerSectionId: '43:4893',
+    },
+    {
+      figmaNodeId: '187:265', name: 'bg', bgRole: 'container', downloadStatus: 'success',
+      targetDomSelector: '[data-section-id="43:4898"]', ownerSectionId: '43:4898',
+      deduplicatedFrom: '48:5909', isSharedAlias: true,
+    },
+    {
+      figmaNodeId: '187:266', name: 'bg', bgRole: 'container', downloadStatus: 'success',
+      targetDomSelector: '[data-section-id="43:4903"]', ownerSectionId: '43:4903',
+      deduplicatedFrom: '48:5909', isSharedAlias: true,
+    },
+  ];
+
+  it('挂载目标取 targetDomSelector；shared alias 回退主资源 owner（statrow 归并后仍 3/3）', () => {
+    const r = scoreResourceMount(mapping, new Set(['43:4893']));
+    expect(r.scored).toBe(true);
+    expect(r.expected).toBe(3);
+    expect(r.matched).toBe(3);
+    expect(r.score).toBe(100);
+  });
+
+  it('真未挂载仍判 missed，reason 列出尝试过的候选 id', () => {
+    const r = scoreResourceMount(mapping, new Set(['43:9999']));
+    expect(r.matched).toBe(0);
+    expect(r.score).toBe(0);
+    expect(r.missed[0].reason).toContain('43:4893');
+  });
+
+  it('无 target/owner 的旧 mapping 退回 figmaNodeId 兜底（旧行为兼容）', () => {
+    const legacy = [
+      { figmaNodeId: '9:9', name: 'bg', bgRole: 'container', downloadStatus: 'success' },
+    ];
+    expect(scoreResourceMount(legacy, new Set(['9:9'])).matched).toBe(1);
+    expect(scoreResourceMount(legacy, new Set(['8:8'])).matched).toBe(0);
+  });
+
+  it('ownerSectionId 兜底：selector 缺失时仍可用 owner 判定', () => {
+    const m = [
+      {
+        figmaNodeId: '5:5', name: 'bg', bgRole: 'container', downloadStatus: 'success',
+        ownerSectionId: '7:7',
+      },
+    ];
+    expect(scoreResourceMount(m, new Set(['7:7'])).matched).toBe(1);
   });
 });
 

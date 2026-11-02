@@ -32,10 +32,13 @@ const LATENCY_STATS_FILE = join(dataDir, 'ai-provider-stats.json')
 
 class ProviderPool {
   constructor() {
-    /** @type {{text: {providers: Map, primaryId: string|null}, vision: {providers: Map, primaryId: string|null}}} */
+    /** @type {{text: {providers: Map, primaryId: string|null, scope: string|null}, vision: {providers: Map, primaryId: string|null, scope: string|null}}} */
+    // 🛡️ 2026-11-02 跨用户串配置根治：每个槽位带注册归属 scope（由 ai-defaults 按用户主配置指纹生成）。
+    // 生产实锤（mc-max-1793601836580-ae77ba7d）：单例槽位跨任务残留 + phase2 启动先 pick，
+    // 导致 panqiang 任务用 liuqh 的 deepseek-v4-pro@api.deepseek.com key。scope 不匹配的 get/pick 一律视为空。
     this._slots = {
-      text: { providers: new Map(), primaryId: null },
-      vision: { providers: new Map(), primaryId: null },
+      text: { providers: new Map(), primaryId: null, scope: null },
+      vision: { providers: new Map(), primaryId: null, scope: null },
     }
     /** @type {Map<string, {rpmBucket:any, tpmBucket:any, breaker:any}>} 跨槽共享的桶/熔断器状态 */
     this._shared = new Map()
@@ -99,6 +102,7 @@ class ProviderPool {
     if (!list.length) {
       slot.providers.clear()
       slot.primaryId = null
+      slot.scope = null
       logger.info(`供应商池[${role}]未配置，回退单 provider 逻辑`)
       return
     }
@@ -138,6 +142,9 @@ class ProviderPool {
     slot.providers = next
     // 主 provider id：仅当对应 id 真实存在时生效，避免悬空引用
     slot.primaryId = opts.primaryId && next.has(opts.primaryId) ? opts.primaryId : null
+    // 🛡️ 注册归属 scope（2026-11-02）：由调用方（ai-defaults）按用户主配置指纹传入。
+    // 之后 get/pick 若带 scope 且与本槽不符 → 视为空，杜绝读到他人任务残留的 provider。
+    slot.scope = typeof opts.scope === 'string' && opts.scope ? opts.scope : null
 
     // 调度策略：weighted-spread 让主模型也参与加权随机；primary-first 主模型独占（默认）
     if (opts.pickStrategy === 'weighted-spread' || opts.pickStrategy === 'primary-first') {
@@ -166,9 +173,12 @@ class ProviderPool {
    * @returns {any|null}
    */
   pick(role = 'text', options = {}) {
-    const { excludeIds = [], requirements = {} } = options || {}
+    const { excludeIds = [], requirements = {}, scope = null } = options || {}
     const r = ROLES.includes(role) ? role : 'text'
     const slot = this._slots[r]
+    // 🛡️ scope 归属校验（2026-11-02）：调用方声明了自己配置的 scope，而槽位注册的是别人
+    // （另一用户/另一任务残留）→ 一律视为空，绝不返回他人凭证。无 scope 的调用保持旧语义（兼容）。
+    if (scope && slot.scope !== scope) return null
     const all = [...slot.providers.values()]
 
     if (!all.length) {
@@ -176,6 +186,8 @@ class ProviderPool {
       const other = this._slots[r === 'text' ? 'vision' : 'text']
       const otherAll = [...other.providers.values()]
       if (!otherAll.length) return null
+      // scope 归属校验对回退槽同样生效
+      if (scope && other.scope !== scope) return null
       logger.warn(`供应商池[${r}]为空，回退到[${r === 'text' ? 'vision' : 'text'}]槽`, {})
       return this._pickFrom(otherAll, other.primaryId, r === 'text' ? 'vision' : 'text', { excludeIds, requirements })
     }
@@ -380,8 +392,21 @@ class ProviderPool {
   }
 
   /** 按 id 取 provider 条目（含桶与熔断器），跨槽查找 */
-  get(id) {
-    return this._slots.text.providers.get(id) || this._slots.vision.providers.get(id) || null
+  get(id, options = {}) {
+    // 🛡️ scope 归属校验（2026-11-02）：带 scope 的读取只命中本 scope 注册的槽位，
+    // 防止拿到他人任务残留的同名 provider（__primary_text__ 全进程同名，单例下必然撞）。
+    const scope = (options && options.scope) || null
+    const inText = this._slots.text.providers.has(id)
+    const inVision = this._slots.vision.providers.has(id)
+    if (inText) {
+      if (scope && this._slots.text.scope !== scope) return null
+      return this._slots.text.providers.get(id) || null
+    }
+    if (inVision) {
+      if (scope && this._slots.vision.scope !== scope) return null
+      return this._slots.vision.providers.get(id) || null
+    }
+    return null
   }
 
   /**

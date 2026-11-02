@@ -16,22 +16,10 @@ import * as microcodeParser from './microcode/code-parser.js';
 import * as microcodeHealer from './microcode/code-healer.js';
 import * as microcodeWriter from './microcode/file-writer.js';
 import * as microcodePrompt from './microcode/prompt-builder.js';
+// 🔍 高级选项 P0（2026-11-02 抽出）：用户补充需求段构建迁至 utils/user-addendum.js
+//  （单一来源；抽出动机 = engineer 整体不可被 jest 加载，纯函数落 utils 才能挂行为断言 spec）。
+import { buildUserAddendumSection } from '../utils/user-addendum.js';
 
-/**
- * 🆕 高级选项 P0（2026-10-09）：用户补充需求 prompt 段。
- * 两项都可选；超长防御截断（extraPrompt ≤4000 字 / 文档文本 ≤20000 字——DTO 层已限，
- * 此处兜底防历史调用方绕过）。空内容返回空串（零开销）。
- */
-function buildUserAddendumSection(extraPrompt, requirementDocText) {
-  const ep = String(extraPrompt || '').trim().slice(0, 4000);
-  const rd = String(requirementDocText || '').trim().slice(0, 20000);
-  if (!ep && !rd) return '';
-  let block = '\n\n# 📎 用户补充需求（高级选项，用户显式输入，必须遵守）\n\n';
-  block += '> 优先级：Figma @技术栈 锚点契约 > 本段 > 平台默认规范；与设计稿视觉冲突时以设计稿为准。\n\n';
-  if (ep) block += `## 补充提示词\n\n${ep}\n\n`;
-  if (rd) block += `## 需求文档（用户上传，要点必须落实）\n\n${rd}\n\n`;
-  return block;
-}
 import * as microcodeValidator from './microcode/code-validator.js';
 import * as microcodeGenerator from './microcode/code-generator.js';
 import * as microcodeResources from './microcode/resource-mounter.js';
@@ -925,7 +913,8 @@ export class MicrocodeEngineer extends BaseAgent {
       // 🆕 高级选项 P0（2026-10-09）：用户补充需求段（提示词 + 需求文档文本）——
       // 紧跟裁决/文档权威段之后、默认规范之前，每个分块 prompt 都携带。
       // 优先级契约：Figma @techstack 锚点 > 本段 > 默认规范；视觉保真是底线
-      //（与设计稿冲突时以设计稿为准，但用户显式要求优先于平台默认行为）。
+      //（🔧 2026-11-02 契约句已拆两层：视觉样式冲突以设计稿为准；交互/行为类
+      //  显式要求必须落实——tab 切换事故 mc-max-1793601934772-3c973404，见 utils/user-addendum.js）。
       // 🔧 修复：本箭头函数定义在 generateCode(input) 内，extraPrompt 走 input 透传
       //  （execute 已组装进 input），裸标识符会 ReferenceError（真机实锤）。
       {
@@ -933,7 +922,14 @@ export class MicrocodeEngineer extends BaseAgent {
           input.extraPrompt,
           input.requirementDocText,
         );
-        if (_userExtra) p += _userExtra;
+        if (_userExtra) {
+          p += _userExtra;
+          // 🔍 真机判据计数行（2026-11-02）：grep `用户补充需求段已注入` 可辩驳验证
+          //   extraPrompt/requirementDocText 真的进了下发 prompt（而非链路某跳静默丢弃）。
+          this.logger.info(
+            `📎 用户补充需求段已注入分块 prompt (fileType=${fileType}, extraPrompt=${String(input.extraPrompt || '').length}字, requirementDoc=${String(input.requirementDocText || '').length}字)`,
+          );
+        }
       }
       // 🛡️ 资源归属指导（方案5）：上一轮漏用背景时，本轮注入权威归属，避免背景漏用/挂错 section。
       if (input._attributionGuidance) p += input._attributionGuidance;

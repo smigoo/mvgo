@@ -4,6 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { dataDir } from './backend-root';
+import {
+  MAX_FIGMA_TOKENS,
+  applyFigmaTokenProjection,
+  materializeFigmaTokenSlots,
+} from './figma-token-projection';
 
 /**
  * 服务端 AI 配置存储（接口保存，替代前端 localStorage）。
@@ -74,6 +79,27 @@ const SLOT_BINDING_SCHEMA = z.object({
 
 const AI_CONFIG_BASE_SCHEMA = {
   figmaToken: stringField,
+  // 🆕 2026-11-02 Figma 多 Token：每用户最多 MAX_FIGMA_TOKENS(2) 个，手动选定 active。
+  // 存储形态与 providers / models 同构（数组存外层）；读取侧由 applyFigmaTokenProjection
+  // 投影回单值 figmaToken，下游 109 处读取点零改动。
+  // ⚠️ 保存是整份 blob 覆盖（user-ai-config.service `$set: { configEnc }`），
+  //   故这两个字段**必须**在 .strict() 的 schema 里显式声明，否则保存直接 400；
+  //   且一旦漏进 schema，用户下次保存就会被永久抹掉。
+  figmaTokens: z
+    .preprocess(
+      (value) => (Array.isArray(value) ? value : undefined),
+      z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            name: stringField,
+            token: stringField,
+          }),
+        )
+        .max(MAX_FIGMA_TOKENS)
+        .optional(),
+    ),
+  activeFigmaTokenId: stringField,
   apifoxToken: stringField,
   // 🆕 GitLab 推送凭据（2026-08-24 打通组件一键推送；secret 字段，读取侧 redactSecrets 脱敏）
   gitlabToken: stringField,
@@ -313,6 +339,10 @@ export class AiConfigService {
     // 所有凭证（模型 + Figma/Apifox/GitLab token）一律只由用户级配置（user_ai_configs）提供。
     const merged: Record<string, any> = {};
     Object.assign(merged, userCfg);
+    // 🆕 2026-11-02 Figma 多 Token → 单值投影（唯一读取出口）：
+    // figmaTokens 里有可用值就以 activeFigmaTokenId 命中的那个覆盖 figmaToken；
+    // 全空时原样透传，历史单值继续生效（旧配置零漂移）。
+    Object.assign(merged, applyFigmaTokenProjection(merged));
     if (merged.modelMode === 'unified') {
       // 统一模式：unified* 为唯一真相源，强制 vision*/text* 与之同源。
       // 修复「UI 显示 gpt-5.5、生成却走 kimi」类脏数据：无论文件里 role 字段是否被
@@ -347,7 +377,10 @@ export class AiConfigService {
    */
   async getUserMergedConfig(userId?: string): Promise<Record<string, any>> {
     const merged = await this.getMergedAiConfig(userId);
-    return migrateLegacyToModels(merged);
+    const withModels = migrateLegacyToModels(merged);
+    // 🆕 2026-11-02 面板读写对称：把历史单值 figmaToken 物化成第 1 号槽位，
+    // 否则老用户打开面板看到空槽位，一保存就把 token 抹掉（体感＝配置凭空丢失）。
+    return materializeFigmaTokenSlots(withModels);
   }
 
 

@@ -18,6 +18,7 @@ import { ApifoxService } from '../apifox/apifox.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { GitlabPushService } from '../component/gitlab-push.service';
 import { UserAiConfigService } from '../config/user-ai-config.service';
+import { applyFigmaTokenProjection } from '../config/figma-token-projection';
 import { Phase2Service } from '../phase2/phase2.service';
 import { LiteService } from '../lite/lite.service';
 import { TaskQueueService } from '../queue/task-queue.service';
@@ -557,7 +558,9 @@ export class WorkbenchService {
 
     // 对话级有值就用对话级，否则回退到用户级配置（MongoDB）
     const userConfig = await this.userAiConfigService.getUserConfig(userId);
-    const userCfg = userConfig || {};
+    // 🆕 2026-11-02 Figma 多 Token：用户级回退必须走投影，否则拿到的是历史 figmaToken
+    // 而不是用户在面板里手动选定的当前 Token（这条路径绕过了 getMergedAiConfig）。
+    const userCfg = applyFigmaTokenProjection(userConfig || {});
     const figmaToken = creds.figmaToken || userCfg.figmaToken;
     const apifoxToken = creds.apifoxToken || userCfg.apifoxToken;
     const gitlabToken = creds.gitlabToken || userCfg.gitlabToken;

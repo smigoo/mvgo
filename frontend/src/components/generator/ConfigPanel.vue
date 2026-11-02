@@ -375,53 +375,134 @@
             <span class="section-desc">设计稿访问令牌</span>
           </div>
 
-          <div class="config-group" v-feature="'figma.integration'">
-            <label for="figmaToken">Figma Access Token</label>
-            <div class="input-with-toggle">
-              <input
-                :type="passwordVisible.figmaToken ? 'text' : 'password'"
-                id="figmaToken"
-                name="mcFigmaAccessToken"
-                v-model="formData.figmaToken"
-                placeholder="figd_..."
-                autocomplete="new-password"
-                autocapitalize="off"
-                spellcheck="false"
-                data-lpignore="true"
-                data-1p-ignore="true"
-                data-bwignore="true"
-              />
-              <button
-                type="button"
-                class="toggle-visibility-btn icon-tooltip"
-                @click="togglePasswordVisibility('figmaToken')"
-                :data-tooltip="passwordVisible.figmaToken ? '隐藏' : '显示'"
-                :aria-label="passwordVisible.figmaToken ? '隐藏' : '显示'"
-              >
-                <svg v-if="!passwordVisible.figmaToken" class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg v-else class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              </button>
+          <div class="config-group figma-token-group" v-feature="'figma.integration'">
+            <div class="ft-head">
+              <label for="figmaToken">Figma Access Token</label>
+              <span class="ft-count">{{ figmaFilledCount }} / {{ MAX_FIGMA_TOKENS }}</span>
             </div>
-            <div class="hint">从 Figma Settings → Account → Personal Access Tokens 获取</div>
-            <!-- 测试按钮 -->
-            <div class="test-section">
+
+            <!-- 下拉：手动选定「当前生效」的 Token（不自动切换，避免生成中途换号） -->
+            <div class="ft-select-wrap">
               <button
                 type="button"
-                class="test-btn"
-                @click="runTest('figma', 'test-figma', { token: formData.figmaToken })"
-                :disabled="testResults.figma.loading || !formData.figmaToken"
+                class="ft-select"
+                :class="{ empty: !activeFigmaSlot?.token }"
+                @click="figmaDropdownOpen = !figmaDropdownOpen"
+                aria-haspopup="listbox"
+                :aria-expanded="figmaDropdownOpen"
               >
-                <span v-if="testResults.figma.loading" class="spinner"></span>
-                <span v-else>测试 Figma Token</span>
+                <span class="ft-dot" :class="{ on: !!activeFigmaSlot?.token }"></span>
+                <span class="ft-name">{{ activeFigmaSlotLabel }}</span>
+                <span class="ft-mask">{{ maskFigmaToken(activeFigmaSlot?.token) }}</span>
+                <svg
+                  class="ft-chevron"
+                  :class="{ open: figmaDropdownOpen }"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ><polyline points="6 9 12 15 18 9" /></svg>
               </button>
-              <div v-if="testResults.figma.success !== undefined" class="test-results">
-                <div class="test-result-item" :class="{ success: testResults.figma.success, error: !testResults.figma.success }">
-                  <span class="result-icon">{{ testResults.figma.success ? '✓' : '✗' }}</span>
-                  <span class="result-text">
-                    {{ testResults.figma.message }}
-                    <span v-if="testResults.figma.latency" class="latency">({{ testResults.figma.latency }}ms)</span>
-                    <div v-if="testResults.figma.detail" class="test-result-detail">{{ testResults.figma.detail }}</div>
-                  </span>
+
+              <!-- 点空白处收起（纯 CSS 遮罩，不挂 document 监听，避免泄漏） -->
+              <div v-if="figmaDropdownOpen" class="ft-dropdown-mask" @click="figmaDropdownOpen = false"></div>
+              <div v-if="figmaDropdownOpen" class="ft-dropdown" role="listbox">
+                <button
+                  v-for="(slot, idx) in formData.figmaTokens"
+                  :key="slot.id"
+                  type="button"
+                  class="ft-dropdown-item"
+                  :class="{ active: slot.id === formData.activeFigmaTokenId }"
+                  role="option"
+                  :aria-selected="slot.id === formData.activeFigmaTokenId"
+                  @click="selectFigmaToken(slot.id)"
+                >
+                  <span class="ft-radio" :class="{ on: slot.id === formData.activeFigmaTokenId }"></span>
+                  <span class="ft-name">{{ slot.name?.trim() || `Token ${idx + 1}` }}</span>
+                  <span class="ft-mask">{{ maskFigmaToken(slot.token) }}</span>
+                  <span v-if="!slot.token?.trim()" class="ft-warn">未填写</span>
+                </button>
+                <div class="ft-dropdown-foot">
+                  <span class="ft-cap">最多 {{ MAX_FIGMA_TOKENS }} 个，下拉里手动切换</span>
+                  <button
+                    v-if="formData.figmaTokens.length < MAX_FIGMA_TOKENS"
+                    type="button"
+                    class="ft-add"
+                    @click="addFigmaTokenSlot"
+                  >+ 添加</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 当前选中槽位的编辑区 -->
+            <div v-if="activeFigmaSlot" class="ft-editor">
+              <div class="ft-editor-head">
+                <span class="ft-editor-title">
+                  {{ activeFigmaSlot.name?.trim() || `Token ${activeFigmaSlotIndex + 1}` }}
+                  <span v-if="activeFigmaSlot.id === formData.activeFigmaTokenId" class="ft-badge">当前使用</span>
+                </span>
+                <button
+                  v-if="formData.figmaTokens.length > 1"
+                  type="button"
+                  class="ft-remove"
+                  @click="removeFigmaTokenSlot(activeFigmaSlot.id)"
+                >移除</button>
+              </div>
+              <input
+                type="text"
+                class="ft-name-input"
+                v-model="activeFigmaSlot.name"
+                placeholder="备注名（如 主账号 / 客户A）"
+                maxlength="24"
+              />
+              <div class="input-with-toggle">
+                <input
+                  :type="passwordVisible.figmaToken ? 'text' : 'password'"
+                  id="figmaToken"
+                  name="mcFigmaAccessToken"
+                  v-model="activeFigmaSlot.token"
+                  placeholder="figd_..."
+                  autocomplete="new-password"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                />
+                <button
+                  type="button"
+                  class="toggle-visibility-btn icon-tooltip"
+                  @click="togglePasswordVisibility('figmaToken')"
+                  :data-tooltip="passwordVisible.figmaToken ? '隐藏' : '显示'"
+                  :aria-label="passwordVisible.figmaToken ? '隐藏' : '显示'"
+                >
+                  <svg v-if="!passwordVisible.figmaToken" class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg v-else class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+              <div class="hint">从 Figma Settings → Account → Personal Access Tokens 获取</div>
+              <!-- 测试按钮：只测当前选中的这个 Token -->
+              <div class="test-section">
+                <button
+                  type="button"
+                  class="test-btn"
+                  @click="testFigmaActive"
+                  :disabled="testResults.figma.loading || !activeFigmaSlot?.token"
+                >
+                  <span v-if="testResults.figma.loading" class="spinner"></span>
+                  <span v-else>测试当前 Token</span>
+                </button>
+                <div v-if="testResults.figma.success !== undefined" class="test-results">
+                  <div class="test-result-item" :class="{ success: testResults.figma.success, error: !testResults.figma.success }">
+                    <span class="result-icon">{{ testResults.figma.success ? '✓' : '✗' }}</span>
+                    <span class="result-text">
+                      {{ testResults.figma.message }}
+                      <span v-if="testResults.figma.latency" class="latency">({{ testResults.figma.latency }}ms)</span>
+                      <div v-if="testResults.figma.detail" class="test-result-detail">{{ testResults.figma.detail }}</div>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -796,6 +877,43 @@ function togglePasswordVisibility(fieldId: string) {
   passwordVisible.value[fieldId] = !passwordVisible.value[fieldId]
 }
 
+// 🆕 2026-11-02 Figma 多 Token：每人最多 2 个、手动选当前生效的一个。
+// ⚠️ 上限与后端 `ai-engine`/`config.service.ts` 的 MAX_FIGMA_TOKENS 必须一致（后端 schema
+//    `.max(2)`，超出直接 400）。前端只是渲染 2 个槽位 + 下拉，不做业务推导。
+const MAX_FIGMA_TOKENS = 2
+
+type FigmaTokenSlot = { id: string; name?: string; token?: string }
+
+let figmaSlotSeq = 0
+function makeFigmaSlot(name = '', token = ''): FigmaTokenSlot {
+  figmaSlotSeq += 1
+  // 确定性前缀 + 递增序号：避免同名重进面板 id 漂移（id 是 activeFigmaTokenId 的锚）
+  return { id: `figma-${Date.now().toString(36)}-${figmaSlotSeq}`, name, token }
+}
+
+/** 后端配置 → 面板槽位（后端已 materialize，这里只做兜底与上限裁剪） */
+function readFigmaSlotsFromCfg(cfg: any): FigmaTokenSlot[] {
+  const raw = Array.isArray(cfg?.figmaTokens) ? cfg.figmaTokens : []
+  const seen = new Set<string>()
+  const slots: FigmaTokenSlot[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const id = typeof item.id === 'string' ? item.id.trim() : ''
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    slots.push({
+      id,
+      name: typeof item.name === 'string' ? item.name : '',
+      token: typeof item.token === 'string' ? item.token : '',
+    })
+    if (slots.length >= MAX_FIGMA_TOKENS) break
+  }
+  if (slots.length) return slots
+  // 兜底：历史单值落成 1 号槽位（后端已做同样的事，双保险，防止旧接口/缓存回包缺字段）
+  const legacy = typeof cfg?.figmaToken === 'string' ? cfg.figmaToken.trim() : ''
+  return [makeFigmaSlot(legacy ? '主 Token' : '', legacy)]
+}
+
 // 表单数据
 const formData = ref<ApiConfig & {
   modelMode?: string
@@ -810,8 +928,12 @@ const formData = ref<ApiConfig & {
   textProviderType?: string
   apifoxToken?: string
   gitlabToken?: string
+  figmaTokens?: FigmaTokenSlot[]
+  activeFigmaTokenId?: string
 }>({
   figmaToken: '',
+  figmaTokens: [makeFigmaSlot()],
+  activeFigmaTokenId: '',
   apifoxToken: '',
   gitlabToken: '',
   visionApiKey: '',
@@ -839,6 +961,88 @@ const formData = ref<ApiConfig & {
     vision: { primaryId: '', poolIds: [] as string[] },
   }
 })
+
+// ——— Figma 多 Token：下拉选择 / 槽位增删 / 当前 Token 测试 ———
+const figmaDropdownOpen = ref(false)
+
+/** 当前生效槽位的下标：activeFigmaTokenId 悬空时确定性回落第 1 个（与后端同口径） */
+const activeFigmaSlotIndex = computed(() => {
+  const slots = formData.value.figmaTokens || []
+  const idx = slots.findIndex((s) => s.id === formData.value.activeFigmaTokenId)
+  return idx >= 0 ? idx : 0
+})
+
+const activeFigmaSlot = computed<FigmaTokenSlot | null>(
+  () => (formData.value.figmaTokens || [])[activeFigmaSlotIndex.value] || null,
+)
+
+const activeFigmaSlotLabel = computed(() => {
+  const slot = activeFigmaSlot.value
+  if (!slot) return '未添加 Token'
+  return slot.name?.trim() || `Token ${activeFigmaSlotIndex.value + 1}`
+})
+
+/** 已填 token 的槽位数（空槽位不计，避免「2/2」但其实只有 1 个可用） */
+const figmaFilledCount = computed(
+  () => (formData.value.figmaTokens || []).filter((s) => !!s.token?.trim()).length,
+)
+
+function maskFigmaToken(token?: string): string {
+  const t = (token || '').trim()
+  if (!t) return '未填写'
+  if (t.length <= 10) return '••••'
+  return `${t.slice(0, 6)}…${t.slice(-4)}`
+}
+
+function selectFigmaToken(id: string) {
+  if (!(formData.value.figmaTokens || []).some((s) => s.id === id)) return
+  formData.value.activeFigmaTokenId = id
+  figmaDropdownOpen.value = false
+}
+
+function addFigmaTokenSlot() {
+  const slots = formData.value.figmaTokens || []
+  if (slots.length >= MAX_FIGMA_TOKENS) return
+  const slot = makeFigmaSlot()
+  formData.value.figmaTokens = [...slots, slot]
+  // 新建即选中，少点一次（用户加第二个 token 一定是想用它）
+  formData.value.activeFigmaTokenId = slot.id
+}
+
+function removeFigmaTokenSlot(id: string) {
+  const left = (formData.value.figmaTokens || []).filter((s) => s.id !== id)
+  // 至少保留 1 个槽位：面板永远有输入行，不需要「0 槽位」特例
+  formData.value.figmaTokens = left.length ? left : [makeFigmaSlot()]
+  if (!formData.value.figmaTokens.some((s) => s.id === formData.value.activeFigmaTokenId)) {
+    formData.value.activeFigmaTokenId = formData.value.figmaTokens[0]?.id || ''
+  }
+}
+
+/** 只测当前选中的这个 Token（多 Token 下「测的是哪个」必须无歧义） */
+async function testFigmaActive() {
+  const slot = activeFigmaSlot.value
+  const token = slot?.token?.trim()
+  if (!slot || !token) {
+    message.warning('当前 Token 还未填写')
+    return
+  }
+  await runTest('figma', 'test-figma', { token })
+  // 测试通过顺手补备注名：后端 detail 形如「已连接：<handle>」，省掉手工命名
+  if (testResults.value.figma.success && !slot.name?.trim()) {
+    const matched = /已连接[：:]\s*(.+)$/.exec(testResults.value.figma.message || '')
+    if (matched?.[1]) slot.name = matched[1].trim().slice(0, 24)
+  }
+}
+
+// legacy 单值镜像：状态卡 / 保存提示 / 其它读 formData.figmaToken 的地方继续有效。
+// 只做单向同步（槽位 → 单值），反向不写，避免和槽位编辑互相打架。
+watch(
+  activeFigmaSlot,
+  (slot) => {
+    formData.value.figmaToken = slot?.token || ''
+  },
+  { deep: true },
+)
 
 // 清理已删除供应商的测试状态
 watch(
@@ -940,6 +1144,9 @@ function applyConfigToForm(cfg: any) {
   // 🐛 用 ?? 不用 ||：空字符串是有意清空，不应 fallback
   formData.value = {
     figmaToken: cfg.figmaToken ?? '',
+    // 🆕 Figma 多 Token：槽位以读回包为准；后端已 materialize，这里再兜一层防旧缓存
+    figmaTokens: readFigmaSlotsFromCfg(cfg),
+    activeFigmaTokenId: cfg.activeFigmaTokenId ?? '',
     apifoxToken: cfg.apifoxToken ?? '',
     gitlabToken: cfg.gitlabToken ?? '',
     visionApiKey: cfg.visionApiKey ?? '',
@@ -1497,8 +1704,35 @@ async function saveConfig() {
 
   // 保存前对所有字符串字段 trim，防止粘贴时带入首尾空格导致 URL/Key 拼接 404
   const trim = (v: any) => (typeof v === 'string' ? v.trim() : v)
+
+  // 🆕 Figma 多 Token：
+  //   ① DOM 值优先覆盖「当前选中槽位」的 token（与既有单值口径一致，绕开 v-model 潜在不同步）；
+  //   ② 空 token 槽位不落库（否则会留一个占位槽，面板下次读回是脏的）；
+  //   ③ 全部空 → figmaTokens 传空数组，让后端退回「无 token」语义（不是「传了旧值」）；
+  //   ④ legacy 单值 figmaToken 同步成 active 那个，保证 109 处单值读取点零改动。
+  const domFigmaToken = trim(getVal('figmaToken'))
+  const figmaSlotsRaw = (formData.value.figmaTokens || []).slice(0, MAX_FIGMA_TOKENS)
+  const activeIdBeforeSave = formData.value.activeFigmaTokenId
+  const figmaTokenSlots = figmaSlotsRaw
+    .map((s) => ({
+      id: s.id,
+      name: trim(s.name),
+      token:
+        s.id === activeIdBeforeSave && typeof domFigmaToken === 'string'
+          ? domFigmaToken
+          : trim(s.token),
+    }))
+    .filter((s) => !!s.token)
+  const activeFigmaTokenIdForSave = figmaTokenSlots.some((s) => s.id === activeIdBeforeSave)
+    ? activeIdBeforeSave
+    : (figmaTokenSlots[0]?.id || '')
+  const activeFigmaTokenForSave =
+    figmaTokenSlots.find((s) => s.id === activeFigmaTokenIdForSave)?.token || ''
+
   const saveData: any = {
-    figmaToken:        trim(getVal('figmaToken')      ?? formData.value.figmaToken),
+    figmaToken:        activeFigmaTokenForSave,
+    figmaTokens:       figmaTokenSlots,
+    activeFigmaTokenId: activeFigmaTokenIdForSave,
     apifoxToken:       trim(getVal('apifoxToken')     ?? formData.value.apifoxToken),
     gitlabToken:       trim(getVal('gitlabToken')     ?? formData.value.gitlabToken),
     visionApiKey:      trim(getVal('visionApiKey')    ?? formData.value.visionApiKey),
@@ -1754,6 +1988,8 @@ function clearConfig() {
       localStorage.removeItem('mc_generator_config')  // 🐛 确保 localStorage 也清除
       formData.value = {
         figmaToken: '',
+        figmaTokens: [makeFigmaSlot()],
+        activeFigmaTokenId: '',
         apifoxToken: '',
         gitlabToken: '',
         visionApiKey: '',
@@ -2510,6 +2746,258 @@ function clearConfig() {
 
 .toggle-visibility-btn:hover .eye-icon {
   color: var(--text-primary);
+}
+
+/* ——— Figma 多 Token（下拉 + 槽位编辑） ——— */
+.ft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ft-head label {
+  margin-bottom: 0;
+}
+
+.ft-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-alt);
+  letter-spacing: 0;
+}
+
+.ft-select-wrap {
+  position: relative;
+}
+
+.ft-select {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: border-color 0.2s, background 0.2s;
+  text-align: left;
+}
+
+.ft-select:hover {
+  border-color: var(--brand);
+}
+
+.ft-select.empty .ft-name {
+  color: var(--text-quaternary);
+}
+
+.ft-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--text-quaternary);
+  flex-shrink: 0;
+}
+
+.ft-dot.on {
+  background: var(--success, #2bb673);
+}
+
+.ft-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46%;
+}
+
+.ft-mask {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ft-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: transform 0.22s ease;
+}
+
+.ft-chevron.open {
+  transform: rotate(180deg);
+}
+
+.ft-dropdown-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.ft-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 21;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  animation: ft-fade-in 0.14s ease;
+}
+
+@keyframes ft-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ft-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.ft-dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.ft-dropdown-item.active {
+  background: var(--brand-bg);
+}
+
+.ft-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border-default);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.ft-radio.on {
+  border-color: var(--brand);
+}
+
+.ft-radio.on::after {
+  content: '';
+  position: absolute;
+  inset: 2.5px;
+  border-radius: var(--radius-full);
+  background: var(--brand);
+}
+
+.ft-warn {
+  font-size: 11px;
+  color: var(--warning-text, #d97706);
+  flex-shrink: 0;
+}
+
+.ft-dropdown-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 10px 2px;
+  border-top: 1px solid var(--border-light);
+}
+
+.ft-cap {
+  font-size: 11px;
+  color: var(--text-quaternary);
+}
+
+.ft-add {
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.ft-add:hover {
+  background: var(--brand-bg);
+}
+
+.ft-editor {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-alt);
+}
+
+.ft-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ft-editor-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ft-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--brand);
+  background: var(--brand-bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.ft-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.ft-remove:hover {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+.ft-name-input {
+  margin-bottom: 8px;
+  font-size: 13px !important;
 }
 
 /* 测试按钮和结果 */

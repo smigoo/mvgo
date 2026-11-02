@@ -1,0 +1,77 @@
+{
+  "id": "table-header-container",
+  "source": "mc-max-1793582610570-e7da39ca（43:4791 设备数据表格；真机 .mc-gen/config/preview-analysis.json 逐字，数据行删至 2 行）",
+  "kind": "table-headers",
+  "semantic": "表头契约形态⑤（单容器声明）：body.children[].{role:'table-header', children:[{type:'label',text}]}；数据行另由 {role:'table-body', items:[{role:'table-row'}]} 承载（既无 headers 数组，也无 table-column 逐列声明）",
+  "form": {
+    "id": "43:4791",
+    "name": "设备数据表格",
+    "role": "常驻",
+    "layout": "vertical",
+    "body": {
+      "children": [
+        {
+          "id": "table-header",
+          "role": "table-header",
+          "layout": "horizontal",
+          "children": [
+            { "type": "label", "text": "设备名称", "styles": { "fontSize": 16, "color": "rgba(84,104,129,1)", "fontWeight": "bold" } },
+            { "type": "label", "text": "电量", "styles": { "fontSize": 16, "color": "rgba(84,104,129,1)", "fontWeight": "bold" } },
+            { "type": "label", "text": "速度(m/s)", "styles": { "fontSize": 16, "color": "rgba(84,104,129,1)", "fontWeight": "bold" } },
+            { "type": "label", "text": "启用状态", "styles": { "fontSize": 16, "color": "rgba(84,104,129,1)", "fontWeight": "bold" } }
+          ]
+        },
+        {
+          "id": "table-rows",
+          "role": "table-body",
+          "layout": "vertical",
+          "items": [
+            {
+              "role": "table-row",
+              "repeatedFill": "#e2ecfe",
+              "children": [
+                { "type": "row", "layout": "horizontal", "children": [
+                  { "type": "icon", "resourceFile": "../resources/images/image_473938-37.png", "recommendedUsage": "imgSrc", "width": 28, "height": 28 },
+                  { "type": "label", "text": "服务区巡检狗K1", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } }
+                ] },
+                { "type": "value", "text": "92", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "value", "text": "1.20", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "label", "text": "启用", "styles": { "fontSize": 14, "color": "rgba(0,199,43,1)" } }
+              ]
+            },
+            {
+              "role": "table-row",
+              "repeatedFill": "#d6e5ff",
+              "children": [
+                { "type": "row", "layout": "horizontal", "children": [
+                  { "type": "icon", "resourceFile": "../resources/images/image_473938-37.png", "recommendedUsage": "imgSrc", "width": 28, "height": 28 },
+                  { "type": "label", "text": "服务区巡检狗K2", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } }
+                ] },
+                { "type": "value", "text": "65", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "value", "text": "0.80", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "label", "text": "启用", "styles": { "fontSize": 14, "color": "rgba(0,199,43,1)" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" },
+  "perturbations": [
+    {
+      "op": "stylesToStyle",
+      "expect": { "headers": ["设备名称", "电量", "速度(m/s)", "启用状态"], "sectionType": "table" }
+    },
+    {
+      "op": "deleteRole",
+      "expect": { "headers": null, "sectionType": "" },
+      "knownGap": "形态⑤ 的唯一载体是容器 role='table-header'（子项走 type='label'）；role 全删后无可声明证据 ⇒ 显式 fail-open 返 null（不按 children 数量瞎猜表头）。这正是「宁漏不误」的设计取舍。"
+    },
+    {
+      "op": "itemsToChildren",
+      "expect": { "headers": null, "sectionType": "" },
+      "knownGap": "形态⑤ 的契约键是 children（真机 vision 输出）；该算子把无 items 的节点 children 互换为 items，容器 children 消失 ⇒ 契约丢失 fail-open。与 table-column-headers 的 knownGap 同源：容器键名漂移即契约不可读。"
+    }
+  ]
+}

@@ -86,6 +86,10 @@ export class BaseAgent {
     }
     this.apiKey = config.apiKey || '';
     this.baseURL = config.baseURL || TEXT_DEFAULTS.baseURL;
+    // 🛡️ 注册归属 scope（2026-11-02 跨用户串配置根治）：resolveTextConfig 按本用户主配置指纹生成，
+    // 随配置流入。refreshProvider 只在 scope 与池槽位注册归属一致时才走池故障转移；
+    // 无 scope（本用户未配置 provider 池）⇒ 绝不从全局池读——槽位里可能是他人任务残留的凭证。
+    this.poolScope = config.poolScope || null;
     // 可选：per-provider 思考开关（如 deepseek 系支持 thinking:{type:"disabled"} 关推理）。
     // 仅当 provider/models 配置显式声明时才透传，避免给不支持的网关（lkeap/glm 官方）注入未知参数 → 400。
     this.thinkingType = config.thinkingType || '';
@@ -113,6 +117,8 @@ export class BaseAgent {
         provider: isOpenAICompatible ? 'openai-compatible' : 'anthropic',
         model: this.model,
         providerId: config.providerId,
+        // 🛡️ 2026-11-02：池归属 scope 透传给统一网关（get/pick 归属校验用）
+        poolScope: this.poolScope,
         sessionId: this.sessionId,
         maxTokens: this.maxTokens,
         // 🛡️ 模型收集（2026-08-29）：用 getter 动态读 this.onProgress（execute 时才被赋值为
@@ -121,14 +127,18 @@ export class BaseAgent {
         // 🔀 主 provider 熔断后自动切换备用：每次 attempt 重新 pick 供应商池并重建 llm。
         // excludeIds：排除上一次 attempt 刚失败的 provider，实现「超时 → 切换大模型」故障转移。
         refreshProvider: ({ excludeIds = [], previousProviderId = null, forceThinkingDisabled = false } = {}) => {
+          // 🛡️ 2026-11-02 跨用户串配置根治：池读取必须带本用户注册 scope。
+          // 无 scope ⇒ 本用户未配置 provider 池 ⇒ 不做池故障转移（槽位里可能是他人凭证），
+          // 保持构造时传入的自身配置（正确的用户凭证）继续重试。
+          if (!this.poolScope) return null
           // 🛡️ 自愈（2026-09-29 B 层·模型无关）：网关检测到「推理烧光输出预算」
           // （finish_reason=length + reasoning_tokens>0）后，会让后续 attempt 复用同一个
           // 刚失败的 provider，但强制 thinkingType:'disabled' 重建重试 —— 而非换 provider。
           // 这样任何推理模型（含未知/新模型、被别名/中转包装的模型）都能自愈，
           // 不再依赖 ai-defaults 的模型名启发式（A 层）。
           const p = forceThinkingDisabled && previousProviderId
-            ? getProviderPool().get(previousProviderId)
-            : getProviderPool().pick('text', { excludeIds });
+            ? getProviderPool().get(previousProviderId, { scope: this.poolScope })
+            : getProviderPool().pick('text', { excludeIds, scope: this.poolScope });
           // 🧠 2026-09-30 第二批（方言自愈）：forceThinkingDisabled ⇒ 上一次 attempt 已
           // 「推理烧光预算」（或强关后仍失败）。把当前生效方言标记失效，
           // _buildLLM → buildThinkingOffParams 会自动顺延到下一候选方言重试

@@ -4,8 +4,10 @@
 
 ## 文档分类
 
-| 目录 | 内容 |
+| 目录 / 文件 | 内容 |
 |------|------|
+| `CHANGELOG.md` | 🆕 **发布更新日志**：按批次记录前后端待部署变更、上线前置与验收清单 |
+| `DEPLOYMENT-NOTES.md` | 生产环境实况速查（三端服务、Docker、nginx 卷映射） |
 | `architecture/` | 系统架构、双运行时职责边界、数据库设计 |
 | `operations/` | 部署指南、生成正确性根治方案 |
 | `component-generation/` | ⭐ 组件生成规范、管线设计、优化方案 |
@@ -28,8 +30,9 @@
 
 1. `architecture/系统架构文档.md` — 技术栈、双运行时、路由、数据流
 2. `architecture/Node-Java-职责边界.md` — Java/Node 详细职责与代理矩阵
-3. `operations/部署指南.md` — 生产 ECS + Docker Compose 部署步骤
-4. `deployment/` — 前端部署与配置
+3. `CHANGELOG.md` — 本批次改了什么、要部署什么、上线前置
+4. `operations/部署指南.md` — 生产 ECS + Docker Compose 部署步骤
+5. `deployment/` — 前端部署与配置
 
 ### AI 引擎开发者
 
@@ -47,6 +50,8 @@
 | 系统架构文档 | `architecture/系统架构文档.md` | 开发者 / 架构师 |
 | 双运行时职责边界 | `architecture/Node-Java-职责边界.md` | 后端开发者 |
 | 部署指南 | `operations/部署指南.md` | 运维 / 部署人员 |
+| 发布更新日志 🆕 | `CHANGELOG.md` | 运维 / 开发者 / 测试 |
+| 生产环境实况 | `DEPLOYMENT-NOTES.md` | 运维 |
 | 组件生成规范 ⭐ | `component-generation/rules-and-optimization.md` | AI 引擎开发者 |
 | Agent Builder PRD | `product/agent-builder/prd.md` | 产品经理 / 开发者 |
 | 质量门禁 | `quality/` | QA / 开发者 |
@@ -62,6 +67,7 @@
 
 - 新增文档先判断分类，再放入对应子目录
 - 用户级文档（使用指南、架构总览）放根目录；技术细节放子目录
+- **每次发布/待部署批次结束，在根目录 `CHANGELOG.md` 追加一节**（批次表 + 变更清单 + 上线前置 + 验收清单），不要把它塞进子目录
 - 文档中的代码路径使用项目根目录作为相对路径基准
 - 文档移动后同步更新相对链接和 README 索引
 - 每个专区目录包含独立的 README.md 导航文档
@@ -78,5 +84,5 @@
 
 ---
 
-**最后更新**: 2026-08-28  
-**变更记录**: 合并 artifacts 目录，新增 6 个专区分类
+**最后更新**: 2026-11-02  
+**变更记录**: 新增根目录 `CHANGELOG.md`（发布更新日志）并登记索引

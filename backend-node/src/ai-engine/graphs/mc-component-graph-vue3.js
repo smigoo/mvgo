@@ -83,6 +83,9 @@ import { scanFlexShrinkRisk } from '../utils/flex-shrink-guard.js';
 import { scanAntdMimicry } from '../utils/antd-mimicry-guard.js';
 import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
+// 🛡️ Phase H（2026-11-02）：TEXT-TRUTH ASCII 口径日志行（hits:0 也打，与 phase2 图同款）。
+// 统计值由 CodeStructureValidator.validate 产出（textTruthAsciiStats）。
+import { formatTextTruthAsciiLog } from '../utils/text-truth-guard.js';
 //  P0-2: 结构顺序门禁（零 LLM，防区块颠倒）
 import { validateStructureOrder } from '../validators/structure-order-validator.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
@@ -1784,6 +1787,68 @@ export function createPhase2Graph(config = {}) {
             healed: healResult.healed.map((h) => ({ text: h.text, removedFrom: h.removedFrom })),
           });
         }
+        // 🔴 R8-1（2026-11-02 · 50d7793f 实锤，与 phase2 图同款）：幻觉段整段收敛——
+        //   guard 已从 index.vue 移除挂载/import 并把组件从 files 剔除，此处删盘上组件文件。
+        const _collapsed = healResult.collapsedSections || [];
+        for (const c of _collapsed) {
+          try {
+            const { unlinkSync: _unlink } = await import('fs');
+            _unlink(_j(state.outputPath, c.file));
+          } catch (e) {
+            logger.warn('🧹 R8-1 幻觉段组件文件删除失败（不阻断）', { file: c.file, error: e?.message || String(e) });
+          }
+          logger.warn('🧹 R8-1 幻觉段已整段收敛（vision 重复声明无锚点段：挂载+import+组件三处移除）', c);
+          state.onProgress?.({
+            stage: '内容映射校验',
+            message: `🧹 幻觉段已整段收敛：${c.sectionId}（${c.file}）`,
+            status: 'warning',
+          });
+        }
+        const _emptyShells = healResult.emptyShellSections || [];
+        if (_emptyShells.length > 0) {
+          logger.warn('🛡️ R8-1 保护档：剥后空壳段（真锚段保守不收敛，显式计数放弃）', {
+            total: _emptyShells.length,
+            hits: _emptyShells.slice(0, 10),
+          });
+        }
+      }
+
+      // 🔴 R8-5（2026-11-02 · ea3798f8 实锤，与 phase2 图同款）空壳对账·独立扫描：
+      //   不依附重复文本前提；判据/动作与 R8-1 单一来源。
+      try {
+        const { collapseHallucinatedEmptySections } = await import(
+          '../utils/section-content-guard.js'
+        );
+        const r85 = collapseHallucinatedEmptySections({
+          files,
+          plan: state.subComponentPlan,
+          figmaRoot: figmaRootForGuard,
+          validateSfc: (c, p) => validateVueSfc(c, p),
+        });
+        for (const c of r85.collapsedSections || []) {
+          try {
+            const { unlinkSync: _unlink85 } = await import('fs');
+            _unlink85(_j(state.outputPath, c.file));
+          } catch (e) {
+            logger.warn('🧹 R8-5 空壳组件文件删除失败（不阻断）', { file: c.file, error: e?.message || String(e) });
+          }
+          logger.warn('🧹 R8-5 空壳对账：幻觉空壳段已整段收敛（独立扫描，无重复文本前提）', c);
+          state.onProgress?.({
+            stage: '内容映射校验',
+            message: `🧹 空壳对账收敛：${c.sectionId}（${c.file}）`,
+            status: 'warning',
+          });
+        }
+        const _shells85 = r85.emptyShellSections || [];
+        if (_shells85.length > 0) {
+          logger.warn('🛡️ R8-5 保护档：独立扫描空壳段（真锚段保守不收敛，显式计数放弃）', {
+            scanned: r85.scanned,
+            total: _shells85.length,
+            hits: _shells85.slice(0, 10),
+          });
+        }
+      } catch (e85) {
+        logger.warn('R8-5 空壳对账执行失败（不阻断）', { error: e85?.message || String(e85) });
       }
 
       // 🎯 2026-09-30 治本③：借用证据（文本/资源）确定性处置（与 phase2 图同款，见其注释）。
@@ -2839,6 +2904,14 @@ export function createPhase2Graph(config = {}) {
         figmaNodeData: state.figmaNodeData || null,
       },
     );
+
+    // 🛡️ Phase H（2026-11-02）：TEXT-TRUTH ASCII 口径计数观测（**不改分级**，只留痕）。
+    // 🔴 hits:0 也必须打：`enabled:false` = 本链路未传 figmaNodeData（口径没跑）；
+    //    `enabled:true hits:0` = 跑了且干净。二者在日志上必须可区分。
+    {
+      const _asciiLog = formatTextTruthAsciiLog(result.textTruthAsciiStats, 'vue3');
+      logger.info(_asciiLog.message, _asciiLog.meta);
+    }
 
     // P0：逐 SFC + 共享 LESS 真实编译门禁。LESS 失败属于发布硬阻断，不能降级为 WARN。
     const filesByPath = Object.fromEntries(

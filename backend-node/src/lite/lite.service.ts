@@ -2354,10 +2354,12 @@ ${typoSize}
       .filter(Boolean)
       .join('\n');
     // 🆕 高级选项 P0（2026-10-09）：用户补充提示词 + 需求文档文本（可选，防御截断）
+    // 🔧 2026-11-02 契约句改写（与 utils/user-addendum.js 同步）：交互/行为类显式要求
+    //  必须落实，仅视觉样式冲突让位设计稿（tab 切换事故 mc-max-1793601934772-3c973404）。
     const epUser = String((dto as any).extraPrompt || '').trim().slice(0, 4000);
     const rdtUser = String((dto as any).requirementDocText || '').trim().slice(0, 20000);
     const userAddendum = epUser || rdtUser
-      ? `\n【用户补充需求（用户显式输入，必须遵守；与设计稿视觉冲突时以设计稿为准，用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
+      ? `\n【用户补充需求（用户显式输入，必须遵守；视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准，但交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
       : '';
     return `你是一名 Vue3 布局还原工程师。请基于截图和结构化拆解，生成一个只负责静态布局还原的单文件组件。
 

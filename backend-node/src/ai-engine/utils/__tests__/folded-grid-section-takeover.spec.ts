@@ -1027,7 +1027,7 @@ describe('刀 53e · detectTableLeaf（列式表格整表接管）', () => {
     expect(r.memberIndex).toBe(0);
     expect(r.cols.map((c) => c.header.text)).toEqual(HEAD);
     const vue = renderFoldedGridLeafVue(r, 'device');
-    expect(vue).toContain('v-for="(row, ri) in rows"');
+    expect(vue).toContain(':data-source="rows"');
     expect(vue).toContain('服务区巡检狗K3');
   });
 
@@ -1095,7 +1095,7 @@ describe('刀 53e · detectTableLeaf（列式表格整表接管）', () => {
     expect(r.parentId).toBe('tbl');
     const vue = renderFoldedGridLeafVue(r, 'device');
     expect(vue).toContain('display:flex;flex-direction:column');
-    expect(vue).toContain('v-for="(row, ri) in rows"');
+    expect(vue).toContain(':data-source="rows"');
   });
 
   it('阴性：表头文本不能唯一回查 ⇒ 不提升锚点，维持原 fail-open', () => {
@@ -1123,14 +1123,23 @@ describe('刀 53e · detectTableLeaf（列式表格整表接管）', () => {
     const idx = idxOf(table(colTexts));
     const r = detectTableLeaf(sec('c0'), idx, buildParentMap(idx));
     const vue = renderFoldedGridLeafVue(r, 'device');
+    // 🔴 R9 antd 语义升级：整表 = `<a-table>`（columns/dataSource + 运行时 inline 真值通道）
     expect(vue).toContain('fg-table-');
     expect(vue).toContain('设备名称');
     expect(vue).toContain('速度(m/s)');
     expect(vue).toContain('服务区巡检狗K3');
     expect(vue).toContain('禁用');
-    expect(vue).toContain('flex:0 0');
-    expect(vue).toContain(`height:${ROW_H}px`);
-    expect(vue).toContain('v-for="(row, ri) in rows"');
+    expect(vue).toContain(`<a-table`);
+    expect(vue).toContain(`:pagination="false"`);
+    expect(vue).toContain(`:bordered="false"`);
+    expect(vue).toContain(`table-layout="fixed"`);
+    expect(vue).toContain(`#bodyCell`);
+    expect(vue).toContain(`width: '37.84%'`);
+    expect(vue).toContain(`height: '${ROW_H}px'`); // th=rowH；td=rowH+rowGap（本 fixture 无负节距 ⇒ 同高）
+    expect(vue).toContain(`customHeaderCell`);
+    expect(vue).toContain(`customCell`);
+    // 微码 import 白名单：组件库由运行时全局注册，产物禁止自行 import
+    expect(vue).not.toContain(`from 'ant-design-vue'`);
     expect(vue).not.toContain('display:none');
 
     const suppressed = renderFoldedGridLeafVue({ ...r, memberIndex: 1 }, 'device');
@@ -1309,17 +1318,20 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     expect(r.cols[3].cells[1].pad).toBe('10px 16px');
   });
 
-  it('阳性②：渲染把外观**内联**（bg/border/padding/负 margin-top），不依赖 style 块', () => {
+  it('阳性②：渲染把外观走**运行时注入**（customHeaderCell/customCell inline style），不依赖 style 块', () => {
     const idx = indexFigmaNodes(tableDoc());
     const r = detectTableLeaf(sec('43:4785'), idx, buildParentMap(idx), []);
     const vue = renderFoldedGridLeafVue(r, 'device');
-    expect(vue).toContain('background:#bdd5ff;');
-    expect(vue).toContain('border:1px solid #ffffff;');
-    expect(vue).toContain('padding:10px 16px;');
-    expect(vue).toContain('margin-top:-1px;');
-    expect(vue).toContain('background: row.c0.bg || undefined');
+    // 🔴 R9：外观真值进 customHeaderCell/customCell 的 inline style（JSON 字面量带引号）
+    expect(vue).toContain('background: "#bdd5ff"');
+    expect(vue).toContain('border: "1px solid #ffffff"');
+    expect(vue).toContain('padding: "10px 16px"');
+    expect(vue).toContain('customHeaderCell: () => ({ style: hStyle0 })');
+    expect(vue).toContain('customCell: (record) => ({ style: cellStyle0(record) })');
     expect(vue).toContain('"bg": "#e2ecfe"');
     expect(vue).toContain('"border": "1px solid #ffffff"');
+    // 负节距不再产 margin-top（table 布局无负 margin 语义，行高换算见 R9 注释）
+    expect(vue).not.toContain('margin-top:-1px');
   });
 
   it('阳性③：首列数据行图标进契约（尺寸/间距）+ import + img；非首列与表头无图标', () => {
@@ -1345,7 +1357,7 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     //   `src="icon1"`（相对 URL → 404），而 `import icon1` 全成死代码。
     //   实锤：c-device-6d79e69d 表格首列 8 行图标全破图。
     expect(vue).toContain('const ICON_MAP = { icon1, icon2, icon3 }');
-    expect(vue).toContain(':src="ICON_MAP[row.c0.iconVar]"');
+    expect(vue).toContain(':src="ICON_MAP[record[column.dataIndex].iconVar]"');
     expect(vue).not.toContain(':src="row.c0.iconVar"');
   });
 
@@ -1375,7 +1387,7 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     // 零副作用：无可用图标 ⇒ 不产查表、不产 `<img>`
     expect(vue).not.toContain('ICON_MAP');
     expect(vue).not.toContain('<img');
-    expect(vue).toContain('background:#bdd5ff;'); // 外观不受图标缺口影响
+    expect(vue).toContain('background: "#bdd5ff"'); // 外观不受图标缺口影响
   });
 
   it('🔴 阴性③：同 varName 指向不同 file ⇒ 冲突名下图标全不渲（不猜取哪一个）', () => {
@@ -1709,5 +1721,113 @@ describe('刀 53f detectLegendDotTextLeaf / 图例圆点叶', () => {
       expect(tr.vue).not.toContain('display:none');
       expect(tr.vue).toContain('-fg-legend-');
     }
+  });
+});
+
+/**
+ * 🔴 R8-7（2026-11-02 · dea074f9 实锤）：
+ *  ① 段内容契约（body.items/body.children）到达判据后，R6 declaredUnconsumed 必须拒止
+ *     「单形态消费不了段声明内容」的接管；mass 口径含 `content`（对象容器）/`parts`。
+ *  ② header 判据 TEXT 计数与 icon/text 对齐为**递归全子树**口径 —— 锚点=大容器时
+ *     不得再用「直接子项层恰 1 TEXT」把多内容段误判成标题行。
+ */
+describe('R8-7 内容量对账与 header 递归口径', () => {
+  const idx = indexFigmaNodes(FIGMA_DOC);
+
+  const vendorBody = () => ({
+    layout: 'grid-4-columns',
+    gridColumns: 4,
+    items: ['华为技术', '中兴通讯', '海康威视', '新华三集团', '浪潮信息', '天地伟业'].map((n, i) => ({
+      id: `strat-${i}`,
+      name: n,
+      role: 'data-tag',
+      content: { parts: [{ text: n, type: 'label' }, { text: `${i}台`, type: 'value' }] },
+    })),
+  });
+
+  it('V2：header 命中但段声明 6 项（含 content.parts）⇒ declaredUnconsumed 拒止并计数', () => {
+    // tail-text 锚点：递归口径下子树仍恰 1 TEXT ⇒ header 命中 ⇒ 由 R6 出口对账拒止
+    const sec = { id: '38:3137-tail-text', sourceNodeIds: ['38:3139', '38:3160'], declaredContent: vendorBody() };
+    const out = collectFoldedGridTakeover({
+      treeSections: [sec],
+      figmaNodeData: FIGMA_DOC,
+      resourceMapping: ICON_MAPPING,
+      componentName: 'c-r87',
+    });
+    expect(out.headerHits).toBe(0);
+    expect(out.declaredUnconsumed).toBe(1);
+    expect(out.map.size).toBe(0);
+    const skip = out.skipped.find((s) => s.id === '38:3137-tail-text');
+    // mass = 6 个 name + 12 个 parts.text = 18 ⇒ header 未消费 = 17（若 content/parts 不递归则只有 5）
+    expect(skip.reason).toContain('header:declaredUnconsumed(17)');
+  });
+
+  it('V2b：stat-card 段声明含 content.elements ⇒ icon 对账数值证明对象容器被递归', () => {
+    const STAT_DOC = {
+      id: '38:3260',
+      type: 'GROUP',
+      absoluteBoundingBox: { x: 0, y: 0, width: 265, height: 76 },
+      children: [
+        { id: '38:3261', type: 'VECTOR', absoluteBoundingBox: { x: 0, y: 0, width: 265, height: 76 }, fills: [solid('#e6f0ff')] },
+        {
+          id: '187:262',
+          type: 'GROUP',
+          absoluteBoundingBox: { x: 10, y: 10, width: 53, height: 55 },
+          children: [{ id: '38:3264', type: 'VECTOR', absoluteBoundingBox: { x: 10, y: 10, width: 53, height: 55 } }],
+        },
+      ],
+    };
+    const card = (id, name, value) => ({
+      id,
+      name,
+      role: 'stat-card',
+      content: { elements: [{ type: 'label', text: name }, { type: 'value', text: value }] },
+    });
+    const sec = {
+      id: '38:3260',
+      sourceNodeIds: ['38:3260'],
+      declaredContent: { layout: 'horizontal-2-columns', children: [card('a', '合作厂商', '33'), card('b', '在线设备', '66')] },
+    };
+    const out = collectFoldedGridTakeover({
+      treeSections: [sec],
+      figmaNodeData: STAT_DOC,
+      resourceMapping: [{ figmaNodeId: '187:262', resourceFile: '../resources/images/icon-262.png', assignedVarName: 'icon2', downloadStatus: 'success' }],
+      componentName: 'c-r87',
+    });
+    expect(out.iconHits).toBe(0);
+    expect(out.declaredUnconsumed).toBe(1);
+    const skip = out.skipped.find((s) => s.id === '38:3260');
+    // mass = 2 个 name + 4 个 elements.text = 6 ⇒ max(items-1=1, mass-1=5) = 5（旧口径只算 name ⇒ 1）
+    expect(skip.reason).toContain('icon:declaredUnconsumed(5)');
+  });
+
+  it('V4：锚点=大容器（精确锚点，子树多 TEXT）⇒ header 拒（递归口径）', () => {
+    const r = detectHeaderRowLeaf({ id: '38:3137', sourceNodeIds: ['38:3137'] }, idx, ICON_MAPPING);
+    expect(r.ok).toBe(false);
+    // 不硬编码具体条数（FIGMA_DOC 被多个 describe 共享追加），只锁「>1 即拒」的判据语义
+    expect(r.reason).toMatch(/texts=(?:[2-9]|\d{2,})\(need 1\)/);
+  });
+
+  it('V4b：剥后缀兜底锚点（合成 tail-text 叶）保持 1 层口径 —— 深层文本归其它叶', () => {
+    // 无 sourceNodeIds ⇒ collectAnchorNodes 剥 `-tail-text` 后缀锚到父容器 38:3137。
+    // 本叶只是父容器切片（列表内容归折叠/grid 叶）⇒ 仍按直接子项层 1 TEXT 接管。
+    const r = detectHeaderRowLeaf({ id: '38:3137-tail-text' }, idx, ICON_MAPPING);
+    expect(r.ok).toBe(true);
+    expect(r.title).toBe('战略合作厂商');
+  });
+
+  it('V3 阳性对照：tail-text 锚点（子树恰 1 TEXT）递归口径下仍接管，真值不变', () => {
+    const r = detectHeaderRowLeaf({ id: '38:3137-tail-text', sourceNodeIds: ['38:3139', '38:3160'] }, idx, ICON_MAPPING);
+    expect(r.ok).toBe(true);
+    expect(r.title).toBe('战略合作厂商');
+    expect(r.iconFile).toBe('icon-战略厂商-3160.png');
+    expect(r.gap).toBe(8);
+  });
+
+  it('V3b 反向断言：锚点外（父容器兄弟）新增 TEXT 不得影响本叶判定', () => {
+    const doc2 = JSON.parse(JSON.stringify(FIGMA_DOC));
+    doc2.children.push(text('38:9999', '别人的文本', 200, 25, 40, 16, '#333333', 14, 400));
+    const r = detectHeaderRowLeaf({ id: '38:3137-tail-text', sourceNodeIds: ['38:3139', '38:3160'] }, indexFigmaNodes(doc2), ICON_MAPPING);
+    expect(r.ok).toBe(true);
   });
 });

@@ -37,7 +37,16 @@ import {
   nodeAppearanceTruth,
 } from './section-tree.js';
 import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js';
+// 🔴 R3（2026-11-02）：超界段判据的 refs 唯一来源 —— 与锚点审计（R22-d/R2）同一份
+//   `collectSectionFigmaRefs`，禁止在本文件另写「children 里挑 id」的副本。
+import { collectSectionFigmaRefs } from './section-anchor-truth.js';
 import { declaredTableHeaders } from './section-type-derive.js';
+// 🛡️ 刀53h：footer 段的**判据唯一来源**必须复用 vision 发言读取口径
+//   （`declaredSectionType` = `sec.type || sec.header.type` 归一小写），
+//   禁止在本文件自写「读 type 字段」的副本 —— 副本 ≥2 份即事故温床
+//   （与 `FG_TAKEOVER_CLASS_RX` 同一纪律）。vision-facts.js 无 import（纯函数集），
+//   故引入无循环依赖风险。
+import { declaredSectionType, declaredTableHeaderContainerTexts, declaredTableRowArity } from './vision-facts.js';
 // 🛡️ 刀33：列表 item 的**卡盒真值**回收要按「行填充色」归一比较（与 N1 真值色值门禁
 //   同一口径，禁止自造颜色归一），故引入 `normalizeCssColor`（纯函数、零依赖，无环）。
 import { normalizeCssColor } from './truth-color-usage-guard.js';
@@ -67,7 +76,7 @@ import { inferBackgroundStyle } from './background-size-inference.js';
  *    `font-size-normalizer#protectFgTagInlineStyles` 保护 ⇒ 字号塌回 `@fontSize`
  *    （d072d085 实锤病灶之一），且 `DEFAULT_SKIP_SELECTOR_RXS` 也会漏掉它。
  */
-export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list)-/;
+export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list|footer)-/;
 
 /** fg- 类名的**裸片段**（去两侧 `/`），供需要拼接正则的场合复用，杜绝副本。 */
 const FG_CLASS_SRC = FG_TAKEOVER_CLASS_RX.source;
@@ -194,6 +203,47 @@ function collectAnchorNodes(sec, figmaIndex) {
   return [...out.values()];
 }
 
+/**
+ * 🔴 R3（2026-11-02 · mc-max-1793597679970-646085b2「合作厂商弹窗」实锤）：超界段判定。
+ *
+ * 病灶：锚点守卫（R22-d）把统计区锚点 38:3260 修成整容器 796:3 前的**撕裂形态**下，
+ * 或锚点天然偏窄时，段声明的 refs（`collectSectionFigmaRefs`）落在**锚点子树之外** ——
+ * 此时 icon/header/text 三类单元素接管只看锚点子树内的事实，会输出「一个图标/一行标题」
+ * **把整段内容确定性裁没**，且无任何告警（真机实锤：统计区只剩一张 53×55 图标却 flex:2.209）。
+ *
+ * 判据（可辩驳，类型无关、命名无关）：
+ *   `collectSectionFigmaRefs(section)` 中存在**树内**、且不在任何锚点子树（含锚点自身）之内的
+ *   引用 ⇒ 该 section scope-incomplete。幻影 ref 不参与（与 R22-d 同口径：幻觉 id 归
+ *   `vision-anchor-validator` 单一来源管）；无锚点段不在此扩权（各检测器既有 `noAnchorNode`
+ *   分支处理）。
+ *
+ * 纯函数、fail-open：无 refs / 无 figmaIndex / 无锚点 ⇒ false（不改变既有行为）。
+ */
+function isScopeIncomplete(sec, figmaIndex) {
+  if (!sec || !(figmaIndex instanceof Map) || figmaIndex.size === 0) return false;
+  const refs = collectSectionFigmaRefs(sec);
+  if (refs.size === 0) return false;
+  const anchors = collectAnchorNodes(sec, figmaIndex);
+  if (anchors.length === 0) return false;
+  const anchorIds = new Set(anchors.map((n) => String(n.id)));
+  for (const ref of refs) {
+    if (!figmaIndex.has(ref)) continue; // 幻影 ref 不参与（单一来源 = vision-anchor-validator）
+    if (anchorIds.has(ref)) continue; // ref 即锚点自身（祖先判定含自身）
+    let cur = figmaIndex.get(ref);
+    let guard = 0;
+    let inside = false;
+    while (cur && guard++ < 256) {
+      if (anchorIds.has(String(cur.id))) {
+        inside = true;
+        break;
+      }
+      cur = cur.parentId != null ? figmaIndex.get(String(cur.parentId)) || null : null;
+    }
+    if (!inside) return true;
+  }
+  return false;
+}
+
 /** 文本节点 → 渲染 run（颜色/字号/字重任一缺失 ⇒ null，调用方 fail-open）。 */
 function textRun(t) {
   const color = firstSolidFillRgba(t);
@@ -224,10 +274,39 @@ function textRun(t) {
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
 export function detectHeaderRowLeaf(sec, figmaIndex, resourceMapping) {
+  // 🔴 R3：超界段（refs 落在锚点子树之外）禁单元素接管 —— 只看锚点子树必然裁没整段内容
+  if (isScopeIncomplete(sec, figmaIndex)) return { ok: false, reason: 'scopeIncomplete' };
   const nodes = collectAnchorNodes(sec, figmaIndex);
-  const texts = nodes.filter(
-    (n) => typeof n?.characters === 'string' && n.characters.trim().length > 0,
+  // 🔴 R8-7（2026-11-02 · dea074f9 实锤）：TEXT 计数与 detectIconLeaf / detectTextLeaf 对齐，
+  //   但**按锚点来源分两态**（连锁红暴露的边界，不可一刀切递归）：
+  //   · 精确锚点（sec.id / sourceNodeIds 直接命中真值树）⇒ 本叶**拥有整棵子树** ⇒ 递归计数。
+  //     旧 1 层口径在此场景误判：38:3137（604×161 容器：标题 TEXT + 两个含 12 TEXT 的正文
+  //     FRAME + 图标）直接子项层恰 1 TEXT ⇒ 标题行接管把整段内容裁没。
+  //   · 剥后缀兜底锚点（合成 `…-tail-text` / `…-list` 叶 → 父容器）⇒ 本叶只是父容器**切片**，
+  //     深层文本归其它叶（折叠列表/网格叶）⇒ 保持 1 层口径（render 用例连锁红实锤）。
+  //   递归仅从本叶锚点集合起步（seen 防父子重复入队），不触碰锚点外节点 ⇒ 8bbcf027 反向断言不受影响。
+  const exactAnchor = [sec?.id, ...toArray(sec?.sourceNodeIds), sec?.figmaNodeId, sec?.figmaNode].some(
+    (raw) => raw != null && raw !== '' && Boolean(figmaIndex.get(String(raw))?.rawNode),
   );
+  let texts;
+  if (exactAnchor) {
+    const seen = new Set();
+    texts = [];
+    const walk = (n) => {
+      if (!n || seen.has(n) || n.visible === false) return;
+      seen.add(n);
+      if (typeof n.characters === 'string' && n.characters.trim().length > 0) {
+        texts.push(n);
+        return;
+      }
+      for (const c of n.children || []) walk(c);
+    };
+    for (const n of nodes) walk(n);
+  } else {
+    texts = nodes.filter(
+      (n) => typeof n?.characters === 'string' && n.characters.trim().length > 0,
+    );
+  }
   if (texts.length !== 1) return { ok: false, reason: `texts=${texts.length}(need 1)` };
   const tb = bboxOf(texts[0]);
   if (!tb) return { ok: false, reason: 'textBoxMissing' };
@@ -290,6 +369,8 @@ export function detectHeaderRowLeaf(sec, figmaIndex, resourceMapping) {
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
 export function detectIconLeaf(sec, figmaIndex, resourceMapping) {
+  // 🔴 R3：超界段（refs 落在锚点子树之外）禁单元素接管 —— 只看锚点子树必然裁没整段内容
+  if (isScopeIncomplete(sec, figmaIndex)) return { ok: false, reason: 'scopeIncomplete' };
   const nodes = collectAnchorNodes(sec, figmaIndex);
   if (nodes.length === 0) return { ok: false, reason: 'noAnchorNode' };
   // 子树含任何非空 TEXT ⇒ 不是纯 icon 叶（交给 text/header 判据）
@@ -421,6 +502,8 @@ function resolveDeclaredTextNodes(sec, figmaIndex) {
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
 export function detectTextLeaf(sec, figmaIndex) {
+  // 🔴 R3：超界段（refs 落在锚点子树之外）禁单元素接管 —— 只看锚点子树必然裁没整段内容
+  if (isScopeIncomplete(sec, figmaIndex)) return { ok: false, reason: 'scopeIncomplete' };
   let nodes = collectAnchorNodes(sec, figmaIndex);
   if (nodes.length === 0) {
     nodes = resolveDeclaredTextNodes(sec, figmaIndex) || [];
@@ -993,6 +1076,19 @@ function resolveDeclaredTableLca(sec, figmaIndex, parentOf) {
 export function detectTableLeaf(sec, figmaIndex, parentOf, resourceMapping) {
   const direct = detectTableLeafByAnchors(sec, figmaIndex, parentOf, resourceMapping);
   if (direct.ok) return direct;
+  // 🛡️ 形态自洽 fail-closed（e7da39ca，2026-11-02）：仅当表头来自**形态⑤**
+  //   （单个 `table-header` 容器）时校验「声明表头数 == 首行非图标单元格数」。
+  //   不自洽 ⇒ 契约与行列结构互相矛盾（vision 幻觉）⇒ 契约不可信，**不用于 LCA
+  //   回查**，并显式记 `contractShapeMismatch`（不静默落回 notTableColumn，避免
+  //   与「契约缺失」混淆）。前四形态 `declaredTableHeaderContainerTexts` 返 null
+  //   ⇒ 本闸门整体跳过，既有行为**逐字不变**。
+  const containerHeaders = declaredTableHeaderContainerTexts(sec);
+  if (containerHeaders) {
+    const arity = declaredTableRowArity(sec);
+    if (arity != null && arity !== containerHeaders.length) {
+      return { ok: false, reason: 'contractShapeMismatch' };
+    }
+  }
   const tableAnchor = resolveDeclaredTableLca(sec, figmaIndex, parentOf);
   if (!tableAnchor) return direct;
   const promoted = detectTableLeafByAnchors(
@@ -2173,6 +2269,123 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   };
 }
 
+/**
+ * 🛡️ 刀53h（2026-11-02 · mc-max-1793582674250-3b0689c9 实锤）：**footer 汇总条**确定性接管判据。
+ *
+ * ## 病灶（为什么必须有这一类）
+ * vision/planner 给出**独立 footer 段**（`type:'footer'` / id 前缀 `footer-*`），其真值
+ * 形状与既有九类**全都不同**，于是九类逐条 fail-open：
+ *   - `detectGridLeaf` / `detectHeaderRowLeaf` / `detectTextLeaf` / `detectIconLeaf` /
+ *     `detectLegendDotTextLeaf` / `detectKvGridLeaf`：**全部依赖 Figma 锚点**，而 footer 段
+ *     `sourceNodeIds=[]`（planner 无归属）⇒ `noAnchorNode`；
+ *   - `detectStatRowLeaf` / `detectTableLeaf`：要求 `role:'stat-card'` / `table-header`+`list`
+ *     契约，footer 的 `body.items[].content.elements` 无这些标记；
+ *   - `detectListLeaf`：要求 `collapsed:true || renderHint==='v-for'`，footer 无折叠标记。
+ * ⇒ footer 段落入 LLM chunk 自由生成：3b0689c9 实测「LLM 把整片内容区 6 节点列表复刻进
+ *   footer 组件（`data-section-id="footer-summary"` 但内容是 node-card），footer 本体真值
+ *   （共 6 个节点 / 接入设备 10810）全丢」，`index.vue` 两块各 flex:1 上下排 ⇒ 用户看到
+ *   「上下重复 + 样式不同」。
+ *
+ * ## 判据（**只用段契约，不依赖 Figma 锚点** —— 这正是它的存在理由）
+ * `declaredSectionType(sec) === 'footer'`（vision 显式发言，`sec.type > sec.header.type`）
+ * **或** `sec.id` 前缀 `footer-`（planner id 通道，实测 `footer-summary`）。
+ * 两通道都**不做几何/形态校验**：无锚点段拿不到几何，加几何闸门等于恒定失败（假绿）。
+ * 反向由判据本身封闭：`type='list'|'stats'|'table'|'grid'|'header'` 或 id 不是 footer-*
+ * 的段一律 `notFooterSection` ⇒ 结构上不可能抢走既有九类的命中。
+ *
+ * ## 真值来源（`body.items[].content.elements[]`，逐字取用，缺事实不猜）
+ * 每 item = 一组（group），组内每个 element = 一个 part：`{ t:text, c:color, fs:fontSize, fw:fontWeight }`。
+ * 🔴 **文本不 trim**：实测 label 真值 `'接入设备 '` 带尾空格，它是「label 与 value 之间的
+ *   间距」这一视觉事实，trim 掉就等于改真值（渲染侧用 `white-space:pre` 保住它，不靠猜 gap）。
+ * 空文本（`trim()===''`）的 part 丢弃；全组丢空 ⇒ `footerNoText`（fail-open，不渲染空壳）。
+ *
+ * ## 背景图（跟随既有纪律：变量名只能取资源映射层的 `assignedVarName`）
+ * `body.backgroundImage.src` 的**基名**去 `resourceMapping` 反查（单一命中才认，歧义/未命中
+ * ⇒ `bg:null` 不猜）；`style` 四件套复用 `inferBackgroundStyle`（与 list item / statrow 卡底
+ * **同一份判据**，禁止副本）。
+ *
+ * @param {object} sec planner 叶段（resolvePlanSections 的产物）
+ * @param {Array} resourceMapping effectiveMapping（含 `resourceFile` / `assignedVarName`）
+ * @returns {{ok:true, kind:'footer', sectionId:string, baseId:string, groups:Array<{parts:Array<{t:string,c:string|null,fs:number|null,fw:string|null}>}>, bg:{varName:string,file:string,style:object}|null}
+ *          | {ok:false, reason:'noSection'|'notFooterSection'|'footerNoItems'|'footerNoText'}}
+ */
+export function detectFooterSummaryLeaf(sec, resourceMapping) {
+  const fail = (reason) => ({ ok: false, reason });
+  if (!sec || typeof sec !== 'object') return fail('noSection');
+  // 判据通道（唯一来源，不自写 type 读取副本）
+  const declared = declaredSectionType(sec);
+  const idStr = String(sec.id ?? '');
+  if (declared !== 'footer' && !/^footer[-_]/i.test(idStr)) return fail('notFooterSection');
+  // 容器形态（两种已验证形态，前者优先；其余形态宁漏不误 ⇒ fail-open）
+  const items = Array.isArray(sec.body?.items)
+    ? sec.body.items
+    : Array.isArray(sec.items)
+      ? sec.items
+      : null;
+  if (!items || items.length === 0) return fail('footerNoItems');
+  const groups = [];
+  for (const it of items) {
+    const els = Array.isArray(it?.content?.elements) ? it.content.elements : [];
+    const parts = [];
+    for (const e of els) {
+      const raw = e?.text == null ? '' : String(e.text);
+      if (!raw.trim()) continue;
+      const st = e?.styles && typeof e.styles === 'object' ? e.styles : {};
+      const fsNum = Number(st.fontSize);
+      parts.push({
+        t: raw,
+        c: st.color == null ? null : String(st.color),
+        fs: Number.isFinite(fsNum) && fsNum > 0 ? fsNum : null,
+        fw: st.fontWeight == null ? null : String(st.fontWeight),
+      });
+    }
+    if (parts.length > 0) groups.push({ parts });
+  }
+  if (groups.length === 0) return fail('footerNoText');
+  return {
+    ok: true,
+    kind: 'footer',
+    sectionId: idStr,
+    baseId: idStr,
+    groups,
+    bg: resolveFooterBackground(sec, resourceMapping),
+  };
+}
+
+/** 背景图基名（`../resources/images/image_313-5800.png` → `image_313-5800.png`）。 */
+function baseNameOf(p) {
+  return String(p ?? '').split('/').pop().split('\\').pop();
+}
+
+/**
+ * footer 段背景图反查（无 Figma 锚点 ⇒ 只能按**资源文件基名**匹配）。
+ *
+ * 纪律：
+ *  ① 只在**基名唯一命中**时认（歧义 ⇒ null，绝不挑一个）；
+ *  ② 变量名只取 `assignedVarName` / `semanticVarName`（取不到 ⇒ null，绝不自造命名空间，
+ *     否则资源挂载层 `bgBindingOwnership` 会判 `other` 而 fail-closed + 诊断噪声）；
+ *  ③ 四件套走 `inferBackgroundStyle`（与 list item / statrow 同一份纯函数判据）。
+ */
+function resolveFooterBackground(sec, resourceMapping) {
+  const src = sec?.body?.backgroundImage?.src;
+  const want = baseNameOf(src);
+  if (!want) return null;
+  const all = toArray(resourceMapping).filter((e) => e && typeof e === 'object');
+  let hits = all.filter((e) => baseNameOf(e.resourceFile || e.file || e.src) === want);
+  if (hits.length !== 1) {
+    const usage = String(sec?.body?.backgroundImage?.recommendedUsage || '');
+    const narrowed = usage
+      ? hits.filter((e) => String(e.recommendedUsage || '') === usage)
+      : [];
+    if (narrowed.length !== 1) return null;
+    hits = narrowed;
+  }
+  const hit = hits[0];
+  const varName = String(hit.assignedVarName || hit.semanticVarName || '');
+  if (!varName) return null;
+  return { varName, file: want, style: inferBackgroundStyle(hit) };
+}
+
 /** script 内联 JSON（转义 `<`，防 `</script>` 提前闭合）。 */
 function inlineJson(value) {
   return JSON.stringify(value, null, 2).replace(/</g, '\\u003c');
@@ -2375,40 +2588,14 @@ export function renderFoldedGridLeafVue(tr, semantic) {
         '',
       ].join('\n');
     }
-    const lines = [
-      '<template>',
-      // 🔴 表格用 column 包行、行内 row 包列：行必须显式 flex（真值列容器是横排兄弟），
-      //    行高/列宽全部内联（scoped style 在预览运行时不生效）。外观三件套
-      //    （bg/border/pad）同样**内联**：表头 `#bdd5ff`、斑马纹、`1px #ffffff`
-      //    白网格线、`padding:10px 16px` 全部来自 Figma 行节点真值，取不到即不写。
-      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;height:${tr.height}px;padding:0;min-width:0;box-sizing:border-box;">`,
-      `    <div class="${cls}-thead" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;height:${tr.rowH}px;flex:none;">`,
-    ];
-    tr.cols.forEach((c, i) => {
-      const thStyle = [
-        `flex:0 0 ${c.widthPct}%;`,
-        'box-sizing:border-box;display:flex;align-items:center;justify-content:center;min-width:0;',
-        c.header.pad ? `padding:${c.header.pad};` : 'padding:0;',
-        c.header.bg ? `background:${c.header.bg};` : '',
-        c.header.border ? `border:${c.header.border};` : '',
-      ].join('');
-      lines.push(
-        `      <div class="${cls}-th${i}" style="${thStyle}">`,
-        `        <span class="${cls}-th${i}-t" style="color:${c.header.color};font-size:${c.header.fs}px;font-weight:${c.header.fw};line-height:1;white-space:nowrap;">{{ h${i} }}</span>`,
-        '      </div>',
-      );
-    });
-    // 行节距真值为负（`itemSpacing=-1`，压叠 1px）⇒ 用 margin-top 表达（flex 的
-    // row-gap 会把负值 clamp 成 0，真值 388 会变 396）。
-    //
     // 图标 import 与「名字 → 模块绑定」查表：按 varName 去重（同一 varName 指向不同
     // file ⇒ 冲突，全不渲染 —— 绝不猜测「取哪一个」）；varName 非法 JS 标识符同样跳过
     // （降级不渲图标，不炸脚本）。
-    // 🔴 必须在**模板生成之前**算出来：模板要按「本列有没有可用图标」决定是否产 `<img>`
-    //   以及 `:src` 走查表还是直取。
+    // 🔴 必须在**模板生成之前**算出来：无可用图标 ⇒ 模板不产 `<img>` 行与查表
+    //   （零副作用：既不写永不为真的绑定，也不引空查表）。
     // 🔴🔴 图标 URL 必须经运行时查表 `ICON_MAP[名]`，模板里绝不能直接绑名字：
     //   `rows` 是 JSON 字面量（`inlineJson`），`iconVar` 存的是**变量名的字符串**
-    //   （`"icon4"`）⇒ 直接 `:src="row.c0.iconVar"` 求值成 `src="icon4"`（相对 URL 404），
+    //   （`"icon4"`）⇒ 直接 `:src="record.c0.iconVar"` 求值成 `src="icon4"`（相对 URL 404），
     //   而 `import icon4` 全成死代码。实锤：c-device-6d79e69d 表格首列 8 行图标全破图。
     const iconFiles = new Map();
     const iconConflicts = new Set();
@@ -2423,39 +2610,74 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       }
     }
     const usableIconVars = [...iconFiles.keys()].filter((v) => !iconConflicts.has(v));
-    const usableIconSet = new Set(usableIconVars);
-    const colHasIcon = (c) =>
-      (c.cells || []).some((cell) => cell.icon && usableIconSet.has(cell.icon.varName));
-    lines.push(
-      '    </div>',
-      `    <div v-for="(row, ri) in rows" :key="ri" class="${cls}-tr" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;height:${tr.rowH}px;flex:none;${tr.rowGap ? `margin-top:${tr.rowGap}px;` : ''}">`,
-    );
-    tr.cols.forEach((c, i) => {
-      lines.push(
-        `      <div class="${cls}-td${i}" :style="{ boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, flex: '0 0 ${c.widthPct}%', padding: row.c${i}.pad || 0, background: row.c${i}.bg || undefined, border: row.c${i}.border || undefined }">`,
-      );
-      // 无可用图标的列不产 `<img>`（零副作用：既不写永不为真的绑定，也不引空查表）
-      if (colHasIcon(c)) {
-        lines.push(`        <img v-if="row.c${i}.iconVar" :src="ICON_MAP[row.c${i}.iconVar]" alt="" :style="{ width: row.c${i}.iconW + 'px', height: row.c${i}.iconH + 'px', objectFit: 'contain', flex: 'none', marginRight: row.c${i}.iconGap == null ? undefined : row.c${i}.iconGap + 'px' }" />`);
-      }
-      lines.push(
-        `        <span class="${cls}-td${i}-t" :style="{ color: row.c${i}.color, fontSize: row.c${i}.fs + 'px', fontWeight: row.c${i}.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ row.c${i}.text }}</span>`,
-        '      </div>',
-      );
-    });
-    lines.push(
-      '    </div>',
+    // 🔴 R9 antd 语义升级（2026-11-02 · 用户拍板方案 A，fe47afcd 实锤立项）：
+    //   手写 flex 表格 DOM ⇒ `<a-table>`。微码预览运行时已全局注册 ant-design-vue
+    //   （frontend/src/utils/loadVue3Runtime.js `app.use(antd)` 实证），产物**禁止
+    //   自行 import**（微码 import 白名单：组件库由运行时提供）。防重复渲染纪律
+    //   不变（memberIndex>0 仍 display:none 空壳）。真值通道（预览运行时 SFC
+    //   scoped style 不生效的既有教训 ⇒ 全部走**运行时注入**，禁 :deep 硬怼内部 DOM）：
+    //   · 列宽 %      → columns[].width（table-layout fixed）；
+    //   · 表头/单元格外观（bg/border/pad/行高）→ customHeaderCell/customCell 返回 inline style；
+    //   · 文本样式（color/fs/fw）→ #headerCell / #bodyCell slot inline（不依赖继承）；
+    //   · 图标列      → #bodyCell 内 ICON_MAP 查表（rows 为 JSON 字面量，模块绑定唯一桥）。
+    //   行为差异声明：flex 版「itemSpacing=-1 压叠出 1px 网格线」在 table 布局无负
+    //   margin 语义，改由真值 border（`1px solid #ffffff`）表达；`:bordered="false"`
+    //   关掉 antd 自带边框，网格线全部来自真值。行高换算：th=rowH；td=rowH+rowGap
+    //   （负节距并入行高 ⇒ 44 + 8×43 = 388 精确命中真值总高）。
+    const imgLine = usableIconVars.length > 0
+      ? `          <img v-if="record[column.dataIndex].iconVar" :src="ICON_MAP[record[column.dataIndex].iconVar]" alt="" :style="{ width: record[column.dataIndex].iconW + 'px', height: record[column.dataIndex].iconH + 'px', objectFit: 'contain', flex: 'none', marginRight: record[column.dataIndex].iconGap == null ? undefined : record[column.dataIndex].iconGap + 'px' }" />`
+      : null;
+    const lines = [
+      '<template>',
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;height:${tr.height}px;padding:0;min-width:0;box-sizing:border-box;">`,
+      `    <a-table class="${cls}-tbl" :columns="cols" :data-source="rows" :pagination="false" :bordered="false" :show-header="true" table-layout="fixed" size="small" :row-key="(_, i) => i">`,
+      '      <template #headerCell="{ column }">',
+      `        <span :style="{ color: column.h.color, fontSize: column.h.fs + 'px', fontWeight: column.h.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ column.title }}</span>`,
+      '      </template>',
+      '      <template #bodyCell="{ column, record }">',
+      '        <template v-if="record[column.dataIndex]">',
+      ...(imgLine ? [imgLine] : []),
+      `          <span :style="{ color: record[column.dataIndex].color, fontSize: record[column.dataIndex].fs + 'px', fontWeight: record[column.dataIndex].fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ record[column.dataIndex].text }}</span>`,
+      '        </template>',
+      '      </template>',
+      '    </a-table>',
       '  </div>',
       '</template>',
       '',
       '<script setup>',
-    );
-    tr.cols.forEach((c, i) => lines.push(`const h${i} = ${jsonStr(c.header.text)}`));
-    // 图标 import（判据见模板段前的 `iconFiles` / `iconConflicts` 计算，此处只落盘）
+    ];
+    // 表头/单元格外观真值 → inline style 源码（customHeaderCell/customCell 运行时注入）。
+    // td 行高并入负节距（th=rowH；td=rowH+rowGap ⇒ 真值总高精确命中，见上方行为差异声明）。
+    const tdH = tr.rowH + (tr.rowGap || 0);
+    tr.cols.forEach((c, i) => {
+      const hStyleParts = [
+        c.header.pad ? `padding: ${jsonStr(c.header.pad)}` : 'padding: 0',
+        c.header.bg ? `background: ${jsonStr(c.header.bg)}` : '',
+        c.header.border ? `border: ${jsonStr(c.header.border)}` : '',
+        `height: '${tr.rowH}px'`,
+        'box-sizing: border-box',
+        'text-align: center',
+        'vertical-align: middle',
+      ].filter(Boolean);
+      const cellStyleParts = [
+        `background: (c && c.bg) || undefined`,
+        `border: (c && c.border) || undefined`,
+        `padding: (c && c.pad) || 0`,
+        `height: '${tdH}px'`,
+        `box-sizing: border-box`,
+        `text-align: center`,
+        `vertical-align: middle`,
+      ];
+      lines.push(
+        `const hStyle${i} = { ${hStyleParts.join(', ')} };`,
+        `const cellStyle${i} = (record) => { const c = record && record.c${i}; return { ${cellStyleParts.join(', ')} }; };`,
+      );
+    });
+    // 图标 import（判据见上方 `iconFiles` / `iconConflicts` 计算，此处只落盘）
     for (const v of usableIconVars) {
       lines.push(`import ${v} from '../../resources/images/${iconFiles.get(v)}'`);
     }
-    // 名字 → 模块绑定。模板 `:src="ICON_MAP[row.cN.iconVar]"` 的唯一来源：
+    // 名字 → 模块绑定。模板 `:src="ICON_MAP[record.cN.iconVar]"` 的唯一来源：
     // `rows` 里存的是字符串名（JSON 字面量无法承载模块绑定），查表是唯一正确的桥。
     if (usableIconVars.length > 0) {
       lines.push(`const ICON_MAP = { ${usableIconVars.join(', ')} }`);
@@ -2485,6 +2707,15 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       rows.push(row);
     }
     lines.push(`const rows = ${inlineJson(rows)}`);
+    // 列定义：真值列宽（table-layout fixed 下百分比生效）+ 表头/单元格外观注入。
+    // 🔴 产物禁止 `import ... from 'ant-design-vue'`（运行时全局注册，import 白名单纪律）。
+    lines.push('const cols = [');
+    tr.cols.forEach((c, i) => {
+      lines.push(
+        `  { title: ${jsonStr(c.header.text)}, dataIndex: 'c${i}', width: '${c.widthPct}%', h: { color: ${jsonStr(c.header.color)}, fs: ${c.header.fs}, fw: ${c.header.fw} }, customHeaderCell: () => ({ style: hStyle${i} }), customCell: (record) => ({ style: cellStyle${i}(record) }) },`,
+      );
+    });
+    lines.push('];');
     lines.push(
       '</script>',
       '',
@@ -2701,6 +2932,52 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       '',
     ].join('\n');
   }
+  // 🔴 footer 汇总条（刀53h）：判据侧零几何（`sourceNodeIds=[]`）⇒ 渲染只落**段真值**
+  //   （每 part 的文本/色值/字号/字重）与图条背景，绝不编造尺寸/间距。
+  //   结构性布局取 `row + space-between`：这是**本 kind 的布局判断**（左「文本指标」/
+  //   右「统计数值」是 footer 汇总条的通用读法），不是从真值推导的几何；真值里既无
+  //   figmaBox 也无 itemSpacing ⇒ 任何 px 间距都会是臆造，故一个都不写。
+  //   🔴 图条 URL 必须走 `:style` 绑定（593cf7f / 刀53d 同一铁律）：静态 style 是纯 CSS
+  //   文本，`bg1` 不会被求值 ⇒ 浏览器拿到相对 URL `url(bg1)` → 404 → 整条零背景。
+  //   两段属性不重叠（静态段只有 size/position/repeat），Vue 合并时互不覆盖。
+  if (tr.kind === 'footer') {
+    const cls = `c-${sem}-fg-footer-${idSlug(tr.sectionId)}`;
+    const bg = tr.bg && tr.bg.varName ? tr.bg : null;
+    const bgStatic = bg
+      ? `background-size:${bg.style.size};background-position:${bg.style.position};background-repeat:${bg.style.repeat};`
+      : '';
+    const bgBind = bg
+      ? ` :style="{ backgroundImage: 'url(' + ${bg.varName} + ')' }"`
+      : '';
+    const groupLit = tr.groups.map(
+      (g, i) =>
+        `  { parts: [${g.parts
+          .map(
+            (p) =>
+              `{ t: ${jsonStr(p.t)}, c: ${p.c ? jsonStr(p.c) : 'null'}, fs: ${p.fs ?? 'null'}, fw: ${p.fw ? jsonStr(p.fw) : 'null'} }`,
+          )
+          .join(', ')}] }${i < tr.groups.length - 1 ? ',' : ''}`,
+    );
+    const lines = [
+      '<template>',
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;width:100%;min-width:0;box-sizing:border-box;${bgStatic}"${bgBind}>`,
+      `    <div v-for="(g, __i) in FG_FOOTER_GROUPS" :key="__i" style="display:flex;flex-direction:row;align-items:center;min-width:0;">`,
+      // 🔴 `white-space:pre` 而非 nowrap：真值 label 带**尾空格**（`'接入设备 '`），
+      //   nowrap 下尾空格会被行盒吃掉 ⇒ label 与 value 粘连。`pre` 保留真值空格，
+      //   「间距」这一视觉事实就由真值自身承载，无需猜 gap。
+      `      <span v-for="(p, __j) in g.parts" :key="__j" :style="{ color: p.c || undefined, fontSize: p.fs ? p.fs + 'px' : undefined, fontWeight: p.fw || undefined, lineHeight: 1.2, whiteSpace: 'pre' }">{{ p.t }}</span>`,
+      '    </div>',
+      '  </div>',
+      '</template>',
+      '',
+      '<script setup>',
+    ];
+    if (bg) {
+      lines.push(`import ${bg.varName} from '../../resources/images/${bg.file}'`);
+    }
+    lines.push('const FG_FOOTER_GROUPS = [', ...groupLit, '];', '</script>', '', '<style lang="less" scoped>', `.${cls} { min-width: 0; }`, '</style>', '');
+    return lines.join('\n');
+  }
   const cls = `c-${sem}-fg-grid-${idSlug(tr.sectionId)}`;
   const lines = [
     '<template>',
@@ -2740,10 +3017,132 @@ export function renderFoldedGridLeafVue(tr, semantic) {
  * @param {object} [p.logger]
  * @returns {{ map: Map<string, {kind:string, sectionId:string, baseId:string, suppressed:boolean, vue:string}>,
  *            evaluated: number, headerHits: number, gridHits: number, legendHits: number,
+ *            footerHits: number,
  *            skipped: Array<{id:string, reason:string}> }}
  */
+/**
+ * 🔴 R6（2026-11-02 · mc-max-1793601903166-9e078c6a「合作厂商弹窗」复跑实锤）：
+ * 接管形态 vs 段声明**内容对账**。
+ *
+ * 病灶：vision 在 `body.children` 里完整声明了段内容（厂商段 6/12/15 个 pill 文本、
+ * 统计段 2 张卡），但 header 接管只渲染「1 标题 + 1 图标」、icon 接管只渲染「1 图标」
+ * —— 声明内容被**确定性丢弃**，零告警、不回退 LLM（接管命中即终点）。
+ * 与 R3 的区别：R3 治「refs 落在锚点子树之外」（几何撕裂）；本判据治「命中形态消费量 ≪
+ * 段声明内容量」（消费对账缺失）——后者在 kids 无 figma id（refs=∅）或声明即锚时天然
+ * 是 R3 盲区（本单 `scopeIncomplete=0` 而 `header:3,icon:1` 即此型）。
+ *
+ * 判据（可辩驳、类型无关、命名无关）：
+ *   · `header` 消费 1 个标题文本 ⇒ 段声明中**带文本**的 item ≥2 ⇒ 拒（回退 LLM）
+ *   · `icon` 消费 1 个图标 ⇒ 段声明 item 总数 ≥2 ⇒ 拒
+ *   · 其余形态（grid/list/statrow/table/legend/kvgrid/footer/text）结构性消费全部成员，不对账
+ * 纪律：声明内容必须被消费或显式计数放弃（`declaredUnconsumed`），**禁止静默丢弃**。
+ * 纯函数；段无声明 kids（⌀）⇒ 0（不改变既有行为，旧 spec 的无 kids fixture 逐字不变）。
+ */
+
+/** 段声明的直接内容 items（与 planner `sectionChildrenOf` 同 OR 语义：取首个非空数组）。 */
+function collectDeclaredItems(sec) {
+  if (!sec || typeof sec !== 'object') return [];
+  const body = sec.body;
+  // 🔴 R8-7：`declaredContent` 是 assembler 透传的段内容契约（与 body 表头契约分键，
+  //   见 generation-context-assembler#normalizeBodyContract）。优先级最高——它是唯一
+  //   保证穿过 generationInput.componentPlan 白名单的内容来源。
+  const declared = sec.declaredContent;
+  const arr =
+    (Array.isArray(declared?.children) && declared.children) ||
+    (Array.isArray(declared?.items) && declared.items) ||
+    (Array.isArray(declared?.elements) && declared.elements) ||
+    (Array.isArray(body?.children) && body.children) ||
+    (Array.isArray(body?.items) && body.items) ||
+    (Array.isArray(body?.elements) && body.elements) ||
+    (Array.isArray(sec.children) && sec.children) ||
+    (Array.isArray(sec.items) && sec.items) ||
+    (Array.isArray(sec.elements) && sec.elements) ||
+    [];
+  return arr.filter((k) => k && typeof k === 'object');
+}
+
+/**
+ * 🔴 R6-2（2026-11-02 · mc-max-1793605825777-d30d888c 实锤）：声明**内容量**递归收集。
+ *
+ * 病灶：`itemHasText` 字段枚举是 R6 的第四次变异盲区——vision 这次把文本载体写在
+ * `name`/`value`（vendor-card），`textBearing=0` ⇒ 对账放行 ⇒ 三厂商段空壳。
+ * 治本：对账口径与「vision 把字段叫什么」解耦——递归收集声明树里全部**文本形字符串叶子**：
+ *   · 文本候选键：`text/texts/characters/name/value/label/title`（声明 children 树内全收，
+ *     段级 name 不在树内天然不收）；
+ *   · 值形态过滤：HEX/rgba()/hsl()/var()/url()/data:/相对|绝对路径/资源扩展名 ⇒ 非文本
+ *     （`#F0F0F0`、`rgba(51,51,51,1)`、`../resources/images/icon.png` 不计入）；
+ *   · 只沿 `children/items/elements` 递归（与 `collectDeclaredItems` 同族键），不进
+ *     `styles` 等样式对象；有界（depth≤12）+ visited 防环（与 I-3 `collectSectionBodyTexts` 同纪律）。
+ * 纯函数；计数行铁律的口径升级——不变式是「声明内容必须被消费或显式计数放弃」。
+ */
+const MASS_TEXT_KEYS = new Set(['text', 'texts', 'characters', 'name', 'value', 'label', 'title']);
+// 🔴 R8-7（2026-11-02 · dea074f9 实锤）：补 `content` / `parts` 两个容器键。
+//   本单 vision 把厂商文本放在 `items[].content.parts[].text`、统计卡文本放在
+//   `body.children[].content.elements[].text` —— 旧三键递归不到 ⇒ mass 只能靠 item 级
+//   `name` 兜住（38:3260 的 33/66 完全漏计）。键集合与 assembler 的 normalizeBodyNode
+//   容器白名单**同族**（content 对象 + parts 数组），判据同构单一来源。
+const MASS_CHILD_KEYS = ['children', 'items', 'elements', 'content', 'parts'];
+const MASS_NON_TEXT_VALUE_RE = /^(#(?:[0-9a-f]{3,8})\b|rgba?\(|hsla?\(|var\(|url\(|data:|https?:|\/|\.\?\/)/i;
+const MASS_ASSET_EXT_RE = /\.(png|jpe?g|svg|gif|webp|ico)$/i;
+
+function isMassTextValue(v) {
+  if (typeof v !== 'string') return false;
+  const s = v.trim();
+  if (!s) return false;
+  if (MASS_NON_TEXT_VALUE_RE.test(s)) return false;
+  if (MASS_ASSET_EXT_RE.test(s)) return false;
+  return true;
+}
+
+function declaredTextMass(node, depth = 0, visited = null) {
+  if (!node || typeof node !== 'object' || depth > 12) return 0;
+  if (visited === null) visited = new Set();
+  if (visited.has(node)) return 0;
+  visited.add(node);
+  let mass = 0;
+  for (const [k, v] of Object.entries(node)) {
+    if (!MASS_TEXT_KEYS.has(k)) continue;
+    if (isMassTextValue(v)) mass += 1;
+    else if (Array.isArray(v)) mass += v.filter(isMassTextValue).length;
+  }
+  for (const ck of MASS_CHILD_KEYS) {
+    const v = node[ck];
+    // 🔴 R8-7：`content` 是**对象**容器（其 parts/elements 才是文本数组），不是数组 ——
+    //   旧实现只认数组 ⇒ 对象容器被静默跳过。数组/对象两种容器形态都递归。
+    if (Array.isArray(v)) {
+      for (const child of v) {
+        if (child && typeof child === 'object') mass += declaredTextMass(child, depth + 1, visited);
+      }
+    } else if (v && typeof v === 'object') {
+      mass += declaredTextMass(v, depth + 1, visited);
+    }
+  }
+  return mass;
+}
+
+/**
+ * @returns {number} 该形态未消费的声明 item 数（0 = 对账通过，接管可落地）
+ */
+function declaredUnconsumedCount(sec, kind) {
+  const items = collectDeclaredItems(sec);
+  if (items.length === 0) return 0; // 无声明 ⇒ 无对账（fail-open，既有行为逐字不变）
+  // 🔴 R6-2：内容量守恒口径（itemHasText 字段枚举判空的第四次变异已实锤）。
+  //    mass = 声明树全部文本形字符串叶子数；header/icon 各消费 1 个标题/图标载体。
+  const mass = declaredTextMass({ children: items });
+  if (kind === 'header') {
+    return Math.max(0, mass - 1); // header 只消费 1 个标题
+  }
+  if (kind === 'icon') {
+    // 保留旧 items 枚举下限（多 icon 无文本段不被新口径漏放），mass 兜 name/value 深层载体
+    return Math.max(0, Math.max(items.length - 1, mass - 1));
+  }
+  return 0;
+}
+
 export function collectFoldedGridTakeover(p = {}) {
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, skipped: [] };
+  // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
+  // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -2771,13 +3170,16 @@ export function collectFoldedGridTakeover(p = {}) {
   for (const sec of collectLeafSections(treeSections)) {
     if (!sec?.id) continue;
     out.evaluated += 1;
+    // 🔴 R3：超界段观测计数（段级、与是否实际命中无关 —— 分母口径，真机日志可见）
+    if (isScopeIncomplete(sec, figmaIndex)) out.scopeIncomplete += 1;
     // 🔴 判定顺序：网格 → 标题行 → **统计行** → 表格 → 纯文本 → 纯 icon → 图例
-    //    （刀 53b/53c/53d/53e/53f）—— 互斥域递减（cards≥2 / 1 TEXT+已映射 icon /
+    //    （刀 53b/53c/53d/53e/53f/53g/53h）—— 互斥域递减（cards≥2 / 1 TEXT+已映射 icon /
     //    兄弟同构 N 元组 / 同表多列 / 线性 N TEXT 无图形 / 0 TEXT 且已导出 PNG /
-    //    1 ELLIPSE + 1 TEXT 的 ≥2 组同构）。统计行/表格必须**早于** text/icon：
-    //    它们的成员各自含 2 个 TEXT；即使成员几何可被线性 text 接管，父级聚类判据
-    //    也更严格，先判可锁定整行/整表归属。图例**放最后**：与 text/icon 两两互斥，
-    //    末位 ⇒ 结构上不可能抢走既有命中（只救原本被 skip 的叶）。
+    //    1 ELLIPSE + 1 TEXT 的 ≥2 组同构 / 段契约声明 footer）。统计行/表格必须**早于**
+    //    text/icon：它们的成员各自含 2 个 TEXT；即使成员几何可被线性 text 接管，父级
+    //    聚类判据也更严格，先判可锁定整行/整表归属。图例/属性网格/footer **放最后**：
+    //    与 text/icon 两两互斥，末位 ⇒ 结构上不可能抢走既有命中（只救原本被 skip 的叶，
+    //    footer-summary 实测即此类）。
     let tr = detectGridLeaf(sec, figmaIndex);
     if (!tr.ok) {
       const h = detectHeaderRowLeaf(sec, figmaIndex, p.resourceMapping);
@@ -2820,11 +3222,24 @@ export function collectFoldedGridTakeover(p = {}) {
                 //   `list`）/ icon（子树 0 TEXT）/ legend（恰 1 图形 + 恰 1 TEXT）
                 //   结构性互斥；text 虽支持 N 段，但只接受同一行或每段独占一行，
                 //   kvgrid 的混合多行多列会被 textRunsNotLinear 明确拒绝 ⇒ 不会被抢走。
+                // 🔴 footer（刀 53h）在 kvgrid 之后、**最后一个**：判据是段契约
+                //   （`declaredSectionType==='footer'` / id 前缀 `footer-`）而非几何，
+                //   放末位 ⇒ 只救「九类全 fail」的叶，结构上不可能抢走既有命中。
                 const kv = detectKvGridLeaf(sec, figmaIndex);
                 if (kv.ok) tr = kv;
                 else {
-                  out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};list:${ls.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason}` });
-                  continue;
+                  // 🔴 footer 汇总条（刀53h）**必须放末位**：判据是「段契约显式声明 footer」
+                  //   （`declaredSectionType==='footer'` 或 id 前缀 `footer-`），与前九类逐一
+                  //   互斥；放末位 ⇒ 只有前九类全 fail 才轮到它 ⇒ **结构上不可能抢走既有
+                  //   命中**（阴性零误伤由「位置」保证，不靠断言兜；与 legend/kvgrid 同一论证，
+                  //   且更弱的前提即可成立）。目标病灶 footer-summary 实测被九类全 skip
+                  //   （noAnchorNode / kvPairs=0 / notCollapsedList …）⇒ 置于此位零漂移。
+                  const ft = detectFooterSummaryLeaf(sec, p.resourceMapping);
+                  if (ft.ok) tr = ft;
+                  else {
+                    out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};list:${ls.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason};footer:${ft.reason}` });
+                    continue;
+                  }
                 }
               }
             }
@@ -2833,6 +3248,15 @@ export function collectFoldedGridTakeover(p = {}) {
           }
         }
       }
+    }
+    // 🔴 R6：接管形态 vs 段声明对账 —— 命中形态消费不了段声明的内容 ⇒ 拒、回退 LLM、计数。
+    //   禁止「命中即终点」的静默裁没（9e078c6a：vision 声明 6/12/15 个 pill 被 header 形态
+    //   整段丢弃、2 张统计卡被 icon 形态丢成 1 图标，均零告警）。
+    const unconsumed = declaredUnconsumedCount(sec, tr.kind);
+    if (unconsumed > 0) {
+      out.declaredUnconsumed += 1;
+      out.skipped.push({ id: String(sec.id), reason: `${tr.kind}:declaredUnconsumed(${unconsumed})` });
+      continue;
     }
     const tag = nameOf.get(String(sec.id));
     if (!tag) {
@@ -2848,6 +3272,9 @@ export function collectFoldedGridTakeover(p = {}) {
     // 🔴 刀 20b 必须**显式**分支（同 53g 教训）：否则落进 else 被算成 gridHits ⇒ 计数失真。
     else if (tr.kind === 'list') out.listHits += 1;
     else if (tr.kind === 'kvgrid') out.kvGridHits += 1;
+    // 🔴 刀53h 同 53g/20b 教训：新 kind **必须显式分支**，否则落进下面 `else` 被算成
+    //   gridHits ⇒「gridHits 里有几个是 footer」不可辨 ⇒ 计数失真 = 假绿。
+    else if (tr.kind === 'footer') out.footerHits += 1;
     else out.gridHits += 1;
     out.map.set(String(tag), {
       kind: tr.kind,
@@ -2935,6 +3362,7 @@ export function collectFoldedGridTakeover(p = {}) {
     tableTaken: out.tableHits,
     tableSuppressed: out.tableSuppressed,
     tableAnchorRepairs: out.tableAnchorRepairs,
+    footerTaken: out.footerHits,
     skipped: out.skipped.slice(0, 16),
   });
   return out;

@@ -277,6 +277,11 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     hardcodedTextHealed: 0,
     hardcodedTextStripped: 0,
     hardcodedTextResidual: 0,
+    // R8-2（2026-11-02 · 50d7793f）：透明容器臆造背景修复计数（0 也必须出现）
+    transparentContainerBgHealed: 0,
+    // R8-6（2026-11-02 · c-d1be-99d1be1d）：frame 类挂载族对账计数（0 也必须出现）
+    frameClassScanned: 0,
+    frameClassAligned: 0,
     // 刀 55（2026-10-23）：plan 外编造副本组件
     orphanHits: 0,
     orphanRemoved: 0,
@@ -935,10 +940,13 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         });
       }
     }
-    // ③ 透明容器臆造背景审计（2026-10-20 · 5ef650ff 实锤，只报不改）：
+    // ③ 透明容器臆造背景 **审计 + 确定性修复**（2026-10-20 · 5ef650ff 实锤立项；
+    //    2026-11-02 R8-2 · 50d7793f 实锤升级——原「只报不改」导致三张臆造卡壳直接落盘）：
     //    设计稿 fills=[] 的透明容器（底色由宿主提供），产物对应 wrapper 却刷
     //    background ⇒ 盖住宿主底色（浅色发白/深色发灰）。对照透明容器真值：
-    //    data-section-id → class → 样式规则块顶层 background 非透明 ⇒ 强 WARN。
+    //    data-section-id → class → 样式规则块顶层 background 非透明 ⇒ 留痕 + 剥除。
+    //    🔴 收窄刀口（R8 系评审定案）：只剥 `background(-color)`；border/border-radius
+    //    的真值源是 strokes/cornerRadius，本刀不碰（挂观测）——越权即重蹈「按单加守卫」覆辙。
     const tct = ctx.layoutStructure?.transparentContainerTruth;
     if (tct?.transparentIds?.length > 0) {
       const vueEntries = Object.entries(result)
@@ -946,6 +954,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       const styleEntries = Object.entries(result)
         .filter(([p, c]) => /\.(less|css|vue)$/i.test(p) && typeof c === 'string');
       const transparentBg = [];
+      let transparentBgHealed = 0;
       for (const sid of tct.transparentIds) {
         // data-section-id="sid" 所在标签的 class
         let cls = null;
@@ -957,30 +966,42 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
           if (cm) { cls = cm[1].trim().split(/\s+/)[0]; break }
         }
         if (!cls) continue;
-        // 该 class 规则块顶层声明里的 background（[^{}]* 只取顶层段，嵌套块不扰）
-        const ruleRe = new RegExp(`\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^{}]*)\\}`, 'g');
+        // 该 class 规则块顶层声明里的 background（[^{}]* 只取顶层段，嵌套块不扰）。
+        // 🔴 修复剥除在**原文区间**上做：rm[1]=`.cls {` 头、rm[2]=顶层声明段，
+        //    bgM 在 rm[2] 内的偏移 + rm.index + rm[1].length ⇒ 原文绝对区间。
+        const ruleRe = new RegExp(`(\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^{}]*)(\\})`, 'g');
         for (const [fp, fc] of styleEntries) {
+          const removals = []; // {start, end} 原文绝对区间（bgM[0] 含前导空白与尾分号）
           for (const rm of fc.matchAll(ruleRe)) {
-            const body = rm[1];
-            const bgM = body.match(/background(?:-color)?\s*:\s*([^;]+);/);
-            if (bgM && !/^\s*transparent\s*$/.test(bgM[1])) {
-              transparentBg.push({ sectionId: sid, file: fp, class: cls, value: bgM[1].trim().slice(0, 60) });
-              break;
-            }
+            const bodyStart = rm.index + rm[1].length;
+            const body = rm[2];
+            const bgM = body.match(/(\s*)background(?:-color)?\s*:\s*([^;{}]+);/);
+            if (!bgM) continue;
+            if (/^\s*transparent\s*$/.test(bgM[2])) continue; // 显式透明=守卫写回，非臆造
+            transparentBg.push({ sectionId: sid, file: fp, class: cls, value: bgM[2].trim().slice(0, 60) });
+            removals.push({ start: bodyStart + bgM.index, end: bodyStart + bgM.index + bgM[0].length });
+            break; // 每 sid 每文件只剥首个命中块（与审计 break 语义一致）
+          }
+          if (removals.length > 0) {
+            let next = fc;
+            for (const r of removals.reverse()) next = next.slice(0, r.start) + next.slice(r.end);
+            result[fp] = next;
+            transparentBgHealed++;
           }
         }
       }
       if (transparentBg.length > 0) {
         summary.transparentContainerBg = transparentBg;
+        summary.transparentContainerBgHealed = transparentBgHealed;
         logger?.warn?.(
-          `🛡️ TRANSPARENT-CONTAINER-BG：${transparentBg.length} 处透明容器被臆造背景色覆盖（设计稿 fills=[]，底色应由宿主透出）`,
-          { hits: transparentBg.slice(0, 10), truthTotal: tct.total },
+          `🛡️ TRANSPARENT-CONTAINER-BG：${transparentBg.length} 处透明容器被臆造背景色覆盖（设计稿 fills=[]），已确定性剥除 ${transparentBgHealed} 处（border/radius 真值源不同，本刀不碰挂观测）`,
+          { hits: transparentBg.slice(0, 10), healed: transparentBgHealed, truthTotal: tct.total },
         );
         appendFailOpenEvent(ctx.outputPath, {
           rule: 'TRANSPARENT-CONTAINER-BG',
           severity: 'WARN',
-          reason: `${transparentBg.length} 处透明容器（figma fills=[]）被产物刷上背景色，盖住宿主底色（浅发白/深发灰）`,
-          detail: { hits: transparentBg.slice(0, 10) },
+          reason: `${transparentBg.length} 处透明容器（figma fills=[]）被产物刷上背景色，已剥除 ${transparentBgHealed} 处（R8-2）`,
+          detail: { hits: transparentBg.slice(0, 10), healed: transparentBgHealed },
         });
       }
     }
@@ -1381,6 +1402,91 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   } catch (err) {
     logger?.warn?.('🛡️ 层4+5 布局真值守卫异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // ㉒ R8-6（2026-11-02 · c-d1be-99d1be1d 实锤立项）：frame 类挂载族对账。
+  //   病灶：LLM 对同一 Figma frame id 在模板上**概率性**挂两套类族之一——
+  //   `c-component-frame-{id}`（跨组件复用基类，common.less 同步产出基类规则：仅
+  //   display/flex-direction/gap，**无尺寸**）与 `c-{sem}-frame-{id}`（组件前缀**尺寸类**：
+  //   `flex: 1 1 calc(25% - 20px)` 等）。同单内 ContentSection4 挂尺寸类（4 列网格正常）、
+  //   ContentSection 只挂基类 ⇒ 6 个厂商 item 无宽度约束挤一行互相压盖（用户实拍）。
+  //   prompt/roles 对该双类体系零约定（grep 实证）⇒ 纯 LLM 自发行为，prompt 治标不可靠。
+  //   判据（可辩驳，三条同时成立才补挂）：
+  //     ① 模板元素挂了 `c-component-frame-{id}`；
+  //     ② 同产物 less（resources/styles/**.less 或组件 scoped 块）存在 `.{X}-frame-{id}`
+  //        且规则体含**尺寸声明**（flex:/width:/grid-template:，排除 min-/max- 前缀）；
+  //     ③ 该元素 class 列表尚不含 `{X}-frame-{id}`。
+  //   动作：class 列表尾补挂 `{X}-frame-{id}`（双类并存，不动基类——保留复用语义）。
+  //   Figma 节点 id 全局唯一 ⇒ 同 id 尺寸类语义必然同构，补挂无串位风险。
+  //   fail-open：无尺寸类 / 尺寸类无尺寸声明 ⇒ 不猜不动。计数恒形状（0 也出现）。
+  try {
+    summary.frameClassScanned = 0;
+    summary.frameClassAligned = 0;
+    const frameAlignHits = [];
+    // ── 收集尺寸类：完整类名 → 是否含尺寸声明（从所有 .less 与 .vue scoped 块提取）──
+    const sizeClassDefs = new Map(); // className -> hasSizeDecl
+    const STYLE_BLOCK_RE = /<style[^>]*>([\s\S]*?)<\/style>/g;
+    const SIZE_DECL_RE = /(?:^|[^-\w])(flex|width|grid-template)\s*:/;
+    const collectLessText = (css, srcName) => {
+      if (typeof css !== 'string' || css.length === 0) return;
+      const ruleRe = /\.([A-Za-z0-9_-]*-frame-[A-Za-z0-9_]+)\s*\{([^{}]*)\}/g;
+      for (const m of css.matchAll(ruleRe)) {
+        const cls = m[1];
+        const hasSize = SIZE_DECL_RE.test(m[2]);
+        // 同名多处定义：只要有一处带尺寸就按尺寸类算（并联不猜）
+        sizeClassDefs.set(cls, (sizeClassDefs.get(cls) || false) || hasSize);
+        void srcName;
+      }
+    };
+    for (const [fp, fc] of Object.entries(result)) {
+      if (typeof fc !== 'string') continue;
+      if (fp.endsWith('.less')) collectLessText(fc, fp);
+      else if (fp.endsWith('.vue')) {
+        for (const sm of fc.matchAll(STYLE_BLOCK_RE)) collectLessText(sm[1], fp);
+      }
+    }
+    if (sizeClassDefs.size > 0) {
+      for (const [fp, fc] of Object.entries(result)) {
+        if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+        // 模板里挂的基类 token：c-component-frame-{id}
+        const baseTokens = new Set();
+        for (const m of fc.matchAll(/c-component-frame-([A-Za-z0-9_]+)/g)) {
+          baseTokens.add(m[1]);
+        }
+        for (const id of baseTokens) {
+          summary.frameClassScanned++;
+          // 尺寸类：任意 `{X}-frame-{id}`（X≠component）且带尺寸声明
+          const sizeCls = [...sizeClassDefs.keys()].find(
+            (k) => k.endsWith(`-frame-${id}`) && !k.startsWith('c-component-') && sizeClassDefs.get(k),
+          );
+          if (!sizeCls) continue; // 无尺寸类 ⇒ 不猜不动
+          if (fc.includes(sizeCls)) continue; // 已挂 ⇒ 幂等跳过
+          const classAttrRe = new RegExp(
+            `(class="[^"]*\\bc-component-frame-${id}\\b)([^"]*")`,
+            'g',
+          );
+          const next = fc.replace(classAttrRe, `$1 ${sizeCls}$2`);
+          if (next === fc) continue; // 未找到可安全补挂的静态 class 形态 ⇒ 不动
+          result[fp] = next;
+          summary.frameClassAligned++;
+          frameAlignHits.push({ file: fp, baseClass: `c-component-frame-${id}`, added: sizeCls });
+        }
+      }
+    }
+    logger?.info?.('🛡️ R8-6 frame 类挂载族对账·已评估', {
+      scanned: summary.frameClassScanned,
+      aligned: summary.frameClassAligned,
+      sizeClasses: sizeClassDefs.size,
+      hits: frameAlignHits.slice(0, 10),
+    });
+    if (frameAlignHits.length > 0) {
+      logger?.warn?.('🛡️ R8-6：基类挂载缺尺寸类 ⇒ 已补挂（同 frame id 尺寸类真值存在）', {
+        total: frameAlignHits.length,
+        hits: frameAlignHits.slice(0, 10),
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ R8-6 frame 类对账异常（fail-open）', { error: err?.message || String(err) });
   }
 
   return { files: result, summary };

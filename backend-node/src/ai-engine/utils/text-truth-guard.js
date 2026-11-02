@@ -14,6 +14,12 @@
  *   - 只匹配「连续中文 ≥2 字」，纯数字/符号/单位/英文天然不入检查（避免误杀格式文字）；
  *   - 命中判定用「子串双向覆盖」：产物文字是某个真值的子串/超串即视为命中（容错截断）；
  *   - 真值集合为空（非 Figma 任务）时 fail-open 返回空。
+ *
+ * 🛡️ Phase H（2026-11-02）追加第二条**并列口径**：ASCII token（`zh1`/`sta` 一类）——
+ * 上面的「纯英文不入检查」正是 e7da39ca `43:4791` 行值「启用」被替换成 `zh1` 未被拦的根因。
+ * 新口径见 `detectUnknownAsciiTokens`：候选 = 渲染文本里的 ASCII 标识符 token，
+ * 判定 = **token 边界独立匹配**（**不**复用 `isCoveredByTruth` 的子串包含）+ 框架词白名单；
+ * 结果**独立计数**、不进 `unknown` 数组 ⇒ 不改既有动态分级（先观测，后收敛）。
  */
 
 const CHINESE_RUN_RE = /[\u4e00-\u9fa5]{2,}/g;
@@ -22,6 +28,202 @@ const CHINESE_RUN_RE = /[\u4e00-\u9fa5]{2,}/g;
 import { parseBusinessTextRules } from './business-text-rules.js';
 
 import { extractSfcTemplate } from './sfc-template-extractor.js';
+
+// ============================================================================
+// 🛡️ Phase H（2026-11-02）：ASCII token 口径（与中文口径**并列、独立计数**，不改分级）
+// ============================================================================
+// 病灶（准确归因）：上面的 `CHINESE_RUN_RE` 只生成「连续中文 ≥2 字」候选 ⇒ 纯 ASCII
+// token（`zh1`/`sta`）**天然不入检查**（docstring 明写的设计豁免，非漏洞）。真机
+// mc-max-1793582610570-e7da39ca `43:4791`「设备数据表格」：表头第 4 列「启用状态」渲染成
+// 空 div、行值「启用」×7 被替换成幻觉 token `zh1`（并生成荒谬分支
+// `row.status === 'zh1' ? enabled : disabled`）；Figma 真值（`43:4852 启用状态` /
+// `43:4854… 启用 / 禁用`）里没有任何 `zh1` ⇒ 应当被拦却全程无人拦。
+//
+// 🔴 判定必须按 **token 边界独立匹配**，禁止复用 `isCoveredByTruth`（下面的「去空白 +
+//    子串双向覆盖」）——子串包含会把 token 边界抹平（`dev ⊂ DEV2201` 直接漏报），且
+//    与白名单互相吞噬（`sta ⊂ status`、`able ⊂ disabled`），判据失真。
+
+/**
+ * ASCII 标识符 token。首字符必须为字母/`_`/`$`（纯数字串如 `3740` 不入候选——
+ * 数字本身不构成「设计文案」，且会与真值侧编号产生大量无意义比对）。
+ * 允许 `$`/`_` 以覆盖 `$event`、`_private` 一类标识符。
+ */
+const ASCII_TOKEN_RE = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+
+/** 候选最小长度：<3 的 token（`e`/`ok`/`id`/`px`）绝大多数是变量名/单位/单字母参数，噪音远大于收益。 */
+const ASCII_TOKEN_MIN_LEN = 3;
+
+/**
+ * 框架词白名单（**小写**）：候选 token 命中即视为「代码词汇」而非「设计文案」，不判臆造。
+ * 分类对齐方案文档（class 名 / 事件名 / 指令词 / 生命周期）：
+ *   ① 生命周期 & 组合式 API  ② 事件名  ③ 指令  ④ JS 关键字/内建  ⑤ 常见标签/属性/单位
+ * ⚠️ 这是**白名单**：不在表里也只是「进入独立计数观测」，不落 issue、不影响产物落地。
+ */
+const ASCII_FRAMEWORK_WORDS = [
+  // ① 生命周期 & 组合式 API
+  'setup', 'created', 'mounted', 'updated', 'unmounted', 'activated', 'deactivated',
+  'errorcaptured', 'beforecreate', 'beforemount', 'beforeupdate', 'beforeunmount',
+  'onmounted', 'onunmounted', 'onupdated', 'onbeforemount', 'onbeforeupdate',
+  'onbeforeunmount', 'onactivated', 'ondeactivated', 'onerrorcaptured', 'onrender',
+  'ref', 'reactive', 'computed', 'watch', 'watcheffect', 'nexttick', 'props', 'emit',
+  'defineprops', 'defineemits', 'defineexpose', 'defineoptions', 'definecomponent',
+  'withmacros', 'withdefaults', 'provide', 'inject', 'toref', 'torefs', 'tovalue',
+  'toraw', 'shallowref', 'shallowreactive', 'markraw',
+  'createapp', 'usetemplateref', 'getcurrentinstance', 'appcontext',
+  // ② 事件名
+  'click', 'dblclick', 'change', 'input', 'submit', 'reset', 'focus', 'blur', 'keydown',
+  'keyup', 'keypress', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'mousemove',
+  'mouseover', 'mouseout', 'scroll', 'load', 'resize', 'select', 'contextmenu', 'wheel',
+  'touchstart', 'touchend', 'touchmove', 'touchcancel', 'dragstart', 'dragover', 'dragend',
+  'drop', 'pointerdown', 'pointerup', 'pointermove', 'animationend', 'transitionend',
+  'enter', 'leave', 'toggle', 'close', 'open', 'show', 'hide',
+  // ③ 指令
+  'vif', 'velse', 'vfor', 'vshow', 'vmodel', 'vbind', 'von', 'vhtml', 'vtext', 'vslot',
+  'vpre', 'vonce', 'vmemo', 'vcloak',
+  // ④ JS 关键字 / 内建
+  'true', 'false', 'null', 'undefined', 'nan', 'infinity', 'function', 'return', 'const',
+  'let', 'var', 'import', 'export', 'default', 'from', 'async', 'await', 'new', 'this',
+  'typeof', 'instanceof', 'class', 'extends', 'super', 'static', 'get', 'set', 'try',
+  'catch', 'finally', 'throw', 'if', 'else', 'for', 'while', 'do', 'switch', 'case',
+  'break', 'continue', 'delete', 'void', 'yield', 'arguments', 'prototype', 'constructor',
+  'string', 'number', 'boolean', 'object', 'array', 'symbol', 'weakmap', 'weakset',
+  'promise', 'json', 'math', 'date', 'regexp', 'error', 'parseint', 'parsefloat', 'isnan',
+  'isfinite', 'console', 'log', 'warn', 'debug', 'length', 'push', 'slice', 'splice',
+  'concat', 'filter', 'reduce', 'foreach', 'split', 'join', 'trim', 'replace', 'test',
+  'match', 'includes', 'map', 'find', 'some', 'every', 'keys', 'values', 'entries',
+  // ⑤ 常见标签 / 属性 / CSS / 单位
+  'div', 'span', 'svg', 'path', 'rect', 'circle', 'ellipse', 'line', 'polygon',
+  'polyline', 'text', 'tspan', 'defs', 'clippath', 'lineargradient', 'radialgradient',
+  'stop', 'use', 'symbol', 'mask', 'pattern', 'filter', 'viewbox', 'width', 'height',
+  'class', 'style', 'type', 'name', 'value', 'label', 'key', 'index', 'item', 'items',
+  'list', 'data', 'slot', 'template', 'script', 'component', 'disabled', 'active',
+  'selected', 'checked', 'readonly', 'required', 'placeholder', 'status', 'role', 'aria',
+  'fill', 'stroke', 'opacity', 'transform', 'translate', 'rotate', 'scale', 'display',
+  'flex', 'grid', 'none', 'block', 'inline', 'absolute', 'relative', 'fixed', 'sticky',
+  'static', 'column', 'row', 'wrap', 'center', 'between', 'around', 'start', 'end',
+  'left', 'right', 'top', 'bottom', 'auto', 'hidden', 'visible', 'overflow', 'solid',
+  'dashed', 'dotted', 'radius', 'shadow', 'background', 'color', 'border', 'padding',
+  'margin', 'font', 'weight', 'family', 'px', 'rem', 'em', 'vh', 'vw', 'rgb', 'rgba',
+  'hsl', 'hsla', 'linear', 'radial', 'url', 'calc', 'inherit', 'transparent', 'important',
+  'currentcolor', 'clamp', 'repeat', 'contain', 'cover', 'sans', 'serif', 'monospace',
+];
+
+const ASCII_FRAMEWORK_WHITELIST = new Set(ASCII_FRAMEWORK_WORDS);
+
+/**
+ * 从一段字符串里提取「ASCII token 候选」（小写、去重、长度 ≥ ASCII_TOKEN_MIN_LEN）。
+ * @param {string} s
+ * @returns {Set<string>}
+ */
+function collectAsciiTokenSet(s) {
+  const out = new Set();
+  if (typeof s !== 'string' || !s) return out;
+  ASCII_TOKEN_RE.lastIndex = 0;
+  const m = s.match(ASCII_TOKEN_RE);
+  if (!m) return out;
+  for (const t of m) if (t.length >= ASCII_TOKEN_MIN_LEN) out.add(t.toLowerCase());
+  return out;
+}
+
+/**
+ * 🛡️ 收集 Figma characters 里的 ASCII token 真值集合（小写）。
+ *
+ * 🔴 口径与 `collectFigmaTextTruth` **同构**（同样只走裸节点、不取 `.document` 包装）——
+ *    两条口径必须共享同一事实源语义，否则会出现「中文口径视野」与「ASCII 口径视野」不一致
+ *    的判据漂移（这是本项目硬约束「判据同构单一来源」的直接要求）。
+ *
+ * @param {object} figmaNodeData Figma 节点树（pruneRedundantFields 后）
+ * @returns {Set<string>} 小写 ASCII token 真值
+ */
+export function collectFigmaAsciiTokens(figmaNodeData) {
+  const out = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'TEXT' && typeof node.characters === 'string') {
+      for (const t of collectAsciiTokenSet(node.characters)) out.add(t);
+    }
+    for (const c of node.children || []) walk(c);
+  };
+  walk(figmaNodeData);
+  return out;
+}
+
+/**
+ * 🛡️ Phase H：检测产物里「不在 Figma 真值里、也不属于框架词白名单」的 ASCII token。
+ *
+ * 与 `detectUnknownText`（中文口径）**并列但独立**：候选来源逐字相同（模板渲染文本 +
+ * script `label|name|text|title` 数据字段），差异只在「token 规则」与「白名单」。
+ *
+ * 🔴 **独立计数**语义：本函数的结果**不进** `detectUnknownText` 的 `unknown` 数组，
+ *    因此不影响 `code-structure-validator` 既有 TEXT-TRUTH 动态分级链
+ *    （标题级 或 >2 处即 BLOCK）。先挂观测（`textTruthAscii:hits:N`），待真机误报率
+ *    与白名单收敛后再决定是否纳入分级。
+ *
+ * @param {Array<{path:string, content:string}>} files 生成产物文件数组
+ * @param {object} figmaNodeData Figma 节点树
+ * @param {object|null} [businessTextRules] 业务术语规则（可选）：rewrite 目标词里的 ASCII
+ *   token 同样纳入真值（与中文口径的 rewrite 语义一致）
+ * @returns {Array<{text:string, file:string}>} 不在真值/白名单里的 ASCII token（去重）
+ */
+export function detectUnknownAsciiTokens(files, figmaNodeData, businessTextRules = null) {
+  const truthTokens = collectFigmaAsciiTokens(figmaNodeData);
+  // 真值集合为空（非 Figma 任务 / 数据缺失）⇒ fail-open，与中文口径一致
+  if (truthTokens.size === 0) return [];
+
+  const parsed = parseBusinessTextRules(businessTextRules);
+  if (parsed) {
+    for (const [, to] of parsed.rewrite) {
+      for (const t of collectAsciiTokenSet(to)) truthTokens.add(t);
+    }
+  }
+
+  const seen = new Set();
+  const unknown = [];
+  for (const f of files || []) {
+    if (!f || !f.content) continue;
+    const candidates = [];
+    for (const t of collectAsciiTokenSet(extractTemplateText(f.content))) candidates.push(t);
+    for (const { text } of extractScriptFieldsWithKey(f.content)) {
+      for (const t of collectAsciiTokenSet(text)) candidates.push(t);
+    }
+    for (const tok of candidates) {
+      if (seen.has(tok)) continue;
+      seen.add(tok);
+      if (ASCII_FRAMEWORK_WHITELIST.has(tok)) continue;
+      // 🔴 token 边界独立匹配（小写全等）——禁止子串包含判定
+      if (truthTokens.has(tok)) continue;
+      unknown.push({ text: tok, file: f.path || '' });
+    }
+  }
+  return unknown;
+}
+
+/**
+ * 🛡️ Phase H：ASCII 口径统一日志行格式（microcode / vue3 两条链路共用，供真机 grep）。
+ *
+ * 🔴 `hits:0` **也必须打**（font-size-guard 同款教训）：否则「口径没接线/未启用」与
+ *    「接线了但零命中」在日志上完全同形。故本行额外带 `enabled:` / `truthTokens:`：
+ *      - `enabled:false` ⇒ 该链路未传 `figmaNodeData`，口径根本没跑；
+ *      - `enabled:true truthTokens:0` ⇒ 跑了，但真值侧无 ASCII token（fail-open）；
+ *      - `enabled:true hits:0` ⇒ 跑了、真值非空、零命中（真正的「干净」）。
+ *
+ * @param {{enabled?:boolean, hits?:number, truthTokens?:number, tokens?:string[]}} stats
+ * @param {'max'|'vue3'|string} tag 链路标记
+ * @returns {{message: string, meta: Record<string, any>}}
+ */
+export function formatTextTruthAsciiLog(stats, tag) {
+  const hits = Number(stats?.hits || 0);
+  const enabled = stats?.enabled === true;
+  const truthTokens = Number(stats?.truthTokens || 0);
+  const tokens = Array.isArray(stats?.tokens) ? stats.tokens : [];
+  return {
+    message:
+      `🛡️ 文本真值 ASCII 口径 [TEXT-TRUTH-ASCII@${tag}] hits:${hits}` +
+      ` enabled:${enabled} truthTokens:${truthTokens}` +
+      (tokens.length ? ` tokens:${tokens.join(',')}` : ''),
+    meta: { tag, hits, enabled, truthTokens, tokens },
+  };
+}
 
 /**
  * 收集 Figma TEXT 节点的 characters 真值集合（确定性）。

@@ -64,6 +64,10 @@ export class VisionAgent {
     this.providerType = config.providerType || 'auto';
     //供应商池：resolveVisionConfig 透传的 provider id（无则走单一配置）
     this.providerId = config.providerId || null;
+    // 🛡️ 注册归属 scope（2026-11-02 跨用户串配置根治）：resolveVisionConfig 按本用户主配置指纹生成。
+    // pickSnapshot 只在 scope 与池槽位注册归属一致时才从池取凭证；无 scope ⇒ 绝不从全局池读
+    // （槽位里可能是他人任务残留的凭证，生产 mc-max-1793601836580 实锤烧到 liuqh 的 key）。
+    this.poolScope = config.poolScope || null;
 
     // Token 用量记录钩子（由外部注入，非阻塞）
     this.onTokenUsage = config.onTokenUsage || null;
@@ -103,11 +107,15 @@ export class VisionAgent {
         provider: 'anthropic',
         model: this.model,
         providerId: config.providerId,
+        // 🛡️ 2026-11-02：池归属 scope 透传给统一网关（get/pick 归属校验用）
+        poolScope: this.poolScope,
         maxTokens: this.maxTokens,
         // 🔀 方案 A：主 provider 熔断后自动切换备用 vision provider
         // excludeIds：排除上一次 attempt 刚失败的 provider，实现「超时 → 切换大模型」故障转移。
         refreshProvider: ({ excludeIds = [] } = {}) => {
-          const p = getProviderPool().pick('vision', { excludeIds });
+          // 🛡️ 2026-11-02：无本用户 scope ⇒ 不从全局池读（防读他人残留凭证），不做故障转移
+          if (!this.poolScope) return null;
+          const p = getProviderPool().pick('vision', { excludeIds, scope: this.poolScope });
           if (!p || !p.apiKey) return null;
           return {
             providerId: p.id,
@@ -224,6 +232,17 @@ export class VisionAgent {
     let lastSnap = null;
     let currentSnap = null;
     const pickSnapshot = ({ excludeIds = [] } = {}) => {
+      // 🛡️ 2026-11-02 跨用户串配置根治：池读取必须带本用户注册 scope；
+      // 无 scope ⇒ 本用户未配置 provider 池 ⇒ 直接用构造时传入的自身配置（正确的用户凭证），
+      // 绝不读全局池（生产实锤：读到他人残留的 qwen3.7-plus@dashscope / deepseek-v4-pro@api.deepseek.com）。
+      if (!this.poolScope) {
+        return {
+          providerId: this.providerId || null,
+          apiKey: this.apiKey,
+          baseURL: this.baseURL || '',
+          model: this.model,
+        };
+      }
       // 显式 providerId（如配置页连通性测试指定了单个 provider）时固定用该 provider，不走池 pick。
       // 🛡️ 但若该 provider 已被本次 excludeIds 排除（刚超时/失败），必须回退到池 pick 故障转移，
       // 否则「显式 providerId 恒命中」会让重试永远撞同一面墙（mc-max-1787717640370 实锤：
@@ -236,8 +255,8 @@ export class VisionAgent {
         // 不硬编码任何模型）；排除刚失败的 provider（故障转移语义不变）。
         const entry =
           this.providerId === '__primary__'
-            ? getProviderPool().pick('vision', { excludeIds })
-            : getProviderPool().get(this.providerId);
+            ? getProviderPool().pick('vision', { excludeIds, scope: this.poolScope })
+            : getProviderPool().get(this.providerId, { scope: this.poolScope });
         if (entry && entry.apiKey) {
           return {
             providerId: entry.id,
@@ -248,7 +267,7 @@ export class VisionAgent {
         }
       }
       // 🔀 排除上一次 attempt 刚失败的 provider，实现「超时 → 切换视觉模型」故障转移
-      const picked = getProviderPool().pick('vision', { excludeIds });
+      const picked = getProviderPool().pick('vision', { excludeIds, scope: this.poolScope });
       if (picked && picked.apiKey) {
         return {
           providerId: picked.id,

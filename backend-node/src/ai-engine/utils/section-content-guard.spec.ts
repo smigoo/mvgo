@@ -772,6 +772,174 @@ describe('checkSectionTruthCoverage · 真值文案覆盖（2026-09-29 治本·A
 });
 
 /**
+ * 🛡️ Phase I-3（2026-11-02）：合成 section 的 body 真值兜底。
+ *
+ * 真机铁证（`mc-max-1793582674250-3b0689c9` 的 checkpoint 离线回放，逐字取材）：
+ *   planner 把页脚规整成**合成 section**（`id:'footer-summary'`、`type:'footer'`、
+ *   `sourceNodeIds:[]` — 占位、无真实 Figma 节点），该段全部文案由 **vision 写在 body**
+ *   （`items[].content.elements[].text` = `共 6 个节点` / `接入设备 ` / `10810`）。
+ *   LLM 却把列表段 `48:5798` 的内容整段装进骨架挂 `footer-summary` 的组件
+ *   （`ContentSection.vue` 渲染 6 张节点卡 + `在线/离线`，`data-section-id="footer-summary"`）
+ *   ⇒ 真值 0 命中 + 装了邻居。
+ *
+ * 改前：`subTexts` 只经 `sourceNodeIds` 走 Figma 子树 ⇒ 合成段恒空
+ *   ⇒ `truthTexts.length===0 continue` 失明（真机 `checkSectionTruthCoverage` = `[]`）。
+ * 改后：子树文案为空时以 `collectSectionBodyTexts(sec)` 兜底 ⇒ 精确命中
+ *   （真机 issues=1：`{sectionId:'footer-summary', truthTexts:[共 6 个节点,接入设备,10810],
+ *   foreignTexts:[在线,江苏联网节点,离线]}`）。
+ *
+ * 🔴 零漂移边界（本组最后一个用例锁定）：**仅在子树文案为空时补**——
+ *   有子树的段 body 不得参与，否则会把「本节真值 0 命中」误判成命中而漏报。
+ */
+describe('checkSectionTruthCoverage · Phase I-3 合成段 body 真值兜底（2026-11-02 真机 3b0689c9）', () => {
+  const figmaRootI3: any = {
+    id: 'root', name: 'cp-节点列表', type: 'FRAME',
+    absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+    children: [
+      {
+        id: '48:5798', name: 'list', type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 200 },
+        children: [
+          { id: '48:5801', name: 't-江苏联网节点', type: 'TEXT', characters: '江苏联网节点', absoluteBoundingBox: { x: 40, y: 10, width: 80, height: 18 } },
+          { id: '48:5802', name: 't-在线', type: 'TEXT', characters: '在线', absoluteBoundingBox: { x: 300, y: 10, width: 30, height: 18 } },
+        ],
+      },
+      {
+        id: '88:32', name: 'sub-header', type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 260, width: 400, height: 24 },
+        children: [
+          { id: '88:32a', name: 't-当日总流量', type: 'TEXT', characters: '当日总流量', absoluteBoundingBox: { x: 58, y: 262, width: 80, height: 18 } },
+        ],
+      },
+    ],
+  };
+
+  /** vision 对 footer 合成段的 body 显式发言（真机 3b0689c9 逐字，仅去掉 styles）。 */
+  const FOOTER_BODY: any = {
+    layout: 'horizontal',
+    items: [
+      { layout: 'horizontal', content: { layout: 'horizontal', elements: [{ type: 'label', text: '共 6 个节点' }] } },
+      {
+        layout: 'horizontal',
+        content: {
+          layout: 'horizontal',
+          elements: [
+            { type: 'label', text: '接入设备 ' },
+            { type: 'value', text: '10810' },
+          ],
+        },
+      },
+    ],
+  };
+
+  function makePlanI3({ footerBody, subBody }: { footerBody?: any; subBody?: any } = {}) {
+    return planWith([
+      {
+        id: 'root', title: 'root', sourceNodeIds: ['root'], isLayoutContainer: true,
+        children: [
+          { id: '48:5798', title: '节点列表', type: 'list', sourceNodeIds: ['48:5798'] },
+          {
+            id: 'footer-summary', title: '底部汇总', type: 'footer', sourceNodeIds: [],
+            body: footerBody === undefined ? FOOTER_BODY : footerBody,
+          },
+          {
+            id: '88:32', title: 'sub-header', type: 'header', sourceNodeIds: ['88:32'],
+            body: subBody === undefined ? { layout: 'horizontal' } : subBody,
+          },
+        ],
+      },
+    ]);
+  }
+
+  function fileForI3(sectionId: string, content: string, plan = makePlanI3()) {
+    const name = assignSectionComponentNames(plan.effectiveSections).get(sectionId);
+    return { path: `package/components/${name}.vue`, content };
+  }
+
+  /** 真机产物形态：骨架挂 footer-summary，内容却是列表段 48:5798 的节点卡。 */
+  const WRONG_CONTENT = `
+<template>
+  <div data-section-id="footer-summary">
+    <div v-for="node in nodeList" :key="node.name">
+      <span>{{ node.name }}</span>
+      <span>在线</span>
+    </div>
+  </div>
+</template>
+<script setup>
+const nodeList = [{ name: '江苏联网节点' }]
+</script>
+`;
+
+  it('① 合成段（sourceNodeIds:[]）真值 0 命中 + 装了邻居 ⇒ 报（真值取自 vision body）', () => {
+    const plan = makePlanI3();
+    const files = [fileForI3('footer-summary', WRONG_CONTENT, plan)];
+    const r = checkSectionTruthCoverage({ files, plan, figmaRoot: figmaRootI3 });
+    expect(r).toHaveLength(1);
+    expect(r[0].sectionId).toBe('footer-summary');
+    // 真值来自 body（改前这里是空 ⇒ 门禁失明）
+    expect(r[0].truthTexts).toEqual(expect.arrayContaining(['共 6 个节点', '接入设备', '10810']));
+    expect(r[0].foreignTexts).toEqual(expect.arrayContaining(['在线', '江苏联网节点']));
+  });
+
+  it('② 反证·只渲染了邻居、自己什么都没渲染（无外来证据的反向）→ 不报', () => {
+    // 本用例构造「自己的 body 文案 0 命中，且**未**渲染任何他处唯一归属文本」：
+    // 缺条件③（装了别人的）⇒ 属「内容不全」，交给 COMP-001/TEXT-TRUTH，不在此阻断。
+    const plan = makePlanI3();
+    const files = [fileForI3('footer-summary', '<template><div data-section-id="footer-summary"></div></template>', plan)];
+    expect(checkSectionTruthCoverage({ files, plan, figmaRoot: figmaRootI3 })).toEqual([]);
+  });
+
+  it('③ 反证·渲染了 body 真值之一（哪怕不全）→ 不报', () => {
+    const plan = makePlanI3();
+    const files = [
+      fileForI3(
+        'footer-summary',
+        `<template><div data-section-id="footer-summary"><span>共 6 个节点</span><span>在线</span></div></template>`,
+        plan,
+      ),
+    ];
+    expect(checkSectionTruthCoverage({ files, plan, figmaRoot: figmaRootI3 })).toEqual([]);
+  });
+
+  it('④ 反证·vision 沉默（body 缺失）⇒ 不补真值、不报（不猜）', () => {
+    const plan = makePlanI3({ footerBody: null });
+    const files = [fileForI3('footer-summary', WRONG_CONTENT, plan)];
+    expect(checkSectionTruthCoverage({ files, plan, figmaRoot: figmaRootI3 })).toEqual([]);
+  });
+
+  it('⑤ 反证·body 文案全为图层名噪声（<2 字/纯 ASCII 单字）⇒ 等同于沉默，不报', () => {
+    const plan = makePlanI3({
+      footerBody: { layout: 'horizontal', items: [{ content: { elements: [{ type: 'label', text: 't' }] } }] },
+    });
+    const files = [fileForI3('footer-summary', WRONG_CONTENT, plan)];
+    expect(checkSectionTruthCoverage({ files, plan, figmaRoot: figmaRootI3 })).toEqual([]);
+  });
+
+  it('⑥ 零漂移边界·段有 Figma 子树时 body **不参与**（仅子树为空才兜底）', () => {
+    // 88:32 有真实子树（真值「当日总流量」）＋ body 里另声明「额外声明文案」。
+    // 产物渲染了 body 那句 + 邻居「在线」，却**没**渲染自己的子树真值 ⇒ 必须仍报，
+    // 且 truthTexts 只含子树真值。若实现改成「无条件 union body」，真值命中 ⇒ 漏报 ⇒ 本用例红。
+    const plan = makePlanI3({
+      subBody: { layout: 'horizontal', items: [{ content: { elements: [{ type: 'label', text: '额外声明文案' }] } }] },
+    });
+    const files = [
+      fileForI3(
+        '88:32',
+        `<template><div><span>额外声明文案</span><span>在线</span></div></template>`,
+        plan,
+      ),
+    ];
+    const r = checkSectionTruthCoverage({ files, plan, figmaRoot: figmaRootI3 });
+    expect(r).toHaveLength(1);
+    expect(r[0].sectionId).toBe('88:32');
+    expect(r[0].truthTexts).toEqual(expect.arrayContaining(['当日总流量']));
+    expect(r[0].truthTexts).not.toContain('额外声明文案');
+    expect(r[0].foreignTexts).toEqual(['在线']);
+  });
+});
+
+/**
  * 🛡️ 2026-09-30 兜底：**未被 Figma 锚定的 section 一律不判借用**。
  *
  * 真机实锤（`c-traffic-monitor-65bedc2d` 等 29 个组件的 189 条误报）：`section-vehicle-type`

@@ -14,7 +14,6 @@ import axios from 'axios';
 import { TasksService } from '../tasks/tasks.service';
 import { ProgressService } from '../progress/progress.service';
 import { VisionAgent } from '../ai-engine/agents/vision-agent';
-import { getProviderPool } from '../ai-engine/utils/provider-pool';
 import { resolveVisionConfig } from '../ai-engine/utils/ai-defaults';
 import { AiConfigService } from '../config/config.service';
 import { resolveFrontendWorkspacePath } from '../config/backend-root';
@@ -541,18 +540,11 @@ export class PageSkeletonService {
   // 内部：vision 分析
   // ============================================================
 
-  /** 解析 vision 配置：优先用运行时供应商池（用户整体配置的模型），回退全局/用户 AI 配置（UI 配置的视觉模型） */
+  /** 解析 vision 配置：以本用户 AI 配置 resolve 结果为准（内部含供应商池择优，带 scope 归属校验） */
   private async getVisionConfig(userId?: string): Promise<{ apiKey: string; baseURL: string; model: string; providerType: string; providerId?: string } | null> {
-    const pooled = getProviderPool().pick('vision');
-    if (pooled && pooled.apiKey) {
-      return {
-        apiKey: pooled.apiKey,
-        baseURL: pooled.baseURL || '',
-        model: pooled.model || '',
-        providerType: pooled.providerType || 'auto',
-        providerId: pooled.id,
-      };
-    }
+    // 🛡️ 2026-11-02 跨用户串配置根治：删除「先从全局池 pick」的逻辑——ProviderPool 是进程级
+    // 单例，槽位残留上一任务的 provider，无 scope 的 pick 会拿到他人凭证（mc-max-1793601836580 实锤）。
+    // resolveVisionConfig 内部 setProviders 打本用户 scope 标 + pick，只认本用户指纹。
     const cfg = resolveVisionConfig(await this.aiConfigService.getMergedAiConfig(userId));
     if (cfg && cfg.apiKey) {
       return {
@@ -560,6 +552,7 @@ export class PageSkeletonService {
         baseURL: cfg.baseURL || '',
         model: cfg.model || '',
         providerType: cfg.providerType || 'auto',
+        providerId: cfg.providerId,
       };
     }
     return null;

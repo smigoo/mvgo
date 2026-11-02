@@ -545,6 +545,9 @@ export async function executeModelRequest(options = {}) {
     onRateLimited,
     operation,
     providerId = null,
+    // 🛡️ 2026-11-02 跨用户串配置根治：池读取归属 scope（由 Agent 构造配置透传）。
+    // 带 scope 的 get/pick 只命中本用户注册的槽位；无 scope 不做池 pick（防读他人残留凭证）。
+    poolScope = null,
     tokenEstimate = 0,
     // 🔀 每次 attempt 动态解析 provider（返回 { providerId, model, provider }）。
     // 用于「超时/失败 → 切换大模型」故障转移：第一次 provider 挂起后，下一次 attempt
@@ -595,8 +598,10 @@ export async function executeModelRequest(options = {}) {
       }
     }
     const entry = pid
-      ? getProviderPool().get(pid)
-      : getProviderPool().pick()
+      ? getProviderPool().get(pid, { scope: poolScope })
+      : poolScope
+        ? getProviderPool().pick('text', { scope: poolScope })
+        : null
     return { providerId: pid, model: mdl, provider: pvd, entry }
   }
 
@@ -1253,6 +1258,8 @@ export function attachUnifiedInvoke(llm, defaults = {}) {
       requestMaxRetries:
         requestOptions.requestMaxRetries ?? defaults.requestMaxRetries,
       providerId: requestOptions.providerId ?? defaults.providerId ?? null,
+      // 🛡️ 2026-11-02：池归属 scope 透传（get/pick 归属校验，防读他人任务残留凭证）
+      poolScope: requestOptions.poolScope ?? defaults.poolScope ?? null,
       tokenEstimate:
         requestOptions.tokenEstimate ??
         estimateTokens(prompt, llm?.maxTokens ?? llm?.max_tokens ?? defaults.maxTokens ?? 0),

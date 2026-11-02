@@ -185,6 +185,61 @@ export function footerGeometryRecoveryAllowed(sec) {
 }
 
 /**
+ * 🛡️ 形态⑤：单个 `table-header` 容器声明（e7da39ca 实锤，2026-11-02）。
+ *
+ * vision 把**整行表头**收成一个 `body.children` 项：
+ *   `{ id:'table-header', role:'table-header', layout:'horizontal',
+ *      children:[{type:'label',text:'设备名称'}, …] }`
+ * 同行另有 `{ role:'table-body', items:[{role:'table-row', …}] }` 承载数据行；
+ * 全表**既无 headers 数组、也无 table-column 逐列声明** ⇒ 旧四形态全落空
+ * ⇒ `declaredTableHeaders` 返 null ⇒ `resolveDeclaredTableLca` 失效
+ * ⇒ 真机退化 `table:notTableColumn`（43:4791 逐字复现，离线回放已实证）。
+ *
+ * 严格判据（宁漏不误）：`body.children` 内**恰一个** table-header 容器，
+ * 其 children 文本 ≥2 且逐项非空；多容器 / 文本不足 / 有空项 ⇒ null（不猜）。
+ * role/type 混用已实证（同容器 `role:'table-header'` + 子项 `type:'label'`），
+ * 故经 `roleOf`（role 优先、type 回退）读取——与全模块同口径，不自写 String()。
+ */
+export function declaredTableHeaderContainerTexts(sec) {
+  const children = Array.isArray(sec?.body?.children) ? sec.body.children : [];
+  const containers = children.filter((c) => roleOf(c) === 'table-header');
+  if (containers.length !== 1) return null;
+  const kids = Array.isArray(containers[0]?.children) ? containers[0].children : [];
+  const texts = kids.map((k) => String(k?.text ?? '').trim());
+  if (texts.length < 2 || !texts.every(Boolean)) return null;
+  return texts;
+}
+
+/**
+ * 形态⑤ 的形态校验真值：`table-header` 容器的表头数 与 `table-body` 首行
+ * **非图标单元格**数。供 `detectTableLeaf` 的 fail-closed 闸门
+ * （契约与行列结构不自洽 ⇒ 契约不可信 ⇒ 回退几何路径，不用于 LCA 回查）。
+ *
+ * 无 `table-body` / 行结构 ⇒ null（= 不校验），故对既有四形态**零影响**。
+ * 列数按**首行顶层单元格数**计：首列常为「图标 + 文本」复合单元格
+ * （43:4791 实锤：`{type:'row',children:[icon,label]}`）仍算一列；
+ * 仅当单元格本身是图标、或其唯一子项是图标时才剔除。
+ */
+export function declaredTableRowArity(sec) {
+  const children = Array.isArray(sec?.body?.children) ? sec.body.children : [];
+  const body = children.find((c) => ['table-body', 'table-rows', 'table'].includes(roleOf(c)));
+  const rows = Array.isArray(body?.items)
+    ? body.items
+    : Array.isArray(body?.children)
+      ? body.children
+      : [];
+  const row = rows.find((r) => roleOf(r) === 'table-row') || rows[0];
+  const cells = Array.isArray(row?.children) ? row.children : [];
+  if (cells.length === 0) return null;
+  const isIconCell = (c) => {
+    if (isIconRole(roleOf(c))) return true;
+    const kids = Array.isArray(c?.children) ? c.children : [];
+    return kids.length === 1 && isIconRole(roleOf(kids[0]));
+  };
+  return cells.filter((c) => !isIconCell(c)).length;
+}
+
+/**
  * vision 已声明的表头契约（结构语义单一来源，自 section-type-derive.js 吸收迁入）。
  * 兼容顶层 headers、body.headers、body.children[].headers 及对应 tableStyle 形态；
  * 只负责读取，不用表头文本猜几何，也不补造缺失表头。
@@ -210,6 +265,11 @@ export function declaredTableHeaders(sec) {
     );
     if (allColumns && perColumn.every(Boolean)) return perColumn;
   }
+  // 🛡️ 第五种合法形态——单个 `table-header` 容器声明（e7da39ca 实锤，2026-11-02）。
+  //   判据与读取口径在 `declaredTableHeaderContainerTexts`（同文件，单一来源）。
+  //   置末位 ⇒ 前四形态优先级**逐字不变**，仅在四形态全落空时兜底。
+  const containerHeaders = declaredTableHeaderContainerTexts(sec);
+  if (containerHeaders) return containerHeaders;
   return null;
 }
 
@@ -225,4 +285,129 @@ export function tableGeometryRecoveryAllowed(sec) {
   const declaredType = declaredSectionType(sec);
   if (declaredType && declaredType !== 'table') return false;
   return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ②-3 本段文案发言（Phase I-3，2026-11-02）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 🛡️ Phase I-3（2026-11-02，3b0689c9 真机铁证）：vision 对**本段有哪些文案**的显式发言（body 侧）。
+ *
+ * 背景：planner 会把某些段规整成**合成 section**（真机铁证 `id:'footer-summary'`、
+ * `sourceNodeIds:[]`——占位、无真实 Figma 节点），而该段的全部文案 vision 早已写进 `body`
+ * （`items[].content.elements[].text` = `共 6 个节点` / `接入设备 ` / `10810`）。
+ * 既有真值收集只经 `sourceNodeIds` 走 Figma 子树 ⇒ 合成段恒空
+ * ⇒ `checkSectionTruthCoverage` 在 `truthTexts.length===0` 处 `continue` 失明
+ * ⇒ 「骨架挂 A 段、内容整段装 B 段」这种最刺眼的缺陷无人拦（同一份真值 COMP-002 本该管）。
+ *
+ * 判据（宁漏不误，只读 vision 已声明的事实，零语义猜测）：
+ *   · 递归遍历 `sec.body`（仅对象/数组节点，深度上限 12 防意外嵌套）；
+ *   · 收集对象上的**非空 `text` 字段**（string / number，`String().trim()`）；
+ *   · 另收 `*.headers` 数组里的非空字符串（vision 的「表头列文案」声明形态）；
+ *   · 未声明 / body 缺失 ⇒ `[]`（= vision 沉默，调用方不得据此推断）。
+ *
+ * 用途与边界：仅供 `section-content-guard#buildSectionEvidenceCtx` 在
+ * **Figma 子树文案为空**时兜底补真值（置末位 ⇒ 有子树的段逐字不变，零漂移）。
+ * 本函数不判归属、不判类型、不猜几何 —— 归属仍由 `section-content-guard` 的
+ * 「唯一归属 + 子树不交叠」两道约束把关。
+ */
+export function collectSectionBodyTexts(sec) {
+  const body = sec?.body;
+  if (!body || typeof body !== 'object') return [];
+  const out = new Set();
+  const seen = new Set();
+  const walk = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > 12) return;
+    if (Array.isArray(node)) {
+      for (const it of node) walk(it, depth + 1);
+      return;
+    }
+    if (seen.has(node)) return;
+    seen.add(node);
+    const t = node.text;
+    if (typeof t === 'string' || typeof t === 'number') {
+      const s = String(t).trim();
+      if (s) out.add(s);
+    }
+    if (Array.isArray(node.headers)) {
+      for (const h of node.headers) {
+        const s = String(h ?? '').trim();
+        if (s) out.add(s);
+      }
+    }
+    for (const v of Object.values(node)) {
+      if (v && typeof v === 'object') walk(v, depth + 1);
+    }
+  };
+  walk(body, 0);
+  return [...out];
+}
+
+/**
+ * 🎯 Phase I-1/2（2026-11-02）：任意节点（Figma 原始节点 / vision 节点）的文案抽取。
+ *
+ * 与 `collectSectionBodyTexts` 同构（有界递归 + visited 防环），但**不绑 body**：
+ *   · 支持 `text`（vision 归一后的字段）与 `characters`（Figma TEXT 原生字段）；
+ *   · 支持 `headers[]`（vision 表头声明形态）。
+ *
+ * 用途：段身份契约要下发「本段允许渲染的全部业务文案」，其真值必须同时覆盖
+ * vision 侧（plan section）与 Figma 侧（节点子树）两个来源——单看一边必漏。
+ */
+export function collectNodeTexts(node, maxDepth = 12) {
+  const out = new Set();
+  const seen = new Set();
+  const walk = (n, depth) => {
+    if (!n || typeof n !== 'object' || depth > maxDepth) return;
+    if (Array.isArray(n)) {
+      for (const it of n) walk(it, depth + 1);
+      return;
+    }
+    if (seen.has(n)) return;
+    seen.add(n);
+    for (const k of ['text', 'characters']) {
+      const v = n[k];
+      if (typeof v === 'string' || typeof v === 'number') {
+        const s = String(v).trim();
+        if (s) out.add(s);
+      }
+    }
+    if (Array.isArray(n.headers)) {
+      for (const h of n.headers) {
+        const s = String(h ?? '').trim();
+        if (s) out.add(s);
+      }
+    }
+    for (const v of Object.values(n)) {
+      if (v && typeof v === 'object') walk(v, depth + 1);
+    }
+  };
+  walk(node, 0);
+  return [...out];
+}
+
+/**
+ * 🎯 Phase I-1/2（2026-11-02）：section 的「真值文本全集」（段身份契约唯一来源）。
+ *
+ * 与 I-3 完全同源（`collectSectionBodyTexts` 置首），再补两类 vision 已声明的实例事实：
+ *   ① `items[].name` —— 折叠重复段（`collapsed` + `items[]`）把 N 个重复实例合并成 1 个
+ *      section，`body` 里只有**一份模板**；只有 items 才带「江苏联网节点」这类实例名。
+ *   ② `items[]` 子树的 `text` / `characters`（经 `collectNodeTexts`，同口径）。
+ *
+ * 边界（宁漏不造）：
+ *   · **不收** `sec.title` / `sec.responsibility` —— 那是 planner 的元信息，
+ *     真机上 `footer-summary` 的标题「底部汇总」在 Figma 里根本不存在，
+ *     收进来就等于允许 LLM 渲染一条臆造标题（撞 N1 数字/文案臆造铁律）。
+ *   · 未声明 / 无 body 无 items ⇒ `[]`（= vision 沉默，调用方不得据此推断）。
+ */
+export function collectSectionTruthTexts(sec) {
+  const out = new Set();
+  if (!sec || typeof sec !== 'object') return [];
+  for (const t of collectSectionBodyTexts(sec)) out.add(t);
+  for (const it of Array.isArray(sec.items) ? sec.items : []) {
+    if (!it || typeof it !== 'object') continue;
+    if (typeof it.name === 'string' && it.name.trim()) out.add(it.name.trim());
+    for (const t of collectNodeTexts(it)) out.add(t);
+  }
+  return [...out];
 }

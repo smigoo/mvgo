@@ -660,7 +660,11 @@
                 <!-- ── 组件名 + 操作按钮栏 ── -->
                 <div class="canvas-header">
                   <div class="ch-name-row">
-                    <span class="ch-name">{{ task.componentName || (pageTaskFlag ? '未命名页面' : '未命名组件') }}({{ task.componentId }})</span>
+                    <span class="ch-name">
+                      <!-- {{ task.componentName || (pageTaskFlag ? '未命名页面' : '未命名组件') }}( -->
+                        {{ task.componentId }}
+                        <!-- ) -->
+                      </span>
                     <GradientButton
                       v-if="canOpenPlayground"
                       class="btn-playground-gradient"

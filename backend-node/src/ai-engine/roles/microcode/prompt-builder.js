@@ -69,6 +69,11 @@ import {
   buildCrossThemeColorFacts,
   formatCrossThemeColorFacts,
 } from '../../utils/color-slot-mapper.js';
+// 🎯 Phase I-1/2（2026-11-02）：段真值文本单一来源（与 I-3 的 COMP-002 兜底同源）
+import {
+  collectSectionTruthTexts,
+  collectNodeTexts,
+} from '../../utils/vision-facts.js';
 
 /**
  * 🌗 跨主题配色真值段（2026-10-19）
@@ -674,8 +679,13 @@ ${outputFormatWarnings(true)}
       : '';
 
     // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
-    const textTruthWhitelist = input.figmaNodeData
-      ? buildTextTruthWhitelist(input.figmaNodeData, input.businessTextRules)
+    //
+    // 🎯 Phase I-1/2b：**子组件 chunk 用段作用域内的事实源**。白名单是「允许写哪些字」，
+    //   一旦含兄弟段文案就等于授权 LLM 复写兄弟段（真机 ContentSection 重复渲染列表的直接来源）。
+    //   `_sectionScope` 不存在 ⇒ `mode='off'` ⇒ 与旧实现逐字一致。
+    const factsScope = resolveSectionScopeFacts(input);
+    const textTruthWhitelist = factsScope.figmaNodeData
+      ? buildTextTruthWhitelist(factsScope.figmaNodeData, input.businessTextRules)
       : '';
 
     // 🧭 把子组件规划诊断前移进 prompt，让模型直接看到 coverage / truth / chrome / resource 事实
@@ -1172,10 +1182,15 @@ export const N1_TRUTH_COLOR_LANDING_RULE = `- 🔴 **给出色值不得被变量
  *
  * @param {Object} input generateCode 的 input（含 businessTextRules）
  * @param {Object} figmaNodeData
+ * @param {Array}  [planSections] 段树（**仅子组件 chunk 传**，见 `resolveSectionScopeFacts`）：
+ *   不传 ⇒ 沿用 `resolvePlanSections(input)`（整稿路径逐字不变）
  * @returns {string} 应用规则后的事实文本块
  */
-export function buildSectionStyleFactsForPrompt(input, figmaNodeData) {
-  const raw = buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData);
+export function buildSectionStyleFactsForPrompt(input, figmaNodeData, planSections) {
+  const raw = buildSectionStyleFacts(
+    Array.isArray(planSections) ? planSections : resolvePlanSections(input),
+    figmaNodeData,
+  );
   const rules = input?.businessTextRules;
   if (!rules) return raw;
   const r = applyRulesToFactsBlock(raw, rules);
@@ -1596,6 +1611,276 @@ export function pickFigmaSubtree(figmaNodeData, kws) {
     return slotHit || ancestorHit;
   }
 
+/**
+ * 🎯 Phase I-1/2：子树节点计数（只做观测，不上限截断会影响「裁剪是否生效」的判断）。
+ * 上限 20000 仅为防病态树把日志撑爆。
+ */
+export function countNodes(root) {
+  const cap = 20000;
+  let n = 0;
+  const stack = [root];
+  while (stack.length && n < cap) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== 'object') continue;
+    n++;
+    for (const c of cur.children || []) stack.push(c);
+  }
+  return n;
+}
+
+/**
+ * 🎯 Phase I-1/2（2026-11-02）：组件名 → section **精确反查**（映射单一事实源）。
+ *
+ * 病灶（真机 3b0689c9 铁证）：`buildSubcomponentScopedInput` 原来靠 `tagWords(tagName)`
+ * 关键词去 `sec.id/responsibility/title` 里 `includes` 反猜归属。而
+ * `ContentSection` / `ListSection` 与 `底部汇总` / `节点列表` **无任何词交集**
+ * ⇒ `matchedSection = null` ⇒ 资源过滤 / layoutStructure.sections 子集 / figma 子树
+ * **三处全链 fail-open 回退全量** ⇒ 子组件 chunk 看到兄弟段的全部事实 ⇒ 跨段渲染（上下重复）。
+ *
+ * 治本：组件名本来就由 `assignSectionComponentNames` 确定性分配（命名指导/模板/文件三处同源），
+ * 反向查表即得归属，零语义猜测。**只做逐字（含分隔符不敏感）匹配，禁止降级为模糊/前缀匹配**
+ * —— 模糊匹配会把 `ListSection` 错配到 `ListSection2`，比不匹配更糟（错绑比漏绑代价高）。
+ */
+export function matchSectionByComponentName(tagName, treeSections) {
+  const tag = normKw(tagName);
+  if (!tag || !Array.isArray(treeSections) || treeSections.length === 0) return null;
+  let nameOf;
+  try {
+    nameOf = assignSectionComponentNames(treeSections);
+  } catch {
+    return null;
+  }
+  if (!nameOf || typeof nameOf.get !== 'function' || nameOf.size === 0) return null;
+  const leaves = collectLeafSections(treeSections);
+  const byId = new Map();
+  for (const sec of leaves) {
+    if (sec && sec.id != null) byId.set(String(sec.id), sec);
+  }
+  const hitOf = (name) => {
+    const id = String(name);
+    return byId.get(id) || treeSections.find((s) => String(s?.id) === id) || null;
+  };
+  // 1) 逐字（大小写不敏感）
+  for (const [id, name] of nameOf) {
+    if (normKw(name) === tag) return hitOf(id);
+  }
+  // 2) 分隔符不敏感（LLM 偶尔写 Content-Section / content_section / Content.Section）
+  const flat = (s) => normKw(s).replace(/[^a-z0-9]/g, '');
+  const tagFlat = flat(tagName);
+  if (tagFlat) {
+    for (const [id, name] of nameOf) {
+      if (flat(name) === tagFlat) return hitOf(id);
+    }
+  }
+  return null;
+}
+
+/**
+ * 🎯 Phase I-1/2：按 Figma 节点 id 精确取子树（`sourceNodeIds` → 节点）。
+ * 返回 `null` 表示本树里找不到该 id（合成段 id 如 `footer-summary` 必然找不到）。
+ */
+export function findFigmaNodeByIds(root, ids) {
+  if (!root || typeof root !== 'object') return null;
+  const want = new Set(
+    (Array.isArray(ids) ? ids : [ids]).filter(Boolean).map(String),
+  );
+  if (want.size === 0) return null;
+  const dfs = (node) => {
+    if (!node || typeof node !== 'object') return null;
+    if (node.id != null && want.has(String(node.id))) return node;
+    for (const c of node.children || []) {
+      const r = dfs(c);
+      if (r) return r;
+    }
+    return null;
+  };
+  return dfs(root);
+}
+
+/**
+ * 🎯 Phase I-1/2：同形兄弟计数（判定锚点是否「重复组模板实例」）。
+ *
+ * 真机 3b0689c9：section `48:5798` 的锚点是 `slot-con` 下 **6 张同形卡中的第 1 张**
+ * （48:5798/813/828/843/858/873，type 与宽高全同）。此时按锚点裁图 ⇒ 只剩 1 张卡，
+ * 其余 5 张与「共 6 个节点」等兄弟文案全部丢失 ⇒ list 段反而失真。
+ * 判据只用**结构性事实**（type + 宽高 ±2 + 同父），不认名字（Figma 名 `Group 2136638415…` 无语义）。
+ */
+export function countSameShapeSiblings(root, nodeId) {
+  const id = String(nodeId);
+  let parent = null;
+  const dfs = (node, p) => {
+    if (!node || typeof node !== 'object') return null;
+    if (node.id != null && String(node.id) === id) {
+      parent = p;
+      return node;
+    }
+    for (const c of node.children || []) {
+      const r = dfs(c, node);
+      if (r) return r;
+    }
+    return null;
+  };
+  const target = dfs(root, null);
+  if (!target || !parent || !Array.isArray(parent.children)) return 1;
+  const box = target.absoluteBoundingBox || {};
+  const near = (a, b) => Math.abs(Number(a) - Number(b)) <= 2;
+  let same = 0;
+  for (const c of parent.children) {
+    if (!c || c === target || c.type !== target.type) continue;
+    const b = c.absoluteBoundingBox || {};
+    if (near(box.width, b.width) && near(box.height, b.height)) same++;
+  }
+  return 1 + same;
+}
+
+/**
+ * 🎯 Phase I-1/2b（2026-11-02）：**子组件 chunk 唯一的事实源作用域**。
+ *
+ * 为什么需要它（真机 3b0689c9 实测，`figmaCut='none'` 的那一类段）：
+ *   `buildSubcomponentScopedInput` 只在「段有唯一 Figma 锚点」时才把 `scoped.figmaNodeData`
+ *   换成子树。**合成段**（`footer-summary`，`sourceNodeIds: []`）与**重复组实例**
+ *   （`48:5798`，6 张同形卡的第 1 张，按锚点裁会丢 5 个实例）都退化为 `figmaCut='none'`
+ *   ⇒ `effInput.figmaNodeData` 仍是**整页树** ⇒ 两个下游消费点继续看到兄弟段事实：
+ *     · `buildTextTruthWhitelist(input.figmaNodeData)` —— 白名单里出现兄弟段文案
+ *       = **直接授权** LLM 写兄弟段内容（ContentSection 又写一遍列表的直接来源）；
+ *     · `buildSectionStyleFactsForPrompt(input, input.figmaNodeData)` —— 样式事实
+ *       把兄弟段的卡片色/尺寸当成"本文件必须逐条落地"的真值。
+ *   段身份契约（`data-section-id` + 真值全集 + 禁跨段）只能**约束**，治不了**投毒**。
+ *
+ * 出口统一（口径单一，禁止各消费点自己裁）：
+ *   `{ sections, figmaNodeData, mode }`
+ *     - `mode='off'`    无 `_sectionScope`（整稿 / template chunk）⇒ 两个字段都**原样返回**
+ *                       （`sections: null` 表示"沿用旧口径 `resolvePlanSections(input)`"），
+ *                       零漂移：旧路径逐字不变。
+ *     - `mode='pruned'` 本段已在树内，但树本身不能裁（锚点即根）⇒ `sections` 收窄、树不裁。
+ *     - `mode='subtree'` 树已裁 / 可裁 ⇒ `sections` 收窄 + `figmaNodeData` = 本段子树
+ *                        （重复组实例时上抬到**同形组的父容器**，保住全部实例）。
+ *     - `mode='none'`   **合成段无 Figma 锚点** ⇒ `figmaNodeData = null`，
+ *                       下游事实块整体不下发（fail-closed）。宁可本段没有 Figma 样式事实，
+ *                       也不能把整页事实当成本段真值 —— 真值另有 vision 侧通道（契约第 2 条）。
+ *
+ * 判据全部为结构性事实（section id / `sourceNodeIds` / type+宽高 ±2），不认 Figma 图层名。
+ */
+export function resolveSectionScopeFacts(input) {
+  const scope = input?._sectionScope;
+  const root = input?.figmaNodeData;
+  // 无作用域 ⇒ 旧行为（零漂移边界：`sections: null` = 调用方沿用默认口径）
+  if (!scope || scope.id == null || scope.id === '' || !root || typeof root !== 'object') {
+    return { sections: null, figmaNodeData: root ?? null, mode: 'off' };
+  }
+  const id = String(scope.id);
+  const all = resolvePlanSections(input);
+  const sections = pruneSectionsToId(all, id);
+  // 已被 `buildSubcomponentScopedInput` 按锚点裁过（子树根就是本段）—— 不再二次裁
+  if (root.id != null && String(root.id) === id) {
+    return { sections, figmaNodeData: root, mode: 'subtree' };
+  }
+  const sec = findSectionById(all, id);
+  const ids = Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds.filter(Boolean) : [];
+  if (ids.length === 0) ids.push(id);
+  const hit = findFigmaNodeByIds(root, ids);
+  if (!hit) {
+    // 合成段（如 footer-summary）：Figma 侧**不存在**本段锚点 ⇒ fail-closed
+    return { sections, figmaNodeData: null, mode: 'none' };
+  }
+  if (hit.id != null && root.id != null && String(hit.id) === String(root.id)) {
+    return { sections, figmaNodeData: root, mode: 'pruned' };
+  }
+  const declaredRepeated =
+    Number(sec?.itemCount) > 1 || sec?.collapsed === true || sec?.renderHint === 'v-for';
+  const repeated = declaredRepeated || countSameShapeSiblings(root, hit.id) > 1;
+  if (!repeated) return { sections, figmaNodeData: hit, mode: 'subtree' };
+  // 重复组实例：上抬到同形组父容器（保住全部兄弟实例），父容器即根则只能收窄 sections
+  const parent = findFigmaParentOf(root, hit.id);
+  if (parent && parent.id != null && root.id != null && String(parent.id) !== String(root.id)) {
+    return { sections, figmaNodeData: parent, mode: 'subtree' };
+  }
+  return { sections, figmaNodeData: root, mode: 'pruned' };
+}
+
+/** 按 section id 递归剪枝，**保留祖先链**（`buildSectionStyleFacts` 的容器布局轨依赖祖先）。 */
+export function pruneSectionsToId(sections, id) {
+  const want = String(id);
+  const walk = (arr) => {
+    const out = [];
+    for (const s of Array.isArray(arr) ? arr : []) {
+      if (!s || typeof s !== 'object') continue;
+      if (s.id != null && String(s.id) === want) {
+        out.push(s);
+        continue;
+      }
+      const kids = walk(s.children);
+      if (kids.length > 0) out.push({ ...s, children: kids });
+    }
+    return out;
+  };
+  return walk(sections);
+}
+
+// 🔴 2026-11-02 事故修复：本地 findSectionById 与 :54 import 撞名 = 原生 ESM
+//  SyntaxError「Identifier 'findSectionById' has already been declared」⇒ 首次投单
+//  动态 import 图链即炸（mc-max-1793600425200-00322bab / mc-max-1793601049768-92be1f39）。
+//  jest CJS 转换静默覆盖不报错 ⇒「spec 绿、真机红」。实现与 utils/section-tree.js 单一
+//  来源版本语义等价（仅 id==null 边缘差，唯一调用点传真实 id），故删本地版保 import。
+export function findFigmaParentOf(root, nodeId) {
+  const id = String(nodeId);
+  const dfs = (node) => {
+    if (!node || typeof node !== 'object') return null;
+    for (const c of node.children || []) {
+      if (c && c.id != null && String(c.id) === id) return node;
+      const r = dfs(c);
+      if (r) return r;
+    }
+    return null;
+  };
+  return dfs(root);
+}
+
+/**
+ * 🎯 Phase I-1/2：段身份契约（下发到**子组件 chunk** 的 prompt）。
+ *
+ * 动机（真机 3b0689c9 肉眼可见缺陷）：两个子组件 chunk 都拿到全量事实，
+ * 且 prompt 里没有任何一处说明「这个文件只负责哪一段」⇒ `ContentSection.vue`
+ * 自己渲染了一遍列表 ⇒ 页面上出现上下两块重复区域、样式还不同。
+ *
+ * 零漂移：只读 `chunk.scopedInput._sectionScope`（由 `buildSubcomponentScopedInput`
+ * 在**映射反查命中**时才写入）。index.vue / template / style 等 chunk 没有该字段 ⇒ 空串。
+ */
+export function buildSectionIdentityContract(chunk) {
+  const scope = chunk?.scopedInput?._sectionScope;
+  if (!scope || scope.id == null || scope.id === '') return '';
+  const id = String(scope.id);
+  const name = String(scope.componentName || '');
+  const file = (chunk.files || [])[0] || name;
+  const truths = Array.isArray(scope.truthTexts) ? scope.truthTexts : [];
+  const out = [];
+  out.push('\n## 🎯 段身份契约（本文件唯一负责的段 · 强制）');
+  out.push('');
+  out.push(
+    `本文件 \`${file}\` 只负责 section \`${id}\`${
+      scope.title ? `（标题「${scope.title}」）` : ''
+    }${name ? `，系统分配组件名 \`${name}\`` : ''}。`,
+  );
+  out.push('');
+  out.push(
+    `1. 本文件**根元素**必须带 \`data-section-id="${id}"\`（逐字照抄；禁止改写该 id、禁止改用其他段的 id）。`,
+  );
+  if (truths.length > 0) {
+    out.push(
+      `2. 本文件允许渲染的**全部业务文案**＝下列真值（逐字照抄；禁止增删改、禁止拼接、禁止臆造同义文案）：`,
+    );
+    for (const t of truths) out.push(`   - \`${t}\``);
+  } else {
+    out.push(
+      `2. 系统未给出本段真值文案 ⇒ 只实现结构与样式，**禁止**自行编造任何业务文案。`,
+    );
+  }
+  out.push(
+    `3. **禁止渲染目标段之外的任何内容**：其他 section 的文案 / 图表 / 列表项 / 统计数字 / 分页一律不得出现在本文件——跨段渲染会让同一份内容在页面上重复出现（COMP-001 / COMP-002 判失败）。`,
+  );
+  return out.join('\n') + '\n';
+}
+
 export function buildSubcomponentScopedInput(subPath, indexContent, input, options = {}) {
     const tagName = String(subPath || '')
       .split('/')
@@ -1608,29 +1893,42 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
     // 导致的跨 section 错绑（mc-max 实锤：icon1 属当日总流量被绑到车型分布、bg2 属车型分布被绑到流量预测）。
     const resourceManifest = buildResourceManifest(input?.resourceDomMapping || []);
 
-    // 🎯 section 中文标题关联（mc-max-1787574672211 实锤修复）：子组件文件名是 LLM 起的英文名，
-    // Figma 子树名是中文（slot-当日总流量），tagWords 英文 ↔ 中文子树永远匹配不上 → 回退全量 200KB prompt。
-    // 关联链：tagWords ↔ section.id/responsibility 英文词（section-daily-total ↔ TotalTraffic 的 'total'）
-    //        → 命中后引入 section.title 中文（与 Figma slot-* 命名同源）→ 子树匹配成功。
-    // 只关联单个最匹配 section，避免跨 section 错配；全不命中则维持原关键词（回退全量，保真）。
+    // 🎯 section 归属判定（Phase I-1/2，2026-11-02 改：映射反查优先，关键词降为 fallback）
+    //
+    // 旧实现（病灶）：只有关键词反猜 —— `tagWords(tagName)` 去 `sec.id/responsibility/title`
+    // 里 `includes`。子组件名是英文（ContentSection / ListSection），段标题是中文
+    // （底部汇总 / 节点列表），**无词交集** ⇒ matchedSection=null ⇒ 下面三处裁剪全部
+    // fail-open 回退全量（真机 3b0689c9 实测两段双双 null）。
+    //
+    // 新实现：组件名由 `assignSectionComponentNames` 确定性分配（命名指导块已把它下发给
+    // template chunk，LLM 用它命名文件/标签/import），反向查表即得归属 —— 零语义猜测。
+    // 未命中（LLM 自创名）才回退旧关键词反猜，此时行为与旧代码逐字一致（零漂移）。
+    //
+    // 段来源统一走 `resolvePlanSections`（= 命名指导块同一函数、同一去重/优先级口径），
+    // 保证「谁被分配了名字」与「谁被反查命中」必然同源。
     let matchedSection = null;
+    let byMapper = false;
     try {
-      const sections = input?.subComponentPlan?.effectiveSections;
+      const sections = resolvePlanSections(input);
       if (Array.isArray(sections) && sections.length > 0) {
-        const words = tagWords(tagName);
-        for (const sec of sections) {
-          const secText = [sec?.id, sec?.responsibility, sec?.title]
-            .map((s) => String(s || '').toLowerCase())
-            .join(' ');
-          if (words.some((w) => w.length >= 3 && secText.includes(w))) {
-            matchedSection = sec;
-            for (const t of [sec?.title, sec?.responsibility]) {
-              for (const cjk of String(t || '').match(
-                /[\u4e00-\u9fa5]{2,8}/g,
-              ) || [])
-                kws.push(cjk);
+        matchedSection = matchSectionByComponentName(tagName, sections);
+        byMapper = !!matchedSection;
+        if (!matchedSection) {
+          const words = tagWords(tagName);
+          for (const sec of sections) {
+            const secText = [sec?.id, sec?.responsibility, sec?.title]
+              .map((s) => String(s || '').toLowerCase())
+              .join(' ');
+            if (words.some((w) => w.length >= 3 && secText.includes(w))) {
+              matchedSection = sec;
+              break;
             }
-            break;
+          }
+        }
+        if (matchedSection) {
+          for (const t of [matchedSection?.title, matchedSection?.responsibility]) {
+            for (const cjk of String(t || '').match(/[\u4e00-\u9fa5]{2,8}/g) || [])
+              kws.push(cjk);
           }
         }
       }
@@ -1680,13 +1978,46 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
       /* 过滤失败保持全量 */
     }
 
-    // 1) Figma 子树
-    const subtree = pickFigmaSubtree(input.figmaNodeData, kws);
-    if (subtree && subtree !== input.figmaNodeData) {
-      scoped.figmaNodeData = subtree;
-      scoped.figmaStyleTree = null; // 强制 buildFigmaStage 对子树重新格式化
-      report.figmaSubtree = true;
+    // 1) Figma 子树（Phase I-1/2：节点 id 精确裁图优先，关键词裁图降为 fallback）
+    //
+    // 精确裁图仅在三条件同时成立时启用，否则**一律不裁**（宁可不裁也不能把兄弟段/兄弟实例裁掉）：
+    //   ① `byMapper`（段归属由映射反查确定，不是关键词猜的）—— 保证 `byMapper=false` 时
+    //      本函数行为与旧实现逐字一致（零漂移边界清晰）；
+    //   ② 段有真实 Figma 锚点（`sourceNodeIds`/`id` 能在树里找到）—— 合成段 id（footer-summary）找不到；
+    //   ③ 锚点**不是重复组模板实例**（同形兄弟 = 1，且段自身未声明 collapsed/itemCount>1）。
+    let figmaCut = 'none';
+    try {
+      const ids = Array.isArray(matchedSection?.sourceNodeIds)
+        ? matchedSection.sourceNodeIds.filter(Boolean)
+        : [];
+      if (ids.length === 0 && matchedSection?.id != null) ids.push(matchedSection.id);
+      const hit = findFigmaNodeByIds(input.figmaNodeData, ids);
+      if (hit && hit !== input.figmaNodeData) {
+        const siblings = countSameShapeSiblings(input.figmaNodeData, hit.id);
+        const declaredRepeated =
+          Number(matchedSection?.itemCount) > 1 ||
+          matchedSection?.collapsed === true ||
+          matchedSection?.renderHint === 'v-for';
+        if (byMapper && siblings <= 1 && !declaredRepeated) {
+          scoped.figmaNodeData = hit;
+          scoped.figmaStyleTree = null; // 强制 buildFigmaStage 对子树重新格式化
+          figmaCut = 'byId';
+        } else {
+          report.repeatedAnchor = `siblings=${siblings} declaredRepeated=${declaredRepeated}`;
+        }
+      }
+    } catch {
+      /* 精确裁图失败走关键词 fallback */
     }
+    if (figmaCut === 'none') {
+      const subtree = pickFigmaSubtree(input.figmaNodeData, kws);
+      if (subtree && subtree !== input.figmaNodeData) {
+        scoped.figmaNodeData = subtree;
+        scoped.figmaStyleTree = null; // 强制 buildFigmaStage 对子树重新格式化
+        figmaCut = 'byKeyword';
+      }
+    }
+    if (figmaCut !== 'none') report.figmaSubtree = true;
 
     // 2) elementStyleMap 子集
     const esm = input.elementStyleMap;
@@ -1706,10 +2037,15 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
     }
 
     // 3) layoutStructure sections 子集
+    // Phase I-1/2：映射反查命中时按 **id 精确** 收窄（`nameMatchesKeywords` 只作 fallback）——
+    // 关键词会因 CJK token 重叠一次留下两段，等于没收窄。
     const ls = input.layoutStructure;
     if (ls && Array.isArray(ls.sections) && ls.sections.length > 1) {
+      const keepId = byMapper && matchedSection?.id != null ? String(matchedSection.id) : null;
       const kept = ls.sections.filter((s) =>
-        nameMatchesKeywords(s?.title || s?.id || s?.name, kws),
+        keepId
+          ? String(s?.id ?? '') === keepId
+          : nameMatchesKeywords(s?.title || s?.id || s?.name, kws),
       );
       if (kept.length > 0 && kept.length < ls.sections.length) {
         scoped.layoutStructure = { ...ls, sections: kept };
@@ -1717,6 +2053,48 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
       }
     }
 
+    // 5) 段身份契约载荷（Phase I-1/2 · 只给「映射反查命中」的段）
+    // 真值 = vision 侧（plan section：body + items 实例文案）+ Figma 侧（本段子树文案）两源并集，
+    // 单看一边必漏（合成段无节点、重复段 body 只有 1 份模板）。
+    if (byMapper && matchedSection && matchedSection.id != null) {
+      try {
+        const truth = new Set(collectSectionTruthTexts(matchedSection));
+        const cutNode = scoped.figmaNodeData;
+        if (cutNode && cutNode !== input.figmaNodeData) {
+          for (const t of collectNodeTexts(cutNode)) truth.add(t);
+        }
+        const truthTexts = [...truth]
+          .filter((t) => typeof t === 'string' && t.length >= 2)
+          .slice(0, 40);
+        scoped._sectionScope = {
+          id: String(matchedSection.id),
+          title: matchedSection.title || '',
+          componentName: tagName,
+          truthTexts,
+        };
+        report.contractTruths = truthTexts.length;
+      } catch {
+        /* 契约载荷失败 ⇒ 只丢契约，不影响既有裁剪（fail-open） */
+      }
+    }
+
+    // 📊 Phase I-1/2 观测：真机必须能从这一行判断「走的是映射还是启发式」
+    report.scopedInputCut = {
+      byMapper,
+      sectionId: matchedSection?.id != null ? String(matchedSection.id) : null,
+      keptSections: Array.isArray(scoped.layoutStructure?.sections)
+        ? scoped.layoutStructure.sections.length
+        : Array.isArray(input.layoutStructure?.sections)
+          ? input.layoutStructure.sections.length
+          : 0,
+      totalSections: Array.isArray(input.layoutStructure?.sections)
+        ? input.layoutStructure.sections.length
+        : 0,
+      subtreeNodes: scoped.figmaNodeData
+        ? countNodes(scoped.figmaNodeData)
+        : countNodes(input.figmaNodeData),
+      figmaCut,
+    };
     options.logger?.info?.('🧩 子组件分块事实裁剪', report);
     return scoped;
   }
@@ -2137,6 +2515,16 @@ export function buildChunkMiddle(chunk, input) {
       _availVars && _availVars.length > 0
         ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n  - \`${_availVars.join('`、`')}\`\n  **用法铁律**：这些变量只能以模板插值使用（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`/\`bg-环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名，写语义名会导致 undefined 变量、背景/图标加载失败\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）。**半透明背景例外**：Figma 中 bg 层自身 opacity<1 时必须独立成层（容器 relative + bg 层 absolute/inset:0/opacity 真值/pointer-events:none + 内容子元素 relative），**严禁**把该 opacity 写到容器本身（图标/文字会一并变透明）`
         : '（无已下载资源变量，模板不得引用 iconN/bgN/imgN 等资源变量）';
+    // 🎯 Phase I-1/2b：子组件 chunk 的样式事实**只允许来自本段**（`resolveSectionScopeFacts`
+    //   同一出口；`mode='off'` 时 sections=null ⇒ 沿用 `resolvePlanSections(input)`，逐字不变）。
+    //   真机 3b0689c9：`ContentSection`（合成段 footer-summary）曾把整页样式事实当本段真值，
+    //   其中就含兄弟段的 6 张节点卡 ⇒ LLM 照表复写了一遍列表。
+    const factsScope = resolveSectionScopeFacts(input);
+    const sectionStyleFactsBlock = buildSectionStyleFactsForPrompt(
+      input,
+      factsScope.figmaNodeData,
+      factsScope.sections || undefined,
+    );
     let contextBlock = '';
     if (chunk.contextFiles && chunk.contextFiles.length > 0) {
       contextBlock =
@@ -2174,7 +2562,8 @@ ${fileList}
   - 中文数据值（如「施工养护」）不得进 class，用语义修饰符（\`--maintenance\`）或索引替代。
   - 🆔 根容器的实例 id 类 \`c-mc-max-{INSTANCE_ID}\`（INSTANCE_ID 为运行时随机标识）由**系统自动注入**，你无需也无法手写它；只需给根元素一个语义 class（如 \`c-env-monitor-root\`），系统会另行追加实例 id 类。内部 class 切勿手写 \`c-mc-max-...\` 长前缀（会被后处理剥离并导致 .vue/.less 错配）。
 - **资源变量白名单**：${availVarsBlock}
-${buildSectionStyleFactsForPrompt(input, input.figmaNodeData)
+${buildSectionIdentityContract(chunk)}
+${sectionStyleFactsBlock
   ? `
 ## 🧭 布局与顺序真值 + 🧩 语义化样式真值（按业务区块归属 · 生成模板与 style 时最高优先级）
 
@@ -2186,7 +2575,7 @@ ${buildSectionStyleFactsForPrompt(input, input.figmaNodeData)
   生成子组件 .vue 的 style scoped 时必须与下表逐条对应，禁止臆造、禁止统一成同一颜色。
   激活态与普通态的背景/文字色必须分别实现。
 
-${buildSectionStyleFactsForPrompt(input, input.figmaNodeData)}
+${sectionStyleFactsBlock}
 ${buildBusinessTextRulesDirective(input)}
 
 ⚠️ 两块各自为准逐条实现：**顺序**按「布局与顺序真值」，**样式**按「内部元素样式真值」。**两份表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非样式表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在样式表中都有背景，必须分别取各自的值。

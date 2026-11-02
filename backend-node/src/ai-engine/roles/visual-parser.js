@@ -1653,6 +1653,8 @@ ${analysisTask}`
             // B 批加固新增观测面（幻影 ref / 拒绝修复），随 stats 一并留痕
             phantomRefs: anchorAudit.stats.phantomRefs,
             unrepaired: anchorAudit.stats.unrepaired,
+            // R2（2026-11-02）：LCA 覆盖兄弟段被拒修的事件数
+            siblingCovered: anchorAudit.stats.siblingCovered,
             issues: anchorAudit.issues.slice(0, 20),
             fixes: anchorAudit.fixes.slice(0, 20),
             unrepairedDetail: anchorAudit.unrepaired.slice(0, 20),

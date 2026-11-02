@@ -67,6 +67,9 @@ import { checkSectionTruthCoverage } from '../utils/section-content-guard.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
 import { detectUnknownText, resolveTextTruthSeverity, collectFigmaTextRuns } from '../utils/text-truth-guard.js';
+// 🛡️ Phase H（2026-11-02）：TEXT-TRUTH 的 ASCII token 口径（并列、**独立计数**，不改分级）
+// 事实源同上：detectUnknownAsciiTokens（候选=渲染文本 ASCII token，判定=token 边界全等+框架词白名单）
+import { detectUnknownAsciiTokens, collectFigmaAsciiTokens } from '../utils/text-truth-guard.js';
 // 🛡️ 刀 8（2026-10-27）：产物侧覆盖语料必须剥注释后再扫 —— 事实源在 strip-vue-comments.js
 // （8bbcf027 实锤：注释「// 设备编码区块…」吞掉真值「编码」⇒ TEXT-COVERAGE 假绿）
 import { stripVueComments } from '../utils/strip-vue-comments.js';
@@ -785,6 +788,9 @@ export class CodeStructureValidator {
     let vforDirectionStats = null;
     // 📐 RICH-TEXT 行内多段样式判据统计（可达性留痕：judged=0 时说明真值不可达而非"全对"）
     let richTextRunStats = null;
+    // 📐 Phase H TEXT-TRUTH ASCII 口径独立计数（可达性留痕：enabled=false 时说明该链路未传
+    //    figmaNodeData、口径根本没跑；enabled=true hits=0 才是「跑了且干净」）
+    let textTruthAsciiStats = null;
 
     // 🛡️ R5: L0-B 空集不得 pass=true（此前空产物恒 pass，绿灯直达发布阶段，
     // 直到 workspace-preview-publisher 才回滚「缺少 package/index.vue」）
@@ -2531,6 +2537,37 @@ export class CodeStructureValidator {
       }
     }
 
+    // ========== 🛡️ Phase H（2026-11-02）：TEXT-TRUTH ASCII 口径 —— **独立计数观测** ==========
+    // 病灶：上面的中文口径候选只从「连续中文 ≥2 字」生成 ⇒ 纯 ASCII token（`zh1`/`sta`）天然
+    // 不入检查。真机 e7da39ca `43:4791`：行值「启用」×7 被替换成幻觉 token `zh1`
+    // （`row.status === 'zh1' ? enabled : disabled`），Figma 真值里无任何 `zh1` ⇒ 应拦未拦。
+    // 🔴 **不改分级**：本口径只产出计数（+日志行），**不落 issue、不进 unknownTexts** ⇒
+    //    既有「标题级 或 >2 处即 BLOCK」的动态分级链逐字不变。观测 ≥3 单真机误报率 +
+    //    白名单收敛后再裁决是否纳入分级链（方案文档 §Phase H 明确要求）。
+    // 🔴 **enabled 必须入 stats**：否则「未接线/未启用」与「接线了零命中」在日志上同形
+    //    （font-size-guard 同款教训，「hits:0 也必须打」）。
+    try {
+      const asciiUnknown = options?.figmaNodeData
+        ? detectUnknownAsciiTokens(files, options.figmaNodeData, options.businessTextRules || null)
+        : [];
+      textTruthAsciiStats = {
+        enabled: Boolean(options?.figmaNodeData),
+        hits: asciiUnknown.length,
+        truthTokens: options?.figmaNodeData
+          ? collectFigmaAsciiTokens(options.figmaNodeData).size
+          : 0,
+        tokens: asciiUnknown.slice(0, 8).map((u) => u.text),
+      };
+    } catch (err) {
+      textTruthAsciiStats = {
+        enabled: Boolean(options?.figmaNodeData),
+        hits: 0,
+        truthTokens: 0,
+        tokens: [],
+        error: err?.message || String(err),
+      };
+    }
+
     // ========== 🛡️ TEXT-AXIS: 设计纵向文本却被嵌进自造 wrapper（2026-09-28 建立 · B-1）==========
     // 事故 mc-max-1790577363045-e2967edf / ContentSection9（section `2:3464`）：
     //   设计：`2:3464` 的直接子节点就是 2 条 TEXT（`货车` y=658 在上、`16270` y=676 在下 ⇒ **纵向**），
@@ -3366,6 +3403,9 @@ export class CodeStructureValidator {
       layoutDirectionStats,
       // 📐 T3 v-for 列表方向统计（vforPairs/judged/mismatches/skipped*）
       vforDirectionStats,
+      // 📐 Phase H TEXT-TRUTH ASCII 口径独立计数（enabled/hits/truthTokens/tokens）——
+      //    由 mc-component-graph-phase2.js / mc-component-graph-vue3.js 双形态门禁打日志行
+      textTruthAsciiStats,
     };
   }
 

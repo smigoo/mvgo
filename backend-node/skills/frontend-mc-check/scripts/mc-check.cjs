@@ -1205,7 +1205,7 @@ function checkHardcodedColor(dir, styleSources) {
 // 判据单一来源：src/ai-engine/utils/folded-grid-section-takeover.js#FG_TAKEOVER_CLASS_RX。
 // 本 skill 为独立可分发 zip，无法 import 后端源码，故内嵌同一正则文本；
 // 同构性由 backend-node spec（mc-check-m5-7-fg-exemption.spec.ts）锁死，改动源正则必须同步此处。
-const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list)-/
+const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list|footer)-/
 
 /**
  * 把命中 fg- 接管类的**整条规则块**抠除（保留换行，行号不漂移），

@@ -39,6 +39,7 @@ const mkTakeover = (over = {}) => ({
   tableHits: 1,
   tableSuppressed: 0,
   tableAnchorRepairs: 2,
+  footerHits: 0,
   skipped: [
     { id: '43:9', reason: 'grid:notCollapsedList;header:noBox' },
     { id: '43:8', reason: 'noComponentName' },
@@ -51,7 +52,7 @@ describe('Phase E · pickTakeoverAudit（takeover 统计子集归一）', () => 
     const a = pickTakeoverAudit(mkTakeover());
     expect(a.evaluated).toBe(9);
     expect(a.candidates).toBe(2);
-    expect(a.hits).toEqual({ header: 1, grid: 0, text: 0, icon: 0, legend: 0, kvGrid: 0, list: 1, statRow: 0, table: 1 });
+    expect(a.hits).toEqual({ header: 1, grid: 0, text: 0, icon: 0, legend: 0, kvGrid: 0, list: 1, statRow: 0, table: 1, footer: 0 });
     expect(a.suppressed).toEqual({ statRow: 1, table: 0 });
     expect(a.anchorRepairs).toBe(2);
     expect(a.skippedTotal).toBe(2);

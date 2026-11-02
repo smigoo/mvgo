@@ -254,6 +254,48 @@ describe('Phase A · canonicalListItem 统计形态收拢（跨形态规范结�
     expect(canonicalListItem(it).stats[0].l).toBe('PartsLabel');
   });
 
+  // 🛡️ 形态⑥（mc-max-1793582674250-3b0689c9 真机实锤）：统计右值在顶层 `status.elements`
+  //    平铺交替（value,label,value,label——与 valueGroup 同构、键名不同）。旧回退链
+  //    不认识 status 键 ⇒ stats=[] ⇒ 列表接管产物数值整列丢失。
+  it('形态⑥：顶层 status.elements 平铺交替 ⇒ 复用 valueGroup 成对归一', () => {
+    const it = {
+      content: { elements: [{ type: 'label', text: '甲', styles: {} }] },
+      status: { layout: 'horizontal', position: 'right', elements: [
+        { type: 'value', text: '3,792', styles: { fontSize: 20, color: '#52c41a' } },
+        { type: 'label', text: '在线', styles: { fontSize: 12 } },
+        { type: 'value', text: '28', styles: { fontSize: 12, color: '#ff4d4f' } },
+        { type: 'label', text: '离线', styles: { fontSize: 12 } },
+      ] },
+    };
+    const n = canonicalListItem(it);
+    expect(n.stats.map((s) => [s.v, s.l])).toEqual([['3,792', '在线'], ['28', '离线']]);
+    expect(n.stats[0].vc).toBe('#52c41a');
+  });
+
+  it('形态⑥ 断组继承：status.elements 奇序列整组 fail-open', () => {
+    const it = {
+      content: { elements: [{ type: 'label', text: '甲', styles: {} }] },
+      status: { elements: [
+        { type: 'value', text: '3,792', styles: {} },
+        { type: 'label', text: '在线', styles: {} },
+        { type: 'value', text: '28', styles: {} },
+      ] },
+    };
+    expect(canonicalListItem(it).stats).toEqual([]);
+  });
+
+  it('形态优先级：显式 stats 仍压过 status.elements（不双份）', () => {
+    const it = {
+      content: { elements: [{ type: 'label', text: '甲', styles: {} }] },
+      stats: [{ value: '7', label: '显式', styles: {} }],
+      status: { elements: [
+        { type: 'value', text: '1', styles: {} },
+        { type: 'label', text: '干扰', styles: {} },
+      ] },
+    };
+    expect(canonicalListItem(it).stats.map((s) => [s.v, s.l])).toEqual([['7', '显式']]);
+  });
+
   it('显式 stats 优先：不与 content.parts/valueGroup 双份追加', () => {
     const it = {
       content: { elements: [

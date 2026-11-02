@@ -12,6 +12,7 @@ import { writeFile, mkdir, cp, readFile, readdir } from 'fs/promises';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { customComponentsDir, vue3ComponentsDir, tempComponentsDir, workspaceRoot, backendRoot } from '../config/backend-root';
 import { AiConfigService } from '../config/config.service';
+import { applyFigmaTokenProjection } from '../config/figma-token-projection';
 import { UserAiConfigService } from '../config/user-ai-config.service';
 import { QuotaService } from '../quota/quota.service';
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
@@ -281,7 +282,9 @@ export class Phase2Service {
       ? await this.userAiConfigService.getUserConfig(userId)
       : null;
     const configSnapshot = this.aiConfigService.buildTaskConfigSnapshot({
-      ...(userAiCfg || {}),
+      // 🆕 2026-11-02 Figma 多 Token：快照也要落「当前生效」的单值，否则重跑/续跑
+      // 读到的是历史 figmaToken（用户已切到第 2 个 token 却仍用第 1 个）。
+      ...applyFigmaTokenProjection(userAiCfg || {}),
       ...config,
       outputPath,
       target,
@@ -487,7 +490,8 @@ export class Phase2Service {
       ? await this.userAiConfigService.getUserConfig(userId)
       : null;
     const configSnapshot = this.aiConfigService.buildTaskConfigSnapshot({
-      ...(userAiCfg || {}),
+      // 🆕 2026-11-02 Figma 多 Token：同上传入口，快照落「当前生效」单值。
+      ...applyFigmaTokenProjection(userAiCfg || {}),
       ...config,
       outputPath,
       target: 'microcode',
@@ -656,45 +660,12 @@ export class Phase2Service {
       // 🔧 修复：此前完全没读按用户存 DB 的配置，导致用户配置的统一 AI 在生成时被忽略
       const mergedAiConfig = await this.buildMergedAiConfig(config, params.userId);
 
-      // 🔥 方案 B：Phase2 入口从 provider pool 取当前最优 provider，覆盖静态配置
-      // 效果：主 provider 熔断/超限时，自动降级到备用 provider，无需等任务失败
-      try {
-        const { getProviderPool } = await import(
-          '../ai-engine/utils/provider-pool.js'
-        );
-        const pool = getProviderPool();
-        if (pool.configured) {
-          const textProvider = pool.pick('text');
-          const visionProvider = pool.pick('vision');
-
-          if (textProvider) {
-            // 用 pool 当前最优 provider 覆盖 mergedAiConfig 的 text 字段
-            mergedAiConfig.textApiKey = textProvider.apiKey;
-            mergedAiConfig.textBaseURL = textProvider.baseURL;
-            mergedAiConfig.textModel = textProvider.model;
-            mergedAiConfig.textProviderId = textProvider.id;
-            this.logger.log(
-              `[Phase2] 文本任务使用 provider pool: ${textProvider.id} (${textProvider.model})`
-            );
-          }
-
-          if (visionProvider) {
-            // 用 pool 当前最优 provider 覆盖 mergedAiConfig 的 vision 字段
-            mergedAiConfig.visionApiKey = visionProvider.apiKey;
-            mergedAiConfig.visionBaseURL = visionProvider.baseURL;
-            mergedAiConfig.visionModel = visionProvider.model;
-            mergedAiConfig.visionProviderId = visionProvider.id;
-            this.logger.log(
-              `[Phase2] 视觉任务使用 provider pool: ${visionProvider.id} (${visionProvider.model})`
-            );
-          }
-        }
-      } catch (err: any) {
-        // pool 导入失败或未配置，保持原有逻辑（向后兼容）
-        this.logger.warn(
-          `[Phase2] provider pool 未启用，使用静态配置: ${err.message}`
-        );
-      }
+      // 🛡️ 2026-11-02 跨用户串配置根治：删除本段「启动时先 pool.pick 覆盖配置」的逻辑。
+      // 生产实锤（mc-max-1793601836580-ae77ba7d / panqiang）：ProviderPool 是进程级单例，
+      // 槽位残留上一个任务（liuqh）的 provider，此处先 pick 会把他人凭证写进本任务配置
+      // → layout-reviewer/style-mapper/vision-agent 全部烧到别人的 deepseek key。
+      // 现在用户自己的池注册与择优统一由下方 resolveVisionConfig/resolveTextConfig 完成
+      // （内部 setProviders 打 scope 标 + pick，只认本用户指纹），本任务绝不再读他人注册。
 
       console.log('[Phase2] 原始 config:', JSON.stringify(config).substring(0, 400));
       const visionCfg = resolveVisionConfig(mergedAiConfig);

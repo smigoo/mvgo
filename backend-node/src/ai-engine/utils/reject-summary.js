@@ -20,7 +20,7 @@
  * （本模块留 contract 扩展位，不硬造数据；待后续刀补结构化源再接）。
  */
 
-/** 9 类接管命中计数键（与 collectFoldedGridTakeover 返回字段一一对应） */
+/** 10 类接管命中计数键（与 collectFoldedGridTakeover 返回字段一一对应） */
 const HIT_KEYS = [
   ['headerHits', 'header'],
   ['gridHits', 'grid'],
@@ -31,6 +31,9 @@ const HIT_KEYS = [
   ['listHits', 'list'],
   ['statRowHits', 'statRow'],
   ['tableHits', 'table'],
+  // 🔴 刀53h：新 kind 必须同步登记 —— 漏登记则「footer 接管了几段」在任务级对账里
+  //   不可见（接管 0 命中 与 零问题 不可区分 = 假绿温床，正是本模块存在的理由）。
+  ['footerHits', 'footer'],
 ];
 
 /** skipped 截断上限（与接管器自身 slice(0,16) 同口径） */
@@ -65,6 +68,10 @@ export function pickTakeoverAudit(takeover) {
       table: num(takeover.tableSuppressed),
     },
     anchorRepairs: num(takeover.tableAnchorRepairs),
+    // 🔴 R3（2026-11-02）：超界段计数（refs 落在锚点子树之外 ⇒ 禁单元素接管）
+    scopeIncomplete: num(takeover.scopeIncomplete),
+    // 🔴 R6（2026-11-02）：接管形态 vs 段声明消费对账拒修计数
+    declaredUnconsumed: num(takeover.declaredUnconsumed),
     skippedTotal: skipped.length,
     skipped: skipped.slice(0, SKIPPED_CAP).map((s) => ({
       id: String(s?.id ?? ''),
@@ -123,7 +130,7 @@ export function formatRejectSummaryLine(summary) {
       `suppressed:statRow=${t.suppressed?.statRow ?? 0}`,
       `suppressed:table=${t.suppressed?.table ?? 0}`,
     );
-    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`);
+    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`);
   }
   const c = summary.contract;
   if (c) {

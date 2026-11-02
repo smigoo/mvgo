@@ -198,13 +198,16 @@ describe('vision 形态回归库 · 跨形态不变量（同一语义 N 形态 �
   const load = (id: string) =>
     JSON.parse(readFileSync(join(FIXTURE_DIR, `${id}.json`), 'utf8'));
 
-  it('表格语义 5 形态 ⇒ declaredTableHeaders 与 sectionType 结论同构', () => {
+  // 🛡️ 形态⑤（e7da39ca，2026-11-02）：原 5 形态漏掉「整行表头收成单个
+  //   role='table-header' 容器」这一真机形态 ⇒ 契约读不到 ⇒ 退化 notTableColumn。
+  it('表格语义 6 形态 ⇒ declaredTableHeaders 与 sectionType 结论同构', () => {
     const ids = [
       'table-headers-inline',
       'table-headers-tablestyle',
       'table-headers-body',
       'table-column-headers',
       'semantic-table-section-tabs',
+      'table-header-container',
     ];
     const conclusions = ids.map((id) => {
       const fx = load(id);

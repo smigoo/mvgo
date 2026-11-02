@@ -148,6 +148,61 @@ describe('bc38e1e6：normalizeSectionNode 透传最小表格表头契约', () =>
   })
 })
 
+describe('e7da39ca：normalizeSectionNode 透传形态⑤（单个 table-header 容器）表头契约', () => {
+  const headerContainer = (texts: string[]) => ({
+    id: 'table-header', role: 'table-header', layout: 'horizontal',
+    children: texts.map((t) => ({ type: 'label', text: t, styles: { fontSize: 16 } })),
+  })
+  const bodyRows = () => ({
+    id: 'table-rows', role: 'table-body', layout: 'vertical',
+    items: [{ role: 'table-row', children: [{ type: 'value', text: '92' }] }],
+  })
+
+  test('⭐ 阳性：shape⑤ 归一为 body.headers（容器本身不进白名单，契约不再被剥）', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [{
+          id: '43:4791', name: '设备数据表格', role: '常驻',
+          body: { children: [headerContainer(['设备名称', '电量', '速度(m/s)', '启用状态']), bodyRows()] },
+        }],
+      },
+    })
+    const [sec] = input.componentPlan.effectiveSections
+    expect(sec.body).toEqual({ headers: ['设备名称', '电量', '速度(m/s)', '启用状态'] })
+    // 非契约载体（table-body / 容器本体）不得回流
+    expect(Object.prototype.hasOwnProperty.call(sec.body, 'children')).toBe(false)
+  })
+
+  test('混合形态（半残 table-column + table-header 容器）⇒ 形态④ 判据不成立，落形态⑤ 不丢契约', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [{
+          id: 'mix', type: 'table',
+          body: { children: [{ id: 'a', role: 'table-column', header: '残缺列' }, headerContainer(['设备名称', '电量'])] },
+        }],
+      },
+    })
+    const [sec] = input.componentPlan.effectiveSections
+    expect(sec.body).toEqual({ headers: ['设备名称', '电量'] })
+  })
+
+  test('残缺形态⑤（双容器 / 含空文本）⇒ 不产 body 键（宁缺不猜）', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [
+          { id: 'two', body: { children: [headerContainer(['A', 'B']), headerContainer(['C', 'D'])] } },
+          { id: 'blank', body: { children: [headerContainer(['A', ''])] } },
+          { id: 'single', body: { children: [headerContainer(['A'])] } },
+        ],
+      },
+    })
+    const [two, blank, single] = input.componentPlan.effectiveSections
+    for (const s of [two, blank, single]) {
+      expect(Object.prototype.hasOwnProperty.call(s, 'body')).toBe(false)
+    }
+  })
+})
+
 describe('刀29b：normalizeSectionNode 透传几何三件套（mc-max-1793255115028-7ec263c9 实锤）', () => {
   // 断点链：planner 刀28c 给宿主/折叠叶带整列并集几何（470x517）
   // → normalizeComponentPlan 白名单重建剥掉 absoluteBoundingBox/figmaBox

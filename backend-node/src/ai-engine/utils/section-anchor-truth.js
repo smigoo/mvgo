@@ -42,9 +42,16 @@ export const FIGMA_ID_RE = /^\d+:\d+$/
  *   `figmaAnchorId`，第三处**漏读** ⇒ vision 聚合段的语义/高度被错挂到「首卡叶子」上
  *   （mc-max-1793266461373-e7290dc5 实锤：「节点列表」标题 + 6 项 items 落到首卡）。
  *   三处各写一遍就是三条会各自漂移的判据，故统一收敛到本函数。
+ *
+ * 🔴 R1（2026-11-02 · mc-max-1793597679970-646085b2 撕裂实锤）：候选表追加 `nodeId` 别名
+ *   （第 3 位，紧随 `figmaNodeId`）。此前**几何轨**（`sectionAnchorKey`）读 `figmaNodeId`、
+ *   **归属/子树轨**（`subcomponent-planner#collectSourceNodeIds`）读 `nodeId` —— 两套字段名
+ *   互不一致，锚点守卫每修一次 `figmaAnchorId` 就制造一段「几何来自 A、内容来自 B」的撕裂段
+ *   （修复越多撕裂越多）。现在两条轨共用本候选表，别名在此单点维护。
+ *   实测 `nodeId` 在 vision schema 与真机产物中 0 出现（防御性别名），入表零现实漂移。
  */
 export function sectionAnchorCandidates(section) {
-  return [section?.figmaAnchorId, section?.figmaNodeId, section?.figmaNode, section?.id]
+  return [section?.figmaAnchorId, section?.figmaNodeId, section?.nodeId, section?.figmaNode, section?.id]
 }
 
 /**
@@ -75,9 +82,16 @@ export function sectionAnchorKey(section) {
 export function collectSectionFigmaRefs(section) {
   const refs = new Set()
   if (!section || typeof section !== 'object') return refs
+  // 🔴 R8-7：`declaredContent`（assembler 透传的内容契约）与 body.children 同族纳入 ——
+  //   此前只读 children/body.children，而 generationInput 白名单不透传 body ⇒ refs 恒空
+  //   ⇒ R3 isScopeIncomplete 结构性 fail-open（dea074f9 实锤）。
+  const dc = section.declaredContent
   const kids = [
     ...(Array.isArray(section.children) ? section.children : []),
     ...(Array.isArray(section.body?.children) ? section.body.children : []),
+    ...(Array.isArray(dc?.children) ? dc.children : []),
+    ...(Array.isArray(dc?.items) ? dc.items : []),
+    ...(Array.isArray(dc?.elements) ? dc.elements : []),
   ]
   for (const kid of kids) {
     if (!kid || typeof kid !== 'object') continue
@@ -121,6 +135,25 @@ function lowestCommonAncestor(index, ids) {
 }
 
 /**
+ * section 当前**声明**的锚点（整形 + 形态校验后）。
+ * 🔴 R2（2026-11-02）起为**模块内单一来源**：主审计循环与兄弟段预采集共用，不得各写一份。
+ * `nodeId` / `id` 需过 FIGMA_ID_RE（防御语义垃圾顶替锚点声明）；`figmaNodeId` / `figmaNode`
+ * 沿旧例不校验（显式声明，查无此节点由 `anchor-unknown` 兜）。
+ */
+function declaredAnchorOf(section) {
+  const [repaired, explicit, aliasNode, explicitNode, rawId] = sectionAnchorCandidates(section).map((v) =>
+    typeof v === 'string' ? v.trim() : '',
+  )
+  const claimed =
+    repaired ||
+    explicit ||
+    (FIGMA_ID_RE.test(aliasNode) ? aliasNode : '') ||
+    explicitNode ||
+    (FIGMA_ID_RE.test(rawId) ? rawId : '')
+  return { claimed, rawId, explicit, repaired }
+}
+
+/**
  * stats 初值（🔴 每个计数键必须显式初始化 —— 命中与否、跳过与否都要有确定值）。
  *
  * 🔴 **导出给聚合侧复用**（`visual-parser#auditVisionSectionAnchors`：同一 payload 里
@@ -139,6 +172,8 @@ export function emptyAnchorStats() {
     notAncestor: 0,
     repaired: 0,
     unrepaired: 0,
+    // R2（2026-11-02）：LCA 覆盖兄弟段声明锚点被拒修的事件数（0 也必须出现，防假绿）
+    siblingCovered: 0,
   }
 }
 
@@ -173,6 +208,15 @@ export function emptyAnchorStats() {
  *      · `missingRefs.length === 0`（**证据完整性**：有幻影 ref 时 LCA 是在残缺引用集上
  *        算出来的，可能系统性偏窄/偏深 ⇒ 不自动落地）
  *    任一不满足 ⇒ 不写 `figmaAnchorId`，记入 `unrepaired`（含候选 `candidateLca`，留痕待判）。
+ *
+ * ## R2 加固（2026-11-02 · mc-max-1793597679970-646085b2 真机实锤）
+ *
+ * ③ **LCA 覆盖兄弟段 ⇒ 拒修**（`lca-covers-sibling-sections`）：候选 LCA 的子树若包含
+ *    **其他 section 的声明锚点**（预采集、与遍历顺序无关），则该修复会把别段的地盘划归本段
+ *    （真机实锤：统计区锚点被修成整内容容器 796:3，几何取 787 高、内容仍是首卡 76 的子树）。
+ *    判据刻意**不设**「高度放大倍数」——刀33 聚合段修复（首卡→整组）本就需要更大 LCA，
+ *    放大是正当的；「是否覆盖兄弟段声明锚点」才是正当聚合与有害扩张的充要条件。
+ *    拒修事件计 `stats.siblingCovered`，unrepaired 条目附 `coveredAnchors` 留痕待判。
  */
 export function auditSectionAnchors(sections, figmaRoot) {
   const root = (figmaRoot && (figmaRoot.document || figmaRoot)) || null
@@ -187,6 +231,21 @@ export function auditSectionAnchors(sections, figmaRoot) {
 
   const rootId = root?.id != null ? String(root.id) : ''
 
+  // 🔴 R2（2026-11-02 · mc-max-1793597679970-646085b2「合作厂商弹窗」实锤）：
+  //   修复门槛只挡 no-lca / lca-is-root / phantom-refs，**不挡「LCA 覆盖兄弟段」**——
+  //   真机统计区锚点 38:3260（首卡底板 265×76）被修成 796:3（整内容容器 604×787，内含
+  //   3 个兄弟段锚点）⇒ 几何来自 796:3、内容仍是 38:3260 的撕裂段，统计区独占 91% 高度、
+  //   内容只剩一张图标。这里**预采集**全部段 的声明锚点（修复写入前、与遍历顺序无关 ⇒ 确定性），
+  //   修复门槛据此拒修「LCA 子树覆盖其他段声明锚点」的候选。
+  //   为什么不用「高度放大倍数」当判据：刀33 聚合段修复（首卡 → 整组）本来就需要更大的 LCA，
+  //   放大是正当的；**「是否覆盖兄弟段声明锚点」才是正当聚合与有害扩张的充要判据**。
+  const declaredAnchors = []
+  for (const s of sections) {
+    if (!s || typeof s !== 'object') continue
+    const { claimed } = declaredAnchorOf(s)
+    if (claimed) declaredAnchors.push({ section: s, anchor: claimed })
+  }
+
   for (const section of sections) {
     if (!section || typeof section !== 'object') continue
     const refs = collectSectionFigmaRefs(section)
@@ -196,11 +255,8 @@ export function auditSectionAnchors(sections, figmaRoot) {
     }
 
     // 当前声明的锚点：修复产物优先（幂等锚点）
-    // （候选优先级单一来源 `sectionAnchorCandidates`，此处只做形态校验）
-    const [repaired, explicit, explicitNode, rawId] = sectionAnchorCandidates(section).map((v) =>
-      typeof v === 'string' ? v.trim() : '',
-    )
-    const claimed = repaired || explicit || explicitNode || (FIGMA_ID_RE.test(rawId) ? rawId : '')
+    // （候选优先级单一来源 `declaredAnchorOf` → `sectionAnchorCandidates`，此处只做形态校验）
+    const { claimed, rawId, explicit, repaired } = declaredAnchorOf(section)
 
     // 语义 id（如 `section-cards`）是合法的，不算锚点声明 ⇒ 不判
     if (!claimed) {
@@ -252,10 +308,16 @@ export function auditSectionAnchors(sections, figmaRoot) {
     //   注：进入此处时 `kind` 必为真 ⇒ `claimed` 必不是全部树内 ref 的祖先
     //   ⇒ `candidateLca === claimed` 可证明不可达（LCA 不可能等于「不是祖先的那个节点」），故不设该分支。
     const candidateLca = refsInTree.length > 0 ? lowestCommonAncestor(index, refsInTree) : null
+    // R2：候选 LCA 子树覆盖的**其他段**声明锚点（含自身 ⇒ isAncestorOrSelf；幻觉锚点不在树中自然不命中）
+    const coveredSiblings = candidateLca
+      ? declaredAnchors.filter((d) => d.section !== section && isAncestorOrSelf(index, candidateLca, d.anchor))
+      : []
     const reason = (() => {
       if (!candidateLca || !index.has(candidateLca)) return 'no-lca'
       if (rootId && candidateLca === rootId) return 'lca-is-root'
       if (missingRefs.length > 0) return 'phantom-refs'
+      // 🔴 R2：LCA 子树若覆盖其他 section 的声明锚点 ⇒ 拒修（记 lca-covers-sibling-sections）
+      if (coveredSiblings.length > 0) return 'lca-covers-sibling-sections'
       return ''
     })()
 
@@ -264,7 +326,15 @@ export function auditSectionAnchors(sections, figmaRoot) {
       fixes.push({ sectionId, from: claimed, to: candidateLca, reason: kind })
       stats.repaired += 1
     } else {
-      unrepaired.push({ sectionId, claimed, kind, candidateLca, reason })
+      unrepaired.push({
+        sectionId,
+        claimed,
+        kind,
+        candidateLca,
+        reason,
+        ...(coveredSiblings.length > 0 ? { coveredAnchors: coveredSiblings.map((d) => d.anchor) } : {}),
+      })
+      if (reason === 'lca-covers-sibling-sections') stats.siblingCovered += 1
       stats.unrepaired += 1
     }
   }

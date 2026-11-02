@@ -63,6 +63,28 @@ function maskSecret(value?: string): string | null {
   return `${v.slice(0, 6)}****${v.slice(-4)}`;
 }
 
+/**
+ * 密钥字段脱敏（管理端唯一出口）。
+ * 🆕 2026-11-02 Figma 多 Token：`figmaTokens` 是**数组**，标量脱敏函数对它恒返回 null
+ * —— 若不单独处理，第 2 个 Token 会整条从管理端消失（安全但不可审计）。
+ * 这里逐条脱敏并标注哪条是当前生效，供管理员核对「这人配了 2 个 token、在用哪个」。
+ */
+function collectMaskedSecrets(cfg: Record<string, any>): Record<string, any> {
+  const secrets: Record<string, any> = {};
+  SECRET_FIELDS.forEach((f) => {
+    secrets[f] = maskSecret(cfg[f]);
+  });
+  secrets.figmaTokens = Array.isArray(cfg.figmaTokens)
+    ? cfg.figmaTokens.map((t: any) => ({
+        id: t?.id,
+        name: t?.name,
+        token: maskSecret(t?.token),
+        active: !!t?.id && t.id === cfg.activeFigmaTokenId,
+      }))
+    : [];
+  return secrets;
+}
+
 /** 用户生成统计（用户管理抽屉展示用），Java AdminUserVO 同构字段 */
 export interface UserStat {
   /** 组件库中该用户创建的组件数 */
@@ -207,10 +229,7 @@ export class AdminService {
         const userId = (d.userId as any).toString();
         const u = userMap.get(userId) || { username: userId, uid: '', displayName: userId };
         const cfg = (d as any).config || {};
-        const masked: Record<string, any> = { secrets: {}, plain: {} };
-        SECRET_FIELDS.forEach((f) => {
-          masked.secrets[f] = maskSecret(cfg[f]);
-        });
+        const masked: Record<string, any> = { secrets: collectMaskedSecrets(cfg), plain: {} };
         PLAIN_FIELDS.forEach((f) => {
           if (cfg[f] !== undefined && cfg[f] !== null && cfg[f] !== '')
             masked.plain[f] = cfg[f];
@@ -245,9 +264,7 @@ export class AdminService {
         const secrets: Record<string, any> = {};
         const plain: Record<string, any> = {};
         if (cfg) {
-          SECRET_FIELDS.forEach((f) => {
-            secrets[f] = maskSecret(cfg[f]);
-          });
+          Object.assign(secrets, collectMaskedSecrets(cfg));
           PLAIN_FIELDS.forEach((f) => {
             if (cfg[f] !== undefined && cfg[f] !== null && cfg[f] !== '') plain[f] = cfg[f];
           });

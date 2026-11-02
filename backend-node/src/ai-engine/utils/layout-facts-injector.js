@@ -237,8 +237,6 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
       continue
     }
 
-    const { display, flexDirection } = extracted
-
     // 🛡️ grid 块保护（2026-09-22 · mc-1790042773505-32d00272 实锤）：
     // forceOverride 会把 LLM 正确写的 display:grid 强改成 flex（grid 是更强的
     // 布局事实——子节点已聚列成网格，flex-direction 对 grid 容器无意义）。
@@ -250,25 +248,80 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
       continue
     }
 
-    const needsDisplay = forceOverride || !display
-    const needsFlexDirection = forceOverride || !flexDirection
+    // 🛡️ R4b-A 方向/display 仲裁（2026-11-02 · mc-max-1793601942419-d140fb11 实锤立项）：
+    //   几何事实**只补缺失，不翻转**产物显式声明。病灶：forceOverride 把 LLM 写对的
+    //   `flex-direction: row`（与 vision 真值 801:3 layout="horizontal" 一致）强改成
+    //   几何聚类的 column（混合布局 GROUP 按子盒 y 排序系统性误判）⇒ 头部竖直流；
+    //   同单 ROB004 pill `display:inline-flex` 被改成块级 flex ⇒ 蓝条拉通整行。
+    //   纪律：冲突必留痕（code=LAYOUT-FACTS-CONFLICT，report-only，真机可 grep 计数）；
+    //   纠错职责归 LAYOUT-001 门禁（WARN）+ review 循环，注入器不做无仲裁的翻转。
+    //   变异对照：去掉本分支（恢复翻转）⇒ truth-arbitration.spec 用例 ①② 必红。
+    const normCssVal = (s) => String(s || '').trim().toLowerCase()
+    const VALID_DIR_RE = /^(row|column|row-reverse|column-reverse)$/
+    const declaredDir =
+      extracted.flexDirection &&
+      VALID_DIR_RE.test(normCssVal(extracted.flexDirection))
+        ? normCssVal(extracted.flexDirection)
+        : null
+    const declaredDisplay = extracted.display
+      ? normCssVal(extracted.display)
+      : null
+    const factDisplay = normCssVal(fact.display)
+    const factDir = normCssVal(fact.flexDirection)
 
-    // 检查是否需要修复
-    const displayMismatch = needsDisplay && display !== fact.display
-    const flexDirectionMismatch = needsFlexDirection && flexDirection !== fact.flexDirection
+    const dirConflict =
+      declaredDir && factDir && VALID_DIR_RE.test(factDir) && declaredDir !== factDir
+    const displayConflict =
+      declaredDisplay && factDisplay && declaredDisplay !== factDisplay
+
+    if (dirConflict || displayConflict) {
+      const conflictDetail = []
+      if (dirConflict) {
+        conflictDetail.push(
+          `flex-direction: ${declaredDir} ≠ 几何事实 ${factDir}，保留产物显式声明（R4b-A 方向仲裁）`,
+        )
+      }
+      if (displayConflict) {
+        conflictDetail.push(
+          `display: ${declaredDisplay} ≠ 几何事实 ${factDisplay}，保留产物显式声明（R4b-A 方向仲裁）`,
+        )
+      }
+      fixes.push({
+        code: 'LAYOUT-FACTS-CONFLICT',
+        className: effectiveClassName,
+        detail: conflictDetail.join(', '),
+      })
+      if (logger) {
+        logger.info(
+          `🛡️ LAYOUT-FACTS-CONFLICT: ${effectiveClassName} ${conflictDetail.join(', ')}`,
+        )
+      }
+    }
+
+    // 缺失才补（R4b-A 后 forceOverride 不再扩大覆盖面，只保留签名兼容）
+    const needsDisplay = !declaredDisplay
+    const needsFlexDirection = !declaredDir
+    const displayMismatch = needsDisplay && !!factDisplay
+    const flexDirectionMismatch = needsFlexDirection && !!factDir
 
     if (displayMismatch || flexDirectionMismatch) {
-      const newDisplay = displayMismatch ? fact.display : display
-      const newFlexDirection = flexDirectionMismatch ? fact.flexDirection : flexDirection
-
-      content = updateFlexProps(content, effectiveClassName.slice(1), newDisplay, newFlexDirection)
+      // 方向取值：已有显式方向 → 原样传回（updateFlexProps 同值替换幂等，绝不翻转）；
+      // 方向缺失 → 传几何事实（可能为 null → hasValidDirection=false 只清非法残留，旧语义保留）
+      const dirForUpdate = declaredDir || fact.flexDirection
+      const newDisplay = displayMismatch ? fact.display : extracted.display
+      content = updateFlexProps(
+        content,
+        effectiveClassName.slice(1),
+        newDisplay,
+        dirForUpdate,
+      )
 
       const fixDetail = []
       if (displayMismatch) {
-        fixDetail.push(`display: ${display || '(缺失)'} → ${fact.display}`)
+        fixDetail.push(`display: ${extracted.display || '(缺失)'} → ${fact.display}`)
       }
       if (flexDirectionMismatch) {
-        fixDetail.push(`flex-direction: ${flexDirection || '(缺失)'} → ${fact.flexDirection}`)
+        fixDetail.push(`flex-direction: ${extracted.flexDirection || '(缺失)'} → ${fact.flexDirection}`)
       }
 
       fixes.push({

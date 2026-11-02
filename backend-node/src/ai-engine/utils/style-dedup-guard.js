@@ -35,6 +35,45 @@
 
 import { extractStyleBlocks } from './flex-sibling-guard.js';
 import { toFileArray, mergeFileArray } from './file-collection.js';
+import { matchTemplateTags } from './layout-facts-injector.js';
+
+/**
+ * 🛡️ R6-B1（2026-11-02 · mc-max-1793601942419-d140fb11 实锤立项）：
+ * 宿主类方向/display 豁免剥离 —— 与 R4b-A（layout-facts-injector 方向仲裁）同一条纪律：
+ * **收敛动作不得破坏方向仲裁的单一来源**。
+ *
+ * 事故链第二环：dedup 正向剥离把 SFC 宿主类 `.c-device-content-header` 的显式
+ * `flex-direction: row` 剥掉（前提=shared 表同名属性存在）⇒ 下游 LAYOUT-FACTS-INJECT
+ * 看到的是「方向缺失」⇒ 按几何 fact 补 column ⇒ 头部被写成竖直流（UI 真值横向）。
+ * R4b-A 只防「翻转显式声明」，防不住「先剥后补」——载体被拆，仲裁无从谈起。
+ *
+ * 判据（命名无关、纯结构）：模板 `data-section-id` 标签上的 class = 段宿主类
+ * （与 buildLayoutMappingFromSectionIds 同口径），其 `display` / `flex-direction`
+ * 声明豁免正向剥离；其余布局属性（width/flex/gap/…）剥离行为不变
+ * （mc-1788415227440 治本不回退）。
+ *
+ * @param {string} vueContent .vue 全文
+ * @returns {Set<string>} 宿主类名集合（不含点；空集=该文件无宿主类）
+ */
+export function collectSectionHostClasses(vueContent) {
+  const out = new Set();
+  if (typeof vueContent !== 'string' || !vueContent) return out;
+  const tplM = vueContent.match(/<template(?:\s[^>]*)?>[\s\S]*<\/template>/i);
+  if (!tplM) return out;
+  for (const tag of matchTemplateTags(tplM[0])) {
+    const secM = (tag.attrs || '').match(/\bdata-section-id\s*=\s*"([^"]+)"/);
+    if (!secM) continue;
+    const classM = (tag.attrs || '').match(/\bclass\s*=\s*"([^"]*)"/);
+    if (!classM) continue;
+    for (const cls of classM[1].split(/\s+/)) {
+      if (cls && /^[a-zA-Z][\w-]*$/.test(cls)) out.add(cls);
+    }
+  }
+  return out;
+}
+
+/** R6-B1：宿主类豁免剥离的方向/display 属性集 */
+const HOST_CLASS_EXEMPT_PROPS = new Set(['display', 'flex-direction']);
 
 /**
  * 参与剥离的布局尺寸类属性白名单。
@@ -164,11 +203,14 @@ function escapeRe(s) {
 
 /**
  * 剥离单个 .vue 的 <style scoped> 中与共享表冲突的声明。
+ * 🛡️ R6-B1：hostClasses（模板 data-section-id 标签 class 集合）中的类的
+ *   display/flex-direction 声明豁免剥离（方向仲裁单一来源，见文件头 R6-B1 注）。
  * @param {string} content .vue 全文
  * @param {Map<string, string>} sharedClasses class 名 → 共享表声明体
+ * @param {Set<string>} [hostClasses] 宿主类名集合（可选；缺省=无豁免，行为同旧）
  * @returns {{ content: string, changes: string[] }}
  */
-export function pruneVueStyleAgainstShared(content, sharedClasses) {
+export function pruneVueStyleAgainstShared(content, sharedClasses, hostClasses = null) {
   if (!content || !sharedClasses || sharedClasses.size === 0) {
     return { content, changes: [] };
   }
@@ -182,6 +224,12 @@ export function pruneVueStyleAgainstShared(content, sharedClasses) {
   for (const [cls, sharedBody] of sharedClasses) {
     const sharedProps = collectPropNames(sharedBody);
     if (sharedProps.size === 0) continue;
+    // 🛡️ R6-B1：宿主类豁免方向/display（从「共享表已声明」集合里剔除豁免属性）
+    const exempt = hostClasses && hostClasses.has(cls);
+    const effectiveSharedProps = exempt
+      ? new Set([...sharedProps].filter((p) => !HOST_CLASS_EXEMPT_PROPS.has(p)))
+      : sharedProps;
+    if (effectiveSharedProps.size === 0) continue;
     const blockRx = new RegExp(
       `(^|\\n)(\\.${escapeRe(cls)})\\s*\\{([^{}]*)\\}`,
       'g',
@@ -189,9 +237,9 @@ export function pruneVueStyleAgainstShared(content, sharedClasses) {
     body = body.replace(blockRx, (full, lead, sel, blockBody) => {
       // 嵌套块不处理（body 已在正则层面排除 '{'，此处防御）
       if (blockBody.includes('{') || blockBody.includes('&')) return full;
-      const r = pruneConflictingDecls(blockBody, sharedProps);
+      const r = pruneConflictingDecls(blockBody, effectiveSharedProps);
       if (r.removed === 0) return full;
-      changes.push(`.${cls}: 剥离 ${r.removed} 条与共享表冲突的布局声明`);
+      changes.push(`.${cls}: 剥离 ${r.removed} 条与共享表冲突的布局声明${exempt ? '（R6-B1 宿主类豁免 display/flex-direction）' : ''}`);
       // 全剥空 → 整块删除，不留空壳规则
       if (!r.body.replace(/[\s;]/g, '')) return '';
       // 🛡️ P2-11：拼装也走规范多行（旧实现 `${sel} {${body}}` 产出 `{flex-direction: column}` 单行形态）
@@ -393,7 +441,13 @@ export function pruneDuplicateStyleDecls(files = []) {
   let changed = false;
   const out = list.map((f) => {
     if (!f || !/\.vue$/i.test(f.path || '')) return f;
-    const r = pruneVueStyleAgainstShared(f.content, sharedClasses);
+    // 🛡️ R6-B1：宿主类（data-section-id 标签 class）方向/display 豁免剥离
+    const hostClasses = collectSectionHostClasses(f.content);
+    const r = pruneVueStyleAgainstShared(
+      f.content,
+      sharedClasses,
+      hostClasses.size > 0 ? hostClasses : null,
+    );
     if (r.changes.length === 0) return f;
     changed = true;
     for (const c of r.changes) allChanges.push(`${f.path} → ${c}`);

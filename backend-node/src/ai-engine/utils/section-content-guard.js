@@ -26,6 +26,7 @@ import {
 import { techStackRequiredPatterns } from '../validators/element-coverage-validator.js';
 import { assessStatRowConfidence } from './inline-row-assembler.js';
 import { extractRenderedText } from './text-truth-guard.js';
+import { collectSectionBodyTexts } from './vision-facts.js';
 
 const MIN_SIG_LEN = 2; // 成员签名文本最小长度（如「24小时」=3）
 const MIN_DUP_LEN = 4; // 重复检测文本最小长度（排除「24小时」类短共享词）
@@ -244,6 +245,142 @@ function introducesNewErrors(validateSfc, before, after, filePath) {
   return false
 }
 
+// ── 🔴 R8-5（2026-11-02 · mc-max-1793611296269-ea3798f8 实锤立项）──
+// 幻觉段判据**单一来源**（R8-1 与 R8-5 共用，禁止副本）：
+//   (a) `sourceNodeIds` 空/缺失 —— R8-1 原判据（50d7793f 431:47）；
+//   (b) 非空但 100% 不在 Figma 真值树 —— ea3798f8 801:10 refs=[801:11..22] 全部
+//       missingRefs、801:23 refs=[801:24] missing（vision 编造锚点），旧判据 (a) 放空。
+// 真值索引缺失（figmaRoot 空）⇒ (b) 无法判定，只认 (a)（保守，不猜）。
+function isHallucinatedSection(sec, figmaIndex) {
+  const ids = Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds : [];
+  if (ids.length === 0) return true;
+  if (!figmaIndex || figmaIndex.size === 0) return false;
+  return ids.every((id) => !figmaIndex.has(String(id)));
+}
+
+// 收敛动作**单一来源**（R8-1 剥后收敛与 R8-5 独立扫描共用）：
+//   前置：组件模板渲染文本空（extractRenderedText 空白归零）；不空 ⇒ has-text（无关）。
+//   幻觉段（isHallucinatedSection）+ 空壳 ⇒ 从 index.vue 移除挂载行 + import 行
+//   （差分 SFC 校验，改坏回滚）→ 组件从 files 剔除 + byPath 删除。
+//   弃权不猜（同 R8-1）：无 data-section-id / plan 无该 section / 无自闭合挂载行 /
+//   index.vue 缺失 / 替换无变化 ⇒ 降级 shell 保护档（真锚段空壳同档显式计数）。
+// 返回 status：'has-text' | 'skip' | 'shell' | 'rollback-sfc' | 'collapsed'。
+function tryCollapseSectionMount({ rec, compPath, byPath, files, sectionsById, figmaIndex, validateSfc }) {
+  const secIdM = rec.content.match(/data-section-id=["']([^"']+)["']/);
+  if (!secIdM) return { status: 'skip' };
+  const secId = String(secIdM[1]);
+  const templateEmpty = !String(extractRenderedText(rec.content) || '').trim();
+  if (!templateEmpty) return { status: 'has-text' };
+  const sec = sectionsById.get(secId);
+  if (!sec || !isHallucinatedSection(sec, figmaIndex)) return { status: 'shell', sectionId: secId };
+
+  const compName = compPath.split('/').pop().replace(/\.vue$/, '');
+  const idxPath = 'package/index.vue';
+  const idxRec = byPath.get(idxPath);
+  if (!idxRec || typeof idxRec.content !== 'string') return { status: 'shell', sectionId: secId };
+  const mountRe = new RegExp(`^[^\\S\\n]*<${compName}\\b[^>]*\\/?>[^\\S\\n]*\\n`, 'm');
+  if (!mountRe.test(idxRec.content)) return { status: 'shell', sectionId: secId }; // 无自闭合挂载行 ⇒ 不猜
+  const importRe = new RegExp(
+    `^import\\s+${compName}\\s+from\\s+['"]\\.\\/components\\/${compName}\\.vue'[^\\n]*\\n`,
+    'm',
+  );
+  let nextIdx = idxRec.content.replace(mountRe, '').replace(importRe, '');
+  if (nextIdx === idxRec.content) return { status: 'shell', sectionId: secId };
+  if (validateSfc && introducesNewErrors(validateSfc, idxRec.content, nextIdx, idxPath)) {
+    return { status: 'rollback-sfc', sectionId: secId }; // 差分否决 ⇒ 回滚收敛，降级保护档
+  }
+  idxRec.content = nextIdx;
+  const arrIdx = files.indexOf(rec);
+  if (arrIdx !== -1) files.splice(arrIdx, 1);
+  byPath.delete(compPath);
+  return { status: 'collapsed', sectionId: secId };
+}
+
+function collapseOutcomeRecord(compPath, outcome) {
+  if (outcome.status === 'collapsed')
+    return { list: 'collapsedSections', rec: { file: compPath, sectionId: outcome.sectionId } };
+  if (outcome.status === 'rollback-sfc')
+    return { list: 'emptyShellSections', rec: { file: compPath, sectionId: outcome.sectionId, reason: 'collapse-rollback-sfc' } };
+  if (outcome.status === 'shell')
+    return { list: 'emptyShellSections', rec: { file: compPath, sectionId: outcome.sectionId } };
+  return null;
+}
+
+/**
+ * 🔴 R8-5 空壳对账（独立扫描，2026-11-02 · mc-max-1793611296269-ea3798f8 实锤立项）。
+ *
+ * 病灶：R8-1 收敛逻辑被锁死在 `healDuplicateTextIssues` 的**重复文本剥离**前提里
+ *   （`duplicateTextIssues.length === 0` 整函数早退）。ea3798f8 实锤：vision 切出
+ *   801:10 / 801:23 两个幻觉锚点段（sourceNodeIds 全部不在真值树），生成组件**从头
+ *   就没有文本产出**（模板空 div/p）⇒ 无重复文本可剥 ⇒ R8-1 永不触发 ⇒ 两个空壳段
+ *   各占 `flex:1` 高度直接落盘 ⇒ 用户实拍 2/3 大片空白。
+ *
+ * 本刀：写盘前对全部挂 `data-section-id` 的 section 组件**独立扫描**（不依附重复文本）：
+ *   判据① 幻觉段（isHallucinatedSection：(a) sourceNodeIds 空 或 (b) 全不在真值树）
+ *   判据② 组件模板渲染文本为空
+ *   双判据同时成立 ⇒ 整段收敛（动作与 R8-1 完全同构：index.vue 挂载+import 移除、
+ *   files 剔除，graph 层凭 collapsedSections 删盘上文件）。
+ *   判据①不成立但②成立（真锚段空壳）⇒ 保护档 emptyShellSections 显式计数（不猜）。
+ * plan 无该 section id 的组件 ⇒ 不归属本刀，跳过（不猜）。
+ *
+ * @param {object} params
+ * @param {Array<{path:string, content:string}>} params.files 产物文件（mutate：收敛剔除）
+ * @param {object} params.plan subComponentPlan（含 effectiveSections）
+ * @param {object} [params.figmaRoot] figmaNodeData（document 树；空 ⇒ 判据(b)停用）
+ * @param {Function} [params.validateSfc] 可选 SFC 语法校验（content, path）=> {valid, errors}
+ * @returns {{scanned:number, collapsedSections:Array, emptyShellSections:Array, files:Array}} 恒形状计数行 + 收敛后 files
+ */
+export function collapseHallucinatedEmptySections({ files, plan, figmaRoot, validateSfc }) {
+  // 🔴 计数行铁律：collapsedSections/emptyShellSections 恒数组（0 也必须出现）
+  const summary = { scanned: 0, collapsedSections: [], emptyShellSections: [] };
+  if (!Array.isArray(files) || files.length === 0)
+    return { ...summary, files: Array.isArray(files) ? files : [] };
+  if (!plan || !Array.isArray(plan.effectiveSections))
+    return { ...summary, files };
+
+  let nameOf;
+  try {
+    nameOf = assignSectionComponentNames(plan.effectiveSections);
+  } catch {
+    return { ...summary, files };
+  }
+  void nameOf; // 命名一致性只作前置 sanity（抛错即弃权）；组件定位以 data-section-id 为准
+
+  const sectionsById = new Map(
+    collectSections(plan?.effectiveSections || []).map((s) => [String(s?.id), s]),
+  );
+  const sectionIds = new Set(sectionsById.keys());
+  const figmaIndex = indexFigmaNodes(figmaRoot);
+  const byPath = new Map(files.map((f) => [f.path, f]));
+
+  // 快照遍历：tryCollapse 会 splice files
+  for (const rec of [...files]) {
+    if (
+      !rec ||
+      typeof rec.path !== 'string' ||
+      !/package\/components\/[^/]+\.vue$/.test(rec.path) ||
+      typeof rec.content !== 'string'
+    )
+      continue;
+    const secIdM = rec.content.match(/data-section-id=["']([^"']+)["']/);
+    if (!secIdM) continue;
+    if (!sectionIds.has(String(secIdM[1]))) continue; // plan 无此 section ⇒ 不归属本刀，不猜
+    summary.scanned++;
+    const outcome = tryCollapseSectionMount({
+      rec,
+      compPath: rec.path,
+      byPath,
+      files,
+      sectionsById,
+      figmaIndex,
+      validateSfc,
+    });
+    const mapped = collapseOutcomeRecord(rec.path, outcome);
+    if (mapped) summary[mapped.list].push(mapped.rec);
+  }
+  return { ...summary, files: [...byPath.values()] };
+}
+
 /**
  * 🛡️ 阶段 C（2026-09-15 · 序 5）：内容守卫分级——高置信自愈。
  *
@@ -269,22 +406,36 @@ function introducesNewErrors(validateSfc, before, after, filePath) {
  * @returns {{files:Array, healed:Array<{text:string, removedFrom:Array<string>}>}}
  */
 export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc }) {
-  if (!Array.isArray(files) || files.length === 0) return { files, healed: [] };
-  if (!plan || !Array.isArray(plan.effectiveSections)) return { files, healed: [] };
+  // 🔴 R8-1 计数行铁律：collapsedSections/emptyShellSections 恒数组（0 也必须出现）
+  const COLLAPSE_EMPTY = { collapsedSections: [], emptyShellSections: [] };
+  if (!Array.isArray(files) || files.length === 0)
+    return { files, healed: [], ...COLLAPSE_EMPTY };
+  if (!plan || !Array.isArray(plan.effectiveSections))
+    return { files, healed: [], ...COLLAPSE_EMPTY };
 
   const { duplicateTextIssues } = checkSectionContent({ files, plan, figmaRoot });
-  if (duplicateTextIssues.length === 0) return { files, healed: [] };
+  if (duplicateTextIssues.length === 0)
+    return { files, healed: [], ...COLLAPSE_EMPTY };
 
   // section id → 组件名（owner 组件定位）
   let nameOf;
   try {
     nameOf = assignSectionComponentNames(plan.effectiveSections);
   } catch {
-    return { files, healed: [] };
+    return { files, healed: [], ...COLLAPSE_EMPTY };
   }
 
   const byPath = new Map(files.map((f) => [f.path, f]));
   const healed = [];
+  // 🔴 R8-1（2026-11-02 · 50d7793f 实锤）：幻觉段整段收敛 + 保护档空壳计数。
+  const collapsedSections = [];
+  const emptyShellSections = [];
+  const sectionsById = new Map(
+    collectSections(plan?.effectiveSections || []).map((s) => [String(s?.id), s]),
+  );
+  // 🔴 R8-5 判据单一来源：幻觉段判定（(a) sourceNodeIds 空 或 (b) 全不在真值树）与收敛动作
+  //   全部收口到 isHallucinatedSection / tryCollapseSectionMount（R8-5 独立扫描共用）。
+  const figmaIndex = indexFigmaNodes(figmaRoot);
 
   for (const issue of duplicateTextIssues) {
     const ownerName = nameOf.get(String(issue.ownerSection));
@@ -333,9 +484,34 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
     if (removedFrom.length > 0) {
       healed.push({ text: issue.text, removedFrom });
     }
+
+    // ── 🔴 R8-1（2026-11-02 · 50d7793f 实锤）：剥后空壳段的**整段收敛**（主刀）──
+    // 病灶：vision 切段概率性把文本重复声明给幻觉段（sourceNodeIds=[]、anchorValid:false），
+    // 阶段 C 判「错装」剥掉非 owner 侧文本 ⇒ 组件空壳（空 span/p + 臆造卡壳）直接落盘
+    // （431:47 当日 3 单必现）。删文本已发生 ⇒ 段必须被**消费或收敛**，禁止留静默空壳。
+    // 🔴 R8-5 收编（2026-11-02）：判据与动作单一来源化到 tryCollapseSectionMount
+    //   （幻觉判定 isHallucinatedSection 含 (b)「sourceNodeIds 非空但全不在真值树」扩维）；
+    //   原保护档第二循环并入 outcome.shell（顺带消除 rollback 场景双计数瑕疵）。
+    for (const wrongPath of removedFrom) {
+      const rec = byPath.get(wrongPath);
+      if (!rec || typeof rec.content !== 'string') continue;
+      const outcome = tryCollapseSectionMount({
+        rec,
+        compPath: wrongPath,
+        byPath,
+        files,
+        sectionsById,
+        figmaIndex,
+        validateSfc,
+      });
+      const mapped = collapseOutcomeRecord(wrongPath, outcome);
+      if (!mapped) continue;
+      if (mapped.list === 'collapsedSections') collapsedSections.push(mapped.rec);
+      else emptyShellSections.push(mapped.rec);
+    }
   }
 
-  return { files: [...byPath.values()], healed };
+  return { files: [...byPath.values()], healed, collapsedSections, emptyShellSections };
 }
 
 /**
@@ -891,6 +1067,19 @@ function buildSectionEvidenceCtx({ plan, figmaRoot }) {
     for (const id of Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : []) {
       for (const item of collectSubtreeTexts(String(id), index, childrenOf)) {
         if (item.text.length >= MIN_SIG_LEN) texts.add(item.text);
+      }
+    }
+    // 🛡️ Phase I-3（2026-11-02，3b0689c9 铁证）：Figma 子树**一个文案都没给出**时，
+    //   以 vision 的 body 声明文案兜底（合成 section `sourceNodeIds:[]` 是已知且被
+    //   `checkSectionExclusiveEvidence` 显式登记的一类：占位、无真实节点 ⇒ 子树恒空
+    //   ⇒ `checkSectionTruthCoverage` 在 `truthTexts.length===0` 处失明，整段错装无人拦）。
+    //
+    //   ⚠️ **只在子树文案为空时补**（兜底语义，同 `declaredTableHeaders` 形态⑤置末位）：
+    //   有子树的段逐字不变 ⇒ 既有 `textOwner` / `checkSectionExclusiveEvidence` 零漂移。
+    //   真值来源仍是 vision 的显式发言（`collectSectionBodyTexts`），不猜、不造。
+    if (texts.size === 0) {
+      for (const t of collectSectionBodyTexts(sec)) {
+        if (t.length >= MIN_SIG_LEN) texts.add(t);
       }
     }
     subTexts.set(sid, texts);

@@ -240,8 +240,16 @@ export function canonicalListItem(it) {
     stats.push(...roleStats);
   }
   // valueGroup 是独立右值区，不属于 content.elements；仅在其它显式统计轨为空时消费。
+  // 🛡️ 形态⑥（mc-max-1793582674250-3b0689c9 真机实锤）：`status.elements` 平铺交替
+  //    （value,label,value,label——与 valueGroup 同构、键名不同）补位消费；
+  //    显式 stats/stat/value 轨仍在场时（statEntries>0）不消费，杜绝双份。
   if (stats.length === 0 && statEntries.length === 0) {
-    stats.push(...normListValueGroupStats(it?.valueGroup));
+    const vgSource = it?.valueGroup?.elements
+      ? it.valueGroup
+      : Array.isArray(it?.status?.elements)
+        ? { elements: it.status.elements }
+        : null;
+    stats.push(...normListValueGroupStats(vgSource));
   }
   for (const s of statEntries) {
     // 顶层 value.parts + offline.parts 与 content.elements.parts 共用同一归一，

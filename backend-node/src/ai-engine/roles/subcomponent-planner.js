@@ -65,7 +65,7 @@ import { buildNodeLayoutFacts, decideLayoutForBoxes } from '../utils/figma-node-
 //   `565:3`、`figmaNodeId` 为空、`id` 却是首卡叶子 id）被索引到首卡名下，于是
 //   ①「节点列表」标题语义 ②6 项 `body.items` ③容器高度 全部错挂到首卡
 //   （mc-max-1793266461373-e7290dc5 实锤）。判据不得在本文件重写第二份。
-import { FIGMA_ID_RE, sectionAnchorKey } from '../utils/section-anchor-truth.js';
+import { FIGMA_ID_RE, sectionAnchorCandidates, sectionAnchorKey } from '../utils/section-anchor-truth.js';
 
 // 🛡️ 2026-10-30 第2步（刀33 既有步序 · 用户拍板）：**结构骨架 = vision／精确尺寸 = Figma**。
 //   此前 E1（deriveSectionsFromFigmaTree）无条件替代 vision sections 作结构骨架，
@@ -1172,10 +1172,23 @@ function splitSectionInternally(section, sectionIndex) {
  * 动机：planner 对同一区域双重解释时（cfb53488：@antd/tab 壳 `89:37` + 臆造 `section-main-content`），
  * 二者 type/responsibility 可能相同（可被现有措辞去重兜底）也可能不同（漏网）——
  * 靠「sourceNodeIds 交集」做**不依赖措辞**的单一归属判定：任一 Figma 节点 id 只能归属一个叶子 section。
- * 来源：显式 sourceNodeIds > figmaNode/nodeId > 形如 `数字:数字` 的 id（Figma node id 格式）>
- * tabStructure.panels 引用的节点 id（纳入归属图）> 子元素 figmaNode/nodeId。
+ * 来源：显式 sourceNodeIds > sectionAnchorCandidates（figmaAnchorId/figmaNodeId/nodeId/figmaNode）
+ * > 形如 `数字:数字` 的 id（Figma node id 格式）> tabStructure.panels > 子元素 figmaNode/figmaNodeId/nodeId/id。
+ *
+ * 🔴 R1（2026-11-02 · mc-max-1793597679970-646085b2 撕裂实锤）：归属候选改走
+ *   `sectionAnchorCandidates` **单一来源**（与几何轨 `sectionAnchorKey` 同表）。
+ *   病灶：几何轨已接修复产物 `figmaAnchorId`，归属轨（本函数）没接、且字段名用 `nodeId`
+ *   而非 `figmaNodeId` ⇒ 锚点守卫每修一次锚点，就制造一段「几何来自 A 节点、内容来自 B 节点」
+ *   的撕裂段（修复越多撕裂越多）。别名 `nodeId` 归入 G1 候选表单点维护。
+ *   子元素同步补收 `figmaNodeId`（与 `collectSectionFigmaRefs` 同视野——refs 认它、
+ *   归属不认它就是同族「半写回」）。
+ *   🔴 `id` 仍保留形态校验（语义 id 不是节点引用，不进归属图）——G1 契约明确「消费方各自
+ *   决定要不要校验形态」，此处是校验方。
+ *   🔴 P2-1 自愈触发语义变化（已论证为正当）：语义 id 段若已带 `figmaAnchorId`/`figmaNodeId`
+ *   （即已被锚定），`ids` 不再为空 ⇒ 不再触发按名字重映射。此时段已有经过祖先校验的真锚点，
+ *   按名字猜 id 反而是第二真值源。**无任何锚点声明的语义 id 段自愈行为逐字不变**（spec 锁）。
  */
-function collectSourceNodeIds(sec) {
+export function collectSourceNodeIds(sec) {
   const ids = [];
   const push = (v) => {
     if (v == null) return;
@@ -1183,8 +1196,12 @@ function collectSourceNodeIds(sec) {
     if (s && !ids.includes(s)) ids.push(s);
   };
   if (Array.isArray(sec?.sourceNodeIds)) sec.sourceNodeIds.forEach(push);
-  push(sec?.figmaNode);
-  push(sec?.nodeId);
+  // 🔴 R1：归属候选 = sectionAnchorCandidates 单一来源（figmaAnchorId → figmaNodeId → nodeId → figmaNode）
+  const [anchorRepaired, anchorExplicit, anchorAlias, anchorNode] = sectionAnchorCandidates(sec);
+  push(anchorRepaired);
+  push(anchorExplicit);
+  push(anchorAlias);
+  push(anchorNode);
   if (/^\d+:\d+$/.test(String(sec?.id || ''))) push(sec.id);
   if (Array.isArray(sec?.tabStructure?.panels)) {
     sec.tabStructure.panels.forEach(push);
@@ -1193,6 +1210,7 @@ function collectSourceNodeIds(sec) {
   if (Array.isArray(children)) {
     for (const c of children) {
       push(c?.figmaNode);
+      push(c?.figmaNodeId);
       push(c?.nodeId);
       if (/^\d+:\d+$/.test(String(c?.id || ''))) push(c.id);
     }
