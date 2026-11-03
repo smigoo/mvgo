@@ -22,6 +22,18 @@ const MAX_IN_MEMORY = 500;
 const MAX_PERSISTED = 2000;
 const ZOMBIE_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时
 
+/**
+ * 🆕 2026-11-03 高级选项文本归一：trim 后空串即视为「未使用该选项」→ undefined。
+ * 截断口径与**消费端保持一致**，不做更严的裁剪，否则重试/续跑拿到的
+ * 约束会比首轮短（首轮 prompt 注入处同样是 ≤4000 / ≤20000）。
+ */
+function normalizeOptionalText(value: unknown, maxLen?: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return maxLen && trimmed.length > maxLen ? trimmed.slice(0, maxLen) : trimmed;
+}
+
 interface TaskMetadata {
   /** 任务启动时冻结的有效配置快照（去 secret 后可落盘审计） */
   configSnapshot?: Record<string, any>;
@@ -51,6 +63,18 @@ interface TaskMetadata {
   generationTier?: 'lite' | 'max';
   /** 输入来源：screenshot | figma | html */
   sourceType?: 'screenshot' | 'figma' | 'html';
+  /**
+   * 🆕 2026-11-03 高级选项「生成约束」三字段 —— 此前只进 codegen prompt、**从不落任务记录**
+   * （TaskMetadata/Task 均无声明，createTask 也不搬运），导致三处同时失效：
+   *   ① 任务详情页无从展示「这次用了什么提示词」；
+   *   ② 断点续跑/任务重试在**没有用户约束**的情况下重跑（产物可能与首轮意图不一致）；
+   *   ③ 历史回填只带回 URL/类型/档位，用户得重写一遍提示词。
+   * 现随任务持久化，成为「一次生成完整上下文」的单一事实源。
+   * ⚠️ requirementDocText 仅存任务记录与详情接口，**不进轮询列表**（见 getAllTasks slim 分支）。
+   */
+  extraPrompt?: string;
+  requirementDocText?: string;
+  userComponentId?: string;
   /** 生成中间产物目录，用于失败恢复和重试定位 */
   outputPath?: string;
   /** 最近完成的生成阶段，后续 checkpoint 续跑使用 */
@@ -152,6 +176,15 @@ export interface Task {
   generationTier?: 'lite' | 'max';
   /** 输入来源：screenshot | figma | html（Lite 管线产物；普通管线可从 fileKey/nodeId 推断） */
   sourceType?: 'screenshot' | 'figma' | 'html';
+  /**
+   * 🆕 2026-11-03 高级选项「生成约束」（详见 TaskMetadata 同名字段注释）。
+   * 语义：**一次生成的完整上下文**。任务详情展示、断点续跑/重试复现、历史回填都读这一份。
+   */
+  extraPrompt?: string;
+  /** 高级选项上传的需求文档全文（≤20000 字；只在任务详情接口返回，列表只给字数） */
+  requirementDocText?: string;
+  /** 高级选项指定的组件 ID（决定产物目录名 / declare / class 前缀） */
+  userComponentId?: string;
   /** 设计画布逻辑尺寸，用于前端预览缩放 */
   figmaDimensions?: { width: number; height: number };
   /** 生成中间产物目录，用于失败恢复和重试定位 */
@@ -1034,7 +1067,15 @@ export class TasksService {
         try {
           await fs.writeFile(tmpFile, json, 'utf-8');
           await fs.access(tmpFile);
-          await fs.rename(tmpFile, this.persistFile);
+          try {
+            await fs.rename(tmpFile, this.persistFile);
+          } catch (renameErr: any) {
+            // 🛡️ 2026-11-03：EPERM rename 风暴降级——rename 不可用时直写目标文件，tmp 尽力清理。
+            if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr;
+            await fs.writeFile(this.persistFile, json, 'utf-8');
+            try { await fs.unlink(tmpFile); } catch { /* 残留 tmp 待清理 */ }
+            console.warn(`[TasksService] 持久化：rename ${renameErr.code}，已降级为直写`);
+          }
           return;
         } catch (err) {
           lastErr = err;
@@ -1122,6 +1163,10 @@ export class TasksService {
       target: metadata.target || 'microcode',
       generationTier: metadata.generationTier,
       sourceType: metadata.sourceType,
+      // 🆕 2026-11-03 高级选项「生成约束」随任务落库（此前只进 prompt ⇒ 详情/重试/历史全丢）
+      extraPrompt: normalizeOptionalText(metadata.extraPrompt, 4000),
+      requirementDocText: normalizeOptionalText(metadata.requirementDocText, 20000),
+      userComponentId: normalizeOptionalText(metadata.userComponentId),
       outputPath: metadata.outputPath,
       lastCompletedStage: metadata.lastCompletedStage,
       checkpointStatus: metadata.checkpointStatus || 'none',
@@ -1461,6 +1506,12 @@ export class TasksService {
         // 🆕 档位和来源（任务详情页展示用，与 getAllTasks 对齐）
         generationTier: task.generationTier,
         sourceType: task.sourceType,
+        // 🆕 2026-11-03 高级选项「生成约束」（详情页展示位数据源）。
+        //   本方法同样是**白名单式构造**，不显式写一行就到不了前端（同 themeNodes 的坑）。
+        //   requirementDocText 全文只在此返回：列表接口瘦身成 requirementDocTextLen。
+        extraPrompt: task.extraPrompt,
+        requirementDocText: task.requirementDocText,
+        userComponentId: task.userComponentId,
         artifactReady: this.hasTaskArtifacts(task),
         // 🆕 渐进式就绪级别（partial 草稿 vs full 完整）+ 缺失关键文件（供 Playground 入口提示）
         artifactReadyLevel: this.getArtifactReadyLevel(task),
@@ -1644,6 +1695,15 @@ export class TasksService {
           // 列表瘦身：progress 只留最近 20 条（列表展示足够，详情页走 status/:sessionId 全量）
           item.progress = (task.progress || []).slice(-20);
           item.buffer = [];
+          // 🆕 2026-11-03 高级选项需求文档（≤20000 字）**绝不进轮询列表**：
+          //   /tasks/recent 每 15s 拉一次，10 条 × 20K 字 = 200KB/轮纯浪费；
+          //   列表/历史下拉只需要「有没有 + 多少字」（「复用上次文档」提示用），
+          //   点「复用」时才按 sessionId 取详情接口拿全文。
+          //   extraPrompt（≤4000）保留在列表里 —— 历史回填要直接填进输入框，多一跳无意义。
+          if (task.requirementDocText) {
+            item.requirementDocTextLen = task.requirementDocText.length;
+            delete item.requirementDocText;
+          }
           if (task.result && typeof task.result === 'object') {
             const slimResult = { ...task.result };
             // 重负载字段剔除：Figma 节点树/样式树/代码产物/校验缓存，详情接口才返回
@@ -2663,6 +2723,11 @@ export class TasksService {
       outputPath: task.outputPath || task.result?.outputPath || null,
       lastCompletedStage: task.lastCompletedStage || task.result?.lastCompletedStage || null,
       checkpointStatus: task.checkpointStatus || 'none',
+      // 🆕 2026-11-03 高级选项「生成约束」：不带回来 ⇒ 重试会在**丢掉用户提示词/需求文档**
+      //   的情况下重跑，产物与首轮意图不一致（用户视角是「同样的配置，结果却变了」）。
+      extraPrompt: task.extraPrompt,
+      requirementDocText: task.requirementDocText,
+      userComponentId: task.userComponentId,
       // 保留原错误信息供前端展示
       originalError: task.error,
       originalDuration: task.duration,

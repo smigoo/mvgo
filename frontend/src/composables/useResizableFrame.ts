@@ -92,6 +92,8 @@ type PersistedSize = {
   height?: number
   preset?: string
   locked?: boolean
+  /** 写入时的尺寸策略版本（见 SIZE_POLICY_VERSION）；缺失或不符一律作废。 */
+  v?: number
   /**
    * 写入时的设计稿宽高比（如 '0.767' 表示 510:665）。
    * 恢复时若与当前比例不符即视为过期快照并丢弃。
@@ -103,6 +105,20 @@ const DEFAULT_MIN_WIDTH = 320
 const DEFAULT_MIN_HEIGHT = 240
 const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 720
+
+/**
+ * 尺寸持久化**策略版本**。改了 `defaultWidth` / `defaultHeight` 的取值口径就必须 +1。
+ *
+ * 为什么必须（同一个坑已踩两次）：
+ *   `width = customWidth > 0 ? customWidth : default` ⇒ 只要用户拖过一次并落库，
+ *   默认值就**永远不再生效**。于是「把默认改成跟随设计稿」这类修复，对老用户
+ *   完全无效，他们浏览器里存着旧逻辑推出的错尺寸，且没有任何自愈路径 ——
+ *   表现为「这个 bug 修了好几次还在」。
+ *   上一次只靠 `designRatio`（设计稿比例变没变）判废，挡不住「比例没变、
+ *   但默认值口径变了」的情况，所以事故复现。
+ *   版本号不同 ⇒ 旧快照一律作废、回落到新默认。每个用户只损失一次拖拽记忆。
+ */
+const SIZE_POLICY_VERSION = 2
 
 function readNumber(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
@@ -206,6 +222,8 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
         height: height.value,
         preset: presetName.value,
         locked: isWidthLocked.value,
+        // 🆕 记录策略版本：默认口径一变，它下面所有旧快照集体作废
+        v: SIZE_POLICY_VERSION,
         // 🆕 记录当时的比例：设计稿变了就能识别出这份快照已过期
         designRatio: currentDesignRatio() ?? undefined,
       }
@@ -232,6 +250,21 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     try {
       const data = JSON.parse(raw) as PersistedSize
       if (!data || typeof data !== 'object') return
+
+      // 🔴 版本闸门：旧策略写下的快照一律作废（见 SIZE_POLICY_VERSION 注释）。
+      //   这是「改了默认逻辑，老用户也立刻受益」的**唯一可靠**通路 ——
+      //   designRatio 只能挡「设计稿比例变了」，挡不住「比例没变但默认口径改了」。
+      if (data.v !== SIZE_POLICY_VERSION) {
+        try {
+          window.localStorage.removeItem(key)
+        } catch {
+          /* 静默 */
+        }
+        customWidth.value = 0
+        customHeight.value = 0
+        presetName.value = 'default'
+        return
+      }
 
       // 🔴 过期判定：存的快照与当前设计稿比例不符 ⇒ 丢弃，回落到 default。
       //   事故 mc-1791783806265-5831962c：用户在旧版（defaultHeight 写死 667）拖过一次，

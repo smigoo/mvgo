@@ -866,3 +866,98 @@ const emit = defineEmits(['select'])`;
     expect(declared.has('icon2')).toBe(false);
   });
 });
+
+/**
+ * 🔴 刀17（2026-11-03 · mc-max-1793689324378-ba2a6814 实锤）：
+ * `collectDeclaredBindings` 的声明符列表曾用 `rest.split(',')` **裸切**，把初始化表达式
+ * 内部的逗号也当成分隔符 —— `const bgList = [bg2, bg1, bg3]` 切成
+ * `['bgList = [bg2', ' bg1', ' bg3]']`，中段 ` bg1` 恰好以标识符结尾 ⇒ 命中
+ * `^IDENT\s*(?:=|;|$)` ⇒ `bg1` 被误登记为「已声明」（首元素被 `bgList = [` 挡住、
+ * 末元素被尾部 `]` 挡住，所以**只有中段元素**受害）。
+ *
+ * 后果链（真机全链实证）：`resource-facts#buildResourceFacts` 见 declared 命中即 continue
+ * ⇒ `unresolved` 不含 bg1 ⇒ **R2 幽灵引用判据失效** ⇒ CODE-025 静默放行
+ * ⇒ 产物 `const bgList = [bg2, bg1, bg3]` 中 bg1 无 import 无声明
+ * ⇒ ESM 模块顶层 `ReferenceError: bg1 is not defined` ⇒ 整个 SFC 加载失败
+ * ⇒ RUNTIME-004 render-error + VISUAL-002（像素差 0.2979）双硬 BLOCK，任务直接报错。
+ * 语义门禁 `validateVueScriptSemantics` 只扫**模板**引用，script 侧是盲区，救不了。
+ *
+ * 修法 = 按括号深度 / 字符串状态切分（`splitTopLevelCommas`），**只收窄识别面**：
+ * 被移除的名字全是「从未真正声明过」的假阳性，真声明（必带 `const|let|var NAME`）
+ * 仍被 declRe 正常捕获 ⇒ 不会漏声明，只让撞名复核与 R2 恢复应有力气。
+ */
+describe('刀17：声明符列表按深度 0 逗号切分（数组字面量中段元素曾被误登记为「已声明」）', () => {
+  it('⭐ 实锤：数组中段元素不得入 declared（只有声明目标本身入）', () => {
+    const code = `const bgList = [bg2, bg1, bg3]`;
+    const declared = collectDeclaredBindings(code);
+    expect(declared.has('bgList')).toBe(true);
+    // 三个元素都不是声明；其中 bg1 是修前唯一被误登记的（幽灵引用 → ReferenceError 源头）
+    expect(declared.has('bg1')).toBe(false);
+    expect(declared.has('bg2')).toBe(false);
+    expect(declared.has('bg3')).toBe(false);
+  });
+
+  it('⭐ 实锤：整条真实 script 片段（import + 数组 + 死代码）declared 只含声明目标', () => {
+    const code = [
+      `import icon3 from '../resources/images/icon-123.png'`,
+      `import bg2 from '../resources/images/bg-124.png'`,
+      `import bg3 from '../resources/images/bg-126.png'`,
+      `const statCards = ref([{ label: 'a' }, { label: 'b' }])`,
+      `const bgList = [bg2, bg1, bg3]`,
+      `const tabs = ref([{ label: 'x', value: 'tunnel' }])`,
+    ].join('\n');
+    const declared = collectDeclaredBindings(code);
+    expect(declared.has('icon3')).toBe(true); // import 是真绑定
+    expect(declared.has('bg2')).toBe(true);
+    expect(declared.has('bg3')).toBe(true);
+    expect(declared.has('bgList')).toBe(true);
+    expect(declared.has('statCards')).toBe(true);
+    expect(declared.has('tabs')).toBe(true);
+    expect(declared.has('bg1')).toBe(false); // 🔴 幽灵引用，必须暴露
+  });
+
+  it('反向：多声明符 `const a = 1, b = 2` 仍全部识别（顶层逗号不可失配）', () => {
+    const declared = collectDeclaredBindings(`const bgA = 1, bgB = 2, bgC = 3`);
+    expect(declared.has('bgA')).toBe(true);
+    expect(declared.has('bgB')).toBe(true);
+    expect(declared.has('bgC')).toBe(true);
+  });
+
+  it('反向：无赋值裸声明 `let bgA, bgB;` 仍全部识别', () => {
+    const declared = collectDeclaredBindings(`let bgA, bgB;`);
+    expect(declared.has('bgA')).toBe(true);
+    expect(declared.has('bgB')).toBe(true);
+  });
+
+  it('反向：函数实参与对象字面量内的逗号不产生假声明', () => {
+    const declared = collectDeclaredBindings(
+      `const bgMap = mapOf(bg1, bg2)\nconst bgObj = { a: bg3, b: bg4 }\nconst bgCalc = Math.max(bg5, bg6)`,
+    );
+    for (const n of ['bgMap', 'bgObj', 'bgCalc']) expect(declared.has(n)).toBe(true);
+    for (const n of ['bg1', 'bg2', 'bg3', 'bg4', 'bg5', 'bg6']) expect(declared.has(n)).toBe(false);
+  });
+
+  it('反向：字符串字面量里的逗号不切分，也不产生假声明', () => {
+    const declared = collectDeclaredBindings(`const bgText = 'a, bg1, b', bgN = 2`);
+    expect(declared.has('bgText')).toBe(true);
+    expect(declared.has('bgN')).toBe(true);
+    expect(declared.has('bg1')).toBe(false);
+  });
+
+  it('反向：真声明嵌套在初始化表达式之后仍被识别（深度回落后继续切分）', () => {
+    const declared = collectDeclaredBindings(`const bgList = [bg1, bg2], bgTail = 9`);
+    expect(declared.has('bgList')).toBe(true);
+    expect(declared.has('bgTail')).toBe(true);
+    expect(declared.has('bg1')).toBe(false);
+    expect(declared.has('bg2')).toBe(false);
+  });
+
+  it('反向：对象字面量嵌套数组（多层深度）不误登记键与元素', () => {
+    const declared = collectDeclaredBindings(
+      `const bgCfg = { list: [bg1, bg2], map: { k: bg3 } }`,
+    );
+    expect(declared.has('bgCfg')).toBe(true);
+    for (const n of ['bg1', 'bg2', 'bg3', 'list', 'map', 'k']) expect(declared.has(n)).toBe(false);
+  });
+});
+

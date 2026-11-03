@@ -1,0 +1,38 @@
+{
+  "name": "par-demo",
+  "label": "并行演示",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "par",
+      "type": "parallel",
+      "label": "并行组",
+      "config": {
+        "handlers": [
+          "hello-agent",
+          "url-parser-agent"
+        ]
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "par"
+    },
+    {
+      "source": "par",
+      "target": "end"
+    }
+  ]
+}

@@ -58,6 +58,7 @@ import { detectOrphanDuplicateComponents, healOrphanDuplicateComponents } from '
 //   J1 无需真值；J2/J3 需 figmaRoot bbox。fail-open + 计数行铁律。
 //   详 src/ai-engine/utils/layout-truth-guard.js。
 import { runLayoutTruthGuard } from './layout-truth-guard.js';
+import { indexFigmaNodes } from './section-tree.js';
 // 删除/改写产物前的语法回退校验（与 section-content-guard 同铁律：引入新错误即回退）。
 import { validateVueSfc } from './sfc-syntax-validation.js';
 // 🛡️ 刀 43（2026-10-22）：R24 **不**挂在本链 —— 本链之后还有 4 个覆写/回退步骤会冲掉它，
@@ -98,6 +99,7 @@ import {
   ensureSlotConBackground,
   healZebraStripeMisread,
 } from './layout-truth-healer.js';
+import { reportPatchChainError } from './patch-chain-observer.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -264,8 +266,12 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     gridContractHealed: 0,
     gridContractFailed: 0,
     gridContractResidual: 0,
+    // 🛡️ S0.2（2026-11-03）：PATCH-CHAIN-ERROR 哨兵聚合计数 —— 结构性错误
+    // （ReferenceError/TypeError/SyntaxError）命中本链 catch 的次数。显式初始化（上行铁律）。
+    patchChainErrors: 0,
     // 刀 42（2026-10-21）：面板三件套（底色/圆角/外发光）自愈计数
     containerBackground: 0,
+    bgTruthlessStripped: 0,
     containerPanelRadius: 0,
     containerPanelGlow: 0,
     panelChromeMisplaced: 0,
@@ -282,6 +288,9 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     // R8-6（2026-11-02 · c-d1be-99d1be1d）：frame 类挂载族对账计数（0 也必须出现）
     frameClassScanned: 0,
     frameClassAligned: 0,
+    // R8-8：grid/display 同声明域一致性（0 也必须出现）
+    gridDisplayScanned: 0,
+    gridDisplayAligned: 0,
     // 刀 55（2026-10-23）：plan 外编造副本组件
     orphanHits: 0,
     orphanRemoved: 0,
@@ -345,6 +354,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
           });
         }
       } catch (err) {
+        reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:351', counter: summary });
         logger?.warn?.('🛡️ L3-c 修复器异常（非阻断）', {
           file: fp,
           error: err?.message || String(err),
@@ -386,6 +396,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
           });
         }
       } catch (err) {
+        reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:392', counter: summary });
         logger?.warn?.('🛡️ CODE-022 修复器异常（非阻断）', {
           file: fp,
           error: err?.message || String(err),
@@ -454,6 +465,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         logger?.warn?.('🛡️ 刀 26 修复：script 独行逗号残片已删除（防 vue/compiler-sfc Unexpected token）', { file: fp });
       }
     } catch (err) {
+      reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:460', counter: summary });
       logger?.warn?.('🛡️ 刀 25/26 残片修复器异常（fail-open）', {
         file: fp,
         error: err?.message || String(err),
@@ -480,6 +492,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:486', counter: summary });
     logger?.warn?.('🛡️ 刀 27 v-for 方向纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -497,7 +510,9 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     const layoutStructure = ctx?.layoutStructure;
     if (layoutStructure) {
       const fileArr = Object.entries(result).map(([path, content]) => ({ path, content }));
-      const det = detectVForListDirectionMismatch(fileArr, layoutStructure);
+      const det = detectVForListDirectionMismatch(fileArr, layoutStructure, {
+        figmaNodeData: ctx?.figmaRoot,
+      });
       if (det.issues.length > 0) {
         const healed = healVForListDirection(fileArr, det.issues);
         for (const f of healed.files) {
@@ -512,7 +527,9 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
           failed: healed.failed,
         });
         // 复检留痕（0 = 全愈；残留仍由 code-structure-validator 的 WARN issue 承载）
-        const recheck = detectVForListDirectionMismatch(healed.files, layoutStructure);
+        const recheck = detectVForListDirectionMismatch(healed.files, layoutStructure, {
+          figmaNodeData: ctx?.figmaRoot,
+        });
         if (recheck.issues.length > 0) {
           summary.vForListDirectionResidual = recheck.issues.length;
           logger?.warn?.('🛡️ 刀 30 复检残留（交回 WARN 门禁）', {
@@ -522,6 +539,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:532', counter: summary });
     logger?.warn?.('🛡️ 刀 30 v-for 方向自愈异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -544,6 +562,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:554', counter: summary });
     logger?.warn?.('🛡️ 刀 28 比例真值纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -566,6 +585,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:576', counter: summary });
     logger?.warn?.('🛡️ 刀 29 文案槽位纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -590,6 +610,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:600', counter: summary });
     logger?.warn?.('🛡️ 刀 30 stat 结构纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -622,6 +643,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:632', counter: summary });
     logger?.warn?.('🛡️ 刀 31 容器底色纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -649,6 +671,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:659', counter: summary });
     logger?.warn?.('🛡️ 刀 32 斑马纹纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -717,6 +740,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       summary.d1ImgSized = d1.summary.imgSized || 0;
       summary.d1Skipped = d1.summary.skipped;
     } catch (d1Err) {
+      reportPatchChainError(d1Err, { logger: logger, pass: 'runPreWriteSelfHealing:727', counter: summary });
       logger?.warn?.('🛡️ D1 per-card 改写异常（fail-open 跳过）', {
         error: d1Err?.message || String(d1Err),
       });
@@ -776,6 +800,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:786', counter: summary });
     logger?.warn?.('🛡️ 样式冲突扫描异常（非阻断）', {
       error: err?.message || String(err),
     });
@@ -818,6 +843,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         });
       }
     } catch (err) {
+      reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:828', counter: summary });
       logger?.warn?.('🛡️ H1 百分比高度检测异常（非阻断）', {
         error: err?.message || String(err),
       });
@@ -868,6 +894,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         });
       }
     } catch (err) {
+      reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:878', counter: summary });
       logger?.warn?.('🛡️ v-for 重复单元几何纠偏异常（非阻断）', {
         error: err?.message || String(err),
       });
@@ -1006,6 +1033,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1016', counter: summary });
     logger?.warn?.('🛡️ 资源/臆造规则审计异常（非阻断）', {
       error: err?.message || String(err),
     });
@@ -1039,6 +1067,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1049', counter: summary });
     logger?.warn?.('🛡️ 刀 23 异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -1071,6 +1100,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         summary.d24Skipped = (d24.skipped || []).length;
       }
     } catch (err) {
+      reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1081', counter: summary });
       logger?.warn?.('🛡️ 刀 24 异常（fail-open）', {
         error: err?.message || String(err),
       });
@@ -1107,6 +1137,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       summary.structuralTruthDetails = st.summary.details;
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1117', counter: summary });
     logger?.warn?.('🛡️ 刀 32/33/34 结构真值三刀异常（fail-open）', {
       error: err?.message || String(err),
     });
@@ -1122,10 +1153,13 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   //   变量」在该层**根本没有槽位**，等于永远不补。现按面板底矩形真值补三件套。
   //   详 src/ai-engine/utils/container-background-truth.js。
   try {
-    const bg = healContainerBackgroundTruth(result, { figmaRoot });
+    const bg = healContainerBackgroundTruth(result, { figmaRoot, logger });
     result = bg.files;
     if (bg.changes.length > 0) {
       summary.containerBackground = bg.changes.length;
+      // M1 独立计数（与刀37/42 的补齐/纠偏区分）
+      const truthlessCount = bg.changes.filter((c) => c.reason === 'truthless-bg').length;
+      if (truthlessCount > 0) summary.bgTruthlessStripped = truthlessCount;
       const radiusCount = bg.changes.filter((c) => c.radius != null).length;
       const glowCount = bg.changes.filter((c) => c.shadow != null).length;
       if (radiusCount > 0) summary.containerPanelRadius = radiusCount;
@@ -1135,6 +1169,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1145', counter: summary });
     logger?.warn?.('🛡️ 刀 37/42 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1155,6 +1190,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1165', counter: summary });
     logger?.warn?.('🛡️ 刀 42-B 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1179,6 +1215,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1189', counter: summary });
     logger?.warn?.('🛡️ 刀 57 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1199,6 +1236,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1209', counter: summary });
     logger?.warn?.('🛡️ 刀 38 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1221,6 +1259,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1231', counter: summary });
     logger?.warn?.('🛡️ 刀 40 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1240,7 +1279,15 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       : (ctx?.layoutStructure?.layout?.sections || ctx?.layoutStructure?.sections || []);
     if (Array.isArray(sections) && sections.length > 0) {
       const fileArr = Object.entries(result).map(([path, content]) => ({ path, content }));
-      const det = detectGridListLayoutIssues(fileArr, { sections });
+      const gridFigmaIndex = figmaRoot ? indexFigmaNodes(figmaRoot?.document || figmaRoot) : null;
+      const det = detectGridListLayoutIssues(fileArr, { sections, figmaIndex: gridFigmaIndex });
+      logger?.info?.('🛡️ R8-10 declaredContent 网格契约·已评估', {
+        evaluated: true,
+        contracts: det.stats.contracts,
+        judged: det.stats.judged,
+        mismatches: det.stats.mismatches,
+        skippedNoTruth: det.stats.skippedNoTruth,
+      });
       if (det.issues.length > 0) {
         const healed = healGridListLayout(fileArr, det.issues);
         for (const f of healed.files) {
@@ -1260,7 +1307,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
           failed: healed.failed,
         });
         // 复检留痕（0 = 全愈；残留交回 WARN 门禁）
-        const recheck = detectGridListLayoutIssues(healed.files, { sections });
+        const recheck = detectGridListLayoutIssues(healed.files, { sections, figmaIndex: gridFigmaIndex });
         if (recheck.issues.length > 0) {
           summary.gridContractResidual = recheck.issues.length;
           logger?.warn?.('🛡️ 刀 41 复检残留（交回 WARN 门禁）', {
@@ -1270,6 +1317,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1288', counter: summary });
     logger?.warn?.('🛡️ 刀 41 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1327,6 +1375,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1345', counter: summary });
     logger?.warn?.('🛡️ 刀 54 异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1373,8 +1422,12 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1391', counter: summary });
     logger?.warn?.('🛡️ 刀 55 异常（fail-open）', { error: err?.message || String(err) });
   }
+
+  // R8-8 已撤回：同块 flex + grid-template 也可能是列模板放错元素，不能据此翻 display。
+  // 网格只由刀41/R8-10 按 v-for 宿主 + section 契约 + Figma 几何接管。
 
   // ㉑ 层 4+5（2026-10-26 · mc-max-1792985029695-58de7d47 实锤）：布局真值守卫。
   //   必须排在所有「写样式」步骤（①–⑳）之后：本步是对**最终样式文本**做确定性消歧/收敛，
@@ -1401,6 +1454,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       summary.layoutTruthSkippedReason = lt.summary.skippedReason || null;
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1422', counter: summary });
     logger?.warn?.('🛡️ 层4+5 布局真值守卫异常（fail-open）', { error: err?.message || String(err) });
   }
 
@@ -1486,6 +1540,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       });
     }
   } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1507', counter: summary });
     logger?.warn?.('🛡️ R8-6 frame 类对账异常（fail-open）', { error: err?.message || String(err) });
   }
 

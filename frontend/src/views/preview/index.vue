@@ -445,7 +445,7 @@ function setAiFixMessage(text, level = '') {
 }
 const aiFixSeconds = ref(0) // 已等待秒数（实时计时）
 const aiFixCancelling = ref(false) // 取消中
-const AI_FIX_TIMEOUT_MS = 190000
+const AI_FIX_TIMEOUT_MS = 250000 // 异步轮询上限 240s + 余量（后端自身 180s 硬超时）
 // 模块级 AbortController：进行中只允许一个请求
 let aiFixController = null
 let aiFixTimer = null // 计时器 handle
@@ -1723,7 +1723,7 @@ async function requestAiFix(errorPayload) {
     )
 
     if (!result?.success) {
-      const message = result?.message || result?.data?.summary || 'AI 修复失败'
+      const message = result?.message || result?.data?.message || result?.data?.summary || 'AI 修复失败'
       console.error('[预览] AI 修复失败:', message)
       // 失败时保持 loading 覆盖层不关闭，用内联消息替代 alert
       if (result?.data?.alreadyRunning) {
@@ -1734,7 +1734,41 @@ async function requestAiFix(errorPayload) {
       return false
     }
 
-    console.log('[预览] AI 修复完成:', result.data.summary)
+    // ── 异步修复（2026-11-03 治本 504）：受理拿 fixId → 轮询状态，不再依赖长连接 ──
+    const fixId = result?.data?.fixId
+    if (!fixId) {
+      setAiFixMessage(result?.data?.message || '修复任务受理失败', 'error')
+      return false
+    }
+    const AI_FIX_POLL_INTERVAL_MS = 3000
+    const AI_FIX_POLL_MAX_WAIT_MS = 240000 // 后端自身 180s 硬超时，留余量
+    const pollStart = Date.now()
+    let finalJob: any = null
+    while (Date.now() - pollStart < AI_FIX_POLL_MAX_WAIT_MS) {
+      if (controller.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' })
+      await new Promise((resolve) => setTimeout(resolve, AI_FIX_POLL_INTERVAL_MS))
+      if (controller.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' })
+      const statusRes = await http.get(`/api/demo/ai-fix-render-error-status/${fixId}`)
+      const job = statusRes?.data
+      if (!job?.success) {
+        setAiFixMessage(job?.message || '修复任务状态查询失败', 'error')
+        return false
+      }
+      if (job.status === 'success' || job.status === 'failed') {
+        finalJob = job
+        break
+      }
+    }
+    if (!finalJob) {
+      setAiFixMessage(`修复超过 ${Math.round(AI_FIX_POLL_MAX_WAIT_MS / 1000)} 秒仍未完成，请稍后重试。`, 'error')
+      return false
+    }
+    if (finalJob.status === 'failed') {
+      setAiFixMessage(finalJob.summary || 'AI 修复失败', 'error')
+      return false
+    }
+
+    console.log('[预览] AI 修复完成:', finalJob.summary)
     setAiFixMessage('修复完成，正在重新加载预览…', 'success')
     loadError.value = ''
     await reloadComponent()
@@ -1745,7 +1779,7 @@ async function requestAiFix(errorPayload) {
     const isLoadOk = finalStatus === 'ready' || (rtComponent.value && !loadError.value)
 
     notifyParentFixed({
-      summary: result.data.summary || 'AI 修复完成',
+      summary: finalJob.summary || 'AI 修复完成',
       status: finalStatus,
       success: isLoadOk
     })
@@ -2437,6 +2471,18 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
   font-size: 13px;
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  /* 🔴 2026-11-03（用户：组件较小时样式很奇怪——按钮文字竖排折行、徽章叠在按钮上）：
+     嵌入 iframe 窄视口下 fixed 容器被压缩 ⇒ 按钮折行、派生值徽章换行叠字。
+     修复：整体禁折行，按钮/徽章禁收缩（white-space + flex-shrink:0），
+     主题多到放不下时容器横向滚动兜底（滚动条隐藏）。 */
+  flex-wrap: nowrap;
+  max-width: calc(100vw - 16px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mc-theme-switcher::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* 🔴 2026-10-13：嵌入态紧凑变体——iframe 高度有限，缩小并半透明悬停恢复 */
@@ -2468,6 +2514,7 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
   gap: 2px;
   padding: 2px;
   border-radius: 999px;
+  flex-shrink: 0;
 }
 .mc-theme-switcher.dark .mc-theme-seg {
   background: rgba(255, 255, 255, 0.08);
@@ -2487,6 +2534,9 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
   background: transparent;
   cursor: pointer;
   transition: background 0.18s, color 0.18s;
+  /* 🔴 2026-11-03：窄视口防文字竖排折行 */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .mc-theme-switcher.dark .mc-theme-seg-btn {
   color: #9ca3af;
@@ -2551,6 +2601,12 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
   border-radius: 999px;
   font-size: 12px;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+/* 🔴 2026-11-03：嵌入态隐藏派生值徽章——窄 iframe 里占空间且易与按钮叠字；
+   说明语义由按钮 title 承载（独立窗口仍显示）。 */
+.mc-theme-switcher--embedded .mc-theme-derived {
+  display: none;
 }
 .mc-theme-switcher.dark .mc-theme-derived {
   color: #9ca3af;

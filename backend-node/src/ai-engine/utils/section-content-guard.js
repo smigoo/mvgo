@@ -26,7 +26,11 @@ import {
 import { techStackRequiredPatterns } from '../validators/element-coverage-validator.js';
 import { assessStatRowConfidence } from './inline-row-assembler.js';
 import { extractRenderedText } from './text-truth-guard.js';
-import { collectSectionBodyTexts } from './vision-facts.js';
+import {
+  collectNodeTexts,
+  collectSectionBodyTexts,
+  collectSectionTruthTexts,
+} from './vision-facts.js';
 
 const MIN_SIG_LEN = 2; // 成员签名文本最小长度（如「24小时」=3）
 const MIN_DUP_LEN = 4; // 重复检测文本最小长度（排除「24小时」类短共享词）
@@ -79,7 +83,11 @@ function collectSections(sections, out = []) {
  * @returns {{memberOrderIssues: Array, duplicateTextIssues: Array}}
  */
 export function checkSectionContent({ files, plan, figmaRoot }) {
-  const result = { memberOrderIssues: [], duplicateTextIssues: [] };
+  const result = {
+    memberOrderIssues: [],
+    duplicateTextIssues: [],
+    ownerStats: { declaredOwnerHits: 0, figmaFallbackHits: 0, declaredConflictSkips: 0, declaredPrefixAliasHits: 0 },
+  };
   if (!Array.isArray(files) || files.length === 0) return result;
   if (!plan || !Array.isArray(plan.effectiveSections)) return result;
 
@@ -157,44 +165,118 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
     }
   }
 
-  // ── ② 唯一归属文本跨组件重复校验（Figma 子树 = 归属真值）──
-  // 🛡️ P2-10 对齐（2026-10-01）：容器 section（isLayoutContainer）是**空间包裹**，不单独
-  //   生成 .vue，不可能是「内容 owner」。此前容器恒 `sourceNodeIds=[]`（planner 容器分支
-  //   漏字段）⇒ 天然不进本表；P2-10 补齐后若不跳过，容器会经 collectSubtreeTexts 认领
-  //   整棵子树文本 ⇒ 每个叶子文本多出一个祖先 owner ⇒ `owners.size !== 1` 一律跳过
-  //   ⇒ 本规则整段失明（假阴性）。与下方借用判定的「最小归属 isProperSubset」同语义：
-  //   容器永不是最小归属。
-  const textOwners = new Map(); // text -> Set(sectionId)
-  const sectionTexts = new Map(); // sectionId -> Set(text)
+  // ── ② 唯一归属文本跨组件重复校验 ──
+  // 显式 declaredContent / vision body 是本段内容契约，优先于祖先 Figma 子树。
+  // 子树只作声明缺失时回退；不做两源无条件 union，否则祖先段会把每个合成叶
+  // 都变成多 owner，规则反而失明。容器仍永不是内容 owner。
+  const declaredOwners = new Map(); // text -> Set(sectionId)
+  const subtreeOwners = new Map(); // text -> Set(sectionId)
+  const ambiguousDeclaredPrefixes = new Set(); // 截断声明有多个全文候选：禁止子树回退猜 owner
+  const allFigmaTexts = new Set();
+  for (const rec of index.values()) {
+    if (rec?.type !== 'TEXT' && rec?.type !== 'CHARACTER') continue;
+    const t = String(rec.rawNode?.characters || '').trim();
+    if (t) allFigmaTexts.add(t);
+  }
+  const figmaTextList = [...allFigmaTexts];
+  const addOwner = (map, text, sectionId) => {
+    if (text.length < MIN_DUP_LEN) return;
+    if (!map.has(text)) map.set(text, new Set());
+    map.get(text).add(sectionId);
+  };
   for (const sec of sections) {
-    if (isLayoutContainerSection(sec)) {
-      sectionTexts.set(String(sec.id), new Set());
-      continue;
+    if (isLayoutContainerSection(sec)) continue;
+    const sectionId = String(sec.id);
+    const declared = new Set([
+      ...collectSectionTruthTexts(sec),
+      ...collectNodeTexts(sec?.declaredContent),
+    ]);
+    // 合成段的 title 只有在 Figma 文本全集可逐字佐证时才作为显式标题；
+    // 不把 planner 元信息直接当可渲染真值，避免重新引入臆造标题。
+    const syntheticTitle = String(sec?.title || '').trim();
+    if (
+      (Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds.length : 0) === 0 &&
+      declared.size > 0 &&
+      allFigmaTexts.has(syntheticTitle)
+    ) {
+      declared.add(syntheticTitle);
     }
+    for (const t of declared) {
+      const text = String(t).trim();
+      if (text.length < MIN_DUP_LEN) continue;
+      if (!allFigmaTexts.has(text)) {
+        // R8-7 declaredContent 的单字符串预算会把长文本截为前缀。只有全文候选
+        // 唯一时才归一；多候选必须弃权，不能让子树回退把真正声明方删空。
+        const candidates = figmaTextList.filter(
+          (full) => full.length > text.length && full.startsWith(text),
+        );
+        if (candidates.length === 1) {
+          addOwner(declaredOwners, candidates[0], sectionId);
+          result.ownerStats.declaredPrefixAliasHits++;
+          continue;
+        }
+        if (candidates.length > 1) {
+          for (const full of candidates) ambiguousDeclaredPrefixes.add(full);
+          continue;
+        }
+      }
+      addOwner(declaredOwners, text, sectionId);
+    }
+
     const ids = Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : [];
-    const own = new Set();
     for (const id of ids) {
       for (const item of collectSubtreeTexts(String(id), index, childrenOf)) {
-        const t = item.text;
-        if (t.length < MIN_DUP_LEN) continue;
-        own.add(t);
-        if (!textOwners.has(t)) textOwners.set(t, new Set());
-        textOwners.get(t).add(String(sec.id));
+        addOwner(subtreeOwners, item.text, sectionId);
       }
     }
-    sectionTexts.set(String(sec.id), own);
   }
 
-  for (const [text, owners] of textOwners) {
-    if (owners.size !== 1) continue; // 多 section 共有（图例类）→ 合法重复
-    const ownerSection = [...owners][0];
+  const allOwnedTexts = new Set([...declaredOwners.keys(), ...subtreeOwners.keys()]);
+  for (const text of allOwnedTexts) {
+    const explicit = declaredOwners.get(text) || new Set();
+    const subtree = subtreeOwners.get(text) || new Set();
+    let ownerSection = null;
+    let ownerSource = null;
+    if (explicit.size === 1) {
+      const declaredOwner = [...explicit][0];
+      // R8-1 回归锁：带 Figma 节点身份、但自身子树并不含该文本的幻觉段，
+      // 不得仅凭重复声明推翻另一个段的唯一 Figma 子树 owner。真正的合成段
+      // （语义 id、sourceNodeIds 为空）仍可凭 declaredContent 接管内容归属。
+      const declaredOwnerHasFigmaIdentity = /^\d+:\d+$/.test(declaredOwner);
+      if (
+        declaredOwnerHasFigmaIdentity &&
+        subtree.size === 1 &&
+        !subtree.has(declaredOwner)
+      ) {
+        ownerSection = [...subtree][0];
+        ownerSource = 'figma';
+        result.ownerStats.figmaFallbackHits++;
+      } else {
+        ownerSection = declaredOwner;
+        ownerSource = 'declared';
+        result.ownerStats.declaredOwnerHits++;
+      }
+    } else if (explicit.size > 1) {
+      result.ownerStats.declaredConflictSkips++;
+      continue; // 多个显式声明共有/冲突，不猜唯一 owner
+    } else if (ambiguousDeclaredPrefixes.has(text)) {
+      result.ownerStats.declaredConflictSkips++;
+      continue; // 截断声明对应多个全文，禁止 Figma 子树回退越权删除
+    } else if (subtree.size === 1) {
+      ownerSection = [...subtree][0];
+      ownerSource = 'figma';
+      result.ownerStats.figmaFallbackHits++;
+    } else {
+      continue; // 多 section 子树共有（图例类）→ 合法重复
+    }
     const hostFiles = vueFiles.filter((f) => f.renderedText.includes(text));
     if (hostFiles.length >= 2) {
       result.duplicateTextIssues.push({
         text,
         ownerSection,
+        ownerSource,
         renderedIn: hostFiles.map((f) => f.path),
-        hint: `文本仅归属 section ${ownerSection}（Figma 子树真值），却被 ${hostFiles.length} 个组件渲染`,
+        hint: `文本仅归属 section ${ownerSection}（${ownerSource === 'declared' ? '显式内容声明' : 'Figma 子树回退'}），却被 ${hostFiles.length} 个组件渲染`,
       });
     }
   }

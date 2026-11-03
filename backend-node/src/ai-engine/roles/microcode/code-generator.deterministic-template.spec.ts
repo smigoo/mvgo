@@ -203,6 +203,29 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(bodyPart).toContain('<StatsSection')
   })
 
+  test('001c5615：sectionId 命中带 chrome body 的 header 宿主，index 只入槽一次且列表独占 body', () => {
+    const secs = [
+      {
+        id: '2:7959', type: 'header', title: '重点车辆监测', sourceNodeIds: ['2:7959'],
+        body: { children: [{ type: 'text', text: '重点车辆监测' }] },
+      },
+      { id: '136:122', type: 'list', title: '今日累计', sourceNodeIds: ['136:122'] },
+    ]
+    const input = makeInput(secs, 'vehicle-monitor')
+    ;(input as any).headerSlots = [{
+      slotType: 'header-right', elementType: 'label', content: '江阴靖江长江隧道 江阴大桥',
+      figmaNodeId: '2:7954', sectionId: '2:7959',
+    }]
+    const facts = buildDeterministicIndexTemplate(input)!
+    const tpl = facts.template
+    const headerTag = facts.sectionRoots.find((s) => s.id === '2:7959')!.component
+    const listTag = facts.sectionRoots.find((s) => s.id === '136:122')!.component
+    expect(tpl.match(/<template #header-right>/g)).toHaveLength(1)
+    expect(tpl.slice(0, tpl.indexOf('slot-con'))).toContain(`<${headerTag} />`)
+    expect(tpl.slice(tpl.indexOf('slot-con'))).not.toContain(`<${headerTag}`)
+    expect(tpl.slice(tpl.indexOf('slot-con'))).toContain(`<${listTag}`)
+  })
+
   test('刀 5c：无 headerSlots 契约 → 回退 type==="header" 二分（旧行为零回归）', () => {
     const secs = [
       { id: '2:8419', type: 'header', responsibility: '顶部标题区' },
@@ -211,6 +234,52 @@ describe('层① 确定性 index.vue 模板装配', () => {
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     expect(facts!.template).toContain('<HeaderSection />')
     expect(facts!.template).toContain('<TabsSection style="flex:1;min-height:0;" />')
+  })
+
+  test('R8-11 止血：type=header 但携带完整网格业务内容 → 禁止回退进 header-right', () => {
+    const secs = [
+      { id: '38:3134', type: 'stats', sourceNodeIds: ['38:3134'] },
+      { id: '38:3137', type: 'header', title: '战略合作厂商', sourceNodeIds: ['38:3137'], body: { layout: 'grid', items: [{ name: '华为技术', value: '8台' }, { name: '中兴通讯', value: '8台' }] } },
+    ]
+    const input = makeInput(secs)
+    ;(input as any).headerSlots = []
+    const tpl = buildDeterministicIndexTemplate(input)!.template
+    expect(tpl).not.toContain('#header-right')
+    expect(tpl.slice(tpl.indexOf('slot-con'))).toContain('<HeaderSection')
+    expect(tpl.slice(tpl.indexOf('slot-con'))).toContain('<StatsSection')
+  })
+
+  test('结构契约：多个顶层 header 唯一化后，落选者在 body 恰好一次', () => {
+    const facts = buildDeterministicIndexTemplate(makeInput([
+      { id: 'h1', type: 'header' },
+      { id: 'h2', type: 'header' },
+      { id: 'body', type: 'content' },
+    ]))!
+    const tag = (id: string) => facts.sectionRoots.find((s) => s.id === id)!.component
+    const tpl = facts.template
+    const slot = tpl.slice(0, tpl.indexOf('slot-con'))
+    const body = tpl.slice(tpl.indexOf('slot-con'))
+    expect(slot).toContain(`<${tag('h1')} />`)
+    expect(slot).not.toContain(`<${tag('h2')}`)
+    expect(body.match(new RegExp(`<${tag('h2')}\\b`, 'g'))).toHaveLength(1)
+  })
+
+  test('结构契约：嵌套叶入 header-right 后，递归 body 不再双挂载', () => {
+    const input = makeInput([{
+      id: 'root', type: 'container', isLayoutContainer: true, layout: 'vertical',
+      children: [
+        { id: 'slot', type: 'tabs', sourceNodeIds: ['slot-node'] },
+        { id: 'body', type: 'content' },
+      ],
+    }])
+    ;(input as any).headerSlots = [{ slotType: 'header-right', figmaNodeId: 'slot-node' }]
+    const facts = buildDeterministicIndexTemplate(input)!
+    const slotTag = facts.sectionRoots.find((s) => s.id === 'slot')!.component
+    const bodyTag = facts.sectionRoots.find((s) => s.id === 'body')!.component
+    const tpl = facts.template
+    expect(tpl.match(new RegExp(`<${slotTag}\\b`, 'g'))).toHaveLength(1)
+    expect(tpl.slice(tpl.indexOf('slot-con'))).not.toContain(`<${slotTag}`)
+    expect(tpl.slice(tpl.indexOf('slot-con'))).toContain(`<${bodyTag}`)
   })
 
   test('E1 治本：容器嵌套保留（switch/@antd-tab 生成 wrapper div，不拍平叶子）', () => {
@@ -470,6 +539,53 @@ describe('层① 确定性 index.vue 模板装配', () => {
       expect(outerLine).not.toContain('position:relative')
       const innerLine = tpl.split('\n').find((l) => l.includes('data-section-id="38:3137"')) || ''
       expect(innerLine).toContain('position:relative')
+    })
+
+    // ── 刀 20c-R（2026-11-02 · `43:5688` 实锤）：几何不足以判别滚动条 ──────────
+    // 真值：装饰条 43:5688 name='Rectangle 346242323' 6×218 r3，右缘 30113+6=30119
+    // 与容器 807:2 右缘 29636+483=30119 **精确贴合**；真滚动条 48:5904 name='滚动条'
+    // 6×218 r3 几何**逐字段同构** ⇒ 旧纯几何判据把装饰条一并豁免（实证
+    // c-device-34fa6237 / c-device-486cc6b6 两目录竖条消失）。收窄为「形态 + 命名」双判据。
+    const barFigma = (name: string) => ({
+      document: {
+        id: '0:0', type: 'FRAME',
+        children: [{
+          id: '801:3', type: 'GROUP', name: 'slot-con', absoluteBoundingBox: CONTAINER_BOX,
+          children: [
+            {
+              id: '43:5688', type: 'RECTANGLE', name,
+              absoluteBoundingBox: {
+                x: CONTAINER_BOX.x + CONTAINER_BOX.width - 6,
+                y: CONTAINER_BOX.y + 100, width: 6, height: 218,
+              },
+              fills: [BG_FILL], cornerRadius: 3,
+            },
+            { id: '36:1708', type: 'TEXT', characters: '产品描述', absoluteBoundingBox: { x: 24772, y: 51824, width: 64, height: 16 } },
+          ],
+        }],
+      },
+    })
+    const barSecs = [{
+      id: '801:3', name: 'slot-con', isLayoutContainer: true, layout: 'vertical',
+      sourceNodeIds: ['801:3', '43:5688', '36:1708'],
+      children: [
+        { id: '801:3-orphan-text-2', type: 'content', sourceNodeIds: ['36:1708'], absoluteBoundingBox: { width: 64, height: 16 } },
+      ],
+    }]
+
+    test('⭐ 贴右缘 + 条状 + **自动名**（Rectangle 346242323）⇒ 仍出 absorbed-bg 层', () => {
+      const input = { ...makeInput(barSecs), figmaNodeData: barFigma('Rectangle 346242323') }
+      const tpl = buildDeterministicIndexTemplate(input)!.template
+      expect(tpl).toContain('data-absorbed-bg="43:5688"')
+      expect(tpl).toContain('border-radius:3px;')
+      // 右缘精确贴合 ⇒ right:0 + 真值宽；顶边不贴 ⇒ 真值偏移 + 真值高
+      expect(tpl).toContain('right:0;width:6px;top:100px;height:218px;')
+    })
+
+    test('反向：同几何但名确指滚动条（滚动条）⇒ 不出层（不画假滚动条）', () => {
+      const input = { ...makeInput(barSecs), figmaNodeData: barFigma('滚动条') }
+      const tpl = buildDeterministicIndexTemplate(input)!.template
+      expect(tpl).not.toContain('data-absorbed-bg="43:5688"')
     })
   })
 })
@@ -1178,6 +1294,69 @@ describe('刀16 · 兄弟间距真值注入（6bba7218 实锤：纵流 33/20/20p
   })
 })
 
+describe('刀16b · 间距基准与 flex 同源（2026-11-03 · mc-1793686933827-7a07febd 实锤：margin-top:551px = 段高 556 双计）', () => {
+  const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
+  // 真机几何（temp-components/_shared-cache/1t7Dmmpsl5i0PC8BJt2QLf/2:9778/figma.json）：
+  //   2:3559「标题」 y=162 h=24  ← 段盒只是标题 GROUP；A4 同源段高 figmaHeightPx=556（slot-当日总流量）
+  //   2:3570「江阴大桥」y=737 h=10
+  //   旧算法：737−(162+24)=551px ≈ 556 又把 prev 正文算一遍；真间距 737−(162+556)=19px
+  //   2:3439「sub-header」y=573 h=24（段高 figmaHeightPx=142）→ 2:3571 y=730 ⇒ 旧 133px / 真 15px
+  const prevTitle = { x: 36, y: 162, w: 102, h: 24 }
+  const curChart = { x: 270, y: 737, w: 56, h: 10 }
+
+  it('⭐ 单元：prev 基准上移到同源段高（556）⇒ 551px 收敛为 19px', () => {
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical')).toBe('margin-top:551px;') // 旧行为逐字
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 556)).toBe('margin-top:19px;')
+  })
+
+  it('⭐ 单元：真机第二例 133px → 15px（段高 142 / 盒高 24）', () => {
+    const prev = { x: 37, y: 573, w: 86, h: 24 }
+    const cur = { x: 36, y: 730, w: 86, h: 174 }
+    expect(siblingGapStyle(prev, cur, 'vertical')).toBe('margin-top:133px;')
+    expect(siblingGapStyle(prev, cur, 'vertical', 142)).toBe('margin-top:15px;')
+  })
+
+  it('反向：同源尺寸缺省 / 为 0 / 小于盒尺寸 ⇒ 逐字回退旧行为（零变化）', () => {
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 0)).toBe('margin-top:551px;')
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', undefined)).toBe('margin-top:551px;')
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 10)).toBe('margin-top:551px;')
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', NaN)).toBe('margin-top:551px;')
+  })
+
+  it('反向：基准上移后重叠（gap<1）⇒ 空串，不再产负/零 margin', () => {
+    // prev 真身占 162..718，cur 在 700 ⇒ 已被 prev 覆盖（跨子树展平产物）
+    expect(siblingGapStyle(prevTitle, { x: 270, y: 700, w: 56, h: 10 }, 'vertical', 556)).toBe('')
+  })
+
+  it('横向对称：prev 宽度基准同样只增不减', () => {
+    const a = { x: 0, y: 0, w: 100, h: 10 }
+    const b = { x: 130, y: 0, w: 10, h: 10 }
+    expect(siblingGapStyle(a, b, 'horizontal')).toBe('margin-left:30px;')
+    expect(siblingGapStyle(a, b, 'horizontal', 120)).toBe('margin-left:10px;')
+  })
+
+  it('⭐ 集成（顶层兄弟）：figmaHeightPx 与 flex 同源 ⇒ 模板不含 551px、含 19px 与 10px', () => {
+    const plan = {
+      isForced: true,
+      minFiles: 8,
+      effectiveSections: [
+        { id: '2:3550', title: 'header-', type: 'content', elementCount: 2,
+          absoluteBoundingBox: B(36, 119, 380, 33), styles: { figmaHeightPx: 33 } },
+        { id: '2:3559', title: 'daily', type: 'content', elementCount: 6,
+          absoluteBoundingBox: B(36, 162, 102, 24), styles: { figmaHeightPx: 556 } },
+        { id: '2:3570', title: 'tunnel', type: 'chart', elementCount: 1,
+          absoluteBoundingBox: B(270, 737, 56, 10), styles: { figmaHeightPx: 10 } },
+      ],
+    }
+    const facts = buildDeterministicIndexTemplate({ componentName: 'traffic', panelType: 'default-panel', subComponentPlan: plan })
+    expect(facts).not.toBeNull()
+    const tpl = facts!.template
+    expect(tpl).toContain('margin-top:19px')
+    expect(tpl).toContain('margin-top:10px')
+    expect(tpl).not.toContain('margin-top:551px')
+  })
+})
+
 describe('刀17 · 横向容器 2D 列簇 + 交叉轴居中（6bba7218 `38:3260` 实锤：icon ｜ 纵排文本块被平铺横排且贴顶）', () => {
   const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
   // 实锤几何：38:3260(26900,51483,265,76) horizontal，三子项：
@@ -1295,5 +1474,99 @@ describe('刀29c 集成：collapsed 叶几何包含认领 ⇒ 卡面 rect 不出
     const tpl = facts!.template;
     const hostLine = tpl.split('\n').find((l) => l.includes('data-section-id="48:5798"')) || '';
     expect(hostLine).toContain('height:256px');
+  });
+});
+
+// ── 刀 7c（2026-11-03 · `c-slot-con-*` ×12 实锤）：根级宿主吸收背景层 ──────────────
+// 病灶：顶层**非容器叶子段** `807:2`（GROUP 'slot-con'，盒 ≡ 图根盒 {29636,51637,483,515}）
+// 的 sourceNodeIds 只有自身 ⇒ 刀 7 候选集为空 ⇒ 装饰条 `43:5688`（6×218 r3，右缘精确
+// 贴宿主边）永不出层（产物该色值 0 次）。治本：候选集扩充直系子（纯枚举）+ 几何护栏
+// （段盒 ≡ 图根盒 ±2px）后注入**根 slot-con div**；几何不自洽者 fail-open。
+describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
+  const ROOT_BOX = { x: 29636, y: 51637, width: 483, height: 515 };
+  const DECO = {
+    id: '43:5688',
+    name: 'Rectangle 346242323',
+    type: 'RECTANGLE',
+    cornerRadius: 3,
+    absoluteBoundingBox: { x: 30113, y: 51815, width: 6, height: 218 },
+    fills: [{ type: 'SOLID', visible: true, color: { r: 0.078, g: 0.412, b: 0.663, a: 0.37 } }],
+  };
+  const slotRootChildren = () => [
+    { id: '43:4784', type: 'GROUP', absoluteBoundingBox: { x: 29636, y: 51637, width: 470, height: 60 } },
+    { id: '43:4878', type: 'TEXT', characters: 'x', absoluteBoundingBox: { x: 29636, y: 51700, width: 100, height: 16 } },
+    { ...DECO },
+  ];
+  const withFigma = (sections: any[], rootBox = ROOT_BOX) => ({
+    ...makeInput(sections, 'slot-con'),
+    figmaNodeData: {
+      document: {
+        id: '807:2',
+        name: 'slot-con',
+        type: 'GROUP',
+        absoluteBoundingBox: rootBox,
+        children: slotRootChildren(),
+      },
+    },
+  });
+
+  it('⭐ 阳性：非容器段盒 ≡ 图根盒 ⇒ 直系子枚举出层，注入根 div（条件定位样式）', () => {
+    const facts = buildDeterministicIndexTemplate(withFigma([{ id: '807:2', type: 'body', responsibility: '主内容区' }]) as any);
+    expect(facts).not.toBeNull();
+    const tpl = facts!.template;
+    // ① 层真的出来了（旧行为：0 层）
+    expect(tpl).toContain('data-absorbed-bg="43:5688"');
+    expect(tpl).toContain('class="c-slot-con-absorbed-bg"');
+    expect(tpl).toContain('right:0;width:6px;top:178px;height:218px;');
+    expect(tpl).toContain('border-radius:3px');
+    expect(tpl).toContain('z-index:-1;');
+    // ② 宿主是根 slot-con div，锚点用专用属性（**不复用 data-section-id**，避免双命中）
+    expect(tpl).toContain('class="c-slot-con-slot-con" data-absorbed-host="807:2"');
+    expect(tpl).toContain('style="display:flex;flex-direction:column;position:relative;isolation:isolate;"');
+    // ③ 层必须渲染在根 div 内（紧跟根 div 开标签）
+    const rootIdx = tpl.indexOf('class="c-slot-con-slot-con"');
+    expect(rootIdx).toBeGreaterThan(-1);
+    expect(tpl.indexOf('data-absorbed-bg="43:5688"')).toBeGreaterThan(rootIdx);
+  });
+
+  it('反向（错位 fail-open）：段盒 ≠ 图根盒 ⇒ 不注入、根 div 样式逐字不变', () => {
+    // 真值反证形态：段自带 bbox 内缩（如 801:3 内缩 28/35px）
+    const shifted = {
+      id: '807:2',
+      type: 'body',
+      responsibility: '主内容区',
+      absoluteBoundingBox: { x: 29664, y: 51672, width: 483, height: 515 },
+    };
+    const facts = buildDeterministicIndexTemplate(withFigma([shifted]) as any);
+    const tpl = facts!.template;
+    expect(tpl).not.toContain('data-absorbed-host');
+    expect(tpl).not.toContain('data-absorbed-bg');
+    expect(tpl).toContain('class="c-slot-con-slot-con" style="display:flex;flex-direction:column;"');
+  });
+
+  it('回归锁：容器段沿用 sourceNodeIds（枚举只对非容器启用）⇒ src 缺直系子也不出新层', () => {
+    const containerSec = {
+      id: '807:2',
+      type: 'body',
+      responsibility: '主内容区',
+      isLayoutContainer: true,
+      layoutSource: 'container-rebuild',
+      sourceNodeIds: ['807:2'], // ← 故意不含直系子 43:5688
+      children: [{ id: '43:4878', type: 'content', responsibility: '文本', sourceNodeIds: ['43:4878'] }],
+    };
+    const facts = buildDeterministicIndexTemplate(withFigma([containerSec]) as any);
+    const tpl = facts!.template;
+    // 若判据层无条件枚举，这里就会出层 ⇒ 本断言锁死「容器零变化是构造保证」
+    expect(tpl).not.toContain('data-absorbed-bg="43:5688"');
+    expect(tpl).not.toContain('data-absorbed-host');
+  });
+
+  it('反向（无直系子 alias）：figmaIndex 缺该段节点 ⇒ 零变化、不抛错', () => {
+    const facts = buildDeterministicIndexTemplate(
+      makeInput([{ id: '807:2', type: 'body', responsibility: '主内容区' }], 'slot-con') as any,
+    );
+    expect(facts).not.toBeNull();
+    expect(facts!.template).toContain('style="display:flex;flex-direction:column;"');
+    expect(facts!.template).not.toContain('data-absorbed-bg');
   });
 });

@@ -1,0 +1,67 @@
+{
+  "name": "feat-from-component",
+  "label": "组件改造（读码→分析→需求→生成）",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "read",
+      "type": "agent",
+      "handler": "my-read",
+      "label": "读取组件代码",
+      "config": {}
+    },
+    {
+      "id": "analyze",
+      "type": "agent",
+      "handler": "code-analyzer",
+      "label": "代码分析",
+      "config": {}
+    },
+    {
+      "id": "gen",
+      "type": "agent",
+      "handler": "feat-generator",
+      "label": "功能组件生成",
+      "config": {}
+    },
+    {
+      "id": "write",
+      "type": "agent",
+      "handler": "my-write",
+      "label": "代码落盘",
+      "config": {}
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "read"
+    },
+    {
+      "source": "read",
+      "target": "analyze"
+    },
+    {
+      "source": "analyze",
+      "target": "gen"
+    },
+    {
+      "source": "gen",
+      "target": "write"
+    },
+    {
+      "source": "write",
+      "target": "end"
+    }
+  ]
+}

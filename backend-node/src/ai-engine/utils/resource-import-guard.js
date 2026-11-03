@@ -148,7 +148,7 @@ export function collectDeclaredBindings(code) {
   // 后果：injectResourceImports 的清理步骤同样只清 `const|let NAME =`，
   // 于是漏网的声明 + 注入的 `import NAME` / `const NAME = 主名` → 重复声明 → SyntaxError。
   // 本集合用于「撞名复核」，扩大识别面只会让注入更保守（宁可不注入，也不炸 SyntaxError）。
-  // 捕获到语句尾（`;` 或行尾），再用逗号切分声明符；每个声明符取 `NAME =` 或裸 `NAME`。
+  // 捕获到语句尾（`;` 或行尾），再按**深度 0 逗号**切分声明符；每个声明符取 `NAME =` 或裸 `NAME`。
   // 要求标识符后紧跟 `=` / `;` / 结束，可过滤 `const s = 'a, b'` 里字符串内逗号造成的误判。
   const declRe = /(?:const|let|var)\s*(\{[^}]*\}|[^;\n]*)/g
   for (const m of code.matchAll(declRe)) {
@@ -160,7 +160,19 @@ export function collectDeclaredBindings(code) {
         if (name) declared.add(name)
       }
     } else {
-      for (const part of rest.split(',')) {
+      // 🔴 刀 17（2026-11-03 · mc-max-1793689324378-ba2a6814 实锤）：必须按**深度 0 逗号**切分。
+      //   旧实现是 `rest.split(',')` 裸切，把初始化表达式内部的逗号也当成声明符分隔符：
+      //     `const bgList = [bg2, bg1, bg3]` → ['bgList = [bg2', ' bg1', ' bg3]']
+      //   中段 ` bg1` 恰以标识符结尾 ⇒ 命中下方 `^IDENT\s*(?:=|;|$)` ⇒ 被误登记「已声明」
+      //   （首元素被 `bgList = [` 挡住、末元素被尾部 `]` 挡住 ⇒ **只有中段元素**受害，最隐蔽）。
+      //   后果链：resource-facts#buildResourceFacts 见 declared 命中即 continue ⇒ `unresolved`
+      //   不含 bg1 ⇒ **R2 幽灵引用判据失效** ⇒ CODE-025 静默放行 ⇒ ESM 顶层
+      //   `ReferenceError: bg1 is not defined` ⇒ 整个 SFC 加载失败 ⇒ RUNTIME-004 render-error
+      //   + VISUAL-002（0.2979）双硬 BLOCK，任务「直接报错」。语义门禁只扫模板，救不了。
+      //   复用本文件既有 splitTopLevel（已增强字符串感知），**只收窄识别面**：被移除的名字
+      //   全是「从未真正声明过」的假阳性（真声明必带 `const|let|var NAME`，仍被上方 declRe
+      //   正常捕获）⇒ 不漏任何真声明，对 injectResourceImports 撞名复核是纯增益。
+      for (const part of splitTopLevel(rest, [','])) {
         const id = part.trim().match(/^([A-Za-z_$][\w$]*)\s*(?:=|;|$)/)
         if (id) declared.add(id[1])
       }
@@ -208,22 +220,36 @@ export function collectDeclaredBindings(code) {
 }
 
 /**
- * 按顶层分隔符切分（忽略括号内的嵌套分隔符）。
- * 用于从 defineProps 的对象/泛型实参里提取第一层 prop 名。
+ * 按顶层分隔符切分（忽略括号内的嵌套分隔符、忽略字符串/模板字面量内的分隔符）。
+ * 用于从 defineProps 的对象/泛型实参里提取第一层 prop 名，以及声明符列表切分。
+ *
+ * 🛡️ 刀 17（2026-11-03 · mc-max-1793689324378-ba2a6814 实锤）：补**字符串/模板字面量感知**。
+ *   旧实现只按括号深度过滤，`const bgText = 'a, bg1, b', bgN = 2` 会在字符串内部切分，
+ *   切出的 ` bg1` 以标识符结尾 ⇒ 被误登记「已声明」⇒ 幽灵引用逃过 R2（同刀17 病灶）。
+ *   字符串内的 `{[(` 也会污染 depth，故必须成对屏蔽。
  */
 function splitTopLevel(text, seps) {
   const parts = []
   let depth = 0
   let cur = ''
+  let quote = ''
   // 🛡️ 刀30（2026-10-29，ab4e3051 实锤）：**不得**把 `<`/`>` 计入配对——
   //   prop 默认值里的箭头函数 `default: () => ({})` 的 `=>` 会被误当泛型闭合符
   //   令 depth -1 → 后续顶层逗号全部失配 → isActive/bgImage 等键丢失
   //   → 模板引用 prop 被 R2 幽灵引用误杀。泛型实参内的逗号本就位于 `{...}` 深度内，无需 `<>` 配对。
   const pairs = { '{': '}', '[': ']', '(': ')' }
+  const closers = Object.values(pairs)
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
+    if (quote) {
+      cur += ch
+      if (ch === '\\') { cur += text[i + 1] ?? ''; i += 1; continue }
+      if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { quote = ch; cur += ch; continue }
     if (pairs[ch] !== undefined) { depth += 1; cur += ch; continue }
-    if (Object.values(pairs).includes(ch)) { depth -= 1; cur += ch; continue }
+    if (closers.includes(ch)) { depth = Math.max(0, depth - 1); cur += ch; continue }
     if (depth === 0 && seps.includes(ch)) { parts.push(cur); cur = '' }
     else cur += ch
   }

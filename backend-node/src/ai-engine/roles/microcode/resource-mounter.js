@@ -24,6 +24,7 @@ import {
 import { inferBackgroundStyle } from '../../utils/background-size-inference.js';
 import {
   scoreMountTarget,
+  isTextLeafTag,
   inferComponentPrefix,
   HOST_SHELL_TAG_RE,
 } from '../../utils/mount-target-scoring.js';
@@ -430,6 +431,17 @@ export function pickBestMountTarget(mapping, pool, opts = {}) {
   let usable = pool.filter(
     (c) => c && c.tag && !c.isHostShell && !usedTags.has(c.tag),
   );
+  // 🛡️ M2（2026-11-03）：文本叶子在评分前即移出候选池（与 scoreMountTarget 的
+  //   -Infinity 双保险）；容器候选耗尽则返回 null，由调用方走既有跳过路径。
+  const textLeafHits = usable.filter((c) => isTextLeafTag(c.tagName));
+  if (textLeafHits.length > 0) {
+    usable = usable.filter((c) => !isTextLeafTag(c.tagName));
+    // 真机计数行（判据可辩驳）：排除数必须非零时才留痕，健康时不刷屏
+    console.warn(`🛡️ M2 bgMountTextExcluded=${textLeafHits.length}`, {
+      resource: mapping?.name || mapping?.assignedVarName || 'unknown',
+      excluded: textLeafHits.map((c) => `${c.tagName}.${c.cls || ''}`).slice(0, 5),
+    });
+  }
   if (opts.skipBound) {
     // 🛡️ ②（2026-09-29）：有资源归属判据时优先按「**本资源未占用**」筛（`bgOwner === 'none'`），
     //   而不是旧的「这个标签有没有 background 字样」——后者会把**别的资源**的宿主当空闲点，

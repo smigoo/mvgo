@@ -43,6 +43,7 @@
           v-if="showQualityScoreAdmin"
           :component-id="task.componentId || sessionId"
           @preview-refresh-needed="handlePreviewRefreshNeeded"
+          @locate-source="handleLocateStyleSource"
         />
         <button
           v-if="!pageTaskFlag && canPushGit && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
@@ -230,6 +231,45 @@
                 <button class="seg-opt" :class="{ active: taskTier === 'max' }" disabled>
                   Max
                 </button>
+              </div>
+            </div>
+            <!-- 🆕 2026-11-03 生成约束（生成页「高级选项」：组件 ID / 补充提示词 / 需求文档）。
+                 三项全空时整块不渲染 —— 常规任务零回归，也不会多出一块空标签。
+                 数据源：任务记录 extraPrompt / requirementDocText / userComponentId
+                 （此前这三项只进 prompt、从不落库，所以详情页一直无从展示）。 -->
+            <div class="sidebar-field" v-if="hasGenerationInputs">
+              <div class="field-label">生成约束</div>
+              <div class="gen-inputs">
+                <div class="gen-input-row" v-if="task.userComponentId">
+                  <span class="gen-input-key">组件 ID</span>
+                  <span class="gen-input-code">{{ task.userComponentId }}</span>
+                </div>
+                <div class="gen-input-row" v-if="task.extraPrompt">
+                  <span class="gen-input-key">
+                    补充提示词
+                    <em class="gen-input-count">{{ task.extraPrompt.length }}/4000</em>
+                  </span>
+                  <p class="gen-input-text" :class="{ 'is-collapsed': isLongExtraPrompt && !extraPromptExpanded }">{{ task.extraPrompt }}</p>
+                  <button
+                    v-if="isLongExtraPrompt"
+                    type="button"
+                    class="gen-input-toggle"
+                    @click="extraPromptExpanded = !extraPromptExpanded"
+                  >{{ extraPromptExpanded ? '收起' : '展开全文' }}</button>
+                </div>
+                <div class="gen-input-row" v-if="task.requirementDocText">
+                  <span class="gen-input-key">
+                    需求文档
+                    <em class="gen-input-count">{{ task.requirementDocText.length }} 字</em>
+                  </span>
+                  <p class="gen-input-text" :class="{ 'is-collapsed': isLongDocText && !docTextExpanded }">{{ task.requirementDocText }}</p>
+                  <button
+                    v-if="isLongDocText"
+                    type="button"
+                    class="gen-input-toggle"
+                    @click="docTextExpanded = !docTextExpanded"
+                  >{{ docTextExpanded ? '收起' : '展开全文' }}</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1776,6 +1816,18 @@ function handleGitLabPushSuccess() {
 }
 
 const task = ref<any>(null)
+
+// ═══ 🆕 2026-11-03 生成约束（生成页「高级选项」在详情页的展示） ═══
+// 数据源＝任务记录三字段（extraPrompt / requirementDocText / userComponentId）。
+// 改前这三项只拼进 codegen prompt，任务记录里一个字都没有 ⇒ 详情页必然空白；
+// 现在随任务落库，这里只做展示，不参与任何生成逻辑。
+const extraPromptExpanded = ref(false)
+const docTextExpanded = ref(false)
+const hasGenerationInputs = computed(
+  () => !!(task.value?.extraPrompt || task.value?.requirementDocText || task.value?.userComponentId),
+)
+const isLongExtraPrompt = computed(() => (task.value?.extraPrompt || '').length > 120)
+const isLongDocText = computed(() => (task.value?.requirementDocText || '').length > 120)
 const workspaceDimensions = ref<PreviewDimensions | null>(null)
 const previewViewportRef = ref<HTMLElement | null>(null)
 const loading = ref(false)
@@ -2621,10 +2673,20 @@ const figmaDimensions = computed<PreviewDimensions | null>(() => {
 })
 
 const previewStageStyle = computed(() => {
-  // 恒响应式：stage 跟随真实视口尺寸（与 iframe 尺寸一致），不做等比缩放
+  /**
+   * 🔴 舞台尺寸必须 = **显示尺寸**（视口 × 缩放），不是视口尺寸本身。
+   *
+   * 事故（用户反馈「预览容器默认和组件差了很多空白，拖一下才 100% 填充」）：
+   *   iframe 是 `transform: scale(zoom)` + `position:absolute` 的（见 .rz-zoom-box .preview-iframe），
+   *   缩放**不改变布局占位**，占位由包裹层负责。所以：
+   *     stage 按「视口尺寸」画（如 1280）→ 包裹层只有 1280×zoom（如 896）
+   *     ⇒ stage 右侧凭空多出 1280-896≈384px 死白，且 stage 比 bf-body 宽，
+   *        justify-content:center 在溢出态下失效 ⇒ 内容整体左贴、右半屏空白。
+   *   改为与包裹层同尺寸后：stage 永远等于「看得见的那块」，居中与留白都回归正常。
+   */
   return {
-    width: `${frameResize.width.value}px`,
-    height: `${frameResize.height.value}px`
+    width: `${Math.round(frameResize.width.value * effectiveZoom.value)}px`,
+    height: `${Math.round(frameResize.height.value * effectiveZoom.value)}px`
   }
 })
 
@@ -2635,15 +2697,38 @@ const previewStageStyle = computed(() => {
 //    不改视口；「自适应/Fit」按容器可用空间自动计算 Math.min(scaleX, scaleY, 1)。
 // 注意：scale 不等于视口变化，@media 不会重新匹配 —— 所以视口尺寸必须真实改 iframe
 // 的 width/height（浏览器原生行为），并 postMessage 通知 iframe 内预览页切换布局。
-// 🔴 默认 'fit'（自适应）而非 100：视口初始 1280 宽常大于可用空间，
-// zoom=1 会让内容溢出被裁 ⇒ 视觉「两边空白」；用户拖拽后 zoom 仍 1 又「盛满」，
-// 同一次交互前后表现不一致。默认 fit 后内容按可用空间完整可见，且与拖拽后一致。
+// 🔴 默认 'fit'（自适应）而非 100：视口现在默认 = 设计稿尺寸，**可能**大于可用空间
+// （大屏 1920×1080 放进窄列）。此时 zoom=1 会让内容溢出被裁、只能滚动看，
+// 而 fit 会把整块等比缩小到完整可见；视口值本身仍是真实设计宽（@media/vw 语义不变）。
+// 设计稿本来就放得下时 fit 算出 1（不放大）⇒ 1:1 显示，与「容器=组件大小」一致。
 const zoomScaleChoice = ref<number | 'fit'>('fit')
 const autoFitScale = ref(0.5)
 let stageResizeObserver: ResizeObserver | null = null
 
 /**
- * 自适应缩放：按预览容器可用空间计算最佳 fit（与 demo 页 updateAutoFitScale 同判据）
+ * 自适应缩放：**只按可用宽度**计算 fit，高度不参与（上限 1，不放大）。
+ *
+ * 🔴 为什么必须去掉高度项（实测事故 2026-11-03 02:27，`mc-1793641875986-001c5615` 预览整个消失）：
+ *   预览区**没有任何一层有确定高度** —— 实测祖先链 clientHeight：
+ *     .bf-body-real 2px → .browser-frame 33px → .preview-panel 87px → .canvas 438px
+ *   全是「内容驱动」（`.bf-body-real{min-height:0}` 把 `.bf-body{padding:20px;min-height:300px}`
+ *   的下限也消掉了）。而 stage 高度 = 视口高 × 本函数算出的 zoom ⇒ **闭环**：
+ *     stage 变矮 → 容器 clientHeight 跟着变矮 → availH 更小 → zoom 更小 → stage 更矮 …
+ *   每轮净减约 pad(24px)，十几次 RO/rAF 回调后 stage 塌到 **6×2px**、容器 971×2px，
+ *   预览等于看不见（iframe 仍在、src 正常、0 报错 —— 所以只能靠几何实测发现）。
+ *   旧实现（stage 直接画「视口尺寸」）看起来没问题，只是因为容器高度恒等于视口高、
+ *   与 zoom 解耦、恰好没有反馈；一旦把 stage 改成「显示尺寸」就必然出事。
+ *   ⇒ 结构上这个盒子**不存在**「可用高度」概念（它就靠内容撑高），所以只按宽度收敛：
+ *     stage 宽 = 视口宽 × zoom ≤ cw - pad 恒成立，宽度方向无反馈（父级宽度由列宽定死）。
+ *
+ * 判据与 `views/demo/index.vue#updateAutoFitScale`（:2837-2858）**逐字同构** ——
+ * 那边已经走过「整画布适配(68%) → 容器宽高适配(54%,高瓶颈) → 宽适配(100%)」三段演进，
+ * 结论就是「自适应 = 按宽度适配，上限 100%，高度超出由容器滚动」。这里没有理由再走一遍。
+ *
+ * 代价与取舍：视口比可用宽度宽时等比缩小；比可用宽度窄时保持 1:1（=「容器=组件大小」）。
+ * 高度超出时预览面板跟着变高、整页竖向滚动 —— 与「1:1 不缩放」的用户预期一致，
+ * 不为了塞进一个不存在的固定视口去压缩内容。
+ *
  * 🔴 返回成功标志：尺寸未就绪（Tabs/布局未完成时 clientWidth=0）必须 return false
  *   让调用方重试，否则早退后「再也不算」，初始就停在错误的缩放上。
  */
@@ -2651,17 +2736,12 @@ function updateAutoFitScale() {
   const el = previewViewportRef.value
   if (!el) return false
   const cw = el.clientWidth
-  const ch = el.clientHeight
-  if (cw <= 0 || ch <= 0) return false
-  // 预留 stage 内边距，避免 fit 后贴边
-  const pad = 24
-  const availW = cw - pad
-  const availH = ch - pad
-  if (availW <= 0 || availH <= 0) return false
-  const scaleX = availW / frameResize.width.value
-  const scaleY = availH / frameResize.height.value
-  // 取较小值确保完整可见，上限 1（不放大）
-  autoFitScale.value = Math.min(scaleX, scaleY, 1)
+  if (cw <= 0) return false
+  // 预留呼吸空间：两侧各 24（= demo 的 pad）+ 组件左右最小边距 32（= demo 的 fitW 加数）
+  const availW = cw - 24 * 2
+  if (availW <= 0) return false
+  const fitW = frameResize.width.value + 32
+  autoFitScale.value = Math.min(availW / fitW, 1)
   return true
 }
 
@@ -2739,32 +2819,40 @@ const frameResize = useResizableFrame({
    */
   designSize: () => figmaDimensions.value,
   /**
-   * 🛡️ 默认尺寸必须**跟随设计稿比例**，不能写死 667 高。
+   * 🛡️ 默认视口 = **组件设计稿尺寸**（用户指令「预览容器默认应该和组件大小一致」）。
    *
-   * 事故（用户反馈「默认打开两边空白、拖拽一次才盛满」·mc-1791783806265-5831962c）：
-   *   该组件 declare.json 的 aspectRatio 是 [510, 665]（**竖版**），
-   *   而原实现 defaultHeight 硬编码 667 ⇒ 用 1280×667 的**横版**视口去装
-   *   竖版内容 ⇒ 组件按竖版宽度（510）渲染在 1280 宽视口里，
-   *   左右各空 (1280-510)/2 ≈ 385px —— 这就是「两边空白」。
-   *   用户手动拖一次后视口变成接近 510 宽才「盛满」，于是误以为是缩放 bug。
+   * 两代事故叠在同一个症状下（「默认打开大片空白、拖一次才 100% 填充」）：
+   *   ① 第一代 mc-1791783806265-5831962c：defaultHeight 写死 667，
+   *      而组件是 510×665 竖版 ⇒ 1280×667 横版视口装竖版内容，左右各空 385px。
+   *   ② 第二代（上一次修复）：只把**高度**改成按比例推算，**宽度仍取宿主可用宽**
+   *      （`Math.min(hostW, 1280)` —— 注释写「不超过宿主宽」，代码却是恒等于宿主宽）
+   *      ⇒ 组件 510 宽、视口 1280 宽，空白照旧；只有用户把手柄往左拖到接近 510
+   *      才「盛满」，所以症状和①一模一样，只是高度不再错。
    *
-   * 修法：按 figmaDimensions 的宽高比推算初始视口，宽不超过容器可视宽，
-   *   高按比例得出（并夹在合理区间内），保证一进页面就是「贴合内容」的视口。
+   * 修法（治本）：视口宽高**直接取设计稿真值**，不再拿宿主宽当默认宽。
+   *   · 设计稿比可用空间大 → 由「缩放=自适应」整体等比缩小显示（只改 transform，
+   *     不改视口 ⇒ @media/vw 语义仍是真实设计宽，不会把 1920 的大屏当成 1000 渲染）；
+   *   · 设计稿比可用空间小 → 1:1 显示，容器严丝合缝包住组件，不留空。
+   *   因此**不需要**再为「手柄别掉到可视区外」去压宽度：手柄贴在缩放后的包裹层上
+   *   （.rz-zoom-box），而包裹层尺寸恒为 视口×缩放 ⇒ 永远在可视区内。
+   *
+   * 设计稿尺寸未知（老任务没写 figmaDimensions）→ 才回落到旧的「宿主宽 / 1280」兜底。
    */
   defaultWidth: () => {
-    const hostW = previewViewportRef.value?.clientWidth || 1280
-    // 上限 1280：一进页面就完整可见，手柄不会落在可视区外
-    return Math.min(hostW, 1280)
+    const d = figmaDimensions.value
+    if (d && d.width > 0) return d.width
+    const hostW = previewViewportRef.value?.clientWidth || 0
+    return hostW > 0 ? Math.min(hostW, 1280) : 1280
   },
   defaultHeight: () => {
     const d = figmaDimensions.value
-    const hostW = previewViewportRef.value?.clientWidth || 1280
-    const maxW = Math.min(hostW, 1280)
-    if (!d || d.width <= 0 || d.height <= 0) return 667
-    const h = Math.round((maxW * d.height) / d.width)
-    // 竖版组件按比例会很高，夹在 [480, 1080] 内保证可看
-    return Math.min(Math.max(h, 480), 1080)
+    if (d && d.height > 0) return d.height
+    return 720
   },
+  // 下限放到 100（与 demo 页一致）：小尺寸组件（如 375×300 卡片）不该被 320/240 下限
+  // 顶大而重新出现「容器比组件大」的空白。
+  minWidth: 100,
+  minHeight: 100,
 })
 
 function pushViewportToFrames() {
@@ -4162,14 +4250,25 @@ const issueLineSet = computed(() => {
 })
 const snapshotCodeScrollRef = ref<HTMLElement | null>(null)
 
-function revealIssueLine(issue: QualityIssue) {
-  activeIssueLine.value = issue.line > 0 ? issue.line : 0
+/**
+ * 把「任意行」滚动到视野中央并画高亮条。
+ *
+ * 🛡️ C1（2026-11-03）：从 revealIssueLine 里抽出来的公共能力。
+ * 原实现绑死在 QualityIssue 上（要求 severity=BLOCK、issueLineSet 只收 BLOCK 行），
+ * 而样式分未匹配项的定位来自产物扫描，不是 QualityIssue，无法走那条路。
+ */
+function revealSourceLine(line: number) {
+  activeIssueLine.value = line > 0 ? line : 0
   nextTick(() => {
     const host = snapshotCodeScrollRef.value
     if (!host) return
     const target = host.querySelector<HTMLElement>(`.snapshot-line-gutter span[data-line="${activeIssueLine.value}"]`)
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   })
+}
+
+function revealIssueLine(issue: QualityIssue) {
+  revealSourceLine(issue.line)
 }
 
 function expandSnapshotPath(path: string) {
@@ -4215,6 +4314,62 @@ async function locateFailedFile(path: string) {
   } else {
     message.success(`已定位到问题文件：${path.split('/').pop()}`)
   }
+}
+
+/**
+ * 样式分未匹配项 → 产物文件落点（C1）。
+ *
+ * 质量分 v1 的 missed[] 带两套定位：`expectedSource`（Figma 节点/路径）与
+ * `closestActualSource`（产物 file/line/className）。产物侧定位此前在
+ * QualityScoreAdminButton 里只是纯文本，用户拿到「common.less @ line 42 · .xxx」
+ * 还得自己去目录翻 —— 这里接住子组件的 emit，把代码面板切到该文件并高亮该行。
+ *
+ * 与 locateFailedFile 的三点差异：
+ *   ① 不要求对应 BLOCK 问题（它不是 QualityIssue，是样式扫描结果）；
+ *   ② 不拿「快照清单里有没有这条路径」当硬闸门：快照 manifest 是生成时刻的不可变文件集，
+ *      而质量分扫描的是磁盘产物目录（collectGeneratedFilesFromDir），两者可能差一两个
+ *      styles 文件；且快照读取接口自带 workspace 同路径回退（task-code-snapshot.service
+ *      readFileContentOrFallback）⇒ 先试着打开，读不出来再提示，比提前拒绝更准；
+ *   ③ line 可能缺失（B3 后 line = 块起始行 + 行内偏移，注释内字面量无包裹规则时为 null）
+ *      ⇒ 无行号时只打开文件，不报错。
+ */
+async function handleLocateStyleSource(payload: {
+  file?: string
+  line?: number | null
+  label?: string
+  className?: string
+}) {
+  const path = String(payload?.file || '')
+  if (!path) return
+  const fileName = path.split('/').pop()
+  const line = Number(payload.line)
+  const hasLine = Number.isFinite(line) && line > 0
+  const expected = payload.label ? `期望 ${payload.label}` : '样式未匹配'
+  const suffix = payload.className ? ` · .${payload.className}` : ''
+
+  // 已在当前文件上：只滚行，不重复拉取（避免白屏闪一下）
+  // 代码面板默认是收起态（activeTab 默认 'logs'）⇒ 不切 tab 的话「跳转成功」也看不见。
+  activeTab.value = 'code'
+  const needOpen = selectedSnapshotPath.value !== path
+  if (needOpen) {
+    const prevPath = selectedSnapshotPath.value
+    expandSnapshotPath(path)
+    await openSnapshotFile(path)
+    if (snapshotError.value || !selectedSnapshotContent.value) {
+      // 读不出来（快照未收录且 workspace 也没回退到）⇒ 提示 + 回到原文件，不留报错面板
+      message.warning(`${path} 在当前快照中读不到内容，无法跳转`)
+      if (prevPath) await openSnapshotFile(prevPath)
+      return
+    }
+  }
+  if (!hasLine) {
+    message.success(`已打开 ${fileName}${expected ? `（${expected}）` : ''}`)
+    return
+  }
+  // 等新文件内容渲染出行号槽后再滚动，否则 querySelector 命中不到
+  await nextTick()
+  revealSourceLine(line)
+  message.info(`${fileName} 第 ${line} 行${suffix}（${expected}）`)
 }
 
 /** 定位到第一个失败文件（展开文件夹并选中） */
@@ -5546,6 +5701,77 @@ watch(bindingWizardOpen, (open) => {
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* 🆕 2026-11-03 生成约束：侧栏内只读展示块（与上方 seg-control 体例一致，不引入新控件） */
+.gen-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.gen-input-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.gen-input-count {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.gen-input-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.gen-input-text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 超长文本折叠：只裁显示，不裁数据（展开即全文） */
+.gen-input-text.is-collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.gen-input-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: var(--color-primary, #1677ff);
+  cursor: pointer;
+}
+
+.gen-input-toggle:hover {
+  text-decoration: underline;
 }
 
 .source-tabs {

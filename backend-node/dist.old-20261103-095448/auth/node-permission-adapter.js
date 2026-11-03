@@ -1,0 +1,63 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NodePermissionAdapter = void 0;
+const common_1 = require("@nestjs/common");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const group_member_schema_1 = require("../schemas/group-member.schema");
+const permission_adapter_interface_1 = require("./permission-adapter.interface");
+const permission_constants_1 = require("./permission.constants");
+const constants_1 = require("../common/constants");
+let NodePermissionAdapter = class NodePermissionAdapter extends permission_adapter_interface_1.PermissionAdapter {
+    groupMemberModel;
+    constructor(groupMemberModel) {
+        super();
+        this.groupMemberModel = groupMemberModel;
+    }
+    async checkPermission(userId, permCode) {
+        const membership = await this.groupMemberModel
+            .findOne({ userId: new mongoose_2.Types.ObjectId(userId) })
+            .lean()
+            .exec();
+        if (!membership)
+            return false;
+        if (membership.role === constants_1.ROLES.ADMIN)
+            return true;
+        return (membership.permissions || []).includes(permCode);
+    }
+    async getUserPermissions(userId) {
+        const membership = await this.groupMemberModel
+            .findOne({ userId: new mongoose_2.Types.ObjectId(userId) })
+            .lean()
+            .exec();
+        if (!membership) {
+            return { role: constants_1.ROLES.MEMBER, permissions: [] };
+        }
+        if (membership.role === constants_1.ROLES.ADMIN) {
+            return { role: constants_1.ROLES.ADMIN, permissions: permission_constants_1.ALL_PERMISSIONS };
+        }
+        return {
+            role: membership.role,
+            permissions: membership.permissions || [],
+        };
+    }
+};
+exports.NodePermissionAdapter = NodePermissionAdapter;
+exports.NodePermissionAdapter = NodePermissionAdapter = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, mongoose_1.InjectModel)(group_member_schema_1.GroupMember.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model])
+], NodePermissionAdapter);
+//# sourceMappingURL=node-permission-adapter.js.map

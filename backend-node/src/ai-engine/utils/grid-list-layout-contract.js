@@ -133,10 +133,10 @@ function boxesOf(sec) {
  */
 export function buildGridContract(sec, opts = {}) {
   if (!sec || typeof sec !== 'object') return null
-  const layout = String(sec.layout || sec.body?.layout || '').toLowerCase()
-  const type = String(sec.type || sec.body?.type || '').toLowerCase()
-  const isGrid = layout === 'grid' || type === 'grid'
-  const declaredRaw = Number(sec.gridColumns ?? sec.body?.gridColumns)
+  const layout = String(sec.layout || sec.body?.layout || sec.declaredContent?.layout || '').toLowerCase()
+  const type = String(sec.type || sec.body?.type || sec.declaredContent?.type || '').toLowerCase()
+  const isGrid = layout === 'grid' || /^grid-\d+-columns$/.test(layout) || type === 'grid'
+  const declaredRaw = Number(sec.gridColumns ?? sec.body?.gridColumns ?? sec.declaredContent?.gridColumns ?? (/^grid-(\d+)-columns$/.exec(layout)?.[1]))
   const declaredCols = declaredRaw > 0 ? Math.round(declaredRaw) : null
 
   let boxes = boxesOf(sec)
@@ -162,12 +162,52 @@ export function buildGridContract(sec, opts = {}) {
   if (boxes.length < 2) {
     const idx = opts.figmaIndex
     const hit = idx && typeof idx.get === 'function' ? idx.get(String(sec.id ?? '')) : null
-    const kids = toArray(hit?.rawNode?.children)
+    const declaredItems = toArray(sec.items).length > 0 ? sec.items
+      : toArray(sec.body?.items).length > 0 ? sec.body.items
+        : toArray(sec.declaredContent?.items).length > 0 ? sec.declaredContent.items
+          : toArray(sec.declaredContent?.children)
+    const expectedCount = Number(sec.itemCount) > 0 ? Number(sec.itemCount) : declaredItems.length
+    const directBoxes = (node) => toArray(node?.children)
       .map((c) => (c && (c.absoluteBoundingBox || c.bbox)) || null)
       .filter((b) => b && Number(b.width) > 0 && Number(b.height) > 0)
-    if (kids.length >= 2) {
-      boxes = kids
-      geometryFrom = `figma:${String(sec.id ?? '')}`
+    // 卡容器常在 section 的深层后代（标题 + 内层 grid）。只认直接子项数与声明项数
+    // 完全一致的容器，避免把标题/装饰/统计卡误当厂商项；无项数时保持旧直接子项口径。
+    const findBoxes = (node, depth = 0) => {
+      if (!node || depth > 8) return null
+      const kids = directBoxes(node)
+      if (kids.length >= 2 && (!expectedCount || kids.length === expectedCount)) return { kids, id: node.id }
+      for (const child of toArray(node.children)) {
+        const found = findBoxes(child, depth + 1)
+        if (found) return found
+      }
+      return null
+    }
+    let found = expectedCount ? findBoxes(hit?.rawNode) : (() => {
+      const kids = directBoxes(hit?.rawNode)
+      return kids.length >= 2 ? { kids, id: hit?.rawNode?.id } : null
+    })()
+    // 真实网格也可能按行拆成多个兄弟容器（4+2 / 4+4+4 / 4+4+4+3）。
+    // 仅在各行直接子项数之和与声明总项数完全一致时聚合，背景/标题/单图标装饰不参与。
+    if (!found && expectedCount) {
+      const rowGroups = toArray(hit?.rawNode?.children)
+        .map((child) => ({ id: child?.id, kids: directBoxes(child) }))
+        .filter((group) => group.kids.length >= 2)
+      const total = rowGroups.reduce((sum, group) => sum + group.kids.length, 0)
+      if (rowGroups.length >= 2 && total === expectedCount) {
+        found = {
+          kids: rowGroups.flatMap((group) => group.kids),
+          id: rowGroups.map((group) => String(group.id ?? '')).join('+'),
+        }
+      }
+    }
+    if (found) {
+      boxes = found.kids
+      const sectionId = String(sec.id ?? '')
+      const containerId = String(found.id ?? '')
+      // 直接命中保持既有留痕；只有命中深层/分行重复容器才追加容器 id。
+      geometryFrom = containerId === sectionId
+        ? `figma:${sectionId}`
+        : `figma:${sectionId}/${containerId}`
     }
   }
 
@@ -609,7 +649,10 @@ export function detectGridListLayoutIssues(files, opts = {}) {
     let matchedAny = false
     for (const pair of pairs) {
       const hostAttrs = pair.parent?.attrs || ''
-      const sid = sectionIdOf(hostAttrs)
+      // R8-11：段锚点常在组件根/外层面板，v-for 宿主是内层网格。
+      // 空间归属取最近的外层 section（当前组件根），实际网格改写仍只针对 pair.parent。
+      const rootAttrs = matchAllTags(f.content).find((attrs) => sectionIdOf(attrs)) || ''
+      const sid = sectionIdOf(hostAttrs) || sectionIdOf(rootAttrs)
       if (!sid) continue
       matchedAny = true
       stats.hosted += 1
@@ -646,6 +689,8 @@ export function detectGridListLayoutIssues(files, opts = {}) {
         severity: 'WARN',
         file: path,
         sectionId: sid,
+        // section 锚点可在外层根，内联自愈必须仍写真实 v-for 宿主，不能回跳外层面板。
+        host: { name: pair.parent?.name || '', attrs: hostAttrs },
         wrapperClass: wrapperTargets[0] || wrapClasses[0],
         wrapperClasses: wrapperTargets,
         itemClasses: itemTargets,
@@ -887,9 +932,22 @@ function findHostTag(content, sectionId) {
   return tagRx.exec(text)
 }
 
-function ensureHostInlineGrid(content, sectionId, decls, dropProps) {
+function findIssueHostTag(content, issue) {
   const text = String(content || '')
-  const m = findHostTag(text, sectionId)
+  const name = String(issue?.host?.name || '')
+  const attrs = String(issue?.host?.attrs || '')
+  if (name && attrs) {
+    const tag = `<${name}${attrs}>`
+    const index = text.indexOf(tag)
+    if (index >= 0) return { 0: tag, index }
+  }
+  // 兼容既有手工 issue / 旧调用：没有真实宿主坐标时才沿用 section 锚点。
+  return findHostTag(text, issue?.sectionId)
+}
+
+function ensureHostInlineGrid(content, issue, decls, dropProps) {
+  const text = String(content || '')
+  const m = findIssueHostTag(text, issue)
   if (!m) return null
   let tag = m[0]
 
@@ -1047,12 +1105,12 @@ export function healGridListLayout(files, issues) {
       ...(contract.rows > 1 ? ['row-gap'] : []),
     ]
     const hostFile =
-      out.find((f) => String(f.path || '') === String(issue.file || '') && findHostTag(f.content, issue.sectionId)) ||
-      out.find((f) => /\.vue$/i.test(String(f.path || '')) && findHostTag(f.content, issue.sectionId))
+      out.find((f) => String(f.path || '') === String(issue.file || '') && findIssueHostTag(f.content, issue)) ||
+      out.find((f) => /\.vue$/i.test(String(f.path || '')) && findIssueHostTag(f.content, issue))
     if (hostFile) {
       const inlined = ensureHostInlineGrid(
         String(hostFile.content || ''),
-        issue.sectionId,
+        issue,
         inlineDecls,
         inlineDrop,
       )

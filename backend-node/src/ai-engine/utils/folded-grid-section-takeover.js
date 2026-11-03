@@ -37,9 +37,16 @@ import {
   nodeAppearanceTruth,
 } from './section-tree.js';
 import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js';
+// 🛡️ P3（2026-11-03）：接管产物**自持**面板三件套真值（底色/圆角/发光/满宽）。
+//   判据单一来源 = `container-background-truth.js`（与刀 37/42 heal 共用同一组
+//   构造器，禁在本文件另写 CSS 字面量副本）。为什么接管侧必须自己写：刀 53 的
+//   **终裁覆写**（`file-writer.js` 以 `_fgTakeoverFiles` 快照整包替换）快照拍在 heal
+//   **之前** ⇒ heal 对本类文件的修复会被整包回滚（实测 icon 0/110、header 0/219）。
+//   该模块只 import `figma-effects.js`（纯函数），无循环依赖。
+import { resolveSectionPanel, buildPanelInlineCss } from './container-background-truth.js';
 // 🔴 R3（2026-11-02）：超界段判据的 refs 唯一来源 —— 与锚点审计（R22-d/R2）同一份
 //   `collectSectionFigmaRefs`，禁止在本文件另写「children 里挑 id」的副本。
-import { collectSectionFigmaRefs } from './section-anchor-truth.js';
+import { collectSectionFigmaRefs, sectionAnchorCandidates, sectionAnchorKey } from './section-anchor-truth.js';
 import { declaredTableHeaders } from './section-type-derive.js';
 // 🛡️ 刀53h：footer 段的**判据唯一来源**必须复用 vision 发言读取口径
 //   （`declaredSectionType` = `sec.type || sec.header.type` 归一小写），
@@ -54,6 +61,11 @@ import { normalizeCssColor } from './truth-color-usage-guard.js';
 //   同一份纯函数判据（`inferBackgroundStyle`），否则 item 挂载形态与容器挂载形态
 //   会分叉成两套 geometry（正是「容器画一遍、item 画另一遍」的温床）。
 import { inferBackgroundStyle } from './background-size-inference.js';
+// 🔀 刀 54 段内分区接管（2026-11-03 接线刀）：全 miss leaf 的段内分区判据唯一来源。
+//   注意：region-partitioner.js 反向 import 本文件的 bboxOf/textRun/clusterByTolerance/KV_TOL
+//   （第一阶段既有口径），构成**良性环**——两侧都只在运行时调用对方函数（函数声明
+//   提升、模块初始化期零互调），ESM/jest 均安全；禁止把环改成第三模块中转（徒增间接层）。
+import { partitionLeafRegions } from './region-partitioner.js';
 
 /**
  * 🛡️ 刀 53 命名空间识别器（**唯一来源**，2026-10-22 round-12 实锤后提取）。
@@ -76,7 +88,7 @@ import { inferBackgroundStyle } from './background-size-inference.js';
  *    `font-size-normalizer#protectFgTagInlineStyles` 保护 ⇒ 字号塌回 `@fontSize`
  *    （d072d085 实锤病灶之一），且 `DEFAULT_SKIP_SELECTOR_RXS` 也会漏掉它。
  */
-export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list|footer)-/;
+export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list|footer|regions)-/;
 
 /** fg- 类名的**裸片段**（去两侧 `/`），供需要拼接正则的场合复用，杜绝副本。 */
 const FG_CLASS_SRC = FG_TAKEOVER_CLASS_RX.source;
@@ -120,7 +132,7 @@ function toArray(x) {
 }
 
 /** 节点 bbox（Figma 树原始节点形态）。 */
-function bboxOf(node) {
+export function bboxOf(node) {
   const b = node?.absoluteBoundingBox || node?.bbox;
   if (!b) return null;
   const x = Number(b.x), y = Number(b.y), w = Number(b.width), h = Number(b.height);
@@ -162,7 +174,10 @@ function firstSolidFillRgba(node) {
  */
 function collectAnchorNodes(sec, figmaIndex) {
   const out = new Map();
+  // R7：只从候选单一来源取修复产物，并保持无修复锚时原有 id/sourceNodeIds 顺序逐字不变。
+  const [anchorRepaired] = sectionAnchorCandidates(sec);
   const ids = [
+    anchorRepaired,
     sec?.id,
     ...toArray(sec?.sourceNodeIds),
     sec?.figmaNodeId,
@@ -245,7 +260,7 @@ function isScopeIncomplete(sec, figmaIndex) {
 }
 
 /** 文本节点 → 渲染 run（颜色/字号/字重任一缺失 ⇒ null，调用方 fail-open）。 */
-function textRun(t) {
+export function textRun(t) {
   const color = firstSolidFillRgba(t);
   const st = t?.style || {};
   const fs = Number(st.fontSize);
@@ -285,7 +300,7 @@ export function detectHeaderRowLeaf(sec, figmaIndex, resourceMapping) {
   //   · 剥后缀兜底锚点（合成 `…-tail-text` / `…-list` 叶 → 父容器）⇒ 本叶只是父容器**切片**，
   //     深层文本归其它叶（折叠列表/网格叶）⇒ 保持 1 层口径（render 用例连锁红实锤）。
   //   递归仅从本叶锚点集合起步（seen 防父子重复入队），不触碰锚点外节点 ⇒ 8bbcf027 反向断言不受影响。
-  const exactAnchor = [sec?.id, ...toArray(sec?.sourceNodeIds), sec?.figmaNodeId, sec?.figmaNode].some(
+  const exactAnchor = [sectionAnchorCandidates(sec)[0], sec?.id, ...toArray(sec?.sourceNodeIds), sec?.figmaNodeId, sec?.figmaNode].some(
     (raw) => raw != null && raw !== '' && Boolean(figmaIndex.get(String(raw))?.rawNode),
   );
   let texts;
@@ -1621,10 +1636,10 @@ export function detectGridLeaf(sec, figmaIndex) {
 const KV_LEAF_TYPE = 'label-value'
 
 /** 几何容差（与刀 41 `TOL` 同口径；Figma 坐标含浮点/取整差异）。 */
-const KV_TOL = 2
+export const KV_TOL = 2
 
 /** 值 → 簇（±tol 视为同一锚点）。返回 `[{anchor, members:[原索引]}]`，按 anchor 升序。 */
-function clusterByTolerance(values, tol = KV_TOL) {
+export function clusterByTolerance(values, tol = KV_TOL) {
   const sorted = values.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v)
   const clusters = []
   for (const { v, i } of sorted) {
@@ -1780,6 +1795,34 @@ export function detectKvGridLeaf(sec, figmaIndex) {
     cols = derived.cols
   }
 
+  // 🔀 刀 54（2026-11-03）：行列/列事实/行事实/贴边形态/单元序的**全部推导**
+  //    原样提取到 `buildKvGridFacts` 共用段 —— 段内分区接管的 kv 区走**同一份**
+  //    严格口径（右对齐/等距/贴边校验一个不少），禁第二套 kv 事实副本。
+  const facts = buildKvGridFacts(resolved, cols, anchorBox)
+  if (!facts.ok) return facts
+
+  return {
+    ok: true,
+    kind: 'kvgrid',
+    sectionId: String(sec.id ?? ''),
+    baseId: String(sec.id ?? ''),
+    ...facts,
+  }
+}
+
+/**
+ * 🔀 刀 54（2026-11-03）：kv 网格事实推导**共用段** —— 自 `detectKvGridLeaf` 尾段
+ * 原样提取（行为逐字不变，既有 kvgrid spec 锁定）。两个消费者：
+ *   ① `detectKvGridLeaf`（originBox = 段锚 bbox，原路径）；
+ *   ② `detectRegionCompositeLeaf` 的 kv 区（originBox = 区外框 bbox —— kv 区以
+ *      绝对定位落在 `region.box` 上，贴边事实相对**区外框**成立，与原口径同构）。
+ *
+ * @param {Array} resolved `[{label:textRun, value:textRun, labelLh, valueLh}]`（行优先）
+ * @param {number} cols 列数（对数/行）
+ * @param {{x,y,w,h}} originBox 贴边判定的参照框（原=段锚；分区=区外框）
+ * @returns {{ok:true, cols,rows,rowGap,colGap,justify,labelGap,columns,cells} | {ok:false, reason}}
+ */
+function buildKvGridFacts(resolved, cols, originBox) {
   // —— 行列聚类（value.x = 列锚；label.y = 行锚）——
   const rows = resolved.length / cols
   const colClusters = clusterByTolerance(resolved.map((r) => r.value.box.x))
@@ -1844,8 +1887,8 @@ export function detectKvGridLeaf(sec, figmaIndex) {
   const cellW = columns.map((c) => c.labelW + labelGap + c.valueW)
   const firstLeft = Math.min(...resolved.map((r) => r.label.box.x))
   const lastRight = Math.max(...resolved.map((r) => r.value.box.x + r.value.box.w))
-  const flushLeft = Math.abs(firstLeft - anchorBox.x) <= KV_TOL
-  const flushRight = Math.abs(anchorBox.x + anchorBox.w - lastRight) <= KV_TOL
+  const flushLeft = Math.abs(firstLeft - originBox.x) <= KV_TOL
+  const flushRight = Math.abs(originBox.x + originBox.w - lastRight) <= KV_TOL
   let justify = 'start'
   let colGap = 0
   if (flushLeft && flushRight) {
@@ -1884,9 +1927,6 @@ export function detectKvGridLeaf(sec, figmaIndex) {
 
   return {
     ok: true,
-    kind: 'kvgrid',
-    sectionId: String(sec.id ?? ''),
-    baseId: String(sec.id ?? ''),
     cols,
     rows,
     rowGap,
@@ -1896,6 +1936,127 @@ export function detectKvGridLeaf(sec, figmaIndex) {
     columns: columns.map((c) => ({ labelW: c.labelW })),
     cells,
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 刀 54（2026-11-03）：段内分区接管（接线刀）。
+ *
+ * ## 病灶
+ * 弹窗家族（36:1693 设备详情 / 38:3134 合作厂商 / 跨 32 目录 slot-icon 家族）：
+ * `<anchor> = bg RECTANGLE + header VECTOR + slot-icon GROUP（全部内容）`，
+ * 复合段（kv 网格+标题+描述混居）对「整段二选一」的 detect* 家族全部 fail-closed
+ * ⇒ 整段交 LLM ⇒ 布局发挥（4ee12198 列对齐参差、b59e9d88 臆造深蓝块）。
+ *
+ * ## 判据与装配
+ * 第一阶段 `region-partitioner.js#partitionLeafRegions`（`8e548cf`，真值重放
+ * 36:1693 全归区）已把内容子树分成互斥子区；本刀做装配：
+ *   - kv 区 → 与 `detectKvGridLeaf` **同一份**事实口径（`buildKvGridFacts`：
+ *     右对齐/等距/贴边校验一个不少；originBox=区外框），判据不过 ⇒ 整段 fail-open；
+ *   - text 区 → 逐成员绝对定位（box 真值；`region.box` 仅为外框——text members
+ *     分散在 kv 区上下，**不可**按 region 顺序块装）。
+ * 完整性由分区器 `partition:unaccounted` 守卫保证（每个文本恰归一区），故本
+ * kind 天然满足 R6 对账（`declaredUnconsumedCount` 对非 header/icon kind 恒 0）。
+ *
+ * ## 分发位置
+ * 检测链**最末位**（footer 之后）：只救十类全 fail 的叶，结构上不可能抢走
+ * 既有命中（与 legend/kvgrid/footer 同一「位置保证」论证，宁漏勿错）。
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/** kv 区行带重聚容差（与分区器 BAND_TOL 同口径；行内精聚仍走 KV_TOL=2）。 */
+const REGION_BAND_TOL = 8;
+
+/**
+ * 段内分区接管判据（复合 leaf → regions 复合真值）。
+ * @param {object} sec section 树节点（需 sec.id）
+ * @param {Map} figmaIndex indexFigmaNodes 产物（entry.rawNode 形状，同 detect* 家族）
+ * @returns {{ok:true, kind:'regions', sectionId, baseId, height, kv, textRuns, regionCount}
+ *          | {ok:false, reason:string}}
+ */
+export function detectRegionCompositeLeaf(sec, figmaIndex) {
+  const part = partitionLeafRegions(sec, figmaIndex);
+  if (!part.ok) return part;
+  const entry = figmaIndex && typeof figmaIndex.get === 'function'
+    ? figmaIndex.get(sectionAnchorKey(sec))
+    : null;
+  // R7：与 partitionLeafRegions 同走 sectionAnchorKey，禁止一个读修复锚、另一个仍读旧 id。
+  // 只取 h（分区器已把成员坐标归一到段锚系；平移不改高度，无平移误差风险）
+  const anchorBox = bboxOf(entry?.rawNode);
+  if (!anchorBox) return { ok: false, reason: 'partition:anchorBoxMissing' };
+
+  // —— kv 区：行带显式重聚（不靠 flatMap 隐式顺序）+ 严格事实口径 ——
+  const kvRegion = part.regions.find((r) => r.kind === 'kvgrid');
+  if (!kvRegion) return { ok: false, reason: 'partition:noKvRegion' };
+  const kvBands = clusterByTolerance(kvRegion.members.map((m) => Math.round(m.box.y)), REGION_BAND_TOL);
+  const counts = kvBands.map((b) => b.members.length);
+  if (!counts.every((c) => c === counts[0])) return { ok: false, reason: 'partition:kvRowsRagged' };
+  const perRow = counts[0];
+  if (perRow < 4 || perRow % 2 !== 0) return { ok: false, reason: `partition:kvPerRow(${perRow})` };
+  const cols = perRow / 2;
+  if (cols < 2) return { ok: false, reason: `partition:kvCols(${cols})` };
+  const resolved = [];
+  for (const b of kvBands) {
+    const line = b.members.map((i) => kvRegion.members[i]).sort((a, b2) => a.box.x - b2.box.x);
+    for (let k = 0; k + 1 < line.length; k += 2) {
+      const l = line[k];
+      const v = line[k + 1];
+      if (l.box.x + l.box.w > v.box.x + KV_TOL) return { ok: false, reason: 'partition:kvPairOrder' };
+      if (!l.run || !v.run) return { ok: false, reason: 'partition:kvRunMissing' };
+      // 🔴 分区器只归一 `member.box`；`member.run.box` 仍是画布绝对坐标（第一阶段
+      //    落库口径，不回改）。几何真值必须取 member.box（同一 bboxOf 产物、已归一），
+      //    否则 buildKvGridFacts 的贴边判定拿绝对坐标比段内系区外框 ⇒ 永不贴边
+      //    （36:1693 实测 kvColGapUnstable 假阴性）。
+      resolved.push({ label: { ...l.run, box: l.box }, value: { ...v.run, box: v.box }, labelLh: l.run.lh, valueLh: v.run.lh });
+    }
+  }
+  const facts = buildKvGridFacts(resolved, cols, kvRegion.box);
+  if (!facts.ok) return { ok: false, reason: `partition:${facts.reason}` };
+
+  // —— text 区：逐成员绝对定位真值（单行 nowrap；h>1.5×行高 ⇒ 多行给宽换行，
+  //     与 detectTextLeaf 的 multiline 形态同构）——
+  const textRegion = part.regions.find((r) => r.kind === 'text');
+  const textRuns = [];
+  if (textRegion) {
+    for (const m of textRegion.members) {
+      if (!m.run || !m.run.box) return { ok: false, reason: 'partition:textRunMissing' };
+      const lh = m.run.lh ?? Math.max(1, Math.round(m.box.h));
+      const multiline = m.box.h > lh * 1.5 + 1;
+      textRuns.push({
+        text: m.run.text,
+        color: m.run.color,
+        fs: m.run.fs,
+        fw: m.run.fw,
+        x: Math.round(m.box.x),
+        y: Math.round(m.box.y),
+        w: Math.round(m.box.w),
+        lh: Math.round(lh),
+        multiline,
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    kind: 'regions',
+    sectionId: String(sec.id ?? ''),
+    baseId: String(sec.id ?? ''),
+    // 容器高=段锚真值（内容全绝对定位不占流 ⇒ 无高度则容器塌 0）
+    height: Math.round(anchorBox.h),
+    kv: {
+      x: Math.round(kvRegion.box.x),
+      y: Math.round(kvRegion.box.y),
+      w: Math.round(kvRegion.box.w),
+      cols: facts.cols,
+      rows: facts.rows,
+      rowGap: facts.rowGap,
+      colGap: facts.colGap,
+      justify: facts.justify,
+      labelGap: facts.labelGap,
+      columns: facts.columns,
+      cells: facts.cells,
+    },
+    textRuns,
+    regionCount: part.regions.length,
+  };
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1935,6 +2096,7 @@ function findSubtreeIconNodeId(node) {
 //   迁至 section-semantics.js#canonicalListItem 单一实现，本模块薄壳引用；
 //   roleOf/ROLE_*_SET 词表随 normListItem 家族一并迁出（本模块不再直接消费）。
 import { canonicalListItem } from './section-semantics.js';
+import { resolveListMemberDirection } from './section-list-direction.js';
 
 export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   const fail = (reason) => ({ ok: false, reason });
@@ -2140,33 +2302,115 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     }
     return null;
   };
+  /** 两盒是否共享至少一条边（±1px 仅吸收舍入，非阈值判据）。 */
+  const sharesEdge = (outer, inner) => {
+    const near = (a, b) => Math.abs(a - b) <= 1;
+    return (
+      near(inner.x, outer.x) ||
+      near(inner.y, outer.y) ||
+      near(inner.x + inner.w, outer.x + outer.w) ||
+      near(inner.y + inner.h, outer.y + outer.h)
+    );
+  };
+  /**
+   * 🔴 步④（2026-11-03）：**按几何选可见底** —— 颜色匹配在实践中是「选错了轴」。
+   *
+   * 病灶（真机 `1t7Dmmpsl5i0PC8BJt2QLf_2-7952` 直读）：卡帧自身 `fills=[]`，卡底渐变在深层
+   * `136:126"bg">2:8058 GROUP>2:8059 RECTANGLE`（两段 `GRADIENT_LINEAR`，首段 `visible:false`）；
+   * 而 vision `repeatedFill=#a6ceff` 归一后在子树内**无相等 SOLID**（渐变归不出单色）。
+   * ⇒ 颜色锚 `findFillAnchorNode` **结构性必然 miss**（不是「真值取不到」，是判据维度错），
+   *   于是回退帧盒（140.48/120/141 异宽）⇒ 按 x 相减恰好得 `[-11,-12]`（与产物逐位吻合）。
+   *
+   * 判据（零语义猜测、零像素阈值，全部可辩驳）：
+   *   ① `visible !== false`；
+   *   ② `fills` 非空且存在 `visible !== false` 的填充 —— **不限 SOLID**（渐变/图片同样是可见底，
+   *      这一步就是把「单色 SOLID」这条隐性前提拆掉）；
+   *   ③ 排除 `TEXT`（TEXT 的 `fills` 是**字色**，不是底）；
+   *   ④ `rowBox ⊇ cb`：含于本行帧盒 —— 注意与颜色锚的「`cb ⊇ rowBox`」**方向相反**，因可见底
+   *      通常比帧盒**小**（帧盒含卡内留白：真机 120 < 140.48）。这也是 `:2321` 必须分开的原因：
+   *      沿用 `cb.w >= rowBox.w` 则「选对节点仍回落」；
+   *   ⑤ 盒不等于行盒（完全相等 ⇒ 无信息增量，交给回退口径）；
+   *   ⑥ 不含其它行（沿用「恰好容纳本行」，否则选到的是列表容器）；
+   *   ⑦ **与行盒共享至少一条边**（上/下/左/右）—— 排除「卡内居中浮块」这类高面积噪声；
+   *      真机三卡分别左对齐/左对齐/右对齐，逐卡满足；
+   *   ⑧ 多候选取**面积最大**（卡底覆盖卡内最大面积；图标、文字框、装饰色块必更小）。
+   * 跨卡一致性另由调用方 span 自校验兜底（见 resolveCardBox 之后）。
+   * @returns {{box:object, node:object, area:number}|null}
+   */
+  const pickVisibleFillBox = (node, rowBox, allRowBoxes) => {
+    if (!node || !rowBox) return null;
+    const seen = new Set();
+    const stack = [node];
+    const cands = [];
+    while (stack.length) {
+      const n = stack.shift();
+      if (!n || seen.has(n)) continue;
+      seen.add(n);
+      if (n.visible === false) continue;
+      const isText = String(n.type || '').toUpperCase() === 'TEXT';
+      const fills = Array.isArray(n.fills) ? n.fills : [];
+      if (!isText && fills.some((f) => f && f.visible !== false)) {
+        const cb = toBox(n.absoluteBoundingBox || n.bbox);
+        if (
+          cb &&
+          cb.w > 0 &&
+          cb.h > 0 &&
+          boxContains(rowBox, cb) &&
+          !(
+            Math.round(cb.w) === Math.round(rowBox.w) &&
+            Math.round(cb.h) === Math.round(rowBox.h)
+          ) &&
+          sharesEdge(rowBox, cb) &&
+          !allRowBoxes.some((rb) => rb && rb !== rowBox && boxContains(cb, rb))
+        ) {
+          cands.push({ box: cb, node: n, area: cb.w * cb.h });
+        }
+      }
+      for (const c of Array.isArray(n.children) ? n.children : []) stack.push(c);
+    }
+    if (!cands.length) return null;
+    cands.sort((a, z) => z.area - a.area);
+    return cands[0];
+  };
   /**
    * 单行卡盒真值。**不可证 ⇒ 回落该行自身盒**（无从证明错位就不改，保持旧口径）。
-   * @returns {{box:object|null, node:object|null, fillNode:object|null}}
+   * 两条支路：① 颜色锚（最精确，先跑，须 `cb ⊇ 行盒`）；② 几何锚（步④，须 `行盒 ⊇ cb`）。
+   * @returns {{box:object|null, node:object|null, fillNode:object|null, boxSource:string|null}}
    */
   const resolveCardBox = (it, rowBox, fill, allRowBoxes) => {
     const target = normalizeCssColor(fill);
     let cur = String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '');
-    if (!cur || !target || !figmaIndex) return { box: rowBox, node: null, fillNode: null };
+    // 🔴 步④：`target` **不再进守卫** —— 颜色锚 miss（含 fill 缺失）时仍须尝试几何锚。
+    if (!cur || !figmaIndex) {
+      return { box: rowBox, node: null, fillNode: null, boxSource: null };
+    }
     let guard = 0;
     while (cur && guard++ < 64) {
       const entry = figmaIndex.get(cur);
       const node = entry?.rawNode || entry?.node || null;
       if (node) {
-        const hit = findFillAnchorNode(node, target);
-        if (hit) {
-          const cb = toBox(entry?.bbox || node.absoluteBoundingBox || node.bbox);
-          const ok =
-            !!cb &&
-            (!rowBox || (cb.w >= rowBox.w && cb.h >= rowBox.h)) &&
-            // 「恰好容纳本行」：若还含别的行 ⇒ 上溯到的是列表容器，不是卡盒
-            !allRowBoxes.some((rb) => rb && rb !== rowBox && boxContains(cb, rb));
-          return ok ? { box: cb, node, fillNode: hit } : { box: rowBox, node: null, fillNode: null };
+        if (target) {
+          const hit = findFillAnchorNode(node, target);
+          if (hit) {
+            const cb = toBox(entry?.bbox || node.absoluteBoundingBox || node.bbox);
+            const ok =
+              !!cb &&
+              (!rowBox || (cb.w >= rowBox.w && cb.h >= rowBox.h)) &&
+              // 「恰好容纳本行」：若还含别的行 ⇒ 上溯到的是列表容器，不是卡盒
+              !allRowBoxes.some((rb) => rb && rb !== rowBox && boxContains(cb, rb));
+            if (ok) return { box: cb, node, fillNode: hit, boxSource: 'fill' };
+            // ⚠️ 步④ 前此处 immediate return：颜色命中但盒不合格 = 命中的是卡内小色块而非卡底，
+            //    直接回退属「颜色单轴」的第二处硬编码。现在落到几何支路由几何裁决。
+          }
+        }
+        const geo = pickVisibleFillBox(node, rowBox, allRowBoxes);
+        if (geo) {
+          return { box: geo.box, node, fillNode: geo.node, boxSource: 'geometry' };
         }
       }
       cur = parentOf.get(cur) || null;
     }
-    return { box: rowBox, node: null, fillNode: null };
+    return { box: rowBox, node: null, fillNode: null, boxSource: null };
   };
   // 行盒（几何轨，旧口径）：E1 富化树节点直读优先（刀 21d），否则按 item id / icon 节点回查
   const rowBoxes = items.map((it) => {
@@ -2179,27 +2423,261 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     return toBox(e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox);
   });
   const cards = items.map((it, i) => resolveCardBox(it, rowBoxes[i], norm[i].fill, rowBoxes));
+  // 🔴 步④ 自校验：几何锚必须与**帧轨同跨度**（首左 → 末右，±2px）。
+  //   为何是跨度而非「Σwidths + Σgaps ≈ 段内容宽」：`Σw + Σg` **恒等于** `max(x+w) − min(x)`
+  //   （代数恒等，不是独立事实），而「段内容宽」还要再取 sec 的 padding —— 那是**第二事实源**，
+  //   违反判据单一来源。跨度式只用已存在的帧轨真值 `rowBoxes`，零新增事实、零阈值（±2 仅吸收舍入；
+  //   真机 37..415 两侧逐位相等）。
+  //   守卫对象：几何锚选到「卡内小色块 / 局部容器」⇒ 跨度必然远小于帧轨 ⇒ 全量 fail-open。
+  //   计数（真机必 grep，0 也打）：`spanRejected>0` ⇒ 有样本被几何锚误选并已拦下；
+  //   长期为 0 且 `geomPicked>0` ⇒ 自校验从未触发（须复核是否被架空）。
+  const spanOfBoxes = (bs) => {
+    const v = (bs || []).filter(Boolean);
+    if (!v.length) return null;
+    const lo = Math.min(...v.map((b) => b.x));
+    const hi = Math.max(...v.map((b) => b.x + b.w));
+    return Number.isFinite(lo) && Number.isFinite(hi) ? hi - lo : null;
+  };
+  const geomPicked = cards.filter((c) => c.boxSource === 'geometry').length;
+  let spanRejected = false;
+  if (geomPicked > 0) {
+    const sp = spanOfBoxes(cards.map((c) => c.box));
+    const sr = spanOfBoxes(rowBoxes);
+    if (sp == null || sr == null || Math.abs(sp - sr) > 2) {
+      spanRejected = true;
+      cards.forEach((c, i) => {
+        if (c.boxSource === 'geometry') {
+          // 盒回退，但**保留尝试痕迹**（`geomPicked` 是「尝试数」不是「生效数」）——
+          //   否则真机日志无法区分「几何锚从未触发」与「触发了但自校验拦下」。
+          cards[i] = { box: rowBoxes[i], node: null, fillNode: null, boxSource: 'geometry-rejected' };
+        }
+      });
+    }
+  }
   const cardBoxes = cards.map((c, i) => c.box || rowBoxes[i]);
-  const geoReady =
-    cardBoxes.length > 0 &&
-    cardBoxes.every(Boolean) &&
-    cardBoxes.every(
-      (b) =>
-        Math.round(b.w) === Math.round(cardBoxes[0].w) &&
-        Math.round(b.h) === Math.round(cardBoxes[0].h),
-    );
+  const boxesReady = cardBoxes.length > 0 && cardBoxes.every(Boolean);
+  const sameHeight = boxesReady && cardBoxes.every(
+    (b) => Math.round(b.h) === Math.round(cardBoxes[0].h),
+  );
+  // 🔴 步③（2026-11-03）：**同宽**是与同高**独立**的轴约束 —— row 的「逐项宽度 + 横向间距」
+  //   只取决于宽度轴，故必须能单独判定（原代码只有 `geoReady`=宽高同时相等，粒度太粗）。
+  const sameWidth = boxesReady && cardBoxes.every(
+    (b) => Math.round(b.w) === Math.round(cardBoxes[0].w),
+  );
+  // 卡高/圆角仍要求统一卡盒；逐项背景归属在下方独立解析，异宽不得阻断资源真值。
+  // （`sameWidth && sameHeight` 与原 `every(w 相等 && h 相等)` 逐字等价）
+  const geoReady = sameWidth && sameHeight;
+
+  // ── 步⑤（P0-2）卡内布局几何真值：名称/数值的相对排布 + 数值/单位的相对排布 ─────
+  // 🛡️ 病灶（设计稿 vs 产物）：真机三卡是「名称在上、`51`+`次` 同一行在名称**正下方**且左对齐」，
+  //   而渲染器硬编码「名称列 + stats 列 + `margin-left:auto`」⇒ 数值被推到**最右**，
+  //   数值与单位上下两行（`51` / `次`）⇒ OCR 读成「名称 …右对齐的 51、次」。
+  //   🔴 `margin-left:auto` 是**渲染层猜的横向关系**，与本次治理的 `cardWidths`/`gaps` 同病：
+  //      声明层没有这条事实，是渲染器替真值做了决定。
+  //
+  // 判据（与刀55 `resolveListMemberDirection` 同构：**几何可证优先，不可证回落现状**）：
+  //   - `innerDir`：名称盒 × 数值盒 —— **x 重叠率 > 50% 且 y 不重叠** ⇒ `stacked`（纵排，本单）；
+  //                 **y 重叠率 > 50% 且 x 不重叠** ⇒ `inline`（横排）；皆不成立 ⇒ 不下发（回落现状）。
+  //   - `valuePartsDir`：数值盒 × 单位盒 —— y 重叠率 > 50% 且 x 不重叠 ⇒ `inline`（本单 `51`+`次`）；
+  //                     x 重叠率 > 50% 且 y 不重叠 ⇒ `stacked`；否则不下发。
+  //   - `valuePartsGap`：单位盒左 − 数值盒右（真值 2px），**逐卡得同一整数才下发**（异值不下发）。
+  //
+  // 🔴 三道 fail-open 闸（缺一不可，否则「一条误判」会重排整段）：
+  //   ① **文本配对必须唯一**：卡子树内 `characters` 与 vision 文本**全等**的节点恰 1 个才可用
+  //      （0 个 = 取不到真值；≥2 个 = 有歧义）⇒ 该卡不投票，**绝不按顺序猜**。
+  //   ② **多卡必须一致**：各卡的结论取集合，集合只有一种才采纳；出现第二种 ⇒ `innerConflict`
+  //      ⇒ 整段不下发（重复成员同构 ⇒ 矛盾即不可证）。
+  //   ③ **只用于「改变现状」的方向**：`stacked` 才重排（现状是 inline）；`inline` 仅确认现状。
+  //      即「判错」的最坏后果是保持原样，不是把 `inline` 段错误压成纵排。
+  //
+  // 计数（真机必 grep，0 也打）：`inner=stacked` + `innerProv>0` ⇒ 判据在本单生效；
+  //   `inner=none` 且产物仍把数值贴右 ⇒ 未生效（须查文本配对是否全 miss）；
+  //   `innerConf=1` ⇒ 有样本各卡不一致而被拦（判据在工作，非故障）。
+  const textBoxesIn = (node) => {
+    const out = [];
+    const seen = new Set();
+    const stack = [node];
+    while (stack.length) {
+      const n = stack.shift();
+      if (!n || seen.has(n)) continue;
+      seen.add(n);
+      if (String(n.type || '').toUpperCase() === 'TEXT') {
+        const s = String(n.characters ?? n.text ?? '').trim();
+        const b = toBox(n.absoluteBoundingBox || n.bbox);
+        if (s && b) out.push({ s, box: b });
+        continue; // TEXT 无子节点，不必下探
+      }
+      for (const c of Array.isArray(n.children) ? n.children : []) stack.push(c);
+    }
+    return out;
+  };
+  /** 卡子树内与 `s` **全等**的 TEXT 盒；恰 1 个才返回（0/多个 ⇒ null，不猜）。 */
+  const uniqueTextBox = (tb, s) => {
+    const key = String(s ?? '').trim();
+    if (!key) return null;
+    const hit = tb.filter((e) => e.s === key);
+    return hit.length === 1 ? hit[0].box : null;
+  };
+  /** 两盒在指定轴上的重叠率（分母取较窄者 ⇒ 小盒被大盒包含即 1.0）。 */
+  const overlapRatio = (a, b, axis) => {
+    const la = axis === 'x' ? a.w : a.h;
+    const lb = axis === 'x' ? b.w : b.h;
+    const m = Math.min(la, lb);
+    if (!(m > 0)) return 0;
+    const lo = axis === 'x' ? Math.max(a.x, b.x) : Math.max(a.y, b.y);
+    const hi = axis === 'x' ? Math.min(a.x + a.w, b.x + b.w) : Math.min(a.y + a.h, b.y + b.h);
+    return Math.max(0, hi - lo) / m;
+  };
+  const innerVotes = [];
+  const vPartsVotes = [];
+  const vGapVotes = [];
+  items.forEach((it, i) => {
+    const id = String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '');
+    const entry = id ? figmaIndex?.get(id) : null;
+    const node = cards[i]?.node || entry?.rawNode || entry?.node || null;
+    if (!node) return;
+    const tb = textBoxesIn(node);
+    const st = norm[i]?.stats?.[0] || null;
+    const nameB = uniqueTextBox(tb, norm[i]?.texts?.[0]?.t);
+    const valueB = st ? uniqueTextBox(tb, st.v) : null;
+    const unitB = st?.l ? uniqueTextBox(tb, st.l) : null;
+    if (nameB && valueB) {
+      const xr = overlapRatio(nameB, valueB, 'x');
+      const yr = overlapRatio(nameB, valueB, 'y');
+      if (xr > 0.5 && yr <= 0.5) innerVotes.push('stacked');
+      else if (yr > 0.5 && xr <= 0.5) innerVotes.push('inline');
+    }
+    if (valueB && unitB) {
+      const xr = overlapRatio(valueB, unitB, 'x');
+      const yr = overlapRatio(valueB, unitB, 'y');
+      if (yr > 0.5 && xr <= 0.5) vPartsVotes.push('inline');
+      else if (xr > 0.5 && yr <= 0.5) vPartsVotes.push('stacked');
+      const gap = Math.round(unitB.x - (valueB.x + valueB.w));
+      if (Number.isFinite(gap) && gap >= 0) vGapVotes.push(gap);
+    }
+  });
+  /** 投票汇总：全一致才采纳；出现第二种即冲突（不下发）。 */
+  const tallyVotes = (vs) => {
+    const uniq = [...new Set(vs)];
+    if (uniq.length === 0) return { dir: null, proven: 0, conflict: false };
+    if (uniq.length > 1) return { dir: null, proven: vs.length, conflict: true };
+    return { dir: uniq[0], proven: vs.length, conflict: false };
+  };
+  const innerTally = tallyVotes(innerVotes);
+  const vPartsTally = tallyVotes(vPartsVotes);
+  const vGapUniq = [...new Set(vGapVotes)];
+  // 间距只在「数值/单位同行」时才是事实（纵排时 x 差无意义）⇒ 门控在 inline 分支内。
+  const valuePartsGap =
+    vPartsTally.dir === 'inline' && vGapUniq.length === 1 ? vGapUniq[0] : null;
+  const innerLayout = {
+    innerDir: innerTally.dir,
+    innerProven: innerTally.proven,
+    innerConflict: innerTally.conflict,
+    valuePartsDir: vPartsTally.dir,
+    valuePartsProven: vPartsTally.proven,
+    valuePartsConflict: vPartsTally.conflict,
+    valuePartsGap,
+  };
+
+  const directionTruth = resolveListMemberDirection(sec, { cardBoxes });
+  const direction = directionTruth.direction;
   let cardH = null;
+  let cardWidths = null;
   let gaps = null;
   let padL = null;
   let radius = null;
-  let itemBg = null;
-  if (geoReady) {
+  // 🔴 步③（2026-11-03）：横向几何（逐项宽度 `cardWidths` + 横向间距 `gaps`）的**可证条件**。
+  //   ① `sameWidth`：与 v-for「重复成员同构」契约一致 ⇒ 可下发；
+  //   ② `horizProven`：每卡盒都由 `resolveCardBox` **独立证明**（`node` 非空）⇒ 异宽也是真值 ⇒ 可下发。
+  //   两者皆不满足（= 回退帧盒 + 异宽）⇒ **不可证** ⇒ 不下发。
+  //   🔴 为何必须保留 ② 这一支（防误伤）：若只用 `sameWidth`，会把「逐项已证明的真异宽」也拦掉 ——
+  //     那种样本的宽度是真值，照发才对。真机病灶样本恰好**两者皆不满足**。
+  //   🔴 为何 `gaps` 与 `cardWidths` 同门（而不是只拦宽度）：row 的横向间距是
+  //     `x(后) − (x(前) + w(前))`，**同一个不可信盒**同时决定宽度与间距 —— 宽度不可证则间距同样不可证。
+  //     只拦宽度会留下「宽度不下发、间距照发」的自相矛盾态。
+  const horizProven = boxesReady && cards.every((c) => !!c.node);
+  const widthNotUniform = boxesReady && direction === 'row' && !sameWidth && !horizProven;
+  if (boxesReady && direction === 'row') {
+    if (sameHeight) cardH = Math.round(cardBoxes[0].h);
+    if (!widthNotUniform) {
+      cardWidths = cardBoxes.map((b) => Math.round(b.w));
+      const byX = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.x - z.b.x);
+      gaps = byX.slice(1).map((p, k) => {
+        const prev = byX[k].b;
+        return Math.round(p.b.x - (prev.x + prev.w));
+      });
+    }
+  } else if (geoReady) {
     cardH = Math.round(cardBoxes[0].h);
     const byY = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
     gaps = byY.slice(1).map((p, k) => {
       const prev = byY[k].b;
       return Math.round(p.b.y - (prev.y + prev.h));
     });
+  }
+  // 🔴🔴 2026-11-03（列表卡盒真值治本 · 步①②）：**间距不得为负** —— 几何恒真约束。
+  //
+  // 病灶（两处独立成因，同一症状）：
+  //   ① row 分支（:2364）只以 `boxesReady` 为守卫，**不看 `geoReady`（同宽同高）**，
+  //      而异宽帧盒按 x 相减必然为负。实测 c-vehicle-monitor-c2f78898 帧盒
+  //      140.5/120/141 @ x=[37,166,274] ⇒ 166−(37+140.5)=−11.5→−11、274−(166+120)=−12，
+  //      与产物 `FG_LIST_GAPS=[-11,-12]` **逐位吻合**（不是「真值取不到」，是算出了负值照写）。
+  //   ② column 分支（:2372）有守卫，但 `resolveCardBox` 对该样本**全量回退同一 rowBox**
+  //      （全同 y）⇒ 实测 −86。
+  // 全库取证：172 产物中 5 个产出列表段，**3 个负间距**（row −11/−12、column −86），纵向横向都复发。
+  //
+  // 处置：负间距一律置 `null`（=不写间距，回落自然流），**绝不 clamp 成 0**
+  //   —— 0 会把「算错」伪装成「设计本就无间距」，正是本仓反复踩的假绿形状。
+  //   置 null 是「让错值不可能被写出去」，而非「把 −11 改成 9」。
+  // 计数（真机必 grep，0 也打）：`negGapClamped=0 而产物仍含负值` ⇒ 判据未生效（或有第四处
+  //   写间距的路径，须先查清）；`>0 而产物已无负值` ⇒ 生效；气氛值暴涨 ⇒ 几何判据误伤。
+  const negGapValues = Array.isArray(gaps) ? gaps.filter((g) => g < 0) : [];
+  const negGapClamped = negGapValues.length > 0;
+  if (negGapClamped) gaps = null;
+  // 🔴 步①：列表几何真值可见化。`geoReady===false`（异宽/异高）过去是**静默降级**，
+  //   与「设计本就无间距」不可区分（§9.3 结论 3）—— 故随本刀一起挂出来。
+  // 🔴 步③：`widthNotUniform`（row 回退盒 + 异宽 ⇒ 横向几何不下发）必须与 `negGapClamped`
+  //   并列挂出 —— 否则「不下发宽度」就是新的静默降级。
+  //   `rawWidths`+`rawXs` 让被拦下的**帧盒几何完整可回溯**（只给宽度无法重建负间距；
+  //   步④ 按几何选可见底也要用到 x 真值）。
+  // 🔴 步③ 与步① 的交互（必须知道，否则会误读计数）：`widthNotUniform` 生效时 `gaps`
+  //   **从未被计算** ⇒ `negGapValues=[]`/`negGapClamped=false`。即真机病灶样本在步③ 后
+  //   由 `widthNotUniform` 承载信号，`negGap` 不再是它的信号 —— 两者互补不重叠：
+  //   `widthNotUniform`=「不可证 ⇒ 不算」，`negGapClamped`=「算了但为负 ⇒ 拦下」。
+  const rawWidths = rowBoxes.length ? rowBoxes.map((b) => (b ? Math.round(b.w) : null)) : null;
+  const rawXs = rowBoxes.length ? rowBoxes.map((b) => (b ? Math.round(b.x) : null)) : null;
+  // 🔴 步④：`raw*` = **帧轨真值**（回溯用，语义不随支路漂移）；`box*` = **生效卡盒**
+  //   （颜色锚或几何锚命中后可能小于帧盒）。两者并列才能区分「帧盒含留白」与「取错盒」。
+  const boxWidths = boxesReady ? cardBoxes.map((b) => Math.round(b.w)) : null;
+  const boxXs = boxesReady ? cardBoxes.map((b) => Math.round(b.x)) : null;
+  const listGeo = {
+    direction,
+    geoReady: !!geoReady,
+    sameWidth: !!sameWidth,
+    sameHeight: !!sameHeight,
+    cardW: boxesReady ? Math.round(cardBoxes[0].w) : null,
+    cardH: boxesReady ? Math.round(cardBoxes[0].h) : null,
+    rawWidths,
+    rawXs,
+    boxWidths,
+    boxXs,
+    geomPicked,
+    spanRejected,
+    cardWidths,
+    gaps,
+    negGapClamped,
+    negGapValues,
+    widthNotUniform,
+    // 🔴 步⑤（P0-2）：卡内布局几何真值可见化 —— 否则「不下发」又是静默降级（与步①/③ 同规）。
+    innerDir: innerLayout.innerDir,
+    innerProven: innerLayout.innerProven,
+    innerConflict: innerLayout.innerConflict,
+    valuePartsDir: innerLayout.valuePartsDir,
+    valuePartsProven: innerLayout.valuePartsProven,
+    valuePartsConflict: innerLayout.valuePartsConflict,
+    valuePartsGap: innerLayout.valuePartsGap,
+  };
+  if (geoReady) {
     // icon 左内距真值：icon 盒左边 − **卡盒**左边（首项可解即下发；不可解不写）
     //   刀 23：子树轨 icon 用反查到的节点 id 回查几何
     const iconId0 = items[0]?.icon?.figmaNode
@@ -2214,58 +2692,82 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     //   取不到 / 为 0 ⇒ 不写（绝不填兜底圆角）。
     const r = cards[0].fillNode ? cornerRadiusOf(cards[0].fillNode) : 0;
     if (r > 0) radius = r;
-    // 每卡自绘**图条**真值：卡盒子树内**唯一**被映射标记为「背景用途」的可下载资源
-    //   （与 statrow 的 `subtreeBackground` 同族判据；图标因 `isBackgroundResource` 为假被排除）。
-    //   多命中（歧义）/ 无 varName ⇒ 不下发（不猜）。四件套复用资源挂载层同一纯函数。
-    if (cards[0].node) {
-      const map = toArray(resourceMapping);
-      const hits = [];
-      const seen = new Set();
-      const walkNode = (n) => {
-        if (!n || seen.has(n)) return;
-        seen.add(n);
-        const hit = map.find(
-          (e) =>
-            String(e?.figmaNodeId) === String(n.id) &&
-            e?.resourceFile &&
-            e?.downloadStatus !== 'failed' &&
-            isBackgroundResource(n, map),
-        );
-        if (hit) hits.push(hit);
-        for (const c of Array.isArray(n.children) ? n.children : []) walkNode(c);
-      };
-      walkNode(cards[0].node);
-      if (hits.length === 1) {
-        const hit = hits[0];
-        const varName = String(hit.assignedVarName || hit.semanticVarName || '');
-        if (varName) {
-          itemBg = {
-            varName,
-            file: String(hit.resourceFile).split('/').pop(),
-            style: inferBackgroundStyle(hit),
-            sourceFill: norm[0].fill || null,
-          };
-        }
+  }
+
+  // 每卡背景独立归属：逐项声明优先；无声明时只消费本卡子树的唯一背景证据。
+  // 颜色只参与卡盒/填充真值，不再参与资源共享；相同 URL 只能由各项分别证明。
+  const toItemBg = (hit, source) => {
+    const varName = String(hit?.assignedVarName || hit?.semanticVarName || '');
+    if (!varName) return null;
+    return {
+      varName,
+      file: String(hit.resourceFile).split('/').pop(),
+      style: inferBackgroundStyle(hit),
+      source,
+    };
+  };
+  const itemBgs = items.map((it, i) => {
+    const declaredFile = String(it?.bg?.resourceFile || '');
+    if (declaredFile) {
+      const ownerIds = new Set(
+        [cards[i]?.node?.id, it?.figmaNodeId, it?.figmaNode, it?.id]
+          .filter((id) => id != null && String(id))
+          .map(String),
+      );
+      const declaredHits = mapping.filter((e) => {
+        if (String(e?.resourceFile || '') !== declaredFile) return false;
+        // 复用既有背景用途/下载状态判据，禁止把同名图标借成卡片背景。
+        if (backgroundImageOf({ id: e?.figmaNodeId }, [e]) !== e) return false;
+        const owner = String(e?.ownerSectionId || '');
+        return !owner || ownerIds.has(owner);
+      });
+      if (declaredHits.length === 1) {
+        const bg = toItemBg(declaredHits[0], 'declared');
+        if (bg) return bg;
       }
+      // 有显式声明但归属/用途/变量不成立时 fail-closed：不得改借本卡另一张背景。
+      return null;
     }
-  }
-  // 图条事实来自首卡，但绑定域必须由逐卡状态证明：仅与来源卡填充一致的项共享。
-  // 不同激活填充 ⇒ 不扩散；所有项填充一致 ⇒ 仍允许全部共享，不硬编码「只有首项」。
-  const itemBgFill = normalizeCssColor(itemBg?.sourceFill);
-  if (itemBgFill) {
-    for (const n of norm) n.bg = normalizeCssColor(n.fill) === itemBgFill;
-  }
+    const cardNode = cards[i]?.node;
+    if (!cardNode) return null;
+    const hits = [];
+    const seen = new Set();
+    const walkNode = (n) => {
+      if (!n || seen.has(n)) return;
+      seen.add(n);
+      const hit = backgroundImageOf(n, mapping);
+      if (hit) hits.push(hit);
+      for (const c of Array.isArray(n.children) ? n.children : []) walkNode(c);
+    };
+    walkNode(cardNode);
+    return hits.length === 1 ? toItemBg(hits[0], 'subtree') : null;
+  });
+  const itemBgStats = { declared: 0, subtree: 0, skipped: 0 };
+  itemBgs.forEach((bg, i) => {
+    norm[i].bg = !!bg;
+    if (bg) itemBgStats[bg.source] += 1;
+    else itemBgStats.skipped += 1;
+  });
   return {
     ok: true,
     kind: 'list',
     sectionId: String(sec.id ?? ''),
     baseId: String(sec.id ?? ''),
     items: norm,
+    direction,
+    directionSource: directionTruth.directionSource,
     cardH,
+    cardWidths,
     gaps,
     padL,
     radius,
-    itemBg,
+    itemBgs,
+    itemBgStats,
+    // 🔴 2026-11-03：几何真值事实（含 `negGapClamped` / `geoReady`）——调用方 `out` 聚合，
+    //   不得只留在返回体里（否则计数行在审计侧不可见 = 假绿）。
+    listGeo,
+    // 🔴 步⑤（P0-2）：卡内布局真值（渲染器据此重排/不重排；`null` ⇒ 保持现状）。
+    innerLayout,
   };
 }
 
@@ -2404,6 +2906,40 @@ function jsonStr(s) {
  * 确定性渲染叶组件（数据内联、类名唯一、关键几何全部内联 style —— 不依赖
  * common.less / 共享表，免疫「后写者胜」）。
  */
+/**
+ * 🔀 刀 54：kv 网格单元**渲染构造**共用段（单一来源，2026-11-03 自 kvgrid 分支原样
+ * 提取，字符串逐字不变 —— 既有 kvgrid spec 锁定）。两个消费者：
+ *   ① `renderFoldedGridLeafVue` 的 kvgrid 分支（`l{i}`/`v{i}`）；
+ *   ② regions 复合分支（`kvl{i}`/`kvv{i}`，避免与 text 区常量撞名）。
+ * @param {object} kv `{cells, columns, labelGap}` 形状（两分支同构）
+ * @param {string} cls 类名前缀
+ * @param {string} lp label script 常量前缀
+ * @param {string} vp value script 常量前缀
+ */
+function fgKvCellLines(kv, cls, lp, vp) {
+  const lines = [];
+  kv.cells.forEach((c, i) => {
+    const lw = kv.columns[c.col]?.labelW ?? c.labelW;
+    lines.push(
+      `    <div class="${cls}-cell" style="display:flex;flex-direction:row;align-items:baseline;gap:${kv.labelGap}px;">`,
+      `      <span class="${cls}-label" style="flex:0 0 ${lw}px;text-align:right;color:${c.labelColor};font-size:${c.labelFs}px;font-weight:${c.labelFw};line-height:${c.labelLh}px;white-space:nowrap;">{{ ${lp}${i} }}</span>`,
+      `      <span class="${cls}-value" style="color:${c.valueColor};font-size:${c.valueFs}px;font-weight:${c.valueFw};line-height:${c.valueLh}px;white-space:nowrap;">{{ ${vp}${i} }}</span>`,
+      '    </div>',
+    );
+  });
+  return lines;
+}
+
+/** 🔀 kv 单元 script 常量行（与 fgKvCellLines 配对，同一单一来源论证）。 */
+function fgKvCellConsts(kv, lp, vp) {
+  const lines = [];
+  kv.cells.forEach((c, i) => {
+    lines.push(`const ${lp}${i} = ${jsonStr(c.label)}`);
+    lines.push(`const ${vp}${i} = ${jsonStr(c.value)}`);
+  });
+  return lines;
+}
+
 export function renderFoldedGridLeafVue(tr, semantic) {
   const sem = String(semantic || 'component');
   // 🔴 同构列表（刀 20b）：N 项 v-for 真值展开。文案/色值/字号逐项内联进
@@ -2425,23 +2961,19 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       }
       return fileToVar.get(it.icon.file);
     });
-    // 🛡️ 刀33：每卡「图条」真值（卡盒内自绘底图）。变量名**取资源映射层的
-    //   `assignedVarName`** ⇒ 资源挂载层的 `bgBindingOwnership` 见之判 `self`（幂等），
-    //   不会与容器挂载互相打架（自造命名空间会被判 `other` 而 fail-closed 并留诊断噪声）。
-    //   🔴 图片 URL 只能走 `:style` 绑定，绝不能拼进静态 `style="..."`（静态段是纯 CSS
-    //   文本，`bg1` 不会被求值 ⇒ 浏览器拿到相对 URL `url(bg1)` → 404 → 整卡零背景，593cf7f 事故）。
-    const itemBg = tr.itemBg && tr.itemBg.varName ? tr.itemBg : null;
-    if (itemBg) {
-      importLines.push(`import ${itemBg.varName} from '../../resources/images/${itemBg.file}'`);
-    }
-    // 静态段只放 CSS 常量（size/position/repeat 与圆角）；URL 由 `:style` 段给出，
-    //   两段属性不重叠 ⇒ Vue 合并 static style 与 `:style` 时不会互相覆盖。
-    const itemStatic =
-      (tr.radius ? `border-radius:${tr.radius}px;` : '') +
-      (itemBg
-        ? `background-size:${itemBg.style.size};background-repeat:${itemBg.style.repeat};background-position:${itemBg.style.position};`
-        : '');
-    const itemBindBg = itemBg ? `, backgroundImage: it.bg ? 'url(' + ${itemBg.varName} + ')' : undefined` : '';
+    // 每卡背景消费自己的映射变量与四件套；同资源由逐项证据自然共享 import，
+    //   不再从首卡向同色成员扩散。URL 与尺寸/定位均只走 `:style`，不拼静态资源文本。
+    const itemBgs = Array.isArray(tr.itemBgs) ? tr.itemBgs : [];
+    const bgImports = new Set();
+    itemBgs.forEach((bg) => {
+      if (!bg?.varName || bgImports.has(bg.varName)) return;
+      bgImports.add(bg.varName);
+      importLines.push(`import ${bg.varName} from '../../resources/images/${bg.file}'`);
+    });
+    const itemStatic = tr.radius ? `border-radius:${tr.radius}px;` : '';
+    const itemBindBg = itemBgs.some(Boolean)
+      ? ", backgroundImage: it.bgVar ? 'url(' + it.bgVar + ')' : undefined, backgroundSize: it.bgVar ? it.bgSize : undefined, backgroundRepeat: it.bgVar ? it.bgRepeat : undefined, backgroundPosition: it.bgVar ? it.bgPosition : undefined"
+      : '';
     const itemLit = tr.items.map((it, i) => {
       const texts = `[${it.texts
         .map(
@@ -2455,28 +2987,67 @@ export function renderFoldedGridLeafVue(tr, semantic) {
             `{ v: ${jsonStr(s.v)}, l: ${jsonStr(s.l)}, vc: ${s.vc ? jsonStr(s.vc) : 'null'}, vfs: ${s.vfs ?? 'null'}, vfw: ${s.vfw ? jsonStr(s.vfw) : 'null'}, lc: ${s.lc ? jsonStr(s.lc) : 'null'}, lfs: ${s.lfs ?? 'null'} }`,
         )
         .join(', ')}]`;
-      return `  { texts: ${texts}, stats: ${stats}, icon: ${itemIconExpr[i]}, iconW: ${it.icon?.w ?? 'null'}, iconH: ${it.icon?.h ?? 'null'}, fill: ${it.fill ? jsonStr(it.fill) : 'null'}, bg: ${it.bg === true} }${i < tr.items.length - 1 ? ',' : ''}`;
+      const bg = itemBgs[i] || null;
+      const bgVar = bg?.varName || 'null';
+      const bgSize = bg?.style?.size ? jsonStr(bg.style.size) : 'null';
+      const bgPosition = bg?.style?.position ? jsonStr(bg.style.position) : 'null';
+      const bgRepeat = bg?.style?.repeat ? jsonStr(bg.style.repeat) : 'null';
+      return `  { texts: ${texts}, stats: ${stats}, icon: ${itemIconExpr[i]}, iconW: ${it.icon?.w ?? 'null'}, iconH: ${it.icon?.h ?? 'null'}, fill: ${it.fill ? jsonStr(it.fill) : 'null'}, bg: ${it.bg === true}, bgVar: ${bgVar}, bgSize: ${bgSize}, bgPosition: ${bgPosition}, bgRepeat: ${bgRepeat} }${i < tr.items.length - 1 ? ',' : ''}`;
     });
     const gapsLit = Array.isArray(tr.gaps)
       ? `const FG_LIST_GAPS = ${inlineJson(tr.gaps)};`
       : 'const FG_LIST_GAPS = null;';
+    const widthsLit = Array.isArray(tr.cardWidths)
+      ? `const FG_LIST_WIDTHS = ${inlineJson(tr.cardWidths)};`
+      : 'const FG_LIST_WIDTHS = null;';
+    const isRow = tr.direction === 'row';
+    const itemWidth = isRow
+      ? "width: FG_LIST_WIDTHS ? FG_LIST_WIDTHS[__i] + 'px' : undefined,"
+      : '';
+    const itemGap = isRow
+      ? "marginLeft: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined,"
+      : "marginTop: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined,";
+    // 🔴 步⑤（P0-2）：卡内布局按**几何真值**重建，缺真值一律保持现状（fail-open 到旧结构）。
+    //   旧结构硬编码了 `margin-left:auto` —— 那是渲染器替真值决定的**横向关系**
+    //   （把数值推到最右）；真机是「数值在名称正下方、左对齐」。两者只差这一处，
+    //   但真值不下发时**必须**仍是旧行为，否则一次误判会重排整段。
+    const il = tr.innerLayout || {};
+    const innerStacked = il.innerDir === 'stacked';
+    const vPartsInline = il.valuePartsDir === 'inline';
+    // 数值/单位同行时的真值间距（真机 2px）；无真值 ⇒ 一个字符都不写（缺事实不猜）。
+    const vGapCss =
+      vPartsInline && Number.isFinite(il.valuePartsGap) ? `gap:${il.valuePartsGap}px;` : '';
+    // 每个 stats 组内部：inline ⇒ 数值/单位同行 + `baseline`（校正 fs20 与 fs12.32 的基线差，
+    //   否则小字会贴大字的底线）；stacked ⇒ 现状纵排，对齐方式随外层（stacked 左对齐 / 现状右对齐）。
+    const statGroupStyle = `display:flex;flex-direction:${vPartsInline ? 'row' : 'column'};align-items:${
+      vPartsInline ? 'baseline' : innerStacked ? 'flex-start' : 'flex-end'
+    };justify-content:center;${vGapCss}`;
+    const statsOuterStyle = innerStacked
+      ? 'display:flex;flex-direction:column;align-items:flex-start;flex:none;'
+      : 'margin-left:auto;display:flex;flex-direction:row;flex:none;';
+    const vSpanHtml = `<span :style="{ color: s.vc || undefined, fontSize: s.vfs ? s.vfs + 'px' : undefined, fontWeight: s.vfw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.v }}</span>`;
+    const lSpanHtml = `<span v-if="s.l" :style="{ color: s.lc || undefined, fontSize: s.lfs ? s.lfs + 'px' : undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.l }}</span>`;
+    const statsBlock = (pad) => [
+      `${pad}<div v-if="it.stats.length" style="${statsOuterStyle}">`,
+      `${pad}  <div v-for="(s, __k) in it.stats" :key="__k" style="${statGroupStyle}">`,
+      `${pad}    ${vSpanHtml}`,
+      `${pad}    ${lSpanHtml}`,
+      `${pad}  </div>`,
+      `${pad}</div>`,
+    ];
     const lines = [
       '<template>',
-      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:column;min-height:0;overflow-y:auto;">`,
-      // 🔴 卡底走 `backgroundColor` **长写**（非 `background` 简写）：简写会把上面静态段的
-      //   `background-size/position/repeat` 一并重置为初始值 ⇒ 图条尺寸/定位全丢。
-      //   长写与静态段四属性零重叠 ⇒ Vue 合并 static style 与 `:style` 时互不覆盖。
-      `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;${itemStatic}" :style="{${tr.cardH ? ` height: '${tr.cardH}px',` : ''} marginTop: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined, backgroundColor: it.fill || undefined${itemBindBg} }">`,
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:${isRow ? 'row' : 'column'};min-height:0;overflow-${isRow ? 'x' : 'y'}:auto;">`,
+      // 🔴 卡底走 `backgroundColor` **长写**（非 `background` 简写）：简写会重置
+      //   逐项背景四件套 ⇒ 图条尺寸/定位全丢；长写与图片属性零重叠。
+      `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;${itemStatic}" :style="{${itemWidth}${tr.cardH ? ` height: '${tr.cardH}px',` : ''} ${itemGap} backgroundColor: it.fill || undefined${itemBindBg} }">`,
       `      <img v-if="it.icon" :src="it.icon" :style="{ width: it.iconW ? it.iconW + 'px' : undefined, height: it.iconH ? it.iconH + 'px' : undefined, objectFit: 'contain', flex: 'none'${tr.padL != null ? `, marginLeft: '${tr.padL}px'` : ''} }" alt="" />`,
       `      <div style="display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1 1 auto;">`,
       `        <span v-for="(t, __j) in it.texts" :key="__j" :style="{ color: t.c || undefined, fontSize: t.fs ? t.fs + 'px' : undefined, fontWeight: t.fw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ t.t }}</span>`,
+      // stacked：stats 进**同一列**（`it` 的文本列），紧接名称下方 ⇒ 天然左对齐、不再贴右
+      ...(innerStacked ? statsBlock('        ') : []),
       `      </div>`,
-      `      <div v-if="it.stats.length" style="margin-left:auto;display:flex;flex-direction:row;flex:none;">`,
-      `        <div v-for="(s, __k) in it.stats" :key="__k" style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;">`,
-      `          <span :style="{ color: s.vc || undefined, fontSize: s.vfs ? s.vfs + 'px' : undefined, fontWeight: s.vfw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.v }}</span>`,
-      `          <span v-if="s.l" :style="{ color: s.lc || undefined, fontSize: s.lfs ? s.lfs + 'px' : undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.l }}</span>`,
-      `        </div>`,
-      `      </div>`,
+      ...(innerStacked ? [] : statsBlock('      ')),
       `    </div>`,
       `  </div>`,
       '</template>',
@@ -2487,6 +3058,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       ...itemLit,
       `];`,
       gapsLit,
+      widthsLit,
       '</script>',
       '',
       '<style lang="less" scoped>',
@@ -2655,18 +3227,18 @@ export function renderFoldedGridLeafVue(tr, semantic) {
         c.header.bg ? `background: ${jsonStr(c.header.bg)}` : '',
         c.header.border ? `border: ${jsonStr(c.header.border)}` : '',
         `height: '${tr.rowH}px'`,
-        'box-sizing: border-box',
-        'text-align: center',
-        'vertical-align: middle',
+        `'box-sizing': 'border-box'`,
+        `'text-align': 'center'`,
+        `'vertical-align': 'middle'`,
       ].filter(Boolean);
       const cellStyleParts = [
         `background: (c && c.bg) || undefined`,
         `border: (c && c.border) || undefined`,
         `padding: (c && c.pad) || 0`,
         `height: '${tdH}px'`,
-        `box-sizing: border-box`,
-        `text-align: center`,
-        `vertical-align: middle`,
+        `'box-sizing': 'border-box'`,
+        `'text-align': 'center'`,
+        `'vertical-align': 'middle'`,
       ];
       lines.push(
         `const hStyle${i} = { ${hStyleParts.join(', ')} };`,
@@ -2749,20 +3321,9 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       '<template>',
       `  <div data-section-id="${tr.sectionId}" class="${cls}" style="${gridStyle};">`,
     ];
-    tr.cells.forEach((c, i) => {
-      const lw = tr.columns[c.col]?.labelW ?? c.labelW;
-      lines.push(
-        `    <div class="${cls}-cell" style="display:flex;flex-direction:row;align-items:baseline;gap:${tr.labelGap}px;">`,
-        `      <span class="${cls}-label" style="flex:0 0 ${lw}px;text-align:right;color:${c.labelColor};font-size:${c.labelFs}px;font-weight:${c.labelFw};line-height:${c.labelLh}px;white-space:nowrap;">{{ l${i} }}</span>`,
-        `      <span class="${cls}-value" style="color:${c.valueColor};font-size:${c.valueFs}px;font-weight:${c.valueFw};line-height:${c.valueLh}px;white-space:nowrap;">{{ v${i} }}</span>`,
-        '    </div>',
-      );
-    });
+    lines.push(...fgKvCellLines(tr, cls, 'l', 'v'));
     lines.push('  </div>', '</template>', '', '<script setup>');
-    tr.cells.forEach((c, i) => {
-      lines.push(`const l${i} = ${jsonStr(c.label)}`);
-      lines.push(`const v${i} = ${jsonStr(c.value)}`);
-    });
+    lines.push(...fgKvCellConsts(tr, 'l', 'v'));
     lines.push(
       '</script>',
       '',
@@ -2776,14 +3337,64 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     );
     return lines.join('\n');
   }
+  if (tr.kind === 'regions') {
+    // 🔀 刀 54 段内分区接管：复合 leaf 产**单个 SFC** —— 相对定位容器（高=段锚真值，
+    //   内容全绝对定位不占流）+ kv 区绝对定位 grid（单元构造复用 kvgrid 分支同一
+    //   helper，禁第二份）+ text 区逐成员绝对定位 span。text members 分散在 kv 区
+    //   上下 ⇒ 只能逐成员定位，不可按 region 顺序块装（区域框仅为外框）。
+    const cls = `c-${sem}-fg-regions-${idSlug(tr.sectionId)}`;
+    const kvCls = `${cls}-kv`;
+    const kv = tr.kv;
+    const gridStyle = [
+      `position:absolute;left:${kv.x}px;top:${kv.y}px;width:${kv.w}px`,
+      'display:grid',
+      `grid-template-columns:repeat(${kv.cols}, max-content)`,
+      `justify-content:${kv.justify}`,
+      kv.colGap > 0 ? `column-gap:${kv.colGap}px` : '',
+      kv.rowGap > 0 ? `row-gap:${kv.rowGap}px` : '',
+      'align-content:start',
+      'align-items:start',
+    ].filter(Boolean).join(';');
+    const lines = [
+      '<template>',
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="position:relative;min-width:0;${tr.height ? `height:${tr.height}px;` : ''}padding:0;">`,
+      `    <div class="${kvCls}" style="${gridStyle};">`,
+    ];
+    lines.push(...fgKvCellLines(kv, kvCls, 'kvl', 'kvv'));
+    lines.push('    </div>');
+    tr.textRuns.forEach((r, i) => {
+      const multiline = Boolean(r.multiline);
+      lines.push(
+        `    <span class="${cls}-rt" style="position:absolute;left:${r.x}px;top:${r.y}px;${multiline ? `width:${r.w}px;` : ''}color:${r.color};font-size:${r.fs}px;font-weight:${r.fw};line-height:${r.lh}px;white-space:${multiline ? 'normal' : 'nowrap'};">{{ rt${i} }}</span>`,
+      );
+    });
+    lines.push('  </div>', '</template>', '', '<script setup>');
+    lines.push(...fgKvCellConsts(kv, 'kvl', 'kvv'));
+    tr.textRuns.forEach((r, i) => {
+      lines.push(`const rt${i} = ${jsonStr(r.text)}`);
+    });
+    lines.push(
+      '</script>',
+      '',
+      '<style lang="less" scoped>',
+      `.${cls} { min-width: 0; }`,
+      `.${cls}-rt { display: block; }`,
+      '</style>',
+      '',
+    );
+    return lines.join('\n');
+  }
   if (tr.kind === 'icon') {
     // 🔴 纯 icon 叶（刀 53c）：真值尺寸内联、object-fit:contain；资源变量由
     //    injectResourceImports 补 import（单一事实源）。**不依赖任何 style 块**
     //   （预览运行时 scoped style 不生效，round-16 实锤）。
     const cls = `c-${sem}-fg-icon-${idSlug(tr.sectionId)}`;
+    // 🛡️ P3：面板真值（底色/圆角/发光/满宽）自持 —— `tr.panelCss` 由 collectFoldedGridTakeover
+    //   注入（判据同源 container-background-truth#buildPanelInlineCss）。为空 ⇒ 无前缀 ⇒ 逐字不变。
+    const panelStyle = tr.panelCss ? `${tr.panelCss};` : '';
     return [
       '<template>',
-      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;align-items:center;justify-content:center;min-width:0;padding:0;">`,
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="${panelStyle}display:flex;align-items:center;justify-content:center;min-width:0;padding:0;">`,
       `    <img :src="${tr.iconVar}" alt="" class="${cls}-img" style="width:${tr.iconW}px;height:${tr.iconH}px;object-fit:contain;flex:none;" />`,
       '  </div>',
       '</template>',
@@ -2905,6 +3516,9 @@ export function renderFoldedGridLeafVue(tr, semantic) {
   }
   if (tr.kind === 'header') {
     const cls = `c-${sem}-fg-header-${idSlug(tr.sectionId)}`;
+    // 🛡️ P3：面板真值自持（同 icon 分支；判据同源，见 collectFoldedGridTakeover 注入点）。
+    //   为空 ⇒ 无前缀 ⇒ 根 div 逐字不变（fail-open 零回归）。
+    const panelStyle = tr.panelCss ? `${tr.panelCss};` : '';
     // 🔴 font-size 放**内联 style 属性**（round-16 推翻 round-10 结论）：
     //   微码预览运行时里 SFC scoped style 块**不生效**（54 个 stylesheet 无 fg- 规则），
     //   放 style 块 = 字号塌回继承值；放内联则依赖归一器的 fg- 标签内联保护
@@ -2913,7 +3527,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     //   `flex-direction:column`（内联没钉的属性 class 就能赢，round-10 实锤）。
     return [
       '<template>',
-      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:${tr.gap}px;height:${tr.height}px;padding:0;">`,
+      `  <div data-section-id="${tr.sectionId}" class="${cls}" style="${panelStyle}display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:${tr.gap}px;height:${tr.height}px;padding:0;">`,
       `    <img :src="${tr.iconVar}" alt="" class="${cls}-icon" style="width:${tr.iconW}px;height:${tr.iconH}px;object-fit:contain;flex:none;" />`,
       `    <span class="${cls}-title" style="color:${tr.titleColor};font-size:${tr.fontSize}px;font-weight:${tr.fontWeight};line-height:1;white-space:nowrap;">{{ title }}</span>`,
       '  </div>',
@@ -3142,7 +3756,7 @@ function declaredUnconsumedCount(sec, kind) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -3237,8 +3851,25 @@ export function collectFoldedGridTakeover(p = {}) {
                   const ft = detectFooterSummaryLeaf(sec, p.resourceMapping);
                   if (ft.ok) tr = ft;
                   else {
-                    out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};list:${ls.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason};footer:${ft.reason}` });
-                    continue;
+                    // 🔀 刀 54 段内分区接管（2026-11-03）：检测链**最末位** ——
+                    //   十类（grid/header/statrow/table/list/text/icon/legend/kv/footer）
+                    //   全 fail 的复合叶才轮到它，结构上不可能抢走既有命中（宁漏勿错）。
+                    //   整段二选一会丢内容的复合段按几何分互斥子区逐区渲染；任一子区
+                    //   判据不过 ⇒ 整段 fail-open 交 LLM。
+                    const rg = detectRegionCompositeLeaf(sec, figmaIndex);
+                    if (rg.ok) {
+                      tr = rg;
+                      // 🔴 判据行铁律：真机可 grep 的命中计数（regions=N = 子区数）。
+                      p.logger?.info?.('🔀 段内分区接管', {
+                        leaf: String(sec.id),
+                        regions: rg.regionCount,
+                        kvCells: rg.kv.cells.length,
+                        textRuns: rg.textRuns.length,
+                      });
+                    } else {
+                      out.skipped.push({ id: String(sec.id), reason: `grid:${tr.reason};header:${h.reason};statrow:${sr.reason};table:${tb.reason};list:${ls.reason};text:${t.reason};icon:${ic.reason};legend:${lg.reason};kv:${kv.reason};footer:${ft.reason};regions:${rg.reason}` });
+                      continue;
+                    }
                   }
                 }
               }
@@ -3270,12 +3901,93 @@ export function collectFoldedGridTakeover(p = {}) {
     // 🔴 刀 53g 必须**显式**分支：否则会落进下面的 `else` 被算成 gridHits，
     //   而「gridHits 里有几个是属性网格」正是真机核验唯一依据 ⇒ 计数失真 = 假绿。
     // 🔴 刀 20b 必须**显式**分支（同 53g 教训）：否则落进 else 被算成 gridHits ⇒ 计数失真。
-    else if (tr.kind === 'list') out.listHits += 1;
+    else if (tr.kind === 'list') {
+      out.listHits += 1;
+      if (tr.direction === 'row') out.listRow += 1;
+      else out.listColumn += 1;
+      // 🔴 刀55 计数行铁律：几何翻案声明/缺省的次数必须真机可 grep（0 也打）——
+      //   若恒 0 说明新判据从未生效（塞入参=假绿的形状），若暴涨说明几何判据误伤。
+      if (String(tr.directionSource || '').startsWith('geometry-overrides')) out.listDirectionOverrides += 1;
+      const declared = Number(tr.itemBgStats?.declared || 0);
+      const subtree = Number(tr.itemBgStats?.subtree || 0);
+      out.listItemBgDeclared += declared;
+      out.listItemBgSubtree += subtree;
+      out.listItemBgSkipped += Number(tr.itemBgStats?.skipped || 0);
+      out.listItemBg += declared + subtree;
+      // 🔴 2026-11-03（步①②）：列表几何真值可见化 —— 与刀55「几何翻案次数必 grep」同款铁律。
+      //   `listGeoNegGapClamped`：负间距被总闸拦下的段数。0 而产物仍含负值 ⇒ 判据未生效。
+      //   `listGeoGeoNotReady`：异宽/异高致 `geoReady=false` 的段数 —— 过去是静默降级，
+      //     与「设计本就无间距」不可区分（§9.3 结论 3），必须挂出来。
+      //   `listGeoWidthNotUniform`（步③）：row 且「回退盒 + 异宽」⇒ 横向几何未下发的段数。
+      //     0 而产物仍含 `FG_LIST_WIDTHS` 异宽值 ⇒ 判据未生效。
+      //   `listGeoSamples`（封顶 8）：留真值现场（`rawW`/`rawX`=帧盒几何真值，
+      //     `widths`=实际下发，`neg`=clamp 前的原始负值）—— 被拦下后仍可完整回溯。
+      const lg = tr.listGeo || null;
+      if (lg) {
+        if (lg.negGapClamped) out.listGeoNegGapClamped += 1;
+        if (!lg.geoReady) out.listGeoGeoNotReady += 1;
+        if (lg.widthNotUniform) out.listGeoWidthNotUniform += 1;
+        // 🔴 步④：几何锚（按几何选可见底）命中段数 + 跨度自校验拒绝段数。
+        //   `geomPicked>0` ⇒ 颜色锚结构性失效的样本已被几何锚救回（真机病灶即此类）；
+        //   `spanRejected>0` ⇒ 几何锚误选并被兜底拦下（是自校验生效的证据，不是故障）。
+        //   `geomPicked>0 && !spanRejected` 才是「几何锚**生效**」；被自校验拦下的段只计 spanRejected。
+        if (lg.geomPicked > 0 && !lg.spanRejected) out.listGeoGeomPicked += 1;
+        if (lg.spanRejected) out.listGeoSpanRejected += 1;
+        // 🔴 步⑤（P0-2）：卡内布局真值落地分布。`innerInline` 仅确认现状（不重排），
+        //   `innerStacked` 才真正改渲染结构 ⇒ 误判定性：只有 stacked 会改变产物形态。
+        //   `innerConflict` ⇒ 各卡投票不一致被拦（判据在工作，不是故障）。
+        if (lg.innerDir === 'stacked') out.listGeoInnerStacked += 1;
+        else if (lg.innerDir === 'inline') out.listGeoInnerInline += 1;
+        if (lg.innerConflict) out.listGeoInnerConflict += 1;
+        if (lg.valuePartsDir === 'inline') out.listGeoValuePartsInline += 1;
+        else if (lg.valuePartsDir === 'stacked') out.listGeoValuePartsStacked += 1;
+        if (out.listGeoSamples.length < 8) {
+          out.listGeoSamples.push({
+            sectionId: String(tr.sectionId ?? ''),
+            dir: lg.direction === 'row' ? 'row' : 'column',
+            w: lg.cardW,
+            h: lg.cardH,
+            rawW: lg.rawWidths,
+            rawX: lg.rawXs,
+            boxW: lg.boxWidths,
+            boxX: lg.boxXs,
+            geom: lg.geomPicked,
+            spanRej: !!lg.spanRejected,
+            inner: lg.innerDir,
+            innerProv: lg.innerProven,
+            vParts: lg.valuePartsDir,
+            vGap: lg.valuePartsGap,
+            widths: lg.cardWidths,
+            gaps: lg.gaps,
+            neg: lg.negGapValues,
+            wnu: !!lg.widthNotUniform,
+          });
+        }
+      }
+    }
     else if (tr.kind === 'kvgrid') out.kvGridHits += 1;
     // 🔴 刀53h 同 53g/20b 教训：新 kind **必须显式分支**，否则落进下面 `else` 被算成
     //   gridHits ⇒「gridHits 里有几个是 footer」不可辨 ⇒ 计数失真 = 假绿。
     else if (tr.kind === 'footer') out.footerHits += 1;
+    // 🔴 刀 54 同 53g/53h/20b 教训：新 kind **必须显式分支**，否则落进 else 被算成
+    //   gridHits ⇒ 计数失真 = 假绿。
+    else if (tr.kind === 'regions') out.regionHits += 1;
     else out.gridHits += 1;
+    // 🛡️ P3（2026-11-03）：icon / header 接管产物**自持**面板真值（底色/圆角/发光/满宽）。
+    //   病灶：刀 53 终裁覆写（`file-writer.js` 以 `_fgTakeoverFiles` 快照整包替换）的快照
+    //   拍于 LLM 分块之前，而刀 37/42 heal 跑在快照**之后** ⇒ 对本类文件的修复被整包回滚
+    //   （全库实测 `fg-` 接管元素 icon `0/110`、header `0/219` 携带背景 = 铁证：同一病、新机制）。
+    //   治本：渲染器自己写（heal 对非接管的 LLM 产物照旧生效，两路互补、判据同源）。
+    //   🔴 只对 icon/header 生效：grid/statrow/table/list 的面板底由既有的 item/容器背景
+    //   机制（刀 33/41）负责，实测已有背景（grid 102/204）；扩面会引入重排风险，故不扩。
+    //   fail-open：无 panel 真值 ⇒ `panelCss=''` ⇒ 根 div 逐字不变（零回归）。
+    if (tr.kind === 'icon' || tr.kind === 'header') {
+      out.panelBgTried += 1;
+      tr.panelCss = buildPanelInlineCss(resolveSectionPanel(tr.sectionId, figmaIndex));
+      // 🔴 计数行铁律：`tried>0 而 injected=0` 正是「判据静默失效」（如索引形状不符）
+      //   的形状，必须与「本来就没有面板真值」可辨 —— 0 也打（见 reject-summary 审计行）。
+      if (tr.panelCss) out.panelBgInjected += 1;
+    }
     out.map.set(String(tag), {
       kind: tr.kind,
       sectionId: tr.sectionId,
@@ -3363,6 +4075,20 @@ export function collectFoldedGridTakeover(p = {}) {
     tableSuppressed: out.tableSuppressed,
     tableAnchorRepairs: out.tableAnchorRepairs,
     footerTaken: out.footerHits,
+    regionsTaken: out.regionHits,
+    listDirectionOverrides: out.listDirectionOverrides,
+    // 🔴 2026-11-03：列表卡盒几何真值（负间距总闸 + geoReady 覆盖 + 步③ 异宽拦宽度）——0 也打。
+    listGeoNegGapClamped: out.listGeoNegGapClamped,
+    listGeoGeoNotReady: out.listGeoGeoNotReady,
+    listGeoWidthNotUniform: out.listGeoWidthNotUniform,
+    listGeoGeomPicked: out.listGeoGeomPicked,
+    listGeoSpanRejected: out.listGeoSpanRejected,
+    listGeoInnerStacked: out.listGeoInnerStacked,
+    listGeoInnerInline: out.listGeoInnerInline,
+    listGeoInnerConflict: out.listGeoInnerConflict,
+    listGeoValuePartsInline: out.listGeoValuePartsInline,
+    listGeoValuePartsStacked: out.listGeoValuePartsStacked,
+    listGeoSamples: out.listGeoSamples.slice(0, 4),
     skipped: out.skipped.slice(0, 16),
   });
   return out;

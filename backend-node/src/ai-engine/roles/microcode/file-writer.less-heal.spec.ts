@@ -5,6 +5,8 @@ import { existsSync } from 'fs'
 
 jest.mock('../../../config/backend-root.js', () => ({
   workspaceRoot: process.cwd(),
+  // logger.js 依赖 logsDir（整模块 mock 必须同给），否则 join(undefined,…) 抛错 ⇒ suite fail-to-run
+  logsDir: join(process.cwd(), 'logs'),
 }), { virtual: true })
 
 import { writeFiles } from './file-writer.js'

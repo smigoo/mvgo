@@ -50,7 +50,11 @@ export class HeaderSlotValidator {
       // 契约推导同样执行（vue3 不消费 base-panel 插槽，但 state 数据双端一致，
       // 结构标记/文字清单链路可复用；无任何 prompt 副作用）
       try {
-        const derived = this.deriveHeaderSlotsFromFigma(figmaNodeData);
+        const derived = this.deriveHeaderSlotsFromFigma(
+          figmaNodeData,
+          null,
+          headerSlotsFromPreview,
+        );
         vue3Result.derivedSlots = derived;
         vue3Result.contractSlots = derived;
         if (derived.length > 0) {
@@ -87,7 +91,11 @@ export class HeaderSlotValidator {
     // 🎯 契约推导：不依赖 vision 候选——vision 漏识别（headerSlots=[]）时 validatedSlots 恒空。
     // 从 Figma header 容器确定性推导 declare/prompt 契约形态的插槽，供图节点回写 state.headerSlots。
     try {
-      const derived = this.deriveHeaderSlotsFromFigma(figmaNodeData, titleNode);
+      const derived = this.deriveHeaderSlotsFromFigma(
+        figmaNodeData,
+        titleNode,
+        headerSlotsFromPreview,
+      );
       result.derivedSlots = derived;
       const byId = new Map();
       for (const d of derived) byId.set(d.figmaNodeId || d.content, d);
@@ -128,7 +136,7 @@ export class HeaderSlotValidator {
    *
    * 🆕 v3.1 优化：按 X 坐标和间距智能分类插槽位置
    */
-  deriveHeaderSlotsFromFigma(figmaNodeData, titleNode = null) {
+  deriveHeaderSlotsFromFigma(figmaNodeData, titleNode = null, headerSlotCandidates = []) {
     const container = this.figmaConnector.findHeaderContainer(figmaNodeData);
     const isAnnotation = (t) =>
       /^[*#]/.test(t) || /TODO|FIXME|标注|备注/.test(t);
@@ -277,7 +285,40 @@ export class HeaderSlotValidator {
       });
     }
 
-    return slots;
+    // 把 Figma 推导 slot 归到 vision 的宿主 section。真实设计里 Tab 与标题段常是
+    // header 容器内的兄弟，而非标题段子树；所以不能写死 container.id，也不能要求
+    // sectionId 必须包含 figmaNodeId。仅当同一 header 容器内、同 slotType 的候选
+    // 归一到唯一 sectionId 时才补归属；多宿主或缺候选一律沉默，交给旧匹配回退。
+    // rejected 候选在这里只提供宿主证据，绝不会因此被重新加入 headerSlots。
+    const containsId = (root, id) => {
+      if (!root || !id) return false;
+      const stack = [root];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (String(node?.id ?? '') === String(id)) return true;
+        for (const child of Array.isArray(node?.children) ? node.children : []) {
+          stack.push(child);
+        }
+      }
+      return false;
+    };
+    const candidates = Array.isArray(headerSlotCandidates) ? headerSlotCandidates : [];
+    const resolveSectionId = (slot) => {
+      const slotType = String(slot?.slotType || '').replace('_', '-').toLowerCase();
+      const matches = new Set();
+      for (const candidate of candidates) {
+        const candidateType = String(candidate?.slotType || '').replace('_', '-').toLowerCase();
+        const sectionId = String(candidate?.sectionId || '').trim();
+        if (!sectionId || candidateType !== slotType) continue;
+        if (containsId(container, sectionId)) matches.add(sectionId);
+      }
+      return matches.size === 1 ? [...matches][0] : '';
+    };
+    return slots.map((slot) => {
+      if (slot.sectionId) return slot;
+      const sectionId = resolveSectionId(slot);
+      return sectionId ? { ...slot, sectionId } : slot;
+    });
   }
 
   /**

@@ -54,12 +54,13 @@ export class DemoController {
   }
 
   /**
-   * AI 修复预览渲染错误
+   * AI 修复预览渲染错误（异步受理版，2026-11-03 治本 504）
    * POST /api/demo/ai-fix-render-error
+   * 立即返回 { success, fixId }；修复进度/结果轮询 GET ai-fix-render-error-status/:fixId
    */
   @Post('ai-fix-render-error')
   @HttpCode(200)
-  async aiFixRenderError(
+  aiFixRenderError(
     @Body()
     body: {
       componentId: string;
@@ -75,14 +76,26 @@ export class DemoController {
     }
 
     try {
-      return await this.demoService.aiFixRenderError(body);
+      return this.demoService.startAiFixRenderError(body);
     } catch (error) {
-      this.logger.error(`AI 修复渲染错误失败: ${error.message}`, error.stack);
+      this.logger.error(`AI 修复渲染错误受理失败: ${error.message}`, error.stack);
       throw new HttpException(
-        `AI 修复渲染错误失败: ${error.message}`,
+        `AI 修复渲染错误受理失败: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * 查询异步 AI 修复任务状态
+   * GET /api/demo/ai-fix-render-error-status/:fixId
+   */
+  @Get('ai-fix-render-error-status/:fixId')
+  aiFixRenderErrorStatus(@Param('fixId') fixId: string) {
+    if (!fixId) {
+      throw new HttpException('fixId 为必填', HttpStatus.BAD_REQUEST);
+    }
+    return this.demoService.getAiFixStatus(fixId);
   }
 
   /**

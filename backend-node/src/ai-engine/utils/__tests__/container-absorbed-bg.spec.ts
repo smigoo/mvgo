@@ -5,7 +5,7 @@
  * sourceNodeIds，但无任何叶子认领它 ⇒ 描述卡底在产物里 0 次出现。
  * 判据全走 Figma 真值（bbox/fills/cornerRadius），逐事实缺失即 fail-open。
  */
-import { resolveAbsorbedBgLayers , claimCollapsedLeafContainedIds} from '../container-absorbed-bg.js'
+import { resolveAbsorbedBgLayers , claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../container-absorbed-bg.js'
 import { indexFigmaNodes } from '../section-tree.js'
 
 // 真值几何（8bbcf027 checkpoint 逐字段抄录）
@@ -138,17 +138,18 @@ describe('resolveAbsorbedBgLayers — 刀 7 容器吸收背景层', () => {
 
   // ── 刀 20c（2026-10-28 · 657661ca 实锤）：滚动条滑块不吸收 ─────────────
   it('刀20c：细长贴右缘 rect（滚动条滑块 6×218）⇒ 跳过，不画假滚动条', () => {
-    // 真值复刻：48:5904 {x: 容器右缘-6, w:6, h:218} rgba(55,149,221,0.37)
+    // 真值复刻：48:5904 name='滚动条' {x: 容器右缘-6, w:6, h:218} rgba(55,149,221,0.37)
     const bar = rect('48:5904', {
       x: CONTAINER_BOX.x + CONTAINER_BOX.width - 6,
       y: CONTAINER_BOX.y + 100,
       width: 6,
       height: 218,
-    }, { cornerRadius: 3 })
+    }, { cornerRadius: 3, name: '滚动条' })
     const root = container([bar])
     const sec = { id: '801:3', sourceNodeIds: ['801:3', '48:5904'] }
     const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
     expect(r.layers).toEqual([])
+    expect(r.scrollbarExempted).toBe(1) // 计数行必须非 0 ⇒ 证明「豁免判据真的跑到了」
   })
 
   it('刀20c 反向：同尺寸但**不贴右缘**的细长 rect ⇒ 仍吸收（不误伤装饰条）', () => {
@@ -163,6 +164,58 @@ describe('resolveAbsorbedBgLayers — 刀 7 容器吸收背景层', () => {
     const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
     expect(r.layers.length).toBe(1)
     expect(r.layers[0].id).toBe('9:10')
+  })
+
+  // ── 刀 20c-R（2026-11-02 · `43:5688` 实锤）：几何不足以判别滚动条 ────────
+  // 铁证：装饰条 43:5688（name='Rectangle 346242323'，6×218 r3）与真滚动条
+  // 48:5904（name='滚动条'，6×218 r3）**几何逐字段同构**（含右缘精确贴容器边），
+  // 容器内容溢出量均为 0 ⇒ 旧纯几何判据把装饰条一并豁免（实测 c-device-34fa6237 /
+  // c-device-486cc6b6 两目录竖条消失，而同构的 c-device-5665901a 正常渲染）。
+  it('⭐ 刀20c-R：贴右缘 + 条状 + **自动名**（Rectangle 346242323）⇒ 仍吸收（真值复刻 43:5688）', () => {
+    // 容器 807:2 {x:29636,y:51637,w:483,h:515}，右缘 29636+483=30119
+    const host = { x: 29636, y: 51637, width: 483, height: 515 }
+    // 43:5688 {x:30113,y:51815,w:6,h:218,r:3}，右缘 30113+6=30119 ⇒ **精确贴合**
+    const deco = rect('43:5688', { x: 30113, y: 51815, width: 6, height: 218 }, {
+      cornerRadius: 3,
+      name: 'Rectangle 346242323',
+    })
+    const root = { id: '807:2', type: 'GROUP', absoluteBoundingBox: host, children: [deco] }
+    const sec = { id: '807:2', sourceNodeIds: ['807:2', '43:5688'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers.length).toBe(1)
+    expect(r.layers[0].id).toBe('43:5688')
+    expect(r.layers[0].borderRadius).toBe(3)
+    expect(r.scrollbarExempted).toBe(0)
+    // 右缘与容器精确贴合 ⇒ right:0 + 真值宽；左/上/下不贴 ⇒ 真值偏移 + 真值尺寸
+    expect(r.layers[0].edgeCss).toBe('right:0;width:6px;top:178px;height:218px;')
+  })
+
+  it('刀20c-R：同几何但名确指滚动条（scrollbar）⇒ 仍豁免（英文命名同源）', () => {
+    const bar = rect('48:5904', {
+      x: CONTAINER_BOX.x + CONTAINER_BOX.width - 6,
+      y: CONTAINER_BOX.y + 100,
+      width: 6,
+      height: 218,
+    }, { cornerRadius: 3, name: 'scrollbar-thumb' })
+    const root = container([bar])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '48:5904'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers).toEqual([])
+    expect(r.scrollbarExempted).toBe(1)
+  })
+
+  it('刀20c-R：缺 name（undefined）⇒ 不豁免（未知即不豁免，fail-open 到吸收）', () => {
+    const bar = rect('9:11', {
+      x: CONTAINER_BOX.x + CONTAINER_BOX.width - 6,
+      y: CONTAINER_BOX.y + 100,
+      width: 6,
+      height: 218,
+    })
+    const root = container([bar])
+    const sec = { id: '801:3', sourceNodeIds: ['801:3', '9:11'] }
+    const r = resolveAbsorbedBgLayers(sec, figmaOf(root), new Set())
+    expect(r.layers.length).toBe(1)
+    expect(r.scrollbarExempted).toBe(0)
   })
 })
 
@@ -205,5 +258,62 @@ describe('刀29c — claimCollapsedLeafContainedIds 几何包含认领（mc-max-
     const claimed = claimCollapsedLeafContainedIds(new Set(['x']), [leaf], mkIndex(), () => null);
     expect(claimed.has('x')).toBe(true);
     expect(claimed.has('48:5814')).toBe(false);
+  });
+});
+
+// ── 刀 7c（2026-11-03 · `807:2`/`43:5688` 实锤）：候选集扩充（纯枚举，无裁决） ────────
+describe('刀 7c — expandCandidateIdsWithDirectChildren 直系子枚举', () => {
+  const HOST = { x: 29636, y: 51637, width: 483, height: 515 };
+  const figma = () => {
+    const deco = rect('43:5688', { x: 30113, y: 51815, width: 6, height: 218 }, {
+      cornerRadius: 3,
+      name: 'Rectangle 346242323',
+    });
+    const root = {
+      id: '807:2',
+      name: 'slot-con',
+      type: 'GROUP',
+      absoluteBoundingBox: HOST,
+      children: [
+        { id: '43:4784', type: 'GROUP', absoluteBoundingBox: { x: 29636, y: 51637, width: 470, height: 60 } },
+        { id: '43:4878', type: 'TEXT', characters: 'x', absoluteBoundingBox: { x: 29636, y: 51700, width: 100, height: 16 } },
+        deco,
+      ],
+    };
+    return figmaOf(root);
+  };
+
+  it('⭐ 阳性：sourceNodeIds 只有自身 ⇒ 直系子按图序追加（真值复刻 807:2）', () => {
+    const sec = { id: '807:2', sourceNodeIds: ['807:2'] };
+    expect(expandCandidateIdsWithDirectChildren(sec, figma())).toEqual([
+      '807:2', '43:4784', '43:4878', '43:5688',
+    ]);
+  });
+
+  it('已声明的 id 不重复追加（保原序，只追加缺的）', () => {
+    const sec = { id: '807:2', sourceNodeIds: ['807:2', '43:5688'] };
+    expect(expandCandidateIdsWithDirectChildren(sec, figma())).toEqual([
+      '807:2', '43:5688', '43:4784', '43:4878',
+    ]);
+  });
+
+  it('fail-open：figmaIndex 缺失 / 节点无 children / sec 无 sourceNodeIds ⇒ 不抛错', () => {
+    expect(expandCandidateIdsWithDirectChildren({ id: '807:2', sourceNodeIds: ['807:2'] }, null)).toEqual(['807:2']);
+    const lone = { id: '9:1', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 1, height: 1 } };
+    expect(expandCandidateIdsWithDirectChildren({ id: '9:1', sourceNodeIds: ['9:1'] }, figmaOf(lone))).toEqual(['9:1']);
+    expect(expandCandidateIdsWithDirectChildren({ id: '807:2' }, figma())).toEqual([
+      '43:4784', '43:4878', '43:5688',
+    ]);
+  });
+
+  it('⭐ 端到端：扩充候选集后喂判据 ⇒ 43:5688 出层（仅枚举、裁决仍在判据单点）', () => {
+    const sec = { id: '807:2', sourceNodeIds: ['807:2'] };
+    const idx = figma();
+    const eff = expandCandidateIdsWithDirectChildren(sec, idx);
+    const r = resolveAbsorbedBgLayers({ ...sec, sourceNodeIds: eff }, idx, new Set());
+    expect(r.layers.map((l) => l.id)).toEqual(['43:5688']);
+    expect(r.layers[0].borderRadius).toBe(3);
+    expect(r.layers[0].edgeCss).toBe('right:0;width:6px;top:178px;height:218px;');
+    expect(r.scrollbarExempted).toBe(0); // 自动名 ⇒ 不豁免
   });
 });

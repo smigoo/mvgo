@@ -170,6 +170,159 @@ describe('刀20b collectFoldedGridTakeover 集成', () => {
   });
 });
 
+describe('任务20第二刀 — 列表成员方向、逐项宽度与主轴间距', () => {
+  const HORIZONTAL_FIGMA = {
+    id: 'root-horizontal', type: 'FRAME',
+    children: [
+      { id: '136:129', x: 37, width: 140.4815 },
+      { id: '136:128', x: 166, width: 120 },
+      { id: '136:127', x: 274, width: 141 },
+    ].map((card) => ({
+      id: card.id, type: 'FRAME',
+      absoluteBoundingBox: { x: card.x, y: 984, width: card.width, height: 74.1953 },
+      children: [{
+        id: `${card.id}-icon`, type: 'FRAME',
+        absoluteBoundingBox: { x: card.x + 8, y: 1000, width: 40, height: 40 }, children: [],
+      }],
+    })),
+  };
+  const HORIZONTAL_SEC = {
+    id: '136:122', type: 'list', layout: 'vertical',
+    body: { layout: 'horizontal-3-columns' },
+    collapsed: true, renderHint: 'v-for', itemCount: 3,
+    items: [
+      mkItem('136:129', '136:129-icon', '甲节点', '#ffffff'),
+      mkItem('136:128', '136:128-icon', '乙节点', '#ffffff'),
+      mkItem('136:127', '136:127-icon', '丙节点', '#ffffff'),
+    ],
+  };
+
+  it('⭐ 真实三卡形态：声明冲突由同 y 几何仲裁为 row（帧盒不可证 ⇒ 横向几何不下发）', () => {
+    const r = detectListLeaf(HORIZONTAL_SEC, indexFigmaNodes(HORIZONTAL_FIGMA));
+    expect(r.ok).toBe(true);
+    expect(r.direction).toBe('row');
+    expect(r.directionSource).toBe('geometry-conflict');
+    expect(r.cardH).toBe(74);
+    // 🔴 2026-11-03（列表卡盒真值治本 步③ **修正本用例**）：
+    //   原断言 `cardWidths=[140,120,141]` + `gaps=[-11,-12]`（并断言产物 `FG_LIST_GAPS=[-11,-12]`）
+    //   把**帧盒**当成卡真值下发 —— 而帧盒是含卡内留白/阴影的**外框**，不是卡本体。
+    //   证据：真机可见底 `2:8034/8047/8058` 是 120×60 @ x=37/166/295（gaps=[9,9]），
+    //   而帧盒 140/120/141 @ x=37/166/274 相减得 **负值**（负间距 = 两卡重叠，几何不可能）
+    //   ⇒ 旧断言把「算错」写成了「设计真值」，正是本刀要根治的假绿形状。
+    //   本夹具每卡 `repeatedFill='#ffffff'` 在子树内**无相等 SOLID** ⇒ `resolveCardBox`
+    //   不可证（`node=null`）⇒ 步③ 宽度守卫拦下：横向几何（逐项宽度 + 间距）**同门不下发**。
+    expect(r.cardWidths).toBeNull();
+    expect(r.gaps).toBeNull();
+    expect(r.listGeo.widthNotUniform).toBe(true);
+    // 🔴 未计算 ⇒ 不是「算了但为负」，故负间距总闸不触发（信号由 widthNotUniform 承载）
+    expect(r.listGeo.negGapClamped).toBe(false);
+    // 被拦下的帧盒几何仍可完整回溯（否则「不下发」= 新的静默降级）
+    expect(r.listGeo.rawWidths).toEqual([140, 120, 141]);
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    expect(vue).toContain('flex-direction:row;min-height:0;overflow-x:auto;');
+    expect(vue).toContain("width: FG_LIST_WIDTHS ? FG_LIST_WIDTHS[__i] + 'px' : undefined");
+    expect(vue).toContain("marginLeft: __i > 0 && FG_LIST_GAPS ? FG_LIST_GAPS[__i - 1] + 'px' : undefined");
+    expect(vue.replace(/\s+/g, '')).toContain('FG_LIST_WIDTHS=null');
+    expect(vue.replace(/\s+/g, '')).toContain('FG_LIST_GAPS=null');
+    expect(validateVueSfc(vue, 'ListSection.vue').errors).toEqual([]);
+    const audit = collectFoldedGridTakeover({
+      treeSections: [HORIZONTAL_SEC], figmaNodeData: HORIZONTAL_FIGMA,
+      resourceMapping: [], componentName: 'c-demo',
+    });
+    expect(audit.listRow).toBe(1);
+    expect(audit.listColumn).toBe(0);
+  });
+
+  const HORIZONTAL_BG_MAP = [
+    { figmaNodeId: '136:125', ownerSectionId: '136:129', resourceFile: '../resources/images/bg-125.png', assignedVarName: 'bg1', recommendedUsage: 'backgroundBlock', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaBox: { x: 37, y: 984, width: 140, height: 74 } },
+    { figmaNodeId: '136:124', ownerSectionId: '136:128', resourceFile: '../resources/images/bg-124.png', assignedVarName: 'bg2', recommendedUsage: 'backgroundBlock', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaBox: { x: 166, y: 984, width: 120, height: 74 } },
+    { figmaNodeId: '136:126', ownerSectionId: '136:127', resourceFile: '../resources/images/bg-126.png', assignedVarName: 'bg3', recommendedUsage: 'backgroundBlock', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaBox: { x: 274, y: 984, width: 141, height: 74 } },
+  ];
+  const HORIZONTAL_BG_SEC = {
+    ...HORIZONTAL_SEC,
+    items: HORIZONTAL_SEC.items.map((it, i) => ({
+      ...it,
+      bg: {
+        resourceFile: `../resources/images/bg-${[125, 124, 126][i]}.png`,
+        recommendedUsage: 'backgroundBlock', width: [140, 120, 141][i], height: 74,
+      },
+    })),
+  };
+
+  it('⭐ 逐项背景：同色三卡仍分别消费自己的资源，禁止首卡扩散', () => {
+    const r = detectListLeaf(HORIZONTAL_BG_SEC, indexFigmaNodes(HORIZONTAL_FIGMA), HORIZONTAL_BG_MAP);
+    expect(r.ok).toBe(true);
+    expect(r.itemBgs.map((bg) => bg?.file)).toEqual(['bg-125.png', 'bg-124.png', 'bg-126.png']);
+    expect(r.itemBgs.map((bg) => bg?.source)).toEqual(['declared', 'declared', 'declared']);
+    expect(r.itemBgs.map((bg) => bg?.style.size)).toEqual(['140px 74px', '120px 74px', '141px 74px']);
+    expect(r.itemBgStats).toEqual({ declared: 3, subtree: 0, skipped: 0 });
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    for (const [v, file] of [['bg1', 'bg-125.png'], ['bg2', 'bg-124.png'], ['bg3', 'bg-126.png']]) {
+      expect(vue).toContain(`import ${v} from '../../resources/images/${file}'`);
+    }
+    expect(vue).toContain("backgroundImage: it.bgVar ? 'url(' + it.bgVar + ')' : undefined");
+    expect(vue).toContain('backgroundSize: it.bgVar ? it.bgSize : undefined');
+    expect(vue).not.toContain('sourceFill');
+    expect(validateVueSfc(vue, 'ListSection.vue').errors).toEqual([]);
+    const audit = collectFoldedGridTakeover({
+      treeSections: [HORIZONTAL_BG_SEC], figmaNodeData: HORIZONTAL_FIGMA,
+      resourceMapping: HORIZONTAL_BG_MAP, componentName: 'c-demo',
+    });
+    expect(audit).toMatchObject({ listItemBg: 3, listItemBgDeclared: 3, listItemBgSubtree: 0, listItemBgSkipped: 0 });
+  });
+
+  it('反向：逐项声明的 mapping owner 属于别卡 ⇒ 该项不绑定，不借位', () => {
+    const wrongOwner = HORIZONTAL_BG_MAP.map((m, i) => i === 1 ? { ...m, ownerSectionId: '136:129' } : m);
+    const r = detectListLeaf(HORIZONTAL_BG_SEC, indexFigmaNodes(HORIZONTAL_FIGMA), wrongOwner);
+    expect(r.itemBgs[0]?.file).toBe('bg-125.png');
+    expect(r.itemBgs[1]).toBeNull();
+    expect(r.itemBgs[2]?.file).toBe('bg-126.png');
+    expect(r.itemBgStats).toEqual({ declared: 2, subtree: 0, skipped: 1 });
+  });
+
+  it('反向：声明资源下载失败或用途不是背景 ⇒ 对应项不绑定，也不改借子树资源', () => {
+    const invalid = HORIZONTAL_BG_MAP.map((m, i) => i === 0
+      ? { ...m, downloadStatus: 'failed' }
+      : i === 1
+        ? { ...m, recommendedUsage: 'imgSrc', previewAnalysisRole: 'icon' }
+        : m);
+    const r = detectListLeaf(HORIZONTAL_BG_SEC, indexFigmaNodes(HORIZONTAL_FIGMA), invalid);
+    expect(r.itemBgs.map((bg) => bg?.file || null)).toEqual([null, null, 'bg-126.png']);
+    expect(r.itemBgStats).toEqual({ declared: 1, subtree: 0, skipped: 2 });
+  });
+
+  it('⭐ 纵向冲突反例：body.horizontal 不得覆盖六卡式纵向几何', () => {
+    const sec = {
+      ...LIST_SEC, layout: 'vertical', body: { layout: 'horizontal' },
+    };
+    const r = detectListLeaf(sec, indexFigmaNodes(FIGMA));
+    expect(r.direction).toBe('column');
+    expect(r.directionSource).toBe('geometry-conflict');
+    expect(r.cardH).toBe(72);
+    expect(r.gaps).toEqual([20]);
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    expect(vue).toContain('flex-direction:column;min-height:0;overflow-y:auto;');
+    expect(vue).toContain('marginTop: __i > 0 && FG_LIST_GAPS');
+  });
+
+  it('反向：冲突且两轴都变化 ⇒ 几何不猜，保留旧 sectionDirection', () => {
+    const gridLike = {
+      ...FIGMA,
+      children: FIGMA.children.map((node, i) => ({
+        ...node,
+        absoluteBoundingBox: { ...node.absoluteBoundingBox, x: i * 100 },
+      })),
+    };
+    const fallback = detectListLeaf({
+      ...LIST_SEC, layout: 'vertical', body: { layout: 'horizontal' },
+    }, indexFigmaNodes(gridLike));
+    expect(fallback.direction).toBe('column');
+    expect(fallback.directionSource).toBe('legacy-section-conflict');
+    // 方向不猜 ≠ 删除既有纵向几何；旧 column 路径仍消费同尺寸卡的 y 间距。
+    expect(fallback.gaps).toEqual([20]);
+  });
+});
+
 describe('刀21b normListItem — stat 对象映射形态（mc-max-1793181937804-3e301cdb 实锤）', () => {
   // vision 另一种 stat 形态：stat: {online:{value,unit,styles}}（非 stats 数组），
   // item 无 id/figmaNode ⇒ 几何缺事实 ⇒ cardH/gaps 必须为 null（fail-open 不猜）。
@@ -945,30 +1098,57 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     expect(res.items[1].fill).toBe('rgba(255,255,255,0.43)');
     expect(res.items[0].bg).toBe(true);
     expect(res.items.slice(1).every((it) => it.bg === false)).toBe(true);
-    expect(res.itemBg.varName).toBe('bg1');
-    expect(res.itemBg.file).toBe('image_313-5800.png');
-    expect(res.itemBg.style.size).toBe('459px 29px');
-    expect(res.itemBg.style.position).toBe('6px 0px');
-    expect(res.itemBg.style.repeat).toBe('no-repeat');
+    expect(res.itemBgs[0].varName).toBe('bg1');
+    expect(res.itemBgs[0].file).toBe('image_313-5800.png');
+    expect(res.itemBgs[0].style.size).toBe('459px 29px');
+    expect(res.itemBgs[0].style.position).toBe('6px 0px');
+    expect(res.itemBgs[0].style.repeat).toBe('no-repeat');
+    expect(res.itemBgs.slice(1).every((bg) => bg === null)).toBe(true);
   });
 
-  it('阴性对照：逐项填充与来源卡一致 ⇒ 不硬编码只留首项，允许全部共享图条', () => {
+  it('⭐ 首卡唯一图条证据：即使所有卡同色，也只挂首卡，禁止按 fill 扩散', () => {
     const sec = { ...SEC, items: mkItems(N, () => '#a6ceff') };
     const allActive = { ...FIGMA_CARD, children: Array.from({ length: N }, (_, i) => mkCard(i, 72, 'a6ceff')) };
     const res = detectListLeaf(sec as any, indexFigmaNodes(allActive as any), MAP) as any;
     expect(res.ok).toBe(true);
-    expect(res.items.every((it) => it.bg === true)).toBe(true);
+    expect(res.items[0].bg).toBe(true);
+    expect(res.items.slice(1).every((it) => it.bg === false)).toBe(true);
+    expect(res.itemBgStats).toEqual({ declared: 0, subtree: 1, skipped: N - 1 });
   });
 
-  it('⭐ 阳性：渲染产物 —— 圆角/图条四件套进静态段，URL 只走 :style 绑定', () => {
+  it('阴性对照：每项都显式声明同一资源 ⇒ 允许共享，与 fill 无关', () => {
+    const sec = {
+      ...SEC,
+      items: mkItems().map((it) => ({
+        ...it,
+        bg: { resourceFile: '../resources/images/image_313-5800.png', recommendedUsage: 'backgroundBlock' },
+      })),
+    };
+    const res = detectListLeaf(sec as any, indexFigmaNodes(FIGMA_CARD as any), MAP) as any;
+    expect(res.ok).toBe(true);
+    expect(res.items.every((it) => it.bg === true)).toBe(true);
+    expect(res.itemBgs.every((bg) => bg?.source === 'declared')).toBe(true);
+    expect(res.itemBgStats).toEqual({ declared: N, subtree: 0, skipped: 0 });
+    const vue = renderFoldedGridLeafVue(res, 'c-demo');
+    expect(vue.match(/import bg1 from/g)).toHaveLength(1);
+    expect(vue.match(/bgVar: bg1/g)).toHaveLength(N);
+  });
+
+  it('⭐ 阳性：渲染产物 —— 圆角留静态段，逐项 URL/图条四件套全走 :style 绑定', () => {
     const res = detectListLeaf(SEC as any, indexFigmaNodes(FIGMA_CARD as any), MAP) as any;
     const vue = renderFoldedGridLeafVue(res, 'c-demo');
     expect(vue).toContain("import bg1 from '../../resources/images/image_313-5800.png'");
     expect(vue).toContain('border-radius:6px;');
-    expect(vue).toContain('background-size:459px 29px;background-repeat:no-repeat;background-position:6px 0px;');
-    expect(vue).toContain("backgroundImage: it.bg ? 'url(' + bg1 + ')' : undefined");
-    // 🔴 卡底必须走 backgroundColor **长写**：`:style` 里的 `background` 简写会把静态段
-    //   的 background-size/position/repeat 一并重置 ⇒ 图条尺寸定位全丢（593cf7f 同族）。
+    expect(vue).toContain("backgroundImage: it.bgVar ? 'url(' + it.bgVar + ')' : undefined");
+    expect(vue).toContain('backgroundSize: it.bgVar ? it.bgSize : undefined');
+    expect(vue).toContain('backgroundPosition: it.bgVar ? it.bgPosition : undefined');
+    expect(vue).toContain('backgroundRepeat: it.bgVar ? it.bgRepeat : undefined');
+    expect(vue).toContain('bgVar: bg1');
+    expect(vue).toContain('bgSize: "459px 29px"');
+    expect(vue).toContain('bgPosition: "6px 0px"');
+    expect(vue).toContain('bgRepeat: "no-repeat"');
+    // 🔴 卡底必须走 backgroundColor **长写**：`background` 简写会重置逐项
+    //   backgroundSize/Position/Repeat ⇒ 图条尺寸定位全丢（593cf7f 同族）。
     expect(vue).toContain('backgroundColor: it.fill || undefined');
     expect(vue).not.toContain('background: it.fill');
     expect(vue).toContain("height: '72px'");
@@ -995,7 +1175,7 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     expect(res.cardH).toBe(41);
     expect(res.gaps).toEqual([51]);
     expect(res.radius).toBeNull();
-    expect(res.itemBg).toBeNull();
+    expect(res.itemBgs.every((bg) => bg === null)).toBe(true);
   });
 
   it('反向：行间卡盒尺寸不一致 ⇒ 不下发几何（自然流，绝不猜）', () => {
@@ -1010,7 +1190,7 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     expect(res.cardH).toBeNull();
     expect(res.gaps).toBeNull();
     expect(res.radius).toBeNull();
-    expect(res.itemBg).toBeNull();
+    expect(res.itemBgs.every((bg) => bg === null)).toBe(true);
   });
 
   it('反向：卡盒层级无可解释 fill 的祖先 ⇒ 回落行盒且零编造圆角/图条', () => {
@@ -1018,7 +1198,7 @@ describe('刀33：卡盒真值回收（c-aiot-dpjh-bsjd-fg-list-485798list-item 
     const res = detectListLeaf(LIST_SEC as any, indexFigmaNodes(FIGMA as any), []) as any;
     expect(res.cardH).toBe(72);
     expect(res.radius).toBeNull();
-    expect(res.itemBg).toBeNull();
+    expect(res.itemBgs.every((bg) => bg === null)).toBe(true);
     const vue = renderFoldedGridLeafVue(res, 'c-demo');
     expect(vue).not.toContain('border-radius');
     expect(vue).not.toContain('backgroundImage');

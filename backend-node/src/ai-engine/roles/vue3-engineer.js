@@ -121,6 +121,7 @@ import { extractComponentTagNames } from '../utils/sfc-semantics.js';
 // （微码路在 microcode-engineer.js 用动态 import + _lastStyleTokens 模式；本文件为静态 import，
 //   静态导入会被 jest.mock 拦截、便于 spec 断言——勿改回 await import 形态）。
 import { buildStyleTokens } from '../utils/style-tokens.js';
+import { reportPatchChainError } from '../utils/patch-chain-observer.js';
 
 export class Vue3Engineer extends MicrocodeEngineer {
   constructor(config = {}) {
@@ -332,7 +333,8 @@ export class Vue3Engineer extends MicrocodeEngineer {
       if (!outputPath) return null;
       try {
         return readFileSync(join(outputPath, rel), 'utf-8');
-      } catch {
+      } catch (_pceErr) {
+        reportPatchChainError(_pceErr, { logger: this.logger, pass: 'generateCode:335' });
         return null;
       }
     };
@@ -365,7 +367,8 @@ export class Vue3Engineer extends MicrocodeEngineer {
             let entries;
             try {
               entries = readdirSync(join(outputPath, dir), { withFileTypes: true });
-            } catch {
+            } catch (_pceErr) {
+              reportPatchChainError(_pceErr, { logger: this.logger, pass: 'generateCode:368' });
               return;
             }
             for (const e of entries) {
@@ -378,6 +381,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           scanDir('resources');
         }
       } catch (scanErr) {
+        reportPatchChainError(scanErr, { logger: this.logger, pass: 'generateCode:380' });
         // 非阻断：扫描失败回退原清单行为
         this.logger.warn('P1 磁盘基线扫描失败（非阻断）', {
           error: scanErr.message,
@@ -577,6 +581,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           const safeResFull = resFull && typeof resFull === 'object' ? resFull : { files: {}, debug: {} };
           Object.assign(allFiles, safeResFull.files || {});
         } catch (truncErr) {
+          reportPatchChainError(truncErr, { logger: this.logger, pass: 'generateCode:579' });
           // ── 降级路径：template → script → style 三段拼装 ──
           this.logger.warn(
             '⚠️ Vue3 整文件生成截断，降级为 template/script/style 三段生成',
@@ -739,6 +744,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             Object.assign(allFiles, safeResStyle.files || {});
           }
         } catch (partialErr) {
+          reportPatchChainError(partialErr, { logger: this.logger, pass: 'generateCode:741' });
           this.logger.warn('⚠️ P1 部分修订失败，回退全量生成', {
             error: partialErr.message,
           });
@@ -877,6 +883,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
               sectionId: tr.sectionId,
             });
           } catch (fgErr) {
+            reportPatchChainError(fgErr, { logger: this.logger, pass: 'generateCode:879' });
             _fgFailed += 1;
             this.logger.warn('🛡️ 刀 53 确定性写入异常（vue3，保留 LLM 产物）', {
               subPath,
@@ -916,6 +923,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             });
           }
         } catch (dedupErr) {
+          reportPatchChainError(dedupErr, { logger: this.logger, pass: 'generateCode:918' });
           // fail-open：守卫异常不阻断主流程
           this.logger.warn('🛡️ 刀 13 重复覆盖守卫异常（vue3，非阻断）', {
             error: dedupErr?.message || String(dedupErr),
@@ -940,6 +948,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           'utf-8',
         );
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:942' });
         /* 非阻断 */
       }
 
@@ -1124,6 +1133,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
       } catch (cleanErr) {
+        reportPatchChainError(cleanErr, { logger: this.logger, pass: 'generateCode:1126' });
         this.logger.warn('Vue3 清洗层执行失败（非阻断，交由下游校验兜底）', {
           error: cleanErr?.message || String(cleanErr),
         });
@@ -1191,6 +1201,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
       } catch (visualErr) {
+        reportPatchChainError(visualErr, { logger: this.logger, pass: 'generateCode:1193' });
         this.logger.warn('Vue3 视觉真值校验执行失败（非阻断）', {
           error: visualErr?.message || String(visualErr),
         });
@@ -1198,6 +1209,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
 
       return { files: allFiles };
     } catch (error) {
+      reportPatchChainError(error, { logger: this.logger, pass: 'generateCode:1200' });
       this.logger.error('Vue3 代码生成失败', { error: error.message });
       throw error;
     }
@@ -1403,6 +1415,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'execute:1405' });
         this.logger.warn('⚠️ [vue3] LESS 变量归一化执行失败（非阻断）', {
           error: e.message,
         });
@@ -1419,6 +1432,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'execute:1421' });
         this.logger.warn('⚠️ [vue3] absolute 遮罩层修复失败（非阻断）', {
           error: e.message,
         });
@@ -1435,6 +1449,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'execute:1437' });
         this.logger.warn('⚠️ [vue3] 业务样式 var() 直引自愈失败（非阻断）', {
           error: e.message,
         });
@@ -1606,6 +1621,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             );
           }
         } catch (ctErr3) {
+          reportPatchChainError(ctErr3, { logger: this.logger, pass: 'execute:1608' });
           this.logger.warn('⚠️ [vue3] 2.1.E chartType 收敛失败（非阻塞）', {
             error: ctErr3?.message,
           });
@@ -1635,6 +1651,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             );
           }
         } catch (axisErr3) {
+          reportPatchChainError(axisErr3, { logger: this.logger, pass: 'execute:1637' });
           this.logger.warn('⚠️ [vue3] 2.1.F 坐标轴格式收敛失败（非阻塞）', {
             error: axisErr3?.message,
           });
@@ -1719,6 +1736,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             }
           }
         } catch (n1err) {
+          reportPatchChainError(n1err, { logger: this.logger, pass: 'execute:1721' });
           this.logger.warn('N1 数字剥离失败（非阻断）', {
             error: n1err.message,
           });
@@ -1782,6 +1800,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             }
           }
         } catch (n2err) {
+          reportPatchChainError(n2err, { logger: this.logger, pass: 'execute:1784' });
           this.logger.warn('N2 图表兜底失败（非阻断）', {
             error: n2err.message,
           });
@@ -1994,11 +2013,13 @@ export class Vue3Engineer extends MicrocodeEngineer {
             }
           }
         } catch (n3err) {
+          reportPatchChainError(n3err, { logger: this.logger, pass: 'execute:1996' });
           this.logger.warn('N3 bg 挂载失败（非阻断）', {
             error: n3err.message,
           });
         }
       } catch (postErr) {
+        reportPatchChainError(postErr, { logger: this.logger, pass: 'execute:2001' });
         this.logger.warn('确定性后处理失败（非阻断）', {
           error: postErr.message,
         });
@@ -2043,6 +2064,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           }
         }
       } catch (n5err) {
+        reportPatchChainError(n5err, { logger: this.logger, pass: 'execute:2045' });
         this.logger.warn('N5 白边框剥离失败（非阻断）', {
           error: n5err.message,
         });
@@ -2051,6 +2073,8 @@ export class Vue3Engineer extends MicrocodeEngineer {
       // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链——资源 import 终验（injectVue3ResourceUrls）
       // + 运行库兜底 + CODE-022 删未挂载 + .value 自愈 + FLEX-003/FLEX-005 量纲归一。
       // 与 microcode-engineer 同源（新增守卫只加一处、双端生效）。取代原 FLEX-003 内联段。
+      // 🛡️ S1.1（2026-11-03）：自愈链 summary 载体，供返回 patchHitReport。
+      let _preWriteSummary = null;
       {
         const _healed = runPreWriteSelfHealing(
           codeResult.files,
@@ -2069,6 +2093,13 @@ export class Vue3Engineer extends MicrocodeEngineer {
           { logger: this.logger },
         );
         codeResult.files = _healed.files;
+        _preWriteSummary = _healed?.summary || null;
+        // 🛡️ S0.2（2026-11-03）：PATCH-CHAIN-ERROR 聚合（与 mc 端同构，方案 E 双端口径）
+        if ((_healed?.summary?.patchChainErrors || 0) > 0) {
+          this.logger.warn('🛡️ PATCH-CHAIN-ERROR 汇总：本任务自愈链捕获结构性错误', {
+            count: _healed.summary.patchChainErrors,
+          });
+        }
       }
 
       // 🎯 M2.2（2026-09-16）：双链路同源 —— 色值槽位用途自愈（文字槽位用于背景属性 → 背景槽位）。
@@ -2085,6 +2116,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'execute:2087' });
         this.logger.warn('COLOR-SLOT 自愈异常（非阻断，按原样继续）', {
           error: e?.message || String(e),
         });
@@ -2225,6 +2257,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           );
         }
       } catch (invErr) {
+        reportPatchChainError(invErr, { logger: this.logger, pass: 'execute:2227' });
         this.logger.warn('🛡️ [vue3] 产物不变量校验执行失败（非阻断）', {
           error: invErr?.message,
         });
@@ -2238,6 +2271,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             files: codeResult.files,
           });
         } catch (snapshotError) {
+          reportPatchChainError(snapshotError, { logger: this.logger, pass: 'execute:2240' });
           this.logger.warn(
             `候选代码快照发布失败，不阻断生成主流程：${snapshotError.message}`,
           );
@@ -2276,12 +2310,18 @@ export class Vue3Engineer extends MicrocodeEngineer {
         autoFixes: [],
         // 🛡️ Phase E：接管评估统计子集（graph 层聚合 reject-summary 落盘）
         takeoverAudit: this._fgTakeoverAudit || undefined,
+        // 🛡️ S1.1（2026-11-03）：补丁命中报表（与 mc 端同构，「0 也落盘」）
+        patchHitReport: {
+          patchChainErrors: _preWriteSummary?.patchChainErrors || 0,
+          selfHealing: _preWriteSummary || undefined,
+        },
         // 🛡️ R2-2：六条产物不变量结果（violations/passed/summary），供任务 meta 与前端展示
         artifactInvariants: _artifactInvariants || undefined,
         // 🛡️ 资源归属指导（方案5）：经 graph 写回 state，供重试轮次注入。
         _attributionGuidance: input._attributionGuidance || null,
       };
     } catch (error) {
+      reportPatchChainError(error, { logger: this.logger, pass: 'execute:2284' });
       this.logger.error('Vue3 组件生成失败', { error: error.message });
       throw error;
     }

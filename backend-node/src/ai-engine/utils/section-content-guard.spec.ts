@@ -166,7 +166,11 @@ describe('checkSectionContent · 左右序与内容错装守卫', () => {
   });
 
   it('无 figmaRoot / 无 plan / 空 files → 空结果（fail-open，不抛错）', () => {
-    expect(checkSectionContent({ files: [], plan: { effectiveSections: [] }, figmaRoot: null })).toEqual({ memberOrderIssues: [], duplicateTextIssues: [] });
+    expect(checkSectionContent({ files: [], plan: { effectiveSections: [] }, figmaRoot: null })).toEqual({
+      memberOrderIssues: [],
+      duplicateTextIssues: [],
+      ownerStats: { declaredOwnerHits: 0, figmaFallbackHits: 0, declaredConflictSkips: 0, declaredPrefixAliasHits: 0 },
+    });
     expect(checkSectionContent({ files: [{ path: 'package/components/A.vue', content: 'x' }], plan: null, figmaRoot: null }).memberOrderIssues).toHaveLength(0);
   });
 });
@@ -350,6 +354,112 @@ describe('healDuplicateTextIssues（阶段 C 高置信自愈）', () => {
     ];
     const r = healDuplicateTextIssues({ files, plan: makePlan(), figmaRoot });
     expect(r.healed.length).toBe(0);
+  });
+});
+
+describe('显式声明优先的 duplicate owner（9343c314 真实事故形态）', () => {
+  const LONG_DESC = '该设备为太阳能供电一体化爆闪灯，支持远程开关控制与闪烁频率调节。';
+  const figmaRoot: any = {
+    id: 'root', name: 'root', type: 'FRAME', children: [
+      { id: '801:3', name: 'header', type: 'FRAME', children: [
+        { id: '801:4', name: 'GD-Robot-04', type: 'TEXT', characters: 'GD-Robot-04' },
+        { id: '801:5', name: '产品描述', type: 'TEXT', characters: '产品描述' },
+        { id: '801:6', name: '描述', type: 'TEXT', characters: LONG_DESC },
+      ] },
+    ],
+  };
+  const plan = {
+    effectiveSections: [
+      { id: '801:3', type: 'header', title: '设备头', sourceNodeIds: ['801:3'], declaredContent: { children: [{ text: 'GD-Robot-04' }] } },
+      { id: 'section-description', title: '产品描述', sourceNodeIds: [], declaredContent: { children: [{ text: LONG_DESC }] } },
+    ],
+  };
+  const makeFiles = () => {
+    const names = assignSectionComponentNames(plan.effectiveSections);
+    return [
+      { path: `package/components/${names.get('801:3')}.vue`, content: `<template>\n  <div data-section-id="801:3">\n    <b>GD-Robot-04</b>\n    <span>产品描述</span>\n    <p>\n      ${LONG_DESC}\n    </p>\n  </div>\n</template>` },
+      { path: `package/components/${names.get('section-description')}.vue`, content: `<template>\n  <div data-section-id="section-description">\n    <span>产品描述</span>\n    <p>\n      ${LONG_DESC}\n    </p>\n  </div>\n</template>` },
+    ];
+  };
+
+  it('合成描述段的标题与正文 owner 均为描述段，只剥离 Header 越界副本', () => {
+    const files = makeFiles();
+    const checked = checkSectionContent({ files, plan, figmaRoot });
+    const issues = checked.duplicateTextIssues.filter((d) => d.text === '产品描述' || d.text === LONG_DESC);
+    expect(issues).toHaveLength(2);
+    expect(issues.every((d) => d.ownerSection === 'section-description' && d.ownerSource === 'declared')).toBe(true);
+    expect(checked.ownerStats.declaredOwnerHits).toBeGreaterThanOrEqual(2);
+
+    const healed = healDuplicateTextIssues({ files, plan, figmaRoot });
+    expect(healed.healed.map((h) => h.text)).toEqual(expect.arrayContaining(['产品描述', LONG_DESC]));
+    const names = assignSectionComponentNames(plan.effectiveSections);
+    const header = healed.files.find((f) => f.path === `package/components/${names.get('801:3')}.vue`);
+    const description = healed.files.find((f) => f.path === `package/components/${names.get('section-description')}.vue`);
+    expect(header.content).toContain('GD-Robot-04');
+    expect(header.content).not.toContain('产品描述');
+    expect(header.content).not.toContain(LONG_DESC);
+    expect(description.content).toContain('产品描述');
+    expect(description.content).toContain(LONG_DESC);
+  });
+
+  it('declaredContent 被预算截成唯一前缀时归一到 Figma 全文，不回退误删描述段', () => {
+    const prefix = LONG_DESC.slice(0, 16);
+    const truncatedPlan = {
+      effectiveSections: plan.effectiveSections.map((sec) => sec.id === 'section-description'
+        ? { ...sec, declaredContent: { children: [{ text: prefix }] } }
+        : sec),
+    };
+    const files = makeFiles();
+    const checked = checkSectionContent({ files, plan: truncatedPlan, figmaRoot });
+    const fullIssues = checked.duplicateTextIssues.filter((d) => d.text === LONG_DESC);
+    expect(fullIssues).toHaveLength(1);
+    expect(fullIssues[0]).toMatchObject({ ownerSection: 'section-description', ownerSource: 'declared' });
+    expect(checked.duplicateTextIssues.some((d) => d.text === prefix)).toBe(false);
+    expect(checked.ownerStats.declaredPrefixAliasHits).toBe(1);
+
+    const healed = healDuplicateTextIssues({ files, plan: truncatedPlan, figmaRoot });
+    const names = assignSectionComponentNames(plan.effectiveSections);
+    const header = healed.files.find((f) => f.path === `package/components/${names.get('801:3')}.vue`);
+    const description = healed.files.find((f) => f.path === `package/components/${names.get('section-description')}.vue`);
+    expect(header.content).not.toContain(LONG_DESC);
+    expect(description.content).toContain(LONG_DESC);
+  });
+
+  it('截断声明有多个全文候选时禁止子树回退猜 owner', () => {
+    const prefix = LONG_DESC.slice(0, 16);
+    const otherFullText = `${prefix}另一段合法长文本。`;
+    const ambiguousFigma = {
+      ...figmaRoot,
+      children: figmaRoot.children.map((sec) => sec.id === '801:3'
+        ? { ...sec, children: [...sec.children, { id: '801:7', name: '另一描述', type: 'TEXT', characters: otherFullText }] }
+        : sec),
+    };
+    const truncatedPlan = {
+      effectiveSections: plan.effectiveSections.map((sec) => sec.id === 'section-description'
+        ? { ...sec, declaredContent: { children: [{ text: prefix }] } }
+        : sec),
+    };
+    const checked = checkSectionContent({ files: makeFiles(), plan: truncatedPlan, figmaRoot: ambiguousFigma });
+    expect(checked.duplicateTextIssues.some((d) => d.text === LONG_DESC)).toBe(false);
+    expect(checked.ownerStats.declaredPrefixAliasHits).toBe(0);
+    expect(checked.ownerStats.declaredConflictSkips).toBeGreaterThan(0);
+  });
+
+  it('两个显式声明冲突时不猜唯一 owner、不删除', () => {
+    const conflictPlan = {
+      effectiveSections: [
+        { id: 'synthetic-a', sourceNodeIds: [], declaredContent: { children: [{ text: LONG_DESC }] } },
+        { id: 'synthetic-b', sourceNodeIds: [], declaredContent: { children: [{ text: LONG_DESC }] } },
+      ],
+    };
+    const files = [
+      { path: 'package/components/A.vue', content: `<template><p>${LONG_DESC}</p></template>` },
+      { path: 'package/components/B.vue', content: `<template><p>${LONG_DESC}</p></template>` },
+    ];
+    const checked = checkSectionContent({ files, plan: conflictPlan, figmaRoot });
+    expect(checked.duplicateTextIssues.filter((d) => d.text === LONG_DESC)).toHaveLength(0);
+    expect(checked.ownerStats.declaredConflictSkips).toBeGreaterThan(0);
+    expect(healDuplicateTextIssues({ files, plan: conflictPlan, figmaRoot }).healed).toHaveLength(0);
   });
 });
 

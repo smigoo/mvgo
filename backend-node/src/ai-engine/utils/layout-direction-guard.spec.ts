@@ -78,6 +78,57 @@ describe('resolveTruthLayout 三态口径（与 subcomponent-planner#extractLayo
   })
 })
 
+describe('折叠列表成员方向共享契约', () => {
+  const horizontalGeometry = {
+    id: 'root', type: 'FRAME', children: [
+      { id: 'a', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 20, width: 140, height: 74 } },
+      { id: 'b', type: 'FRAME', absoluteBoundingBox: { x: 129, y: 20, width: 120, height: 74 } },
+    ],
+  };
+  const makeConflictFixture = (direction: string) => {
+    const f = fixture({
+      sectionLayout: 'vertical', sectionId: 'cards-list',
+      rootAttrs: `data-section-id="cards-list" class="c-a" style="display:flex;flex-direction:${direction}"`,
+    });
+    const sec = f.layoutStructure.layout.sections[0];
+    sec.collapsed = true;
+    sec.renderHint = 'v-for';
+    sec.body = { layout: 'horizontal-3-columns' };
+    sec.items = [{ id: 'a' }, { id: 'b' }];
+    return f;
+  };
+
+  it('⭐ 声明冲突 + 横向成员盒：正确 row 零误报，旧 column 命中', () => {
+    const ok = makeConflictFixture('row');
+    expect(only(detectLayoutDirectionMismatch(
+      ok.files, ok.layoutStructure, { figmaNodeData: horizontalGeometry },
+    ))).toHaveLength(0);
+    const bad = makeConflictFixture('column');
+    const issues = only(detectLayoutDirectionMismatch(
+      bad.files, bad.layoutStructure, { figmaNodeData: horizontalGeometry },
+    ));
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('横向');
+  });
+
+  it('反向：声明冲突 + 纵向成员盒：column 不误报，row 命中', () => {
+    const verticalGeometry = {
+      id: 'root', type: 'FRAME', children: [
+        { id: 'a', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 72 } },
+        { id: 'b', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 92, width: 400, height: 72 } },
+      ],
+    };
+    const ok = makeConflictFixture('column');
+    expect(only(detectLayoutDirectionMismatch(
+      ok.files, ok.layoutStructure, { figmaNodeData: verticalGeometry },
+    ))).toHaveLength(0);
+    const bad = makeConflictFixture('row');
+    expect(only(detectLayoutDirectionMismatch(
+      bad.files, bad.layoutStructure, { figmaNodeData: verticalGeometry },
+    ))).toHaveLength(1);
+  });
+});
+
 describe('readSectionGridColumns 口径统一（#3）', () => {
   it('sec.gridColumns 与 sec.body.gridColumns 都可读，前者优先', () => {
     expect(readSectionGridColumns({ gridColumns: 4 })).toBe(4)

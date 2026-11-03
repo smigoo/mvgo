@@ -275,10 +275,64 @@ function findArrayLiteralWithTexts(content, texts) {
 }
 
 /**
- * 在 template 区找「静态文本元素」：元素内容恰为指定文本（无插值）。
- * 每个文本必须唯一出现，否则返回 null（保守防误伤）。
- * @returns {Array<{text: string, match: string, full: string, index: number}>|null}
- *   index 为**整个文件内容**中的绝对位置（含 <template> 标签偏移）
+ * 为 template 开标签建立真实父节点索引。标签配对而不是用正则猜父级；
+ * 注释、引号内 `>`、void/自闭合标签均不参与错误的深度变化。
+ */
+function indexTemplateParents(template) {
+  const parentByOffset = new Map();
+  const stack = [];
+  const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+  let nextId = 1;
+  let i = 0;
+  while (i < template.length) {
+    if (template.startsWith('<!--', i)) {
+      const end = template.indexOf('-->', i + 4);
+      i = end < 0 ? template.length : end + 3;
+      continue;
+    }
+    if (template[i] !== '<') {
+      i++;
+      continue;
+    }
+    let quote = '';
+    let end = i + 1;
+    for (; end < template.length; end++) {
+      const c = template[end];
+      if (quote) {
+        if (c === quote && template[end - 1] !== '\\') quote = '';
+      } else if (c === '"' || c === "'") {
+        quote = c;
+      } else if (c === '>') {
+        break;
+      }
+    }
+    if (end >= template.length) break;
+    const raw = template.slice(i, end + 1);
+    const closing = raw.match(/^<\/\s*([a-zA-Z][\w-]*)/);
+    if (closing) {
+      const name = closing[1].toLowerCase();
+      const at = stack.map((n) => n.name).lastIndexOf(name);
+      if (at >= 0) stack.splice(at, 1);
+      i = end + 1;
+      continue;
+    }
+    const opening = raw.match(/^<\s*([a-zA-Z][\w-]*)/);
+    if (opening) {
+      const name = opening[1].toLowerCase();
+      parentByOffset.set(i, stack.length ? stack[stack.length - 1].id : 0);
+      if (!/\/\s*>$/.test(raw) && !voidTags.has(name)) {
+        stack.push({ name, id: nextId++ });
+      }
+    }
+    i = end + 1;
+  }
+  return parentByOffset;
+}
+
+/**
+ * 在 template 区找「同父直接兄弟静态文本元素」：元素内容恰为指定文本（无插值）。
+ * 每个文本必须唯一出现，否则返回 null（保守防误伤）。跨卡/跨 wrapper 的同名
+ * 文本集合不是 Figma 同父 TEXT 组的可修复投影，必须弃权，不能交换内文。
  */
 function findStaticTextElements(content, texts) {
   const templateMatch = content.match(/<template>([\s\S]*)<\/template>/i);
@@ -287,6 +341,7 @@ function findStaticTextElements(content, texts) {
   // template 捕获组在 content 中的绝对起始偏移（<template> 标签之后）
   const templateAbsOffset =
     templateMatch.index + templateMatch[0].indexOf(template);
+  const parentByOffset = indexTemplateParents(template);
 
   const found = [];
   for (const t of texts) {
@@ -301,16 +356,20 @@ function findStaticTextElements(content, texts) {
     }
     if (hits.length !== 1) return null; // 0 个或多个 → 不可判定
     const hit = hits[0];
+    const parent = parentByOffset.get(hit.index);
+    if (parent === undefined) return null;
     found.push({
       text: t,
       full: hit[0],
       match: `${hit[3]}${t}${hit[4]}`,
       index: templateAbsOffset + hit.index,
+      parent,
     });
   }
   // 按 template 中出现位置排序 = 实际渲染顺序
   found.sort((a, b) => a.index - b.index);
-  return found;
+  const crossParent = new Set(found.map((el) => el.parent)).size !== 1;
+  return { elements: crossParent ? null : found, crossParent };
 }
 
 /** 归一化 files 输入（支持 [{path,content}] 与 Record 两种形态） */
@@ -338,7 +397,7 @@ function normalizeFiles(files) {
  * @returns {Array<{file: string, kind: 'array'|'template', parentName: string,
  *                    expected: string[], actual: string[]}>}
  */
-export function detectTextOrderDrift(files, figmaNodeData) {
+export function detectTextOrderDrift(files, figmaNodeData, skippedCrossParent = null) {
   const groups = collectFigmaTextSiblingGroups(figmaNodeData);
   if (groups.length === 0) return [];
 
@@ -379,8 +438,17 @@ export function detectTextOrderDrift(files, figmaNodeData) {
         }
       }
 
-      // 形态 B：template 静态兄弟元素
-      const elems = findStaticTextElements(file.content, texts);
+      // 形态 B：template 同父直接兄弟静态元素。跨父集合只留观测，绝不换文本。
+      const staticResult = findStaticTextElements(file.content, texts);
+      if (staticResult?.crossParent && Array.isArray(skippedCrossParent)) {
+        skippedCrossParent.push({
+          file: file.path,
+          kind: 'template',
+          parentName: group.parentName,
+          expected: texts,
+        });
+      }
+      const elems = staticResult?.elements || null;
       if (
         elems &&
         elems.length === texts.length &&
@@ -421,8 +489,9 @@ export function fixTextOrderDrift(files, figmaNodeData) {
 
   const fixed = [];
   const remaining = [];
+  const skippedCrossParent = [];
 
-  for (const drift of detectTextOrderDrift(normalized, figmaNodeData)) {
+  for (const drift of detectTextOrderDrift(normalized, figmaNodeData, skippedCrossParent)) {
     const content = out[drift.file];
     if (typeof content !== 'string') {
       remaining.push(drift);
@@ -469,7 +538,7 @@ export function fixTextOrderDrift(files, figmaNodeData) {
     }
 
     if (drift.kind === 'template') {
-      const elems = findStaticTextElements(content, drift.expected);
+      const elems = findStaticTextElements(content, drift.expected)?.elements || null;
       if (!elems || elems.length !== drift.expected.length) {
         remaining.push(drift);
         continue;
@@ -495,7 +564,7 @@ export function fixTextOrderDrift(files, figmaNodeData) {
       // 返回 null → 无 drift → 误判成功），故必须用强校验——
       // 每个文本恰出现一次、元素结构仍可解析、顺序 = expected。
       if (next !== content) {
-        const elemsAfter = findStaticTextElements(next, drift.expected);
+        const elemsAfter = findStaticTextElements(next, drift.expected)?.elements || null;
         const ok =
           elemsAfter !== null &&
           elemsAfter.length === drift.expected.length &&
@@ -515,7 +584,7 @@ export function fixTextOrderDrift(files, figmaNodeData) {
     }
   }
 
-  return { fixed, remaining, files: out };
+  return { fixed, remaining, skippedCrossParent, files: out };
 }
 
 export default {

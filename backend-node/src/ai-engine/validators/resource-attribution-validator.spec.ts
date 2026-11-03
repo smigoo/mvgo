@@ -75,4 +75,34 @@ describe('stripCrossSectionResourceBindings（1.C 确定性剥离）', () => {
     expect(removed.length).toBe(0)
     expect(out['package/components/CompA.vue']).toContain('icon2')
   })
+
+  // 🛡️ 2026-11-03 治本回归锁（mc-max-1793679009293-1a28aa90 实锤，四次复发）：
+  //   旧正则尾部 `\s*;?` 跨行吃掉 import 行尾换行符 ⇒ 下一行 vue 具名 import 被拼到
+  //   上一行尾部（`...png'import { ref } from 'vue'`）⇒ Missing semicolon ⇒ P1-4 隔离。
+  test('剥离 import 不拼行：相邻 vue 具名 import 行保持完整（1a28aa90）', () => {
+    const manifest = buildResourceManifest([
+      { assignedVarName: 'icon2', downloadStatus: 'success', figmaPath: 'slot-secA/icon-2.png' },
+      { assignedVarName: 'icon1', downloadStatus: 'success', figmaPath: 'slot-secB/icon-1.png' },
+    ])
+    const files = {
+      'package/components/CompA.vue':
+        `<template><div><img :src="icon2" /><img :src="icon1" /></div></template>\n` +
+        `\n<script setup>\n` +
+        `import icon2 from '../../resources/images/icon-2.png'\n` +
+        `import icon1 from '../../resources/images/icon-1.png'\n` +
+        `import { ref } from 'vue'\n` +
+        `const x = ref(1)\n` +
+        `</script>\n`,
+    }
+    const { files: out, removed } = stripCrossSectionResourceBindings(manifest, files, {
+      'package/components/CompA.vue': 'slot-secA',
+    })
+    const a = out['package/components/CompA.vue']
+    expect(removed.map((r) => r.varName)).toEqual(['icon1'])
+    expect(a).not.toContain('icon1')
+    // 🔴 拼行断言：保留行的行边界必须完整，禁止 `.png'import` / `.png'const` 直接相接
+    expect(a).not.toMatch(/\.png['"]import/)
+    expect(a).not.toMatch(/\.png['"]const/)
+    expect(a).toContain(`import { ref } from 'vue'\nconst x = ref(1)`)
+  })
 })

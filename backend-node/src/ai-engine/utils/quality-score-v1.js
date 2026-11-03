@@ -12,9 +12,21 @@ import {
   resolveStyleVariables, 
   substituteVariables,
   colorFuzzyMatch,
+  colorDistance,
+  parseColor,
   numericFuzzyMatch,
   parseNumericValue 
 } from './style-var-resolver.js'
+// 🛡️ P3（2026-11-03）：装饰叶子落地判定。语义判据（无语义名/资源封装/叶子形态）与
+// `visual-parser#_generateCoverageReport` 同源，均在 utils/decor-leaf-truth.js，禁止另立口径。
+import { judgeDecorLeaves } from './decor-leaf-truth.js'
+// 🛡️ 档A 面板壳判据（2026-11-03 同源化）：**直接消费生成侧真值 `skipMount === true`**，
+//   由调用方从 `.mc-gen/resource-dom-mapping.json` 读出后以节点 id 集合传入（本文件保持纯函数、零 IO）。
+//   🔴 为何不用 `isPanelResource`（名字白名单）：它是「命名像面板壳」的**近似**判据，实测存在
+//      `isPanelResource===true` 但**无** `skipMount` 的反例（`36:1697 header`，产物确实渲染它）
+//      ⇒ 用它会让「几何守卫版 4 例」放宽成 158 例纯名字命中，两判据只是**恰好重合**而非同源。
+//      `skipMount`（`figma-connector.js:2679-2704`：`previewAnalysisRole==='bg'` ∧ 路径段数 ≤2）
+//      才是「产物不还原它」的**唯一事实源** —— 与 `scoreResourceMount`（本文件 :940）同一口径。
 
 export const QUALITY_SCORE_V1_VERSION = 'v1'
 export const SPEC_BLOCK_PENALTY = 8
@@ -120,35 +132,45 @@ export function computeSpecScore(l0b = {}) {
   }
 }
 
-function parseRgbTuple(css) {
-  const s = String(css || '').trim().toLowerCase().replace(/\s+/g, '')
-  if (!s) return null
-  const hex = s.match(/^#([0-9a-f]{3,8})$/)
-  if (hex) {
-    let h = hex[1]
-    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
-    if (h.length === 8) h = h.slice(0, 6)
-    if (h.length !== 6) return null
-    return {
-      r: parseInt(h.slice(0, 2), 16),
-      g: parseInt(h.slice(2, 4), 16),
-      b: parseInt(h.slice(4, 6), 16),
-    }
-  }
-  const rgb = s.match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/)
-  if (rgb) return { r: +rgb[1], g: +rgb[2], b: +rgb[3] }
-  return null
-}
-
-function colorDistance(a, b) {
-  const pa = parseRgbTuple(a)
-  const pb = parseRgbTuple(b)
-  if (!pa || !pb) return Infinity
-  return Math.sqrt((pa.r - pb.r) ** 2 + (pa.g - pb.g) ** 2 + (pa.b - pb.b) ** 2)
-}
-
+/**
+ * 🛡️ style 色彩判据单一来源（2026-11-03）：
+ * 此处原有第二套 `parseRgbTuple` + `colorDistance` 私有实现，与 `style-var-resolver.js` 的
+ * `parseColor` + `colorDistance` 并行——后者保留 alpha，前者把 `#RRGGBBAA` 直接 `slice(0,6)` 截掉。
+ * 两份算出的 RGB 欧氏距离目前逐字等价（已逐分支核对：hex3/hex6/hex8/rgb/rgba 解析路径相同），
+ * 但「同构判据必须单一来源」不允许留第二份，故删除私有实现改为委托。
+ */
 function colorsMatch(expected, actuals, maxDelta = 24) {
   return actuals.some((a) => colorDistance(expected, a) <= maxDelta)
+}
+
+/**
+ * 🛡️ 2026-11-03：色彩匹配**明细**（不改判定，只把「这次匹配有多勉强」说清楚）。
+ *
+ * 背景（离线取证 3741 个期望色 · 262 目录）：`maxDelta=24` 的原始理由是「吸收取整/浮点噪声」，
+ * 但噪声几乎全部落在 d=0（(0,3] 仅 19 例 / 0.51%），而 (10,24] 有 443 例（11.84%）是**实质色差**
+ * （#ff4747 vs #ff5a50 d=21.0、#333333 vs #2b2b2b d=13.9）却仍被判「匹配」；
+ * 另有 414 例 RGB 命中但 |Δalpha|>0.08（exp=#2c68ff(a=1) vs act=rgba(44,104,255,0.08)），
+ * 静态产物无法区分「产物用纯色+opacity 实现」与「透明度真的写错」。
+ *
+ * 故本函数只做**分档留痕**，判定阈值一个字不改 ⇒ matched/missed 与 styleScore 逐字不变。
+ * 分档（按「最近产物色的 RGB 欧氏距离」）：exact(d=0) / near(0<d<=3) / loose(3<d<=24) / over(d>24)。
+ * 注意 `over` 只表示「超出 colorsMatch 的 maxDelta=24」——是否最终被兜住需看 matched 字段
+ * （d∈(24,32] 仍可能被 colorFuzzyMatch 的 maxDelta=32 判匹配），本档位不声称「未匹配」。
+ */
+function colorMatchDetail(expected, actuals) {
+  let best = null
+  for (const a of actuals || []) {
+    const d = colorDistance(expected, a)
+    if (!best || d < best.delta) best = { delta: d, actual: a }
+  }
+  if (!best || !isFinite(best.delta)) {
+    return { delta: Infinity, actual: null, alphaDiff: null, tier: 'over' }
+  }
+  const ec = parseColor(expected)
+  const ac = parseColor(best.actual)
+  const alphaDiff = ec && ac ? Math.abs(ec.a - ac.a) : null
+  const tier = best.delta === 0 ? 'exact' : best.delta <= 3 ? 'near' : best.delta <= 24 ? 'loose' : 'over'
+  return { delta: best.delta, actual: best.actual, alphaDiff, tier }
 }
 
 function parsePx(value) {
@@ -298,7 +320,24 @@ export function extractDeclaredStyleLiteralsWithLocation(files = []) {
       let m
       colorRe.lastIndex = 0
       while ((m = colorRe.exec(styleText))) {
-        colors.push(makeDeclaredEntry(m[0].replace(/\s+/g, ''), p, startLine, offsetToLine(styleText, m.index), null, 'fills'))
+        // 🔴 B3（2026-11-03 修复 · 参数错位）：此前把 `offsetToLine(...)` 传进了 className 位、
+        //   丢掉行内偏移与 field（多传一个实参 + 'fills' 落到第 6 位被忽略），后果有二：
+        //   ① color 维度 source.className **恒为数字**（行偏移）——313 组件目录实测 11748 条 actual 颜色条目中
+        //      11155 条（94.9%）className 是纯数字，颜色指纹/定位归因全部失真；
+        //   ② source.line 停在 `<style>` 块首行，不含声明所在行内偏移 ⇒ 前端「未匹配颜色来自哪个类名 / 哪一行」一直错
+        //      （实测 11155 条行号恒 = 块首行，如 common.less line 1，真实声明在 42/48/54 行）。
+        //   现与 spacing/font/radius 三支（:326/:336/:347）统一口径：line = 块起始行 + 行内偏移，className = 所属规则选择器。
+        //   ⚠️ 判定零影响：scoreDimension 只读 entries[].value（uniqueStrings(actList.map(a => a.value))），
+        //   source 仅经 missed[].closestActualSource 透传给前端 ⇒ matched / missed / score 逐字不变。
+        colors.push(
+          makeDeclaredEntry(
+            m[0].replace(/\s+/g, ''),
+            p,
+            startLine + offsetToLine(styleText, m.index),
+            findEnclosingClass(styleText, m.index),
+            'fills'
+          )
+        )
       }
       spaceRe.lastIndex = 0
       while ((m = spaceRe.exec(styleText))) {
@@ -437,14 +476,58 @@ export function extractExpectedStyleLiterals(figmaNodeData) {
  *
  * 注意：保留字符串版本是为了向后兼容（style-auto-fix.js 等仍在用）。
  */
-export function extractExpectedStyleLiteralsWithLocation(figmaNodeData) {
+export function extractExpectedStyleLiteralsWithLocation(figmaNodeData, opts = {}) {
+  // 🛡️ A1 配套（2026-11-03）：去重开关，**默认 true = 判据口径，一个字不改**。
+  //   `dedupe: false` 供 prompt 侧「样式真值强化」使用，原因有二：
+  //   ① 需要「每个值 → 全部来源节点」的完整锚点，去重只留首个节点会丢锚点；
+  //   ② `spacing` 是按 **value 字符串**去重的（见 dedupeExpectedEntries），把
+  //      itemSpacing（gap）与 padding 同值条目混在一个桶里 —— 若 gap 10px 先入，
+  //      padding 10px 会被**整个吞掉**，prompt 侧直接读去重结果就会漏报内边距真值。
+  //   ⚠️ 判据（scoreComponentDir）永远走默认值，不得传 false —— 传了会改变期望分母。
+  const dedupe = opts.dedupe !== false
+  // 🛡️ 档B 成品位图资源节点（2026-11-03）：这些节点的**像素类属性**（fill 颜色 / cornerRadius）
+  //   已随「按节点渲染」的 PNG 导出烘进像素，产物以 `<img>`/background-image 直接显示该位图
+  //   ⇒ CSS 侧无从（也不该）声明 ⇒ 不收期望（否则系统性假扣分）。
+  //   判据**单一来源** = `.mc-gen/resource-dom-mapping.json` 的 `downloadStatus === 'success'`
+  //   （与挂载侧同源），由调用方（`scoreComponentDir`）读盘后以节点 id 集合传入 —— 本函数
+  //   保持**纯函数、零 IO**，签名之外不碰磁盘。
+  //   ⚠️ 必须严格只取 success：`resourceFile` 有值但 `downloadStatus === 'missing'` 的节点没有
+  //      真导出、产物走 CSS 兜底，其颜色仍是真值（如 36:1694）⇒ 不在本集合内。
+  const exemptPixelNodeIds =
+    opts.exemptPixelNodeIds instanceof Set
+      ? opts.exemptPixelNodeIds
+      : Array.isArray(opts.exemptPixelNodeIds)
+        ? new Set(opts.exemptPixelNodeIds)
+        : null
+  // 🛡️ 档A 面板壳节点（2026-11-03）：`skipMount === true` 的节点 —— 生成侧已裁决「产物不还原它」
+  //   （面板外壳由宿主 base-panel 提供），其 cornerRadius 恒失配 ⇒ 不收期望。
+  //   判据**单一来源** = `.mc-gen/resource-dom-mapping.json` 的 `skipMount`，由调用方读盘后传入；
+  //   与 `scoreResourceMount`（本文件）同一字段、同一语义，禁止此处再叠名字白名单。
+  const panelShellNodeIds =
+    opts.panelShellNodeIds instanceof Set
+      ? opts.panelShellNodeIds
+      : Array.isArray(opts.panelShellNodeIds)
+        ? new Set(opts.panelShellNodeIds)
+        : null
   const colors = []
   const spacing = []
   const fonts = []
   const radii = []
+  // 🛡️ P4 位图替代矢量豁免档计数（2026-11-03）：被豁免的 cornerRadius 条数（详见下方判据）。
+  let bitmapRadiusExempted = 0
+  // 🛡️ 档B 计数（2026-11-03）：成品位图资源节点被豁免的 fill 颜色条数。
+  let exportedPixelColorExempted = 0
+  // 🛡️ 档A 计数（2026-11-03）：面板壳（宿主 base-panel 提供）被豁免的 cornerRadius 条数。
+  let panelShellRadiusExempted = 0
   const root = figmaNodeData?.document || figmaNodeData
   if (!root || typeof root !== 'object') {
-    return { color: [], spacing: [], font: [], radius: [] }
+    return {
+      color: [],
+      spacing: [],
+      font: [],
+      radius: [],
+      stats: { bitmapRadiusExempted, exportedPixelColorExempted, panelShellRadiusExempted },
+    }
   }
   const walk = (node, depth, maskCtx = false, figmaPath = '') => {
     if (!node || typeof node !== 'object' || depth > 12) return
@@ -476,7 +559,16 @@ export function extractExpectedStyleLiteralsWithLocation(figmaNodeData) {
         // 近似全透明层（op < 0.01）对视觉无贡献，跳过。
         if (op >= 0.01) {
           const css = figmaColorToCss(topFill)
-          if (css) colors.push(makeExpectedEntry(css, node, figmaPath, 'fills[0]'))
+          if (css) {
+            // 🛡️ 档B（2026-11-03）：成品位图资源节点 —— Figma 里这里是**矢量源色**
+            //   （如 48:5903 fill #3965ff → 导出 icon-关闭-5903.png），产物写 `<img :src>`，
+            //   CSS 里既没有也不该有该色 ⇒ 仍作期望则恒失配（全库 158 条实证）。
+            if (exemptPixelNodeIds && node.id && exemptPixelNodeIds.has(node.id)) {
+              exportedPixelColorExempted += 1
+            } else {
+              colors.push(makeExpectedEntry(css, node, figmaPath, 'fills[0]'))
+            }
+          }
         }
       }
     }
@@ -499,12 +591,50 @@ export function extractExpectedStyleLiteralsWithLocation(figmaNodeData) {
     }
     // 2026-09-29 修复：过滤掉圆形/椭圆节点的 cornerRadius（不是 CSS border-radius）
     // 圆形节点的 cornerRadius 等于其半径（如 75px），但产物不会用 border-radius: 75px
+    //
+    // 🛡️ P4 位图替代矢量豁免档（2026-11-03 · 实证 mc-max-1793629839483-bf86ddba radius 0/2）：
+    //   判据 = 节点**顶层可见 fill** 为 IMAGE。依据：资源经 `figma-client.js:77`
+    //   `GET /files/{key}/images?ids={nodeId}&format=png` **节点渲染端点**导出，Figma 按节点
+    //   渲染 ⇒ cornerRadius 已**烘入位图 PNG 的 alpha 通道**（实测 12/12 目录 `image_473938-37.png`
+    //   四角 alpha=95~96、中心 255）。产物以 `<img>`/background-image 直接显示该位图 ⇒
+    //   CSS 无需（也不应）再写 border-radius；仍作期望项则恒失配 ⇒ 假扣分。
+    //   **边界（不放水）**：仅「顶层可见 fill === IMAGE」豁免；顶层为 SOLID/GRADIENT 的节点，
+    //   CSS 侧仍需 border-radius（如 43:5688 SOLID rgba(20,105,169,.37) r=3，属真值），照常纳入。
+    //
+    // 🛡️ 档A 面板壳圆角豁免（2026-11-03 同源化 · 实证 mc-max-1793672978279-c85bc59c radius 0/3）：
+    //   判据 = 节点 id ∈ `collectPanelShellNodeIds(resourceMapping)`，
+    //   即生成侧 `resource-dom-mapping.json` 的 **`skipMount === true`** 真值。
+    //   依据（`figma-connector.js:2679-2704`）：`previewAnalysisRole === 'bg'` ∧ 路径段数 ≤2 的 `bg`
+    //   （如 36:1694「cp-设备详情/bg」，box 603×555 ≡ 图根盒）被置 `skipMount = true`；prompt 侧
+    //   明写「base-panel 外壳由宿主提供，只需还原 slot 内容，**无需输出面板背景/标题栏**」⇒ 产物
+    //   **不渲染**它是管线既定决策，其圆角由宿主提供。仍作期望则恒失配（全库实测 158 例 0 兑现）。
+    //   ⚠️ 为何**不用** `isPanelResource`（今次同源化的直接动因）：它是「命名像面板壳」的**近似**
+    //      判据（`bg|background|header|panel-header|title-bar`），实测存在 `isPanelResource === true`
+    //      但**无** `skipMount` 的反例（`36:1697 header`，产物确实渲染它）⇒ 两判据只是**恰好重合**，
+    //      并非同源；且纯名字版会把命中面从 4 例放大到 158 例。`skipMount` 才是「产物不还原它」的
+    //      **唯一事实源**，并天然排除**嵌套** bg（`cp-xxx/tabs-list/bg`，≥3 段 ⇒ 走 `mountTarget`
+    //      挂载、产物**要**渲染）—— 与 `scoreResourceMount`（本文件）消费同一字段、同一语义。
+    //   ⚠️ 只作用于 **radius**：面板壳的颜色/间距不是本档语义（颜色走档B、间距是容器事实照审）。
+    const topVisibleFill = (node.fills || []).find((f) => f && f.visible !== false)
+    const isBitmapTopFill = !!topVisibleFill && topVisibleFill.type === 'IMAGE'
+    // 档B：该节点已导出为成品位图资源 ⇒ 圆角同样已烘入 PNG alpha（与 P4 同源证据、更宽的覆盖面）。
+    const isExportedPixelNode = !!(exemptPixelNodeIds && node.id && exemptPixelNodeIds.has(node.id))
+    // 档A：生成侧已裁决不做挂载还原（skipMount）⇒ 其圆角由宿主面板提供，不收期望。
+    const isPanelShellNode = !!(panelShellNodeIds && node.id && panelShellNodeIds.has(node.id))
     if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
       // 跳过 ELLIPSE 类型节点（圆形/椭圆装饰）
       if (node.type !== 'ELLIPSE') {
         // 四舍五入到整数，避免浮点精度问题（如 1.7600001096725464 → 2）
         const rounded = Math.round(node.cornerRadius)
-        if (rounded > 0) radii.push(makeExpectedEntry(`${rounded}px`, node, figmaPath, 'cornerRadius'))
+        if (rounded > 0) {
+          if (isBitmapTopFill || isExportedPixelNode) {
+            bitmapRadiusExempted += 1
+          } else if (isPanelShellNode) {
+            panelShellRadiusExempted += 1
+          } else {
+            radii.push(makeExpectedEntry(`${rounded}px`, node, figmaPath, 'cornerRadius'))
+          }
+        }
       }
     }
     if (Array.isArray(kids)) {
@@ -517,11 +647,69 @@ export function extractExpectedStyleLiteralsWithLocation(figmaNodeData) {
   }
   walk(root, 0)
   return {
-    color: dedupeExpectedEntries(colors),
-    spacing: dedupeExpectedEntries(spacing),
-    font: dedupeExpectedEntries(fonts),
-    radius: dedupeExpectedEntries(radii),
+    color: dedupe ? dedupeExpectedEntries(colors) : colors,
+    spacing: dedupe ? dedupeExpectedEntries(spacing) : spacing,
+    font: dedupe ? dedupeExpectedEntries(fonts) : fonts,
+    radius: dedupe ? dedupeExpectedEntries(radii) : radii,
+    // 🛡️ P4 可观测性（2026-11-03）：位图替代矢量豁免档的计数，随 structured 一并下发，
+    //   经 `expectedWithLocation` 直达前端，用户可看到「已豁免 N 条位图圆角（无需 CSS）」。
+    //   注意：`stringifyExpectedLiterals` 只取四维，故该字段对字符串版 API 无影响（向后兼容）。
+    //   档B（2026-11-03）扩展：`bitmapRadiusExempted` 现同时计入「成品位图资源」节点的圆角
+    //   （顶层 IMAGE ∨ 已导出为位图 ⇒ 像素已在 PNG 里），语义统一为「位图替代矢量的圆角豁免」。
+    stats: { bitmapRadiusExempted, exportedPixelColorExempted, panelShellRadiusExempted },
   }
+}
+
+/**
+ * 成品位图资源节点 id 集合（档B · 2026-11-03）。
+ *
+ * 判据**单一来源** = `resource-dom-mapping.json` 的 `downloadStatus === 'success'` —— 该节点
+ * 已经 `figma-client.js` 的 `GET /files/{key}/images?ids={nodeId}&format=png` **按节点渲染**
+ * 导出为 PNG，其颜色/圆角已在位图像素里；产物以 `<img>`/background-image 直接显示 ⇒ CSS 侧
+ * 无需（也不该）声明这些像素类属性 ⇒ 作期望则恒失配（全库实证：color 158 条、radius 38 条）。
+ *
+ * ⚠️ 严格只取 `success`：`resourceFile` 有值但 `downloadStatus !== 'success'` 的节点（如
+ *    36:1694 `missing`）**没有真导出**，产物走 CSS 兜底 ⇒ 其颜色仍是真值，不放水。
+ *
+ * @param {Array|null} resourceMapping `resource-dom-mapping.json` 内容
+ * @returns {Set<string>|null} 空集合返回 null（与「不传」等价，避免无谓的 opts）
+ */
+export function collectExportedResourceNodeIds(resourceMapping) {
+  if (!Array.isArray(resourceMapping)) return null
+  const ids = new Set()
+  for (const m of resourceMapping) {
+    if (m && m.downloadStatus === 'success' && typeof m.figmaNodeId === 'string' && m.figmaNodeId) {
+      ids.add(m.figmaNodeId)
+    }
+  }
+  return ids.size > 0 ? ids : null
+}
+
+/**
+ * 面板壳节点 id 集合（档A · 2026-11-03 同源化）。
+ *
+ * 判据**单一来源** = `resource-dom-mapping.json` 的 `skipMount === true` —— 生成侧
+ * （`figma-connector.js:2679-2704`）对 `previewAnalysisRole === 'bg'` ∧ 路径段数 ≤2 的 `bg`
+ * 置此标记，语义是「面板外壳由宿主 base-panel 提供，产物**不还原**它」（prompt 侧同义）。
+ * ⇒ 其 cornerRadius 恒失配，不作期望。与 `scoreResourceMount`（本文件）消费同一字段，口径一致。
+ *
+ * 🔴 不使用 `isPanelResource`（命名近似）：实测反例 `36:1697 header` 为 `isPanelResource === true`
+ *    但无 `skipMount`（产物确实渲染它）⇒ 名字判据会**过宽**。`skipMount` 才是真值。
+ *
+ * ⚠️ 严格只取 `true`（`skipMount` 为 `false`/`undefined` 一律不算）；空集合返回 null（与「不传」等价）。
+ *
+ * @param {Array|null} resourceMapping `resource-dom-mapping.json` 内容
+ * @returns {Set<string>|null}
+ */
+export function collectPanelShellNodeIds(resourceMapping) {
+  if (!Array.isArray(resourceMapping)) return null
+  const ids = new Set()
+  for (const m of resourceMapping) {
+    if (m && m.skipMount === true && typeof m.figmaNodeId === 'string' && m.figmaNodeId) {
+      ids.add(m.figmaNodeId)
+    }
+  }
+  return ids.size > 0 ? ids : null
 }
 
 // 构造带 Figma 定位的期望条目
@@ -566,19 +754,76 @@ function stringifyExpectedLiterals(structured) {
 /**
  * 从 Figma 节点提取结构信息（布局类型、对齐方式、层级深度）
  */
+/**
+ * 🔴 2026-11-03：节点构成分类常量——供 `nodes` 子项输出**可解释的构成明细**。
+ *
+ * 为何要分类：Figma 的 `nodeCount` 与产物侧「`<template>` 开标签数」**口径不同源**——
+ *   Figma 里 56% 的节点是 VECTOR / ELLIPSE 这类**纯矢量装饰**，产物侧通常由
+ *   CSS 背景 / 伪元素 / 内联 SVG path 承载，**不产生独立 DOM 标签**。
+ *   实测 c-device-monitor-7c5ef300：Figma 437 节点 = 容器 105 + 文本 74 + 装饰 258，
+ *   而产物只有 25 个标签 ⇒ `min(1, 25/437)=0.057`。这不是产物缺了 412 个 DOM，
+ *   而是两侧在数不同的东西。故本项**退出 structure 分母**，改以构成明细呈现。
+ */
+const FIGMA_CONTAINER_TYPES = new Set([
+  'FRAME',
+  'GROUP',
+  'COMPONENT',
+  'COMPONENT_SET',
+  'INSTANCE',
+  'SECTION',
+])
+const FIGMA_DECOR_TYPES = new Set([
+  'VECTOR',
+  'ELLIPSE',
+  'RECTANGLE',
+  'LINE',
+  'STAR',
+  'POLYGON',
+  'BOOLEAN_OPERATION',
+])
+
 export function extractExpectedStructure(figmaNodeData) {
   const layouts = [] // flex/grid/none
   const alignments = [] // align-items/justify-content
   let maxDepth = 0
   let nodeCount = 0
+  // 节点构成统计（仅供 nodes 明细展示，不参与判据）
+  let containerCount = 0 // 容器类节点（FRAME/GROUP/COMPONENT/INSTANCE/SECTION）
+  let layoutContainerCount = 0 // 其中带 auto layout 的（HORIZONTAL/VERTICAL/GRID）
+  let decorNodeCount = 0 // 纯矢量装饰节点（VECTOR/ELLIPSE/RECTANGLE/…，多数为叶）
+  let textNodeCount = 0
+  const nodeBreakdown = {}
   const root = figmaNodeData?.document || figmaNodeData
   if (!root || typeof root !== 'object') {
-    return { layouts: [], alignments: [], maxDepth: 0, nodeCount: 0 }
+    return {
+      layouts: [],
+      alignments: [],
+      maxDepth: 0,
+      nodeCount: 0,
+      containerCount: 0,
+      layoutContainerCount: 0,
+      decorNodeCount: 0,
+      textNodeCount: 0,
+      nodeBreakdown: {},
+    }
   }
   const walk = (node, depth) => {
     if (!node || typeof node !== 'object' || depth > 12) return
     nodeCount++
     if (depth > maxDepth) maxDepth = depth
+    // 节点构成（按 type 归类；未知类型归入 other）
+    const nodeType = String(node.type || 'other')
+    nodeBreakdown[nodeType] = (nodeBreakdown[nodeType] || 0) + 1
+    if (FIGMA_CONTAINER_TYPES.has(nodeType)) containerCount++
+    if (FIGMA_DECOR_TYPES.has(nodeType)) decorNodeCount++
+    if (nodeType === 'TEXT') textNodeCount++
+    if (
+      node.layoutMode === 'HORIZONTAL' ||
+      node.layoutMode === 'VERTICAL' ||
+      node.layoutMode === 'GRID'
+    ) {
+      layoutContainerCount++
+    }
     const kids = Array.isArray(node.children)
       ? node.children
       : Array.isArray(node.document?.children)
@@ -611,10 +856,24 @@ export function extractExpectedStructure(figmaNodeData) {
       }
     } else if (layoutMode === 'GRID') {
       layouts.push('grid')
-    } else if (kids.length > 1) {
-      // 多子节点但无 layoutMode，可能是绝对定位或无布局
-      layouts.push('none')
     }
+    // 🔴 2026-11-03 删除 `layouts.push('none')`（旧代码：`else if (kids.length > 1)` 时记 'none'）
+    //
+    // 根因：'none' 是**不可满足字面量**——对照侧 extractActualStructure 的 displayRe
+    //   只采集 `display:(flex|grid|block|inline-flex|inline-grid)`，**永不产出 'none'**
+    //   （`display:none` 恰好不在此枚举内，且隐藏元素不该参与布局比对）。
+    //   ⇒ 该期望值命中率恒为 0，却照样计入 layout 分母 ⇒ 凡 Figma 含「多子节点但无
+    //   auto layout」的容器，layout ratio 就被无条件稀释。
+    //
+    // 实证（mc-max-1793679145822-fae4130a）：expected=['none','flex'] /
+    //   actual=['grid','flex','block'] ⇒ layout 1/2=0.5，**白扣 50 分**（折 structure 总分
+    //   12.5）。该组件深度修正后与真值完全一致、对齐项才是唯一真缺陷，故这 50 分纯属判据噪声。
+    //
+    // 为何不改成「映射到 'block'」：'none' 的语义是「无 auto layout」，既可能是绝对定位
+    //   （position:absolute）也可能是默认块级流，无法辩驳地断言产物「应该」出现某个
+    //   display 字面量；而对 CSS 而言 `display:block` 是默认值、产物通常不显式声明，
+    //   映射过去会反向制造假阴性。
+    //   守则：**不可判定 / 不可满足的期望项不得进入分母**。
     if (Array.isArray(kids)) {
       for (const child of kids.slice(0, 80)) walk(child, depth + 1)
     }
@@ -625,7 +884,64 @@ export function extractExpectedStructure(figmaNodeData) {
     alignments: uniqueStrings(alignments),
     maxDepth,
     nodeCount,
+    // 节点构成（nodes 明细展示用；判据不消费）
+    containerCount,
+    layoutContainerCount,
+    decorNodeCount,
+    textNodeCount,
+    nodeBreakdown,
   }
+}
+
+/**
+ * 🔴 2026-11-03：标签配平计数前必须剥离「**不产生配对**的标签」——depth / nodeCount 虚高根因
+ *
+ * 事故 mc-max-1793679145822-fae4130a：maxDepth 被判 5（Figma 真值 4）⇒ depth 维度白扣
+ *   20 分（ratio 0.8），而实际深度与设计**完全一致**。定位到该文件模板里恰有 1 个
+ *   `<img … />`：tagRe 把它当作开始标签 `+1`，却永远没有对应的 `</img>` 来 `-1`
+ *   ⇒ 其后所有 depth 读数**永久偏移**，maxDepth 与 nodeCount 双双虚高。
+ *   剥离后实测：maxDepth 5→**4**（= 真值 4）、nodeCount 59→58。
+ *
+ * 三类必须剥（缺一不可）：
+ *   ① HTML 注释：`<!-- <div> -->` 里的标签会被 tagRe 数进去，注释本身也不配对；
+ *   ② 语法自闭合：`<Img … />` / `<Icon …/>`（Vue 自定义组件极常见）；
+ *   ③ HTML void 元素的无斜杠写法：`<img src="x">` / `<br>` / `<input>`（规范上永不闭合）。
+ *
+ * 🔴 但它们**不是不存在**——是真实存在的**叶子元素**（DOM 里占一个位置，Figma 侧也有
+ *   对应的 IMAGE/VECTOR 节点）。所以处理方式不是「删干净」，而是**替换成配平的叶子
+ *   占位符** `<x-leaf></x-leaf>`：配平器看到它 +1 再 -1（深度不永久偏移），但它确实
+ *   占了一层（`<div><img/></div>` 与 `<div><span/></div>` 深度一致=2）、并计入节点数。
+ *   若直接删成空串，纯叶子容器会**少算一层**（实测本改动首版即如此）。
+ *
+ * 为何是「语法自闭合（任意标签名）+ void 元素名清单」双口径，而不是只按元素名白名单：
+ *   只按 `img/input/br…` 会漏掉 `<Icon />` 这类自定义组件 → 虚高照旧。反之若只按语法
+ *   自闭合，则漏掉 `<img src="x">` 无斜杠写法。
+ *
+ * 🔴🔴 void 元素名后必须用 `(?=[\s/>])` 而非 `\b`：`-` 是「非单词字符」，`\b` 在
+ *   `<base-panel …>` 的 `base|` 处同样成立 ⇒ 会把产物根容器 `<base-panel>` 整段当成
+ *   `<base>` 剥掉。首版实测即中此招：全库 378 处误伤（几乎全是 `<base-panel`），
+ *   其中 12 个组件 nodeCount 断崖下跌（17→8、6→4）。同理 `<col-*>`/`<link-*>` 等带
+ *   前缀标签全部中招。
+ *
+ * 已知边界：属性值内含 `>` 或 `/>` 的极端写法（如 `v-if="a > b"`）不会被正确匹配，
+ *   属正则级固有局限，对「结构性偏移」的量化影响可忽略。
+ */
+const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g
+const SELF_CLOSING_TAG_RE = /<[a-z][\w.-]*\b[^>]*\/>/gi
+const VOID_ELEMENT_RE =
+  /<(?:img|input|br|hr|source|area|base|col|embed|link|meta|track|wbr|param)(?=[\s/>])[^>]*>/gi
+// 叶子占位符：成对出现，配平后深度归位，但本身占一层、计一个节点
+const LEAF_MARKER = '<x-leaf></x-leaf>'
+
+/**
+ * 把「不产生配对的标签」（自闭合 / void / 注释）归一化为叶子占位符
+ * @returns {string} 可安全配平的模板
+ */
+function normalizeUnpairedTags(template) {
+  return String(template || '')
+    .replace(HTML_COMMENT_RE, '')
+    .replace(SELF_CLOSING_TAG_RE, LEAF_MARKER)
+    .replace(VOID_ELEMENT_RE, LEAF_MARKER)
 }
 
 /**
@@ -645,7 +961,9 @@ export function extractActualStructure(files = []) {
     // 提取模板计算层级深度和节点数
     const tplMatch = content.match(templateRe)
     if (tplMatch) {
-      const tpl = tplMatch[1]
+      // 🔴 先把不产生配对的标签（自闭合 / void / 注释）归一化为叶子占位符，
+      //    否则 `<img />` 只 +1 不 -1 ⇒ 之后所有 depth 永久偏移
+      const tpl = normalizeUnpairedTags(tplMatch[1])
       // 简单统计标签嵌套深度（非精确，但可用于比较）
       let depth = 0
       let maxD = 0
@@ -918,59 +1236,151 @@ export function scoreResourceMount(resourceMapping, actualSectionIds) {
 /**
  * 结构维度评分：比较布局类型、对齐方式、层级深度、节点数量比例
  */
+/**
+ * 结构维度评分：比较布局类型、对齐方式、层级深度、节点数量构成。
+ *
+ * 🔴 2026-11-03（本轮）三处判据修正，配套「缺什么」明细：
+ *   ① `layout` / `alignment` 由「只报 ratio」改为**同时输出差集 missed** ——
+ *      这两个子项天然可列：期望集合 − 实际集合 = 缺失的具体 CSS 值，零噪声。
+ *   ② `depth` 输出 `diff`（差几层），如实呈现为差值（深度无法列「缺哪一层」）。
+ *   ③ **`nodes` 退出分母**（只统计、不计分）—— 见下方长注释。
+ *   顶层补 `expected` / `matched` / `missed`，使前端通用明细渲染（读 `dim.missed`）
+ *   零改动即可展示，同时修掉 UI 上 `undefined/undefined` 的空分母。
+ */
 function scoreStructure(expected, actual) {
   if (!expected || typeof expected !== 'object') {
-    return { scored: false, score: null, details: {} }
+    return { scored: false, score: null, details: {}, expected: 0, matched: 0, missed: [] }
   }
   const details = {}
+  const missed = []
   let totalScore = 0
   let scoredDims = 0
-  // 布局类型匹配（flex/grid/none）
+  let perfectDims = 0
+
+  // 布局类型匹配（flex/grid）
   const expLayouts = new Set(expected.layouts || [])
   const actLayouts = new Set(actual?.layouts || [])
   if (expLayouts.size > 0) {
-    let layoutMatch = 0
-    for (const l of expLayouts) {
-      if (actLayouts.has(l)) layoutMatch++
-    }
+    const missing = [...expLayouts].filter((l) => !actLayouts.has(l))
+    const layoutMatch = expLayouts.size - missing.length
     const layoutRatio = layoutMatch / expLayouts.size
-    details.layout = { expected: expLayouts.size, matched: layoutMatch, ratio: layoutRatio }
+    details.layout = {
+      expected: expLayouts.size,
+      matched: layoutMatch,
+      ratio: layoutRatio,
+      missed: missing,
+    }
+    for (const l of missing) {
+      missed.push({
+        value: `display:${l}`,
+        kind: 'layout',
+        reason:
+          l === 'grid'
+            ? 'Figma 使用 GRID 网格布局，产物 CSS 未声明 display:grid'
+            : `Figma 使用 auto layout，产物 CSS 未声明 display:${l}`,
+      })
+    }
     totalScore += layoutRatio * 100
     scoredDims++
+    if (layoutRatio === 1) perfectDims++
   }
+
   // 对齐方式匹配
   const expAligns = new Set(expected.alignments || [])
   const actAligns = new Set(actual?.alignments || [])
   if (expAligns.size > 0) {
-    let alignMatch = 0
-    for (const a of expAligns) {
-      if (actAligns.has(a)) alignMatch++
-    }
+    const missing = [...expAligns].filter((a) => !actAligns.has(a))
+    const alignMatch = expAligns.size - missing.length
     const alignRatio = alignMatch / expAligns.size
-    details.alignment = { expected: expAligns.size, matched: alignMatch, ratio: alignRatio }
+    details.alignment = {
+      expected: expAligns.size,
+      matched: alignMatch,
+      ratio: alignRatio,
+      missed: missing,
+    }
+    for (const a of missing) {
+      missed.push({
+        value: a,
+        kind: 'alignment',
+        reason: `Figma 主轴/交叉轴对齐为 ${a}，产物 CSS 未声明该对齐`,
+      })
+    }
     totalScore += alignRatio * 100
     scoredDims++
+    if (alignRatio === 1) perfectDims++
   }
-  // 层级深度比较（允许 ±2 层误差）
+
+  // 层级深度比较（每差 1 层扣 20%）
   if (expected.maxDepth > 0) {
-    const depthDiff = Math.abs((actual?.maxDepth || 0) - expected.maxDepth)
-    const depthRatio = Math.max(0, 1 - depthDiff / 5) // 每差 1 层扣 20%
-    details.depth = { expected: expected.maxDepth, actual: actual?.maxDepth || 0, ratio: depthRatio }
+    const actDepth = actual?.maxDepth || 0
+    const depthDiff = Math.abs(actDepth - expected.maxDepth)
+    const depthRatio = Math.max(0, 1 - depthDiff / 5)
+    details.depth = {
+      expected: expected.maxDepth,
+      actual: actDepth,
+      diff: depthDiff,
+      ratio: depthRatio,
+    }
+    if (depthDiff > 0) {
+      missed.push({
+        value: `嵌套深度：期望 ${expected.maxDepth} 层 / 实际 ${actDepth} 层`,
+        kind: 'depth',
+        diff: depthDiff,
+        unit: '层',
+        reason: `产物标签嵌套深度与 Figma 设计树相差 ${depthDiff} 层（${
+          actDepth > expected.maxDepth ? '偏深' : '偏浅'
+        }）`,
+      })
+    }
     totalScore += depthRatio * 100
     scoredDims++
+    if (depthRatio === 1) perfectDims++
   }
-  // 节点数量比例（允许 ±30% 误差）
+
+  // 🔴🔴 节点数量（2026-11-03：退出分母，只统计不计分）
+  //
+  // 根因：`expected.nodeCount`（Figma 全节点）与 `actual.nodeCount`（产物 `<template>`
+  //   开标签数）**口径不同源**，硬做比值不是评分而是**恒定惩罚项**——
+  //   全库 120 个有 Figma 数据的组件实测：min(1, actual/expected) 均值仅 0.213、
+  //   中位 0.195，**满分个数 0/120、落在 0.7~1 带内 0/120**。
+  //   即所有组件在该子项都被扣掉约 79 分（折 structure 总分约 19.6 分），
+  //   且扣分幅度与产物质量无关：Figma 侧过半是纯矢量装饰（VECTOR/ELLIPSE/RECTANGLE），
+  //   产物侧由 CSS 背景 / 伪元素 / 内联 SVG 承载、不产生独立标签。
+  //
+  // 为何不改口径而是退出分母（两条备选口径均已实测排除）：
+  //   · 「仅数 Figma 容器节点」→ 全库均值 0.627、满分 20/120，仍偏低；
+  //     因 Figma GROUP 在产物中常被扁平化（不产生包装 DOM），比值低不代表缺 DOM。
+  //   · 「仅数带 auto layout 的容器」→ 均值 0.993、**满分 116/120**，
+  //     恒满分 = 零区分力，等于把一个子项白送分。
+  //   两条路都不成立 ⇒ 按本仓守则「**口径不同源即不得进入分母**」（同 a 改动守则），
+  //   本项不计分，但**完整保留构成明细**（details.nodes），让「缺什么 DOM」可被人工核对。
   if (expected.nodeCount > 0) {
-    const nodeRatio = Math.min(1, (actual?.nodeCount || 0) / expected.nodeCount)
-    details.nodes = { expected: expected.nodeCount, actual: actual?.nodeCount || 0, ratio: nodeRatio }
-    totalScore += nodeRatio * 100
-    scoredDims++
+    const actNodes = actual?.nodeCount || 0
+    details.nodes = {
+      scored: false, // 🔴 不参与 structure 等权平均
+      expected: expected.nodeCount,
+      actual: actNodes,
+      ratio: Math.min(1, actNodes / expected.nodeCount),
+      figma: {
+        containerCount: expected.containerCount ?? null,
+        layoutContainerCount: expected.layoutContainerCount ?? null,
+        textNodeCount: expected.textNodeCount ?? null,
+        decorNodeCount: expected.decorNodeCount ?? null,
+        byType: expected.nodeBreakdown || null,
+      },
+      note:
+        `口径不同源：Figma 全树 ${expected.nodeCount} 节点（容器 ${expected.containerCount ?? '?'} / ` +
+        `文本 ${expected.textNodeCount ?? '?'} / 纯矢量装饰 ${expected.decorNodeCount ?? '?'}），` +
+        `产物按 <template> 开标签计 ${actNodes} 个。装饰节点在产物侧由 CSS/伪元素/内联 SVG 承载、` +
+        `不产生独立标签 ⇒ 本项不计入 structure 平均分，仅作结构完备性参考。`,
+    }
   }
+
   if (scoredDims === 0) {
-    return { scored: false, score: null, details }
+    return { scored: false, score: null, details, expected: 0, matched: 0, missed }
   }
   const score = clampScore(totalScore / scoredDims)
-  return { scored: true, score, details }
+  return { scored: true, score, details, expected: scoredDims, matched: perfectDims, missed }
 }
 
 function scoreDimension(expected, actual, kind) {
@@ -989,9 +1399,35 @@ function scoreDimension(expected, actual, kind) {
   }
   const missed = []
   const fuzzyMatches = []
+  // 🛡️ 2026-11-03 style 色彩分档留痕（**判定仍走 colorsMatch，阈值一个字不改**）：
+  // 记录每个期望色「离最近产物色有多远」，把 maxDelta=24 里被吞掉的实质色差摆到明面上。
+  // 只统计不参与判定 ⇒ matched/missed/score 逐字不变（复用 P3 装饰叶子的零回归验收法）。
+  const colorAudit = kind === 'color'
+    ? { maxDelta: 24, expected: 0, exact: 0, near: 0, loose: 0, over: 0, alphaGaps: 0, samples: [] }
+    : null
   let matched = 0
   for (const expVal of expValues) {
     const expEntry = expList.find((e) => e.value === expVal) || { value: expVal, source: null }
+    // 色彩分档（只留痕，不参与判定；tier 描述最近产物色的距离带）
+    if (colorAudit) {
+      const det = colorMatchDetail(expVal, actValues)
+      colorAudit.expected += 1
+      if (det.tier === 'exact') colorAudit.exact += 1
+      else if (det.tier === 'near') colorAudit.near += 1
+      else if (det.tier === 'loose') colorAudit.loose += 1
+      else colorAudit.over += 1
+      // 「RGB 命中但 alpha 明显不同」——静态产物无法区分「纯色+opacity 实现」与「透明度写错」
+      const alphaGap = det.alphaDiff != null && det.delta <= 24 && det.alphaDiff > 0.08
+      if (alphaGap) colorAudit.alphaGaps += 1
+      if ((det.tier === 'loose' || alphaGap) && colorAudit.samples.length < 8) {
+        colorAudit.samples.push({
+          expected: expVal,
+          closest: det.actual,
+          delta: Math.round(det.delta * 10) / 10,
+          alphaDiff: det.alphaDiff == null ? null : Math.round(det.alphaDiff * 100) / 100,
+        })
+      }
+    }
     // 先精确匹配
     const exactOk = kind === 'color' ? colorsMatch(expVal, actValues) : pxMatch(expVal, actValues)
     if (exactOk) {
@@ -1000,41 +1436,48 @@ function scoreDimension(expected, actual, kind) {
     }
 
     // P2 集成：精确匹配失败后 fallback 到模糊匹配
+    // 🛡️ B1（2026-11-03 可观测性治本）：**「最近产物值」的计算移出 `if (fuzzyOk)`**。
+    //   原实现只在模糊命中时才算 bestActualVal，而命中后立刻 `matched += 1` 走掉 ⇒
+    //   未命中分支里 bestActualVal 恒 null ⇒ missed[] 的 closestActualValue /
+    //   closestActualSource / diff 永远是 null（全量 763 份 component-meta 实测 0 非空），
+    //   前端「未匹配 20px：产物最贴近 4px（在 HeaderSub.vue:42）」这条承诺从未兑现。
+    //   🔴 只改「算不算」，不改「判不判」：fuzzyOk 判定式、fuzzyMatches 内容、
+    //      matched / missed 条数 / score 逐字不变（零回归，按逐字段 diff 验收）。
     let fuzzyOk = false
     let bestActualVal = null
     if (kind === 'color') {
       // 颜色模糊匹配：支持透明度误差 + 更大的颜色容差
       fuzzyOk = colorFuzzyMatch(expVal, actValues, { maxDelta: 32, alphaTolerance: 0.15 })
-      if (fuzzyOk) {
-        // 找到最近的实际颜色，记录距离
-        let bestDist = Infinity
-        for (const a of actValues) {
-          const d = colorDistance(expVal, a)
-          if (d < bestDist) {
-            bestDist = d
-            bestActualVal = a
-          }
+      // 找到最近的实际颜色，记录距离（**无条件计算**：未命中时也用于定位「差多远」）
+      let bestDist = Infinity
+      for (const a of actValues) {
+        const d = colorDistance(expVal, a)
+        if (d < bestDist) {
+          bestDist = d
+          bestActualVal = a
         }
+      }
+      if (fuzzyOk) {
         fuzzyMatches.push({ expected: expVal, matchedTo: bestActualVal, distance: Math.round(bestDist * 10) / 10, unit: 'rgb' })
       }
     } else {
       // 🛡️ 2026-09-30 容差沿用 c6b287b 实测过的 (3, 0.15)（放过 +0/-0 取整 + ±3px 噪声，不破坏
       // 「不匹配即判 50」设计契约）。第一层做的是「未匹配项带定位」而非放宽。
       fuzzyOk = numericFuzzyMatch(expVal, actValues, { tolerance: 3, relativeTolerance: 0.15 })
-      if (fuzzyOk) {
-        // 找到最近的实际数值，记录差值
-        const expPxVal = parseNumericValue(expVal)
-        let bestDiff = Infinity
-        for (const a of actValues) {
-          const actPxVal = parseNumericValue(a)
-          if (actPxVal != null && expPxVal != null) {
-            const diff = Math.abs(expPxVal - actPxVal)
-            if (diff < bestDiff) {
-              bestDiff = diff
-              bestActualVal = a
-            }
+      // 找到最近的实际数值，记录差值（**无条件计算**）
+      const expPxVal = parseNumericValue(expVal)
+      let bestDiff = Infinity
+      for (const a of actValues) {
+        const actPxVal = parseNumericValue(a)
+        if (actPxVal != null && expPxVal != null) {
+          const diff = Math.abs(expPxVal - actPxVal)
+          if (diff < bestDiff) {
+            bestDiff = diff
+            bestActualVal = a
           }
         }
+      }
+      if (fuzzyOk) {
         fuzzyMatches.push({ expected: expVal, matchedTo: bestActualVal, distance: Math.round(bestDiff * 10) / 10, unit: 'px' })
       }
     }
@@ -1070,7 +1513,17 @@ function scoreDimension(expected, actual, kind) {
   let score = clampScore(ratio * 100)
   const coverage = expValues.length ? matched / expValues.length : 0
   if (coverage < STYLE_COVERAGE_THRESHOLD) score = Math.min(score, STYLE_COVERAGE_CAP)
-  return { scored: true, score, expected: expValues.length, matched, missed: missed.slice(0, 12), fuzzyMatches: fuzzyMatches.slice(0, 20) }
+  const result = {
+    scored: true,
+    score,
+    expected: expValues.length,
+    matched,
+    missed: missed.slice(0, 12),
+    fuzzyMatches: fuzzyMatches.slice(0, 20),
+  }
+  // 🛡️ 2026-11-03：色彩分档只挂在 color 维度（其余维度 colorAudit=null 不挂）
+  if (colorAudit) result.colorAudit = colorAudit
+  return result
 }
 
 /**
@@ -1115,7 +1568,14 @@ export function computeStyleScore(expected, actual, opts = {}) {
   }
   const scored = Object.values(dims).filter((d) => d.scored)
   if (scored.length === 0) {
-    return { score: null, reason: 'no-expected', coverage: 0, dimensions: dims, diffs: [] }
+    return {
+      score: null,
+      reason: 'no-expected',
+      coverage: 0,
+      dimensions: dims,
+      diffs: [],
+      ...(dims.color?.colorAudit ? { colorAudit: dims.color.colorAudit } : {}),
+    }
   }
   const avg = scored.reduce((s, d) => s + d.score, 0) / scored.length
   const expectedTotal = scored.reduce((s, d) => s + (d.expected || 0), 0)
@@ -1137,7 +1597,17 @@ export function computeStyleScore(expected, actual, opts = {}) {
       }
     }
   }
-  return { score, reason: 'ok', coverage, dimensions: dims, diffs: diffs.slice(0, 40) }
+  return {
+    score,
+    reason: 'ok',
+    coverage,
+    dimensions: dims,
+    diffs: diffs.slice(0, 40),
+    // 🛡️ 2026-11-03 style 色彩分档留痕（顶层便捷出口；完整对象亦见 dimensions.color.colorAudit）。
+    // 用途：把「maxDelta=24 兜住的实质色差」「RGB 命中但 alpha 缺口」直接摆到 quality.style 上，
+    // 不改任何判定与分数（与 P3 装饰叶子分账同策略）。
+    ...(dims.color?.colorAudit ? { colorAudit: dims.color.colorAudit } : {}),
+  }
 }
 
 export function collectGeneratedFilesFromDir(componentDir) {
@@ -1310,7 +1780,23 @@ export async function scoreComponentDir(componentDir, opts = {}) {
     l0b = CodeStructureValidator.validate(files, componentId, {
       ...(opts.l0bOptions || {}),
       target: isVue3 ? 'vue3' : undefined,
+      // 🔴🔴 F1（2026-11-03 治本）：mapping 事实源**键名失配**修正。
+      //   校验器内部有**两个**键名，各管一片检查，必须同时传：
+      //     · `resourceDomMapping` —— 事实源九处：:172 根背景期望 / :1280+ CODE-008 /
+      //       :1535 RESOURCE-001+002 / :1687 CODE-014 面板资源豁免 / :1952 资源变量归属分级 /
+      //       :2083 整块背景宿主 / :2182 CODE-018 契约改写豁免 / :2213 P1-1 节点级尺寸绑定 /
+      //       :2229 detectMissingPropsWiring
+      //     · `resourceMapping` —— :3318 幽灵引用体检（读的就是这个旧键名）
+      //   历史事故（c-vehicle-monitor-c46c2631，11:42:50）：此前只传 `resourceMapping`
+      //   ⇒ 九处全部拿到空 mapping ⇒ `validResourceFiles` 空集 ⇒ **每条资源 import 恒判
+      //   CODE-008 WARN**（实测 12 条假阳性，与日志「规范 12」逐数吻合）⇒ quality-fix 的
+      //   stripLlmResourceImports 全量删除 12 行 import ⇒ CODE-025 BLOCK。
+      //   注：2026-09-22「CODE-025-WARN 根治」只加了 findResourceDomMapping() 加载，
+      //   键名一直没对上，那次的修复从未真正生效。
+      //   A/B 对照（真实产物 + 真实 mapping）：传 resourceMapping → CODE-008×12；
+      //   传 resourceDomMapping → CODE-008×0（同时首次暴露 RESOURCE-001）。
       resourceMapping,
+      resourceDomMapping: resourceMapping,
     })
     // Vue3 手写图片 import 是合法写法，剔除 CODE-008 假阳性（校验器未做 Vue3 分流）
     if (isVue3 && Array.isArray(l0b.issues)) {
@@ -1337,8 +1823,18 @@ export async function scoreComponentDir(componentDir, opts = {}) {
 
   const spec = computeSpecScore(l0b)
   const figma = opts.figmaNodeData || findFigmaNodeData(componentDir)
+  // 🛡️ 档B 接线（2026-11-03）：成品位图资源节点 ⇒ 像素类属性（fill 颜色 / 圆角）不审。
+  //   判据单一来源 = 上面已加载的 `resourceMapping`（`.mc-gen/resource-dom-mapping.json`）
+  //   的 `downloadStatus === 'success'`，与挂载侧同源；extractor 侧保持纯函数（收 id 集合）。
+  const exemptPixelNodeIds = collectExportedResourceNodeIds(resourceMapping)
+  // 🛡️ 档A 接线（2026-11-03 同源化）：面板壳节点（生成侧 `skipMount === true`）⇒ 圆角不审。
+  //   判据单一来源 = 上面已加载的 `resourceMapping`，与 `scoreResourceMount` 同字段同语义。
+  const panelShellNodeIds = collectPanelShellNodeIds(resourceMapping)
   // 🛡️ 2026-09-30 第一层可观测性：带定位版本，让 missed 项能展示「Figma 节点 / 产物文件 + 行号」
-  const expectedStyleWithLoc = extractExpectedStyleLiteralsWithLocation(figma)
+  const expectedStyleWithLoc = extractExpectedStyleLiteralsWithLocation(figma, {
+    exemptPixelNodeIds,
+    panelShellNodeIds,
+  })
   const expectedStyle = stringifyExpectedLiterals(expectedStyleWithLoc) // 向后兼容的字符串版
   const expectedStructure = extractExpectedStructure(figma)
 
@@ -1348,6 +1844,9 @@ export async function scoreComponentDir(componentDir, opts = {}) {
   let actualStyle
   let actualStyleWithLoc // 🛡️ 带定位版本：actual 字面量来自哪个文件/行/类
   let varResolutionInfo = null
+  // 🛡️ P3（2026-11-03）：变量替换后的产物文件单独留存，供装饰叶子落地判定复用同一份
+  // 「归一化后字面量」——否则判定会拿未解析的 @color-xxx 去比 Figma 真值色 ⇒ 全部假 missing。
+  let resolvedFilesForJudge = files
   try {
     const themeVarsPath = findThemeVarsPath(componentDir)
     const varMap = resolveStyleVariables(files, themeVarsPath)
@@ -1357,6 +1856,7 @@ export async function scoreComponentDir(componentDir, opts = {}) {
         ...f,
         content: substituteVariables(f.content, varMap),
       }))
+      resolvedFilesForJudge = resolvedFiles
       // 🛡️ 2026-09-30：两个版本都产，外部 API 默认看字符串版（向后兼容），
       // 但 qualityV1 输出同时携带 WithLocation 完整信息，让前端能渲染 Figma/产物双向定位。
       actualStyleWithLoc = extractDeclaredStyleLiteralsWithLocation(resolvedFiles)
@@ -1381,6 +1881,19 @@ export async function scoreComponentDir(componentDir, opts = {}) {
   }
 
   const actualStructure = extractActualStructure(files)
+
+  // 🛡️ P3（2026-11-03）：装饰叶子落地判定。
+  // 为什么放在这里而不是 visual-parser：装饰叶子被覆盖率判定 `ignored`（正确：无语义名不该算缺失），
+  // 但「豁免是否成立」需要产物存在才能验证。评分阶段产物已落盘 ⇒ 这是唯一能判定的时机。
+  // 判据：SOLID 取 RGB±3 ∧ alpha±0.08；GRADIENT 取全部不透明 stop 的 RGB±3；
+  // <12px VECTOR 图标与全透明渐变视为判据盲区显式豁免。几何通道已实测零区分力，不采用。
+  let decorLeavesResult = null
+  try {
+    decorLeavesResult = judgeDecorLeaves(figma, resolvedFilesForJudge)
+  } catch (err) {
+    // fail-open：判定失败不得影响 v1 评分（与 resourceMount 同策略）
+    console.warn('[quality-score-v1] 装饰叶子判定失败（非阻断）:', err.message)
+  }
 
   // resourceMount 维度（2026-09-28）：检查背景图是否挂载到正确的 data-section-id
   let resourceMountResult = null
@@ -1433,6 +1946,13 @@ export async function scoreComponentDir(componentDir, opts = {}) {
       visualSimilarity: 'Vision LLM，不进 v1 总分',
       visual002: '直方图，不进 v1 总分',
     },
+    // 🛡️ P3（2026-11-03）：装饰叶子分账（不进 v1 总分）。
+    // 覆盖率把无语义名叶子判 `ignored` 是**正确豁免**（Phase 6 全量实测：1600 条中 1553 条确实已落地，97.06%），
+    // 但豁免本身不可见 ⇒ 缺陷被藏起来。这里把「豁免是否成立」变成可读明账：
+    //   verified = 产物里确实找得到该颜色（落地证据）；unverified = 找不到（真缺陷候选）；
+    //   exempt = 判据盲区（<12px VECTOR 图标 / 全透明渐变 / 仅描边 / 未知填充类型），显式标注不猜。
+    // 不参与 specScore/styleScore 计算——与 excluded 同策略，避免二次扣分。
+    ...(decorLeavesResult ? { decorLeaves: decorLeavesResult } : {}),
     // 🛡️ 2026-09-30 第一层可观测性：把带定位的期望/实际一并下发到前端，
     //   让 QualityScoreAdminButton 能渲染「未匹配 20px：Figma 来自 slot-流量预测 (id=83:30, FRAME) /
     //   产物最贴近 4px（package/components/HeaderSub.vue:42, .c-x-slot 类）」。
@@ -1450,6 +1970,51 @@ export async function scoreComponentDir(componentDir, opts = {}) {
     ...(varResolutionInfo ? { varResolutionInfo } : {}),
     ...(screenshots.length > 0 ? { screenshots } : {}),
     ...(designImages.length > 0 ? { designImages } : {}),
+  }
+
+  // 🛡️ P3（2026-11-03）：未落地装饰叶子出 WARN，让豁免不再沉默。
+  // 只告警不扣分：判据是「颜色字面量缺失」，单凭颜色不能断定视觉缺陷（可能由 svg/背景图实现），
+  // 故不阻断、不改分数，仅把 44/1600（2.75%）这类结构性盲区摆到日志面上。
+  if (decorLeavesResult && decorLeavesResult.unverified.count > 0) {
+    const unverifiedPct = Math.round(decorLeavesResult.unverified.rate * 10000) / 100
+    console.warn(
+      `[quality-score-v1] 装饰叶子未落地: ${decorLeavesResult.unverified.count}/${decorLeavesResult.total} (${unverifiedPct}%)`,
+      {
+        componentId,
+        samples: decorLeavesResult.unverified.items.slice(0, 5).map((i) => ({
+          id: i.id,
+          type: i.type,
+          size: `${i.w}x${i.h}`,
+          reason: i.reason,
+        })),
+      },
+    )
+  }
+
+  // 🛡️ 2026-11-03 style 色彩分档留痕：把「被 maxDelta=24 兜住的实质色差 / alpha 缺口」摆到日志面上。
+  // 只告警不改分：单凭 RGB 距离无法断定缺陷（产物可能用纯色+opacity 或图层混色实现，静态产物分不开），
+  // 故与 P3 装饰叶子同策略——先让假匹配可见，阈值调整另行立项，绝不在本轮放水或收紧判定。
+  if (style?.colorAudit && (style.colorAudit.loose > 0 || style.colorAudit.alphaGaps > 0)) {
+    console.warn(
+      `[quality-score-v1] 色彩松匹配留痕: loose=${style.colorAudit.loose} alphaGaps=${style.colorAudit.alphaGaps} / expected=${style.colorAudit.expected} (maxDelta=${style.colorAudit.maxDelta})`,
+      { componentId, samples: style.colorAudit.samples.slice(0, 3) },
+    )
+  }
+
+  // 🛡️ 2026-11-03 structure 明细留痕（真机计数行）：让「结构究竟缺什么」在服务日志里可直接核对，
+  // 不必只依赖前端界面——按本仓守则，判定类改动必须留下真机可读的计数行。
+  // 只记录不改分：layout/alignment 差集与 depth 差值如实输出；nodes 已退出分母（口径不同源），
+  // 仅登记 Figma 全树构成 vs 产物开标签计数，供人工判断「缺了哪些 DOM」。
+  const structDim = style?.dimensions?.structure
+  if (structDim?.scored) {
+    const nodesDetail = structDim.details?.nodes
+    console.log(
+      `[quality-score-v1] 结构明细: 子项 ${structDim.matched}/${structDim.expected} 满分 · 缺失 ${structDim.missed.length} 项 · nodes(不计分) figma=${nodesDetail?.expected ?? '-'} 产物=${nodesDetail?.actual ?? '-'}`,
+      {
+        componentId,
+        missed: structDim.missed.slice(0, 5).map((m) => m.value),
+      },
+    )
   }
 
   if (opts.persist !== false) persistQualityScore(componentDir, quality)

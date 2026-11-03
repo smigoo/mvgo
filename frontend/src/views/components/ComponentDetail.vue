@@ -205,7 +205,7 @@
                 :src="previewUrl"
                 class="preview-iframe"
                 :style="previewIframeStyle"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin allow-popups"
                 @load="onIframeLoad"
               />
             </div>

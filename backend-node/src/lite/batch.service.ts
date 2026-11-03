@@ -187,8 +187,17 @@ export class BatchService implements OnModuleInit {
 
       // 原子写入：先写唯一 .tmp 再 rename
       const tmpFile = `${this.persistFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-      writeFileSync(tmpFile, JSON.stringify(list, null, 2), 'utf-8');
-      require('fs').renameSync(tmpFile, this.persistFile);
+      const json = JSON.stringify(list, null, 2);
+      writeFileSync(tmpFile, json, 'utf-8');
+      try {
+        require('fs').renameSync(tmpFile, this.persistFile);
+      } catch (renameErr: any) {
+        // 🛡️ 2026-11-03：EPERM rename 风暴降级——rename 不可用时直写目标文件，tmp 尽力清理。
+        if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr;
+        writeFileSync(this.persistFile, json, 'utf-8');
+        try { require('fs').unlinkSync(tmpFile); } catch { /* 残留 tmp 待清理 */ }
+        this.logger.warn(`持久化批次记录：rename ${renameErr.code}，已降级为直写`);
+      }
     } catch (err: any) {
       this.logger.warn(`持久化批次记录失败: ${err.message}`);
     }

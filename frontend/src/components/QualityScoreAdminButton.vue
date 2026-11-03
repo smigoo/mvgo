@@ -196,12 +196,32 @@
               </div>
             </div>
           </div>
-          
+
+          <!-- 🛡️ 2026-11-02 未评分可见性：无可判定锚点 ⇒ 该维度不参与等权平均。
+               此前 scored:false 时整块不渲染，用户看不到「本维度未验证」，
+               容易误读成「已通过」。这里显式标注并给出原因与条目数。 -->
+          <div
+            v-else-if="quality.style.dimensions.resourceMount"
+            class="qs-dimension qs-dim-resource qs-dim-unscored"
+          >
+            <div class="qs-dim-header">
+              <span class="qs-dim-name">资源挂载</span>
+              <span class="qs-dim-score">未评分</span>
+              <span class="qs-dim-coverage">
+                {{ quality.style.dimensions.resourceMount.unanchored?.length || 0 }} 条无锚点
+              </span>
+            </div>
+            <p class="qs-dim-desc">
+              映射条目的挂载目标不是 [data-section-id="…"] 形态（如 class 选择器）且无
+              ownerSectionId ⇒ 期望目标不可判定，本维度不参与 styleScore 等权平均
+            </p>
+          </div>
+
           <!-- 其他维度通用展示 -->
           <div v-for="(dim, dimName) in quality.style.dimensions" :key="dimName" class="qs-dimension"
                v-show="dimName !== 'resourceMount'">
             <div class="qs-dim-header">
-              <span class="qs-dim-name">{{ dimName }}</span>
+              <span class="qs-dim-name">{{ dimLabel(dimName) }}</span>
               <span class="qs-dim-score">{{ dim.score != null ? Math.round(dim.score) : '—' }}</span>
               <span class="qs-dim-coverage">{{ dim.matched }}/{{ dim.expected }}</span>
               <span v-if="dim.variableAdapted" class="qs-dim-adapted">✓ 变量化</span>
@@ -232,7 +252,7 @@
                   <span class="qs-missed-label">未匹配：</span>
                   <span class="qs-missed-value">{{ m.value }}</span>
                   <span v-if="m.diff != null" class="qs-missed-diff">
-                    差 {{ m.diff }}{{ m.unit === 'rgb' ? '色距' : 'px' }}
+                    差 {{ m.diff }}{{ m.unit === 'rgb' ? '色距' : (m.unit || 'px') }}
                   </span>
                 </div>
                 <!-- Figma 源定位 -->
@@ -246,8 +266,17 @@
                     [{{ m.expectedSource.field }}]
                   </span>
                 </div>
-                <!-- 产物最贴近位置：差值 → tooltip。 -->
-                <div v-if="m.closestActualSource?.file" class="qs-missed-source actual">
+                <!-- 产物最贴近位置：差值 → tooltip。
+                     🛡️ C1（2026-11-03）：产物侧 file/line/className 自 B3 修正后已是真值，
+                     此前只当纯文本展示、用户还得自己去目录里翻 ⇒ 改为可点击落点：点一下就把
+                     父级代码面板切到该文件并高亮该行（emit locate-source，由 TaskDetail 消费）。 -->
+                <button
+                  v-if="m.closestActualSource?.file"
+                  type="button"
+                  class="qs-missed-source actual is-locatable"
+                  :title="`跳转到 ${m.closestActualSource.file}${m.closestActualSource.line ? ':' + m.closestActualSource.line : ''}`"
+                  @click="emitLocateSource(m)"
+                >
                   <span class="qs-source-tag">产物</span>
                   <span class="qs-source-path">
                     {{ m.closestActualValue }}
@@ -255,11 +284,34 @@
                     <span v-if="m.closestActualSource.className"> · .{{ m.closestActualSource.className }}</span>
                   </span>
                   <span class="qs-source-file">{{ m.closestActualSource.file }}</span>
-                </div>
+                  <span class="qs-source-goto" aria-hidden="true">跳转 ›</span>
+                </button>
               </div>
               <div v-if="dim.missed.length > 5" class="qs-missed-more">
                 还有 {{ dim.missed.length - 5 }} 项...
               </div>
+            </div>
+
+            <!-- 🛡️ 2026-11-03：节点数量构成（不计分，仅结构完备性参考）。
+                 Figma 全节点数含大量纯矢量装饰，与产物 <template> 开标签数口径不同源，
+                 故本项退出 structure 等权平均——但**明细照常统计出来**，供人工核对。 -->
+            <div v-if="dimName === 'structure' && dim.nodes" class="qs-struct-nodes">
+              <div class="qs-struct-nodes-head">
+                <span class="qs-struct-nodes-tag">节点构成 · 不计分</span>
+                <span class="qs-struct-nodes-count">
+                  Figma {{ dim.nodes.expected }} → 产物 {{ dim.nodes.actual }}
+                </span>
+              </div>
+              <div v-if="dim.nodes.figma?.byType" class="qs-struct-nodes-breakdown">
+                <span
+                  v-for="(cnt, tp) in dim.nodes.figma.byType"
+                  :key="tp"
+                  class="qs-struct-chip"
+                >
+                  {{ tp }} {{ cnt }}
+                </span>
+              </div>
+              <p class="qs-struct-nodes-note">{{ dim.nodes.note }}</p>
             </div>
           </div>
         </div>
@@ -293,6 +345,12 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'preview-refresh-needed'): void
+  /**
+   * 🛡️ C1（2026-11-03）：样式分未匹配项的「产物侧落点」。
+   * 载荷只带父级（代码面板）真正需要的东西：file + 可选 line + 展示用 label/className。
+   * 不在此处决定「能不能跳转」——快照是否包含该文件由父级判断（同 locateFailedFile 口径）。
+   */
+  (e: 'locate-source', payload: { file: string; line: number | null; label?: string; className?: string }): void
 }>()
 
 defineOptions({ inheritAttrs: false })
@@ -352,12 +410,51 @@ function dimTone(n: number | null | undefined) {
   return 'dim-bad'
 }
 
+/**
+ * 🛡️ 2026-11-03：维度名中文映射。
+ * 此前直接渲染后端键名 ⇒ 界面上出现英文 `structure` / `color`，与同面板的
+ * 「资源挂载」「变量解析」中文文案混排。仅展示层映射，键名本身不动
+ * （`structure` 仍用于定位 `dimensions.structure`、以及 canFixDimension 的排除判断）。
+ */
+const DIM_LABELS: Record<string, string> = {
+  color: '颜色',
+  spacing: '间距',
+  font: '字号',
+  radius: '圆角',
+  structure: '结构',
+  resourceMount: '资源挂载',
+}
+
+function dimLabel(dimName: string) {
+  return DIM_LABELS[dimName] || dimName
+}
+
 function formatTime(iso?: string) {
   if (!iso) return '-'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+/**
+ * 🛡️ C1（2026-11-03）：把「产物侧最近值定位」点击转成父级跳转。
+ *
+ * 判定侧 missed[].closestActualSource 由 B3 修正后为真值（file/line/className 都指向真实声明），
+ * 但 line 可能是 0/null（注释内字面量、跨行声明）⇒ 只传 file 让父级至少把文件打开。
+ * 抽屉自身先关闭，否则跳转结果被 520px 抽屉盖住。
+ */
+function emitLocateSource(m: any) {
+  const src = m?.closestActualSource
+  if (!src?.file) return
+  const line = Number(src.line)
+  emit('locate-source', {
+    file: String(src.file),
+    line: Number.isFinite(line) && line > 0 ? line : null,
+    label: m?.value == null ? '' : String(m.value),
+    className: src.className ? String(src.className) : '',
+  })
+  drawerOpen.value = false
 }
 
 function getScreenshotUrl(path: string) {
@@ -817,6 +914,41 @@ async function fixDimension(dimName: string) {
   &.actual {
     color: #b8c5d4;
   }
+  /* 🛡️ C1（2026-11-03）：产物定位可点击落点。
+     button 复位（浏览器默认 border/background/font 与 div 不一致，不复位会撑出灰色块），
+     再补 hover/focus 的可发现性——否则用户不知道这行能点。 */
+  &.is-locatable {
+    width: 100%;
+    padding: 3px 6px;
+    margin-top: 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: rgba(88, 160, 208, 0.45);
+      background: rgba(88, 160, 208, 0.12);
+      outline: none;
+    }
+    &:hover .qs-source-goto {
+      opacity: 1;
+    }
+  }
+}
+.qs-source-goto {
+  /* 由 .qs-source-file 的 margin-left:auto 吃掉剩余空间，这里只留间隔，
+     两个 auto 会把空白对半分、把「文件路径」挤到中间。 */
+  margin-left: 6px;
+  font-size: 9px;
+  color: #58a0d0;
+  white-space: nowrap;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
 }
 .qs-source-tag {
   font-size: 9px;
@@ -1029,6 +1161,14 @@ async function fixDimension(dimName: string) {
 .qs-dim-resource {
   border-left: 3px solid #3d7ea8;
 }
+/* 未评分态（2026-11-02）：锚点不可判定，维度不参与等权平均 */
+.qs-dim-unscored {
+  border-left-color: #7a8b9c;
+  opacity: 0.85;
+}
+.qs-dim-unscored .qs-dim-score {
+  color: #a3b8cb;
+}
 .qs-dim-desc {
   margin: 4px 0 8px;
   font-size: 11px;
@@ -1088,6 +1228,56 @@ async function fixDimension(dimName: string) {
   padding: 1px 4px;
   border-radius: 3px;
   font-family: monospace;
+}
+
+/* 结构维度 · 节点构成（不计分，2026-11-03）：Figma 全节点口径与产物 DOM 口径不同源，
+   本项退出 structure 等权平均，仅作完备性参考展示。左条用中性灰与计分维度区分。 */
+.qs-struct-nodes {
+  margin-top: 8px;
+  background: #0f1722;
+  border-radius: 6px;
+  padding: 8px 10px;
+  border-left: 2px solid #7a8b9c;
+}
+.qs-struct-nodes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.qs-struct-nodes-tag {
+  font-size: 11px;
+  color: #a3b8cb;
+  background: #1a2836;
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.qs-struct-nodes-count {
+  font-size: 11px;
+  color: #c5d5e5;
+  font-family: monospace;
+  margin-left: auto;
+}
+.qs-struct-nodes-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 6px;
+}
+.qs-struct-chip {
+  font-size: 10px;
+  color: #9fb6c9;
+  background: #1a2836;
+  border: 1px solid #243447;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: monospace;
+}
+.qs-struct-nodes-note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #7f93a8;
 }
 
 /* 维度分数颜色 */

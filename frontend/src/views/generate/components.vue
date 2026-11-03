@@ -60,7 +60,7 @@
             </svg>
             Figma 链接
           </button>
-          <button
+          <!-- <button
             type="button"
             class="source-tab"
             :class="{ active: sourceMode === 'docx-html' }"
@@ -84,7 +84,7 @@
               <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
             HTML + 需求文档
-          </button>
+          </button> -->
         </div>
 
         <!-- 隐藏文件输入（脚本依赖 ref） -->
@@ -1190,6 +1190,22 @@
                 <span class="adv-doc-name" :title="advDocName">{{ advDocName }}</span>
                 <button class="adv-doc-remove" type="button" @click="clearAdvDoc">✕</button>
               </div>
+              <!-- 🔴 2026-11-03：历史任务的需求文档**不自动灌入**（可能 2 万字，静默塞进输入框
+                   用户不知道自己在复用旧约束）。改为显式提示 + 按需「复用」，
+                   点击时才按 sessionId 拉详情接口取全文。 -->
+              <div v-else-if="advDocHint" class="adv-doc-hint">
+                <span class="adv-doc-icon">📄</span>
+                <span class="adv-doc-hint-text">上次任务用过一份需求文档（{{ advDocHint.len }} 字）</span>
+                <button
+                  class="adv-doc-reuse"
+                  type="button"
+                  :disabled="busy || advDocHint.loading"
+                  @click="reuseHistoryDoc"
+                >
+                  {{ advDocHint.loading ? '读取中…' : '复用' }}
+                </button>
+                <button class="adv-doc-remove" type="button" title="忽略该文档" @click="dismissHistoryDoc">✕</button>
+              </div>
               <button v-else class="adv-doc-btn" type="button" :disabled="busy" @click="advDocInput?.click()">
                 + 上传需求文档
               </button>
@@ -1325,7 +1341,8 @@ import { useConfigStore } from '@/stores/config'
 import { generateLite, batchGenerate, cancelTask } from '@/api/lite'
 // 🆕 2026-12 N 主题：显式参数类型（themeNodes 等可选字段需要它才不报 TS2339）
 import type { GenerateLiteParams } from '@/api/lite'
-import { fetchFigmaPreview } from '@/api/generator'
+// 🔴 2026-11-03：历史需求文档「复用」要按 sessionId 取全文（列表接口只有字数）
+import { fetchFigmaPreview, fetchTaskStatus } from '@/api/generator'
 import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
 import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
@@ -1839,6 +1856,12 @@ const advExtraPrompt = ref('')
 const advDocName = ref('')
 const advDocText = ref('')
 const advDocInput = ref<HTMLInputElement | null>(null)
+/**
+ * 🔴 2026-11-03：历史任务的需求文档「待复用」提示。
+ *   列表接口只带字数（requirementDocTextLen，全文 2 万字不进 15s 轮询），
+ *   所以这里只记 sessionId + 字数，用户点「复用」时才按 sessionId 拉详情取全文。
+ */
+const advDocHint = ref<{ sessionId: string; len: number; loading: boolean } | null>(null)
 // 折叠条收起时的已填摘要
 const advSummaryChips = computed(() => {
   const chips: string[] = []
@@ -1860,6 +1883,8 @@ function onAdvDocPick(e: Event) {
   reader.onload = () => {
     advDocName.value = file.name
     advDocText.value = String(reader.result || '')
+    // 已经选了新文档 ⇒ 历史「待复用」提示失去意义，清掉避免清空后又冒出来
+    advDocHint.value = null
   }
   reader.readAsText(file)
   input.value = ''
@@ -1867,7 +1892,39 @@ function onAdvDocPick(e: Event) {
 function clearAdvDoc() {
   advDocName.value = ''
   advDocText.value = ''
+  // 手动清空是明确意图：连带忽略历史文档提示，不要自动回填上一份
+  advDocHint.value = null
   if (advDocInput.value) advDocInput.value.value = ''
+}
+/**
+ * 🔴 2026-11-03：复用历史任务的需求文档。
+ *   全文只在详情接口（getTaskStatus 白名单）返回，列表接口是 requirementDocTextLen，
+ *   故此处按 sessionId 二次取全文 —— 用户显式点击才付出这一跳代价。
+ */
+async function reuseHistoryDoc() {
+  const hint = advDocHint.value
+  if (!hint || hint.loading) return
+  hint.loading = true
+  try {
+    const resp = await fetchTaskStatus(hint.sessionId)
+    const text = String(resp?.data?.task?.requirementDocText || resp?.task?.requirementDocText || '')
+    if (!text) {
+      htmlError.value = '该历史任务的需求文档已不可读取（可能已被清理）'
+      advDocHint.value = null
+      return
+    }
+    advDocText.value = text
+    advDocName.value = `历史任务文档（${text.length} 字）`
+    advDocHint.value = null
+    advOpen.value = true
+  } catch {
+    htmlError.value = '获取历史需求文档失败，请重新上传'
+  } finally {
+    if (advDocHint.value) advDocHint.value.loading = false
+  }
+}
+function dismissHistoryDoc() {
+  advDocHint.value = null
 }
 const busy = ref(false)
 const submitting = ref(false)
@@ -3724,6 +3781,20 @@ function restoreHistoryTask(t: any) {
     if (tier === 'lite' || tier === 'max') genTier.value = tier
     else if (t?.kindClass === 'is-lite') genTier.value = 'lite'
     else if (t?.kindClass === 'is-max') genTier.value = 'max'
+    // 🔴 2026-11-03：高级选项回填。用户点历史任务多半是想「在上次基础上再改一版」，
+    //   不续上提示词/组件 ID ⇒ 生成结果与上次不是同一类（甚至产物目录/类前缀都变了）。
+    //   守 busy 守卫：生成中不能让右栏点击改写正在跑的请求体。
+    //   requirementDocText **不自动灌入**（可达 2 万字），改走下方「待复用」提示。
+    advUserId.value = String(t?.userComponentId || '')
+    advExtraPrompt.value = String(t?.extraPrompt || '')
+    // 清掉上一次历史残留：文档正文/文件名/待复用提示三者必须同步，
+    // 否则会出现「chip 显示旧文件名、实际 advDocText 为空」的假已填状态。
+    advDocName.value = ''
+    advDocText.value = ''
+    if (advDocInput.value) advDocInput.value.value = ''
+    const docLen = Number(t?.requirementDocTextLen || 0)
+    advDocHint.value = docLen > 0 && t?.sessionId ? { sessionId: String(t.sessionId), len: docLen, loading: false } : null
+    if (advUserId.value || advExtraPrompt.value || advDocHint.value) advOpen.value = true
   }
   const themes = Array.isArray(t?.themeNodes) ? t.themeNodes : null
   if (themes && themes.length > 1 && !busy.value) {
@@ -3790,6 +3861,13 @@ async function fetchRecent() {
       sourceType: t.sourceType || '',
       taskType: t.taskType || '',
       target: t.target || '',
+      // 🔴 2026-11-03：高级选项三字段透传（历史还原用）。
+      //   extraPrompt（≤4000）/userComponentId 列表接口直接带全文，回填即用；
+      //   requirementDocText 全文不在列表（getAllTasks slim 剥成 requirementDocTextLen），
+      //   只带字数 → 还原时显示「上次用过一份文档（N 字）· 复用」，点了才拉详情取全文。
+      extraPrompt: t.extraPrompt || '',
+      userComponentId: t.userComponentId || '',
+      requirementDocTextLen: Number(t.requirementDocTextLen || 0),
       visualLayoutSource: t.visualLayoutSource || t.result?._visualLayoutSource || null,
       visualDegradeReason: t.visualDegradeReason || t.result?._visualDegradeReason || '',
       // 🛡️ 2026-09-30: 低覆盖率「降级放行」质量提示（非阻断）→ 「内容可能不完整 + 归因到视觉模型」提示条
@@ -6311,6 +6389,46 @@ html[data-theme='dark'] .spinner--lg {
 }
 .adv-doc-remove:hover {
   color: #dc2626;
+}
+/* 🔴 2026-11-03：历史任务文档「待复用」提示条（正文不自动灌入，显式点击才拉全文） */
+.adv-doc-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #f5f3ff;
+  border: 1px dashed #c4b5fd;
+}
+.adv-doc-hint-text {
+  font-size: 12px;
+  color: #6d28d9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adv-doc-reuse {
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 2px 10px;
+  border: 1px solid #a78bfa;
+  border-radius: 9999px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7c3aed;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.adv-doc-reuse:hover:not(:disabled) {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+}
+.adv-doc-reuse:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* 深色面板主题（aio-panel）下折叠条配色 */

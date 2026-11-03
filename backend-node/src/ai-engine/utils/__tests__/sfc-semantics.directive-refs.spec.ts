@@ -133,3 +133,57 @@ import icon6 from '../../resources/images/icon-普通厂商-3208.png'
     expect(issues[0]).toContain('icon普通厂商')
   })
 })
+
+describe('模板插槽局部绑定作用域', () => {
+  test('真实 fg-table：#headerCell/#bodyCell 的 column/record 不需要 script 声明', () => {
+    const code = `<template><a-table :data-source="rows">
+  <template #headerCell="{ column }"><span :title="column.title">{{ column.title }}</span></template>
+  <template #bodyCell="{ column, record }"><span v-if="record.c0">{{ column.title }}</span></template>
+</a-table></template>
+<script setup>
+const rows = []
+</script>`
+    expect(validateVueScriptSemantics(code, 'ContentSection.vue', {}).issues).toEqual([])
+    const template = code.match(/<template>([\s\S]*)<\/template>/)![1]
+    const { loopVars } = extractTemplateRefs(template)
+    expect([...loopVars]).toEqual(expect.arrayContaining(['column', 'record']))
+  })
+
+  test('长写 v-slot、对象别名、单标识符与简单数组解构均可识别', () => {
+    const code = `<template><a-table>
+  <template v-slot:headerCell="{ column: col }"><span :title="col" /></template>
+  <template v-slot:bodyCell="record"><span :title="record" /></template>
+  <template #default="[row, rowIndex]"><span v-if="rowIndex > 0" :title="row" /></template>
+</a-table></template>
+<script setup>
+const rows = []
+</script>`
+    expect(validateVueScriptSemantics(code, 'Slots.vue', {}).issues).toEqual([])
+  })
+
+  test('插槽体内的额外未声明变量仍 fail-closed', () => {
+    const code = `<template><a-table>
+  <template #bodyCell="{ column, record }"><span v-if="missingFlag" :title="column">{{ record.c0 }}</span></template>
+</a-table></template>
+<script setup>
+const rows = []
+</script>`
+    const issues = validateVueScriptSemantics(code, 'Missing.vue', {}).issues
+    expect(issues.join(' ')).toContain('missingFlag')
+    expect(issues.join(' ')).not.toContain('record、column')
+  })
+
+  test.each([
+    ['默认值', '{ column = fallback }', 'column'],
+    ['嵌套对象', '{ column: { title } }', 'title'],
+    ['嵌套数组', '[record, [nested]]', 'nested'],
+  ])('复杂/带默认值绑定不盲目豁免：%s', (_label, binding, missing) => {
+    const code = `<template><a-table>
+  <template #bodyCell="${binding}"><span :title="${missing}" /></template>
+</a-table></template>
+<script setup>
+const rows = []
+</script>`
+    expect(validateVueScriptSemantics(code, 'Complex.vue', {}).issues.join(' ')).toContain(missing)
+  })
+})

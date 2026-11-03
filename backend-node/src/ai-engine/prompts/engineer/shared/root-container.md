@@ -16,6 +16,7 @@
   - 默认 → `display: flex; flex-direction: column;`
 - 只有当 `layoutStructure` 或 `elementStyleMap` 中**明确标注**了某容器的 background/padding/border-radius 时，才按精确值还原
 - 背景图资源（bg1/bg2...）通过 `:style="{ backgroundImage: ... }"` 引用，**不是**用纯色 `background` 模拟
+- **图色互斥（2026-11-03 新增）**：元素已分配背景图资源（或其 Figma 真值为 IMAGE 填充）时，**禁止**再为该元素或其装饰子元素写 `background` / `background-color` / 渐变——底色已由图片承载，叠加即双重上色。同理：Figma 真值 fills 里没有的色值/渐变，一律不得凭空写入任何元素的背景
 - **子区块高度规则**：内容区块用 `flex: <flexGrow系数> 1 0; min-height: 0` 比例分配、禁止写死高度、禁止像素写进 grow、图表容器 min-height 分级（主图 160/紧凑 100）——**完整规范见 layout-rules.md「3️⃣ flex-grow 比例分配铁律」（唯一事实源，本文件不再重复）**。
 - **区块间距**：根容器用 `gap: <Figma 间距精确值>` 控制子区块间距；禁止用子区块自身的 `margin-bottom` 堆叠间距（会与 gap 叠加导致间距翻倍）。
 - **aspectRatio 来源（禁止默认值）**：模板中 `boxStyle` 的 `aspectRatio` 必须从 Figma 根容器的真实尺寸计算（`Figma width / Figma height`），**禁止写死 `[16, 9]` 或任何默认比例**。Figma 根容器 425×807 → 应为 `aspectRatio: '425 / 807'`（纵向面板），而非 `'16 / 9'`（横向视频比例）。写错 aspectRatio 会导致容器被压扁/拉伸，内容全部挤到一端。

@@ -72,7 +72,13 @@ export class TasksController {
       : 3;
     // limit 前置截断：产物就绪检查在 map 内做同步 fs，recent 只查最近 N 个任务
     // （2026-09-02：原 getAllTasks 全量 71 任务 fs 后再 slice → 6s）
-    const tasks = this.tasksService.getAllTasks(userId, { limit: safeLimit });
+    //
+    // 🆕 2026-11-03 本接口改走 slim：它是前端「最近生成」每 15s 轮询的数据源，
+    //   而任务记录现在带高级选项需求文档全文（≤20000 字/条）⇒ 不瘦身就是 200KB+/轮。
+    //   slim 只剔除「重负载 result 字段 + 需求文档全文（留字数）」，
+    //   前端 fetchRecent 消费的 _visualDegraded / gateSkippedFiles / themeNodes /
+    //   generationTier / extraPrompt 等全部保留，不受影响。
+    const tasks = this.tasksService.getAllTasks(userId, { limit: safeLimit, slim: true });
     return {
       success: true,
       tasks,

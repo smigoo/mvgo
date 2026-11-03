@@ -162,7 +162,7 @@ function normalizeBodyContract(body) {
 const BODY_PASSTHROUGH_KEYS = new Set([
   'id', 'title', 'responsibility', 'elementCount', 'type', 'collapsed', 'renderHint',
   'itemCount', 'items', 'headers', 'tableStyle', 'body', 'isLayoutContainer', 'layout',
-  'layoutSource', 'sourceNodeIds', 'absoluteBoundingBox', 'figmaBox', 'styles',
+  'layoutSource', 'sourceNodeIds', 'figmaAnchorId', 'absoluteBoundingBox', 'figmaBox', 'styles',
   'rowPeerIds', 'layoutMetadata', 'children',
 ])
 
@@ -202,6 +202,8 @@ function normalizeSectionNode(section, ctx = null) {
       if (BODY_PASSTHROUGH_KEYS.has(key)) continue
       if (value && typeof value === 'object') ctx.droppedKeys[key] = (ctx.droppedKeys[key] || 0) + 1
     }
+    // R7：修复锚点透传计数（递归容器/叶子共用同一 ctx，0 也必须可观测）。
+    if (typeof section.figmaAnchorId === 'string' && section.figmaAnchorId) ctx.repairedAnchors += 1
     if (bodyResult) {
       ctx.bodySections += 1
       ctx.bodyNodes += bodyResult.nodes
@@ -235,6 +237,8 @@ function normalizeSectionNode(section, ctx = null) {
     sourceNodeIds: Array.isArray(section.sourceNodeIds)
       ? section.sourceNodeIds.map((s) => String(s)).filter(Boolean)
       : undefined,
+    // R7：主锚与归属集合是两种契约——sourceNodeIds 再完整也不能替代 figmaAnchorId。
+    ...(section.figmaAnchorId ? { figmaAnchorId: String(section.figmaAnchorId) } : {}),
     // 🛡️ 刀 29b（mc-max-1793255115028-7ec263c9 实锤）：几何三件套透传。
     //   此前白名单重建剥掉 absoluteBoundingBox/figmaBox ⇒ engineer 的
     //   resolveSubComponentPlan 优先取本函数产物（generationInput.componentPlan）
@@ -285,6 +289,7 @@ export function normalizeComponentPlan(plan) {
   if (!plan || typeof plan !== 'object') return null
   const ctx = {
     droppedKeys: {},
+    repairedAnchors: 0,
     bodySections: 0,
     bodyNodes: 0,
     bodyTruncated: 0,

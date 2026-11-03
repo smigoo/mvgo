@@ -584,7 +584,7 @@
               class="preview-iframe"
               :style="frameResize.frameStyle.value"
               frameborder="0"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-same-origin allow-popups"
             ></iframe>
             <span class="rz-size-bubble" v-if="frameResize.showSizeBubble.value">
               {{ frameResize.sizeLabel.value }}
@@ -613,7 +613,7 @@
             :src="previewUrl"
             class="preview-iframe"
             frameborder="0"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin allow-popups"
           ></iframe>
           <div class="rz-toolbar">
             <template v-if="responsiveTestMode">
@@ -910,10 +910,55 @@ const showPreview = ref(false)
 // 进入响应式模式后改由 useResizableFrame 接管真实尺寸，媒体查询才会重新匹配。
 const responsiveTestMode = ref(false)
 const viewportPresets = PREVIEW_VIEWPORT_PRESETS
+
+/**
+ * 🔴 默认视口尺寸 = **组件设计稿尺寸**（与 views/tasks/TaskDetail.vue:2789-2799、
+ *   views/demo/index.vue:2449-2450 统一口径）。
+ *
+ * 用户指令：「预览容器默认应该和组件大小一致」。
+ * 改前写死 `1280×720` ⇒ 组件 420×147（如 c-vehicle-monitor-*）也被塞进 1280 宽视口，
+ * 左右各空 430px；更糟的是视口宽被伪造成「桌面宽」，@media 语义失真 ——
+ * 一进响应式测试看到的就是错的断点。
+ *
+ * 尺寸来源：`figmaPreview.width/height` —— 即 `/phase2/figma-preview` 返回的 Figma 节点
+ *   `absoluteBoundingBox`（后端 phase2.service.ts:2285-2286 / 2348-2349 取的真值，
+ *   `getFigmaPreview()` 在 :2175 声明）。**它就是组件设计尺寸**，不是宿主宽度 ——
+ *   刻意不重复 TaskDetail 的「第二代价」错误（拿宿主可用宽当视口宽，会让 510 宽的
+ *   组件永远装在 1280 的框里，症状与第一代价一样）。
+ *
+ * 实测口径代价为零：全库 284 个组件（custom-components/&lt;hash&gt;/_figma-size.json）
+ *   宽度 255–966（**无一个 > 1280**，故宽度方向本来就不会溢出）；
+ *   高度 147–1206，其中 88 个 > 720 —— 竖版面板是常态，封顶 720 只会把内容切掉，
+ *   所以这里取真值不封顶（高度超出由预览面板滚动兜住）。
+ *
+ * ⚠️ 必须同时把下限压到 100：useResizableFrame 默认 minWidth/minHeight = 320/240，
+ *   会把小尺寸组件顶大 —— 284 个组件里 43 个高度 < 240（多为 420×147/186 的监测卡）、
+ *   6 个宽度 < 320。不改下限 = 「默认值改了但空白照旧」。
+ *   TaskDetail.vue:2800-2803 与 demo/index.vue:2447 都已是 100/100。
+ *
+ * 设计稿尺寸未知（预览未拉到 / 路由恢复中 / 请求失败）→ 回落 1280×720。
+ *   watch(figmaUrl)（:1408）在 URL 变化 1s 后重拉预览，getter 随之自动取到真值；
+ *   且 responsiveTestMode 初始 false，用户点「响应式测试」时通常已就绪。
+ *
+ * 注：componentId 传空 ⇒ 本页不落 localStorage（useResizableFrame#currentStorageKey
+ *   `:202-205` 返回 '' 即 return），故 SIZE_POLICY_VERSION 版本闸门对本页无影响 ——
+ *   改动对已用过的浏览器同样立即生效，无需清缓存。
+ */
+function figmaDesignSize(): { width: number; height: number } | null {
+  const w = Number(figmaPreview.value?.width) || 0
+  const h = Number(figmaPreview.value?.height) || 0
+  return w > 0 && h > 0 ? { width: w, height: h } : null
+}
+
 const frameResize = useResizableFrame({
   componentId: '',
-  defaultWidth: 1280,
-  defaultHeight: 720,
+  // 供 composable 做「持久化快照过期判定」（本页不落库；保留仅为契约一致）
+  designSize: figmaDesignSize,
+  defaultWidth: () => figmaDesignSize()?.width ?? 1280,
+  defaultHeight: () => figmaDesignSize()?.height ?? 720,
+  // 下限 100（与 TaskDetail / demo 一致）：别把小尺寸组件顶大而重新出现空白
+  minWidth: 100,
+  minHeight: 100,
 })
 
 function resolveItemGroupId(sessionId: string, fallback?: string): string {

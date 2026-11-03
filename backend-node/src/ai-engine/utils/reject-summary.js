@@ -34,6 +34,8 @@ const HIT_KEYS = [
   // 🔴 刀53h：新 kind 必须同步登记 —— 漏登记则「footer 接管了几段」在任务级对账里
   //   不可见（接管 0 命中 与 零问题 不可区分 = 假绿温床，正是本模块存在的理由）。
   ['footerHits', 'footer'],
+  // 🔴 刀54 段内分区接管：同上，漏登记则「regions 接管了几段」在任务级对账不可见。
+  ['regionHits', 'regions'],
 ];
 
 /** skipped 截断上限（与接管器自身 slice(0,16) 同口径） */
@@ -67,11 +69,54 @@ export function pickTakeoverAudit(takeover) {
       statRow: num(takeover.statRowSuppressed),
       table: num(takeover.tableSuppressed),
     },
+    listDirections: {
+      row: num(takeover.listRow),
+      column: num(takeover.listColumn),
+    },
+    listItemBgs: {
+      total: num(takeover.listItemBg),
+      declared: num(takeover.listItemBgDeclared),
+      subtree: num(takeover.listItemBgSubtree),
+      skipped: num(takeover.listItemBgSkipped),
+    },
+    // 🔴 2026-11-03（列表卡盒真值治本 步①②③）：列表几何真值可见化。
+    //   `negGapClamped`：负间距被总闸拦下（置 null，回落自然流）的段数 —— **0 也打**。
+    //     0 而产物仍含负值 ⇒ 判据未生效（或存在第四处写间距的路径）；暴涨 ⇒ 几何判据误伤。
+    //   `geoNotReady`：异宽/异高致 `geoReady=false` 的段数。过去是**静默降级**，与
+    //     「设计本就无间距」不可区分 —— 没有这一项，`gaps=null` 永远是盲区。
+    //   `widthNotUniform`（步③）：row 且「回退盒 + 异宽」⇒ 横向几何（宽度+间距）未下发的段数。
+    //     0 而产物仍见 `FG_LIST_WIDTHS` 异宽值 ⇒ 判据未生效；暴涨 ⇒ 误伤已证明的真异宽样本。
+    //   `samples`（封顶 8）：留真值现场；`rawW`/`rawX`=帧盒几何真值、`widths`=实际下发、
+    //     `neg`=clamp 前原始负值 —— 被拦下后仍可完整回溯。
+    //   🔴 步⑤（P0-2）：`innerStacked`/`innerInline`=卡内布局几何判定落点（`inline` 仅确认现状，
+    //     只有 `stacked` 会真正重排渲染结构 ⇒ 误判定性只看这一项）；`innerConflict`=各卡投票
+    //     不一致被拦的段数（判据在工作，非故障）；`valuePartsInline`/`Stacked`=数值/单位排布。
+    //     全部 **0 也打**：`innerStacked=0` 而产物仍把数值贴右 ⇒ 文本配对全 miss（判据未生效）。
+    listGeo: {
+      negGapClamped: num(takeover.listGeoNegGapClamped),
+      geoNotReady: num(takeover.listGeoGeoNotReady),
+      widthNotUniform: num(takeover.listGeoWidthNotUniform),
+      geomPicked: num(takeover.listGeoGeomPicked),
+      spanRejected: num(takeover.listGeoSpanRejected),
+      innerStacked: num(takeover.listGeoInnerStacked),
+      innerInline: num(takeover.listGeoInnerInline),
+      innerConflict: num(takeover.listGeoInnerConflict),
+      valuePartsInline: num(takeover.listGeoValuePartsInline),
+      valuePartsStacked: num(takeover.listGeoValuePartsStacked),
+      samples: Array.isArray(takeover.listGeoSamples) ? takeover.listGeoSamples.slice(0, 8) : [],
+    },
     anchorRepairs: num(takeover.tableAnchorRepairs),
     // 🔴 R3（2026-11-02）：超界段计数（refs 落在锚点子树之外 ⇒ 禁单元素接管）
     scopeIncomplete: num(takeover.scopeIncomplete),
     // 🔴 R6（2026-11-02）：接管形态 vs 段声明消费对账拒修计数
     declaredUnconsumed: num(takeover.declaredUnconsumed),
+    // 🛡️ P3（2026-11-03）：icon/header 接管叶的**面板真值注入**计数。
+    //   `injected/tried` —— 0 也打；`tried>0 && injected=0` = 判据静默失效的形状
+    //   （曾实测：索引形状不符 ⇒ resolveSectionPanel 直接崩/返 null，而 hits 仍非 0 ⇒ 假绿）。
+    panelBg: {
+      injected: num(takeover.panelBgInjected),
+      tried: num(takeover.panelBgTried),
+    },
     skippedTotal: skipped.length,
     skipped: skipped.slice(0, SKIPPED_CAP).map((s) => ({
       id: String(s?.id ?? ''),
@@ -129,8 +174,14 @@ export function formatRejectSummaryLine(summary) {
     parts.push(
       `suppressed:statRow=${t.suppressed?.statRow ?? 0}`,
       `suppressed:table=${t.suppressed?.table ?? 0}`,
+      `listDirections:row=${t.listDirections?.row ?? 0},column=${t.listDirections?.column ?? 0}`,
+      `listItemBg=${t.listItemBgs?.total ?? 0},declared=${t.listItemBgs?.declared ?? 0},subtree=${t.listItemBgs?.subtree ?? 0},skipped=${t.listItemBgs?.skipped ?? 0}`,
+      // 🔴 2026-11-03：列表卡盒几何真值（负间距总闸 + geoReady 覆盖 + 步③ 异宽拦宽度）。0 也打 ——
+      //   `listGeo:negGap=0` 而产物含负值即判据失效；`widthNotUniform=0` 而产物仍含异宽
+      //   `FG_LIST_WIDTHS` 即步③ 判据失效。这是本行的唯一用途。
+      `listGeo:negGap=${t.listGeo?.negGapClamped ?? 0},geoNotReady=${t.listGeo?.geoNotReady ?? 0},widthNotUniform=${t.listGeo?.widthNotUniform ?? 0},geomPicked=${t.listGeo?.geomPicked ?? 0},spanRejected=${t.listGeo?.spanRejected ?? 0},innerStacked=${t.listGeo?.innerStacked ?? 0},innerInline=${t.listGeo?.innerInline ?? 0},innerConflict=${t.listGeo?.innerConflict ?? 0},vPartsInline=${t.listGeo?.valuePartsInline ?? 0},vPartsStacked=${t.listGeo?.valuePartsStacked ?? 0}`,
     );
-    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`);
+    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`, `panelBg=${t.panelBg?.injected ?? 0}/${t.panelBg?.tried ?? 0}`);
   }
   const c = summary.contract;
   if (c) {

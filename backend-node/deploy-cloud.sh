@@ -80,7 +80,7 @@ fi
 NODE_VERSION="22"
 
 # 门户 API 基准地址（iframe 登录校验用，必须带 /portlet/api 前缀，否则 401）
-# 2026-08-30 修正：原写死公网域名，ECS 上 Node 继承公司 HTTP_PROXY 会把门户校验请求塞进代理导致 5s 超时 401。
+# 2026-08-30 修正：原写死公网域名，若宿主/容器继承了上游 HTTP_PROXY，门户校验请求会被塞进代理导致 5s 超时 401。
 # 改为同机内网 portlet 地址（实测 2.4ms），彻底不依赖公网 egress；配合 auth.service.ts 的 axios proxy:false 双保险。
 PORTAL_BASE_URL="http://192.168.112.1:39680/portlet/api"
 # 真实预览页基准地址（前端真实根，截图器探测用）

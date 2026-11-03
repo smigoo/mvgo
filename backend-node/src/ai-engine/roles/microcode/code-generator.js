@@ -33,12 +33,13 @@ import {
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
 import { planRowBands, planColumnGroups, crossAxisCenterStyle } from '../../utils/row-band-cluster.js';
-import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle, claimCollapsedLeafContainedIds } from '../../utils/container-absorbed-bg.js';
+import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle, claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
 //   才能把它们从 flex 归一化分母里剔除。判据单一来源 = 接管器本身（不在本文件重判）。
 import { collectFoldedGridTakeover } from '../../utils/folded-grid-section-takeover.js';
 import { sanitizeComponentId, tailHexOf, normalizeUserComponentId } from '../../utils/component-naming.js';
+import { buildSectionStructureContract } from '../../utils/section-structure-contract.js';
 
 export function assembleIndexVue(templateContent, scriptContent, input, options = {}) {
     let tpl = (templateContent || '').trim();
@@ -70,14 +71,27 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
     // 此处对脚本内容做声明级去重（保留更完整的后段），保证拼装产物可直接编译。
     // 无重复时 dedupeScriptDeclarations 原样返回，不影响正常组件格式。
     if (scr) {
+      const builderImportStats = { mcBuilderModuleImport: 0 };
       const sm = scr.match(/<script[^>]*>([\s\S]*?)<\/script>/);
       if (sm) {
         scr = scr.replace(
           sm[1],
-          '\n' + dedupeMcComponentBuilder(dedupeScriptDeclarations(sm[1])).trim() + '\n',
+          '\n' + dedupeMcComponentBuilder(dedupeScriptDeclarations(sm[1]), {
+            normalizeModuleImports: true,
+            stats: builderImportStats,
+          }).trim() + '\n',
         );
       } else {
-        scr = dedupeMcComponentBuilder(dedupeScriptDeclarations(scr));
+        scr = dedupeMcComponentBuilder(dedupeScriptDeclarations(scr), {
+          normalizeModuleImports: true,
+          stats: builderImportStats,
+        });
+      }
+      if (builderImportStats.mcBuilderModuleImport > 0) {
+        options.logger?.warn?.(
+          `🛡️ 微码宿主 builder 裸 import 归一 mcBuilderModuleImport healed=${builderImportStats.mcBuilderModuleImport}`,
+          { file: 'package/index.vue', healed: builderImportStats.mcBuilderModuleImport },
+        );
       }
     }
 
@@ -351,9 +365,10 @@ export function flexItemStyleFromWidths(widths, index) {
  * @param {{x,y,w,h}|null} prevBox 前一兄弟 box
  * @param {{x,y,w,h}|null} curBox 当前兄弟 box
  * @param {'vertical'|'horizontal'} axis 主轴方向
+ * @param {number} [prevEffectiveSize] 前一兄弟**实际被分配**的尺寸（与 flex 分配同源）
  * @returns {string} `margin-top:Npx;` / `margin-left:Npx;` / ''
  */
-export function siblingGapStyle(prevBox, curBox, axis) {
+export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0) {
   const ok = (b) =>
     b &&
     Number.isFinite(b.x) &&
@@ -363,12 +378,27 @@ export function siblingGapStyle(prevBox, curBox, axis) {
     b.w > 0 &&
     b.h > 0;
   if (!ok(prevBox) || !ok(curBox)) return '';
-  const gap =
-    axis === 'vertical'
-      ? curBox.y - (prevBox.y + prevBox.h)
-      : curBox.x - (prevBox.x + prevBox.w);
+  const vertical = axis === 'vertical';
+  // 🔴 刀16b（2026-11-03 · mc-1793686933827-7a07febd 实锤）：间距基准必须与 flex 分配**同源**。
+  //   病灶：prev 的段盒常只是**段标题 GROUP**（`2:3559 标题` y=162 h=24），而 flex 分配用的是
+  //   段整体高度（A4 `styles.figmaHeightPx` = 556，实测 `2:3559`→`2:3570` 得 margin-top:551px
+  //   ≈ 整段高 556 双计；`2:3439`→`2:3571` 得 133px ≈ 段高 142-9）。真间距只有 737−(162+556)=19
+  //   / 730−(573+142)=15。**两套高度口径混用 = 把 prev 正文高度再算一遍**。
+  //   判据：prev 底 = prevBox.y + max(prevBox.h, prevEffectiveSize)（**只增不减**，与 A4 同规则；
+  //   prevEffectiveSize 缺省/为 0/更小 ⇒ 逐字回退旧行为，零变化）。
+  const prevExtent =
+    Number.isFinite(prevEffectiveSize) && prevEffectiveSize > 0
+      ? vertical
+        ? Math.max(prevBox.h, prevEffectiveSize)
+        : Math.max(prevBox.w, prevEffectiveSize)
+      : vertical
+        ? prevBox.h
+        : prevBox.w;
+  const gap = vertical
+    ? curBox.y - (prevBox.y + prevExtent)
+    : curBox.x - (prevBox.x + prevExtent);
   if (!Number.isFinite(gap) || gap < 1) return '';
-  const prop = axis === 'vertical' ? 'margin-top' : 'margin-left';
+  const prop = vertical ? 'margin-top' : 'margin-left';
   return `${prop}:${Math.round(gap)}px;`;
 }
 
@@ -471,10 +501,17 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   // 🛡️ 刀 7（2026-10-27 · 8bbcf027 `36:1695` 实锤）：容器吸收背景层计数。
   let __absorbedBgCandidates = 0;
   let __absorbedBgLayers = 0;
+  let __absorbedBgScrollbarExempted = 0;
+  // 🛡️ 刀 7c（2026-11-03 · `807:2`/`43:5688` 实锤）：根级宿主吸收背景层计数。
+  //   顶层非容器叶子段的盒 ≡ 图根盒时，其吸收层注入根 slot-con div。
+  let __absorbedBgRootHostCandidates = 0;
+  let __absorbedBgRootHostLayers = 0;
+  let __absorbedBgRootHostDeferred = 0;
   // 🛡️ 刀 12（2026-10-27 · ad8939a5 `801:3` 实锤）：2D 行簇重建计数。
   let __rowBandEvaluated = 0;
   let __rowBandHits = 0;
   let __gapApplied = 0; // 刀16 兄弟间距真值注入计数
+  let __gapRebased = 0; // 刀16b 间距基准被上移到「与 flex 同源高度」的注入数（修双计）
   if (!leaves.length) return null;
 
   const nameOf = assignSectionComponentNames(treeSections);
@@ -519,6 +556,10 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   //   各出一层 = 双层叠加。规则：**plan 树上最近的容器**（deepest）独占该层。
   //   故自底向上预分配（子容器先判），渲染时只消费自己名下的层。
   const bgLayersByContainer = new Map();
+  // 🛡️ 刀 7c：根级宿主的吸收层（注入根 slot-con div），以及几何不自洽的 deferred 段 id。
+  let rootHostSection = null;
+  let rootHostLayers = [];
+  const rootHostDeferredSectionIds = [];
   {
     const consumedBgIds = new Set();
     const assignBg = (list) => {
@@ -527,6 +568,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         assignBg(s.children); // 子容器优先（deepest wins）
         const r = resolveAbsorbedBgLayers(s, figmaIndex, claimedNodeIds);
         __absorbedBgCandidates += r.evaluated;
+        __absorbedBgScrollbarExempted += r.scrollbarExempted;
         const owned = r.layers.filter((layer) => !consumedBgIds.has(layer.id));
         for (const layer of owned) consumedBgIds.add(layer.id);
         __absorbedBgLayers += owned.length;
@@ -534,6 +576,89 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       }
     };
     assignBg(treeSections);
+
+    // 🛡️ 刀 7c（2026-11-03 · `c-slot-con-*` ×12 实锤）：**根级宿主吸收背景层**。
+    //
+    //   ## 病灶（真值，非推理）
+    //   顶层**非容器叶子段** `807:2`（GROUP name='slot-con'，盒 `{29636,51637,483,515}`
+    //   ≡ Figma 图根盒）的 `sourceNodeIds` **只有自身** ⇒ 7 个直系子
+    //   （`43:4784/4869/4875/4878/4892/4911/5688`）全不在闭包 ⇒ 刀 7 候选集为空 ⇒
+    //   装饰条 `43:5688`（6×218 r3 `rgba(20,105,169,.37)`，右缘精确贴宿主边）**永不出层**，
+    //   产物 `.vue/.less` 中该色值 0 次出现（真缺陷，非假阳性）。
+    //   判据层早已具备能力（见 utils/__tests__/container-absorbed-bg.spec.ts 刀20c-R 用例，
+    //   其 sec.sourceNodeIds 含 '43:5688' ⇒ 正确出层）⇒ 缺口纯在**候选集**。
+    //
+    //   ## 治本
+    //   候选集扩充「Figma 直系子」（`expandCandidateIdsWithDirectChildren`，**纯枚举**，
+    //   类型/fill/认领/越出/滚动条豁免仍全由 `resolveAbsorbedBgLayers` 单点裁决）。
+    //
+    //   ## 几何护栏（必需）
+    //   层注入**根 `c-{semantic}-slot-con` div**（叶子分支只输出 `<XxxSection/>`，无 div 无锚；
+    //   给叶子加 wrapper 会破坏 P6「一层承载全部职责」契约并把 flex 比例/方向链多推一层）。
+    //   根 div 只有在该段盒 ≡ 图根盒（±2px）时才与段几何同源 ⇒ 否则坐标基准错位。
+    //   全语料反证：39 段/18 目录的非容器段盒 ≠ 图根盒（如 `801:3` 内缩 28/35px、
+    //   `38:3137` 高度差 707px、`c-aiot-…-3a548c26` 6 段 470×72 vs 根 510×665）
+    //   ⇒ 一律 fail-open 并入 `deferred`（计数行 + 段 id），不注入、不猜。
+    //
+    //   ## 为什么枚举只对非容器段启用
+    //   容器段沿用 `sourceNodeIds` ⇒ 「容器零变化」是**构造保证**，而非「实测 0」的巧合：
+    //   全语料 399 个容器段里有 23 段 `sourceNodeIds` 本就不含全部直系子，一旦未来变全，
+    //   若判据层无条件枚举会**静默改变容器行为**。
+    const rootNode = input?.figmaNodeData?.document || input?.figmaNodeData || null;
+    const rootBBox = rootNode?.absoluteBoundingBox || rootNode?.bbox || null;
+    const rootBox =
+      rootBBox &&
+      [rootBBox.x, rootBBox.y, rootBBox.width, rootBBox.height].every(Number.isFinite)
+        ? { x: rootBBox.x, y: rootBBox.y, w: rootBBox.width, h: rootBBox.height }
+        : null;
+    if (rootBox) {
+      const ROOT_HOST_TOLERANCE_PX = 2;
+      const boxEq = (a, b) =>
+        !!a &&
+        Math.abs(a.x - b.x) <= ROOT_HOST_TOLERANCE_PX &&
+        Math.abs(a.y - b.y) <= ROOT_HOST_TOLERANCE_PX &&
+        Math.abs(a.w - b.w) <= ROOT_HOST_TOLERANCE_PX &&
+        Math.abs(a.h - b.h) <= ROOT_HOST_TOLERANCE_PX;
+      // 计划序 DFS：先父后子，故「盒 ≡ 图根盒」的最外层段天然优先（不再额外排序）。
+      const nonContainers = [];
+      const collectNonContainers = (list) => {
+        for (const s of list || []) {
+          if (!s) continue;
+          if (!isLayoutContainerSection(s)) nonContainers.push(s);
+          collectNonContainers(s.children);
+        }
+      };
+      collectNonContainers(treeSections);
+      const guarded = [];
+      for (const s of nonContainers) {
+        const eff = expandCandidateIdsWithDirectChildren(s, figmaIndex);
+        const declared = Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds.length : 0;
+        // 无直系子可加 ⇒ 与旧行为逐字等价，不必评估（保住「零变化」的可读性）。
+        if (eff.length <= declared) continue;
+        const r = resolveAbsorbedBgLayers({ ...s, sourceNodeIds: eff }, figmaIndex, claimedNodeIds);
+        __absorbedBgRootHostCandidates += r.evaluated;
+        const owned = r.layers.filter((layer) => !consumedBgIds.has(layer.id));
+        if (!owned.length) continue;
+        const sb = resolveSectionBox(s, figmaIndex);
+        if (boxEq(sb, rootBox)) guarded.push({ sec: s, layers: owned });
+        else {
+          rootHostDeferredSectionIds.push(String(s.id));
+          __absorbedBgRootHostDeferred += owned.length;
+        }
+      }
+      // 归属必须唯一：0 个 ⇒ 无根宿主（正常）；≥2 个 ⇒ 无法确定主语，一律 deferred。
+      if (guarded.length === 1) {
+        rootHostSection = guarded[0].sec;
+        rootHostLayers = guarded[0].layers;
+        for (const layer of rootHostLayers) consumedBgIds.add(layer.id);
+        __absorbedBgRootHostLayers += rootHostLayers.length;
+      } else if (guarded.length > 1) {
+        for (const g of guarded) {
+          rootHostDeferredSectionIds.push(String(g.sec.id));
+          __absorbedBgRootHostDeferred += g.layers.length;
+        }
+      }
+    }
   }
 
   // 🛡️ P1-B 治本（2026-10-26 · mc-max-1792934367321-ab7bb76c 实锤）：刀 53 抑制成员的
@@ -594,105 +719,16 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     return height;
   };
 
-  const headerLeaves = leaves.filter((s) => s.type === 'header');
-  const bodyLeaves = leaves.filter((s) => s.type !== 'header');
-
-  // 🛡️ 刀 5c（2026-09-13）：header-right 归属单一事实源 = headerSlots 契约，而非 type==='header' 词猜。
-  // 旧实现按 type 二分把内容区「小标题」误判进 header-right，与真正标题行 tabs（type=tabs 进 body）
-  // 双轨/过拆（vehicle 小标题 vs tabs、traffic 三个 header 叶实锤）。治本：收集 headerSlots 契约的
-  // figmaNodeId 集合，凡叶子 sourceNodeIds 与之相交 → 进 header-right；body 排除同 node（只落一次）。
-  // 匹配不到（vision 未产出契约 / node 对不上）→ 回退 type==='header' 二分，保持旧行为零回归。
-  const headerSlotNodeIds = new Set();
-  const slotList = Array.isArray(input?.headerSlots) ? input.headerSlots : [];
-  for (const slot of slotList) {
-    const st = String(slot?.slotType || '').toLowerCase();
-    if (st === 'header-right' || st === 'title-right') {
-      const nid = slot?.figmaNodeId || slot?.id;
-      if (nid) headerSlotNodeIds.add(String(nid));
-    }
-  }
-  let headerLeavesFinal = headerLeaves;
-  let bodyLeavesFinal = bodyLeaves;
-  if (headerSlotNodeIds.size > 0) {
-    const matched = leaves.filter((s) => {
-      const ids = Array.isArray(s?.sourceNodeIds)
-        ? s.sourceNodeIds.map((v) => String(v))
-        : [];
-      return ids.some((id) => headerSlotNodeIds.has(id));
-    });
-    // 🛡️ 治本（2026-09-16）：headerSlots 契约的 figmaNodeId 是 vision 编造 id（如 8:3/8:4/8:5），
-    //   与 planner 真实 header 叶子 sourceNodeIds（2:8419）对不上 → matched 空 → header 整个丢失。
-    //   匹配不到时回退 type==='header' 二分（与注释承诺一致，此前漏实现）。
-    if (matched.length > 0) {
-      headerLeavesFinal = matched;
-    } else {
-      headerLeavesFinal = headerLeaves;
-    }
-    const headerSet = new Set(headerLeavesFinal);
-    bodyLeavesFinal = leaves.filter((s) => !headerSet.has(s));
-  }
-
-  // 🛡️ 2026-09-29 治本 · header 槽唯一化（mc-max-1790678105345-66ccbed9 实锤，server.log 18:37:42）
-  //
-  // 病灶：宿主契约（`base-panel/index.vue` 的 4 个固定槽名 title-left / title-right /
-  // header-right / close，每个在面板模板里只有**一个** `<slot name>`）决定「一个槽名
-  // 只能出现一次」。而上面 `headerLeaves` 用的是**扁平全量** `leaves.filter(type==='header')`
-  // —— 会把容器内的 sub-header 叶一并算进来（traffic-monitor 实锤：3 个 header 叶）
-  // ⇒ 下方 `for (const h of headerLeavesFinal)` 对每个叶各产一个 `<template #header-right>`
-  // ⇒ 3 个重名插槽。
-  //
-  // 后果不是"报错"，而是**一路静默**：
-  //   ① 资源注入器自检（跑在写盘门禁**之前**）读 `validateVueSfc` 看到重名
-  //      → `writeGuarded` 回滚（"拒绝把合格产物改坏"）→ 资源未挂 → slot 级回退糊满整槽；
-  //   ② 写盘门禁内的 `_deduplicateTemplateBlocks` 又"恰好"把重名块删成合法（它的正则
-  //      `<template\b[^>]*>([\s\S]*?)<\/template>` 会误匹配子级 slot `<template>`），
-  //      只留一行「已去重 <template> 标签（3 个）」的静默修复 ⇒ 门禁通过、任务"成功"，
-  //      缺陷被埋进产物（残留空行即其删除痕迹）。
-  //
-  // 判据与下方 `topBodyRoots` 收集处（`if (root?.type === 'header') continue`）**收敛到同一口径**：
-  // header 槽只承载**顶层** `type==='header'` 叶（面板标题行，外壳语义），容器内 sub-header 叶
-  // 归属 body。已核实 `renderBodyNode` 是**树驱动**（`topBodyRoots` 仅用于分配比例），容器内叶
-  // 本来就在 body 里渲染 ⇒ 收缩 header 槽**既不丢内容、也不产生双渲染**。
-  //
-  // 保留优先级：① 顶层 header 叶 → ② 无顶层 header 叶时退而取首个（确定性，不依赖命名/几何）。
-  // 只做「>1 才收缩」⇒ 单 header 叶（绝大多数组件）产物**逐字不变**（零回归）。
-  if (headerLeavesFinal.length > 1) {
-    const topLevelHeaderIds = new Set(
-      treeSections
-        .filter((s) => s?.type === 'header')
-        .map((s) => String(s?.id)),
-    );
-    const topOnly = headerLeavesFinal.filter((s) =>
-      topLevelHeaderIds.has(String(s?.id)),
-    );
-    const kept = (topOnly.length > 0 ? topOnly : headerLeavesFinal)[0];
-    const dropped = headerLeavesFinal.filter((s) => s !== kept);
-    headerLeavesFinal = [kept];
-    // header 集合变了 ⇒ 按**上面两分支各自的原口径**同步重算 body 侧（只影响
-    // slot-con 是否创建，不影响渲染；`renderBodyNode` 走的是 topBodyRoots）。
-    if (headerSlotNodeIds.size > 0) {
-      const headerSetFinal = new Set(headerLeavesFinal);
-      bodyLeavesFinal = leaves.filter((s) => !headerSetFinal.has(s));
-    } else {
-      bodyLeavesFinal = bodyLeaves;
-    }
-    if (options?.logger?.warn) {
-      options.logger.warn(
-        '🛡️ header 槽唯一化：多个 header 叶只保留 1 个进 #header-right（其余归属 body）',
-        {
-          kept: String(kept?.id),
-          keptBy: topOnly.length > 0 ? 'top-level-header' : 'first-leaf-fallback',
-          dropped: dropped.map((s) => String(s?.id)),
-        },
-      );
-    }
-  }
-  // 🛡️ 生效自检（与 B′·已评估 同族）：0 收缩时也落一行，区分「没跑 / 跑了没命中」。
+  // 唯一结构契约：placement 与 type 解耦；插槽、bodyLeaves、bodyRoots、递归 body 全部同源。
+  const structureContract = buildSectionStructureContract(treeSections, {
+    headerSlots: input?.headerSlots,
+  });
+  const headerLeavesFinal = structureContract.headerLeaves;
+  const bodyLeavesFinal = structureContract.bodyLeaves;
   if (options?.logger?.info) {
-    options.logger.info('🛡️ header 槽唯一化·已评估', {
-      headerLeavesBefore: headerLeaves.length,
-      headerSlotsEmitted: headerLeavesFinal.length,
-      contracted: headerLeaves.length > 1 ? 1 : 0,
+    options.logger.info('🛡️ section 结构契约·已评估', {
+      ...structureContract.stats,
+      dropped: structureContract.droppedHeaderLeaves.map((s) => String(s?.id)),
     });
   }
 
@@ -717,7 +753,27 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   此前它是 block（display 由 LLM 的 less 决定），顶层容器/叶子失去 flex item 身份，
     //   高度只能靠 less 里的 height:100%（LLM 写了才有）。确定化后整条链从 pannel-content
     //   → slot-con → 容器 → wrapper → 子项 全程 flex 传导，不再依赖 LLM 样式。
-    lines.push(`    <div class="${rootContainerClass}" style="display:flex;flex-direction:column;">`);
+    // 🛡️ 刀 7c（2026-11-03）：根级宿主的吸收层注入根 div —— 与刀 7b 对容器所做的事**同构**
+    //   （`position:relative;isolation:isolate;` 把 `z-index:-1` 层圈进本层叠上下文，
+    //   沉到内容之下、根 div 背景之上）。
+    //   🔴 样式**必须条件注入**：`code-generator.deterministic-template.spec.ts:80` 逐字断言
+    //   无层时根 div 为 `class="c-…-slot-con" style="display:flex;flex-direction:column;"`；
+    //   其 fixture（makeInput）不含 figmaNodeData ⇒ indexFigmaNodes 空 Map ⇒ 恒 0 层 ⇒ 逐字不变。
+    //   🔴 宿主锚点用专用属性 `data-absorbed-host`，**绝不复用 `data-section-id`**：产物叶子组件
+    //   根元素已带 `data-section-id="<该段id>"`（如 ContentFooter.vue 带 807:2），而
+    //   `figma-connector.js:2580` 生成的 `[data-section-id="<id>"]` 是资源挂载锚 / 评分选择器
+    //   ⇒ 同名会让该选择器在同页**双命中**（背景错挂 + mount-target-scoring 派分污染）。
+    const rootHostAttr =
+      rootHostLayers.length && rootHostSection
+        ? ` data-absorbed-host="${rootHostSection.id}"`
+        : '';
+    const rootHostStyle = rootHostLayers.length ? 'position:relative;isolation:isolate;' : '';
+    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHostStyle}">`);
+    for (const layer of rootHostLayers) {
+      lines.push(
+        `      <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
+      );
+    }
     // 🛡️ E1 治本（2026-09-16）：递归保留容器层级。此前用 bodyLeavesFinal 平铺叶子，
     //   switch/@antd-tab 等中间容器被丢弃 → active/default/tabs/cons 全部平级，
     //   用户指正「switch 没有组成一个元素，而是和下面所有内容全部 flex 了」。
@@ -732,6 +788,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   一层承载全部职责，wrapper 整体消失。传导链不变：
     //   pannel-content → slot-con → 容器(比例+方向) → 子元素(比例) 全程 flex。
     const renderBodyNode = (sec, indent, parentFlexStyle = '') => {
+      // 入槽叶在任意嵌套深度都不得再由 body 渲染；归属只读结构契约。
+      if (structureContract.byId.get(String(sec?.id ?? ''))?.placement === 'header-right') return;
       const pad = '      ' + '  '.repeat(indent);
       // 🛡️ P1-B 收尾：suppressed 叶已被首个同组成员整行/整表接管，最终只保留其
       // display:none 子组件身份，不再参与空间分配。仅在尺寸数组里填 0 不够——
@@ -975,28 +1033,26 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
               ? 'flex:1;min-width:0;'
               : flexItemStyleFromWidths(childWidths, i);
             // 🛡️ 刀16：横向兄弟间距（真值 x 差）
+            //   🔴 刀16b：prev 基准与 flex 同源（childWidths = resolveSectionFlexSize 口径）
+            const prevBox = i > 0 ? resolveSectionBox(sec.children[i - 1], figmaIndex) : null;
             const g =
               i > 0
-                ? siblingGapStyle(
-                    resolveSectionBox(sec.children[i - 1], figmaIndex),
-                    resolveSectionBox(child, figmaIndex),
-                    'horizontal',
-                  )
+                ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'horizontal', childWidths[i - 1])
                 : '';
             if (g) __gapApplied += 1;
+            if (g && prevBox && childWidths[i - 1] > prevBox.w) __gapRebased += 1;
             renderBodyNode(child, indent + 1, flexStyle + g);
           } else {
             const flexStyle = flexItemStyleFromHeights(childHeights, i);
             // 🛡️ 刀16：纵向兄弟间距（真值 y 差）
+            //   🔴 刀16b：prev 基准与 flex 同源（childHeights = figmaHeightPx > 段盒高度时取前者）
+            const prevBox = i > 0 ? resolveSectionBox(sec.children[i - 1], figmaIndex) : null;
             const g =
               i > 0
-                ? siblingGapStyle(
-                    resolveSectionBox(sec.children[i - 1], figmaIndex),
-                    resolveSectionBox(child, figmaIndex),
-                    'vertical',
-                  )
+                ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'vertical', childHeights[i - 1])
                 : '';
             if (g) __gapApplied += 1;
+            if (g && prevBox && childHeights[i - 1] > prevBox.h) __gapRebased += 1;
             renderBodyNode(child, indent + 1, flexStyle + g);
           }
         }
@@ -1060,31 +1116,30 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   与容器内子项**同口径**：按 Figma 高度（几何事实，非硬编码）归一化分配 flex-grow。
     //   ⚠️ 安全性：`flexItemStyleFromHeights` 在「取不到高度」时返回 `flex:1`（与旧行为逐字相同），
     //   故无几何事实的组件零变化；仅当高度可解析时才产生比例。
-    const topBodyRoots = [];
-    for (const root of treeSections) {
-      // 只渲染 body 侧顶层节点（header 叶子已进 header 插槽，这里跳过）
-      if (root?.type === 'header') continue;
-      // header 插槽命中的叶子也不在此重复渲染（刀 5c：同 node 只落一次）
-      const rootIds = Array.isArray(root?.sourceNodeIds) ? root.sourceNodeIds.map(String) : [];
-      const isHeaderNode = rootIds.some((id) => headerSlotNodeIds.has(id));
-      if (isHeaderNode) continue;
-      topBodyRoots.push(root);
-    }
+    // 顶层容器只要仍含 body 后代就保留；入槽叶由 renderBodyNode 按同一契约跳过。
+    const topBodyRoots = structureContract.bodyRoots;
     if (topBodyRoots.length > 1) {
       const topHeights = topBodyRoots.map((s) =>
         isSizeExcluded(s) ? 0 : resolveHeightWithTakeover(s),
       );
       for (let i = 0; i < topBodyRoots.length; i++) {
         // 🛡️ 刀16：顶层兄弟纵向间距（真值 y 差）
+        //   🔴 刀16b：prev 基准与 flex 同源 —— topHeights[i-1] 就是该兄弟拿到的分配高度
+        //   （`resolveSectionFlexSize` 优先 figmaHeightPx）。实测 `2:3559`(标题 h=24 / 段高 556)
+        //   → `2:3570`：旧算法 737−(162+24)=551（把 556 正文又算一遍），修正后 737−(162+556)=19。
+        const prevTopBox =
+          i > 0 ? resolveSectionBox(topBodyRoots[i - 1], figmaIndex) : null;
         const topGap =
           i > 0
             ? siblingGapStyle(
-                resolveSectionBox(topBodyRoots[i - 1], figmaIndex),
+                prevTopBox,
                 resolveSectionBox(topBodyRoots[i], figmaIndex),
                 'vertical',
+                topHeights[i - 1],
               )
             : '';
         if (topGap) __gapApplied += 1;
+        if (topGap && prevTopBox && topHeights[i - 1] > prevTopBox.h) __gapRebased += 1;
         renderBodyNode(topBodyRoots[i], 0, flexItemStyleFromHeights(topHeights, i) + topGap);
       }
     } else {
@@ -1109,9 +1164,25 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     });
     // 🛡️ 刀 7 生效自检：`candidates` = 容器里「未认领且类型为 RECTANGLE」的节点数，
     //   `layers` = 真正出层的背景数（其余被 fill/bbox/越界判掉）。0/0 也要落行。
+    //   `scrollbarExempted`（刀 20c-R）= 因「形态条状 + 名确指滚动条」被豁免的吸收数；
+    //   0 = 无滚动条真值（正常），与「跑没跑」用 candidates 区分。
     options.logger.info('🛡️ 刀 7 容器吸收背景层·已评估', {
       candidates: __absorbedBgCandidates,
       layers: __absorbedBgLayers,
+      scrollbarExempted: __absorbedBgScrollbarExempted,
+    });
+    // 🛡️ 刀 7c 生效自检（2026-11-03）：`candidates` = 非容器段经「直系子枚举」后
+    //   「未认领且 type=RECTANGLE」的节点数（0 = 无直系子可枚举 / 全被认领）；
+    //   `rootHostSections` = 通过几何护栏（盒 ≡ 图根盒 ±2px）并注入根 div 的段数（0/1，
+    //   ≥2 已 fail-open 降级到 deferred）；`layers` = 注入的层数；
+    //   `deferred` / `deferredSections` = 几何不自洽而未注入的层数与段 id
+    //   （**>0 = 有已知挂账，可诊断，非静默放水**）。0/0/0/[] 也要落行。
+    options.logger.info('🛡️ 刀 7c 根级宿主吸收背景层·已评估', {
+      candidates: __absorbedBgRootHostCandidates,
+      rootHostSections: rootHostLayers.length ? 1 : 0,
+      layers: __absorbedBgRootHostLayers,
+      deferred: __absorbedBgRootHostDeferred,
+      deferredSections: rootHostDeferredSectionIds,
     });
     // 🛡️ 刀 12 生效自检：`evaluated` = 进入评估的垂直容器数（≥3 子项才评），
     //   `applied` = 真判出 2D 行簇并改写的容器数。0/0 也要落行。
@@ -1119,8 +1190,12 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       evaluated: __rowBandEvaluated,
       applied: __rowBandHits,
     });
-    // 🛡️ 刀 16 生效自检：`applied` = 真正注入兄弟 margin 的位置数（0 = 全贴合/缺几何）。
-    options.logger.info('🛡️ 刀 16 兄弟间距真值注入·已评估', { applied: __gapApplied });
+    // 🛡️ 刀 16 生效自检：`applied` = 真正注入兄弟 margin 的位置数（0 = 全贴合/缺几何）；
+    //   `rebased` = 其中「prev 基准从段盒上移到 flex 同源高度」的数量（刀16b 修双计；0 也打）。
+    options.logger.info('🛡️ 刀 16 兄弟间距真值注入·已评估', {
+      applied: __gapApplied,
+      rebased: __gapRebased,
+    });
     // 🛡️ P1-B 生效自检：`takeoverLeaves` = 接管器评估到的叶数（0 ⇒ 判据没跑或无可接管段，
     //   与「跑了但无抑制成员」区分）；`excluded` = 真正从 flex 分母剔除的成员数。
     options.logger.info('🛡️ P1-B 抑制成员 flex 分母剔除·已评估', {

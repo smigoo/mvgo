@@ -923,7 +923,12 @@ const previewSmartSuggestion = computed(() => {
   return ''
 })
 
-// P1: AI一键修复
+// P1: AI一键修复（2026-11-03 切异步：原 /api/component/:id/ai-fix-render-error 后端不存在必 404，
+// 且同步长请求会被生产 nginx proxy_read_timeout 掐断返回 504。现走 /api/demo/ai-fix-render-error
+// 受理拿 fixId → 轮询状态，摆脱网关超时）
+const PREVIEW_AI_FIX_POLL_MS = 3000
+const PREVIEW_AI_FIX_MAX_WAIT_MS = 240000
+
 async function handlePreviewAiFix() {
   if (previewAiFixing.value) return
   previewAiFixing.value = true
@@ -937,26 +942,56 @@ async function handlePreviewAiFix() {
   }, 1000)
   
   try {
-    const response = await http.post(`/api/component/${componentId.value}/ai-fix-render-error`, {
+    const response = await http.post('/api/demo/ai-fix-render-error', {
+      componentId: componentId.value,
       errorMessage: previewError.value,
-      diagnostic: previewDiagnostic.value,
+      info: previewDiagnostic.value,
     })
-    
-    if (response.success) {
-      previewAiFixMessage.value = 'AI修复成功，正在重新加载预览...'
-      previewAiFixLevel.value = 'success'
-      // 重新加载预览
-      await nextTick()
-      reloadPreview()
-      // 2秒后清除提示
-      setTimeout(() => {
-        previewAiFixing.value = false
-        previewAiFixMessage.value = ''
-        previewErrorDismissed.value = false
-      }, 2000)
-    } else {
-      throw new Error(response.message || 'AI修复失败')
+
+    if (!response?.success || !response?.data?.fixId) {
+      throw new Error(response?.data?.message || response?.message || 'AI修复任务受理失败')
     }
+    const fixId = response.data.fixId
+    previewAiFixMessage.value = 'AI修复进行中...'
+    previewAiFixLevel.value = 'info'
+
+    let job = null
+    const pollDeadline = Date.now() + PREVIEW_AI_FIX_MAX_WAIT_MS
+    while (Date.now() < pollDeadline) {
+      if (previewAiFixCancelling.value) {
+        previewAiFixMessage.value = '已停止等待（后台修复可能仍会完成）'
+        previewAiFixLevel.value = 'info'
+        return
+      }
+      await new Promise((r) => setTimeout(r, PREVIEW_AI_FIX_POLL_MS))
+      if (previewAiFixCancelling.value) {
+        previewAiFixMessage.value = '已停止等待（后台修复可能仍会完成）'
+        previewAiFixLevel.value = 'info'
+        return
+      }
+      const statusRes = await http.get(`/api/demo/ai-fix-render-error-status/${fixId}`)
+      if (!statusRes?.data?.success) {
+        throw new Error(statusRes?.data?.message || '修复任务状态查询失败')
+      }
+      if (statusRes.data.status === 'success' || statusRes.data.status === 'failed') {
+        job = statusRes.data
+        break
+      }
+    }
+    if (!job) throw new Error('修复超过 240 秒仍未完成，请稍后重试')
+    if (job.status === 'failed') throw new Error(job.summary || 'AI修复失败')
+
+    previewAiFixMessage.value = 'AI修复成功，正在重新加载预览...'
+    previewAiFixLevel.value = 'success'
+    // 重新加载预览
+    await nextTick()
+    reloadPreview()
+    // 2秒后清除提示
+    setTimeout(() => {
+      previewAiFixing.value = false
+      previewAiFixMessage.value = ''
+      previewErrorDismissed.value = false
+    }, 2000)
   } catch (error) {
     previewAiFixMessage.value = `AI修复失败: ${error.message || '未知错误'}`
     previewAiFixLevel.value = 'error'
@@ -969,23 +1004,16 @@ async function handlePreviewAiFix() {
   }
 }
 
-// P1: 取消AI修复
+// P1: 取消AI修复（轮询模式下仅停止前端等待；后台任务按 componentId 锁互斥，完成后结果自然落盘）
 async function cancelPreviewAiFix() {
   if (!previewAiFixing.value) return
   previewAiFixCancelling.value = true
-  try {
-    await http.post(`/api/component/${componentId.value}/ai-fix-cancel`)
-    previewAiFixing.value = false
-    previewAiFixMessage.value = '已取消AI修复'
-    previewAiFixLevel.value = 'info'
-  } catch (error) {
-    console.error('取消AI修复失败:', error)
-  } finally {
-    previewAiFixCancelling.value = false
-    if (previewAiFixTimer) {
-      clearInterval(previewAiFixTimer)
-      previewAiFixTimer = null
-    }
+  previewAiFixing.value = false
+  previewAiFixMessage.value = '已取消等待AI修复'
+  previewAiFixLevel.value = 'info'
+  if (previewAiFixTimer) {
+    clearInterval(previewAiFixTimer)
+    previewAiFixTimer = null
   }
 }
 

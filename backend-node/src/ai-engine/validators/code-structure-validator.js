@@ -1761,6 +1761,7 @@ export class CodeStructureValidator {
       const layoutDir = detectLayoutDirectionMismatch(
         productFiles,
         options.layoutStructure,
+        { figmaNodeData: options.figmaNodeData },
       );
       for (const it of layoutDir.issues) issues.push(it);
       layoutDirectionStats = layoutDir.stats;
@@ -1780,6 +1781,7 @@ export class CodeStructureValidator {
         const vforDir = detectVForListDirectionMismatch(
           productFiles,
           options.layoutStructure,
+          { figmaNodeData: options.figmaNodeData },
         );
         for (const it of vforDir.issues) issues.push(it);
         vforDirectionStats = vforDir.stats;

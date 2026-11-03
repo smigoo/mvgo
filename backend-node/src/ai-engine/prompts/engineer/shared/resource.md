@@ -8,6 +8,8 @@
 - 已下载的 bg1, bg2, bg3 等背景图资源**必须**在模板中通过 :style backgroundImage 引用
 - **禁止**用 CSS gradient 替代已下载的 bg 资源
 - **禁止**用纯色 background 替代图片背景资源
+- **禁止**给文本元素（span/p 等文字叶子）挂背景图——背景图只属于容器/卡片；文本节点宽度随文字变化，挂图必拉伸失真
+- **图色互斥**：已挂背景图的元素及其装饰子元素，**禁止**再写 background/background-color/渐变；Figma fills 里没有的色值/渐变一律不得凭空写入背景
 - 🛡️ **使用位置判定（重要）**：
   - 「用法: backgroundStyle」的 bg：仅在 layoutStructure.backgroundImage（根容器/content）或 section body 明确标注该背景图时才作为整体背景；否则说明它属于某个具体区块，必须放进对应区块
   - 「用法: backgroundBlock」的 bg：**只允许**作为具体卡片/区块的局部背景，**绝对禁止**贴到根容器或整面板背景

@@ -32,6 +32,13 @@ import { injectResourceImports } from './resource-import-guard.js';
 describe('runPreWriteSelfHealing（双链路共用落盘前自愈链）', () => {
   const noopLogger = { info() {}, warn() {}, error() {}, debug() {} };
 
+  it('R8-11 止血：已撤回同块 flex + grid-template 即翻 display 的误修', () => {
+    const source = '<template><div class="panel">x</div></template><style scoped>.panel{display:flex;grid-template-columns:repeat(4,1fr)}</style>';
+    const { files: out, summary } = runPreWriteSelfHealing({ 'package/index.vue': source }, {}, { logger: noopLogger });
+    expect(summary.gridDisplayAligned).toBe(0);
+    expect(out['package/index.vue']).toContain('display:flex');
+  });
+
   it('.value 误用自愈：import 图片变量写 bg1.value → 去掉 .value', () => {
     const files = {
       'package/index.vue': `<template><div :style="\`url(\${bg1.value})\`"></div></template>
@@ -421,5 +428,45 @@ import logo from '../resources/images/header-1697.png'
     expect(first.summary.layoutTruthInertRemoved).toBe(1);
     expect(second.summary.layoutTruthInertRemoved).toBe(0);
     expect(second.summary.layoutTruthHits).toBe(0);
+  });
+});
+
+describe('PATCH-CHAIN-ERROR 阳性对照（2026-11-03 S0.2）', () => {
+  const silentLogger = { info() {}, warn() {}, error() {}, debug() {} };
+  it('注入结构性错误（poison Proxy 抛 TypeError）⇒ 计数行非零 + summary 聚合', () => {
+    const calls: { msg: string; meta?: any }[] = [];
+    const probeLogger = {
+      info() {},
+      debug() {},
+      error() {},
+      warn(msg: string, meta?: any) {
+        calls.push({ msg, meta });
+      },
+    };
+    // 刀 30 pass 消费 ctx.layoutStructure；Proxy get 陷阱抛 TypeError（结构性错误）
+    const poison = new Proxy(
+      {},
+      {
+        get() {
+          throw new TypeError('poisoned sentinel（阳性对照）');
+        },
+      },
+    );
+    const { summary } = runPreWriteSelfHealing(
+      { 'package/index.vue': '<template><div class="c-x"/></template>' },
+      { layoutStructure: poison } as any,
+      { logger: probeLogger },
+    );
+    expect(summary.patchChainErrors).toBeGreaterThan(0);
+    expect(calls.some((c) => String(c.msg).includes('PATCH-CHAIN-ERROR'))).toBe(true);
+  });
+
+  it('健康输入 ⇒ patchChainErrors = 0（字段显式存在，0 也落盘纪律）', () => {
+    const { summary } = runPreWriteSelfHealing(
+      { 'package/index.vue': '<template><div/></template>' },
+      {} as any,
+      { logger: silentLogger },
+    );
+    expect(summary.patchChainErrors).toBe(0);
   });
 });

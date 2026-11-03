@@ -260,6 +260,118 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
 });
 
 // ──────────────────────────────────────────────
+// 🎯 2026-11-03 Loop 2 治本（mc-max-1793675440559-c46c2631 实锤）：
+// plan.effectiveSections 已由 planner 滤除 header，「计划里只剩 1 个内容段」是合法形态。
+// 旧双重守卫（planLeaves >= 2 + tags.length < 2）把这档打进 raw fallback 后仍对不上 →
+// fail-open → A4 写的 1.508 永远到不了产物（写而不消费第三断点）。
+// ──────────────────────────────────────────────
+describe('buildSectionHeightsMap · Loop 2：plan 单一内容段容错', () => {
+  // 真实样本复刻：vision 2 sections = 标题栏(2:7959, 0.492) + 今日累计(136:122, 1.508)；
+  // generationInput.componentPlan.effectiveSections 仅 1 leaf「今日累计」(layoutMetadata.flexGrow=1.508)；
+  // 产物 index.vue 仅 1 个大写标签 <ContentSection>（header 被 LLM 吞、tab 被提出 base-panel）。
+  const vmIndexVue = `<template>
+  <div class="c-vehicle-monitor-slot-con-tabs" style="display:flex;gap:8px;margin-bottom:12px;">
+    <div class="c-vehicle-monitor-tab">今日累计</div>
+  </div>
+  <base-panel panelKey="default-panel">
+    <div class="c-vehicle-monitor-slot-con c-mc-xxx" style="display:flex; flex-direction:column">
+      <ContentSection style="flex:1;min-height:0;" />
+    </div>
+  </base-panel>
+</template>
+<script setup>
+import ContentSection from './components/ContentSection.vue'
+</script>`;
+
+  const contentSectionVue = `<template>
+  <div class="c-vehicle-monitor-content">
+    <div class="c-vehicle-monitor-stat">...</div>
+  </div>
+</template>`;
+
+  const vmModelFiles = {
+    'package/index.vue': vmIndexVue,
+    'package/components/ContentSection.vue': contentSectionVue,
+  };
+
+  const vmLayout = {
+    layout: {
+      sections: [
+        { id: '2:7959', title: '标题栏', styles: { flexGrow: 0.492 } },
+        { id: '136:122', title: '今日累计', styles: { flexGrow: 1.508 } },
+      ],
+    },
+  };
+
+  const vmPlan = {
+    effectiveSections: [
+      {
+        id: '136:122',
+        title: '今日累计',
+        layoutMetadata: { flexGrow: 1.508, height: 86 },
+      },
+    ],
+  };
+
+  it('阳性：plan 1 leaf（header 已滤）+ 产物 1 标签 → 唯一标签映射 1.508（第三断点闭合）', () => {
+    const map = buildSectionHeightsMap(vmModelFiles, vmLayout, {
+      subComponentPlan: vmPlan,
+    });
+    expect(map).toEqual({ 'c-vehicle-monitor-content': 1.508 });
+  });
+
+  it('阴性 A：plan 1 leaf 但产物 2 标签 → 数量不严格相等，fail-open 不猜', () => {
+    const twoTagFiles = {
+      ...vmModelFiles,
+      'package/components/HeaderSection.vue': `<template>
+  <div class="c-vehicle-monitor-header">...</div>
+</template>`,
+      'package/index.vue': vmIndexVue.replace(
+        '  <base-panel panelKey="default-panel">',
+        '  <HeaderSection />\n  <base-panel panelKey="default-panel">',
+      ),
+    };
+    expect(
+      buildSectionHeightsMap(twoTagFiles, vmLayout, { subComponentPlan: vmPlan }),
+    ).toBeNull();
+  });
+
+  it('阴性 B：plan leaf 与 raw section 双缺 flexGrow（量纲缺失）→ fail-open 返回 null', () => {
+    const noCoeffLayout = {
+      layout: {
+        sections: [
+          { id: '2:7959', title: '标题栏', styles: {} },
+          { id: '136:122', title: '今日累计', styles: {} },
+        ],
+      },
+    };
+    const noCoeffPlan = {
+      effectiveSections: [
+        { id: '136:122', title: '今日累计', layoutMetadata: { height: 86 } },
+      ],
+    };
+    expect(
+      buildSectionHeightsMap(vmModelFiles, noCoeffLayout, {
+        subComponentPlan: noCoeffPlan,
+      }),
+    ).toBeNull();
+  });
+
+  it('边界 C：单文件组件（tags===0）+ plan 1 leaf → 单文件路径仍要求 >=2 直接子类，fail-open', () => {
+    const singleFile = {
+      'package/index.vue': `<template>
+  <div class="c-vehicle-monitor-root">
+    <div class="c-vehicle-monitor-content">...</div>
+  </div>
+</template>`,
+    };
+    expect(
+      buildSectionHeightsMap(singleFile, vmLayout, { subComponentPlan: vmPlan }),
+    ).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────
 // 🛡️ 删减法批次 3 loop 3a（2026-09-14 · 914 §13）：布局事实单一事实源
 // ──────────────────────────────────────────────
 describe('buildSectionLayoutFacts（display/gridColumns/flexDirection）', () => {

@@ -268,3 +268,76 @@ const list = [icon1]
     expect(stripUndefinedResourceRefs(sfc, {})).toContain('import icon1');
   });
 });
+
+/**
+ * 🔴 刀17（2026-11-03 · mc-max-1793689324378-ba2a6814 实锤）：R2 幽灵引用曾对
+ * 「**三元素及以上**数组字面量的中段元素」完全失明。
+ *
+ * 上游病灶在 `resource-import-guard#collectDeclaredBindings`：声明符列表按裸逗号切分，
+ * `const bgList = [bg2, bg1, bg3]` 切成 `['bgList = [bg2', ' bg1', ' bg3]']`，
+ * 只有**中段** ` bg1` 恰以标识符结尾 ⇒ 被误登记「已声明」⇒ 本文件 `buildResourceFacts`
+ * 第 167 行命中 declared 即 continue ⇒ `unresolved` 不含 bg1 ⇒ **R2 不报**。
+ * 首元素被 `X = [` 挡住、末元素被尾部 `]` 挡住，故 1~2 元素数组（既有用例）
+ * 恰好都测不到，盲区长期潜伏。
+ *
+ * 真机后果：产物 `const bgList = [bg2, bg1, bg3]` 中 bg1 无 import 无声明
+ * ⇒ ESM 顶层 `ReferenceError: bg1 is not defined` ⇒ SFC 加载失败
+ * ⇒ RUNTIME-004 render-error + VISUAL-002（0.2979）双硬 BLOCK，任务「直接报错」。
+ */
+describe('刀17：R2 幽灵引用覆盖数组中段元素（三元素字面量）', () => {
+  const REAL_ARTIFACT = `<template>
+  <div class="c-vehicle-monitor-slot-con-tabs">tabs</div>
+  <base-panel panelKey="default-panel">
+    <div class="c-vehicle-monitor-slot-con" :style="{ backgroundImage: \`url(\${bg3})\` }">
+      <ListSection style="flex: 1.544 1 0;min-height:0;" />
+    </div>
+  </base-panel>
+</template>
+<script setup>
+import icon3 from '../resources/images/icon-123.png'
+import icon5 from '../resources/images/icon-8049.png'
+import icon4 from '../resources/images/icon-8036.png'
+import bg2 from '../resources/images/bg-124.png'
+import bg3 from '../resources/images/bg-126.png'
+import ListSection from './components/ListSection.vue'
+import { ref } from 'vue'
+const tabs = ref([{label:'隧道',value:'tunnel'},{label:'大桥',value:'bridge'}])
+const bgList = [bg2, bg1, bg3]
+</script>
+`;
+  const REAL_MAPPING = [
+    { assignedVarName: 'icon3', resourceFile: '../resources/images/icon-123.png', name: 'icon' },
+    { assignedVarName: 'icon4', resourceFile: '../resources/images/icon-8036.png', name: 'icon' },
+    { assignedVarName: 'icon5', resourceFile: '../resources/images/icon-8049.png', name: 'icon' },
+    { assignedVarName: 'bg2', resourceFile: '../resources/images/bg-124.png', name: 'bg' },
+    { assignedVarName: 'bg3', resourceFile: '../resources/images/bg-126.png', name: 'bg' },
+  ];
+
+  it('⭐ 实锤：bg1 既无 import 也不在事实源 → unresolved 必须含 bg1，且 CODE-025 判 error', () => {
+    const files = { 'package/index.vue': REAL_ARTIFACT };
+    const facts = buildResourceFacts({ mapping: REAL_MAPPING, files });
+    expect(facts.unresolved.map((u) => u.varName)).toContain('bg1');
+    const v = checkResourceContract(files, facts);
+    const blocking = v.filter((x) => x.severity === 'error');
+    expect(blocking.some((x) => x.code === 'R2' && x.message.includes('bg1'))).toBe(true);
+    // bg2/bg3 已 import → 不得被判 R1/R2（阳性对照，防「一律报错」的伪修复）
+    expect(blocking.some((x) => x.message.includes('bg2'))).toBe(false);
+    expect(blocking.some((x) => x.message.includes('bg3'))).toBe(false);
+  });
+
+  it('阳性对照：一旦事实源登记 bg1 且已 import → 全链零 error', () => {
+    const files = {
+      'package/index.vue': REAL_ARTIFACT.replace(
+        `import bg2 from '../resources/images/bg-124.png'`,
+        `import bg2 from '../resources/images/bg-124.png'\nimport bg1 from '../resources/images/bg-120.png'`,
+      ),
+    };
+    const mapping = [
+      ...REAL_MAPPING,
+      { assignedVarName: 'bg1', resourceFile: '../resources/images/bg-120.png', name: 'bg' },
+    ];
+    const facts = buildResourceFacts({ mapping, files });
+    expect(facts.unresolved).toEqual([]);
+    expect(checkResourceContract(files, facts).filter((x) => x.severity === 'error')).toEqual([]);
+  });
+});

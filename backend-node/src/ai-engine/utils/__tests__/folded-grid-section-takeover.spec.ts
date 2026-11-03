@@ -23,6 +23,8 @@ import {
   FG_TAKEOVER_CLASS_RX,
 } from '../folded-grid-section-takeover.js';
 import { indexFigmaNodes } from '../section-tree.js';
+import { pickTakeoverAudit, formatTakeoverAuditLine } from '../reject-summary.js';
+import { parse as parseJavaScript } from '@babel/parser';
 
 const solid = (hex, opacity) => {
   const n = parseInt(hex.slice(1), 16);
@@ -379,6 +381,85 @@ describe('刀 53 collectFoldedGridTakeover', () => {
       treeSections: TREE, figmaNodeData: FIGMA_DOC, resourceMapping: ICON_MAPPING, componentName: 'c-component',
     });
     expect([...a.map.entries()]).toEqual([...b.map.entries()]);
+  });
+});
+
+/**
+ * 🛡️ P3（2026-11-03）接管产物**自持面板真值**（底色/圆角/发光/满宽）。
+ *
+ * 病灶：刀 53 的**终裁覆写**（`file-writer.js` 以 `_fgTakeoverFiles` 快照整包替换）快照
+ * 拍在刀 37/42 heal **之前** ⇒ heal 对 `fg-` 接管文件的修复被整包回滚，全库实测
+ * icon `0/110`、header `0/219` 携带背景。治本 = 渲染器自己写（判据同源
+ * `container-background-truth#resolveSectionPanel/buildPanelInlineCss`）。
+ *
+ * 🔴 本 describe 的夹具**必须是真节点 id**（`P:1`）：既有 TREE 的标题叶是合成 id
+ * `38:3137-tail-text`（索引里查不到 ⇒ 提前 null）—— 这正是真机 TypeError 崩溃
+ * 长期测不到的原因。故此处独立造夹具，锁「真 id ⇒ 前缀注入 + 计数」。
+ */
+describe('P3 icon/header 接管自持面板真值', () => {
+  const PANEL_GLOW = [
+    { type: 'DROP_SHADOW', color: { r: 0, g: 0.52, b: 1, a: 0.35 }, offset: { x: 0, y: 0 }, radius: 12, spread: 2, visible: true },
+  ];
+  const panelDoc = (withBg: boolean, bgH = 161) => ({
+    id: 'P:1',
+    type: 'FRAME',
+    absoluteBoundingBox: { x: 0, y: 0, width: 604, height: 161 },
+    children: [
+      ...(withBg
+        ? [{
+            id: 'P:1-bg', type: 'RECTANGLE',
+            absoluteBoundingBox: { x: 0, y: 0, width: 604, height: bgH },
+            fills: [solid('#e2d084')], cornerRadius: 12, effects: PANEL_GLOW,
+          }]
+        : []),
+      text('P:1-t', '战略合作厂商', 44, 25, 96, 16, '#333333', 16, 500),
+      { id: 'P:1-ic', type: 'FRAME', absoluteBoundingBox: { x: 20, y: 25, width: 16, height: 16 }, fills: [solid('#ffffff')] },
+    ],
+  });
+  const PANEL_MAP = [{ figmaNodeId: 'P:1-ic', resourceFile: '../resources/images/icon-1.png', assignedVarName: 'icon1', ownerSectionId: 'P:1', downloadStatus: 'success' }];
+  const PANEL_TREE = [{ id: 'root', isLayoutContainer: true, children: [{ id: 'P:1' }] }];
+  const rootStyle = (vue: string) => (vue.match(/^\s*<div[^>]*\bstyle="([^"]*)"/m) || [])[1] || '';
+
+  it('阳性：真 id header 叶 + 满覆盖面板底 ⇒ 根 div 前缀带 底/圆角/发光，计数 1/1', () => {
+    const out = collectFoldedGridTakeover({
+      treeSections: PANEL_TREE, figmaNodeData: panelDoc(true), resourceMapping: PANEL_MAP, componentName: 'c-p3panel',
+    });
+    const tr = [...out.map.values()][0];
+    expect(tr.kind).toBe('header');
+    expect(out.panelBgTried).toBe(1);
+    expect(out.panelBgInjected).toBe(1);
+    const s = rootStyle(tr.vue);
+    expect(s.startsWith('background:rgba(226, 208, 132, 1);border-radius:12px;box-shadow:0px 0px 12px 2px')).toBe(true);
+    expect(s).toContain('display:flex;flex-direction:row');
+  });
+
+  it('阴性：面板底面积比 <0.6 ⇒ 判据不认（计数 1/0，根 div 逐字不变）', () => {
+    const withBg = collectFoldedGridTakeover({
+      treeSections: PANEL_TREE, figmaNodeData: panelDoc(true), resourceMapping: PANEL_MAP, componentName: 'c-p3panel',
+    });
+    const small = collectFoldedGridTakeover({
+      treeSections: PANEL_TREE, figmaNodeData: panelDoc(true, 60), resourceMapping: PANEL_MAP, componentName: 'c-p3panel',
+    });
+    const nobg = collectFoldedGridTakeover({
+      treeSections: PANEL_TREE, figmaNodeData: panelDoc(false), resourceMapping: PANEL_MAP, componentName: 'c-p3panel',
+    });
+    expect(small.panelBgTried).toBe(1);
+    expect(small.panelBgInjected).toBe(0);
+    expect(nobg.panelBgInjected).toBe(0);
+    const stripped = rootStyle(withBg.map.values().next().value.vue).replace(/^background:[^;]+;border-radius:[^;]+;box-shadow:[^;]+;/, '');
+    for (const o of [small, nobg]) {
+      expect(rootStyle([...o.map.values()][0].vue)).toBe(stripped);
+      expect(rootStyle([...o.map.values()][0].vue).startsWith('background:')).toBe(false);
+    }
+  });
+
+  it('计数行：panelBg 恒透传（0 也打，pickTakeoverAudit/单行日志）', () => {
+    const out = collectFoldedGridTakeover({
+      treeSections: PANEL_TREE, figmaNodeData: panelDoc(false), resourceMapping: PANEL_MAP, componentName: 'c-p3panel',
+    });
+    const audit = pickTakeoverAudit(out);
+    expect(audit.panelBg).toEqual({ injected: 0, tried: 1 });
+    expect(formatTakeoverAuditLine(audit)).toContain('panelBg=0/1');
   });
 });
 
@@ -1332,6 +1413,22 @@ describe('刀 53 外观扩维 · detectTableLeaf（cd8938f8 实锤）', () => {
     expect(vue).toContain('"border": "1px solid #ffffff"');
     // 负节距不再产 margin-top（table 布局无负 margin 语义，行高换算见 R9 注释）
     expect(vue).not.toContain('margin-top:-1px');
+  });
+
+  it('表头/单元格连字符样式键必须是合法 JS：真实 script setup 可由 Babel 解析', () => {
+    const idx = indexFigmaNodes(tableDoc());
+    const r = detectTableLeaf(sec('43:4785'), idx, buildParentMap(idx), []);
+    const vue = renderFoldedGridLeafVue(r, 'device');
+    const script = vue.match(/<script setup>([\s\S]*?)<\/script>/)?.[1];
+    expect(script).toBeTruthy();
+    expect(() => parseJavaScript(script!, { sourceType: 'module' })).not.toThrow();
+    for (const declaration of [
+      "'box-sizing': 'border-box'",
+      "'text-align': 'center'",
+      "'vertical-align': 'middle'",
+    ]) {
+      expect(vue).toContain(declaration);
+    }
   });
 
   it('阳性③：首列数据行图标进契约（尺寸/间距）+ import + img；非首列与表头无图标', () => {

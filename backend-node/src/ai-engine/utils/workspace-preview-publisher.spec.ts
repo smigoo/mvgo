@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { createHash } from 'crypto';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -110,6 +111,67 @@ describe('workspace-preview-publisher', () => {
     `);
 
     expect(existsSync(orphan)).toBe(false);
+  });
+});
+
+/**
+ * 🛡️ 2026-11-03（真机实锤）：journal 原子写不得阻断生成。
+ * 背景：`writePreviewTransactionJournal` 旧实现「写 tmp → renameSync」，rename 抛
+ * `EPERM: operation not permitted` 时**整单生成失败**。journal 仅是崩溃恢复用的
+ * 尽力而为持久化，绝不能因它写不成而让用户任务挂掉。
+ */
+describe('workspace-preview-publisher · journal 原子写容错', () => {
+  const journalDir = join(PROJECT_ROOT, 'temp-components', '.preview-transactions');
+
+  afterEach(() => {
+    // 清掉本 spec 可能留下的唯一命名探针，避免污染真实 journal 目录
+    try {
+      for (const name of readdirSync(journalDir)) {
+        if (name.startsWith('spec-') || name.includes('.spec-probe.')) {
+          rmSync(join(journalDir, name), { recursive: true, force: true });
+        }
+      }
+    } catch {
+      /* 目录不存在则忽略 */
+    }
+  });
+
+  it('启动恢复清扫未完成的 journal 临时文件（*.json.tmp-*）', () => {
+    mkdirSync(journalDir, { recursive: true });
+    const stale = join(journalDir, 'spec-stale.json.tmp-999-1-abcdef');
+    writeFileSync(stale, '{"partial":true}', 'utf-8');
+
+    runModuleScript(`
+      import { __testing } from ${JSON.stringify(`file://${MODULE_PATH}`)};
+      __testing.recoverPreviewTransactions();
+    `);
+
+    expect(existsSync(stale)).toBe(false);
+  });
+
+  it('原子重命名失败（目标被目录占位）时不得抛出，且不残留 tmp', () => {
+    mkdirSync(journalDir, { recursive: true });
+    const key = `spec-probe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const digest = createHash('sha256').update(key).digest('hex');
+    const journalPath = join(journalDir, `${digest}.json`);
+    // 目标路径用**目录**占位 ⇒ renameSync 必失败（EISDIR/ENOTDIR），逼近 EPERM 场景
+    mkdirSync(journalPath, { recursive: true });
+
+    // runModuleScript 在子进程非 0 退出时抛错 ⇒ 若 writePreviewTransactionJournal 冒泡异常，本用例直接失败
+    const out = runModuleScript(`
+      import { __testing } from ${JSON.stringify(`file://${MODULE_PATH}`)};
+      __testing.writePreviewTransactionJournal({ transactionKey: ${JSON.stringify(key)} });
+      console.log('NO_THROW');
+    `);
+    expect(String(out)).toContain('NO_THROW');
+
+    // tmp 必须被清理，不留残骸
+    const leftovers = readdirSync(journalDir).filter(
+      (n) => n.startsWith(digest) && n.includes('.tmp-'),
+    );
+    expect(leftovers).toEqual([]);
+
+    rmSync(journalPath, { recursive: true, force: true });
   });
 });
 

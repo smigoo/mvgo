@@ -248,6 +248,63 @@ const list = [1, 2, 3]
   });
 });
 
+describe('任务20第二刀 · 折叠列表声明冲突由成员盒仲裁', () => {
+  const horizontalGeometry = {
+    id: 'root', type: 'FRAME', children: [
+      { id: 'a', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 20, width: 140, height: 74 } },
+      { id: 'b', type: 'FRAME', absoluteBoundingBox: { x: 129, y: 20, width: 120, height: 74 } },
+    ],
+  };
+  const structure = {
+    layout: { sections: [{
+      id: 'cards-list', layout: 'vertical', body: { layout: 'horizontal-3-columns' },
+      collapsed: true, renderHint: 'v-for', items: [{ id: 'a' }, { id: 'b' }],
+      children: [{ id: 'card-1', layout: 'horizontal' }],
+    }] },
+  };
+
+  it('⭐ 正确横向 wrapper 零误报；旧纵向 wrapper 阳性检出并自愈为 row', () => {
+    const okFiles = [
+      { path: 'ListSection.vue', content: vue(`${P}-horizontal-list`, `${P}-horizontal-card`, 'cards-list') },
+      { path: 'common.less', content: less({ [`${P}-horizontal-list`]: 'row', [`${P}-horizontal-card`]: 'row' }) },
+    ];
+    expect(detectVForListDirectionMismatch(okFiles, structure, {
+      figmaNodeData: horizontalGeometry,
+    }).issues).toHaveLength(0);
+
+    const badFiles = [
+      { path: 'ListSection.vue', content: vue(`${P}-bad-list`, `${P}-bad-card`, 'cards-list') },
+      { path: 'common.less', content: less({ [`${P}-bad-list`]: 'column', [`${P}-bad-card`]: 'row' }) },
+    ];
+    const detected = detectVForListDirectionMismatch(badFiles, structure, {
+      figmaNodeData: horizontalGeometry,
+    });
+    expect(detected.issues.map((i: any) => i.id)).toEqual(['VFOR-DIR-WRAPPER']);
+    expect(detected.issues[0].hint).toMatchObject({ role: 'wrapper', expected: 'row', actual: 'column' });
+    const healed = healVForListDirection(badFiles, detected.issues);
+    expect(healed.failed).toEqual([]);
+    expect(detectVForListDirectionMismatch(healed.files, structure, {
+      figmaNodeData: horizontalGeometry,
+    }).issues).toHaveLength(0);
+  });
+
+  it('反向：相同声明冲突但成员盒纵向 ⇒ 正确 column 不被翻成 row', () => {
+    const verticalGeometry = {
+      id: 'root', type: 'FRAME', children: [
+        { id: 'a', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 72 } },
+        { id: 'b', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 92, width: 400, height: 72 } },
+      ],
+    };
+    const files = [
+      { path: 'ListSection.vue', content: vue(`${P}-vertical-list`, `${P}-vertical-card`, 'cards-list') },
+      { path: 'common.less', content: less({ [`${P}-vertical-list`]: 'column', [`${P}-vertical-card`]: 'row' }) },
+    ];
+    expect(detectVForListDirectionMismatch(files, structure, {
+      figmaNodeData: verticalGeometry,
+    }).issues).toHaveLength(0);
+  });
+});
+
 describe('T3 · 纯函数', () => {
   it('findVForPairs：识别 v-for 元素及其父元素，并标注 wrapper 是否根元素', () => {
     const content = `<template>

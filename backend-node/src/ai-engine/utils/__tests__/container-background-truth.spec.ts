@@ -15,6 +15,7 @@ import {
   collectClassBackgrounds,
   healContainerBackgroundTruth,
 } from '../container-background-truth.js';
+import { indexFigmaNodes as indexFigmaNodesTree } from '../section-tree.js';
 
 const NOOP_LOGGER = { info() {}, warn() {}, error() {}, debug() {} };
 
@@ -394,6 +395,65 @@ describe('刀 42 resolveSectionPanel：面板三件套真值', () => {
   it('阴性：inheritEffects=false 的不可见发光被跳过', () => {
     const figma = buildPanelFigma({ effects: [{ ...INNER_GLOW_GOLD, visible: false }] });
     expect(resolveSectionPanel('panel-gold', indexFigmaNodes(figma)).shadow).toBe(null);
+  });
+});
+
+/**
+ * 🔴 P3（2026-11-03 · 8ba08be 实锤）索引形状无关回归。
+ *
+ * 病灶：本仓有**两个** `indexFigmaNodes` —— 本模块的条目是 `{node, parentId}`，
+ * `section-tree.js` 的条目是 `{id, name, type, bbox, parentId, rawNode}`。折叠段接管器
+ * （刀 53 `collectFoldedGridTakeover`）用的**是后者**，而本判据原先只读 `entry.node`
+ * ⇒ `sec` 为 undefined ⇒ `areaOf(sec.absoluteBoundingBox)` 直接 **TypeError 崩**。
+ *
+ * 为什么此前零告警：既有单测与本模块 heal 全用**本模块索引**（形状相同）；而
+ * `folded-grid-section-takeover.spec.ts` 的标题叶用的是**合成 id** `…-tail-text`
+ * （索引里查不到 ⇒ 提前 `return null`）⇒ 真机崩溃路径**结构性覆盖不到**。
+ */
+describe('P3 resolveSectionPanel：索引形状无关（两个 indexFigmaNodes 共存）', () => {
+  it('section-tree 形状索引（rawNode/parentId）⇒ 与本模块索引结果逐字段相等', () => {
+    const figma = buildPanelFigma();
+    // 真实调用口径（`folded-grid-section-takeover.js#collectFoldedGridTakeover`）：
+    // 先取 `.document` 再喂索引器（`p.figmaNodeData?.document || p.figmaNodeData`）。
+    // ⚠️ 两个 `indexFigmaNodes` 对**包装体**的处理并不相同：本模块会自动解包 `{document}`，
+    //    section-tree 版**不解包**（直接 walk 传入对象）。fg 侧显式传 `.document`
+    //    ⇒ 真机入参下两者等价；此处按同一口径喂入，避免把「包装体差异」误当成本次
+    //    P3 要治的「条目形状差异」（`{node}` vs `{rawNode}`）。
+    const root = figma.document ?? figma;
+    const own = resolveSectionPanel('panel-gold', indexFigmaNodes(root));
+    const tree = resolveSectionPanel('panel-gold', indexFigmaNodesTree(root));
+    expect(own).not.toBe(null);
+    expect(tree).toEqual(own);
+    expect(tree.radius).toBe(12);
+    expect(tree.layerId).toBe('panel-gold-bg');
+  });
+
+  it('父级框（fullWidth 判定）同样兼容 rawNode 形状', () => {
+    // 造「子段面板 + 父框」：子段宽 = 父框宽 ⇒ fullWidth=true，两种索引必须同判
+    const figma = {
+      id: 'p', absoluteBoundingBox: { x: 0, y: 0, width: 600, height: 400 },
+      children: [
+        {
+          id: 's', absoluteBoundingBox: { x: 0, y: 0, width: 600, height: 200 },
+          children: [
+            {
+              id: 's-bg', type: 'RECTANGLE',
+              absoluteBoundingBox: { x: 0, y: 0, width: 600, height: 200 },
+              fills: [{ type: 'SOLID', visible: true, opacity: 1, color: { r: 1, g: 1, b: 1 } }],
+              cornerRadius: 4,
+            },
+          ],
+        },
+      ],
+    };
+    const own = resolveSectionPanel('s', indexFigmaNodes(figma));
+    const tree = resolveSectionPanel('s', indexFigmaNodesTree(figma));
+    expect(own.fullWidth).toBe(true);
+    expect(tree).toEqual(own);
+  });
+
+  it('条目既无 node 也无 rawNode ⇒ 返回 null（fail-open，绝不抛）', () => {
+    expect(resolveSectionPanel('panel-gold', new Map([['panel-gold', { parentId: null }]]))).toBe(null);
   });
 });
 

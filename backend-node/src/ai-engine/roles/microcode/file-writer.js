@@ -33,7 +33,7 @@ import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.j
 //   （零 DOM/字面/动态引用 ⇒ 删块 + 留痕），并**复用** class-facts + style-class-consolidator
 //   的同一份解析（禁造第三份）。只改 .less 源：.css 由下游 `recompileIndexCss` 自动重生成。
 import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
 // 🛡️ L2-a（195c8d0e 实锤）：写盘门禁判坏且磁盘无 last-good 时，回退到分块缓存中的合格版本
@@ -57,7 +57,11 @@ import {
   neutralForBucket,
   pickTruthCandidate,
 } from '../../utils/truth-palette.js';
-import { MC_CANONICAL_COLOR_SLOTS } from '../../utils/style-tokens.js';
+import {
+  MC_CANONICAL_COLOR_SLOTS,
+  resolveSemanticColorSlot,
+  isPrimaryAccentName,
+} from '../../utils/style-tokens.js';
 // 🛡️ 2026-09-29 治本：写盘门禁前置自愈——自闭合标签「` /` 后夹属性」畸形还原（单点实现，双链路共用）
 import { repairSelfClosingSlashInsideTag } from '../../utils/pre-write-self-healing.js';
 // 🛡️ 刀 43（2026-10-22）：R24「空 `<img>` / `:src` 引用未声明变量」的落盘前终验。
@@ -393,17 +397,57 @@ export function stripSurplusBlockClosers(source = '') {
  */
 export function deduplicateTemplateBlocks(source = '') {
   const src = String(source);
-  // 匹配顶层 <template...>...</template>（非贪婪 + 允许带属性）
-  const re = /<template\b[^>]*>([\s\S]*?)<\/template>/gi;
+  // 🛡️ 2026-11-03 治本（mc-max-1793666519535-ca22c7d0 实锤，表格段整段消失根因）：
+  //   旧实现用非贪婪正则 `/<template\b[^>]*>([\s\S]*?)<\/template>/` 提取「顶层块」，
+  //   遇**嵌套** slot `<template #headerCell/#bodyCell>`（R9 antd 升级 fe47afcd 引入，
+  //   刀53 table 接管器标准产物）在**第一个内层闭合处截断** ⇒ 把嵌套 slot 误判为
+  //   「重复顶层块」⇒ 错误删除重建 ⇒ SFC 块结构损坏（missing/invalid end tag）
+  //   ⇒ P1-4 坏文件隔离把整段表格删掉 + index.vue import 被剥离。两次生成同路径
+  //   同死法（00:42:43 / 00:42:58 双实锤）。仓内先例：quality-score-v1 同族缺陷
+  //   同修法（depth 配平扫描）。
+  //   治本：**深度配平 token 扫描**提取真正的顶层 template 块——深度 0→1 的开标签
+  //   = 顶层块起点，深度 1→0 的闭标签 = 顶层块终点；嵌套 slot 不影响顶层判定。
+  //   顶层块 ≤1 ⇒ 原样返回（接管器产物含嵌套 slot = 合法，不再误伤）。
+  const TOP_OPEN_RX = /<template\b[^>]*>/gi;
+  const TOP_CLOSE_RX = /<\/template\s*>/gi;
+  const tokens = [];
+  let tm;
+  const openRx = new RegExp(TOP_OPEN_RX.source, 'gi');
+  while ((tm = openRx.exec(src)) !== null) {
+    tokens.push({ index: tm.index, end: tm.index + tm[0].length, kind: 'open', text: tm[0] });
+  }
+  const closeRx = new RegExp(TOP_CLOSE_RX.source, 'gi');
+  while ((tm = closeRx.exec(src)) !== null) {
+    tokens.push({ index: tm.index, end: tm.index + tm[0].length, kind: 'close', text: tm[0] });
+  }
+  tokens.sort((a, b) => a.index - b.index);
   const matches = [];
-  let m;
-  while ((m = re.exec(src)) !== null) {
-    matches.push({
-      start: m.index,
-      end: m.index + m[0].length,
-      full: m[0],
-      content: m[1],
-    });
+  let depth = 0;
+  let topStart = -1;
+  let topOpenText = '';
+  for (const tok of tokens) {
+    if (tok.kind === 'open') {
+      if (depth === 0) {
+        topStart = tok.index;
+        topOpenText = tok.text;
+      }
+      depth += 1;
+    } else {
+      if (depth > 0) {
+        depth -= 1;
+        if (depth === 0 && topStart >= 0) {
+          matches.push({
+            start: topStart,
+            end: tok.index + tok.text.length,
+            full: src.slice(topStart, tok.index + tok.text.length),
+            content: src.slice(topStart + topOpenText.length, tok.index),
+          });
+          topStart = -1;
+          topOpenText = '';
+        }
+      }
+      // 深度 0 的游离闭合（坏文件）不参与顶层块配对——交由后续校验/隔离处置
+    }
   }
   if (matches.length <= 1)
     return { source: src, fixed: false, removedCount: 0 };
@@ -428,9 +472,11 @@ export function deduplicateTemplateBlocks(source = '') {
   }
 
   // 重新构造 SFC：首个模板之前 + 新模板 + 首个模板之后（去除后续模板）
+  // 🔍 开标签保留原文（`<template lang="pug">` 等属性不丢；深度扫描记录了 topOpenText）
   const before = src.slice(0, first.start);
   const after = src.slice(first.end);
-  const newTemplate = `<template>${mergedContent}</template>`;
+  const _firstOpen = first.full.match(/^<template\b[^>]*>/i)?.[0] || '<template>';
+  const newTemplate = `${_firstOpen}${mergedContent}</template>`;
   // 从 after 中删除所有后续模板的位置
   let cleanedAfter = after;
   for (let i = matches.length - 1; i >= 1; i--) {
@@ -541,29 +587,53 @@ function guessLessVarValueByName(n = '', ctx = {}) {
   //   旧实现对 light/dark 返回同一个值 ⇒ 两个主题 mixin 同色 ⇒ 切主题零变化
   //   （真机实锤：产物 c-aiot-dpjh-bsjd-def7310d 的 `@color-bg-card` 两套都是 #ffffff）。
   const isDarkBg = ctx.background === 'dark';
-  // 数值型：给真实数值，确保算术（如 @gap + 4px）也能编译通过
-  if (/radius/.test(n)) return '8px';
-  // 🛡️ 顺序修复（2026-09-02）：font-size 必须排在 size 之前——否则 `fontsize` 含子串 `size`，
-  // 会被下面 /(…|size)/ 命中返回 0px（环境监测/流量监测「文字消失」根因，@fontSize 被兜底成 0px）。
-  // 🛡️ 2026-09-03：补全值 '14px' → 'var(--fontSize)'——mc-check v1.0.20 M5-6 硬性要求
-  // theme-vars.less 的 @fontSize 是 var(--fontSize) 映射（正则只认不带 fallback 的精确形态），
-  // 字面值补全会导致每个组件 M5-6 失败（实锤 /tmp/mc-verify 复测）；var() 引用由根容器
-  // --fontSize 变量驱动，less 编译原样输出合法。
-  if (/(font-size|fontsize)/.test(n)) return 'var(--fontSize)';
-  if (/(gap|padding|margin|space|offset|width|height|size)/.test(n))
-    return '0px';
-  if (/(line-height|lh)/.test(n)) return '1.5';
-  if (/(opacity|alpha)/.test(n)) return '1';
-  if (/(zindex|z-index)/.test(n)) return '1';
-  if (/(weight|fw)/.test(n)) return '400';
-  if (/(duration|delay|speed)/.test(n)) return '0.2s';
+  // 🛡️ 颜色前缀强信号（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：
+  //   `@color-over-height-number` 含 `height` ⇒ 旧顺序在数值分支（下方 /(…|height|size)/）即命中
+  //   ⇒ 产出 `'0px'`。而 `'0px'` 不是颜色 ⇒ `safeLessVarValue` 的 `COLOR_VALUE_RE` 真值分支
+  //   被**整体跳过** ⇒ 原样落盘 `color: 0px`（**非法 CSS，浏览器整条丢弃** ⇒ 超高车辆数字丢色）。
+  //   `color-*` / `*-color` / `*-colour` 是**明确的颜色声明**，必须绕过数值分支直达下方颜色族，
+  //   从而进入「真值优先、禁止按名编造」通道（N3/#139 口径）。
+  const colorDecl = /^color-/.test(n) || /-(color|colour)$/.test(n);
+  // 数值型（颜色声明除外）：给真实数值，确保算术（如 @gap + 4px）也能编译通过
+  if (!colorDecl) {
+    if (/radius/.test(n)) return '8px';
+    // 🛡️ 顺序修复（2026-09-02）：font-size 必须排在 size 之前——否则 `fontsize` 含子串 `size`，
+    // 会被下面 /(…|size)/ 命中返回 0px（环境监测/流量监测「文字消失」根因，@fontSize 被兜底成 0px）。
+    // 🛡️ 2026-09-03：补全值 '14px' → 'var(--fontSize)'——mc-check v1.0.20 M5-6 硬性要求
+    // theme-vars.less 的 @fontSize 是 var(--fontSize) 映射（正则只认不带 fallback 的精确形态），
+    // 字面值补全会导致每个组件 M5-6 失败（实锤 /tmp/mc-verify 复测）；var() 引用由根容器
+    // --fontSize 变量驱动，less 编译原样输出合法。
+    if (/(font-size|fontsize)/.test(n)) return 'var(--fontSize)';
+    if (/(gap|padding|margin|space|offset|width|height|size)/.test(n))
+      return '0px';
+    if (/(line-height|lh)/.test(n)) return '1.5';
+    if (/(opacity|alpha)/.test(n)) return '1';
+    if (/(zindex|z-index)/.test(n)) return '1';
+    if (/(weight|fw)/.test(n)) return '400';
+    if (/(duration|delay|speed)/.test(n)) return '0.2s';
+  }
   // 颜色型：必须返回真实颜色（#/rgba），否则 lighten()/darken()/fade() 等 LESS 颜色函数无法求值。
   // 主题切换由 .theme-light()/.theme-dark() mixin 提供不同真实颜色，无需 CSS 运行时 var()。
   //
   // 🔴 2026-10-12 治本 B：深色底下背景/边框/文字必须给**深色系**值，
   //   否则深色主题渲染出白卡片/黑字 ⇒ 切主题看起来毫无变化（真机实锤）。
+  // 🛡️ #3（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**规范槽位直查优先**。
+  //   单一事实源 = `MC_CANONICAL_COLOR_SLOTS`（= 默认主题 mixin `.theme-light()`/`.theme-dark()`
+  //   的取值来源，见 `style-tokens.js#renderMicrocodeThemeVarsLess`）。
+  //   旧实现一律走下面的语义族字面量 ⇒ `@color-primary-bg` 被兜成**不透明纯白 `#ffffff`**
+  //   （真值 `rgba(24,144,255,0.1)` 透明淡蓝）⇒ 根作用域生成**整卡白蒙层盖住本体**
+  //   （真机 `index.css:152-158` 实锤）。直查后取默认主题真值，不再硬编码。
+  //   ⚠️ 只认**规范 kebab 槽位名**；框架预设的驼峰名（`@colorPrimary` 等）不在此列，
+  //   仍走下方语义族分支（其字面量 `#409EFF` 是框架 `--colorPrimary` 的既有契约）。
+  const canon = isDarkBg ? MC_CANONICAL_COLOR_SLOTS.dark : MC_CANONICAL_COLOR_SLOTS.light;
+  if (canon[n]) return canon[n];
   if (/border/.test(n)) return isDarkBg ? '#4b4b4b' : '#e8e8e8';
-  if (/(bg|background)/.test(n)) return isDarkBg ? '#2b2b2b' : '#ffffff';
+  if (/(bg|background)/.test(n)) {
+    // 🛡️ #3 续：「主色底纹」类槽位（`@color-primary-bg` / `-bg-hover` / `@color-bg-card-active`
+    //   之类）语义是**半透明主色叠加**，不是实心底色 —— 取规范 `color-primary-bg` 真值。
+    if (/(primary|accent|active|hover|selected)/.test(n)) return canon['color-primary-bg'];
+    return isDarkBg ? '#2b2b2b' : '#ffffff';
+  }
   if (/(primary|accent)/.test(n)) return '#409EFF';
   if (/(success|ok)/.test(n)) return '#52c41a';
   if (/(warning|warn)/.test(n)) return '#faad14';
@@ -607,6 +677,20 @@ export function safeLessVarValue(name = '', ctx = {}) {
   //   （仅当桶内恰好 1 个候选，避免错位）；③ 否则取桶内中性色（backgrounds 全透明），
   //   绝不编造语义色——「没有真值就不给颜色」。
   if (COLOR_VALUE_RE.test(String(guess))) {
+    // 🛡️ 语义别名层（2026-11-03 · 用户拍板「加语义别名层治本」）——**必须先于** N3 丢弃判定：
+    //   ① 约定语义名（error/danger/fail/alert/notice/warning/warn/success/ok）→ 规范槽真值
+    //      （含深色反相；值取自 MC_CANONICAL_COLOR_SLOTS 单一事实源，不新增硬编码）；
+    //   ② 通用主强调名（primary/accent，无色相限定）→ 保留名字分支真色（框架 `--colorPrimary`
+    //      既有契约 #409EFF），因这类名字的猜测来自**契约**而非编造。
+    //   否则 `@color-alert` 恒被下面的 N3 分支兜成中性灰 #333333。
+    const semSlot = resolveSemanticColorSlot(n);
+    if (semSlot) {
+      const semCanon = ctx.background === 'dark'
+        ? MC_CANONICAL_COLOR_SLOTS.dark
+        : MC_CANONICAL_COLOR_SLOTS.light;
+      if (semCanon[semSlot]) return semCanon[semSlot];
+    }
+    if (isPrimaryAccentName(n) && isColorEvaluable(guess)) return guess;
     if (CANONICAL_COLOR_NAMES.has(n)) {
       if (isColorEvaluable(guess) || !isColorFnConsumer(n, ctx)) return guess;
       return NEUTRAL_LESS_COLOR;
@@ -1100,6 +1184,28 @@ export function writeFiles(files, outputPath, options = {}) {
             logger.warn(`🧩 SFC theme 变量引用自愈跳过: ${relativePath}（${refErr?.message || refErr}）`);
           }
         }
+        // 🛡️ 2026-11-03 治本（eaa64a71 实锤）：裸 `@x * N` 算术包裹 calc()。
+        //   M5-6 归一后 @fontSize 等值是 var() 透传形态，编译期无法算术求值：
+        //   `@fontSize * 2` → LESS `Operation on an invalid type` → SFC 写盘门禁判死
+        //   整文件 → 组件文件缺失 → CODE-023 悬空标签 → L0-B 重试耗尽任务失败。
+        //   calc(@fontSize * 2) 则合法（全库 2185 处既有形态）。纯函数幂等，无匹配零改动。
+        try {
+          const arithHealed = applyHealToVueStyleBlocks(sanitizedContent, (css) =>
+            healBareVarArithmeticToCalc(css),
+          );
+          if (arithHealed !== sanitizedContent) {
+            sanitizedContent = arithHealed;
+            if (logger) {
+              logger.warn(
+                `🧩 SFC 裸变量算术 → calc() 包裹: ${relativePath}（@x * N 编译期不可求值）`,
+              );
+            }
+          }
+        } catch (arithErr) {
+          if (logger) {
+            logger.warn(`🧩 SFC 裸变量算术包裹跳过: ${relativePath}（${arithErr?.message || arithErr}）`);
+          }
+        }
         // 🛡️ 2026-09-04 A2+B：主题变量化确定性自愈（写盘即修复，防 THEME 门禁 3 轮重试耗尽）。
         // ① 槽位 hex 字面量（color: #ffffff）→ var(--cssVar, #hex)（THEME-SLOT-COLOR）；
         // ② 预设字面量声明（@colorPrimary: #409EFF）→ @colorPrimary: var(--colorPrimary, #409EFF)
@@ -1470,6 +1576,24 @@ export function writeFiles(files, outputPath, options = {}) {
         } catch (refErr) {
           if (logger) {
             logger.warn(`🧩 theme 变量引用自愈跳过: ${relativePath}（${refErr?.message || refErr}）`);
+          }
+        }
+
+        // 🛡️ 2026-11-03 治本（eaa64a71 实锤）：裸 `@x * N` 算术 → calc() 包裹（独立 .less 同样需要）。
+        //   M5-6 注入的声明是 var() 透传形态，`@fontSize * 2` 编译期不可求值 → LESS 门禁炸。
+        try {
+          const arithHealedLess = healBareVarArithmeticToCalc(sanitizedContent);
+          if (arithHealedLess !== sanitizedContent) {
+            sanitizedContent = arithHealedLess;
+            if (logger) {
+              logger.warn(
+                `🧩 裸变量算术 → calc() 包裹: ${relativePath}（@x * N 编译期不可求值）`,
+              );
+            }
+          }
+        } catch (arithErr) {
+          if (logger) {
+            logger.warn(`🧩 裸变量算术包裹跳过: ${relativePath}（${arithErr?.message || arithErr}）`);
           }
         }
 
@@ -1942,10 +2066,23 @@ export function writeFiles(files, outputPath, options = {}) {
         }
       }
       const tvPath = 'resources/styles/themes/theme-vars.less';
-      const tvContentNow =
-        (files && typeof files[tvPath] === 'string'
-          ? files[tvPath]
-          : '') + pendingThemeVars;
+      // 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**必须以磁盘为事实源**。
+      //   历史实现只用内存 `files[tvPath]`（缺失即回退空串、**不读盘**）⇒ 内存落后于磁盘
+      //   （写盘门禁 checker 是**直接写盘**、不改内存 map）⇒ `declaredSet` 漏掉磁盘上已有的
+      //   声明 ⇒ 已存在的变量被**反复补**：真机 theme-vars.less 出现 **3 处**
+      //   「写盘门禁自动补全缺失变量」块、同批变量 2~3 份；且顶层**普通赋值覆盖主题 mixin 真值**
+      //   （`@color-primary-bg: #ffffff` 盖掉 `.theme-light()` 的 `rgba(25,144,255,0.10)`
+      //    ⇒ 根作用域 `common.less` 生成整卡白蒙层，真机 `index.css:152-158` 实锤；
+      //    less 语义：mixin 注入「先调用者胜出」而普通赋值「后者胜出」——两种语义相反，见 R21）。
+      //   正解：内存 + 磁盘 + 本批 pending **取并集**建 declaredSet（任一来源声明过即视为已声明）。
+      const tvOnDisk = existsSync(join(outputPath, tvPath))
+        ? readFileSync(join(outputPath, tvPath), 'utf-8')
+        : '';
+      const tvInMemory =
+        files && typeof files[tvPath] === 'string' ? files[tvPath] : '';
+      const tvContentNow = [tvInMemory, tvOnDisk, pendingThemeVars]
+        .filter((s) => typeof s === 'string' && s.length > 0)
+        .join('\n');
       const declaredSet = new Set();
       for (const mm of tvContentNow.matchAll(/@([a-zA-Z][\w-]*)\s*[:]/g))
         declaredSet.add(mm[1]);
@@ -2003,17 +2140,45 @@ export function writeFiles(files, outputPath, options = {}) {
         const existing = existsSync(full)
           ? readFileSync(full, 'utf-8')
           : files[tvPath] || '';
-        const tvContent = `${existing}\n// 写盘门禁自动补全缺失变量\n${pendingThemeVars}`;
-        writeFileSync(full, tvContent, 'utf-8');
-        // 🔒 R1（2026-09-01）：同步回写内存 files map（单一事实源，与磁盘同内容）
-        if (files && typeof files === 'object') files[tvPath] = tvContent;
-        writtenFiles.push(tvPath);
-        if (logger) {
-          logger.info(' 已回写缺失 less 变量到 theme-vars.less', {
-            path: tvPath,
-            varsSize: pendingThemeVars.length,
-          });
+        // 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**追加前按名去重（幂等）**。
+        //   历史实现是**纯 append** ⇒ 同批变量反复落盘（真机 3 个同头块、同变量 2~3 份）。
+        //   这一层是「即便上游 declaredSet 因任何原因漏项，也绝不把同名变量补第二遍」的兜底，
+        //   与 `pendingThemeVars` 内同名去重一起构成幂等（二次运行 ⇒ 零改动、mtime 不变）。
+        const alreadyDeclared = new Set(
+          [...String(existing).matchAll(/@([a-zA-Z][\w-]*)\s*[:]/g)].map((m) => m[1]),
+        );
+        const freshLines = [];
+        for (const line of String(pendingThemeVars).split('\n')) {
+          const m = /^\s*@([a-zA-Z][\w-]*)\s*:/.exec(line);
+          if (!m) continue; // 只落变量声明行；块头注释由本函数统一给出
+          if (alreadyDeclared.has(m[1])) continue;
+          alreadyDeclared.add(m[1]);
+          freshLines.push(line.trimStart());
         }
+        const pendingSize = pendingThemeVars.length;
+        if (freshLines.length === 0) {
+          // 全部已声明 ⇒ 不动磁盘（幂等：内容与 mtime 都不变）
+          if (logger) {
+            logger.info(' 写盘门禁补全变量全部已声明 · 跳过回写（幂等）', { path: tvPath });
+          }
+        } else {
+          const tvContent = `${existing}\n// 写盘门禁自动补全缺失变量\n${freshLines.join('\n')}`;
+          writeFileSync(full, tvContent, 'utf-8');
+          // 🔒 R1（2026-09-01）：同步回写内存 files map（单一事实源，与磁盘同内容）
+          if (files && typeof files === 'object') files[tvPath] = tvContent;
+          writtenFiles.push(tvPath);
+          if (logger) {
+            logger.info(' 已回写缺失 less 变量到 theme-vars.less', {
+              path: tvPath,
+              varsSize: pendingSize,
+              appended: freshLines.length,
+              deduped: String(pendingThemeVars)
+                .split('\n')
+                .filter((l) => /^\s*@[a-zA-Z][\w-]*\s*:/.test(l)).length - freshLines.length,
+            });
+          }
+        }
+        pendingThemeVars = '';
       } catch (e2) {
         if (logger) {
           logger.warn('回写 theme-vars.less 失败（非致命）', {

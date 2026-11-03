@@ -327,7 +327,14 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
       if (Number.isFinite(repaired) && repaired > 0) return repaired;
       return pxOf(sec);
     };
-    if (planLeaves.length >= 2) {
+    // 🎯 2026-11-03 治本（mc-max-1793675440559-c46c2631 实锤）：>= 2 放宽到 >= 1。
+    // plan.effectiveSections 已由 planner 滤除 header——「计划里只剩 1 个内容段」是合法形态
+    // （重点车辆监测：plan 1 leaf「今日累计」fg=1.508；vision 2 sections = header 0.492 + 内容 1.508）。
+    // 旧守卫 >= 2 把这档直接打进 raw fallback：顺序源退化为「含 header 的 vision sections」，
+    // 与产物标签数（1 个 ContentSection——header 被 LLM 吞掉/tab 提出去）对不上 → 388 行
+    // fail-open → 规则⑥拿不到映射 → index.vue 内联 `flex:1` 原样透传（code-generator 均分兜底），
+    // A4 写的 1.508 永远到不了产物（写而不消费第三断点）。
+    if (planLeaves.length >= 1) {
       orderedSections = planLeaves.map((eff) => {
           const sec =
             findSectionById(rawSections, eff?.id) ||
@@ -385,7 +392,12 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
       }
       return null;
     }
-    if (tags.length < 2 || tags.length !== orderedSections.length) return null;
+    // 🎯 2026-11-03 治本（同上实锤）：删去 `tags.length < 2` 前半条件。
+    // orderedSections.length === 1 只可能来自 planLeaves.length === 1——raw fallback 长度恒
+    // === rawSections.length >= 2（:300 已挡 <2），plan 路径长度必须 === planLeaves.length（:350）。
+    // 故「唯一标签 ↔ 唯一 plan leaf」是严格相等校验的自然结果，非放宽数量纪律；
+    // tags 2 ≠ plan 1 仍 fail-open（不猜）。同时保留单文件路径（tags===0）在上一分支已返回。
+    if (tags.length !== orderedSections.length) return null;
 
     // ③ 各子组件模板根 class → px
     const map = {};

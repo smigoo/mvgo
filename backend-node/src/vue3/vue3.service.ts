@@ -322,6 +322,9 @@ export class Vue3Service {
             layoutSource: genResult?._visualLayoutSource || undefined,
             degradeReason: genResult?._visualDegradeReason || undefined,
           },
+          // 🛡️ S1.1（2026-11-03）：补丁命中报表透传（graph state → 此处 → workspace 两处 meta；
+          //   util 已改 merge-aware，不会抹掉 graph 层先写的 runtimeVerified/visualFidelity 等字段）
+          genResult?.patchHitReport ?? null,
         );
         } catch (postErr: any) {
           this.logger.warn(

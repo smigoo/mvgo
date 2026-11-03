@@ -28,6 +28,12 @@ import { extractTextRuns, linesForNode, hasMixedRunStyles } from './text-runs.js
 //   ⇒ 本模块**不写第二份**「横排/网格」判定。依赖方向：本模块 → layout-facts → section-tree
 //   → figma-effects（无环）。
 import { decideLayoutForBoxes } from './figma-node-layout-facts.js';
+// 🔍 L1 文档同构折叠（2026-11-03）：文档页面元素表「同 api+同控件」声明组 → 第二折叠证据。
+// ⚠️ 与 doc-homogeneity-hints.js 存在环引用（hints 复用本模块 geoBox）——双方仅函数
+//   调用期使用对方绑定、无模块求值期依赖，ESM live binding 语义下安全（node/jest/rollup 均如此）。
+import { matchDocEvidenceGroup } from './doc-homogeneity-hints.js';
+// 🔍 geoBoxWithRoot 的 figmaRoot 按 id 查找复用既有单一来源（assembler 零依赖，无环）。
+import { findFigmaNodeById } from './section-leaf-assembler.js';
 
 function getChildren(sec) {
   if (!sec || typeof sec !== 'object') return [];
@@ -66,8 +72,10 @@ export function sectionRepeatSignature(sec) {
  * 🛡️ ② 几何同构签名（2026-09-20）：名不同但「等宽高 + 同行 + 逐子形状同构」→ 同签名。
  * 用于 Figma 命名 1/2/3 的同构卡（三卡案例：140×74 / 120×74 / 141×74，宽差 ≤3px 容差内）。
  * box 来源：figmaBox（E1）或 absoluteBoundingBox（vision）。
+ * 🔍 2026-11-03 导出：doc-homogeneity-hints.js L1 文档同构折叠的弱相似否决门复用
+ *   （单一来源，禁止第二份 bbox 解析口径）。
  */
-function geoBox(sec) {
+export function geoBox(sec) {
   if (!sec || typeof sec !== 'object') return null;
   const b = sec.figmaBox || sec.absoluteBoundingBox || sec.body?.box || null;
   if (!b || typeof b !== 'object') return null;
@@ -77,6 +85,23 @@ function geoBox(sec) {
   const y = Number(b.y) || 0;
   if (!w || !h) return null;
   return { w, h, x, y };
+}
+
+/**
+ * 🔍 geoBox 的 figmaRoot 兜底（2026-11-03 真机实证）：
+ *   vision sections（structure-source=vision 路径）在 planner 折叠时机**无内联 box**
+ *   （figmaBox/absoluteBoundingBox/body.box 全空，今日累计 mc-doc-20c428fd 实锤：
+ *   三卡 136:127/128/129 y=984 同行、h=74.195 等高，geoBox 却全 null ⇒ 几何与 L1
+ *   两组判据双双 fail-closed 不折叠）。兜底 = 按段 id（Figma 节点 id）在 opts.figmaRoot
+ *   里查 absoluteBoundingBox。判据同源：仍走 geoBox 归一口径，不造第二份 bbox 解析。
+ *   @param {object|null} figmaRoot Figma 节点树根（collapseSectionsDeep opts.figmaRoot）
+ */
+export function geoBoxWithRoot(sec, figmaRoot) {
+  const inline = geoBox(sec);
+  if (inline) return inline;
+  if (!figmaRoot || !sec?.id) return null;
+  const node = findFigmaNodeById(figmaRoot, sec.id);
+  return node ? geoBox(node) : null;
 }
 
 /**
@@ -267,9 +292,11 @@ function enrichItemData(item, ctx = {}) {
  *     - 否则 → 纵排，先 y（同行容差 ±4px）再 x。
  *   无 box 或 box 不全 → 保持原序（不破坏 device 无 box 回归）。
  */
-function sortItemsByVisualOrder(pairs) {
+function sortItemsByVisualOrder(pairs, figmaRoot = null) {
   if (!Array.isArray(pairs) || pairs.length < 2) return pairs;
-  const indexed = pairs.map((p, i) => ({ p, i, b: geoBox(p?.item) }));
+  // 🔍 figmaRoot 兜底（2026-11-03 真机 mc-doc-337f2bf2）：vision/doc 路径成员无内联 box，
+  //   按 id 查 Figma 树取真值——否则「有缺失 box 不排序」静默跳过（维持任意序）。
+  const indexed = pairs.map((p, i) => ({ p, i, b: geoBoxWithRoot(p?.item, figmaRoot) }));
   if (indexed.some((x) => !x.b)) return pairs; // 有缺失 box 不排序
   const ys = indexed.map((x) => x.b.y);
   const yMin = Math.min(...ys);
@@ -342,8 +369,12 @@ export function flattenNestedCollapsedItems(items) {
 }
 
 /** 组合并 bbox（geoBox 口径 {w,h,x,y} → absoluteBoundingBox 口径 {width,height,x,y}） */
-function unionBoxOf(list) {
-  const boxes = (Array.isArray(list) ? list : []).map(geoBox).filter(Boolean);
+function unionBoxOf(list, figmaRoot = null) {
+  // 🔍 figmaRoot 兜底（2026-11-03 真机 mc-doc-337f2bf2）：vision/doc 路径成员无内联 box
+  //   ⇒ 旧实现恒 null ⇒ 刀25「整列并集几何」与刀33「parentBox 方向判据」对 doc 路径双双失明。
+  const boxes = (Array.isArray(list) ? list : [])
+    .map((it) => geoBoxWithRoot(it, figmaRoot))
+    .filter(Boolean);
   if (boxes.length === 0) return null;
   const x = Math.min(...boxes.map((b) => b.x));
   const y = Math.min(...boxes.map((b) => b.y));
@@ -384,13 +415,16 @@ function unionBoxOf(list) {
  *
  * @param {Array<object>} items 折叠后的成员项
  * @param {object|null} parentBox 折叠容器并集 bbox（`{x,y,width,height}`，背景层剔除用）
+ * @param {object|null} [figmaRoot] Figma 节点树根——成员无内联 box（vision/doc 路径）时
+ *   按成员 id 兜底取 absoluteBoundingBox（真机 mc-doc-337f2bf2 实锤：三卡 Figma 横排一行，
+ *   无兜底时 boxes=[] ⇒ 数量兜底 `type:'list'` 无 layout ⇒ 产物纵排与真值方向相反）。
  * @returns {{type:'grid'|'list', layout?:string, gridColumns?:number}}
  */
-function decideCollapsedShape(items, parentBox = null) {
+function decideCollapsedShape(items, parentBox = null, figmaRoot = null) {
   const list = Array.isArray(items) ? items : [];
   const boxes = [];
   for (const it of list) {
-    const b = geoBox(it); // {w,h,x,y}
+    const b = geoBoxWithRoot(it, figmaRoot); // {w,h,x,y}——内联优先，figmaRoot 按 id 兜底
     if (!b) continue;
     boxes.push({
       absoluteBoundingBox: { x: b.x, y: b.y, width: b.w, height: b.h },
@@ -432,6 +466,8 @@ function buildCollapsedSection(first, items, type, opts = {}) {
     renderHint: 'v-for',
     title: String(title || '').trim(),
   };
+  // 🔍 L1 文档同构折叠证据留痕（2026-11-03，仅 doc 路径有值；几何路径产物无此键=形状不变）
+  if (opts._foldEvidence) Sec._foldEvidence = opts._foldEvidence;
   // 🛡️ 刀33（2026-10-29）：`...first` 带进来的 `layout` 是**首卡内部方向**，不是「成员之间」
   //   的排布方向（折叠段合成 id `<firstId>-list` 查不到 figma 索引 ⇒
   //   `refineDerivedContainerLayout` 永不复算它）。成员几何已给出方向事实时以事实为准。
@@ -479,7 +515,25 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
   const minRepeat = opts.minRepeat ?? 3;
   if (!Array.isArray(sections) || sections.length < minRepeat) return sections;
 
-  const collapsing = groupSections(sections, opts);
+  // 🔍 L1 文档同构折叠（2026-11-03）：几何分组为空时，文档页面元素表
+  //   「同 api+同控件」声明组作为第二证据放行（方案 docs/2026-11-03-折叠器文档同构判据.md）。
+  //   几何分组路径行为逐字不变——本 fallback 仅在几何分组为空时生效。
+  //   保守门：核心成员几何否决门（同行等高）在 matchDocEvidenceGroup 内置。
+  let collapsing = groupSections(sections, opts);
+  let foldEvidence = 'geometry';
+  if (
+    collapsing.length === 0 &&
+    Array.isArray(opts.docGroups) &&
+    opts.docGroups.length > 0
+  ) {
+    const docGroup = matchDocEvidenceGroup(sections, opts.docGroups, opts.figmaRoot);
+    if (docGroup && docGroup.idxs.length > 0) {
+      collapsing = [
+        { sig: `doc:${docGroup.api}:${docGroup.control}`, idxs: docGroup.idxs },
+      ];
+      foldEvidence = 'doc';
+    }
+  }
   if (collapsing.length === 0) return sections;
 
   collapsing.sort((a, b) => a.idxs[0] - b.idxs[0]);
@@ -518,13 +572,13 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
       return item;
     });
     // 🛡️ 1a：按视觉顺序排序（横排 x 升序 / 纵排 y 升序），修卡片左右序倒置
-    const itemsSorted = sortItemsByVisualOrder(items.map((item) => ({ item }))).map((p) => p.item);
+    const itemsSorted = sortItemsByVisualOrder(items.map((item) => ({ item })), opts.figmaRoot).map((p) => p.item);
     g.idxs.forEach((i) => skip.add(i));
     const first = sections[g.idxs[0]];
     // 🛡️ F1：跨层折叠 → 展平到最内层重复单元（判据见 flattenNestedCollapsedItems）
     const flat = flattenNestedCollapsedItems(itemsSorted);
     const finalItems = flat.flattened
-      ? sortItemsByVisualOrder(flat.items.map((item) => ({ item }))).map((p) => p.item)
+      ? sortItemsByVisualOrder(flat.items.map((item) => ({ item })), opts.figmaRoot).map((p) => p.item)
       : flat.items;
     // 🛡️ 刀 25（mc-max-1793191766917-329a3781 实锤）：非跨层折叠路径也必须给
     //   折叠产物整列并集几何 + 全成员 sourceNodeIds——否则 `...first` 透传的
@@ -532,15 +586,17 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
     //   容器压成单卡高（overflow-y:auto 假窗口 ⇒「只有第一条有数据」）。
     //   判据零语义：成员 box 并集 + 成员 sourceNodeIds 并集（缺省回退成员 id）。
     const geoBasis = flat.flattened ? g.idxs.map((i) => sections[i]) : finalItems;
-    const collapsedBox = unionBoxOf(geoBasis);
+    const collapsedBox = unionBoxOf(geoBasis, opts.figmaRoot);
     // 🛡️ 刀33：形态事实（type / layout / gridColumns）由**几何方向**决定
     //   （`decideCollapsedShape`，判据单一来源 `decideLayoutForBoxes`），数量仅兜底
     //   —— 治「6 张卡纵排被误判成 CardGrid 并被强制横排」。并集几何同时作 `_box` 下传。
-    const shape = decideCollapsedShape(finalItems, collapsedBox);
+    const shape = decideCollapsedShape(finalItems, collapsedBox, opts.figmaRoot);
     const type = shape.type;
     const flatOpts = {
       ...opts,
       ...(flat.flattened ? { _template: finalItems[0] || first } : {}),
+      // 🔍 L1 文档同构折叠证据留痕（仅 doc 路径写入；几何路径产物形状逐字不变）
+      ...(foldEvidence === 'doc' ? { _foldEvidence: 'doc' } : {}),
       // 🛡️ 刀31a：宿主 vision 语义树（body.items）透传给折叠产物
       _visionItems: Array.isArray(opts._visionItems) ? opts._visionItems : null,
       _box: collapsedBox,

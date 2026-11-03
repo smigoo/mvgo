@@ -577,3 +577,170 @@ describe('healRootScopeMissingSlots — 根作用域缺槽位补齐', () => {
   })
 })
 
+/**
+ * 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）
+ *
+ * 真机 theme-vars.less 的 `.theme-light()` 内「自动添加（语义推断）」8 行出现 **2 份**，
+ * 根因双链路：
+ *   A. `scanAllMixinVariables` 的定义集漏掉「自动添加」推断值 ⇒ 已写入的变量永不认为「已定义」
+ *      ⇒ 每轮又判缺失 ⇒ `appendToMixin`（历史纯 append）再追加一份 ⇒ 无限重复；
+ *   B. `file-writer` 的 `tvContentNow = files[tvPath] + pending` **不读磁盘** ⇒ 内存落后磁盘
+ *      ⇒ declaredSet 漏项。
+ *
+ * 修复后语义：① `appendToMixin` 按名去重（幂等、真值优先不覆盖）；② `healDuplicateMixinVarDecls`
+ * 对**存量**产物去重自愈（只删归一化后逐字符相同的行、保留首次 ⇒ Less 语义可证等价）。
+ */
+describe('less-variable-checker · #1 mixin 变量去重幂等（存量自愈）', () => {
+  let dir: string
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'mvgo-less-dedup-'))
+  })
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  const tvPath = () => join(dir, 'theme-vars.less')
+
+  it('appendToMixin 幂等：同批变量二次追加 → 零改动（真值优先，绝不覆盖）', async () => {
+    const lines = [
+      '  @c-auto-bg: #ffffff; // 自动添加（语义推断）',
+      '  @c-auto-text: #333333; // 自动添加（语义推断）',
+    ].join('\n')
+    const once = LessVariableChecker.appendToMixin('.common() {}', 'theme-light', lines)
+    // 首次：块被创建 + 两行注入
+    expect(once).toContain('@c-auto-bg: #ffffff;')
+    expect(once).toContain('@c-auto-text: #333333;')
+
+    // 二次追加同批：全部已声明 ⇒ 返回原串（真「零改动」）
+    const twice = LessVariableChecker.appendToMixin(once, 'theme-light', lines)
+    expect(twice).toBe(once)
+
+    // 出现次数恒为 1（历史 bug 此处会是 2）
+    expect((twice.match(/@c-auto-bg/g) || []).length).toBe(1)
+    expect((twice.match(/@c-auto-text/g) || []).length).toBe(1)
+  })
+
+  it('appendToMixin 真值优先：块内已有同名的**不同值** → 新值被丢弃（不覆盖真值）', async () => {
+    const base = ['.theme-light() {', '  @c-brand: #a6ceff;', '}'].join('\n')
+    const out = LessVariableChecker.appendToMixin(
+      base,
+      'theme-light',
+      '  @c-brand: #ffffff; // 自动添加（语义推断）',
+    )
+    // 原有真值保留、推断值不进（不得出现第二份 @c-brand）
+    expect(out).toContain('@c-brand: #a6ceff;')
+    expect(out).not.toContain('#ffffff')
+    expect((out.match(/@c-brand/g) || []).length).toBe(1)
+  })
+
+  it('healDuplicateMixinVarDecls：存量重复 8 行块自愈为唯一一份（removed 非空、二次幂等）', async () => {
+    const block = [
+      '  @c-auto-bg: #ffffff; // 自动添加（语义推断）',
+      '  @c-auto-text: #333333; // 自动添加（语义推断）',
+      '  @c-auto-line: #e5e5e5; // 自动添加（语义推断）',
+      '  @c-auto-sub: #666666; // 自动添加（语义推断）',
+      '  @c-auto-primary: #1890ff; // 自动添加（语义推断）',
+      '  @c-auto-danger: #f5222d; // 自动添加（语义推断）',
+      '  @c-auto-warn: #faad14; // 自动添加（语义推断）',
+      '  @c-auto-success: #52c41a; // 自动添加（语义推断）',
+    ]
+    // 真机形态：同 8 行块在 .theme-light() 内出现 2 份
+    await writeFile(
+      tvPath(),
+      ['.theme-light() {', ...block, ...block, '}', ''].join('\n'),
+      'utf-8',
+    )
+
+    const r1 = LessVariableChecker.healDuplicateMixinVarDecls(tvPath())
+    expect(r1.fixed).toBe(true)
+    expect(r1.removed.length).toBe(8)
+    const after1 = readFileSync(tvPath(), 'utf-8')
+    // 每个变量名恒为 1 次
+    for (const name of ['@c-auto-bg', '@c-auto-text', '@c-auto-line', '@c-auto-sub', '@c-auto-primary', '@c-auto-danger', '@c-auto-warn', '@c-auto-success']) {
+      expect((after1.match(new RegExp(name, 'g')) || []).length).toBe(1)
+    }
+
+    // 二次调用 → 幂等（无重复可删）
+    const r2 = LessVariableChecker.healDuplicateMixinVarDecls(tvPath())
+    expect(r2.fixed).toBe(false)
+    expect(r2.removed).toEqual([])
+    expect(readFileSync(tvPath(), 'utf-8')).toBe(after1)
+  })
+
+  it('healDuplicateMixinVarDecls：同名**不同值**的两行都不删（只删逐字符相同行，保守）', async () => {
+    const content = [
+      '.theme-light() {',
+      '  @c-brand: #a6ceff; // 主题真值',
+      '  @c-brand: #ffffff; // 自动添加（语义推断）',
+      '}',
+      '',
+    ].join('\n')
+    await writeFile(tvPath(), content, 'utf-8')
+    const r = LessVariableChecker.healDuplicateMixinVarDecls(tvPath())
+    // 值不同 ⇒ 不可证等价 ⇒ 保守不动
+    expect(r.fixed).toBe(false)
+    expect(readFileSync(tvPath(), 'utf-8')).toBe(content)
+  })
+
+  it('healDuplicateMixinVarDecls：文件不存在 / 无重复 → 静默返回 fixed:false（不抛）', async () => {
+    const missing = LessVariableChecker.healDuplicateMixinVarDecls(join(dir, 'nope.less'))
+    expect(missing).toEqual({ fixed: false, removed: [] })
+
+    const clean = '.theme-dark() { @c-a: #000; }\n'
+    await writeFile(tvPath(), clean, 'utf-8')
+    const r = LessVariableChecker.healDuplicateMixinVarDecls(tvPath())
+    expect(r.fixed).toBe(false)
+    expect(readFileSync(tvPath(), 'utf-8')).toBe(clean)
+  })
+
+  it('#1 端到端幂等：check() 自愈存量重复块后，二次 check() 零改动（fixed:false / 字节不变）', async () => {
+    await mkdir(join(dir, 'package'), { recursive: true })
+    await mkdir(join(dir, 'resources/styles/themes'), { recursive: true })
+    // check() 只认组件根下的 resources/styles/themes/theme-vars.less
+    const realTv = join(dir, 'resources/styles/themes/theme-vars.less')
+    const block = [
+      '  @c-card-bg: #ffffff; // 自动添加（语义推断）',
+      '  @c-card-text: #333333; // 自动添加（语义推断）',
+      '  @c-card-line: #e5e5e5; // 自动添加（语义推断）',
+      '  @c-card-sub: #666666; // 自动添加（语义推断）',
+      '  @c-card-primary: #1890ff; // 自动添加（语义推断）',
+      '  @c-card-danger: #f5222d; // 自动添加（语义推断）',
+      '  @c-card-warn: #faad14; // 自动添加（语义推断）',
+      '  @c-card-success: #52c41a; // 自动添加（语义推断）',
+    ]
+    await writeFile(
+      join(dir, 'package/index.vue'),
+      `<template><div class="root"></div></template>\n<style lang="less" scoped>.root { color: @c-card-text; }</style>`,
+      'utf-8',
+    )
+    await writeFile(
+      realTv,
+      [
+        '.common() { @font-size-base: 14px; }',
+        '.theme-light() {',
+        ...block,
+        ...block, // 真机形态：同 8 行块出现 2 份
+        '}',
+        '.theme-light();',
+        '.common();',
+        '',
+      ].join('\n'),
+      'utf-8',
+    )
+
+    // 首次 check()：4b 自愈去重
+    const r1 = await LessVariableChecker.check(dir)
+    expect(r1.fixed).toBe(true)
+    const after1 = readFileSync(realTv, 'utf-8')
+    expect((after1.match(/@c-card-text/g) || []).length).toBe(1)
+    expect((after1.match(/@c-card-bg/g) || []).length).toBe(1)
+
+    // 二次 check()：无缺失、无重复 → 零改动
+    const r2 = await LessVariableChecker.check(dir)
+    expect(r2.fixed).toBe(false)
+    expect(readFileSync(realTv, 'utf-8')).toBe(after1)
+  })
+})
+

@@ -21,6 +21,8 @@ import {
   isCollapsedListSection,
   extractRichBodyItems,
 } from '../utils/repeated-section-collapser.js';
+// 🔍 L1 文档同构折叠（2026-11-03）：docAnalysis.uiElements 同 api+同控件声明组
+import { buildDocHomogeneityGroups } from '../utils/doc-homogeneity-hints.js';
 import {
   isLayoutContainerSection,
   collectLeafSections,
@@ -703,7 +705,17 @@ function isSameRowPanelChrome(sec) {
   return children.every(isChromeNode);
 }
 
-function isPanelHeader(sec) {
+function hasDeclaredHeaderSlotContent(sec) {
+  const slots = Array.isArray(sec?.header?.headerSlots) ? sec.header.headerSlots : [];
+  return slots.some((slot) =>
+    String(slot?.content ?? slot?.text ?? slot?.label ?? '').trim().length > 0,
+  );
+}
+
+function isPanelHeader(sec, preserveDeclaredHeaderSlots = true) {
+  // panel chrome 只能承接标题/控件/装饰，不能吞掉 vision 已单独声明的实际插槽内容。
+  // 仅凭 slotCandidate 或空 headerSlots 不够：既有纯 chrome 过滤行为必须保持不变。
+  if (preserveDeclaredHeaderSlots && hasDeclaredHeaderSlotContent(sec)) return false;
   // 原生 vision 已显式声明「这就是面板标题栏」时，无需几何行注入或名称猜测；
   // 元素数可包含标题、左右图标、关闭按钮、下划线等 >3 个 chrome 元素。
   if (sec?.headerRelation === 'title-itself') return true;
@@ -1895,6 +1907,8 @@ export function buildEffectiveSection(sec, idx, ctx) {
           itemTemplate: richItems[0],
           items: richItems,
           sourceNodeIds: listSourceNodeIds,
+          // R7：修复锚点是主锚契约，不随列表合成叶的 id 变化而丢失。
+          ...(sec.figmaAnchorId ? { figmaAnchorId: sec.figmaAnchorId } : {}),
           ...(unionBox
             ? {
                 absoluteBoundingBox: unionBox,
@@ -1957,6 +1971,8 @@ export function buildEffectiveSection(sec, idx, ctx) {
       //   均为「容器只补自身 id + 直接子 id」即可满足，不做子树全集（避免把容器当成
       //   内容 owner）。
       sourceNodeIds: collectSourceNodeIds(sec),
+      // R7：上游已修复的主锚必须穿过容器白名单，供接管器按 sectionAnchorKey 同源消费。
+      ...(sec.figmaAnchorId ? { figmaAnchorId: sec.figmaAnchorId } : {}),
       ...(sec.geometryAnchorInvalid ? { geometryAnchorInvalid: sec.geometryAnchorInvalid } : {}),
       complexityScore: 0,
       complexityReasons: {
@@ -2271,6 +2287,8 @@ export function buildEffectiveSection(sec, idx, ctx) {
       : {}),
     // 🛡️ R1-1：归属的 Figma 节点 id 集合（供 dedupeDuplicateSections 做不依赖措辞的单一归属去重）
     sourceNodeIds: collectSourceNodeIds(tabStructured),
+    // R7：普通叶同样保留修复锚；缺字段不产键，未修复段输出逐字不变。
+    ...(sec.figmaAnchorId ? { figmaAnchorId: sec.figmaAnchorId } : {}),
     ...(sec.geometryAnchorInvalid ? { geometryAnchorInvalid: sec.geometryAnchorInvalid } : {}),
     complexityScore: scoreResult.score,
     complexityReasons: scoreResult.reasons,
@@ -2463,10 +2481,18 @@ export class SubcomponentPlanner {
       evaluated: rawSections.length,
       removed: rawSections.length - businessSections.length,
     });
+    const preservedHeaderSlotContent = skipPanelHeaderFilter
+      ? 0
+      : businessSections.filter((sec) => isPanelHeader(sec, false) && hasDeclaredHeaderSlotContent(sec)).length;
     let sections = skipPanelHeaderFilter
       ? businessSections
       : businessSections.filter((sec) => !isPanelHeader(sec));
     let filteredCount = rawSections.length - sections.length;
+    logger.info('🛡️ panel-header 插槽事实过滤·已评估', {
+      evaluated: skipPanelHeaderFilter ? 0 : businessSections.length,
+      filtered: skipPanelHeaderFilter ? 0 : businessSections.length - sections.length,
+      preservedHeaderSlotContent,
+    });
     // 🔴 R23：E1（确定性递归结构）是否真的替代了 vision sections —— 归并后方向复算的判定域闸门
     let e1Derived = false;
     // 🛡️ 2026-10-26（ab7bb76c P0）：本层按 `chromeOnly` 剥离的纯标题栏数量（含嵌套）。
@@ -2948,7 +2974,31 @@ export class SubcomponentPlanner {
     // 🛡️ R19（2026-10-21）：把 Figma 节点树传进折叠器，items 的文本真值改由
     //   `utils/text-runs.js` 产出 `_vforData.lines`（一行一组 run，带 color/fontSize/fontWeight）。
     //   旧行为（无 figmaNodeData ⇒ 走 vision 平行数组）保持不变。
-    sections = collapseSectionsDeep(sections, { figmaRoot: opts.figmaNodeData });
+    // 🔍 L1 文档同构折叠（2026-11-03）：docAnalysis.uiElements「同 api+同控件」组作为
+    //   第二折叠证据（几何分组为空时的 fallback，方案 docs/2026-11-03-折叠器文档同构判据.md）。
+    const docGroups = buildDocHomogeneityGroups(opts.docAnalysis);
+    sections = collapseSectionsDeep(sections, {
+      figmaRoot: opts.figmaNodeData,
+      docGroups,
+    });
+    // 🔍 真机判据计数行：L1 生效可辩驳验证（groups>0 即文档声明组进了折叠器）
+    if (docGroups.length > 0) {
+      let docFolded = 0;
+      let docFoldedItems = 0;
+      const walkFold = (arr) => {
+        for (const s of Array.isArray(arr) ? arr : []) {
+          if (s?._foldEvidence === 'doc') {
+            docFolded++;
+            docFoldedItems += Array.isArray(s.items) ? s.items.length : 0;
+          }
+          walkFold(s?.children);
+        }
+      };
+      walkFold(sections);
+      logger.info(
+        `📄 文档同构折叠: docGroups=${docGroups.length}, docFolded=${docFolded}, items=${docFoldedItems}, apis=[${docGroups.map((g) => g.api).join(',')}]`,
+      );
+    }
     const afterCollapseDeep = JSON.stringify(countSectionsDeep(sections));
     if (afterCollapseDeep !== beforeCollapseDeep || sections.length !== beforeCollapse) {
       logger.info('重复同构 section 已折叠为 list/grid（递归）', {
@@ -2972,6 +3022,13 @@ export class SubcomponentPlanner {
         requireContentCarrier: effectiveStructureSource === STRUCTURE_SOURCE_VISION,
       });
       sections = coverageDeduped.sections || sections;
+      logger.info('🛡️ R8-9 plan 覆盖去重·已评估', {
+        evaluated: true,
+        beforeTop: beforeCoverageDedupe,
+        afterTop: sections.length,
+        removed: coverageDeduped.removed.length,
+        structureSource: effectiveStructureSource,
+      });
       if (coverageDeduped.removed.length > 0) {
         logger.warn('🛡️ items 覆盖去重：被完全覆盖的重复段已移除（同一批 Figma 节点的第二条解释）', {
           removed: coverageDeduped.removed,

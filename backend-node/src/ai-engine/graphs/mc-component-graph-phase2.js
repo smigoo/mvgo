@@ -20,6 +20,8 @@ import {
   VISUAL_VERDICTS,
   applyHallucinationDrop,
 } from '../roles/visual-parser.js';
+// 🛡️ A4 高度比例（2026-11-03）：缓存命中路径补跑（与 visual-parser 主路径同一纯函数）
+import { applyFigmaElementHeightRatios } from '../utils/figma-height-ratio.js';
 import { LayoutReviewer } from '../roles/layout-reviewer.js';
 import { StyleMapper } from '../roles/style-mapper.js';
 import { LayoutRefiner } from '../roles/layout-refiner.js';
@@ -683,25 +685,41 @@ export function createPhase2Graph(config = {}) {
 
     //S9+S10: 文档子管线（并行版）— init 发起 Promise 不阻塞，figma-connector 汇合
     // 优先级：预分析产物(state.docAnalysis) > 原文分析(state.requirementDoc)
+    //        > 高级选项上传文档文本(state.requirementDocText)兜底
+    // 🔧 2026-11-03（今日累计事故 mc-max-1793638171552-cfa7cc95）：requirementDocText
+    //   此前只进「📎 用户补充需求」段，不触发文档子管线 ⇒ S8 buildDocDesignBlock 五维
+    //   权威注入（events/数据对接/业务配置/interactions）整段缺席 ⇒ vue 分块照 Figma
+    //   画静态卡（Tag 切换/点击明细/轮询全丢）。接入后下游 S8/L0-B/engineer 既有消费方
+    //   零改动自动生效。方案：docs/2026-11-03-需求文档高级选项接入文档子管线.md
     // Promise 自捕获错误（resolve null），不阻塞主管线
     let docAnalysis = state.docAnalysis || null;
     let docAnalysisPromise = null;
     let docAnalysisDegraded = false;
-    if (
-      !docAnalysis &&
-      state.requirementDoc &&
+    const _docTextSource =
+      state.requirementDoc && state.requirementDoc.trim().length >= 20
+        ? state.requirementDoc
+        : state.requirementDocText && state.requirementDocText.trim().length >= 20
+          ? state.requirementDocText
+          : null;
+    const _docSourceKind = state.requirementDoc &&
       state.requirementDoc.trim().length >= 20
-    ) {
+      ? 'requirementDoc'
+      : 'requirementDocText';
+    if (!docAnalysis && _docTextSource) {
       state.onProgress?.({
         stage: '文档分析',
         message: '📄 需求文档后台并行解析中（D0/D1 确定性 + D2 LLM）...',
         status: 'running',
       });
+      // 🔍 真机判据计数行：来源标记可辩驳验证高级选项上传文档真的进了子管线
+      logger.info(
+        `📄 文档子管线启动 (source=${_docSourceKind}, 字数=${_docTextSource.trim().length})`,
+      );
       const textCfg = state.textAIConfig || state.aiConfig || {};
       const invokeLLM = buildDocInvokeLLM(textCfg);
       docAnalysisDegraded = !invokeLLM;
       docAnalysisPromise = docAnalyzerModule
-        .analyze(state.requirementDoc, { invokeLLM, source: 'paste' })
+        .analyze(_docTextSource, { invokeLLM, source: 'paste' })
         .then((result) => {
           logger.info('📄 文档子管线完成（并行）', {
             events: result.events?.length || 0,
@@ -1058,6 +1076,32 @@ export function createPhase2Graph(config = {}) {
             status: 'failed',
           });
           throw blockError;
+        }
+        // 🛡️ 2026-11-03 治本（ec1db095 实锤）：缓存命中也要补跑 A4 高度比例。
+        //   与上方 applyHallucinationDrop 同源思路——uiCache 存的是**加工后**结构，
+        //   A4 判据升级（如新增 ①-β 追认幻觉缺项 / slot 同名容器上溯 / 逐项并集）对缓存任务
+        //   永不生效 ⇒ 续跑路径会静默产出「旧判据」的比例（实测样本 1：reuseCache:true 任务
+        //   server.log 全程无任何 A4 行，因编排层缓存短路使 visual-parser.parse() 未执行）。
+        //   A4 是幂等纯函数（同输入同输出），对已写过比例的缓存再跑一次不会漂移；
+        //   事实源仍是实时 Figma 树（state.figmaNodeData），不是缓存里那份。
+        try {
+          if (state.figmaNodeData) {
+            const a4Stats = {};
+            const a4Count = applyFigmaElementHeightRatios(validatedCachedResult, state.figmaNodeData, {
+              disabled: process.env.MC_DISABLE_FIGMA_ELEM_RATIO === '1',
+              stats: a4Stats,
+            });
+            if (a4Count) {
+              logger.info('A4 元素级高度比例已应用（缓存命中补跑）', {
+                count: a4Count,
+                sectionStats: a4Stats,
+                _uiCacheHit: true,
+              });
+            }
+          }
+        } catch (a4Err) {
+          // fail-open：A4 补跑失败绝不阻断缓存命中主流程（比例缺失由宿主默认 flex 兜底）。
+          logger.warn('⚠️ 缓存命中补跑 A4 高度比例失败（已忽略）', { error: a4Err?.message });
         }
         return validatedCachedResult;
       }
@@ -1813,6 +1857,8 @@ export function createPhase2Graph(config = {}) {
         generatedFiles: result.generatedFiles
           ? Object.keys(result.generatedFiles)
           : result.writtenFiles,
+        // 🛡️ S1.1（2026-11-03）：补丁命中报表入 state，complete 节点 merge 进 component-meta.json
+        patchHitReport: result?.patchHitReport || null,
         componentStructure: result.componentStructure,
         // L0-B 重试计数由 code-structure-validator 节点负责（失败才 +1、通过即重置），
         // engineer 不再无条件自增，避免首次失败即耗尽预算（off-by-one）且跨轮累积。
@@ -3257,6 +3303,10 @@ export function createPhase2Graph(config = {}) {
           // WP3 渲染探针（2026-10-08）：只读 DOM 事实（img 空源/对比度/溢出裁切/塌缩槽/图表占位），
           // 只留痕不阻断；探针 null（未跑/降级）则不写字段，避免覆盖旧值
           ...(state.renderProbes ? { renderProbes: state.renderProbes } : {}),
+          // 🛡️ S1.1（2026-11-03）：补丁命中报表（engineer → state → 落盘；patchChainErrors 0 也落盘）
+          ...(state.patchHitReport ? { patchHitReport: state.patchHitReport } : {}),
+          // 🛡️ S1.1：BLOCK 四维归类（gate-score：结构/资源/类名/语义），退役判据的数据源
+          ...(state._gateScore ? { gateScore: state._gateScore } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -3315,16 +3365,22 @@ export function createPhase2Graph(config = {}) {
         state.figmaNodeData ||
         state._uiCache?.figmaNodeData ||
         state._visualParserCache?.figmaNodeData;
+      const contentPlanForGuard =
+        state.generationInput?.componentPlan || state.subComponentPlan;
       const contentCheck = checkSectionContent({
         files,
-        plan: state.subComponentPlan,
+        plan: contentPlanForGuard,
         figmaRoot: figmaRootForGuard,
+      });
+      logger.info('🛡️ section 内容归属·已评估', {
+        planSource: state.generationInput?.componentPlan ? 'generationInput' : 'legacy',
+        ...(contentCheck.ownerStats || {}),
       });
       // 🛡️ 阶段 C 高置信自愈：唯一归属文本从非 owner 组件删除（写回产物）
       if (contentCheck.duplicateTextIssues.length > 0) {
         const healResult = healDuplicateTextIssues({
           files,
-          plan: state.subComponentPlan,
+          plan: contentPlanForGuard,
           figmaRoot: figmaRootForGuard,
           validateSfc: (c, p) => validateVueSfc(c, p),
         });
@@ -4339,6 +4395,8 @@ export function createPhase2Graph(config = {}) {
       const plan = subcomponentPlanner.plan(state.layoutStructure, {
         // 🛡️ 臆造壳锚定事实源（2026-09-14 · 34750940）：planner 内 anchorPhantomSections 消费
         figmaNodeData: state.figmaNodeData,
+        // 🔍 L1 文档同构折叠（2026-11-03）：S8 文档子管线产物 → 折叠器第二证据
+        docAnalysis: state.docAnalysis || null,
         diagnostics: {
           analysisDiagnostics: state._visualParserCache?.analysisDiagnostics || [],
           analysisFixes: state._visualParserCache?.analysisFixes || [],

@@ -42,6 +42,8 @@ export class SubcomponentPlannerNode extends BaseAgent {
       skipPanelHeaderFilter: target === 'vue3',
       // 🛡️ 臆造壳锚定事实源（2026-09-14 · 34750940）：有 figmaNodeData 时把 src=[] 壳锚回真实节点
       figmaNodeData: params.figmaNodeData,
+      // 🔍 L1 文档同构折叠（2026-11-03）：S8 文档子管线产物 → 折叠器第二证据
+      docAnalysis: params.docAnalysis || null,
     })
     logger.info('子组件规划完成', { count: plan.effectiveSections?.length, reason: plan.reason })
     return { subcomponentPlan: plan }

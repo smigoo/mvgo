@@ -304,7 +304,7 @@
               :src="previewUrl"
               class="lg-preview-iframe"
               frameborder="0"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-same-origin allow-popups"
               allowfullscreen
             ></iframe>
           </div>
@@ -318,7 +318,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { generateLite, createLiteProgressStream, fetchTaskStatus, batchGenerate } from '@/api/lite'
-import { getVue3PreviewUrl } from '@/api/component'
+import { getVue3PreviewUrl, getMcPreviewUrl } from '@/api/component'
 import LiteBatchPanel from './LiteBatchPanel.vue'
 import LiteBatchProgress from './LiteBatchProgress.vue'
 
@@ -445,19 +445,40 @@ onMounted(async () => {
   const restored = restoreTask()
   if (restored) {
     try {
-      // 查询任务状态
-      const status = await fetchTaskStatus(restored.sessionId)
-      if (status && status.state !== 'completed' && status.state !== 'failed') {
-        // 任务还在运行，恢复进度
-        sessionId.value = restored.sessionId
-        currentSessionId = restored.sessionId
+      // 🔴 后端 /api/tasks/status/:sessionId 经全局响应拦截器包成
+      //    { success, code, message, data: { task: { status, ... } } }（tasks.service.ts getTaskStatus 亦无 state 字段）。
+      //    原写法 `status.state !== 'completed'` 恒为真 ⇒ 已完成任务也被当成「未完成」去绑 SSE，
+      //    只能靠 SSE 重连补发 complete 侥幸兜住；一旦补发链路失效即永远卡在生成中、看不到产物。
+      //    解包口径与 TaskDetail.vue:4856 / generate/page.vue:409 保持一致。
+      const resp = await fetchTaskStatus(restored.sessionId)
+      const task = resp?.data?.task || resp?.task || null
+      const taskStatus = task?.status || ''
+
+      sessionId.value = restored.sessionId
+      currentSessionId = restored.sessionId
+      componentType.value = restored.componentType
+
+      if (taskStatus === 'completed' || taskStatus === 'success') {
+        // 已完成：直接恢复产物预览，不再依赖 SSE 补发
+        stages.value.forEach((s) => (s.status = 'done'))
+        generationComplete.value = true
+        isGenerating.value = false
+        clearPersistedTask()
+        const groupId = task?.groupId || localStorage.getItem('currentGroupId') || 'default-group'
+        previewUrl.value = buildPreviewUrl(restored.sessionId, groupId, restored.componentType)
+        showPreview.value = true
+        addLog('success', '已恢复上次生成结果，正在加载产物预览...')
+      } else if (taskStatus === 'failed') {
+        isGenerating.value = false
+        generationFailed.value = true
+        clearPersistedTask()
+        addLog('error', `上次生成失败: ${task?.error || '未知错误'}`)
+      } else if (taskStatus) {
+        // 仍在运行：恢复进度
         isGenerating.value = true
-        componentType.value = restored.componentType
-        
         addLog('info', '检测到未完成的生成任务，正在恢复进度...')
         bindSseEvents(restored.sessionId)
       } else {
-        // 任务已完成或失败，清理存储
         clearPersistedTask()
       }
     } catch (err) {
@@ -598,6 +619,18 @@ async function handleGenerate() {
   }
 }
 
+/**
+ * 按组件类型装配预览 URL。
+ * 🔴 微码组件（target=microcode，产物落 custom-components）必须带 `type=microcode`；
+ *    硬拼 `type=vue3` 会让预览页去 vue3-components/<id> 找 ⇒ 「未找到组件」。
+ *    快照源存在时会忽略 workspacePath 从而掩盖该缺陷，快照缺失即暴露（同 generate/component.vue:975 的范式）。
+ */
+function buildPreviewUrl(sid: string, groupId: string, type: 'vue3' | 'microcode'): string {
+  return type === 'microcode'
+    ? `${getMcPreviewUrl(sid)}&groupId=${encodeURIComponent(groupId)}`
+    : getVue3PreviewUrl(groupId, sid)
+}
+
 function bindSseEvents(sid: string) {
   if (eventSource) {
     eventSource.close()
@@ -645,7 +678,7 @@ function bindSseEvents(sid: string) {
 
         // 打开预览
         const groupId = localStorage.getItem('currentGroupId') || 'default-group'
-        previewUrl.value = getVue3PreviewUrl(groupId, sid)
+        previewUrl.value = buildPreviewUrl(sid, groupId, componentType.value)
         showPreview.value = true
       } else if (data.type === 'error') {
         generationFailed.value = true
@@ -697,15 +730,15 @@ function bindSseEvents(sid: string) {
 async function checkTaskAndRecover(sid: string) {
   try {
     const resp = await fetchTaskStatus(sid)
-    if (resp?.success && resp.data.task) {
-      const task = resp.data.task
+    if (resp?.success && (resp.data?.task || resp.task)) {
+      const task = resp.data?.task || resp.task
       if (task.status === 'success' || task.status === 'completed') {
         stages.value.forEach((s) => (s.status = 'done'))
         generationComplete.value = true
         isGenerating.value = false
         clearPersistedTask()
-        const groupId = localStorage.getItem('currentGroupId') || 'default-group'
-        previewUrl.value = getVue3PreviewUrl(groupId, sid)
+        const groupId = task.groupId || localStorage.getItem('currentGroupId') || 'default-group'
+        previewUrl.value = buildPreviewUrl(sid, groupId, componentType.value)
         showPreview.value = true
       } else if (task.status === 'failed') {
         generationFailed.value = true

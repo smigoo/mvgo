@@ -30,6 +30,17 @@ import { extractSfcTemplateRegion } from './sfc-template-extractor.js';
  */
 export const DETERMINISTIC_ANCHOR_SCORE = 1000;
 
+/**
+ * 🛡️ M2（2026-11-03 · mc-1793718100141-30ba57ca 实锤）：
+ * 文本叶子禁止作为背景图挂载点——卡片底图被挂到数字/单位 <span> 上，
+ * 真正的卡片容器反而无背景。文本节点的背景图既撑不起卡片几何，又会随文字宽度拉伸。
+ * 判据只认标签结构（文本语义叶子），不认类名/组件名。
+ */
+const TEXT_LEAF_TAGS = /^(span|p|strong|em|b|i|small|label|code|font|mark|sub|sup|u|s|del|ins|abbr|time)$/i;
+export function isTextLeafTag(tagName) {
+  return typeof tagName === 'string' && TEXT_LEAF_TAGS.test(tagName);
+}
+
 /** 剥离 class 上的实例 ID 前缀（`c-mc-max-<ts>-<hex>-` / `c-mv-max-...`） */
 export function stripInstanceClsPrefix(s) {
   return String(s || '')
@@ -127,6 +138,8 @@ export function scoreMountTarget(mapping, cand, opts = {}) {
   if (!mapping || !cand) return Number.NEGATIVE_INFINITY;
   // 宿主外壳（base-panel / mc-panel）禁止挂业务背景：会被 100% 100% 拉伸成整面板大背景
   if (cand.isHostShell) return Number.NEGATIVE_INFINITY;
+  // M2：文本叶子禁止挂背景图（优先级同 hostShell，先于确定性锚——锚定父容器本不应是文本节点）
+  if (isTextLeafTag(cand.tagName)) return Number.NEGATIVE_INFINITY;
 
   // ── 🛡️ 确定性锚短路（2026-09-29 治本 · mc-max-1790671706919-f0c05ecc 实锤）──
   //  `mapping.ownerSectionId` = bg 节点的**直接父节点 figma id**（figma-connector 已固化，
@@ -356,6 +369,8 @@ export function selectAnchorMountCandidate(files, mapping, opts = {}) {
       const attrs = mt[2] + 'class="' + mt[3] + '"' + mt[4];
       const sidM = attrs.match(/\bdata-section-id\s*=\s*["']([^"']*)["']/);
       if (!sidM || sidM[1] !== anchor) continue;
+      // M2：文本叶子即使带锚 sid 也不可挂背景（继续找同名 sid 的容器候选）
+      if (isTextLeafTag(mt[1])) continue;
       // ⚠️ 阻断判据（host-shell / already-bg）与 owner 无关、对**任一**同名 sid 元素生效，
       //    命中即定性（保持 2026-09-30 首版语义不变）：任一命中即证明该锚点已处理/不可挂。
       if (HOST_SHELL_TAG_RE.test(mt[1])) {
@@ -426,6 +441,7 @@ export default {
   boxAreaRatio,
   inferComponentPrefix,
   scoreMountTarget,
+  isTextLeafTag,
   isSemanticMountTarget,
   DETERMINISTIC_ANCHOR_SCORE,
   HOST_SHELL_TAG_RE,

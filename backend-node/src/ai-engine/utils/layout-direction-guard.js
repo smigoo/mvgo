@@ -43,41 +43,13 @@
  */
 
 import { matchTemplateTags } from './layout-facts-injector.js'
+import {
+  isVForListSection,
+  resolveListMemberDirection,
+  resolveTruthLayout,
+} from './section-list-direction.js'
 
-// ─────────────────────────────────────────────────────────────────────────
-// 真值口径（与 subcomponent-planner#extractLayoutMetadata 逐字同源）
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * `layout` 真值 → `{ direction, isGrid }` 三态。
- *
- * 与 `subcomponent-planner.js:559 extractLayoutMetadata` 的 direction 判定**逐字相同**
- * （含字符串/对象双形态、前缀匹配、`grid`/未知 → null），避免同一份 `layout` 在两处判出不同方向。
- *
- * @param {*} rawLayout - `section.layout || section.body.layout`
- * @returns {{direction: 'row'|'column'|null, isGrid: boolean}}
- */
-export function resolveTruthLayout(rawLayout) {
-  const layoutMode = String(
-    (rawLayout && typeof rawLayout === 'object'
-      ? rawLayout.layoutMode || rawLayout.direction
-      : rawLayout) || '',
-  )
-    .trim()
-    .toUpperCase()
-  // 前缀匹配：真实语料含 `horizontal-2-columns` / `horizontal-3-items` / `grid-3x4` 等变体
-  //（`subcomponent-planner.js:1029` 的 `/horizontal|grid|row/i` 同口径）
-  const direction =
-    layoutMode === 'ROW' || layoutMode.startsWith('HORIZONTAL')
-      ? 'row'
-      : layoutMode === 'COLUMN' || layoutMode.startsWith('VERTICAL')
-        ? 'column'
-        : null
-  // 网格事实独立成旗标：`layout: 'grid'` 时 direction 必为 null（不臆造方向），
-  // 但「这是网格容器」本身是事实，供「网格被排成 flex」检查使用。
-  const isGrid = layoutMode === 'GRID' || layoutMode.startsWith('GRID')
-  return { direction, isGrid }
-}
+export { resolveTruthLayout } from './section-list-direction.js'
 
 /**
  * `gridColumns` 读取口径统一（#3）。
@@ -406,7 +378,7 @@ export function resolveActualDirection(tag, corpus, opts = {}) {
  * @param {Object} layoutStructure - `state.layoutStructure`
  * @returns {{issues: Array, stats: Object}}
  */
-export function detectLayoutDirectionMismatch(files, layoutStructure) {
+export function detectLayoutDirectionMismatch(files, layoutStructure, opts = {}) {
   const issues = []
   const stats = {
     sections: 0,
@@ -442,7 +414,12 @@ export function detectLayoutDirectionMismatch(files, layoutStructure) {
     const corpus = buildStyleCorpus(fileList)
 
     for (const sec of list) {
-      const truth = resolveTruthLayout(sec.layout || sec.body?.layout)
+      const memberTruth = isVForListSection(sec)
+        ? resolveListMemberDirection(sec, { figmaNodeData: opts.figmaNodeData })
+        : null;
+      const truth = memberTruth && memberTruth.directionSource !== 'default'
+        ? { direction: memberTruth.direction, isGrid: false }
+        : resolveTruthLayout(sec.layout || sec.body?.layout)
       if (!truth.direction && !truth.isGrid) continue // 无方向/网格事实 ⇒ 不判
       stats.truthFact += 1
 

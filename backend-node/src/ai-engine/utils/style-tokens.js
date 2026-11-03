@@ -1008,6 +1008,53 @@ export const MC_CANONICAL_COLOR_SLOTS = {
   },
 };
 
+/**
+ * 约定语义色名 → 规范槽位别名层（2026-11-03 · 用户拍板「加语义别名层治本」）。
+ *
+ * 背景：`file-writer.safeLessVarValue` 的 N3（#139）口径为「颜色变量真值优先、禁止按名编造」，
+ * 对**非规范槽位名**一律丢弃按名猜测的颜色 ⇒ `@color-alert` / `@color-error` / `@noticeColor`
+ * 被兜成中性灰 `#333333`，2026-09-28 契约要求的「告警名 → 红」失效（真机 mc-max-1793699233426-f8c957d8）。
+ *
+ * 本表只做「约定语义词 → 规范槽位」的**名字间接**；值一律回查 MC_CANONICAL_COLOR_SLOTS
+ * （本文件即单一事实源），**不携带任何硬编码色值** ⇒ 自动获得深色反相与语义一致。
+ */
+export const MC_SEMANTIC_COLOR_ALIASES = [
+  [/(error|danger|fail|alert|notice)/, 'color-danger'],
+  [/(warning|warn)/, 'color-warning'],
+  [/(success)/, 'color-success'],
+  [/(^|[-_])ok($|[-_])/, 'color-success'],
+];
+
+/**
+ * 约定语义名 → 规范槽位名；非语义名返回 null。
+ * 守卫：① `bg`/`border` 是更强的结构信号（`@color-alert-bg` 属底纹，不是告警色本体）
+ * ② 带色相限定词（gold/mint/cyan…）→ 组件专属，必须继续走 N3 真值桶，不按语义归位。
+ * @param {string} name 变量名（可含 @）
+ * @returns {string|null}
+ */
+export function resolveSemanticColorSlot(name = '') {
+  const n = String(name).replace(/^@/, '').toLowerCase();
+  if (!n) return null;
+  if (/(bg|background|border)/.test(n)) return null;
+  if (/(gold|silver|mint|cyan|orange|purple|red|green|blue|pink|brown|gray|grey|warm|cool)/.test(n)) return null;
+  for (const [rx, slot] of MC_SEMANTIC_COLOR_ALIASES) if (rx.test(n)) return slot;
+  return null;
+}
+
+/**
+ * 通用主强调名（primary/accent）判定 —— 框架 `--colorPrimary` 的既有字面量契约（#409EFF）归属。
+ * 与语义状态色不同：这类名字在 `guessLessVarValueByName` 的名字分支已给出真色，应**保留**而非改写。
+ * 同样排除色相限定词（`@color-accent-gold` 走真值桶）。
+ * @param {string} name 变量名（可含 @）
+ * @returns {boolean}
+ */
+export function isPrimaryAccentName(name = '') {
+  const n = String(name).replace(/^@/, '').toLowerCase();
+  if (!n) return false;
+  if (/(gold|silver|mint|cyan|orange|purple|red|green|blue|pink|brown|gray|grey|warm|cool)/.test(n)) return false;
+  return /(primary|accent)/.test(n);
+}
+
 /** `.common()` 兜底（prior 缺省时） */
 const MC_COMMON_FALLBACK = {
   fontSize: 'var(--fontSize)',

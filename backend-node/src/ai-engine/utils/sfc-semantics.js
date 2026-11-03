@@ -95,7 +95,7 @@ const JS_STATEMENT_RX = /(?:const|let|var|function|=>|return\s|if\s*\(|for\s*\(|
  * 提取模板中使用的裸标识符（仅硬引用：${var} / :attr="var" / ref="var" / v-for 源 / PascalCase 组件标签）
  * 刻意不做全表达式解析，避免大量误报。
  * @param {string} templateContent
- * @returns {{ used: Set<string>, loopVars: Set<string> }} used=需在 script 中声明的引用；loopVars=v-for 循环变量（模板作用域内，无需声明）
+ * @returns {{ used: Set<string>, loopVars: Set<string> }} used=需在 script 中声明的引用；loopVars=v-for/插槽本地绑定（历史字段名，无需声明）
  */
 /**
  * 指令表达式里要豁免的 JS 关键字（`v-if="typeof x === 'string'"` 不能把 typeof 当变量）。
@@ -112,6 +112,37 @@ const JS_KEYWORDS = new Set([
 /** v-if / v-else-if / v-show / v-model（含 :arg 与 .modifier）的属性值 */
 const DIRECTIVE_EXPR_RX =
   /\bv-(?:else-)?if\s*=\s*"([^"]*)"|\bv-show\s*=\s*"([^"]*)"|\bv-model(?:[:.][\w.-]+)*\s*=\s*"([^"]*)"/g
+
+/** v-slot / v-slot:name / #name 的插槽参数表达式（单双引号） */
+const SLOT_BINDING_EXPR_RX =
+  /(?:\bv-slot(?::[A-Za-z0-9_-]+)?|#[A-Za-z0-9_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+
+/**
+ * 只提取简单插槽本地绑定；任一复杂项存在则整组弃权，避免把默认值/嵌套属性误豁免。
+ * 对象解构登记别名后的本地名（{ column: col } => col），而非属性名。
+ */
+function addSimpleSlotBindings(rawExpression, target) {
+  const expression = String(rawExpression || '').trim()
+  if (!expression) return
+  if (/^[A-Za-z_$][\w$]*$/.test(expression)) {
+    target.add(expression)
+    return
+  }
+  const objectMatch = expression.match(/^\{([^{}]*)\}$/)
+  const arrayMatch = expression.match(/^\[([^\[\]]*)\]$/)
+  if (!objectMatch && !arrayMatch) return
+  const names = []
+  for (const rawPart of (objectMatch ? objectMatch[1] : arrayMatch[1]).split(',')) {
+    const part = rawPart.trim()
+    if (!part) continue // 允许尾逗号与数组空位
+    const match = objectMatch
+      ? part.match(/^([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?$/)
+      : part.match(/^([A-Za-z_$][\w$]*)$/)
+    if (!match) return
+    names.push(objectMatch ? (match[2] || match[1]) : match[1])
+  }
+  for (const name of names) target.add(name)
+}
 
 export function extractTemplateRefs(templateContent) {
   const used = new Set()
@@ -144,10 +175,15 @@ export function extractTemplateRefs(templateContent) {
     }
   }
 
-  // 5. PascalCase 组件标签 <TotalTraffic ...>
+  // 5. 插槽参数是模板局部绑定，不要求 script 顶层声明；沿用 loopVars 返回通道保持 API 不变。
+  for (const m of templateContent.matchAll(SLOT_BINDING_EXPR_RX)) {
+    addSimpleSlotBindings(m[1] ?? m[2], loopVars)
+  }
+
+  // 6. PascalCase 组件标签 <TotalTraffic ...>
   for (const m of templateContent.matchAll(/<([A-Z][\w]*)\b/g)) used.add(m[1])
 
-  // 6. 指令表达式：v-if / v-else-if / v-show / v-model
+  // 7. 指令表达式：v-if / v-else-if / v-show / v-model
   //    🔴 2026-10-22（mc-1792642629927-5084c375 实锤）：此前**整类漏抽** ——
   //    规则 2 只认 `:attr="裸标识符"`，而 `v-if="icon普通厂商"`（未声明）零命中，
   //    门禁放行后产物在渲染期抛 ReferenceError（整段模块白屏），比缺图标严重得多。
@@ -843,6 +879,35 @@ export function dedupeScriptDeclarations(scriptBody) {
 }
 
 /**
+ * 把误写成裸模块的宿主 builder 具名 import 归一为既有全局调用契约。
+ * 只接管简单具名绑定；默认/命名空间/副作用 import 与其它模块一律原样保留。
+ *
+ * @param {string} scriptBody 不含 <script> 标签的脚本内容
+ * @returns {{ content: string, healed: number }}
+ */
+export function normalizeMcComponentBuilderImports(scriptBody) {
+  if (!scriptBody || typeof scriptBody !== 'string') return { content: scriptBody, healed: 0 }
+  let healed = 0
+  const content = scriptBody.replace(
+    /import\s*\{([^}]*)\}\s*from\s*(['"])\$mcComponentBuilder\2[ \t]*;?/g,
+    (full, inner) => {
+      const bindings = []
+      for (const raw of String(inner).split(',')) {
+        const part = raw.trim()
+        if (!part) continue
+        const match = part.match(/^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
+        if (!match) return full
+        bindings.push(match[2] ? `${match[1]}: ${match[2]}` : match[1])
+      }
+      if (bindings.length === 0) return full
+      healed += 1
+      return `const { ${bindings.join(', ')} } = $mcComponentBuilder()`
+    },
+  )
+  return { content, healed }
+}
+
+/**
  * 确定性修复：$mcComponentBuilder() 解构声明的重复（#9a 三段拆分脚本常见故障）。
  *
  * 背景：#9a 将 index.vue 脚本拆为 状态/生命周期/图表 三段分别生成。prompt 已要求
@@ -856,14 +921,22 @@ export function dedupeScriptDeclarations(scriptBody) {
  *
  * 本函数：收集所有 $mcComponentBuilder() 解构出现处的绑定名（取并集，按本地名去重，保留首次写法文本），
  * 仅在 FIRST 处保留并集声明，其余处整条删除（变量已由首处声明）。无重复时原样返回。
+ * options.normalizeModuleImports 仅供 index 最终装配出口 opt-in，避免分块合并提前消费计数。
  * @param {string} scriptBody 不含 <script> 标签的脚本内容
+ * @param {{ normalizeModuleImports?: boolean, stats?: { mcBuilderModuleImport?: number } }} [options]
  * @returns {string}
  */
-export function dedupeMcComponentBuilder(scriptBody) {
+export function dedupeMcComponentBuilder(scriptBody, options = {}) {
   if (!scriptBody || typeof scriptBody !== 'string') return scriptBody
+  let source = scriptBody
+  if (options.normalizeModuleImports) {
+    const normalized = normalizeMcComponentBuilderImports(source)
+    source = normalized.content
+    if (options.stats) options.stats.mcBuilderModuleImport = normalized.healed
+  }
   const re = /((?:const|let|var)\s*\{([^}]*)\}\s*=\s*\$mcComponentBuilder\s*\(\s*\))/g
-  const matches = [...scriptBody.matchAll(re)]
-  if (matches.length <= 1) return scriptBody
+  const matches = [...source.matchAll(re)]
+  if (matches.length <= 1) return source
 
   const seen = new Set()
   const union = []
@@ -881,7 +954,7 @@ export function dedupeMcComponentBuilder(scriptBody) {
   }
   const unionStr = union.join(', ')
   let replacedFirst = false
-  return scriptBody.replace(re, (full) => {
+  return source.replace(re, (full) => {
     if (!replacedFirst) {
       replacedFirst = true
       const kw = /^(const|let|var)/.exec(full)[1]

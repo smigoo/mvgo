@@ -1,0 +1,42 @@
+{
+  "name": "doc-config-gen",
+  "label": "文档设计配置生成工作流",
+  "entryNode": "doc-analyzer",
+  "nodes": [
+    {
+      "id": "doc-analyzer",
+      "label": "文档分析",
+      "type": "agent",
+      "handler": "doc-analyzer",
+      "position": {
+        "x": 200,
+        "y": 200
+      },
+      "config": {
+        "model": "claude-sonnet-4-6",
+        "temperature": 0.3
+      }
+    },
+    {
+      "id": "config-generator",
+      "label": "配置生成",
+      "type": "agent",
+      "handler": "config-generator",
+      "position": {
+        "x": 480,
+        "y": 220
+      },
+      "config": {
+        "model": "claude-sonnet-4-6",
+        "temperature": 0.3
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1782977714046-1",
+      "source": "doc-analyzer",
+      "target": "config-generator"
+    }
+  ]
+}

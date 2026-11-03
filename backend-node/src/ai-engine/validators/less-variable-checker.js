@@ -144,7 +144,22 @@ export class LessVariableChecker {
         })
       }
 
-      // 4b. 🔴🔴 #139（N3 · e7a50be7 实锤）：「名字说 gold、值是蓝」的**存量**矫正。
+      // 4b. 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**存量重复声明自愈**。
+      //   生成侧已修（定义集含推断值 + appendToMixin 幂等），但存量产物不重跑生成就仍带
+      //   重复块 ⇒ 写盘自愈链路补齐（只删「逐字符相同的重复行」，可证等价）。
+      if (existsSync(themeVarsPath)) {
+        const dup = this.healDuplicateMixinVarDecls(themeVarsPath)
+        if (dup.fixed) {
+          result.fixed = true
+          result.healedDuplicateMixinVars = dup.removed
+          logger.info('已去除 theme-vars.less 中重复的 mixin 变量声明', {
+            count: dup.removed.length,
+            samples: dup.removed.slice(0, 5),
+          })
+        }
+      }
+
+      // 4c. 🔴🔴 #139（N3 · e7a50be7 实锤）：「名字说 gold、值是蓝」的**存量**矫正。
       //   事故：`@color-accent-gold: #409EFF` / `@color-accent-mint: #409EFF` 已存在于
       //   theme-vars.less（早前按名猜色的产物，后被 healCommonColorVars 从 .common() 迁出），
       //   `addMissingVariables` **只补缺失** ⇒ 永远不会被碰到 ⇒ 蓝色发光/蓝块长期存在。
@@ -351,8 +366,15 @@ export class LessVariableChecker {
   static scanAllMixinVariables(themeVarsPath, definedVariables) {
     try {
       const content = readFileSync(themeVarsPath, 'utf-8')
-      const vars = this.extractAllMixinVars(content)
-      for (const name of vars.keys()) definedVariables.add(name)
+      // 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**定义集必须含推断值**。
+      //   历史 bug：此处复用 `extractAllMixinVars().keys()`，而后者**刻意跳过**带「自动添加」
+      //   注释的推断行（那是为了**取值池**不被推断值污染 —— 见 extractAllMixinVars:411-416）。
+      //   于是**两个用途被混用**：已经推断写入 mixin 的变量**永不被视为「已定义」**
+      //   ⇒ 下一轮 `addMissingVariables` 又把它判为缺失 ⇒ `appendToMixin` 再追加一份
+      //   ⇒ **无限重复**（真机实锤：`.theme-light()` 内「自动添加（语义推断）」8 变量块
+      //   在 `theme-vars.less:51-58` 与 `:59-66` 各出现一次）。
+      //   正解：定义集用「含推断值」的全量名字集合；取值池语义保持不变。
+      for (const name of this.collectAllMixinVarNames(content)) definedVariables.add(name)
     } catch (error) {
       logger.error('扫描全部 mixin 变量失败', { themeVarsPath, error: error.message })
     }
@@ -428,6 +450,39 @@ export class LessVariableChecker {
       }
     }
     return vars;
+  }
+
+  /**
+   * 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：收集 theme-vars.less 里
+   * **所有 mixin 块声明过的变量名** —— **含**带「自动添加」注释的推断值。
+   *
+   * ⚠️ 与 `extractAllMixinVars` 是**两个用途**，绝不可互换：
+   *   - `extractAllMixinVars` → **取值池**（必须排除推断值，否则 light/dark 两池命中
+   *     同一个推断值 ⇒ 明暗分流失效）
+   *   - 本方法 → **定义集**（判「该变量是否已声明」；推断值**也是已声明**，
+   *     不能再补第二遍）
+   *   历史上 `scanAllMixinVariables` 直接复用前者 ⇒ 推断值反复被判缺失 ⇒
+   *   `appendToMixin` 无限追加同一批变量（真机实锤见 scanAllMixinVariables 注释）。
+   *
+   * @param {string} content theme-vars.less 全文
+   * @returns {Set<string>} 变量名（不含 `@`）
+   */
+  static collectAllMixinVarNames(content) {
+    const names = new Set()
+    const mixinBlockRe = /\.([a-zA-Z0-9_-]+)\(\)\s*\{([^}]*)\}/g
+    let match
+    while ((match = mixinBlockRe.exec(content)) !== null) {
+      // 🔴 定义集**不做行首锚定**（与 extractAllMixinVars 的取值池判据就此分道）。
+      //   一个 mixin 块内允许多条声明**同行**（真机与存量 spec 实锤：
+      //   `.theme-light() { @c-test-bg: …; @c-test-primary: …; }` 同行两条），
+      //   行首锚定只能捕到第一条 ⇒ 定义集漏项 ⇒ 又判缺失再补 ⇒ 重复。
+      //   `@` + 标识符 + `:` 是 Less 变量声明的充分形态；值里的 `a@b.png`（无冒号）/
+      //   `@{x}` 插值（`@` 后非标识符）都不构成该形态，不会误命中。
+      const varRe = /@([a-zA-Z0-9_-]+)\s*:/g
+      let vmatch
+      while ((vmatch = varRe.exec(match[2])) !== null) names.add(vmatch[1])
+    }
+    return names
   }
 
   /**
@@ -922,12 +977,109 @@ export class LessVariableChecker {
    */
   static appendToMixin(content, mixinName, lines) {
     const re = new RegExp(`\\.${mixinName}\\s*\\(\\s*\\)\\s*\\{([^}]*)\\}`)
-    if (re.test(content)) {
+    const hit = re.test(content)
+    // 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**按名去重（幂等）**。
+    //   历史实现是**纯 append** ⇒ 同一批变量被反复追加（真机 theme-vars.less 的
+    //   `.theme-light()` 内同 8 行出现 2 份）。
+    //   口径：① 块内**已声明同名**的行直接丢弃（真值优先，**绝不覆盖**已有真值）；
+    //        ② 本批 `lines` 内同名也只保留第一条。
+    //   两条都命中 ⇒ 返回原 content（真正的「零改动」幂等，日志/磁盘都无变化）。
+    const kept = this._dropDeclaredVarLines(
+      lines,
+      hit ? String(content).match(re)[1] : '',
+    )
+    if (!kept) return content
+    if (hit) {
       return content.replace(re, (m, inner) =>
-        `.${mixinName}() {\n${String(inner).trim()}\n${lines}\n}`,
+        `.${mixinName}() {\n${String(inner).trim()}\n${kept}\n}`,
       )
     }
-    return content + `\n\n.${mixinName}() {\n${lines}\n}\n`
+    return content + `\n\n.${mixinName}() {\n${kept}\n}\n`
+  }
+
+  /**
+   * 🛡️ #1（2026-11-03）：从待追加的变量声明行里剔除「块内已存在」与本批重复者。
+   *
+   * @param {string} lines 待追加行（形如 `  @name: value; // 自动添加…`）
+   * @param {string} innerBlock 目标 mixin 的现有块内容（可空）
+   * @returns {string} 过滤后的行（可能为空串 ⇒ 调用方按「零改动」处理）
+   */
+  static _dropDeclaredVarLines(lines, innerBlock = '') {
+    const declared = new Set()
+    const vr = /@([a-zA-Z0-9_-]+)\s*:/g
+    let x
+    while ((x = vr.exec(String(innerBlock || ''))) !== null) declared.add(x[1])
+    const seen = new Set()
+    const kept = []
+    for (const raw of String(lines || '').split('\n')) {
+      const m = /^\s*@([a-zA-Z0-9_-]+)\s*:/.exec(raw)
+      if (!m) {
+        // 非声明行（空行/注释）原样保留，但尾部空行由 trim 收敛
+        kept.push(raw)
+        continue
+      }
+      const n = m[1]
+      if (declared.has(n) || seen.has(n)) continue
+      seen.add(n)
+      kept.push(raw)
+    }
+    return kept.join('\n').trim()
+  }
+
+  /**
+   * 🛡️ #1（2026-11-03 · mc-max-1793699233426-f8c957d8 实锤）：**存量** theme-vars.less
+   * 的「mixin 内重复变量声明」自愈（幂等）。
+   *
+   * 真机产物：`.theme-light()` 内「自动添加（语义推断）」8 行出现 **2 次**、`.theme-dark()`
+   * 同形；根因见 `scanAllMixinVariables`（定义集漏推断值）与 `appendToMixin`（纯 append）。
+   * 生成侧已修（未来不再产生），但**存量产物不重跑生成就不会好** ⇒ 在写盘自愈链路补齐。
+   *
+   * 为什么敢删（安全性论证）：只删**归一化后逐字符完全相同**的重复声明行、且保留**首次**
+   * 出现 ⇒ Less 语义完全不变（普通重复赋值「同名同值」结果同值；mixin 内重复定义同理），
+   * 属**可证等价**的纯去噪，不影响任何取值优先级。
+   *
+   * @param {string} themeVarsPath
+   * @returns {{fixed:boolean, removed:string[]}}
+   */
+  static healDuplicateMixinVarDecls(themeVarsPath) {
+    const EMPTY = { fixed: false, removed: [] }
+    let content
+    try {
+      content = readFileSync(themeVarsPath, 'utf-8')
+    } catch (e) {
+      return EMPTY
+    }
+    const removed = []
+    const next = String(content).replace(
+      /(\.([a-zA-Z0-9_-]+)\s*\(\s*\)\s*\{)([^}]*)(\})/g,
+      (all, head, mixinName, body, tail) => {
+        const seen = new Set()
+        const out = []
+        for (const line of body.split('\n')) {
+          const key = line.trim()
+          // 只对「@name: …」声明行去重；空行/注释一律保留
+          if (!/^@[a-zA-Z0-9_-]+\s*:/.test(key)) {
+            out.push(line)
+            continue
+          }
+          if (seen.has(key)) {
+            removed.push(`.${mixinName}(): ${key}`)
+            continue
+          }
+          seen.add(key)
+          out.push(line)
+        }
+        return `${head}${out.join('\n')}${tail}`
+      },
+    )
+    if (removed.length === 0) return EMPTY
+    try {
+      writeFileSync(themeVarsPath, next, 'utf-8')
+    } catch (e) {
+      logger.error('去重 mixin 变量声明失败', { themeVarsPath, error: e.message })
+      return EMPTY
+    }
+    return { fixed: true, removed }
   }
 
   /**

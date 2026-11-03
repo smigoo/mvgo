@@ -2,7 +2,7 @@
  * 质量评分自动修复模块（2026-09-17）
  *
  * 针对质量评分中可自动修复的扣分项提供修复函数：
- * - CODE-008：剥离 LLM 手写的资源 import（应由 injectResourceImports 后处理注入）
+ * - CODE-008：剥离 LLM 臆造的资源 import（mapping 未登记的才删，平台注入的保留）
  * - THEME-VAR-NAME-MISMATCH：业务样式 var() 直引转 Less 槽位引用
  * - CODE-025-WARN：剥离孤儿资源 import（import 了 mapping 未登记的变量）
  *
@@ -19,15 +19,29 @@ import { collectGeneratedFilesFromDir, findResourceDomMapping } from './quality-
 import { buildResourceFacts } from './resource-facts.js'
 
 /**
- * 剥离 LLM 手写的资源 import（CODE-008）
+ * 剥离 LLM 臆造的资源 import（CODE-008）
  *
  * 背景：资源 import 应由 injectResourceImports 后处理自动注入，禁止 LLM 手写。
  * 但 LLM 有时会自行 import 本地图片资源，导致 CODE-008 WARN。
  *
+ * 🔴🔴 F2（2026-11-03 治本）：判据必须与校验器**同源**
+ *   历史事故：本函数此前用「无条件删除所有 resources/images import」的正则，注释声称
+ *   「让后续的 injectResourceImports 重新注入正确的」——**但 quality-fix 链条
+ *   （mc-spec.service.ts#fixQualityIssues: runAutoFix → writeFixedFiles → scoreComponentDir）
+ *   里根本没有任何后续注入步骤**，file-writer.js 写盘出口也不做 import 注入。
+ *   于是上游一旦误报 CODE-008（F1 修掉的 mapping 键名失配，实测 12 条假阳性），
+ *   平台注入的合法 import 被整体抹除且不可逆 ⇒ 产物直接形成 CODE-025 BLOCK
+ *   （事故：c-vehicle-monitor-c46c2631，2026-11-03 11:42:50）。
+ *
+ *   现口径与 code-structure-validator.js:1281-1312（CODE-008 判定）**完全一致**：
+ *   mapping（`.mc-gen/resource-dom-mapping.json` = 资源事实源）中登记的 resourceFile
+ *   视为合法 import（保留）；未登记的才是「LLM 臆造」（删除）。
+ *   fail-safe：mapping 不可得 ⇒ 无法证伪 ⇒ 一行都不删（只删可证的臆造）。
+ *
  * 修复策略：
  * - 扫描 .vue 文件的 <script> 部分
- * - 匹配 `import xxx from '...resources/images/...'` 模式
- * - 删除这些 import 行（让后续的 injectResourceImports 重新注入正确的）
+ * - 匹配 `import xxx from '...resources/images/...'`
+ * - **只删除**归一化路径不在 mapping.resourceFile 中的 import（幂等、可证）
  *
  * @param {string} componentDir 组件目录
  * @param {Array} files 文件列表（{ path, content }）
@@ -35,7 +49,36 @@ import { buildResourceFacts } from './resource-facts.js'
  */
 export function stripLlmResourceImports(componentDir, files) {
   const fixed = []
-  const importRegex = /import\s+\w+\s+from\s+['"][^'"]*resources\/images\/[^'"]+['"];?\s*\n?/g
+
+  // 🛡️ 判据单一来源：资源事实源（与 stripOrphanResourceImports / 校验器 CODE-008 同一入口）
+  const mapping = findResourceDomMapping(componentDir)
+  if (!Array.isArray(mapping) || mapping.length === 0) {
+    // fail-safe：无事实源 ⇒ 无法区分「平台注入」与「LLM 臆造」⇒ 不删（宁可留假阳性也不误删真值）
+    return { fixed, files }
+  }
+
+  // 归一化口径与 code-structure-validator.js:1281-1312 逐字对齐
+  const validResourceFiles = new Set(
+    mapping
+      .filter((m) => m && m.resourceFile)
+      .map((m) =>
+        String(m.resourceFile).replace(/^\.\.\//, '').replace(/^\.\.\/\.\.\//, ''),
+      ),
+  )
+  const isRegistered = (importPath) => {
+    const raw = String(importPath || '')
+    const normalizedPath = raw.replace(/^\.\.\//, '').replace(/^\.\.\/\.\.\//, '')
+    if (validResourceFiles.has(normalizedPath)) return true
+    return mapping.some(
+      (m) =>
+        m &&
+        m.resourceFile &&
+        raw.endsWith(String(m.resourceFile).replace(/^.*images\//, '')),
+    )
+  }
+
+  // 第 1 捕获组 = 变量名（保留给审计），第 2 捕获组 = import 路径（合法判据）
+  const importRegex = /import\s+(\w+)\s+from\s+['"]([^'"]*resources\/images\/[^'"]+)['"];?\s*\n?/g
 
   const updatedFiles = files.map((file) => {
     if (!file.path?.endsWith('.vue') || typeof file.content !== 'string') {
@@ -47,17 +90,20 @@ export function stripLlmResourceImports(componentDir, files) {
     if (!scriptMatch) return file
 
     const scriptContent = scriptMatch[1]
-    const before = scriptContent
+    let removed = 0
 
-    // 剥离资源 import
-    const after = scriptContent.replace(importRegex, '')
+    // 只删 mapping 未登记的（臆造）；平台注入的合法 import 原样保留
+    const after = scriptContent.replace(importRegex, (fullMatch, _varName, importPath) => {
+      if (isRegistered(importPath)) return fullMatch
+      removed++
+      return ''
+    })
 
-    if (before !== after) {
-      const removedCount = (before.match(importRegex) || []).length
+    if (removed > 0) {
       const newContent = file.content.replace(scriptMatch[0], (m) => {
         return m.replace(scriptContent, after)
       })
-      fixed.push({ file: file.path, removed: removedCount })
+      fixed.push({ file: file.path, removed })
       return { ...file, content: newContent }
     }
 

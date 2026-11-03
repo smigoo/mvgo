@@ -46,16 +46,12 @@ import {
   buildStyleCorpus,
   resolveActualDirection,
 } from './layout-direction-guard.js'
+import {
+  isVForListSection,
+  resolveListMemberDirection,
+} from './section-list-direction.js'
 
-/** 折叠/重复列表段：`-list` 合成 id、显式 collapsed、或 renderHint=v-for */
-export function isCollapsedListSection(sec) {
-  if (!sec || typeof sec !== 'object') return false
-  const id = String(sec.id ?? '')
-  if (/-list$/.test(id)) return true
-  if (sec.collapsed === true) return true
-  if (sec.renderHint === 'v-for') return true
-  return false
-}
+export { isVForListSection as isCollapsedListSection } from './section-list-direction.js'
 
 /**
  * 在 section 树里定位 `id`，同时返回其**父段**（用于取 wrapper 期望方向）。
@@ -200,14 +196,22 @@ export function detectVForListDirectionMismatch(files, layoutStructure, opts = {
     //     ② 折叠段：自身 layout = **重复单元之间**排布 ⇒ **wrapper 期望**；子段 layout = item 期望
     //   不做分叉会把「3 张卡横排」的真值当成「卡内横排」⇒ 误报（实测 vehicle-monitor card-item
     //   实际是 icon 上/文字下的 column，本就正确）。
-    const secIsList = isCollapsedListSection(sec)
+    const secIsList = isVForListSection(sec)
+    const resolveWrapperTruth = (section) => {
+      const member = resolveListMemberDirection(section, {
+        figmaNodeData: opts.figmaNodeData,
+      })
+      return member.directionSource === 'default'
+        ? resolveTruthLayout(section.layout || section.body?.layout)
+        : { direction: member.direction, isGrid: false }
+    }
     let wrapperTruth
     let itemTruth
     let wrapperSectionId
     let itemSectionId
     if (secIsList) {
-      // ② 折叠段：自身 layout = 重复单元**之间**排布 ⇒ wrapper 期望；子段（原型）= item 期望
-      wrapperTruth = resolveTruthLayout(sec.layout || sec.body?.layout)
+      // ② 折叠段：成员方向由共享声明/几何契约裁决；子段（原型）= item 期望
+      wrapperTruth = resolveWrapperTruth(sec)
       wrapperSectionId = String(sec.id ?? '')
       const child = (Array.isArray(sec.children) ? sec.children : []).find(
         (c) => c && typeof c === 'object',
@@ -216,11 +220,11 @@ export function detectVForListDirectionMismatch(files, layoutStructure, opts = {
         ? resolveTruthLayout(child.layout || child.body?.layout)
         : { direction: null, isGrid: false }
       itemSectionId = child ? String(child.id ?? '') : ''
-    } else if (parent && isCollapsedListSection(parent)) {
+    } else if (parent && isVForListSection(parent)) {
       // ① 叶子段（父为折叠段）：自身 layout = **单元内部**排布 ⇒ item 期望；父段 = wrapper 期望
       itemTruth = resolveTruthLayout(sec.layout || sec.body?.layout)
       itemSectionId = String(sec.id ?? '')
-      wrapperTruth = resolveTruthLayout(parent.layout || parent.body?.layout)
+      wrapperTruth = resolveWrapperTruth(parent)
       wrapperSectionId = String(parent.id ?? '')
     } else {
       // ③ 段是「集合」本身（v-for 直接挂在该段下，无折叠段/原型子段）：

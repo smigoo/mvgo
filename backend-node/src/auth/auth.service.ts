@@ -196,7 +196,7 @@ export class AuthService {
       const resp = await axios.get(verifyUrl, {
         params: { token },
         timeout: 5000,
-        // ECS 上 Node 继承公司 HTTP_PROXY，axios 默认不认 no_proxy 会把门户校验请求塞进代理导致 5s 超时 401。
+        // 若宿主/容器继承了上游 HTTP_PROXY，axios 默认不认 no_proxy 会把门户校验请求塞进代理导致 5s 超时 401。
         // 门户校验本就不该走外网代理，显式禁用。
         proxy: false,
       });

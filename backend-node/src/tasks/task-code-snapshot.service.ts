@@ -12,6 +12,7 @@ import {
 import { createHash, randomUUID } from 'crypto';
 import { dirname, isAbsolute, posix, resolve, sep } from 'path';
 import { tempComponentsDir, customComponentsDir } from '../config/backend-root';
+import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
 
 export type TaskCodeSnapshotStatus = 'candidate' | 'validating' | 'last-good' | 'rejected' | 'partial';
 
@@ -228,7 +229,8 @@ export class TaskCodeSnapshotService {
         encoding: 'utf8',
         flag: 'wx',
       });
-      renameSync(tempDir, revisionDir);
+      // 🛡️ 2026-11-03：EPERM rename 风暴下降级为复制落名，保证快照可用。
+      renameWithCopyFallback(tempDir, revisionDir, { label: '候选快照 revision 落名' });
       this.writePointer(input.sessionId, 'candidate', revision);
       return manifest;
     } catch (error) {
@@ -939,7 +941,7 @@ export class TaskCodeSnapshotService {
     const manifestPath = resolve(this.getRevisionDir(sessionId, revision), 'manifest.json');
     const tempPath = `${manifestPath}.tmp-${randomUUID()}`;
     writeFileSync(tempPath, JSON.stringify(next, null, 2), { encoding: 'utf8', flag: 'wx' });
-    renameSync(tempPath, manifestPath);
+    renameWithCopyFallback(tempPath, manifestPath, { label: '快照 manifest 原子写' });
     return next;
   }
 
@@ -974,7 +976,7 @@ export class TaskCodeSnapshotService {
       JSON.stringify({ revision, updatedAt: new Date().toISOString() }, null, 2),
       { encoding: 'utf8', flag: 'wx' },
     );
-    renameSync(tempPath, pointerPath);
+    renameWithCopyFallback(tempPath, pointerPath, { label: '快照 pointer 原子写' });
   }
 
   private clearPointer(

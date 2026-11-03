@@ -890,6 +890,8 @@ export function createPhase2Graph(config = {}) {
       return {
         generatedFiles: result.writtenFiles,
         componentStructure: result.componentStructure,
+        // 🛡️ S1.1（2026-11-03）：补丁命中报表入 state，complete 节点 merge 进 component-meta.json
+        patchHitReport: result?.patchHitReport || null,
         // L0-B 重试计数由 code-structure-validator 节点负责（失败才 +1、通过即重置），
         // engineer 不再无条件自增，避免首次失败即耗尽预算（off-by-one）且跨轮累积。
         //  P0-2: 结构顺序门禁重试标记（engineer 已按 retryGuidance 重排区块）
@@ -1711,6 +1713,8 @@ export function createPhase2Graph(config = {}) {
           // WP3 渲染探针（2026-10-08）：只读 DOM 事实（img 空源/对比度/溢出裁切/塌缩槽/图表占位），
           // 只留痕不阻断；探针 null（未跑/降级）则不写字段，避免覆盖旧值
           ...(state.renderProbes ? { renderProbes: state.renderProbes } : {}),
+          // 🛡️ S1.1（2026-11-03）：补丁命中报表（engineer → state → 落盘；patchChainErrors 0 也落盘）
+          ...(state.patchHitReport ? { patchHitReport: state.patchHitReport } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -1762,15 +1766,21 @@ export function createPhase2Graph(config = {}) {
         state.figmaNodeData ||
         state._uiCache?.figmaNodeData ||
         state._visualParserCache?.figmaNodeData;
+      const contentPlanForGuard =
+        state.generationInput?.componentPlan || state.subComponentPlan;
       const contentCheck = checkSectionContent({
         files,
-        plan: state.subComponentPlan,
+        plan: contentPlanForGuard,
         figmaRoot: figmaRootForGuard,
+      });
+      logger.info('🛡️ section 内容归属·已评估', {
+        planSource: state.generationInput?.componentPlan ? 'generationInput' : 'legacy',
+        ...(contentCheck.ownerStats || {}),
       });
       if (contentCheck.duplicateTextIssues.length > 0) {
         const healResult = healDuplicateTextIssues({
           files,
-          plan: state.subComponentPlan,
+          plan: contentPlanForGuard,
           figmaRoot: figmaRootForGuard,
           validateSfc: (c, p) => validateVueSfc(c, p),
         });

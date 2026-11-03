@@ -606,15 +606,73 @@ export class McSpecService {
       summary.styleNumeric = (styleResult.summary.spacing || 0) + (styleResult.summary.font || 0) + (styleResult.summary.radius || 0);
     }
 
-    // 6. 写回磁盘
+    // 6. 🔴🔴 F3（2026-11-03 治本）：资源 import 终验兜底（落盘前，幂等只补缺失、绝不删已有）
+    //
+    //    根因：本端点（runAutoFix → writeFixedFiles）是**第二条写盘出口**，
+    //    此前完全没有资源 import 兜底。上游一旦把 import 删掉（CODE-008 修复 / 误报），
+    //    这里没有任何补偿 ⇒ 产物直接形成 CODE-025 BLOCK 且不可逆
+    //    （事故：c-vehicle-monitor-c46c2631，2026-11-03 11:42:50 删掉 12 行 import）。
+    //
+    //    选用 `ensureResourceImportsForRefs` 而非 `injectResourceImports`（技术选型有据）：
+    //    · 严格幂等 —— 有 `import <var> from` 与 collectDeclaredBindings 撞名双复核，
+    //      重跑零改动；实测 injectResourceImports **非严格幂等**（第 2 次会重排 import
+    //      块并多插一个空行，第 3 次才收敛），每次 quality-fix 都会白改一次文件。
+    //    · 引用驱动 —— 按「模板 + script 内引用」采集（resource-facts 单一实现），
+    //      本事故的 statCards 正是 script 内联引用形态。
+    //    · 与生成侧同源 —— microcode-engineer.js:3087 用的就是它。
+    //    fail-open：任何异常都不阻断写盘，只记账。
+    const resourceInject = {
+      vue: 0,
+      injected: 0,
+      unresolved: 0,
+      mappingCount: 0,
+      error: null as string | null,
+    };
+    try {
+      if (files.length > 0) {
+        const { findResourceDomMapping } = await import('../ai-engine/utils/quality-score-v1.js');
+        const mapping = findResourceDomMapping(componentDir);
+        resourceInject.mappingCount = Array.isArray(mapping) ? mapping.length : 0;
+        if (Array.isArray(mapping) && mapping.length > 0) {
+          const { ensureResourceImportsForRefs } = await import(
+            '../ai-engine/roles/microcode/resource-mounter.js'
+          );
+          const fileMap: Record<string, string> = {};
+          for (const f of files as any[]) {
+            if (f?.path && typeof f.content === 'string') fileMap[f.path] = f.content;
+          }
+          const healed = ensureResourceImportsForRefs(fileMap, mapping, { logger: this.logger });
+          resourceInject.vue = Object.keys(fileMap).filter((p) => /\.vue$/i.test(p)).length;
+          resourceInject.injected = Array.isArray(healed.injected) ? healed.injected.length : 0;
+          resourceInject.unresolved = Array.isArray(healed.unresolved) ? healed.unresolved.length : 0;
+          files = (files as any[]).map((f: any) => {
+            const next = f?.path ? healed.files?.[f.path] : undefined;
+            return typeof next === 'string' && next !== f.content ? { ...f, content: next } : f;
+          });
+        }
+      }
+    } catch (err: any) {
+      resourceInject.error = err?.message || String(err);
+      this.logger.warn(
+        `[quality-fix] ${id}: 资源 import 终验兜底失败（fail-open，继续写盘）: ${resourceInject.error}`,
+      );
+    }
+
+    // 7. 写回磁盘
     const { writeFixedFiles } = await import('../ai-engine/utils/quality-auto-fix.js');
     const { written } = writeFixedFiles(componentDir, files);
-    this.logger.log(`[quality-fix] ${id}: 修复 ${allFixed.length} 处（规范 ${fixableIssues.length} + 样式），写入 ${written} 文件`);
+    // 🛡️ 审计计数行：`注入=0` 必须与 `跑了但干净` 可区分（mapping 缺失时 mappingCount=0 即证据；
+    //    unresolved>0 表示「产物引用了 mapping 未登记的变量」= 幽灵引用信号，不会被静默吞掉）
+    this.logger.log(
+      `[quality-fix] ${id}: 修复 ${allFixed.length} 处（规范 ${fixableIssues.length} + 样式），写入 ${written} 文件；` +
+        `资源 import 终验 vue=${resourceInject.vue} 注入=${resourceInject.injected} ` +
+        `未解析=${resourceInject.unresolved} mapping=${resourceInject.mappingCount}`,
+    );
 
-    // 7. 重新评分并写回 component-meta.json
+    // 8. 重新评分并写回 component-meta.json
     const newResult = await scoreComponentDir(componentDir, { componentId: id, persist: true });
 
-    // 8. 同步到所有副本
+    // 9. 同步到所有副本
     await this.persistQualityToReplicas(id, newResult.quality);
 
     return {

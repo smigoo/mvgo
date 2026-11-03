@@ -15,6 +15,7 @@ import {
   selectAnchorMountCandidate,
   isResourceRendered,
   anchorOwnerRank,
+  isTextLeafTag,
   DETERMINISTIC_ANCHOR_SCORE,
 } from './mount-target-scoring.js';
 
@@ -459,5 +460,45 @@ describe('锚点 owner 优先级（④ 跨文件重复 sid 的确定性归属）
     });
     expect(r && r.skip).toBe(true);
     expect(r.reason).toBe('anchor-already-bg');
+  });
+});
+
+describe('M2 文本叶子禁挂背景（2026-11-03 · mc-1793718100141-30ba57ca 实锤）', () => {
+  it('阳性对照：span/p 候选直接 -Infinity，div 容器正常评分', () => {
+    const mapping = bgMapping();
+    const spanCand = { tagName: 'span', cls: 'c-x-stat-card-value', depth: 3 };
+    const divCand = { tagName: 'div', cls: 'c-x-stat-card-value', depth: 3 };
+    expect(scoreMountTarget(mapping, spanCand)).toBe(Number.NEGATIVE_INFINITY);
+    expect(scoreMountTarget(mapping, divCand)).not.toBe(Number.NEGATIVE_INFINITY);
+    // 即便文本候选语义满分也不许中标
+    const spanFull = { tagName: 'span', cls: mapping.mountTarget || 'bg', depth: 2 };
+    expect(scoreMountTarget(mapping, spanFull)).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  it('isTextLeafTag 只认文本语义标签，容器不受影响', () => {
+    expect(isTextLeafTag('span')).toBe(true);
+    expect(isTextLeafTag('p')).toBe(true);
+    expect(isTextLeafTag('div')).toBe(false);
+    expect(isTextLeafTag('section')).toBe(false);
+    expect(isTextLeafTag('img')).toBe(false);
+    expect(isTextLeafTag('base-panel')).toBe(false);
+    expect(isTextLeafTag(undefined)).toBe(false);
+  });
+
+  it('文本叶子即便带锚 sid + 确定性锚短路也被排除', () => {
+    const mapping = bgMapping({ ownerSectionId: '7:7' });
+    const spanAnchor = { tagName: 'span', cls: 'c-x-value', dataSectionId: '7:7' };
+    expect(scoreMountTarget(mapping, spanAnchor)).toBe(Number.NEGATIVE_INFINITY);
+    const divAnchor = { tagName: 'div', cls: 'c-x-card', dataSectionId: '7:7' };
+    expect(scoreMountTarget(mapping, divAnchor)).toBe(DETERMINISTIC_ANCHOR_SCORE);
+  });
+
+  it('selectAnchorMountCandidate：同名 sid 的 span 跳过、div 容器中标', () => {
+    const files = {
+      'package/index.vue':
+        '<template><span class="c-x-val" data-section-id="8:8"></span><div class="c-x-card" data-section-id="8:8"></div></template>',
+    };
+    const r = selectAnchorMountCandidate(files, bgMapping({ ownerSectionId: '8:8' }));
+    expect(r && !r.skip && r.cand.cls).toBe('c-x-card');
   });
 });

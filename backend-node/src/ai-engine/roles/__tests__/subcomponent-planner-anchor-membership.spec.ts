@@ -16,7 +16,7 @@ jest.mock('../../logger/index.js', () => ({
   createLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} }),
 }))
 
-import { collectSourceNodeIds } from '../subcomponent-planner.js'
+import { buildEffectiveSection, collectSourceNodeIds } from '../subcomponent-planner.js'
 import { FIGMA_ID_RE, sectionAnchorKey } from '../../utils/section-anchor-truth.js'
 describe('R1 collectSourceNodeIds：归属候选与几何键同源（单一来源）', () => {
   test('🔴 真机复刻（646085b2）：修复产物 figmaAnchorId 进入归属集合，不变量成立', () => {
@@ -73,5 +73,41 @@ describe('R1 collectSourceNodeIds：归属候选与几何键同源（单一来�
   test('语义 id 不进归属集合（id 仍做形态校验，语义名不是节点引用）', () => {
     const ids = collectSourceNodeIds({ id: 'section-cards', name: 'x' })
     expect(ids).not.toContain('section-cards')
+  })
+})
+
+describe('R7 修复锚点的 plan 契约透传', () => {
+  const ctx = () => ({ enableInternalSplit: false, allInternalSubcomponents: [], figmaIndex: null })
+
+  test('普通叶：figmaAnchorId 不被白名单重建剥离；缺字段不产键', () => {
+    const repaired = buildEffectiveSection({ id: '136:122', figmaAnchorId: '2:8023', body: { children: [] } }, 0, ctx())
+    const plain = buildEffectiveSection({ id: '136:122', body: { children: [] } }, 0, ctx())
+    expect(repaired.figmaAnchorId).toBe('2:8023')
+    expect(Object.prototype.hasOwnProperty.call(plain, 'figmaAnchorId')).toBe(false)
+  })
+
+  test('容器叶：修复锚与 children 一起存活', () => {
+    const out = buildEffectiveSection({
+      id: '136:122', figmaAnchorId: '2:8023', isLayoutContainer: true,
+      children: [{ id: '136:123', body: { children: [] } }],
+    }, 0, ctx())
+    expect(out.isLayoutContainer).toBe(true)
+    expect(out.figmaAnchorId).toBe('2:8023')
+  })
+
+  test('富卡列表合成叶：id 变为 -list 后主锚仍指向原修复容器', () => {
+    const richItems = [
+      { id: '136:127', content: { elements: [{ text: '危化品车' }, { text: '51次' }] } },
+      { id: '136:128', content: { elements: [{ text: '重型货车' }, { text: '2次' }] } },
+    ]
+    const out = buildEffectiveSection({
+      id: '136:122', figmaAnchorId: '2:8023', isLayoutContainer: true, layout: 'horizontal',
+      body: { items: richItems },
+      children: [{ id: '136:127' }, { id: '136:128' }],
+    }, 0, ctx())
+    expect(out.children).toHaveLength(1)
+    expect(out.children[0].collapsed).toBe(true)
+    expect(out.children[0].id).toBe('136:122-list')
+    expect(out.children[0].figmaAnchorId).toBe('2:8023')
   })
 })

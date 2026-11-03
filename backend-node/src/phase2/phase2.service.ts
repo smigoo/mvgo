@@ -309,6 +309,13 @@ export class Phase2Service {
       userId,
       generationTier: 'max',
       sourceType: 'figma',
+      // 🆕 2026-11-03 高级选项「生成约束」落库：此前这三个字段只进 engineer prompt，
+      //   任务记录里一个字都没有 ⇒ 详情页无法展示、断点续跑/重试复现不了首轮意图。
+      //   注意这是**整体覆盖**写入（lite/phase2 controller 先建过一份 queued 记录），
+      //   所以排队期能看到、跑起来后也不会丢。
+      extraPrompt,
+      requirementDocText,
+      userComponentId,
     });
     this.sendSseLog(sessionId, 'info', `任务已创建: ${finalComponentName}`);
 
@@ -1451,6 +1458,17 @@ export class Phase2Service {
       const task = this.tasksService.getTask(sessionId);
       const config = task?.configSnapshot || {};
 
+      // 🆕 2026-11-03 断点续跑必须复现**首轮生成约束**：此前这里只传 config，
+      //   extraPrompt/requirementDocText/userComponentId 全部丢失 ⇒ 用户点「续跑」
+      //   实际是在没有自己那段提示词的情况下跑完，产物与首轮意图不一致
+      //   （userComponentId 丢失还会让产物目录/类前缀与首轮不同）。
+      //   数据源＝任务记录（createTask 时已落库），不另立第二处。
+      const genInputs = {
+        extraPrompt: task?.extraPrompt,
+        requirementDocText: task?.requirementDocText,
+        userComponentId: task?.userComponentId,
+      };
+
       // 异步执行续跑（不阻塞恢复响应）
       this.executeGeneration(sessionId, {
         componentName: params.componentName,
@@ -1462,6 +1480,7 @@ export class Phase2Service {
         userId: params.userId,
         panelType: params.panelType,
         target: params.target,
+        ...genInputs,
         failureGuidance: params.failureGuidance, // 🛡️ P1-3：上轮失败指导
         uiCache: cp.uiCache || undefined,
         resumeData: cp.resumeData || undefined,

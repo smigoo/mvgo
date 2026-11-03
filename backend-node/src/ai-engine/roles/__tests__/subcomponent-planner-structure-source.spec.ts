@@ -313,6 +313,48 @@ describe('vision 原生 panel-header 识别（9e0b7a97：不再依赖几何行�
     expect(res.effectiveSections.map((s: any) => s.id)).toContain('section-header')
   })
 
+  it('001c5615：body 仅标题/装饰但 header.headerSlots 有实际 Tab 内容 ⇒ 保留插槽宿主段', () => {
+    const withExplicitSlots = {
+      layout: { sections: [
+        {
+          id: '2:7959', role: '常驻', name: '标题栏与Tab切换',
+          headerRelation: 'title-same-row', slotCandidate: 'header-right',
+          header: {
+            title: '重点车辆监测', controls: [],
+            headerSlots: [
+              { slotType: 'header-right', elementType: 'tab', content: '江阴靖江长江隧道', active: true },
+              { slotType: 'header-right', elementType: 'tab', content: '江阴大桥', active: false },
+            ],
+          },
+          body: { children: [
+            { id: 'icon-decor', role: '装饰', type: 'icon' },
+            { id: 'title-text', role: '常驻', type: 'text', text: '重点车辆监测' },
+          ] },
+        },
+        ...layout.layout.sections.slice(1),
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(withExplicitSlots, { enableInternalSplit: false })
+    expect(res.effectiveSections.map((s: any) => s.id)).toEqual(['2:7959', '48:5798', 'section-footer'])
+  })
+
+  it('空或空白 header.headerSlots 不得豁免纯 chrome 过滤', () => {
+    const withoutSlotContent = {
+      layout: { sections: [
+        {
+          ...layout.layout.sections[0],
+          header: {
+            title: '部署节点概览', controls: [],
+            headerSlots: [{ slotType: 'header-right', elementType: 'tab', content: '  ' }],
+          },
+        },
+        ...layout.layout.sections.slice(1),
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(withoutSlotContent)
+    expect(res.effectiveSections.map((s: any) => s.id)).toEqual(['48:5798', 'section-footer'])
+  })
+
   it('Vue3：skipPanelHeaderFilter=true 仍保留 header，不改变既有双端契约', () => {
     const res: any = new SubcomponentPlanner().plan(layout, { skipPanelHeaderFilter: true })
     expect(res.effectiveSections.map((s: any) => s.id)).toContain('section-header')

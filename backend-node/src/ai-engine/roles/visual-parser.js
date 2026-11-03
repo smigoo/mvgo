@@ -27,6 +27,15 @@ import { injectRepeatedCardTruth, injectTransparentContainerTruth } from '../uti
 // 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
 // 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
 import { fillToRgba } from '../utils/section-tree.js'
+// 🛡️ P3（2026-11-03）：装饰叶子语义判据单一来源。`_isNonSemanticName` / `_isResourceWrapperName` /
+// `collectDecorLeaves` 全仓唯一实现在 utils/decor-leaf-truth.js，本类方法仅做委托——
+// 覆盖率判定与质量评分必须同源，否则「豁免口径」会在两处各长一套。
+import {
+  isNonSemanticName,
+  isResourceWrapperName,
+  collectDecorLeaves,
+} from '../utils/decor-leaf-truth.js'
+import { hasNodeResourceDeclaration } from '../utils/resource-declaration-truth.js'
 
 const logger = createLogger({ name: 'visual-parser' })
 
@@ -1762,10 +1771,14 @@ ${analysisTask}`
    * @returns {number} 覆盖的元素数
    */
   _applyFigmaElementHeightRatios(parsed, figmaData) {
+    // 🛡️ stats out param（2026-11-03）：section 级配对分支命中数回传，供真机日志计数行取证。
+    //   判据必须挂日志计数——只靠函数返回值验证无法区分走了哪条分支（假绿）。
+    const stats = {}
     const count = applyFigmaElementHeightRatios(parsed, figmaData, {
       disabled: process.env.MC_DISABLE_FIGMA_ELEM_RATIO === '1',
+      stats,
     })
-    if (count) logger.info('A4 元素级高度比例已应用', { count })
+    if (count) logger.info('A4 元素级高度比例已应用', { count, sectionStats: stats })
     return count
   }
 
@@ -1919,17 +1932,8 @@ ${analysisTask}`
    * 「名字」是合理的——它们是图层命名而非内容语义，把它们算进 missing 会虚低覆盖率。
    */
   _isNonSemanticName(name) {
-    const n = (name || '').trim()
-    if (!n) return true
-    // Figma 自动编号命名（Group 1 / Vector 2 / Rectangle 26 / Ellipse 3 ...）
-    if (/^(group|vector|rectangle|ellipse|frame|line|polygon|star|slice|boolean)\b/i.test(n)) return true
-    // 通用占位名
-    if (/^(bg|icon|img|g|circle|path|mask|shape|image|text|label|value|content)\b/i.test(n)) return true
-    // 技术组件名（@antd/tab / @echarts/bar / @ant/select ...）
-    if (n.startsWith('@')) return true
-    // 结构占位名
-    if (/^(btn|button|tit|charts|sub-header|header-?|footer|slot-|tab)\b/i.test(n)) return true
-    return false
+    // 🛡️ P3（2026-11-03）：实现已迁到 utils/decor-leaf-truth.js（单一来源），此处仅委托。
+    return isNonSemanticName(name)
   }
 
   /**
@@ -1938,24 +1942,8 @@ ${analysisTask}`
    * 等「结构容器」——结构容器内部通常有真实内容（如标题文字），剪枝会误伤覆盖率。
    */
   _isResourceWrapperName(name) {
-    const n = (name || '').trim()
-    if (!n) return false
-    // 🛡️ 技术组件剪枝（2026-09-02 修复过度剪枝）：只剪「图表库」（@echarts/@chart 等
-    // canvas 运行时渲染，下钻只会导出柱子碎片），UI 控件库（@antd 等）不剪——设计稿常把
-    // 业务内容塞在 @antd/tab → cons/ 下（12 个真实设备卡片 + 导航）。与
-    // figma-connector._isChartStackLibrary 同口径（mc-max-1788003760938 / 设备监测实锤）。
-    const mark = n.toLowerCase().match(/@([a-z]+)/)
-    if (
-      mark &&
-      /^(echarts?|chartjs|charts?|plotly|g2|g2plot|antv|d3|highcharts|bizcharts|vchart)$/.test(mark[1])
-    ) {
-      return true
-    }
-    // 矢量组「g」：内部是 circle/path 装饰矢量（实测 g(GROUP)→circle/path），不还原。
-    // 精确匹配「g」本身，避免 /^g\b/ 误伤 g-xxx 这类真实命名。
-    if (n.toLowerCase() === 'g') return true
-    // 资源封装（bg 背景图 / icon 图标 / img|image 图片）：内部是资源渲染结果，不还原
-    return /^(bg|icon|img|image)\b/i.test(n)
+    // 🛡️ P3（2026-11-03）：实现已迁到 utils/decor-leaf-truth.js（单一来源），此处仅委托。
+    return isResourceWrapperName(name)
   }
 
   /**
@@ -2005,6 +1993,24 @@ ${analysisTask}`
         }
       }
       _traverse(figmaData)
+
+      // 🛡️ P3（2026-11-03 · 离线重放 273 目录实证）：装饰叶子分账。
+      // 命中下方 `:ignored` 分支的「无语义名 ∧ 无 characters ∧ 非 UI 技术栈标记」节点里，有一族
+      // **装饰叶子**（标题渐变装饰线 / 半透明底条 / 10px 图标）。旧口径把它们一并 ignored ⇒
+      // 只落进 `excludedCount`，读者无法区分「豁免正确」与「漏判缺陷」。
+      // 实测（Phase 6 · 273 目录 · dist 真实评分路径）：1600 个装饰叶子中 1553 个（97.06%）在产物里
+      // 能找到对应色值，故**绝不并入 missing**（会造成 97% 假缺失、覆盖率从 95% 砸到 <35% 触发误中止）；
+      // 此处只做**结构分账**，
+      // 让「被豁免了多少、都是什么填充类型」在报告里可见。真正「有没有落地」的判定必须等产物
+      // 写盘后由 quality-score-v1 的 `judgeDecorLeaves` 复算（本阶段产物尚不存在，无法判定）。
+      // 🛡️ fail-open：分账是**附加可观测性**，任何异常都不得影响覆盖率主判据（与 quality-score-v1 同策略）。
+      let decorLeafMap = new Map()
+      try {
+        decorLeafMap = collectDecorLeaves(figmaData)
+      } catch (err) {
+        logger.warn('装饰叶子采集失败（非阻断，分账降级为空）', { error: err && err.message })
+      }
+      const decorLeavesIgnored = []
 
       // 2. 从 Vision 分���结果提取已识别元素名（layoutStructure sections + visualElements keys）
       const identifiedNames = new Set()
@@ -2153,7 +2159,12 @@ ${analysisTask}`
         const techMarker = elem.name.trim().match(/^@([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/)
         if (this._isNonSemanticName(elem.name) && !charsLower.trim()) {
           const isUITechMarker = !!techMarker && !this._isResourceWrapperName(elem.name)
-          if (!isUITechMarker) { stateByNode.set(elem.node, 'ignored'); continue }
+          if (!isUITechMarker) {
+            // 🛡️ P3（2026-11-03）：装饰叶子在「被忽略」的同时留痕（只计数，不改判定状态）。
+            const decorLeaf = decorLeafMap.get(elem.node)
+            if (decorLeaf) decorLeavesIgnored.push(decorLeaf)
+            stateByNode.set(elem.node, 'ignored'); continue
+          }
           const libToken = techMarker[1].toLowerCase()
           const compToken = techMarker[2].toLowerCase()
           // 宽松匹配：全等 / 库+组件 / 首词（date-picker → date），避免措辞差异造成假 missing
@@ -2268,6 +2279,29 @@ ${analysisTask}`
         ? Math.round((coreMatched / coverageBasisJudged) * 100)
         : 100
 
+      // 🛡️ P3（2026-11-03）：装饰叶子分账（结构层，不涉及落地判定）。
+      // 与 `excludedCount` 的关系：decorLeaves.total 是 excludedCount 的**子集**（只统计命中忽略分支
+      // 且形态为装饰叶子的那些），故两者不可相加，也不进 coverageRate 分母。
+      const decorByFillType = {}
+      for (const d of decorLeavesIgnored) {
+        decorByFillType[d.fillType] = (decorByFillType[d.fillType] || 0) + 1
+      }
+      const decorLeavesBlock = {
+        total: decorLeavesIgnored.length,
+        byFillType: decorByFillType,
+        // 只有「已落产物」才能判定落地与否 ⇒ 本阶段恒 pending，由 quality-score-v1 复算覆盖
+        verdict: 'pending-offline-judge',
+        samples: decorLeavesIgnored.slice(0, 12).map((d) => ({
+          id: d.id,
+          name: d.name,
+          type: d.type,
+          w: d.w,
+          h: d.h,
+          fillType: d.fillType,
+          cornerRadius: d.cornerRadius,
+        })),
+      }
+
       const report = {
         totalFigma,
         judgedTotal,
@@ -2303,6 +2337,8 @@ ${analysisTask}`
           characters: (e.characters || '').slice(0, 24)
         })),
         uncertain: uncertain.slice(0, 10).map(e => ({ name: e.name, type: e.type })),
+        // 🛡️ P3（2026-11-03）：装饰叶子分账，让「豁免了多少、是什么填充」可见
+        decorLeaves: decorLeavesBlock,
         summary: coverageRate >= 90 ? '优秀' : coverageRate >= 75 ? '良好' : coverageRate >= 60 ? '一般' : '需关注'
       }
 
@@ -2312,6 +2348,15 @@ ${analysisTask}`
         judgedTotal,
         totalFigma,
         summary: report.summary
+      })
+
+      // 🛡️ P3（2026-11-03）：装饰叶子分账计数行（真机日志可核，禁止只在单测里绿）。
+      // 关注点：该行有值时说明本段确实存在被忽略的装饰层；verdict 恒为 pending-offline-judge，
+      // 落地与否看 quality-score-v1 落盘的 `quality.decorLeaves`（verified/exempt/unverified 三分）。
+      logger.info(`🎨 装饰叶子分账: ${decorLeavesBlock.total} 个被忽略（${Object.entries(decorByFillType).map(([k, v]) => `${k}=${v}`).join(' ') || '无'}），落地判定交由离线评分`, {
+        total: decorLeavesBlock.total,
+        byFillType: decorByFillType,
+        excludedCount: report.excludedCount,
       })
 
       // 🛡️ P1-6（2026-10-01）：技术栈标记未落地必须**有声**（旧口径全静默 ⇒ 按钮整块消失也报「良好」）。
@@ -3146,12 +3191,14 @@ ${analysisTask}`
     if (available.length === 0) return 0
 
     let fixedCount = 0
+    let childOwnedBackgroundSkips = 0
 
     // 定位 content 对象（flat 格式）
     const content = parsed.content
     if (content && typeof content === 'object') {
       // 🛡️ 容器判断：content.children 已带 resourceFile 时，背景由子元素决定，不补统一背景图
       const contentHasChildResources = this._bodyChildrenHaveResources(content)
+      if (contentHasChildResources && !content.backgroundImage) childOwnedBackgroundSkips++
       const contentBg = contentHasChildResources ? null : this._findContentBackgroundResource(content, available, parsed)
       if (contentBg && !content.backgroundImage) {
         // 用精确计算替代硬编码 cover/center/no-repeat
@@ -3182,7 +3229,10 @@ ${analysisTask}`
         // 说明该 section 是容器，背景应由子元素渲染，不应补统一背景图。
         // 否则 _findContentBackgroundResource 会误把某张具体卡片背景（如 switch/active 的 bg-8788）
         // 放大贴满整个 section（header/列表区都会中招，视觉严重错乱）。
-        if (this._bodyChildrenHaveResources(body)) continue
+        if (this._bodyChildrenHaveResources(body)) {
+          childOwnedBackgroundSkips++
+          continue
+        }
         const bodyBg = this._findContentBackgroundResource(body, available, parsed)
         if (bodyBg) {
           const bodyDims = body.dimensions || parsed.structure?.dimensions || null
@@ -3203,6 +3253,9 @@ ${analysisTask}`
       }
     }
 
+    if (childOwnedBackgroundSkips > 0) {
+      logger.info('🛡️ 内容区子级资源归属保护', { childOwnedBackgroundSkips, fixedCount })
+    }
     return fixedCount
   }
 
@@ -3273,13 +3326,7 @@ ${analysisTask}`
   }
 
   _nodeHasResource(node) {
-    if (!node || typeof node !== 'object') return false
-    if (node.resourceFile || node.bgResource || node.backgroundImage?.src) return true
-    const kids = node.children || node.items || []
-    if (Array.isArray(kids) && kids.length > 0) {
-      return kids.some((k) => this._nodeHasResource(k))
-    }
-    return false
+    return hasNodeResourceDeclaration(node)
   }
 
   /**

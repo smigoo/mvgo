@@ -1,0 +1,53 @@
+{
+  "name": "url-summarize",
+  "label": "URL 内容总结",
+  "description": "输入网页 URL → 抓取正文 → AI 总结摘要与要点（需配置模型 Key）",
+  "scenario": "网络分析",
+  "source": "user",
+  "author": "anonymous",
+  "workflow": {
+    "entryNode": "start",
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "label": "入口节点"
+      },
+      {
+        "id": "fetch",
+        "type": "agent",
+        "handler": "my-fetch",
+        "label": "网页抓取",
+        "config": {}
+      },
+      {
+        "id": "sum",
+        "type": "agent",
+        "handler": "text-summarizer",
+        "label": "AI 总结",
+        "config": {}
+      },
+      {
+        "id": "end",
+        "type": "end",
+        "label": "结束节点"
+      }
+    ],
+    "edges": [
+      {
+        "source": "start",
+        "target": "fetch"
+      },
+      {
+        "source": "fetch",
+        "target": "sum"
+      },
+      {
+        "source": "sum",
+        "target": "end"
+      }
+    ]
+  },
+  "version": 1,
+  "createdAt": 1787222370264
+}

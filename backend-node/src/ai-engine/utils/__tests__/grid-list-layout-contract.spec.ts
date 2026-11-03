@@ -26,6 +26,72 @@ import {
 } from '../grid-list-layout-contract.js'
 import { extractStyleBlocksDeep } from '../flex-sibling-guard.js'
 
+describe('R8-10：未折叠 declaredContent 网格接管', () => {
+  const figmaIndex = new Map([['38:3211', {
+    rawNode: { id: '38:3211', children: [{ id: '38:3211-head', type: 'FRAME' }, { id: '38:3211-grid', type: 'FRAME', children: mkBoxes(15, 4) }] },
+  }]])
+  const section = {
+    id: '38:3211',
+    declaredContent: {
+      layout: 'grid-4-columns', gridColumns: 4,
+      items: Array.from({ length: 15 }, (_, i) => ({ text: `厂商${i + 1}` })),
+    },
+  }
+
+  test('布局与列数从 declaredContent 读取，几何仍由 Figma 真值给出', () => {
+    const c = buildGridContract(section, { figmaIndex }) as any
+    expect(c).toMatchObject({ cols: 4, cardW: 126, cardH: 30, colGap: 20, rowGap: 20, itemCount: 15, isGrid: true, geometryFrom: 'figma:38:3211/38:3211-grid' })
+  })
+
+  test('无 v-for 折叠标记也可经同一刀41契约检测并确定性修复', () => {
+    const file = {
+      path: 'package/components/ContentSection4.vue',
+      content: `<template><div data-section-id="38:3211" class="vendor-panel"><div class="vendor-grid"><div v-for="item in vendors" class="vendor-cell">{{ item.text }}</div></div></div></template><style scoped>.vendor-panel{display:flex;flex-direction:column}.vendor-grid{display:flex;flex-direction:column;gap:10px}.vendor-cell{height:30px}</style>`,
+    }
+    const det = detectGridListLayoutIssues([file], { sections: [section], figmaIndex })
+    expect(det.issues).toHaveLength(1)
+    const healed = healGridListLayout([file], det.issues)
+    expect(healed.healed).toHaveLength(1)
+    expect(healed.files[0].content).toContain('display: grid')
+    expect(healed.files[0].content).toContain('grid-template-columns: repeat(4, 126px)')
+    expect(healed.files[0].content).toContain('grid-auto-rows: 30px')
+    expect(healed.files[0].content).toContain('column-gap: 20px')
+    expect(healed.files[0].content).toContain('row-gap: 20px')
+    expect(healed.files[0].content).toContain('height:30px')
+    // 反误伤：section 锚点在外层面板，内联契约只能落在真实 v-for 父宿主。
+    expect(healed.files[0].content).toContain('<div data-section-id="38:3211" class="vendor-panel">')
+    expect(healed.files[0].content).not.toContain('class="vendor-panel" style=')
+    expect(healed.files[0].content).toMatch(/<div class="vendor-grid" style="[^"]*display:\s*grid/)
+  })
+
+  test('Figma 分行兄弟容器按声明总项数聚合为同一网格真值', () => {
+    const boxes = mkBoxes(6, 4)
+    const splitRowsIndex = new Map([['38:3137', {
+      rawNode: {
+        id: '38:3137',
+        children: [
+          { id: '38:3138', type: 'RECTANGLE' },
+          { id: '38:3139', type: 'TEXT' },
+          { id: '38:3140', type: 'FRAME', children: boxes.slice(0, 4) },
+          { id: '38:3153', type: 'FRAME', children: boxes.slice(4) },
+          { id: '38:3160', type: 'FRAME', children: [{ id: 'icon', absoluteBoundingBox: { x: 0, y: 0, width: 16, height: 16 } }] },
+        ],
+      },
+    }]])
+    const c = buildGridContract({
+      id: '38:3137', layout: 'grid',
+      body: { items: Array.from({ length: 6 }, () => ({ text: '厂商' })) },
+    }, { figmaIndex: splitRowsIndex }) as any
+    expect(c).toMatchObject({ cols: 4, rows: 2, itemCount: 6, cardW: 126, cardH: 30, colGap: 20, rowGap: 20 })
+    expect(c.geometryFrom).toBe('figma:38:3137/38:3140+38:3153')
+  })
+
+  test('缺 declaredContent 网格声明时不凭 Figma 几何接管普通列表', () => {
+    const plain = { id: '38:3211', items: Array.from({ length: 15 }, () => ({ text: '厂商' })) }
+    expect(buildGridContract(plain, { figmaIndex })?.isGrid).toBe(false)
+  })
+})
+
 // ── 真机几何（38:3167-list / 38:3211-list，x 步长 146=126+20，y 步长 50=30+20）──
 function mkBoxes(count, cols) {
   const out = []

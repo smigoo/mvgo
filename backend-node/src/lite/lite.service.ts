@@ -413,18 +413,19 @@ export class LiteService {
       let declareJson: any = null;
       try {
         // 🛡️ U1-lite：生成 + 裸写表单控件守卫闭环（命中→修正重试→择优）
-        const guarded = await this.callCodegenWithControlGuard(
+        // 🛡️ 截断守卫：缺闭合标签（疑似 LLM 输出截断）→ 自动重试一次（2026-11-03）
+        const guarded = await this.callCodegenWithTruncationRetry({
           agent,
-          uploadPath,
-          isMicrocode
+          imagePath: uploadPath,
+          prompt: isMicrocode
             ? this.buildMicrocodeCodegenPrompt(brief, finalComponentName, dto, width, height)
             : this.buildCodegenPrompt(brief, finalComponentName, dto, width, height),
           isMicrocode,
           sessionId,
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
-          { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
-        );
+          callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
+        });
         vueCode = guarded.vueCode;
         declareJson = guarded.declareJson ?? null;
       } catch (err: any) {
@@ -671,9 +672,20 @@ ${businessStyles}
 
       // 元数据先进入 outputPath，确保 revision、后端 workspace 与前端 workspace
       // 使用同一份完整文件组，不再出现 dev 有 metadata、prod-style 缺失的情况。
+      // 🛡️ S1.1（2026-11-03）：merge 写入——保留早前阶段已落字段（如 patchHitReport），不整量覆写。
+      const metaPathL1 = join(outputPath, 'component-meta.json');
+      let prevMetaL1: Record<string, any> = {};
+      try {
+        if (existsSync(metaPathL1)) {
+          prevMetaL1 = JSON.parse(readFileSync(metaPathL1, 'utf-8')) || {};
+        }
+      } catch {
+        prevMetaL1 = {};
+      }
       await writeFile(
-        join(outputPath, 'component-meta.json'),
+        metaPathL1,
         JSON.stringify({
+          ...prevMetaL1,
           requirementDoc: (dto as any).requirementDoc || '',
           docAnalysis: null,
           // 语义化组件名（视觉分析推导）：中文名展示、英文名作代码标识
@@ -2687,15 +2699,24 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     return vueCode.replace(fullTag, () => newFullTag);
   }
 
-  private validateLiteSfc(vueCode: string): void {
+  /**
+   * 🛡️ SFC 必需块缺失检测——判据单一来源：
+   * validateLiteSfc（拒收门禁）与 callCodegenWithTruncationRetry（截断重试）共用同一口径，
+   * 禁止在别处复制第二份 requiredBlocks。
+   */
+  private missingSfcBlocks(vueCode: string): string[] {
     const requiredBlocks = [
       ['<template', '</template>'],
       ['<script setup', '</script>'],
       ['<style', '</style>'],
     ] as const;
-    const missing = requiredBlocks
+    return requiredBlocks
       .filter(([openTag, closeTag]) => !vueCode.includes(openTag) || !vueCode.includes(closeTag))
       .map(([, closeTag]) => closeTag);
+  }
+
+  private validateLiteSfc(vueCode: string): void {
+    const missing = this.missingSfcBlocks(vueCode);
 
     if (missing.length > 0) {
       throw this.wrapError(
@@ -2703,6 +2724,41 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         `生成的组件结构不完整，缺少闭合标签: ${missing.join(', ')}`,
       );
     }
+  }
+
+  /**
+   * 🛡️ 截断守卫（2026-11-03，真机实证 mv-lite-1793686730643-ae7d4a85）：
+   * LLM 输出被截断（文件在字符串中间硬切断、缺 </script>，典型 max_tokens 到顶/流中断）时，
+   * 原先直接落到 validateLiteSfc 抛「生成失败」给用户。治本=在进入 sanitize/validate 链**之前**
+   * 检测缺失并自动重试一次；两趟仍缺则放行到 validateLiteSfc 照旧拒收（fail-visible）。
+   * 主路径与断点续跑路径统一走本 helper，不复制第二份重试逻辑。
+   */
+  private async callCodegenWithTruncationRetry(params: {
+    agent: any,
+    imagePath: string,
+    prompt: string,
+    isMicrocode: boolean,
+    sessionId: string,
+    callOpts: any,
+    progressStage?: string,
+  }): Promise<{ vueCode: string; declareJson: any }> {
+    const { agent, imagePath, prompt, isMicrocode, sessionId, callOpts, progressStage = 'generating' } = params;
+    let guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts);
+    const missing = this.missingSfcBlocks(guarded.vueCode || '');
+    if (missing.length > 0) {
+      // 日志计数行：真机可按「疑似输出截断」grep 审计重试命中率
+      this.logger.warn(
+        `[${sessionId}] 检测到生成代码不完整（缺 ${missing.join(', ')}，疑似输出截断），自动重试一次`,
+      );
+      this.progressService.sendProgress(sessionId, {
+        type: 'progress',
+        stage: progressStage,
+        status: 'running',
+        message: '检测到生成代码不完整（疑似输出截断），自动重试一次...',
+      });
+      guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts);
+    }
+    return { vueCode: guarded.vueCode, declareJson: guarded.declareJson ?? null };
   }
 
   /** Lite 微码只保留布局展示所需的最小声明，运行时字段由系统确定性补齐 */
@@ -3441,18 +3497,19 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         const screenshotPath = this.findScreenshotPath(outputPath);
 
         // 🛡️ U1-lite：生成 + 裸写表单控件守卫闭环（与主路径同款）
-        const guarded = await this.callCodegenWithControlGuard(
+        // 🛡️ 截断守卫：与主路径统一走 callCodegenWithTruncationRetry（2026-11-03）
+        const guarded = await this.callCodegenWithTruncationRetry({
           agent,
-          screenshotPath,
-          isMicrocode
+          imagePath: screenshotPath,
+          prompt: isMicrocode
             ? this.buildMicrocodeCodegenPrompt(brief, finalComponentName, dto, width, height)
             : this.buildCodegenPrompt(brief, finalComponentName, dto, width, height),
           isMicrocode,
           sessionId,
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
-          { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
-        );
+          callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
+        });
         vueCode = guarded.vueCode;
         declareJson = guarded.declareJson ?? null;
 
@@ -3515,9 +3572,20 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
       }
 
       const resumeGroupId = await this.resolvePrivateGroupId(dto.groupId, this.tasksService.getTask(sessionId)?.userId);
+      // 🛡️ S1.1（2026-11-03）：merge 写入——保留早前阶段已落字段（如 patchHitReport），不整量覆写。
+      const metaPathL2 = join(outputPath, 'component-meta.json');
+      let prevMetaL2: Record<string, any> = {};
+      try {
+        if (existsSync(metaPathL2)) {
+          prevMetaL2 = JSON.parse(readFileSync(metaPathL2, 'utf-8')) || {};
+        }
+      } catch {
+        prevMetaL2 = {};
+      }
       await writeFile(
-        join(outputPath, 'component-meta.json'),
+        metaPathL2,
         JSON.stringify({
+          ...prevMetaL2,
           requirementDoc: (dto as any).requirementDoc || '',
           docAnalysis: null,
           // 语义化组件名（视觉分析推导）：中文名展示、英文名作代码标识

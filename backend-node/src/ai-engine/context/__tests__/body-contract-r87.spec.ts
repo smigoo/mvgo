@@ -159,4 +159,16 @@ describe('R8-7 段内容契约透传（normalizeComponentPlan）', () => {
     const out = normalizeComponentPlan({ effectiveSections: [sec] })
     expect(out.normalization.bodyTruncated).toBeGreaterThan(0)
   })
+
+  it('R7：figmaAnchorId 穿过 generationInput 白名单并计 repairedAnchors', () => {
+    const out = normalizeComponentPlan({
+      effectiveSections: [
+        { ...makeStatSection(), figmaAnchorId: '2:8023' },
+        { id: 'plain', sourceNodeIds: ['plain'] },
+      ],
+    })
+    expect(out.effectiveSections[0].figmaAnchorId).toBe('2:8023')
+    expect(out.effectiveSections[1]).not.toHaveProperty('figmaAnchorId')
+    expect(out.normalization.repairedAnchors).toBe(1)
+  })
 })

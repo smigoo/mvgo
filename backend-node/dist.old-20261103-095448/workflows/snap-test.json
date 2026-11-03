@@ -1,0 +1,33 @@
+{
+  "name": "snap-test",
+  "label": "快照测试",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "parse",
+      "type": "agent",
+      "handler": "url-parser-agent",
+      "label": "URL 解析"
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "parse"
+    },
+    {
+      "source": "parse",
+      "target": "end"
+    }
+  ]
+}

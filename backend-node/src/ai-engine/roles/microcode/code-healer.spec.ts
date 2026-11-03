@@ -665,7 +665,7 @@ watch(activeTab, (newTab) => {})
 // `font-size: @fontSize` → variable undefined → 候选标红。
 // ============================================================
 
-import { healThemeMixinVarRefs, healThemeMixinVarRefsInVue } from './code-healer.js'
+import { healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healBareVarArithmeticToCalc } from './code-healer.js'
 
 const THEME_VARS = `.common() {
   @fontSize: 14px;
@@ -676,8 +676,56 @@ const THEME_VARS = `.common() {
 }
 `
 
-describe('healThemeMixinVarRefs —— mixin 闭包变量引用改写为 var()', () => {
-  it('顶层 @fontSize 引用 → var(--fontSize, 14px)（事故场景）', () => {
+// ============================================================
+// 🆕 2026-11-03 治本：裸 Less 变量算术 → calc() 包裹
+// 实锤 mc-max-1793679140403-eaa64a71：StatsSection.vue 因
+// `font-size: @fontSize * 2` LESS「Operation on an invalid type」
+// 被 SFC 写盘门禁判死 → 组件文件缺失 → CODE-023 → L0-B 重试耗尽。
+// ============================================================
+
+describe('healBareVarArithmeticToCalc —— 裸变量算术包裹 calc()', () => {
+  it('var() 透传定义的 @fontSize * 2 → calc(@fontSize * 2)（eaa64a71 事故场景）', () => {
+    const src = `@fontSize: var(--fontSize);
+.c-eaa64a-stat-value {
+  font-size: @fontSize * 2;
+}`
+    const out = healBareVarArithmeticToCalc(src)
+    expect(out).toContain('font-size: calc(@fontSize * 2);')
+  })
+
+  it('已有 calc() 内的不重复包裹（幂等）', () => {
+    const src = `@fontSize: var(--fontSize);
+.a { font-size: calc(@fontSize * 1.14); }`
+    expect(healBareVarArithmeticToCalc(src)).toBe(src)
+    // 包裹后再跑一遍仍不变
+    const once = healBareVarArithmeticToCalc(`@fontSize: var(--fontSize);\n.a { font-size: @fontSize * 2; }`)
+    expect(healBareVarArithmeticToCalc(once)).toBe(once)
+  })
+
+  it('字面量定义的算术不包裹（合法编译期求值，包 calc 反而阻止折叠）', () => {
+    const src = `@width: 14px;
+.a { width: @width * 2; }`
+    expect(healBareVarArithmeticToCalc(src)).toBe(src)
+  })
+
+  it('变量声明行本身不动；带单位数字也支持', () => {
+    const src = `@fontSize: var(--fontSize);
+@lineScale: var(--lineScale);
+.a { line-height: @fontSize * 1.6; }`
+    const out = healBareVarArithmeticToCalc(src)
+    expect(out).toContain('line-height: calc(@fontSize * 1.6);')
+    expect(out).toContain('@fontSize: var(--fontSize);')
+  })
+
+  it('注释行不动', () => {
+    const src = `@fontSize: var(--fontSize);
+// font-size: @fontSize * 2 说明
+.a { color: red; }`
+    expect(healBareVarArithmeticToCalc(src)).toBe(src)
+  })
+})
+
+describe('healThemeMixinVarRefs —— mixin 闭包变量引用改写为 var()', () => {  it('顶层 @fontSize 引用 → var(--fontSize, 14px)（事故场景）', () => {
     const src = `.c-env-monitor-root { font-size: var(--fontSize, 14px); }
 .c-env-monitor-tab { font-size: @fontSize; }
 .c-env-monitor-stat { font-size: calc(@fontSize * 0.857); }`

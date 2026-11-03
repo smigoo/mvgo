@@ -19,6 +19,9 @@ import * as microcodePrompt from './microcode/prompt-builder.js';
 // 🔍 高级选项 P0（2026-11-02 抽出）：用户补充需求段构建迁至 utils/user-addendum.js
 //  （单一来源；抽出动机 = engineer 整体不可被 jest 加载，纯函数落 utils 才能挂行为断言 spec）。
 import { buildUserAddendumSection } from '../utils/user-addendum.js';
+// 🚧 段级数据归属守卫（2026-11-03）：S8 字段映射对 component 分块的越界渲染禁令
+//  （P0 双渲染 mc-doc-337f2bf2 治本；纯函数落 utils = jest 可挂行为断言 spec）。
+import { buildDocScopeGuard, filterForeignMappings } from '../utils/doc-scope-guard.js';
 
 import * as microcodeValidator from './microcode/code-validator.js';
 import * as microcodeGenerator from './microcode/code-generator.js';
@@ -163,7 +166,8 @@ function _getTextRuns(figmaRoot) {
   if (!v) {
     try {
       v = _extractTextRunsPure(figmaRoot);
-    } catch {
+    } catch (_pceErr) {
+      reportPatchChainError(_pceErr, { logger: null, pass: '_getTextRuns:169' });
       v = null;
     }
     _textRunsCache.set(figmaRoot, v);
@@ -358,6 +362,7 @@ import {
   isLeafTextAssemblyEnabled,
 } from '../utils/section-leaf-assembler.js';
 import { THEME_WRAPPER_TEMPLATES } from '../utils/mc-skeleton.js';
+import { reportPatchChainError } from '../utils/patch-chain-observer.js';
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const THEME_WRAPPER_TEMPLATES = { dark: …, light: … }`
 //   及其架构 docblock（2026-08-26 治本修复：宿主/预览从不注入 .dark/.light 类 ⇒
@@ -565,6 +570,7 @@ export class MicrocodeEngineer extends BaseAgent {
               ...(input.dualTruth || {}),
             })?.themeMeta || null;
           } catch (bstErr) {
+            reportPatchChainError(bstErr, { logger: this.logger, pass: 'generateCode:570' });
             this.logger.warn?.(
               `🩹 骨架阶段构建 styleTokens 失败（退回单/双主题骨架）：${bstErr?.message || bstErr}`,
             );
@@ -579,6 +585,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (bootstrapErr) {
+        reportPatchChainError(bootstrapErr, { logger: this.logger, pass: 'generateCode:584' });
         this.logger.warn('⚠️ 预置样式骨架失败（非阻断）', {
           error: bootstrapErr?.message,
         });
@@ -756,7 +763,8 @@ export class MicrocodeEngineer extends BaseAgent {
       if (!outputPath) return null;
       try {
         return readFileSync(join(outputPath, rel), 'utf-8');
-      } catch {
+      } catch (_pceErr) {
+        reportPatchChainError(_pceErr, { logger: this.logger, pass: 'generateCode:762' });
         return null;
       }
     };
@@ -893,6 +901,7 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
       } catch (err) {
+        reportPatchChainError(err, { logger: this.logger, pass: 'generateCode:898' });
         this.logger.warn(`断点续跑恢复分块失败: ${err.message}`);
       }
     }
@@ -904,11 +913,31 @@ export class MicrocodeEngineer extends BaseAgent {
     let metaWriteChain = Promise.resolve();
 
     //瘦身：全局技术栈规则按 chunk 类型裁剪——declare/style 块不需要表单/表格细节，避免每块都背整段
-    const appendGlobalGuidance = (p, fileType) => {
+    const appendGlobalGuidance = (p, fileType, chunk = null) => {
       // 🛡️ 上下文裁决约束（trustVerdict/currentIssues，权威优先，置于最前）
       const _trustGuidance = this._buildTrustGuidance(input.generationInput);
       if (_trustGuidance) p += _trustGuidance;
       if (docDesignBlock) p += docDesignBlock; //S8: 文档设计注入（位于重试/技术栈之前，权威依据优先展示）
+      // 🚧 段级数据归属守卫（2026-11-03 P0 双渲染治本）：S8 字段映射表全 chunk 共享，
+      //   纯标题段（如 136:122「今日累计」）的 component chunk 也看到三卡字段映射
+      //   ⇒ LLM 越界渲染统计卡，与折叠轨（ListSection）双份重叠（337f2bf2 截图实锤）。
+      //   治本：component 分块按 _sectionScope.truthTexts 判归属，未归属字段下发禁令。
+      //   仅 component 分块守卫——declare/index 块需全局 api 上下文做统一轮询/provide。
+      if (chunk && chunk.segmentType === 'component' && docDesignBlock) {
+        const _scope = chunk.scopedInput?._sectionScope || null;
+        const _fieldMappings = docAnalysis?.dataBinding?.fieldMappings || [];
+        const _guard = buildDocScopeGuard(_scope, _fieldMappings);
+        if (_guard) {
+          p += _guard;
+          const _foreign = filterForeignMappings(_scope, _fieldMappings);
+          this.logger.info('🚧 段级数据归属守卫已注入', {
+            files: chunk.files,
+            section: `${_scope?.id || 'n/a'}「${_scope?.title || '无标题'}」`,
+            foreignFields: _foreign.map((fm) => fm.field),
+            totalFields: _fieldMappings.length,
+          });
+        }
+      }
       if (_l0CodeRetryGuidance) p += _l0CodeRetryGuidance;
       // 🆕 高级选项 P0（2026-10-09）：用户补充需求段（提示词 + 需求文档文本）——
       // 紧跟裁决/文档权威段之后、默认规范之前，每个分块 prompt 都携带。
@@ -1695,11 +1724,13 @@ export class MicrocodeEngineer extends BaseAgent {
                   const { writeFileSync: _wfs } = await import('fs');
                   _wfs(_chunkMetaPath, JSON.stringify(_meta, null, 2), 'utf-8');
                 } catch (_) {
+                  reportPatchChainError(_, { logger: this.logger, pass: 'generateCode:1720' });
                   /* ignore */
                 }
               }
             }
           } catch (e) {
+            reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:1725' });
             this.logger.warn(
               `R12: 读取 chunk-meta.json 失败，跳过断点续跑检查: ${e.message}`,
             );
@@ -1748,7 +1779,25 @@ export class MicrocodeEngineer extends BaseAgent {
           segmentType: chunk.segmentType,
         });
       }
-      prompt = appendGlobalGuidance(prompt, fileType);
+      prompt = appendGlobalGuidance(prompt, fileType, chunk);
+      // 📸 chunk prompt 落盘取证（2026-11-03 P0 双渲染归因）：prompt 此前不落盘，
+      //   「污染源是 S8 共享块还是结构契约错划」两说无法辩驳。落盘 .mc-gen/cache/prompts/
+      //   后 grep 即可定位。fail-open：写失败不影响生成。
+      if (outputPath) {
+        try {
+          const { mkdirSync: _mk, writeFileSync: _wf } = await import('fs');
+          const { join: _j } = await import('path');
+          const _pdir = _j(outputPath, '.mc-gen', 'cache', 'prompts');
+          _mk(_pdir, { recursive: true });
+          const _fname = `${chunk.index || 0}-${(chunk.files || ['unknown'])
+            .map((f) => String(f).replace(/[^A-Za-z0-9._-]/g, '_'))
+            .join('+')}.txt`;
+          _wf(_j(_pdir, _fname), prompt, 'utf-8');
+        } catch (_e) {
+          reportPatchChainError(_e, { logger: this.logger, pass: 'generateCode:1788' });
+          /* 取证失败不阻断生成 */
+        }
+      }
       // 📊 P0-A：分块 Prompt 体积观测（不记录正文）
       const promptChars = prompt.length;
       this.logger.info('📊 分块 Prompt 体积', {
@@ -1802,7 +1851,8 @@ export class MicrocodeEngineer extends BaseAgent {
                 const prev = JSON.parse(readFileSync(chunkMetaPath, 'utf-8'));
                 if (prev && Array.isArray(prev.completed)) meta = prev;
               }
-            } catch {
+            } catch (_pceErr) {
+              reportPatchChainError(_pceErr, { logger: this.logger, pass: 'generateCode:1845' });
               /* ignore */
             }
 
@@ -1846,6 +1896,7 @@ export class MicrocodeEngineer extends BaseAgent {
               `💾 代码生成分块已落盘: ${chunk.index || 0} (${Object.keys(res.files).length} 个文件)`,
             );
           } catch (err) {
+            reportPatchChainError(err, { logger: this.logger, pass: 'generateCode:1888' });
             this.logger.warn(`分块落盘失败: ${err.message}`);
           }
         }
@@ -2120,6 +2171,7 @@ export class MicrocodeEngineer extends BaseAgent {
             sectionId: tr.sectionId,
           });
         } catch (fgErr) {
+          reportPatchChainError(fgErr, { logger: this.logger, pass: 'generateCode:2162' });
           // 写入失败 ⇒ 回退 LLM 路径（把该叶重新作为 chunk 补生成），不静默丢内容
           this.logger.warn('🛡️ 刀 53 确定性写入异常，回退 LLM chunk', {
             subPath,
@@ -2232,6 +2284,7 @@ export class MicrocodeEngineer extends BaseAgent {
                   })
                 }
               } catch (spErr) {
+                reportPatchChainError(spErr, { logger: this.logger, pass: 'generateCode:2274' });
                 this.logger.warn('🔁 子组件资源 prop 剥离异常（非阻断）', {
                   error: spErr?.message || String(spErr),
                 })
@@ -2303,7 +2356,8 @@ export class MicrocodeEngineer extends BaseAgent {
             const secKey = resolveSectionKey(_subCompManifest, ref.title || ref.id);
             if (secKey) fileSectionMap[subFile] = secKey;
           }
-        } catch {
+        } catch (_pceErr) {
+          reportPatchChainError(_pceErr, { logger: this.logger, pass: 'generateCode:2346' });
           /* 归属解析失败不阻断（L7 启发式兜底） */
         }
       }
@@ -2470,6 +2524,7 @@ export class MicrocodeEngineer extends BaseAgent {
               });
             }
           } catch (e) {
+            reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2512' });
             this.logger.warn('🧩 complex 分支取 sectionRoots 失败（非阻断）', {
               error: e?.message || String(e),
             });
@@ -2530,6 +2585,7 @@ export class MicrocodeEngineer extends BaseAgent {
             resI && typeof resI === 'object' ? resI : { files: {}, debug: {} };
           Object.assign(allFiles, safeResI.files || {});
         } catch (truncErr) {
+          reportPatchChainError(truncErr, { logger: this.logger, pass: 'generateCode:2572' });
           this.logger.warn(
             '⚠️ 回滚实验：medium 组件 index.vue 整文件截断，降级为 template/script 拆分',
             { error: truncErr.message },
@@ -2632,6 +2688,7 @@ export class MicrocodeEngineer extends BaseAgent {
           complexity,
         });
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2674' });
         this.logger.warn('保存调试文件失败', { error: e.message });
       }
 
@@ -2695,6 +2752,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2737' });
         this.logger.warn(`类名对齐失败，按原样继续校验: ${e?.message || e}`);
       }
 
@@ -2718,6 +2776,7 @@ export class MicrocodeEngineer extends BaseAgent {
           );
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2760' });
         this.logger.warn(`对象键引号补全失败，按原样继续: ${e?.message || e}`);
       }
 
@@ -2741,6 +2800,7 @@ export class MicrocodeEngineer extends BaseAgent {
           );
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2783' });
         this.logger.warn(`数据键还原失败，按原样继续: ${e?.message || e}`);
       }
 
@@ -2759,6 +2819,7 @@ export class MicrocodeEngineer extends BaseAgent {
           this.logger.warn(`🛡️ 刀 20 flex 容器补全：${JSON.stringify(_flexFix.fixed)}，警告: ${JSON.stringify(_flexFix.warnings)}`);
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2801' });
         this.logger.warn(`flex 容器补全失败，按原样继续: ${e?.message || e}`);
       }
 
@@ -2785,6 +2846,7 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2827' });
         this.logger.warn(`设备网格 grid 治愈失败，按原样继续: ${e?.message || e}`);
       }
 
@@ -2802,6 +2864,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:2844' });
         this.logger.warn('COLOR-SLOT 自愈异常（非阻断，按原样继续）', {
           error: e?.message || String(e),
         });
@@ -3059,6 +3122,7 @@ export class MicrocodeEngineer extends BaseAgent {
             });
           }
         } catch (e) {
+          reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:3101' });
           this.logger.warn('资源 import 引用驱动补齐失败（fail-open）', {
             error: e?.message || String(e),
           });
@@ -3250,6 +3314,7 @@ export class MicrocodeEngineer extends BaseAgent {
               files: { ...allFiles },
             });
           } catch (snapshotError) {
+            reportPatchChainError(snapshotError, { logger: this.logger, pass: 'generateCode:3292' });
             this.logger.warn(
               `语义拦截前候选快照发布失败（非阻断）：${snapshotError?.message || snapshotError}`,
             );
@@ -3526,6 +3591,7 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:3568' });
         this.logger.warn('⚠️ 背景形态契约修复失败（非阻断）', {
           error: e.message,
         });
@@ -3547,7 +3613,8 @@ export class MicrocodeEngineer extends BaseAgent {
           this.logger.warn('🔬 背景形态修复崩溃现场已存档（离线重放用）', {
             dir: _dumpDir,
           });
-        } catch (_) {}
+        } catch (_) {
+          reportPatchChainError(_, { logger: this.logger, pass: 'generateCode:3590' });}
       }
       try {
         const _absHealed = microcodeResources.healAbsoluteOverlayParents(
@@ -3563,6 +3630,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:3605' });
         this.logger.warn('⚠️ absolute 遮罩层修复失败（非阻断）', {
           error: e.message,
         });
@@ -3584,6 +3652,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:3626' });
         this.logger.warn('⚠️ 业务样式 var() 直引自愈失败（非阻断）', {
           error: e.message,
         });
@@ -3840,6 +3909,7 @@ export class MicrocodeEngineer extends BaseAgent {
         try {
           JSON.parse(allFiles['declare.json']);
         } catch (jsonErr) {
+          reportPatchChainError(jsonErr, { logger: this.logger, pass: 'generateCode:3882' });
           this.logger.warn('⚠️ declare.json 非有效 JSON，启用模板兜底', {
             error: jsonErr.message,
           });
@@ -3868,6 +3938,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (_stripErr) {
+        reportPatchChainError(_stripErr, { logger: this.logger, pass: 'generateCode:3910' });
         this.logger.warn('🔧 悬空引用剥离异常（非阻断）', { error: _stripErr?.message || String(_stripErr) });
       }
 
@@ -3906,6 +3977,7 @@ export class MicrocodeEngineer extends BaseAgent {
         indexTemplateFacts: input._indexTemplateFacts || null,
       };
     } catch (error) {
+      reportPatchChainError(error, { logger: this.logger, pass: 'generateCode:3948' });
       // 🚨 崩溃堆栈追踪（2026-08-30 为排查 Cannot read properties of undefined (reading 'error') 添加）
       this.logger.error('组件代码生成失败', {
         error: error.message,
@@ -4273,6 +4345,7 @@ export class MicrocodeEngineer extends BaseAgent {
       });
       return r.filled;
     } catch (e) {
+      reportPatchChainError(e, { logger: this.logger, pass: '_fillTruthTextSlots:4315' });
       this.logger.warn('🛡️ S3 真值填槽异常（非阻断）', {
         error: e?.message || String(e),
       });
@@ -4304,6 +4377,7 @@ export class MicrocodeEngineer extends BaseAgent {
       if (index.size === 0) return null;
       return { index, childrenOf: buildChildrenMap(index), resourceDomMapping };
     } catch (e) {
+      reportPatchChainError(e, { logger: this.logger, pass: '_buildSectionTruthCtx:4346' });
       this.logger.warn('🎯 section 真值上下文构建失败（非阻断）', {
         error: e?.message || String(e),
       });
@@ -4367,6 +4441,7 @@ export class MicrocodeEngineer extends BaseAgent {
       }
       return out;
     } catch (e) {
+      reportPatchChainError(e, { logger: this.logger, pass: '_sectionTruthLines:4409' });
       this.logger.warn('🎯 section 真值贴行失败（非阻断）', {
         error: e?.message || String(e),
       });
@@ -5299,6 +5374,7 @@ export class MicrocodeEngineer extends BaseAgent {
           });
         }
       } catch (_peErr) {
+        reportPatchChainError(_peErr, { logger: this.logger, pass: 'writeFiles:5341' });
         // 兜底器自身异常 → 不阻断主流程，沿用原 files
         if (this.logger) {
           this.logger.warn('🛡️ panelKey 兜底替换跳过（非致命）', {
@@ -5356,6 +5432,7 @@ export class MicrocodeEngineer extends BaseAgent {
       const _fontGuardLog = formatFontGuardLog(_fontGuard, 'max');
       this.logger.info(_fontGuardLog.message, _fontGuardLog.meta);
     } catch (e) {
+      reportPatchChainError(e, { logger: this.logger, pass: 'writeFiles:5398' });
       // 🛡️ 2026-09-04 C：logger 判空 + 记录调用栈（生产曾现 reading 'log' 且无堆栈无法溯源）
       const errText = `[style-class-consolidator] 收敛失败，按原样写盘: ${e?.message || e}`;
       if (this.logger) {
@@ -5937,7 +6014,8 @@ export class MicrocodeEngineer extends BaseAgent {
         if (_frameworkKeys.has(k) || _extraVarDefs.some((x) => x.key === k)) continue;
         _extraVarDefs.push({ key: k, name: k, type: 'color' });
       }
-    } catch {
+    } catch (_pceErr) {
+      reportPatchChainError(_pceErr, { logger: this.logger, pass: 'normalizeDeclareJson:5980' });
       // 兜底：file-writer 未提供导出（旧版本）⇒ 按已知语义色键名补声明
       for (const k of [
         'colorTextSecondary', 'colorDanger', 'colorWarning', 'colorSuccess', 'colorBorder',
@@ -5962,7 +6040,8 @@ export class MicrocodeEngineer extends BaseAgent {
           'declare.componentId 已重建为确定性格式 c-<语义>-<sessionId 尾8hex>',
           { componentId: d.componentId, sessionId: _sessionId },
         );
-      } catch {
+      } catch (_pceErr) {
+        reportPatchChainError(_pceErr, { logger: this.logger, pass: 'normalizeDeclareJson:6005' });
         /* 日志失败不阻断 */
       }
     }
@@ -6843,6 +6922,7 @@ export class MicrocodeEngineer extends BaseAgent {
         });
       }
     } catch (_paletteErr) {
+      reportPatchChainError(_paletteErr, { logger: this.logger, pass: 'execute:6885' });
       this._truthPalette = null;
       if (this.logger) {
         this.logger.warn('🎨 真值色板构建失败（fail-open，颜色变量走中性兜底）', {
@@ -7251,7 +7331,8 @@ export class MicrocodeEngineer extends BaseAgent {
                   `🎯 [mc] declare attribute.title 回写 Figma 标题（R4）：「${titleText}」`,
                 );
               }
-            } catch {}
+            } catch (_pceErr) {
+              reportPatchChainError(_pceErr, { logger: this.logger, pass: 'execute:7294' });}
           }
         }
 
@@ -7559,6 +7640,7 @@ export class MicrocodeEngineer extends BaseAgent {
             );
           }
         } catch (ctErr) {
+          reportPatchChainError(ctErr, { logger: this.logger, pass: 'execute:7601' });
           this.logger.warn('⚠️ [mc] 2.1.E chartType 收敛失败（非阻塞）', {
             error: ctErr?.message,
           });
@@ -7591,6 +7673,7 @@ export class MicrocodeEngineer extends BaseAgent {
             );
           }
         } catch (axisErr) {
+          reportPatchChainError(axisErr, { logger: this.logger, pass: 'execute:7633' });
           this.logger.warn('⚠️ [mc] 2.1.F 坐标轴格式收敛失败（非阻塞）', {
             error: axisErr?.message,
           });
@@ -7675,6 +7758,7 @@ export class MicrocodeEngineer extends BaseAgent {
             }
           }
         } catch (n1err) {
+          reportPatchChainError(n1err, { logger: this.logger, pass: 'execute:7717' });
           this.logger.warn('N1 数字剥离失败（非阻断）', {
             error: n1err.message,
           });
@@ -7744,6 +7828,7 @@ export class MicrocodeEngineer extends BaseAgent {
             }
           }
         } catch (n2err) {
+          reportPatchChainError(n2err, { logger: this.logger, pass: 'execute:7786' });
           this.logger.warn('N2 图表兜底失败（非阻断）', {
             error: n2err.message,
           });
@@ -7925,6 +8010,7 @@ export class MicrocodeEngineer extends BaseAgent {
             }
           }
         } catch (n3err) {
+          reportPatchChainError(n3err, { logger: this.logger, pass: 'execute:7967' });
           this.logger.warn('N3 bg 挂载失败（非阻断）', {
             error: n3err.message,
           });
@@ -7965,6 +8051,7 @@ export class MicrocodeEngineer extends BaseAgent {
             );
           }
         } catch (n4bErr) {
+          reportPatchChainError(n4bErr, { logger: this.logger, pass: 'execute:8007' });
           this.logger.warn('N4b 子容器尺寸锚定失败（非阻断）', {
             error: n4bErr.message,
           });
@@ -8031,11 +8118,13 @@ export class MicrocodeEngineer extends BaseAgent {
             }
           }
         } catch (n5err) {
+          reportPatchChainError(n5err, { logger: this.logger, pass: 'execute:8073' });
           this.logger.warn('N5 白边框剥离失败（非阻断）', {
             error: n5err.message,
           });
         }
       } catch (postErr) {
+        reportPatchChainError(postErr, { logger: this.logger, pass: 'execute:8078' });
         this.logger.warn('mc 确定性后处理失败（非阻断）', {
           error: postErr.message,
         });
@@ -8101,6 +8190,7 @@ export class MicrocodeEngineer extends BaseAgent {
             { logger: this.logger },
           )?.themeMeta;
         } catch (_stErr) {
+          reportPatchChainError(_stErr, { logger: this.logger, pass: 'execute:8143' });
           this.logger.warn?.(
             `⚠️ 覆盖层阶段构建 styleTokens 失败（退回 light/dark 双主题）：${_stErr?.message || _stErr}`,
           );
@@ -8200,6 +8290,7 @@ export default declareInfo
           });
         }
       } catch (cleanErr) {
+        reportPatchChainError(cleanErr, { logger: this.logger, pass: 'execute:8242' });
         // 清洗失败不阻断：确定性修复是「尽力而为」，残留交由下游校验兜底
         this.logger.warn('清洗层执行失败（非阻断，交由下游校验兜底）', {
           error: cleanErr?.message || String(cleanErr),
@@ -8296,6 +8387,7 @@ export default declareInfo
           });
         }
       } catch (fixErr) {
+        reportPatchChainError(fixErr, { logger: this.logger, pass: 'execute:8338' });
         this.logger.warn('确定性修复执行失败（非阻断，交由下游校验兜底）', {
           error: fixErr?.message || String(fixErr),
         });
@@ -8388,6 +8480,7 @@ export default declareInfo
               });
             }
           } catch (tvErr) {
+            reportPatchChainError(tvErr, { logger: this.logger, pass: 'execute:8430' });
             this.logger.warn('🎨 theme-vars.less 确定性渲染失败（非阻断）', {
               error: tvErr?.message || String(tvErr),
             });
@@ -8406,6 +8499,7 @@ export default declareInfo
             },
           );
         } catch (pfErr) {
+          reportPatchChainError(pfErr, { logger: this.logger, pass: 'execute:8448' });
           this.logger.warn('🏢 一体化平台文件生成失败（非阻断）', {
             error: pfErr?.message || String(pfErr),
           });
@@ -8480,6 +8574,7 @@ export default declareInfo
           });
         }
       } catch (visualErr) {
+        reportPatchChainError(visualErr, { logger: this.logger, pass: 'execute:8522' });
         // 视觉校验失败不阻断主流程
         this.logger.warn('视觉真值校验执行失败（非阻断）', {
           error: visualErr?.message || String(visualErr),
@@ -8532,6 +8627,8 @@ export default declareInfo
       // 此处把最终事实（allFiles + fixedFiles）一次性落盘：writeFiles 自愈幂等（不会二次改动），
       // 且自带用户编辑保护（isUserPatched 跳过不覆盖）。候选快照与 workspace 从此同内容。
       let finalTruthFiles = { ...allFiles, ...fixedFiles };
+      // 🛡️ S1.1（2026-11-03）：自愈链 summary 载体（execute 作用域），供返回 patchHitReport。
+      let _preWriteSummary = null;
       // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链——资源 import 终验 + 运行库兜底 +
       // CODE-022 删未挂载 + .value 自愈 + FLEX-003/FLEX-005 量纲归一（与 vue3-engineer 同源，
       // 新增守卫只加一处、双端生效）。取代下方内联段，行为等价 + 新增 .value 自愈。
@@ -8555,6 +8652,15 @@ export default declareInfo
           { logger: this.logger },
         );
         finalTruthFiles = _healed.files;
+        // 🛡️ S1.1（2026-11-03）：自愈链 summary 提升到 execute 作用域，供 patchHitReport 落盘。
+        _preWriteSummary = _healed?.summary || null;
+        // 🛡️ S0.2（2026-11-03）：PATCH-CHAIN-ERROR 聚合 —— 本任务自愈链结构性错误计数，
+        //   >0 即有 pass 遭 ReferenceError/TypeError/SyntaxError 损坏（fail-open 保持，须定位修复）。
+        if ((_healed?.summary?.patchChainErrors || 0) > 0) {
+          this.logger.warn('🛡️ PATCH-CHAIN-ERROR 汇总：本任务自愈链捕获结构性错误', {
+            count: _healed.summary.patchChainErrors,
+          });
+        }
       }
       // 🛡️ 层①配套（2026-09-11 · c-device-monitor-1fduq67s 实锤）：子组件 import 落盘终验兜底。
       // 后处理/AI 修复可能重写 index.vue script 并丢掉子组件 import（实测：模板 4 个标签只剩
@@ -8692,6 +8798,7 @@ export default declareInfo
           }
         }
       } catch (_bgFormFinalErr) {
+        reportPatchChainError(_bgFormFinalErr, { logger: this.logger, pass: 'execute:8734' });
         this.logger.warn('⚠️ 落盘前背景形态修复失败（非阻断）', {
           error: _bgFormFinalErr?.message || String(_bgFormFinalErr),
         });
@@ -8715,7 +8822,8 @@ export default declareInfo
           this.logger.warn('🔬 背景形态修复崩溃现场已存档（离线重放用）', {
             dir: _dumpDir,
           });
-        } catch (_) {}
+        } catch (_) {
+          reportPatchChainError(_, { logger: this.logger, pass: 'execute:8758' });}
       }
       try {
         const _absFinal = microcodeResources.healAbsoluteOverlayParents(
@@ -8729,6 +8837,7 @@ export default declareInfo
           );
         }
       } catch (_absFinalErr) {
+        reportPatchChainError(_absFinalErr, { logger: this.logger, pass: 'execute:8771' });
         this.logger.warn('⚠️ 落盘前 absolute 遮罩层修复失败（非阻断）', {
           error: _absFinalErr?.message || String(_absFinalErr),
         });
@@ -8780,6 +8889,7 @@ export default declareInfo
           });
         }
       } catch (_auditErr) {
+        reportPatchChainError(_auditErr, { logger: this.logger, pass: 'execute:8822' });
         // 审计器自身异常（非业务 BLOCK）→ 不阻断生成成果，仅告警，避免门禁故障拖垮流程。
         this.logger.warn('⚠️ Loop4 双裁判门禁执行异常（已跳过，不阻断）', {
           error: _auditErr?.message || String(_auditErr),
@@ -8818,6 +8928,7 @@ export default declareInfo
               _healReadbackCount++;
             }
           } catch (_readbackErr) {
+            reportPatchChainError(_readbackErr, { logger: this.logger, pass: 'execute:8860' });
             /* 回读失败保持内存版，快照仍可预览旧版，不阻断 */
           }
         }
@@ -8859,6 +8970,7 @@ export default declareInfo
               ? JSON.parse(readFileSync(metaPath, 'utf-8'))
               : {};
           } catch (_) {
+            reportPatchChainError(_, { logger: this.logger, pass: 'execute:8901' });
             /* 旧 meta 损坏则重建 */
           }
           const { gitHash, distBuildAt } = getBuildVersion();
@@ -8918,6 +9030,7 @@ export default declareInfo
             });
           }
         } catch (metaErr) {
+          reportPatchChainError(metaErr, { logger: this.logger, pass: 'execute:8960' });
           this.logger.warn('⚠️ component-meta.json 写入失败（非阻断）', {
             error: metaErr?.message || String(metaErr),
           });
@@ -8954,6 +9067,7 @@ export default declareInfo
           });
         }
       } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'execute:8996' });
         this.logger.warn(
           '⚠️ index.less → index.css 编译失败，降级使用 .less 原始文件',
           { error: e.message },
@@ -9022,6 +9136,7 @@ export default component
             });
           }
         } catch (healthErr) {
+          reportPatchChainError(healthErr, { logger: this.logger, pass: 'execute:9064' });
           this.logger.warn('🏢 一体化健康度检查执行失败（非阻断）', {
             error: healthErr?.message || String(healthErr),
           });
@@ -9055,6 +9170,7 @@ export default component
           );
         }
       } catch (invErr) {
+        reportPatchChainError(invErr, { logger: this.logger, pass: 'execute:9097' });
         this.logger.warn('🛡️ 产物不变量校验执行失败（非阻断）', {
           error: invErr?.message || String(invErr),
         });
@@ -9067,6 +9183,7 @@ export default component
             files: snapshotFiles,
           });
         } catch (snapshotError) {
+          reportPatchChainError(snapshotError, { logger: this.logger, pass: 'execute:9109' });
           this.logger.warn(
             `候选代码快照发布失败，不阻断生成主流程：${snapshotError.message}`,
           );
@@ -9107,9 +9224,16 @@ export default component
         artifactInvariants: _artifactInvariants || undefined,
         // 🛡️ Phase E：接管评估统计子集（graph 层聚合 reject-summary 落盘）
         takeoverAudit: this._fgTakeoverAudit || undefined,
+        // 🛡️ S1.1（2026-11-03）：补丁命中报表（「0 也落盘」——patchChainErrors 恒存在）。
+        //   经 graph 写回 state → complete 节点 merge 进 component-meta.json → S10 saveComponentMeta 透传。
+        patchHitReport: {
+          patchChainErrors: _preWriteSummary?.patchChainErrors || 0,
+          selfHealing: _preWriteSummary || undefined,
+        },
         _attributionGuidance: codeResult._attributionGuidance || null, // 🛡️ 资源归属指导（供 graph 写回 state）
       };
     } catch (error) {
+      reportPatchChainError(error, { logger: this.logger, pass: 'execute:9152' });
       // 🚨 崩溃堆栈追踪（2026-08-30 为排查 Cannot read properties of undefined (reading 'error') 添加）
       this.logger.error('代码生成执行失败', {
         error: error.message,
@@ -9147,7 +9271,8 @@ function isUserPatched(outputPath, relativePath) {
     if (!existsSync(p)) return false;
     const parsed = JSON.parse(readFileSync(p, 'utf-8'));
     return Array.isArray(parsed?.files) && parsed.files.includes(relativePath);
-  } catch {
+  } catch (_pceErr) {
+    reportPatchChainError(_pceErr, { logger: null, pass: 'isUserPatched:9190' });
     return false;
   }
 }

@@ -4,6 +4,9 @@ import { tmpdir } from 'os'
 
 jest.mock('../../../config/backend-root.js', () => ({
   workspaceRoot: process.cwd(),
+  // logger.js 从 backend-root 取 logsDir 建日志目录；mock 是整模块替换，
+  // 漏给即 `path.join(undefined,…)` 抛错 ⇒ suite fail-to-run（基线环境红）。
+  logsDir: join(process.cwd(), 'logs'),
 }), { virtual: true })
 
 import { writeFiles, safeLessVarValue } from './file-writer.js'

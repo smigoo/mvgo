@@ -50,7 +50,12 @@ function isListContentCarrier(sec) {
   if (!sec || typeof sec !== 'object') return false
   if (isCollapsedListShape(sec)) return true
   if (Array.isArray(sec.items) && sec.items.length >= 2) return true
-  return Array.isArray(sec.body?.items) && sec.body.items.length >= 2
+  if (Array.isArray(sec.body?.items) && sec.body.items.length >= 2) return true
+  // R8-9：R8-7 的独立内容契约也是逐项内容真值，不能让整容器与合成子切片并存。
+  for (const key of ['items', 'children', 'elements']) {
+    if (Array.isArray(sec.declaredContent?.[key]) && sec.declaredContent[key].length >= 2) return true
+  }
+  return false
 }
 
 /**
@@ -105,6 +110,28 @@ function collectAnchorIds(node, acc = new Set(), depth = 0, includeItemAnchors =
     }
   }
   return acc
+}
+
+/** R8-11：无锚合成切片的第二判据——内容文本是否被另一整段完整覆盖。 */
+function collectDeclaredTexts(node, acc = new Set(), depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 8) return acc
+  for (const key of ['text', 'label', 'value', 'title']) {
+    const value = node[key]
+    if (typeof value === 'string' && value.trim()) acc.add(value.trim())
+  }
+  for (const root of ['body', 'declaredContent', 'content', 'parts', 'status']) {
+    if (node[root] && typeof node[root] === 'object') collectDeclaredTexts(node[root], acc, depth + 1)
+  }
+  for (const key of ['items', 'children', 'elements']) {
+    for (const child of Array.isArray(node[key]) ? node[key] : []) collectDeclaredTexts(child, acc, depth + 1)
+  }
+  return acc
+}
+
+function textSubset(small, big) {
+  if (small.size === 0) return false
+  for (const text of small) if (!big.has(text)) return false
+  return true
 }
 
 /**
@@ -214,9 +241,23 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path, opts = {})
   }
   const droppedBy = new Map() // i -> j（吸收者下标）
   const partialBy = new Map() // i -> 二段判据的重叠比例（一段命中者不在此表）
+  const contentBy = new Set() // i -> 无锚子切片按 declaredContent/body 文本全覆盖去重
   for (let i = 0; i < sections.length; i++) {
     if (!sections[i] || typeof sections[i] !== 'object') continue
-    if (cov[i].size === 0) continue // 无 Figma 归属 ⇒ 不参与（永不误删）
+    if (cov[i].size === 0) {
+      // 无锚点不能参与几何去重；但 vision 显式拆出的合成子切片可凭内容全覆盖判重。
+      if (opts.requireContentCarrier) {
+        const ownTexts = collectDeclaredTexts(sections[i])
+        for (let j = 0; j < sections.length; j++) {
+          if (i === j || droppedBy.has(j) || cov[j].size === 0) continue
+          if (!textSubset(ownTexts, collectDeclaredTexts(sections[j]))) continue
+          droppedBy.set(i, j)
+          contentBy.add(i)
+          break
+        }
+      }
+      continue
+    }
     const iIsList = isCollapsedListShape(sections[i])
     for (let j = 0; j < sections.length; j++) {
       if (i === j || droppedBy.has(j)) continue
@@ -286,7 +327,7 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path, opts = {})
       coveredBy: String(sections[j]?.id ?? ''),
       size: cov[i].size,
       // 一段='full'（全包含）/ 二段='partial'（折叠列表段 ≥75% 重叠）
-      reason: partialBy.has(i) ? 'partial' : 'full',
+      reason: contentBy.has(i) ? 'declared-content' : partialBy.has(i) ? 'partial' : 'full',
       ...(partialBy.has(i) ? { ratio: partialBy.get(i) } : {}),
       path: path || '/',
     })

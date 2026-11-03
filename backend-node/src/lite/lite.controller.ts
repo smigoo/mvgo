@@ -380,6 +380,11 @@ export class LiteController {
           generationTier: 'max',
           sourceType: 'figma',
           outputPath: join(tempComponentsDir, groupId, sessionId),
+          // 🆕 2026-11-03 高级选项「生成约束」：排队期间任务详情就该看得到，
+          //   不能等 startGeneration 覆盖式 createTask 才出现。
+          extraPrompt: dto.extraPrompt,
+          requirementDocText: dto.requirementDocText,
+          userComponentId: dto.userComponentId,
         },
         'queued',
       );
@@ -520,6 +525,12 @@ export class LiteController {
           : {}),
         // 🆕 记录产物输出目录（恢复/重试定位原图缓存用）
         outputPath: join(tempComponentsDir, groupId, sessionId),
+        // 🆕 2026-11-03 高级选项「生成约束」落库：Lite 管线同样消费 extraPrompt /
+        //   requirementDocText（lite.service 的 userAddendum 拼进 prompt），
+        //   不落库 ⇒ 详情页空白且重试丢约束，与 Max 档是同一种病。
+        extraPrompt: dto.extraPrompt,
+        requirementDocText: dto.requirementDocText,
+        userComponentId: dto.userComponentId,
       },
       'queued',
     );

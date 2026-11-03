@@ -28,6 +28,20 @@ export class DemoService {
   private readonly logger = new Logger(DemoService.name);
   // 同一组件正在进行的 AI 修复任务锁（防止并发 Agent 竞争写同一文件）
   private readonly aiFixLocks = new Set<string>();
+  // 异步 AI 修复任务表（fixId → 状态快照）：进程内存态，服务重启即失效（前端轮询会拿到可辨识的"不存在"）
+  private readonly aiFixJobs = new Map<
+    string,
+    {
+      fixId: string;
+      componentId: string;
+      status: 'running' | 'success' | 'failed';
+      summary: string;
+      iterations?: number;
+      createdAt: number;
+      finishedAt?: number;
+    }
+  >();
+  private aiFixSeq = 0;
 
   constructor(
     private readonly componentService: ComponentService,
@@ -154,6 +168,110 @@ export class DemoService {
     this.aiFixLocks.add(componentId);
 
     try {
+      return await this.runAiFixRenderError(params);
+    } finally {
+      // 无论成功/失败/异常，都释放该组件的修复锁
+      this.aiFixLocks.delete(componentId);
+    }
+  }
+
+  /**
+   * 🛡️ 异步修复入口（2026-11-03，真机实证 mv-lite-1793686730643-ae7d4a85 504 根治）：
+   * 同步长请求（AI 修复 1~3 分钟）会被生产 nginx proxy_read_timeout 先掐断返回 504。
+   * 治本=立即返回 fixId，后台执行，前端轮询 ai-fix-render-error-status。
+   * 锁语义不变：仍按 componentId 互斥，管理点统一收拢在本方法。
+   */
+  startAiFixRenderError(params: {
+    componentId: string;
+    groupId?: string;
+    errorMessage: string;
+    stack?: string;
+    info?: string;
+    llmConfig?: { apiKey?: string; baseURL?: string; model?: string };
+  }): { success: boolean; fixId?: string; alreadyRunning?: boolean; message?: string } {
+    const { componentId } = params;
+    if (this.aiFixLocks.has(componentId)) {
+      return {
+        success: false,
+        alreadyRunning: true,
+        message: '该组件已有 AI 修复任务正在进行中，请等待当前任务完成后再试。',
+      };
+    }
+    this.aiFixLocks.add(componentId);
+    const fixId = `aifix-${Date.now()}-${(++this.aiFixSeq).toString(36)}`;
+    const job = {
+      fixId,
+      componentId,
+      status: 'running' as 'running' | 'success' | 'failed',
+      summary: '',
+      iterations: undefined as number | undefined,
+      createdAt: Date.now(),
+      finishedAt: undefined as number | undefined,
+    };
+    this.aiFixJobs.set(fixId, job);
+    this.logger.log(`AI 修复任务已受理(异步): fixId=${fixId}, componentId=${componentId}`);
+    void this.runAiFixRenderError(params)
+      .then((res) => {
+        job.status = res.success ? 'success' : 'failed';
+        job.summary = res.summary || '';
+        job.iterations = res.iterations;
+        job.finishedAt = Date.now();
+        this.logger.log(`AI 修复任务结束: fixId=${fixId}, status=${job.status}`);
+      })
+      .catch((err) => {
+        job.status = 'failed';
+        job.summary = err?.message || String(err);
+        job.finishedAt = Date.now();
+        this.logger.error(`AI 修复任务异常: fixId=${fixId}, ${job.summary}`);
+      })
+      .finally(() => {
+        this.aiFixLocks.delete(componentId);
+      });
+    return { success: true, fixId };
+  }
+
+  /**
+   * 查询异步修复任务状态。结果保留 10 分钟供轮询，过期/不存在（如服务重启）返回可辨识失败。
+   */
+  getAiFixStatus(fixId: string): {
+    success: boolean;
+    fixId?: string;
+    status?: 'running' | 'success' | 'failed';
+    componentId?: string;
+    summary?: string;
+    iterations?: number;
+    message?: string;
+  } {
+    const job = this.aiFixJobs.get(fixId);
+    if (!job) {
+      return { success: false, message: '修复任务不存在或已过期（服务可能已重启），请重新发起修复。' };
+    }
+    if (job.finishedAt && Date.now() - job.finishedAt > 10 * 60_000) {
+      this.aiFixJobs.delete(fixId);
+      return { success: false, message: '修复任务结果已过期，请重新发起修复。' };
+    }
+    return {
+      success: true,
+      fixId: job.fixId,
+      status: job.status,
+      componentId: job.componentId,
+      summary: job.summary,
+      iterations: job.iterations,
+    };
+  }
+
+  /** 原 aiFixRenderError 执行体（不含锁管理——锁由 aiFixRenderError/startAiFixRenderError 各自管理） */
+  private async runAiFixRenderError(params: {
+    componentId: string;
+    groupId?: string;
+    errorMessage: string;
+    stack?: string;
+    info?: string;
+    llmConfig?: { apiKey?: string; baseURL?: string; model?: string };
+  }) {
+    const { componentId, groupId = '', errorMessage, stack = '', info = '', llmConfig = {} } = params;
+
+    try {
     this.logger.log(`AI 修复渲染错误: componentId=${componentId}, error=${errorMessage.substring(0, 120)}`);
     const selectedFiles = [
       { path: 'package/index.vue', name: 'package/index.vue' },
@@ -236,9 +354,10 @@ ${stack || '无'}
       summary: `${result.content}\n\n校验结果：${validation.message}`,
       iterations: result.iterations,
     };
-  } finally {
-    // 无论成功/失败/异常，都释放该组件的修复锁
-    this.aiFixLocks.delete(componentId);
+  } catch (err) {
+    // 锁由调用方（aiFixRenderError / startAiFixRenderError）管理；这里记审计日志后原样抛回
+    this.logger.error(`AI 修复执行异常: componentId=${componentId}, ${err?.message}`);
+    throw err;
   }
   }
 

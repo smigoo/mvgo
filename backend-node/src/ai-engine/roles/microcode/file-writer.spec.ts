@@ -14,7 +14,7 @@ jest.mock('../../../config/backend-root.js', () => ({
   logsDir: '/tmp/mvgo-test-logs',
 }), { virtual: true })
 
-import { sanitizeFileContent, stripDsmlResidue, safeLessVarValue, buildCssVarsFile } from './file-writer.js';
+import { sanitizeFileContent, stripDsmlResidue, safeLessVarValue, buildCssVarsFile, deduplicateTemplateBlocks } from './file-writer.js';
 
 describe('sanitizeFileContent · 样式文件 SFC 标签剥离（2026-09-14 治本）', () => {
   const pollutedLess = [
@@ -137,7 +137,12 @@ describe('safeLessVarValue · alert/notice 归入 danger 族（2026-09-28）', (
     expect(safeLessVarValue('@color-error')).toBe('#f5222d');
     expect(safeLessVarValue('@color-warning')).toBe('#faad14');
     expect(safeLessVarValue('@color-success')).toBe('#52c41a');
-    expect(safeLessVarValue('@color-primary')).toBe('#409EFF');
+    // 🔴 判据更新（2026-11-03 · 用户拍板「对齐 canonical」）：`@color-primary` 是**规范槽位名**
+    //   （kebab 设计槽，同 `color-text-base`/`color-bg-container` 一族），真值 = MC_CANONICAL_COLOR_SLOTS
+    //   .light['color-primary'] = '#1890ff'；其 `-bg`/`-hover`/`-active` 亦全由 #1890ff 派生。
+    //   旧断言 #409EFF 属 2026-09-28（canonical 机制引入前）的框架 `--colorPrimary` 字面量遗留，
+    //   已由规范槽单一事实源取代（框架驼峰名 `@colorPrimary` 仍保留 #409EFF 契约，见下方 color-fn-fallback）。
+    expect(safeLessVarValue('@color-primary')).toBe('#1890ff');
   });
 
   it('数值型分支优先：@alertZIndex 不被误判成颜色', () => {
@@ -252,3 +257,59 @@ describe('刀15 · DSML 工具调用残片区剥除（mv-1793103939639-b9319f42 
     expect(out).toContain('<div class="x">你好</div>');
   });
 })
+
+describe('deduplicateTemplateBlocks · 嵌套 slot template 不误伤（2026-11-03 ca22c7d0 表格消失根因）', () => {
+  // 真机形态：刀53 table 接管器产物（R9 antd 升级 fe47afcd）——顶层 1 个 template +
+  // 3 个嵌套 slot template（#headerCell/#bodyCell/v-if）。旧非贪婪正则把嵌套当顶层
+  // 重复块错误删除 ⇒ SFC 块结构损坏 ⇒ P1-4 隔离整段表格。
+  const NESTED_SLOT_SFC = [
+    '<template>',
+    '  <div data-section-id="43:4788" class="tbl-wrap">',
+    '    <a-table :columns="cols" :data-source="rows" :bordered="false">',
+    '      <template #headerCell="{ column }">',
+    '        <span :style="{ color: column.h.color }">{{ column.title }}</span>',
+    '      </template>',
+    '      <template #bodyCell="{ column, record }">',
+    '        <template v-if="record[column.dataIndex]">',
+    '          <span>{{ record[column.dataIndex].text }}</span>',
+    '        </template>',
+    '      </template>',
+    '    </a-table>',
+    '  </div>',
+    '</template>',
+    '',
+    '<script setup>',
+    "const cols = []",
+    '</script>',
+  ].join('\n');
+
+  it('阳性（真机回归锁）：嵌套 slot template = 合法单顶层块 ⇒ 逐字不变', () => {
+    const out = deduplicateTemplateBlocks(NESTED_SLOT_SFC);
+    expect(out.fixed).toBe(false);
+    expect(out.removedCount).toBe(0);
+    expect(out.source).toBe(NESTED_SLOT_SFC); // 逐字不变
+  });
+
+  it('旧病灶不回归：LLM 真·双顶层 template 仍被去重（保留第一个）', () => {
+    const dup = '<template>\n  <div>A</div>\n</template>\n\n<template>\n  <div>B</div>\n</template>\n';
+    const out = deduplicateTemplateBlocks(dup);
+    expect(out.fixed).toBe(true);
+    expect(out.removedCount).toBe(1);
+    expect(out.source).toContain('<div>A</div>');
+    expect(out.source).not.toContain('<div>B</div>');
+  });
+
+  it('带属性顶层块保留属性；深度配平不受内层 template 干扰', () => {
+    const withAttr = '<template lang="html">\n  <div>\n    <template #s>\n      <i>x</i>\n    </template>\n  </div>\n</template>\n';
+    const out = deduplicateTemplateBlocks(withAttr);
+    expect(out.fixed).toBe(false);
+    expect(out.source).toBe(withAttr);
+  });
+
+  it('游离闭合（坏文件）不参与顶层配对 ⇒ 不误改，交隔离兜底', () => {
+    const broken = '<template>\n  <div>x</div>\n</template>\n</template>\n';
+    const out = deduplicateTemplateBlocks(broken);
+    // 顶层块只有 1 个合法配对；多余的游离闭合不构成「第二个顶层块」
+    expect(out.fixed).toBe(false);
+  });
+});

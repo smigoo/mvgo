@@ -276,6 +276,42 @@ describe('fixTextOrderDrift：N4c 自愈重排', () => {
     expect(out).toMatch(/<div class="tab active">一氧化碳<\/div>/);
   });
 
+  it('跨卡片文本集合不是同父兄弟组 → 不报、不换文本，并留下弃权计数', () => {
+    const files = {
+      'package/components/StatsSection.vue': `<template>
+  <div class="stats">
+    <div class="card"><b>一氧化碳</b><span>洞内照明</span></div>
+    <div class="card"><b>洞外光强</b><span>能见度</span></div>
+  </div>
+</template>`,
+    };
+    const original = files['package/components/StatsSection.vue'];
+    expect(detectTextOrderDrift(files, FIGMA_ACCIDENT)).toHaveLength(0);
+    const res = fixTextOrderDrift(files, FIGMA_ACCIDENT);
+    expect(res.fixed).toHaveLength(0);
+    expect(res.skippedCrossParent.length).toBeGreaterThan(0);
+    expect(res.files['package/components/StatsSection.vue']).toBe(original);
+  });
+
+  it('跨 wrapper/section 的文本集合同样弃权；同父既有阳性能力不受影响', () => {
+    const files = {
+      'package/components/ContentHeader.vue': `<template>
+  <div class="header"><div class="name">一氧化碳</div><div class="code">洞内照明</div></div>
+  <div class="description"><div class="label">洞外光强</div><div class="text">能见度</div></div>
+</template>`,
+    };
+    const original = files['package/components/ContentHeader.vue'];
+    expect(detectTextOrderDrift(files, FIGMA_ACCIDENT)).toHaveLength(0);
+    const res = fixTextOrderDrift(files, FIGMA_ACCIDENT);
+    expect(res.files['package/components/ContentHeader.vue']).toBe(original);
+    expect(res.skippedCrossParent.length).toBeGreaterThan(0);
+
+    const valid = {
+      'package/components/Tabs.vue': `<template><div><span>一氧化碳</span><span>洞内照明</span><span>洞外光强</span><span>能见度</span></div></template>`,
+    };
+    expect(fixTextOrderDrift(valid, FIGMA_ACCIDENT).fixed).toHaveLength(1);
+  });
+
   it('保守回退：数组含额外元素（组外项混入）→ 不修，remaining 交给门禁', () => {
     const files = {
       'package/components/Tabs.vue': `<template><div v-for="t in tabs">{{ t.label }}</div></template>

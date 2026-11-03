@@ -237,6 +237,65 @@ describe('刀22：折叠列表段的吸收者必须是列表内容携带者（mc
   })
 })
 
+describe('R8-9：整容器 + 合成子切片的祖先覆盖去重（设备详情 36:1693 形态）', () => {
+  const idx = () => buildFigmaClosureIndex(makeFigma())!
+
+  test('阳性：declaredContent 整容器完整携带内容 ⇒ 被吸收的同源子切片只保留一次', () => {
+    const whole = {
+      id: '48:5798',
+      sourceNodeIds: ['48:5798'],
+      declaredContent: { items: [{ text: '节点' }, { text: '在线' }] },
+    }
+    const slice = { id: 'group-props/card-desc', sourceNodeIds: ['48:5799', '48:5800'] }
+    const r = dedupeSectionsByCoverage([whole, slice], idx(), { requireContentCarrier: true })
+    expect(r.sections.map((s: any) => s.id)).toEqual(['48:5798'])
+    expect(r.removed[0]).toMatchObject({ id: 'group-props/card-desc', coveredBy: '48:5798', reason: 'full' })
+  })
+
+  test('阴性：整容器未携带 declaredContent ⇒ 不删唯一内容子切片', () => {
+    const whole = { id: '48:5798', sourceNodeIds: ['48:5798'] }
+    const slice = { id: 'group-props/card-desc', sourceNodeIds: ['48:5799', '48:5800'] }
+    const r = dedupeSectionsByCoverage([whole, slice], idx(), { requireContentCarrier: true })
+    expect(r.sections).toHaveLength(2)
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('阴性：子切片含整容器外的独有节点 ⇒ 覆盖不完整，保留', () => {
+    const whole = {
+      id: '48:5798',
+      sourceNodeIds: ['48:5798'],
+      declaredContent: { children: [{ text: '节点' }, { text: '在线' }] },
+    }
+    const slice = { id: 'group-props/card-desc', sourceNodeIds: ['48:5799', '48:5888'] }
+    const r = dedupeSectionsByCoverage([whole, slice], idx(), { requireContentCarrier: true })
+    expect(r.sections).toHaveLength(2)
+  })
+
+  test('无锚子切片：文本被整容器 body 完整覆盖 ⇒ 去重；含独有文本 ⇒ 保留', () => {
+    const whole = {
+      id: '801:3', sourceNodeIds: ['48:5798'],
+      body: { children: [{ content: { elements: [{ text: '所属产品' }, { text: '爆闪灯' }, { text: '设备类型' }] } }] },
+    }
+    const duplicate = { id: '801:3-attrs', sourceNodeIds: [], body: { items: [{ label: '所属产品', value: '爆闪灯' }] } }
+    const unique = { id: '801:3-extra', sourceNodeIds: [], body: { items: [{ label: '独有字段', value: '不可丢' }] } }
+    const r = dedupeSectionsByCoverage([whole, duplicate, unique], idx(), { requireContentCarrier: true })
+    expect(r.sections.map((s: any) => s.id)).toEqual(['801:3', '801:3-extra'])
+    expect(r.removed[0]).toMatchObject({ id: '801:3-attrs', coveredBy: '801:3', reason: 'declared-content' })
+  })
+
+  test('幂等：去重后再次评估零移除', () => {
+    const whole = {
+      id: '48:5798', sourceNodeIds: ['48:5798'],
+      declaredContent: { elements: [{ text: '节点' }, { text: '在线' }] },
+    }
+    const slice = { id: 'group-props/card-desc', sourceNodeIds: ['48:5799'] }
+    const once = dedupeSectionsByCoverage([whole, slice], idx(), { requireContentCarrier: true })
+    const twice = dedupeSectionsByCoverage(once.sections, idx(), { requireContentCarrier: true })
+    expect(once.sections).toHaveLength(1)
+    expect(twice.removed).toHaveLength(0)
+  })
+})
+
 describe('刀28b：非列表段的吸收证据不含 items 锚点展开（mc-max-1793252160457-54ae6ee3 实锤）', () => {
   const idx = () => buildFigmaClosureIndex(makeFigma())!
   // 本轮形态：vision 把尾部文本「共 6 个节点」(48:5888) 也塞成 items 条目 ⇒

@@ -612,3 +612,637 @@ describe('mergeVisualRows —— 视觉行归并（regions 粒度 → 视觉语�
     expect(sections[1].styles.figmaHeightPx).toBe(99)
   })
 })
+
+describe('根下直配（2026-11-03 治本 · mc-max-1793669737047-17691193）', () => {
+  it('header+slot 两区域 vs 两 section 直接 1:1（回归：曾配错成 74/24 反了）', () => {
+    const sections: any[] = [
+      { id: '2:7959', name: '头部标题栏' },
+      { id: '136:122', name: '今日累计' },
+    ]
+    // Figma 根下非 bg 节点 = [header(28), slot(86)]，与 2 个 section 天然 1:1
+    const doc = {
+      name: 'cp-重点车辆监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 16, y: 922, width: 420, height: 147 },
+      children: [
+        { id: '2:7953', name: 'bg', type: 'VECTOR', absoluteBoundingBox: { x: 16, y: 922, width: 420, height: 147 } },
+        { id: '136:120', name: 'header', type: 'FRAME', absoluteBoundingBox: { x: 36, y: 932, width: 380, height: 28 } },
+        {
+          id: '136:121', name: 'slot', type: 'FRAME', absoluteBoundingBox: { x: 37, y: 963, width: 377, height: 86 },
+          children: [
+            { id: '2:8023', name: 'Group 2136639043', type: 'GROUP', absoluteBoundingBox: { x: 37, y: 984, width: 378, height: 74 } },
+            { id: '136:122', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 36, y: 963, width: 86, height: 24 } },
+          ],
+        },
+      ],
+    }
+    expect(applyFigmaSectionRatios(sections, { document: doc })).toBe(2)
+    // 🔴 修复前：头部被配成 74（三卡）、内容被配成 24（sub-header），正好反了
+    expect(sections[0].styles.figmaHeightPx).toBe(28)
+    expect(sections[1].styles.figmaHeightPx).toBe(86)
+    const avg = (28 + 86) / 2
+    expect(sections[0].styles.flexGrow).toBeCloseTo(28 / avg, 2) // ≈0.49
+    expect(sections[1].styles.flexGrow).toBeCloseTo(86 / avg, 2) // ≈1.51
+    expect(sections[0].styles.flexGrow).toBeLessThan(sections[1].styles.flexGrow as number)
+  })
+
+  it('根下节点数 ≠ sections 数时不触发直配（仍走展开/容错链，防误接管）', () => {
+    const sections: any[] = [{ name: '甲' }, { name: '乙' }]
+    // 根下 3 个非 bg 节点（header + switch + list）≠ 2 sections → 直配不触发
+    const doc = {
+      name: 'cp',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 425 },
+      children: [
+        { id: 'h', name: 'header', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 30 } },
+        { id: 'sw', name: 'switch', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 30, width: 420, height: 65 } },
+        { id: 'lst', name: 'list', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 95, width: 420, height: 317 } },
+      ],
+    }
+    // 数量不等 → 走 header 容错剥 header 后 [switch(65), list(317)] 与两 section 配对
+    expect(applyFigmaSectionRatios(sections, { document: doc })).toBe(2)
+    expect(sections[0].styles.figmaHeightPx).toBe(65)
+    expect(sections[1].styles.figmaHeightPx).toBe(317)
+  })
+})
+
+describe('section.id 直配（2026-11-03 治本 · mc-max-1793675066942-7396124c 实锤）', () => {
+  it('阳性：根下 slot-icon 不匹配 WRAPPER_RE 时，sections.id 命中 figma 节点 → 直配真值高度', () => {
+    // 实锤：合作厂商根下 [bg, header(10), slot-icon(787, 9 kids)]，slot-icon 不匹配
+    // WRAPPER_RE（精确匹配 slot）→ collectSectionRegions 只得 2 region → 复合展开成
+    // 9 图元 → 10≠4 → 旧实现写入 0。而 4 个 sections.id 恰为 figma 节点 id。
+    // （Loop 3 后 ② 路径展开后再归并也会得 [76,161,212,265]——见下方交叉验证用例；
+    //   ①-β 排在 ② 之前仍优先生效，本用例计数行须保持 idDirect=4。）
+    const sections: any[] = [
+      { id: '38:3260', name: '顶部统计卡片' },
+      { id: '38:3137', name: '战略合作厂商' },
+      { id: '38:3162', name: '优质厂商' },
+      { id: '38:3206', name: '普通厂商' },
+    ]
+    const doc = {
+      name: 'cp-合作厂商弹窗',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 660, height: 868 },
+      children: [
+        { id: '38:3135', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 660, height: 868 } },
+        { id: '38:3136', name: 'header', type: 'VECTOR', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 } },
+        {
+          id: '796:3', name: 'slot-icon', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 10, width: 604, height: 787 },
+          children: [
+            { id: '38:3137', name: 'Group 2136638432', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 161, width: 604, height: 161 } },
+            { id: '38:3162', name: 'Group 2136638433', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 372, width: 604, height: 212 } },
+            { id: '38:3206', name: 'Group 2136638434', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 604, width: 604, height: 265 } },
+            { id: '38:3260', name: 'Group 2136638431', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 10, width: 265, height: 76 } },
+            { id: '38:3262', name: '33', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 20, width: 20, height: 28 } },
+            { id: '38:3263', name: '合作厂商', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 48, width: 60, height: 24 } },
+            { id: '38:3282', name: 'Group 2136638435', type: 'GROUP', absoluteBoundingBox: { x: 300, y: 10, width: 265, height: 76 } },
+            { id: '38:3284', name: '66', type: 'TEXT', absoluteBoundingBox: { x: 300, y: 20, width: 20, height: 28 } },
+            { id: '38:3285', name: '在线设备', type: 'TEXT', absoluteBoundingBox: { x: 300, y: 48, width: 60, height: 24 } },
+          ],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(4)
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([76, 161, 212, 265])
+    expect(stats.idDirect).toBe(4) // 计数行取证：走了 id 直配分支
+    const avg = (76 + 161 + 212 + 265) / 4
+    expect(sections[0].styles.flexGrow).toBeCloseTo(76 / avg, 2)
+    expect(sections[3].styles.flexGrow).toBeCloseTo(265 / avg, 2)
+  })
+
+  it('⭐ Loop 3 阳性（设备详情）：语义 id 不命中 → ①-β 放弃，② 路径复合展开后再归并成功 [98,135,193]', () => {
+    // 设备详情实锤 fixture：sections.id 是语义 id（attributes-section），figmaNodes 中无此 id；
+    // 根下 slot-icon(801:3) 不匹配 WRAPPER_RE → regions 仅 2 → 复合展开成 9 图元。
+    // Loop 3 前：10≠3 → 顺序配对不成立 → 写入 0（A4 全链路无系数 → mounter 退等分 flex:1）。
+    // Loop 3 后：展开 + 剥离循环结束后再跑一次 mergeVisualRows（恰好 3 行才采纳）→
+    //   [头部信息=98(img+GD-Robot-04+徽标+编码/爆闪灯), 设备属性=135.25(Group 24 kids), 产品描述=193(矩形+标签+描述)]
+    const sections: any[] = [
+      { id: 'header-section', name: '头部信息' },
+      { id: 'attributes-section', name: '设备属性' },
+      { id: 'description-section', name: '产品描述' },
+    ]
+    const doc = {
+      name: 'cp-设备详情',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 24717, y: 51464, width: 603, height: 555 },
+      children: [
+        { id: '36:1694', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: { x: 24717, y: 51464, width: 603, height: 555 } },
+        { id: '36:1697', name: 'header', type: 'VECTOR', absoluteBoundingBox: { x: 24745, y: 51464, width: 10, height: 10 } },
+        {
+          id: '801:3', name: 'slot-icon', type: 'GROUP', absoluteBoundingBox: { x: 24745, y: 51499, width: 547, height: 493 },
+          children: [
+            { id: '36:1695', name: 'Rectangle 346242326', type: 'RECTANGLE', absoluteBoundingBox: { x: 24745, y: 51799, width: 547, height: 193 } },
+            { id: '36:1698', name: '编码', type: 'TEXT', absoluteBoundingBox: { x: 24864, y: 51556, width: 32, height: 16 } },
+            { id: '36:1708', name: '产品描述', type: 'TEXT', absoluteBoundingBox: { x: 24772, y: 51824, width: 64, height: 16 } },
+            { id: '36:1719', name: '该设备为太阳能供电一体化爆闪灯', type: 'TEXT', absoluteBoundingBox: { x: 24772, y: 51849, width: 496, height: 90 } },
+            { id: '81:7', name: 'Group 2136638454', type: 'GROUP', absoluteBoundingBox: { x: 24745, y: 51630, width: 440, height: 135.25 } },
+            { id: '36:1721', name: '爆闪灯', type: 'TEXT', absoluteBoundingBox: { x: 24989, y: 51556, width: 48, height: 16 } },
+            { id: '36:1722', name: 'Frame 2136639901', type: 'FRAME', absoluteBoundingBox: { x: 24905, y: 51553, width: 72, height: 22 } },
+            { id: '36:1724', name: 'GD-Robot-04', type: 'TEXT', absoluteBoundingBox: { x: 24864, y: 51514, width: 147, height: 24 } },
+            { id: '36:1725', name: 'img', type: 'GROUP', absoluteBoundingBox: { x: 24745, y: 51499, width: 98, height: 98 } },
+          ],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(3)
+    expect(stats.idDirect).toBeUndefined()
+    expect(stats.idDirectMiss).toBe(3)
+    expect(stats.order).toBe(3) // 计数行取证：走了 ② 顺序配对（复合展开后再归并）
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([98, 135, 193])
+    const avg = (98 + 135.25 + 193) / 3
+    expect(sections[0].styles.flexGrow).toBeCloseTo(98 / avg, 2)
+    expect(sections[1].styles.flexGrow).toBeCloseTo(135.25 / avg, 2)
+    expect(sections[2].styles.flexGrow).toBeCloseTo(193 / avg, 2)
+    // 视觉行高递增 ⇒ 系数单调递增（头部信息 < 设备属性 < 产品描述）
+    expect(sections[0].styles.flexGrow).toBeLessThan(sections[1].styles.flexGrow as number)
+    expect(sections[1].styles.flexGrow).toBeLessThan(sections[2].styles.flexGrow as number)
+  })
+
+  it('Loop 3 阴性：展开后归并出 3 行 ≠ 5 sections → 不采纳，维持 fail-open 0（不猜）', () => {
+    // 同一设备详情几何，但 sections=5：归并只能出 3 个视觉行 → 数量不严格相等 → 不采纳
+    // → pairRegions 保持 10 图元 → 10≠5 → 顺序配对不成立 → 0（纪律优先于覆盖）。
+    const sections: any[] = [
+      { id: 'header-section', name: '头部信息' },
+      { id: 'attributes-section', name: '设备属性' },
+      { id: 'description-section', name: '产品描述' },
+      { id: 'extra-a', name: '附加一' },
+      { id: 'extra-b', name: '附加二' },
+    ]
+    const doc = {
+      name: 'cp-设备详情',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 24717, y: 51464, width: 603, height: 555 },
+      children: [
+        { id: '36:1694', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: { x: 24717, y: 51464, width: 603, height: 555 } },
+        { id: '36:1697', name: 'header', type: 'VECTOR', absoluteBoundingBox: { x: 24745, y: 51464, width: 10, height: 10 } },
+        {
+          id: '801:3', name: 'slot-icon', type: 'GROUP', absoluteBoundingBox: { x: 24745, y: 51499, width: 547, height: 493 },
+          children: [
+            { id: '36:1695', name: 'Rectangle 346242326', type: 'RECTANGLE', absoluteBoundingBox: { x: 24745, y: 51799, width: 547, height: 193 } },
+            { id: '36:1698', name: '编码', type: 'TEXT', absoluteBoundingBox: { x: 24864, y: 51556, width: 32, height: 16 } },
+            { id: '36:1708', name: '产品描述', type: 'TEXT', absoluteBoundingBox: { x: 24772, y: 51824, width: 64, height: 16 } },
+            { id: '36:1719', name: '该设备为太阳能供电一体化爆闪灯', type: 'TEXT', absoluteBoundingBox: { x: 24772, y: 51849, width: 496, height: 90 } },
+            { id: '81:7', name: 'Group 2136638454', type: 'GROUP', absoluteBoundingBox: { x: 24745, y: 51630, width: 440, height: 135.25 } },
+            { id: '36:1721', name: '爆闪灯', type: 'TEXT', absoluteBoundingBox: { x: 24989, y: 51556, width: 48, height: 16 } },
+            { id: '36:1722', name: 'Frame 2136639901', type: 'FRAME', absoluteBoundingBox: { x: 24905, y: 51553, width: 72, height: 22 } },
+            { id: '36:1724', name: 'GD-Robot-04', type: 'TEXT', absoluteBoundingBox: { x: 24864, y: 51514, width: 147, height: 24 } },
+            { id: '36:1725', name: 'img', type: 'GROUP', absoluteBoundingBox: { x: 24745, y: 51499, width: 98, height: 98 } },
+          ],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(0)
+    expect(stats.order).toBeUndefined()
+    for (const s of sections) expect(s.styles).toBeUndefined()
+  })
+
+  it('⭐ Loop 3 交叉验证（合作厂商 ② 路径隔离）：语义 id 场景下展开后归并得 [76,161,212,265]，与 ①-β id 直配逐项一致', () => {
+    // 同一合作厂商几何，但 sections.id 改用语义 id（绕过 ①-β，隔离 ② 路径）：
+    // 复合展开 slot-icon → 10 图元 → 展开后再归并 → 4 视觉行 [76,161,212,265]。
+    // 与 ①-β 阳性用例（sections.id=figma id）的结果逐项相等 ⇒ 两条独立路径互为交叉验证；
+    // 且与 context-shadow.json 中 planner 修复值 fg=[0.426,0.902,1.188,1.485] 同源吻合。
+    const sections: any[] = [
+      { id: 'sec-top', name: '顶部统计卡片' },
+      { id: 'sec-strategy', name: '战略合作厂商' },
+      { id: 'sec-quality', name: '优质厂商' },
+      { id: 'sec-normal', name: '普通厂商' },
+    ]
+    const doc = {
+      name: 'cp-合作厂商弹窗',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 660, height: 868 },
+      children: [
+        { id: '38:3135', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 660, height: 868 } },
+        { id: '38:3136', name: 'header', type: 'VECTOR', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 } },
+        {
+          id: '796:3', name: 'slot-icon', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 10, width: 604, height: 787 },
+          children: [
+            { id: '38:3137', name: 'Group 2136638432', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 161, width: 604, height: 161 } },
+            { id: '38:3162', name: 'Group 2136638433', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 372, width: 604, height: 212 } },
+            { id: '38:3206', name: 'Group 2136638434', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 604, width: 604, height: 265 } },
+            { id: '38:3260', name: 'Group 2136638431', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 10, width: 265, height: 76 } },
+            { id: '38:3262', name: '33', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 20, width: 20, height: 28 } },
+            { id: '38:3263', name: '合作厂商', type: 'TEXT', absoluteBoundingBox: { x: 0, y: 48, width: 60, height: 24 } },
+            { id: '38:3282', name: 'Group 2136638435', type: 'GROUP', absoluteBoundingBox: { x: 300, y: 10, width: 265, height: 76 } },
+            { id: '38:3284', name: '66', type: 'TEXT', absoluteBoundingBox: { x: 300, y: 20, width: 20, height: 28 } },
+            { id: '38:3285', name: '在线设备', type: 'TEXT', absoluteBoundingBox: { x: 300, y: 48, width: 60, height: 24 } },
+          ],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(4)
+    expect(stats.idDirect).toBeUndefined() // 语义 id → ①-β 不接手
+    expect(stats.idDirectMiss).toBe(4)
+    expect(stats.order).toBe(4) // ② 顺序配对（展开后再归并）
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([76, 161, 212, 265])
+    const avg = (76 + 161 + 212 + 265) / 4
+    expect(sections[0].styles.flexGrow).toBeCloseTo(76 / avg, 2) // ≈0.426
+    expect(sections[3].styles.flexGrow).toBeCloseTo(265 / avg, 2) // ≈1.485
+  })
+
+  it('顺序保护：根下直配必须先于 section.id 直配（重点车辆监测保持 28/86，不被 28/24 抢走）', () => {
+    // 重点车辆监测 sections.id 指向**内部子节点**（2:7959 小标题 28、136:122 sub-header 24），
+    // 若 id 直配优先会得 28/24（错）；根下直配得 28/86（对）⇒ 根下直配必须胜出。
+    const sections: any[] = [
+      { id: '2:7959', name: '标题栏' },
+      { id: '136:122', name: '今日累计' },
+    ]
+    const doc = {
+      name: 'cp-重点车辆监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 16, y: 922, width: 420, height: 147 },
+      children: [
+        { id: '2:7953', name: 'bg', type: 'VECTOR', absoluteBoundingBox: { x: 16, y: 922, width: 420, height: 147 } },
+        { id: '136:120', name: 'header', type: 'FRAME', absoluteBoundingBox: { x: 36, y: 932, width: 380, height: 28 } },
+        {
+          id: '136:121', name: 'slot', type: 'FRAME', absoluteBoundingBox: { x: 37, y: 963, width: 377, height: 86 },
+          children: [
+            { id: '2:8023', name: 'Group 2136639043', type: 'GROUP', absoluteBoundingBox: { x: 37, y: 984, width: 378, height: 74 } },
+            { id: '136:122', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 36, y: 963, width: 86, height: 24 } },
+          ],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(2)
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([28, 86])
+    expect(stats.rootDirect).toBe(2) // 走的是根下直配，不是 id 直配
+    expect(stats.idDirect).toBeUndefined()
+  })
+})
+
+// ============================================================
+// 🆕 2026-11-03 治本：collapsed list section 高度取逐项并集
+// 实锤 mc-max-1793682828131-09063447：①-β id 直配命中 48:5798（Figma 里只是
+// 首卡 GROUP 72px，非 6 卡列表容器 532px）⇒ flexGrow 1.636/0.364 + 刀16 gap
+// 483px 全错 ⇒ 列表压成一条缝。与 planner resolveVisionSectionBox 同源判据。
+// ============================================================
+describe('collapsed list 逐项并集（2026-11-03 治本 · 09063447 实锤）', () => {
+  it('阳性：id 直配命中首卡，body.items ≥2 逐项命中 → 并集 532 替代 72', () => {
+    // 09063447 真机形态（cp-aiot-dpjh-bsjd）：slot-con 下 6 卡各 72px、gap 20
+    const items = ['48:5799', '48:5813', '48:5828', '48:5843', '48:5858', '48:5873']
+    const listChildren = items.map((id, i) => ({
+      id,
+      name: `Group ${i}`,
+      type: 'GROUP',
+      absoluteBoundingBox: { x: 20811, y: 51606 + i * 92, width: 470, height: 72 },
+    }))
+    const sections: any[] = [
+      { id: '48:5890', name: '图区' },
+      { id: '48:5798', name: '节点列表', body: { layout: 'vertical', items: items.map((id) => ({ id })) } },
+      { id: '48:5888', name: '底部汇总' },
+    ]
+    const doc = {
+      name: 'cp-aiot-dpjh-bsjd',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 20811, y: 51533, width: 510, height: 665 },
+      children: [
+        { id: '48:5797', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: { x: 20811, y: 51533, width: 510, height: 665 } },
+        { id: '565:2', name: 'header', type: 'GROUP', absoluteBoundingBox: { x: 20811, y: 51551, width: 470, height: 30 } },
+        {
+          id: '565:3', name: 'slot-con', type: 'GROUP', absoluteBoundingBox: { x: 20811, y: 51606, width: 483, height: 571 },
+          children: [
+            { id: '48:5798', name: 'Group 2136638415', type: 'GROUP', absoluteBoundingBox: { x: 20811, y: 51606, width: 470, height: 72 } },
+            ...listChildren,
+            { id: '48:5888', name: '共 6 个节点', type: 'TEXT', absoluteBoundingBox: { x: 20811, y: 52161, width: 72, height: 16 } },
+            { id: '48:5889', name: '接入设备 10810', type: 'TEXT', absoluteBoundingBox: { x: 20891, y: 52161, width: 107, height: 16 } },
+          ],
+        },
+        // 面板标题栏（48:5890）：真机在 header GROUP 内，这里作为根下节点保证 id 直配可命中
+        { id: '48:5890', name: '标题img', type: 'FRAME', absoluteBoundingBox: { x: 20811, y: 51551, width: 470, height: 30 } },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(3)
+    expect(stats.idDirect).toBe(3)
+    // 6×72 + 5×20 = 532（首卡 72 → 并集 532）
+    expect(sections[1].styles.figmaHeightPx).toBe(532)
+    // 非列表段不受影响
+    expect(sections[0].styles.figmaHeightPx).toBe(30)
+    expect(sections[2].styles.figmaHeightPx).toBe(16)
+    // 比例：30:532:16，列表占绝对大头
+    expect(sections[1].styles.flexGrow).toBeGreaterThan(sections[0].styles.flexGrow * 5)
+  })
+
+  it('阴性：配对节点已是整段容器（并集 ≤ 配对高）→ 不覆盖', () => {
+    const sections: any[] = [
+      { id: 'a:1', name: '段一', body: { items: [{ id: 'a:1' }, { id: 'a:2' }] } },
+      { id: 'b:1', name: '段二' },
+    ]
+    const doc = {
+      name: 'cp-x', type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 300 },
+      children: [
+        { id: 'a:1', name: 'container', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 200 },
+          children: [
+            { id: 'a:2', name: 'row', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 90 } },
+          ] },
+        { id: 'b:1', name: 'footer', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 200, width: 400, height: 100 } },
+      ],
+    }
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, { document: doc }, stats)
+    expect(sections[0].styles.figmaHeightPx).toBe(200) // 容器 200 保持（子项并集 90 < 200）
+  })
+
+  it('阴性：body.items < 2 或 item 不命中 → 行为不变', () => {
+    const sections: any[] = [
+      { id: 'a:1', name: '段一', body: { items: [{ id: 'zzz' }] } },
+      { id: 'b:1', name: '段二' },
+    ]
+    const doc = {
+      name: 'cp-y', type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 300 },
+      children: [
+        { id: 'a:1', name: 'one', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 120 } },
+        { id: 'b:1', name: 'two', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 120, width: 400, height: 180 } },
+      ],
+    }
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, { document: doc }, stats)
+    expect(sections[0].styles.figmaHeightPx).toBe(120)
+  })
+})
+
+// ============================================================
+// 🆕 2026-11-03 治本：段标题节点上溯 `slot-{段名}` 同名容器
+// 实锤 mc-max-1793683866145-ec1db095（流量监测）：vision section.id 锚到 Figma 里的
+// **段标题 GROUP**（2:3559 标题 24px / 2:3439 sub-header 24px / 2:3571 tit 24px），
+// ①-β id 直配「全命中即采纳」⇒ A4 比例 24:21:24:24 近均分 + 刀16 用标题 y 差算出
+// 242/124/133px margin-top ⇒ 大面积空白 + 文字互叠。真值容器是祖先 `slot-{业务名}`
+// （Figma 命名约定，业务名与 section.name 精确同名）：556 / 142 / 174。
+// 判据：沿 parentId 上溯 ≤4 跳、祖先名 trim 后严格全等、只升级不降级、fail-open。
+// ============================================================
+describe('slot 同名容器上溯（2026-11-03 治本 · ec1db095 实锤）', () => {
+  it('父链事实：collectFigmaNodes 记录 parentId（上溯的纯结构前提）', () => {
+    const doc = figmaDoc([
+      {
+        id: 'p', name: 'slot-x', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
+        children: [{ id: 'c', name: 'kid', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 5, height: 5 } }],
+      },
+    ])
+    const nodes = collectFigmaNodes(doc)
+    expect(nodes.find((n) => n._id === 'c')?.parentId).toBe('p')
+    // 根下节点无父 id（figmaDoc 根未给 id）→ null（链到此终止）
+    expect(nodes.find((n) => n._id === 'p')?.parentId).toBe(null)
+  })
+
+  it('阳性：段标题 GROUP(24) 上溯 slot-{段名} 容器 → [556,142,174]（24→556 修正）', () => {
+    const sections: any[] = [
+      { id: '2:3559', name: '当日总流量' },
+      { id: '2:3439', name: '车型分布' },
+      { id: '2:3571', name: '流量预测' },
+    ]
+    const doc = {
+      name: 'cp-流量监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 944 },
+      children: [
+        { id: 'bg', name: 'bg-[m]', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 944 } },
+        {
+          id: '88:33', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 30, width: 420, height: 556 },
+          children: [
+            {
+              id: '88:32', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 30, width: 420, height: 30 },
+              children: [
+                { id: '2:3559', name: '标题', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 32, width: 120, height: 24 } },
+              ],
+            },
+          ],
+        },
+        {
+          id: '2:3438', name: 'slot-车型分布', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 590, width: 420, height: 142 },
+          children: [
+            { id: '2:3439', name: 'sub-header', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 592, width: 120, height: 24 } },
+          ],
+        },
+        {
+          id: '83:30', name: 'slot-流量预测', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 740, width: 420, height: 174 },
+          children: [
+            {
+              id: '2:3565', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 742, width: 420, height: 30 },
+              children: [
+                { id: '2:3571', name: 'tit', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 744, width: 80, height: 24 } },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(3)
+    expect(stats.idDirect).toBe(3) // 仍走 ①-β id 直配，仅采纳值被上溯替换
+    expect(stats.slotAncestor).toBe(3) // 计数行取证：3 段全部上溯生效
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([556, 142, 174])
+    const avg = (556 + 142 + 174) / 3
+    expect(sections[0].styles.flexGrow).toBeCloseTo(556 / avg, 2) // ≈1.913
+    expect(sections[1].styles.flexGrow).toBeCloseTo(142 / avg, 2) // ≈0.489
+    expect(sections[2].styles.flexGrow).toBeCloseTo(174 / avg, 2) // ≈0.599
+    for (const s of sections) {
+      expect(s.styles.flexBasis).toBe(0)
+      expect(s.styles.height).toBeUndefined() // 仍是比例，不写固定 px
+    }
+  })
+
+  it('阴性：祖先名不精确相等（slot-车型分布2 / slot-其他）→ 不上溯，保持配对值', () => {
+    const sections: any[] = [
+      { id: 'x1', name: '车型分布' },
+      { id: 'x2', name: '流量预测' },
+    ]
+    const doc = {
+      name: 'cp-neg1', type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+      children: [
+        {
+          id: 'p1', name: 'slot-车型分布2', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 142 },
+          children: [{ id: 'x1', name: 'sub-header', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 120, height: 24 } }],
+        },
+        {
+          id: 'p2', name: 'slot-其他', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 200, width: 400, height: 174 },
+          children: [{ id: 'x2', name: 'tit', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 200, width: 120, height: 24 } }],
+        },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(2)
+    expect(stats.idDirect).toBe(2)
+    expect(stats.slotAncestor).toBe(0) // 严格全等不成立 ⇒ 恒 0（判据未失效，是名字不精确）
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([24, 24])
+  })
+
+  it('阴性（保护）：顺序配对路径不上溯 —— 复合展开把 slot 段拆成子块时子块不得被撑成整段', () => {
+    // e1432017 契约：`slot-当日总流量` 自身就是 section，② 路径复合展开把它拆成
+    // sub-header/Group/bar/bar 多个 section。若顺序配对也做同名上溯，子块会被撑回 556
+    // ⇒ 打挂复合展开（既有 5-section 用例）。故上溯只挂在 id 直配/id 命中的采纳值上。
+    const sections: any[] = [
+      { id: 'section-daily-total', name: '当日总流量' },
+      { id: 'section-forecast', name: '流量预测' },
+    ]
+    const doc = {
+      name: 'cp-neg2', type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 944 },
+      children: [
+        { id: 'bg', name: 'bg-[m]', type: 'RECTANGLE', absoluteBoundingBox: { x: 0, y: 0, width: 420, height: 944 } },
+        { id: '88:33', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 30, width: 420, height: 556 } },
+        { id: '83:30', name: 'slot-流量预测', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 740, width: 420, height: 174 } },
+      ],
+    }
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(2)
+    expect(stats.order).toBe(2) // 走的是 ② 顺序配对（语义 id 在 figmaNodes 中不命中）
+    expect(stats.slotAncestor).toBe(0)
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([556, 174])
+  })
+})
+
+describe('①-β 追认幻觉缺项（2026-11-03 治本 · ec1db095 实锤）', () => {
+  /**
+   * 真实 fixture：mc-max-1793683866145-ec1db095（流量监测 2:9778）上 14:00 复测的 6 sections。
+   * 真值（.checkpoint dump 逐字）：
+   *   - 根 cp-流量监测(2:9778) 根下 [bg-[m], header-(2:3550,32.54), slot-当日总流量(88:33,556.31),
+   *     slot-车型分布(2:3438,142.0), slot-流量预测(83:30,174)]
+   *   - 5 段 id 直命中；1 段 `2:3580 江阴大桥柱状图` 是 Vision 把 `@antd/tab` 第二个选项文字
+   *     **误升格为 section**（真值树不存在 ⇒ validateVisionAnchors 已标 anchorValid:false）。
+   *   - 旧「全命中才采纳」被这一项打破 ⇒ idDirect 整体放弃 ⇒ 顺序配对 6≠regions 也 miss ⇒
+   *     A4 全灭（真机 stats 原文 {"slotAncestor":0,"idDirectMiss":1,"miss":1}）。
+   */
+  const cpFlowMonitor = () => ({
+    document: {
+      id: '2:9778',
+      name: 'cp-流量监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 10, y: 109, width: 425.8275146484375, height: 807 },
+      children: [
+        { id: '2:3436', name: 'bg-[m]', type: 'BOOLEAN_OPERATION', absoluteBoundingBox: { x: 10, y: 109, width: 425.83, height: 807 } },
+        { id: '2:3550', name: 'header-', type: 'GROUP', absoluteBoundingBox: { x: 10, y: 109, width: 425.83, height: 32.54178237915039 } },
+        {
+          id: '88:33', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 150, width: 425.83, height: 556.3101196289062 },
+          children: [
+            {
+              id: '88:32', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 150, width: 425.83, height: 30.422534942626953 },
+              children: [
+                { id: '2:3559', name: '标题', type: 'GROUP', absoluteBoundingBox: { x: 10, y: 152, width: 120, height: 24.338027954101562 } },
+              ],
+            },
+          ],
+        },
+        {
+          id: '2:3438', name: 'slot-车型分布', type: 'GROUP', absoluteBoundingBox: { x: 10, y: 720, width: 425.83, height: 142.000244140625 },
+          children: [
+            { id: '2:3439', name: 'sub-header', type: 'GROUP', absoluteBoundingBox: { x: 10, y: 722, width: 120, height: 24.338027954101562 } },
+          ],
+        },
+        {
+          id: '83:30', name: 'slot-流量预测', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 880, width: 425.83, height: 174 },
+          children: [
+            {
+              id: '2:3565', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 882, width: 425.83, height: 24.338027954101562 },
+              children: [
+                {
+                  id: '2:3566', name: '@antd/tab', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 882, width: 425.83, height: 19 },
+                  children: [
+                    {
+                      id: '2:3569', name: 'btn', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 882, width: 100, height: 19 },
+                      children: [
+                        { id: '2:3570', name: '江阴大桥', type: 'TEXT', absoluteBoundingBox: { x: 10, y: 882, width: 60, height: 10 } },
+                      ],
+                    },
+                  ],
+                },
+                { id: '2:3571', name: 'tit', type: 'GROUP', absoluteBoundingBox: { x: 10, y: 885, width: 80, height: 24.338027954101562 } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  })
+
+  const realSections = (): any[] => [
+    { id: '2:3550', name: '流量监测标题' },
+    { id: '2:3559', name: '当日总流量' },
+    { id: '2:3570', name: '江阴靖江长江隧道柱状图' },
+    { id: '2:3580', name: '江阴大桥柱状图', anchorValid: false }, // Vision 幻觉升格段
+    { id: '2:3439', name: '车型分布' },
+    { id: '2:3571', name: '流量预测' },
+  ]
+
+  it('⭐ 阳性：未命中项全部 anchorValid===false ⇒ 追认命中项，A4 由全灭变为 [33,556,10,142,174]', () => {
+    const sections = realSections()
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, cpFlowMonitor(), stats)).toBe(5)
+    // 计数行取证：走了 ①-β 且追认了 1 个幻觉缺项
+    expect(stats.idDirect).toBe(5)
+    expect(stats.idDirectSkipHallucinated).toBe(1)
+    expect(stats.slotAncestor).toBe(3) // 556/142/174 三段走上溯（与 B 组剔除幻觉后逐项一致）
+    expect(stats.idDirectMiss).toBeUndefined() // 不再整体放弃
+    // 命中 5 项各自写入比例；幻觉项（下标 3）保持无 styles
+    expect(sections.map((s: any) => s.styles?.figmaHeightPx)).toEqual([33, 556, 10, undefined, 142, 174])
+    // 幻觉项本身完全不给比例（fail-open ⇒ 交宿主默认 flex，不猜不混配）
+    expect(sections[3].styles).toBeUndefined()
+    const avg = (32.54178237915039 + 556.3101196289062 + 10 + 142.000244140625 + 174) / 5
+    expect(sections[0].styles.flexGrow).toBeCloseTo(32.54178237915039 / avg, 2) // ≈0.178
+    expect(sections[1].styles.flexGrow).toBeCloseTo(556.3101196289062 / avg, 2) // ≈3.04
+    expect(sections[2].styles.flexGrow).toBeCloseTo(10 / avg, 2) // ≈0.055
+    expect(sections[4].styles.flexGrow).toBeCloseTo(142.000244140625 / avg, 2) // ≈0.776
+    expect(sections[5].styles.flexGrow).toBeCloseTo(174 / avg, 2) // ≈0.951
+  })
+
+  it('阴性（上界）：幻觉缺项数 > 命中数 ⇒ 不采纳（防「大半段臆造」静默劣化）', () => {
+    // 2 真命中 + 3 幻觉缺项：hallucinatedMiss(3) > matched(2) → 判定样本已不可信，维持放弃。
+    const sections: any[] = [
+      { id: '2:3550', name: '流量监测标题' },
+      { id: '2:3559', name: '当日总流量' },
+      { id: '9:9001', name: '臆造一', anchorValid: false },
+      { id: '9:9002', name: '臆造二', anchorValid: false },
+      { id: '9:9003', name: '臆造三', anchorValid: false },
+    ]
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, cpFlowMonitor(), stats)
+    expect(stats.idDirect).toBeUndefined()
+    expect(stats.idDirectSkipHallucinated).toBe(0) // 计数行「0 也打」：未追认不是判据失效
+    expect(stats.idDirectMiss).toBe(3)
+  })
+
+  it('阴性：未命中项无 anchorValid===false 标记（可能真·错配）⇒ 整体放弃，不放松', () => {
+    // 语义 id（attributes-section 类）在 figmaNodes 中天然不命中，且没有幻觉标记 ⇒ 维持旧行为。
+    const sections: any[] = [
+      { id: '2:3550', name: '流量监测标题' },
+      { id: '2:3559', name: '当日总流量' },
+      { id: 'semantic-section', name: '语义段落' },
+    ]
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, cpFlowMonitor(), stats)
+    expect(stats.idDirect).toBeUndefined()
+    expect(stats.idDirectSkipHallucinated).toBe(0)
+    expect(stats.idDirectMiss).toBe(1)
+  })
+
+  it('阴性：anchorValid===true（锚点仍被判为可信但配对未命中）⇒ 不追认', () => {
+    const sections: any[] = [
+      { id: '2:3550', name: '流量监测标题' },
+      { id: '2:3559', name: '当日总流量' },
+      { id: '2:9999', name: '未收录但标记可信', anchorValid: true },
+    ]
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, cpFlowMonitor(), stats)
+    expect(stats.idDirect).toBeUndefined()
+    expect(stats.idDirectSkipHallucinated).toBe(0)
+    expect(stats.idDirectMiss).toBe(1)
+  })
+
+  it('阴性：全命中（idDirectMiss===0）时 idDirectSkipHallucinated 恒 0（回归原行为）', () => {
+    const sections: any[] = [
+      { id: '2:3550', name: '流量监测标题' },
+      { id: '2:3559', name: '当日总流量' },
+    ]
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, cpFlowMonitor(), stats)).toBe(2)
+    expect(stats.idDirect).toBe(2)
+    expect(stats.idDirectSkipHallucinated).toBe(0)
+  })
+})

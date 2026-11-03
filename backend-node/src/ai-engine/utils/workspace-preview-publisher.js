@@ -15,6 +15,7 @@ import { createHash, randomBytes } from 'crypto'
 import { execFileSync } from 'child_process'
 import { dirname, join } from 'path'
 import { createLogger } from '../logger/index.js'
+import { renameWithCopyFallback } from './rename-with-copy-fallback.js'
 import {
   projectRoot,
   workspaceRoot,
@@ -361,12 +362,20 @@ function promotePreparedTarget(preparedTarget) {
   const parent = dirname(preparedTarget.targetPath)
   mkdirSync(parent, { recursive: true })
 
+  // 🛡️ 2026-11-03：EPERM rename 风暴（沙箱态 spawn 的进程 rename/unlink 全挂）下，
+  // 备份与落名统一走「rename 优先、复制兜底」；复制模式源目录可能残留，交给 schedulePathCleanup。
   if (existsSync(preparedTarget.targetPath)) {
-    renameSync(preparedTarget.targetPath, preparedTarget.backupPath)
+    renameWithCopyFallback(preparedTarget.targetPath, preparedTarget.backupPath, {
+      logger,
+      label: 'workspace 预览旧产物备份',
+    })
     preparedTarget.hadExisting = true
   }
 
-  renameSync(preparedTarget.stagingPath, preparedTarget.targetPath)
+  renameWithCopyFallback(preparedTarget.stagingPath, preparedTarget.targetPath, {
+    logger,
+    label: 'workspace 预览 staging 落名',
+  })
   preparedTarget.published = true
   return preparedTarget
 }
@@ -436,13 +445,40 @@ function getPreviewTransactionJournalPath(transactionKey) {
 function writePreviewTransactionJournal(transaction) {
   mkdirSync(previewTransactionJournalDir, { recursive: true })
   const journalPath = getPreviewTransactionJournalPath(transaction.transactionKey)
-  const tempPath = `${journalPath}.tmp-${process.pid}-${Date.now()}-${randomBytes(3).toString('hex')}`
-  writeFileSync(tempPath, JSON.stringify({
+  const payload = JSON.stringify({
     version: 1,
     ...transaction,
     updatedAt: new Date().toISOString(),
-  }, null, 2), 'utf-8')
-  renameSync(tempPath, journalPath)
+  }, null, 2)
+  const tempPath = `${journalPath}.tmp-${process.pid}-${Date.now()}-${randomBytes(3).toString('hex')}`
+  // 🛡️ 2026-11-03（真机实锤）：`renameSync` 抛 `EPERM: operation not permitted` 曾**整单生成失败**。
+  //   journal 只是「崩溃恢复用的尽力而为持久化」，**绝不能**因它写不成而让用户的生成任务挂掉。
+  //   故：原子重命名失败 → 清理临时文件后**退化为直写目标**（非原子，但内容一致、可恢复）；
+  //   直写仍失败 → 记 warn 后放行（本次生成照常进行，仅失去崩溃恢复能力）。
+  //   EPERM 常见诱因：陈旧 `.tmp-*` 残留、父目录被文件监视器/沙箱持有、权限瞬时异常。
+  try {
+    writeFileSync(tempPath, payload, 'utf-8')
+    renameSync(tempPath, journalPath)
+    return
+  } catch (error) {
+    try {
+      if (existsSync(tempPath)) unlinkSync(tempPath)
+    } catch {
+      /* 清理失败可忽略：下次启动的陈旧 tmp 清理会兜底 */
+    }
+    try {
+      writeFileSync(journalPath, payload, 'utf-8')
+      logger.warn('质量预览事务 journal 原子重命名失败，已退化为直写（非原子）', {
+        journalPath,
+        error: error.message,
+      })
+    } catch (error2) {
+      logger.warn('质量预览事务 journal 写入失败，已跳过（不影响本次生成）', {
+        journalPath,
+        error: error2.message,
+      })
+    }
+  }
 }
 
 function removePreviewTransactionJournal(transactionKey) {
@@ -469,6 +505,17 @@ function recoverPreviewTransactions() {
   }
 
   let recovered = 0
+  // 🛡️ 启动清理：`.json.tmp-<pid>-…` 是 writePreviewTransactionJournal 的**未完成原子写残留**
+  //   （进程在 writeFileSync 与 renameSync 之间死掉，或 rename 因 EPERM 失败）。
+  //   它们不是有效 journal（下面 `.json` 过滤本就不收，且会撑大目录/干扰排查），启动即清。
+  for (const name of entries) {
+    if (!name.includes('.json.tmp-')) continue
+    try {
+      unlinkSync(join(previewTransactionJournalDir, name))
+    } catch (error) {
+      logger.warn('质量预览事务残留临时文件清理失败', { name, error: error.message })
+    }
+  }
   for (const name of entries) {
     if (!name.endsWith('.json')) continue
     const journalPath = join(previewTransactionJournalDir, name)
@@ -791,6 +838,10 @@ export const __testing = {
   resetCleanupState,
   hasQualityPreviewTransaction,
   qualityPreviewTransactions,
+  // 🛡️ 2026-11-03：暴露 journal 写入/恢复，供 spec 验证「原子重命名失败不得抛出」的兜底契约。
+  writePreviewTransactionJournal,
+  recoverPreviewTransactions,
+  getPreviewTransactionJournalPath,
 }
 
 export {

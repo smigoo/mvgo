@@ -31,6 +31,29 @@ function boxOf(node) {
   return { x, y, width, height }
 }
 
+/**
+ * 刀 20c 形态识别（**纯形态，非裁决**）：细长条（宽 ≤12px、长宽比 ≥4）且右缘贴容器边（±4px）。
+ * 仅回答「它长得像滚动条滑块吗」，是否豁免由 `isScrollbarNamed` 的正判据共同决定。
+ */
+function isBarAtRightEdge(b, cBox) {
+  return (
+    b.width <= 12 &&
+    b.height >= 4 * b.width &&
+    Math.abs(b.x + b.width - (cBox.x + cBox.width)) <= 4
+  )
+}
+
+/**
+ * 🛡️ 刀 20c-R（2026-11-02 · `43:5688` 实锤）正判据：图层名必须**确指**滚动条。
+ *
+ * 依据：Figma `node.name` 是**真值事实**（不是启发式猜测），与 `figma-connector` 既有
+ * `_isNonSemanticName` / `/^bg(\b|[-_])/i` 同源——命名来自设计稿，可作判据。
+ * **自动名不构成证据**：`Rectangle 346242323` ⇒ 返回 false ⇒ 照常吸收（未知即不豁免）。
+ */
+function isScrollbarNamed(node) {
+  return /滚动|scroll/i.test(String(node?.name || ''))
+}
+
 /** 单轴边锚定：贴合 ⇒ 0；单贴 ⇒ 0+真值尺寸；不贴 ⇒ 偏移+真值尺寸。 */
 function axisCss(a0, aSize, c0, cSize, startProp, endProp, sizeProp) {
   const a1 = a0 + aSize
@@ -47,10 +70,10 @@ function axisCss(a0, aSize, c0, cSize, startProp, endProp, sizeProp) {
  * @param {Object} sec 容器 section（读 id/sourceNodeIds）
  * @param {Map|null} figmaIndex `indexFigmaNodes` 产物
  * @param {Set<string>} claimedIds 全部叶子认领的节点 id（含叶子自身 id 与其 sourceNodeIds）
- * @returns {{evaluated:number, layers:Array<{id:string, background:string, borderRadius:number|null, edgeCss:string, top:number, left:number, width:number, height:number}>}}
+ * @returns {{evaluated:number, scrollbarExempted:number, layers:Array<{id:string, background:string, borderRadius:number|null, edgeCss:string, top:number, left:number, width:number, height:number}>}}
  */
 export function resolveAbsorbedBgLayers(sec, figmaIndex, claimedIds) {
-  const out = { evaluated: 0, layers: [] }
+  const out = { evaluated: 0, scrollbarExempted: 0, layers: [] }
   if (!sec || !figmaIndex || typeof figmaIndex.get !== 'function') return out
   const src = Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : []
   if (!src.length) return out
@@ -79,12 +102,20 @@ export function resolveAbsorbedBgLayers(sec, figmaIndex, claimedIds) {
     // 🛡️ 刀 20c（2026-10-28 · 657661ca 实锤）：滚动条滑块/轨道不是背景层——
     //   细长条贴容器右缘（宽 ≤12px、长宽比 ≥4、右缘贴边 ±4px）被吸收后画成
     //   装饰 div ⇒ 视觉上有滚动条但列表不能滚（假滚动）。真值滚由刀 20b 列表
-    //   容器的 overflow-y:auto 承担。判据纯几何，不猜语义。
-    if (
-      b.width <= 12 &&
-      b.height >= 4 * b.width &&
-      Math.abs(b.x + b.width - (cBox.x + cBox.width)) <= 4
-    ) {
+    //   容器的 overflow-y:auto 承担。
+    //
+    //   🛡️ 刀 20c-R（2026-11-02）：**几何不足以判别** —— 实测装饰条与真滚动条同构：
+    //     · 真滚动条 `48:5904` name='滚动条' 6×218 r3 @(21308,51791)，容器右缘 21308+6=21314；
+    //     · 装饰条   `43:5688` name='Rectangle 346242323' 6×218 r3 @(30113,51815)，
+    //       容器 `807:2` 右缘 29636+483=30119 = 30113+6（**精确贴合**）。
+    //   两者宽/高/圆角/贴边逐字段相同，容器「内容是否溢出」均 0 ⇒ 旧纯几何判据把装饰条
+    //   一并豁免。铁证（同构同几何异结果）：`c-device-34fa6237`(10-28 18:07) /
+    //   `c-device-486cc6b6`(10-30 09:42) 的 `807:2` 与渲染成功的 `c-device-5665901a`(10-27 18:29)
+    //   **逐字段相同**（isLayoutContainer=true / container-rebuild / srcN=116 含 43:5688），
+    //   唯一差别是生成时间晚于刀 20c ⇒ 竖条从产物消失（假缺陷：漏渲染却静默通过）。
+    //   ⇒ 豁免收窄为**正判据**：形态条状 **且** 图层名确指滚动条才跳过。自动名走吸收。
+    if (isBarAtRightEdge(b, cBox) && isScrollbarNamed(node)) {
+      out.scrollbarExempted += 1
       continue
     }
     // 越出容器 ⇒ 归属语义不同，跳过
@@ -111,6 +142,46 @@ export function resolveAbsorbedBgLayers(sec, figmaIndex, claimedIds) {
       width: b.width,
       height: b.height,
     })
+  }
+  return out
+}
+
+/**
+ * 🛡️ 刀 7c（2026-11-03 · `43:5688` 实锤）：候选集扩充 —— 把 sec 的 **Figma 直系子 id**
+ * 并入候选集（`sourceNodeIds ∪ directChildren(sec.id)`）。
+ *
+ * 病灶：刀 7 的候选集唯一来源是 `sec.sourceNodeIds`，而顶层非容器叶子段（`807:2`
+ * name='slot-con'，盒 ≡ 图根盒）的 `sourceNodeIds` **只有自身**，7 个直系子
+ * （`43:4784/4869/4875/4878/4892/4911/5688`）全不在闭包 ⇒ 判据 `eval=0` ⇒
+ * 装饰条 `43:5688`（6×218 r3 `rgba(20,105,169,.37)`，右缘精确贴宿主边）在产物里 0 次出现。
+ *
+ * **本函数只做枚举，不做任何裁决**：类型/fill/认领/越出/滚动条豁免全部仍由
+ * `resolveAbsorbedBgLayers` 单点裁决（判据同构单一来源）。故本函数对
+ * `resolveAbsorbedBgLayers` 零改动、零签名变化 ⇒ 其既有用例逐字不变。
+ *
+ * 纯函数、fail-open：`sec` / `figmaIndex` / `rawNode.children` 任一缺失 ⇒ 原样返回
+ * `sourceNodeIds`（调用方拿到的候选集与旧行为逐字相同）。
+ *
+ * @param {Object} sec 段（读 id / sourceNodeIds）
+ * @param {Map|null} figmaIndex `indexFigmaNodes` 产物
+ * @returns {string[]} 扩充后的候选 id 列表（保留 `sourceNodeIds` 原序，直系子按图序追加）
+ */
+export function expandCandidateIdsWithDirectChildren(sec, figmaIndex) {
+  const src = Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds.map((v) => String(v)) : []
+  if (!sec || !figmaIndex || typeof figmaIndex.get !== 'function') return src
+  const id = String(sec.id ?? '')
+  if (!id) return src
+  const node =
+    figmaIndex.get(id)?.rawNode || figmaIndex.get(id)?.node || null
+  const children = Array.isArray(node?.children) ? node.children : []
+  if (!children.length) return src
+  const out = [...src]
+  const seen = new Set(src)
+  for (const c of children) {
+    const cid = String(c?.id ?? '')
+    if (!cid || seen.has(cid)) continue
+    seen.add(cid)
+    out.push(cid)
   }
   return out
 }

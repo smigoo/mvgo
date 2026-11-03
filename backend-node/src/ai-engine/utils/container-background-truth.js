@@ -107,6 +107,151 @@ export function normalizeCss(value) {
     .replace(/(\d*\.?\d+)px/g, '$1px');
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * 🛡️ M1（2026-11-03 · mc-1793718100141-30ba57ca 实锤）：无来源背景剥除（判据推广）
+ *
+ * 病灶：卡片底色已烤进背景图（真值仅 `bg: bg-126 backgroundBlock`，fills 无渐变），
+ *   LLM 却在 common.less / scoped style 里臆造 linear-gradient 叠到卡片主体与装饰条上
+ *   ⇒ 双重上色。既有 刀37/42 只纠「已锚定 section 元素的背景错/缺」，管不到未锚定
+ *   后代 class 的**凭空新增**背景。
+ *
+ * 判据（单一真值源 = Figma fills，命名无关）：
+ *   产物样式块里任何 background / background-color 声明，其值（less 变量解析后）
+ *   必须能在**全组件 Figma 真值 fills 集合**中找到等值来源（渐变方向不可证时按 stops 比）。
+ *   无来源 = 臆造 ⇒ 剥除该条声明（不动选择器其它属性，不删规则）。
+ *
+ * fail-open 豁免（一律保留）：
+ *   - transparent / url(...) / 含 CSS var() 的值
+ *   - 解析不出的 @变量、命名色（white/black 等非常见字面量）、currentColor 等关键字
+ *   - 真值集合为空（无 figmaRoot / 无任何 fills）时整体跳过
+ * 设计约束：只扫样式块（.vue <style> 与 common.less），**不碰 inline style**——
+ *   inline 是 刀37/42 等真值守卫的注入位，避免互相拆台。
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** hex → rgba() 归一（#rgb / #rrggbb / #rrggbbaa），非法返回 null */
+function hexToRgbaCss(hex) {
+  const m = /^#([0-9a-f]{3,8})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3 || h.length === 4) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6 && h.length !== 8) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+  return `rgba(${r}, ${g}, ${b}, ${Number(a.toFixed(3))})`;
+}
+
+/** 收集 figma 树全部 fills 的合法背景真值集合（归一化；含 hex/rgba 双形态与 stops 级变体） */
+export function collectBackgroundTruthSet(figmaRoot) {
+  const truth = new Set();
+  const root = figmaRoot?.document ?? figmaRoot;
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    for (const f of n.fills || []) {
+      if (!f || f.visible === false) continue;
+      const css = fillsToCss([f]);
+      if (!css) continue;
+      truth.add(normalizeCss(css));
+      if (/gradient\(/.test(css)) truth.add(normalizeCss(stripGradientAngle(css)));
+    }
+    for (const c of n.children || []) walk(c);
+  };
+  walk(root);
+  return truth;
+}
+
+/** 单个背景声明值是否有真值来源 */
+export function hasBackgroundTruthSource(rawValue, { truthSet, lessVars }) {
+  const value = String(rawValue || '').trim();
+  if (!value) return true;
+  // 豁免：透明/图片/CSS 变量/关键字
+  if (/^(transparent|none|currentColor|inherit|initial|unset)$/i.test(value)) return true;
+  if (/url\s*\(|var\s*\(/.test(value)) return true;
+  const resolved = resolveVars(value, lessVars);
+  if (/@/.test(resolved)) return true; // 变量解析不出 → fail-open
+  const norm = normalizeCss(resolved);
+  if (truthSet.has(norm)) return true;
+  if (/gradient\(/.test(norm) && truthSet.has(normalizeCss(stripGradientAngle(norm)))) return true;
+  // hex → rgba 双形态比较
+  const hexM = /#[0-9a-f]{3,8}/i.exec(resolved);
+  if (hexM) {
+    const asRgba = hexToRgbaCss(hexM[0]);
+    if (asRgba && truthSet.has(normalizeCss(asRgba))) return true;
+    // 含 hex 的渐变：把每个 stop 色转 rgba 后再比 stops
+    if (/gradient\(/.test(resolved)) {
+      const converted = resolved.replace(/#[0-9a-f]{3,8}/gi, (h) => hexToRgbaCss(h) || h);
+      const n2 = normalizeCss(stripGradientAngle(converted));
+      if (truthSet.has(n2)) return true;
+    }
+    return false;
+  }
+  // rgba()/rgb() 字面量直接比（normalizeCss 已归一空白）
+  if (/^rgba?\(/.test(norm) || /gradient\(/.test(norm)) return false;
+  return true; // 其它形态（命名色等）fail-open
+}
+
+const BG_DECL_RE = /(^|;)(\s*)(background(?:-color)?\s*:\s*)([^;]+)(?=;|$)/g;
+
+/**
+ * 无来源背景剥除主体。扫 .vue <style> 块与 common.less；返回变更留痕。
+ * @returns {{ files, changes: Array<{file:string, selector:string|null, value:string}> }}
+ */
+export function stripTruthlessBackgrounds(files, { figmaRoot, logger } = {}) {
+  const changes = [];
+  if (!files || typeof files !== 'object' || !figmaRoot) return { files, changes };
+  const truthSet = collectBackgroundTruthSet(figmaRoot);
+  if (truthSet.size === 0) return { files, changes };
+
+  const lessVars = (() => {
+    const merged = new Map();
+    for (const [p, c] of Object.entries(files)) {
+      if (typeof c === 'string' && /theme-vars\.less$/.test(p)) {
+        for (const [k, v] of parseLessVars(c)) if (!merged.has(k)) merged.set(k, v);
+      }
+    }
+    return merged;
+  })();
+
+  const stripFromCss = (css, file) => {
+    let out = css;
+    // 按规则块处理，留痕选择器；顶层与嵌套块同样处理（剥声明不拆结构）
+    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    out = out.replace(ruleRe, (whole, selector, body) => {
+      if (!/background(?:-color)?\s*:/.test(body)) return whole;
+      const nextBody = body.replace(BG_DECL_RE, (decl, lead, ws, prop, value) => {
+        if (hasBackgroundTruthSource(value, { truthSet, lessVars })) return decl;
+        changes.push({ file, selector: selector.trim().slice(0, 120), value: value.trim() });
+        return lead + ws; // 剥除整条声明，保留规则体其它内容
+      });
+      return nextBody === body ? whole : `${selector}{${nextBody}}`;
+    });
+    return out;
+  };
+
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string') continue;
+    if (/\.vue$/.test(path)) {
+      let next = content.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (whole, open, body, close) => {
+        const stripped = stripFromCss(body, path);
+        return stripped === body ? whole : open + stripped + close;
+      });
+      if (next !== content) files[path] = next;
+    } else if (/common\.less$/.test(path)) {
+      const next = stripFromCss(content, path);
+      if (next !== content) files[path] = next;
+    }
+  }
+
+  if (changes.length > 0) {
+    logger?.warn?.(`🛡️ M1 无来源背景剥除 bgTruthlessStripped=${changes.length}`, {
+      items: changes.slice(0, 8),
+    });
+  }
+  return { files, changes };
+}
+
+
 /** 去掉 linear-gradient 的方向（只留 stops），供「方向不可证」时的 stops 级比较 */
 export function stripGradientAngle(css) {
   return String(css || '').replace(/(linear-gradient\()\s*-?\d+(?:\.\d+)?deg\s*,/i, '$1');
@@ -201,11 +346,21 @@ export function resolveSectionBackground(secId, figmaIndex) {
 export function resolveSectionPanel(secId, figmaIndex) {
   const entry = figmaIndex.get(String(secId));
   if (!entry) return null;
-  const sec = entry.node;
+  // 🔴 P3（2026-11-03）索引形状容错 —— 本仓有**两个** `indexFigmaNodes`：
+  //   本模块的（条目 `{node, parentId}`）与 `section-tree.js` 的（条目
+  //   `{id, name, type, bbox, parentId, rawNode}`）。折叠段接管器（刀 53）用的是后者
+  //   ⇒ 只读 `entry.node` 时 `sec` 为 undefined，`:205` 立刻 TypeError **崩溃**
+  //   （真机只要命中一个 icon/header 叶就崩；单测因夹具用的是**合成 id**
+  //   `…-tail-text` 提前 `return null` 而完全测不到 —— 假绿）。
+  //   `rawNode` 与 `node` 是同一节点的原始引用，语义等价 ⇒ 取其一，不引入第二套口径。
+  const sec = entry.node || entry.rawNode;
+  if (!sec) return null;
   const secArea = areaOf(sec.absoluteBoundingBox);
   if (!secArea) return null;
   // 段自身是否横跨父级（判「面板必须 width:100%」，纯几何、命名无关）
-  const parentBox = figmaIndex.get(String(entry.parentId))?.node?.absoluteBoundingBox;
+  const parentEntry =
+    entry.parentId != null ? figmaIndex.get(String(entry.parentId)) : null;
+  const parentBox = (parentEntry?.node || parentEntry?.rawNode)?.absoluteBoundingBox;
   const fullWidth =
     Number(parentBox?.width) > 0 && Number(sec.absoluteBoundingBox?.width) / parentBox.width >= 0.95;
   for (const child of sec.children || []) {
@@ -233,6 +388,50 @@ export function resolveSectionPanel(secId, figmaIndex) {
     };
   }
   return null;
+}
+
+/**
+ * 🛡️ P3（2026-11-03）—— 面板「三件套」→ inline 声明 **唯一来源**。
+ *
+ * 为什么必须抽出来（根因）：刀 53 的**终裁覆写**在 `file-writer.js` 用
+ * `_fgTakeoverFiles` 快照**整包替换** sanitizedContent；该快照拍在
+ * `microcode-engineer.js:2012`（LLM 分块**之前**），而刀 37/42 的
+ * `healContainerBackgroundTruth` 跑在 `:8539`（快照**之后**）⇒ **接管文件上的 heal
+ * 修复被整包回滚**。全库实测：fg 接管元素里 icon `0/110`、header `0/219` 携带背景
+ * —— 即「同一个病（面板底色/圆角/发光缺失）在新机制（刀 53）下系统性复发」。
+ *
+ * 治本 = 接管渲染器**自持**面板真值，与 heal 共用下面这组构造器 ⇒
+ * **禁止**在 `folded-grid-section-takeover.js` 或任何地方另写
+ * `border-radius:${r}px` / `box-shadow:${s}` 之类的副本（第二套口径 = 分叉温床）。
+ *
+ * 逐项判据与 heal 内的 `decls.push(...)` **逐字一致**（改这里 = 同时改 heal，
+ * 两侧任一改动必须同步跑两态回归）。
+ */
+export const panelDeclBackground = (value) => (value ? `background:${value}` : null);
+export const panelDeclRadius = (panel) =>
+  Number(panel?.radius) > 0 ? `border-radius:${panel.radius}px` : null;
+export const panelDeclShadow = (panel) => (panel?.shadow ? `box-shadow:${panel.shadow}` : null);
+export const panelDeclWidth = (panel) => (panel?.fullWidth ? 'width:100%' : null);
+
+/**
+ * 面板三件套（+ 满宽）→ 完整 inline CSS 片段（`;` 连接、无尾分号）。无 panel ⇒ `''`。
+ * 顺序与 heal 的 `decls` 拼装顺序严格一致：background → border-radius → box-shadow → width。
+ *
+ * @param {object|null} panel `resolveSectionPanel()` 结果
+ * @param {{ background?: string }} [opts] 背景值覆盖（方向不可证时由调用方合并角度后传入）
+ * @returns {string}
+ */
+export function buildPanelInlineCss(panel, opts = {}) {
+  if (!panel) return '';
+  const bg = opts.background !== undefined ? opts.background : panel.css;
+  return [
+    panelDeclBackground(bg),
+    panelDeclRadius(panel),
+    panelDeclShadow(panel),
+    panelDeclWidth(panel),
+  ]
+    .filter(Boolean)
+    .join(';');
 }
 
 /** 解析 less 变量表（取首个声明，通常是 light 主题） */
@@ -321,13 +520,28 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
   const figmaIndex = indexFigmaNodes(figmaRoot);
   if (figmaIndex.size === 0) return { files, changes, skipped: [{ reason: 'empty-figma-index' }] };
 
+  // 🛡️ M1：无来源背景剥除（真值源相同、不新增 pass、不改顺序）。
+  // 必须在刀37/42 主循环**之后**执行：让「渐变写错=mismatch / 主题变量豁免」等既有判据
+  // 先定性，M1 只清残余臆造，不改变既有 reason 语义（两态回归实锤）。
+  const runTruthlessStrip = () => {
+    const stripped = stripTruthlessBackgrounds(files, { figmaRoot, logger: arguments[1]?.logger });
+    for (const c of stripped.changes) {
+      changes.push({ file: c.file, sectionId: null, reason: 'truthless-bg', selector: c.selector, removedValue: c.value });
+    }
+  };
+
   // ① 全量 section 面板真值（底色 + 圆角 + 发光；同样供「借用了谁的背景」反查）
   const bgBySection = new Map(); // secId → { css, kind, layerId, radius, shadow }
   for (const id of figmaIndex.keys()) {
     const panel = resolveSectionPanel(id, figmaIndex);
     if (panel) bgBySection.set(id, panel);
   }
-  if (bgBySection.size === 0) return { files, changes, skipped: [{ reason: 'no-bg-truth' }] };
+  if (bgBySection.size === 0) {
+    // 纯 IMAGE 填充组件（无 SOLID/GRADIENT 面板真值）恰恰最需要 M1：底色全在图里，
+    // 任何字面量背景都是臆造。早退前仍执行剥除。
+    runTruthlessStrip();
+    return { files, changes, skipped: [{ reason: 'no-bg-truth' }] };
+  }
 
   // 值 → 拥有该背景的 section 集合
   const ownersByCss = new Map();
@@ -434,7 +648,7 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
             truth.angleGuessed && declared
               ? mergeGradientAngle(truth.css, extractGradientAngle(resolveVars(declared.value, lessVars)))
               : truth.css;
-          decls.push(`background:${bgValue}`);
+          decls.push(panelDeclBackground(bgValue));
           reasons.push(reason);
         }
       }
@@ -444,7 +658,7 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
       if (truth.radius > 0 && !/\bborder-radius\s*:/.test(inlineStyle)) {
         const declaredR = classes.some((cls) => declaredProp(cls, 'border-radius', propMaps));
         if (!declaredR) {
-          decls.push(`border-radius:${truth.radius}px`);
+          decls.push(panelDeclRadius(truth));
           reasons.push('missing-radius');
         }
       }
@@ -453,7 +667,7 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
       if (truth.shadow && !/\bbox-shadow\s*:/.test(inlineStyle)) {
         const declaredS = classes.some((cls) => declaredProp(cls, 'box-shadow', propMaps));
         if (!declaredS) {
-          decls.push(`box-shadow:${truth.shadow}`);
+          decls.push(panelDeclShadow(truth));
           reasons.push('missing-glow');
         }
       }
@@ -465,7 +679,7 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
       if (truth.fullWidth && !/(?:^|;)\s*width\s*:/.test(inlineStyle)) {
         const declaredW = classes.some((cls) => declaredProp(cls, 'width', propMaps));
         if (!declaredW) {
-          decls.push('width:100%');
+          decls.push(panelDeclWidth(truth));
           reasons.push('missing-width');
         }
       }
@@ -492,5 +706,6 @@ export function healContainerBackgroundTruth(files, { figmaRoot } = {}) {
     if (dirty) files[path] = next;
   }
 
+  runTruthlessStrip();
   return { files, changes };
 }

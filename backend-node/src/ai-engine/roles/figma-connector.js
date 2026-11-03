@@ -14,6 +14,7 @@ import {
 } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'node:crypto';
+import { connect as tlsConnectImpl } from 'node:tls';
 import { createLogger } from '../logger/index.js';
 import { backendRoot } from '../../config/backend-root.js';
 import tunnel from 'tunnel';
@@ -94,10 +95,13 @@ export class FigmaConnector {
     //    节点数据补同款：TTL 内命中零网络回源；token 变更不复用；TTL 可配（0=禁用）。
     this._nodeCacheDir =
       config.cacheDir || join(backendRoot, 'data', 'figma-node-cache');
+    // 🛡️ 2026-11-03：TTL 默认 30min → 24h。同一节点重投（调样式/改 prompt 再生成）
+    //    只要 token 未变就零网络回源；代价是设计稿改动后 24h 内仍用旧树，
+    //    需强刷时设 FIGMA_NODE_CACHE_TTL_MS=0（禁用）或删 data/figma-node-cache/。
     this._nodeCacheTtlMs = Number(
       config.nodeCacheTtlMs ??
         process.env.FIGMA_NODE_CACHE_TTL_MS ??
-        30 * 60 * 1000,
+        24 * 60 * 60 * 1000,
     );
 
     // 代理配置（Figma API 在某些网络环境下必须走代理）- 保留系统配置
@@ -109,13 +113,46 @@ export class FigmaConnector {
     if (proxyUrl) {
       this.proxyAgent = _createProxyAgent(proxyUrl);
       if (this.proxyAgent) {
+        try {
+          const u = new URL(proxyUrl);
+          this._proxyTarget = {
+            host: u.hostname,
+            port: parseInt(u.port, 10) || (u.protocol === 'https:' ? 443 : 80),
+          };
+        } catch {
+          this._proxyTarget = null;
+        }
         logger.info('Figma Connector 已启用隧道代理', {
           proxyUrl: proxyUrl.replace(/\/\/.*@/, '//***@'),
         });
+      } else {
+        this._proxyTarget = null;
       }
     } else {
       this.proxyAgent = null;
+      this._proxyTarget = null;
     }
+
+    // 🛡️ 2026-11-03 治本（mc-max-1793671867830-acb4cb93 真机实锤 `read ECONNRESET`）：
+    //    跨境链路偶发「TCP 建连成功但 TLS/首字节挂起 或被 RST」（生产实测：curl /v1/me
+    //    10 次里 1 次 connect=0.10s 后 appconnect 挂到 20s 超时；www.figma.com 1 次
+    //    rc=35 SSL connect error）。原实现只能等 axios 全量超时/失败才知道通道坏了：
+    //    一次坏通道吃满 timeoutMs(180s)，且 proxyAgent 为 null 时 attempt%2 的
+    //    「代理↔直连交替」形同虚设 ⇒ 3 次重试全撞同一条坏链路（本次三连失败）。
+    //    新增两项能力：
+    //      ① 握手前置探测 —— 只做 TCP+TLS 握手，不发 API 请求、不带 Token、不占限流槽，
+    //         坏通道在 1 次 RTT（~70ms）内暴露，失败即退避换通道，不再白等 180s；
+    //      ② 总预算闸门 —— 长超时 × 多次重试会叠爆管线（180s×5=900s > 节点 600s），
+    //         按剩余预算动态收敛单次超时。
+    //    软回滚：FIGMA_CHANNEL_PROBE=0（回到「直接发请求、失败再重试」旧行为）。
+    const probeEnv = String(process.env.FIGMA_CHANNEL_PROBE ?? 'on').toLowerCase();
+    this._probeEnabled = !['0', 'false', 'off', 'no'].includes(probeEnv);
+    this._connectTimeoutMs = Number(
+      process.env.FIGMA_CONNECT_TIMEOUT_MS ?? 12000,
+    );
+    this._totalBudgetMs = Number(process.env.FIGMA_TOTAL_BUDGET_MS ?? 300000);
+    // 探测器的 TLS 实现可注入（单测接口；生产恒用 node:tls）
+    this._tlsConnect = null;
 
     logger.info('Figma Connector 已初始化', {
       cacheEnabled: this.cacheEnabled,
@@ -129,15 +166,111 @@ export class FigmaConnector {
   }
 
   /**
-   *统一的 Figma API GET 请求（限流 + 429 全局冷却 + 长退避重试）
+   * 📡 通道握手探测（2026-11-03 新增，mc-max-1793671867830-acb4cb93 治本）
+   *
+   * 只做 **TCP + TLS 握手**，不发任何 Figma API 请求、不带 Token、不占限流槽。
+   * 判据：握手在 connectTimeoutMs 内完成 ⇒ 通道可用；超时/报错 ⇒ 通道坏。
+   *
+   * 为什么需要：生产 ECS(47.98.216.206) → api.figma.com(AWS CloudFront 65.9.168.x)
+   * 跨境链路偶发「TCP 建连成功(0.1s) 但 TLS 永不完成」或「首字节阶段被 RST」，
+   * 这类失败只能靠吃满 axios 超时才发现；而 axios 的 timeout 同时约束「连接阶段」
+   * 与「socket 空闲」(lib/adapters/http.js)，无法既快失败又保留慢响应预算。
+   * 探测把它们拆开：握手阶段单独短超时，业务阶段继续保留长超时。
+   *
+   * 代理模式下跳过探测：走代理时真实对端是代理（明文 CONNECT，不是 TLS），
+   * 用 TLS 语义探测代理会得到假阴性 ⇒ 交由 tunnel agent 自身处理建隧道。
+   *
+   * @param {string} url 目标 URL（取 host/port 作为探测目标）
+   * @param {number} connectTimeoutMs 握手超时（默认 FIGMA_CONNECT_TIMEOUT_MS=12000）
+   * @returns {Promise<{ok:boolean, phase:string, ms:number, error?:string}>}
+   */
+  _probeChannel(url, connectTimeoutMs = this._connectTimeoutMs) {
+    if (this.proxyAgent) {
+      return Promise.resolve({ ok: true, phase: 'skipped-proxy', ms: 0 });
+    }
+
+    let hostname = null;
+    let port = 443;
+    try {
+      const u = new URL(url);
+      hostname = u.hostname;
+      port = parseInt(u.port, 10) || (u.protocol === 'https:' ? 443 : 80);
+    } catch {
+      return Promise.resolve({
+        ok: false,
+        phase: 'url',
+        ms: 0,
+        error: 'URL 解析失败',
+      });
+    }
+
+    const tlsConnect = this._tlsConnect || tlsConnectImpl;
+    const startedAt = Date.now();
+
+    return new Promise((resolve) => {
+      let done = false;
+      let socket = null;
+      const finish = (res) => {
+        if (done) return;
+        done = true;
+        try {
+          if (socket) socket.destroy();
+        } catch {
+          /* socket 已销毁：忽略 */
+        }
+        resolve({ ...res, ms: Date.now() - startedAt });
+      };
+
+      const timer = setTimeout(
+        () => finish({ ok: false, phase: 'handshake', error: 'connect-timeout' }),
+        Math.max(1000, connectTimeoutMs),
+      );
+      // 探测不应单独拖住进程退出
+      if (typeof timer.unref === 'function') timer.unref();
+
+      try {
+        socket = tlsConnect({
+          host: hostname,
+          port,
+          servername: hostname,
+          rejectUnauthorized: true,
+        });
+        socket.once('secureConnect', () => {
+          clearTimeout(timer);
+          finish({ ok: true, phase: 'handshake' });
+        });
+        socket.once('error', (err) => {
+          clearTimeout(timer);
+          finish({
+            ok: false,
+            phase: 'handshake',
+            error: err?.code || err?.message || 'tls-error',
+          });
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        finish({
+          ok: false,
+          phase: 'handshake',
+          error: err?.code || err?.message || 'tls-throw',
+        });
+      }
+    });
+  }
+
+  /**
+   *统一的 Figma API GET 请求（通道探测 + 限流 + 429 全局冷却 + 指数退避重试）
    * fetchNodeData / getImageUrl / batchGetImageUrls / downloadImageAsset 的 Figma API 调用统一走此方法。
    * 行为：
-   *  - 发送前先过全局速率限制器（最小间隔 + 并发上限 + 429 冷却）
+   *  - 发请求前先做 TCP+TLS 握手探测（坏通道 1 次 RTT 内暴露，不白等长超时）
+   *  - 探测通过后才过全局速率限制器（最小间隔 + 并发上限 + 429 冷却）
    *  - 429 → 触发全局冷却（尊重 Retry-After，默认 30s 起、封顶 120s），下次 acquire 自然排队等待
-   *  - 5xx / 超时 → 标准指数退避重试
+   *  - 5xx / 超时 / 探测失败 → 指数退避重试（1s 起翻倍、封顶 8s，附 0~400ms 抖动）
    *  - 4xx（非 429）→ 不重试，直接抛出（如 401/403 token 问题、404 节点不存在）
+   *  - 总预算闸门（默认 300s）：按剩余预算动态收敛单次超时，防长超时 × 多次重试叠爆管线
    * @param {string} url - 完整请求 URL
-   * @param {object} options - { timeoutMs=90000, responseType, tag='figma-api', maxRetries=2 }
+   * @param {object} options - { timeoutMs=120000, responseType, tag='figma-api', maxRetries=5,
+   *   probe=FIGMA_CHANNEL_PROBE, connectTimeoutMs, budgetMs }
    * @returns {Promise<axios.Response>}
    */
   async _figmaApiGet(url, options = {}) {
@@ -145,34 +278,95 @@ export class FigmaConnector {
       timeoutMs = 120000,
       responseType,
       tag = 'figma-api',
-      maxRetries = 3,
+      maxRetries = 5,
       rateLimiter = this._rateLimiter,
+      probe = this._probeEnabled,
+      connectTimeoutMs = this._connectTimeoutMs,
+      budgetMs = this._totalBudgetMs,
     } = options;
 
+    const startedAt = Date.now();
+    // 📊 真机计数（判据证据：探测次数 / 探测失败 / 实际发出请求，失败与异常路径必打）
+    const stats = { attempts: 0, probes: 0, probeFailed: 0, sent: 0 };
+    const retryBaseMs = Number(process.env.FIGMA_RETRY_BASE_MS ?? 1000);
     let lastError = null;
+
     // 🎯 生成管线限流等待预算：单请求持槽最长 timeoutMs(90s)，并行任务排队需覆盖
     // 「持槽 + 7s 间隔 + 429 冷却」最坏组合；20s 默认值对后台任务必超时。
     const acquireTimeoutMs = Number(
       process.env.FIGMA_ACQUIRE_TIMEOUT_MS ?? 120000,
     );
 
+    const backoffMsFor = (attempt) =>
+      Math.min(retryBaseMs * 2 ** (attempt - 1), 8000) +
+      Math.floor(Math.random() * 400);
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      stats.attempts = attempt;
+
+      // ⏳ 总预算闸门：180s × 5 次 = 900s 会远超节点 600s 超时 ⇒ 按剩余预算收敛
+      const remainingMs = budgetMs - (Date.now() - startedAt);
+      if (remainingMs < 5000) {
+        logger.warn(`⏳ ${tag} 总预算耗尽，中止重试`, {
+          attempt,
+          maxRetries,
+          budgetMs,
+          elapsedMs: Date.now() - startedAt,
+        });
+        break;
+      }
+      const effectiveTimeoutMs = Math.max(5000, Math.min(timeoutMs, remainingMs));
+
+      // 📡 握手前置探测：坏通道不占限流槽、不发请求、不带 Token
+      if (probe) {
+        stats.probes++;
+        const p = await this._probeChannel(
+          url,
+          Math.min(connectTimeoutMs, effectiveTimeoutMs),
+        );
+        if (!p.ok) {
+          stats.probeFailed++;
+          lastError = new Error(
+            `Figma 通道握手失败(${p.phase}): ${p.error || 'unknown'} (${p.ms}ms)`,
+          );
+          lastError.isChannelProbe = true;
+
+          if (attempt < maxRetries) {
+            const delayMs = backoffMsFor(attempt);
+            logger.warn(`📡 ${tag} 通道握手失败，${delayMs}ms 后换通道重试`, {
+              attempt,
+              maxRetries,
+              phase: p.phase,
+              error: p.error,
+              probeMs: p.ms,
+            });
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue;
+          }
+          break;
+        }
+      }
+
       const release = await rateLimiter.acquire(acquireTimeoutMs);
 
       const controller = new AbortController();
       const timeoutHandle = setTimeout(() => {
-        logger.warn(`${tag} 请求超时，强制中断`, { attempt, timeoutMs });
+        logger.warn(`${tag} 请求超时，强制中断`, {
+          attempt,
+          timeoutMs: effectiveTimeoutMs,
+        });
         controller.abort();
-      }, timeoutMs);
+      }, effectiveTimeoutMs);
 
       // 交替走/不走代理：attempt 1→代理，attempt 2→直连，attempt 3→代理
       const useProxy = this.proxyAgent && attempt % 2 === 1;
       const attemptAgent = useProxy ? this.proxyAgent : undefined;
 
       try {
+        stats.sent++;
         const response = await axios.get(url, {
           headers: { 'X-Figma-Token': this.figmaToken },
-          timeout: timeoutMs,
+          timeout: effectiveTimeoutMs,
           signal: controller.signal,
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
@@ -182,6 +376,7 @@ export class FigmaConnector {
         });
         clearTimeout(timeoutHandle);
         release();
+        this._logEgressStats(tag, url, stats, startedAt, budgetMs);
         return response;
       } catch (error) {
         clearTimeout(timeoutHandle);
@@ -217,7 +412,7 @@ export class FigmaConnector {
         }
 
         if (attempt < maxRetries && isRetryable) {
-          const delayMs = 2000 * attempt; // 5xx/超时：2s, 4s, 6s
+          const delayMs = backoffMsFor(attempt); // 超时/网络错误：1s→2s→4s→8s（封顶）+ 抖动
           logger.warn(`${tag} 请求失败，${delayMs}ms 后重试`, {
             attempt,
             maxRetries,
@@ -233,7 +428,39 @@ export class FigmaConnector {
       }
     }
 
-    throw lastError;
+    this._logEgressStats(tag, url, { ...stats, failed: true }, startedAt, budgetMs);
+    throw (
+      lastError ||
+      new Error(
+        `Figma API 请求失败：预算耗尽或无可重试通道 (tag=${tag}, budget=${budgetMs}ms)`,
+      )
+    );
+  }
+
+  /**
+   * 📊 出站计数日志：判据证据（真机可 grep 统计「探测失败次数 vs 实际请求数」）。
+   * 稳态首次即成功时不打 info（避免每个资源下载刷屏），异常/重试路径必打。
+   */
+  _logEgressStats(tag, url, stats, startedAt, budgetMs) {
+    const needAttention =
+      stats.failed ||
+      stats.probeFailed > 0 ||
+      stats.attempts > 1 ||
+      Date.now() - startedAt > 30000;
+    if (!needAttention) {
+      logger.debug(`📡 ${tag} 出站统计`, stats);
+      return;
+    }
+    logger.info(`📡 ${tag} 出站统计`, {
+      url: url.length > 120 ? `${url.slice(0, 120)}…` : url,
+      attempts: stats.attempts,
+      probes: stats.probes,
+      probeFailed: stats.probeFailed,
+      sent: stats.sent,
+      elapsedMs: Date.now() - startedAt,
+      budgetMs,
+      ...(stats.failed && { failed: true }),
+    });
   }
 
   /**
@@ -320,10 +547,12 @@ export class FigmaConnector {
    * 获取Figma节点数据（带重试 + AbortController 强制超时）
    * @param {string} fileKey - Figma 文件 Key
    * @param {string} nodeId - 节点 ID
-   * @param {number} maxRetries - 最大重试次数，默认 2（429 重试受全局冷却保护，1 次重试即够）
+   * @param {number} maxRetries - 最大尝试次数，默认 5（跨境链路偶发 TLS/RST，
+   *   配合握手探测 + 总预算闸门，多次尝试才有换通道的机会）
    * @returns {Promise<Object>} 节点 document 数据
    */
-  async fetchNodeData(fileKey, nodeId, maxRetries = 3) {
+  async fetchNodeData(fileKey, nodeId, maxRetries = 5) {
+    const startedAt = Date.now();
     logger.info('获取Figma节点数据', { fileKey, nodeId });
 
     // 转换nodeId格式：2-8417 -> 2:8417
@@ -373,8 +602,18 @@ export class FigmaConnector {
       let userMsg;
       if (figStatus === 401 || figStatus === 403) {
         userMsg = `Figma Token 无效或已过期 (HTTP ${figStatus})，请前往 Figma → Settings → Personal Access Tokens 重新生成 Token，并在前端「设置」面板中更新`;
+      } else if (figStatus) {
+        userMsg = `Figma API 错误 (HTTP ${figStatus}): ${figMsg}`;
       } else {
-        userMsg = `Figma API 错误 (HTTP ${figStatus || '?'}): ${figMsg}`;
+        // 🛡️ 2026-11-03：无 HTTP 状态码 = 请求没到业务响应层（TLS/首字节阶段被中断）。
+        //    旧文案「HTTP ?」会让人误以为是 Figma 侧错误、去查 Token/权限，实测是
+        //    生产 ECS 出口到 api.figma.com(CloudFront) 的跨境链路抖动 ⇒ 文案按层归因。
+        const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+        const probeHint = error?.isChannelProbe ? '通道握手阶段即失败，' : '';
+        userMsg =
+          `Figma API 网络层失败（无 HTTP 状态码，${probeHint}耗时 ${elapsedSec}s / 最多 ${maxRetries} 次尝试）：${figMsg}。` +
+          `此类错误多为服务器出口到 api.figma.com 的跨境链路在 TLS/首字节阶段被中断（ECONNRESET / timeout），` +
+          `与 Token、权限、Figma 文件无关，可直接重投；频繁出现时请换出口网络或稍后重试`;
       }
       const figErr = new Error(userMsg);
       figErr.figStatus = figStatus;
@@ -531,9 +770,9 @@ export class FigmaConnector {
     const apiNodeId = nodeId.replace(/-/g, ':');
     const url = `https://api.figma.com/v1/images/${fileKey}?ids=${apiNodeId}&format=png&scale=1`;
 
-    //走统一限流出站方法（含 429 全局冷却 + 长退避重试）
+    //走统一限流出站方法（含通道探测 + 429 全局冷却 + 指数退避重试）
     const response = await this._figmaApiGet(url, {
-      maxRetries: 2,
+      maxRetries: 3,
       timeoutMs: 120000,
       tag: 'getImageUrl',
       ...(rateLimiter && { rateLimiter }),
@@ -582,9 +821,9 @@ export class FigmaConnector {
       const imageUrl = `https://api.figma.com/v1/images/${fileKey}?ids=${apiNodeIds}&format=${format}&scale=${scale}`;
 
       try {
-        //走统一限流出站方法（含 429 全局冷却 + 长退避重试 + 代理交替）
+        //走统一限流出站方法（含通道探测 + 429 全局冷却 + 指数退避重试 + 代理交替）
         const response = await this._figmaApiGet(imageUrl, {
-          maxRetries: 2,
+          maxRetries: 3,
           timeoutMs: 120000,
           tag: 'batchGetImageUrls',
         });
@@ -1323,11 +1562,11 @@ export class FigmaConnector {
 
       logger.debug('请求 Figma Images API', { nodeId: apiNodeId, nodeName });
 
-      //走统一限流出站方法（含 429 全局冷却 + 长退避重试 + 代理交替）
+      //走统一限流出站方法（含通道探测 + 429 全局冷却 + 指数退避重试 + 代理交替）
       const imageApiResponse = await this._figmaApiGet(imageApiUrl, {
         timeoutMs,
         tag: 'downloadImageAsset',
-        maxRetries: 2,
+        maxRetries: 3,
       });
 
       // 检查 API 响应状态

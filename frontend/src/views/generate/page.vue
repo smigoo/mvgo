@@ -189,7 +189,7 @@
             <button class="preview-btn icon-tooltip" @click="closeChildPreview" data-tooltip="关闭" aria-label="关闭">✕</button>
           </div>
         </div>
-        <iframe :src="previewChildUrl" class="child-preview-iframe" frameborder="0" sandbox="allow-scripts"></iframe>
+        <iframe :src="previewChildUrl" class="child-preview-iframe" frameborder="0" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
       </div>
     </div>
 

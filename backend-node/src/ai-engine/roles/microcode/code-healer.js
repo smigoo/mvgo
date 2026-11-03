@@ -618,6 +618,15 @@ export function fixTextSiblingOrder(allFiles, figmaNodeData, options = {}) {
         },
       );
     }
+    if ((result.skippedCrossParent || []).length > 0) {
+      logger.info('🛡️ TEXT-001 同父契约·跨父文本集合已弃权', {
+        total: result.skippedCrossParent.length,
+        hits: result.skippedCrossParent.slice(0, 10).map((d) => ({
+          file: d.file,
+          parent: d.parentName,
+        })),
+      });
+    }
     if (result.remaining.length > 0) {
       logger.warn(
         `🛡️ TEXT-001 自愈：${result.remaining.length} 处文本顺序漂移无法安全重排（结构不可判定），保留给 L0-B 门禁`,
@@ -1491,6 +1500,75 @@ function safeMixinVarFallback(name, def) {
     return MIXIN_VAR_CSS_FALLBACKS[name];
   }
   return null;
+}
+
+/**
+ * 🛡️ 2026-11-03 治本 · 裸 Less 变量算术 → calc() 包裹（mc-max-1793679140403-eaa64a71 实锤）。
+ *
+ * 病灶：M5-6 归一后 `@fontSize` 等令牌的值是 `var(--fontSize)` **透传形态**（运行期值），
+ *   Less 无法在编译期对其做算术求值：
+ *   - `font-size: calc(@fontSize * 1.14);` ✅ 可编译（calc 内保留 var() 链原样输出，
+ *     实测 `calc(var(--fontSize) * 1.14)`）——全库 2185 处 calc 形态因此不炸；
+ *   - `font-size: @fontSize * 2;` 🔴 `Operation on an invalid type` ⇒ SFC 写盘门禁
+ *     判死整个文件 ⇒ 组件文件缺失 ⇒ CODE-023 悬空子组件标签 ⇒ L0-B 重试耗尽任务失败。
+ *   （eaa64a71：StatsSection.vue 因 `@fontSize * 2` 被跳过，chunk-meta 标 completed 但产物无文件。）
+ *
+ * 治本：值位置的裸 `@x * N`（x 为 var() 透传定义）确定性改写为 `calc(@x * N)`——
+ *   包 calc 后与既有合法形态完全一致，编译通过且语义等价（浏览器端求值）。
+ *
+ * 边界（极保守，可辩驳）：
+ *   - 只处理 `*`（真机唯一形态；`/` 在 strictMath 下语义不同、`+/-` 需空格规范，不碰）；
+ *   - 只处理文件内声明为 `var(` 开头的变量（字面量定义的算术是合法求值，包 calc 反而
+ *     阻止编译期折叠——`@w: 14px; @w * 2` → 28px 优于 calc(14px * 2)）；
+ *   - 已在 `calc(` 内的不重复包裹（前驱非 `calc(` 结尾才动手）；
+ *   - 变量声明行本身不动（`@x: ...` 行首形态排除）。
+ *
+ * 纯函数、无 IO、幂等（包裹后前驱变为 `calc(`，二次调用零改动）。
+ *
+ * @param {string} content 业务样式源（.less 内容或 SFC 内嵌 style 块）
+ * @returns {string} 修复后内容（无匹配时原样返回）
+ */
+export function healBareVarArithmeticToCalc(content) {
+  if (typeof content !== 'string' || !content.includes('@')) return content;
+  // 收集 var() 透传定义的变量名（顶层 `@x: var(...)`，含缩进形态）
+  const passthrough = new Set();
+  for (const m of content.matchAll(/^\s*@([\w-]+)\s*:\s*var\(/gm)) {
+    passthrough.add(m[1]);
+  }
+  if (passthrough.size === 0) return content;
+
+  let changed = false;
+  const out = content.split('\n').map((line) => {
+    const t = line.trim();
+    // 跳过注释行与变量声明行（与 healThemeMixinVarRefs 同口径）
+    if (
+      t.startsWith('//') ||
+      t.startsWith('/*') ||
+      t.startsWith('*') ||
+      /^@[\w-]+\s*:/.test(t)
+    ) {
+      return line;
+    }
+    let outLine = line;
+    for (const name of passthrough) {
+      // 值位置 `@x * N`：前驱为行首/`:`/`(`/空白，后跟 * 与数字
+      const re = new RegExp(
+        `(^|[:(]|\\s)@${name}(?![\\w-])\\s*\\*\\s*(\\d+(?:\\.\\d+)?(?:px|em|rem|%)?)`,
+        'g',
+      );
+      if (re.test(outLine)) {
+        outLine = outLine.replace(re, (mm, pre, num, offset) => {
+          // 已在 calc( 内的不重复包裹（幂等：包裹后前驱文本以 calc( 结尾）
+          // 注意 pre 是匹配的一部分（`(` 等），检查须含 pre：slice(0, offset + pre.length)
+          if (outLine.slice(0, offset + pre.length).endsWith('calc(')) return mm;
+          return `${pre}calc(@${name} * ${num})`;
+        });
+        changed = true;
+      }
+    }
+    return outLine;
+  }).join('\n');
+  return changed ? out : content;
 }
 
 export function healThemeMixinVarRefs(content, themeVarsContent) {

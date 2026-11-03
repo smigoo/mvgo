@@ -389,8 +389,18 @@ export function stripCrossSectionResourceBindings(manifest, files, fileSectionMa
       for (const r of referenced) {
         if (r.section !== primarySec) {
           // ① 移除 import 语句（import varName from '.../images/varName...'）
+          // 🛡️ 2026-11-03 治本（mc-max-1793679009293-1a28aa90 实锤，四次复发 00:10/00:44/01:31/04:11）：
+          //   旧正则尾部 `\s*;?` 的 `\s` **跨行匹配换行符**——删除被剥离的 import 行时把行尾
+          //   换行一并吃掉，把下一行 `import { ref } from 'vue'` 直接拼到上一行尾部：
+          //   `import icon2 from '...png'import { ref} from 'vue'` ⇒ Missing semicolon
+          //   ⇒ P1-4 坏文件隔离删子组件 ⇒ 悬空 import 剥离掏空 index.vue ⇒ ARTIFACT_INCOMPLETE。
+          //   与 2026-09-02 injectResourceImports P0 修复（resource-import-guard.js:504）同族同修法：
+          //   空白一律收窄为 `[ \t]`（不跨行）。开头 `\n?` 保留（整行删除语义不变）。
           c = c.replace(
-            new RegExp(`\\n?\\s*import\\s+${r.varName}\\s+from\\s+['\"][^'\"]*['\"]\\s*;?`, 'g'),
+            new RegExp(
+              `\\n?[ \\t]*import[ \\t]+${r.varName}[ \\t]+from[ \\t]*['"][^'"]*['\"][ \\t]*;?`,
+              'g',
+            ),
             '',
           )
           // ② 移除 <img ... :src="varName" ...> 整标签
