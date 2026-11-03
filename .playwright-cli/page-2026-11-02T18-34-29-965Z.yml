@@ -1,0 +1,327 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - img "company" [ref=e8]
+        - generic [ref=e10]:
+          - img "logo" [ref=e12]
+          - generic [ref=e13]:
+            - heading "感智｜晓界工坊" [level=1] [ref=e14]
+            - generic [ref=e15]: $ <h1>Hell
+      - navigation [ref=e17]:
+        - link "组件开发" [ref=e18] [cursor=pointer]:
+          - /url: /generator/components
+        - link "组件库" [ref=e19] [cursor=pointer]:
+          - /url: /components
+        - link "接口开发" [ref=e20] [cursor=pointer]:
+          - /url: /generator/api
+        - link "任务中心" [ref=e21] [cursor=pointer]:
+          - /url: /tasks
+        - link "大屏布局" [ref=e22] [cursor=pointer]:
+          - /url: /screen
+        - link "管理后台" [ref=e23] [cursor=pointer]:
+          - /url: /admin/operation-log
+      - generic [ref=e24]:
+        - button "切换到工作台模式" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+          - generic: TEST
+          - text: 工作台
+        - button "设置" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - text: 设置
+        - button "切换到深色" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - text: 切换到深色
+        - generic [ref=e36] [cursor=pointer]:
+          - img [ref=e38]
+          - generic [ref=e41]: dev-local
+    - main [ref=e42]:
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - button "返回" [ref=e45] [cursor=pointer]:
+            - img [ref=e46]
+            - text: 返回
+          - generic [ref=e48]: /
+          - generic [ref=e49]: mc-1793641875986-001c5615
+          - generic [ref=e50]: · 重点车辆监测 · c-vehicle-monitor-001c5615
+          - generic [ref=e51]:
+            - button "↻ 刷新" [ref=e52] [cursor=pointer]
+            - button "✔ 微码规范检查" [ref=e53] [cursor=pointer]:
+              - generic [ref=e54]: ✔
+              - generic [ref=e55]: 微码规范检查
+            - button "★ 质量评分" [ref=e56] [cursor=pointer]:
+              - generic [ref=e57]: ★
+              - generic [ref=e58]: 质量评分
+            - button "🚀 推送到 GitLab" [ref=e59] [cursor=pointer]
+        - generic [ref=e61]:
+          - complementary [ref=e62]:
+            - generic [ref=e63]:
+              - generic [ref=e64]:
+                - generic [ref=e65]: 输入源
+                - generic [ref=e66]:
+                  - button "截图" [disabled] [ref=e67]
+                  - button "Figma" [disabled] [ref=e68]
+                  - button "HTML" [disabled] [ref=e69]
+                - generic [ref=e70]:
+                  - generic [ref=e71]: Figma 源设计
+                  - generic [ref=e72]:
+                    - generic "点击查看大图" [ref=e73] [cursor=pointer]:
+                      - img "浅色主题" [ref=e74]
+                      - generic [ref=e75]:
+                        - generic [ref=e76]:
+                          - generic [ref=e77]: 浅色主题
+                          - generic [ref=e78]: 浅色
+                        - link "设计稿 ↗" [ref=e80]:
+                          - /url: https://www.figma.com/file/1t7Dmmpsl5i0PC8BJt2QLf?node-id=2%3A7952
+                    - generic [ref=e81]:
+                      - img [ref=e83]
+                      - generic [ref=e85]:
+                        - generic [ref=e86]:
+                          - generic [ref=e87]: 深色主题
+                          - generic [ref=e88]: 深色
+                        - generic [ref=e90]: 系统内置一体化 dark 主题
+              - generic [ref=e91]:
+                - generic [ref=e92]: 代码类型
+                - generic [ref=e93]:
+                  - button "V3" [disabled] [ref=e94]
+                  - button "MC" [disabled] [ref=e95]
+              - generic [ref=e96]:
+                - generic [ref=e97]: 生成规格
+                - generic [ref=e98]:
+                  - button "Lite" [disabled] [ref=e99]
+                  - button "Max" [disabled] [ref=e100]
+            - generic [ref=e101]:
+              - generic [ref=e103]: 任务信息
+              - generic [ref=e104]:
+                - generic [ref=e105]: 任务号
+                - generic [ref=e106]: mc-1793641875986-001c5615
+                - generic [ref=e107]: 状态
+                - generic [ref=e108]: 已完成
+                - generic [ref=e109]: 名称
+                - generic [ref=e110]: 重点车辆监测 · c-vehicle-monitor-001c5615
+                - generic [ref=e111]: 创建
+                - generic [ref=e112]: 11/3 01:51
+                - generic [ref=e113]: 耗时
+                - generic "endTime − startTime（含排队）" [ref=e114]: 49s
+            - generic [ref=e115]:
+              - generic [ref=e117]: AI 模型
+              - generic [ref=e119]: deepseek/deepseek-v4.1-flash
+          - main [ref=e120]:
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]:
+                  - generic [ref=e126]:
+                    - generic "mc-1793641875986-001c5615（点击复制任务号）" [ref=e128] [cursor=pointer]:
+                      - heading "任务号：mc-1793641875986-001c5615" [level=2] [ref=e129]
+                      - img [ref=e130]
+                    - generic [ref=e133]:
+                      - generic [ref=e134]: 微码
+                      - generic [ref=e135]: Figma
+                      - generic [ref=e136]: Max
+                      - generic [ref=e137]: 单主题（设计主题 · 1 + 默认一体化主题）
+                  - generic [ref=e138]:
+                    - text: ✓ 完成
+                    - generic [ref=e139]: 100%
+                - generic [ref=e140]:
+                  - generic [ref=e142]: 第 20/24 步
+                  - generic [ref=e143]:
+                    - generic "初始化 · 已完成" [ref=e146] [cursor=pointer]:
+                      - img [ref=e148]
+                      - generic [ref=e150]: 初始化
+                    - generic "Figma 数据获取 · 已完成" [ref=e151] [cursor=pointer]:
+                      - img [ref=e153]
+                      - generic [ref=e155]: Figma 数据获取
+                    - generic "视觉分析 · 已完成" [ref=e156] [cursor=pointer]:
+                      - img [ref=e158]
+                      - generic [ref=e160]: 视觉分析
+                    - generic "图像分析 · 已完成" [ref=e161] [cursor=pointer]:
+                      - img [ref=e163]
+                      - generic [ref=e165]: 图像分析
+                    - generic "并行分析 · 已完成" [ref=e166] [cursor=pointer]:
+                      - img [ref=e168]
+                      - generic [ref=e170]: 并行分析
+                    - generic "布局审查 · 已完成" [ref=e171] [cursor=pointer]:
+                      - img [ref=e173]
+                      - generic [ref=e175]: 布局审查
+                    - generic "样式映射 · 已完成" [ref=e176] [cursor=pointer]:
+                      - img [ref=e178]
+                      - generic [ref=e180]: 样式映射
+                    - generic "子组件规划 · 已完成" [ref=e181] [cursor=pointer]:
+                      - img [ref=e183]
+                      - generic [ref=e185]: 子组件规划
+                    - generic "代码生成 · 已完成" [ref=e186] [cursor=pointer]:
+                      - img [ref=e188]
+                      - generic [ref=e190]: 代码生成
+                    - generic "Chunk start · 等待中" [ref=e191] [cursor=pointer]:
+                      - generic [ref=e193]: "10"
+                      - generic [ref=e194]: Chunk start
+                    - generic "微码生成 · 等待中" [ref=e195] [cursor=pointer]:
+                      - generic [ref=e197]: "11"
+                      - generic [ref=e198]: 微码生成
+                    - generic "Chunk complete · 等待中" [ref=e199] [cursor=pointer]:
+                      - generic [ref=e201]: "12"
+                      - generic [ref=e202]: Chunk complete
+                    - generic "Chunk timeout · 等待中" [ref=e203] [cursor=pointer]:
+                      - generic [ref=e205]: "13"
+                      - generic [ref=e206]: Chunk timeout
+                    - generic "资源计划挂载 · 已完成" [ref=e207] [cursor=pointer]:
+                      - img [ref=e209]
+                      - generic [ref=e211]: 资源计划挂载
+                    - generic "资源归属校验 · 已完成" [ref=e212] [cursor=pointer]:
+                      - img [ref=e214]
+                      - generic [ref=e216]: 资源归属校验
+                    - generic "确定性修复 · 已完成" [ref=e217] [cursor=pointer]:
+                      - img [ref=e219]
+                      - generic [ref=e221]: 确定性修复
+                    - generic "视觉真值校验 · 已完成" [ref=e222] [cursor=pointer]:
+                      - img [ref=e224]
+                      - generic [ref=e226]: 视觉真值校验
+                    - generic "视觉比对 · 已完成" [ref=e227] [cursor=pointer]:
+                      - img [ref=e229]
+                      - generic [ref=e231]: 视觉比对
+                    - generic "运行时质量门禁 · 已完成" [ref=e232] [cursor=pointer]:
+                      - img [ref=e234]
+                      - generic [ref=e236]: 运行时质量门禁
+                    - generic "产物校验 · 已完成" [ref=e237] [cursor=pointer]:
+                      - img [ref=e239]
+                      - generic [ref=e241]: 产物校验
+                    - generic "代码清理 · 已完成" [ref=e242] [cursor=pointer]:
+                      - img [ref=e244]
+                      - generic [ref=e246]: 代码清理
+                    - generic "样式检查 · 已完成" [ref=e247] [cursor=pointer]:
+                      - img [ref=e249]
+                      - generic [ref=e251]: 样式检查
+                    - generic "合规确认 · 已完成" [ref=e252] [cursor=pointer]:
+                      - img [ref=e254]
+                      - generic [ref=e256]: 合规确认
+                    - generic "完成 · 已完成" [ref=e257] [cursor=pointer]:
+                      - img [ref=e259]
+                      - generic [ref=e261]: 完成
+                - generic [ref=e262]:
+                  - generic [ref=e263]:
+                    - generic [ref=e264]: LLM 调用耗时
+                    - generic [ref=e265]: 1 次调用 · LLM 11s
+                  - generic [ref=e266]:
+                    - generic "vision-agent" [ref=e267]
+                    - generic [ref=e270]: 11s · 1 次
+                  - paragraph [ref=e271]: 仅 LLM 调用墙钟之和，不含排队与非 LLM 阶段；端到端见侧栏「耗时」。
+              - generic [ref=e273]:
+                - generic [ref=e274]:
+                  - generic [ref=e275]: ✓
+                  - generic [ref=e277]: 组件生成完成
+                - generic [ref=e278]:
+                  - button "下载产物" [ref=e279] [cursor=pointer]:
+                    - img [ref=e280]
+                    - text: 下载产物
+                  - button "推送到公共池" [ref=e283] [cursor=pointer]:
+                    - img [ref=e284]
+                    - text: 推送到公共池
+              - generic [ref=e287]:
+                - generic [ref=e288]:
+                  - generic [ref=e289]: c-vehicle-monitor-001c5615
+                  - button "code Playground" [ref=e290]:
+                    - generic [ref=e291]:
+                      - img "code" [ref=e292]:
+                        - img [ref=e293]
+                      - text: Playground
+                - button "删除任务" [ref=e296] [cursor=pointer]
+              - generic [ref=e297]:
+                - button "日志 (H)" [ref=e298] [cursor=pointer]:
+                  - text: 日志
+                  - generic [ref=e299]: (H)
+                - button "产物 24" [ref=e300] [cursor=pointer]:
+                  - text: 产物
+                  - generic [ref=e301]: "24"
+                - button "统计" [ref=e303] [cursor=pointer]
+                - button "预览" [ref=e304] [cursor=pointer]
+              - generic [ref=e306]:
+                - generic [ref=e307]:
+                  - img [ref=e309]
+                  - generic [ref=e312]: 候选预览正在安全换帧，当前稳定画面继续保留
+                  - generic [ref=e313]:
+                    - generic [ref=e314]: 面板类型
+                    - combobox "面板类型" [ref=e315] [cursor=pointer]:
+                      - option "使用默认" [selected]
+                      - option "默认/浅色面板"
+                      - option "弹窗面板"
+                      - option "一体化/深色面板"
+                      - option "无面板"
+                - generic [ref=e316]:
+                  - generic [ref=e317]:
+                    - generic [ref=e322]: component://c-vehicle-monitor-dc888541(文档纠偏)/preview
+                    - generic "稳定版本（已过门禁） · r5383bb · 1 个阻断问题（预览仅供参考）" [ref=e323]
+                    - generic [ref=e324]:
+                      - generic [ref=e325]: "容器尺寸:"
+                      - generic [ref=e326]: 420 × 147
+                      - button "重置" [ref=e327] [cursor=pointer]
+                      - generic [ref=e328]: "缩放:"
+                      - generic [ref=e329] [cursor=pointer]:
+                        - generic: fit
+                        - generic [ref=e330]:
+                          - combobox [active] [ref=e332]
+                          - generic [ref=e333]: 自适应
+                        - generic:
+                          - img:
+                            - img
+                      - button "Fit" [ref=e334] [cursor=pointer]
+                    - button "重新校验" [ref=e335] [cursor=pointer]
+                    - button "刷新" [ref=e336] [cursor=pointer]
+                    - button "在新窗口全屏预览（可自由拉伸）" [ref=e337] [cursor=pointer]:
+                      - img [ref=e338]
+                  - generic [ref=e342]:
+                    - iframe [ref=e343]:
+                      - generic [ref=f20e3]:
+                        - generic [ref=f20e4]:
+                          - radiogroup "主题切换" [ref=f20e5]:
+                            - radio "浅色主题" [checked] [ref=f20e6] [cursor=pointer]:
+                              - img [ref=f20e7]
+                              - generic [ref=f20e10]: 浅色主题
+                            - radio "深色主题·内置" [ref=f20e11] [cursor=pointer]:
+                              - img [ref=f20e12]
+                              - generic [ref=f20e14]: 深色主题·内置
+                          - generic [ref=f20e15]: 深色侧为派生值
+                        - generic [ref=f20e17]:
+                          - generic [ref=f20e18]:
+                            - generic [ref=f20e19] [cursor=pointer]: 江阴靖江长江隧道
+                            - generic [ref=f20e20] [cursor=pointer]: 江阴大桥
+                          - generic [ref=f20e22]:
+                            - img [ref=f20e26]
+                            - generic [ref=f20e30]:
+                              - generic [ref=f20e31]:
+                                - generic [ref=f20e33]: 危化品车
+                                - generic [ref=f20e35]:
+                                  - generic [ref=f20e36]: "51"
+                                  - generic [ref=f20e37]: 次
+                              - generic [ref=f20e38]:
+                                - generic [ref=f20e40]: 重型货车
+                                - generic [ref=f20e42]:
+                                  - generic [ref=f20e43]: "2"
+                                  - generic [ref=f20e44]: 次
+                              - generic [ref=f20e45]:
+                                - generic [ref=f20e47]: 超高车辆
+                                - generic [ref=f20e49]:
+                                  - generic [ref=f20e50]: "19"
+                                  - generic [ref=f20e51]: 次
+                    - separator "调整视口宽度" [ref=e344]
+                    - separator "调整视口高度" [ref=e345]
+                    - separator "调整视口宽高" [ref=e346]
+    - contentinfo [ref=e347]:
+      - generic [ref=e348]: © 2026 感智晓界工坊 · 感动科技 | 智能体工作室
+      - navigation [ref=e349]:
+        - link "架构介绍" [ref=e350] [cursor=pointer]:
+          - /url: /generator/intro
+        - link "页面开发" [ref=e351] [cursor=pointer]:
+          - /url: /generator/page-skeleton
+        - link "工作流编排" [ref=e352] [cursor=pointer]:
+          - /url: /generator/workflow
+        - link "更新日志" [ref=e353] [cursor=pointer]:
+          - /url: /help/changelog
+        - link "系统公告" [ref=e354] [cursor=pointer]:
+          - /url: /announcements
+        - link "建议反馈" [ref=e355] [cursor=pointer]:
+          - /url: https://aio.microvideo.cn/tzy/biz/formCustSql/formCustSqlView/njgd_yjfk
+  - generic "任务监控（按住拖拽可移动位置）" [ref=e356]:
+    - generic [ref=e357]:
+      - img [ref=e358]
+      - generic [ref=e361]: 监控
+    - generic [ref=e362]: ›
