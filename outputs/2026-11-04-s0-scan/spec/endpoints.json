@@ -1,0 +1,481 @@
+{
+  "generatedAt": "2026-11-04T15:57:33Z",
+  "projectRoot": "/Users/smigoo/工作/test",
+  "declaredPrefix": "/api",
+  "total": 12,
+  "byConfidence": {
+    "high": 0,
+    "declared": 0,
+    "partial": 2,
+    "candidate": 10
+  },
+  "endpoints": [
+    {
+      "path": "/api/bridge/traffic/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 10,
+            "verb": "ANY",
+            "raw": "/api/bridge/traffic/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 10,
+            "verb": "ANY",
+            "raw": "/api/bridge/traffic/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/etc/transactions/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 6,
+            "verb": "ANY",
+            "raw": "/api/etc/transactions/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 6,
+            "verb": "ANY",
+            "raw": "/api/etc/transactions/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/province/gantry/traffic/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 12,
+            "verb": "ANY",
+            "raw": "/api/province/gantry/traffic/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 12,
+            "verb": "ANY",
+            "raw": "/api/province/gantry/traffic/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/toll/entry/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 7,
+            "verb": "ANY",
+            "raw": "/api/toll/entry/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 7,
+            "verb": "ANY",
+            "raw": "/api/toll/entry/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/toll/exit/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 5,
+            "verb": "ANY",
+            "raw": "/api/toll/exit/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 5,
+            "verb": "ANY",
+            "raw": "/api/toll/exit/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/toll/lanes/traffic/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 11,
+            "verb": "ANY",
+            "raw": "/api/toll/lanes/traffic/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 11,
+            "verb": "ANY",
+            "raw": "/api/toll/lanes/traffic/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/trajectory/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 9,
+            "verb": "ANY",
+            "raw": "/api/trajectory/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 9,
+            "verb": "ANY",
+            "raw": "/api/trajectory/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/vehicles/mileage/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 4,
+            "verb": "ANY",
+            "raw": "/api/vehicles/mileage/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 4,
+            "verb": "ANY",
+            "raw": "/api/vehicles/mileage/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/weather/observations/query",
+      "verb": "ANY",
+      "sources": [
+        "prototype"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "prototypeOnly-未交叉验证"
+      ],
+      "evidence": {
+        "prototype": [
+          {
+            "file": "html/模块1/common/service-overview.js",
+            "line": 8,
+            "verb": "ANY",
+            "raw": "/api/weather/observations/query"
+          },
+          {
+            "file": "html/模块1/common/service.js",
+            "line": 8,
+            "verb": "ANY",
+            "raw": "/api/weather/observations/query"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/nhu-dp-show/api/fuwuyun/getCaiYunWeatherData",
+      "verb": "GET",
+      "sources": [
+        "frontend"
+      ],
+      "confidence": "candidate",
+      "flags": [
+        "outsideDeclaredPrefix(/api)",
+        "frontendOnly-疑似模板示例"
+      ],
+      "evidence": {
+        "frontend": [
+          {
+            "file": "frontend/vue3-vite-base/src/api/test.js",
+            "line": 9,
+            "verb": "GET",
+            "raw": null
+          }
+        ]
+      }
+    },
+    {
+      "path": "/test/byId",
+      "verb": "GET",
+      "sources": [
+        "backend"
+      ],
+      "confidence": "partial",
+      "flags": [
+        "outsideDeclaredPrefix(/api)",
+        "backendOnly"
+      ],
+      "evidence": {
+        "backend": [
+          {
+            "file": "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/controller/XxlJobController.java",
+            "line": 47,
+            "verb": "GET",
+            "raw": "byId"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/test/cache",
+      "verb": "GET",
+      "sources": [
+        "backend"
+      ],
+      "confidence": "partial",
+      "flags": [
+        "outsideDeclaredPrefix(/api)",
+        "backendOnly"
+      ],
+      "evidence": {
+        "backend": [
+          {
+            "file": "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/controller/XxlJobController.java",
+            "line": 54,
+            "verb": "GET",
+            "raw": "cache"
+          }
+        ]
+      }
+    }
+  ],
+  "fullEvidence": {
+    "doc": [],
+    "prototype": [
+      {
+        "path": "/api/vehicles/mileage/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 4,
+        "raw": "/api/vehicles/mileage/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/toll/exit/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 5,
+        "raw": "/api/toll/exit/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/etc/transactions/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 6,
+        "raw": "/api/etc/transactions/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/toll/entry/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 7,
+        "raw": "/api/toll/entry/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/weather/observations/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 8,
+        "raw": "/api/weather/observations/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/trajectory/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 9,
+        "raw": "/api/trajectory/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/bridge/traffic/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 10,
+        "raw": "/api/bridge/traffic/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/toll/lanes/traffic/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 11,
+        "raw": "/api/toll/lanes/traffic/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/province/gantry/traffic/query",
+        "file": "html/模块1/common/service-overview.js",
+        "line": 12,
+        "raw": "/api/province/gantry/traffic/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/vehicles/mileage/query",
+        "file": "html/模块1/common/service.js",
+        "line": 4,
+        "raw": "/api/vehicles/mileage/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/toll/exit/query",
+        "file": "html/模块1/common/service.js",
+        "line": 5,
+        "raw": "/api/toll/exit/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/etc/transactions/query",
+        "file": "html/模块1/common/service.js",
+        "line": 6,
+        "raw": "/api/etc/transactions/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/toll/entry/query",
+        "file": "html/模块1/common/service.js",
+        "line": 7,
+        "raw": "/api/toll/entry/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/weather/observations/query",
+        "file": "html/模块1/common/service.js",
+        "line": 8,
+        "raw": "/api/weather/observations/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/trajectory/query",
+        "file": "html/模块1/common/service.js",
+        "line": 9,
+        "raw": "/api/trajectory/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/bridge/traffic/query",
+        "file": "html/模块1/common/service.js",
+        "line": 10,
+        "raw": "/api/bridge/traffic/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/toll/lanes/traffic/query",
+        "file": "html/模块1/common/service.js",
+        "line": 11,
+        "raw": "/api/toll/lanes/traffic/query",
+        "verb": "ANY"
+      },
+      {
+        "path": "/api/province/gantry/traffic/query",
+        "file": "html/模块1/common/service.js",
+        "line": 12,
+        "raw": "/api/province/gantry/traffic/query",
+        "verb": "ANY"
+      }
+    ],
+    "prototypeFilteredNonApi": [],
+    "frontend": [
+      {
+        "path": "/nhu-dp-show/api/fuwuyun/getCaiYunWeatherData",
+        "verb": "GET",
+        "file": "frontend/vue3-vite-base/src/api/test.js",
+        "line": 9
+      }
+    ],
+    "backend": [
+      {
+        "path": "/test/byId",
+        "verb": "GET",
+        "file": "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/controller/XxlJobController.java",
+        "line": 47,
+        "raw": "byId",
+        "classPrefix": "/test"
+      },
+      {
+        "path": "/test/cache",
+        "verb": "GET",
+        "file": "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/controller/XxlJobController.java",
+        "line": 54,
+        "raw": "cache",
+        "classPrefix": "/test"
+      }
+    ]
+  }
+}

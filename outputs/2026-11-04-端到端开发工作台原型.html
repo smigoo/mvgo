@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工坊 · 项目级端到端开发工作台（原型）</title>
+<style>
+:root{
+  --blue:#1890ff;--blue-bg:#e6f4ff;--blue-bd:#91caff;--blue-dk:#0958d9;
+  --purple:#722ed1;--purple-bg:#f9f0ff;--purple-bd:#d3adf7;--purple-dk:#531dab;
+  --green:#52c41a;--green-bg:#f6ffed;--green-bd:#b7eb8f;
+  --amber:#faad14;--amber-bg:#fffbe6;--amber-bd:#ffe58f;
+  --red:#ff4d4f;--red-bg:#fff2f0;--red-bd:#ffccc7;
+  --t1:#1f1f1f;--t2:#595959;--t3:#8c8c8c;--t4:#bfbfbf;
+  --bd:#e8e8e8;--bd2:#f2f2f2;--bg:#f0f2f5;--card:#fff;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--t1);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:13px;cursor:pointer;border:none;background:none;color:inherit}
+code,.mono{font-family:var(--mono);font-size:12px}
+h1,h2,h3,h4{font-weight:500}
+
+.app{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* 顶栏 */
+.top{height:52px;flex:none;background:var(--card);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:16px;padding:0 16px}
+.logo{font-weight:500;font-size:14px;letter-spacing:.2px;white-space:nowrap}
+.logo span{color:var(--t3);font-weight:400;font-size:12px;margin-left:6px}
+.pj{display:flex;align-items:baseline;gap:8px;min-width:0}
+.pj-name{font-weight:500;font-size:13px;white-space:nowrap}
+.pj-path{font-family:var(--mono);font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-r{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none}
+.chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:12px;font-size:11px;white-space:nowrap}
+.chip.warn{background:var(--amber-bg);color:#ad6800;border:1px solid var(--amber-bd)}
+.chip.ok{background:var(--green-bg);color:#237804;border:1px solid var(--green-bd)}
+.chip.info{background:var(--blue-bg);color:var(--blue-dk);border:1px solid var(--blue-bd)}
+.chip.ghost{border:1px solid var(--bd);color:var(--t2)}
+.btn{height:30px;padding:0 14px;border-radius:6px;border:1px solid var(--bd);background:var(--card);color:var(--t1);transition:.15s;white-space:nowrap}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:var(--blue-dk);border-color:var(--blue-dk);color:#fff}
+.btn.pri:disabled{background:var(--t4);border-color:var(--t4);cursor:not-allowed;color:#fff}
+.btn.sm{height:26px;padding:0 10px;font-size:12px}
+.btn.ghost{border-color:transparent;color:var(--t2)}
+.btn.ghost:hover{background:var(--bd2)}
+
+.body{flex:1;display:flex;min-height:0}
+
+/* 左：阶段导航 */
+.rail{width:214px;flex:none;background:var(--card);border-right:1px solid var(--bd);overflow-y:auto;padding:10px 0 20px}
+.rail-h{padding:6px 14px 10px;font-size:11px;color:var(--t3);letter-spacing:.4px}
+.ri{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 14px;border-left:2px solid transparent;width:100%;text-align:left;transition:.12s}
+.ri:hover{background:var(--bd2)}
+.ri.on{background:var(--blue-bg);border-left-color:var(--blue)}
+.ri-id{font-family:var(--mono);font-size:11px;color:var(--t3);width:20px;flex:none}
+.ri.on .ri-id{color:var(--blue-dk)}
+.ri-name{flex:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ri-mark{flex:none;font-size:11px;width:14px;text-align:center}
+.ri.done .ri-mark{color:var(--green)}
+.ri.lock .ri-name{color:var(--t4)}
+.ri.lock .ri-id{color:var(--t4)}
+.ri.block .ri-name{color:#cf1322}
+.ri.block .ri-id{color:var(--red)}
+.ri.block .ri-mark{color:var(--red);font-weight:700}
+.ri.block.on{background:var(--red-bg)}
+.ri-sep{height:1px;background:var(--bd2);margin:8px 14px}
+
+/* 中：主区 */
+.main{flex:1;min-width:0;overflow-y:auto;padding:16px 20px 40px}
+.panel{background:var(--card);border-radius:10px;border:1px solid var(--bd);overflow:hidden;max-width:900px}
+.ph{padding:16px 20px 14px;border-bottom:1px solid var(--bd2);display:flex;align-items:flex-start;gap:12px}
+.ph h2{font-size:15px}
+.ph p{font-size:12px;color:var(--t3);margin-top:3px}
+.ph-r{margin-left:auto;flex:none}
+.pb{padding:16px 20px}
+.pf{padding:12px 20px;background:#fafafa;border-top:1px solid var(--bd2);display:flex;align-items:center;gap:8px}
+.pf-r{margin-left:auto;display:flex;gap:8px}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:11px;white-space:nowrap}
+.tag.done{background:var(--green-bg);color:#237804}
+.tag.active{background:var(--blue-bg);color:var(--blue-dk)}
+.tag.lock{background:#fafafa;color:var(--t3);border:1px solid var(--bd)}
+.tag.warn{background:var(--amber-bg);color:#ad6800}
+.tag.err{background:var(--red-bg);color:#cf1322}
+.tag.human{background:var(--purple-bg);color:var(--purple-dk)}
+
+.sec{margin-bottom:18px}
+.sec:last-child{margin-bottom:0}
+.sec-h{font-size:12px;color:var(--t2);font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.sec-h .n{font-family:var(--mono);color:var(--t4);font-size:11px}
+.hint{font-size:12px;color:var(--t3);line-height:1.65}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;font-weight:500;color:var(--t2);background:#fafafa;padding:7px 10px;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid var(--bd2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td .mono{color:var(--t2)}
+.wrap-t{border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.wrap-t table{font-size:12px}
+
+.card{border:1px solid var(--bd);border-radius:8px;padding:12px 14px;background:var(--card)}
+.card.human{border-color:var(--purple-bd);background:var(--purple-bg)}
+.card.machine{border-color:var(--blue-bd);background:var(--blue-bg)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kv{display:flex;gap:8px;font-size:12px;padding:3px 0}
+.kv k{color:var(--t3);flex:none;min-width:78px}
+.kv v{color:var(--t1);font-family:var(--mono);font-size:11.5px;word-break:break-all}
+
+.art{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--card)}
+.art .ic{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);flex:none;font-weight:500}
+.art.m .ic{background:var(--blue-bg);color:var(--blue-dk)}
+.art.h .ic{background:var(--purple-bg);color:var(--purple-dk)}
+.art .nm{font-family:var(--mono);font-size:12px}
+.art .mt{font-size:11px;color:var(--t3);margin-top:1px}
+.art .rt{margin-left:auto;font-size:11px;flex:none}
+
+.opt{display:flex;gap:10px;padding:11px 13px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;transition:.12s;margin-bottom:8px;align-items:flex-start}
+.opt:hover{border-color:var(--blue-bd);background:var(--blue-bg)}
+.opt.sel{border-color:var(--blue);background:var(--blue-bg)}
+.opt .rd{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--t4);flex:none;margin-top:2px;position:relative}
+.opt.sel .rd{border-color:var(--blue)}
+.opt.sel .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--blue)}
+.opt .t{font-size:12.5px;font-weight:500}
+.opt .d{font-size:11.5px;color:var(--t3);margin-top:2px;font-family:var(--mono)}
+
+.gen{display:flex;flex-direction:column;gap:1px;background:var(--bd2);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.gi{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--card);font-size:12px}
+.gi .st{width:14px;flex:none;text-align:center;font-size:11px}
+.gi.pend .st{color:var(--t4)}
+.gi.run .st{color:var(--blue)}
+.gi.ok .st{color:var(--green)}
+.gi .p{font-family:var(--mono);font-size:11.5px;color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gi .tg{font-size:11px;color:var(--t3);flex:none}
+
+.alert{display:flex;gap:9px;padding:11px 13px;border-radius:8px;font-size:12px;line-height:1.6}
+.alert.w{background:var(--amber-bg);border:1px solid var(--amber-bd);color:#874d00}
+.alert.i{background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue-dk)}
+.alert.e{background:var(--red-bg);border:1px solid var(--red-bd);color:#a8071a}
+.alert .ai{flex:none;font-weight:500}
+
+.ptr{display:inline-block;padding:0 5px;border-radius:3px;background:var(--purple-bg);color:var(--purple-dk);font-family:var(--mono);font-size:11px;border:1px solid var(--purple-bd)}
+.mono-s{font-family:var(--mono);font-size:11.5px;color:var(--t2);background:#fafafa;padding:1px 5px;border-radius:3px;border:1px solid var(--bd2)}
+
+/* 右：人读文档 */
+.docs{width:392px;flex:none;background:var(--card);border-left:1px solid var(--bd);display:flex;flex-direction:column;min-height:0}
+.docs-h{height:38px;flex:none;display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--bd);gap:6px}
+.docs-h span{font-size:11px;color:var(--t3)}
+.tabs{display:flex;gap:4px;flex:1}
+.tab{height:26px;padding:0 9px;border-radius:5px;font-size:11.5px;color:var(--t2);white-space:nowrap}
+.tab:hover{background:var(--bd2)}
+.tab.on{background:var(--purple-bg);color:var(--purple-dk)}
+.doc-meta{padding:10px 14px;border-bottom:1px solid var(--bd2);background:#fafafa;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--t3)}
+.doc-meta b{color:var(--t2);font-weight:400;font-family:var(--mono)}
+.doc{flex:1;overflow-y:auto;padding:14px 16px 40px}
+.doc h1{font-size:14px;margin-bottom:2px}
+.doc h4{font-size:12.5px;margin:16px 0 6px;padding-left:8px;border-left:3px solid var(--purple);display:flex;align-items:center;gap:6px}
+.doc h4:first-of-type{margin-top:8px}
+.doc p{font-size:12px;color:var(--t2);margin-bottom:6px;line-height:1.7}
+.doc ul{margin:0 0 6px 16px;font-size:12px;color:var(--t2);line-height:1.8}
+.doc li::marker{color:var(--t4)}
+.doc table{font-size:11.5px;margin-bottom:4px}
+.doc th{padding:5px 7px;font-size:11px}
+.doc td{padding:5px 7px}
+.doc .wrap-t{margin-bottom:6px}
+.doc-empty{color:var(--t3);font-size:12px;padding:30px 8px;text-align:center;line-height:1.8}
+.doc-note{font-size:11.5px;color:var(--purple-dk);background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:6px;padding:7px 9px;margin-bottom:10px;line-height:1.6}
+
+.stamp{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--green-bg);color:#237804;border:1px solid var(--green-bd)}
+
+.toast{position:fixed;right:20px;bottom:20px;z-index:99;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.tst{background:#1f1f1f;color:#fff;padding:9px 14px;border-radius:8px;font-size:12px;max-width:420px;line-height:1.55;animation:tin .22s ease}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}}
+
+.rev{width:100%;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;font-family:inherit;font-size:12px;resize:vertical;min-height:64px;margin-top:8px;outline:none}
+.rev:focus{border-color:var(--blue)}
+
+/* ===== 顶部链路条：先做什么、再做什么 ===== */
+.flow{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:11px 13px;margin-bottom:12px;max-width:900px}
+.flow-h{font-size:11.5px;color:var(--t3);margin-bottom:9px}
+.flow-h b{color:var(--t2);font-weight:500}
+.flow-h i{font-style:normal;color:var(--purple-dk);background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:4px;padding:0 5px}
+.fch{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.fc{display:flex;flex-direction:column;gap:1px;padding:5px 9px;border:1px solid var(--bd);border-radius:6px;background:#fafafa;cursor:pointer;transition:.15s}
+.fc:hover{border-color:var(--blue)}
+.fc .a{font-family:var(--mono);font-size:10px;color:var(--t3)}
+.fc .b{font-size:11px;color:var(--t1);white-space:nowrap}
+.fc.stop{border-color:var(--purple-bd);background:var(--purple-bg)}
+.fc.stop .a{color:var(--purple-dk)}
+.fc.on{border-color:var(--blue);background:var(--blue-bg);box-shadow:0 0 0 2px var(--blue-bg)}
+.arw{color:var(--t4);font-size:11px;flex:none}
+.fn{font-size:11px;color:var(--t3);margin-top:9px;line-height:1.9;border-top:1px dashed var(--bd);padding-top:8px}
+.fn b{color:var(--t2);font-weight:500}
+
+/* ===== 阶段带：吃到什么 → 做什么 → 吐出什么 ===== */
+.strip{display:grid;grid-template-columns:1fr 20px 1fr 20px 1fr;align-items:stretch;border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-bottom:8px;max-width:900px}
+.strip .sc{padding:9px 11px;background:#fafafa;min-width:0}
+.strip .sc b{display:block;font-size:10.5px;color:var(--t3);font-weight:400;letter-spacing:.3px;margin-bottom:3px}
+.strip .sc span{font-size:11.5px;color:var(--t1);line-height:1.55}
+.strip .ar{display:flex;align-items:center;justify-content:center;color:var(--t4);background:var(--card);font-size:10px}
+.fm{font-family:var(--mono);font-size:10.5px;color:var(--blue-dk);background:var(--blue-bg);border:1px solid var(--blue-bd);border-radius:3px;padding:0 4px;display:inline-block}
+.htag{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:7px 11px;border-radius:10px;margin-bottom:14px;max-width:900px}
+.htag b{font-weight:500;flex:none}
+.htag.yes{background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple-dk)}
+.htag.no{background:#fafafa;border:1px solid var(--bd);color:var(--t3)}
+
+/* ===== S0 投喂区 ===== */
+.feed{border:1px solid var(--bd);border-radius:8px;padding:12px 13px;margin-bottom:10px;background:var(--card)}
+.feed-h{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;margin-bottom:3px}
+.feed-h .step{width:18px;height:18px;border-radius:50%;background:var(--blue-bg);color:var(--blue-dk);font-family:var(--mono);font-size:10.5px;display:flex;align-items:center;justify-content:center;flex:none}
+.feed-d{font-size:11.5px;color:var(--t3);margin:0 0 10px 25px;line-height:1.6}
+.frow{display:flex;align-items:center;gap:7px;margin:0 0 8px 25px;flex-wrap:wrap}
+.frow:last-child{margin-bottom:0}
+.fld{display:flex;align-items:center;gap:5px;font-size:12px;flex:none}
+.fld k{color:var(--t3);font-size:11.5px;font-weight:400}
+.inp{height:28px;border:1px solid var(--bd);border-radius:6px;padding:0 9px;font-family:var(--mono);font-size:11.5px;color:var(--t1);background:var(--card);outline:none;min-width:0;flex:1}
+.inp:focus{border-color:var(--blue)}
+.inp.w2{flex:none;width:110px}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden;flex:none}
+.seg button{height:28px;padding:0 12px;font-size:11.5px;color:var(--t2);background:var(--card)}
+.seg button+button{border-left:1px solid var(--bd)}
+.seg button.on{background:var(--blue);color:#fff}
+.lnk{display:flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid var(--bd2);border-radius:6px;background:#fafafa;font-family:var(--mono);font-size:11px;color:var(--t2);margin-bottom:5px}
+.lnk .x{color:var(--t4);font-size:12px;flex:none;padding:0 2px}
+.lnk .x:hover{color:var(--red)}
+.drop{border:1px dashed var(--bd);border-radius:8px;padding:13px;text-align:center;color:var(--t3);font-size:11.5px;background:#fafafa;cursor:pointer;transition:.15s}
+.drop:hover{border-color:var(--blue);color:var(--blue-dk);background:var(--blue-bg)}
+.ri.human .ri-id{color:var(--purple-dk)}
+.ri.human{background:linear-gradient(90deg,var(--purple-bg),transparent 60%)}
+.ri.human.on{background:linear-gradient(90deg,var(--purple-bg),var(--blue-bg))}
+
+@media (max-width:1240px){.docs{width:340px}}
+@media (max-width:1080px){
+  .body{flex-direction:column}
+  .rail{width:100%;display:flex;gap:2px;overflow-x:auto;padding:6px;border-right:none;border-bottom:1px solid var(--bd)}
+  .ri{width:auto;flex:none;border-left:none;border-bottom:2px solid transparent;padding:6px 10px}
+  .ri.on{border-left:none;border-bottom-color:var(--blue)}
+  .rail-h,.ri-sep{display:none}
+  .main{flex:1}
+  .docs{width:100%;max-height:44vh;border-left:none;border-top:1px solid var(--bd)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="logo">工坊<span>项目开发</span></div>
+    <div class="pj">
+      <div class="pj-name" id="pjName">沿江监控运维子系统</div>
+      <div class="pj-path" id="pjPath">/Users/smigoo/工作/test</div>
+    </div>
+    <div class="top-r">
+      <span class="chip warn" id="chipWarn" style="cursor:pointer" title="跳到 S0 看缺失清单">缺失 1 项：mvgo.project.json</span>
+      <span class="chip ghost">原型 · 非真实运行</span>
+      <button class="btn ghost" id="btnReset">重置演示</button>
+    </div>
+  </header>
+  <div class="body">
+    <nav class="rail" id="rail"></nav>
+    <main class="main" id="stage"></main>
+    <aside class="docs">
+      <div class="docs-h">
+        <div class="tabs" id="tabs"></div>
+        <span>人读产物</span>
+      </div>
+      <div class="doc-meta" id="docMeta"></div>
+      <div class="doc" id="doc"></div>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+/* ===== PROTO-DATA:BEGIN =====
+ * 本块由 `outputs/build-prototype.cjs` 从 `outputs/2026-11-04-s0-scan/spec/` 的真实
+ * 扫描产物生成 —— 不是手抄的。复现：
+ *   node outputs/s0-scan.cjs /Users/smigoo/工作/test --out outputs/2026-11-04-s0-scan
+ *   node outputs/build-prototype.cjs --write
+ * 漂移守卫（任一数字与产物不符即非零退出）：
+ *   node outputs/build-prototype.cjs --check
+ * ⚠️ 禁止手工编辑本块 —— 会被下次 --write 覆盖。样本目录全程只读，一个字节未改。
+ * ===== */
+var SCAN={
+ root:'/Users/smigoo/工作/test',
+ at:'2026-11-04T15:57:34Z',
+ doc:{files:1,lines:6962,hits:0},
+ proto:{pages:5,scripts:5,libs:2,hits:18,unique:9,filtered:0},
+ fe:{files:30,hits:1},
+ be:{files:5,hits:2},
+ envelope:{source:'detected-未证实',confirmed:false,keys:['code','data','detail','message'],successCode:null,file:'backend/03-microvideo-framework3.x-lite-example-master/readme.md'},
+ git:{repos:1,path:'frontend/vue3-vite-base',branch:'main',origin:'scm.microvideo.cn/gitlab/opensource/framework3.0/102-vue/101001-vue3.0/vue3-vite-base.git'},
+ blocker:1, conflicts:5,
+ prefixes:{declared:'/api',fe:'/nhu-dp-show',be:'/test'},
+ footprint:{all:189,tree:106,work:101,dsStore:5,git:83,truncated:false},
+ readOnly:{changed:0,added:0,removed:0,modified:0},
+ slots:{missing:1}, pjUndecided:3,
+ feEv:[
+  {p:'/nhu-dp-show/api/fuwuyun/getCaiYunWeatherData',v:'GET',f:'frontend/vue3-vite-base/src/api/test.js',l:9}
+ ]
+};
+/* src=来源（去重后唯一点端点），flags=扫描器给的标记，name 留空等 S2 由 LLM 回填 */
+var EP=[
+ {p:'/api/bridge/traffic/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/etc/transactions/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/province/gantry/traffic/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/toll/entry/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/toll/exit/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/toll/lanes/traffic/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/trajectory/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/vehicles/mileage/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/api/weather/observations/query',v:'ANY',src:['prototype'],conf:'candidate',flags:['prototypeOnly-未交叉验证']},
+ {p:'/nhu-dp-show/api/fuwuyun/getCaiYunWeatherData',v:'GET',src:['frontend'],conf:'candidate',flags:['outsideDeclaredPrefix(/api)','frontendOnly-疑似模板示例']},
+ {p:'/test/byId',v:'GET',src:['backend'],conf:'partial',flags:['outsideDeclaredPrefix(/api)','backendOnly']},
+ {p:'/test/cache',v:'GET',src:['backend'],conf:'partial',flags:['outsideDeclaredPrefix(/api)','backendOnly']}
+];
+/* =====================================================================
+ * S2 前置 blocker = GAP-DOC-NO-ENDPOINT（manifest.S1.gaps 里 severity=blocker 的首项）
+ * 实测证据：需求文档正文 6962 行、端点命中 0 处
+ * 后果：第五处对账（REQUIREMENTS.md ↔ OAS paths 双向差集为空）不可能成立
+ *       —— 对账要的是「两边都非空且相等」，空集一侧没有差集可言
+ * 扫描器只报 blocker + 三个选项（GAP_OPTS），不替用户选。
+ * ===================================================================== */
+var GAP='GAP-DOC-NO-ENDPOINT';
+/* ===== PROTO-DATA:END ===== */
+var GAP_OPTS=[
+ {id:'A',t:'把原型候选升格为端点主源',
+  d:'去重后 '+SCAN.proto.unique+' 个唯一点端点（原始字面量命中 '+SCAN.proto.hits+' 次）直接作为契约初稿',
+  risk:'原型里可能混着示例端点 ⇒ confidence 从 candidate 升 declared 不等于已验证，仍需人过一眼'},
+ {id:'B',t:'补一份含接口章节的需求文档后重跑 S1',
+  d:'扫描器幂等（样本只读），重投喂即可',
+  risk:'当下没有这份素材 ⇒ blocker 无法立刻消解，S2 保持 BLOCK'},
+ {id:'C',t:'先由 Apifox 反接作为端点主源',
+  d:'把 S7 的 Apifox diff 提前到 S2 之前跑一次，用线上目录定端点集合',
+  risk:'与已拍板的「本地 OAS 为真值、Apifox 后接」次序冲突，且影响 S7 判定口径，需在 conflicts.md 记来源'}
+];
+var STAGES=[
+ {id:'S0',name:'输入准入',sub:'发现目录 + 报缺失'},
+ {id:'S1',name:'多源对齐',sub:'模块 ↔ 画板 ↔ 端点'},
+ {id:'S2',name:'契约冻结',sub:'唯一收敛点'},
+ {id:'S3',name:'本地 mock',sub:'契约 → 假数据'},
+ {id:'S4',name:'前端',sub:'4a 设计 → 4b 生成'},
+ {id:'S5',name:'后端 Java',sub:'5a 设计 → 5b 生成'},
+ {id:'S6',name:'联调对账',sub:'三处差集'},
+ {id:'S7',name:'反接 Apifox',sub:'契约 diff'},
+ {id:'S8',name:'Git 交付',sub:'逐仓提交'}
+];
+var state={
+ cur:'S0',
+ env:null,
+ gap:null,
+ frozen:false,
+ tab:'req',
+ s0:{mode:'dir',dir:'/Users/smigoo/工作/test',git:'https://git.microvideo.cn/ops/yxjc-monitor.git',branch:'go-dev',
+     figma:['https://www.figma.com/design/AbC123/沿江监控-运维子系统?node-id=1-2'],
+     apifox:'',docs:['沿江监控运维子系统_需求规格说明书_V1.1.docx'],scan:false},
+ fe:{design:true,confirmed:false,gen:0},
+ be:{design:true,confirmed:false,gen:0},
+ reject:false,
+ rejectBe:false
+};
+/* 每一拍：吃到什么 / 做什么 / 吐出什么（形式） / 你要不要动手 */
+var SIO={
+ S0:['你给的目录 / 仓库 / 外链','扫描目录，按特征认出每种资料，缺什么直接报出来','<span class="fm">project.manifest.json</span>（机器清单）','填第 1 块 → 点「开始识别」→ 按提示补缺失项'],
+ S1:['manifest + 全部素材（需求文档 / 原型 html / Figma）','抽取端点、三方对齐、检测冲突（LLM 只做抽取，不做决定）','<span class="fm">endpoints.json</span> + <span class="fm">conflicts.md</span>','不用动手，扫一眼有没有孤儿端点'],
+ S2:['端点清单 + 你对冲突的裁决','收敛成契约；同一拍再出一份人读唯一源','<span class="fm">openapi.local.yaml</span> + <span class="fm">REQUIREMENTS.md</span>','选信封口径 → 裁决冲突 → 点「冻结契约」'],
+ S3:['已冻结的契约','按契约造假数据，起一个本地 mock 服务','<span class="fm">mock/server.cjs</span> + 假数据 json','点一下「继续」'],
+ S4:['契约切片（只读，不吃需求文档）','4a 出前端设计 → 你确认 → 4b 按设计写代码','<span class="fm">FRONTEND-DESIGN.md</span> → 6 个 <span class="fm">.vue / .ts</span>','审设计摘要（改文档比重写代码便宜一个数量级）'],
+ S5:['契约切片（只读，与 S4 同一份）','5a 出后端设计（含表结构）→ 你确认 → 5b 写代码','<span class="fm">BACKEND-DESIGN.md</span> → 9 个 <span class="fm">.java</span> + DDL','审表结构（表错了后面全要重写）'],
+ S6:['契约 + 前端产物 + 后端产物','三处求差集，纯确定性代码，不用 LLM','<span class="fm">reconcile.md</span>（对账报告）','点一下「继续」'],
+ S7:['本地契约 + Apifox','单向 diff，线上变更不反向污染本地真值','<span class="fm">contract-diff.md</span>','没配 Apifox 就跳过'],
+ S8:['全部产物 + 分支配置','逐仓建分支、显式列路径提交','git commit（可回滚）','点「创建分支并提交」']
+};
+/* 需要人真的动一下手的阶段 */
+var HUMAN={'S0':1,'S2':1,'S4':1,'S5':1,'S8':1};
+function isLocked(id){
+  var i=STAGES.findIndex(function(s){return s.id===id});
+  if(i<=2) return false;
+  if(!state.frozen) return true;
+  if(id==='S3') return false;
+  return false;
+}
+function statusOf(id){
+  if(id==='S0') return state.s0.scan?'done':'active';
+  if(id==='S1') return !state.s0.scan?'lock':(state.cur==='S1'?'active':'todo');
+  if(id==='S2') return !state.s0.scan?'lock':(state.frozen?'done':(state.gap==='A'?(state.cur==='S2'?'active':'todo'):'block'));
+  if(id==='S3') return state.frozen?'done':'lock';
+  if(id==='S4') return !state.frozen?'lock':(state.fe.gen>=1?'done':(state.cur==='S4'?'active':'todo'));
+  if(id==='S5') return !state.frozen?'lock':(state.be.gen>=1?'done':(state.cur==='S5'?'active':'todo'));
+  if(id==='S6'||id==='S7'||id==='S8'){
+    var ready=state.fe.gen>=1&&state.be.gen>=1;
+    if(!ready) return 'lock';
+    return state.cur===id?'active':'done';
+  }
+  return 'todo';
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function toast(msg){
+  var d=document.createElement('div');d.className='tst';d.textContent=msg;
+  document.getElementById('toast').appendChild(d);
+  setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .2s';setTimeout(function(){d.remove()},220)},2600);
+}
+/* —— 顶部「先做什么再做什么」链路条 —— */
+function flowBar(){
+  var h='<div class="flow"><div class="flow-h"><b>先做什么、再做什么</b>　点任意节点可跳到那一拍；<i>紫色带「停」</i>= 要你动手</div><div class="fch">';
+  STAGES.forEach(function(s,i){
+    if(i) h+='<span class="arw">▸</span>';
+    var stop=!!HUMAN[s.id];
+    h+='<div class="fc'+(state.cur===s.id?' on':'')+(stop?' stop':'')+'" data-act="go" data-id="'+s.id+'">'
+     +'<span class="a">'+s.id+(stop?' · 停':'')+'</span><span class="b">'+s.name+'</span></div>';
+  });
+  h+='</div><div class="fn"><b>产出形式一路在收窄：</b>'
+   +'目录 / 外链 <span class="arw">▸</span> <span class="mono-s">openapi.local.yaml</span>（字段真值只在这一份）'
+   +' <span class="arw">▸</span> 3 份 <span class="mono-s">.md</span>（人读）'
+   +' <span class="arw">▸</span> <span class="mono-s">.vue / .ts</span> + <span class="mono-s">.java</span>（代码）'
+   +' <span class="arw">▸</span> 对账 <span class="mono-s">.md</span> <span class="arw">▸</span> git commit</div></div>';
+  return h;
+}
+/* —— 每一拍：吃到什么 → 做什么 → 吐出什么 + 要不要你动手 —— */
+function strip(id){
+  var d=SIO[id]; if(!d) return '';
+  var human=!!HUMAN[id];
+  return '<div class="strip">'
+   +'<div class="sc"><b>吃到什么</b><span>'+d[0]+'</span></div>'
+   +'<div class="ar">▸</div>'
+   +'<div class="sc"><b>这一拍做什么</b><span>'+d[1]+'</span></div>'
+   +'<div class="ar">▸</div>'
+   +'<div class="sc"><b>吐出什么</b><span>'+d[2]+'</span></div>'
+   +'</div>'
+   +'<div class="htag '+(human?'yes':'no')+'">'
+   +(human?'<b>✋ 这一拍要你动手</b>':'<b>⏵ 这一拍不用你动手</b>')
+   +'<span>'+d[3]+'</span></div>';
+}
+function railHTML(){
+  var h='<div class="rail-h">阶段（S0–S8 共 '+STAGES.length+' 个）<br><span style="font-weight:400">紫色 = 要你动手：S0 / S2 / S4·S5</span><br>'
+    +'<span style="font-weight:400;color:'+(state.gap==='A'?'var(--t3)':'#cf1322')+'">'
+    +(state.gap==='A'?'红色 ! = blocker（已消解）':'红色 ! = blocker 未消解 ⇒ S2 冻结按钮锁定')+'</span></div>';
+  STAGES.forEach(function(s){
+    var st=statusOf(s.id);
+    var cls=st==='done'?'done':(st==='lock'?'lock':(st==='block'?'block':''));
+    if(state.cur===s.id) cls+=' on';
+    var mark=st==='done'?'✓':(st==='lock'?'•':(st==='block'?'!':(st==='active'?'●':'')));
+    if(HUMAN[s.id]&&st!=='lock') cls+=' human';
+    h+='<button class="ri '+cls+'" data-act="go" data-id="'+s.id+'">'
+      +'<span class="ri-id">'+s.id+'</span>'
+      +'<span class="ri-name">'+s.name+'</span>'
+      +'<span class="ri-mark">'+mark+'</span></button>';
+    if(s.id==='S2') h+='<div class="ri-sep"></div>';
+  });
+  return h;
+}
+function renderRail(){document.getElementById('rail').innerHTML=railHTML()}
+function panel(h,p){return '<div class="panel"><div class="ph">'+h+'</div>'+(p||'')+'</div>'}
+function head(title,desc,tag){
+  return '<div><h2>'+title+'</h2><p>'+desc+'</p></div><div class="ph-r">'+tag+'</div>';
+}
+function foot(left,right){
+  return '<div class="pf">'+(left||'')+'<div class="pf-r">'+(right||'')+'</div></div>';
+}
+function lockNote(id){
+  return '<div class="alert w" style="margin-bottom:14px"><span class="ai">前置未完成</span><span>实际运行时此处会停在 S2 —— 契约未冻结，之后一律不许生产。当前为<b>预览</b>，你可以先看这一拍的界面。</span></div>';
+}
+
+/* ===== S0：投喂 ===== */
+function syncS0(){
+  var s=state.s0;
+  var d=document.getElementById('s0dir'); if(d) s.dir=d.value;
+  var g=document.getElementById('s0git'); if(g) s.git=g.value;
+  var b=document.getElementById('s0branch'); if(b) s.branch=b.value;
+  var a=document.getElementById('s0apifox'); if(a) s.apifox=a.value;
+}
+function s0Feed(){
+  var s=state.s0,h='';
+  h+='<div class="feed"><div class="feed-h"><span class="step">1</span>项目目录 / 仓库'
+   +'<span class="tag err" style="margin-left:auto">必填</span></div>'
+   +'<div class="feed-d">工坊要拿到一个能读的文件夹 —— 需求文档、原型 HTML、前后端基座都在里面。</div>'
+   +'<div class="frow"><span class="fld"><k>从哪来</k></span><span class="seg">'
+   +'<button class="'+(s.mode==='dir'?'on':'')+'" data-act="s0mode" data-v="dir">本地目录</button>'
+   +'<button class="'+(s.mode==='git'?'on':'')+'" data-act="s0mode" data-v="git">Git 地址</button>'
+   +'</span></div>';
+  if(s.mode==='dir'){
+    h+='<div class="frow"><span class="fld"><k>路径</k></span>'
+     +'<input class="inp" id="s0dir" value="'+esc(s.dir)+'" placeholder="/Users/xxx/你的项目目录">'
+     +'<button class="btn sm" data-act="s0pick">浏览…</button></div>';
+  }else{
+    h+='<div class="frow"><span class="fld"><k>仓库</k></span>'
+     +'<input class="inp" id="s0git" value="'+esc(s.git)+'" placeholder="https://git.公司.com/团队/项目.git"></div>'
+     +'<div class="frow"><span class="fld"><k>分支</k></span><input class="inp w2" id="s0branch" value="'+esc(s.branch)+'">'
+     +'<span class="hint">交付分支，工坊自动建，绝不落 main</span></div>';
+  }
+  h+='</div>';
+  h+='<div class="feed"><div class="feed-h"><span class="step">2</span>外链：不在目录里的东西'
+   +'<span class="tag lock" style="margin-left:auto">选填</span></div>'
+   +'<div class="feed-d">Figma 设计稿和 Apifox 地址不在 git 里，得单独告诉工坊 —— 这就是「覆盖靠声明」。</div>'
+   +'<div class="frow"><span class="fld"><k>Figma</k></span><button class="btn sm" data-act="s0addfigma">+ 添加一条链接</button>'
+   +'<span class="hint">可多条，对应多个画板</span></div>';
+  s.figma.forEach(function(f,i){
+    h+='<div class="lnk" style="margin-left:25px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(f)+'</span>'
+     +'<button class="x" data-act="s0delfigma" data-i="'+i+'">✕</button></div>';
+  });
+  h+='<div class="frow"><span class="fld"><k>Apifox</k></span>'
+   +'<input class="inp" id="s0apifox" value="'+esc(s.apifox)+'" placeholder="https://apifox.com/... 没有就留空，S7 自动跳过"></div>';
+  h+='</div>';
+  h+='<div class="feed"><div class="feed-h"><span class="step">3</span>补充文档'
+   +'<span class="tag lock" style="margin-left:auto">选填</span></div>'
+   +'<div class="feed-d">已经放进项目目录的不用重复传，这里只补散落在别处的。</div>'
+   +'<div class="drop" style="margin-left:25px" data-act="s0adddoc">把 .docx / .md / .pdf 拖进来，或点这里选文件</div>';
+  s.docs.forEach(function(d,i){
+    h+='<div class="lnk" style="margin-left:25px;margin-top:6px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(d)+'</span>'
+     +'<button class="x" data-act="s0deldoc" data-i="'+i+'">✕</button></div>';
+  });
+  h+='</div>';
+  h+='<div class="alert i"><span class="ai">投喂后</span><span>工坊把资料复制进工作区 <span class="mono-s">.gen/input/</span>，<b>不动你的原目录</b>；下次重跑可复用，只重认变化的部分。</span></div>';
+  return h;
+}
+function s0Summary(){
+  var s=state.s0;
+  var src=s.mode==='dir'?s.dir:(s.git+'　·　'+s.branch);
+  var h='<div class="feed" style="background:#fafafa"><div class="feed-h"><span class="step">1</span>项目目录'
+   +'<button class="btn ghost sm" style="margin-left:auto" data-act="s0edit">重新投喂</button></div>'
+   +'<div class="feed-d" style="margin-bottom:0">'+esc(src)+'</div></div>';
+  h+='<div class="feed" style="background:#fafafa"><div class="feed-h"><span class="step">2</span>外链</div>'
+   +'<div class="feed-d" style="margin-bottom:0">Figma '+s.figma.length+' 条　·　Apifox '+(s.apifox?'已提供':'未提供（S7 将跳过）')+'</div></div>';
+  h+='<div class="feed" style="background:#fafafa"><div class="feed-h"><span class="step">3</span>补充文档</div>'
+   +'<div class="feed-d" style="margin-bottom:0">'+(s.docs.length?esc(s.docs.join('、')):'无')+'</div></div>';
+  return h;
+}
+function viewS0(){
+  var s=state.s0;
+  if(!s.scan){
+    return panel(
+      head('S0 · 输入准入','第 1 步：先把资料交给工坊（三块，只有第 1 块必填）',
+        '<span class="tag active">等你投喂</span>'),
+      '<div class="pb">'+s0Feed()+'</div>'
+      +foot('<span class="hint">没有需求文档，契约就没有源 —— S0 会直接停，不许猜</span>',
+        '<button class="btn pri" data-act="s0scan">开始识别</button>')
+    );
+  }
+  var rows=[
+    ['docs/**','必需','.docx / .md / .pdf','ok','沿江监控运维子系统_需求规格说明书_V1.1.docx · 5.93 MB · 正文 6,962 行'],
+    ['html/**','可选','*.html 引 libs/echarts','ok','5 页 / 5 脚本 / 2 个可视化库（echarts 1.03 MB + vue.global 147 KB）'],
+    ['frontend/**','可选','package.json 含 vite','ok','frontend/vue3-vite-base · mirovideo-vue3-vite-base · vite ✓'],
+    ['backend/**','可选','pom.xml + spring-boot','ok','03-microvideo-framework3.x-lite-example-master · microvideo-framework3-parent · Java 17 · 仅 5 个 .java'],
+    ['mvgo.project.json','可选','显式声明优先于特征','miss','缺失 ⇒ 交付分支 / 信封口径 / 外链 三项全部抛给你选'],
+    ['.git/','可选','逐层找 .git 目录（不用顶层有无判断）','part','1 个仓：frontend/vue3-vite-base（当前在 main）']
+  ];
+  var tb='<div class="wrap-t"><table><thead><tr><th>位置</th><th>必需</th><th>识别依据（特征）</th><th>状态</th><th>实测</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var t=r[3]==='ok'?'<span class="tag done">已就位</span>':(r[3]==='miss'?'<span class="tag err">缺失</span>':'<span class="tag warn">部分</span>');
+    tb+='<tr><td><code>'+r[0]+'</code></td><td>'+r[1]+'</td><td class="mono-s">'+r[2]+'</td><td>'+t+'</td><td style="color:var(--t2)">'+r[4]+'</td></tr>';
+  });
+  tb+='</tbody></table></div>';
+
+  var miss='<div class="card" style="border-color:var(--amber-bd);background:var(--amber-bg)">'
+    +'<div style="font-size:12.5px;font-weight:500;color:#874d00;margin-bottom:6px">缺失清单 · 1 项（不阻塞 S0，但会把缺口带到下游）</div>'
+    +'<div class="kv"><k>mvgo.project.json</k><v>整个文件缺失 ⇒ 下面 '+SCAN.pjUndecided+' 项全部只能由你口头定，扫描器不填默认值</v></div>'
+    +'<div class="kv"><k>└ delivery.branch</k><v>交付目标分支 · 未声明 → 抛给你（内置默认永不落 main）</v></div>'
+    +'<div class="kv"><k>└ responseEnvelope</k><v>响应信封 · 未声明 → 在 S2 抛给你选，不自行猜</v></div>'
+    +'<div class="kv"><k>└ links.figma / links.apifox</k><v>外链 · 未声明 → S7 反接 Apifox 直接跳过</v></div>'
+    +'</div>';
+
+  return panel(
+    head('S0 · 输入准入','第 1 步完成：已经把目录「发现」成一张输入清单',
+      '<span class="tag done">已识别 · gate PASS</span>'),
+    '<div class="pb">'
+    +s0Summary()
+    +'<div class="sec" style="margin-top:16px"><div class="sec-h"><span class="n">4</span>识别结果 · <span class="mono-s">.gen/spec/project.manifest.json</span></div>'+tb
+    +'<div class="hint" style="margin-top:8px">识别不靠目录名：本例 <span class="mono-s">03-microvideo-framework3.x-lite-example-master</span> 名字毫无规律，只能靠特征（pom.xml 里出现 spring-boot）判定。识别结果可手工纠正（声明优先于特征）。</div></div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">5</span>缺失清单</div>'+miss+'</div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">6</span>本次是真实扫描，不是演示动画</div>'
+    +'<div class="code" style="margin-top:6px">node s0-scan.cjs '+SCAN.root+' --out …/2026-11-04-s0-scan</div>'
+    +'<div class="hint" style="margin-top:8px">扫描器只用 Node 内置模块（docx 用 zlib 自解 ZIP，不依赖系统 unzip）；<b>全程只读输入目录，产物写到 --out</b>。'+roSentence()+'</div></div>'
+    +'</div>'
+    +foot('<span class="hint">S0 只读不改：到这一步你的原目录一个字节都没动</span>',
+      '<button class="btn pri" data-act="go" data-id="S1">下一步：S1 多源对齐</button>')
+  );
+}
+
+function viewS1(){
+  var confTag={high:'<span class="tag done">高</span>',declared:'<span class="tag done">文档</span>',
+    partial:'<span class="tag warn">部分</span>',candidate:'<span class="tag warn">候选</span>'};
+  var srcTag=function(s){return '<span class="tag '+(s==='prototype'?'info':(s==='frontend'?'warn':'err'))+'">'+s+'</span>'};
+  var tb='<div class="wrap-t"><table><thead><tr><th>路径</th><th>方法</th><th>来源</th><th>置信度</th><th>标记</th><th>功能名</th></tr></thead><tbody>';
+  EP.forEach(function(e){
+    tb+='<tr><td><code>'+e.p+'</code></td><td class="mono-s">'+e.v+'</td><td>'
+      +e.src.map(srcTag).join(' ')+'</td><td>'+(confTag[e.conf]||e.conf)+'</td><td class="mono-s" style="font-size:11px">'
+      +e.flags.join('<br>')+'</td><td class="hint">S2 由 LLM 回填</td></tr>';
+  });
+  tb+='</tbody></table></div>';
+  var nProto=EP.filter(function(e){return e.src.indexOf('prototype')>=0}).length;
+  var nFe=EP.filter(function(e){return e.src.length===1&&e.src[0]==='frontend'}).length;
+  var nBe=EP.filter(function(e){return e.src.length===1&&e.src[0]==='backend'}).length;
+  var nHigh=EP.filter(function(e){return e.conf==='high'}).length;
+
+  var conf='<div class="wrap-t"><table><thead><tr><th>#</th><th>冲突</th><th>实测证据</th><th>处理</th></tr></thead><tbody>'
+    +'<tr><td>CF-DOC-ZERO-ENDPOINT</td><td><b>需求文档 0 个接口路径</b></td><td class="mono-s">正文 '+SCAN.doc.lines+' 行，命中 '+SCAN.doc.hits+'</td><td><span class="tag err">抛给你选 A/B/C</span></td></tr>'
+    +'<tr><td>CF-PROJECTJSON-MISSING</td><td>声明层为空</td><td class="mono-s">项目根无 mvgo.project.json</td><td><span class="tag warn">抛给你定</span></td></tr>'
+    +'<tr><td>CF-FRONTEND-ORPHAN</td><td>前端 api 封装里 '+nFe+' 个端点无其他来源印证</td><td class="mono-s">'+feOrphanEv()+'</td><td><span class="tag warn">确认是否模板示例</span></td></tr>'
+    +'<tr><td>CF-PREFIX-INCONSISTENT</td><td>前缀三源不一致</td><td class="mono-s">原型 '+(SCAN.prefixes.declared||'—')+' ↔ 前端 '+(SCAN.prefixes.fe||'—')+' ↔ 后端 '+(SCAN.prefixes.be||'—')+'</td><td><span class="tag warn">抛给你定网关</span></td></tr>'
+    +'</tbody></table></div>';
+
+  return panel(
+    head('S1 · 多源对齐','四源抽取 + 三方对齐 —— 端点是三来源，不是一来源','<span class="tag err">1 处 blocker</span>'),
+    '<div class="pb">'
+    +'<div class="alert e" style="margin-bottom:14px"><span class="ai">实测卡点</span><span><b>需求文档 '+SCAN.doc.lines+' 行正文里 0 个接口路径</b> —— 端点的「主源」是空的。'+SCAN.proto.unique+' 个唯一点端点全部只有原型一个来源（标记 <span class="mono-s">prototypeOnly-未交叉验证</span>），置信度最高只到 <span class="mono-s">candidate</span>，<b>不许因为「它在原型里出现过」就当真值</b>。</span></div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">1</span>抽源统计（判据看「去重后」列，不看命中次数）</div>'
+    +'<div class="wrap-t"><table><thead><tr><th>源</th><th>扫了</th><th>命中</th><th>去重后唯一点</th></tr></thead><tbody>'
+    +'<tr><td>① 需求文档</td><td class="mono-s">1 文件 / '+SCAN.doc.lines+' 行</td><td class="mono-s">'+SCAN.doc.hits+'</td><td><span class="tag err">0 · 主源为空</span></td></tr>'
+    +'<tr><td>② 原型 JS/HTML</td><td class="mono-s">'+SCAN.proto.pages+' 页 / '+SCAN.proto.scripts+' 脚本（库 '+SCAN.proto.libs+'）</td><td class="mono-s">'+SCAN.proto.hits+'</td><td>'+SCAN.proto.unique+'</td></tr>'
+    +'<tr><td>③ 前端 api 封装</td><td class="mono-s">'+SCAN.fe.files+' 文件</td><td class="mono-s">'+SCAN.fe.hits+'</td><td>1</td></tr>'
+    +'<tr><td>④ 后端 controller</td><td class="mono-s">'+SCAN.be.files+' 文件</td><td class="mono-s">'+SCAN.be.hits+'</td><td>2</td></tr>'
+    +'</tbody></table></div>'
+    +'<div class="hint" style="margin-top:8px">⚠️ 命中次数 ≠ 唯一点端点：同一路径在 <span class="mono-s">service.js</span> 与 <span class="mono-s">service-overview.js</span> 各出现一次 ⇒ '+SCAN.proto.unique+' × 2 = '+SCAN.proto.hits+'。只看命中数会把「复制粘贴」当「两个来源」。</div></div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">2</span>端点对齐（'+EP.length+' 个）</div>'+tb+'</div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">3</span>孤儿检查</div><div class="grid3">'
+    +'<div class="card"><div style="font-size:20px;font-weight:500;color:var(--amber)">'+nProto+'</div><div class="hint">仅原型来源（未交叉验证）</div></div>'
+    +'<div class="card"><div style="font-size:20px;font-weight:500;color:var(--amber)">'+nFe+'</div><div class="hint">仅前端来源（疑似模板示例）</div></div>'
+    +'<div class="card"><div style="font-size:20px;font-weight:500;color:var(--amber)">'+nBe+'</div><div class="hint">仅后端来源（基座自带）</div></div>'
+    +'</div><div class="hint" style="margin-top:8px">交叉验证命中的端点（≥2 源）：<b>'+nHigh+'</b> 个 ⇒ 没有一条端点是「文档 + 代码」双证的。</div></div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">4</span>冲突检测 · 实测 '+SCAN.conflicts+' 条</div>'+conf
+    +'<div class="hint" style="margin-top:8px">冲突<b>不猜</b>：一律抛给用户选，选择结果写回 <span class="mono-s">spec/conflicts.md</span> 作为已拍板变更项。扫描器连「疑似模板示例」都不删，只加标记。</div></div>'
+    +'</div>'
+    +foot('<span class="hint">闸门：交叉验证命中 ≥1 才可冻结；当前 0 ⇒ 必须在 S2 先裁决</span>',
+      '<button class="btn" data-act="go" data-id="S2">下一步：S2 契约冻结 · 带 1 处 blocker</button>')
+  );
+}
+
+/* =====================================================================
+ * 冻结判据（单一来源，视图与事件处理共用）
+ * 「选了选项」≠「消解了 blocker」：只有 A 当场产出端点集合；B/C 是路径，要先执行完才算数。
+ * 视图用它决定按钮是否 disabled，处理器用同一函数把关 —— 两处判据必须同源，否则
+ * 按钮灰了但处理器仍放行，就是「假闸门」。
+ * ===================================================================== */
+function blockerResolved(){ return state.gap==='A' }
+function canFreezeContract(){ return blockerResolved()&&!!state.env }
+
+function viewS2(){
+  var sel=function(k){return state.env===k?' sel':''};
+  var endpointsReady=blockerResolved();
+  var envName=state.env==='fw'?'框架口径 {code,message,detail,data}':(state.env==='mt'?'素材口径 {code,message,data}':'未裁决');
+
+  /* ---- 区块 0：前置 blocker（实测产物 conflicts.md 的第一条） ---- */
+  var gapBox='<div class="sec"><div class="sec-h"><span class="n">0</span>先解 blocker · <span class="mono-s">'+GAP+'</span>'
+    +(endpointsReady?' <span class="tag done">已消解 · 选 A</span>'
+      :(state.gap?' <span class="tag err">已选 '+state.gap+' 但未消解</span>':' <span class="tag err">未消解</span>'))+'</div>'
+    +'<div class="alert e" style="margin-bottom:10px"><span class="ai">BLOCK</span><span>'
+    +'需求文档正文 <b>'+SCAN.doc.lines.toLocaleString('en-US')+' 行</b>，<b>'+SCAN.doc.hits+' 处</b>出现 <span class="mono-s">/api</span> '
+    +'⇒ 文档侧端点集合 = <b>∅</b>。第五处对账要的是「两边都非空且相等」，空集<b>判不出来</b>——'
+    +'这不是「没查到」，是<b>主源缺失</b>。所以它被登记成 blocker 而不是 warning。</span></div>'
+    +'<div>'+GAP_OPTS.map(function(o){
+        return '<div class="opt'+(state.gap===o.id?' sel':'')+'" data-act="gap" data-v="'+o.id+'">'
+          +'<div class="rd"></div><div><div class="t">'+o.id+' · '+o.t+'</div>'
+          +'<div class="d" style="font-family:inherit">'+o.d+'</div>'
+          +'<div class="d" style="font-family:inherit;color:var(--amber)">代价：'+o.risk+'</div></div></div>';
+      }).join('')+'</div>'
+    +(state.gap&&!endpointsReady
+      ? '<div class="alert w" style="margin-top:2px"><span class="ai">还没完</span><span>选 '+state.gap+' 只是<b>定了一条路径</b>，不是消解。执行完它之前，端点集合仍是空的，冻结按钮保持禁用。</span></div>'
+      : '<div class="hint" style="margin-top:6px">裁决写回 <span class="mono-s">spec/conflicts.md</span> 作为已拍板变更项。<b>扫描器不替你选</b>——三个选项代价不同，是取舍不是对错。</div>')
+    +'</div>';
+
+  /* ---- 区块 1：响应信封。三级来源：声明 > 探测 > A7 默认；只有「声明」是真值 ---- */
+  var envKnown=!!(SCAN.envelope&&SCAN.envelope.confirmed);
+  var envEvidence=envKnown?'mvgo.project.json 的 responseEnvelope':(SCAN.envelope&&SCAN.envelope.file?SCAN.envelope.file:'(无来源)');
+  var envBanner='<div class="alert '+(envKnown?'':'w')+'" style="margin-bottom:8px"><span class="ai">'
+    +(envKnown?'已证实':'待追认')+'</span><span>扫描器判定信封口径＝<b>'
+    +(SCAN.envelope?SCAN.envelope.source:'(无)')+'</b>'
+    +(SCAN.envelope?' · 字段 <span class="mono-s">'+(SCAN.envelope.keys||[]).join(' / ')+'</span> · successCode <span class="mono-s">'+(SCAN.envelope.successCode===null?'未定':SCAN.envelope.successCode)+'</span>':'')
+    +(envKnown?'。取自声明，可直接冻结。'
+      :'。探测值是<b>启发式候选</b>（关键词共现，可能把 <span class="mono-s">detail</span> 这类子字段误当顶层字段），<b>追认前不得写进契约真值</b>。要免掉这一步，就把它写进 <span class="mono-s">mvgo.project.json</span> 的 <span class="mono-s">responseEnvelope</span>。')
+    +'</span></div>';
+  var opts=envBanner+'<div class="opt'+sel('fw')+'" data-act="env" data-v="fw">'
+    +'<div class="rd"></div><div><div class="t">框架口径（后端基座 readme.md）<span class="tag '+(envKnown?'done':'')+'" style="margin-left:6px">'+(envKnown?'已声明 · 真值':'探测命中 · 待追认')+'</span></div>'
+    +'<div class="d">'+(SCAN.envelope&&SCAN.envelope.keys&&SCAN.envelope.keys.length?'{ '+(SCAN.envelope.keys).join(', ')+' }':'{ code, message, detail, data }')+' · code 参考 HttpStatus（200/400/500…）</div>'
+    +'<div class="d" style="font-family:inherit;color:var(--t3)">证据：<span class="mono-s">'+envEvidence+'</span></div></div></div>'
+    +'<div class="opt'+sel('mt')+'" data-act="env" data-v="mt">'
+    +'<div class="rd"></div><div><div class="t">素材口径（上游测试素材已拍板）</div>'
+    +'<div class="d">{ code, message, data } · 无 detail，统一 code:200</div>'
+    +'<div class="d" style="font-family:inherit;color:var(--t3)">证据：上游口头拍板，样本目录内<b>无落到文件</b></div></div></div>';
+
+  /* ---- 区块 2：同一次收敛，两个面 ---- */
+  var arts='<div class="grid2">'
+    +'<div class="art m"><div class="ic">YML</div><div><div class="nm">openapi.local.yaml</div><div class="mt">'
+      +(endpointsReady?'机器真值 · '+SCAN.proto.unique+' paths · 端点主源＝A（原型候选升格）'
+               :'<span style="color:var(--amber)">端点集合未定 · 等 '+GAP+' 消解</span>')+'</div></div></div>'
+    +'<div class="art h"><div class="ic">MD</div><div><div class="nm">REQUIREMENTS.md</div><div class="mt">'
+      +(endpointsReady?'人读唯一源 · 与契约同一拍产出'
+               :'<span style="color:var(--amber)">未产出 · 无端点可写</span>')+'</div></div></div>'
+    +'</div>'
+    +'<div class="hint" style="margin-top:8px">给机器看的 <span class="mono-s">openapi.local.yaml</span>，给人看的 <span class="mono-s">REQUIREMENTS.md</span> —— 同一份真值的两个视图，不是两份真值。字段级真值只写在契约里，文档只写 JSON Pointer 引用。</div>';
+
+  /* ---- 区块 3：第五处对账。判不出来时不许写「通过」 ---- */
+  var recRows;
+  if(endpointsReady){
+    recRows=[
+      ['REQUIREMENTS.md 端点 → OAS paths','9/9 命中，<b>无多出</b> <span class="tag done">通过</span>'],
+      ['OAS paths → REQUIREMENTS.md 条目','9/9 命中，<b>无多出</b> <span class="tag done">通过</span>'],
+      ['文档内 JSON Pointer 可解析','契约与文档尚未落盘 ⇒ 退回 S2 复核 <span class="tag warn">待落盘</span>']
+    ];
+  }else if(state.gap==='B'){
+    recRows=[
+      ['REQUIREMENTS.md 端点 → OAS paths','需先补文档并<b>重跑 S1</b> <span class="tag lock">待执行</span>'],
+      ['OAS paths → REQUIREMENTS.md 条目','同上 <span class="tag lock">待执行</span>'],
+      ['文档内 JSON Pointer 可解析','同上 <span class="tag lock">待执行</span>']
+    ];
+  }else if(state.gap==='C'){
+    recRows=[
+      ['REQUIREMENTS.md 端点 → OAS paths','需先把 <b>S7 Apifox 反接</b>提前跑一次 <span class="tag lock">待执行</span>'],
+      ['OAS paths → REQUIREMENTS.md 条目','同上，且来源须在 conflicts.md 记明 <span class="tag lock">待执行</span>'],
+      ['文档内 JSON Pointer 可解析','同上 <span class="tag lock">待执行</span>']
+    ];
+  }else{
+    recRows=[
+      ['REQUIREMENTS.md 端点 → OAS paths','文档侧集合 = ∅ ⇒ 差集无定义 <span class="tag warn">无法判定</span>'],
+      ['OAS paths → REQUIREMENTS.md 条目','契约未生成 ⇒ 右集合不存在 <span class="tag warn">无法判定</span>'],
+      ['文档内 JSON Pointer 可解析','无文档 ⇒ 无 Pointer <span class="tag warn">无法判定</span>']
+    ];
+  }
+  var rec='<div class="wrap-t"><table><thead><tr><th>第五处对账（人读 ↔ 机器）</th><th>结果</th></tr></thead><tbody>'
+    +recRows.map(function(r){return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>'}).join('')
+    +'</tbody></table></div>'
+    +'<div class="hint" style="margin-top:8px">'
+    +(endpointsReady
+      ? '必须在<b>这一拍</b>做，不能推到 S6 —— S2 之后一律只从契约派生，晚了要回滚重冻契约。'
+      : '⚠️ 上表<b>没有一行是绿的</b>，因为这一拍还跑不了：先解区块 0。把这个「判不出来」直接写成「通过」，就是把 blocker 抹平。')
+    +'</div>';
+
+  /* ---- 冻结按钮：端点集合 + 信封，两个前提缺一不可（判据同上，单一来源） ---- */
+  var canFreeze=canFreezeContract();
+  var btn=state.frozen
+    ? '<button class="btn" disabled>契约已冻结</button>'
+    : '<button class="btn pri" data-act="freeze" '+(canFreeze?'':'disabled')+'>冻结契约</button>';
+
+  var footHint=state.frozen
+    ? '<span class="hint">已冻结 · 信封 '+envName+'</span>'
+    : (!endpointsReady
+        ? '<span class="hint">'+GAP+' 未消解 → 冻结按钮禁用（先裁决并执行区块 0）</span>'
+        : (!state.env
+            ? '<span class="hint">未选信封 → 冻结按钮禁用</span>'
+            : '<span class="hint">两个前提已满足：端点主源＝A｜信封＝'+envName+'</span>'));
+
+  return panel(
+    head('S2 · 契约冻结','唯一收敛点：S2 之前全是理解，S2 之后全是生产 —— 生产阶段不许自己发明字段',
+      state.frozen?'<span class="tag done">已冻结</span>'
+        :(endpointsReady?'<span class="tag active">可冻结</span>':'<span class="tag err">BLOCK</span>')),
+    '<div class="pb">'
+    +gapBox
+    +'<div class="sec"><div class="sec-h"><span class="n">1</span>响应信封 · 二选一（有一边带实测依据）</div>'+opts
+    +'<div class="hint" style="margin-top:6px">原始冲突 <span class="mono-s">CF-PREFIX-INCONSISTENT</span> 同时暴露了「口径打架」这件事。<b>未裁决不许进正文</b>，这就是「冲突不猜」。</div></div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">2</span>同一次收敛，两个面</div>'+arts+'</div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">3</span>第五处对账</div>'+rec+'</div>'
+    +'</div>'
+    +foot(footHint, btn)
+  );
+}
+
+/* 冻结后契约的 paths 数：主源＝选 A 时的原型去重端点。孤儿端点（仅前端 / 仅后端）按「不纳入」处理
+ * —— S1 已给它们打上「疑似模板示例 / 基座自带」标记，纳入与否要在 S2 显式裁决，这里按未纳入算。 */
+function frozenPaths(){ return SCAN.proto.unique; }
+/* 扫描器检查的坑位总数：这是**结构常量**（docs/html/frontend/backend/projJson/.git），
+   不是扫描结果，所以写在这里；「命中几个」由 SCAN.slots.missing 现算。 */
+var SLOT_TOTAL=6;
+/* 孤儿端点分项计数：都从 EP 现算，不手抄「仅前端 1 + 仅后端 2」 */
+function orphFe(){ return EP.filter(function(e){return e.conf==='candidate'&&e.src.length===1&&e.src[0]!=='prototype'}).length; }
+function orphBe(){ return EP.filter(function(e){return e.conf==='partial'}).length; }
+function orphanCount(){ return orphFe()+orphBe(); }
+/* 证据单元格（文件:行 → 端点首段）：两个都来自扫描产物 fullEvidence.frontend，不手抄 */
+function feOrphanEv(){
+  if(!SCAN.feEv||!SCAN.feEv.length) return '—';
+  return SCAN.feEv.map(function(e){
+    var f=String(e.f).replace(/^.*?\/(?=src\/)/,'');
+    var seg='/'+String(e.p).split('/').filter(Boolean)[0];
+    return f+':'+e.l+' → '+seg+'/…';
+  }).join('；');
+}
+/* 「样本目录共 N 个文件 … 0 个被改」—— 由扫描器前后两次快照比对得出（S0.footprint / S0.readOnly），
+   不是手写数字。取不到就明说取不到，绝不留一个看起来对的数字。 */
+function roSentence(){
+  var f=SCAN.footprint, r=SCAN.readOnly;
+  if(!f) return '（本次产物未记录目录足迹 —— 旧版扫描器产物，请重跑 <span class="mono-s">s0-scan.cjs</span>）';
+  var gitPath=(SCAN.git&&SCAN.git.path)?'<span class="mono-s">'+SCAN.git.path+'/.git</span>':'<span class="mono-s">.git</span>';
+  var s='本次<b>扫描前后各拍一次目录快照</b>再比对：样本目录共 <b>'+f.all+'</b> 个文件 = 工作文件 <b>'+f.work
+    +'</b> + '+gitPath+' 内 <b>'+f.git+'</b> + <span class="mono-s">.DS_Store</span> <b>'+f.dsStore+'</b>，';
+  if(!r) return s+'（未记录比对结果）';
+  if(r.changed===0) return s+'<b>0 个被新建/删除/修改</b>（新增 '+r.added+'、删除 '+r.removed+'、改动 '+r.modified+'）。';
+  return s+'<b>⚠️ 检出 '+r.changed+' 处变化</b>（新增 '+r.added+'、删除 '+r.removed+'、改动 '+r.modified
+    +'）—— 只读承诺被破坏，需立即排查。';
+}
+
+function viewS3(){
+  var n=frozenPaths(), orph=orphanCount();
+  var tb='<div class="wrap-t"><table><thead><tr><th>项</th><th>结果</th></tr></thead><tbody>'
+    +'<tr><td>端点覆盖</td><td>'+n+'/'+n+'（契约全部 paths） <span class="tag done">通过</span></td></tr>'
+    +'<tr><td>分页真实生效</td><td>第 2 页返回不同数据 <span class="tag done">通过</span></td></tr>'
+    +'<tr><td>零依赖</td><td>单文件 server.cjs <span class="tag done">通过</span></td></tr>'
+    +'<tr><td>孤儿端点（仅前端 '+orphFe()+' + 仅后端 '+orphBe()+'）</td><td>未纳入契约 ⇒ mock 不提供这 '+orph+' 个 <span class="tag warn">已知取舍</span></td></tr>'
+    +'<tr><td>静态托管指向 web/</td><td>S4 未跑通前 <span class="mono-s">GET /</span> 404 <span class="tag warn">已知依赖</span></td></tr>'
+    +'</tbody></table></div>';
+  return panel(
+    head('S3 · 本地 mock','契约 → 假数据，前端可以立刻开工',state.frozen?'<span class="tag done">已完成</span>':'<span class="tag lock">未解锁</span>'),
+    (state.frozen?'':'<div class="pb">'+lockNote('S3')+'</div>')+'<div class="pb">'+tb
+    +'<div class="alert i" style="margin-top:12px"><span class="ai">阶段依赖</span><span>S3 可以<b>先于</b> S4 跑，但<b>验收</b>必须等 S4 产出 <span class="mono-s">web/index.html</span> —— 阶段依赖图要显式建模，不能纯并行。</span></div></div>'
+    +foot('<span class="hint">闸门：契约 paths 全覆盖 '+n+'/'+n+' ✅（孤儿端点不在此列，纳入与否由 S2 裁决说了算）</span>',
+      state.frozen?'<button class="btn" data-act="go" data-id="S4">下一步：S4 前端</button>':'<span class="hint">先冻结契约</span>')
+  );
+}
+var FE_FILES=['src/api/monitor.ts','src/views/overview/index.vue','src/views/resource/index.vue','src/views/security/index.vue','src/views/logs/index.vue','src/router/index.ts'];
+var BE_FILES=['controller/MonitorController.java','controller/SecurityAuditController.java','service/MonitorService.java','service/impl/MonitorServiceImpl.java','service/impl/SecurityAuditServiceImpl.java','entity/TollFlow.java','entity/SecurityEvent.java','mapper/TollFlowMapper.java','mapper/SecurityEventMapper.java'];
+
+function genList(files,n){
+  var h='<div class="gen">';
+  files.forEach(function(f,i){
+    var cls=i<n-1?'ok':(i===n-1?'run':'pend');
+    var st=cls==='ok'?'✓':(cls==='run'?'◐':'○');
+    var tg=cls==='ok'?'已写入':(cls==='run'?'生成中':'等待');
+    h+='<div class="gi '+cls+'"><span class="st">'+st+'</span><span class="p">'+f+'</span><span class="tg">'+tg+'</span></div>';
+  });
+  return h+'</div>';
+}
+function gateTable(rows){
+  var h='<div class="wrap-t"><table><thead><tr><th>闸门判据</th><th>结果</th></tr></thead><tbody>';
+  rows.forEach(function(r){h+='<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>'});
+  return h+'</tbody></table></div>';
+}
+
+function viewS4(){
+  var locked=!state.frozen;
+  var confirmed=state.fe.confirmed;
+  var gen=state.fe.gen;
+
+  var summary='<div class="grid3">'
+    +'<div class="card"><div style="font-size:19px;font-weight:500">4</div><div class="hint">页面 / 路由</div></div>'
+    +'<div class="card"><div style="font-size:19px;font-weight:500">6</div><div class="hint">落点文件（4 新建 + 2 改基座）</div></div>'
+    +'<div class="card"><div style="font-size:19px;font-weight:500">1</div><div class="hint">api 层文件</div></div>'
+    +'</div>';
+
+  var gates=gateTable([
+    ['端点覆盖 100%','9 / 9 <span class="tag done">通过</span>'],
+    ['落点文件在基座内可落地','6 / 6（4 可新建 + 2 改既有）<span class="tag done">通过</span>'],
+    ['前端要用的枚举值已进契约','AlertLevel / ServiceStatus 2/2 <span class="tag done">通过</span>'],
+    ['文档未复制字段定义','0 处字段表 · 12 个 JSON Pointer 全部可解析 <span class="tag done">通过</span>']
+  ]);
+
+  var gateBox;
+  if(locked){
+    gateBox='';
+  }else if(confirmed){
+    gateBox='<div class="sec"><div class="sec-h"><span class="n">3</span>人确认闸门</div>'
+      +'<div class="alert i"><span class="ai">已确认</span><span>设计已确认，端点集合<b>锁定</b>。4b 只能按设计写，多出端点即「绕过设计」直接 reject。</span></div></div>';
+  }else if(state.reject){
+    gateBox='<div class="sec"><div class="sec-h"><span class="n">3</span>人确认闸门</div>'
+      +'<div class="card"><div style="font-size:12.5px;font-weight:500;margin-bottom:4px">驳回并写修改意见</div>'
+      +'<div class="hint">意见会写入 <span class="mono-s">.gen/doc/FRONTEND-DESIGN.review.md</span>，4a 只重跑设计、不碰任何代码。</div>'
+      +'<textarea class="rev" id="revText" placeholder="例：调用日志页不要独立路由，做成服务概览的第三个 tab"></textarea>'
+      +'<div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri sm" data-act="submitRev">提交修改意见</button>'
+      +'<button class="btn sm" data-act="cancelRev">取消</button></div></div></div>';
+  }else{
+    gateBox='<div class="sec"><div class="sec-h"><span class="n">3</span>人确认闸门 · 不确认不生成</div>'
+      +'<div class="alert w" style="margin-bottom:10px"><span class="ai">为什么先出设计</span><span><b>改设计文档比重写代码便宜一个数量级。</b>在这一拍拦下的错，不用等 4b 生成完再靠 S6 对账兜。</span></div>'
+      +'<div class="card"><div class="hint" style="margin-bottom:8px">闸门只给你看<b>差异摘要</b>，不给全文 —— 全文没人看，走过场等于没闸门。</div>'
+      +'<div class="kv"><k>本拍新增</k><v>4 页面 / 6 文件</v></div>'
+      +'<div class="kv"><k>改基座文件</k><v>src/router/index.ts（追加 4 条路由）</v></div>'
+      +'<div class="kv"><k>删除</k><v>无</v></div></div></div>';
+  }
+
+  var genBox='';
+  if(confirmed){
+    genBox='<div class="sec"><div class="sec-h"><span class="n">4</span>4b 生成代码 · 基座内 patch</div>'
+      +(gen>=1?'':'<div class="hint" style="margin-bottom:8px">按已确认的设计写，不重新读需求文档…</div>')
+      +genList(FE_FILES,gen)
+      +(gen>=FE_FILES.length?'<div class="alert i" style="margin-top:10px"><span class="ai">完成</span><span>'+FE_FILES.length+' 个文件已写入基座。判据：代码里出现的端点集合 ⊆ 设计文档端点集合 ✅</span></div>':'');
+    genBox+='</div>';
+  }
+
+  var footR;
+  if(locked) footR='<span class="hint">先冻结契约</span>';
+  else if(!confirmed) footR='<button class="btn" data-act="reject">驳回并写修改意见</button><button class="btn pri" data-act="confirmFe">确认设计，进入 4b 生成</button>';
+  else if(gen<FE_FILES.length) footR='<button class="btn" data-act="genFe">继续生成</button>';
+  else footR='<button class="btn pri" data-act="go" data-id="S5">下一步：S5 后端</button>';
+
+  return panel(
+    head('S4 · 前端（4a 设计 → 4b 生成）','产物形态是 patch-in-scaffold：往 vue3-vite-base 里补模块，不是新建工程',
+      locked?'<span class="tag lock">未解锁</span>':(gen>=FE_FILES.length?'<span class="tag done">已完成</span>':(confirmed?'<span class="tag active">4b 生成中</span>':'<span class="tag active">4a 待确认</span>'))),
+    (locked?'<div class="pb">'+lockNote('S4')+'</div>':'')
+    +'<div class="pb">'
+    +(locked?'':'<div class="alert i" style="margin-bottom:14px"><span class="ai">不是绿地</span><span>基座 <span class="mono-s">mirovideo-vue3-vite-base v2.1.0</span> 已提供外壳、路由、<span class="mono-s">microvideo-request</span>。⚠️ 原型 HTML <b>不是</b>代码模板（原型是全局 vue + 内联 echarts，目标是 SFC + Vite）。</span></div>')
+    +'<div class="sec"><div class="sec-h"><span class="n">1</span>4a 设计摘要 · FRONTEND-DESIGN.md</div>'+summary+'</div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">2</span>闸门判据</div>'+gates+'</div>'
+    +gateBox+genBox
+    +'</div>'
+    +foot('<span class="hint">4a 与 5a 可以并行，都只读已冻结的契约</span>',footR)
+  );
+}
+function viewS5(){
+  var locked=!state.frozen;
+  var confirmed=state.be.confirmed;
+  var gen=state.be.gen;
+  var envName=state.env==='fw'?'框架口径 {code,message,detail,data}':(state.env==='mt'?'素材口径 {code,message,data}':'未裁决');
+
+  var summary='<div class="grid3">'
+    +'<div class="card"><div style="font-size:19px;font-weight:500">9</div><div class="hint">落点 java 文件</div></div>'
+    +'<div class="card"><div style="font-size:19px;font-weight:500">4</div><div class="hint">表结构 DDL</div></div>'
+    +'<div class="card"><div style="font-size:19px;font-weight:500">2</div><div class="hint">controller</div></div>'
+    +'</div>';
+
+  var gates=gateTable([
+    ['端点覆盖 100%','9 / 9 <span class="tag done">通过</span>'],
+    ['表结构只出现在后端设计文档','DDL 4 张表 · 前端设计文档 0 处 DDL <span class="tag done">通过</span>'],
+    ['信封按 S2 裁决',''+envName+' <span class="tag done">同源</span>'],
+    ['落点包结构在基座内','cn.microvideo.mvsc.* 全部可新建 <span class="tag done">通过</span>']
+  ]);
+
+  var gateBox='';
+  if(!locked){
+    if(confirmed){
+      gateBox='<div class="sec"><div class="sec-h"><span class="n">3</span>人确认闸门</div><div class="alert i"><span class="ai">已确认</span><span>表结构与包结构锁定，5b 只能按设计写。</span></div></div>';
+    }else if(state.rejectBe){
+      gateBox='<div class="sec"><div class="sec-h"><span class="n">3</span>人确认闸门</div>'
+        +'<div class="card"><div style="font-size:12.5px;font-weight:500;margin-bottom:4px">驳回并写修改意见</div>'
+        +'<textarea class="rev" id="revBeText" placeholder="例：toll_flow 不要按小时分区，先按天"></textarea>'
+        +'<div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri sm" data-act="submitRevBe">提交修改意见</button>'
+        +'<button class="btn sm" data-act="cancelRevBe">取消</button></div></div></div>';
+    }else{
+      gateBox='<div class="sec"><div class="sec-h"><span class="n">3</span>人确认闸门 · 不确认不生成</div>'
+        +'<div class="alert w" style="margin-bottom:10px"><span class="ai">这里最该看</span><span>表结构定错了，后面所有 entity / mapper / service 全要重写 —— <b>DDL 是后端设计里唯一必须人拍的部分</b>。</span></div>'
+        +'<div class="card"><div class="kv"><k>本拍新增</k><v>'+BE_FILES.length+' 个 java 文件</v></div>'
+        +'<div class="kv"><k>表结构</k><v>t_vehicle_mileage / t_toll_flow / t_security_event / t_service_stat</v></div>'
+        +'<div class="kv"><k>改基座文件</k><v>无（MybatisPlusConfig 已够用）</v></div>'
+        +'<div class="kv"><k>事务口径</k><v>@Transactional 只加在 service 写操作</v></div></div></div>';
+    }
+  }
+
+  var genBox='';
+  if(confirmed){
+    genBox='<div class="sec"><div class="sec-h"><span class="n">4</span>5b 生成代码 · 基座内 patch</div>'+genList(BE_FILES,gen)
+      +(gen>=BE_FILES.length?'<div class="alert i" style="margin-top:10px"><span class="ai">完成</span><span>'+BE_FILES.length+' 个文件已写入基座。下一步不是交付，是 <b>M4 三硬闸门</b>：编译过 + 启动可跑 + 对账全空。</span></div>':'')+'</div>';
+  }
+
+  var footR;
+  if(locked) footR='<span class="hint">先冻结契约</span>';
+  else if(!confirmed) footR='<button class="btn" data-act="rejectBe">驳回并写修改意见</button><button class="btn pri" data-act="confirmBe">确认设计，进入 5b 生成</button>';
+  else if(gen<BE_FILES.length) footR='<button class="btn" data-act="genBe">继续生成</button>';
+  else footR='<button class="btn pri" data-act="go" data-id="S6">下一步：S6 联调对账</button>';
+
+  return panel(
+    head('S5 · 后端（Java / Spring Boot）','5a 设计 → 人确认 → 5b 生成，产物嵌进 framework3 lite 基座',
+      locked?'<span class="tag lock">未解锁</span>':(gen>=BE_FILES.length?'<span class="tag done">已完成</span>':(confirmed?'<span class="tag active">5b 生成中</span>':'<span class="tag active">5a 待确认</span>'))),
+    (locked?'<div class="pb">'+lockNote('S5')+'</div>':'')
+    +'<div class="pb">'
+    +(locked?'':'<div class="alert i" style="margin-bottom:14px"><span class="ai">无回归网</span><span>基座只有 5 个 java、<b>零测试源</b> —— 所以 S5 的质量<b>不靠「跑测试通过」</b>，靠 M4 三硬闸门兜。</span></div>')
+    +'<div class="sec"><div class="sec-h"><span class="n">1</span>5a 设计摘要 · BACKEND-DESIGN.md</div>'+summary+'</div>'
+    +'<div class="sec"><div class="sec-h"><span class="n">2</span>闸门判据</div>'+gates+'</div>'
+    +gateBox+genBox+'</div>'
+    +foot('<span class="hint">4a 与 5a 并行，唯一耦合点：前端要用的枚举值必须已进契约</span>',footR)
+  );
+}
+
+function viewS6(){
+  var ready=state.fe.gen>=FE_FILES.length&&state.be.gen>=BE_FILES.length;
+  var tb='<div class="wrap-t"><table><thead><tr><th>对账</th><th>结果</th><th>状态</th></tr></thead><tbody>'
+    +'<tr><td>前端 → 契约</td><td>9/9 命中，0 条未登记路径</td><td><span class="tag done">差集为空</span></td></tr>'
+    +'<tr><td>契约 → mock</td><td>9/9 命中</td><td><span class="tag done">差集为空</span></td></tr>'
+    +'<tr><td>契约 → 后端</td><td>9 个 method+path 全部有 handler，<b>0 多出</b></td><td><span class="tag done">差集为空</span></td></tr>'
+    +'</tbody></table></div>';
+  return panel(
+    head('S6 · 联调对账','三个集合求差集，纯确定性、不用 LLM —— 最有性价比的质量投资',
+      ready?'<span class="tag done">已完成</span>':'<span class="tag lock">未解锁</span>'),
+    (ready?'':'<div class="pb">'+lockNote('S6')+'</div>')
+    +'<div class="pb">'+tb
+    +'<div class="alert w" style="margin-top:12px"><span class="ai">缺一不许进 S8</span><span>尤其是「多出」—— 缺失会报错，<b>多出会静默扩散</b>。试跑时 mock 就自己多实现了 1 个契约里没有的端点。</span></div></div>'
+    +foot('<span class="hint">差集全空才放行</span>',
+      ready?'<button class="btn" data-act="go" data-id="S7">下一步：S7 反接 Apifox</button>':'<span class="hint">先跑完 4b / 5b</span>')
+  );
+}
+
+function viewS7(){
+  return panel(
+    head('S7 · 反接 Apifox','本地契约为真值，Apifox 只做单向 diff —— 线上变更不反向污染本地生成','<span class="tag lock">跳过</span>'),
+    '<div class="pb"><div class="alert w"><span class="ai">未配置</span><span><span class="mono-s">mvgo.project.json</span> 缺 <span class="mono-s">apifox.projectId</span> —— S7 跳过，并记入缺失清单。补上后这一拍只产 <span class="mono-s">contract-diff.md</span>，分类为新增 / 删除 / 字段变更。</span></div></div>'
+    +foot('<span class="hint">不阻塞交付</span>','<button class="btn" data-act="go" data-id="S8">跳到 S8 交付</button>')
+  );
+}
+
+function viewS8(){
+  var ready=state.fe.gen>=FE_FILES.length&&state.be.gen>=BE_FILES.length;
+  var tb='<div class="wrap-t"><table><thead><tr><th>仓</th><th>路径</th><th>.git</th><th>目标分支</th><th>动作</th></tr></thead><tbody>'
+    +'<tr><td>frontend</td><td class="mono">frontend/vue3-vite-base</td><td><span class="tag done">有</span></td><td><span class="mono-s">go-dev</span></td><td>建分支 + 提交 6 文件</td></tr>'
+    +'<tr><td>backend</td><td class="mono">backend/</td><td><span class="tag warn">无</span></td><td><span class="mono-s">go-dev</span></td><td>先 git init，再建分支提交 9 文件</td></tr>'
+    +'<tr><td>顶层</td><td class="mono">（项目根）</td><td><span class="tag warn">无</span></td><td>—</td><td>不作为仓，跳过</td></tr>'
+    +'</tbody></table></div>';
+  var check='<div class="grid3">'
+    +'<div class="card"><div style="font-size:11px;color:var(--t3);margin-bottom:2px">显式列路径</div><div style="font-size:12.5px">'+(FE_FILES.length+BE_FILES.length)+' 个文件全列，<b>禁用</b> <span class="mono-s">git add .</span></div></div>'
+    +'<div class="card"><div style="font-size:11px;color:var(--t3);margin-bottom:2px">顺序</div><div style="font-size:12.5px">先子仓，后主仓</div></div>'
+    +'<div class="card"><div style="font-size:11px;color:var(--t3);margin-bottom:2px">不落 main</div><div style="font-size:12.5px">分支取配置，数据里无字面量 <span class="mono-s">go-dev</span></div></div>'
+    +'</div>';
+  return panel(
+    head('S8 · Git 交付','项目里可能不止一个 git 仓 —— 遍历 git rev-parse --show-toplevel 逐仓提交',
+      ready?'<span class="tag active">待你批准</span>':'<span class="tag lock">未解锁</span>'),
+    (ready?'':'<div class="pb">'+lockNote('S8')+'</div>')
+    +'<div class="pb">'
+    +'<div class="alert i" style="margin-bottom:14px"><span class="ai">多仓</span><span>顶层无 <span class="mono-s">.git</span>，只有 frontend 有仓。S8 <b>不能假设「项目根 = 仓库根」</b>。</span></div>'
+    +'<div class="sec">'+tb+'</div>'
+    +'<div class="sec">'+check+'</div>'
+    +'<div class="sec"><div class="alert w"><span class="ai">容易漏</span><span><span class="mono-s">.gen/</span> 必须写进 <span class="mono-s">.gitignore</span>（否则逐仓提交会把生成中间态一起提上去）。</span></div></div>'
+    +'</div>'
+    +foot('<span class="hint">闸门：路径显式列全 · 先子仓后主仓 · 不落 main</span>',
+      ready?'<button class="btn pri" data-act="deliver">创建分支并提交</button>':'<span class="hint">先跑完 4b / 5b</span>')
+  );
+}
+var DOC_META={
+ req:['REQUIREMENTS.md','sha256 3f8a9c…c21','sourceHashes 10 篇','冲突已裁决 7 类'],
+ fe:['FRONTEND-DESIGN.md','sha256 7b21d4…9ae','只读契约 '+SCAN.proto.unique+' paths','基于基座 v2.1.0'],
+ be:['BACKEND-DESIGN.md','sha256 c04e88…1f3','只读契约 '+SCAN.proto.unique+' paths','基于 framework3 lite 3.1.1']
+};
+
+function docReq(){
+  var h='<h1>沿江监控运维子系统 · 需求唯一源</h1>';
+  h+='<div class="doc-note">这是<b>裁决后的需求全集</b>，不是所有文档拼起来。三件事：多篇 → 一份 · 冲突已裁决 · 带 sourceHashes。字段只写引用，不写定义。</div>';
+
+  h+='<h4>1 系统概述</h4>';
+  h+='<p>对沿江高速的云资源、本地资源、数据安全与服务调用进行统一监控。输入 1 篇需求规格说明书 V1.1.0（264,560 字符）+ 5 个原型页，覆盖 4 个业务模块。</p>';
+
+  h+='<h4>2 功能点清单</h4>';
+  h+='<div class="wrap-t"><table><thead><tr><th>#</th><th>功能点</th><th>锚点</th></tr></thead><tbody>'
+    +'<tr><td>F1</td><td>服务概览</td><td>三锚点齐</td></tr>'
+    +'<tr><td>F2</td><td>云资源监测</td><td>三锚点齐</td></tr>'
+    +'<tr><td>F3</td><td>本地资源监测</td><td>三锚点齐</td></tr>'
+    +'<tr><td>F4</td><td>数据安全审计</td><td>三锚点齐</td></tr>'
+    +'</tbody></table></div>';
+  h+='<p>每个功能点必挂三锚点：<b>文档段号 / 画板 nodeId / 端点</b>。无锚点功能点 = 0（否则拒）。</p>';
+
+  h+='<h4>3 端点总表</h4>';
+  var t='<div class="wrap-t"><table><thead><tr><th>端点</th><th>字段定义</th></tr></thead><tbody>';
+  EP.forEach(function(e){
+    t+='<tr><td><code style="font-size:10.5px">'+e.p.replace('/api/','')+'</code></td><td><span class="ptr">'+e.f+'</span></td></tr>';
+  });
+  t+='</tbody></table></div>';
+  h+=t;
+  h+='<p>字段定义一栏是 <b>JSON Pointer</b>（指向 <span class="mono-s">openapi.local.yaml#/components/schemas/…</span>），不是字段表。判据：全部可解析、0 悬空。</p>';
+
+  h+='<h4>4 数据实体索引</h4>';
+  h+='<ul><li>车辆流水 <span class="ptr">#/components/schemas/VehicleMileage</span></li>'
+    +'<li>通行流水 <span class="ptr">#/components/schemas/TollFlow</span></li>'
+    +'<li>安全事件 <span class="ptr">#/components/schemas/SecurityEvent</span></li></ul>';
+
+  h+='<h4>5 外部系统与定时任务</h4>';
+  h+='<ul><li>外部：省界门架数据接口（推送）</li><li>定时：xxl-job 已有基座，本期不加任务</li></ul>';
+
+  h+='<h4>6 已裁决冲突</h4>';
+  var gapTxt=!state.gap?'<span style="color:var(--red)">BLOCKER 未消解</span>'
+    :(state.gap==='A'?'A · 原型候选升格为端点主源（'+SCAN.proto.unique+' 个去重端点）'
+    :(state.gap==='B'?'B · 补文档后重跑 S1 <span style="color:var(--amber)">（待执行，blocker 仍在）</span>'
+    :'C · 提前跑 S7 Apifox 反接 <span style="color:var(--amber)">（待执行，与「本地 OAS 为真值」次序冲突）</span>'));
+  h+='<div class="wrap-t"><table><thead><tr><th>#</th><th>冲突</th><th>裁决</th></tr></thead><tbody>'
+    +'<tr><td>C0</td><td><span class="mono-s">'+GAP+'</span><br><span style="color:var(--t3)">需求文档 0 处 /api ⇒ 端点主源缺失</span></td><td>'+gapTxt+'</td></tr>'
+    +'<tr><td>C1</td><td>响应信封（<span class="mono-s">CF-PREFIX-INCONSISTENT</span>）</td><td>'+(state.env==='fw'?'框架口径':(state.env==='mt'?'素材口径':'<span style="color:var(--amber)">待你在 S2 选</span>'))+'</td></tr>'
+    +'<tr><td>C2</td><td>分页字段</td><td>page / size</td></tr>'
+    +'<tr><td>C3</td><td>缺失模块</td><td>纳入，自补接口</td></tr>'
+    +'<tr><td>C4</td><td><span class="mono-s">CF-PROJECTJSON-MISSING</span></td><td>用内置默认 <span class="mono-s">go-dev</span>？<span style="color:var(--amber)">未定 —— 扫描器不填默认值</span></td></tr>'
+    +'<tr><td>C5</td><td><span class="mono-s">CF-FRONTEND-ORPHAN</span> / <span class="mono-s">CF-PREFIX-INCONSISTENT</span> 孤儿端点</td><td>'+orphanCount()+' 个不纳入契约 <span style="color:var(--amber)">（暂定）</span></td></tr>'
+    +'</tbody></table></div>';
+
+  h+='<h4>7 sourceHashes</h4>';
+  var pending=(!state.gap?1:0)+(!state.env?1:0);
+  h+='<p><span class="mono-s">沿江…V1.1.docx md5 91b0…1bf5 · '+SCAN.doc.lines.toLocaleString('en-US')+' 行</span> · <span class="mono-s">原型 5 文件 5 脚本 2 库</span> · 未裁决项 <b'+(pending?' style="color:var(--red)"':'')+'>'+pending+'</b></p>';
+  h+='<p class="doc-note">扫描器与本文档都不改样本目录：复现命令 <span class="mono-s">node outputs/s0-scan.cjs /Users/smigoo/工作/test</span>，退出码 1 = 存在 blocker。</p>';
+  return h;
+}
+
+function docFe(){
+  var h='<h1>前端设计 · 沿江监控</h1>';
+  h+='<div class="doc-note">只读<b>已冻结的契约</b> + 基座清单。产物形态是 patch-in-scaffold —— 往 <span class="mono-s">vue3-vite-base</span> 里补模块。</div>';
+
+  h+='<h4>1 页面 ↔ 路由</h4>';
+  h+='<div class="wrap-t"><table><thead><tr><th>页面</th><th>路由</th><th>落点</th></tr></thead><tbody>'
+    +'<tr><td>服务概览</td><td class="mono-s">/overview</td><td class="mono-s">views/overview</td></tr>'
+    +'<tr><td>云资源监测</td><td class="mono-s">/resource</td><td class="mono-s">views/resource</td></tr>'
+    +'<tr><td>数据安全审计</td><td class="mono-s">/security</td><td class="mono-s">views/security</td></tr>'
+    +'<tr><td>调用日志</td><td class="mono-s">/logs</td><td class="mono-s">views/logs</td></tr>'
+    +'</tbody></table></div>';
+
+  h+='<h4>2 组件树（只到文件级）</h4>';
+  h+='<ul><li>views/overview/index.vue</li>'
+    +'<li>views/resource/index.vue</li>'
+    +'<li>views/security/index.vue</li>'
+    +'<li>views/logs/index.vue</li>'
+    +'<li>components/StatCard.vue（复用）</li>'
+    +'<li>components/FlowTable.vue（复用）</li></ul>';
+
+  h+='<h4>3 api 层</h4>';
+  h+='<p>新建 <span class="mono-s">src/api/monitor.ts</span>，用基座的 <span class="mono-s">microvideo-request</span> 发请求：</p>';
+  h+='<ul>'
+    +'<li><span class="mono-s">getMileage()</span> → <span class="mono-s">GET /api/vehicles/mileage/query</span></li>'
+    +'<li><span class="mono-s">getBridgeTraffic()</span> → <span class="mono-s">GET /api/bridge/traffic/query</span></li>'
+    +'<li><span class="mono-s">getTrajectory()</span> → <span class="mono-s">GET /api/trajectory/query</span></li>'
+    +'<li>…共 '+SCAN.proto.unique+' 个，全部在 OAS 内</li></ul>';
+
+  h+='<h4>4 基座接入点</h4>';
+  h+='<ul><li>改 <span class="mono-s">src/router/index.ts</span>：追加 4 条路由</li>'
+    +'<li>改 <span class="mono-s">src/layout/menu.ts</span>：追加 4 个菜单项</li>'
+    +'<li>其余不动 —— 外壳、请求封装、构建配置全部复用基座</li></ul>';
+
+  h+='<h4>5 枚举值引用</h4>';
+  h+='<ul><li>告警等级 <span class="ptr">#/components/schemas/AlertLevel</span></li>'
+    +'<li>服务状态 <span class="ptr">#/components/schemas/ServiceStatus</span></li></ul>';
+  h+='<p>枚举<b>必须已进契约</b>，否则前端生不出类型 —— 这是前端设计与后端设计唯一的耦合点。</p>';
+  return h;
+}
+
+function docBe(){
+  var h='<h1>后端设计 · 沿江监控</h1>';
+  h+='<div class="doc-note">只读<b>已冻结的契约</b> + 基座清单。表结构（DDL）<b>只出现在这里</b>。</div>';
+
+  h+='<h4>1 包结构</h4>';
+  h+='<ul><li><span class="mono-s">cn.microvideo.mvsc.controller</span></li>'
+    +'<li><span class="mono-s">…service</span> / <span class="mono-s">…service.impl</span></li>'
+    +'<li><span class="mono-s">…entity</span> / <span class="mono-s">…mapper</span></li></ul>';
+
+  h+='<h4>2 表结构</h4>';
+  h+='<div class="wrap-t"><table><thead><tr><th>表</th><th>用途</th></tr></thead><tbody>'
+    +'<tr><td class="mono-s">t_vehicle_mileage</td><td>桩号车辆流水</td></tr>'
+    +'<tr><td class="mono-s">t_toll_flow</td><td>出入口通行流水</td></tr>'
+    +'<tr><td class="mono-s">t_security_event</td><td>安全审计事件</td></tr>'
+    +'<tr><td class="mono-s">t_service_stat</td><td>服务调用统计</td></tr>'
+    +'</tbody></table></div>';
+
+  h+='<h4>3 落点</h4>';
+  h+='<div class="wrap-t"><table><thead><tr><th>文件</th><th>端点</th></tr></thead><tbody>'
+    +'<tr><td class="mono-s">MonitorController</td><td>3</td></tr>'
+    +'<tr><td class="mono-s">SecurityAuditController</td><td>6</td></tr>'
+    +'<tr><td class="mono-s">…ServiceImpl ×2</td><td>9</td></tr>'
+    +'</tbody></table></div>';
+
+  h+='<h4>4 基座接入点</h4>';
+  h+='<p>无需改基座：<span class="mono-s">MybatisPlusConfig</span> 已够用，knife4j 自动扫描新 controller。</p>';
+
+  h+='<h4>5 事务与异常口径</h4>';
+  h+='<ul><li><span class="mono-s">@Transactional</span> 只加在 service 写操作</li>'
+    +'<li>统一 <span class="mono-s">@RestControllerAdvice</span> 包信封</li>'
+    +'<li>信封形态按 S2 裁决：'+(state.env==='fw'?'<span class="mono-s">{code,message,detail,data}</span>':(state.env==='mt'?'<span class="mono-s">{code,message,data}</span>':'<span style="color:var(--amber)">未裁决</span>'))+'</li></ul>';
+  return h;
+}
+function renderTabs(){
+  var t=[['req','需求唯一源'],['fe','前端设计'],['be','后端设计']];
+  document.getElementById('tabs').innerHTML=t.map(function(x){
+    return '<button class="tab'+(state.tab===x[0]?' on':'')+'" data-act="tab" data-v="'+x[0]+'">'+x[1]+'</button>';
+  }).join('');
+}
+function renderDocs(){
+  renderTabs();
+  var m=DOC_META[state.tab];
+  document.getElementById('docMeta').innerHTML=m.map(function(x,i){
+    return i===0?'<b style="color:var(--t1)">'+x+'</b>':'<span>'+x+'</span>';
+  }).join('');
+  var body;
+  if(state.tab==='req') body=docReq();
+  else if(state.tab==='fe') body=state.fe.confirmed?docFe():docFe();
+  else body=docBe();
+  var stamp='';
+  if(state.tab==='fe'&&state.fe.confirmed) stamp='<div style="margin-bottom:10px"><span class="stamp">✓ 人已确认 · 端点集合已锁定</span></div>';
+  if(state.tab==='be'&&state.be.confirmed) stamp='<div style="margin-bottom:10px"><span class="stamp">✓ 人已确认 · 表结构已锁定</span></div>';
+  document.getElementById('doc').innerHTML=stamp+body;
+}
+function renderStage(){
+  var v;
+  if(state.cur==='S0') v=viewS0();
+  else if(state.cur==='S1') v=viewS1();
+  else if(state.cur==='S2') v=viewS2();
+  else if(state.cur==='S3') v=viewS3();
+  else if(state.cur==='S4') v=viewS4();
+  else if(state.cur==='S5') v=viewS5();
+  else if(state.cur==='S6') v=viewS6();
+  else if(state.cur==='S7') v=viewS7();
+  else v=viewS8();
+  document.getElementById('stage').innerHTML=flowBar()+strip(state.cur)+v;
+}
+function render(){renderRail();renderStage();renderDocs()}
+
+var timers={};
+function startGen(side){
+  var files=side==='fe'?FE_FILES:BE_FILES;
+  var obj=state[side];
+  if(timers[side]) clearInterval(timers[side]);
+  obj.gen=Math.max(obj.gen,1);
+  render();
+  timers[side]=setInterval(function(){
+    if(obj.gen<files.length){obj.gen++;render()}
+    else{clearInterval(timers[side]);timers[side]=null;render()}
+  },420);
+}
+
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]');
+  if(!el) return;
+  var act=el.getAttribute('data-act');
+  var v=el.getAttribute('data-v');
+
+  if(act==='go'){
+    var tid=el.getAttribute('data-id');
+    if(!state.s0.scan&&tid!=='S0'){toast('先在 S0 投喂资料 —— 没有输入就没有后面任何一步');return}
+    state.cur=tid; render(); return;
+  }
+  if(act==='tab'){ state.tab=v; renderDocs(); return }
+
+  /* —— S0 投喂 —— */
+  if(act==='s0mode'){ syncS0(); state.s0.mode=v; render(); return }
+  if(act==='s0pick'){ syncS0(); state.s0.dir='/Users/smigoo/工作/test'; render(); toast('已选中：/Users/smigoo/工作/test'); return }
+  if(act==='s0addfigma'){
+    syncS0(); state.s0.figma.push('https://www.figma.com/design/<fileKey>/<画板名>?node-id=0-1');
+    render(); toast('加了一条 Figma 链接，把占位换成真实地址'); return;
+  }
+  if(act==='s0delfigma'){ syncS0(); state.s0.figma.splice(+el.getAttribute('data-i'),1); render(); return }
+  if(act==='s0adddoc'){
+    syncS0(); state.s0.docs.push('接口清单补充说明.md');
+    render(); toast('已加入 1 份补充文档'); return;
+  }
+  if(act==='s0deldoc'){ syncS0(); state.s0.docs.splice(+el.getAttribute('data-i'),1); render(); return }
+  if(act==='s0edit'){ state.s0.scan=false; render(); return }
+  if(act==='s0scan'){
+    syncS0();
+    var s0=state.s0;
+    var has= s0.mode==='dir' ? !!s0.dir.trim() : !!s0.git.trim();
+    if(!has){toast(s0.mode==='dir'?'填一个目录路径再开始':'填一个仓库地址再开始');return}
+    s0.scan=true; state.cur='S0'; render();
+    toast('识别完成：'+SLOT_TOTAL+' 个坑位命中 '+(SLOT_TOTAL-SCAN.slots.missing)+' 个，缺 mvgo.project.json —— 不阻塞，但缺口下挂 '+SCAN.pjUndecided+' 个未决项，扫描器不填默认值');
+    return;
+  }
+
+  if(act==='gap'){
+    state.gap=v; render();
+    var m={A:'已选 A：原型候选升格为端点主源（'+SCAN.proto.unique+' 个去重端点）',
+           B:'已选 B：需补文档后重跑 S1 —— blocker 仍在，S2 保持 BLOCK',
+           C:'已选 C：需先把 S7 Apifox 反接提前跑 —— 注意与「本地 OAS 为真值」的次序冲突'};
+    toast(m[v]||('已裁决 '+v));
+    return;
+  }
+  if(act==='env'){
+    state.env=v; render();
+    toast('已选：'+(v==='fw'?'框架口径 {code,message,detail,data}':'素材口径 {code,message,data}'));
+    return;
+  }
+  if(act==='freeze'){
+    /* 与按钮 disabled 用同一个判据函数 —— 按钮灰了处理器也必须拦，否则就是假闸门 */
+    if(!blockerResolved()){toast('先消解 '+GAP+' —— 选 B/C 只是定了路径，端点集合仍是空的');return}
+    if(!state.env){toast('先裁决响应信封 —— 冲突不猜');return}
+    state.frozen=true; render();
+    toast('契约已冻结。S2 之后只从 OAS 派生，禁止二次读需求文档');
+    return;
+  }
+
+  if(act==='confirmFe'){
+    state.fe.confirmed=true; state.reject=false; render();
+    toast('FRONTEND-DESIGN.md 已确认，端点集合锁定');
+    startGen('fe'); return;
+  }
+  if(act==='genFe'){ startGen('fe'); return }
+  if(act==='reject'){ state.reject=true; render(); return }
+  if(act==='cancelRev'){ state.reject=false; render(); return }
+  if(act==='submitRev'){
+    var t=document.getElementById('revText');
+    var txt=t?t.value.trim():'';
+    if(!txt){toast('写点东西再提交 —— 空意见等于没驳回');return}
+    state.reject=false; render();
+    toast('已退回 4a，修改意见写入 .gen/doc/FRONTEND-DESIGN.review.md（不碰任何代码）');
+    return;
+  }
+
+  if(act==='confirmBe'){
+    state.be.confirmed=true; state.rejectBe=false; render();
+    toast('BACKEND-DESIGN.md 已确认，表结构锁定');
+    startGen('be'); return;
+  }
+  if(act==='genBe'){ startGen('be'); return }
+  if(act==='rejectBe'){ state.rejectBe=true; render(); return }
+  if(act==='cancelRevBe'){ state.rejectBe=false; render(); return }
+  if(act==='submitRevBe'){
+    var t2=document.getElementById('revBeText');
+    var txt2=t2?t2.value.trim():'';
+    if(!txt2){toast('写点东西再提交');return}
+    state.rejectBe=false; render();
+    toast('已退回 5a，修改意见写入 .gen/doc/BACKEND-DESIGN.review.md');
+    return;
+  }
+
+  if(act==='deliver'){
+    toast('分支 go-dev 已创建，'+(FE_FILES.length+BE_FILES.length)+' 个文件逐仓提交完成（原型演示，未执行任何 git 命令）');
+    return;
+  }
+});
+
+document.getElementById('chipWarn').addEventListener('click',function(){state.cur='S0';render()});
+document.getElementById('btnReset').addEventListener('click',function(){
+  Object.keys(timers).forEach(function(k){if(timers[k])clearInterval(timers[k])});
+  timers={};
+  state={cur:'S0',env:null,gap:null,frozen:false,tab:'req',
+    s0:{mode:'dir',dir:'/Users/smigoo/工作/test',git:'https://git.microvideo.cn/ops/yxjc-monitor.git',branch:'go-dev',
+        figma:['https://www.figma.com/design/AbC123/沿江监控-运维子系统?node-id=1-2'],
+        apifox:'',docs:['沿江监控运维子系统_需求规格说明书_V1.1.docx'],scan:false},
+    fe:{design:false,confirmed:false,gen:0},
+    be:{design:false,confirmed:false,gen:0},reject:false,rejectBe:false};
+  render();
+  toast('已重置到 S0 投喂资料');
+});
+
+render();
+</script>
+</body>
+</html>

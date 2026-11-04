@@ -1,0 +1,220 @@
+{
+  "generatedAt": "2026-11-04T17:45:00+08:00",
+  "sourceOfTruth": "outputs/yxjc-monitor/CONTRACT.md",
+  "note": "画板引用一律 fileKey + nodeId 双键；CONTRACT 未给出 nodeId 的画板，nodeId 记 null 并标注 nodeIdStatus，待 Figma 补录，不按文件名匹配。",
+  "summary": {
+    "modules": 14,
+    "endpointsTotal": 25,
+    "httpEndpoints": 24,
+    "wsChannels": 1,
+    "docBasedEndpoints": 17,
+    "figmaDerivedEndpoints": 8,
+    "boardsReferenced": 17,
+    "uncoveredBoards": 1,
+    "countNote": "docBasedEndpoints=17（含 WS #13，依 CONTRACT §4.1「有文档依据的 17 个端点」）；figmaDerivedEndpoints=8（#18-#25）。17+8=25=endpointsTotal。另有正交口径 httpEndpoints=24 + wsChannels=1 = 25。⚠️ 口径差异声明：按「模块 hasDocBasis=true」聚合的端点并集为 19，比 docBasedEndpoints 多 2 项 —— `GET /operation/detection/envAlarmList`（#23，Figma 反推后落位于有文档依据的模块）与 `POST /operation/detection/eventHandle`（#25，D9 正文引用了 `eventHandle` 却未给路径，本轮补全）。二者均**不计入** docBasedEndpoints（该字段严格定义为「文档字面给出的端点」，口径 = sources.json 十篇文档 documents[].endpoints 去重并集），并已包含在 figmaDerivedEndpoints=8（#18-#25）之内。"
+  },
+  "modules": [
+    {
+      "moduleId": "shell",
+      "moduleName": "大屏外壳（头部/隧道路线/三栏）",
+      "region": "—",
+      "figma": [
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-3432", "boardName": "运行监测2026.04.14" },
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "隧道路线" }
+      ],
+      "sourceDocs": [],
+      "endpoints": ["GET /operation/monitor/route"],
+      "hasDocBasis": false,
+      "docBasisNote": "外壳无文档；隧道路线端点由契约 §4.2 #24 反推补全"
+    },
+    {
+      "moduleId": "flow-today",
+      "moduleName": "当日总流量",
+      "region": "left",
+      "figma": [
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-流量监测" }
+      ],
+      "sourceDocs": ["D1"],
+      "endpoints": ["GET /operation/flow/todayFlow"],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "flow-vehicle-type",
+      "moduleName": "车型分布",
+      "region": "left → modal modal-vehicle-type",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "车型分布下钻" }
+      ],
+      "sourceDocs": ["D2"],
+      "endpoints": [
+        "GET /operation/flow/todayVehicleTypeStatic",
+        "GET /operation/flow/todayVehicleTypeTrend"
+      ],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "flow-forecast-realtime",
+      "moduleName": "实时流量预测",
+      "region": "left",
+      "figma": [
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-流量监测" }
+      ],
+      "sourceDocs": ["D3"],
+      "endpoints": ["GET /operation/forecast/realtime"],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "flow-forecast-holiday",
+      "moduleName": "节假日流量预测",
+      "region": "left → modal modal-forecast-holiday",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "节假日预测下钻" }
+      ],
+      "sourceDocs": ["D3"],
+      "endpoints": [
+        "GET /operation/forecast/staticsByHour",
+        "GET /operation/forecast/staticsByDay",
+        "GET /operation/forecast/holiday"
+      ],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "point-today",
+      "moduleName": "今日累计",
+      "region": "left",
+      "figma": [
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-重点车辆监测" }
+      ],
+      "sourceDocs": ["D5"],
+      "endpoints": ["GET /operation/point/pointTypeStatics"],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "point-car-detail",
+      "moduleName": "车辆明细",
+      "region": "modal",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "重型货车明细" },
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "超高车辆明细" }
+      ],
+      "sourceDocs": ["D6"],
+      "endpoints": [
+        "GET /operation/point/pointCarDetail",
+        "GET /operation/point/hazardousTypeDistribution"
+      ],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "point-waybill",
+      "moduleName": "危化品车运单列表",
+      "region": "modal",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "重点车辆监测下钻-危化品明细" }
+      ],
+      "sourceDocs": ["D7"],
+      "endpoints": ["GET /operation/point/wayBillRecord"],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "detection-event-list",
+      "moduleName": "智能侦测事件列表",
+      "region": "right / center",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-异常事件下钻" }
+      ],
+      "sourceDocs": ["D8"],
+      "endpoints": [
+        "GET /operation/detection/eventList",
+        "WS /ws/detection/event"
+      ],
+      "hasDocBasis": true
+    },
+    {
+      "moduleId": "detection-alert-disposal",
+      "moduleName": "告警处置",
+      "region": "modal",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "交通态势核实&协同上报" }
+      ],
+      "sourceDocs": ["D9"],
+      "endpoints": [
+        "GET /operation/detection/alertDetail",
+        "POST /operation/detection/alertDisposal",
+        "POST /operation/detection/eventComplete",
+        "POST /operation/detection/eventHandle"
+      ],
+      "hasDocBasis": true,
+      "docBasisNote": "前 3 个端点有文档依据；eventHandle 正文提及但无路径，由契约 #25 补全（Figma「交通态势核实&协同上报」）"
+    },
+    {
+      "moduleId": "env-monitor",
+      "moduleName": "环境监测",
+      "region": "right",
+      "figma": [
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-环境监测" },
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-环境异常2026.04.21" }
+      ],
+      "sourceDocs": ["D10"],
+      "endpoints": [
+        "GET /operation/device/monitor",
+        "GET /operation/detection/envAlarmList"
+      ],
+      "hasDocBasis": true,
+      "docBasisNote": "device/monitor 有 D10 依据；envAlarmList 为契约 #23 Figma 反推补充"
+    },
+    {
+      "moduleId": "device-monitor",
+      "moduleName": "设备监测",
+      "region": "right",
+      "figma": [
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-设备监测" },
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "设备监测下钻" }
+      ],
+      "sourceDocs": [],
+      "endpoints": [
+        "GET /operation/device/list",
+        "GET /operation/device/detail",
+        "POST /operation/device/repair"
+      ],
+      "hasDocBasis": false,
+      "docBasisNote": "文档缺失，按契约 #18-#20 由 Figma「设备监测下钻」反推补全"
+    },
+    {
+      "moduleId": "weather-alarm",
+      "moduleName": "异常天气",
+      "region": "modal",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-异常天气2026.04.21" }
+      ],
+      "sourceDocs": [],
+      "endpoints": ["GET /operation/detection/weatherAlarmList"],
+      "hasDocBasis": false,
+      "docBasisNote": "文档缺失，按契约 #21 由 Figma 反推补全"
+    },
+    {
+      "moduleId": "report-list",
+      "moduleName": "异常上报",
+      "region": "modal",
+      "figma": [
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-异常上报2026.04.21" }
+      ],
+      "sourceDocs": [],
+      "endpoints": ["GET /operation/detection/reportList"],
+      "hasDocBasis": false,
+      "docBasisNote": "文档缺失，按契约 #22 由 Figma 反推补全"
+    }
+  ],
+  "uncoveredBoards": [
+    {
+      "fileKey": "Phqur1Lou2tSgwxYqIbM8U",
+      "nodeId": null,
+      "boardName": "运行监测-全息深色版本",
+      "reason": "视觉风格基准画板（CONTRACT §6），不对应任何业务模块/端点，仅作文档记录"
+    }
+  ],
+  "boardCountReconciliation": {
+    "declaredTopLevelBoards": 17,
+    "namedInContract": 17,
+    "note": "CONTRACT §0 称弹窗文件有 17 个顶层画板，§4.2/§5 可具名枚举 13 个（另有主文件 5 个画板 + 隧道路线 + 全息深色版本）。未具名的顶层画板无名称依据，不臆造；已具名画板全部映射到模块或列入 uncoveredBoards。"
+  }
+}

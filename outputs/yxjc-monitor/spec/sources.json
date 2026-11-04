@@ -1,0 +1,265 @@
+{
+  "generatedAt": "2026-11-04T17:45:00+08:00",
+  "sourceOfTruth": "outputs/yxjc-monitor/CONTRACT.md",
+  "documents": [
+    {
+      "id": "D1",
+      "file": "4.2.2.1_当日总流量（F_UC_B_YXJC_LLJC_DRZLL）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.2.1_当日总流量（F_UC_B_YXJC_LLJC_DRZLL）.md",
+      "sha256": "1293c87e0258f8dba883a34c3c4a934c4e518a7b8c0d1c5614de238bf8a52b97",
+      "bytes": 10004,
+      "lines": 222,
+      "moduleCode": "F_UC_B_YXJC_LLJC_DRZLL",
+      "moduleName": "当日总流量",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": ["GET /operation/flow/todayFlow"],
+      "tables": ["t_flow_statictic_15min"],
+      "cronJobs": ["门架流量数据拉取（每1分钟）", "当日数据补偿（每1小时）", "昨日数据补偿（每6小时）"],
+      "externalSystems": ["实验室系统-门架流量查询"]
+    },
+    {
+      "id": "D2",
+      "file": "4.2.2.2_车型分布（F_UC_B_YXJC_LLJC_CXFB）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.2.2_车型分布（F_UC_B_YXJC_LLJC_CXFB）.md",
+      "sha256": "d2dbd7aad444ee2ba24bdea865facf8f1f83100b3aa9ccb8d4ca68ab846874e1",
+      "bytes": 10866,
+      "lines": 273,
+      "moduleCode": "F_UC_B_YXJC_LLJC_CXFB",
+      "moduleName": "车型分布",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": [
+        "GET /operation/flow/todayVehicleTypeStatic",
+        "GET /operation/flow/todayVehicleTypeTrend"
+      ],
+      "tables": ["t_flow_statictic_15min"],
+      "cronJobs": [],
+      "externalSystems": ["实验室系统"]
+    },
+    {
+      "id": "D3",
+      "file": "4.2.2.3_流量预测（F_UC_B_YXJC_LLJC_LLYC）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.2.3_流量预测（F_UC_B_YXJC_LLJC_LLYC）.md",
+      "sha256": "81a2a37263c176974d2166cd6e5d36c7f28d9391418ef4115d2c9df45eab7b9f",
+      "bytes": 17308,
+      "lines": 410,
+      "moduleCode": "F_UC_B_YXJC_LLJC_LLYC",
+      "moduleName": "流量预测（实时流量预测 + 节假日流量预测，一编码两组件）",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": [
+        "GET /operation/forecast/realtime",
+        "GET /operation/forecast/staticsByHour",
+        "GET /operation/forecast/staticsByDay",
+        "GET /operation/forecast/holiday"
+      ],
+      "tables": [],
+      "cronJobs": [],
+      "externalSystems": ["实验室系统-流量预测查询", "实验室系统-节假日列表查询"]
+    },
+    {
+      "id": "D4",
+      "file": "4.2.2.3_流量预测（F_UC_B_YXJC_LLJC_LLYC） (1).md",
+      "absPath": "/Users/smigoo/Downloads/4.2.2.3_流量预测（F_UC_B_YXJC_LLJC_LLYC） (1).md",
+      "sha256": "81a2a37263c176974d2166cd6e5d36c7f28d9391418ef4115d2c9df45eab7b9f",
+      "bytes": 17308,
+      "lines": 410,
+      "moduleCode": "F_UC_B_YXJC_LLJC_LLYC",
+      "moduleName": "流量预测（同 D3）",
+      "duplicateOf": "D3",
+      "conflictWith": null,
+      "endpoints": [
+        "GET /operation/forecast/realtime",
+        "GET /operation/forecast/staticsByHour",
+        "GET /operation/forecast/staticsByDay",
+        "GET /operation/forecast/holiday"
+      ],
+      "tables": [],
+      "cronJobs": [],
+      "externalSystems": ["实验室系统-流量预测查询", "实验室系统-节假日列表查询"]
+    },
+    {
+      "id": "D5",
+      "file": "4.2.3.1_今日累计（F_UC_B_YXJC_ZDCL_JRLJ） (1).md",
+      "absPath": "/Users/smigoo/Downloads/4.2.3.1_今日累计（F_UC_B_YXJC_ZDCL_JRLJ） (1).md",
+      "sha256": "5e16a50b65358649b1d4dba35c567f56128dfb8b1daa5f040df59e03241fb7cf",
+      "bytes": 5321,
+      "lines": 135,
+      "moduleCode": "F_UC_B_YXJC_ZDCL_JRLJ",
+      "moduleName": "今日累计",
+      "duplicateOf": null,
+      "conflictWith": "同编号非(1)版（sha256 dc2da03af4fc990f4f7f6543c838ebbb214aa220c24edc9a1cf63965420f3e0a，253行）已分叉，本轮以(1)版为准",
+      "endpoints": ["GET /operation/point/pointTypeStatics"],
+      "tables": ["t_point_card_record", "t_car_drive_recode"],
+      "cronJobs": [],
+      "externalSystems": ["感动中台-重点车辆触网推送（Kafka）", "控股中台-运单数据"]
+    },
+    {
+      "id": "D6",
+      "file": "4.2.3.2_车辆明细（F_UC_B_YXJC_ZDCL_CLMX）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.3.2_车辆明细（F_UC_B_YXJC_ZDCL_CLMX）.md",
+      "sha256": "e25db7a013b9bdabc6994fee408671660b2525434d3ea150ad2c3b1f6d78ebf0",
+      "bytes": 10687,
+      "lines": 282,
+      "moduleCode": "F_UC_B_YXJC_ZDCL_CLMX",
+      "moduleName": "车辆明细",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": [
+        "GET /operation/point/pointCarDetail",
+        "GET /operation/point/hazardousTypeDistribution"
+      ],
+      "tables": ["t_car_drive_recode"],
+      "cronJobs": [],
+      "externalSystems": []
+    },
+    {
+      "id": "D7",
+      "file": "4.2.3.3_危化品车运单列表（F_UC_B_YXJC_ZDCL_YDLB）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.3.3_危化品车运单列表（F_UC_B_YXJC_ZDCL_YDLB）.md",
+      "sha256": "a57b9cb57b874f55dc078b597ca4783b1d2b9978529de886879f9900db63f4f2",
+      "bytes": 6797,
+      "lines": 193,
+      "moduleCode": "F_UC_B_YXJC_ZDCL_YDLB",
+      "moduleName": "危化品车运单列表",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": ["GET /operation/point/wayBillRecord"],
+      "tables": [],
+      "cronJobs": [],
+      "externalSystems": ["控股中台-危化品运单查询"]
+    },
+    {
+      "id": "D8",
+      "file": "4.2.4.1_智能侦测事件列表（F_UC_B_YXJC_ZNJC_SJLB）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.4.1_智能侦测事件列表（F_UC_B_YXJC_ZNJC_SJLB）.md",
+      "sha256": "975028d8bf0fe92f13a6d245c289164e6562a5380b2869ebc544cf1b0b4543b4",
+      "bytes": 17999,
+      "lines": 346,
+      "moduleCode": "F_UC_B_YXJC_ZNJC_SJLB",
+      "moduleName": "智能侦测事件列表",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": [
+        "GET /operation/detection/eventList",
+        "WS /ws/detection/event"
+      ],
+      "tables": [
+        "t_detection_ai_v2_info",
+        "t_detection_coordination_info",
+        "t_detection_weather_alarm_info",
+        "t_device_monitor_warn"
+      ],
+      "cronJobs": ["异常上报数据拉取（每1分钟）", "异常天气数据拉取（每1分钟）"],
+      "externalSystems": [
+        "一路三方平台（推送/定时拉取）",
+        "IOT物联网平台",
+        "结构健康监测系统（Kafka structure-alarm-topic）"
+      ]
+    },
+    {
+      "id": "D9",
+      "file": "4.2.4.2_告警处置（F_UC_B_YXJC_ZNJC_GJCL）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.4.2_告警处置（F_UC_B_YXJC_ZNJC_GJCL）.md",
+      "sha256": "7e4fb2fa7457dc510aa8ba591afcac4cfa56cbc1f7b85978b8b5f6e129d1d6e6",
+      "bytes": 17164,
+      "lines": 496,
+      "moduleCode": "F_UC_B_YXJC_ZNJC_GJCL",
+      "moduleName": "告警处置",
+      "duplicateOf": null,
+      "conflictWith": "正文 §4.2.4.2.3 引用 eventHandle 但 §4.2.4.2.4 未给路径，本轮补为 POST /operation/detection/eventHandle（契约 #25）",
+      "endpoints": [
+        "GET /operation/detection/alertDetail",
+        "POST /operation/detection/alertDisposal",
+        "POST /operation/detection/eventComplete"
+      ],
+      "tables": [
+        "t_device_monitor_warn",
+        "t_alarm_handle_record",
+        "t_detection_ai_v2_info",
+        "t_detection_coordination_info",
+        "t_detection_weather_alarm_info"
+      ],
+      "cronJobs": [],
+      "externalSystems": ["IOT物联网平台", "结构监控监测平台"]
+    },
+    {
+      "id": "D10",
+      "file": "4.2.6.1_异常环境监测（F_UC_B_YXJC_HJJC_YCHJJC）.md",
+      "absPath": "/Users/smigoo/Downloads/4.2.6.1_异常环境监测（F_UC_B_YXJC_HJJC_YCHJJC）.md",
+      "sha256": "2ed30dc09e582d125f619c525acb5b4b2f20e873b1bfe969bef7264a77c42327",
+      "bytes": 9646,
+      "lines": 249,
+      "moduleCode": "F_UC_B_YXJC_HJJC_YCHJJC",
+      "moduleName": "异常环境监测",
+      "duplicateOf": null,
+      "conflictWith": null,
+      "endpoints": ["GET /operation/device/monitor"],
+      "tables": [],
+      "cronJobs": [],
+      "externalSystems": ["设备集控", "IOT物联中台-历史数据查询"],
+      "note": "用户清单外文档，磁盘发现后并入；定义 GET /operation/device/monitor，补上「环境监测」缺口"
+    }
+  ],
+  "figma": {
+    "files": [
+      {
+        "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf",
+        "name": "运行监测",
+        "role": "主设计（大屏骨架）",
+        "lastModified": null,
+        "boards": [
+          { "nodeId": "2-3432", "name": "运行监测2026.04.14", "nodeIdStatus": "CONTRACT §0 明确给出" },
+          { "nodeId": null, "name": "cp-流量监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "cp-重点车辆监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "cp-环境监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "cp-设备监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" }
+        ]
+      },
+      {
+        "fileKey": "Phqur1Lou2tSgwxYqIbM8U",
+        "name": "运行监测",
+        "role": "弹窗文件（17 个顶层画板，含全部下钻与弹窗）",
+        "lastModified": null,
+        "knownNodeIds": ["5-7", "5-1083"],
+        "boards": [
+          { "nodeId": null, "name": "车型分布下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "节假日预测下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "重型货车明细", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "超高车辆明细", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "重点车辆监测下钻-危化品明细", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "运行监测-异常事件下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "交通态势核实&协同上报", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "运行监测-环境异常2026.04.21", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "设备监测下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "运行监测-异常天气2026.04.21", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "运行监测-异常上报2026.04.21", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "隧道路线", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
+          { "nodeId": null, "name": "运行监测-全息深色版本", "nodeIdStatus": "风格基准画板，CONTRACT §6 提及" }
+        ]
+      }
+    ]
+  },
+  "dedup": {
+    "removed": ["D4"],
+    "reason": "D4 与 D3 sha256 完全相同（81a2a37263c176974d2166cd6e5d36c7f28d9391418ef4115d2c9df45eab7b9f），亦经 md5 1539428a52180cf46d2b0cb1462c52a3 复核一致；保留 D3，D4 标记 duplicateOf=D3"
+  },
+  "forked": [
+    {
+      "id": "4.2.3.1",
+      "variants": [
+        "4.2.3.1_今日累计（F_UC_B_YXJC_ZDCL_JRLJ）.md",
+        "4.2.3.1_今日累计（F_UC_B_YXJC_ZDCL_JRLJ） (1).md"
+      ],
+      "chosen": "(1)",
+      "sha256": {
+        "nonParenTheOne": "dc2da03af4fc990f4f7f6543c838ebbb214aa220c24edc9a1cf63965420f3e0a",
+        "parenTheOne": "5e16a50b65358649b1d4dba35c567f56128dfb8b1daa5f040df59e03241fb7cf"
+      },
+      "diffHunks": ["11,12c11", "26,137c25,31", "141,157c35,39"],
+      "diffSummary": "共 3 处差异：① 原型图 URL 不同（原 11-12 行 → 新 11 行）；② 初始化参数由扁平 businessConfig[]（原 26-137 行，逐项 name/key/type/default 平铺）改为 sections[] + pollInterval 两层结构（新 25-31 行）；③ 接口配置/页面元素段随参数结构重写（原 141-157 行 → 新 35-39 行）。两版 code 均为 200。"
+    }
+  ],
+  "lineNumberBaseline": "bytes/lines 由 wc -c / wc -l 实算；diff 段号为 diff 输出的 hunk 头（左侧=非(1)版行号，右侧=(1)版行号）"
+}

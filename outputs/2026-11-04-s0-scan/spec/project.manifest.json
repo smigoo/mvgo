@@ -1,0 +1,742 @@
+{
+  "generator": "s0-scan.cjs",
+  "version": "1.0.0",
+  "scannedAt": "2026-11-04T15:57:34Z",
+  "projectRoot": "/Users/smigoo/工作/test",
+  "S0": {
+    "docs": {
+      "required": true,
+      "found": true,
+      "dir": "docs/",
+      "files": [
+        {
+          "path": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+          "bytes": 5926644
+        }
+      ]
+    },
+    "html": {
+      "required": false,
+      "found": true,
+      "dir": "html/",
+      "pages": [
+        {
+          "path": "html/模块1/云资源监测.html",
+          "bytes": 203409
+        },
+        {
+          "path": "html/模块1/数据安全审计.html",
+          "bytes": 244210
+        },
+        {
+          "path": "html/模块1/服务概览.html",
+          "bytes": 20020
+        },
+        {
+          "path": "html/模块1/本地资源监测.html",
+          "bytes": 310858
+        },
+        {
+          "path": "html/模块1/调用日志.html",
+          "bytes": 13349
+        }
+      ],
+      "scriptFiles": [
+        {
+          "path": "html/模块1/common/common.js",
+          "bytes": 23748
+        },
+        {
+          "path": "html/模块1/common/service-overview.js",
+          "bytes": 15057
+        },
+        {
+          "path": "html/模块1/common/service.js",
+          "bytes": 9104
+        },
+        {
+          "path": "html/模块1/libs/echarts.min.js",
+          "bytes": 1030855
+        },
+        {
+          "path": "html/模块1/libs/vue.global.prod.js",
+          "bytes": 146843
+        }
+      ],
+      "visualLibs": [
+        {
+          "path": "html/模块1/libs/echarts.min.js",
+          "bytes": 1030855
+        },
+        {
+          "path": "html/模块1/libs/vue.global.prod.js",
+          "bytes": 146843
+        }
+      ],
+      "backupFiles": 3,
+      "featureHit": "echarts / vue.global 全局包存在 ⇒ 判定为「可运行原型」而非设计稿"
+    },
+    "frontend": {
+      "required": false,
+      "found": true,
+      "dir": "frontend/",
+      "bases": [
+        {
+          "dir": "frontend/vue3-vite-base",
+          "name": "mirovideo-vue3-vite-base",
+          "vite": true,
+          "parsed": true
+        }
+      ],
+      "verdict": "vite 工程 ⇒ 可作为 S4 落点"
+    },
+    "backend": {
+      "required": false,
+      "found": true,
+      "dir": "backend/",
+      "bases": [
+        {
+          "dir": "backend/03-microvideo-framework3.x-lite-example-master",
+          "artifactId": "microvideo-framework3-parent",
+          "springBoot": true,
+          "javaVersion": "17"
+        }
+      ],
+      "verdict": "spring-boot 工程 ⇒ 可作为 S5 落点"
+    },
+    "projectJson": {
+      "required": false,
+      "found": false,
+      "path": "mvgo.project.json",
+      "content": null,
+      "parseError": null,
+      "undecided": [
+        "delivery.branch（交付目标分支）",
+        "responseEnvelope（响应信封口径）",
+        "links.figma / links.apifox（外链）"
+      ]
+    },
+    "git": {
+      "repos": [
+        {
+          "path": "frontend/vue3-vite-base",
+          "head": "ref: refs/heads/main",
+          "branch": "main",
+          "origin": "http://scm.microvideo.cn/gitlab/opensource/framework3.0/102-vue/101001-vue3.0/vue3-vite-base.git"
+        }
+      ],
+      "multiRepo": false,
+      "verdict": "单仓"
+    },
+    "missing": [
+      {
+        "slot": "mvgo.project.json",
+        "level": "declaration",
+        "why": "未声明 ⇒ 交付分支 / 信封口径 / 外链 3 项只能全部抛给用户选，禁止内置默认值蒙混"
+      }
+    ],
+    "gate": "PASS",
+    "footprint": {
+      "allFiles": 189,
+      "treeFiles": 106,
+      "work": 101,
+      "dsStore": 5,
+      "gitInternals": 83,
+      "truncated": false
+    },
+    "readOnly": {
+      "added": 0,
+      "removed": 0,
+      "modified": 0,
+      "changed": 0
+    }
+  },
+  "S1": {
+    "sources": {
+      "doc": {
+        "files": [
+          "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx"
+        ],
+        "endpoints": 0,
+        "textLines": 6962,
+        "headings": [
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 164,
+            "no": "1",
+            "title": "1 文档介绍"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 165,
+            "no": "1.1",
+            "title": "1.1 文档目的与范围"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 166,
+            "no": "1.1.1",
+            "title": "1.1.1 文档目的"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 169,
+            "no": "1.1.2",
+            "title": "1.1.2 文档范围"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 229,
+            "no": "1.1.3",
+            "title": "1.1.3 需求口径与实现基准"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 233,
+            "no": "1.1.4",
+            "title": "1.1.4 各模块规则基准"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 266,
+            "no": "1.1.5",
+            "title": "1.1.5 交付节奏与验收边界"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 310,
+            "no": "1.2",
+            "title": "1.2 参考文献"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 384,
+            "no": "1.3",
+            "title": "1.3 术语表与缩略语"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 440,
+            "no": "1.4",
+            "title": "1.4 业务涉众"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 461,
+            "no": "2",
+            "title": "2 业务全景与目标"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 462,
+            "no": "2.1",
+            "title": "2.1 业务背景"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 464,
+            "no": "2.1.1",
+            "title": "2.1.1 国家与行业背景"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 466,
+            "no": "2.1.2",
+            "title": "2.1.2 集团建设方向"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 468,
+            "no": "2.1.3",
+            "title": "2.1.3 沿江建设现状"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 470,
+            "no": "2.1.4",
+            "title": "2.1.4 建设必要性"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 474,
+            "no": "2.2",
+            "title": "2.2 业务需求与建设价值"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 496,
+            "no": "2.3",
+            "title": "2.3 业务目标"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 532,
+            "no": "2.4",
+            "title": "2.4 实施保障与风险管理"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 577,
+            "no": "2.5",
+            "title": "2.5 用户画像"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 595,
+            "no": "3",
+            "title": "3 业务分析与建模"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 597,
+            "no": "3.1",
+            "title": "3.1 业务划分与系统上下文"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 598,
+            "no": "3.1.1",
+            "title": "3.1.1 业务划分"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 632,
+            "no": "3.1.2",
+            "title": "3.1.2 系统上下文"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 690,
+            "no": "3.1.3",
+            "title": "3.1.3 业务流程清单"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 700,
+            "no": "3.2.1",
+            "title": "3.2.1 云资源监测运维"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 734,
+            "no": "3.2.2",
+            "title": "3.2.2 本地资源监测运维"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 768,
+            "no": "3.2.3",
+            "title": "3.2.3 操作事实追溯"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 778,
+            "no": "3.2.4",
+            "title": "3.2.4 服务概览"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 788,
+            "no": "3.2.5",
+            "title": "3.2.5 调用日志"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 799,
+            "no": "3.1.4",
+            "title": "3.1.4 业务主线说明"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 809,
+            "no": "3.2",
+            "title": "3.2 业务流程分析"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 810,
+            "no": "3.2.1",
+            "title": "3.2.1 云资源监测运维流程（BP01、BP02、BP03、BP04）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1114,
+            "no": "3.2.2",
+            "title": "3.2.2 本地资源监测运维流程（BP05、BP06、BP07、BP08）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1512,
+            "no": "3.2.3",
+            "title": "3.2.3 操作事实追溯流程（BP09）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1592,
+            "no": "3.2.4",
+            "title": "3.2.4 服务概览流程（BP10）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1657,
+            "no": "3.2.5",
+            "title": "3.2.5 调用日志流程（BP11）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1727,
+            "no": "3.3",
+            "title": "3.3 系统用例"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1736,
+            "no": "3.3.2",
+            "title": "3.3.2 云资源监测"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1762,
+            "no": "3.3.3",
+            "title": "3.3.3 本地资源监测"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1812,
+            "no": "3.3.4",
+            "title": "3.3.4 数据安全审计（操作事实追溯）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1826,
+            "no": "3.3.5",
+            "title": "3.3.5 服务概览"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1834,
+            "no": "3.3.6",
+            "title": "3.3.6 调用日志"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 1843,
+            "no": "3.3.1",
+            "title": "3.3.1 功能点拆分清单"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 2255,
+            "no": "3.3.2",
+            "title": "3.3.2 云资源监测用例"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 2627,
+            "no": "3.3.3",
+            "title": "3.3.3 本地资源监测用例"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3268,
+            "no": "3.3.4",
+            "title": "3.3.4 数据安全审计用例（操作事实追溯）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3444,
+            "no": "3.3.5",
+            "title": "3.3.5 服务概览用例"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3517,
+            "no": "3.3.6",
+            "title": "3.3.6 调用日志用例"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3591,
+            "no": "3.3.7",
+            "title": "3.3.7 用例字段列表"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3679,
+            "no": "3.4",
+            "title": "3.4 领域模型"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3681,
+            "no": "3.4.1",
+            "title": "3.4.1 类属性表"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 3949,
+            "no": "3.4.2",
+            "title": "3.4.2 类关系表"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4119,
+            "no": "3.4.3",
+            "title": "3.4.3 状态取值与流转"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4180,
+            "no": "3.5",
+            "title": "3.5 角色与权限矩阵"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4257,
+            "no": "4",
+            "title": "4 系统功能需求"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4259,
+            "no": "4.1",
+            "title": "4.1 总体功能清单与角色权限"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4681,
+            "no": "4.2",
+            "title": "4.2 云资源监测模块"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4682,
+            "no": "4.2.1",
+            "title": "4.2.1 页面流设计（Page Flow Design）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 4740,
+            "no": "4.2.2",
+            "title": "4.2.2 功能点描述"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 5106,
+            "no": "4.2.3",
+            "title": "4.2.3 功能处理逻辑"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 5231,
+            "no": "4.2.4",
+            "title": "4.2.4 交互设计逻辑（DAR 模式）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 5277,
+            "no": "4.3",
+            "title": "4.3 本地资源监测模块"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 5278,
+            "no": "4.3.1",
+            "title": "4.3.1 页面流设计（Page Flow Design）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 5366,
+            "no": "4.3.2",
+            "title": "4.3.2 功能点描述"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6010,
+            "no": "4.3.3",
+            "title": "4.3.3 功能处理逻辑"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6184,
+            "no": "4.3.4",
+            "title": "4.3.4 交互设计逻辑（DAR 模式）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6245,
+            "no": "4.4",
+            "title": "4.4 数据安全审计模块"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6246,
+            "no": "4.4.1",
+            "title": "4.4.1 页面流设计（Page Flow Design）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6275,
+            "no": "4.4.2",
+            "title": "4.4.2 功能点描述"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6333,
+            "no": "4.4.3",
+            "title": "4.4.3 功能处理逻辑"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6363,
+            "no": "4.4.4",
+            "title": "4.4.4 交互设计逻辑（DAR 模式）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6383,
+            "no": "4.5",
+            "title": "4.5 服务概览模块"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6384,
+            "no": "4.5.1",
+            "title": "4.5.1 页面流设计（Page Flow Design）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6413,
+            "no": "4.5.2",
+            "title": "4.5.2 功能点描述"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6509,
+            "no": "4.5.3",
+            "title": "4.5.3 功能处理逻辑"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6540,
+            "no": "4.5.4",
+            "title": "4.5.4 交互设计逻辑（DAR 模式）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6558,
+            "no": "4.6",
+            "title": "4.6 调用日志模块"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6559,
+            "no": "4.6.1",
+            "title": "4.6.1 页面流设计（Page Flow Design）"
+          },
+          {
+            "file": "docs/沿江监控运维子系统_需求规格说明书_V1.1.docx",
+            "line": 6580,
+            "no": "4.6.2",
+            "title": "4.6.2 功能点描述"
+          }
+        ]
+      },
+      "prototype": {
+        "files": [
+          "html/模块1/common/common.js",
+          "html/模块1/common/service-overview.js",
+          "html/模块1/common/service.js",
+          "html/模块1/libs/echarts.min.js",
+          "html/模块1/libs/vue.global.prod.js",
+          "html/模块1/云资源监测.html",
+          "html/模块1/数据安全审计.html",
+          "html/模块1/服务概览.html",
+          "html/模块1/本地资源监测.html",
+          "html/模块1/调用日志.html"
+        ],
+        "endpoints": 18,
+        "filteredNonApiLiterals": 0
+      },
+      "frontend": {
+        "files": 30,
+        "endpoints": 1,
+        "otherCalls": 0,
+        "baseUrls": []
+      },
+      "backend": {
+        "files": [
+          "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/MicroAppliction.java",
+          "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/config/MybatisPlusConfig.java",
+          "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/controller/XxlJobController.java",
+          "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/entity/XxlJob.java",
+          "backend/03-microvideo-framework3.x-lite-example-master/src/main/java/cn/microvideo/mvsc/mapper/XxlJobMapper.java"
+        ],
+        "endpoints": 2
+      }
+    },
+    "alignment": {
+      "total": 12,
+      "high": 0,
+      "candidate": 10,
+      "partial": 2,
+      "declaredPrefix": "/api"
+    },
+    "envelopeShapes": [
+      {
+        "file": "backend/03-microvideo-framework3.x-lite-example-master/readme.md",
+        "keys": [
+          "code",
+          "message",
+          "detail",
+          "data"
+        ]
+      }
+    ],
+    "envelope": {
+      "source": "detected-未证实",
+      "confirmed": false,
+      "keys": [
+        "code",
+        "data",
+        "detail",
+        "message"
+      ],
+      "successCode": null,
+      "declared": null,
+      "detected": {
+        "file": "backend/03-microvideo-framework3.x-lite-example-master/readme.md",
+        "keys": [
+          "code",
+          "data",
+          "detail",
+          "message"
+        ]
+      },
+      "effective": null,
+      "why": "无声明，退到探测值（来自 backend/03-microvideo-framework3.x-lite-example-master/readme.md）。关键词共现启发式 ⇒ 可能混入子字段（如 detail），S2 冻结前必须由人追认，追认前不得写进契约真值"
+    },
+    "gaps": [
+      {
+        "id": "GAP-DOC-NO-ENDPOINT",
+        "severity": "blocker",
+        "what": "需求文档里 0 个接口路径（已扫正文 6962 行）",
+        "impact": "第五处对账「REQUIREMENTS.md 端点 ↔ 契约 paths 双向差集为空」无法在 S2 完成：文档主源为空",
+        "options": [
+          "A 把原型候选（去重后 9 个唯一点端点；原始字面量命中 18 次）升格为端点草案，逐条标「来源=原型，待补文档」",
+          "B 中止 S1，请用户补需求文档的接口章节后重跑",
+          "C 从 Apifox 反接端点（需要 mvgo.project.json 的 links.apifox）"
+        ]
+      }
+    ],
+    "gate": "BLOCK"
+  },
+  "missing": [
+    {
+      "slot": "mvgo.project.json",
+      "level": "declaration",
+      "why": "未声明 ⇒ 交付分支 / 信封口径 / 外链 3 项只能全部抛给用户选，禁止内置默认值蒙混"
+    }
+  ],
+  "elapsedMs": 59
+}

@@ -1,0 +1,1311 @@
+openapi: 3.0.3
+info:
+  title: 运行监测大屏 · 本地契约（S2 冻结）
+  version: 1.0.0
+  description: |
+    唯一约定源：outputs/yxjc-monitor/CONTRACT.md。
+    统一响应信封 {code:200,message:'ok',data:{...}}；code===200 成功，非 200 时 data=null。
+    统一分页：请求 pageNum(默认1)/pageSize(默认20)；响应 data={list:[],page:{...}}。
+    本文件覆盖 CONTRACT §4 的 25 个端点（#1-#25，其中 #13 为 WebSocket，见根级 x-websocket）。
+    后期对接 Apifox 的接缝：用 Apifox 导出的 OAS 替换本文件并做 diff。
+servers:
+  - url: http://127.0.0.1:8791
+    description: 本地 mock 服务（端口固定 8791）
+tags:
+  - name: 流量监测
+    description: 当日总流量 / 车型分布 / 流量预测
+  - name: 重点车辆
+    description: 今日累计 / 车辆明细 / 危化品运单
+  - name: 智能侦测
+    description: 事件列表 / 告警详情与处置 / 天气与上报 / 协同处置
+  - name: 设备监测
+    description: 设备列表 / 详情 / 报修（文档缺失，Figma 反推）
+  - name: 环境监测
+    description: 异常环境监测 / 环境异常告警
+  - name: 基础
+    description: 隧道路线拓扑
+paths:
+  /operation/flow/todayFlow:
+    get:
+      operationId: getTodayFlow
+      summary: 当日流量统计与趋势
+      tags: [流量监测]
+      description: 来源文档：D1 4.2.2.1。返回各路段当日累计流量、上下行、同比及趋势明细。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码，多个使用数组传参
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+        - name: type
+          in: query
+          required: false
+          description: 趋势维度，1=24小时（当天按小时），2=就近一小时（按15分钟），默认1
+          schema:
+            type: integer
+            enum: [1, 2]
+            default: 1
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayFlowResponse'
+  /operation/flow/todayVehicleTypeStatic:
+    get:
+      operationId: getTodayVehicleTypeStatic
+      summary: 当日车型流量概览（客货累计）
+      tags: [流量监测]
+      description: 来源文档：D2 4.2.2.2。原文缺 sectionNum 归属，本轮补 items[].sectionNum。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayVehicleTypeStaticResponse'
+  /operation/flow/todayVehicleTypeTrend:
+    get:
+      operationId: getTodayVehicleTypeTrend
+      summary: 车型细分散点趋势
+      tags: [流量监测]
+      description: 来源文档：D2 4.2.2.2。返回客1-4/货1-6 累计量及按时间×方向的散点数据。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayVehicleTypeTrendResponse'
+  /operation/forecast/realtime:
+    get:
+      operationId: getForecastRealtime
+      summary: 实时流量预测（前后2小时）
+      tags: [流量监测]
+      description: 来源文档：D3 4.2.2.3 组件一。过去/当前含实际+预测+准确率，未来仅含预测。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastRealtimeResponse'
+  /operation/forecast/staticsByHour:
+    get:
+      operationId: getForecastStaticsByHour
+      summary: 按小时统计流量预测
+      tags: [流量监测]
+      description: 来源文档：D3 4.2.2.3 组件二。返回某日 0-23 时四曲线（实际/预测/去年同期/历史最大）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+        - name: startTime
+          in: query
+          required: true
+          description: 开始时间（yyyy-MM-dd HH:mm:ss）
+          schema: { type: string }
+        - name: endTime
+          in: query
+          required: true
+          description: 结束时间（yyyy-MM-dd HH:mm:ss）
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastStaticsByHourResponse'
+  /operation/forecast/staticsByDay:
+    get:
+      operationId: getForecastStaticsByDay
+      summary: 按日期统计流量预测
+      tags: [流量监测]
+      description: 来源文档：D3 4.2.2.3 组件二。原文正文称返回 dateList，但参数表与示例均无，本轮按「不返回」处理（见 conflicts.md）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+        - name: startDate
+          in: query
+          required: true
+          description: 开始日期（yyyy-MM-dd）
+          schema: { type: string }
+        - name: endDate
+          in: query
+          required: true
+          description: 结束日期（yyyy-MM-dd）
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastStaticsByDayResponse'
+  /operation/forecast/holiday:
+    get:
+      operationId: getForecastHoliday
+      summary: 获取节假日列表
+      tags: [流量监测]
+      description: 来源文档：D3 4.2.2.3 组件二。无请求参数。
+      parameters: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastHolidayResponse'
+  /operation/point/pointTypeStatics:
+    get:
+      operationId: getPointTypeStatics
+      summary: 重点车辆类型统计（今日累计）
+      tags: [重点车辆]
+      description: 来源文档：D5 4.2.3.1（以 (1) 版为准）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointTypeStaticsResponse'
+  /operation/point/pointCarDetail:
+    get:
+      operationId: getPointCarDetail
+      summary: 重点车辆行驶明细（分页）
+      tags: [重点车辆]
+      description: 来源文档：D6 4.2.3.2。exitTime/avgSpeed 未驶离时为字符串 "-"。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+        - name: carType
+          in: query
+          required: true
+          description: 车辆类型，1=危化品/2=重型货车
+          schema:
+            type: integer
+            enum: [1, 2]
+        - name: direction
+          in: query
+          required: false
+          description: 行驶方向，1=上行/2=下行，不传查全部
+          schema:
+            type: integer
+            enum: [1, 2]
+        - name: licensePlate
+          in: query
+          required: false
+          description: 车牌号，模糊查询
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointCarDetailResponse'
+  /operation/point/hazardousTypeDistribution:
+    get:
+      operationId: getHazardousTypeDistribution
+      summary: 危化品运送类型分布统计
+      tags: [重点车辆]
+      description: '来源文档：D6 4.2.3.2。原文 data 为裸数组，本轮统一为 envelope.data = { data: [...] }。'
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+        - name: direction
+          in: query
+          required: false
+          description: 行驶方向，1=上行/2=下行，不传查全部
+          schema:
+            type: integer
+            enum: [1, 2]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HazardousTypeDistributionResponse'
+  /operation/point/wayBillRecord:
+    get:
+      operationId: getWayBillRecord
+      summary: 危化品车运单列表（分页）
+      tags: [重点车辆]
+      description: 来源文档：D7 4.2.3.3。原文无分页，本轮新增标准分页（见 conflicts.md）。
+      parameters:
+        - name: licensePlate
+          in: query
+          required: true
+          description: 车牌号
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WayBillRecordResponse'
+  /operation/detection/eventList:
+    get:
+      operationId: getDetectionEventList
+      summary: 智能侦测事件列表（分页）
+      tags: [智能侦测]
+      description: 来源文档：D8 4.2.4.1。原文无分页，本轮新增标准分页；eventLevel 枚举统一为 HIGH/MEDIUM/LOW。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+        - name: eventType
+          in: query
+          required: true
+          description: 事件类型
+          schema:
+            type: string
+            enum: [OVER_HEIGHT, ILLEGAL, ABNORMAL_EVENT, ABNORMAL_WEATHER, ABNORMAL_REPORT, ENV_ABNORMAL, STRUCT_ABNORMAL]
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionEventListResponse'
+  /ws/detection/event:
+    get:
+      operationId: subscribeDetectionEvent
+      summary: 智能侦测事件实时推送（WebSocket）
+      tags: [智能侦测]
+      description: 来源文档：D8 4.2.4.1。WebSocket 通道，OAS 3.0 无法原生表达，语义见根级 x-websocket；此处仅登记通道并提供消息体 schema。
+      responses:
+        '101':
+          description: 协议切换（WebSocket 升级成功）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListItem'
+  /operation/detection/alertDetail:
+    get:
+      operationId: getAlertDetail
+      summary: 获取告警详情
+      tags: [智能侦测]
+      description: 来源文档：D9 4.2.4.2。返回 alertInfo + cameras + disposalTimeline。
+      parameters:
+        - name: eventId
+          in: query
+          required: true
+          description: 事件ID
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertDetailResponse'
+  /operation/detection/alertDisposal:
+    post:
+      operationId: postAlertDisposal
+      summary: 提交告警处置记录
+      tags: [智能侦测]
+      description: 来源文档：D9 4.2.4.2。操作人由后端 Token 获取，前端不传。原文错误码 5011/5012/5013 保留语义。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertDisposalRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertDisposalResponse'
+  /operation/detection/eventComplete:
+    post:
+      operationId: postEventComplete
+      summary: 处置完成（关闭事件）
+      tags: [智能侦测]
+      description: 来源文档：D9 4.2.4.2。原文错误码 5021/5022/5023 保留语义。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCompleteRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventCompleteResponse'
+  /operation/device/monitor:
+    get:
+      operationId: getDeviceMonitor
+      summary: 环境监测数据及预警阈值
+      tags: [环境监测]
+      description: 来源文档：D10 4.2.6.1（用户清单外文档，磁盘发现并入）。maxThreshold/minThreshold 可为 null（不画预警线）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: true
+          description: 路段编码
+          schema: { type: string }
+        - name: productCode
+          in: query
+          required: true
+          description: 设备类型编码
+          schema: { type: string }
+        - name: monitorType
+          in: query
+          required: true
+          description: 监测类型编码
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceMonitorResponse'
+  /operation/device/list:
+    get:
+      operationId: getDeviceList
+      summary: 设备分页列表
+      tags: [设备监测]
+      description: 来源：Figma 画板「设备监测下钻」（文档缺失，自行补全）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: false
+          description: 路段编码
+          schema: { type: string }
+        - name: keyword
+          in: query
+          required: false
+          description: 设备名/编号模糊查询
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceListResponse'
+  /operation/device/detail:
+    get:
+      operationId: getDeviceDetail
+      summary: 单设备详情 + 实时指标序列
+      tags: [设备监测]
+      description: 来源：Figma 画板「设备监测下钻」（文档缺失，自行补全）。
+      parameters:
+        - name: deviceId
+          in: query
+          required: true
+          description: 设备ID
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDetailResponse'
+  /operation/device/repair:
+    post:
+      operationId: postDeviceRepair
+      summary: 提交设备报修
+      tags: [设备监测]
+      description: 来源：Figma 画板「设备监测下钻」（文档缺失，自行补全）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRepairRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceRepairResponse'
+  /operation/detection/weatherAlarmList:
+    get:
+      operationId: getWeatherAlarmList
+      summary: 异常天气预警列表（分页）
+      tags: [智能侦测]
+      description: 来源：Figma 画板「运行监测-异常天气2026.04.21」（文档缺失，自行补全）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: false
+          description: 路段编码
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeatherAlarmListResponse'
+  /operation/detection/reportList:
+    get:
+      operationId: getReportList
+      summary: 异常上报列表（分页）
+      tags: [智能侦测]
+      description: 来源：Figma 画板「运行监测-异常上报2026.04.21」（文档缺失，自行补全）。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: false
+          description: 路段编码
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportListResponse'
+  /operation/detection/envAlarmList:
+    get:
+      operationId: getEnvAlarmList
+      summary: 环境异常告警列表（分页）
+      tags: [环境监测]
+      description: 来源：Figma 画板「运行监测-环境异常2026.04.21」（文档缺失，自行补全），补充 device/monitor 之外的告警视图。
+      parameters:
+        - name: sectionNum
+          in: query
+          required: false
+          description: 路段编码
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageNum'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvAlarmListResponse'
+  /operation/monitor/route:
+    get:
+      operationId: getMonitorRoute
+      summary: 隧道路段/门架拓扑点位
+      tags: [基础]
+      description: 来源：Figma 画板「隧道路线」（文档缺失，自行补全）。
+      parameters: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitorRouteResponse'
+  /operation/detection/eventHandle:
+    post:
+      operationId: postEventHandle
+      summary: 协同上报处置（误报/忽略/已读）
+      tags: [智能侦测]
+      description: 来源：Figma 画板「交通态势核实&协同上报」。D9 正文引用 eventHandle 但未给路径，本轮补全为 POST /operation/detection/eventHandle（契约 #25）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventHandleRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventHandleResponse'
+x-websocket:
+  - path: /ws/detection/event
+    description: 智能侦测事件实时推送，消息体同 EventListItem
+    messageSchema:
+      $ref: '#/components/schemas/EventListItem'
+components:
+  parameters:
+    PageNum:
+      name: pageNum
+      in: query
+      required: false
+      description: 页码，默认 1
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      description: 每页条数，默认 20
+      schema:
+        type: integer
+        minimum: 1
+        default: 20
+  schemas:
+    Envelope:
+      type: object
+      description: 统一响应信封。code===200 成功；非 200 为业务错误，data 为 null。
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          example: 200
+          description: 200 成功；非 200 业务错误
+        message:
+          type: string
+          example: ok
+        data:
+          type: object
+          nullable: true
+          description: 业务数据；错误时为 null
+    PageMeta:
+      type: object
+      description: 统一分页元信息（模板取自 D6 4.2.3.2）
+      required: [totalNum, currentPage, pageSize, totalPages, firstPage, lastPage, startRow, endRow]
+      properties:
+        totalNum: { type: integer, description: 总记录数 }
+        currentPage: { type: integer, description: 当前页码 }
+        pageSize: { type: integer, description: 每页条数 }
+        totalPages: { type: integer, description: 总页数 }
+        firstPage: { type: integer, description: 首页页码 }
+        lastPage: { type: integer, description: 末页页码 }
+        startRow: { type: integer, description: 当前页起始行号 }
+        endRow: { type: integer, description: 当前页结束行号 }
+    PagedList:
+      type: object
+      description: 列表型 data 基座，供 allOf 组合
+      required: [list, page]
+      properties:
+        list:
+          type: array
+          items: {}
+        page:
+          $ref: '#/components/schemas/PageMeta'
+    EmptyData:
+      type: object
+      description: 空对象；成功即 code=200
+      properties: {}
+
+    TodayFlowResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TodayFlowData'
+    TodayFlowData:
+      type: object
+      required: [items]
+      properties:
+        flowThreshold: { type: number, description: 分流阈值（Nacos），用于趋势图标线 }
+        flowSuggestion: { type: string, description: 分流建议文案 }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodayFlowSection'
+    TodayFlowSection:
+      type: object
+      properties:
+        sectionNum: { type: string }
+        sectionName: { type: string }
+        dailyTotalFlow: { type: number, description: 当日累计总流量 }
+        upFlow: { type: number, description: 上行累计流量 }
+        downFlow: { type: number, description: 下行累计流量 }
+        yoyChange: { type: number, description: 同比上周变化率(%) }
+        trendList:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodayFlowTrendPoint'
+    TodayFlowTrendPoint:
+      type: object
+      properties:
+        time: { type: string, description: '24h 为 "HH:00"，就近一小时为 "HH:mm"' }
+        upFlow: { type: number }
+        downFlow: { type: number }
+
+    TodayVehicleTypeStaticResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TodayVehicleTypeStaticData'
+    TodayVehicleTypeStaticData:
+      type: object
+      description: 原文缺 sectionNum 归属，本轮补 items[].sectionNum
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodayVehicleTypeStaticItem'
+    TodayVehicleTypeStaticItem:
+      type: object
+      properties:
+        sectionNum: { type: string }
+        sectionName: { type: string }
+        busNum: { type: number, description: 客车累计流量 }
+        truckNum: { type: number, description: 货车累计流量 }
+        busRatio: { type: number, description: 客车占比(%)，前端可计算 }
+        truckRatio: { type: number, description: 货车占比(%)，前端可计算 }
+
+    TodayVehicleTypeTrendResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TodayVehicleTypeTrendData'
+    TodayVehicleTypeTrendData:
+      allOf:
+        - $ref: '#/components/schemas/VehicleCountMap'
+        - type: object
+          properties:
+            sectionNum: { type: string }
+            scatterData:
+              type: array
+              items:
+                $ref: '#/components/schemas/ScatterTrendItem'
+    VehicleCountMap:
+      type: object
+      description: 客1-4 / 货1-6 累计流量
+      properties:
+        k1: { type: number }
+        k2: { type: number }
+        k3: { type: number }
+        k4: { type: number }
+        h1: { type: number }
+        h2: { type: number }
+        h3: { type: number }
+        h4: { type: number }
+        h5: { type: number }
+        h6: { type: number }
+    ScatterTrendItem:
+      type: object
+      properties:
+        time: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        upStatic:
+          $ref: '#/components/schemas/VehicleCountMap'
+        downStatic:
+          $ref: '#/components/schemas/VehicleCountMap'
+
+    ForecastRealtimeResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ForecastRealtimeData'
+    ForecastRealtimeData:
+      type: object
+      properties:
+        prevHour2:
+          $ref: '#/components/schemas/ForecastRealtimePoint'
+        prevHour1:
+          $ref: '#/components/schemas/ForecastRealtimePoint'
+        current:
+          $ref: '#/components/schemas/ForecastRealtimePoint'
+        nextHour1:
+          $ref: '#/components/schemas/ForecastRealtimeFuturePoint'
+        nextHour2:
+          $ref: '#/components/schemas/ForecastRealtimeFuturePoint'
+    ForecastRealtimePoint:
+      type: object
+      properties:
+        time: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        actualFlow: { type: number }
+        predictFlow: { type: number }
+        accuracy: { type: number, description: 预测准确率(%) }
+    ForecastRealtimeFuturePoint:
+      type: object
+      properties:
+        time: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        predictFlow: { type: number }
+
+    ForecastStaticsByHourResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ForecastStaticsByHourData'
+    ForecastStaticsByHourData:
+      type: object
+      properties:
+        currentHour: { type: integer, description: 当前小时(0-23) }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastHourItem'
+    ForecastHourItem:
+      type: object
+      properties:
+        time: { type: string }
+        actualFlow: { type: number, description: 未来时间点无此字段 }
+        predictFlow: { type: number }
+        lastYearFlow: { type: number, description: 未来时间点无此字段 }
+        historyMaxFlow: { type: number, description: 未来时间点无此字段 }
+
+    ForecastStaticsByDayResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ForecastStaticsByDayData'
+    ForecastStaticsByDayData:
+      type: object
+      description: 本轮不返回 dateList（原文正文提及但表与示例均无）
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastDayItem'
+    ForecastDayItem:
+      type: object
+      properties:
+        date: { type: string, description: yyyy-MM-dd }
+        actualFlow: { type: number }
+        predictFlow: { type: number }
+        lastYearFlow: { type: number }
+        historyMaxFlow: { type: number }
+
+    ForecastHolidayResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ForecastHolidayData'
+    ForecastHolidayData:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HolidayItem'
+    HolidayItem:
+      type: object
+      properties:
+        holidayName: { type: string, description: 春运/清明/劳动/端午/中秋/国庆 }
+        startDate: { type: string, description: yyyy-MM-dd }
+        endDate: { type: string, description: yyyy-MM-dd }
+
+    PointTypeStaticsResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PointTypeStaticsData'
+    PointTypeStaticsData:
+      type: object
+      properties:
+        hazardousCount: { type: number, description: 危化品车当日通行数量 }
+        truckCount: { type: number, description: 重型货车当日通行数量 }
+
+    PointCarDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PointCarDetailData'
+    PointCarDetailData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/CarDetailItem'
+    CarDetailItem:
+      type: object
+      properties:
+        id: { type: string, description: 行驶记录主键ID }
+        plateNo: { type: string }
+        entryTime: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        exitTime:
+          type: string
+          description: 驶离时间，未驶离为 "-"
+        avgSpeed:
+          description: 平均速度(km/h)，未驶离为字符串 "-"
+          oneOf:
+            - type: number
+            - type: string
+        driverName: { type: string }
+        driverPhone: { type: string }
+        driveStatus: { type: string, description: '0-未驶离、1-已驶离', enum: ['0', '1'] }
+
+    HazardousTypeDistributionResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/HazardousTypeDistributionData'
+    HazardousTypeDistributionData:
+      type: object
+      description: '原文 data 为裸数组，本轮统一为 { data: [...] } 包在 envelope.data 内'
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/HazardousTypeItem'
+    HazardousTypeItem:
+      type: object
+      properties:
+        typeName: { type: string }
+        count: { type: number }
+
+    WayBillRecordResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WayBillRecordData'
+    WayBillRecordData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/WayBillItem'
+    WayBillItem:
+      type: object
+      properties:
+        id: { type: string }
+        wayBillNo: { type: string }
+        dangerousGoodsName: { type: string }
+        dangerousGoodsType: { type: string, description: 危化品分类编号，如 "2.2" }
+        origin: { type: string }
+        destination: { type: string }
+        departureTime: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        arrivalTime:
+          type: string
+          nullable: true
+          description: 到达时间，null 表示未到达
+        estimatedTravelTime: { type: string, description: 预计运输耗时（小时） }
+        fullLoad: { type: string, description: '1-满载、2-不满载' }
+        transportStatus: { type: string, description: '1-在途、2-已完成' }
+        transportMileage: { type: number, description: 单位 KM }
+        totalWeight: { type: number, description: 单位吨 }
+        driverName: { type: string }
+        driverPhone: { type: string }
+
+    DetectionEventListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DetectionEventListData'
+    DetectionEventListData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventListItem'
+    EventListItem:
+      type: object
+      description: 事件列表项；WebSocket 推送消息体同此结构
+      properties:
+        id: { type: string }
+        eventNo: { type: string }
+        eventType:
+          type: string
+          enum: [OVER_HEIGHT, ILLEGAL, ABNORMAL_EVENT, ABNORMAL_WEATHER, ABNORMAL_REPORT, ENV_ABNORMAL, STRUCT_ABNORMAL]
+        eventTypeName: { type: string }
+        alertTime: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        sectionName: { type: string }
+        direction: { type: string }
+        pileNumber: { type: string }
+        alertContent: { type: string }
+        eventLevel:
+          type: string
+          description: 统一枚举 HIGH/MEDIUM/LOW（原文 WS 示例 CRITICAL 视为笔误）
+          enum: [HIGH, MEDIUM, LOW]
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, DONE, FALSE_ALARM, IGNORED, READ]
+
+    AlertDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AlertDetailData'
+    AlertDetailData:
+      type: object
+      properties:
+        alertInfo:
+          $ref: '#/components/schemas/AlertInfo'
+        cameras:
+          type: array
+          items:
+            $ref: '#/components/schemas/CameraItem'
+        disposalTimeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisposalTimelineItem'
+    AlertInfo:
+      type: object
+      properties:
+        id: { type: string }
+        eventNo: { type: string }
+        eventType: { type: string, enum: [OVER_HEIGHT, ENV_ABNORMAL, STRUCT_ABNORMAL] }
+        eventTypeName: { type: string }
+        alertTime: { type: string }
+        sectionName: { type: string }
+        direction: { type: string }
+        pileNumber: { type: string }
+        alertContent: { type: string }
+        eventLevel: { type: string, enum: [HIGH, MEDIUM, LOW] }
+        status: { type: string, enum: [PENDING, PROCESSING, DONE, FALSE_ALARM, IGNORED] }
+        alertThreshold: { type: string, description: 仅超高/结构异常返回 }
+        realtimeValue: { type: string, description: 仅超高/结构异常返回 }
+        abnormalReason: { type: string, description: 仅超高/环境/结构异常返回 }
+        monitorPoint: { type: string, description: 仅结构异常返回 }
+        alertType: { type: string, description: 仅环境异常返回 }
+        processingResult: { type: string, description: 仅环境异常返回 }
+    CameraItem:
+      type: object
+      properties:
+        deviceId: { type: string }
+        deviceName: { type: string }
+        mediaType: { type: string, enum: [VIDEO, IMAGE] }
+        mediaUrl: { type: string }
+    DisposalTimelineItem:
+      type: object
+      properties:
+        time: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        action: { type: string }
+        operator: { type: string }
+
+    AlertDisposalRequest:
+      type: object
+      required: [eventId, handleTime, handleContent]
+      properties:
+        eventId: { type: string }
+        handleTime: { type: string, description: 'yyyy-MM-dd HH:mm:ss' }
+        handleContent: { type: string, description: 处置内容/措施 }
+    AlertDisposalResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EmptyData'
+    EventCompleteRequest:
+      type: object
+      required: [eventId]
+      properties:
+        eventId: { type: string }
+    EventCompleteResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EmptyData'
+
+    DeviceMonitorResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceMonitorData'
+    DeviceMonitorData:
+      type: object
+      properties:
+        deviceList:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceMonitorItem'
+    DeviceMonitorItem:
+      type: object
+      properties:
+        deviceId: { type: string }
+        deviceName: { type: string }
+        pileNumber: { type: integer, description: 设备桩号数字 }
+        pileNumberStr: { type: string }
+        direction: { type: string, description: '1上行 2下行 3上下行' }
+        directionName: { type: string }
+        unit: { type: string }
+        maxThreshold: { type: number, nullable: true, description: 预警上限，null 不画线 }
+        minThreshold: { type: number, nullable: true, description: 预警下限，null 不画线 }
+        currentValue: { type: number }
+        historyData:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryPoint'
+    HistoryPoint:
+      type: object
+      properties:
+        time: { type: string }
+        value: { type: number }
+
+    DeviceListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceListData'
+    DeviceListData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/DeviceListItem'
+    DeviceListItem:
+      type: object
+      properties:
+        deviceId: { type: string }
+        deviceName: { type: string }
+        deviceCode: { type: string, description: 设备编号 }
+        pileNumberStr: { type: string }
+        location: { type: string, description: 安装位置 }
+        status: { type: string, description: 'ONLINE/OFFLINE/FAULT', enum: [ONLINE, OFFLINE, FAULT] }
+        lastHeartbeat: { type: string, description: 最后心跳时间 }
+
+    DeviceDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceDetailData'
+    DeviceDetailData:
+      allOf:
+        - $ref: '#/components/schemas/DeviceListItem'
+        - type: object
+          properties:
+            unit: { type: string }
+            metrics:
+              type: array
+              items:
+                $ref: '#/components/schemas/DeviceMetricPoint'
+    DeviceMetricPoint:
+      type: object
+      properties:
+        time: { type: string }
+        value: { type: number }
+
+    DeviceRepairRequest:
+      type: object
+      required: [deviceId, faultDesc]
+      properties:
+        deviceId: { type: string }
+        faultDesc: { type: string, description: 故障描述 }
+        contactName: { type: string, description: 报修联系人（可选） }
+        contactPhone: { type: string, description: 联系电话（可选） }
+    DeviceRepairResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EmptyData'
+
+    WeatherAlarmListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WeatherAlarmListData'
+    WeatherAlarmListData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/WeatherAlarmItem'
+    WeatherAlarmItem:
+      type: object
+      properties:
+        id: { type: string }
+        alarmType: { type: string, description: 天气类型：大雾/暴雨/大风/冰雪等 }
+        alarmLevel: { type: string, description: 'BLUE/YELLOW/ORANGE/RED', enum: [BLUE, YELLOW, ORANGE, RED] }
+        sectionName: { type: string }
+        content: { type: string }
+        publishTime: { type: string }
+        status: { type: string, description: 'PENDING/PROCESSING/DONE', enum: [PENDING, PROCESSING, DONE] }
+
+    ReportListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ReportListData'
+    ReportListData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReportItem'
+    ReportItem:
+      type: object
+      properties:
+        id: { type: string }
+        reportNo: { type: string }
+        reportType: { type: string }
+        content: { type: string }
+        sectionName: { type: string }
+        reporter: { type: string }
+        reportTime: { type: string }
+        status: { type: string, description: 'PENDING/PROCESSING/DONE', enum: [PENDING, PROCESSING, DONE] }
+
+    EnvAlarmListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EnvAlarmListData'
+    EnvAlarmListData:
+      allOf:
+        - $ref: '#/components/schemas/PagedList'
+        - type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/EnvAlarmItem'
+    EnvAlarmItem:
+      type: object
+      properties:
+        id: { type: string }
+        monitorType: { type: string, description: 'CO/VI/INNER_ILLUM/OUTER_ILLUM' }
+        deviceName: { type: string }
+        pileNumberStr: { type: string }
+        alertContent: { type: string }
+        realtimeValue: { type: number }
+        threshold: { type: number }
+        unit: { type: string }
+        alertTime: { type: string }
+        status: { type: string, description: 'PENDING/PROCESSING/DONE', enum: [PENDING, PROCESSING, DONE] }
+
+    MonitorRouteResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MonitorRouteData'
+    MonitorRouteData:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteNode'
+    RouteNode:
+      type: object
+      properties:
+        nodeId: { type: string }
+        nodeName: { type: string }
+        nodeType: { type: string, description: 'tunnel/gantry/interchange', enum: [tunnel, gantry, interchange] }
+        x: { type: number, description: 拓扑坐标 x（0-1 归一化） }
+        y: { type: number, description: 拓扑坐标 y（0-1 归一化） }
+        sectionNum: { type: string }
+
+    EventHandleRequest:
+      type: object
+      description: D9 正文引用 eventHandle 但未给路径，本轮补全
+      required: [eventId, action]
+      properties:
+        eventId: { type: string }
+        eventType:
+          type: string
+          enum: [OVER_HEIGHT, ILLEGAL, ABNORMAL_EVENT, ABNORMAL_WEATHER, ABNORMAL_REPORT, ENV_ABNORMAL, STRUCT_ABNORMAL]
+        action: { type: string, description: 'FALSE_ALARM/IGNORED/READ', enum: [FALSE_ALARM, IGNORED, READ] }
+        remark: { type: string, description: 备注/误报原因（可选） }
+    EventHandleResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EmptyData'

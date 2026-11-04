@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>运行监测大屏</title>
+  <!-- 外壳 DOM 契约：CONTRACT.md §3.1 -->
+  <link rel="stylesheet" href="core/style.css" />
+</head>
+<body>
+  <div id="yxjc-root">
+    <header id="yxjc-head"></header>
+    <main id="yxjc-main">
+      <aside id="yxjc-left"></aside>
+      <section id="yxjc-center"></section>
+      <aside id="yxjc-right"></aside>
+    </main>
+  </div>
+  <div id="yxjc-modal-layer"></div>
+
+  <!-- 核心库：顺序固定（util → charts → api → shell → modules） -->
+  <script src="core/util.js"></script>
+  <script src="core/charts.js"></script>
+  <script src="core/api.js"></script>
+  <script src="core/shell.js"></script>
+  <script src="core/modules.js"></script>
+  <script>
+    (function () {
+      function start() {
+        if (window.YXJC && typeof window.YXJC.loadModules === 'function') {
+          window.YXJC.loadModules();
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+      } else {
+        start();
+      }
+    })();
+  </script>
+</body>
+</html>
