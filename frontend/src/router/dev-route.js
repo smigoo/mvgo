@@ -30,5 +30,15 @@ export const devRoute = [
     meta: {
       title: 'jaegerPermision'
     }
+  },
+  {
+    // 新管线（ai-engine-v2）测试页：仅供本地调测，不挂任何导航入口
+    // 后端 /api/v2/pipeline 由 DevOnlyGuard 把控，生产环境统一 404
+    name: 'ComponentsTestV2',
+    path: '/generator/components-test',
+    component: () => import('@/views/components-test/index.vue'),
+    meta: {
+      title: '新管线测试台'
+    }
   }
 ]

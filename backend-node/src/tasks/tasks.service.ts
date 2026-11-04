@@ -15,6 +15,7 @@ import { redactSecrets } from '../common/utils/redact';
 import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { markSessionLocked } from '../ai-engine/utils/session-lock-registry.js';
+import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
 
 const { ZipArchive } = require('archiver');
 
@@ -312,6 +313,23 @@ export class TasksService {
   private persistAgain = false;
 
   /**
+   * 🛡️ 缩减护栏（2026-11-04「历史记录列表记录无故消失」治本·D 项）：
+   * 记录本进程内**有意删除**的 sessionId 集合。flushPersistQueue 只有在
+   * 「本次确有意删除」时才允许落盘列表相比磁盘缩短；否则一旦发现缩短即判为
+   * 异常（历史上双写互覆把 260 抹成 135→77→6），记 WARN 并合并磁盘独有项。
+   * 注意：gc 的 500 上限超额淘汰亦属**有意删除**（设计内 LRU），同样登记在案，
+   * 以便与「无故缩短」区分开——后者不登记、由护栏拦截。
+   */
+  private pendingDeletedIds: Set<string> = new Set();
+
+  /**
+   * 最近一次已知的磁盘任务条数（boot 时由 loadSync 初始化，每次成功落盘后更新）。
+   * 用于在 flushPersistQueue 里以 O(1) 廉价判断是否发生「疑似缩短」，
+   * 避免每 30s 都去读 37MB 的 tasks.json。
+   */
+  private lastKnownDiskCount = 0;
+
+  /**
    * 产物就绪快照缓存（进程内）：sessionId -> { ready, level, missing, missingFiles, status, at }。
    * hasTaskArtifacts/artifactReadyLevel/missingEntryFiles/getPartialMissingFiles 内部多次
    * 同步 existsSync/读快照清单，71 任务全量 = 数百次 fs/请求（2026-09-02 实测首次冷 15.9s）。
@@ -493,7 +511,17 @@ export class TasksService {
         }
         return;
       }
-      const list = JSON.parse(raw);
+      let list: any;
+      try {
+        list = JSON.parse(raw);
+      } catch (parseErr: any) {
+        // 🛡️ 补强2（2026-11-04）：主文件解析失败（如降级直写半写损毁）→ 回退最近一次备份
+        //    tasks.json.prev。可解析出合法数组才采纳，否则继续抛出交由外层 warn。
+        const prevFile = this.persistFile + '.prev';
+        if (!existsSync(prevFile)) throw parseErr;
+        console.warn(`[TasksService] 主文件解析失败（${parseErr?.message}），回退备份 ${prevFile}`);
+        list = JSON.parse(readFileSync(prevFile, 'utf-8'));
+      }
       if (!Array.isArray(list)) return;
 
       for (const task of list) {
@@ -537,6 +565,10 @@ export class TasksService {
       }
 
       console.log(`[TasksService] 已恢复 ${list.length} 个历史任务`);
+
+      // 🛡️ 缩减护栏基线：记录本次 boot 读到的磁盘条数（封顶到落盘上限，避免
+      //    磁盘 >MAX_PERSISTED 时首次落盘产生 False-Positive WARN），供 flushPersistQueue 比对。
+      this.lastKnownDiskCount = Math.min(list.length, MAX_PERSISTED);
 
       // 迁移后重建父子关系：遍历所有有 parentId 的任务，将它们注册到父任务的 childIds
       for (const [, task] of this.tasks) {
@@ -1052,12 +1084,43 @@ export class TasksService {
           buffer: [],
         }));
 
+      // 🛡️ 缩减护栏（2026-11-04「历史记录列表记录无故消失」治本·D 项）：
+      // 除非本进程确有意删除（pendingDeletedIds 非空，含用户显式删除与 gc 500 上限配套淘汰），
+      // 否则落盘列表不应比磁盘现有更短——任何「无故缩短」都视为异常（宁可多留、不可误删）。
+      // 命中时记 WARN 并合并磁盘独有项，拒绝缩小写入。
+      // 🛡️ 回灌（QA 复核建议）：合并后把磁盘独有项**回灌 this.tasks**，使内存与落盘条数一致；
+      //    否则 memory 恒 < 基线，异常态下每次 persist 都会重复读整份文件 + 重复 WARN + 重复合并。
+      let finalList = list;
+      if (list.length < this.lastKnownDiskCount && this.pendingDeletedIds.size === 0) {
+        const diskList = this.readDiskTaskList();
+        if (diskList.length > list.length) {
+          console.warn(
+            `[TasksService] 落盘护栏：内存 ${list.length} < 磁盘 ${diskList.length} 且无有意删除，` +
+            `已合并磁盘独有项、拒绝缩短写入（疑似磁盘被外部替换/异常丢数据）`,
+          );
+          finalList = this.mergeTaskLists(list, diskList);
+          // 回灌磁盘独有项到内存（内存优先：不覆盖已存在的 live 对象，只补缺失的）。
+          let injected = 0;
+          for (const t of finalList) {
+            if (t && t.sessionId && !this.tasks.has(t.sessionId)) {
+              this.tasks.set(t.sessionId, t);
+              injected++;
+            }
+          }
+          if (injected > 0) {
+            console.warn(
+              `[TasksService] 落盘护栏：已回灌 ${injected} 条磁盘独有任务到内存（内存/落盘对齐，避免重复读盘与合并）`,
+            );
+          }
+        }
+      }
+
       const dir = join(this.persistFile, '..');
       if (!existsSync(dir)) {
         await fs.mkdir(dir, { recursive: true });
       }
 
-      const json = JSON.stringify(list, null, 2);
+      const json = JSON.stringify(finalList, null, 2);
       // 原子化替换：先写唯一 .tmp 再 rename，避免并发持久化互相删除临时文件。
       // 🛡️ 2026-09-02：环境 safe-delete 钩子会拦截 Node fs（曾观测 tmp 写完后、
       // rename 前被移除 → ENOENT）。write 后 access 复核，被劫走则换名重试一次。
@@ -1072,10 +1135,27 @@ export class TasksService {
           } catch (renameErr: any) {
             // 🛡️ 2026-11-03：EPERM rename 风暴降级——rename 不可用时直写目标文件，tmp 尽力清理。
             if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr;
+            // 🛡️ 补强2（2026-11-04）：直写 `fs.writeFile` 是「先 truncate 再写」的**非原子覆盖**，
+            //   SIGTERM/半写即整表损毁（data/ 下 13 个 0 字节 tasks.json.<pid>.<ts>.<rand>.tmp 即实证）。
+            //   故直写前先落一份 tasks.json.prev（保留最近一次，覆盖旧值）→ 半写可回滚；
+            //   loadSync 在「主文件解析失败」时会回退读 .prev。
+            await this.backupPersistFileBeforeDirectWrite();
             await fs.writeFile(this.persistFile, json, 'utf-8');
             try { await fs.unlink(tmpFile); } catch { /* 残留 tmp 待清理 */ }
             console.warn(`[TasksService] 持久化：rename ${renameErr.code}，已降级为直写`);
           }
+          // ✅ 落盘成功。🛡️ 补强1（2026-11-04）：先取旧基线用于「低噪声证人日志」，再更新基线。
+          //    仅在本次落盘条数 ≠ 上一次落盘条数时打印 —— 下次若再缩水，本日志可直接区分
+          //    「进程内变小（磁盘基线≈内存）」还是「磁盘被外部换掉后由护栏合并（合并磁盘独有>0）」。
+          const prevBaseline = this.lastKnownDiskCount;
+          if (finalList.length !== prevBaseline) {
+            console.log(
+              `[TasksService] 落盘 ${finalList.length} 条（磁盘基线 ${prevBaseline}，` +
+              `有意删除 ${this.pendingDeletedIds.size}，合并磁盘独有 ${finalList.length - list.length}）`,
+            );
+          }
+          this.lastKnownDiskCount = finalList.length;
+          this.pendingDeletedIds.clear();
           return;
         } catch (err) {
           lastErr = err;
@@ -1085,6 +1165,70 @@ export class TasksService {
       throw lastErr;
     } catch (err) {
       console.warn('[TasksService] 持久化任务失败:', err.message);
+    }
+  }
+
+  /**
+   * 🛡️ 缩减护栏辅助：读取磁盘现有任务列表。
+   * 仅在 flushPersistQueue 判定「疑似缩短」时调用（低频），失败返回空数组、不阻断正常落盘。
+   */
+  private readDiskTaskList(): Task[] {
+    try {
+      if (!existsSync(this.persistFile)) return [];
+      const raw = readFileSync(this.persistFile, 'utf-8');
+      if (!raw || raw.trim() === '') return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Task[]) : [];
+    } catch (err: any) {
+      console.warn('[TasksService] 落盘护栏读取磁盘任务失败:', err?.message);
+      return [];
+    }
+  }
+
+  /**
+   * 🛡️ 缩减护栏辅助：合并两份任务列表。以内存列表为准，补齐磁盘独有（按 sessionId）条目，
+   * 按开始时间倒序，截断至 MAX_PERSISTED。返回**未**做 redactSecrets 的原始任务数组，
+   * 由调用方（flushPersistQueue）统一处理（磁盘条目在写入前已被 redact 过）。
+   */
+  private mergeTaskLists(memoryList: Task[], diskList: Task[]): Task[] {
+    const seen = new Set(memoryList.map((t) => t.sessionId));
+    const merged: Task[] = [...memoryList];
+    for (const t of diskList) {
+      if (!t || !t.sessionId || seen.has(t.sessionId)) continue;
+      seen.add(t.sessionId);
+      merged.push(t);
+    }
+    return merged
+      .sort((a, b) => b.startTime - a.startTime)
+      .slice(0, MAX_PERSISTED);
+  }
+
+  /**
+   * 🛡️ 补强2（2026-11-04）：EPERM 降级直写前，把现有主文件备份为 `${persistFile}.prev`。
+   *
+   * 背景：降级路径 `fs.writeFile` 是「先 truncate 再写」的非原子覆盖，SIGTERM/半写即整表损毁。
+   * 策略：原子替换 .prev —— 先 copy 到唯一 .tmp，再 renameWithCopyFallback 落名
+   *       （rename 不可用时由该 util 内部降级为 copy）；整体失败则 copy 直覆兜底。
+   * best-effort：备份失败不阻断主流程（仅 warn），因为主账本仍在（只是失去一层回滚保护）。
+   */
+  private async backupPersistFileBeforeDirectWrite(): Promise<void> {
+    const prevFile = `${this.persistFile}.prev`;
+    try {
+      if (!existsSync(this.persistFile)) return; // 无主文件可备份
+      const prevTmp = `${prevFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+      await fs.copyFile(this.persistFile, prevTmp);
+      // renameWithCopyFallback 已内建 EPERM/EBUSY/EXDEV → copy 降级
+      renameWithCopyFallback(prevTmp, prevFile, { label: 'TasksService.persist.prev' });
+    } catch (err: any) {
+      // 兜底：直接覆盖 .prev（best-effort）
+      try {
+        await fs.copyFile(this.persistFile, prevFile);
+      } catch (fallbackErr: any) {
+        console.warn(
+          '[TasksService] 直写前备份 .prev 失败（继续直写，仅失去回滚保护）:',
+          fallbackErr?.message || err?.message,
+        );
+      }
     }
   }
 
@@ -1127,6 +1271,8 @@ export class TasksService {
     if (completed.length > MAX_IN_MEMORY) {
       const removeCount = completed.length - MAX_IN_MEMORY;
       for (let i = 0; i < removeCount; i++) {
+        // 🛡️ 设计内 LRU 超额淘汰：登记为「有意删除」，使落盘护栏放行本次缩短。
+        this.pendingDeletedIds.add(completed[i][0]);
         this.tasks.delete(completed[i][0]);
       }
       needsPersist = true;
@@ -2270,7 +2416,11 @@ export class TasksService {
     }
 
     const deleted = this.tasks.delete(sessionId);
-    if (deleted) this.persist();
+    if (deleted) {
+      // 🛡️ 用户显式删除：登记后放行本次落盘缩短
+      this.pendingDeletedIds.add(sessionId);
+      this.persist();
+    }
     return deleted;
   }
 
@@ -2462,6 +2612,8 @@ export class TasksService {
       const ids = this.getTaskIdentifiers(task);
       if (ids.some((id) => componentIds.has(id))) continue;
       deletedFiles += this.cleanupTaskArtifacts(task);
+      // 🛡️ 清理孤儿任务：登记为「有意删除」（controller 端点显式触发）
+      this.pendingDeletedIds.add(task.sessionId);
       this.tasks.delete(task.sessionId);
       orphanTasks++;
     }
@@ -2479,6 +2631,8 @@ export class TasksService {
       if (task.status !== 'running') {
         // 数据隔离：如果提供了 userId，只删除该用户的任务
         if (userId && task.userId && task.userId !== userId) continue;
+        // 🛡️ 批量删除过期任务：登记为「有意删除」（controller 端点显式触发）
+        this.pendingDeletedIds.add(sessionId);
         this.tasks.delete(sessionId);
         removed++;
       }

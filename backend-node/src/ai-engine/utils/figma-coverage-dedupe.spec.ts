@@ -7,6 +7,8 @@
  */
 import {
   buildFigmaClosureIndex,
+  buildFigmaTextIdSet,
+  buildFigmaTextCharactersIndex,
   sectionCoverageSet,
   dedupeSectionsByCoverage,
 } from './figma-coverage-dedupe.js'
@@ -327,5 +329,179 @@ describe('刀28b：非列表段的吸收证据不含 items 锚点展开（mc-max
     const r = dedupeSectionsByCoverage([inflatedItemsSection(), plain], idx())
     expect(r.sections).toHaveLength(1)
     expect(r.removed[0]?.id).toBe('48:5813')
+  })
+})
+
+describe('C0.2 三段判据：祖先/后代单一归属（mc-max-1793750471950-b93589ae 实锤）', () => {
+  // 拓扑复刻真机：根 Frame 36:1693（壳：bg RECTANGLE + header VECTOR，无 TEXT 余量）
+  // 内含子 Group 801:3（全部业务文本）。两段平级 ⇒ 旧管线双渲染。
+  const makeAncestorFigma = () => ({
+    id: '0:1',
+    type: 'FRAME',
+    name: 'root',
+    children: [
+      {
+        id: '36:1693',
+        type: 'FRAME',
+        name: 'cp-设备详情',
+        children: [
+          { id: '36:1694', type: 'RECTANGLE', name: 'bg' },
+          { id: '36:1697', type: 'VECTOR', name: 'header' },
+          {
+            id: '801:3',
+            type: 'GROUP',
+            name: 'slot-icon',
+            children: [
+              { id: '36:1695', type: 'RECTANGLE', name: 'r' },
+              { id: '36:1698', type: 'TEXT', name: '编码', characters: '编码' },
+              { id: '36:1708', type: 'TEXT', name: '产品描述', characters: '产品描述' },
+            ],
+          },
+        ],
+      },
+    ],
+  })
+  const idx = () => buildFigmaClosureIndex(makeAncestorFigma())!
+  const texts = () => buildFigmaTextIdSet(makeAncestorFigma())!
+  const opts = () => ({
+    textIdSet: texts(),
+    textCharIndex: buildFigmaTextCharactersIndex(makeAncestorFigma())!,
+  })
+
+  test('buildFigmaTextIdSet：只收 TEXT 节点、document 包装兼容、无效输入 fail-open', () => {
+    expect([...texts()].sort()).toEqual(['36:1698', '36:1708'])
+    expect(buildFigmaTextIdSet({ document: makeAncestorFigma() })!.size).toBe(2)
+    expect(buildFigmaTextIdSet(null)).toBeNull()
+  })
+
+  test('⭐ 阳性：纯壳祖先被删、结构后代保留（requireContentCarrier 挡不住的场景）', () => {
+    const ancestor = { id: '36:1693', sourceNodeIds: ['36:1693'] } // 壳：余量只有 RECTANGLE/VECTOR
+    const descendant = { id: '801:3', sourceNodeIds: ['801:3'] } // 承接全部 TEXT
+    const r = dedupeSectionsByCoverage([ancestor, descendant], idx(), {
+      ...opts(),
+      requireContentCarrier: true,
+    })
+    expect(r.sections.map((s: any) => s.id)).toEqual(['801:3'])
+    expect(r.removed).toHaveLength(1)
+    expect(r.removed[0]).toMatchObject({ id: '36:1693', coveredBy: '801:3', reason: 'ancestor-shell' })
+  })
+
+  test('反向：祖先余量含 TEXT（壳外还有自己的文本）⇒ 保留（宁多勿漏）', () => {
+    const figma = makeAncestorFigma()
+    figma.children[0].children.push({ id: '36:9999', type: 'TEXT', name: '标题', characters: '标题' })
+    const ancestor = { id: '36:1693', sourceNodeIds: ['36:1693'] }
+    const descendant = { id: '801:3', sourceNodeIds: ['801:3'] }
+    const r = dedupeSectionsByCoverage([ancestor, descendant], buildFigmaClosureIndex(figma)!, {
+      textIdSet: buildFigmaTextIdSet(figma)!,
+      requireContentCarrier: true,
+    })
+    expect(r.sections).toHaveLength(2)
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('方向性（ab7bb76c 教训）：删壳留内容——容器壳消失、内部业务段全部保留', () => {
+    // 容器 807:2 的子树 = 两个业务段节点；自身无 TEXT ⇒ 壳被删，业务段全留
+    const figma = {
+      id: '0:1',
+      type: 'FRAME',
+      name: 'root',
+      children: [
+        {
+          id: '807:2',
+          type: 'GROUP',
+          name: '底部',
+          children: [
+            { id: '807:10', type: 'GROUP', name: '统计卡', children: [{ id: '807:11', type: 'TEXT', characters: '卡' }] },
+            { id: '807:20', type: 'GROUP', name: '表格', children: [{ id: '807:21', type: 'TEXT', characters: '表' }] },
+          ],
+        },
+      ],
+    }
+    const shell = { id: '807:2', sourceNodeIds: ['807:2'] }
+    const card = { id: '807:10', sourceNodeIds: ['807:10'] }
+    const table = { id: '807:20', sourceNodeIds: ['807:20'] }
+    const r = dedupeSectionsByCoverage([shell, card, table], buildFigmaClosureIndex(figma)!, {
+      textIdSet: buildFigmaTextIdSet(figma)!,
+      requireContentCarrier: true,
+    })
+    expect(r.sections.map((s: any) => s.id).sort()).toEqual(['807:10', '807:20'])
+    expect(r.removed[0]).toMatchObject({ id: '807:2', reason: 'ancestor-shell' })
+  })
+
+  test('反向：祖先是列表内容携带者（items ≥2）⇒ 不触发删壳（刀 22 同源防御）', () => {
+    const ancestor = {
+      id: '36:1693',
+      sourceNodeIds: ['36:1693'],
+      body: { items: [{ id: '801:3' }, { id: '0:1' }] },
+    }
+    const descendant = { id: '801:3', sourceNodeIds: ['801:3'] }
+    const r = dedupeSectionsByCoverage([ancestor, descendant], idx(), opts())
+    // 祖先携带 items ⇒ 三段不删壳；后代走一段全包含判据被吸收（旧行为）
+    expect(r.sections.map((s: any) => s.id)).toEqual(['36:1693'])
+    expect(r.removed.filter((x: any) => x.reason === 'ancestor-shell')).toHaveLength(0)
+  })
+
+  test('反向：无 textIdSet ⇒ 三段不启用（fail-open，行为与旧版一致：一段判据照常）', () => {
+    const ancestor = { id: '36:1693', sourceNodeIds: ['36:1693'] }
+    const descendant = { id: '801:3', sourceNodeIds: ['801:3'] }
+    const r = dedupeSectionsByCoverage([ancestor, descendant], idx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]).toMatchObject({ id: '801:3', reason: 'full' })
+  })
+
+  test('幂等：壳删后再跑一遍无新增删除', () => {
+    const ancestor = { id: '36:1693', sourceNodeIds: ['36:1693'] }
+    const descendant = { id: '801:3', sourceNodeIds: ['801:3'] }
+    const once = dedupeSectionsByCoverage([ancestor, descendant], idx(), opts())
+    const twice = dedupeSectionsByCoverage(once.sections, idx(), opts())
+    expect(once.sections).toHaveLength(1)
+    expect(twice.removed).toHaveLength(0)
+  })
+
+  test('⭐ 声明承接（7d7925d2 真机教训）：壳段声明 vision 独有文本（无 TEXT 真值锚点）⇒ 保留', () => {
+    // 组件根 807:2 壳（树中无 TEXT 节点）+ 误锚根的 footer 段声明「运行中」——
+    // Figma 树里不存在该文本 ⇒ 删壳即丢内容 ⇒ 必须保留
+    const figma = {
+      id: '807:2',
+      type: 'FRAME',
+      name: 'root',
+      children: [
+        { id: '43:4892', type: 'GROUP', name: 'stats', children: [] },
+        { id: '43:4788', type: 'GROUP', name: 'list', children: [] },
+      ],
+    }
+    const stats = { id: '43:4893', sourceNodeIds: ['43:4892'] }
+    const footer = { id: '807:2', sourceNodeIds: ['807:2'], body: { children: [{ type: 'label', text: '运行中' }] } }
+    const list = { id: '43:4788', sourceNodeIds: ['43:4788'] }
+    const r = dedupeSectionsByCoverage([stats, footer, list], buildFigmaClosureIndex(figma)!, {
+      textIdSet: buildFigmaTextIdSet(figma)!,
+      textCharIndex: buildFigmaTextCharactersIndex(figma)!,
+      requireContentCarrier: true,
+    })
+    expect(r.sections.map((s: any) => s.id)).toEqual(['43:4893', '807:2', '43:4788'])
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('⭐ 声明承接（b93589ae 完整形态）：壳段声明文本全部锚定在后代闭包 TEXT ⇒ 删壳零丢失', () => {
+    // 壳 36:1693 声明的文本（编码/产品描述）锚定的 TEXT 节点全在 801:3 闭包内
+    const ancestor = {
+      id: '36:1693',
+      sourceNodeIds: ['36:1693'],
+      body: { children: [{ text: '编码' }, { text: '产品描述' }] },
+    }
+    const descendant = { id: '801:3', sourceNodeIds: ['801:3'] }
+    const r = dedupeSectionsByCoverage([ancestor, descendant], idx(), {
+      ...opts(),
+      requireContentCarrier: true,
+    })
+    expect(r.sections.map((s: any) => s.id)).toEqual(['801:3'])
+    expect(r.removed[0]).toMatchObject({ id: '36:1693', reason: 'ancestor-shell' })
+  })
+
+  test('buildFigmaTextCharactersIndex：TEXT characters trim 后索引、无效输入 fail-open', () => {
+    const m = buildFigmaTextCharactersIndex(makeAncestorFigma())!
+    expect([...m.get('编码')!]).toEqual(['36:1698'])
+    expect(m.get('不存在')).toBeUndefined()
+    expect(buildFigmaTextCharactersIndex(null)).toBeNull()
   })
 })

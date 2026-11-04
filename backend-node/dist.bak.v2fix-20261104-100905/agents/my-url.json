@@ -1,0 +1,31 @@
+{
+  "name": "my-url",
+  "label": "我的URL解析",
+  "description": "测试创建",
+  "category": "数据源",
+  "logicType": "tool",
+  "templateId": "url-parser",
+  "inputs": [
+    {
+      "key": "figmaUrl",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "fileKey",
+      "type": "string"
+    },
+    {
+      "key": "nodeId",
+      "type": "string"
+    }
+  ],
+  "params": {},
+  "model": null,
+  "author": "test-user",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/my-url.js",
+  "createdAt": 1787210657124
+}

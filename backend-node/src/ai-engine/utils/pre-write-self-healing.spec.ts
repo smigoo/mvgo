@@ -470,3 +470,125 @@ describe('PATCH-CHAIN-ERROR 阳性对照（2026-11-03 S0.2）', () => {
     expect(summary.patchChainErrors).toBe(0);
   });
 });
+
+/**
+ * 🛡️ 刀 42-B A0 计数行接线（2026-11-04 · c-b04f22-b04f223c 实锤）：
+ *   本刀原先只在命中时落 `panelChromeMisplaced` ⇒ 事后无法区分「跑过但零命中」「未跑到」。
+ *   接线后 **命中 0 也全量落盘**（铁律：零命中必须与「未接线」可区分）。
+ */
+describe('刀 42-B A0 计数行接线（2026-11-04）', () => {
+  const silentLogger = { info() {}, warn() {}, error() {}, debug() {} };
+
+  it('① 未跑到（无 figmaRoot）⇒ 全部 panelChrome* 键显式存在且为 0（0 也落盘）', () => {
+    const { summary } = runPreWriteSelfHealing(
+      { 'package/index.vue': '<template><div class="c-x"/></template>' },
+      {} as any,
+      { logger: silentLogger },
+    );
+    const keys = [
+      'panelChromeScanned',
+      'panelChromeSkippedSelfPanel',
+      'panelChromeSkippedMissingDecl',
+      'panelChromeSkippedUnresolvedValue',
+      'panelChromeSkippedNoUniqueOwner',
+      'panelChromeClassScanned',
+      'panelChromeClassSkipped',
+      'panelChromeClassSkipAlreadyStripped',
+      'panelChromeClassSkipNoShadow',
+      'panelChromeClassSkipUnused',
+      'panelChromeClassSkipShared',
+      'panelChromeClassSkipUnresolved',
+      'panelChromeClassSkipNoOwner',
+      'panelChromeClassSkipOccupied',
+      'panelChromeMisplaced',
+    ];
+    for (const k of keys) {
+      expect(summary).toHaveProperty(k);
+      expect((summary as any)[k]).toBe(0);
+    }
+  });
+
+  it('② 跑过但零命中（`@var: unset` 遮蔽）⇒ scanned>0 且 Unresolved===1，可与「未跑到」区分', () => {
+    const box = (x: number, y: number, w: number, h: number) => ({ x, y, width: w, height: h });
+    const figmaRoot = {
+      document: {
+        id: 'root',
+        type: 'FRAME',
+        absoluteBoundingBox: box(0, 0, 1200, 600),
+        children: [
+          {
+            id: 'panel-gold',
+            type: 'GROUP',
+            absoluteBoundingBox: box(0, 0, 1200, 240),
+            children: [
+              {
+                id: 'panel-gold-bg',
+                type: 'RECTANGLE',
+                absoluteBoundingBox: box(0, 0, 1200, 240),
+                cornerRadius: 12,
+                fills: [{ type: 'SOLID', opacity: 1, color: { r: 226 / 255, g: 208 / 255, b: 132 / 255, a: 0.2 } }],
+                effects: [
+                  { type: 'INNER_SHADOW', offset: { x: 0, y: 0 }, radius: 16, spread: 0, color: { r: 1, g: 200 / 255, b: 0, a: 1 } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const files = {
+      'package/index.vue': '<template><div class="c-panel" data-section-id="panel-gold" style="display:flex"/></template>',
+      'package/components/Deco.vue': '<template><div class="c-deco"/></template>',
+      'resources/styles/common.less': '.c-deco {\n  border-radius: 12px;\n  box-shadow: @vendor-panel-shadow;\n}\n',
+      'resources/styles/themes/theme-vars.less': '@vendor-panel-shadow: unset;\n',
+    };
+    const { summary } = runPreWriteSelfHealing(files, { figmaRoot } as any, { logger: silentLogger });
+    expect(summary.panelChromeScanned).toBe(1); // 跑过（分母非零）
+    expect(summary.panelChromeSkippedSelfPanel).toBe(1); // 面板元素自己
+    expect(summary.panelChromeClassScanned).toBe(1);
+    expect(summary.panelChromeClassSkipUnresolved).toBe(1); // 点名「解析不出真值」
+    expect(summary.panelChromeMisplaced).toBe(0);
+  });
+
+  it('③ (b) 两源下沉：SFC 首源 stub 遮蔽 ⇒ 下沉取到 common.less 真发光 ⇒ misplaced=2、Unresolved=0', () => {
+    const box = (x: number, y: number, w: number, h: number) => ({ x, y, width: w, height: h });
+    const figmaRoot = {
+      document: {
+        id: 'root',
+        type: 'FRAME',
+        absoluteBoundingBox: box(0, 0, 1200, 600),
+        children: [
+          {
+            id: 'panel-gold',
+            type: 'GROUP',
+            absoluteBoundingBox: box(0, 0, 1200, 240),
+            children: [
+              {
+                id: 'panel-gold-bg',
+                type: 'RECTANGLE',
+                absoluteBoundingBox: box(0, 0, 1200, 240),
+                cornerRadius: 12,
+                fills: [{ type: 'SOLID', opacity: 1, color: { r: 226 / 255, g: 208 / 255, b: 132 / 255, a: 0.2 } }],
+                effects: [
+                  { type: 'INNER_SHADOW', offset: { x: 0, y: 0 }, radius: 16, spread: 0, color: { r: 1, g: 200 / 255, b: 0, a: 1 } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    // 与 ② 同形，但多一份「有效发光源」：SFC 首源 stub + common.less 次源真值
+    const files = {
+      'package/index.vue': '<template><div class="c-panel" data-section-id="panel-gold" style="display:flex"/></template>',
+      'package/components/Deco.vue':
+        '<template><div class="c-deco"/></template>\n<style scoped>\n.c-deco {\n  border-radius: 12px;\n  box-shadow: @vendor-panel-shadow;\n}\n</style>\n',
+      'resources/styles/common.less':
+        '.c-deco {\n  border-radius: 12px;\n  box-shadow: inset 0px 0px 16px 0px #ffc800;\n}\n',
+      'resources/styles/themes/theme-vars.less': '@vendor-panel-shadow: unset;\n',
+    };
+    const { summary } = runPreWriteSelfHealing(files, { figmaRoot } as any, { logger: silentLogger });
+    expect(summary.panelChromeClassSkipUnresolved).toBe(0); // 下沉成功 ⇒ 不再零命中
+    expect(summary.panelChromeMisplaced).toBe(2); // Deco.vue <style> + common.less 各 1 处
+  });
+});

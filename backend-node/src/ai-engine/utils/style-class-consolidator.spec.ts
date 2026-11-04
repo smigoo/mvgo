@@ -857,3 +857,133 @@ describe('ensureBackgroundContainerDimensions · v-for 重复单元豁免（2026
     expect(out['package/components/ContentSection.vue']).toContain('height: 100%')
   })
 })
+
+/**
+ * 🛡️ F2 家族（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）
+ *
+ * 真机症状：环境监测组件的 tabs 四项**纵向堆叠**成大蓝块（DOM 实测
+ * `.c-…-tabs-list` 计算 display=block，四个 tab 项 y=231/252/273/294）。
+ *
+ * 三条独立缺陷（本组用例逐条锁死）：
+ *  - F2  保护判据粒度：`hasPercentageSize && hasPixelSizeInCommon` ⇒ **整块丢弃**，
+ *        把 `display:flex / flex-direction:row` 一起丢掉；
+ *  - F2b `splitBlockBody` 不认 LESS `//` 单行注释 ⇒ 注释污染嵌套选择器 ⇒ 重排后多出 `}`
+ *        ⇒ 写盘门禁 LESS-WRITE-001 括号不平衡 ⇒ **整轮合并被回退**；
+ *  - F2c `extractClassBlocks` 按行累计深度，遇到 `}` 与下一选择器同行（`}.c-x {`）会把
+ *        相邻两块判成一块 ⇒ 既有真值声明（height:27px / overflow:hidden）进不了并集。
+ */
+describe('consolidateSubComponentClasses · F2 百分比尺寸逐声明剥离', () => {
+  it('F2 阳性：保留结构声明、只剥百分比尺寸、真值像素守恒', () => {
+    const files = {
+      'resources/styles/common.less':
+        '.c-env-monitor-tabs-list {\n  align-items: center;\n  height: 27px;\n  overflow: hidden;\n}\n',
+      'package/components/TabsSection.vue': child(
+        '.c-env-monitor-tabs-list',
+        '  display: flex;\n  flex-direction: row;\n  flex: 1;\n  height: 100%;\n  padding: 0 3px;',
+      ),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 结构声明必须存活（旧口径整块丢弃 ⇒ 这里会全为 false）
+    expect(css).toContain('display: flex;')
+    expect(css).toContain('flex-direction: row;')
+    // 百分比尺寸被剥（不让它覆盖真值像素）
+    expect(css).not.toContain('height: 100%;')
+    // 真值像素与既有独有声明守恒
+    expect(css).toContain('height: 27px;')
+    expect(css).toContain('overflow: hidden;')
+  })
+
+  it('F2 阴性：剥后无声明 ⇒ 仍整块丢弃（不写空块、真值块继续生效）', () => {
+    const files = {
+      'resources/styles/common.less': '.c-env-monitor-x {\n  height: 27px;\n}\n',
+      'package/components/XSection.vue': child('.c-env-monitor-x', '  width: 100%;\n  height: 100%;'),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('height: 27px;')
+    expect((css.match(/\.c-env-monitor-x\s*\{/g) || []).length).toBe(1)
+  })
+
+  it('F2 豁免不变：图表组件（含 echarts）的百分比块不被剥离', () => {
+    const files = {
+      'resources/styles/common.less': '.c-env-chart-canvas {\n  height: 110px;\n}\n',
+      'package/components/ChartSection.vue': `<template>
+  <div class="c-env-chart"><div ref="chartRef" class="c-env-chart-canvas"></div></div>
+</template>
+<script setup>
+import * as echarts from 'echarts'
+chart = echarts.init(chartRef.value)
+</script>
+<style lang="less" scoped>
+.c-env-chart-canvas {
+  width: 100%;
+  height: 100%;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('height: 100%;') // 图表豁免：百分比必须覆盖像素
+  })
+})
+
+describe('consolidateSubComponentClasses · F2b `//` 单行注释不再毒化块重排', () => {
+  it('含 // 注释 + 嵌套规则的子组件块能正常合并（不被写盘门禁回退）', () => {
+    const files = {
+      'resources/styles/common.less': '.c-demo-root {\n  width: 100%;\n}\n',
+      'package/components/TabsSection.vue': `<template>
+  <div class="c-demo-tab"><span class="c-demo-tab-label">x</span></div>
+</template>
+<script setup>
+import { ref } from 'vue'
+const a = ref(1)
+</script>
+<style lang="less" scoped>
+.c-demo-tab {
+  display: flex;
+  // 普通态文字：浅蓝
+  .c-demo-tab-label {
+    color: #99ccff;
+  }
+  &--active {
+    .c-demo-tab-label {
+      color: #ffffff;
+    }
+  }
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 未被门禁回退 ⇒ 新类真的进了 common.less
+    expect(css).toContain('.c-demo-tab')
+    expect(css).toContain('display: flex;')
+    // 花括号平衡（LESS-WRITE-001 判据）
+    expect((css.match(/\{/g) || []).length).toBe((css.match(/\}/g) || []).length)
+  })
+})
+
+describe('consolidateSubComponentClasses · F2c 粘连闭括号不再吞掉相邻块', () => {
+  it('`}.c-x {` 同行的既有块仍能进并集（真值声明不丢）', () => {
+    const files = {
+      // 前一块的 `}` 与目标选择器同行（追加写盘的典型形态）
+      'resources/styles/common.less':
+        '.c-before {\n  color: red;\n}.c-env-monitor-tabs-list {\n  align-items: center;\n  height: 27px;\n  overflow: hidden;\n}\n',
+      'package/components/TabsSection.vue': child(
+        '.c-env-monitor-tabs-list',
+        '  display: flex;\n  flex-direction: row;\n  height: 100%;',
+      ),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('display: flex;')
+    expect(css).toContain('flex-direction: row;')
+    // 既有真值声明必须被并集保住（旧实现：块被吞掉 ⇒ 这两条全丢）
+    expect(css).toContain('height: 27px;')
+    expect(css).toContain('overflow: hidden;')
+    expect((css.match(/\{/g) || []).length).toBe((css.match(/\}/g) || []).length)
+  })
+})

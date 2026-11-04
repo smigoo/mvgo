@@ -361,6 +361,39 @@ describe('vision 原生 panel-header 识别（9e0b7a97：不再依赖几何行�
   })
 })
 
+describe('C0：header 结构事实透传（mc-max-1793723025659-a72365c4）', () => {
+  it('vision header.controls/headerSlots 不再被 buildEffectiveSection 白名单剥掉', () => {
+    const withBusinessBody = {
+      layout: { sections: [
+        {
+          id: 'section-header', role: '常驻', name: '流量预测标题栏',
+          headerRelation: 'title-same-row', slotCandidate: 'header-right',
+          header: {
+            title: '流量预测',
+            controls: [
+              { name: '24小时', value: '24小时', role: 'select' },
+              { name: '节假日预测', value: '节假日预测', role: 'button' },
+            ],
+            headerSlots: [
+              { slotType: 'header-right', elementType: 'tab', content: '今日', active: true },
+              { slotType: 'header-right', elementType: 'tab', content: '本周', active: false },
+            ],
+          },
+          body: { children: [
+            { role: 'text', type: 'text', text: '流量预测' },
+            { role: 'statistic', type: 'text', text: '在线 3792' },
+          ] },
+        },
+        { id: '48:5798', role: 'list', body: { items: [] } },
+      ] },
+    }
+    const res: any = new SubcomponentPlanner().plan(withBusinessBody)
+    const sec = findSection(res.effectiveSections, 'section-header')
+    expect(sec).toBeDefined()
+    expect(sec.header).toEqual(withBusinessBody.layout.sections[0].header)
+  })
+})
+
 describe('ef5c7ed3：纯装饰伪 section 不得进入业务规划', () => {
   const layout = {
     layout: { sections: [
@@ -491,7 +524,11 @@ describe('🔴 vision 布局主权：根锚点只切几何，Figma 不重排结�
     expect(findSection(res.effectiveSections, '43:4893')?.type).not.toBe('header')
   })
 
-  it('Figma y 顺序与 vision 相反 ⇒ 仍保留 vision 顺序；根锚点守卫不是重排开关', () => {
+  it('V-3（2026-11-04 裁决更新，覆盖 7d7925d2）：锚点全有效+严格垂直堆叠+y 序相反 ⇒ 按几何纠正（6f926db0 实锤 vision 错序）', () => {
+    // 旧裁决（7d7925d2）：vision 序无条件保留。新裁决（V-3 窄判据）：垂直流中数组序≠y 序
+    // 无语义解释，属客观错序，按 Figma 几何纠正并打 sectionOrderMismatch 计数；
+    // 「vision 主权」仍保留在窄判据之外——锚点缺失/水平并排/同 y 段一律不动
+    // （见 vision-order-auditor.spec.ts 对应用例）。
     const reversed = {
       layout: { sections: [
         { id: '43:4788', name: '先读列表', body: { children: [] } },
@@ -499,7 +536,7 @@ describe('🔴 vision 布局主权：根锚点只切几何，Figma 不重排结�
       ] },
     }
     const res: any = new SubcomponentPlanner().plan(reversed, { figmaNodeData: ROOT })
-    expect(res.effectiveSections.map((s: any) => s.id)).toEqual(['43:4788', '43:4893'])
+    expect(res.effectiveSections.map((s: any) => s.id)).toEqual(['43:4893', '43:4788'])
   })
 })
 

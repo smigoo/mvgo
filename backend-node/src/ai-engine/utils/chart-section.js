@@ -97,6 +97,123 @@ function isChartSection(sec) {
   )
 }
 
+// ==================== 几何宿主归属（2026-11-04 · mc-max-1793771678347-18544d9c 实锤） ====================
+// 病灶：vision 的 layout.sections 无 children、charts[] 无 id/父级（上游脱锚）→ planner 产出
+//   扁平 content section → 本兜底把未覆盖的 @echarts 节点「追加到根末尾」：① 顺序丢失
+//   （Content×3 在前、Chart×5 在后，真实视觉序被撕碎）；② 刀16b 兄弟间距在错误相邻关系上
+//   补偿出 421px/91px/62px 像素 margin；③ 与宿主组件自绘图表双渲染（ContentForecast 与
+//   ChartChart5 各画一遍流量预测）。F1 根容器高度契约让容器真实高度生效后，margin+flex
+//   叠加 → 段溢出重叠、「section 缺失/样式失效」。
+// 治本：未覆盖节点先找**几何宿主**（节点中心落在叶子 section 的 Figma 盒内，取最小盒）——
+//   有宿主 ⇒ 挂为宿主 internalSubcomponents（R1 同款机制，宿主 prompt 明确告知），不做根级注入；
+//   无宿主 ⇒ 根级**按视觉 Y 归并插入**（不再 append 末尾）。真机计数行见 injectChartSectionIfMissing 尾部。
+
+/** memo 化 Figma 节点 id → absoluteBoundingBox 查找。 */
+function makeFigmaBoxResolver(figmaNodeData) {
+  const cache = new Map()
+  return function boxOf(id) {
+    const key = String(id ?? '')
+    if (!key) return null
+    if (cache.has(key)) return cache.get(key)
+    let found = null
+    const root = figmaNodeData && typeof figmaNodeData === 'object'
+      ? (figmaNodeData.document || figmaNodeData)
+      : null
+    const walk = (node) => {
+      if (!node || found) return
+      if (node.id !== undefined && String(node.id) === key) {
+        found = node.absoluteBoundingBox || null
+        return
+      }
+      for (const c of node.children || []) walk(c)
+    }
+    if (root) walk(root)
+    cache.set(key, found)
+    return found
+  }
+}
+
+/** section 几何盒：优先自身 figmaBox/absoluteBoundingBox，fallback 按 id/sourceNodeIds 查 Figma 树。 */
+function sectionBoxOf(sec, boxOf) {
+  const direct = sec?.figmaBox || sec?.absoluteBoundingBox
+  if (direct && Number.isFinite(Number(direct.y))) return direct
+  if (typeof boxOf !== 'function') return null
+  const fromId = sec?.id !== undefined && sec?.id !== null ? boxOf(sec.id) : null
+  if (fromId) return fromId
+  const src = Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds[0] : null
+  return src ? boxOf(src) : null
+}
+
+function boxArea(b) {
+  return Math.max(0, Number(b?.width) || 0) * Math.max(0, Number(b?.height) || 0)
+}
+
+/** inner 中心点（几何中心）是否落在 outer 盒内（含边界）。 */
+function boxContainsCenter(outer, inner) {
+  if (!outer || !inner) return false
+  const ox = Number(outer.x) || 0
+  const oy = Number(outer.y) || 0
+  const ow = Number(outer.width) || 0
+  const oh = Number(outer.height) || 0
+  if (ow <= 0 || oh <= 0) return false
+  const cx = (Number(inner.x) || 0) + (Number(inner.width) || 0) / 2
+  const cy = (Number(inner.y) || 0) + (Number(inner.height) || 0) / 2
+  return cx >= ox && cx <= ox + ow && cy >= oy && cy <= oy + oh
+}
+
+/** 在叶子 section 中找几何宿主：节点中心落在其盒内，取最小面积（最内层）。
+ *  chart section（type==='chart'）不当宿主；content section 标题含「图表」字样仍可为宿主。 */
+function findGeometricHost(node, leafRefs, boxOf) {
+  let best = null
+  let bestArea = Infinity
+  for (const sec of leafRefs) {
+    if (sec?.type === 'chart') continue
+    const b = sectionBoxOf(sec, boxOf)
+    if (!b || boxArea(b) <= 0) continue
+    if (!boxContainsCenter(b, node?.bbox)) continue
+    const a = boxArea(b)
+    if (a < bestArea) {
+      bestArea = a
+      best = sec
+    }
+  }
+  return best
+}
+
+/** 遍历树中**真实对象引用**的每个 section（不 copy —— 宿主挂载靠对象身份对齐）。 */
+function forEachSectionRef(list, fn) {
+  for (const sec of list || []) {
+    if (!sec || typeof sec !== 'object') continue
+    fn(sec)
+    if (Array.isArray(sec.children) && sec.children.length > 0) {
+      forEachSectionRef(sec.children, fn)
+    }
+  }
+}
+
+function collectLeafRefs(list) {
+  const refs = []
+  forEachSectionRef(list, (sec) => {
+    if (!Array.isArray(sec.children) || sec.children.length === 0) refs.push(sec)
+  })
+  return refs
+}
+
+/** chart section → internalSubcomponent 形状（与 planner R1 图表隔离同款，prompt 已支持）。 */
+function chartSectionToInternalSub(cs) {
+  return {
+    type: 'chart-component',
+    id: cs.id,
+    name: cs.title || cs.id,
+    responsibility: cs.responsibility || `图表组件：${cs.title || cs.id}`,
+    reason: 'R1-geo: 几何宿主归属（@echarts 节点中心落在宿主 section 盒内，不再根级注入）',
+    props: ['chartData', 'chartConfig'],
+    emits: ['legendClick', 'dataZoom'],
+    chartType: cs.chartType || null,
+    sourceNodeIds: Array.isArray(cs.sourceNodeIds) ? cs.sourceNodeIds : [],
+  }
+}
+
 /**
  * 判断 section 是否覆盖了指定的 Figma 节点 ID。
  */
@@ -268,6 +385,12 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
 
   if (chartSections.length === 0) return plan
 
+  // @echarts 节点 id → 节点（含 bbox），尾部几何宿主/归并需要（挂在闭包变量，不进 section 对象）
+  const nodeById = new Map()
+  if (uncoveredNodes.length > 0) {
+    for (const n of uncoveredNodes) nodeById.set(String(n.id), n)
+  }
+
   // 🛡️ 消重（2026-09-26）：@echarts 节点若已以「同 id 的容器 section」存在于树中，
   //   则**就地替换**该子树（消重 + 保留其父容器内的位置与 flex 比例）；
   //   树中确实没有该节点的才维持旧的「根级追加」。
@@ -301,19 +424,103 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
       appended.push(cs)
     }
   }
-  const nextSections = appended.length > 0 ? [...tree, ...appended] : tree
+
+  // 🛡️ 几何宿主归属（2026-11-04 · 18544d9c 实锤）：未就地替换的 chart section 先找几何宿主——
+  //   有宿主 ⇒ 挂为宿主 internalSubcomponents（R1 同款机制），**不做根级注入**（杜绝顺序撕碎、
+  //   像素间距错补偿、与宿主自绘双渲染）；无宿主 ⇒ 根级按视觉 Y 归并插入（不再 append 末尾）。
+  const boxOf = makeFigmaBoxResolver(figmaNodeData)
+  const hostedPairs = []
+  const orphans = []
+  for (const cs of appended) {
+    const node = nodeById.get(String(cs.sourceNodeIds?.[0] ?? ''))
+    const geoHost = node && node.bbox
+      ? findGeometricHost(node, collectLeafRefs(tree), boxOf)
+      : null
+    if (geoHost) hostedPairs.push([geoHost, cs, node])
+    else orphans.push(cs)
+  }
+
+  if (hostedPairs.length > 0) {
+    const attachToHost = (list) =>
+      list.map((sec) => {
+        const pairs = hostedPairs.filter(([h]) => h === sec)
+        if (pairs.length > 0) {
+          const subs = pairs.map(([, cs]) => chartSectionToInternalSub(cs))
+          return {
+            ...sec,
+            internalSubcomponents: [...(sec.internalSubcomponents || []), ...subs],
+          }
+        }
+        if (sec && Array.isArray(sec.children) && sec.children.length > 0) {
+          return { ...sec, children: attachToHost(sec.children) }
+        }
+        return sec
+      })
+    tree = attachToHost(tree)
+  }
+
+  // 孤儿 chart section：按视觉 Y 与既有顶层 section 归并（稳定排序：同 y 保持原相对顺序）。
+  // 无几何事实的 section/chart 取 +Infinity，保持相对顺序落尾部（等价旧 append 语义）。
+  let nextSections = tree
+  if (orphans.length > 0) {
+    const yOf = (sec) => {
+      const node = nodeById.get(String(sec?.sourceNodeIds?.[0] ?? ''))
+      if (node?.bbox && Number.isFinite(Number(node.bbox.y))) return Number(node.bbox.y)
+      const b = sectionBoxOf(sec, boxOf)
+      return b && Number.isFinite(Number(b.y)) ? Number(b.y) : Number.POSITIVE_INFINITY
+    }
+    nextSections = [...tree, ...orphans]
+      .map((sec, idx) => ({ sec, idx, y: yOf(sec) }))
+      .sort((a, b) => (a.y - b.y) || (a.idx - b.idx))
+      .map((x) => x.sec)
+  }
+
+  // 宿主归属的 plan 级记账（prompt 分组按 parentSectionId 消费；与 planner R1 同形状）
+  const hostedPlanSubs = hostedPairs.map(([host, cs]) => ({
+    ...chartSectionToInternalSub(cs),
+    parentSectionId: host.id || host.title || null,
+    parentSectionTitle: host.title || null,
+  }))
 
   const leafCount = collectLeafSections(nextSections).length
   const minSectionsForced = 3
   const isForced = leafCount >= minSectionsForced
+  const totalInternalSubs =
+    (Array.isArray(plan.internalSubcomponents) ? plan.internalSubcomponents.length : 0) +
+    hostedPlanSubs.length
+
+  // 🔴 计数行（0 也必须出现）：hosted/orphan/replaced 三分支真机可观测
+  sources.logger?.info?.('[chart-section] 图表兜底注入裁决', {
+    chartSections: chartSections.length,
+    replacedInTree: replacedCount,
+    hostedByGeometry: hostedPairs.length,
+    rootMergedByY: orphans.length,
+    rootOrder: nextSections.map((s) => s.id).filter(Boolean),
+  })
 
   return {
     ...plan,
     effectiveSections: nextSections,
+    // 🛡️ G2（2026-11-04）：图表宿主裁决计数进 plan 返回体（上游 component-meta 落盘）——
+    //   resolved = 就地替换 + 几何宿主归属；unresolved = 根级 Y 归并（无宿主）；
+    //   skippedNonChartish = 宿主存在但非图表语义被守卫拦下（走归并/追加）。
+    chartHostStats: {
+      resolved: replacedCount + hostedPairs.length,
+      unresolved: orphans.length,
+      skippedNonChartish: skippedCount,
+    },
+    ...(hostedPlanSubs.length > 0
+      ? {
+          internalSubcomponents: [
+            ...(Array.isArray(plan.internalSubcomponents) ? plan.internalSubcomponents : []),
+            ...hostedPlanSubs,
+          ],
+        }
+      : {}),
     isForced,
-    minFiles: isForced ? leafCount : 0,
+    minFiles: isForced ? leafCount + totalInternalSubs : 0,
     reason: isForced
-      ? `叶子 sections=${leafCount} ≥ ${minSectionsForced} → 强制拆分（含强制注入的 ${chartSections.length} 个图表 section${replacedCount > 0 ? `，其中 ${replacedCount} 个就地替换既有容器` : ''}${skippedCount > 0 ? `，${skippedCount} 个宿主非图表语义→改为根级追加` : ''}）`
-      : `叶子 sections=${leafCount} < ${minSectionsForced} → 不强制拆分（已注入 ${chartSections.length} 个图表 section${replacedCount > 0 ? `，其中 ${replacedCount} 个就地替换既有容器` : ''}${skippedCount > 0 ? `，${skippedCount} 个宿主非图表语义→改为根级追加` : ''}）`,
+      ? `叶子 sections=${leafCount} ≥ ${minSectionsForced} → 强制拆分（含强制注入的 ${chartSections.length} 个图表 section${replacedCount > 0 ? `，其中 ${replacedCount} 个就地替换既有容器` : ''}${hostedPairs.length > 0 ? `，${hostedPairs.length} 个几何宿主归属（挂 internalSubcomponents）` : ''}${orphans.length > 0 ? `，${orphans.length} 个根级按 Y 归并` : ''}${skippedCount > 0 ? `，${skippedCount} 个宿主非图表语义→走归并/追加` : ''}）`
+      : `叶子 sections=${leafCount} < ${minSectionsForced} → 不强制拆分（已注入 ${chartSections.length} 个图表 section${replacedCount > 0 ? `，其中 ${replacedCount} 个就地替换既有容器` : ''}${hostedPairs.length > 0 ? `，${hostedPairs.length} 个几何宿主归属` : ''}${orphans.length > 0 ? `，${orphans.length} 个根级按 Y 归并` : ''}${skippedCount > 0 ? `，${skippedCount} 个宿主非图表语义→走归并/追加` : ''}）`,
   }
 }

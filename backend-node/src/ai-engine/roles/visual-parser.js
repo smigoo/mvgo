@@ -39,6 +39,12 @@ import { hasNodeResourceDeclaration } from '../utils/resource-declaration-truth.
 
 const logger = createLogger({ name: 'visual-parser' })
 
+// 🛡️ C0.3-A（2026-11-04）：Figma 结构参考（hint 树）注入预算上限。
+//   原实现为「每轮 parts.join 全量重算后按 5000 字符静默 break」——O(n²) 且**截断静默**：
+//   模型拿到一棵被砍掉下半截的树却不知道有截断，于是对缺失区域自由发挥（臆造 id / 臆造结构）。
+//   现改为跨递归共享的增量预算对象，并在截断处写入显式标记，让模型知道「以下未展开」。
+const FIGMA_HINT_MAX_CHARS = 5000
+
 // Vision 真实预览图分析比配置页连通性测试重得多：需要完整 UI 图 + 大 prompt + JSON 结构化输出。
 // 单次 attempt 超时取 240s（4 分钟）：正常视觉分析约 97s（实测），240s 留足冷启动余量；
 // 同时保证「单次超时 × requestMaxRetries(1)=2 次 attempt + 等待 ≈ 481s」< 节点超时 VISUAL_TIMEOUT_MS(600s)，
@@ -101,6 +107,12 @@ import { mergeInlineRowsIntoSections } from '../utils/inline-row-merger.js'
 export { mergeInlineRowsIntoSections }
 // 🛡️ P1-7（2026-10-01 · c-a812-07a812f7 实锤）：vision 锚点真值校验（幻觉 id 零报警 → 显式诊断）
 import { validateVisionAnchors } from '../utils/vision-anchor-validator.js'
+
+// 🛡️ V-2（2026-11-04 · bf0f0342 实锤）：charts[].section 归属强制解析。
+//   vision 的 chart.section 可为 null 落盘（实测 charts:[{type:'bar',section:None}]）⇒
+//   validator 交叉校验跳过 null + design-facts 退化合成 id + 下游宿主断供 → 组件零 echarts。
+//   本解析按「已锚 → bbox containment → title 语义」确定性补全，全失败显式标 sectionUnresolved。
+import { resolveChartSectionAnchors } from '../utils/chart-anchor-resolver.js'
 // 🛡️ Phase D1（2026-10-31 治理方案）：vision 出口契约审计（观测）——
 //   既有审计家族新成员，输出 {evaluated, missing, conflicts}；只记日志不阻断。
 import { auditVisionContract } from '../utils/vision-contract-audit.js'
@@ -339,6 +351,28 @@ export class VisualParser {
     if (figmaData) {
       const figmaHints = this.extractFigmaHints(figmaData, 4, 0, resourceDomMapping)
       if (figmaHints) {
+        // 🛡️ C0.3-A（2026-11-04 · 真机 mc-max-1793755487753-104f5a31）：
+        //   只补 `[id]` 不足以治本——`section.id` 是**单值契约**，而视觉分区常跨多个兄弟节点。
+        //   若不给降级规则，模型在有 id 的情况下仍会退回整屏根节点；而下游
+        //   section-anchor-truth.js 对 `lca-is-root` 明确**拒修** ⇒ 不会自愈。
+        //   故此处显式给出根 id 与「跨节点取最近公共父节点」的降级路径。
+        const rootId = figmaData && figmaData.id ? String(figmaData.id) : ''
+        const anchorRules = [
+          '',
+          '### 🔑 节点 id 与锚点规则（CRITICAL）',
+          '',
+          '结构树每一行形如 `  - 名称 [123:456] 尺寸 text="..."`，方括号里的 `数字:数字` 是该节点在 Figma 中的**真实 id**。',
+          rootId ? `本组件的根节点 id 是 \`${rootId}\`。` : null,
+          '',
+          '输出 `section.id` / `children[].id` / `items[].figmaNode` 时必须遵守：',
+          '',
+          '1. **id 只能取自上面结构树中真实出现的 `[id]`**；禁止凭样式或语义编造，禁止照抄文档示例（例如 `2:3550`）。',
+          '2. **一个区域锚它自己的节点**：取覆盖该区域**最内层**的节点 id，不要用外层大容器。',
+          '3. **区域跨多个兄弟节点**时，用覆盖它们的**最近公共父节点** id，不要因为找不到单一节点就退回整屏根节点。',
+          rootId ? `4. **禁止**把根节点 \`${rootId}\` 用作普通 section 的 id —— 只有该 section 确实就是整个组件时才可用。` : null,
+          '5. **逐元素**给 id：`items[]` 里每个文字/图标元素各自给真实 \`figmaNode\`，不要整段共用同一个 id。',
+          '',
+        ].filter((l) => l !== null).join('\n')
         figmaContextSection = `
 
 ---
@@ -359,6 +393,7 @@ export class VisualParser {
 - \`img-*\` / \`image-*\`：图片资源，必须用 \`<img :src>\` 渲染
 - **禁止**：用 CSS 渐变、SVG 图标、纯色背景替代这些节点的实际图片资源
 
+${anchorRules}
 ${figmaHints}
 `
       }
@@ -537,8 +572,14 @@ ${analysisTask}`
    * @param {number} currentDepth - 当前深度
    * @returns {string} 缩进树形结构的文本摘要
    */
-  extractFigmaHints(node, maxDepth = 4, currentDepth = 0, resourceDomMapping = null) {
+  extractFigmaHints(node, maxDepth = 4, currentDepth = 0, resourceDomMapping = null, budget = null) {
     if (!node || typeof node !== 'object' || currentDepth >= maxDepth) return ''
+
+    // 🛡️ C0.3-A（2026-11-04）：顶层创建**跨递归共享**的预算对象（增量累加，O(n)）。
+    //   截断只发生在预算耗尽处，且一定写入显式标记（见下方 truncated 分支）。
+    if (currentDepth === 0) {
+      budget = { used: 0, limit: FIGMA_HINT_MAX_CHARS, truncated: false }
+    }
 
     const parts = []
     const indent = '  '.repeat(currentDepth)
@@ -622,7 +663,16 @@ ${analysisTask}`
       if (gradients.length > 0) colorStr += ' [has-gradient]'
     }
 
-    parts.push(`${indent}- ${label}${sizeStr}${textStr}${colorStr}${resourceAnnotation}`)
+    // 🛡️ C0.3-A（2026-11-04 · 真机 mc-max-1793755487753-104f5a31）：**行内携带真实节点 id**。
+    //   本刀之前，prompt 的 Figma 结构参考**不含任何节点 id**（本行只有 name/type/尺寸/文本/颜色），
+    //   而 references/schemas/preview-analysis-schema.md 又强制 `section.id` 必须是真 id（`数字:数字`）
+    //   ⇒ 模型唯一见过的真 id，是资源清单里渲出的 `data-section-id`（= 资源父节点 id，本次恰好是根
+    //   Frame 36:1693）；唯一见过的「合法 id 形态」是 schema 示例里的 `2:3550`。
+    //   真机产物三段 id = { 36:1693(根), 2:3550(schema 示例), 36:1693(根) } 即此必然结果。
+    //   现补 `[id]`：与下游 `/^\d+:\d+$/` 锚点门禁、`sourceNodeIds` 同一命名空间，消除「无 id 可引用」。
+    const idStr = node.id ? ` [${node.id}]` : ''
+    parts.push(`${indent}- ${label}${idStr}${sizeStr}${textStr}${colorStr}${resourceAnnotation}`)
+    if (budget) budget.used += parts[0].length + 1
 
     // 子节点布局方向推断
     if (node.children && node.children.length > 1) {
@@ -643,11 +693,22 @@ ${analysisTask}`
 
     // 递归子节点
     if (node.children && Array.isArray(node.children)) {
-      for (const child of node.children) {
-        const childHint = this.extractFigmaHints(child, maxDepth, currentDepth + 1, resourceDomMapping)
+      for (let i = 0; i < node.children.length; i++) {
+        if (budget && budget.truncated) break
+        // 🛡️ C0.3-A：预算耗尽 → **显式标记**（原来只是静默 break，模型不知道树被砍过）
+        if (budget && budget.used > budget.limit) {
+          budget.truncated = true
+          const rest = node.children.length - i
+          parts.push(
+            `${indent}  [⚠️ 结构已截断：此处省略 ${rest} 个兄弟节点（注入预算 ${budget.limit} 字符已满）。` +
+            `这些节点在 Figma 中真实存在但未展开——禁止臆造其 id/名称/内容；` +
+            `如需引用于此的锚点，请使用上层节点 id ${node.id || '?'}]`
+          )
+          break
+        }
+        const child = node.children[i]
+        const childHint = this.extractFigmaHints(child, maxDepth, currentDepth + 1, resourceDomMapping, budget)
         if (childHint) parts.push(childHint)
-        //瘦身：Figma 结构参考总长度上限（防超大组件注入失控，保留最上层结构信息即可）
-        if (parts.join('\n').length > 5000) break
       }
     }
 
@@ -3617,6 +3678,9 @@ ${analysisTask}`
       const axes = typeof c.axes === 'string' ? c.axes : ''
       hints.push({
         chartType: c.type || '',
+        // 🛡️ V-2→P-3 桥（2026-11-04 · bf0f0342 实锤）：section 归属由 chart-anchor-resolver
+        //   在落盘前解析保证；chartDataHints 携带它，planner 聚合为 section.chartFacts。
+        section: c.section != null ? String(c.section) : '',
         title: c.title || c.section || '',
         labels: legend,
         values: [],
@@ -3700,6 +3764,30 @@ ${analysisTask}`
           logger.warn('seriesColors 真值修正失败（非阻断）', { error: err?.message })
         }
       }
+    }
+
+      // 🛡️ V-2（2026-11-04 · bf0f0342 实锤）：charts[].section 归属强制解析。
+      //   计数行铁律：`已评估` 恒打；unresolved 显式入诊断（不阻断，供下游「无宿主不注入」）。
+      if (figmaData) {
+        try {
+          const anchorStats = resolveChartSectionAnchors(parsed.charts, sections, figmaData)
+          logger.info('🛡️ chart 归属解析·已评估', anchorStats)
+          if (anchorStats.unresolved > 0) {
+            pushDiagnostic(
+              'chart-anchor-unresolved',
+              '存在无法归属到任何 section 的图表条目（bbox/名称均无法定位宿主），下游宿主注入将按「无宿主不注入」处理',
+              { items: anchorStats.unresolvedDetail },
+            )
+          }
+          if (anchorStats.resolvedByBBox > 0 || anchorStats.resolvedByName > 0) {
+            pushFix(
+              'chart-anchor',
+              `已确定性补全 ${anchorStats.resolvedByBBox + anchorStats.resolvedByName} 个 chart 的 section 归属（bbox:${anchorStats.resolvedByBBox}/name:${anchorStats.resolvedByName}）`,
+            )
+          }
+        } catch (anchorErr) {
+          logger.warn('chart 归属解析失败（fail-open 跳过）', { error: anchorErr?.message })
+        }
     }
 
     // 🎯 E2 / R3(B)（2026-09-16）：headerSlots 装配统一为「事实优先 + 兜底补缺 union」。

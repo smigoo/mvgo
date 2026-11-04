@@ -18,7 +18,7 @@ import {
   VUE_BUILTIN_COMPONENTS,
 } from '../../utils/sfc-semantics.js';
 import { ensureSubComponentImport, pruneDeadSubComponentImports, postProcessIndexVue } from './resource-mounter.js';
-import { buildChunkMiddle, buildTemplateChunkMiddle, buildScriptChunkMiddle, buildScriptChunkMiddlePart, buildRetryPrompt, resolvePlanSections } from './prompt-builder.js';
+import { buildChunkMiddle, buildTemplateChunkMiddle, buildScriptChunkMiddle, buildScriptChunkMiddlePart, buildRetryPrompt, resolvePlanSections, templateHasNoRefMount } from './prompt-builder.js';
 import { parseCodeOutput, detectFileTruncation } from './code-parser.js';
 import { invokeWithTimeout } from '../../utils/llm-timeout.js';
 import { getMaxTokens, coerceLLMText, resolveModelCapability } from '../../utils/model-config.js';
@@ -366,9 +366,16 @@ export function flexItemStyleFromWidths(widths, index) {
  * @param {{x,y,w,h}|null} curBox 当前兄弟 box
  * @param {'vertical'|'horizontal'} axis 主轴方向
  * @param {number} [prevEffectiveSize] 前一兄弟**实际被分配**的尺寸（与 flex 分配同源）
+ * @param {{guarded?: number}|null} [guardStats] 🛡️ G1 异常间距守卫计数器（可选，命中时 guarded++）
  * @returns {string} `margin-top:Npx;` / `margin-left:Npx;` / ''
  */
-export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0) {
+// 🛡️ G1（2026-11-04 · mc-max-1793775843193-5980b8ee 实锤 margin-top:305px）：异常间距守卫。
+//   病根：prev/cur 盒被假高段/错误锚推歪时，几何差算出数百 px「间距」——设计稿真值兄弟
+//   间距几乎不可能 ≥100px（实测语料 8~64px）。宁缺勿滥：超限不注入（flex grow 自会分配
+//   空间，缺 margin 影响远小于注入 305px 巨型空白），guardStats.guarded 计数恒可观测。
+const SIBLING_GAP_MAX_PX = 100;
+
+export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, guardStats = null) {
   const ok = (b) =>
     b &&
     Number.isFinite(b.x) &&
@@ -398,6 +405,11 @@ export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0) {
     ? curBox.y - (prevBox.y + prevExtent)
     : curBox.x - (prevBox.x + prevExtent);
   if (!Number.isFinite(gap) || gap < 1) return '';
+  // 🛡️ G1：异常间距守卫（在刀16b 同源修正之后——仍超限说明盒输入本身被推歪）
+  if (gap > SIBLING_GAP_MAX_PX) {
+    if (guardStats && typeof guardStats === 'object') guardStats.guarded = (guardStats.guarded || 0) + 1;
+    return '';
+  }
   const prop = vertical ? 'margin-top' : 'margin-left';
   return `${prop}:${Math.round(gap)}px;`;
 }
@@ -512,6 +524,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let __rowBandHits = 0;
   let __gapApplied = 0; // 刀16 兄弟间距真值注入计数
   let __gapRebased = 0; // 刀16b 间距基准被上移到「与 flex 同源高度」的注入数（修双计）
+  let __canvasMismatchCount = 0; // G10 画布收敛复核拦停数（兄弟盒跨度 vs 容器高偏差>15%）
+  const __gapGuardStats = { guarded: 0 }; // 🛡️ G1 异常间距守卫计数（≥100px 不注入）
   if (!leaves.length) return null;
 
   const nameOf = assignSectionComponentNames(treeSections);
@@ -768,7 +782,17 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         ? ` data-absorbed-host="${rootHostSection.id}"`
         : '';
     const rootHostStyle = rootHostLayers.length ? 'position:relative;isolation:isolate;' : '';
-    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHostStyle}">`);
+    // 🛡️ F1 根容器高度契约（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：
+    //   此前根 div 只写 `display:flex;flex-direction:column`，高度**全靠 LLM 在 less 里写
+    //   `height:100%`**（见上方 P5 注释「LLM 写了才有」）。一旦 LLM 没写（本例 index.vue 的
+    //   `<style>` 只有 @import，共享表里 `.c-…-slot-con` 零规则），根 div 在 block 父层
+    //   （`.pannel-content`，定高）里 height:auto，而 A4 给每个段写的都是 `flex:<r> 1 0`
+    //   + `min-height:0` ⇒ **列向 flex 容器无定高时子项 hypothetical main size 全为 0**
+    //   ⇒ 整棵树高度 0：echarts 已 init（canvas 存在）却被 `overflow:hidden` 裁掉，
+    //   真机实测 slot-con 0 / chart 0 / canvas 110 溢出不可见。
+    //   治本：把高度契约定在**产生处**（内联样式优先级最高，免疫后续合并/反杀），
+    //   与既有正常组件的 `.c-…-slot-con{width:100%;height:100%;min-height:0}` 同口径。
+    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;height:100%;min-height:0;${rootHostStyle}">`);
     for (const layer of rootHostLayers) {
       lines.push(
         `      <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
@@ -1006,6 +1030,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
                     bandTree.children[i - 1].box,
                     bandTree.children[i].box,
                     rootIsRow ? 'horizontal' : 'vertical',
+                    0,
+                    __gapGuardStats,
                   )
                 : '';
             if (bandGap) __gapApplied += 1;
@@ -1017,6 +1043,34 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
                 : flexItemStyleFromHeights(bandSizes, i)) + bandGap,
               rootCenter,
             );
+          }
+        }
+        // 🛡️ G10（2026-11-04 · a87c2ba5 实锤）：段高比例/间距**画布收敛复核**。
+        //   病灶：三段 flex 0.411/2.314/0.274 + margin-top 92/59px，Σ折算 ≈708 > 画布 557
+        //   不收敛 ⇒ 段盒与间距不同坐标系（段锚层级错位/跨画布取盒），反向比例+巨 margin。
+        //   判据（几何恒等式）：兄弟盒真值同坐标系时 `Σ(盒高)+Σ(盒差间距) ≡ 盒跨度`，
+        //   故复核等价于 `兄弟盒跨度 vs 容器盒高`；偏差 >15% ⇒ 跨坐标系错位确诊。
+        //   处置：本容器**兄弟间距全部弃用**（绝对 margin 是错位最直接放大器，弃用回落
+        //   自然流），flex 相对比例保留（内部自洽）；计数 ratioCanvasMismatch 恒打。
+        //   根治段锚层级归位属 G3/上游锚审计，本刀只做错位拦截。
+        let __canvasMismatch = false;
+        if (!intrinsic.ok && !isHorizontal && (sec.children || []).length >= 2) {
+          const __cbox = resolveSectionBox(sec, figmaIndex);
+          const __cboxes = sec.children.map((c) => resolveSectionBox(c, figmaIndex));
+          if (__cbox && Number.isFinite(__cbox.h) && __cbox.h > 0 && __cboxes.every(Boolean)) {
+            const __minY = Math.min(...__cboxes.map((b) => b.y));
+            const __maxEnd = Math.max(...__cboxes.map((b) => b.y + b.h));
+            const __span = __maxEnd - __minY;
+            if (Number.isFinite(__span) && Math.abs(__span - __cbox.h) / __cbox.h > 0.15) {
+              __canvasMismatch = true;
+              __canvasMismatchCount += 1;
+              options?.logger?.warn?.('🛡️ G10 画布收敛复核拦停：兄弟盒跨度与容器盒高偏差超阈，段间距弃用', {
+                sectionId: sec.id,
+                span: Math.round(__span),
+                containerH: Math.round(__cbox.h),
+                deviance: `${Math.round(Math.abs(__span - __cbox.h) / __cbox.h * 100)}%`,
+              });
+            }
           }
         }
         for (let i = 0; !bandTree && i < (sec.children || []).length; i++) {
@@ -1037,7 +1091,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             const prevBox = i > 0 ? resolveSectionBox(sec.children[i - 1], figmaIndex) : null;
             const g =
               i > 0
-                ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'horizontal', childWidths[i - 1])
+                ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'horizontal', childWidths[i - 1], __gapGuardStats)
                 : '';
             if (g) __gapApplied += 1;
             if (g && prevBox && childWidths[i - 1] > prevBox.w) __gapRebased += 1;
@@ -1046,10 +1100,11 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             const flexStyle = flexItemStyleFromHeights(childHeights, i);
             // 🛡️ 刀16：纵向兄弟间距（真值 y 差）
             //   🔴 刀16b：prev 基准与 flex 同源（childHeights = figmaHeightPx > 段盒高度时取前者）
+            //   🔴 G10：画布不收敛（跨坐标系错位）⇒ 间距弃用（绝对 margin 是错位最大放大器）
             const prevBox = i > 0 ? resolveSectionBox(sec.children[i - 1], figmaIndex) : null;
             const g =
-              i > 0
-                ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'vertical', childHeights[i - 1])
+              i > 0 && !__canvasMismatch
+                ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'vertical', childHeights[i - 1], __gapGuardStats)
                 : '';
             if (g) __gapApplied += 1;
             if (g && prevBox && childHeights[i - 1] > prevBox.h) __gapRebased += 1;
@@ -1095,6 +1150,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
                 node.children[i - 1].box,
                 node.children[i].box,
                 isRowBand ? 'horizontal' : 'vertical',
+                0,
+                __gapGuardStats,
               )
             : '';
         if (innerGap) __gapApplied += 1;
@@ -1136,6 +1193,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
                 resolveSectionBox(topBodyRoots[i], figmaIndex),
                 'vertical',
                 topHeights[i - 1],
+                __gapGuardStats,
               )
             : '';
         if (topGap) __gapApplied += 1;
@@ -1195,6 +1253,10 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     options.logger.info('🛡️ 刀 16 兄弟间距真值注入·已评估', {
       applied: __gapApplied,
       rebased: __gapRebased,
+      // 🛡️ G1：异常间距守卫（≥100px 不注入）——0 也要落行，验收判据「异常 margin 归零」由此观测
+      guarded: __gapGuardStats.guarded,
+      // 🛡️ G10：画布收敛复核拦停数（0 也打；>0 ⇒ 有容器段盒跨坐标系错位被拦，段锚审计输入）
+      ratioCanvasMismatch: __canvasMismatchCount,
     });
     // 🛡️ P1-B 生效自检：`takeoverLeaves` = 接管器评估到的叶数（0 ⇒ 判据没跑或无可接管段，
     //   与「跑了但无抑制成员」区分）；`excluded` = 真正从 flex 分母剔除的成员数。
@@ -1454,6 +1516,11 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
       // 完整实现」，模型为子组件 section 臆造 chartRef/legendState 等变量 → 语义门禁自由变量拦截。
       // 强制拆分（isForced && effectiveSections 非空）意味着所有 section（含图表）都已拆为子组件，
       // 主组件 script 只负责 import 子组件 + 组合，图表逻辑由子组件各自生成 → 跳过 charts 段（省一次 LLM + 彻底避免臆造）。
+      // 🛡️ 2026-11-04 治本（mc-max-1793767891707-10c19d61 实锤）·续接本口径：isForced 只覆盖强拆场景，
+      //   **自然拆分**（planner 常规出子组件 + 确定性父壳模板）漏网 ⇒ 父壳模板无任何 ref 挂载
+      //   ⇒ charts 段写出的 echarts.init(chartRef) 必然孤儿 ⇒ DO-NOT-INVENT-CHART-MOUNT-MISSING
+      //   终态拦截（iteration 8 无回环，任务失败）。判据扩为：isForced || 父模板无挂载锚
+      //   （templateHasNoRefMount，prompt-builder 单一来源，与门禁同源思想；模板有锚 → false 零行为变化）。
       const _genPlanForCharts = input.generationInput?.componentPlan;
       const _subPlanForCharts =
         _genPlanForCharts && typeof _genPlanForCharts === 'object'
@@ -1464,15 +1531,20 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
       );
       const _forcedSplit =
         _subPlanForCharts?.isForced === true && _leafForCharts.length > 0;
+      const _parentNoMount = templateHasNoRefMount(templateContent);
+      const _skipParentCharts = _forcedSplit || _parentNoMount;
 
       // 🛡️ 优雅降级：图表段失败降级为空（组件无图表仍可渲染，不 fail-closed）
       let scriptCharts = '';
-      if (_forcedSplit) {
+      if (_skipParentCharts) {
         options.logger?.info?.(
-          '🧩 强制子组件拆分：主组件跳过 charts 段（图表逻辑归子组件）',
+          _parentNoMount && !_forcedSplit
+            ? '🧩 父模板无 ref 挂载锚：跳过 charts 段（图表已由子组件承载，父级图表实现必然成孤儿死代码）'
+            : '🧩 强制子组件拆分：主组件跳过 charts 段（图表逻辑归子组件）',
           {
             componentName: input.componentName,
             sectionCount: _leafForCharts.length,
+            parentNoMount: _parentNoMount,
           },
         );
       } else {

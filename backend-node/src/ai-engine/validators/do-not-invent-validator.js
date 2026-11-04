@@ -120,6 +120,43 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
     }
   }
 
+  // ── 2.7 段级图表存在性（G12b，2026-11-04 · d703c55e 实锤，先 WARN 观测）──
+  // 病灶：vision charts[] 有「面积图 section=83:30」，产物 ContentForecast.vue 390 行
+  // 无任何 echarts（只有标题/Tab/图例文字），但既有 2.5 全局检查因**全产物集合**中
+  // 别处有 line series 而放行 ⇒ 图静默缺失、任务假绿发布。
+  // 判据（确定性）：vision 某图表 {section, type} 的承载文件（内容含
+  // data-section-id="<section>" 的 .vue）内无对应归一类型 series ⇒ WARN。
+  // fail-open：section 空 / 归一类型 null / 找不到承载文件（段被合并渲染或由父级
+  // 直挂兄弟组件承载——ChartChart 拆组件场景，静态无法判定相邻性）⇒ 跳过。
+  // 先 WARN 不 BLOCK：拆组件承载场景存在误拦面，待真机 WARN 分布数据后再议升级。
+  let chartSectionMissing = 0
+  for (const c of analysisCharts) {
+    const normT = normalizeChartType(c?.type)
+    const sid = c?.section != null ? String(c.section) : ''
+    if (!normT || !sid) continue
+    const holder = Object.entries(files).find(
+      ([p, v]) => typeof v === 'string' && /\.vue$/.test(p) && v.includes(`data-section-id="${sid}"`),
+    )
+    if (!holder) continue
+    const [holderPath, holderContent] = holder
+    const holderTypes = collectChartSeriesTypes(holderContent)
+    const holderHasDecl = /series\s*:\s*\[/.test(holderContent)
+    const satisfied = holderTypes.has(normT) || (normT === 'line' && holderHasDecl)
+    if (!satisfied) {
+      chartSectionMissing += 1
+      const msg = `段级图表缺失：vision 记录 ${sid} 段有「${normT}」图表，但承载文件 ${holderPath} 内无对应类型 series（可能漏写或被拆至兄弟组件承载）`
+      if (!seen.has(msg)) {
+        seen.add(msg)
+        issues.push({
+          severity: 'WARN',
+          id: 'DO-NOT-INVENT-CHART-SECTION-MISSING',
+          message: msg,
+          file: holderPath,
+        })
+      }
+    }
+  }
+
   // ── 3. 数据点膨胀 ──
   const analysisDataPoints = analysis.dataPoints || analysis.layoutStructure?.dataPoints
   if (typeof analysisDataPoints === 'number' && analysisDataPoints > 0) {
@@ -163,6 +200,8 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
     pass: blockCount === 0,
     blockCount,
     issues,
+    // 🛡️ G12b：段级图表缺失计数（WARN 观测，0 也打——调用方落日志）
+    warnChartSectionMissing: chartSectionMissing,
     _analyzed: true,
   }
 }

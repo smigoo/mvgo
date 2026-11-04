@@ -388,6 +388,61 @@ export function collectRootRegions(figmaData) {
 }
 
 /**
+ * 🛡️ header 类区域判据（单一来源 · 2026-11-04 收敛）：② 路径 header 容错、复合展开内层剥离、
+ *   ①-γ 剩余区域兜底三处共用。仅认「头部条」这种短命名，不做包含匹配（避免 `header-info` 被误剥）。
+ */
+const HEADER_RE = /^(header|头部|title|标题|top|top-bar|title-bar)[-_]?$/i
+/** header 类区域的高度上界：超过 80px 说明它是内容块而非头部条（与 ② 容错同口径）。 */
+const HEADER_MAX_HEIGHT_PX = 80
+
+/**
+ * ①-γ 剩余区域（2026-11-04 治本 · mc-max-1793765119169-4cbe82a2 实锤）：
+ *   从 `collectSectionRegions` 的结果里剔除「已被 id 命中 section 消费」的区域。
+ *
+ * 判据（纯结构，无业务猜测）：
+ *   - 区域自身就是命中节点 → 已消费；
+ *   - 区域是命中节点的**祖先**（容器已被某段整体认领，其高度已计入该段）→ 已消费；
+ *   - 区域是命中节点的**后代**（已含在某段内部）→ 已消费；
+ *   - 其余才是「无归属的独立区域」，供未命中段兜底配对。
+ *
+ * 实测（cp-环境监测 2:7879）：命中 `2:7889/89:43/2:7949` 三者都在 `sub-t(89:42)` 内 ⇒
+ *   regions `[header(2:7881), @echarts/line(2:7898), sub-t(89:42)]` 里 `sub-t` 因「是命中项
+ *   祖先」被剔除，`@echarts/line` 留作图表段的真实区域（113px）。
+ *
+ * @param {Array<object>} regions collectSectionRegions 输出（原始 Figma 节点）
+ * @param {Array<object>} matchedNodes 已 id 命中的 figmaNodes 条目（含 parentId）
+ * @param {Map<string, object>} byId collectFigmaNodes 产出的 _id → 节点 索引
+ * @returns {Array<object>} 未被消费的独立区域（保持 Figma 文档序）
+ */
+function collectLeftoverRegions(regions, matchedNodes, byId) {
+  if (!Array.isArray(regions) || !regions.length) return []
+  if (!Array.isArray(matchedNodes) || !matchedNodes.length) return []
+  const ancestorsOf = (id) => {
+    const set = new Set()
+    let cur = byId.get(String(id))
+    for (let hop = 0; cur && hop < 16; hop++) {
+      const pid = cur.parentId
+      if (pid == null || pid === '') break
+      set.add(String(pid))
+      cur = byId.get(String(pid))
+    }
+    return set
+  }
+  const matchedIds = matchedNodes.map((n) => String(n._id))
+  const matchedAncestors = matchedIds.map(ancestorsOf)
+  const regionAncestors = new Map()
+  return regions.filter((r) => {
+    const rid = String(r?.id ?? '')
+    if (!rid) return false
+    if (matchedIds.includes(rid)) return false
+    if (matchedAncestors.some((set) => set.has(rid))) return false
+    if (!regionAncestors.has(rid)) regionAncestors.set(rid, ancestorsOf(rid))
+    const rAnc = regionAncestors.get(rid)
+    return !matchedIds.some((mid) => rAnc.has(mid))
+  })
+}
+
+/**
  * 🛠️ 2026-10-30 视觉行归并（mc-max-1793349441153-c3b958e0 实锤）。
  *
  * 病灶：`collectSectionRegions` 返回的是**图元级**节点，而 vision 的 sections 是**视觉语义级**。
@@ -521,10 +576,11 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   const bump = (k, n = 1) => {
     if (stats && typeof stats === 'object') stats[k] = (Number(stats[k]) || 0) + n
   }
-  // 🛡️ 计数行「0 也打」：slotAncestor / idDirectSkipHallucinated 恒 0 时同样出现在日志里，
-  //   便于区分「未生效」与「判据失效」。
+  // 🛡️ 计数行「0 也打」：slotAncestor / idDirectSkipHallucinated / idDirectLeftover 恒 0 时
+  //   同样出现在日志里，便于区分「未生效」与「判据失效」。
   bump('slotAncestor', 0)
   bump('idDirectSkipHallucinated', 0)
+  bump('idDirectLeftover', 0)
 
   // ① figmaNodeId 直命中
   const idMatched = []
@@ -600,6 +656,76 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
       bump('idDirect', idDirectMatched.length)
       return writeSectionRatios(idDirectMatched, figmaNodes, stats)
     }
+    // ①-γ section.id 部分命中 + 剩余区域兜底（2026-11-04 治本 · mc-max-1793765119169-4cbe82a2 实锤）
+    //   病灶：cp-环境监测(2:7879) 的 vision 4 段里 3 段 id 精确命中 Figma 图元
+    //   （2:7889 tabs-list / 89:43 tabs-icon / 2:7949 num），第 4 段 `chart-section` 是 vision
+    //   **自造壳**（Figma 树无此 id，且未标 anchorValid:false）⇒「全命中才采纳」与「幻觉追认」
+    //   两条判据都够不到 ⇒ ①-β 整体放弃 ⇒ ② 顺序配对按图元文档序 1:1：展开 sub-t(89:42) 后得
+    //   [@echarts/line(113), num(14), tabs-list(27), tabs-icon(24)] 直接对位 ⇒ 113px 的图表被
+    //   配给「标签切换栏」（flexGrow 2.539），图表反而只有 0.539 ⇒ 产物标签栏撑到 63.5%、
+    //   图表压成 13.5%（用户报「样式很差」）。消费端 subcomponent-planner:2378 又以
+    //   styles.figmaHeightPx 为事实源二次归一，把错值固化。
+    //   判据（纯结构、fail-open，不猜）：
+    //     ① 精确 id 命中 ≥2 段 —— 强身份证据，不是位置猜测；
+    //     ② 剩余区域 = collectSectionRegions 里剔除「被命中项消费」的区域（自身/祖先/后代）；
+    //     ③ 剩余区域**首项**若是 header 类（名匹配 + ≤80px）先按既有 header 容错剥掉
+    //        （header 走 base-panel header slot、不进 body sections，本模块既有约定）；
+    //     ④ 剥后 未命中段数 与 剩余区域数 **严格相等** 才采纳（多一少一率放弃）；
+    //     ⑤ 剩余区域按 Figma y 视觉序（同 y 按 x）升序后再与未命中段（vision 顺序=视觉序）
+    //        逐位配对——文档序 ≠ 视觉序时不得串列（cp-环境监测 的 slot-con 文档序即与视觉
+    //        上下相反：@echarts/line 在下却排在前）；
+    //     ⑥ 写比例仍走 writeSectionRatios 单一入口（同一份 collapsed list 并集 / slot 上溯修正）；
+    //     ⑦ 缺项**全部无幻觉标记**才接管——带 anchorValid===false 的缺项归 ①-β 追认判据
+    //        管辖（ec1db095 契约），①-γ 不得二次裁决（见下）。
+    //   🔴 刻意不放松 ①-β「全命中才采纳」：spec「未命中项无 anchorValid===false ⇒ 整体放弃」
+    //      阴性用例守着该判据，且该判据在设备详情场景（语义 id）正确。
+    //   🔴 header 剥离**不设数量前提**（区别于 ② 路径的「恰多 1 才剥」）：本分支的前提已是
+    //      「id 强命中 ≥2 段」，header 无 id 身份必落在剩余区域里；若剥后仍等量（如 5 段样本
+    //      剩余 [header, chart] vs 缺项 2）⇒ 说明剩余区域含无法归属的头部 ⇒ 数量不等 ⇒ 放弃，
+    //      否则会把 28px 的 header 认成 `chart-section`（spec 阴性等量纪律用例守着这条）。
+    //   🔴 2026-11-04 评审补刀（判据裁决冲突）：①-β 上界裁决「幻觉缺项数 > 命中数 ⇒ 样本已
+    //      不可信 ⇒ 放弃」后代码会落入本分支；若剩余区域数恰等，①-γ 会把**已判臆造的段**
+    //      又配回真实区域——等于用位置兜底推翻了 id 层面的可信度裁决。修法：缺项里混入**任一**
+    //      幻觉标记即不接管（含混合场景，保守 fail-open），该域完全交给 ①-β/② 既有口径。
+    const unmarkedMissCount = idDirectMissSections.filter((s) => s?.anchorValid !== false).length
+    if (
+      idDirectMatched.length >= 2 &&
+      idDirectMiss >= 1 &&
+      unmarkedMissCount === idDirectMiss
+    ) {
+      const byId = new Map()
+      for (const n of figmaNodes) if (n && n._id != null) byId.set(String(n._id), n)
+      let leftover = collectLeftoverRegions(
+        regions,
+        idDirectMatched.map((m) => m.node),
+        byId,
+      )
+      if (leftover.length) {
+        const first = leftover[0]
+        const h = Number(first?.absoluteBoundingBox?.height) || 0
+        if (HEADER_RE.test(String(first?.name || '').trim()) && h > 0 && h <= HEADER_MAX_HEIGHT_PX) {
+          leftover = leftover.slice(1)
+        }
+      }
+      if (leftover.length === idDirectMiss) {
+        const ordered = [...leftover].sort((a, b) => {
+          const ya = Number(a?.absoluteBoundingBox?.y) || 0
+          const yb = Number(b?.absoluteBoundingBox?.y) || 0
+          if (ya !== yb) return ya - yb
+          return (Number(a?.absoluteBoundingBox?.x) || 0) - (Number(b?.absoluteBoundingBox?.x) || 0)
+        })
+        const leftoverMatched = ordered
+          .map((r, i) => ({ section: idDirectMissSections[i], node: byId.get(String(r?.id)) }))
+          .filter((m) => m.node && m.node.effectiveH > 0)
+        if (leftoverMatched.length === idDirectMiss) {
+          bump('idDirectLeftover', leftoverMatched.length)
+          // 🛡️ 计数行取证：①-γ 接管时同样登记缺项数（否则日志只有 leftover、看不出兜底了几段）。
+          bump('idDirectMiss', idDirectMiss)
+          return writeSectionRatios([...idDirectMatched, ...leftoverMatched], figmaNodes, stats)
+        }
+      }
+      bump('idDirectLeftoverMiss', 1)
+    }
     bump('idDirectMiss', idDirectMiss)
   }
 
@@ -610,7 +736,8 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   // vs sections=[概览,列表] → 2!==3 整体跳过 → 两区块被 mounter 盲注 flex:1 1 0 均分。
   // 处理（保守）：仅当 regions 恰好多 1 且首个是 header 类（名匹配 + 高度 ≤80px，
   // 文档顺序首项即视觉顶部）时，剥掉首个再 1:1；其余数量不等场景维持跳过不猜。
-  const HEADER_RE = /^(header|头部|title|标题|top|top-bar|title-bar)[-_]?$/i
+  // 🛡️ 2026-11-04：HEADER_RE / HEADER_MAX_HEIGHT_PX 已提升到模块作用域（①-γ 共用），
+  //   此处不得再声明同名局部常量——同一函数内的局部 `const` 会让上方 ①-γ 分支落入 TDZ。
   let pairRegions = regions
   // 🛠️ 2026-10-30 视觉行归并兜底（mc-max-1793349441153-c3b958e0 实锤，见 mergeVisualRows）。
   // 仅在「regions 比 sections 多」时启用；归并后恰好对齐才采纳，否则原样退回走下面的旧容错链。
@@ -625,7 +752,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   if (restSections.length >= 2 && pairRegions.length === restSections.length + 1) {
     const first = pairRegions[0]
     const bb = first?.absoluteBoundingBox
-    if (HEADER_RE.test(String(first?.name || '').trim()) && bb && bb.height > 0 && bb.height <= 80) {
+    if (HEADER_RE.test(String(first?.name || '').trim()) && bb && bb.height > 0 && bb.height <= HEADER_MAX_HEIGHT_PX) {
       pairRegions = pairRegions.slice(1)
     }
   }
@@ -658,7 +785,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
       .filter((c) => {
         const nm = String(c.name || '').trim()
         const h = c.absoluteBoundingBox?.height || 0
-        return !(HEADER_RE.test(nm) && h > 0 && h <= 80)
+        return !(HEADER_RE.test(nm) && h > 0 && h <= HEADER_MAX_HEIGHT_PX)
       })
       .sort((a, b) => (a.absoluteBoundingBox.y || 0) - (b.absoluteBoundingBox.y || 0))
     if (expandedKids.length < 2) break // 展开不充分说明这不是真复合 region，停
@@ -677,7 +804,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
     if (pairRegions.length < 3) return false
     const first = pairRegions[0]
     const bb = first?.absoluteBoundingBox
-    if (HEADER_RE.test(String(first?.name || '').trim()) && bb && bb.height > 0 && bb.height <= 80) {
+    if (HEADER_RE.test(String(first?.name || '').trim()) && bb && bb.height > 0 && bb.height <= HEADER_MAX_HEIGHT_PX) {
       pairRegions = pairRegions.slice(1)
       return true
     }
@@ -687,7 +814,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
     if (pairRegions.length <= restSections.length) return false
     const before = pairRegions.length
     pairRegions = pairRegions.filter(
-      (r) => !(SUB_HEADER_RE.test(String(r?.name || '').trim()) && (r?.absoluteBoundingBox?.height || 0) <= 80),
+      (r) => !(SUB_HEADER_RE.test(String(r?.name || '').trim()) && (r?.absoluteBoundingBox?.height || 0) <= HEADER_MAX_HEIGHT_PX),
     )
     return pairRegions.length < before
   }
@@ -780,6 +907,10 @@ function writeSectionRatios(matched, figmaNodes, stats = null) {
     section.styles.flexShrink = 1
     section.styles.flexBasis = 0
     section.styles.figmaHeightPx = Math.round(node.effectiveH) // 仅审计
+    // 🛡️ P-2（2026-11-04）：几何契约双写。flexGrow 是「换算后的比例」，换算即失真
+    //   （画布不定则比例展开走样）；geometryPx 保留 Figma 绝对像素真值（顶层契约字段，
+    //   非 styles 消费面），G1 尺寸同源直接消费它，不再反推。
+    section.geometryPx = { h: Math.round(node.effectiveH) }
     count += 1
   }
   return count

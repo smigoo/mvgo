@@ -1,0 +1,11 @@
+[
+  {
+    "need": "解析 Excel 表格",
+    "query": "excel",
+    "author": "anonymous",
+    "ts": 1787276758056,
+    "status": "done",
+    "resolvedBy": "excel-parse",
+    "resolvedAt": "2026-08-21"
+  }
+]

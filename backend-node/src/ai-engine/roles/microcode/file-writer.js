@@ -33,11 +33,17 @@ import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.j
 //   （零 DOM/字面/动态引用 ⇒ 删块 + 留痕），并**复用** class-facts + style-class-consolidator
 //   的同一份解析（禁造第三份）。只改 .less 源：.css 由下游 `recompileIndexCss` 自动重生成。
 import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
 // 🛡️ L2-a（195c8d0e 实锤）：写盘门禁判坏且磁盘无 last-good 时，回退到分块缓存中的合格版本
 import { pickCachedChunkLastGood } from './cached-chunk-last-good.js';
+// 🛡️ F3 刀 3（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：图表 min-height 被
+//   **后置同名规则**（`[自动修复]` fallback 的 `.c-x-chart{min-height:0}` / VERT-004 追加）
+//   按源序反杀 ⇒ 图表容器 0 高 + `overflow:hidden` ⇒ 用户看到「图表消失」。
+//   本刀在全产物**唯一写盘出口**修复（此前的样式步骤都可能再追加规则，只有这里能保证
+//   「门禁校验内容 == 实际落盘内容」）。判据见 chart-container-guard.js#restoreChartMinHeightAfterZero。
+import { restoreChartMinHeightAfterZero } from '../../utils/chart-container-guard.js';
 import {
   isColorEvaluable,
   isColorFnConsumer,
@@ -804,6 +810,24 @@ export function writeFiles(files, outputPath, options = {}) {
     });
   }
 
+  // 🛡️ F3 刀 3（2026-11-04）：写盘前终态修复「图表 min-height 被后置同名规则反杀」。
+  //   放在这里而不是某个样式步骤里：本函数是所有产物文件的**唯一写盘出口**，
+  //   其上任何一步（含 `[自动修复]` fallback / VERT-004）都可能再追加同名 0 值规则。
+  try {
+    const f3 = restoreChartMinHeightAfterZero(files);
+    if (f3.fixed && f3.fixed.length > 0) {
+      for (const [fp3, fc3] of Object.entries(f3.files || {})) files[fp3] = fc3;
+      logger.info(
+        `🎯 [mc] 图表 min-height 后置反杀已修复 ${f3.fixed.length} 处（刀 3）`,
+        { details: f3.fixed.slice(0, 8) },
+      );
+    }
+  } catch (f3Err) {
+    logger.warn('⚠️ [mc] 图表 min-height 后置修复失败（非阻塞）', {
+      error: f3Err?.message || String(f3Err),
+    });
+  }
+
   const writtenFiles = [];
   const skippedFiles = [];
   let currentFile = '';
@@ -1144,6 +1168,46 @@ export function writeFiles(files, outputPath, options = {}) {
           if (logger) {
             logger.warn(
               `🧩 SFC 内嵌 style 括号自愈跳过: ${relativePath}（${styleErr?.message || styleErr}）`,
+            );
+          }
+        }
+        // 🛡️ G6（2026-11-04 · bf0f0342 display:flex 串进 script 函数体实锤）：出口确定性拦截——
+        //   CSS 声明行在 JS 里是合法标签语句，语法/语义门禁全放行，唯有写盘前逐行清除。
+        try {
+          const cssInScript = healCssDeclarationsInScript(sanitizedContent);
+          if (cssInScript.changed) {
+            sanitizedContent = cssInScript.source;
+            if (logger) {
+              logger.warn(
+                `🛡️ G6 script 区 CSS 声明行清除: ${relativePath}（removed=${cssInScript.removed}，samples=${JSON.stringify(cssInScript.samples)}）`,
+              );
+            }
+          }
+        } catch (cssInScriptErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ G6 script 区 CSS 声明行清除跳过: ${relativePath}（${cssInScriptErr?.message || cssInScriptErr}）`,
+            );
+          }
+        }
+        // 🛡️ G12a（2026-11-04 · 74672f68 实锤）：父级死代码图表实现确定性剥离——
+        //   script 有 echarts.init(X) 但 template 无 ref="X" 挂载点（图表由子组件承载）
+        //   ⇒ init 恒 null 崩溃，原本被 DO-NOT-INVENT-CHART-MOUNT-MISSING 拦停任务失败。
+        //   现写盘前整块剥离死实现（import/声明/函数/watch/调用点），活代码零接触。
+        try {
+          const deadChart = stripDeadChartImpl(sanitizedContent);
+          if (deadChart.changed) {
+            sanitizedContent = deadChart.content;
+            if (logger) {
+              logger.warn(
+                `🛡️ G12a 父级死代码图表实现已剥离: ${relativePath}（removed=${deadChart.removed.length}：${deadChart.removed.slice(0, 6).join('；')}）`,
+              );
+            }
+          }
+        } catch (deadChartErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ G12a 死代码图表剥离跳过: ${relativePath}（${deadChartErr?.message || deadChartErr}）`,
             );
           }
         }

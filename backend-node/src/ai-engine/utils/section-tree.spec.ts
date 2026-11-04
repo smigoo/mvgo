@@ -306,6 +306,62 @@ describe('dedupeDuplicateSections（planner 双重解释去重）', () => {
     expect(r).toHaveLength(2);
   });
 
+  // ── 🛡️ G14b：去重留痕（removed[]）阳性对照 ──
+  // 2026-11-04（mc-max-1793783486041-8e733a22 实锤）：静默丢段让 COMP-001 假绿 ——
+  // 36:1642 被 81:8 按 elementCount 6<36 收敛丢弃，日志与产物 0 次出现。
+  // 以下为**判据阳性对照**：构造真机形态，验证 removed[] 真的记录、口径与
+  // figma-coverage-dedupe#removed[] 对齐（id/coveredBy/size/reason/path）。
+  describe('G14b 留痕（removed[]）', () => {
+    const big = {
+      id: '81:8', type: 'body', responsibility: '主体',
+      elementCount: 36, sourceNodeIds: ['81:8'],
+    };
+    const small = {
+      id: '36:1642', type: 'body', responsibility: '厂商清单',
+      elementCount: 6, sourceNodeIds: ['81:8'],
+    };
+
+    it('阳性对照：共享锚点 后者更小 → 记录被丢段（count-collapse）', () => {
+      const removed: any[] = [];
+      const r = dedupeDuplicateSections([big, small], removed);
+      expect(r.map((s: any) => s.id)).toEqual(['81:8']);
+      expect(removed).toHaveLength(1);
+      expect(removed[0]).toMatchObject({
+        id: '36:1642',
+        coveredBy: '81:8',
+        size: 6,
+        reason: 'shared-anchor-count-collapse',
+      });
+      expect(typeof removed[0].path).toBe('string');
+    });
+
+    it('阳性对照：后者更全 → 记录被顶替的前者（superseded）', () => {
+      const removed: any[] = [];
+      const r = dedupeDuplicateSections([small, big], removed);
+      expect(r.map((s: any) => s.id)).toEqual(['81:8']);
+      expect(removed[0]).toMatchObject({
+        id: '36:1642',
+        coveredBy: '81:8',
+        reason: 'shared-anchor-superseded',
+      });
+    });
+
+    it('阴性对照：无丢弃 → removed 为空数组（计数行 0 也要打）', () => {
+      const removed: any[] = [];
+      dedupeDuplicateSections(
+        [{ id: 'a', type: 'stats', elementCount: 1 }, { id: 'b', type: 'header' }],
+        removed,
+      );
+      expect(removed).toEqual([]);
+    });
+
+    it('不传累加器 → 行为与旧版完全一致（9 处既有调用零影响）', () => {
+      const r = dedupeDuplicateSections([shell, shellDup]);
+      expect(r).toHaveLength(1);
+      expect(r[0].id).toBe('section-main-content');
+    });
+  });
+
   it('layout 容器不参与 sourceNodeIds 归属冲突（递归 children）', () => {
     const container = {
       id: 'c1', isLayoutContainer: true,

@@ -6,6 +6,7 @@ import { User, UserSchema } from '../schemas/user.schema';
 import { Group, GroupSchema } from '../schemas/group.schema';
 import { GroupMember, GroupMemberSchema } from '../schemas/group-member.schema';
 import { SessionGuard } from './session.guard';
+import { OptionalSessionGuard } from './optional-session.guard';
 import { PermissionsGuard } from './permissions.guard';
 import { PermissionAdapter } from './permission-adapter.interface';
 import { NodePermissionAdapter } from './node-permission-adapter';
@@ -30,6 +31,9 @@ const permissionAdapterProvider =
   providers: [
     AuthService,
     SessionGuard,
+    // 可选身份守卫：与 SessionGuard 共用 resolveSessionFromRequest，
+    // 供「登录可读配置 / 未登录可自检」的只读元数据端点使用（见 optional-session.guard.ts）
+    OptionalSessionGuard,
     PermissionsGuard,
     // 权限适配器：按 PERMISSION_SOURCE 切换数据源（node=本地 / qs=门户权限中心）
     permissionAdapterProvider,
@@ -37,6 +41,7 @@ const permissionAdapterProvider =
   exports: [
     AuthService,
     SessionGuard,
+    OptionalSessionGuard,
     PermissionsGuard,
     PermissionAdapter,
   ],

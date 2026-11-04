@@ -716,7 +716,18 @@ export class MicrocodeEngineer extends BaseAgent {
     // 但此处直接取 subPlan.effectiveSections → 同一事实两处消费、只有一处去重 →
     // 模板骨架只挂 1 个子组件，而 prompt/子组件生成仍按 3 个（Switch/Tabs/Main）各生成一份 →
     // 重复内容 + 视口挤出。统一在「取用点」去重，与 prompt-builder 同源。
-    const effectiveSections = dedupeDuplicateSections(subPlan.effectiveSections || []) || [];
+    // 🛡️ G14b（2026-11-04 · 8e733a22 实锤）：去重必须**可观测**。
+    //   裂缝：dedupeDuplicateSections 静默丢段（36:1642 被 81:8 按 elementCount 6<36 收敛），
+    //   dropped 段在日志与产物里 0 次出现 → COMP-001 假绿 → 用户肉眼才发现「三个 section 内容缺少」。
+    //   口径与 figma-coverage-dedupe#removed[] 对齐（id/coveredBy/size/reason/path）；计数行 0 也打。
+    const _dedupeRemoved = [];
+    const effectiveSections =
+      dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemoved) || [];
+    this.logger.info('🛡️ G14b 段去重留痕', {
+      kept: effectiveSections.length,
+      dropped: _dedupeRemoved.length,
+      items: _dedupeRemoved,
+    });
     // 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格契约原先只在 `pre-write-self-healing`
     //   跑 —— 那一刻段容器的 `data-section-id` 还没补齐（后被 R22/结构自愈补上），
     //   于是 `sectionIdOf(hostAttrs)` 取不到 id、整段 `continue`：
@@ -3027,6 +3038,8 @@ export class MicrocodeEngineer extends BaseAgent {
           (f) => f.endsWith('.vue') && typeof allFiles[f] === 'string',
         );
         let injectedCount = 0;
+        // 🛡️ G11a：背景 fallback 注入计数（0 也打——挂注入完成日志）
+        let bgFallbackInjected = 0;
         // P0-②（2026-09-01）：占位符终验——注入后仍残留的资源占位符逐文件聚合诊断
         const placeholderDiag = [];
         // 🛡️ 刀 43：装配层归属表（组件名 → 最近祖先 section id）。用于给模板里**没有**
@@ -3072,8 +3085,33 @@ export class MicrocodeEngineer extends BaseAgent {
           if (diag.residual.length > 0 || diag.unmapped.length > 0) {
             placeholderDiag.push({ file: relPath, ...diag });
           }
-          if (patched !== content) {
-            allFiles[relPath] = patched;
+          // 🛡️ G11a（2026-11-04 · a41a470f/a87c2ba5 实锤）：下载失败 bg 的 CSS fallback
+          //   确定性消费——missing+fillsSummary(渐变/纯色真值) → section 容器背景注入。
+          //   原 fallbackHint「请用 CSS 替代」只写进 mapping 即断头，LLM 不执行、刀53 不读
+          //   ⇒ 整卡背景透明。仅 missing 态（success 的图必须用图，互不冲突）。
+          let finalContent = patched;
+          try {
+            const bgHealed = microcodeHealer.injectMissingBgFallback(
+              patched,
+              effectiveMapping,
+            );
+            if (bgHealed.changed) {
+              finalContent = bgHealed.content;
+              bgFallbackInjected += bgHealed.injected;
+              this.logger.info('🛡️ G11a 下载失败 bg 已按 fillsSummary 注入 CSS 背景', {
+                file: relPath,
+                injected: bgHealed.injected,
+                skipped: bgHealed.skipped,
+              });
+            }
+          } catch (bgErr) {
+            this.logger.warn('🛡️ G11a 背景 fallback 注入跳过', {
+              file: relPath,
+              error: bgErr?.message || String(bgErr),
+            });
+          }
+          if (finalContent !== content) {
+            allFiles[relPath] = finalContent;
             injectedCount++;
             this.logger.info(
               '✅ 已自动注入资源import语句（生成内阶段，门禁前）',
@@ -3100,6 +3138,7 @@ export class MicrocodeEngineer extends BaseAgent {
           vueFileCount: vueFiles.length,
           injectedCount,
           mappingCount: effectiveMapping.length,
+          bgFallbackInjected,
         });
 
         // 🛡️ P1.7（2026-09-11）引用驱动补齐：旧注入只认模板使用形态，**script 内引用是盲区**
@@ -6949,8 +6988,15 @@ export class MicrocodeEngineer extends BaseAgent {
     // 表现为 section 根 height:100% 未改写 → 多区块各占 100% 高互相溢出 → 仅首块可见/三卡消失。
     // 收口到 resolveSubComponentPlan（与 generateCode 同一事实源）。
     const subPlan = resolveSubComponentPlan(generationInput, subComponentPlan);
+    // 🛡️ G14b（2026-11-04）：execute 路径同源留痕（与 generateCode 同一事实源，计数行 0 也打）
+    const _dedupeRemovedExec = [];
     const effectiveSections =
-      dedupeDuplicateSections(subPlan.effectiveSections || []) || [];
+      dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemovedExec) || [];
+    this.logger.info('🛡️ G14b 段去重留痕（execute）', {
+      kept: effectiveSections.length,
+      dropped: _dedupeRemovedExec.length,
+      items: _dedupeRemovedExec,
+    });
     if (useGenerationInput) {
       this.logger.info(
         '🆕 [Context Assembler] 裁决事实已注入 Engineer（仅信任等级 + 问题清单）',

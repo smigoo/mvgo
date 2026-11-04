@@ -1,9 +1,17 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'fs';
+import { dirname, join, relative, sep } from 'path';
 import { tempComponentsDir } from '../../config/backend-root';
 import { AiConfigService } from '../../config/config.service';
 import { ProgressService } from '../../progress/progress.service';
+import { TaskCodeSnapshotService } from '../../tasks/task-code-snapshot.service';
 import { TasksService } from '../../tasks/tasks.service';
 import type { GenerateV2Dto, PreviewV2Dto } from './dto/v2-pipeline.dto';
 import { validateVueSfc } from '../../ai-engine/utils/sfc-syntax-validation.js';
@@ -39,6 +47,7 @@ export class V2PipelineService implements OnModuleInit {
     private readonly aiConfigService: AiConfigService,
     private readonly progressService: ProgressService,
     private readonly tasksService: TasksService,
+    private readonly taskCodeSnapshotService: TaskCodeSnapshotService,
     @InjectModel(GroupMember.name)
     private readonly groupMemberModel: Model<any>,
   ) {}
@@ -272,6 +281,15 @@ export class V2PipelineService implements OnModuleInit {
 
       const written = this.writeArtifacts(outputPath, result.artifacts);
 
+      // 🔴 落盘 ≠ 可见：任务详情页代码区读的是代码快照指针（candidate/last-good），
+      //    只写 temp-components 不登记快照 ⇒ 页面恒空。与 Lite/Phase2 同契约登记。
+      this.publishCandidateSnapshot({
+        sessionId,
+        groupId,
+        outputPath,
+        target: this.resolveSnapshotTarget(engine, result.spec || dto.spec),
+      });
+
       const payload = {
         sessionId,
         spec: result.spec,
@@ -325,6 +343,112 @@ export class V2PipelineService implements OnModuleInit {
       written.push(relPath);
     }
     return written;
+  }
+
+  /**
+   * 把本次产物注册成「候选代码快照」。
+   *
+   * 🔴 2026-11-04 治本（实测 v2-microcod-lite-1793761649503-8492d3）：
+   *   writeArtifacts 只把文件落到 temp-components，而任务详情页的代码区读的是
+   *   GET /api/tasks/:sessionId/code-snapshots/latest（解析 candidate/last-good 指针）。
+   *   不登记快照 ⇒ 磁盘上 package/index.vue 完整（6.3KB）、资源齐全、任务 status=completed，
+   *   但 latest 返回 { candidate: null, lastGood: null } ⇒ 页面「完成后没有任何代码」。
+   *   Lite / Phase2 都有这一步，v2 漏了，属管线缺陷而非前端缺陷。
+   *
+   * 失败语义：快照登记失败不阻断生成（产物已在磁盘），但必须留 error 日志，
+   *   否则又退化成「静默空白」，排查成本极高。
+   */
+  private publishCandidateSnapshot(params: {
+    sessionId: string;
+    groupId?: string;
+    outputPath: string;
+    target: 'microcode' | 'vue3';
+  }): void {
+    const { sessionId, groupId, outputPath, target } = params;
+    try {
+      const files = this.collectSnapshotFiles(outputPath);
+      const fileCount = Object.keys(files).length;
+      if (fileCount === 0) {
+        this.logger.warn(`[v2] 快照跳过：产物目录为空 ${outputPath}`);
+        return;
+      }
+
+      const candidate = this.taskCodeSnapshotService.createCandidate({
+        sessionId,
+        componentId: sessionId,
+        groupId,
+        target,
+        stage: 'v2-generation',
+        files,
+      });
+
+      // v2 的可编译性已在 writeArtifacts 内由 validateVueSfc 拦截；
+      // 与 Lite 对齐：语义/SFC/Less 视为通过，runtime 交由预览阶段结论。
+      this.taskCodeSnapshotService.markValidating(sessionId, candidate.revision, {
+        semantics: 'passed' as const,
+        sfc: 'passed' as const,
+        less: 'passed' as const,
+        runtime: 'pending' as const,
+      });
+
+      this.progressService.sendCodeSnapshot(sessionId, {
+        revision: candidate.revision,
+        status: 'validating',
+        stage: candidate.stage,
+        fileCount: candidate.files.length,
+        changedFiles: candidate.files.map((file) => file.path),
+        lastGoodRevision: candidate.lastGoodRevision,
+      });
+
+      this.logger.log(
+        `[v2] 候选快照已登记 ${sessionId} revision=${candidate.revision} 文件=${candidate.files.length} target=${target}`,
+      );
+    } catch (e: any) {
+      this.logger.error(`[v2] 候选快照登记失败 ${sessionId}: ${e.message}`);
+    }
+  }
+
+  /**
+   * 收集产物文件表（相对路径 → Buffer）。
+   *
+   * 排除引擎自身的中间产物目录：`.mc-gen`（含 debug-prompt.txt 69KB、code-chunks、
+   * 全量 prompt），它既是实现细节也会把提示词泄漏进用户可见的快照清单。
+   * 软链接一律跳过（可指向包外）。
+   */
+  private collectSnapshotFiles(outputPath: string): Record<string, string | Buffer> {
+    const files: Record<string, string | Buffer> = {};
+    const SKIP_DIRS = new Set(['.mc-gen', '.cache', '.checkpoint', '_upload', 'node_modules']);
+
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        if (SKIP_DIRS.has(entry)) continue;
+        const abs = join(dir, entry);
+        const stat = lstatSync(abs);
+        if (stat.isSymbolicLink()) continue;
+        if (stat.isDirectory()) {
+          walk(abs);
+          continue;
+        }
+        const rel = relative(outputPath, abs).split(sep).join('/');
+        files[rel] = readFileSync(abs);
+      }
+    };
+
+    walk(outputPath);
+    return files;
+  }
+
+  /**
+   * 规范 → 快照 target 的唯一判据：engineerClass。
+   * 不用 specId 猜字符串：用户自定义规范 id 未必含 "vue3"（如 vue3-ts 之外的团队包）。
+   */
+  private resolveSnapshotTarget(engine: any, specId?: string): 'microcode' | 'vue3' {
+    try {
+      const def = engine?.specRegistry?.resolveSpec(specId || 'microcode');
+      return def?.engineerClass === 'Vue3Engineer' ? 'vue3' : 'microcode';
+    } catch {
+      return 'microcode';
+    }
   }
 
   /**

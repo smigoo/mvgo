@@ -2,16 +2,25 @@
  * 任务状态管理器
  * 将任务执行与 SSE 连接解耦，支持断线重连
  *
- * 持久化：任务状态变更（create/complete/fail）写入 data/tasks.json，
- *         服务重启后自动恢复历史任务列表，刷新页面即可看到之前的任务。
+ * 持久化：任务状态变更（create/complete/fail）写入 **data/task-manager.json**（独立旁路文件），
+ *         服务重启后自动恢复本模块自己的任务快照。
  *         进度明细（progress/buffer）仅存内存，不落盘，避免频繁 IO。
+ *
+ * 🛡️ 2026-11-04（「历史记录列表记录无故消失」治本）：
+ *   本文件原先与 `TasksService`（src/tasks/tasks.service.ts）**共用** data/tasks.json，
+ *   但双方各持一份独立内存 Map 且都是「全量覆写」——任一方持有较小/较旧的快照时，
+ *   一次 persist 就会把账本整表抹成小集合（实测跨重启计数 260→135→77→6 逐级下滑）。
+ *   现解耦：TaskManager 只写自己的 sidecar，历史账本 data/tasks.json 的唯一写入方交给
+ *   TasksService（UI 的 /api/tasks 亦只依赖 TasksService）。
  */
 
 import fs from 'fs'
 import path from 'path'
 import { dataDir } from '../../config/backend-root.js'
+import { renameWithCopyFallback } from './rename-with-copy-fallback.js'
 
-const PERSIST_FILE = path.join(dataDir, 'tasks.json')
+// 独立 sidecar：**不再**指向 data/tasks.json，避免与 TasksService 双写互覆。
+export const PERSIST_FILE = path.join(dataDir, 'task-manager.json')
 
 // 🔒 安全：持久化前递归剥离密钥类字段，避免 figmaToken / apiKey 等明文落盘
 const SECRET_FIELD_RE = /(figmaToken|apiKey|api_key|password|secret|token|authorization|access[_-]?token)/i
@@ -77,8 +86,17 @@ class TaskManager {
 
   /**
    * 持久化全部任务到磁盘（仅状态变更时调用）
+   *
+   * 🛡️ 2026-11-04（「历史记录列表记录无故消失」治本·C 项）：
+   *   改为**原子写**（先写同目录唯一 .tmp → rename 覆盖），与
+   *   src/tasks/tasks.service.ts#flushPersistQueue 同范式。原先的
+   *   `fs.writeFileSync(PERSIST_FILE, ...)` 是**整文件非原子覆盖**——与其它
+   *   写入方/外部 safe-delete 钩子竞态时会留下半写内容或整表被小集合覆盖。
+   *   rename 在 EPERM/EBUSY（macOS safe-delete 拦截）时由 renameWithCopyFallback
+   *   降级为 copyFileSync 落名；若连降级都失败则再退一步直写 + tmp 尽力清理。
    */
   persist() {
+    let json
     try {
       const list = Array.from(this.tasks.values())
         // 持久化时裁剪到大容量上限（按开始时间倒序保留较新的）
@@ -88,7 +106,27 @@ class TaskManager {
         .map(({ progress, buffer, ...rest }) => redactSecrets(rest))
 
       fs.mkdirSync(path.dirname(PERSIST_FILE), { recursive: true })
-      fs.writeFileSync(PERSIST_FILE, JSON.stringify(list, null, 2), 'utf-8')
+      json = JSON.stringify(list, null, 2)
+
+      // 原子写：同目录唯一 .tmp → rename 覆盖，杜绝读到半写/被小集合整表覆盖。
+      const tmpFile = `${PERSIST_FILE}.${process.pid}.${Date.now()}.${Math.random()
+        .toString(16)
+        .slice(2)}.tmp`
+      fs.writeFileSync(tmpFile, json, 'utf-8')
+      try {
+        renameWithCopyFallback(tmpFile, PERSIST_FILE, { label: 'TaskManager.persist' })
+      } catch (renameErr) {
+        // renameWithCopyFallback 已内建 EPERM/EBUSY/EXDEV → copy 降级；
+        // 能走到这里说明连 copy 也失败 —— 最后再退一步直写目标文件兜底。
+        if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr
+        fs.writeFileSync(PERSIST_FILE, json, 'utf-8')
+        try {
+          fs.unlinkSync(tmpFile)
+        } catch {
+          /* 残留 tmp 待启动自愈/延迟清理 */
+        }
+        console.warn(`[TaskManager] 持久化：rename ${renameErr.code}，已降级为直写`)
+      }
     } catch (err) {
       console.warn('[TaskManager] 持久化任务失败:', err.message)
     }

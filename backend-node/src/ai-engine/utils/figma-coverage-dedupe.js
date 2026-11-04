@@ -83,6 +83,51 @@ export function buildFigmaClosureIndex(figmaNodeData) {
   return map.size > 0 ? map : null
 }
 
+/**
+ * 🛡️ C0.2（2026-11-04 · mc-max-1793750471950-b93589ae 实锤）：Figma TEXT 节点 id 集。
+ *   供三段判据（祖先/后代单一归属）做「祖先余量是否有文本内容」判定：
+ *   祖先闭包减去全部结构后代闭包后，若连一个 TEXT 节点都不剩 ⇒ 纯容器壳。
+ */
+export function buildFigmaTextIdSet(figmaNodeData) {
+  const root = figmaNodeData?.document ?? figmaNodeData
+  if (!root || typeof root !== 'object') return null
+  const out = new Set()
+  const walk = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 60) return
+    if (node.id != null && String(node.type || '').toUpperCase() === 'TEXT') {
+      out.add(String(node.id))
+    }
+    for (const c of node.children || []) walk(c, depth + 1)
+  }
+  walk(root, 0)
+  return out
+}
+
+/**
+ * 🛡️ C0.2 配套：Figma TEXT 真值字符索引（trim 后的 characters → TEXT 节点 id 集）。
+ *   三段判据的「声明内容承接」证据：壳段 vision 声明的文本若能精确锚到结构后代
+ *   闭包内的 TEXT 节点 ⇒ 内容已由后代承接；锚不到（vision 独有内容）⇒ 保留壳段
+ *   （7d7925d2 真机：footer 误锚组件根但声明「运行中」为 vision 独有，删壳即丢内容）。
+ */
+export function buildFigmaTextCharactersIndex(figmaNodeData) {
+  const root = figmaNodeData?.document ?? figmaNodeData
+  if (!root || typeof root !== 'object') return null
+  const out = new Map()
+  const walk = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 60) return
+    if (node.id != null && String(node.type || '').toUpperCase() === 'TEXT') {
+      const key = typeof node.characters === 'string' ? node.characters.trim() : ''
+      if (key) {
+        if (!out.has(key)) out.set(key, new Set())
+        out.get(key).add(String(node.id))
+      }
+    }
+    for (const c of node.children || []) walk(c, depth + 1)
+  }
+  walk(root, 0)
+  return out
+}
+
 /** 递归收集 section 子树里所有「锚点 id」（id / figmaNodeId / figmaNode / items[].id / body.items[].id）。 */
 function collectAnchorIds(node, acc = new Set(), depth = 0, includeItemAnchors = true) {
   if (!node || typeof node !== 'object' || depth > 8) return acc
@@ -112,8 +157,14 @@ function collectAnchorIds(node, acc = new Set(), depth = 0, includeItemAnchors =
   return acc
 }
 
-/** R8-11：无锚合成切片的第二判据——内容文本是否被另一整段完整覆盖。 */
-function collectDeclaredTexts(node, acc = new Set(), depth = 0) {
+/**
+ * R8-11：无锚合成切片的第二判据——内容文本是否被另一整段完整覆盖。
+ *
+ * 🛡️ C0.3-B（2026-11-04）：**全仓唯一的「段声明文本」收集口径**，显式导出供
+ * `utils/section-tree.js#dedupeDuplicateSections` 复用。禁止在消费方复制第二份，
+ * 否则「什么算声明内容」会在两处各长一套（治理门禁：单一来源）。
+ */
+export function collectDeclaredTexts(node, acc = new Set(), depth = 0) {
   if (!node || typeof node !== 'object' || depth > 8) return acc
   for (const key of ['text', 'label', 'value', 'title']) {
     const value = node[key]
@@ -131,6 +182,43 @@ function collectDeclaredTexts(node, acc = new Set(), depth = 0) {
 function textSubset(small, big) {
   if (small.size === 0) return false
   for (const text of small) if (!big.has(text)) return false
+  return true
+}
+
+/** 归一化锚点集（去重 + 排序），用于「同锚点集」比较。 */
+function normalizeAnchorKey(ids) {
+  const arr = Array.isArray(ids) ? ids.map((s) => String(s)).filter(Boolean) : []
+  return Array.from(new Set(arr)).sort().join(',')
+}
+
+/**
+ * 🛡️ C0.3-B（2026-11-04）：**共享锚点 ≠ 同一区域**。
+ *
+ * 背景：`section-tree.js#dedupeDuplicateSections` 的 R1-1 判据只按 `sourceNodeIds`
+ * 交集做单一归属裁决，遇到「多段共享同一锚点」时按 `elementCount` 收敛 —— 当 vision
+ * 因为拿不到子节点 id 而把多个语义段全部锚到根节点时（真机 mc-max-1793755487753-104f5a31：
+ * 设备头部信息 / 设备属性 / 产品描述 三段同锚 `36:1693`），该收敛会丢掉真实分区。
+ *
+ * 本判据给出「不得折叠」的**语义证据**，作用域刻意收窄到同时满足三条：
+ *   1. 双方锚点集**完全相同**（同锚点才是本形态；有交集但不相同的维持原行为）；
+ *   2. 双方各自声明了文本（`collectDeclaredTexts` 非空）—— 空壳段之间不适用，
+ *      仍交给 `elementCount` 收敛 / 下游 ancestor-shell 去重；
+ *   3. 两组声明文本**互不重叠**（交集为空）—— 有重叠说明是同一区域的重复解释，
+ *      照旧折叠。
+ *
+ * @param {object} a
+ * @param {object} b
+ * @returns {boolean} true = 同锚点集且声明内容互斥 ⇒ 不得按重复解释折叠
+ */
+export function haveDisjointDeclaredContent(a, b) {
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+  const keyA = normalizeAnchorKey(a.sourceNodeIds)
+  const keyB = normalizeAnchorKey(b.sourceNodeIds)
+  if (!keyA || keyA !== keyB) return false
+  const textsA = collectDeclaredTexts(a)
+  const textsB = collectDeclaredTexts(b)
+  if (textsA.size === 0 || textsB.size === 0) return false
+  for (const text of textsA) if (textsB.has(text)) return false
   return true
 }
 
@@ -242,6 +330,89 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path, opts = {})
   const droppedBy = new Map() // i -> j（吸收者下标）
   const partialBy = new Map() // i -> 二段判据的重叠比例（一段命中者不在此表）
   const contentBy = new Set() // i -> 无锚子切片按 declaredContent/body 文本全覆盖去重
+
+  // 🛡️ 三段判据（2026-11-04 · C0.2 · mc-max-1793750471950-b93589ae 实锤）：
+  //   祖先/后代单一归属。病灶：根 Frame 36:1693 与其内部子 Group 801:3 同时成为
+  //   平级 section ⇒ LLM 轨（ContentHeader）与确定性轨（ContentSection）各渲染
+  //   同一批节点 ⇒ DOM 双份。一段判据在 vision 路径被 requireContentCarrier 挡死
+  //   （祖先纯壳不携带逐项内容）、在 figma 路径会反向删掉结构后代留下壳——两道
+  //   门都给不出正确的所有权方向。
+  //
+  //   判据（纯几何 + 节点类型，命名无关）：
+  //     1. 平级 X、Y，Y 的**严格闭包** ⊂ X 的严格闭包（真子集）⇒ Y 是 X 的结构后代；
+  //     2. 余量 = strictCov(X) ∖ ∪strictCov(结构后代)；
+  //     3. 余量里连一个 TEXT 节点都没有 ⇒ X 是纯容器壳 ⇒ **删壳留内容**（保后代）。
+  //   执行顺序刻意在一段判据**之前**：祖先/后代关系的所有权必须先裁决（壳先走、
+  //   后代存活），非壳情形才回落到一段/二段。方向性与历史误删（ab7bb76c）恰好
+  //   相反：旧 bug 删业务段留容器；本段删壳留业务段，阳性不回退。折叠列表形态
+  //   段（刀 22 域）不作为被删者参与本段。
+  //   fail-open：无 textIdSet（无 figma 数据）⇒ 本段整体不启用。
+  const ancestorShellBy = new Set() // i -> 因祖先纯壳被删（reason='ancestor-shell'）
+  const textIdSet = opts.textIdSet instanceof Set ? opts.textIdSet : null
+  const textCharIndex = opts.textCharIndex instanceof Map ? opts.textCharIndex : null
+  if (textIdSet) {
+    for (let x = 0; x < sections.length; x++) {
+      if (droppedBy.has(x)) continue
+      if (!sections[x] || typeof sections[x] !== 'object') continue
+      const covX = strictCovOf(x)
+      if (covX.size === 0) continue
+      // 🛡️ 刀 22 同源防御：被删者若是折叠列表形态或自身携带逐项内容（items ≥2），
+      //   其内容轨可能不在后代闭包里（vision items 锚点可指向段外），不删。
+      if (isCollapsedListShape(sections[x]) || isListContentCarrier(sections[x])) continue
+      const descendants = []
+      for (let y = 0; y < sections.length; y++) {
+        if (y === x || droppedBy.has(y)) continue
+        if (!sections[y] || typeof sections[y] !== 'object') continue
+        const covY = strictCovOf(y)
+        if (covY.size === 0 || covY.size >= covX.size) continue
+        if (!isSubset(covY, covX)) continue
+        descendants.push(y)
+      }
+      if (descendants.length === 0) continue
+      const covered = new Set()
+      for (const y of descendants) {
+        for (const id of strictCovOf(y)) covered.add(id)
+      }
+      let remainderHasText = false
+      for (const id of covX) {
+        if (!covered.has(id) && textIdSet.has(id)) {
+          remainderHasText = true
+          break
+        }
+      }
+      if (remainderHasText) continue // 有文本余量：内容并未全部由后代承接，保留（宁多勿漏）
+      // 🛡️ 声明内容承接（7d7925d2 真机教训）：壳段 vision 声明的文本必须能精确锚到
+      //   结构后代闭包内的 TEXT 真值节点；锚不到 = vision 独有内容（如误锚组件根的
+      //   footer 声明「运行中」），删壳即丢内容 ⇒ 保留。b93589ae 壳段声明的 kv 表
+      //   文本全部锚在 801:3 闭包内的 TEXT 节点 ⇒ 承接成立、删壳零丢失。
+      if (textCharIndex instanceof Map) {
+        const declaredTexts = collectDeclaredTexts(sections[x])
+        let allAnchoredInDescendants = true
+        for (const t of declaredTexts) {
+          const ids = textCharIndex.get(t)
+          if (!ids) {
+            allAnchoredInDescendants = false
+            break
+          }
+          let hit = false
+          for (const id of ids) {
+            if (covered.has(id)) {
+              hit = true
+              break
+            }
+          }
+          if (!hit) {
+            allAnchoredInDescendants = false
+            break
+          }
+        }
+        if (!allAnchoredInDescendants) continue
+      }
+      droppedBy.set(x, descendants[0])
+      ancestorShellBy.add(x)
+    }
+  }
+
   for (let i = 0; i < sections.length; i++) {
     if (!sections[i] || typeof sections[i] !== 'object') continue
     if (cov[i].size === 0) {
@@ -326,8 +497,14 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path, opts = {})
       id: String(sections[i]?.id ?? ''),
       coveredBy: String(sections[j]?.id ?? ''),
       size: cov[i].size,
-      // 一段='full'（全包含）/ 二段='partial'（折叠列表段 ≥75% 重叠）
-      reason: contentBy.has(i) ? 'declared-content' : partialBy.has(i) ? 'partial' : 'full',
+      // 一段='full'（全包含）/ 二段='partial'（折叠列表段 ≥75% 重叠）/ 三段='ancestor-shell'（祖先纯壳）
+      reason: ancestorShellBy.has(i)
+        ? 'ancestor-shell'
+        : contentBy.has(i)
+          ? 'declared-content'
+          : partialBy.has(i)
+            ? 'partial'
+            : 'full',
       ...(partialBy.has(i) ? { ratio: partialBy.get(i) } : {}),
       path: path || '/',
     })

@@ -2210,6 +2210,21 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   //   resourceMapping（figmaNodeId → resourceFile，与 header/icon 接管同口径）。
   //   查不到 ⇒ icon 留 null（缺事实不猜），不阻断列表接管。
   const mapping = toArray(resourceMapping);
+  // 🔴 G11b：mapping 文本归位计数（调用方聚合进计数行，0 也打）
+  let iconTextMatched = 0;
+  let iconTextUnmatched = 0;
+  // 🔴 G11b（2026-11-04 · a41a470f 实锤）：icon 尺寸单一来源 = mapping `figmaBox`。
+  //   旧代码读 `m.width/m.height`——mapping 条目顶层**无** width/height（只有
+  //   figmaBox/visualMeta）⇒ Number(undefined)=NaN ⇒ w/h **恒 null**（真 bug）。
+  const mappingIconSize = (m) => {
+    const fb = m?.figmaBox || null;
+    const w = Number(fb?.width);
+    const h = Number(fb?.height);
+    return {
+      w: Number.isFinite(w) && w > 0 ? Math.round(w) : null,
+      h: Number.isFinite(h) && h > 0 ? Math.round(h) : null,
+    };
+  };
   const iconNodeIds = items.map((it, i) => {
     if (norm[i].icon) return null;
     const nodeId =
@@ -2224,8 +2239,7 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
       if (m) {
         norm[i].icon = {
           file: String(m.resourceFile).split('/').pop(),
-          w: Number.isFinite(Number(m.width)) ? Number(m.width) : null,
-          h: Number.isFinite(Number(m.height)) ? Number(m.height) : null,
+          ...mappingIconSize(m),
         };
         return nodeId;
       }
@@ -2250,10 +2264,36 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     if (hits.length === 1) {
       norm[i].icon = {
         file: String(hits[0].m.resourceFile).split('/').pop(),
-        w: Number.isFinite(Number(hits[0].m.width)) ? Number(hits[0].m.width) : null,
-        h: Number.isFinite(Number(hits[0].m.height)) ? Number(hits[0].m.height) : null,
+        ...mappingIconSize(hits[0].m),
       };
       return String(hits[0].node.id);
+    }
+    // 🔴 G11b 第三路（2026-11-04 · a41a470f 实锤）：**mapping 文本唯一匹配**。
+    //   病灶：item 锚=分组 Group（38:3137），厂商行子树内 icon 未被 vision 建
+    //   icon 节点 ⇒ 前两路全 miss ⇒ `icon-战略厂商`(16×16 已下载)闲置。
+    //   判据（零语义猜测）：mapping name 去 `icon-` 前缀、去尾部 `-数字` 得语义名，
+    //   与 item 任一 text **互含**（双向 includes），且**全 mapping 仅一命中**；
+    //   多命中/零命中不猜（留 null）。计数由调用方聚合（iconFromMapping）。
+    const texts0 = (norm[i]?.texts || []).map((t) => String(t?.t || '').trim()).filter(Boolean);
+    if (texts0.length > 0) {
+      const semMatches = mapping.filter((e) => {
+        if (!e?.resourceFile || e?.downloadStatus === 'failed') return false;
+        const sem = String(e?.name || '')
+          .replace(/^icon-/, '')
+          .replace(/-?\d+$/, '')
+          .trim();
+        if (!sem) return false;
+        return texts0.some((t) => t.includes(sem) || sem.includes(t));
+      });
+      if (semMatches.length === 1) {
+        norm[i].icon = {
+          file: String(semMatches[0].resourceFile).split('/').pop(),
+          ...mappingIconSize(semMatches[0]),
+        };
+        iconTextMatched += 1;
+        return String(semMatches[0].figmaNodeId ?? '');
+      }
+      iconTextUnmatched += 1;
     }
     return null;
   });
@@ -2413,6 +2453,11 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     return { box: rowBox, node: null, fillNode: null, boxSource: null };
   };
   // 行盒（几何轨，旧口径）：E1 富化树节点直读优先（刀 21d），否则按 item id / icon 节点回查
+  // 🔴 G9（2026-11-04 · 1de12f48 实锤）：icon 回退盒**只作占位、禁作行盒真值**。
+  //   病灶：item 无本体盒时回退 `figmaIndex.get(item.icon.figmaNode)` ⇒ icon 是行内
+  //   **子元素**（40×40），必然小于行盒；其盒被当行盒真值消费 ⇒ cardH=40（真值 ~72）
+  //   且 cardWidths/gaps 同源污染。标记 `rowBoxFromIcon`，几何下发处分支拦截。
+  const rowBoxFromIcon = [];
   const rowBoxes = items.map((it) => {
     const direct = it?.absoluteBoundingBox;
     const e =
@@ -2420,8 +2465,14 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
         ? { bbox: direct }
         : figmaIndex?.get(String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '')) ||
           figmaIndex?.get(String(it?.icon?.figmaNode ?? ''));
+    const fromIcon =
+      !(direct && Number.isFinite(direct.x) && Number.isFinite(direct.y)) &&
+      !figmaIndex?.get(String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '')) &&
+      !!(it?.icon?.figmaNode && figmaIndex?.get(String(it.icon.figmaNode)));
+    rowBoxFromIcon.push(fromIcon);
     return toBox(e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox);
   });
+  const iconFallbackPolluted = rowBoxFromIcon.some(Boolean);
   const cards = items.map((it, i) => resolveCardBox(it, rowBoxes[i], norm[i].fill, rowBoxes));
   // 🔴 步④ 自校验：几何锚必须与**帧轨同跨度**（首左 → 末右，±2px）。
   //   为何是跨度而非「Σwidths + Σgaps ≈ 段内容宽」：`Σw + Σg` **恒等于** `max(x+w) − min(x)`
@@ -2531,6 +2582,31 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   const innerVotes = [];
   const vPartsVotes = [];
   const vGapVotes = [];
+  // 🔴 G8（2026-11-04 · a41a470f 实锤）：texts **条目间**几何投票。
+  //   病灶：innerLayout 只投 name↔stats[0] 与 value↔unit 两组盒对；value 被归入
+  //   texts（stats=[]）时，「华为技术」「8台」同行左右的几何关系**无任何投票** ⇒
+  //   innerDir=null ⇒ 渲染器文本列 column 纵堆。补第三组：texts 相邻条目
+  //   （texts[j] vs texts[j+1]）同构判据（uniqueTextBox+overlapRatio），零语义猜测。
+  const textPairVotes = [];
+  items.forEach((it, i) => {
+    const id = String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '');
+    const entry = id ? figmaIndex?.get(id) : null;
+    const node = cards[i]?.node || entry?.rawNode || entry?.node || null;
+    if (!node) return;
+    const tb = textBoxesIn(node);
+    const tx = norm[i]?.texts || [];
+    for (let j = 0; j + 1 < tx.length; j++) {
+      const aB = uniqueTextBox(tb, tx[j]?.t);
+      const bB = uniqueTextBox(tb, tx[j + 1]?.t);
+      if (!aB || !bB) continue;
+      const xr = overlapRatio(aB, bB, 'x');
+      const yr = overlapRatio(aB, bB, 'y');
+      // 与 name↔stats 判据同构：y 重叠（同行）+x 分离（左右）⇒ inline；
+      // x 重叠（同列）+y 分离（上下）⇒ stacked。
+      if (yr > 0.5 && xr <= 0.5) textPairVotes.push('inline');
+      else if (xr > 0.5 && yr <= 0.5) textPairVotes.push('stacked');
+    }
+  });
   items.forEach((it, i) => {
     const id = String(it?.figmaNodeId ?? it?.figmaNode ?? it?.id ?? '');
     const entry = id ? figmaIndex?.get(id) : null;
@@ -2565,6 +2641,8 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   };
   const innerTally = tallyVotes(innerVotes);
   const vPartsTally = tallyVotes(vPartsVotes);
+  // 🔴 G8：texts 条目间投票汇总（全行一致才采纳，出现第二种即冲突不下发）
+  const textPairsTally = tallyVotes(textPairVotes);
   const vGapUniq = [...new Set(vGapVotes)];
   // 间距只在「数值/单位同行」时才是事实（纵排时 x 差无意义）⇒ 门控在 inline 分支内。
   const valuePartsGap =
@@ -2577,6 +2655,10 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     valuePartsProven: vPartsTally.proven,
     valuePartsConflict: vPartsTally.conflict,
     valuePartsGap,
+    // 🔴 G8：texts 相邻条目方向（inline=同行左右 / stacked=上下堆叠 / null=不可证不猜）
+    textPairsDir: textPairsTally.dir,
+    textPairsProven: textPairsTally.proven,
+    textPairsConflict: textPairsTally.conflict,
   };
 
   const directionTruth = resolveListMemberDirection(sec, { cardBoxes });
@@ -2597,7 +2679,9 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   //     只拦宽度会留下「宽度不下发、间距照发」的自相矛盾态。
   const horizProven = boxesReady && cards.every((c) => !!c.node);
   const widthNotUniform = boxesReady && direction === 'row' && !sameWidth && !horizProven;
-  if (boxesReady && direction === 'row') {
+  // 🔴 G9：icon 回退盒污染 ⇒ cardH/cardWidths/gaps 全部不可证（盒高/宽是子元素尺寸，
+  //   非行盒真值）⇒ 一律不下发（宁缺勿错：错误 40px 限高比自然流危害大）。
+  if (boxesReady && direction === 'row' && !iconFallbackPolluted) {
     if (sameHeight) cardH = Math.round(cardBoxes[0].h);
     if (!widthNotUniform) {
       cardWidths = cardBoxes.map((b) => Math.round(b.w));
@@ -2607,7 +2691,7 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
         return Math.round(p.b.x - (prev.x + prev.w));
       });
     }
-  } else if (geoReady) {
+  } else if (geoReady && !iconFallbackPolluted) {
     cardH = Math.round(cardBoxes[0].h);
     const byY = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
     gaps = byY.slice(1).map((p, k) => {
@@ -2655,6 +2739,8 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     geoReady: !!geoReady,
     sameWidth: !!sameWidth,
     sameHeight: !!sameHeight,
+    // 🔴 G9：icon 回退盒污染标记（真机计数行 listCardHIconFallbackRejected 的数据源）
+    iconFallbackPolluted,
     cardW: boxesReady ? Math.round(cardBoxes[0].w) : null,
     cardH: boxesReady ? Math.round(cardBoxes[0].h) : null,
     rawWidths,
@@ -2672,6 +2758,10 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     innerDir: innerLayout.innerDir,
     innerProven: innerLayout.innerProven,
     innerConflict: innerLayout.innerConflict,
+    // 🔴 G8：texts 条目间方向真值（a41a470f name/value 同行实锤）
+    textPairsDir: innerLayout.textPairsDir,
+    textPairsProven: innerLayout.textPairsProven,
+    textPairsConflict: innerLayout.textPairsConflict,
     valuePartsDir: innerLayout.valuePartsDir,
     valuePartsProven: innerLayout.valuePartsProven,
     valuePartsConflict: innerLayout.valuePartsConflict,
@@ -2748,6 +2838,12 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     if (bg) itemBgStats[bg.source] += 1;
     else itemBgStats.skipped += 1;
   });
+  // 🛡️ G4（2026-11-04 · mc-max-1793775868744-c7d56bd7 实锤 FG_LIST_ITEMS texts:[]）：
+  //   文本可观测性——textsFilled/textsEmpty 恒计（调用方计数行落日志，0 也打）。
+  //   textsAllEmpty=true = 本段所有行的行文本断供（文本全在 stats 或采集缺失），
+  //   接管仍成立（卡几何/背景真值在），但显式标记供审计与 G3 消费，不再静默。
+  const textsFilled = norm.filter((n) => n.texts.length > 0).length;
+  const textsEmpty = norm.length - textsFilled;
   return {
     ok: true,
     kind: 'list',
@@ -2768,6 +2864,12 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     listGeo,
     // 🔴 步⑤（P0-2）：卡内布局真值（渲染器据此重排/不重排；`null` ⇒ 保持现状）。
     innerLayout,
+    textsFilled,
+    textsEmpty,
+    // 🔴 G11b：mapping 文本归位计数（调用方聚合进计数行）
+    iconFromMapping: iconTextMatched,
+    iconTextUnmatched,
+    textsAllEmpty: textsFilled === 0 && norm.length > 0,
   };
 }
 
@@ -3014,6 +3116,14 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     const il = tr.innerLayout || {};
     const innerStacked = il.innerDir === 'stacked';
     const vPartsInline = il.valuePartsDir === 'inline';
+    // 🔴 G8（2026-11-04 · a41a470f 实锤）：texts 条目间几何真值落地。
+    //   inline（同行左右，y 重叠+x 分离投票一致）⇒ 文本列改 row + baseline；
+    //   间距无真值不写（紧邻排列），也不推右（margin-left:auto 是替真值决定，
+    //   与步⑤ 废除 stats 硬编码推右同一纪律）。stacked/null ⇒ 维持旧 column（fail-open）。
+    const textPairsInline = il.textPairsDir === 'inline';
+    const textColStyle = textPairsInline
+      ? 'display:flex;flex-direction:row;align-items:baseline;justify-content:flex-start;min-width:0;flex:1 1 auto;'
+      : 'display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1 1 auto;';
     // 数值/单位同行时的真值间距（真机 2px）；无真值 ⇒ 一个字符都不写（缺事实不猜）。
     const vGapCss =
       vPartsInline && Number.isFinite(il.valuePartsGap) ? `gap:${il.valuePartsGap}px;` : '';
@@ -3042,7 +3152,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       //   逐项背景四件套 ⇒ 图条尺寸/定位全丢；长写与图片属性零重叠。
       `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;${itemStatic}" :style="{${itemWidth}${tr.cardH ? ` height: '${tr.cardH}px',` : ''} ${itemGap} backgroundColor: it.fill || undefined${itemBindBg} }">`,
       `      <img v-if="it.icon" :src="it.icon" :style="{ width: it.iconW ? it.iconW + 'px' : undefined, height: it.iconH ? it.iconH + 'px' : undefined, objectFit: 'contain', flex: 'none'${tr.padL != null ? `, marginLeft: '${tr.padL}px'` : ''} }" alt="" />`,
-      `      <div style="display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1 1 auto;">`,
+      `      <div style="${textColStyle}">`,
       `        <span v-for="(t, __j) in it.texts" :key="__j" :style="{ color: t.c || undefined, fontSize: t.fs ? t.fs + 'px' : undefined, fontWeight: t.fw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ t.t }}</span>`,
       // stacked：stats 进**同一列**（`it` 的文本列），紧接名称下方 ⇒ 天然左对齐、不再贴右
       ...(innerStacked ? statsBlock('        ') : []),
@@ -3756,7 +3866,7 @@ function declaredUnconsumedCount(sec, kind) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   const figmaIndex = indexFigmaNodes(
@@ -3905,6 +4015,15 @@ export function collectFoldedGridTakeover(p = {}) {
       out.listHits += 1;
       if (tr.direction === 'row') out.listRow += 1;
       else out.listColumn += 1;
+      // 🛡️ G4（2026-11-04 · c7d56bd7 FG_LIST_ITEMS texts:[] 实锤）：文本可观测性恒计——
+      //   textsFilled/textsEmpty 0 也打；textsAllEmpty 段数单列（行文本断供嫌疑，
+      //   文本全在 stats 或采集缺失），不再静默。
+      out.listTextsFilled += Number(tr.textsFilled || 0);
+      out.listTextsEmpty += Number(tr.textsEmpty || 0);
+      if (tr.textsAllEmpty) out.listTextsAllEmptySections += 1;
+      // 🔴 G11b：mapping 文本归位计数恒打（iconFromMapping>0 而产物 icon 仍 null ⇒ 模板/数据未消费）
+      out.iconFromMapping += Number(tr.iconFromMapping || 0);
+      out.iconTextUnmatched += Number(tr.iconTextUnmatched || 0);
       // 🔴 刀55 计数行铁律：几何翻案声明/缺省的次数必须真机可 grep（0 也打）——
       //   若恒 0 说明新判据从未生效（塞入参=假绿的形状），若暴涨说明几何判据误伤。
       if (String(tr.directionSource || '').startsWith('geometry-overrides')) out.listDirectionOverrides += 1;
@@ -3924,6 +4043,9 @@ export function collectFoldedGridTakeover(p = {}) {
       //     `widths`=实际下发，`neg`=clamp 前的原始负值）—— 被拦下后仍可完整回溯。
       const lg = tr.listGeo || null;
       if (lg) {
+        // 🔴 G9（2026-11-04）：icon 回退盒污染致几何拒下发的段数 —— 0 也打；
+        //   >0 且产物仍有 cardH/widths ⇒ 判据未生效（或有第二写路径）。
+        if (lg.iconFallbackPolluted) out.listCardHIconFallbackRejected += 1;
         if (lg.negGapClamped) out.listGeoNegGapClamped += 1;
         if (!lg.geoReady) out.listGeoGeoNotReady += 1;
         if (lg.widthNotUniform) out.listGeoWidthNotUniform += 1;
@@ -3939,6 +4061,10 @@ export function collectFoldedGridTakeover(p = {}) {
         if (lg.innerDir === 'stacked') out.listGeoInnerStacked += 1;
         else if (lg.innerDir === 'inline') out.listGeoInnerInline += 1;
         if (lg.innerConflict) out.listGeoInnerConflict += 1;
+        // 🔴 G8：texts 条目间方向分布（0 也打；inline>0 而产物仍纵堆 ⇒ 模板未消费）
+        if (lg.textPairsDir === 'inline') out.listTextPairsInline += 1;
+        else if (lg.textPairsDir === 'stacked') out.listTextPairsStacked += 1;
+        if (lg.textPairsConflict) out.listTextPairsConflict += 1;
         if (lg.valuePartsDir === 'inline') out.listGeoValuePartsInline += 1;
         else if (lg.valuePartsDir === 'stacked') out.listGeoValuePartsStacked += 1;
         if (out.listGeoSamples.length < 8) {
@@ -4077,12 +4203,25 @@ export function collectFoldedGridTakeover(p = {}) {
     footerTaken: out.footerHits,
     regionsTaken: out.regionHits,
     listDirectionOverrides: out.listDirectionOverrides,
+    // 🛡️ G4（2026-11-04 · c7d56bd7 texts:[] 实锤）：行文本可观测性——0 也打。
+    listTextsFilled: out.listTextsFilled,
+    listTextsEmpty: out.listTextsEmpty,
+    listTextsAllEmptySections: out.listTextsAllEmptySections,
     // 🔴 2026-11-03：列表卡盒几何真值（负间距总闸 + geoReady 覆盖 + 步③ 异宽拦宽度）——0 也打。
     listGeoNegGapClamped: out.listGeoNegGapClamped,
     listGeoGeoNotReady: out.listGeoGeoNotReady,
     listGeoWidthNotUniform: out.listGeoWidthNotUniform,
     listGeoGeomPicked: out.listGeoGeomPicked,
     listGeoSpanRejected: out.listGeoSpanRejected,
+    // 🔴 G9（2026-11-04 · 1de12f48 cardH=40 实锤）：icon 回退盒污染拒下发段数——0 也打。
+    listCardHIconFallbackRejected: out.listCardHIconFallbackRejected,
+    // 🔴 G8（2026-11-04 · a41a470f name/value 纵堆实锤）：texts 条目间几何投票分布。
+    listTextPairsInline: out.listTextPairsInline,
+    listTextPairsStacked: out.listTextPairsStacked,
+    listTextPairsConflict: out.listTextPairsConflict,
+    // 🔴 G11b（2026-11-04 · a41a470f icon 全 null 实锤）：mapping 文本归位计数。
+    iconFromMapping: out.iconFromMapping,
+    iconTextUnmatched: out.iconTextUnmatched,
     listGeoInnerStacked: out.listGeoInnerStacked,
     listGeoInnerInline: out.listGeoInnerInline,
     listGeoInnerConflict: out.listGeoInnerConflict,

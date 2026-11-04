@@ -163,8 +163,36 @@ const BODY_PASSTHROUGH_KEYS = new Set([
   'id', 'title', 'responsibility', 'elementCount', 'type', 'collapsed', 'renderHint',
   'itemCount', 'items', 'headers', 'tableStyle', 'body', 'isLayoutContainer', 'layout',
   'layoutSource', 'sourceNodeIds', 'figmaAnchorId', 'absoluteBoundingBox', 'figmaBox', 'styles',
-  'rowPeerIds', 'layoutMetadata', 'children',
+  'rowPeerIds', 'layoutMetadata', 'children', 'header',
+  // 🛡️ 2026-11-04（mc-max-1793771678347-18544d9c 实锤）：internalSubcomponents 是图表宿主归属
+  //   事实源（chart-section.js 几何宿主挂载），此前被白名单剥掉 → production 输入 internalSubcomponents:0
+  //   → 宿主 section 永远不知道自己名下有图表 → 双渲染/图表缺失。白名单放行 + 下方显式归一化透传。
+  'internalSubcomponents',
 ])
+
+/** internalSubcomponents 透传字段（最小契约，与 planner R1/chart-section 产出字段对齐）。 */
+const INTERNAL_SUB_PASSTHROUGH_KEYS = [
+  'type', 'id', 'name', 'responsibility', 'reason',
+  'parentSectionId', 'parentSectionTitle',
+  'props', 'emits', 'sourceNodeIds', 'chartType',
+  'elementNames', 'textTruths',
+]
+
+function normalizeInternalSubs(subs) {
+  if (!Array.isArray(subs)) return undefined
+  const out = subs
+    .filter((s) => s && typeof s === 'object')
+    .map((s) => {
+      const o = {}
+      for (const k of INTERNAL_SUB_PASSTHROUGH_KEYS) {
+        if (s[k] === undefined || s[k] === null) continue
+        o[k] = s[k]
+      }
+      return o
+    })
+    .filter((o) => Object.keys(o).length > 0)
+  return out.length > 0 ? out : undefined
+}
 
 function normalizeSectionNode(section, ctx = null) {
   if (!section || typeof section !== 'object') return null
@@ -195,6 +223,9 @@ function normalizeSectionNode(section, ctx = null) {
       }
     : undefined
   const bodyResult = normalizeBodyContract(section.body)
+  // 🛡️ 2026-11-04（18544d9c 实锤）：图表宿主归属（internalSubcomponents）透传——
+  //   几何宿主挂载在 section 级与 plan 级两处消费，归一化剥掉即生产断供。
+  const internalSubcomponents = normalizeInternalSubs(section.internalSubcomponents)
   if (ctx) {
     // 🔴 R8-7 观测：白名单剔除的**内容型**字段（对象/数组值）按名计数 —— 终结「第 N 次
     //   同类补丁」：今后任何事实被白名单剥掉，真机日志一行可见（聚合于 normalizeComponentPlan）。
@@ -216,6 +247,10 @@ function normalizeSectionNode(section, ctx = null) {
     responsibility: section.responsibility || null,
     elementCount: Number.isFinite(section.elementCount) ? section.elementCount : null,
     type: section.type || null,
+    // 🛡️ C0（2026-11-04 · mc-max-1793723025659-a72365c4 实锤）：header 是结构事实源。
+    //   planner 已透传 `header.controls/headerSlots`，此处若不透传会在第二断点再次断供。
+    //   原样透传，不做字段级修补。
+    ...(section.header && typeof section.header === 'object' ? { header: section.header } : {}),
     collapsed: section.collapsed === true,
     renderHint: section.renderHint || null,
     itemCount: Number.isFinite(section.itemCount) ? section.itemCount : null,
@@ -272,6 +307,8 @@ function normalizeSectionNode(section, ctx = null) {
     ...(Number.isFinite(Number(section.styles?.figmaHeightPx))
       ? { styles: { figmaHeightPx: Number(section.styles.figmaHeightPx) } }
       : {}),
+    // 🛡️ 2026-11-04（18544d9c 实锤）：图表宿主归属透传（缺省不产键，零副作用）
+    ...(internalSubcomponents ? { internalSubcomponents } : {}),
     // 🛡️ #138 续（2026-10-20 · 60dee79d/d7abdee8 实锤）：E1 互挂兄弟真值第二断点。
     //   planner 已透传 rowPeerIds，但此处 normalizeSectionNode 白名单重建再次剥掉 ⇒
     //   engineer 的 resolveSubComponentPlan **优先取 generationInput.componentPlan**（本函数产物）
@@ -315,11 +352,16 @@ export function normalizeComponentPlan(plan) {
   }
   ctx.bodyBytes = used
 
+  // 🛡️ 2026-11-04（18544d9c 实锤）：plan 级 internalSubcomponents 透传（图表宿主归属），
+  //   与 section 级同契约；缺省不产键（零副作用）。
+  const planInternalSubs = normalizeInternalSubs(plan.internalSubcomponents)
+
   return {
     effectiveSections: sections,
     isForced: plan.isForced === true,
     minFiles: Number.isFinite(plan.minFiles) ? plan.minFiles : null,
     reason: plan.reason || null,
+    ...(planInternalSubs ? { internalSubcomponents: planInternalSubs } : {}),
     // 🔴 R8-7 计数行数据源（0 也必须出现）：调用方据此打一行 `plan 归一化·已评估`。
     normalization: { sections: sections.length, ...ctx },
   }

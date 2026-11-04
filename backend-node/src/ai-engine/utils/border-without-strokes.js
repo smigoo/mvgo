@@ -13,6 +13,9 @@
  *   ① 真值：某 section 根节点 `strokes` 为空（或全部 `visible:false`）⇒ 该 section 不得有边框。
  *   ② 产物：该 section 元素的 inline `style`、或**仅被该 section 使用**的 class 规则里
  *      出现 `border` / `border-*` / `outline` / `outline-*` 且值不是 none/0 ⇒ 删除该声明。
+ *      **深度口径（2026-11-04 修正）**：只删该规则块**顶层（depth 0）**的声明 —— 嵌套后代
+ *      规则（`.a { .b { border: … } }` 里的 `.b`）属于**另一个元素**，不属该 section 根，
+ *      一律保留（对齐读侧 `container-background-truth#collectClassProp` 的「只认顶层」语义）。
  *
  * 三条边界（都是「不得误伤」的阴性对照）：
  *   · **`border-radius` 不是边框** —— 语义是圆角，一律保留。
@@ -90,21 +93,32 @@ export function isClassExclusiveTo(cls, sectionId, usages) {
 
 /**
  * 通用「按谓词删除声明」三条（2026-10-21 刀 42 抽出，供「面板装饰误置」复用同一份块改写逻辑）。
- * 边界与刀 38 完全一致：逐行一条声明、不碰嵌套块、inline 只删目标属性。
+ * 边界与刀 38 完全一致：逐行一条声明、**只删顶层（depth 0）**、inline 只删目标属性。
+ *
+ * 🔴 深度感知（2026-11-04 · CS1 实锤修正，用户裁决 (B) 治本共享写侧）：
+ *   旧实现逐行匹配、**无深度语义** ⇒ 会删掉被匹配 class 块内**嵌套后代规则**（`.a { .b { … } }`
+ *   里的 `.b`）的同名声明 —— 那些声明属**另一个元素**，不由本 class 管辖。真机实测：CS1 的
+ *   `.c-b04f22-group-2136638432` 块内嵌套后代 `.c-b04f22-frame-2136639903,…` 的
+ *   `border-radius: 6px` 被连带删 1 行（本刀 42-B 2 行 + 刀 38 3 行，全局 2/168 产物）。
+ *   现按 `{`/`}` 维护深度，**depth 0 才判删**，与读侧 `container-background-truth#collectClassProp`
+ *   的「只认顶层」语义对称，亦与本文件「不碰嵌套块」的原注释一致。
  * @param {(prop:string, value:string) => boolean} isTargetProp
  */
 export function stripDeclsFromBody(body, isTargetProp) {
-  const lines = String(body || '').split('\n');
   const kept = [];
-  for (const line of lines) {
+  let depth = 0;
+  for (const line of String(body || '').split('\n')) {
     const t = line.trim();
-    if (!t || t.startsWith('//') || t.startsWith('/*')) {
-      kept.push(line);
-      continue;
+    let matched = false;
+    if (depth === 0 && t && !t.startsWith('//') && !t.startsWith('/*')) {
+      const m = /^([a-zA-Z-]+)\s*:\s*([^;]*);?$/.exec(t);
+      if (m && isTargetProp(m[1], m[2])) matched = true;
     }
-    const m = /^([a-zA-Z-]+)\s*:\s*([^;]*);?$/.exec(t);
-    if (m && isTargetProp(m[1], m[2])) continue;
-    kept.push(line);
+    if (!matched) kept.push(line);
+    for (const ch of line) {
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+    }
   }
   return kept.join('\n');
 }

@@ -5,12 +5,13 @@
 - 🔴 不得自行部署（重启、生产同步、git push）⇒交付必说「已改完，未部署」。
 - 🔴 治本非产物直改＋可辩驳判据＋阳性对照；判据单一来源；只认 type TEXT/CHARACTER；角色唯一 `splitTitleValueByStyle`。
 - 🔴 提交必显式列路径（禁 `git add .`）；先子仓后主仓；主仓指针 `-dirty` 是并行 WIP 所致（写入的是纯 SHA），message 注明。
+- 🔴 **Git 交付目标分支 = 可配置项，默认 `go-dev`**（11-04 用户澄清：「go-dev 只是我构想的，可以写到配置，由开发项目的人自定义」⇒ **不硬编码**）：三级取值先命中先用 —— ① 任务高级选项 `deliveryBranch` ② 项目根 `mvgo.project.json` → `delivery.branch`（**项目开发者自定义**，可随项目提交） ③ 内置默认 `go-dev`（永不落 `main`）。核查（11-04 17:09）：四个仓库**当前均无 `go-dev`**（本地与远程皆无）；backend-node / frontend 远端仅有 `origin/{main,dev}`，docs 与主仓远端仅有 `main` ⇒ 用默认值时首次交付需创建该分支。
 - 🔴🔴 几何/真值判据必挂真机日志计数行（塞入参=假绿）；改的人=验的人同正则=假绿。
 
-## 状态（11-03 15:40）
-- 生产：前端 11-03 15:25 构建（入口 `index-Cem2KRQN.js`，含 `59fea37`/`1bf82a0`/`1e83dde`），回滚点 `mvgo.bak.20261103-1525`。Node `37d0983` 未更新，后端未部署 ~40+ commit。
-- 本地 :13030 单进程跑 dist（源码改动须 build+重启才生效）；:2610 Vite / :8080 java / Mongo `brew services start mongodb-community`。11-03 22:26 已 `npm run build`（stamp `2026-11-03T14:26:43.099Z git=47b3ba4`，含 #1 双链路幂等/#2 `color:0px`/#3 根 `::before` 白蒙层/语义别名层/EPERM 兜底），**进程 PID 82358 启动 22:15:51 早于构建 ⇒ 仍跑旧 dist、未重启**。
-- git：主仓 `main` 无 upstream；子仓 ahead = backend-node 37 / docs 17 / frontend 9，**均未 push**。工作区常驻并行 WIP（`quality-score-v1.js`+.spec、`data/api-catalogs/*`、`data/figma-node-cache/*`、`dist.old-*`）——**勿 commit/勿 revert**。
+## 状态（11-04 08:15）
+- 生产：前端 11-03 15:25 构建（入口 `index-Cem2KRQN.js`，回滚点 `mvgo.bak.20261103-1525`）；**Node 11-04 08:04 部署 `3502de2`**（pm2 pid 1933968；含 CSS 清洗块注释治本 + 2 处未提交 header 透传 WIP + EPERM rename 降级），回滚点 `dist.bak.3502de2-20261104-080443`。⚠️ 08:03:55 另有并行会话同版本重部署（bak `...-080355`）⇒ **生产 backend-node 目录会被多会话同时操作**。
+- 本地 :13030 单进程跑 dist（源码改动须 build+重启才生效），11-04 00:22 已本地重启 PID 23628（dist git=3502de2）；:2610 Vite / :8080 java / Mongo `brew services start mongodb-community`。
+- git：主仓 `main` 无 upstream，HEAD `5dbffe9e`；子仓 HEAD = backend-node `2bc00f2`(ahead 8) / docs `c595253`(23) / frontend `4fec696`(10)，**均未 push**。11-04 08:14 提交 C0 header 结构事实透传（planner buildEffectiveSection + assembler normalizeSectionNode 两断点原样透传 `header`，附 2 条 C0 spec；backend-node `2bc00f2` / docs `c595253` / 主仓 `5dbffe9e`）。工作区常驻并行 WIP（`quality-score-v1.js`+.spec、`data/api-catalogs/*`、`data/figma-node-cache/*`、`dist.old-*`）——**勿 commit/勿 revert**。
 - 11-03 后端提交链：`95f26c6` 段级归属守卫 / `8ee4133` 方向判据 / `ac6b163` 表格 dedup / `8e548cf` region-partitioner / `dc4c483` P3 面板自持 / `62f5c83` L1 / `701c550` A1+B1 / `2980bd7` B3 / `a02fc43` C1 / `2fc4067` 两档豁免 / `22af320` Figma 跨境 / `a347671` A4 / `16e820c` quality structure+resource F1F2F3 / `8b20c59` A4 二轮 / `35726c7` 504 异步化 / `ac32ea0` 刀16b+刀17。styleScore 11-02 重算 532；component-meta 179 目录 11-03 落盘；⏸ HOLD 7 个 0→null 待拍板。
 
 ## 关键契约
@@ -44,3 +45,13 @@
 - git daily auto-sync 拆改工作区⇒A/B 基线用刀前 commit id（禁 `git show HEAD:`）；两态回归前后 src 全量 `md5 -r` diff。
 - worktree 三假象：无 dist/⇒假失败；无未跟踪样本⇒静默 skip；`ln -sfn` 塞已存在目录⇒逐项 `ln -s`。
 - tsc `allowJs` 未开⇒`npx tsc -p tsconfig.build.json --outDir /tmp/nbcheck` 避免覆写在跑 dist。
+- 🔴 `find -not -path './.git/*'` **只挡顶层 `.git`，挡不住嵌套子仓**（样本 `/Users/smigoo/工作/test` 的 `.git` 在 `frontend/vue3-vite-base/.git` ⇒ 该式返回=总数）⇒ 必用 `-not -path '*/.git/*'`（带 `*/`）或 `-prune`。口径样例：该样本 189 = 工作文件 101 + 嵌套 `.git` 83 + `.DS_Store` 5。
+- 🔴 演示/原型类 HTML 里的「实测数字」**一律机器生成，禁手抄**：`outputs/2026-11-04-端到端开发工作台原型.html` 的 `/* PROTO-DATA:BEGIN/END */` 块由 `outputs/build-prototype.cjs --write` 从 `outputs/<scan>/spec/` 生成，`--check` 漂移即 exit 1（0 一致/1 漂移/2 用法或产物缺失）。禁手改块内任何字节。判据自证要求：`--write` 幂等（md5 不变）＋阳性对照（改产物后 `--check` 必须红）＋「改产物→原型跟着变」的数据流通实验，三者缺一即为假绿。
+- 🔴 本 shell 里 **`sed -i ''` 失效**（空参数被吞 ⇒ `-i` 把脚本当备份后缀，报 `No such file or directory` 且**整体 exit 0 静默不改**）；原地替换用 `python3` 读写。且 zsh 中 `CMD='env -i ...'; $CMD node x` **不按空格分词**（报 `no such file: env -i ...`）⇒ 用函数或每次内联 `env -i`。
+
+## outputs/ 原型线（S0 扫描 → 原型生成）
+- 🔴🔴 **产物分两层，别混**：`<scan>/spec/{project.manifest.json,endpoints.json,conflicts.md}` + `doc/REQUIREMENTS.draft.md` 是**扫描快照**（重跑整篇覆盖）；`<scan>/spec/decisions.md` 是**决策层**——扫描器**只读不写**。人裁决/人工判定必须与快照物理分开落盘，否则「下一次重跑」就是裁决的删除键。已实测重跑后 `decisions.md` md5 不变。
+- 🔴 **两个 `conflicts.md` 各司其职**：`outputs/2026-11-04-s0-scan/spec/conflicts.md` 是生成物（`countConflictEntries()` 数 §四 的 `### N.` 并与标题「（4 条）」交叉校验，手改即漂移报红）；`outputs/yxjc-monitor/spec/conflicts.md` 是人写的 S2 契约台账（A1–A7/B1–B10，可改）。改前先 `wc -l`+`md5` 认人。
+- 🔴 **只读自证**（`s0-scan.cjs` 的 `snapshotTree`/`diffSnapshots`）：扫前扫后各拍一次目录快照比对，结果进 `manifest.S0.readOnly`，足迹进 `S0.footprint`。**口径故意与 `walk()` 不同**——`snapshotTree` 不跳 `.git`/`.DS_Store`（否则「共 N 个文件」与 `find` 数不符），扫描用的 `walk()` 跳。只读承诺必须由被承诺方自证，手写「0 个被改」不算。
+- 🔴 **手写数字自证不了自己**：演示/报告类产物里的每个数要么派生、要么删掉；真派生不出来的（如坑位总数 6）须显式标注「结构常量」并写理由，别混进派生里假装。
+- 🔴 跨文件引用（台账抄 md5/字节数）必须配断言钉回真值 + **阳性对照**（插 1 字节 ⇒ 断言精确红几条，还原后字节级回到原值）。能红的断言才算断言。

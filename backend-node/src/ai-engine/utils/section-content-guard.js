@@ -751,18 +751,190 @@ export function healBorrowedEvidence({
 /**
  * 删除「引用某资源变量的绑定」，返回新内容；认不出形态返回 null（不猜）。
  *
- * 只处理两种**可确定性定位**的形态：
+ * 只处理三种**可确定性定位**的形态：
  *   ① `:style="{ … backgroundImage: 'url(' + bg3 + ')' … }"` —— 对象字面量里的**顶层属性**
  *      （值的表达式引用该变量）⇒ 删该属性（含相邻逗号），保留其余属性原格式；
- *   ② `:attr="bg3"` —— 绑定表达式**恰为该变量本身** ⇒ 删整个属性。
+ *   ② `:attr="bg3"` —— 绑定表达式**恰为该变量本身** ⇒ 删整个属性；
+ *   ③ 🛡️ 刀 57（2026-11-04）：**任意对象字面量**里的顶层字段值引用该变量
+ *      （数据数组行 `{ label: '摄像机', icon: icon1 }` / 配置对象）⇒ 删该字段。
+ *      值自身含 `{`/`[`/`(`/`)` 的字段跳过（内层字面量各自处理）。
  */
 function removeResourceRefs(content, varName) {
   if (typeof content !== 'string' || !content || !varName) return null;
   const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const refRe = new RegExp(`\\b${esc}\\b`);
   let out = removeStylePropsReferencing(content, refRe);
+  out = removeObjectFieldRefs(out, refRe);
   out = removeExactBindings(out, varName);
   return out === content ? null : out;
+}
+
+/**
+ * ③ 🛡️ 刀 57（2026-11-04 · mc-max-1793759563964-878b3ef1 实锤）：**对象字面量字段值**形态。
+ *
+ * 病灶：借用资源的确定性处置自 2026-09-30 上线起，对本形态**静默 0 处置**——
+ *   `CardGrid.vue`（section `2:8437`）里 3 个借用资源的引用形态**全部**是数据数组的
+ *   对象字段值：`{ label: '摄像机', value: '(2/484)', icon: icon1 }`。
+ *   而 `removeStylePropsReferencing` 只认 `:style` 属性**内部**的对象、
+ *   `removeExactBindings` 只认 `:attr="var"` 整属性 ⇒ 两形态全不命中 ⇒
+ *   `removeResourceRefs` 返回 null ⇒ 逐条 `continue` ⇒ 产物原样发货：
+ *   跨段借用图标照渲（header 的 16x16 / switch 的 35x28 图标被画进卡片网格），
+ *   且 import 剪不掉（`touched` 为空 ⇒ `pruneUnmounted` 不跑）⇒ 撞发布前的 RES-UNREF 缺口。
+ *   ⚠️ 离线探针实锤：`checkSectionExclusiveEvidence` 算出 3 条 `borrowedAssetIssues`，
+ *   同参调 `healBorrowedEvidence` 返回 `healed.asset = []` 且 5 个文件**逐字节未变**。
+ *
+ * 判据（宁漏不误删，全部确定性、无语义推断）：
+ *   在**任意对象字面量**里，某**顶层字段**的**值**表达式引用了该变量 ⇒ 删该字段（含相邻逗号）。
+ *   · 只看「值」（第一个顶层 `:` 之后，见 `topLevelValue`）——键名 `icon: …` 本身不算引用，
+ *     故变量名为 `icon` 时不会被 `icon: 'x'` 误删；
+ *   · 值中的**字符串字面量先被抹空**（`maskQuoted`）⇒ `label: 'icon1'` 这类不是引用；
+ *   · 值本身含 `{` / `[` / `(` / `)` 的字段**本层跳过**（内层字面量会作为独立候选各自处理），
+ *     保证「不因内层命中而整块删外层」；
+ *   · 只认 `field: <简单表达式>`；`ref()` 声明行、字符串字面量内出现变量名一律不动。
+ *
+ * 定位：**兜底** —— 根治在分配侧（本节真值资源白名单），本刀只保证「算得出 ⇒ 处置得了」。
+ */
+function removeObjectFieldRefs(content, refRe) {
+  const lits = findObjectLiterals(content);
+  if (lits.length === 0) return content;
+  const edits = [];
+  for (const lit of lits) {
+    const body = content.slice(lit.start + 1, lit.end);
+    const parts = splitTopLevelObjectProps(body);
+    if (parts.length === 0) continue;
+    const removed = parts.map((p) => {
+      const v = topLevelValue(p.text); // 只看「值」——键名并不构成引用
+      if (/[{\[()]/.test(v)) return false; // 值含嵌套字面量/调用 ⇒ 本层跳过（内层各自处理）
+      return refRe.test(maskQuoted(v)); // 抹掉字符串字面量 ⇒ `'icon1'` 这类不算引用
+    });
+    if (!removed.some(Boolean)) continue;
+    for (const [s, e] of planObjectPropDeletions(parts, removed, body.length)) {
+      edits.push({ start: lit.start + 1 + s, end: lit.start + 1 + e, text: '' });
+    }
+  }
+  if (edits.length === 0) return content;
+  edits.sort((a, b) => a.start - b.start);
+  return applyEdits(content, edits);
+}
+
+/** 取「顶层字段」的**值**部分（第一个顶层 `:` 之后）；无顶层 `:`（简写/非字段）⇒ 整体视为值。 */
+function topLevelValue(text) {
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === ':' && depth === 0) return text.slice(i + 1);
+  }
+  return text;
+}
+
+/** 把字符串字面量的**内容**抹成空格（保留长度），使 `'icon1'` 不被识别为变量引用。 */
+function maskQuoted(text) {
+  let out = '';
+  let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === '\\') {
+        out += '  ';
+        i++;
+      } else {
+        if (ch === quote) quote = null;
+        out += ' ';
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      out += ' ';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * 扫出全文中所有**成对**的 `{…}` 区间（单次遍历，O(n)）。
+ *
+ * 跳过引号区（`'` / `"` / `` ` ``，含转义）与注释（`//` / `\\*…*\\/`）：
+ *  · 故 `<template>` 里 `:style="{…}"` 这类**属性值内**的对象不会被收（由 ① 专管，
+ *    避免同一对象被两条规则各删一次 ⇒ 双删越界）；
+ *  · `{{ expr }}` 会被当作 `{ {expr} }` 收下，但 `splitTopLevelObjectProps` 切出的
+ *    唯一顶层段含 `{` ⇒ 被 ③ 的排除闸挡下，无副作用；
+ *  · `<style>` 里的 CSS 块同样会被收下，但字段值不可能命中资源变量名 ⇒ 无副作用。
+ */
+function findObjectLiterals(content) {
+  const out = [];
+  const stack = [];
+  let quote = null;
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '/' && content[i + 1] === '/') {
+      const j = content.indexOf('\n', i);
+      i = j < 0 ? content.length : j;
+      continue;
+    }
+    if (ch === '/' && content[i + 1] === '*') {
+      const j = content.indexOf('*/', i + 2);
+      i = j < 0 ? content.length : j + 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '{') stack.push(i);
+    else if (ch === '}') {
+      const s = stack.pop();
+      if (s !== undefined) out.push({ start: s, end: i });
+    }
+  }
+  return out;
+}
+
+/**
+ * 计算「待删顶层属性」在 body 坐标下的删除区段（连续命中合并为一段）。
+ * 末段连**前导**逗号删，其余连**尾随**逗号删 —— 两条规则共用，避免「同一事实两处各自计算」。
+ */
+function planObjectPropDeletions(parts, removed, bodyLen) {
+  const ranges = [];
+  let i = 0;
+  while (i < parts.length) {
+    if (!removed[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < parts.length && removed[j + 1]) j++;
+    let s = parts[i].start;
+    let e;
+    if (j + 1 < parts.length) {
+      e = parts[j + 1].start; // 含尾随逗号
+    } else {
+      e = bodyLen;
+      if (i > 0) s = parts[i - 1].end; // 末段：连前导逗号
+    }
+    ranges.push([s, e]);
+    i = j + 1;
+  }
+  return ranges;
 }
 
 /** ① 删 `:style` 对象字面量里引用 refRe 的顶层属性；`:style` 因此变空则删整个属性。 */
@@ -782,26 +954,7 @@ function removeStylePropsReferencing(content, refRe) {
     if (!removed.some(Boolean)) continue;
 
     // 计算删除区段（按 body 坐标；末段连前导逗号一起删，避免留悬挂逗号）
-    const delRanges = [];
-    let i = 0;
-    while (i < parts.length) {
-      if (!removed[i]) {
-        i++;
-        continue;
-      }
-      let j = i;
-      while (j + 1 < parts.length && removed[j + 1]) j++;
-      let s = parts[i].start;
-      let e;
-      if (j + 1 < parts.length) {
-        e = parts[j + 1].start; // 含尾随逗号
-      } else {
-        e = body.length;
-        if (i > 0) s = parts[i - 1].end; // 末段：连前导逗号
-      }
-      delRanges.push([s, e]);
-      i = j + 1;
-    }
+    const delRanges = planObjectPropDeletions(parts, removed, body.length);
     let newBody = body;
     for (let k = delRanges.length - 1; k >= 0; k--) {
       newBody = newBody.slice(0, delRanges[k][0]) + newBody.slice(delRanges[k][1]);

@@ -2593,14 +2593,24 @@ export class FigmaConnector {
   /**
    * 推断DOM选择器
    */
-  _inferDomSelector(node) {
+  _inferDomSelector(node, anchorParentId = null) {
     const name = node.name
       .toLowerCase()
       .replace(/^(bg-|img-|icon-)/, '')
       .replace(/\s+/g, '-')
       .replace(/[^\w-]/g, '');
 
-    return `.${name}-container`;
+    // 🛡️ 小修（2026-11-04 · a41a470f 实锤）：归一后为空/仅连字符（如纯符号名、
+    //   "Group 11" 被剥成 "-"）⇒ 拼出的 `.-container`/`.--container` 是**虚构 class**
+    //   （产物 DOM 中根本不存在）⇒ LLM 按它找挂载点必然失败。回退确定性锚
+    //   `[data-section-id]`（父 section 容器，与 bg 条目 :2818 同款先例）；无 id ⇒ null（不虚构）。
+    const trimmed = name.replace(/^-+|-+$/g, '');
+    if (!trimmed) {
+      return anchorParentId
+        ? `[data-section-id="${anchorParentId}"]`
+        : null;
+    }
+    return `.${trimmed}-container`;
   }
 
   /**
@@ -2817,7 +2827,7 @@ export class FigmaConnector {
             //   而旧 targetDomSelector=.m-container 对不上 ⇒ 背景没挂 ⇒ 蓝框丢失。
             nodeType === 'bg' && parentId
               ? `[data-section-id="${parentId}"]`
-              : this._inferDomSelector(node),
+              : this._inferDomSelector(node, parentId),
           targetDomHint: this._inferDomHint(node, path),
           previewAnalysisRole: nodeType,
           hint: `${this._semanticAncestor(path) || node.name} → ${this._inferDomHint(node, path)}`,

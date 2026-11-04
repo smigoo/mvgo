@@ -77,7 +77,9 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(tpl).toContain('<SwitchSection style="flex:1;min-height:0;" />')
     expect(tpl).toContain('<TabsSection style="flex:1;min-height:0;" />')
     expect(tpl).toContain('<MainSection style="flex:1;min-height:0;" />')
-    expect(tpl).toContain('class="c-device-monitor-slot-con" style="display:flex;flex-direction:column;"')
+    // 🛡️ F1（2026-11-04）：根 slot-con 必须自带高度契约（height:100%;min-height:0）——
+    //   此前只写 display/flex-direction，高度靠 LLM 的 less，缺规则时整树塌 0（图表被裁）。
+    expect(tpl).toContain('class="c-device-monitor-slot-con" style="display:flex;flex-direction:column;height:100%;min-height:0;"')
     expect(tpl.indexOf('<SwitchSection')).toBeLessThan(tpl.indexOf('<TabsSection'))
     expect(tpl.indexOf('<TabsSection')).toBeLessThan(tpl.indexOf('<MainSection'))
     // 🛡️ R1-2：facts 单一事实源（rootContainerClass + sectionRoots）
@@ -1305,22 +1307,39 @@ describe('刀16b · 间距基准与 flex 同源（2026-11-03 · mc-1793686933827
   const curChart = { x: 270, y: 737, w: 56, h: 10 }
 
   it('⭐ 单元：prev 基准上移到同源段高（556）⇒ 551px 收敛为 19px', () => {
-    expect(siblingGapStyle(prevTitle, curChart, 'vertical')).toBe('margin-top:551px;') // 旧行为逐字
+    // 🛡️ G1（2026-11-04）：无同源尺寸时旧算法 551px 超守卫上限（100px）⇒ 不注入（宁缺勿滥）
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical')).toBe('')
     expect(siblingGapStyle(prevTitle, curChart, 'vertical', 556)).toBe('margin-top:19px;')
   })
 
   it('⭐ 单元：真机第二例 133px → 15px（段高 142 / 盒高 24）', () => {
     const prev = { x: 37, y: 573, w: 86, h: 24 }
     const cur = { x: 36, y: 730, w: 86, h: 174 }
-    expect(siblingGapStyle(prev, cur, 'vertical')).toBe('margin-top:133px;')
+    // 🛡️ G1：无同源尺寸时 133px 超限 ⇒ 守卫拦截返回空串
+    expect(siblingGapStyle(prev, cur, 'vertical')).toBe('')
     expect(siblingGapStyle(prev, cur, 'vertical', 142)).toBe('margin-top:15px;')
   })
 
-  it('反向：同源尺寸缺省 / 为 0 / 小于盒尺寸 ⇒ 逐字回退旧行为（零变化）', () => {
-    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 0)).toBe('margin-top:551px;')
-    expect(siblingGapStyle(prevTitle, curChart, 'vertical', undefined)).toBe('margin-top:551px;')
-    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 10)).toBe('margin-top:551px;')
-    expect(siblingGapStyle(prevTitle, curChart, 'vertical', NaN)).toBe('margin-top:551px;')
+  it('🛡️ G1 异常间距守卫（2026-11-04 · 5980b8ee margin-top:305px 实锤）：超限不注入 + guarded 计数', () => {
+    const stats: any = { guarded: 0 }
+    // 305px（5980b8ee 真机值）> 100px 上限 ⇒ '' + 计数
+    expect(
+      siblingGapStyle({ x: 36, y: 100, w: 100, h: 50 }, { x: 36, y: 455, w: 100, h: 60 }, 'vertical', 0, stats),
+    ).toBe('')
+    expect(stats.guarded).toBe(1)
+    // 正常 33px 间距不受守卫影响，照常注入
+    const stats2: any = { guarded: 0 }
+    expect(
+      siblingGapStyle({ x: 0, y: 0, w: 100, h: 67 }, { x: 0, y: 100, w: 100, h: 60 }, 'vertical', 0, stats2),
+    ).toBe('margin-top:33px;')
+    expect(stats2.guarded).toBe(0)
+  })
+
+  it('反向：同源尺寸缺省 / 为 0 / 小于盒尺寸 ⇒ 逐字回退旧行为（🛡️ G1：超限部分被守卫拦截）', () => {
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 0)).toBe('')
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', undefined)).toBe('')
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', 10)).toBe('')
+    expect(siblingGapStyle(prevTitle, curChart, 'vertical', NaN)).toBe('')
   })
 
   it('反向：基准上移后重叠（gap<1）⇒ 空串，不再产负/零 margin', () => {
@@ -1522,7 +1541,7 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     expect(tpl).toContain('z-index:-1;');
     // ② 宿主是根 slot-con div，锚点用专用属性（**不复用 data-section-id**，避免双命中）
     expect(tpl).toContain('class="c-slot-con-slot-con" data-absorbed-host="807:2"');
-    expect(tpl).toContain('style="display:flex;flex-direction:column;position:relative;isolation:isolate;"');
+    expect(tpl).toContain('style="display:flex;flex-direction:column;height:100%;min-height:0;position:relative;isolation:isolate;"');
     // ③ 层必须渲染在根 div 内（紧跟根 div 开标签）
     const rootIdx = tpl.indexOf('class="c-slot-con-slot-con"');
     expect(rootIdx).toBeGreaterThan(-1);
@@ -1541,7 +1560,7 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     const tpl = facts!.template;
     expect(tpl).not.toContain('data-absorbed-host');
     expect(tpl).not.toContain('data-absorbed-bg');
-    expect(tpl).toContain('class="c-slot-con-slot-con" style="display:flex;flex-direction:column;"');
+    expect(tpl).toContain('class="c-slot-con-slot-con" style="display:flex;flex-direction:column;height:100%;min-height:0;"');
   });
 
   it('回归锁：容器段沿用 sourceNodeIds（枚举只对非容器启用）⇒ src 缺直系子也不出新层', () => {
@@ -1566,7 +1585,7 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
       makeInput([{ id: '807:2', type: 'body', responsibility: '主内容区' }], 'slot-con') as any,
     );
     expect(facts).not.toBeNull();
-    expect(facts!.template).toContain('style="display:flex;flex-direction:column;"');
+    expect(facts!.template).toContain('style="display:flex;flex-direction:column;height:100%;min-height:0;"');
     expect(facts!.template).not.toContain('data-absorbed-bg');
   });
 });

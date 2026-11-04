@@ -292,6 +292,199 @@ describe('刀 42-B healPanelChromeMisplacement', () => {
 });
 
 /**
+ * 🛡️ A0 零命中留痕计数行（2026-11-04 · c-b04f22-b04f223c 实锤）：
+ *   本刀原先只在 `changes.length > 0` 时留痕 ⇒ 事后无法区分「跑过但零命中」「未跑到」
+ *   「被哪条 continue 筛掉」——这正是 CS1 案查不动 3 轮的直接原因（与 G14b 同款缺口）。
+ *   `stats` 为**纯观测**计数，判据一字未动；本组即计数行自身的阳性对照。
+ */
+describe('刀 42-B A0 零命中计数行', () => {
+  it('① 阳性：命中场景下分母与分支归因都在（class 已被元素级收入 ⇒ AlreadyStripped）', () => {
+    const { changes, stats } = healPanelChromeMisplacement(buildFiles(), { figmaRoot: buildFigma() });
+    expect(changes.length).toBeGreaterThan(0); // 确有命中
+    expect(stats.scanned).toBe(2); // 2 个带 data-section-id 的元素
+    expect(stats.skippedSelfPanel).toBe(1); // 面板真值元素自己（panel-gold）
+    expect(stats.classLevelSkipAlreadyStripped).toBe(1); // c-header-text 已被元素级 ③ 收入
+    // 归因守恒：②-b 的「总」= 各分支之和
+    const sum =
+      stats.classLevelSkipAlreadyStripped +
+      stats.classLevelSkipNoShadow +
+      stats.classLevelSkipUnused +
+      stats.classLevelSkipShared +
+      stats.classLevelSkipUnresolved +
+      stats.classLevelSkipNoOwner +
+      stats.classLevelSkipOccupied;
+    expect(stats.classLevelSkipped).toBe(sum);
+  });
+
+  it('② CS1 病灶归因阳性：`@var: unset` 遮蔽 ⇒ classLevelSkipUnresolved === 1（零命中但有留痕）', () => {
+    // 复刻真机形态：SFC scoped 的 `box-shadow: @vendor-panel-shadow`（= unset）遮蔽了
+    // common.less 的金发光；装饰 class 挂在**无 data-section-id** 的元素上（元素级够不着）。
+    const themeVars = `@vendor-panel-shadow: unset;
+@color-bg-vendor-gold: rgba(226, 208, 132, 0.2);
+@radius-panel: 12px;
+`;
+    const less = `.c-deco {
+  border-radius: 12px;
+  box-shadow: @vendor-panel-shadow;
+}
+`;
+    const decoVue = `<template>
+  <div class="c-deco" v-bind="$attrs"></div>
+</template>
+`;
+    const files = {
+      'package/index.vue': INDEX_VUE,
+      'package/components/Deco.vue': decoVue,
+      'resources/styles/common.less': less,
+      'resources/styles/themes/theme-vars.less': themeVars,
+    };
+    const { changes, stats } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    expect(changes).toHaveLength(0); // 零命中
+    expect(stats.classLevelScanned).toBe(1); // 但确实跑到了 ②-b
+    expect(stats.classLevelSkipUnresolved).toBe(1); // 且点名落在「解析不出真值」这条
+  });
+
+  it('③ 三态可分：「跑过但零命中」(scanned>0) ≠「未跑到」(scanned=0)', () => {
+    const files = {
+      'package/index.vue': INDEX_VUE, // 面板真值元素 ⇒ skippedSelfPanel
+      'package/components/Plain.vue': `<template>
+  <div class="c-plain" data-section-id="x-1" style="display:flex"></div>
+</template>
+`,
+      'resources/styles/common.less': '',
+      'resources/styles/themes/theme-vars.less': THEME_VARS,
+    };
+    const ran = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    expect(ran.changes).toHaveLength(0);
+    expect(ran.stats.scanned).toBe(2); // 跑过（分母非零）
+    expect(ran.stats.skippedMissingDecl).toBe(1); // 无三件套声明 ⇒ 落此分支
+
+    const notRun = healPanelChromeMisplacement(files, {});
+    expect(notRun.stats.scanned).toBe(0); // 未跑到 ⇒ 全 0
+    expect(notRun.skipped?.[0]?.reason).toBe('no-figma-root'); // 且带早退原因
+  });
+
+  it('④ 早退留痕：无面板真值 ⇒ 全 0 且带 no-panel-truth（不是静默返回）', () => {
+    const noPanelFigma = {
+      document: { id: 'root', type: 'FRAME', absoluteBoundingBox: box(0, 0, 100, 100), children: [] },
+    };
+    const { stats, skipped } = healPanelChromeMisplacement(buildFiles(), { figmaRoot: noPanelFigma });
+    expect(stats.scanned).toBe(0);
+    expect(stats.classLevelScanned).toBe(0);
+    expect(skipped?.[0]?.reason).toBe('no-panel-truth');
+  });
+});
+
+/**
+ * 🛡️ 42-B (b)（2026-11-04 · CS1 段1 实锤）：**无效 stub 下沉**。
+ *   病灶：`cssSources` 首源（SFC `<style>`）把 class 的 `box-shadow` 声明成
+ *   `@vendor-panel-shadow`（= `unset`）⇒ first-wins 永远取到 stub，**后面那份有效发光声明**
+ *   （`common.less` 顶层金发光）读不到 ⇒ 在 `Unresolved` 静默丢弃、`changes=0`。
+ *   口径（用户 2026-11-04 裁决）：**只认 `unset`** —— 它是「LLM 未填」的 stub 语义，须继续
+ *   下查；`none` 是**有意**的「无阴影」声明，不得下查（否则会误「复活」被有意取消的阴影）。
+ *   本组即「首源 stub 遮蔽时仍能下沉取到真值」的**两源阳性对照**（⑤ 走元素级 `declaredProp`、
+ *   ⑥ 走 class 级 ②-b `putValid`），⑦ 为 `none` 不下沉的阴性对照。
+ */
+describe('刀 42-B (b) 无效 stub 下沉（首源 unset 遮蔽）', () => {
+  const themeVarsStub = `@vendor-panel-shadow: unset;
+@color-bg-vendor-gold: rgba(226, 208, 132, 0.2);
+@radius-panel: 12px;
+`;
+
+  it('⑤ 元素级阳性：SFC 首源 `box-shadow: @var(unset)` 遮蔽 ⇒ 下沉取到 common.less 金发光并摘除', () => {
+    const headerVue = `<template>
+  <div class="c-header-text" data-section-id="panel-gold-tail-text" v-bind="$attrs"></div>
+</template>
+<style scoped>
+.c-header-text {
+  height: 100%;
+  background: @color-bg-vendor-gold;
+  border-radius: 12px;
+  box-shadow: @vendor-panel-shadow;
+}
+</style>
+`;
+    const less = `.c-header-text {
+  background: @color-bg-vendor-gold;
+  border-radius: 12px;
+  box-shadow: inset 0px 0px 16px 0px #ffc800;
+}
+`;
+    const files = {
+      'package/index.vue': INDEX_VUE,
+      'package/components/HeaderText.vue': headerVue,
+      'resources/styles/common.less': less,
+      'resources/styles/themes/theme-vars.less': themeVarsStub,
+    };
+    const { files: out, changes, stats } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    // 不再掉进「解析不出真值」
+    expect(stats.skippedUnresolvedValue).toBe(0);
+    expect(changes.some((c) => c.cls === 'c-header-text' && c.owner === 'panel-gold')).toBe(true);
+    // 三件套（含被 stub 遮蔽的发光）被摘净
+    expect(out['resources/styles/common.less']).not.toContain('#ffc800');
+    expect(out['resources/styles/common.less']).not.toContain('border-radius: 12px');
+  });
+
+  it('⑥ class 级（②-b）阳性：无 data-section-id 的装饰 class，首源 stub 下沉后仍摘除', () => {
+    const decoVue = `<template>
+  <div class="c-deco" v-bind="$attrs"></div>
+</template>
+<style scoped>
+.c-deco {
+  border-radius: 12px;
+  box-shadow: @vendor-panel-shadow;
+}
+</style>
+`;
+    const less = `.c-deco {
+  border-radius: 12px;
+  box-shadow: inset 0px 0px 16px 0px #ffc800;
+}
+`;
+    const files = {
+      'package/index.vue': INDEX_VUE,
+      'package/components/Deco.vue': decoVue,
+      'resources/styles/common.less': less,
+      'resources/styles/themes/theme-vars.less': themeVarsStub,
+    };
+    const { changes, stats } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    expect(stats.classLevelSkipUnresolved).toBe(0); // 不再被 stub 卡在 Unresolved
+    expect(
+      changes.some((c) => c.cls === 'c-deco' && c.where === 'class-orphan' && c.owner === 'panel-gold'),
+    ).toBe(true);
+  });
+
+  it('⑦ 阴性：`none` 不是 stub ⇒ 不下沉（有意的「无阴影」不得被复活）', () => {
+    const decoVue = `<template>
+  <div class="c-deco" v-bind="$attrs"></div>
+</template>
+<style scoped>
+.c-deco {
+  border-radius: 12px;
+  box-shadow: none;
+}
+</style>
+`;
+    const less = `.c-deco {
+  border-radius: 12px;
+  box-shadow: inset 0px 0px 16px 0px #ffc800;
+}
+`;
+    const files = {
+      'package/index.vue': INDEX_VUE,
+      'package/components/Deco.vue': decoVue,
+      'resources/styles/common.less': less,
+      'resources/styles/themes/theme-vars.less': themeVarsStub,
+    };
+    const { files: out, changes, stats } = healPanelChromeMisplacement(files, { figmaRoot: buildFigma() });
+    // 首源 `none` 是有意声明 ⇒ 保住 `none` ⇒ shadowColorKey('none')=null ⇒ Unresolved，不下沉
+    expect(stats.classLevelSkipUnresolved).toBe(1);
+    expect(changes.some((c) => c.cls === 'c-deco')).toBe(false);
+    expect(out['resources/styles/common.less']).toContain('#ffc800');
+  });
+});
+
+/**
  * 刀 57 / 方案 E（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：双标题。
  *   index.vue 把 Figma 标题组件挂 `#header-right`，default-panel chrome 又无条件渲染
  *   `{{ componentName }}`（title == Figma 标题文本）⇒ 同一标题出现两次。

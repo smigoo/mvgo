@@ -1,4 +1,4 @@
-import { repairScopedThirdPartySelectors, ensureFlexDirection, ensureFlexDirectionInVueSfc, ensureGridDisplay, ensureGridDisplayInVueSfc, ensureFlexDisplay, ensureFlexDisplayInVueSfc, sanitizeCssContent } from './css-sanitizer.js';
+import { repairScopedThirdPartySelectors, ensureFlexDirection, ensureFlexDirectionInVueSfc, ensureGridDisplay, ensureGridDisplayInVueSfc, ensureFlexDisplay, ensureFlexDisplayInVueSfc, sanitizeCssContent, aggressiveCleanCss } from './css-sanitizer.js';
 
 describe('Loop 0.C sanitizeCssContent 粘合行', () => {
   it('}==== 粘合分隔符时保留右括号并换行，less 可继续解析后续规则', () => {
@@ -19,6 +19,35 @@ describe('Loop 0.C sanitizeCssContent 粘合行', () => {
     expect(out).not.toMatch(/\}\/\/[ \t]*={3,}/);
     expect(out).toContain('display: flex;');
     expect(out).toContain('.child');
+  });
+});
+
+describe('sanitizeCssContent 块注释边界', () => {
+  const banner = `/* ============================================================
+   状态修饰类
+   ============================================================ */`;
+
+  it('完整保留含等号和中文的注释横幅，不破坏后续规则', () => {
+    const out = sanitizeCssContent(`${banner}\n.panel { color: red; }`);
+
+    expect(out).toContain(banner);
+    expect(out).toContain('.panel { color: red; }');
+  });
+
+  it('只清洗注释外的垃圾行，注释内文本逐字还原', () => {
+    const raw = `================\n${banner}\n模型生成的中文说明\n.panel { color: red; }`;
+    const out = sanitizeCssContent(raw);
+
+    expect(out).toContain(banner);
+    expect(out).not.toContain('模型生成的中文说明');
+    expect(out).not.toMatch(/^\s*={3,}\s*$/m);
+  });
+
+  it('激进清洗同样保护块注释', () => {
+    const out = aggressiveCleanCss(`${banner}\n.panel { color: red; }`);
+
+    expect(out).toContain(banner);
+    expect(out).toContain('.panel { color: red; }');
   });
 });
 

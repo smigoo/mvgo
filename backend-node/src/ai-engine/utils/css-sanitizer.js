@@ -25,12 +25,29 @@
  * @param {boolean} [options.isLessFile=false] - 是否为 .less 文件（启用 @import 修复）
  * @returns {string} 清洗后的内容
  */
+function maskBlockComments(raw) {
+  const comments = []
+  const masked = raw.replace(/\/\*[\s\S]*?\*\//g, (comment) => {
+    const marker = `// MVGO_CSS_BLOCK_COMMENT_${comments.length}`
+    comments.push({ marker, comment })
+    return marker
+  })
+  return {
+    masked,
+    restore: (content) => comments.reduce(
+      (result, { marker, comment }) => result.replace(marker, comment),
+      content,
+    ),
+  }
+}
+
 export function sanitizeCssContent(raw, options = {}) {
   if (!raw || typeof raw !== 'string') return raw
 
   const { isLessFile = false } = options
+  const blockComments = maskBlockComments(raw)
 
-  let cleaned = raw
+  let cleaned = blockComments.masked
     // 1. 去除 <thinking>...</thinking> 推理块（含未闭合的残块）
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
     .replace(/<thinking>[\s\S]*$/gi, '')
@@ -120,7 +137,7 @@ export function sanitizeCssContent(raw, options = {}) {
   //   `.c-x-cons { display:grid; flex-direction: undefined }` 导致布局整段失效。
   cleaned = stripIllegalCssValues(cleaned)
 
-  return cleaned
+  return blockComments.restore(cleaned)
 }
 
 /**
@@ -157,7 +174,8 @@ export function stripIllegalCssValues(cssContent) {
 export function aggressiveCleanCss(raw) {
   if (!raw || typeof raw !== 'string') return raw
 
-  const lines = raw.split('\n')
+  const blockComments = maskBlockComments(raw)
+  const lines = blockComments.masked.split('\n')
   const kept = []
   let braceDepth = 0
 
@@ -180,7 +198,7 @@ export function aggressiveCleanCss(raw) {
   }
 
   // 确保大括号闭合
-  let result = kept.join('\n')
+  let result = blockComments.restore(kept.join('\n'))
   for (let i = 0; i < braceDepth; i++) result += '\n}'
 
   return result

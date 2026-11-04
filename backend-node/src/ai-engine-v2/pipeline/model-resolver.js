@@ -10,7 +10,9 @@
  *   3. 规范级   spec.defaultModels[nodeId]        —— 如微码 code-engineer 需强模型
  *   4. 通道级   aiConfig.textAIConfig/visionAIConfig —— 用户级配置（getMergedAiConfig）
  *   ⚠️ 无第五层系统兜底（🔒 2026-09-29 env 兜底已拔除，每用户模型独有）：
- *      resolveNodeModel 在全部层级皆空时抛出清晰错误。
+ *      resolveNodeModel 在全部层级皆空时抛出清晰错误；仅对 willCallLlm=true 的节点强制。
+ *      确定性节点 / programmatic·rules 模式节点不调 LLM，无模型合法（source='none'），
+ *      避免把「未配置模型」抛在永不调模型的节点上误导用户。
  *
  * 凭证（apiKey/baseURL）只按通道解析，不做节点级覆盖 —— 密钥属于部署配置，
  * 不应由前端请求携带（P1 迁 Java 后由服务端托管下发）。
@@ -46,7 +48,7 @@ export function resolveChannelCredentials(channel, aiConfig = {}) {
  * 解析单个节点的模型
  * @returns {{ model:string, channel:string, source:string }} source 标明命中的优先级层，便于配置页展示与排障
  */
-export function resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, aiConfig } = {}) {
+export function resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, aiConfig, required = true } = {}) {
   const channel = getChannel(nodeId)
   const { apiKey, baseURL, envModel } = resolveChannelCredentials(channel, aiConfig)
 
@@ -65,12 +67,25 @@ export function resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, ai
   } else if (envModel) {
     model = envModel
     source = 'env'
+  } else if (!required) {
+    // 🔴 2026-11-04 非 LLM 节点豁免：确定性节点（input-adapter / screenshot-renderer /
+    // code-structure-validator / revision-decision / emit）与 programmatic·rules 模式节点
+    // 永不参与 LLM 调用，缺模型不构成错误。required 由调用方按 willCallLlm() 传入，
+    // 本函数不自判 willCallLlm —— 它需要 tierProfile（模式相关），避免出现第二套判据。
+    model = ''
+    source = 'none'
   } else {
     throw new Error(
       `[model-resolver] 节点 "${nodeId}"（通道: ${channel}）未配置模型。` +
       `请到「设置 - 模型配置」中设置${channel === 'vision' ? '视觉' : '文本'}模型并保存。`
     )
   }
+
+  // 🔴 2026-11-04 恢复被误删的返回契约（2c09603 拔除 FALLBACK_MODELS 时整行连带删除，无替代）：
+  // 该行缺失导致 ①auditCredentials 读不到 entry.apiKey ⇒ 所有人恒报「两通道凭证缺失」
+  // ②instantiateNode 注入 role 的 apiKey/baseURL 为 undefined ⇒ 真跑空凭证 ③配置页模型表 nodeId 空白。
+  // apiKey/baseURL 由 resolveChannelCredentials 提供，是这里唯一的事实源，禁止在此二次推导。
+  return { nodeId, channel, model, source, apiKey, baseURL }
 }
 
 /**
@@ -82,8 +97,11 @@ export function resolvePipelineModels({ spec, tierProfile, modelOverrides, aiCon
   const llmNodes = []
 
   for (const nodeId of tierProfile.nodes) {
-    const resolved = resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, aiConfig })
-    resolved.callsLlm = willCallLlm(tierProfile, nodeId)
+    // callsLlm 必须先于模型解析算出：非 LLM 节点缺模型不抛错（见 resolveNodeModel.required），
+    // 否则配置为空时首条报错会落在 input-adapter 这类永不调模型的节点上。
+    const callsLlm = willCallLlm(tierProfile, nodeId)
+    const resolved = resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, aiConfig, required: callsLlm })
+    resolved.callsLlm = callsLlm
     resolved.deterministic = DETERMINISTIC_NODES.has(nodeId)
     table[nodeId] = resolved
     if (resolved.callsLlm) llmNodes.push(nodeId)

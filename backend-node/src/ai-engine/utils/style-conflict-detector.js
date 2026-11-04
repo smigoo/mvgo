@@ -15,8 +15,10 @@
  *    实锤：`.c-f7e57a-antd-button` 在 common.less:124（按钮本体样式错放，width=4.29 字号）
  *    与 HeaderSection2.vue scoped（容器规则，width:100%）双定义 → @import 后到覆盖 →
  *    容器收缩成按钮大小、按钮区露出面板底色（观感「按钮跑到组件外部」）。
- *    只比较**直接声明**（深度 1），嵌套块（:deep / & / 子选择器）内部声明不参与 —— 容器
- *    class 里嵌 :deep(.ant-btn) 是标准写法，不算冲突。
+ *    只比较**直接声明**，且**逐层归属最近的纯 class 层**：顶层（深度 1）与**嵌套后代纯 class
+ *    规则（深度 ≥2）**都参与（2026-11-04 (a) 可见性扩展）；非纯 class 层
+ *    （:deep / & / > / 逗号复合 / 空格后代）内部声明不参与 —— 容器 class 里嵌
+ *    :deep(.ant-btn) 是标准写法，不算冲突。
  *
  * 为什么只报不改（两个理由，缺一不可）：
  *    - ①无真值可改：自愈器拿不到「这条 calc 对应哪个控件的契约真值」（class⇄契约无确定性关联），
@@ -47,11 +49,12 @@ const CONFLICT_ATTRS = new Set([
   'font-size',
   'display',
   'flex-direction',
+  // 2026-11-04 (a) 可见性：box-shadow 是 CS1「面板装饰误置」的载体属性（chrome 发光被写错元素/
+  // 写进被 SFC scoped 首源遮蔽的位置），⑩ 原白名单不含它 ⇒ 静默覆盖漏报。补入后 SFC scoped 与
+  // common.less 对同一 class 的 box-shadow 取值不同即可被留痕（只报不改）。
+  'box-shadow',
 ]);
 
-// LESS/CSS 顶层 class 规则提取（深度 1）：选择器行以 .class 开头 + 其直接声明。
-// 用括号深度扫描而非 `[^}]*` 正则：SFC 里 `.container { :deep(.ant-btn) { ... } }`
-// 的嵌套块若用朴素正则会把嵌套选择器误当声明属性。
 // 值语义归一：`calc(@fontSize * 0.857)` 与 `calc(var(--fontSize, 14px) * 0.857)` 语义相同
 // （@fontSize 编译后即 var(--fontSize)）—— 字面不同但渲染一致，不得报冲突。
 // 归一：去空白 → var(--x, fallback) 收敛为 var(--x) → @less-var 映射为 var(--less-var)。
@@ -66,59 +69,64 @@ function normalizeCssValue(v) {
     .replace(/@([a-zA-Z][\w-]*)/g, (mm, name) => 'var(' + name.replace(/-/g, '') + ')');
 }
 
+// 纯单 class 选择器才认作「一条可归属的 class 规则」（顶层与嵌套后代同判）。
+// 🔴 排除（防假阳性）：`:deep(...)` / `&` 变体 / `>` 直接子 / 逗号复合选择器 / 空格后代选择器
+//   —— 这些块里的声明**不属本 class**（容器 class 里嵌 `:deep(.ant-btn)` 是标准写法），
+//   若把它们算进容器属性集会误报冲突。
+function matchPlainClassSelector(sel) {
+  const m = /^\s*\.([a-zA-Z][\w-]*)\s*$/.exec(String(sel || ''));
+  return m ? m[1] : null;
+}
+
+// LESS/CSS class 规则提取：顶层（深度 1）+ **嵌套后代纯 class 规则（深度 ≥2）**的**直接声明**。
+// 🔴 2026-11-04 (a) 可见性扩展：原实现只提「深度 1」声明 ⇒ CS1 的面板 chrome（box-shadow）嵌在
+//   父选择器内（深度 2）时 ⑩ 看不见（§3.6 a2）。现按 `{`/`}` 维护**逐层 class 栈**：一条声明归属
+//   「最近的、纯 class 的包围层」；非纯 class 层（:deep / & / > / 复合 / @media 等）入栈为 null，
+//   其内声明不归属任何 class。产物一字不改，只让「SFC scoped 双定义」在留痕里可见。
+// 用括号深度扫描而非 `[^}]*` 正则：否则 `.container { :deep(.ant-btn) { ... } }` 的嵌套选择器
+//   会被朴素正则误当声明属性。
 function extractTopLevelClassRules(cssText) {
   // className -> Map<attr, Set<valueNormalized>>：值也要记 —— 同属性同值的双写是
   // 无害冗余（健康产物大量存在，覆盖后语义不变），只有「值不同」才是静默覆盖冲突。
   const rules = new Map();
   const text = String(cssText || '');
+  const classStack = []; // 逐层「本层块归属的 class」，非纯 class 规则层为 null
   let i = 0;
   let depth = 0;
-  let selector = '';
-  let currentClass = null;
-  let buf = '';
-  const flushDecl = () => {
-    if (!currentClass || !buf.includes(':')) return;
-    const m = buf.match(/^\s*([a-zA-Z-]+)\s*:\s*([^;{}]*)$/);
-    if (m) {
-      const attr = m[1].trim().toLowerCase();
-      const value = normalizeCssValue(m[2]);
-      if (!rules.has(currentClass)) rules.set(currentClass, new Map());
-      const attrMap = rules.get(currentClass);
-      if (!attrMap.has(attr)) attrMap.set(attr, new Set());
-      attrMap.get(attr).add(value);
-    }
-    buf = '';
+  let seg = ''; // 距上一个 { / } / ; 之间的文本：进块前是选择器，其余是声明
+  const addDecl = (cls, raw) => {
+    if (!cls) return;
+    const m = raw.match(/^\s*([a-zA-Z-]+)\s*:\s*([^;{}]*)$/);
+    if (!m) return;
+    const attr = m[1].trim().toLowerCase();
+    const value = normalizeCssValue(m[2]);
+    if (!rules.has(cls)) rules.set(cls, new Map());
+    const attrMap = rules.get(cls);
+    if (!attrMap.has(attr)) attrMap.set(attr, new Set());
+    attrMap.get(attr).add(value);
   };
   while (i < text.length) {
     const ch = text[i];
     if (ch === '{') {
-      if (depth === 0) {
-        const cm = selector.match(/^\.([a-zA-Z][\w-]*)\s*$/);
-        currentClass = cm ? cm[1] : null;
-        buf = '';
-      }
-      depth++;
-      selector = '';
+      classStack.push(matchPlainClassSelector(seg));
+      depth += 1;
+      seg = '';
     } else if (ch === '}') {
-      depth--;
-      flushDecl();
-      if (depth === 0) currentClass = null;
-      buf = '';
-      selector = '';
-    } else if (ch === ';') {
-      flushDecl();
-    } else if (depth === 0) {
-      selector += ch;
-      // 换行 = 新行开始（重置）；逗号 = 复合选择器（只认单 class 顶层规则，防误报）
-      if (ch === '\n') {
-        selector = '';
-      } else if (ch === ',') {
-        selector = '@@complex';
+      if (depth > 0) {
+        addDecl(classStack[depth - 1], seg);
+        classStack.pop();
+        depth -= 1;
       }
-    } else if (depth === 1 && currentClass) {
-      buf += ch;
+      seg = '';
+    } else if (ch === ';') {
+      addDecl(classStack[depth - 1], seg);
+      seg = '';
+    } else {
+      seg += ch;
+      // 顶层换行 = 新行开始（重置）：排除行内注释/`@import` 拼接出的伪选择器
+      if (depth === 0 && ch === '\n') seg = '';
     }
-    i++;
+    i += 1;
   }
   return rules;
 }

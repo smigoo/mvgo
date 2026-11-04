@@ -1277,6 +1277,13 @@
                       </span>
                       <!-- 响应式拉伸控制（playground 同款）：收进浏览器工具条，不再占组件上方一行 -->
                       <span class="rz-bar-controls">
+                        <!-- 🛡️ G0 设计画布开关：默认响应式；开启后按 Figma 真值画布 1:1 渲染（布局验收） -->
+                        <button
+                          class="rz-btn"
+                          :class="{ 'rz-btn--active': designCanvasMode }"
+                          :title="designCanvasMode ? '当前：Figma 设计画布 1:1（点击切回响应式）' : '当前：响应式视口（点击锁定 Figma 设计画布）'"
+                          @click="designCanvasMode = !designCanvasMode"
+                        >{{ designCanvasMode ? '设计画布' : '响应式' }}</button>
                         <span class="rz-zoom-label">容器尺寸:</span>
                         <span class="rz-size" aria-live="polite">{{ frameResize.sizeLabel.value }}</span>
                         <button class="rz-btn" title="恢复默认视口尺寸" @click="frameResize.resetSize()">重置</button>
@@ -2855,28 +2862,48 @@ const frameResize = useResizableFrame({
   minHeight: 100,
 })
 
+// 🛡️ G0（2026-11-04 用户裁决）：设计画布模式开关——默认关（恒响应式，旧指令保持）。
+//   开启时向 iframe 内预览页下发 mode:'fidelity'，preview 页 stage 按 Figma 真值
+//   (_figma-size.json/declare) 锁定设计像素——flex 比例获得正确参照系，用于布局验收；
+//   关闭时维持 responsive（视口拖拽语义不变）。
+const designCanvasMode = ref(false)
+
 function pushViewportToFrames() {
   const host = previewViewportRef.value
   if (!host) return
   // 恒响应式：总是下发真实视口尺寸（mode/width/height 不得给 0，
-  // 否则 iframe 内预览页的 previewMode/responsiveWidth 会残留错态）
+  // 否则 iframe 内预览页的 previewMode/responsiveWidth 会残留错态）。
+  // G0 画布锁定态：mode:'fidelity' 不带尺寸（preview 页据此清 responsive 残留，
+  // stageStyle 重新走 figma 分支）。
   host.querySelectorAll('iframe.preview-iframe').forEach((el) => {
     const frame = el as HTMLIFrameElement
     try {
-      frame.contentWindow?.postMessage(
-        {
-          type: 'set-preview-viewport',
-          mode: 'responsive',
-          width: frameResize.width.value,
-          height: frameResize.height.value
-        },
-        window.location.origin
-      )
+      if (designCanvasMode.value) {
+        frame.contentWindow?.postMessage(
+          { type: 'set-preview-viewport', mode: 'fidelity' },
+          window.location.origin
+        )
+      } else {
+        frame.contentWindow?.postMessage(
+          {
+            type: 'set-preview-viewport',
+            mode: 'responsive',
+            width: frameResize.width.value,
+            height: frameResize.height.value
+          },
+          window.location.origin
+        )
+      }
     } catch {
       /* iframe 已卸载或不可访问：忽略 */
     }
   })
 }
+
+// 开关切换 → 立即下发新模式（不等视口尺寸变化）
+watch(designCanvasMode, () => {
+  pushViewportToFrames()
+})
 
 // 任务加载后 componentId 才有值 → 用真实持久化 key 恢复上次视口（FR-4）
 watch(
@@ -8655,6 +8682,13 @@ watch(bindingWizardOpen, (open) => {
 }
 .rz-btn:hover {
   opacity: 0.85;
+}
+/* 🛡️ G0 设计画布开关激活态：琥珀色区分（默认蓝=响应式） */
+.rz-btn--active {
+  background: #d48806;
+}
+.rz-btn--active:hover {
+  opacity: 0.9;
 }
 /* 响应式模式：stage 放开 overflow:hidden（否则手柄被裁掉），宽度超出由 bf-body 滚动 */
 .rz-stage--responsive {

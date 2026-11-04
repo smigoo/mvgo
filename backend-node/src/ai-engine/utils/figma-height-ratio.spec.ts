@@ -1246,3 +1246,222 @@ describe('①-β 追认幻觉缺项（2026-11-03 治本 · ec1db095 实锤）', 
     expect(stats.idDirectSkipHallucinated).toBe(0)
   })
 })
+
+/**
+ * ①-γ section.id 部分命中 + 剩余区域兜底（2026-11-04 治本 · mc-max-1793765119169-4cbe82a2 实锤）。
+ *
+ * 真实 fixture（`.mc-gen/cache/figma-node-data.json` 逐字）：cp-环境监测 2:7879 420×186，
+ * 根下 [bg(铺满), header(28.09), slot-con(145)]；slot-con 下**文档序**为
+ * [@echarts/line(113, y930), sub-t(32, y898)]——图表在前、标签行在后，与视觉顺序相反。
+ * vision 4 段：3 段 id 精确命中（2:7889/89:43/2:7949），第 4 段 `chart-section` 是自造壳
+ * （Figma 树无此 id、无 anchorValid 标记）⇒ ①-β 整体放弃 ⇒ ② 顺序配对把 113px 的图表
+ * 配给「标签切换栏」（真机 flexGrow 2.539 vs 图表 0.539，产物图表压成 13.5%）。
+ */
+describe('①-γ id 部分命中 + 剩余区域兜底（2026-11-04 治本 · 4cbe82a2 实锤）', () => {
+  const cpEnvMonitor = () => ({
+    document: {
+      id: '2:7879',
+      name: 'cp-环境监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 1475, y: 865, width: 420, height: 186 },
+      children: [
+        { id: '2:7880', name: 'bg', type: 'VECTOR', absoluteBoundingBox: { x: 1475, y: 865, width: 420, height: 186 } },
+        {
+          id: '2:7881', name: 'header', type: 'GROUP',
+          absoluteBoundingBox: { x: 1495, y: 875, width: 377, height: 28.08984375 },
+          children: [
+            { id: '2:7888', name: '环境监测', type: 'TEXT', absoluteBoundingBox: { x: 1495, y: 875, width: 64, height: 19 } },
+          ],
+        },
+        {
+          id: '89:41', name: 'slot-con', type: 'FRAME',
+          absoluteBoundingBox: { x: 1495, y: 898, width: 380, height: 145 },
+          children: [
+            { id: '2:7898', name: '@echarts/line', type: 'GROUP', absoluteBoundingBox: { x: 1495, y: 930, width: 380, height: 113 } },
+            {
+              id: '89:42', name: 'sub-t', type: 'FRAME',
+              absoluteBoundingBox: { x: 1495, y: 898, width: 380, height: 32 },
+              children: [
+                { id: '2:7889', name: 'tabs-list', type: 'GROUP', absoluteBoundingBox: { x: 1495, y: 903, width: 295, height: 27 } },
+                { id: '89:43', name: 'tabs-icon', type: 'FRAME', absoluteBoundingBox: { x: 1816, y: 905, width: 52, height: 24 } },
+                { id: '2:7949', name: 'num', type: 'GROUP', absoluteBoundingBox: { x: 1861, y: 898, width: 14, height: 14 } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  })
+
+  it('⭐ 阳性：3 段 id 命中 + 1 段自造壳 → 剩余区域兜底，图表回到 113px（63.5%）', () => {
+    const sections: any[] = [
+      { id: '2:7889', name: '标签切换栏' },
+      { id: '89:43', name: '操作按钮' },
+      { id: '2:7949', name: '角标' },
+      { id: 'chart-section', name: '图表区域' },
+    ]
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, cpEnvMonitor(), stats)).toBe(4)
+    // 计数行取证：走 ①-γ，且不再退化成 ② 顺序配对、不再整体放弃
+    expect(stats.idDirectLeftover).toBe(1)
+    expect(stats.idDirect).toBeUndefined()
+    expect(stats.order).toBeUndefined()
+    expect(stats.idDirectMiss).toBe(1)
+    // 修复前：标签栏 113 / 图表 24（正好反了）；修复后按 Figma 图元真值
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([27, 24, 14, 113])
+    const avg = (27 + 24 + 14 + 113) / 4 // 44.5
+    expect(sections[0].styles.flexGrow).toBeCloseTo(27 / avg, 2) // ≈0.607
+    expect(sections[1].styles.flexGrow).toBeCloseTo(24 / avg, 2) // ≈0.539
+    expect(sections[2].styles.flexGrow).toBeCloseTo(14 / avg, 2) // ≈0.315
+    expect(sections[3].styles.flexGrow).toBeCloseTo(113 / avg, 2) // ≈2.539
+    // 比例量纲（avg=1，和 = 段数），图表段独占设计事实的 63.5%
+    const sum = sections.reduce((a: number, s: any) => a + s.styles.flexGrow, 0)
+    expect(sum).toBeCloseTo(4, 2)
+    expect(113 / 178).toBeCloseTo(0.635, 3)
+    // header 走 base-panel header slot：28.09 的区域被容错剥掉，不得被任何段认领
+    expect(sections.some((s: any) => s.styles.figmaHeightPx === 28)).toBe(false)
+  })
+
+  it('阴性（等量纪律）：剩余区域数 ≠ 未命中段数 ⇒ 不采纳，退回 ②（不猜）', () => {
+    const sections: any[] = [
+      { id: '2:7889', name: '标签切换栏' },
+      { id: '89:43', name: '操作按钮' },
+      { id: '2:7949', name: '角标' },
+      { id: 'chart-section', name: '图表区域' },
+      { id: 'extra-section', name: '多出的臆造段' },
+    ]
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, cpEnvMonitor(), stats)
+    expect(stats.idDirectLeftover).toBe(0)
+    expect(stats.idDirectLeftoverMiss).toBe(1)
+    // ② 路径原样生效（展开 sub-t 后 5 图元 == 5 sections），证明 ①-γ 未越权接管
+    expect(stats.order).toBe(5)
+    expect(sections[0].styles.figmaHeightPx).toBe(28) // header 28.09 → ② 路径的结果
+  })
+
+  it('阴性（证据门槛）：id 命中 < 2 段 ⇒ 不启用 ①-γ（孤例不猜）', () => {
+    const sections: any[] = [
+      { id: '2:7889', name: '标签切换栏' },
+      { id: 'semantic-a', name: '语义段甲' },
+      { id: 'semantic-b', name: '语义段乙' },
+    ]
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, cpEnvMonitor(), stats)
+    expect(stats.idDirectLeftover).toBe(0)
+    expect(stats.idDirectLeftoverMiss).toBeUndefined() // 门槛未过，连校验都不进入
+  })
+
+  /**
+   * 多剩余场景的**顺序纪律**：剩余区域按 Figma y 视觉序升序与未命中段逐位配对。
+   *
+   * 病灶复现（同一类型，非实测产物）：`slot-con` 的文档序把视觉在下的 `high-region(160, y240)`
+   * 排在视觉在上的 `low-region(40, y40)` 之前（cp-环境监测 2:7879 的 `slot-con` 就是
+   * `[@echarts/line(113, y930), sub-t(32, y898)]` 这种倒序）⇒ 若按文档序兜底，
+   * 「横带区」会拿到 160px、「大板区」拿到 40px，**正好反了**，等于把 4cbe82a2 的病灶换个位置复发。
+   */
+  it('⭐ 阳性（顺序纪律）：剩余区域按 Figma y 视觉序配对，不被文档序串列', () => {
+    const figma = () => ({
+      document: {
+        id: '3:100',
+        name: 'cp-双剩余',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+        children: [
+          { id: '3:101', name: 'bg', type: 'VECTOR', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 } },
+          { id: '3:102', name: 'header', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 24 } },
+          {
+            id: '3:103', name: 'slot-con', type: 'FRAME',
+            absoluteBoundingBox: { x: 0, y: 40, width: 400, height: 360 },
+            children: [
+              // 🔴 文档序：视觉在下的排在前（与 cp-环境监测 同款倒序）
+              { id: '3:104', name: 'high-region', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 240, width: 400, height: 160 } },
+              { id: '3:105', name: 'low-region', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 40, width: 400, height: 40 } },
+              {
+                id: '3:106', name: 'inner', type: 'FRAME',
+                absoluteBoundingBox: { x: 0, y: 300, width: 400, height: 100 },
+                children: [
+                  { id: '3:107', name: 'hit-a', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 310, width: 400, height: 30 } },
+                  { id: '3:108', name: 'hit-b', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 350, width: 400, height: 30 } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    })
+    // vision 顺序 = 视觉序（上→下）：两个未命中段在前（y40 / y240），命中的两段在容器内（y310 / y350）
+    const sections: any[] = [
+      { id: 'band', name: '横带区' },
+      { id: 'board', name: '大板区' },
+      { id: '3:107', name: '指标甲' },
+      { id: '3:108', name: '指标乙' },
+    ]
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, figma(), stats)).toBe(4)
+    expect(stats.idDirectLeftover).toBe(2)
+    expect(stats.idDirectMiss).toBe(2)
+    expect(stats.order).toBeUndefined()
+    // 若按文档序兜底：[160, 40, 30, 30]（错）；按 y 视觉序：[40, 160, 30, 30]（对）
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([40, 160, 30, 30])
+    const avg = (40 + 160 + 30 + 30) / 4 // 65
+    expect(sections[0].styles.flexGrow).toBeCloseTo(40 / avg, 2) // ≈0.615
+    expect(sections[1].styles.flexGrow).toBeCloseTo(160 / avg, 2) // ≈2.462
+    // header(24) 被容错剥掉，未被任何段认领
+    expect(sections.some((s: any) => s.styles.figmaHeightPx === 24)).toBe(false)
+  })
+
+  /**
+   * 🛡️ 2026-11-04 评审补刀（判据裁决冲突）：①-β 上界裁决「幻觉缺项数 > 命中数 ⇒ 样本不可信」
+   * 之后代码会落入 ①-γ；若剩余区域数恰等，旧实现会把**已判臆造的段**（anchorValid===false）
+   * 又配回真实区域——等于用位置兜底推翻 id 层面的可信度裁决。修法：缺项混入任一幻觉标记
+   * 即不接管（含混合场景），该域完全交给 ①-β/② 既有口径。
+   */
+  it('阴性（幻觉域隔离）：缺项含 anchorValid===false ⇒ ①-γ 不接管，退回既有 ② 口径', () => {
+    const figma = () => ({
+      document: {
+        id: '4:200',
+        name: 'cp-幻觉域',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+        children: [
+          { id: '4:201', name: 'bg', type: 'VECTOR', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 } },
+          {
+            id: '4:202', name: 'slot-con', type: 'FRAME',
+            absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+            children: [
+              { id: '4:203', name: 'w1', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 50 } },
+              { id: '4:204', name: 'w2', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 60, width: 400, height: 60 } },
+              { id: '4:205', name: 'w3', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 130, width: 400, height: 70 } },
+              {
+                id: '4:206', name: 'inner', type: 'FRAME',
+                absoluteBoundingBox: { x: 0, y: 210, width: 400, height: 190 },
+                children: [
+                  { id: '4:207', name: 'hit-a', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 220, width: 400, height: 30 } },
+                  { id: '4:208', name: 'hit-b', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 260, width: 400, height: 30 } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    })
+    // 3 个幻觉缺项（> 2 命中 ⇒ ①-β 上界明确放弃）；剩余区域恰为 [w1,w2,w3] 数量相等
+    // —— 旧实现会在 ①-γ 把臆造段配回 w1/w2/w3。
+    const sections: any[] = [
+      { id: 'fake-1', name: '臆造一', anchorValid: false },
+      { id: 'fake-2', name: '臆造二', anchorValid: false },
+      { id: 'fake-3', name: '臆造三', anchorValid: false },
+      { id: '4:207', name: '指标甲' },
+      { id: '4:208', name: '指标乙' },
+    ]
+    const stats: any = {}
+    applyFigmaSectionRatios(sections, figma(), stats)
+    // ①-γ 未接管：无 leftover 计数（连 miss 计数都不进）
+    expect(stats.idDirectLeftover).toBe(0)
+    expect(stats.idDirectLeftoverMiss).toBeUndefined()
+    // 落回既有链路：①-β 放弃（缺项登记 3），② 顺序配对接管（复合展开 inner 后 5==5）
+    expect(stats.idDirect).toBeUndefined()
+    expect(stats.idDirectMiss).toBe(3)
+    expect(stats.order).toBe(5)
+  })
+})

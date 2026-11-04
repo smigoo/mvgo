@@ -127,6 +127,7 @@ import { scanOrphanResources, scanThemeVariantParity } from '../utils/style-pari
 import { scanFlexShrinkRisk } from '../utils/flex-shrink-guard.js';
 // 🛡️ U1（2026-10-09）：antd 手写模仿指纹留痕（表单/上传手写 div 模仿，实锤 c-c19746-c1974689）
 import { scanAntdMimicry } from '../utils/antd-mimicry-guard.js';
+import { scanStateVariantFlatten } from '../utils/state-variant-guard.js';
 import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 import { createLogger } from '../logger/index.js';
@@ -3657,6 +3658,18 @@ export function createPhase2Graph(config = {}) {
         issues: mimicryCheck.issues,
         checkedAt: Date.now(),
       };
+      // 🛡️ T3-C（2026-11-04）：互斥状态变体「展平」留痕
+      // （实锤 c-device-monitor-878b3ef1 · `89:38` name=`switch` 的 active/default 双态被并列渲成 a-table）
+      let stateVariantCheck = { issues: [] };
+      try {
+        stateVariantCheck = scanStateVariantFlatten({ files: csFiles, figmaRoot: state.figmaNodeData });
+      } catch (svErr) {
+        logger.warn('⚠️ 状态变体展平扫描失败（非阻断，fail-open）', { error: svErr?.message || String(svErr) });
+      }
+      const stateVariantIssues = {
+        issues: stateVariantCheck.issues,
+        checkedAt: Date.now(),
+      };
       const chartSpecIssues = {
         textColors: textColors.violations,
         specIssues: specCheck.issues,
@@ -3668,7 +3681,8 @@ export function createPhase2Graph(config = {}) {
         bindingContractIssues.orphanResources.length > 0 ||
         bindingContractIssues.themeVariantParity.length > 0 ||
         flexShrinkIssues.issues.length > 0 ||
-        antdMimicryIssues.issues.length > 0
+        antdMimicryIssues.issues.length > 0 ||
+        stateVariantIssues.issues.length > 0
       ) {
         const metaPath = pathJoinCs(state.outputPath, 'component-meta.json');
         let prev = {};
@@ -3679,7 +3693,7 @@ export function createPhase2Graph(config = {}) {
         }
         _wfsCs(
           metaPath,
-          JSON.stringify({ ...prev, chartSpecIssues, bindingContractIssues, flexShrinkIssues, antdMimicryIssues }, null, 2),
+          JSON.stringify({ ...prev, chartSpecIssues, bindingContractIssues, flexShrinkIssues, antdMimicryIssues, stateVariantIssues }, null, 2),
           'utf-8',
         );
         logger.warn('📊 chartSpec/绑定契约/收缩守卫/antd 模仿指纹红线留痕（详见 component-meta.json）', {
@@ -3689,10 +3703,11 @@ export function createPhase2Graph(config = {}) {
           themeVariantParity: bindingContractIssues.themeVariantParity.length,
           flexShrink: flexShrinkIssues.issues.length,
           antdMimicry: antdMimicryIssues.issues.length,
+          stateVariant: stateVariantIssues.issues.length,
         });
         state.onProgress?.({
           stage: '产物校验',
-          message: `⚠️ 图表契约留痕：${chartSpecIssues.textColors.length} 处文字色硬编码、${chartSpecIssues.specIssues.length} 处 chartSpec 违规、${bindingContractIssues.orphanResources.length} 个孤儿资源、${bindingContractIssues.themeVariantParity.length} 处主题变体同值、${flexShrinkIssues.issues.length} 处 flex 收缩风险、${antdMimicryIssues.issues.length} 处 antd 手写模仿指纹（详见 component-meta.json）`,
+          message: `⚠️ 图表契约留痕：${chartSpecIssues.textColors.length} 处文字色硬编码、${chartSpecIssues.specIssues.length} 处 chartSpec 违规、${bindingContractIssues.orphanResources.length} 个孤儿资源、${bindingContractIssues.themeVariantParity.length} 处主题变体同值、${flexShrinkIssues.issues.length} 处 flex 收缩风险、${antdMimicryIssues.issues.length} 处 antd 手写模仿指纹、${stateVariantIssues.issues.length} 处状态变体展平（详见 component-meta.json）`,
           status: 'warning',
         });
       }
@@ -5721,6 +5736,12 @@ export function createPhase2Graph(config = {}) {
       };
       throw err;
     }
+    // 🛡️ G12b：段级图表缺失 WARN 计数恒打（0 也打；>0 ⇒ 有 vision 图表信号在承载文件内落空，
+    //   WARN 不拦发布，分布数据供后续升级 BLOCK 决策）
+    logger.info('🛡️ G12b 段级图表存在性·已评估', {
+      chartSectionMissing: res.warnChartSectionMissing || 0,
+      warnIssues: res.issues.filter((i) => i.severity === 'WARN').map((i) => i.id),
+    });
     logger.info('✅ 禁止臆造校验通过', { issueCount: res.issues.length });
     return { doNotInventResult: res };
   });

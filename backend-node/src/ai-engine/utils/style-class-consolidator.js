@@ -200,11 +200,22 @@ function extractClassBlocks(less = '', selectors = []) {
     if (depth <= 0) {
       if (!line.includes('{')) continue;
       const selPart = line.slice(0, line.indexOf('{')).trim();
-      const tokens = selPart.split(/\s+/).filter(Boolean);
+      // 🛡️ F2c（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：选择器 token 归一。
+      //   追加写盘（`...}\n.c-x {}` 或直接 `}.c-x {`）会让选择器与上一块的 `}` 粘连，
+      //   `tokens.includes('.c-x')` 判不中 ⇒ 既有同名块**根本没进并集** ⇒ 批0
+      //   「声明保真」保护失效（实测 tabs-list 的真值 height:27px / overflow:hidden 静默丢失）。
+      //   归一：按空白/逗号切分后剥掉行首装饰符（`}`/`;`），兼容 `,` 分隔的多选择器。
+      const tokens = selPart
+        .split(/[\s,]+/)
+        .map((t) => t.replace(/^[};]+/, ''))
+        .filter(Boolean);
       const hit = selectors.some((s) => tokens.includes(s));
       if (!hit) continue;
       buf = [line];
-      const { open, close } = countBraces(line);
+      // 🛡️ F2c（同批）：深度只从**本块开括号**起算 —— 行首若粘连上一块的 `}`（`}.c-x {`），
+      //   旧口径 open-close=0 ⇒ 块被判定「当场闭合」，只取到选择器行、正文全丢；再被
+      //   removeClassBlocks 删掉原块 ⇒ 声明净丢失（真值 height:27px/overflow:hidden 实测丢失）。
+      const { open, close } = countBraces(line.slice(line.indexOf('{')));
       depth = open - close;
       if (depth <= 0) { out.push(buf.join('\n')); buf = null; depth = 0; }
     } else if (buf) {
@@ -215,6 +226,24 @@ function extractClassBlocks(less = '', selectors = []) {
     }
   }
   return out;
+}
+
+/**
+ * 🛡️ F2c（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：**粘连闭括号规范化**。
+ *
+ * 病灶：追加写盘会产生 `}.c-next {` / `flex: 0 0 auto;}.c-next {`（`}` 与下一个选择器同一行）。
+ *   `extractClassBlocks` / `removeClassBlocks` 都是**按行累计花括号深度**的实现 ⇒ 这种行里
+ *   「前块的 `}` + 后块的 `{`」被同时计入本行 ⇒ `open-close === 0` ⇒ 前块把后块整块吞掉
+ *   （实测 6 块只抽出 3 块，tabs-list / icon-wrap / num 三个全部丢失）⇒ 批0「声明保真」
+ *   并集失效 + `removeClassBlocks` 照删原块 ⇒ **声明净丢失**（真值 height:27px / overflow:hidden
+ *   消失）。真机 A/B 反证：把 `}.` 拆成 `}\n.` 后 6 块全部命中、真值声明回到并集。
+ *
+ * 判据：`}` 之后紧跟非空白/非 `}` 字符 ⇒ 插入换行。幂等（拆过之后不再命中）。
+ * @param {string} less
+ * @returns {string}
+ */
+function normalizeGluedBraces(less = '') {
+  return String(less).replace(/\}(?=[^\s}])/g, '}\n');
 }
 
 /**
@@ -274,6 +303,58 @@ export function removeClassBlocks(less = '', selectors = []) {
  */
 function hasPercentageSize(blockText) {
   return /\b(width|height)\s*:\s*\d+%/i.test(blockText);
+}
+
+/** 单条「百分比尺寸」声明（F2 逐声明剥离的唯一判据口径，与 hasPercentageSize 同源：只认 width/height） */
+const PCT_SIZE_DECL_RE = /^(?:width|height)\s*:\s*\d+(?:\.\d+)?%\s*(?:!important)?$/i;
+
+/**
+ * 🛡️ F2（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：**逐声明**剥百分比尺寸，而非整块丢弃。
+ *
+ * 事故形态（环境监测 tabs 纵向堆叠成大蓝块，真机 DOM 实测 `.c-…-tabs-list` 计算 display=block）：
+ *   子组件块 = `{ display:flex; flex-direction:row; align-items:center; flex:1;
+ *                min-width:0; height:100%; padding:0 3px; box-sizing:border-box; }`
+ *   common.less 同名类已有 Figma 真值像素块（`height:27px; padding:3px 4px; flex:0 0 auto;`）
+ *   ⇒ 旧保护判据 `hasPercentageSize && hasPixelSizeInCommon` 命中后 **`return false` 整块丢弃**
+ *   ⇒ `display:flex / flex-direction:row` 随块一起消失 ⇒ 四个 tab 纵向堆叠。
+ *   丢弃粒度与 `:408-414`「批0 并集防声明净丢失」的治理方向自相矛盾。
+ *
+ * 治本：只剥**冲突的尺寸声明**（width/height 百分比），其余声明（display / flex-direction /
+ *   align-* / gap / padding / 定位…）全部保留并参与合并；剥后无声明且无嵌套块才整块丢弃
+ *   （返回 null，调用方按旧语义丢弃）。
+ *
+ * @param {string} blockText 完整规则文本 `sel { body }`
+ * @returns {string|null} 剥后文本；原文无需改动时返回原文；剥空返回 null
+ */
+function stripPercentageSizeDecls(blockText) {
+  const text = String(blockText || '');
+  const open = text.indexOf('{');
+  if (open < 0) return text;
+  // 深度感知配对闭合（嵌套 LESS 子块不得截断父块，同 splitBlockBody 口径）
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        close = i;
+        break;
+      }
+    }
+  }
+  if (close < 0) return text;
+  const head = text.slice(0, open);
+  const body = text.slice(open + 1, close);
+  const tail = text.slice(close + 1);
+  const { decls, nested } = splitBlockBody(body);
+  const kept = decls.filter((d) => !PCT_SIZE_DECL_RE.test(String(d).trim()));
+  if (kept.length === decls.length) return text; // 无百分比尺寸声明 ⇒ 原样
+  if (kept.length === 0 && nested.length === 0) return null; // 剥空 ⇒ 整块丢弃（旧语义）
+  const nestedText = nested.map((n) => `  ${n.selector} {${n.body}}`).join('\n');
+  const bodyText = kept.map((d) => `  ${d};`).join('\n');
+  return `${head}{\n${bodyText}${nestedText ? `\n${nestedText}` : ''}\n}${tail}`;
 }
 
 /**
@@ -364,6 +445,9 @@ function stripFixedPxSizesForChartBlock(blockText) {
  * @returns {{content: string, replaced: string[], added: string[]}}
  */
 function mergeIntoCommonLess(commonLess = '', blocks = []) {
+  // 🛡️ F2c（2026-11-04）：先把「`}` 与下一个选择器同行」的粘连拆行 —— 否则按行累计深度的
+  //   抽取/删除实现会把相邻两块判成一块（详见 normalizeGluedBraces 注释）。
+  commonLess = normalizeGluedBraces(commonLess);
   // 🛡️ R2（2026-09-30 · a6d2e5e1）：图表组件块先剥固定 px 尺寸（详见 stripFixedPxSizesForChartBlock）
   const normalizedBlocks = blocks.map((b) => {
     if (!b || !b.isChartComponent || typeof b.text !== 'string') return b;
@@ -372,8 +456,12 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
     return stripped === b.text ? b : { ...b, text: stripped };
   }).filter(Boolean);
 
-  // 过滤掉会覆盖像素值的百分比块
-  const protectedBlocks = normalizedBlocks.filter((b) => {
+  // 过滤掉会覆盖像素值的百分比尺寸
+  // 🛡️ F2（2026-11-04）：粒度由「整块丢弃」改为「**逐声明**丢弃」——只剥 width/height 百分比，
+  //   display / flex-direction / align-* / gap / padding 等结构声明必须存活（详见
+  //   stripPercentageSizeDecls 注释：旧口径把 tabs-list 的 display:flex 一起丢掉 ⇒ tab 纵排）。
+  const percentStripped = [];
+  const protectedBlocks = normalizedBlocks.map((b) => {
     // 🛡️ 图表组件豁免（2026-09-29 · c-traffic-monitor-4d6135d1 / bda1b2fd 双实锤）：
     //   源文件含 echarts 的子组件，其**所有类**的百分比块不得被本保护丢弃——
     //   图表根类/canvas 类必须以 width/height:100% 撑满装配空间；若 common.less 里有
@@ -381,14 +469,20 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
     //   canvas 52×52 ⇒ 柱图不可见；根类 52px ⇒ 宽度塌陷（「还是一点点宽」）。
     //   「真值集非最高权威」铁律同样适用：可绘制/可布局的结构特征优先于误置真值。
     //   非图表类不受影响（真值像素仍被保护，见 spec 回归用例）。
-    if (b.isChartComponent) return true;
-    if (hasPercentageSize(b.text) && hasPixelSizeInCommon(commonLess, b.selector)) {
-      // 子组件是百分比，common.less 是像素 → 保留 common.less 版本
-      return false;
+    if (!b) return null;
+    if (b.isChartComponent) return b;
+    if (!hasPercentageSize(b.text) || !hasPixelSizeInCommon(commonLess, b.selector)) {
+      return b;
     }
-    return true;
-  });
-
+    // 子组件是百分比、common.less 是像素 → 只剥尺寸声明，保留结构声明（F2）
+    const stripped = stripPercentageSizeDecls(b.text);
+    if (stripped === null) {
+      percentStripped.push({ selector: b.selector, dropped: true, keptDecls: 0 });
+      return null; // 剥后无声明 ⇒ 沿用旧语义整块丢弃（common.less 像素块继续生效）
+    }
+    percentStripped.push({ selector: b.selector, dropped: false });
+    return stripped === b.text ? b : { ...b, text: stripped };
+  }).filter(Boolean);
   // 🗑️ P4：extractLayoutDecls/injectMissingLayoutDecls/injectDisplayFromFlexSignals 补偿器
   //    已删除（display 判定权由 B' 布局事实层接管，见文件头说明）。此层不再事后补 display。
   const mergedBlocks = protectedBlocks;
@@ -456,6 +550,8 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
     content,
     replaced: oldSelectors,
     added: mergedBlocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
+    // 🛡️ F2：逐声明剥离留痕（调用方据此落计数行，避免「静默改写」）
+    percentStripped,
   };
 }
 
@@ -521,6 +617,21 @@ export function splitBlockBody(body) {
       else buf += seg;
       i = stop - 1;
       continue;
+    }
+    // 🛡️ F2b（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：LESS **单行注释** `//`
+    //   此前未被识别 → 注释行被并入下一个嵌套选择器（`// 普通态文字：浅蓝\n  .c-x-label`），
+    //   `nestedKey()` 判不出合法键 ⇒ 该嵌套块被跳过但父块重排时多出 `}` ⇒
+    //   **写盘门禁 LESS-WRITE-001 括号不平衡 ⇒ 整轮合并被回退**（本轮所有子组件类都进不了
+    //   common.less，tabs-list 的 display:flex 随之丢失）。真机实测：该块去 `//` 后 revert 消失。
+    //   判据：仅在「行首 / 声明分隔符后」把 `//` 当注释，避免误吃 `url(http://…)`。
+    if (ch === '/' && text[i + 1] === '/') {
+      const prev = i > 0 ? text[i - 1] : '\n';
+      if (prev === '\n' || /[\s;{}]/.test(prev)) {
+        let end = text.indexOf('\n', i);
+        if (end < 0) end = text.length;
+        i = end - 1; // 注释整段丢弃（不参与声明/选择器）
+        continue;
+      }
     }
 
     if (ch === '{') {
@@ -1490,6 +1601,15 @@ export function consolidateSubComponentClasses(files = {}, options = {}) {
   info(
     `[style-class-consolidator] 子组件类样式已收敛进 common.less（新增 ${merged.added.length} / 覆盖同名 ${merged.replaced.length}）`,
   );
+  // 🛡️ F2 计数行（恒 0 也打，保证「判据跑了但没命中」与「判据没跑」可区分）
+  {
+    const strippedList = Array.isArray(merged.percentStripped) ? merged.percentStripped : [];
+    info(
+      `[style-class-consolidator] F2 百分比尺寸逐声明剥离 ${strippedList.length} 处` +
+        `（整块丢弃 ${strippedList.filter((x) => x.dropped).length} / 结构声明保留 ${strippedList.filter((x) => !x.dropped).length}）`,
+      { selectors: strippedList.slice(0, 6).map((x) => x.selector) },
+    );
+  }
   return next;
 }
 

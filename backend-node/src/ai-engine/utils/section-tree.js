@@ -9,6 +9,10 @@
 //   两份实现必然漂移（记忆铁律：同判据 ≥2 份 = 事故温床）。差异只有颜色写法
 //   （本文件 alpha=1 时输出 hex，共享实现恒 rgba），二者被 normalizeCssColor 归一为同一 token。
 import { effectsToBoxShadow } from './figma-effects.js';
+// 🛡️ C0.3-B（2026-11-04）：「段声明文本」收集口径**单一来源**。
+//   复用 figma-coverage-dedupe（零 import 的纯函数模块）——本文件不得复制第二份，
+//   否则「什么算声明内容」会在去重与覆盖率两处各长一套。
+import { haveDisjointDeclaredContent } from './figma-coverage-dedupe.js';
 
 export function isLayoutContainerSection(sec) {
   if (!sec || typeof sec !== 'object') return false
@@ -78,7 +82,40 @@ function chartSignature(sec) {
   return `${String(sec?.chartType || '')}|${series}|${String(sec?.title || '')}`
 }
 
-export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections)) return sections
+/**
+ * 🛡️ G14b（2026-11-04 · R1-1 留痕）：记录一次「被去重丢弃」的段。
+ *
+ * ── 背景（真机 mc-max-1793783486041-8e733a22 实锤）─────────────────────────
+ * 本文件此前**静默丢段**：`dedupeDuplicateSections` 只返回 sections，被丢的段在日志与产物里
+ * **0 次出现**（36:1642 与 81:8 共享锚点、elementCount 6 < 36 ⇒ 被规则①收敛丢弃），
+ * 直到用户肉眼发现「三个 section 的内容缺少」才暴露。COMP-001 因此假绿。
+ *
+ * 对照组 `figma-coverage-dedupe.js#dedupeLevelByCoverage` 早已返回 `removed[]`
+ * （四态 reason + path），本留痕**字段口径与它严格对齐**（id/coveredBy/size/reason/path），
+ * 禁止另立第二份口径。
+ *
+ * 约定：`removed` 是**可选累加器**——调用方传数组才收集，不传则行为与旧版完全一致
+ * （本函数有 9 处调用，签名不得破坏）。
+ *
+ * @param {Array|null} removed 累加器，元素 { id, coveredBy, size, reason, path }
+ * @param {object} sec 被丢弃的段
+ * @param {object|null} coveredBy 吸收/顶替它的段（碎片壳无单一宿主时传 null）
+ * @param {string} reason 丢弃原因（见调用点）
+ * @param {string} path 层级路径（'/' 分隔）
+ */
+function recordDroppedSection(removed, sec, coveredBy, reason, path) {
+  if (!Array.isArray(removed)) return
+  removed.push({
+    id: String(sec?.id ?? ''),
+    coveredBy: String(coveredBy?.id ?? ''),
+    size: Number(sec?.elementCount) || 0,
+    reason,
+    path: path || '/',
+  })
+}
+
+export function dedupeDuplicateSections(sections, removed = null, path = '') {
+  if (!Array.isArray(sections)) return sections
   const out = []
   const seen = new Map() // tabs 措辞 key -> out 下标
   const nodeOwner = new Map() // sourceNodeId -> out 下标（仅叶子）
@@ -89,7 +126,14 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
     }
     // layout 容器：仅空间包裹，不参与归属冲突；递归处理 children
     if (isLayoutContainerSection(sec)) {
-      out.push({ ...sec, children: dedupeDuplicateSections(sec.children) })
+      out.push({
+        ...sec,
+        children: dedupeDuplicateSections(
+          sec.children,
+          removed,
+          `${path}/${String(sec.id ?? '')}`,
+        ),
+      })
       continue
     }
     // ① R1-1：sourceNodeIds 单一归属（不依赖措辞）
@@ -122,7 +166,38 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
       //   维持原行为，避免扩大误伤面。
       if (isChartLeaf(prev) && isChartLeaf(sec) && chartSignature(prev) !== chartSignature(sec)) {
         if (Array.isArray(sec.children)) {
-          out.push({ ...sec, children: dedupeDuplicateSections(sec.children) })
+          out.push({
+        ...sec,
+        children: dedupeDuplicateSections(
+          sec.children,
+          removed,
+          `${path}/${String(sec.id ?? '')}`,
+        ),
+      })
+        } else {
+          out.push(sec)
+        }
+        continue
+      }
+      // 🛡️ C0.3-B（2026-11-04 · 真机 mc-max-1793755487753-104f5a31）：**共享锚点 ≠ 同一区域**。
+      //   形态：vision 因 prompt 未给子节点 id，把「设备头部信息 / 设备属性 / 产品描述」多个语义段
+      //   全部锚到根 Frame（三段 sourceNodeIds 同一集合）⇒ 若按 elementCount 收敛，真实分区被丢，
+      //   下游每段又各取整树真值 ⇒ 结构/样式整体消失（视觉完全退化）。
+      //   判据（刻意收窄，三条同时满足才不折叠）：
+      //     · 双方锚点集**完全相同**（有交集但不相同的维持原行为，避免扩大误伤面）；
+      //     · 双方各自声明了文本（空壳段不适用，仍走 elementCount 收敛 / ancestor-shell）；
+      //     · 两组声明文本**互不重叠** ⇒ 不同区域的独立声明，不是同一区域的重复解释。
+      //   口径单一来源：figma-coverage-dedupe.collectDeclaredTexts（禁止本文件另建一份）。
+      if (haveDisjointDeclaredContent(prev, sec)) {
+        if (Array.isArray(sec.children)) {
+          out.push({
+        ...sec,
+        children: dedupeDuplicateSections(
+          sec.children,
+          removed,
+          `${path}/${String(sec.id ?? '')}`,
+        ),
+      })
         } else {
           out.push(sec)
         }
@@ -132,11 +207,17 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
       const curCount = Number(sec.elementCount) || 0
       // 保留内容更全的一份（elementCount 更大），丢弃重复解释
       if (curCount > prevCount) {
+        // 🛡️ G14b 留痕：prev 被内容更全的 sec 顶替
+        recordDroppedSection(removed, prev, sec, 'shared-anchor-superseded', path)
         for (const id of Array.isArray(prev?.sourceNodeIds) ? prev.sourceNodeIds : []) {
           if (nodeOwner.get(String(id)) === conflictIdx) nodeOwner.delete(String(id))
         }
         out[conflictIdx] = sec
         for (const id of srcIds) nodeOwner.set(id, conflictIdx)
+      } else {
+        // 🛡️ G14b 留痕：sec 因 elementCount 不更大被收敛丢弃
+        //    ← 8e733a22 的 36:1642（6 < 81:8 的 36）走的就是这条，此前完全不可见
+        recordDroppedSection(removed, sec, prev, 'shared-anchor-count-collapse', path)
       }
       continue
     }
@@ -167,7 +248,14 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
         if (hasOverlap || anyEmpty) {
           const prevCount = Number(prev?.elementCount) || 0
           const curCount = Number(sec.elementCount) || 0
-          if (curCount > prevCount) out[prevIdx] = sec
+          if (curCount > prevCount) {
+            // 🛡️ G14b 留痕：prev 被内容更全的 sec 顶替（措辞兜底路径）
+            recordDroppedSection(removed, prev, sec, 'tabs-wording-superseded', path)
+            out[prevIdx] = sec
+          } else {
+            // 🛡️ G14b 留痕：sec 被措辞兜底收敛丢弃
+            recordDroppedSection(removed, sec, prev, 'tabs-wording-collapse', path)
+          }
           continue
         }
         // 判为「不同区域」→ 两个都保留，落到下方公共 push 路径；并让后续同 key 与**最新**者比较
@@ -175,12 +263,19 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
       seen.set(key, out.length)
     }
     if (Array.isArray(sec.children)) {
-      out.push({ ...sec, children: dedupeDuplicateSections(sec.children) })
+      out.push({
+        ...sec,
+        children: dedupeDuplicateSections(
+          sec.children,
+          removed,
+          `${path}/${String(sec.id ?? '')}`,
+        ),
+      })
       continue
     }
     out.push(sec)
   }
-  return dedupeByWholeRegionShell(out)
+  return dedupeByWholeRegionShell(out, removed, path)
 }
 
 /**
@@ -258,7 +353,7 @@ export function uniqueSectionIds(sections) {
  * @param {Array} sections 同层 section 数组（已递归处理过 children）
  * @returns {Array}
  */
-export function dedupeByWholeRegionShell(sections) {
+export function dedupeByWholeRegionShell(sections, removed = null, path = '') {
   if (!Array.isArray(sections) || sections.length < 3) return sections
 
   const COMPETING_TYPES = new Set(['tabs', 'switch', 'nav', 'sidebar', 'toolbar'])
@@ -294,15 +389,22 @@ export function dedupeByWholeRegionShell(sections) {
   const ownedTotalCount = owned.reduce((n, o) => n + o.count, 0)
 
   // 每个无归属壳按判别力单独判定
-  const dropIdx = new Set()
+  const dropIdx = new Map() // idx -> { coveredByIdx, reason }（🛡️ G14b：留痕与丢弃同源，禁止事后重算）
   const lostGridFacts = [] // 被丢碎片壳携带的栅格空间事实（需并入宿主，信息不丢失）
   for (const shell of shells) {
     if (shell.count >= ownedTotalCount) {
       // 超集：壳覆盖整块 → 丢弃竞争类型的有归属兄弟（它们的内容已被壳完整覆盖）
-      for (const o of competingOwned) dropIdx.add(o.idx)
+      for (const o of competingOwned)
+        dropIdx.set(o.idx, {
+          coveredByIdx: shell.idx,
+          reason: 'whole-region-owned-covered',
+        })
     } else {
       // 碎片重述：壳比真实有归属兄弟更小 → 壳是臆造，丢弃壳本身
-      dropIdx.add(shell.idx)
+      dropIdx.set(shell.idx, {
+        coveredByIdx: -1, // 碎片壳无单一宿主（内容由多个有归属兄弟共同承载）
+        reason: 'whole-region-shell-fragment',
+      })
       // 🛡️ 信息不丢失（2026-09-14 · a612a9f7）：碎片壳若携带视觉已标注的栅格列数事实
       //   （`layout:'grid'` + `gridColumns`），丢弃时须并入保留的内容宿主兄弟，
       //   否则代码生成 prompt 拿不到列数 → LLM 自由发挥（真机偶发 4 列，设计稿 3 列）。
@@ -314,6 +416,17 @@ export function dedupeByWholeRegionShell(sections) {
   // 防御：不允许把有归属兄弟全清空（至少保留 1 个真实 section）
   const remaining = sections.filter((_, i) => !dropIdx.has(i))
   if (remaining.length === 0) return sections
+
+  // 🛡️ G14b 留痕：只有真正发生丢弃才记录（上面两条 early-return 证明没丢）
+  for (const [i, meta] of dropIdx) {
+    recordDroppedSection(
+      removed,
+      sections[i],
+      meta.coveredByIdx >= 0 ? sections[meta.coveredByIdx] : null,
+      meta.reason,
+      path,
+    )
+  }
 
   // 把丢失的栅格事实并入「内容宿主」兄弟（优先级：body > tabs > grid > list > content > stats；
   // 绝不为 header/switch/nav/sidebar/toolbar 等竞争型或标题型节点挂栅格事实）。

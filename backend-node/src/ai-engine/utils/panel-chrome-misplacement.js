@@ -105,11 +105,42 @@ function styleBodies(content) {
  */
 export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
   const changes = [];
-  if (!files || typeof files !== 'object') return { files, changes };
-  if (!figmaRoot) return { files, changes, skipped: [{ reason: 'no-figma-root' }] };
+  // 🛡️ A0（2026-11-04 · c-b04f22-b04f223c 实锤）：**零命中留痕计数**（纯观测，不改判据）。
+  //   缺口：本刀原先只在 `changes.length > 0` 时留痕，且三条 `continue`（自己是面板 /
+  //   缺声明 / 弱证据）与 ②-b 的七条 `continue` **全静默** ⇒ 事后无法区分
+  //   「跑过但零命中」「未跑到」「被哪一条筛掉」—— 这正是 CS1 案查不动 3 轮的直接原因
+  //   （与 G14b「静默丢段」同款可观测性缺口）。
+  //   计数键语义见下方各 `stats.*++` 处；`scanned` = 进入判据链的候选数（分母）。
+  const stats = {
+    scanned: 0,
+    skippedSelfPanel: 0, // ① 元素自身就是面板真值（三件套本就属于它）⇒ 设计性跳过
+    skippedMissingDecl: 0, // ② 无 `border-radius`/`box-shadow` 双声明
+    skippedUnresolvedValue: 0, // ② 声明存在但解析后无有效圆角/颜色（如 `@var: unset` 遮蔽）
+    skippedNoUniqueOwner: 0, // ③ owner 反查不唯一
+    classLevelScanned: 0, // ②-b 兜底：声明了圆角+发光的 class 数（分母）
+    classLevelSkipped: 0, // ②-b 兜底：被任一条件筛掉的 class 数（总）
+    // ②-b 各 `continue` 分支的细粒度归因（否则「被哪条筛掉」不可答 —— CS1 病灶正落 Unresolved）
+    classLevelSkipAlreadyStripped: 0, // ②-b：已被元素级 ③ 收入 classesToStrip
+    classLevelSkipNoShadow: 0, // ②-b：该 class 只声明圆角、无发光声明
+    classLevelSkipUnused: 0, // ②-b：死规则（声明了但无任何元素使用）
+    classLevelSkipShared: 0, // ②-b：多使用点或有 section 归属（共享 class 铁律）
+    classLevelSkipUnresolved: 0, // ②-b：圆角/发光解析不出真值（`@var: unset` 遮蔽 ← CS1 段1）
+    classLevelSkipNoOwner: 0, // ②-b：owner 反查不唯一
+    classLevelSkipOccupied: 0, // ②-b：该 class 正是面板自己的 / 别的面板在用
+  };
+  // ②-b 计数助手：同时累加「总」与「分支」两个维度（键名 = classLevelSkip + <Reason>）
+  const bumpClassSkip = (reason) => {
+    stats.classLevelSkipped += 1;
+    const key = `classLevelSkip${reason}`;
+    if (key in stats) stats[key] += 1;
+  };
+  if (!files || typeof files !== 'object') return { files, changes, stats };
+  if (!figmaRoot) return { files, changes, stats, skipped: [{ reason: 'no-figma-root' }] };
 
   const figmaIndex = indexFigmaNodes(figmaRoot);
-  if (figmaIndex.size === 0) return { files, changes, skipped: [{ reason: 'empty-figma-index' }] };
+  if (figmaIndex.size === 0) {
+    return { files, changes, stats, skipped: [{ reason: 'empty-figma-index' }] };
+  }
 
   // ① 全量面板真值 + 「发光颜色 → section 集合」反查表
   const panelBySection = new Map();
@@ -123,7 +154,9 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
     if (!ownersByShadowKey.has(key)) ownersByShadowKey.set(key, new Set());
     ownersByShadowKey.get(key).add(id);
   }
-  if (panelBySection.size === 0) return { files, changes, skipped: [{ reason: 'no-panel-truth' }] };
+  if (panelBySection.size === 0) {
+    return { files, changes, stats, skipped: [{ reason: 'no-panel-truth' }] };
+  }
 
   const cssSources = [];
   for (const [p, c] of Object.entries(files)) {
@@ -146,12 +179,26 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
     'border-radius': collectClassProp(css, 'border-radius'),
     'box-shadow': collectClassProp(css, 'box-shadow'),
   }));
+  // 🛡️ 42-B (b)（2026-11-04 · CS1 段1 实锤）：**无效 stub 下沉**
+  //   病灶：`cssSources` 首源（SFC `<style>`）把该 class 的 `box-shadow` 声明成
+  //   `@vendor-panel-shadow`，而该变量是 `unset`（`theme-vars.less` / `ContentSection.vue`
+  //   里的自愈字面量）⇒ first-wins 永远取到 stub，**后面那份有效发光声明**
+  //   （`common.less` 顶层金发光）读不到 ⇒ 判据在 `Unresolved` 处静默丢弃、`changes=0`。
+  //   口径（用户 2026-11-04 裁决）：**只认 `unset`** —— 它是「LLM 未填」的 stub 语义，须继续
+  //   下查；`none` 是**有意**的「无阴影」声明，不得下查（否则会误「复活」有意取消的阴影）。
+  //   与既有「无效值口径」同源但**故意收窄**：`container-background-truth.js:169` 的
+  //   `/^(transparent|none|currentColor|inherit|initial|unset)$/i` 亦含 none/transparent，本刀不取。
+  //   🔴 不触碰共享 `collectClassProp`（仅本刀本地过滤），避免波及刀 37 / M1。
+  const isUnsetStub = (v) => String(resolveVars(v) || '').trim().toLowerCase() === 'unset';
   const declaredProp = (cls, prop) => {
+    let firstSeen = null;
     for (const mp of propMaps) {
       const v = mp[prop].get(cls);
-      if (v) return v;
+      if (!v) continue;
+      if (firstSeen == null) firstSeen = v;
+      if (!isUnsetStub(v)) return v; // 首个**有效**声明胜出
     }
-    return null;
+    return firstSeen; // 全为 stub ⇒ 保留原语义，交下游 `Unresolved` 判据
   };
 
   const usages = collectClassUsages(files);
@@ -169,7 +216,11 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
     let dirty = false;
     for (const t of tags.reverse()) {
       const sid = String(t.sectionId);
-      if (panelBySection.has(sid)) continue; // 它自己就是面板 ⇒ 三件套本就属于它
+      stats.scanned += 1; // A0：分母 = 带 data-section-id 的元素数
+      if (panelBySection.has(sid)) {
+        stats.skippedSelfPanel += 1; // A0
+        continue; // 它自己就是面板 ⇒ 三件套本就属于它
+      }
 
       const classes = classTokens(t.tag);
       const styleAttr = /\bstyle="([^"]*)"/.exec(t.tag);
@@ -177,16 +228,25 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
 
       const radiusVal = inline['border-radius'] ?? classes.map((c) => declaredProp(c, 'border-radius')).find(Boolean);
       const shadowVal = inline['box-shadow'] ?? classes.map((c) => declaredProp(c, 'box-shadow')).find(Boolean);
-      if (!radiusVal || !shadowVal) continue;
+      if (!radiusVal || !shadowVal) {
+        stats.skippedMissingDecl += 1; // A0
+        continue;
+      }
 
       const r = radiusNumber(resolveVars(radiusVal));
       const key = shadowColorKey(resolveVars(shadowVal));
-      if (r == null || !key) continue;
+      if (r == null || !key) {
+        stats.skippedUnresolvedValue += 1; // A0：`@var: unset` 之类遮蔽 ⇒ 解析不出真值
+        continue;
+      }
 
       const candidates = Array.from(ownersByShadowKey.get(key) || []).filter(
         (a) => a !== sid && panelBySection.get(a).radius === r,
       );
-      if (candidates.length !== 1) continue; // 无证据或证据不唯一 ⇒ 不改（fail-open）
+      if (candidates.length !== 1) {
+        stats.skippedNoUniqueOwner += 1; // A0
+        continue; // 无证据或证据不唯一 ⇒ 不改（fail-open）
+      }
       const owner = candidates[0];
 
       // ② inline 删除（元素级，安全）
@@ -220,32 +280,35 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
   if (cssSources.length > 0) {
     const radiusMap = new Map();
     const shadowMap = new Map();
+    // 与 `declaredProp` 同构：**首个有效声明胜出**（stub `unset` 下沉到下一源；口径见上方 (b) 注释）
+    const putValid = (map, cls, v) => {
+      if (!map.has(cls)) { map.set(cls, v); return; }
+      if (isUnsetStub(map.get(cls)) && !isUnsetStub(v)) map.set(cls, v);
+    };
     for (const css of cssSources) {
-      for (const [cls, v] of collectClassProp(css, 'border-radius')) {
-        if (!radiusMap.has(cls)) radiusMap.set(cls, v);
-      }
-      for (const [cls, v] of collectClassProp(css, 'box-shadow')) {
-        if (!shadowMap.has(cls)) shadowMap.set(cls, v);
-      }
+      for (const [cls, v] of collectClassProp(css, 'border-radius')) putValid(radiusMap, cls, v);
+      for (const [cls, v] of collectClassProp(css, 'box-shadow')) putValid(shadowMap, cls, v);
     }
     for (const [cls, radiusVal] of radiusMap) {
-      if (classesToStrip.has(cls)) continue;
+      // A0：②-b 分母（声明了圆角；下一行再要求同 class 也声明发光）
+      if (classesToStrip.has(cls)) { bumpClassSkip('AlreadyStripped'); continue; }
       const shadowVal = shadowMap.get(cls);
-      if (!shadowVal) continue;
+      if (!shadowVal) { bumpClassSkip('NoShadow'); continue; }
+      stats.classLevelScanned += 1;
       const usage = usages.get(cls);
-      if (!usage) continue; // 声明了但没有任何元素使用 ⇒ 死规则，不动
+      if (!usage) { bumpClassSkip('Unused'); continue; } // 声明了但没有任何元素使用 ⇒ 死规则，不动
       // 只认「唯一使用点且该点无 section 归属」：多使用点 = 共享 class，铁律一律不动
-      if (usage.orphanTags !== 1 || usage.sids.size !== 0) continue;
+      if (usage.orphanTags !== 1 || usage.sids.size !== 0) { bumpClassSkip('Shared'); continue; }
       const r = radiusNumber(resolveVars(radiusVal));
       const key = shadowColorKey(resolveVars(shadowVal));
-      if (r == null || !key) continue;
+      if (r == null || !key) { bumpClassSkip('Unresolved'); continue; } // A0：CS1 段1 命中此处（`@var: unset` 遮蔽）
       const candidates = Array.from(ownersByShadowKey.get(key) || []).filter(
         (a) => panelBySection.get(a).radius === r,
       );
-      if (candidates.length !== 1) continue;
+      if (candidates.length !== 1) { bumpClassSkip('NoOwner'); continue; }
       const owner = candidates[0];
-      if (usage.sids.has(owner)) continue; // 就是面板自己的 class
-      if (Array.from(usage.sids).some((s) => panelBySection.has(s))) continue; // 别的面板在用
+      if (usage.sids.has(owner)) { bumpClassSkip('Occupied'); continue; } // 就是面板自己的 class
+      if (Array.from(usage.sids).some((s) => panelBySection.has(s))) { bumpClassSkip('Occupied'); continue; } // 别的面板在用
       classesToStrip.set(cls, owner);
       orphanClasses.add(cls); // 只打标，实际变更由 ④ 按文件如实记录
     }
@@ -305,7 +368,7 @@ export function healPanelChromeMisplacement(files, { figmaRoot } = {}) {
     }
   }
 
-  return { files, changes };
+  return { files, changes, stats };
 }
 
 /**

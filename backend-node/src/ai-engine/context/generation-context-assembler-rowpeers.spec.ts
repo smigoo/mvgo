@@ -72,6 +72,41 @@ describe('normalizeSectionNode 透传 rowPeerIds（#138 续）', () => {
   })
 })
 
+describe('C0：header 结构事实穿过 normalizeSectionNode（mc-max-1793723025659-a72365c4）', () => {
+  const state = {
+    subComponentPlan: {
+      effectiveSections: [
+        {
+          id: '2:3571',
+          title: '流量预测',
+          elementCount: 3,
+          header: {
+            title: '流量预测',
+            controls: [
+              { name: '24小时', value: '24小时', role: 'select' },
+              { name: '节假日预测', value: '节假日预测', role: 'button' },
+            ],
+            headerSlots: [
+              { slotType: 'header-right', elementType: 'tab', content: '今日', active: true },
+              { slotType: 'header-right', elementType: 'tab', content: '本周', active: false },
+            ],
+          },
+          body: { children: [{ type: 'text', text: '流量预测' }] },
+        },
+      ],
+      isForced: true,
+      minFiles: 1,
+    },
+  }
+
+  test('header 原样透传，不进 droppedKeys', () => {
+    const input = assembleGenerationContext(state)
+    const sec = input.componentPlan.effectiveSections[0]
+    expect(sec.header).toEqual(state.subComponentPlan.effectiveSections[0].header)
+    expect(Object.keys(sec.header ?? {})).toEqual(['title', 'controls', 'headerSlots'])
+  })
+})
+
 describe('bc38e1e6：normalizeSectionNode 透传最小表格表头契约', () => {
   test('body.headers 与 body.children[].headers 均可穿过 generationInput.componentPlan', () => {
     const input = assembleGenerationContext({

@@ -3455,6 +3455,29 @@ ${OUTPUT_FORMAT_WARNING_BRIEF}
 `;
   }
 
+/**
+ * 🛡️ 父级图表挂载守卫（2026-11-04 治本 · mc-max-1793767891707-10c19d61 实锤）：
+ *   病灶：index.vue 最终模板由确定性骨架生成（层① 2026-09-11，`buildDeterministicIndexTemplate`
+ *   只写子组件组合标签，**无任何 `ref="X"` 挂载 div**），而 script 段 prompt 仍写着
+ *   「如有图表，使用 echarts.init() + watch(chartRef) 模式」⇒ LLM 依令写出完整图表实现
+ *   ⇒ `echarts.init(chartRef.value)` 无本文件挂载 ⇒ DO-NOT-INVENT-CHART-MOUNT-MISSING
+ *   终态拦截（iteration 8 无回环，任务失败）。
+ *   判据（纯结构、与门禁 `detectEchartsMountPointMissing` 同源思想）：模板中**不存在任何
+ *   `ref="…"` 属性**（静态 `ref="` / 动态 `:ref="` / `v-bind:ref="` 均算锚存在）⇒ script 里
+ *   任何 echarts.init 必然孤儿（script 不能反向修改 template）。模板有锚 → false（零行为变化，
+ *   fail-open）；空模板 → false（部分修订路径 index.vue 非目标，不猜）。
+ *   单一来源：本函数是「父模板有无挂载锚」的唯一判据，code-generator（charts 段跳过决策）
+ *   与本文件（script 段禁令注入）共用，不复制第二份口径。
+ *
+ * @param {string} templateContent index.vue 最终模板内容
+ * @returns {boolean} true = 模板无任何 ref 挂载锚（父级图表实现必然是死代码）
+ */
+export function templateHasNoRefMount(templateContent) {
+    if (typeof templateContent !== 'string' || !templateContent.trim()) return false;
+    // 属性名前必是空白或 ':'（动态绑定）；匹配到任一 ref 属性即视为锚存在
+    return !/[:\s]ref\s*=\s*["'][^"']*["']/.test(templateContent);
+}
+
 export function buildScriptChunkMiddle(chunk, input) {
     const { componentName } = input;
 
@@ -3485,6 +3508,19 @@ export function buildScriptChunkMiddle(chunk, input) {
           })
           .join('\n');
     }
+    // 🛡️ 2026-11-04 治本（10c19d61 实锤）：父模板无任何 ref 挂载锚 ⇒ 图表实现必然成孤儿死代码。
+    //   把旧的「如有图表，使用 echarts.init()…」鼓励句替换为硬禁令（判据见 templateHasNoRefMount）。
+    const _tplCtxEntry = (chunk.contextFiles || []).find(
+      (cf) =>
+        /index\.vue/i.test(String(cf?.path || '')) &&
+        /<template/i.test(String(cf?.content || '')),
+    );
+    const _parentNoMount = _tplCtxEntry
+      ? templateHasNoRefMount(String(_tplCtxEntry.content || ''))
+      : false;
+    const chartGuidance = _parentNoMount
+      ? '- 🚫 **父模板无任何 ref 挂载点（图表已由子组件承载）**：**禁止** `import * as echarts`、禁止 `echarts.init` / 图表 option / 图表数据 / `watch(chartRef)` / ResizeObserver 图表逻辑——父级任何图表实现都将成为无法渲染的死代码，并被 DO-NOT-INVENT-CHART-MOUNT-MISSING 终态拦截'
+      : '- 如有图表，使用 echarts.init() + ResizeObserver + watch(chartRef) 模式';
     return `
 # 任务要求（分块生成 · 第 ${chunk.index || 1}/${chunk.total || 1} 批：${chunk.title || ''}）
 
@@ -3499,7 +3535,7 @@ ${contextBlock}
 - 必须包含 \`$mcComponentBuilder\` 调用（用 try-catch 包裹）并解构 \`runtimeBuilder\`
 - 必须在 \`onMounted\` 中调用 \`runtimeBuilder.publishEvent('${componentName}-onload', {...})\`
 - 使用 Vue 3 Composition API（ref / watch / onMounted / onUnmounted 等）
-- 如有图表，使用 echarts.init() + ResizeObserver + watch(chartRef) 模式
+${chartGuidance}
 - **禁止编写 import 样式文件的语句**（样式只在 <style> 块中 @import，由系统处理）
 - 🧩 **子组件拆分**：若 <template> 中引用了 \`<PascalCase组件名>\`（如 \`<TotalTraffic />\`），**必须在本脚本中 import**：\`import TotalTraffic from './components/TotalTraffic.vue'\`（子组件文件会由后续批次单独生成）
 - ⚠️ **脚本必须完整**：包含 import（去重）、全部状态/函数定义、onMounted 等生命周期逻辑，禁止只输出 import 头

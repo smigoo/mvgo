@@ -15,6 +15,7 @@ import {
   editDistance,
   pickUniqueTruthCandidate,
   pickSiblingTruthCandidate,
+  isCssValueLiteral,
 } from '../hardcoded-text-gate.js';
 
 /** 构造最小 figma 树（TEXT 节点可嵌套） */
@@ -122,6 +123,237 @@ runtimeBuilder.publishEvent('c-device-onload', { componentId: 'device' })
     expect(texts).not.toContain('c-device-onload');
     expect(texts).not.toContain('device');
     expect(texts).not.toContain('样式里的文字');
+  });
+});
+
+/**
+ * 🛡️ 2026-11-04（`mc-max-1793759564-878b3ef1` 实锤）：script 域三种形态统一排除 CSS 取值。
+ *
+ * 病灶：真机 `detectHardcodedText` = `evaluated 36 / hits 6`，**6 处全是**
+ *   `const X = 'rgb(25,144,255)'` 这类纯颜色常量（`TabsSection.vue`×3 + `CardGrid.vue`×3）。
+ *   颜色值天然不可能出现在 Figma 的 TEXT 节点里 ⇒ 恒 ∉ truth ⇒ 恒报 issue，
+ *   噪声占满 hits 后**真漏检被淹没**。
+ *
+ * ⚠️ 域限制：只作用于 script 域（`ref` / `const` / `array-value`）；template 域的静态文本
+ *   与展示属性保持原样 —— 那些位置按定义就是「渲染成文本」的。
+ */
+describe('🛡️ CSS 取去除噪（isCssValueLiteral）', () => {
+  it('阳性：颜色 / 渐变 / 变换 / 引用 / 计算函数记法 ⇒ 判为 CSS 取值', () => {
+    const cssValues = [
+      '#fff', '#FFFFFF', '#FF8800AA',
+      'rgb(25,144,255)', 'rgba(255,255,255,1)', 'hsl(210, 100%, 55%)', 'hsla(0,0%,0%,.5)',
+      'linear-gradient(90deg, #fff 0%, #000 100%)', 'radial-gradient(circle, red, blue)',
+      'var(--c-text-primary)', 'calc(100% - 8px)', 'clamp(12px, 2vw, 16px)',
+      'translate(-50%, -50%)', 'scale(1.2)', 'rotate(45deg)', 'blur(4px)', 'brightness(1.1)',
+      'url(/assets/a.png)',
+    ];
+    for (const v of cssValues) {
+      expect([v, isCssValueLiteral(v)]).toEqual([v, true]);
+    }
+  });
+
+  it('阴性：可见文本 / 含内容的串 / 普通标识符 ⇒ 不判为 CSS 取值', () => {
+    const texts = [
+      '56302', '1280', '总数:', '隧道设备', 't-隧道设备', '运行中', 'disabled',
+      // 🔴 关键阴性：**含**类 CSS 语汇但整串不是 CSS 取值 ⇒ 必须放行（只做整串匹配）
+      '共 5 条 #fff', '主色 rgb(25,144,255)', 'hover 时 translate(2px)',
+      'rgba not a value', '50%', '1px', '', null, undefined,
+    ];
+    for (const v of texts) {
+      expect([v, isCssValueLiteral(v)]).toEqual([v, false]);
+    }
+  });
+
+  it('抽取：script 域 const / ref / array-value 三个形态都排除颜色常量', () => {
+    const sfc = `<template>
+  <div v-for="(row, i) in rows" :key="i">{{ row.text }}</div>
+</template>
+<script setup>
+const c1 = 'rgb(25,144,255)'
+const c2 = "rgba(255,255,255,1)"
+const bg = ref('linear-gradient(90deg, #fff, #000)')
+const rows = [
+  { text: '总数:', color: 'rgba(255,255,255,1)' },
+  { text: '1280', color: 'rgba(25,144,255,1)' }
+]
+</script>`;
+    const texts = extractArtifactTextLiterals(sfc).map((l) => l.text);
+    // 颜色/渐变 ⇒ 一处不得进网
+    expect(texts).not.toContain('rgb(25,144,255)');
+    expect(texts).not.toContain('rgba(255,255,255,1)');
+    expect(texts).not.toContain('linear-gradient(90deg, #fff, #000)');
+    expect(texts.some((t) => /^\s*(rgb|rgba|hsl|hsla|linear-gradient)\s*\(/.test(t))).toBe(false);
+    // 同数据行里的可见文本 ⇒ 照常进网（证明不是「整行跳过」）
+    expect(texts).toContain('总数:');
+    expect(texts).toContain('1280');
+  });
+
+  it('阴性：template 域不受该排除影响（静态文本 / 展示属性照常进网）', () => {
+    const sfc = `<template>
+  <span>共 5 条 #fff</span>
+  <span>主色 rgb(25,144,255)</span>
+  <div title="升起 #ff8800"></div>
+</template>`;
+    const texts = extractArtifactTextLiterals(sfc).map((l) => l.text);
+    expect(texts).toContain('共 5 条 #fff');
+    expect(texts).toContain('主色 rgb(25,144,255)');
+    expect(texts).toContain('升起 #ff8800');
+  });
+
+  it('端到端：真机形态（6 处颜色常量 + 少量真值文本）⇒ hits 归零不淹没', () => {
+    const figma = figmaWithTexts(['总设备', '运行中', '启用']);
+    const sfc = `<template><span>总设备</span><span>运行中</span><span>启用</span></template>
+<script setup>
+const a = 'rgb(25,144,255)'
+const b = 'rgba(255,255,255,1)'
+const c = 'rgba(255,115,0,1)'
+const d = '#FFFFFF'
+const e = 'rgb(0,0,0)'
+const f = 'rgba(25,144,255,0.8)'
+</script>`;
+    const r = detectHardcodedText({ files: [{ path: 'package/components/TabsSection.vue', content: sfc }], figmaRoot: figma });
+    expect(r.hits).toBe(0);
+    // ⚠️ `evaluated` 语义 = 「未走白名单的字面量数」，它在 truth 判定**之前**自增
+    //    ⇒ 三处真值静态文本本就计入（3）。关键在于 **6 处颜色常量一处都不计入**
+    //    （无本修复时该值为 9）—— 这才是「噪声不再挤压信噪比」的直接证据。
+    expect(r.evaluated).toBe(3);
+    expect(r.skipped).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('🔴 缺口 A · 模板绑定数据源数组（:columns/:data-source 形态）', () => {
+  /**
+   * 真机形态（`c-device-monitor-878b3ef1/package/components/StatsSection.vue`）：
+   *   `<a-table :columns="cols" :data-source="rows">` —— 无 v-for ⇒ 既有 ④ 一处不扫；
+   *   `rows` 用**带引号键 + 嵌套**（`"c0": { "text": … }`）⇒ 既有字段正则也匹配不到。
+   */
+  const TABLE_SFC = `<template>
+  <a-table :columns="cols" :data-source="rows">
+    <template #headerCell="{ column }">
+      <span>{{ column.title }}</span>
+    </template>
+    <template #bodyCell="{ column, record }">
+      <span>{{ record[column.dataIndex].text }}</span>
+    </template>
+  </a-table>
+</template>
+<script setup>
+const rows = [
+  { "c0": { "text": "总数:", "color": "rgba(255,255,255,1)" }, "c1": { "text": "南北接线\\n设备" } },
+  { "c0": { "text": "运行中" }, "c1": { "text": "1280" } },
+]
+const cols = [
+  { title: "56302", dataIndex: 'c0', width: '50%' },
+  { title: "1280", dataIndex: 'c1', width: '50%' },
+]
+</script>`;
+
+  it('阳性①：:data-source（带引号键）的文本字段被抽出，结构字段不被抽', () => {
+    const lits = extractArtifactTextLiterals(TABLE_SFC);
+    const texts = lits.map((l) => l.text);
+    // 模板渲染的是 `record[column.dataIndex].text` ⇒ text 是文本承载字段
+    expect(texts).toContain('总数:');
+    expect(texts).toContain('运行中');
+    expect(texts).toContain('1280');
+    // 🔴 结构字段（dataIndex/width）不是文本 ⇒ 一律不得入网（否则即新误报）
+    expect(texts).not.toContain('c0');
+    expect(texts).not.toContain('c1');
+    expect(texts).not.toContain('50%');
+    // CSS 取值照旧不抽
+    expect(texts.some((t) => t.includes('rgba('))).toBe(false);
+    // kind 口径与 ④ 一致（array-value），供 heal 的兄弟配对复用
+    expect(lits.find((l) => l.text === '总数:')?.kind).toBe('array-value');
+    expect(lits.find((l) => l.text === '总数:')?.field).toBe('text');
+  });
+
+  it('阳性②：:columns 的 title 字段被抽出（模板渲染 column.title）', () => {
+    const texts = extractArtifactTextLiterals(TABLE_SFC).map((l) => l.text);
+    expect(texts).toContain('56302');
+  });
+
+  it('阳性③：JS 转义解码 —— 源码 `\\n` 解码后经归一化 == 真值形态（第三洞）', () => {
+    const lits = extractArtifactTextLiterals(TABLE_SFC);
+    const cell = lits.find((l) => l.text.startsWith('南北接线'));
+    expect(cell).toBeTruthy();
+    // 源码 `"南北接线\n设备"`（反斜杠+n 两字符）⇒ 解码为真实换行 ⇒ normalizeTruthText 压成空格。
+    // 真值侧（collectFigmaTruthTexts）同走 normalizeTruthText ⇒ 两侧都是 `南北接线 设备`（空格）⇒ 相等。
+    // 若**不解码**，此处会是反斜杠字面量 `南北接线\n设备`，与真值空格形态永不相等 ⇒ 恒误报。
+    expect(cell!.text).toBe('南北接线 设备');
+    expect(cell!.text).not.toContain('\\n');
+  });
+
+  it('🔴 sliceTemplateBlock：嵌套 <template #slot> / v-if 不得截断模板体', () => {
+    // 回归：旧实现用 indexOf('</template>') ⇒ 在第一个**内层** </template> 就闭合，
+    // 其后所有 `{{ }}` 都不可见 ⇒ renderedFields 残缺、绑定数据源整条漏扫（真机实锤）。
+    // 本 fixture 的两个 `{{ }}` 均在内层 `</template>` 之后 ⇒ 截断时 renderedFields 只剩 title。
+    const texts = extractArtifactTextLiterals(TABLE_SFC).map((l) => l.text);
+    expect(texts).toContain('南北接线 设备'); // 依赖 `record[column.dataIndex].text`（L9 内层）
+    expect(texts).toContain('总数:');
+    // 阴性对照：截断时只剩 cols 的 title 两条
+    expect(texts.length).toBeGreaterThan(2);
+  });
+
+  it('阴性①：非单标识符绑定（:style="{…}" / :class 字面量 / v-for）不引入新数据源', () => {
+    const sfc = `<template>
+  <div v-for="x in items" :data-x="foo.bar" :data-y="'lit'" :style="{ color: '#fff' }" class="a b">{{ x.val }}</div>
+</template>
+<script setup>
+const foo = { bar: 'should-not-pick' }
+const items = [{ val: 'picked' }]
+</script>`;
+    const texts = extractArtifactTextLiterals(sfc).map((l) => l.text);
+    // v-for ⇒ ④ 全字段口径，照常抽
+    expect(texts).toContain('picked');
+    // `foo.bar`（非单标识符绑定）⇒ 绝不进网
+    expect(texts).not.toContain('should-not-pick');
+  });
+
+  it('阴性②：绑定数组里未被模板渲染的字段不抽（避免第二套口径）', () => {
+    const sfc = `<template><a-table :columns="cols" :pagination="meta">{{ cols[0].title }}</a-table></template>
+<script setup>
+const cols = [{ title: '真值头', dataIndex: 'k' }]
+const meta = [{ label: '不渲染', note: '也不渲染' }]
+</script>`;
+    const texts = extractArtifactTextLiterals(sfc).map((l) => l.text);
+    expect(texts).toContain('真值头'); // title 被渲染
+    expect(texts).not.toContain('不渲染');
+    expect(texts).not.toContain('也不渲染');
+  });
+
+  it('端到端①：已转义的 `\\n` 命中真值 ⇒ 不误报（第三洞修复）', () => {
+    const sfc = `<template><a-table :columns="cols" :data-source="rows">{{ record.text }}</a-table></template>
+<script setup>
+const rows = [{ text: '南北接线\\n设备' }]
+const cols = [{ title: 'x' }]
+</script>`;
+    const r = detectHardcodedText({
+      files: [{ path: 'package/components/StatsSection.vue', content: sfc }],
+      figmaRoot: figmaWithTexts(['南北接线\n设备', 'x']),
+    });
+    // 解码后 == 真值 ⇒ 不得产生 issue
+    expect(r.issues.some((i: any) => String(i.text).includes('南北接线'))).toBe(false);
+  });
+
+  it('端到端②：heal 写回必须重新转义 —— 反斜杠真值写回源码为 `\\\\`，不炸语法', () => {
+    // 源码 `'a\\bxy'`（JS 里是「a + 转义反斜杠 + bxy」）⇒ 解码 `a\bxy` ⇒ 与真值 `a\bx` 距 1 ⇒ heal。
+    // 写回若不重新转义，源码会变成 `'a\bx'`（\b = 退格转义）⇒ 语义被悄悄改坏。
+    const sfc = `<template><a-table :columns="cols" :data-source="rows">{{ record.text }}</a-table></template>
+<script setup>
+const rows = [{ text: 'a\\\\bxy' }, { text: 'ok1' }, { text: 'ok2' }]
+const cols = [{ title: 'x' }]
+</script>`;
+    const r = healHardcodedText({
+      files: [{ path: 'package/components/StatsSection.vue', content: sfc }],
+      figmaRoot: figmaWithTexts(['a\\bx', 'ok1', 'ok2', 'x']),
+    });
+    expect(r.healed.length).toBe(1);
+    expect(r.healed[0].to).toBe('a\\bx');
+    const out = (r.files[0] as any).content as string;
+    // 必须是双反斜杠（`a\\bx`），而不是把真值裸写进去（`a\bx`）
+    expect(out).toContain('a\\\\bx');
+    expect(out).not.toContain("a\\bx'");
+    // 行数守恒 ⇒ 没有把真实换行写进去
+    expect(out.split('\n').length).toBe(sfc.split('\n').length);
   });
 });
 

@@ -275,6 +275,26 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     containerPanelRadius: 0,
     containerPanelGlow: 0,
     panelChromeMisplaced: 0,
+    // 🛡️ A0（2026-11-04 · c-b04f22-b04f223c 实锤）：刀 42-B **零命中留痕**。
+    //   缺口：本刀原先只在命中时落 `panelChromeMisplaced`，三条元素级 `continue` 与 ②-b 的
+    //   七条 `continue` **全静默** ⇒ 事后无法区分「跑过但零命中」「未跑到」「被哪条 continue
+    //   筛掉」——这正是 CS1 案查不动 3 轮的直接原因（与 G14b 同款可观测性缺口）。
+    //   显式初始化为 0（上行铁律：零命中必须与「未接线」可区分）。
+    //   语义：scanned / classScanned 为分母；skipped* 为各 continue 分支的分子。
+    panelChromeScanned: 0,
+    panelChromeSkippedSelfPanel: 0,
+    panelChromeSkippedMissingDecl: 0,
+    panelChromeSkippedUnresolvedValue: 0,
+    panelChromeSkippedNoUniqueOwner: 0,
+    panelChromeClassScanned: 0,
+    panelChromeClassSkipped: 0,
+    panelChromeClassSkipAlreadyStripped: 0,
+    panelChromeClassSkipNoShadow: 0,
+    panelChromeClassSkipUnused: 0,
+    panelChromeClassSkipShared: 0,
+    panelChromeClassSkipUnresolved: 0,
+    panelChromeClassSkipNoOwner: 0,
+    panelChromeClassSkipOccupied: 0,
     // 刀 57（2026-10-23 · 方案 E）：面板标题槽位归属（header-right → title-left）
     panelTitleSlotReslot: 0,
     // 刀 54（2026-10-23）：硬编码文本门禁（显式初始化 —— 下游按固定形状序列化 summary，
@@ -1183,8 +1203,37 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   try {
     const pc = healPanelChromeMisplacement(result, { figmaRoot });
     result = pc.files;
+    // 🛡️ A0（2026-11-04）：**无条件留痕**（命中 0 也必须出现）——把每次运行的「分母 + 各筛除
+    //   分支」落进 summary 与日志，杜绝「跑过零命中 / 未跑到 / 被哪条 continue 筛掉」三态不可分。
+    //   （与 G14b「静默丢段」同款缺口；改动纯观测，判据一字未动。）
+    const s = pc.stats || {};
+    // 键映射表：stats 键 → summary 键（**全量落盘，命中 0 也必须出现**）。
+    // 见上方 summary 初始化块的语义注释。
+    const STATS_TO_SUMMARY = {
+      scanned: 'panelChromeScanned',
+      skippedSelfPanel: 'panelChromeSkippedSelfPanel',
+      skippedMissingDecl: 'panelChromeSkippedMissingDecl',
+      skippedUnresolvedValue: 'panelChromeSkippedUnresolvedValue',
+      skippedNoUniqueOwner: 'panelChromeSkippedNoUniqueOwner',
+      classLevelScanned: 'panelChromeClassScanned',
+      classLevelSkipped: 'panelChromeClassSkipped',
+      classLevelSkipAlreadyStripped: 'panelChromeClassSkipAlreadyStripped',
+      classLevelSkipNoShadow: 'panelChromeClassSkipNoShadow',
+      classLevelSkipUnused: 'panelChromeClassSkipUnused',
+      classLevelSkipShared: 'panelChromeClassSkipShared',
+      classLevelSkipUnresolved: 'panelChromeClassSkipUnresolved',
+      classLevelSkipNoOwner: 'panelChromeClassSkipNoOwner',
+      classLevelSkipOccupied: 'panelChromeClassSkipOccupied',
+    };
+    for (const [k, sk] of Object.entries(STATS_TO_SUMMARY)) summary[sk] = s[k] ?? 0;
+    summary.panelChromeMisplaced = pc.changes.length;
+    logger?.info?.('🛡️ 刀 42-B 面板装饰反查（零命中亦留痕）', {
+      scanned: summary.panelChromeScanned,
+      changes: pc.changes.length,
+      stats: s,
+      skipped: pc.skipped,
+    });
     if (pc.changes.length > 0) {
-      summary.panelChromeMisplaced = pc.changes.length;
       logger?.warn?.('🛡️ 刀 42-B：面板装饰（底色/圆角/外发光）误置于子元素，已移除', {
         changes: pc.changes,
       });

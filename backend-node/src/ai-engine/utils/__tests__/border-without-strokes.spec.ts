@@ -130,6 +130,32 @@ describe('刀 38 判据构件', () => {
     expect(out).toContain('display: flex');
   });
 
+  it('stripBorderDeclsFromBody：🔴 深度感知 —— 只删顶层声明，嵌套后代规则的边框必须保留（2026-11-04 (B)）', () => {
+    const body = `
+  display: flex;
+  border: 1px solid #a0c1ff;
+  border-radius: 4px;
+  .child-box {
+    border: 2px solid #00ff00;
+    border-radius: 6px;
+  }
+  &:hover {
+    border-top: 1px solid #ff0000;
+  }
+`;
+    const out = stripBorderDeclsFromBody(body);
+    // 顶层 ⇒ 删
+    expect(out).not.toContain('border: 1px solid #a0c1ff');
+    // 嵌套后代（depth 1）⇒ 保留：属另一个元素，不由本 class 管辖
+    expect(out).toContain('border: 2px solid #00ff00');
+    expect(out).toContain('border-top: 1px solid #ff0000');
+    // 圆角一律保留（顶层 + 嵌套）
+    expect(out).toContain('border-radius: 4px');
+    expect(out).toContain('border-radius: 6px');
+    expect(out).toContain('.child-box {');
+    expect(out).toContain('&:hover {');
+  });
+
   it('stripBorderFromInline：删边框段、其余声明原样保留', () => {
     expect(stripBorderFromInline('flex:1;min-width:0;border:1px solid #a0c1ff;')).toBe(
       'flex:1;min-width:0',
@@ -147,6 +173,33 @@ describe('刀 38 判据构件', () => {
     expect(out).toContain('border-radius: 4px');
     // 阴性：其它 class 的 border 必须保留
     expect(out).toContain('.c-card2-con');
+    expect(out).toContain('border: 1px solid #000000');
+  });
+
+  it('stripBorderDeclsFromClassRules：🔴 目标 class 内的嵌套后代规则不得被连带删除（2026-11-04 (B)）', () => {
+    const css = `.c-wrap {
+  border: 1px solid #a0c1ff;
+  .c-inner {
+    border: 2px solid #00ff00;
+    border-radius: 6px;
+  }
+  &:hover {
+    border-left: 3px solid #ff0000;
+  }
+}
+.c-other {
+  border: 1px solid #000000;
+}
+`;
+    const out = stripBorderDeclsFromClassRules(css, ['c-wrap']);
+    // 顶层 ⇒ 删
+    expect(out).not.toContain('border: 1px solid #a0c1ff');
+    // 嵌套后代 ⇒ 保留
+    expect(out).toContain('border: 2px solid #00ff00');
+    expect(out).toContain('border-left: 3px solid #ff0000');
+    expect(out).toContain('border-radius: 6px');
+    expect(out).toContain('.c-inner {');
+    // 别的 class 一律不动
     expect(out).toContain('border: 1px solid #000000');
   });
 

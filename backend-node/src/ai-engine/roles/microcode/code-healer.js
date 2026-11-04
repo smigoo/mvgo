@@ -1412,6 +1412,51 @@ function injectTabBarIntoTemplate(tplBody, bar) {
  * 且只能在 </style> 前补差额；栈帧算法可在「新顶层规则前精确闭合当前块」，
  * 避免把后续规则错误嵌套进上一个容器。作用域不变：仍按 style 块逐块处理。
  */
+/**
+ * 🛡️ G6（2026-11-04 · mc-max-1793775515654-bf0f0342 实锤）：script 区段内 CSS 声明行清除。
+ *
+ * 病灶：bf0f0342 产物 index.vue 的 `handleLegendToggle` 函数体内被插进一行
+ *   `  display: flex;`——上游样式回写链（layout-refiner claim 回写嫌疑）定位锚点
+ *   错配到 script。`display: flex;` 在 JS 里是**合法标签语句**（label + 表达式），
+ *   语法/语义门禁全部放行 ⇒ 坏产物带病落盘。
+ *
+ * 治本（出口确定性拦截，一次防住全部注入者）：逐行扫描 `<script...>...</script>`
+ *   区段，删除「CSS 声明形态行」：缩进 + CSS 属性白名单冒号 + 分号结尾、
+ *   且行内无 JS 语法字符（括号/逗号/运算符）。合法 JS 撞形态需要「对象字面量
+ *   无逗号换行 + 分号结尾 + 属性名恰在白名单」，真机语料 0 例（对象属性以 `,`
+ *   或 `}` 收尾，不合形态）——零误伤可辩驳。
+ *
+ * @param {string} content SFC 全文
+ * @returns {{ source: string, changed: boolean, removed: number, samples: string[] }}
+ */
+const CSS_DECL_PROP_RE =
+  /^\s+(display|flex-direction|flex-wrap|justify-content|align-items|align-content|align-self|gap|row-gap|column-gap|width|height|min-width|min-height|max-width|max-height|margin|margin-top|margin-right|margin-bottom|margin-left|padding|padding-top|padding-right|padding-bottom|padding-left|background|background-color|background-size|background-position|background-repeat|background-image|border|border-radius|border-color|border-width|color|font-size|font-weight|font-family|line-height|letter-spacing|text-align|text-overflow|white-space|vertical-align|overflow|overflow-x|overflow-y|position|top|right|bottom|left|z-index|opacity|box-sizing|box-shadow|object-fit|cursor|pointer-events|transition|transform)\s*:\s*[^;{}()"',=+\-*/]+;\s*$/;
+
+export function healCssDeclarationsInScript(content) {
+  if (typeof content !== 'string' || !/<script[\s>]/i.test(content)) {
+    return { source: content, changed: false, removed: 0, samples: [] };
+  }
+  let removed = 0;
+  const samples = [];
+  const source = content.replace(
+    /(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi,
+    (full, openTag, body, closeTag) => {
+      const lines = body.split('\n');
+      const kept = [];
+      for (const line of lines) {
+        if (CSS_DECL_PROP_RE.test(line) && removed + samples.length < 50) {
+          removed += 1;
+          if (samples.length < 5) samples.push(line.trim());
+          continue;
+        }
+        kept.push(line);
+      }
+      return `${openTag}${kept.join('\n')}${closeTag}`;
+    },
+  );
+  return { source, changed: removed > 0, removed, samples };
+}
+
 export function healVueEmbeddedStyleBraces(content) {
   if (typeof content !== 'string' || !content.includes('<style')) return content;
   let changed = false;
@@ -2467,4 +2512,229 @@ export function healLessColorFnVarArgs(source = '') {
   });
   if (changes.length === 0) return { source: src, changes: [] };
   return { source: out, changes };
+}
+
+/**
+ * 🛡️ G11a（2026-11-04 · a41a470f/a87c2ba5 实锤）：下载失败 bg 的 **CSS fallback 确定性消费**。
+ *
+ * ## 病灶
+ * `resource-dom-mapping` 对 Figma 渐变/纯色 fill 节点判定 `downloadStatus:'missing'`
+ * （本就不是位图），并把真值写在 `visualMeta.fillsSummary`（如
+ * `linear-gradient(180deg,#d4e3ffe5 0%,…)` / `#123259f2`）与 fallbackHint
+ * 「请使用 CSS 替代」——但该链**只写到 mapping 文件即终止**：LLM 不执行规范、
+ * 刀53 接管不读 mapping ⇒ 产物整卡背景透明，bgVar/bgSize 四件套连锁 null。
+ *
+ * ## 判据（确定性，零语义猜测）
+ *   ① `downloadStatus === 'missing'`（**仅**此态；success 的图必须用图，不冲突）；
+ *   ② `visualMeta.fillsSummary` 非空（Figma 真值，CSS 形态可直用）；
+ *   ③ `targetDomSelector` 恰为 `[data-section-id="X"]` 形态（class 选择器是虚构挂载点，跳过）；
+ *   ④ 产物中该标签**尚无** background/background-color/background-image 声明（已有真值不覆盖）。
+ *
+ * ## 注入形态
+ * 向该 section 容器标签的 `style` 头部追加 `background:<fillsSummary>;`。
+ * 渐变/纯色天然铺满容器 ⇒ **不写 background-size/position**（写死 px 违反自适应量纲）。
+ *
+ * @param {string} content 单个 .vue 文件内容
+ * @param {Array} resourceMapping resource-dom-mapping 条目数组
+ * @param {object} [options] 预留
+ * @returns {{content: string, changed: boolean, injected: number, skipped: number}}
+ */
+export function injectMissingBgFallback(content, resourceMapping, options = {}) {
+  if (typeof content !== 'string' || content.length === 0 || !Array.isArray(resourceMapping)) {
+    return { content, changed: false, injected: 0, skipped: 0 };
+  }
+  let out = content;
+  let injected = 0;
+  let skipped = 0;
+  for (const m of resourceMapping) {
+    if (!m || m.downloadStatus !== 'missing') continue;
+    const fills = String(m?.visualMeta?.fillsSummary || '').trim();
+    if (!fills || /[;{}]/.test(fills) || fills.length > 300) { skipped += 1; continue; }
+    const sel = String(m?.targetDomSelector || '');
+    const idMatch = sel.match(/^\[data-section-id="([^"]+)"\]$/);
+    if (!idMatch) { skipped += 1; continue; }
+    const esc = idMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const tagRe = new RegExp(`<([a-zA-Z][^<>]*data-section-id="${esc}"[^<>]*)>`);
+    const hit = out.match(tagRe);
+    if (!hit) { skipped += 1; continue; }
+    const tag = hit[0];
+    if (/(?:^|\s)(?:background|background-color|background-image)\s*:/.test(tag)) { skipped += 1; continue; }
+    let newTag;
+    if (/style="/.test(tag)) {
+      newTag = tag.replace(/style="/, `style="background:${fills};`);
+    } else {
+      newTag = tag.replace(/>$/, ` style="background:${fills};">`);
+    }
+    if (newTag !== tag && out.includes(tag)) {
+      out = out.replace(tag, newTag);
+      injected += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+  return { content: out, changed: injected > 0, injected, skipped };
+}
+
+/**
+ * 🛡️ G12a（2026-11-04 · mc-max-1793783001034-74672f68 实锤）：**父级死代码图表实现确定性剥离**。
+ *
+ * ## 病灶
+ * 分块生成时 index chunk 先于子组件 chunk，LLM 拿到图表信号（vision charts[]）但无法预判
+ * 「图表将由子组件承载」⇒ 在父级 index.vue 写了完整图表实现（import echarts / chartRef /
+ * initChart / updateChart / watch(chartRef) / resize 监听），而 template 无 ref 挂载点
+ * （图表实际由子组件承载）⇒ `echarts.init(chartRef.value)` 恒 null 崩溃，被
+ * DO-NOT-INVENT-CHART-MOUNT-MISSING 拦停，任务失败且无 heal。
+ *
+ * ## 判据（与门禁 detectEchartsMountPointMissing 同源，确定性、零语义猜测）
+ *   ① script 有 `echarts.init(X)`（X=简单标识符）；
+ *   ② template 无静态 `ref="X"`；
+ *   ③ template 无动态 `:ref=` / `v-bind:ref`（动态绑定不可静态判定 ⇒ fail-open 不动）；
+ *   ④ template 提取失败 ⇒ fail-open。
+ *
+ * ## 剥离范围（行级+块级，平衡大括号扫描）
+ *   - `import * as echarts ...` 行
+ *   - `const <X> = ref(null)` 声明行
+ *   - `let chart = null` / `let chartObserver = null` 声明行（死图表变量）
+ *   - 顶层声明块（`const NAME = ... => {` / `function NAME(...) {`）**体内引用死信号**
+ *     （echarts.init( / chartObserver / chart.setOption( / chart.resize(）⇒ 整块删
+ *   - `watch(<X>, ...)` 块 ⇒ 整块删
+ *   - 被删函数的无参调用行（`initChart()` 等）+ `window.addEventListener/removeEventListener('resize', <deletedFn>)` 行
+ *
+ * 不动活代码：不含死信号的块/行逐字保留（tab 切换等业务逻辑零接触）。
+ *
+ * @param {string} content 单个 .vue 文件内容
+ * @param {object} [options] 预留
+ * @returns {{content: string, changed: boolean, removed: string[]}}
+ */
+export function stripDeadChartImpl(content, options = {}) {
+  if (typeof content !== 'string' || !/echarts\.init\(/.test(content)) {
+    return { content, changed: false, removed: [] };
+  }
+  const tplMatch = content.match(/<template>([\s\S]*?)<\/template>/);
+  const template = tplMatch ? tplMatch[1] : '';
+  if (!template) return { content, changed: false, removed: [] };
+  // ③ 动态 ref ⇒ fail-open（图可能经动态挂载渲染，删除会误伤）
+  if (/[:@]ref\s*=|v-bind:ref/.test(template)) {
+    return { content, changed: false, removed: [], skipped: 'dynamicRef' };
+  }
+  // 提取 init ref 名（与门禁同正则口径）
+  const refNames = new Set();
+  const initRe = /echarts\.init\(\s*([A-Za-z_$][\w$]*)(?:\.value)?\s*\)/g;
+  let m;
+  while ((m = initRe.exec(content)) !== null) refNames.add(m[1]);
+  if (refNames.size === 0) return { content, changed: false, removed: [] };
+  const deadRefs = [...refNames].filter(
+    (r) => !new RegExp(`ref\\s*=\\s*["']${r}["']`).test(template),
+  );
+  if (deadRefs.length === 0) return { content, changed: false, removed: [] };
+
+  const DEAD_SIGNAL = /echarts\.init\(|chartObserver|chart\.setOption\(|chart\.resize\(/;
+  const lines = content.split('\n');
+  const removed = [];
+  const out = [];
+  const deletedFnNames = new Set();
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const t = line.trim();
+    // ── 行删：import echarts ──
+    if (/^import\s+\*\s+as\s+echarts\s+from\s+['"]echarts/.test(t)) {
+      removed.push(`import:${t.slice(0, 40)}`);
+      i += 1;
+      continue;
+    }
+    // ── 行删：死 ref 声明 ──
+    if (
+      deadRefs.some((r) =>
+        new RegExp(`^(?:const|let)\\s+${r}\\s*=\\s*ref\\s*\\(`).test(t),
+      )
+    ) {
+      removed.push(`decl:${t.slice(0, 40)}`);
+      i += 1;
+      continue;
+    }
+    // ── 行删：死图表变量声明 ──
+    if (/^(?:let|const)\s+chart\s*(?:=\s*null)?\s*;?\s*$/.test(t) ||
+        /^let\s+chartObserver\s*(?:=\s*null)?\s*;?\s*$/.test(t)) {
+      removed.push(`decl:${t.slice(0, 40)}`);
+      i += 1;
+      continue;
+    }
+    // ── 块删：watch(<deadRef>, ...) ──
+    const watchHit = deadRefs.find((r) =>
+      new RegExp(`^watch\\s*\\(\\s*${r}\\b`).test(t),
+    );
+    if (watchHit && /\{\s*$/.test(t)) {
+      const end = scanBlockEnd(lines, i);
+      removed.push(`watch(${watchHit}) @${i + 1}`);
+      i = end;
+      continue;
+    }
+    // ── 块删：顶层声明块且体内含死信号 ──
+    const fnDecl = t.match(
+      /^(?:const|let|function)\s+([A-Za-z_$][\w$]*)\s*(?:=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{|=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*=>\s*\{|\([^)]*\)\s*\{)/,
+    );
+    if (fnDecl && /\{\s*$/.test(t)) {
+      const end = scanBlockEnd(lines, i);
+      const body = lines.slice(i, end).join('\n');
+      if (DEAD_SIGNAL.test(body)) {
+        deletedFnNames.add(fnDecl[1]);
+        removed.push(`fn:${fnDecl[1]} @${i + 1}(${end - i}行)`);
+        i = end;
+        continue;
+      }
+    }
+    out.push(line);
+    i += 1;
+  }
+  // ── Pass 2：被删函数的调用点/监听行/死变量残留语句 ──
+  if (deletedFnNames.size > 0) {
+    const names = [...deletedFnNames].map((n) => n.replace(/\$/g, '\\$&'));
+    const callRe = new RegExp(`^(?:${names.join('|')})\\s*\\(\\s*\\)\\s*;?\\s*$`);
+    const lstRe = new RegExp(
+      `window\\.(?:add|remove)EventListener\\(\\s*['"]resize['"]\\s*,\\s*(?:${names.join('|')})\\s*\\)`,
+    );
+    // 死变量残留语句（onUnmounted 清理块 / watch 回调内）：
+    // `chart?.dispose()` / `chart = null` / `chartObserver?.disconnect()` / `if (chart) updateChart()` 等
+    // 判据：行引用死变量（chart/chartObserver——其声明已被行删）或死函数名，且该行不是声明/定义形态。
+    const deadVarRef = new RegExp(
+      `\\b(?:chart|chartObserver|${names.join('|')})\\b`,
+    );
+    const final = [];
+    for (const line of out) {
+      const t2 = line.trim();
+      const tDecl = /^(?:const|let|function|import|export)\b|=>\s*\{/.test(t2);
+      const dead =
+        callRe.test(t2) ||
+        lstRe.test(t2) ||
+        (deadVarRef.test(t2) && !tDecl && !/watch\s*\(/.test(t2));
+      if (dead) {
+        removed.push(`call:${t2.slice(0, 40)}`);
+        continue;
+      }
+      final.push(line);
+    }
+    return { content: final.join('\n'), changed: true, removed };
+  }
+  return removed.length > 0
+    ? { content: out.join('\n'), changed: true, removed }
+    : { content, changed: false, removed: [] };
+}
+
+/** 大括号平衡扫描：返回块结束行的**下一行**下标（起点行含开括号）。 */
+function scanBlockEnd(lines, start) {
+  let depth = 0;
+  let started = false;
+  for (let j = start; j < lines.length; j++) {
+    for (const ch of lines[j]) {
+      if (ch === '{') { depth += 1; started = true; }
+      else if (ch === '}') depth -= 1;
+      else if (ch === '"' || ch === "'" || ch === '`') {
+        // 粗略跳过字符串字面量内的大括号（本仓生成代码 option 字符串极少跨行模板串，
+        // 保守策略：不跳过——门禁侧 2.5/3.5 同为正则级判据，此处平衡扫描已够用）
+      }
+    }
+    if (started && depth <= 0) return j + 1;
+  }
+  return lines.length;
 }

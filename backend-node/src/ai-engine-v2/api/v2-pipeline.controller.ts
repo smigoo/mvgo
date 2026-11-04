@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { OptionalSessionGuard } from '../../auth/optional-session.guard';
 import { SessionGuard } from '../../auth/session.guard';
 import { ProgressService } from '../../progress/progress.service';
 import { TasksService } from '../../tasks/tasks.service';
@@ -30,11 +31,18 @@ import { V2PipelineService } from './v2-pipeline.service';
  *
  * 守卫策略：
  *   DevOnlyGuard 覆盖全部端点 —— 生产环境统一 404。
- *   SessionGuard 只加在 generate 上 —— 它会真实消耗模型额度并需要 userId 取用户配置；
- *   catalog/preview/health 是无副作用的元数据查询，免登录以便配置页首屏与 curl 自检。
+ *   OptionalSessionGuard 覆盖全部端点 —— **只解析身份，不阻断**。
+ *     🔴 必需：catalog/preview/health 免 SessionGuard，但它们的 userId 依赖 `req.session`，
+ *     而 `req.session` 只由守卫建立（本仓无全局 session 中间件）。不带本守卫时
+ *     `req.session?.userId` 恒为 undefined ⇒ getMergedAiConfig(undefined) 返回 {}
+ *     ⇒ 引擎看不到用户已保存的模型配置，误报「凭证缺失 / 未配置模型」。
+ *     带本守卫后：请求带 Token 头（前端全站 axios 拦截器都会注入）即装载用户身份，
+ *     不带 Token 仍可匿名自检（curl 冒烟），免登录语义不变。
+ *   SessionGuard 只加在 generate 上 —— 它会真实消耗模型额度并需要 userId 取用户配置，
+ *    必须有确定归属；无 Token 时由它抛 401（OptionalSessionGuard 已放行，不会抢先拦截）。
  */
 @Controller('v2/pipeline')
-@UseGuards(DevOnlyGuard)
+@UseGuards(DevOnlyGuard, OptionalSessionGuard)
 export class V2PipelineController {
   private readonly logger = new Logger(V2PipelineController.name);
 

@@ -63,3 +63,26 @@ describe('VisualParser 结构主权契约（7d7925d2）', () => {
     expect(source).toContain('vision-structure-guard')
   })
 })
+
+describe('C0.3-A 接线契约：hint 行携带真 id + 预算显式截断（104f5a31）', () => {
+  const source = readFileSync(`${__dirname}/../visual-parser.js`, 'utf8')
+
+  it('结构树每一行必须携带节点真实 id —— 否则模型无 id 可引用，只能锚根/抄示例', () => {
+    expect(source).toContain("const idStr = node.id ? ` [${node.id}]` : ''")
+    expect(source).toContain('${label}${idStr}${sizeStr}${textStr}${colorStr}${resourceAnnotation}')
+  })
+
+  it('prompt 必须显式给出根节点 id 与跨节点降级规则（否则有 id 仍会退回根，且 lca-is-root 拒修）', () => {
+    expect(source).toContain('节点 id 与锚点规则')
+    expect(source).toContain('最近公共父节点')
+    expect(source).toContain('const rootId = figmaData && figmaData.id ? String(figmaData.id) : \'\'')
+  })
+
+  it('注入预算必须跨递归共享（O(n)）且截断必须显式标记，禁止静默 break', () => {
+    expect(source).toContain('FIGMA_HINT_MAX_CHARS')
+    expect(source).toContain('budget = { used: 0, limit: FIGMA_HINT_MAX_CHARS, truncated: false }')
+    expect(source).toContain('结构已截断')
+    // 旧实现：每轮全量 join 后再静默 break（O(n²) + 模型不知情）
+    expect(source).not.toContain("if (parts.join('\\n').length > 5000) break")
+  })
+})

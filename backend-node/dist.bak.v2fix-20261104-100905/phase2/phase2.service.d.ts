@@ -1,0 +1,85 @@
+import { TasksService } from '../tasks/tasks.service';
+import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
+import { ProgressService } from '../progress/progress.service';
+import { ComponentService } from '../component/component.service';
+import { TokenTrackerService } from '../token-usage/token-tracker.service';
+import { GeneratePhase2Dto } from './dto/generate-phase2.dto';
+import { DocAnalyzerService } from './doc/doc-analyzer.service';
+import { UiCacheService } from './ui-cache.service';
+import { AiConfigService } from '../config/config.service';
+import { UserAiConfigService } from '../config/user-ai-config.service';
+import { QuotaService } from '../quota/quota.service';
+import { Model } from 'mongoose';
+import { GroupMemberDocument } from '../schemas/group-member.schema';
+export declare class Phase2Service {
+    private readonly tasksService;
+    private readonly taskCodeSnapshotService;
+    private readonly progressService;
+    private readonly componentService;
+    private readonly tokenTrackerService;
+    private readonly aiConfigService;
+    private readonly docAnalyzerService;
+    private readonly uiCacheService;
+    private readonly quotaService;
+    private readonly userAiConfigService;
+    private groupMemberModel;
+    private readonly logger;
+    private readonly _previewCache;
+    private readonly _previewCacheDir;
+    private readonly _previewCacheIndexFile;
+    private _loadPreviewCacheFromDisk;
+    private _persistPreviewCache;
+    private sendSseLog;
+    constructor(tasksService: TasksService, taskCodeSnapshotService: TaskCodeSnapshotService, progressService: ProgressService, componentService: ComponentService, tokenTrackerService: TokenTrackerService, aiConfigService: AiConfigService, docAnalyzerService: DocAnalyzerService, uiCacheService: UiCacheService, quotaService: QuotaService, userAiConfigService: UserAiConfigService, groupMemberModel: Model<GroupMemberDocument>);
+    private buildMergedAiConfig;
+    startGeneration(sessionId: string, dto: GeneratePhase2Dto, groupId: string, userId?: string): Promise<void>;
+    regenerateWithDoc(sessionId: string, params: {
+        componentId: string;
+        groupId: string;
+        requirementDoc: string;
+        docAnalysis?: Record<string, any>;
+        config: any;
+        userId?: string;
+        panelType?: string;
+    }): Promise<void>;
+    private executeGeneration;
+    resumeFromCheckpoint(sessionId: string, params: {
+        componentName: string;
+        fileKey: string;
+        nodeId: string;
+        outputPath: string;
+        groupId: string;
+        userId?: string;
+        panelType?: string;
+        target?: string;
+        failureGuidance?: string;
+    }): Promise<{
+        success: boolean;
+        message?: string;
+        error?: string;
+    }>;
+    refineComponent(sessionId: string, params: {
+        componentId: string;
+        refineType?: string;
+        userId?: string;
+    }): Promise<void>;
+    private executeRefine;
+    private scanComponentFiles;
+    private precompileCss;
+    private fixPackageImagePaths;
+    private resolveFigmaToken;
+    private ensurePreviewImage;
+    private collectVueFiles;
+    copyToWorkspace(outputPath: string, sessionId: string, target?: string, groupId?: string): Promise<void>;
+    packageComponent(componentId: string, target?: string, groupId?: string): Promise<Buffer>;
+    getFigmaPreview(figmaUrl: string, figmaToken?: string, config?: any, userId?: string): Promise<{
+        success: boolean;
+        imageUrl?: string;
+        previewToken?: string;
+        nodeName?: string;
+        width?: number;
+        height?: number;
+        error?: string;
+    }>;
+    private _findFirstNodeId;
+}

@@ -111,6 +111,76 @@ describe('style-conflict-detector', () => {
 
       expect(r.conflicts).toHaveLength(0);
     });
+
+    // 🔴 2026-11-04 (a) 可见性扩展（CS1 刀口，(b) 的纯观测伴刀，产物一字不改）
+    it('(a) 🔴 深度 ≥2 嵌套后代纯 class 规则的 box-shadow 双定义可被检出', () => {
+      // 真机形态：面板 chrome 发光（box-shadow）写在父选择器内的嵌套后代 class 上（§3.6 a2），
+      // 原实现只提「深度 1」声明 ⇒ ⑩ 漏报。扩展后归属到「最近的纯 class 层」。
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.c-chrome {
+  box-shadow: 0 0 8px #ffc800;
+}`,
+        'package/components/A.vue': `<style scoped>
+.c-wrap {
+  .c-chrome {
+    box-shadow: 0 0 8px #00ff00;
+  }
+}
+</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(1);
+      expect(r.conflicts[0].className).toBe('c-chrome');
+      expect(r.conflicts[0].attrs).toContain('box-shadow');
+    });
+
+    it('(a) 🔴 非纯 class 嵌套层（:deep / & / >）内部声明一律不计入（防假阳性）', () => {
+      // 容器 class 里嵌 :deep(.ant-btn) / &:hover / > .child 是标准写法，其声明不属本 class。
+      // 构造反例：若误把嵌套层拆成 .ant-btn / .child，会与 less 的同名 class 撞出冲突。
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.c-x { box-shadow: 0 0 8px #ffc800; }
+.ant-btn { box-shadow: 0 0 8px #00ff00; }
+.child { box-shadow: 0 0 8px #0000ff; }`,
+        'package/components/A.vue': `<style scoped>
+.c-x {
+  box-shadow: 0 0 8px #ffc800;
+
+  :deep(.ant-btn) {
+    box-shadow: 0 0 8px #ff00ff;
+  }
+  &:hover {
+    box-shadow: 0 0 8px #00ffff;
+  }
+  > .child {
+    box-shadow: 0 0 8px #ffff00;
+  }
+}
+</style>`,
+      });
+
+      // .c-x 顶层同值 ⇒ 不冲突；三个嵌套层全部被排除 ⇒ 0 冲突。
+      expect(r.conflicts).toHaveLength(0);
+    });
+
+    it('(a) box-shadow 已入冲突白名单：同 class 取值不同即报', () => {
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.p { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }`,
+        'package/components/A.vue': `<style scoped>.p { box-shadow: none; }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(1);
+      expect(r.conflicts[0].attrs).toEqual(['box-shadow']);
+    });
+
+    it('(a) box-shadow 主题变量别名双写 = 语义同值，不报（回归：归一仍生效）', () => {
+      // @panel-shadow（less）与 var(--panelShadow)（SFC）编译后同源 ⇒ 归一为 var(panelshadow) ⇒ 不冲突。
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.p { box-shadow: @panel-shadow; }`,
+        'package/components/A.vue': `<style scoped>.p { box-shadow: var(--panelShadow); }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(0);
+    });
   });
 
   describe('scanProductStyleIssues', () => {

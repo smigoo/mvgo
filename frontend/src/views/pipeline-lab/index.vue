@@ -475,6 +475,9 @@ import {
   CheckOutlined,
   CloseOutlined,
 } from '@ant-design/icons-vue'
+import { createProgressStream } from '@/api/generator'
+import { getAuthToken } from '@/utils/api-token'
+import { readJson } from '@/utils/safe-json'
 
 // ========== 状态 ==========
 const catalog = ref({
@@ -785,10 +788,22 @@ function closeNodePopover() {
 // ========== API ==========
 const apiBase = '/api/v2/pipeline'
 
+/**
+ * 与全站 axios 拦截器同口径地注入门户 Token。
+ * 本页此前用裸 fetch 且不带 Token —— 后端 v2 端点依赖守卫建立会话身份来读取
+ * 用户模型配置，缺 Token 会导致 `req.session.userId` 恒空、引擎读不到配置。
+ */
+function authHeaders(extra = {}) {
+  const headers = { ...extra }
+  const token = getAuthToken()
+  if (token) headers.Token = token
+  return headers
+}
+
 async function fetchCatalog() {
   try {
-    const res = await fetch(`${apiBase}/catalog`)
-    const data = await res.json()
+    const res = await fetch(`${apiBase}/catalog`, { headers: authHeaders() })
+    const data = await readJson(res)
     if (data.success) {
       catalog.value = data.data
       form.value.spec = data.data.defaults.spec
@@ -802,8 +817,8 @@ async function fetchCatalog() {
 async function fetchHealth() {
   healthStatus.value = 'loading'
   try {
-    const res = await fetch(`${apiBase}/health`)
-    const data = await res.json()
+    const res = await fetch(`${apiBase}/health`, { headers: authHeaders() })
+    const data = await readJson(res)
     healthStatus.value = data.data.generationReady ? 'ready' : 'not-ready'
     if (data.data.specAudit?.warnings?.length) {
       catalog.value.registryWarnings = data.data.specAudit.warnings
@@ -820,10 +835,10 @@ async function fetchPreview() {
     const body = buildRequestBody()
     const res = await fetch(`${apiBase}/preview`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     })
-    const data = await res.json()
+    const data = await readJson(res)
     if (res.ok && data.success) {
       previewResult.value = data.data.preview
     } else {
@@ -847,10 +862,10 @@ async function handleGenerate() {
     const body = buildRequestBody()
     const res = await fetch(`${apiBase}/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     })
-    const data = await res.json()
+    const data = await readJson(res)
     if (!res.ok || !data.success) {
       message.error(data.message || '启动失败')
       taskStatus.value = 'failed'
@@ -927,22 +942,24 @@ async function handleSpecUpload(evt) {
 
     const res = await fetch(`${apiBase}/specs/upload`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(specDef),
     })
-    const data = await res.json()
+    const data = await readJson(res)
 
     if (res.ok && data.success) {
-      message.success(data.message || `规范 "${data.id}" 上传成功`)
+      // 信封为「严格纯嵌套」：控制器返回的 id/packageDir 落在外层 data 下
+      const specId = data.data?.id || specDef.id
+      message.success(data.message || `规范 "${specId}" 上传成功`)
       // 加入本地自定义列表
       customSpecs.value.push({
-        id: data.id,
-        name: specDef.label || data.id,
+        id: specId,
+        name: specDef.label || specId,
         description: specDef.description || '用户上传的自定义规范',
         isCustom: true,
       })
       // 自动选中新上传的规范
-      form.value.spec = data.id
+      form.value.spec = specId
       handleConfigChange()
       // 刷新 catalog 以确认后端已收录
       fetchCatalog()
