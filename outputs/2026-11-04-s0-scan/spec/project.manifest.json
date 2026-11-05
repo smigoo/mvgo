@@ -1,7 +1,7 @@
 {
   "generator": "s0-scan.cjs",
   "version": "1.0.0",
-  "scannedAt": "2026-11-04T15:57:34Z",
+  "scannedAt": "2026-11-04T16:16:23Z",
   "projectRoot": "/Users/smigoo/工作/test",
   "S0": {
     "docs": {
@@ -126,7 +126,15 @@
         }
       ],
       "multiRepo": false,
-      "verdict": "单仓"
+      "nested": [
+        {
+          "path": "frontend/vue3-vite-base",
+          "branch": "main",
+          "origin": "http://scm.microvideo.cn/gitlab/opensource/framework3.0/102-vue/101001-vue3.0/vue3-vite-base.git"
+        }
+      ],
+      "hasTopLevel": false,
+      "verdict": "单仓（落点 frontend/vue3-vite-base，**非顶层**）"
     },
     "missing": [
       {
@@ -716,6 +724,32 @@
       "effective": null,
       "why": "无声明，退到探测值（来自 backend/03-microvideo-framework3.x-lite-example-master/readme.md）。关键词共现启发式 ⇒ 可能混入子字段（如 detail），S2 冻结前必须由人追认，追认前不得写进契约真值"
     },
+    "sourceHashes": {
+      "total": 46,
+      "digest": "7252376b3e7d3b6214b859ff9c0a9aa3ef5432d15b0ef7dff0eedd2516562599",
+      "groups": [
+        {
+          "label": "① 需求文档",
+          "count": 1,
+          "digest": "fbe4bde4de558ff3631f42b2cdeceb98f9e716997cdc89c217187b6acb49c271"
+        },
+        {
+          "label": "② 原型 HTML/JS",
+          "count": 10,
+          "digest": "942c48722fb40f659e2083a0ca16bd3166388fae7adc309606178574532e0ecb"
+        },
+        {
+          "label": "③ 前端 api 封装",
+          "count": 30,
+          "digest": "79f17f23cd82b4a3b698d16ca607f4744127d91d9bf0973afb89bddd4288fed5"
+        },
+        {
+          "label": "④ 后端 controller",
+          "count": 5,
+          "digest": "a86f3af8159377db4b800057a03c93ab6c0f62f498e6ec0a7ae2c011c407e870"
+        }
+      ]
+    },
     "gaps": [
       {
         "id": "GAP-DOC-NO-ENDPOINT",
@@ -738,5 +772,5 @@
       "why": "未声明 ⇒ 交付分支 / 信封口径 / 外链 3 项只能全部抛给用户选，禁止内置默认值蒙混"
     }
   ],
-  "elapsedMs": 59
+  "elapsedMs": 60
 }

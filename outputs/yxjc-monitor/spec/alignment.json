@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-11-04T17:45:00+08:00",
   "sourceOfTruth": "outputs/yxjc-monitor/CONTRACT.md",
-  "note": "画板引用一律 fileKey + nodeId 双键；CONTRACT 未给出 nodeId 的画板，nodeId 记 null 并标注 nodeIdStatus，待 Figma 补录，不按文件名匹配。",
+  "note": "画板引用一律 fileKey + nodeId 双键（2026-11-05 起 nodeId 全部为 Figma REST 实拉值，形如 `2-3432`，原始形 `2:3432`）；禁止按文件名匹配。`kind` 区分顶层画板与内部卡片帧。",
   "summary": {
     "modules": 14,
     "endpointsTotal": 25,
@@ -10,7 +10,9 @@
     "docBasedEndpoints": 17,
     "figmaDerivedEndpoints": 8,
     "boardsReferenced": 17,
+    "boardsReferencedNodes": 16,
     "uncoveredBoards": 1,
+    "boardsCountNote": "boardsReferenced=17 为**画板名**去重数（模块直接引用的名字，5-7 一帧载「车型分布下钻/节假日预测下钻」两名）；boardsReferencedNodes=16 为**节点**去重数（cp-流量监测 被 2 个模块引用）；uncoveredBoards=1（2-4 全息深色版本）。节点口径合计 16+1=17，名字口径合计 17+1=18，差值恒为 1（一帧两名）。",
     "countNote": "docBasedEndpoints=17（含 WS #13，依 CONTRACT §4.1「有文档依据的 17 个端点」）；figmaDerivedEndpoints=8（#18-#25）。17+8=25=endpointsTotal。另有正交口径 httpEndpoints=24 + wsChannels=1 = 25。⚠️ 口径差异声明：按「模块 hasDocBasis=true」聚合的端点并集为 19，比 docBasedEndpoints 多 2 项 —— `GET /operation/detection/envAlarmList`（#23，Figma 反推后落位于有文档依据的模块）与 `POST /operation/detection/eventHandle`（#25，D9 正文引用了 `eventHandle` 却未给路径，本轮补全）。二者均**不计入** docBasedEndpoints（该字段严格定义为「文档字面给出的端点」，口径 = sources.json 十篇文档 documents[].endpoints 去重并集），并已包含在 figmaDerivedEndpoints=8（#18-#25）之内。"
   },
   "modules": [
@@ -19,8 +21,8 @@
       "moduleName": "大屏外壳（头部/隧道路线/三栏）",
       "region": "—",
       "figma": [
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-3432", "boardName": "运行监测2026.04.14" },
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "隧道路线" }
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-3432", "kind": "board", "boardName": "运行监测2026.04.14", "nodeIdStatus": "Figma 实拉；CONTRACT §0 亦给出 2-3432" },
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-9050", "kind": "board", "boardName": "隧道路线", "nodeIdStatus": "Figma 实拉；弹窗文件亦有同 nodeId 帧，取主设计为准" }
       ],
       "sourceDocs": [],
       "endpoints": ["GET /operation/monitor/route"],
@@ -32,7 +34,7 @@
       "moduleName": "当日总流量",
       "region": "left",
       "figma": [
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-流量监测" }
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-9778", "kind": "nestedCard", "boardName": "cp-流量监测", "nodeIdStatus": "Figma 实拉；2-3432 左侧内部卡片帧，非顶层画板" }
       ],
       "sourceDocs": ["D1"],
       "endpoints": ["GET /operation/flow/todayFlow"],
@@ -43,7 +45,7 @@
       "moduleName": "车型分布",
       "region": "left → modal modal-vehicle-type",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "车型分布下钻" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-7", "kind": "board", "boardName": "车型分布下钻", "nodeIdStatus": "Figma 实拉；5-7 单帧名「车型分布下钻/节假日预测下钻」承载两个画板名" }
       ],
       "sourceDocs": ["D2"],
       "endpoints": [
@@ -57,7 +59,7 @@
       "moduleName": "实时流量预测",
       "region": "left",
       "figma": [
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-流量监测" }
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-9778", "kind": "nestedCard", "boardName": "cp-流量监测", "nodeIdStatus": "Figma 实拉；2-3432 左侧内部卡片帧，非顶层画板" }
       ],
       "sourceDocs": ["D3"],
       "endpoints": ["GET /operation/forecast/realtime"],
@@ -68,7 +70,7 @@
       "moduleName": "节假日流量预测",
       "region": "left → modal modal-forecast-holiday",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "节假日预测下钻" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-7", "kind": "board", "boardName": "节假日预测下钻", "nodeIdStatus": "Figma 实拉；与「车型分布下钻」同帧 5-7" }
       ],
       "sourceDocs": ["D3"],
       "endpoints": [
@@ -83,7 +85,7 @@
       "moduleName": "今日累计",
       "region": "left",
       "figma": [
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-重点车辆监测" }
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-7952", "kind": "nestedCard", "boardName": "cp-重点车辆监测", "nodeIdStatus": "Figma 实拉；2-3432 左侧内部卡片帧" }
       ],
       "sourceDocs": ["D5"],
       "endpoints": ["GET /operation/point/pointTypeStatics"],
@@ -94,8 +96,8 @@
       "moduleName": "车辆明细",
       "region": "modal",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "重型货车明细" },
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "超高车辆明细" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-736", "kind": "board", "boardName": "重型货车明细", "nodeIdStatus": "Figma 实拉" },
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-899", "kind": "board", "boardName": "超高车辆明细", "nodeIdStatus": "Figma 实拉" }
       ],
       "sourceDocs": ["D6"],
       "endpoints": [
@@ -109,7 +111,7 @@
       "moduleName": "危化品车运单列表",
       "region": "modal",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "重点车辆监测下钻-危化品明细" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-478", "kind": "board", "boardName": "重点车辆监测下钻-危化品明细", "nodeIdStatus": "Figma 实拉" }
       ],
       "sourceDocs": ["D7"],
       "endpoints": ["GET /operation/point/wayBillRecord"],
@@ -120,7 +122,7 @@
       "moduleName": "智能侦测事件列表",
       "region": "right / center",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-异常事件下钻" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-1785", "kind": "board", "boardName": "运行监测-异常事件下钻", "nodeIdStatus": "Figma 实拉" }
       ],
       "sourceDocs": ["D8"],
       "endpoints": [
@@ -134,7 +136,7 @@
       "moduleName": "告警处置",
       "region": "modal",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "交通态势核实&协同上报" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-430", "kind": "board", "boardName": "交通态势核实&协同上报", "nodeIdStatus": "Figma 实拉" }
       ],
       "sourceDocs": ["D9"],
       "endpoints": [
@@ -151,8 +153,8 @@
       "moduleName": "环境监测",
       "region": "right",
       "figma": [
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-环境监测" },
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-环境异常2026.04.21" }
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-7879", "kind": "nestedCard", "boardName": "cp-环境监测", "nodeIdStatus": "Figma 实拉；2-3432 右侧内部卡片帧" },
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-25417", "kind": "board", "boardName": "运行监测-环境异常2026.04.21", "nodeIdStatus": "Figma 实拉；另有同名孪生帧 5-30973（未引用）" }
       ],
       "sourceDocs": ["D10"],
       "endpoints": [
@@ -167,8 +169,8 @@
       "moduleName": "设备监测",
       "region": "right",
       "figma": [
-        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": null, "boardName": "cp-设备监测" },
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "设备监测下钻" }
+        { "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf", "nodeId": "2-8417", "kind": "nestedCard", "boardName": "cp-设备监测", "nodeIdStatus": "Figma 实拉；2-3432 右侧内部卡片帧" },
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-1083", "kind": "board", "boardName": "设备监测下钻", "nodeIdStatus": "Figma 实拉；CONTRACT §0 给出 5-1083" }
       ],
       "sourceDocs": [],
       "endpoints": [
@@ -184,7 +186,7 @@
       "moduleName": "异常天气",
       "region": "modal",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-异常天气2026.04.21" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-8567", "kind": "board", "boardName": "运行监测-异常天气2026.04.21", "nodeIdStatus": "Figma 实拉" }
       ],
       "sourceDocs": [],
       "endpoints": ["GET /operation/detection/weatherAlarmList"],
@@ -196,7 +198,7 @@
       "moduleName": "异常上报",
       "region": "modal",
       "figma": [
-        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": null, "boardName": "运行监测-异常上报2026.04.21" }
+        { "fileKey": "Phqur1Lou2tSgwxYqIbM8U", "nodeId": "5-14242", "kind": "board", "boardName": "运行监测-异常上报2026.04.21", "nodeIdStatus": "Figma 实拉；另有同名孪生帧 5-19847（未引用）" }
       ],
       "sourceDocs": [],
       "endpoints": ["GET /operation/detection/reportList"],
@@ -207,14 +209,32 @@
   "uncoveredBoards": [
     {
       "fileKey": "Phqur1Lou2tSgwxYqIbM8U",
-      "nodeId": null,
+      "nodeId": "2-4",
+      "kind": "board",
       "boardName": "运行监测-全息深色版本",
+      "nodeIdStatus": "Figma 实拉；与主设计同 nodeId，两文件皆有此帧",
       "reason": "视觉风格基准画板（CONTRACT §6），不对应任何业务模块/端点，仅作文档记录"
     }
   ],
   "boardCountReconciliation": {
+    "baseline": "Figma REST 实拉（GET /v1/files/{key}?depth=2，2026-11-05 http=200），非文档推断",
+    "mainFileTopLevelFrames": 4,
+    "popupFileTopLevelFrames": 17,
+    "popupSupersetOfMain": true,
+    "supersetNote": "弹窗文件前 4 帧 nodeId 与主设计完全相同（2-4 / 2-1758 / 2-3432 / 2-9050）⇒ 两文件是包含关系而非互补；`隧道路线` 的 fileKey 在两处均可解析，本文件取主设计 1t7D 为准并标注双份。",
     "declaredTopLevelBoards": 17,
-    "namedInContract": 17,
-    "note": "CONTRACT §0 称弹窗文件有 17 个顶层画板，§4.2/§5 可具名枚举 13 个（另有主文件 5 个画板 + 隧道路线 + 全息深色版本）。未具名的顶层画板无名称依据，不臆造；已具名画板全部映射到模块或列入 uncoveredBoards。"
+    "referencedTopLevelNodes": 13,
+    "referencedNestedCards": 4,
+    "referencedDistinctNodes": 17,
+    "namedInContract": 18,
+    "namedInContractBasis": "按画板名去重：17 个被引用节点载 18 个画板名（5-7 一帧载「车型分布下钻/节假日预测下钻」两名的缘故）；节点口径为 17。",
+    "unreferencedTopLevelBoards": [
+      { "nodeId": "2-1758", "name": "运行监测-全息深色版本-收起", "reason": "无模块引用" },
+      { "nodeId": "5-2929", "name": "运行监测-异常事件2026.04.21", "reason": "无模块引用（异常事件列表用 5-1785 下钻帧）" },
+      { "nodeId": "5-19847", "name": "运行监测-异常上报2026.04.21", "reason": "与 5-14242 同名孪生帧" },
+      { "nodeId": "5-30973", "name": "运行监测-环境异常2026.04.21", "reason": "与 5-25417 同名孪生帧" }
+    ],
+    "checkNote": "13 被引用顶层帧 + 4 未引用顶层帧 = 17 = 弹窗文件实测顶层帧数；4 个 cp-* 系 2-3432 内部卡片帧，不计入顶层画板（原 note 记「主文件 5 个画板 + 隧道路线 + 全息深色版本」为重复计数，已更正）。",
+    "note": "CONTRACT §0「弹窗文件 17 个顶层画板」经实测成立；原产物据此推断「仅 13 个可具名」，实为 17 帧全部具名，另 4 帧无模块引用。"
   }
 }

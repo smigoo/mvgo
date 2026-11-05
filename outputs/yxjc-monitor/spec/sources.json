@@ -203,40 +203,51 @@
     }
   ],
   "figma": {
+    "nodeIdForm": "Figma REST 原始形为 `2:3432`，本文件统一写作 `2-3432`（与 CONTRACT §0 一致），二者指同一节点",
+    "baseline": "顶层帧与内部卡片清单由 Figma REST 实拉：GET /v1/files/{key}?depth=2 取顶层帧，GET /v1/files/{key}/nodes?ids=2-9781|2-9779&depth=3 取左右栏内部卡片（2026-11-05 实拉，http=200）。非文档推断，亦不按文件名匹配。",
     "files": [
       {
         "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf",
         "name": "运行监测",
-        "role": "主设计（大屏骨架）",
-        "lastModified": null,
+        "role": "主设计（大屏骨架）；实测 4 个顶层帧（原记 5 条系把 2-3432 内部的 4 个 cp-* 卡片误计为顶层画板，已按实拉拆分）",
+        "lastModified": "2026-09-28T10:07:57Z",
         "boards": [
-          { "nodeId": "2-3432", "name": "运行监测2026.04.14", "nodeIdStatus": "CONTRACT §0 明确给出" },
-          { "nodeId": null, "name": "cp-流量监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "cp-重点车辆监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "cp-环境监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "cp-设备监测", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" }
+          { "nodeId": "2-3432", "name": "运行监测2026.04.14", "size": "1920x1080", "children": ["2-9781 左侧", "2-9779 右侧", "2-9780 中部", "2-7813 头部"], "nodeIdStatus": "Figma 实拉；CONTRACT §0 亦给出 2-3432" },
+          { "nodeId": "2-9050", "name": "隧道路线", "size": "17359x6665", "nodeIdStatus": "Figma 实拉；与弹窗文件同 nodeId（两文件皆有此帧）" },
+          { "nodeId": "2-4", "name": "运行监测-全息深色版本", "size": "1920x1080", "nodeIdStatus": "Figma 实拉；CONTRACT §6 视觉基准；与弹窗文件同 nodeId" },
+          { "nodeId": "2-1758", "name": "运行监测-全息深色版本-收起", "size": "1920x1080", "nodeIdStatus": "Figma 实拉；原产物漏记，无模块引用" }
+        ],
+        "nestedCards": [
+          { "nodeId": "2-9778", "name": "cp-流量监测", "parentId": "2-9781", "parentName": "左侧", "nodeIdStatus": "Figma 实拉；内部卡片帧，非顶层画板" },
+          { "nodeId": "2-7952", "name": "cp-重点车辆监测", "parentId": "2-9781", "parentName": "左侧", "nodeIdStatus": "Figma 实拉；内部卡片帧，非顶层画板" },
+          { "nodeId": "2-7879", "name": "cp-环境监测", "parentId": "2-9779", "parentName": "右侧", "nodeIdStatus": "Figma 实拉；内部卡片帧，非顶层画板" },
+          { "nodeId": "2-8417", "name": "cp-设备监测", "parentId": "2-9779", "parentName": "右侧", "nodeIdStatus": "Figma 实拉；内部卡片帧，非顶层画板" }
         ]
       },
       {
         "fileKey": "Phqur1Lou2tSgwxYqIbM8U",
         "name": "运行监测",
-        "role": "弹窗文件（17 个顶层画板，含全部下钻与弹窗）",
-        "lastModified": null,
+        "role": "弹窗文件；实测 17 个顶层画板。前 4 帧 nodeId 与主设计完全相同（2-4 / 2-1758 / 2-3432 / 2-9050）⇒ 弹窗 ⊃ 主设计，两文件是包含关系而非互补关系",
+        "lastModified": "2026-06-24T08:33:47Z",
         "knownNodeIds": ["5-7", "5-1083"],
         "boards": [
-          { "nodeId": null, "name": "车型分布下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "节假日预测下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "重型货车明细", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "超高车辆明细", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "重点车辆监测下钻-危化品明细", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "运行监测-异常事件下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "交通态势核实&协同上报", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "运行监测-环境异常2026.04.21", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "设备监测下钻", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "运行监测-异常天气2026.04.21", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "运行监测-异常上报2026.04.21", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "隧道路线", "nodeIdStatus": "CONTRACT 仅给名称，nodeId 待 Figma 补录" },
-          { "nodeId": null, "name": "运行监测-全息深色版本", "nodeIdStatus": "风格基准画板，CONTRACT §6 提及" }
+          { "nodeId": "2-4", "name": "运行监测-全息深色版本", "size": "1920x1080", "refBy": "uncoveredBoards", "nodeIdStatus": "Figma 实拉；与主设计同 nodeId" },
+          { "nodeId": "2-1758", "name": "运行监测-全息深色版本-收起", "size": "1920x1080", "unreferenced": true, "nodeIdStatus": "Figma 实拉；无模块引用" },
+          { "nodeId": "2-3432", "name": "运行监测2026.04.14", "size": "1920x1080", "refBy": "shell", "nodeIdStatus": "Figma 实拉；与主设计同 nodeId" },
+          { "nodeId": "2-9050", "name": "隧道路线", "size": "17359x6665", "refBy": "shell", "nodeIdStatus": "Figma 实拉；与主设计同 nodeId" },
+          { "nodeId": "5-7", "name": "车型分布下钻/节假日预测下钻", "size": "1920x1080", "refBy": "flow-vehicle-type + flow-forecast-holiday", "nodeIdStatus": "Figma 实拉；一帧载两个画板名（斜杠分隔），故 17 节点对应 18 个画板名" },
+          { "nodeId": "5-430", "name": "交通态势核实&协同上报", "size": "1920x1080", "refBy": "detection-alert-disposal", "nodeIdStatus": "Figma 实拉" },
+          { "nodeId": "5-478", "name": "重点车辆监测下钻-危化品明细", "size": "1920x1080", "refBy": "point-waybill", "nodeIdStatus": "Figma 实拉" },
+          { "nodeId": "5-736", "name": "重型货车明细", "size": "1920x1080", "refBy": "point-car-detail", "nodeIdStatus": "Figma 实拉" },
+          { "nodeId": "5-899", "name": "超高车辆明细", "size": "1920x1080", "refBy": "point-car-detail", "nodeIdStatus": "Figma 实拉" },
+          { "nodeId": "5-1083", "name": "设备监测下钻", "size": "1920x2823", "refBy": "device-monitor", "nodeIdStatus": "Figma 实拉；CONTRACT §0 给出 5-1083" },
+          { "nodeId": "5-1785", "name": "运行监测-异常事件下钻", "size": "4216x1803", "refBy": "detection-event-list", "nodeIdStatus": "Figma 实拉" },
+          { "nodeId": "5-2929", "name": "运行监测-异常事件2026.04.21", "size": "1920x1080", "unreferenced": true, "nodeIdStatus": "Figma 实拉；原产物漏记，无模块引用" },
+          { "nodeId": "5-8567", "name": "运行监测-异常天气2026.04.21", "size": "1920x1080", "refBy": "weather-alarm", "nodeIdStatus": "Figma 实拉" },
+          { "nodeId": "5-14242", "name": "运行监测-异常上报2026.04.21", "size": "1920x1080", "refBy": "report-list", "nodeIdStatus": "Figma 实拉；另有同名孪生帧 5-19847" },
+          { "nodeId": "5-19847", "name": "运行监测-异常上报2026.04.21", "size": "1920x1080", "duplicateNameOf": "5-14242", "unreferenced": true, "nodeIdStatus": "Figma 实拉；同名重复帧，未引用" },
+          { "nodeId": "5-25417", "name": "运行监测-环境异常2026.04.21", "size": "1920x1080", "refBy": "env-monitor", "nodeIdStatus": "Figma 实拉；另有同名孪生帧 5-30973" },
+          { "nodeId": "5-30973", "name": "运行监测-环境异常2026.04.21", "size": "1920x1080", "duplicateNameOf": "5-25417", "unreferenced": true, "nodeIdStatus": "Figma 实拉；同名重复帧，未引用" }
         ]
       }
     ]

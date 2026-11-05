@@ -22,7 +22,16 @@
  *   <out>/spec/project.manifest.json   S0 坑位识别 + S1 抽源统计 + 缺失清单
  *   <out>/spec/endpoints.json          S1 四源端点 + 来源 + 置信度 + 标记
  *   <out>/spec/conflicts.md            必须由人裁决的冲突（不自动选择）
- *   <out>/doc/REQUIREMENTS.draft.md    前后端需求唯一源 · 草稿
+ *   <out>/doc/REQUIREMENTS.draft.md    前后端需求唯一源 · 7 章骨架（草稿）
+ *   <out>/doc/FRONTEND-DESIGN.draft.md 前端设计 · 5 章骨架（草稿）
+ *   <out>/doc/BACKEND-DESIGN.draft.md  后端设计 · 5 章骨架（草稿）
+ *
+ * 三份人读文档的共同准绳（已裁决「三份一起定死」）:
+ *   · 章节结构由本脚本**钉死**，重跑不变形；`.draft` = 尚未由 S2/S4/S5 回填。
+ *   · 扫描器只填**事实**（文件、行号、端点、哈希），设计类内容一律留白 ——
+ *     留白是如实的，手写一个看似完整的假象才是失真。
+ *   · 三份共用同一轮扫描：指纹只在 REQUIREMENTS §7 出现一次，另两份只引用不复制
+ *     （复制即制造第二个真值）。
  *
  * 明确不产出的文件:
  *   <out>/spec/decisions.md            人裁决留痕。本脚本只读它的存在性做交叉引用，
@@ -363,8 +372,15 @@ function stageS0() {
   slots.git = {
     repos: gitRepos,
     multiRepo: gitRepos.length > 1,
+    /* 嵌套仓 = 仓落在子目录而非顶层。多见于「基座是从上游 clone 来的」，带的就是上游的
+     * remote 与分支 —— 直接在其中提交会推到**别人的仓库**（高危）。
+     * 这里只报事实 + 风险提示，**不自动处置**：处置须先备份、先经人确认（已裁决口径）。 */
+    nested: gitRepos.filter((r) => r.path !== '(顶层)').map((r) => ({ path: r.path, branch: r.branch || null, origin: r.origin || null })),
+    hasTopLevel: gitRepos.some((r) => r.path === '(顶层)'),
     verdict: gitRepos.length === 0 ? '无 .git ⇒ S8 无可提交目标'
-      : (gitRepos.length === 1 ? '单仓' : '多仓 ⇒ S8 必须逐仓提交'),
+      : (gitRepos.length === 1
+        ? '单仓（落点 ' + gitRepos[0].path + (gitRepos[0].path === '(顶层)' ? '' : '，**非顶层**') + '）'
+        : '多仓 ' + gitRepos.length + ' ⇒ S8 必须逐仓提交'),
   };
   if (!gitRepos.length) {
     missing.push({ slot: '.git', level: 'required-for-S8', why: '全项目无 .git ⇒ S8 交付无落点' });
@@ -715,7 +731,7 @@ function buildGapsAndConflicts(s0, docSrc, protoSrc, feSrc, beSrc, aligned, env)
   return { gaps, conflicts };
 }
 
-function buildManifest(s0, srcStats, aligned, gaps, envelopes, env) {
+function buildManifest(s0, srcStats, aligned, gaps, envelopes, env, srcHashes) {
   return {
     generator: 's0-scan.cjs',
     version: '1.0.0',
@@ -736,6 +752,15 @@ function buildManifest(s0, srcStats, aligned, gaps, envelopes, env) {
        * 消费方（build-prototype.cjs、S2 冻结前的门禁）必须读 source，
        * 只认 declared 为真值；detected / default 一律按「待追认」处理。 */
       envelope: env,
+      /* 输入素材指纹：逐文件 sha256 的汇总（明细在 doc/REQUIREMENTS.draft.md §7）。
+       * 消费方可用 total + digest 判「素材是否变过」而不必读整篇文档。 */
+      sourceHashes: srcHashes
+        ? {
+            total: srcHashes.total,
+            digest: srcHashes.digest,
+            groups: srcHashes.groups.map((g) => ({ label: g.label, count: g.count, digest: g.digest })),
+          }
+        : null,
       gaps,
       gate: gaps.some((g) => g.severity === 'blocker') ? 'BLOCK' : 'PASS',
     },
@@ -818,13 +843,106 @@ function buildConflictsMd(s0, gaps, conflicts, aligned, now, stats) {
   return m;
 }
 
-function buildRequirementsMd(s0, aligned, gaps, now) {
+/* 单文件 sha256：读不出来就返回 null（不编哈希）。 */
+function sha256File(abs) {
+  try { return crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex'); }
+  catch (e) { return null; }
+}
+function sha256Text(s) {
+  return crypto.createHash('sha256').update(s).digest('hex');
+}
+
+/* 输入素材指纹：对本轮**实际被读取**的文件逐个 sha256，再按源分类汇总。
+ * 用途（设计文档 §13 第 3 条）：S4/S5 注入 prompt 时记下指纹 ⇒ 出问题能判「设计错了 / 代码没按设计写」。
+ * 注意：这是「输入素材」的指纹；本文档**自身的** sha256 无法自证（写入即改变），交给消费者算。 */
+function buildSourceHashes(s0, srcs) {
+  const groups = [];
+  const defs = [
+    { label: '① 需求文档', files: srcs.docSrc.scannedFiles },
+    { label: '② 原型 HTML/JS', files: srcs.protoSrc.scannedFiles },
+    { label: '③ 前端 api 封装', files: srcs.feSrc.scannedFiles },
+    { label: '④ 后端 controller', files: srcs.beSrc.scannedFiles },
+  ];
+  if (s0.projectJson.found) defs.push({ label: '⑤ 声明层', files: ['mvgo.project.json'] });
+
+  for (const d of defs) {
+    const rows = d.files.map((relPath) => {
+      const abs = path.join(ROOT, relPath);
+      let bytes = null;
+      try { bytes = fs.statSync(abs).size; } catch (e) { /* 读不到就留 null */ }
+      return { path: relPath, bytes: bytes, sha256: sha256File(abs) };
+    });
+    // 分类摘要：对「路径:sha256」排序后拼接再哈希 ⇒ 与逐文件表同源，不是另算一遍
+    const digest = sha256Text(rows.map((r) => r.path + ':' + (r.sha256 || 'NOHASH')).sort().join('\n'));
+    groups.push({ label: d.label, count: rows.length, digest: digest, files: rows });
+  }
+  const total = groups.reduce((a, g) => a + g.count, 0);
+  const digest = sha256Text(groups.map((g) => g.label + ':' + g.digest).join('\n'));
+  return { groups, total, digest };
+}
+
+/* JSON Pointer 转义：`~` → `~0`，`/` → `~1`（RFC 6901）。
+ * 端点总表里那一栏不是字段表，是指向契约的指针 —— 转义错了就是悬空引用。 */
+function jsonPtr(s) {
+  return String(s).replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+/* 从 java 文件路径推包名：`…/src/main/java/<pkg…>/X.java` ⇒ `<pkg…>`。
+ * 推不出来返回 null —— 不编。 */
+function javaPackage(relPath) {
+  const m = /\/src\/main\/java\/(.+)\/[^/]+\.java$/.exec('/' + relPath);
+  return m ? m[1].replace(/\//g, '.') : null;
+}
+
+/* 前/后端「文件盘面」：两份设计文档生成器的**唯一事实来源**。
+ * 只做「按路径特征分类」，不做语义判断 —— 分类要改就改这一处，
+ * 不让两份文档各自 walk 一遍、各自漏不同的文件（那会变成两个真值）。 */
+function buildInventory() {
+  const relAll = (dir, rx) => walk(dir, (f) => rx.test(f)).map(rel).sort();
+  const feRoot = path.join(ROOT, 'frontend');
+  const beRoot = path.join(ROOT, 'backend');
+  const javaFiles = relAll(beRoot, /\.java$/);
+
+  return {
+    fe: {
+      pages: relAll(path.join(ROOT, 'html'), /\.html?$/i),
+      routes: relAll(feRoot, /\/src\/router\/[^/]+\.(js|ts)$/),
+      apis: relAll(feRoot, /\/src\/api\/.*\.(js|ts)$/),
+      components: relAll(feRoot, /\/src\/(components|views|layouts)\/.*\.(vue|js|ts)$/),
+      store: relAll(feRoot, /\/src\/(store|stores)\/.*\.(js|ts)$/),
+      entry: relAll(feRoot, /\/src\/(main|App)\.(js|ts|vue)$/),
+      request: relAll(feRoot, /(request|axios|http)[^/]*\.(js|ts)$/),
+      guard: relAll(feRoot, /(permission|guard|auth)[^/]*\.(js|ts)$/),
+      configs: relAll(feRoot, /(vite\.config\.|package\.json$|\.env|\/src\/config\/)/),
+    },
+    be: {
+      java: javaFiles,
+      packages: [...new Set(javaFiles.map(javaPackage).filter(Boolean))].sort(),
+      controllers: javaFiles.filter((f) => /Controller\.java$/.test(f)),
+      services: javaFiles.filter((f) => /Service(Impl)?\.java$/.test(f)),
+      mappers: javaFiles.filter((f) => /Mapper\.java$/.test(f)),
+      entities: javaFiles.filter((f) => /(entity|domain|model)\//.test(f)),
+      configs: javaFiles.filter((f) => /(Config|Configuration)\.java$/.test(f)),
+      apps: javaFiles.filter((f) => /Application\.java$/.test(f)),
+      advice: javaFiles.filter((f) => /(Advice|Exception|ExceptionHandler|GlobalHandler)\.java$/.test(f)),
+      txFiles: javaFiles,   // 事务口径靠内容扫，见生成器
+      resources: relAll(beRoot, /\.(xml|yml|yaml|properties)$/),
+    },
+  };
+}
+
+function buildRequirementsMd(ctx) {
+  const { s0, aligned, gaps, now, srcHashes } = ctx;
   const docHasEndpoints = !gaps.some((g) => g.id === 'GAP-DOC-NO-ENDPOINT');
   let m = '# REQUIREMENTS.md —— 前后端需求唯一源（草稿 v0.1 · 自动生成）\n\n';
   m += '> 生成器 `s0-scan.cjs`｜' + now + '｜项目根 `' + ROOT + '`\n';
   m += '> **本文件是契约（OAS）的第 1 种视图，不是新真值。字段级真值只在契约里；本文只写 JSON Pointer 引用与落点。**\n\n';
+  m += '> **章节骨架已定死（7 章）**：① 系统概述 ② 功能点清单 ③ 端点总表 ④ 数据实体索引 ⑤ 外部系统与定时任务 ⑥ 已裁决冲突 ⑦ sourceHashes。\n';
+  m += '> 结构由扫描器产出、不随重跑变形；② 的语义描述由 S2 的 `requirements-writer` 在本骨架上回填。\n\n';
 
-  m += '## 0. 项目坑位（S0 识别结果）\n\n';
+  /* ---------------------------------------------------- ① 系统概述 --- */
+  m += '## 1. 系统概述\n\n';
+  m += '### 1.1 输入素材（S0 坑位识别结果）\n\n';
   m += '| 坑位 | 状态 | 依据 |\n|---|---|---|\n';
   m += '| `docs/**` | ' + (s0.docs.found ? '✅ ' + s0.docs.files.length + ' 个文件' : '🔴 缺失') + ' | 唯一必需项 |\n';
   m += '| `html/**` | ' + (s0.html.found ? '✅ ' + s0.html.pages.length + ' 页' : '🔴 缺失') + ' | ' + s0.html.featureHit + ' |\n';
@@ -832,17 +950,48 @@ function buildRequirementsMd(s0, aligned, gaps, now) {
   m += '| `backend/**` | ' + (s0.backend.found ? '✅ ' + s0.backend.verdict : '🔴 缺失') + ' | 特征：spring-boot |\n';
   m += '| `mvgo.project.json` | ' + (s0.projectJson.found ? '✅' : '🔴 缺失') + ' | 外链 / 口径 / 交付分支声明 |\n';
   m += '| `.git` | ' + (s0.git.repos.length ? '✅ ' + s0.git.verdict : '🔴 缺失') + ' | ' + s0.git.repos.map((r) => r.path).join('、') + ' |\n';
+  if (s0.git.nested.length) {
+    m += '\n> ⚠️ **嵌套仓警告**：' + s0.git.nested.length + ' 个 `.git` 落在子目录而非顶层 —— ';
+    for (const n of s0.git.nested) {
+      m += '`' + n.path + '`' + (n.branch ? '（分支 `' + n.branch + '`' : '') + (n.origin ? '，origin `' + n.origin + '`' : '') + '）';
+    }
+    m += '。\n> 常见成因：**基座是从上游 clone 来的**，带的就是上游的 remote 与分支 —— '
+      + '在其中直接提交会推到**别人的仓库**。按已裁决口径（见 §6）：删嵌套 `.git` 并纳管为上层仓的普通子目录，'
+      + '**处置前先整仓备份、先经人确认**，扫描器不自动执行。\n';
+  }
+  m += '\n> 业务语义概述（这个系统做什么）由 S2 的 `requirements-writer` 从 `docs/**` 抽取后回填本节 1.2。\n';
 
-  m += '\n## 1. 端点清单（' + aligned.list.length + ' 条）\n\n';
-  m += '> 置信度口径：`high` = ≥2 源交叉命中；`declared` = 仅需求文档声明；`partial` = 仅后端有实现；`candidate` = 仅原型/仅前端，**未交叉验证**。\n\n';
-  m += '| # | 路径 | 方法 | 来源 | 置信度 | 标记 | 字段落点 |\n|---|---|---|---|---|---|---|\n';
+  /* ------------------------------------------- ② 功能点清单（三锚点） --- */
+  m += '\n## 2. 功能点清单（每个功能点挂三锚点）\n\n';
+  m += '> 三锚点 = **文档段号 / 画板 nodeId / 端点**。下表由扫描器**机械**给出其中两个（文档命中位置、端点），'
+    + '画板 nodeId 需要 Figma 输入（本项目 ' + (s0.projectJson.found ? '见 `mvgo.project.json` 的 `links.figma`' : '未声明 `links.figma`')
+    + '）⇒ 留 `—` 待 S2 回填。**无锚点的功能点不得进入本节**。\n\n';
+  m += '| # | 功能点 | 文档锚点（file:line） | 画板锚点（nodeId） | 端点锚点 |\n|---|---|---|---|---|\n';
+  if (!aligned.list.length) {
+    m += '| — | *(空)* | — | — | — |\n';
+  } else {
+    aligned.list.forEach((e, i) => {
+      const d = (e.evidence.doc && e.evidence.doc[0]) || null;
+      m += '| ' + (i + 1) + ' | *(待 S2 命名)* | '
+        + (d ? '`' + d.file + ':' + d.line + '`' : '<span>—</span>') + ' | — | `' + e.path + '` |\n';
+    });
+  }
+  m += '\n> 功能点名称留白是**故意的**：扫描器不做语义摘要（那是 LLM 的活）。手写一个名字上来，'
+    + '就等于给「没读过文档的人」一个看似完整的假象。\n';
+
+  /* ---------------------------------------------------- ③ 端点总表 --- */
+  m += '\n## 3. 端点总表（' + aligned.list.length + ' 条）\n\n';
+  m += '> 置信度口径：`high` = ≥2 源交叉命中；`declared` = 仅需求文档声明；`partial` = 仅后端有实现；`candidate` = 仅原型/仅前端，**未交叉验证**。\n';
+  m += '> 「字段定义」一栏是 **JSON Pointer**（指向 `openapi.local.yaml`），不是字段表 —— 字段级真值只在契约里。\n\n';
+  m += '| # | 路径 | 方法 | 来源 | 置信度 | 标记 | 字段定义（JSON Pointer） |\n|---|---|---|---|---|---|---|\n';
   aligned.list.forEach((e, i) => {
     m += '| ' + (i + 1) + ' | `' + e.path + '` | ' + e.verb + ' | ' + e.sources.join('+') + ' | ' + e.confidence
-      + ' | ' + (e.flags.length ? e.flags.join('<br>') : '—') + ' | *(JSON Pointer 占位)* |\n';
+      + ' | ' + (e.flags.length ? e.flags.join('<br>') : '—')
+      + ' | `openapi.local.yaml#/paths/' + jsonPtr(e.path) + '` |\n';
   });
-  if (!aligned.list.length) m += '| — | *(空)* | — | — | — | 需先解决 GAP-DOC-NO-ENDPOINT | — |\n';
+  if (!aligned.list.length) m += '| — | *(空)* | — | — | — | — | — |\n';
 
-  m += '\n## 2. 端点来源缺口\n\n';
+  m += '\n### 3.1 端点来源缺口\n\n';
   if (docHasEndpoints) m += '- 需求文档提供了端点声明，主源正常。\n';
   else {
     m += '🔴 **需求文档未提供任何接口路径** —— 上表全部端点的 `sources` 均不含 `doc`。\n\n';
@@ -850,13 +999,375 @@ function buildRequirementsMd(s0, aligned, gaps, now) {
     m += '必须先由用户裁决（见 `spec/conflicts.md` 的 `CF-DOC-ZERO-ENDPOINT`）。\n';
   }
 
-  m += '\n## 3. 功能条目（待人工从文档补全）\n\n';
-  m += '> 扫描器不做语义摘要（那是 LLM 的活，S2 阶段由 `requirements-writer` role 生成）。本文件此节留空，等待角色回填。\n\n';
+  /* ------------------------------------------------ ④ 数据实体索引 --- */
+  m += '\n## 4. 数据实体索引\n\n';
+  m += '> 扫描器**不解析实体**（实体是从需求文档语义抽取出来的，属 S2 的 `contract-freezer`）。\n';
+  m += '> 本节留空是**如实**：填上任何实体名都是编的。S2 回填口径 = 实体名 → `openapi.local.yaml#/components/schemas/<Name>`。\n\n';
+  m += '| # | 实体 | 契约指针 | 出现于端点 |\n|---|---|---|---|\n';
+  m += '| — | *(S2 回填)* | — | — |\n';
 
-  m += '## 4. 待裁决冲突\n\n';
-  m += '见 `spec/conflicts.md`。本文件不复制冲突内容，避免两处真值。\n';
+  /* ------------------------------------- ⑤ 外部系统与定时任务 --- */
+  m += '\n## 5. 外部系统与定时任务\n\n';
+  const links = (s0.projectJson.content && !s0.projectJson.content.__parseError
+    && s0.projectJson.content.links) || null;
+  m += '### 5.1 外部系统（声明层）\n\n';
+  m += '| 外链 | 状态 |\n|---|---|\n';
+  m += '| Figma | ' + (links && links.figma ? '✅ `' + links.figma + '`' : '🔴 未声明') + ' |\n';
+  m += '| Apifox | ' + (links && links.apifox ? '✅ `' + links.apifox + '`' : '🔴 未声明') + ' |\n';
+  if (!s0.projectJson.found || !links || (!links.figma && !links.apifox)) {
+    m += '\n> 未声明不等于没有：**扫描器只报事实，不替你填**。按已裁决口径（见 §6），无 Apifox 时先出本地 mock，后期对接。\n';
+  }
+  m += '\n### 5.2 定时任务 / 调度器（由后端文件特征派生）\n\n';
+  const schedRx = /(xxl|xxljob|quartz|schedul|\bcron\b|\bjob\b|\btask\b)/i;
+  const schedFiles = walk(ROOT, (x) => /\.(java|xml|yml|yaml|properties)$/i.test(x))
+    .map((x) => rel(x))
+    .filter((r) => /^backend\//.test(r) && schedRx.test(path.basename(r)))
+    .sort();
+  if (schedFiles.length) {
+    m += '发现 ' + schedFiles.length + ' 个疑似调度器文件（**文件名特征命中**，未读内容判定）：\n\n';
+    for (const f of schedFiles) m += '- `' + f + '`\n';
+    m += '\n> 「本期要不要加任务」属需求裁决，不在本节结论内。\n';
+  } else {
+    m += '后端未见调度器特征文件（`xxl` / `quartz` / `schedul` / `cron` / `job` / `task` 文件名特征）。\n';
+  }
+
+  /* ------------------------------------------------ ⑥ 已裁决冲突 --- */
+  m += '\n## 6. 已裁决冲突\n\n';
+  const decPath = path.join(OUT, 'spec', 'decisions.md');
+  if (fs.existsSync(decPath)) {
+    const buf = fs.readFileSync(decPath);
+    m += '- 裁决台账：`spec/decisions.md`（**已存在**，' + buf.length + ' B，md5 `'
+      + crypto.createHash('md5').update(buf).digest('hex') + '`）。\n';
+  } else {
+    m += '- 裁决台账：`spec/decisions.md` **尚未落盘** ⇒ 冲突全部待裁决。\n';
+  }
+  m += '- 待裁决冲突的**扫描快照**在 `spec/conflicts.md`（每次重跑整篇重写）。\n';
+  m += '- **本文不复制裁决内容**：复制即制造第二个真值。要看裁决，读 `decisions.md`。\n';
+
+  /* -------------------------------------------------- ⑦ sourceHashes --- */
+  m += '\n## 7. 输入素材指纹（sourceHashes）\n\n';
+  m += '> 对本轮**实际被读取**的每个输入文件逐个 sha256。S4/S5 注入 prompt 时记下这些指纹 ⇒ '
+    + '出问题能判「是设计错了，还是代码没按设计写」。\n';
+  m += '> ⚠️ **本文档自身的 sha256 不在这里** —— 自指哈希无法自证（写入即改变自身哈希），由消费者在注入前计算并记录。\n\n';
+  m += '### 7.1 分类摘要\n\n';
+  m += '| 源 | 文件数 | 分类 sha256（对「路径:文件sha256」排序拼接后再哈希） |\n|---|---|---|\n';
+  for (const g of srcHashes.groups) m += '| ' + g.label + ' | ' + g.count + ' | `' + g.digest + '` |\n';
+  m += '| **合计** | **' + srcHashes.total + '** | `' + srcHashes.digest + '` |\n';
+
+  m += '\n### 7.2 逐文件\n\n';
+  m += '| 源 | 路径 | 字节 | sha256 |\n|---|---|---|---|\n';
+  for (const g of srcHashes.groups) {
+    for (const r of g.files) {
+      m += '| ' + g.label + ' | `' + r.path + '` | ' + (r.bytes === null ? '?' : r.bytes)
+        + ' | ' + (r.sha256 ? '`' + r.sha256 + '`' : '*(读失败)*') + ' |\n';
+    }
+  }
+
+  m += '\n---\n\n';
+  m += '复现：`node outputs/s0-scan.cjs ' + ROOT + ' --out ' + OUT + '`（**只读输入目录**，退出码 1 = 存在 blocker）。\n';
   return m;
 }
+
+
+/* ====================================================================== *
+ * FRONTEND-DESIGN.md —— 5 章骨架
+ * 同一准绳：**扫描器只出事实，设计留白**。本文件在 S0 阶段是「基座盘面 +
+ * 待回填位」；S4 的 frontend-designer 回填后去掉 `.draft` 后缀。
+ * ====================================================================== */
+function buildFrontendDesignMd(ctx) {
+  const { now, inv, s0, aligned } = ctx;
+  const F = inv.fe;
+  let m = '# FRONTEND-DESIGN.md —— 前端设计（草稿 v0.1 · S0 骨架）\n\n';
+  m += '> 生成器 `s0-scan.cjs`｜' + now + '｜项目根 `' + ROOT + '`\n';
+  m += '> **当前形态 = S0 骨架**：5 章结构由扫描器钉死，**事实**（基座现有文件）已填，'
+    + '**设计**（目标页面 / 组件 / 落点）留白 —— 由 S4 的 `frontend-designer` 回填，回填后去掉 `.draft`。\n';
+  m += '> **字段级真值只在契约（`openapi.local.yaml`）里**，本文只写 JSON Pointer 引用与落点。\n';
+  m += '> 素材指纹见 `REQUIREMENTS.draft.md` §7 —— 同一轮扫描同一份指纹，此处**不复制**（复制即第二个真值）。\n\n';
+
+  /* -------------------------------------------------- ① 页面清单 ↔ 路由表 --- */
+  m += '## 1. 页面清单 ↔ 路由表\n\n';
+  m += '### 1.1 原型侧页面（事实）\n\n';
+  if (F.pages.length) {
+    m += '| # | 原型页面 | 字节 |\n|---|---|---|\n';
+    for (let i = 0; i < F.pages.length; i++) {
+      const abs = path.join(ROOT, F.pages[i]);
+      let b = '?';
+      try { b = fs.statSync(abs).size; } catch (e) { /* 读不到留 ? */ }
+      m += '| ' + (i + 1) + ' | `' + F.pages[i] + '` | ' + b + ' |\n';
+    }
+  } else {
+    m += '*(无 `html/**` 页面 ⇒ 无视觉锚点)*\n';
+  }
+
+  m += '\n### 1.2 基座侧现有路由（事实）\n\n';
+  if (F.routes.length) {
+    m += '| # | 路由文件 | 字节 |\n|---|---|---|\n';
+    F.routes.forEach((r, i) => {
+      let b = '?';
+      try { b = fs.statSync(path.join(ROOT, r)).size; } catch (e) { /* 读不到留 ? */ }
+      m += '| ' + (i + 1) + ' | `' + r + '` | ' + b + ' |\n';
+    });
+    /* 装配线索：把路由相关文件里**含 router/routes 关键字**的行原样列出。
+     * 为什么给原文而不是「已注册/未注册」的布尔判断：布尔值是扫描器的**结论**，
+     * 而扫描器读不懂「`import './router'` 其实注册了 index.js」这种目录导入
+     * ⇒ 布尔判断会给出假否定。原文不会骗人，S4 自己读一眼就够。 */
+    const clues = [];
+    const routeRx = /\b(createRouter|createWebHistory|createWebHashHistory|router\.|routes\s*[:=]|\broutes\b)/;
+    for (const r of F.routes.concat(F.entry)) {
+      const abs = path.join(ROOT, r);
+      let lines;
+      try { lines = read(abs).split('\n'); } catch (e) { continue; }
+      for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (!t || t.startsWith('//') || t.startsWith('*')) continue;
+        if (routeRx.test(t)) clues.push({ file: r, line: i + 1, text: t });
+      }
+    }
+    m += '\n**路由装配线索（原文，未做解释）**\n\n';
+    if (clues.length) {
+      m += '| 位置 | 原文 |\n|---|---|\n';
+      for (const c of clues.slice(0, 30)) {
+        m += '| `' + c.file + ':' + c.line + '` | `' + c.text.replace(/\|/g, '\\|').slice(0, 160) + '` |\n';
+      }
+      if (clues.length > 30) m += '| ... | *（另有 ' + (clues.length - 30) + ' 行，见源文件）* |\n';
+    } else {
+      m += '*(未见 `createRouter` / `routes` 等装配关键字 ⇒ 基座可能未装配路由，或装配方式不在上述文件里)*\n';
+    }
+  } else {
+    m += '*(基座未见 `src/router/**` ⇒ 需 S4 建立路由层)*\n';
+  }
+
+  m += '\n### 1.3 映射（**留白，S4 回填**）\n\n';
+  m += '> 原型页面名 ≠ 路由 path ≠ 组件文件名 —— 三者之间是**设计决策**，不是字符串变换。'
+    + '自动映射出来的东西看着像结论，实际是猜的，所以这里留空。\n\n';
+  m += '| # | 原型页面 | 目标路由 path | 目标组件文件 | 备注 |\n|---|---|---|---|---|\n';
+  if (F.pages.length) {
+    for (let i = 0; i < F.pages.length; i++) m += '| ' + (i + 1) + ' | `' + path.basename(F.pages[i]) + '` | *(S4 定)* | *(S4 定)* | |\n';
+  } else {
+    m += '| — | *(空)* | — | — | — |\n';
+  }
+  m += '\n> 回填完成后，本节每个 path 必须与 S4 实际写入的路由表**逐字一致**；不一致即视为设计漂移。\n';
+
+  /* -------------------------------------------------- ② 组件树（文件级） --- */
+  m += '\n## 2. 组件树（只到文件级）\n\n';
+  m += '### 2.1 基座现有组件（事实 · 供判断「复用 or 新建」）\n\n';
+  if (F.components.length) {
+    const bucket = { components: [], views: [], layouts: [] };
+    for (const c of F.components) {
+      if (/\/src\/views\//.test(c)) bucket.views.push(c);
+      else if (/\/src\/layouts\//.test(c)) bucket.layouts.push(c);
+      else bucket.components.push(c);
+    }
+    for (const k of ['components', 'views', 'layouts']) {
+      m += '**`src/' + k + '/`（' + bucket[k].length + '）**\n\n';
+      if (bucket[k].length) { for (const c of bucket[k]) m += '- `' + c + '`\n'; }
+      else m += '- *(无)*\n';
+      m += '\n';
+    }
+  } else {
+    m += '*(基座未见 `src/components|views|layouts/**` ⇒ S4 组件全新建)*\n\n';
+  }
+  m += '### 2.2 目标组件树（**留白，S4 回填**）\n\n';
+  m += '> 骨架只到**文件级**（`路径 → 职责一句话`），不到 props / 事件级 —— 那是代码的事，写在设计文档里必然与代码漂移。\n\n';
+  m += '| 文件 | 职责 | 复用自 |\n|---|---|---|\n';
+  m += '| *(S4 回填)* | — | — |\n';
+
+  /* -------------------------------------------------------- ③ api 层组织 --- */
+  m += '\n## 3. api 层组织\n\n';
+  m += '### 3.1 基座现有 api 文件（事实）\n\n';
+  m += F.apis.length ? F.apis.map((a) => '- `' + a + '`').join('\n') + '\n' : '*(基座未见 `src/api/**` ⇒ S4 新建 api 层)*\n';
+  if (F.store.length) {
+    m += '\n**状态层（事实）**：' + F.store.map((s) => '`' + s + '`').join('、') + '\n';
+  }
+
+  m += '\n### 3.2 端点 → api 落点（**待 S4 定名**）\n\n';
+  m += '> 端点清单来自 S1（' + aligned.list.length + ' 条）。**「建议文件」一栏是待填位，不是建议值** —— '
+    + '扫描器不知道你们的 api 层是按模块分文件还是按页面分文件。\n\n';
+  m += '| # | 端点 | 方法 | 置信度 | 建议 api 文件（S4 定） | 契约指针 |\n|---|---|---|---|---|---|\n';
+  if (aligned.list.length) {
+    aligned.list.forEach((e, i) => {
+      m += '| ' + (i + 1) + ' | `' + e.path + '` | ' + e.verb + ' | ' + e.confidence
+        + ' | *(S4 定)* | `openapi.local.yaml#/paths/' + jsonPtr(e.path) + '` |\n';
+    });
+  } else {
+    m += '| — | *(空)* | — | — | — | — |\n';
+  }
+
+  m += '\n### 3.3 请求封装（事实 · 基座接入点）\n\n';
+  if (F.request.length) {
+    for (const r of F.request) m += '- `' + r + '` —— 统一请求封装候选（文件名特征命中，**未读内容判定**）\n';
+  } else {
+    m += '*(基座未见 `request*.js` / `axios*.js` ⇒ S4 需自建请求封装，或确认基座用的是别的名字)*\n';
+  }
+
+  /* ------------------------------------------------------ ④ 基座接入点 --- */
+  m += '\n## 4. 基座接入点（改哪个文件）\n\n';
+  m += '> 本节是**事实清单**：这些文件按「文件名特征」被识别为可能的接入点，每条都给了判据。'
+    + '「是否必然改动」一栏是判断，S4 若不同意须写明理由并改本表。\n\n';
+  m += '| 角色 | 文件 | 判据（短标签） | 是否必然改动 |\n|---|---|---|---|\n';
+  const rows = [];
+  for (const e of F.entry) rows.push(['应用入口', e, '文件名 `main.*` / `App.vue`', '必然']);
+  for (const r of F.routes) rows.push(['路由注册', r, '路径 `src/router/**`', '必然']);
+  for (const p of F.guard) rows.push(['路由守卫 / 鉴权', p, '文件名 `permission` / `guard` / `auth`', '视鉴权需求']);
+  for (const r of F.request) rows.push(['请求封装 / 拦截器', r, '文件名 `request` / `axios` / `http`', '必然（信封口径要落这里）']);
+  for (const c of F.configs) rows.push(['构建 / 环境配置', c, '文件名 `vite.config` / `package.json` / `.env*` / `src/config/**`', '视代理与环境变量']);
+  if (rows.length) { for (const r of rows) m += '| ' + r[0] + ' | `' + r[1] + '` | ' + r[2] + ' | ' + r[3] + ' |\n'; }
+  else m += '| — | *(基座未见可识别接入点)* | — | — |\n';
+  m += '\n> ⚠️ **信封口径必须落在「请求封装」这一层**，不要在每个 api 文件里各写一遍 —— '
+    + '那是 12 处一致性问题，会变成 12 个真值。\n';
+
+  /* --------------------------------------------------- ⑤ 枚举值引用 --- */
+  m += '\n## 5. 枚举值引用（指向契约）\n\n';
+  m += '> 扫描器**不解析枚举**（枚举是从需求文档语义抽取的，属 S2 的 `contract-freezer`）。\n';
+  m += '> 本节留空是**如实**：填上任何枚举名都是编的。S4 回填口径 = 枚举名 → `openapi.local.yaml#/components/schemas/<Name>`，'
+    + '并标明前端从哪里读（常量文件 / 契约生成）。\n\n';
+  m += '| # | 枚举 | 契约指针 | 前端读取位置 |\n|---|---|---|---|\n';
+  m += '| — | *(S4 回填)* | — | — |\n';
+
+  const gate = s0.frontend.found ? '' : '\n> 🔴 **基座前端缺失**（`frontend/` 无 package.json）⇒ 本文件全部落点无宿主，S4 无法开工。\n';
+  m += gate;
+  m += '\n---\n\n复现：`node outputs/s0-scan.cjs ' + ROOT + ' --out ' + OUT + '`\n';
+  return m;
+}
+
+
+/* ====================================================================== *
+ * BACKEND-DESIGN.md —— 5 章骨架（同准绳：事实填、设计留白）
+ * ====================================================================== */
+function buildBackendDesignMd(ctx) {
+  const { now, inv, s0, aligned } = ctx;
+  const B = inv.be;
+  let m = '# BACKEND-DESIGN.md —— 后端设计（草稿 v0.1 · S0 骨架）\n\n';
+  m += '> 生成器 `s0-scan.cjs`｜' + now + '｜项目根 `' + ROOT + '`\n';
+  m += '> **当前形态 = S0 骨架**：5 章结构由扫描器钉死，**事实**（基座现有包 / 类 / 配置）已填，'
+    + '**设计**（表结构 / 落点 / 事务口径）留白 —— 由 S5 的 `backend-engineer` 回填（表结构源头在 S2 的 `contract-freezer`），'
+    + '回填后去掉 `.draft`。\n';
+  m += '> **字段级真值只在契约（`openapi.local.yaml`）里**，本文只写 JSON Pointer 引用与落点。\n';
+  m += '> 素材指纹见 `REQUIREMENTS.draft.md` §7 —— 同一轮扫描同一份指纹，此处**不复制**。\n\n';
+  m += '> **本期技术栈口径：只做 Java（Spring Boot）** —— 由已裁决项确定。非 Java 基座不纳入本文件。\n\n';
+
+  /* ------------------------------------------------------------ ① 包结构 --- */
+  m += '## 1. 包结构\n\n';
+  m += '### 1.1 基座现有包（事实 · 由 java 文件路径派生）\n\n';
+  if (B.packages.length) {
+    for (const p of B.packages) m += '- `' + p + '`\n';
+  } else {
+    m += '*(基座未见 `src/main/java` 下的 java 文件 ⇒ S5 全新建包结构)*\n';
+  }
+
+  m += '\n### 1.2 分层归类（事实）\n\n';
+  m += '| 层 | 文件数 | 文件 |\n|---|---|---|\n';
+  const layerRows = [
+    ['启动类', B.apps], ['Controller', B.controllers], ['Service', B.services],
+    ['Mapper', B.mappers], ['Entity / Domain', B.entities], ['Config', B.configs],
+    ['异常 / 全局处理', B.advice],
+  ];
+  for (const [name, list] of layerRows) {
+    m += '| ' + name + ' | ' + list.length + ' | '
+      + (list.length ? list.map((x) => '`' + path.basename(x) + '`').join(' ') : '—') + ' |\n';
+  }
+
+  m += '\n### 1.3 建议新增包（**留白，S5 回填**）\n\n';
+  m += '> 新增包的命名要跟基座已有风格一致（上表就是风格事实）。包名一旦定下就写进这里，别在代码里另起一套。\n\n';
+  m += '| 包 | 职责 |\n|---|---|\n';
+  m += '| *(S5 回填)* | — |\n';
+
+  /* -------------------------------------------------------- ② 表结构 DDL --- */
+  m += '\n## 2. 表结构 DDL\n\n';
+  m += '> 表结构是**契约（实体）的投影**，源头在 S2 的 `contract-freezer`。扫描器不解析需求文档里的字段语义 ⇒ 本节留空是**如实**。\n';
+  m += '> S2 交付物应为 `ddl/*.sql`（可重复执行：`CREATE TABLE IF NOT EXISTS` + 索引显式命名），本节只写「表 → 契约指针」的索引。\n\n';
+  m += '> ⚠️ **禁止由后端工程师凭空设计表结构** —— 那会让 DDL 与契约各说一套。\n\n';
+  m += '| # | 表名 | 契约指针 | DDL 文件 |\n|---|---|---|---|\n';
+  m += '| — | *(S2 回填)* | — | — |\n';
+
+  /* ------------------------------- ③ entity/service/controller 落点 --- */
+  m += '\n## 3. entity / service / controller 落点\n\n';
+  m += '### 3.1 基座现有 Controller（事实）\n\n';
+  if (B.controllers.length) {
+    m += '| Controller | 抽到的端点数 |\n|---|---|\n';
+    for (const c of B.controllers) {
+      const n = (ctx.beSrc ? ctx.beSrc.api : []).filter((x) => x.file === c).length;
+      m += '| `' + c + '` | ' + n + ' |\n';
+    }
+    m += '\n> 端点明细（含行号与原文）见 `spec/endpoints.json` 的 `fullEvidence.backend`。\n';
+  } else {
+    m += '*(基座未见 `*Controller.java` ⇒ S5 全新建 controller 层)*\n';
+  }
+
+  m += '\n### 3.2 端点 → 落点（**待 S5 回填**）\n\n';
+  m += '> **置信度一栏直接决定落点策略**：`partial`（仅后端有实现）= 基座已存在，S5 是**改造**；'
+    + '`candidate`（仅原型/仅前端）= 后端全无，S5 是**新建**。两者工作量与风险不同，不得混在一张待办里。\n\n';
+  m += '| # | 端点 | 方法 | 置信度 | Controller | Service | Entity | 类型 |\n|---|---|---|---|---|---|---|---|\n';
+  if (aligned.list.length) {
+    aligned.list.forEach((e, i) => {
+      const kind = e.confidence === 'partial' ? '改造' : (e.confidence === 'candidate' ? '新建' : '待定');
+      m += '| ' + (i + 1) + ' | `' + e.path + '` | ' + e.verb + ' | ' + e.confidence
+        + ' | *(S5 定)* | *(S5 定)* | *(S5 定)* | ' + kind + ' |\n';
+    });
+  } else {
+    m += '| — | *(空)* | — | — | — | — | — | — |\n';
+  }
+  m += '\n> 每个端点必须回填到「契约 `paths` 里的 operationId / 落点类名」两处，缺一不可 —— '
+    + '只有类名没契约指针，等于没接进契约体系。\n';
+
+  /* -------------------------------------------------------- ④ 基座接入点 --- */
+  m += '\n## 4. 基座接入点（改哪个文件）\n\n';
+  m += '| 角色 | 文件 | 判据 | 是否必然改动 |\n|---|---|---|---|\n';
+  const brows = [];
+  for (const a of B.apps) brows.push(['启动类', a, '文件名 `*Application.java`', '否（新增依赖时）']);
+  for (const c of B.configs) brows.push(['配置类', c, '文件名 `*Config*.java`', '视数据源 / 拦截器 / 序列化']);
+  for (const x of B.advice) brows.push(['异常 / 全局处理', x, '文件名特征 `Advice` / `Exception` / `Handler`', '必然（信封口径要落这里）']);
+  for (const r of B.resources) {
+    if (/(application|bootstrap)[^/]*\.(yml|yaml|properties)$/.test(path.basename(r))) brows.push(['应用配置', r, '文件名特征 `application.*` / `bootstrap.*`', '视数据源与外部系统']);
+    else if (/\/mapper\/.*\.xml$/.test(r) || /mybatis/.test(r)) brows.push(['MyBatis 映射', r, '路径/文件名特征 `mapper/**` / `mybatis`', '必然（新增 Mapper 时）']);
+  }
+  if (brows.length) { for (const r of brows) m += '| ' + r[0] + ' | `' + r[1] + '` | ' + r[2] + ' | ' + r[3] + ' |\n'; }
+  else m += '| — | *(基座未见可识别接入点)* | — | — |\n';
+  if (!B.advice.length) {
+    m += '\n> 🔴 **基座无异常 / 全局处理类**（未见 `*Advice*` / `*Exception*` / `*Handler*.java`）⇒ '
+      + '信封口径**无既有宿主**，必须新建一个（`@RestControllerAdvice` + 统一返回体），'
+      + '而不是散在各个 Controller 里。这条是结论、有判据，S5 若不同意须给出反例文件。\n';
+  }
+  m += '\n> ⚠️ **信封口径必须落在「异常 / 全局处理」这一层**（`@ControllerAdvice` / 统一返回体），'
+    + '不要每个 Controller 各包一次。当前口径见 `spec/project.manifest.json` 的 `S1.envelope`。\n';
+
+  /* ---------------------------------------------------- ⑤ 事务与异常口径 --- */
+  m += '\n## 5. 事务与异常口径\n\n';
+  m += '### 5.1 基座现有事实（内容特征扫，非文件名）\n\n';
+  let txHits = 0, advHits = 0;
+  for (const f of B.java) {
+    let txt = '';
+    try { txt = read(path.join(ROOT, f)); } catch (e) { continue; }
+    if (/@Transactional\b/.test(txt)) txHits++;
+    if (/@ControllerAdvice|@RestControllerAdvice|@ExceptionHandler/.test(txt)) advHits++;
+  }
+  m += '| 特征 | 命中文件数 | 说明 |\n|---|---|---|\n';
+  /* 说明栏必须随命中数改口 —— 命中 0 还写「基座已有…」是自相矛盾（文案与事实打架）。 */
+  m += '| `@Transactional` | ' + txHits + ' | '
+    + (txHits ? '基座已有事务注解用法；新代码须与之同口径（注解位置 / 回滚规则）'
+      : '**基座无既有事务口径** ⇒ 新代码的事务边界与回滚规则需先裁决') + ' |\n';
+  m += '| `@ControllerAdvice` / `@ExceptionHandler` | ' + advHits + ' | '
+    + (advHits ? '基座已有全局异常处理；**新代码禁止另起一套**'
+      : '**基座无全局异常处理** ⇒ 信封口径要新建宿主，禁止各 Controller 自包') + ' |\n';
+  if (txHits === 0 || advHits === 0) {
+    m += '\n> 🔴 命中为 0 的那一项意味着基座没有既有口径 ⇒ 该口径需由人裁决后写入 `spec/decisions.md`，'
+      + '不得由 S5 自作主张（两个工程师会写出两套）。\n';
+  }
+
+  m += '\n### 5.2 新代码口径（**留白，人裁决 + S5 回填**）\n\n';
+  m += '| 项 | 口径 | 依据 |\n|---|---|---|\n';
+  m += '| 事务边界 | *(待定)* | — |\n';
+  m += '| 回滚规则 | *(待定)* | — |\n';
+  m += '| 异常 → 信封映射 | *(待定)* | 须与 `S1.envelope.source` 一致：'
+    + (ctx.env ? '`' + ctx.env.source + '`' + (ctx.env.confirmed ? '（已证实）' : '（**待追认**，追认前不得据此写死）') : '(未解析)') + ' |\n';
+  m += '\n> 本节的每一条定下来后，都应有一条对应的可执行断言（否则口径只活在文档里）。\n';
+
+  const gate = s0.backend.found ? '' : '\n> 🔴 **基座后端缺失**（`backend/` 无 pom.xml）⇒ 本文件全部落点无宿主，S5 无法开工。\n';
+  m += gate;
+  m += '\n---\n\n复现：`node outputs/s0-scan.cjs ' + ROOT + ' --out ' + OUT + '`\n';
+  return m;
+}
+
 
 function main() {
   const t0 = Date.now();
@@ -881,7 +1392,11 @@ function main() {
     backend: { files: beSrc.scannedFiles, endpoints: beSrc.api.length },
   };
 
-  const manifest = buildManifest(s0, srcStats, aligned, gaps, envelopeShapes, env);
+  const srcHashes = buildSourceHashes(s0, { docSrc, protoSrc, feSrc, beSrc });
+  // 前后端「文件盘面」：两份设计文档生成器的唯一事实来源（一次 walk，两个消费者）
+  const inv = buildInventory();
+
+  const manifest = buildManifest(s0, srcStats, aligned, gaps, envelopeShapes, env, srcHashes);
   const post = snapshotTree(ROOT);   // ← 只读自证的「后」
   const readOnly = diffSnapshots(pre, post);
   manifest.S0.footprint = {
@@ -935,7 +1450,12 @@ function main() {
   fs.writeFileSync(path.join(OUT, 'spec', 'project.manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   fs.writeFileSync(path.join(OUT, 'spec', 'endpoints.json'), JSON.stringify(endpointsJson, null, 2) + '\n');
   fs.writeFileSync(path.join(OUT, 'spec', 'conflicts.md'), buildConflictsMd(s0, gaps, conflicts, aligned, now, stats));
-  fs.writeFileSync(path.join(OUT, 'doc', 'REQUIREMENTS.draft.md'), buildRequirementsMd(s0, aligned, gaps, now));
+  fs.writeFileSync(path.join(OUT, 'doc', 'REQUIREMENTS.draft.md'),
+    buildRequirementsMd({ s0, aligned, gaps, now, srcHashes }));
+  fs.writeFileSync(path.join(OUT, 'doc', 'FRONTEND-DESIGN.draft.md'),
+    buildFrontendDesignMd({ s0, aligned, now, inv }));
+  fs.writeFileSync(path.join(OUT, 'doc', 'BACKEND-DESIGN.draft.md'),
+    buildBackendDesignMd({ s0, aligned, now, inv, env, beSrc }));
 
   /* ---------------------------- stdout 摘要 ---------------------------- */
   const L = [];
@@ -977,6 +1497,8 @@ function main() {
   L.push('  ' + path.join(OUT, 'spec', 'endpoints.json'));
   L.push('  ' + path.join(OUT, 'spec', 'conflicts.md'));
   L.push('  ' + path.join(OUT, 'doc', 'REQUIREMENTS.draft.md'));
+  L.push('  ' + path.join(OUT, 'doc', 'FRONTEND-DESIGN.draft.md'));
+  L.push('  ' + path.join(OUT, 'doc', 'BACKEND-DESIGN.draft.md'));
   console.log(L.join('\n'));
 
   process.exit(gaps.some((g) => g.severity === 'blocker') ? 1 : 0);
