@@ -20,6 +20,7 @@
  */
 
 import { Graph } from './graph.js';
+import { resolveResourceDomMapping } from '../utils/resource-mapping-resolver.js';
 import { FigmaConnector } from '../roles/figma-connector.js';
 import { VisualParser } from '../roles/visual-parser.js';
 import { LayoutReviewer } from '../roles/layout-reviewer.js';
@@ -480,6 +481,8 @@ function buildNodeHandler(node, { onProgress, onNodeSnapshot, nodeMap }) {
         subHandlers.map(async (h) => {
           try {
             const role = await instantiateRole(h, state);
+            // 🛡️ R3-legacy：并行子节点可能是精修角色，同样补背景真值锚
+            resolveResourceDomMapping(state);
             const r = await role.execute(state);
             return { handler: h, ok: true, result: r || {} };
           } catch (e) {
@@ -531,6 +534,9 @@ function buildNodeHandler(node, { onProgress, onNodeSnapshot, nodeMap }) {
         status: 'running',
       });
       // 透传 state 供 role.execute 解构所需字段
+      // 🛡️ R3-legacy（2026-11-05）：续跑态把背景真值锚写回 state，精修白名单据此生效
+      // （角色从 execute 入参读，不是从 roleCfg 读）；解析不到时是 no-op。
+      resolveResourceDomMapping(state);
       const result = await role.execute(state);
       // 汇报完成
       onProgress?.({

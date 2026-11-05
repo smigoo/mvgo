@@ -1991,9 +1991,30 @@ export class CodeStructureValidator {
 
           const offenders = [];
           const tolerant = [];
+          // 🛡️ 刀B 兜底（RES-URL-UNDECLARED，2026-11-05 · c-env-monitor-c324a730 实锤）：
+          //   原逻辑 `!resourceFileNames.has(fname) → continue` 对「非已下载资源」零拦截 ——
+          //   mc-preview.png（/workspace/ 预览截图，prompt 高频分析输入 token）被 LLM 当
+          //   资源写进 CSS 后一路放行，且运行时真能加载 ⇒ 幻觉可见。上游 C10 守卫
+          //   （resource-url-guard）会换真值/剥声明，这里是第二道防线：凡漏网的
+          //   「非白名单 + 本地路径直写」一律 BLOCK。变量引用/data:URI/外链不属此类。
+          const undeclaredOffenders = [];
           for (const hit of this._scanStyleResourceUrls(styleContent)) {
             const fname = String(hit.url).split('/').pop();
-            if (!resourceFileNames.has(fname)) continue;
+            if (!resourceFileNames.has(fname)) {
+              const isVarRef =
+                /^\s*(?:\$\{[^}]*\}|[@$]\{[\w-]+\}|[@$][\w-]+|--[\w-]+)\s*$/.test(
+                  hit.url,
+                );
+              const isDataUri = /^data:/i.test(hit.url);
+              const isExternal = /^(?:https?:)?\/\//i.test(hit.url);
+              if (!isVarRef && !isDataUri && !isExternal) {
+                undeclaredOffenders.push({
+                  fname,
+                  selector: hit.selector || '(变量定义)',
+                });
+              }
+              continue;
+            }
             const meta = legalMountByFile.get(fname);
             const legal =
               hit.kind === 'less-var-decl' ||
@@ -2057,6 +2078,21 @@ export class CodeStructureValidator {
               severity: 'WARN',
               file: filePath,
               message: `样式块在根容器/变量定义处直写了资源路径（${uniq.slice(0, 3).join('、')}）。属合法兜底挂载，但请确认相对路径正确（resources/styles/*.less 应为 ../images/x；resources/styles/themes/*.less 应为 ../../images/x）`,
+            });
+          }
+          // 🛡️ 刀B 兜底出口（RES-URL-UNDECLARED，BLOCK）：mc-preview 类幻觉 URL
+          if (undeclaredOffenders.length > 0) {
+            const uniq = [
+              ...new Set(undeclaredOffenders.map((o) => o.fname)),
+            ];
+            const at = [
+              ...new Set(undeclaredOffenders.map((o) => o.selector)),
+            ].slice(0, 3);
+            issues.push({
+              id: 'RES-URL-UNDECLARED',
+              severity: 'BLOCK',
+              file: filePath,
+              message: `样式块直写了不在已下载资源清单中的路径（${uniq.slice(0, 3).join('、')}，位于 ${at.join('、')}）。预览图/截图（mc-preview.png 等）只是分析输入、**不是资源**：请删除该 url() 声明（宁留白不出错图），或改用清单内资源（../resources/images/…）的 import 变量绑定`,
             });
           }
         }

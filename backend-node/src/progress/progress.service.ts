@@ -47,6 +47,13 @@ export class ProgressService {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    // 🔧 2026-11-05 生产实锤（mc-max-1793758028293-456e4f3d，11-04 反馈「SSE 全程无更新」）：
+    // 此前未禁用 Nginx 代理缓冲（默认 proxy_buffering on）——事件（含 5s 心跳）全部攒在
+    // Nginx 缓冲区，客户端一个字节都收不到，页面永远停在 running；刷新才看到已完成。
+    // X-Accel-Buffering: no 让 Nginx 逐事件直透；flushHeaders 立即把响应头推给客户端，
+    // 避免 EventSource 因迟迟收不到头而停在 connecting。
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
 
     // 检查是否是重连
     const existingTask = this.tasksService.getTask(sessionId);

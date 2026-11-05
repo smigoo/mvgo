@@ -55,18 +55,83 @@ const CONFLICT_ATTRS = new Set([
   'box-shadow',
 ]);
 
+// var(--name[, fallback]) 收敛为 var(name)，**括号配平**扫描。
+// 🔴 2026-11-04 治本修正（原实现是假阳性大户）：旧写法 `/var\((--[\w-]+)[^)]*\)/` 的 `[^)]*`
+//   会在**内层右括号**提前收口。LESS 侧真机原文 `calc(var(--fontSize, var(--fontSize)) * 0.714)`
+//   （嵌套 fallback，common.less:97）被归一成 `calc(var(fontsize)) * 0.714)` —— 多一个 ')' 且把
+//   calc 的括号结构打断；而 SFC 侧 `calc(var(--fontSize, 14px) * 0.714)` 归一成
+//   `calc(var(fontsize) * 0.714)` ⇒ **同一语义在两侧永不相等** ⇒ ⑩ 每次都报冲突。
+//   同类隐患：`var(--x, rgba(0,0,0,.5))` → `var(x))`。全局实测该 bug 制造 248/396 条属性对
+//   假阳性（62.6%），是「精度噪声」表象的真正主因（非 calc 小数舍入，故加数值容差治不了它）。
+function collapseVarRefs(s) {
+  const text = String(s || '');
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (!text.startsWith('var(', i)) {
+      out += text[i];
+      i += 1;
+      continue;
+    }
+    let depth = 1;
+    let j = i + 4;
+    while (j < text.length && depth > 0) {
+      if (text[j] === '(') depth += 1;
+      else if (text[j] === ')') depth -= 1;
+      j += 1;
+    }
+    if (depth > 0) {
+      // 未闭合（畸形输入）：原样保留剩余，不臆造闭合
+      out += text.slice(i);
+      break;
+    }
+    const inner = text.slice(i + 4, j - 1); // 去掉真正配平的那个 ')'
+    const name = (inner.split(',')[0] || '').trim();
+    out += 'var(' + name.replace(/-/g, '') + ')';
+    i = j;
+  }
+  return out;
+}
+
 // 值语义归一：`calc(@fontSize * 0.857)` 与 `calc(var(--fontSize, 14px) * 0.857)` 语义相同
 // （@fontSize 编译后即 var(--fontSize)）—— 字面不同但渲染一致，不得报冲突。
-// 归一：去空白 → var(--x, fallback) 收敛为 var(--x) → @less-var 映射为 var(--less-var)。
+// 归一：去空白 → var(--x, fallback) 收敛为 var(--x)（括号配平）→ @less-var 映射为 var(--less-var)。
 function normalizeCssValue(v) {
-  return String(v || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-    // var(--camelName, fallback) 与 @kebab-name 别名语义相同（theme token 双写）：
+  return collapseVarRefs(
+    String(v || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase(),
+  )
+    // var(--camelName) 与 @kebab-name 别名语义相同（theme token 双写）：
     // 统一去连字符 → var(--colorBgContainer) / @color-bg-container 都收敛为 var(colorbgcontainer)
-    .replace(/var\((--[\w-]+)[^)]*\)/g, (mm, name) => 'var(' + name.replace(/-/g, '') + ')')
     .replace(/@([a-zA-Z][\w-]*)/g, (mm, name) => 'var(' + name.replace(/-/g, '') + ')');
+}
+
+// 数值等价容差（仅用于含 calc() 的值）：相对差 ≤0.1% 视为同一设计值。
+// 为什么需要：LESS 侧手写 `* 0.714`，SFC 侧由「px 真值 ÷ 字号」反推 `* 0.7143`，同一设计值
+//   被两种精度写法表达 ⇒ 精确字符串比较恒判不等（假阳性）。实测该族最大相对差 0.098%
+//   （`1.4286` vs `1.43`），而真差异最小 16.7%（`0.8571` vs `0.714`）⇒ 0.1% 有充足安全间隔。
+// 🔴 只对**两侧都含 calc(** 的值生效：颜色（`#101010` vs `#101011`）、px 等纯字面量不参与数值
+//   近似，避免把「差一个色阶」误判同值。
+const NUMERIC_EQ_RTOL = 0.001;
+
+function valuesEquivalent(a, b) {
+  if (a === b) return true;
+  if (!a.includes('calc(') || !b.includes('calc(')) return false;
+  const ta = a.replace(/\d+(?:\.\d+)?/g, '#');
+  const tb = b.replace(/\d+(?:\.\d+)?/g, '#');
+  if (ta !== tb) return false; // 结构不同（如 * 1.14 vs - 4px）⇒ 真差异
+  const na = a.match(/\d+(?:\.\d+)?/g) || [];
+  const nb = b.match(/\d+(?:\.\d+)?/g) || [];
+  if (na.length === 0 || na.length !== nb.length) return false;
+  for (let k = 0; k < na.length; k += 1) {
+    const x = Number(na[k]);
+    const y = Number(nb[k]);
+    const d = Math.abs(x - y) / Math.max(Math.abs(x), Math.abs(y), 1e-9);
+    if (d > NUMERIC_EQ_RTOL) return false;
+  }
+  return true;
 }
 
 // 纯单 class 选择器才认作「一条可归属的 class 规则」（顶层与嵌套后代同判）。
@@ -206,8 +271,9 @@ export function findCrossFileClassRuleConflicts(files = {}) {
       const lv = less.attrs.get(attr);
       const sv = sfc.attrs.get(attr);
       if (!lv || !sv) continue;
-      // 值集合有交集 ⇒ 双写但渲染结果一致（无害冗余）；完全不相交 ⇒ 静默覆盖冲突
-      if ([...lv].some((v) => sv.has(v))) continue;
+      // 值集合有交集（含 calc 数值近似等价）⇒ 双写但渲染结果一致（无害冗余）；
+      // 完全不相交 ⇒ 静默覆盖冲突
+      if ([...lv].some((v) => [...sv].some((s) => valuesEquivalent(v, s)))) continue;
       shared.push(attr);
     }
     if (shared.length === 0) continue;

@@ -25,6 +25,8 @@ import { getFrontendCandidates } from '../../config/runtime-env.js'
 // workspace-preview-publisher.js 已 module.exports named export resolveWorkspaceComponentId。
 import { resolveWorkspaceComponentId } from '../utils/workspace-preview-publisher.js'
 import { compareRenderedVsDesign, FIDELITY_VERDICTS } from '../utils/render-fidelity-gate.js'
+// 🛡️ 2026-11-05 C3：console 噪声判据收敛为纯函数模块（单一事实源、零重依赖、可单测）
+import { isBenignConsoleError, isFatalConsoleError } from '../utils/console-noise-classifier.js'
 
 const logger = createLogger({ name: 'screenshot-renderer' })
 const RUNTIME_SELF_HEAL_WARNING_CODE = 'RUNTIME_SELF_HEAL_MISSING_ASSET'
@@ -50,34 +52,31 @@ const RUNTIME_INCREMENTAL_IDS = new Set([
   'RUNTIME-010',
 ])
 
-const RUNTIME_BENIGN_CONSOLE_PATTERNS = [
-  /Permissions policy violation: unload is not allowed in this document\.?/i,
-  /ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i,
-  /favicon\.ico/i,
-]
+// 🔴 2026-11-05 C3′ → **C2**（docs/2026-11-05-VISUAL-002门禁ReferenceError根因与G1G2真机验签.md §3.4 / §7.5）
+//   背景：`finalizePreviewResult` 曾引用 `previewState`（定义在 renderViaPreviewPage `:760`）
+//   与 `issues`（`:613`），两者都不在该函数（renderScreenshot `:1229`）的闭包链上 ⇒
+//   `compareRenderedVsDesign` 成功后必抛 ReferenceError，被 catch 吞掉 ⇒
+//   `visualFidelityDerivative` 恒 0，且 **VISUAL-002 自 08-02（commit 8cc3b11）起从未进入 runtimeGate**。
+//
+//   C3′（2026-11-05 15:0x）：修引用错配 + 只观测，开关 false，3 样本验证零行为变化。
+//   **C2（2026-11-05 15:1x，用户裁决「继续c2」）：开关置 true，VISUAL-002 以 `WARN` 进入 runtimeGate。**
+//
+//   真机依据（3 样本）：score `0.4014 / 0.5303 / 0.5459`，**3/3 `verdict=block`**，
+//   且 `renderBroken=0`、`issueCount=0` ⇒ 真实视觉差异，非渲染失败。
+//   故 **不能沿用 `severity:'BLOCK'`**：那会掉进 `classifyRuntimeGate` 的 fallback
+//   （`:265` issueIds.length>0 ⇒ `:270` unknownBlocking=filter(severity==='BLOCK') ⇒ `:272` `action:'fail'`）
+//   ⇒ 按实测分布会 **100% 拒收**。C2 因此把 VISUAL-002 一律降为 `WARN`：
+//   `classifyRuntimeGate` 走 `:278` `action:'incremental_fix'`（不 fail、任务仍 completed）。
+//
+//   ⚠️ 已知边界（勿误读）：`incremental_fix` 在 `mc-component-graph-phase2.js:5880` 只做
+//   `logger.warn` 后 `return`，**不设 `state.needsRevision`、不触发重试** ⇒ C2 当前是
+//   「留痕 + 不阻断」，**不会驱动 LLM 自动修**。要真正回流需另立 C2-B（见文档 §7.7）。
+const VISUAL_002_EMIT_ENABLED = true
 
-const RUNTIME_FATAL_CONSOLE_PATTERNS = [
-  /TypeError/i,
-  /ReferenceError/i,
-  /SyntaxError/i,
-  /RangeError/i,
-  /Cannot read properties of undefined/i,
-  /Cannot read properties of null/i,
-  /Cannot set properties of undefined/i,
-  /Cannot set properties of null/i,
-  /is not defined/i,
-  /Unhandled/i,
-  /Unexpected token/i,
-]
-
-const LOCAL_RUNTIME_URL_PATTERNS = [
-  /\/preview\//i,
-  /\/__raw\//i,
-  /\/workspace\//i,
-  /\/component\.js(?:\?|$)/i,
-  /\/index\.vue(?:\?|$)/i,
-  /\.(js|mjs|ts|vue)(?:\?|$)/i,
-]
+// 🛡️ 2026-11-05 C3：CONSOLE_NOISE_PATTERNS / isThirdPartyWarning /
+//   isBenignConsoleError / isFatalConsoleError 及三组常量已收敛到
+//   utils/console-noise-classifier.js（纯函数、零依赖，便于 jest 单测）。
+//   本文件只 import 消费，不再维护第二套正则口径。
 
 // 全局 Puppeteer browser 单例（复用，避免每次启动开销）
 let _browserInstance = null
@@ -169,17 +168,7 @@ function summarizeRuntimeGate(runtimeGate) {
   return runtimeGate?.issues?.map(issue => `[${issue.id}] ${issue.message}`).join('; ') || '未知运行时错误'
 }
 
-function isBenignConsoleError(entry = {}) {
-  const text = `${entry?.text || ''} ${entry?.location?.url || ''}`.trim()
-  return RUNTIME_BENIGN_CONSOLE_PATTERNS.some(pattern => pattern.test(text))
-}
-
-function isFatalConsoleError(entry = {}) {
-  const text = entry?.text || ''
-  if (RUNTIME_FATAL_CONSOLE_PATTERNS.some(pattern => pattern.test(text))) return true
-  const locationUrl = entry?.location?.url || ''
-  return !!locationUrl && LOCAL_RUNTIME_URL_PATTERNS.some(pattern => pattern.test(locationUrl))
-}
+// isBenignConsoleError / isFatalConsoleError 由 utils/console-noise-classifier.js 提供。
 
 export function buildRuntimeRevisionGuidance(runtimeGate) {
   const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []
@@ -686,11 +675,10 @@ async function renderViaPreviewPage({
     /\/api\/auth\/current(?:\?|$)/,
     /\/api\/tasks(?:\?|$)/,
   ]
-  const ignoredConsoleErrorPatterns = [
-    /Permissions policy violation: unload is not allowed in this document\.?/i,
-  ]
+  // 🛡️ 2026-11-05 C3：渲染期过滤与分类期 benign 共用模块级 CONSOLE_NOISE_PATTERNS
+  //   + isThirdPartyWarning，不再维护函数内第二套正则（此前只有 Permissions policy 一条）。
   const isIgnoredShellRequest = url => ignoredShellRequestPatterns.some(pattern => pattern.test(url))
-  const isIgnoredConsoleError = text => ignoredConsoleErrorPatterns.some(pattern => pattern.test(text || ''))
+  const isIgnoredConsoleError = entry => isBenignConsoleError(entry)
 
   if (requestMocks.length > 0) {
     await page.setRequestInterception(true)
@@ -736,7 +724,8 @@ async function renderViaPreviewPage({
       const text = message.text()
       const location = message.location()
       const locationUrl = location?.url || ''
-      if (isIgnoredShellRequest(locationUrl) || isIgnoredConsoleError(text)) return
+      const consoleEntry = { text, location }
+      if (isIgnoredShellRequest(locationUrl) || isIgnoredConsoleError(consoleEntry)) return
       // 浏览器对资源 404 会同时记 response>=400 和 console.error("Failed to load resource")。
       // 这类错误本质上已经由 RUNTIME-007 覆盖，若继续记到 RUNTIME-010 会重复阻断同一问题。
       const isDuplicatedHttpConsole =
@@ -1259,8 +1248,38 @@ export async function renderScreenshot(params) {
   })
 
     const finalizePreviewResult = async (result) => {
-      if (!result?.renderedImage) return result
+      // 🔴 G2（2026-11-05，A 档只报不改）：像素比对**输入链路**四态留痕。
+      //   `visualFidelityDerivative:evaluated=0` 只能说明「本次未做比对」，无法区分
+      //   「无 previewImage 参数 / 路径不存在 / 截图全白 / 无渲染图早退」，故单列计数行。
+      //   只加日志：不改判据、不改 visualFidelityDerivative 赋值、不改 severity/id/阈值。
+      const vfInput = {
+        preview: previewImage ? 1 : 0,
+        exists: previewImage && existsSync(previewImage) ? 1 : 0,
+        blank: 0,
+        compared: 0,
+        earlyReturn: 0,
+      }
+      const logVisualFidelityInput = () => logger.info(
+        `visualFidelityInput:preview=${vfInput.preview},exists=${vfInput.exists},` +
+          `blank=${vfInput.blank},compared=${vfInput.compared},earlyReturn=${vfInput.earlyReturn}`,
+      )
+      // 🔴 C3′（2026-11-05）：比对分数观测。`score=-` = 本次未做比对（与 score=0 可区分）；
+      //   `emitted` = VISUAL-002 是否允许进入 runtimeGate（C3′ 阶段恒 0）。
+      //   每次 finalizePreviewResult 恰好一行，**含早退路径**（早退打 `score=-,verdict=none`）。
+      const vfScore = { score: null, verdict: 'none', renderBroken: 0 }
+      const logVisualFidelityScore = () => logger.info(
+        `visualFidelityScore:score=${vfScore.score === null ? '-' : vfScore.score},` +
+          `verdict=${vfScore.verdict},renderBroken=${vfScore.renderBroken},` +
+          `emitted=${VISUAL_002_EMIT_ENABLED ? 1 : 0}`,
+      )
+      if (!result?.renderedImage) {
+        vfInput.earlyReturn = 1
+        logVisualFidelityScore()
+        logVisualFidelityInput()
+        return result
+      }
       const pixelEvidence = await analyzeScreenshotPixels(result.renderedImage)
+      vfInput.blank = pixelEvidence.blank ? 1 : 0
       if (pixelEvidence.blank) {
         result.runtimeGate.status = 'BLOCK'
         result.runtimeGate.issues.push({
@@ -1273,34 +1292,77 @@ export async function renderScreenshot(params) {
       }
 
       // 7-A：渲染产物 vs 设计稿 · 像素级比对门禁
+      // 🛡️ 2026-11-05 C3（docs/2026-11-05-四任务样式各异根因修复方案.md §3.3）：
+      //   VISUAL-002 证据有效性留痕，续接 2026-11-03-微码builder裸import运行时404.md:116
+      //   「不沿用未渲染状态下 VISUAL-002 作布局根因」。只报不改：不改 severity / id / 阈值。
+      let visualFidelityDerivative = { evaluated: 0, derivative: 0, independent: 0 }
       if (!pixelEvidence.blank && previewImage && existsSync(previewImage)) {
         try {
           const fidelity = await compareRenderedVsDesign({
             renderedPath: result.renderedImage,
             designPath: previewImage,
           })
+          vfInput.compared = 1
           result.visualFidelity = fidelity
-          if (fidelity.verdict === FIDELITY_VERDICTS.BLOCK) {
+          // 🔴 C3′（2026-11-05）：此处原为
+          //   `previewState.status !== 'ready' && issues.some((i) => i?.id === 'RUNTIME-004')`
+          //   但 `previewState`(`:760`) 与 `issues`(`:613`) 都定义在 `renderViaPreviewPage`，
+          //   而本函数在 `renderScreenshot`（`:1229`）内 ⇒ 闭包不可达 ⇒ 必抛
+          //   `ReferenceError: previewState is not defined`，被下方 catch 吞掉 ⇒
+          //   `evaluated` 恒 0，且 VISUAL-002 自 08-02 起从未生效。
+          //   等价替代（不新增判据）：RUNTIME-004 正是 `previewState.status !== 'ready'`
+          //   的产物（`:793-794`），且 `result.runtimeGate.issues` 是 renderViaPreviewPage
+          //   的返回值（`:858-867`），与旧写法同一份事实源。
+          const gateIssues = Array.isArray(result?.runtimeGate?.issues) ? result.runtimeGate.issues : []
+          const renderBroken = gateIssues.some((i) => i?.id === 'RUNTIME-004')
+          vfScore.score = typeof fidelity.score === 'number' ? fidelity.score : null
+          vfScore.verdict = String(fidelity.verdict || 'none')
+          vfScore.renderBroken = renderBroken ? 1 : 0
+          const derivative = renderBroken ? 'runtime-render-error' : null
+          const fidelityEvidence = derivative
+            ? { ...fidelity, insufficientEvidence: derivative }
+            : fidelity
+          visualFidelityDerivative = {
+            evaluated: 1,
+            derivative: renderBroken ? 1 : 0,
+            independent: renderBroken ? 0 : 1,
+          }
+          // 🔴 C2：push 段由 VISUAL_002_EMIT_ENABLED 控制（现已置 true）。
+          //   **两档一律 severity:'WARN'**：真机 3/3 verdict=block 且 renderBroken=0，
+          //   若沿用 BLOCK 会经 classifyRuntimeGate fallback(:270) ⇒ action:'fail' ⇒ 100% 拒收。
+          //   降 WARN 后走 :278 incremental_fix（不 fail、任务仍 completed）。
+          //   message 文案保持原样：进 BLOCK 分支的就是 score < 0.6，措辞仍准确。
+          if (VISUAL_002_EMIT_ENABLED && fidelity.verdict === FIDELITY_VERDICTS.BLOCK) {
             result.runtimeGate.issues.push({
               id: 'VISUAL-002',
-              severity: 'BLOCK',
+              severity: 'WARN',
               category: 'render-fidelity',
               message: `渲染产物与设计稿像素差异过大（score=${fidelity.score}，阈值<${0.6}）`,
-              evidence: fidelity,
+              evidence: fidelityEvidence,
             })
-          } else if (fidelity.verdict === FIDELITY_VERDICTS.WARN) {
+          } else if (VISUAL_002_EMIT_ENABLED && fidelity.verdict === FIDELITY_VERDICTS.WARN) {
             result.runtimeGate.issues.push({
               id: 'VISUAL-002',
               severity: 'WARN',
               category: 'render-fidelity',
               message: `渲染产物与设计稿存在像素差异（score=${fidelity.score}，阈值 0.6~0.85）`,
-              evidence: fidelity,
+              evidence: fidelityEvidence,
             })
           }
         } catch (e) {
           logger.warn('渲染比对门禁执行失败，跳过', { error: e.message })
         }
       }
+      // 🔴 全 0 也打（未进入比对时的正常态）。注意：C3′ 修掉引用错配后，
+      //   「比对成功却 evaluated=0」已不可能发生 —— 若再现，即为新的回归。
+      logger.info(
+        `visualFidelityDerivative:evaluated=${visualFidelityDerivative.evaluated},` +
+          `derivative=${visualFidelityDerivative.derivative},` +
+          `independent=${visualFidelityDerivative.independent}`,
+      )
+      logVisualFidelityScore()
+      // 🔴 G2：全 0 也打，每次 finalizePreviewResult 恰好一行（含早退路径）。
+      logVisualFidelityInput()
 
       return result
     }

@@ -520,6 +520,74 @@ describe('刀 41 · 折叠网格布局契约', () => {
       expect(codes15).toEqual(['grid-track-fluid'])
     })
 
+    // 🔴 观测型计数行（2026-11-05 · 第 2 项 A 方案）：`stats.fluidTracks` / `fluidTracksIllegal`
+    //   是「刀 41 到底有没有覆盖到 LLM 写的 1fr」的唯一真机证据，因此必须与判据**同源**
+    //   （都走 `parseRepeatTrack` / `isFluidTrack`），且 0 也要能被打出来。
+    //   阳性对照设计：**同一份 CSS** 只换段项数（12 行满 / 15 末行不满）——
+    //   若计数行漏打、或与判据两套口径，下面两条必有一条挂。
+    it('观测计数行：段内 1fr 恒计入 fluidTracks；仅末行不满才计入 fluidTracksIllegal', () => {
+      const LESS_1FR = `
+.c-component-card-grid-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 30px;
+  column-gap: 20px;
+  row-gap: 20px;
+  align-content: start;
+}
+
+.c-component-card-grid-item {
+  height: 30px;
+  min-width: 0;
+}
+`
+      const files = filesOf(LESS_1FR, [
+        { path: 'package/components/CardGridList.vue', content: VUE_12 },
+      ])
+
+      // 行满（12 项）：1fr 与 126px 渲染等价 ⇒ 零 issue，但计数行必须看得见「这段用了 1fr」
+      const full = detectGridListLayoutIssues(files, { sections: [SEC_12] })
+      expect(full.stats.judged).toBe(1)
+      expect(full.stats.fluidTracks).toBe(1)
+      expect(full.stats.fluidTracksIllegal).toBe(0)
+      expect(full.issues).toEqual([])
+
+      // 末行不满（15 项）：同一份 CSS 立刻变成真违规 ⇒ Illegal 必须同步为 1
+      const partial = detectGridListLayoutIssues(files, {
+        sections: [{ ...SEC_15, id: SEC_12.id }],
+      })
+      expect(partial.stats.judged).toBe(1)
+      expect(partial.stats.fluidTracks).toBe(1)
+      expect(partial.stats.fluidTracksIllegal).toBe(1)
+      expect(partial.issues.map((i) => i.id)).toEqual(['GRID-CONTRACT-001'])
+      expect(partial.issues[0].violations.map((v) => v.code)).toEqual(['grid-track-fluid'])
+    })
+
+    // 阴性对照：定值轨道（`repeat(4, 126px)`）⇒ 两个计数都必须是 0（证明计数不是「有网格就 +1」）
+    it('观测计数行阴性：定值轨道 ⇒ fluidTracks / fluidTracksIllegal 均为 0', () => {
+      const LESS_PX = `
+.c-component-card-grid-list {
+  display: grid;
+  grid-template-columns: repeat(4, 126px);
+  grid-auto-rows: 30px;
+  column-gap: 20px;
+  row-gap: 20px;
+}
+
+.c-component-card-grid-item {
+  height: 30px;
+}
+`
+      const r = detectGridListLayoutIssues(
+        filesOf(LESS_PX, [{ path: 'package/components/CardGridList.vue', content: VUE_12 }]),
+        { sections: [SEC_12] },
+      )
+      expect(r.stats.judged).toBe(1)
+      expect(r.stats.fluidTracks).toBe(0)
+      expect(r.stats.fluidTracksIllegal).toBe(0)
+      expect(r.issues).toEqual([])
+    })
+
     it('detect：真机 12 项 + 真模板 ⇒ 1 条 GRID-CONTRACT-001', () => {
       const { issues, stats } = detectGridListLayoutIssues(filesOf(REAL_LESS, [{ path: 'package/components/CardGridList.vue', content: VUE_12 }]), {
         sections: [SEC_12],

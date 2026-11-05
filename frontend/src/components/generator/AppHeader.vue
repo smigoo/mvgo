@@ -31,13 +31,42 @@
             <span class="brand-cursor" :style="{ background: terminalGreen }"></span>
           </span>
         </div>
+        <!-- 品牌文字右侧的动态标识：静音循环播放，纯装饰，不参与交互 -->
+        <!-- <video
+          class="logo-anim"
+          :src="logoAnimSrc"
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="auto"
+          aria-hidden="true"
+          tabindex="-1"
+        ></video> -->
       </div>
     </div>
 
     <!-- 主导航 -->
     <nav class="main-nav">
-      <template v-for="tab in mainTabs" :key="tab.path">
-        <router-link v-if="tab.enabled" :to="tab.path" class="nav-tab" active-class="active">
+      <template v-for="tab in mainTabs" :key="tab.path || tab.label">
+        <!-- 含子菜单的分组（如「实验室」） -->
+        <div v-if="tab.children && tab.children.length" class="nav-tab nav-group">
+          <span class="nav-group-label">{{ tab.label }}</span>
+          <span class="nav-caret">▾</span>
+          <div class="nav-dropdown">
+            <router-link
+              v-for="c in tab.children"
+              :key="c.path"
+              :to="c.path"
+              class="nav-dropdown-item"
+              active-class="active"
+            >
+              {{ c.label }}
+            </router-link>
+          </div>
+        </div>
+        <!-- 普通标签 -->
+        <router-link v-else-if="tab.enabled" :to="tab.path" class="nav-tab" active-class="active">
           {{ tab.label }}
         </router-link>
         <span v-else class="nav-tab nav-tab-disabled" @click="showDisabledHint(tab.label)">
@@ -239,6 +268,7 @@ const withBaseAsset = (assetPath: string) => `${import.meta.env.BASE_URL}${asset
 
 const logoSrc = computed(() => withBaseAsset(isDark.value ? 'logo-dark.png' : 'logo.png'))
 const companyLogoSrc = withBaseAsset('favicon.png')
+const logoAnimSrc = withBaseAsset('logo-anim.mp4')
 
 // 终端文字颜色：深色模式用荧光绿，浅色模式用品牌深蓝（白底清晰可读）
 const terminalGreen = computed(() => (isDark.value ? '#00ff00' : '#0073e6'))
@@ -248,7 +278,14 @@ const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin())
 
 // 主导航（设计稿中间的5个标签）— 每项关联功能开关 key
-const mainTabsConfig = [
+interface MainTab {
+  path?: string
+  label: string
+  feature?: string
+  devOnly?: boolean
+  children?: { path: string; label: string }[]
+}
+const mainTabsConfig: MainTab[] = [
   { path: '/generator/components', label: '组件开发', feature: 'generator.component' },
   { path: '/components', label: '组件库', feature: 'component.library' },
   // { path: '/generator/page',      label: '页面',    feature: 'generator.page' },
@@ -256,19 +293,23 @@ const mainTabsConfig = [
   { path: '/tasks', label: '任务中心', feature: 'tasks' },
   // 大屏布局：2026-09-30 从页脚**移入头部主导航**（它是生成页，属主入口；
   // 页脚的定位是「低频入口」，见 AppFooter.vue 顶部注释）
-  { path: '/screen', label: '大屏布局', feature: 'screen' }
+  { path: '/screen', label: '大屏布局', feature: 'screen' },
   // 「页面开发」「工作流编排」已移至页脚 AppFooter
+  // 「实验室」下拉（components-test / project-lab / meeting）已于 2026-11-05
+  // 移至页脚 AppFooter（低频入口定位），沿用 devOnly 约定。
 ]
 
 // 管理后台导航项：仅 admin 角色可见（统一入口，内部通过侧边栏切换）
 const adminTab = { path: '/admin/operation-log', label: '管理后台', adminOnly: true }
 
-// 主导航最终列表：admin 角色追加「管理后台」统一入口
+// 主导航最终列表：devOnly 项仅 dev 可见；含 children 的分组始终可用（下拉本身）；admin 角色追加「管理后台」统一入口
 const mainTabs = computed(() => {
-  const base = mainTabsConfig.map((tab) => ({
-    ...tab,
-    enabled: featureStore.isEnabled(tab.feature)
-  }))
+  const base = mainTabsConfig
+    .filter((tab) => !tab.devOnly || import.meta.env.DEV)
+    .map((tab) => ({
+      ...tab,
+      enabled: tab.children ? true : featureStore.isEnabled(tab.feature ?? '')
+    }))
   if (isAdmin.value) {
     base.push({ ...adminTab, enabled: true })
   }
@@ -501,6 +542,18 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
 }
 
+/* 品牌文字右侧的动态标识（720x720 方形、自带浅色底），圆角与 logo 对齐 */
+.logo-anim {
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: #f2f2f2;
+  pointer-events: none;
+}
+
 .logo-sparkle {
   display: none;
   position: absolute;
@@ -621,6 +674,84 @@ onUnmounted(() => {
   font-weight: 600;
   background: var(--brand-bg-hover);
   border-color: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+/* 分组导航（含子菜单的下拉） */
+.nav-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.nav-group:hover {
+  color: var(--brand);
+  background: var(--brand-bg-hover);
+  border-color: color-mix(in srgb, var(--brand) 20%, transparent);
+}
+
+.nav-caret {
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.nav-group:hover .nav-caret {
+  transform: rotate(180deg);
+}
+
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 184px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 200;
+}
+
+.nav-group:hover .nav-dropdown {
+  display: flex;
+}
+
+.nav-dropdown-item {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.nav-dropdown-item:hover {
+  color: var(--brand);
+  background: var(--brand-bg-hover);
+}
+
+.nav-dropdown-item.active {
+  color: var(--brand);
+  font-weight: 600;
+  background: var(--brand-bg-hover);
 }
 
 /* 禁用态导航 */
@@ -958,6 +1089,11 @@ onUnmounted(() => {
     height: 26px;
   }
 
+  .logo-anim {
+    width: 26px;
+    height: 26px;
+  }
+
   .brand-name {
     font-size: 18px;
   }
@@ -1091,6 +1227,11 @@ onUnmounted(() => {
     width: 20px;
     height: 20px;
     border-radius: var(--radius-xs);
+  }
+
+  /* 窄屏 header-left 空间不足，动态标识让位给品牌名 */
+  .logo-anim {
+    display: none;
   }
 
   .logo-wrapper {

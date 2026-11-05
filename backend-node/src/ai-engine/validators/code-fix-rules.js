@@ -31,6 +31,7 @@ import {
   injectNodeLevelColorTruth,
 } from '../utils/post-process.js';
 import { normalizeCssVarNames } from '../utils/css-var-contract.js';
+import { sizeFromScaleMode } from '../utils/background-size-inference.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 import {
   ensureGridDisplay,
@@ -236,6 +237,11 @@ export function anchorRootContainerInFiles(files, options = {}) {
   const bgFileName = panelBg
     ? String(panelBg.resourceFile).split('/').pop()
     : '';
+  // 🛡️ R3-legacy（2026-11-06）：面板背景的 size/repeat 不再写死 `100% 100% / no-repeat`。
+  // `sizeFromScaleMode` 有 Figma 真值就按真值（FILL→cover / FIT→contain /
+  // STRETCH→100% 100% / TILE→auto+repeat），缺失则回落旧的中性默认（逐字零回归）。
+  // 此前无条件铺满会把「保形填充」的设计意图拉成变形，与合并精修的 F3 产出不一致。
+  const panelBgStyle = panelBg ? sizeFromScaleMode(panelBg) : null;
   const styleBlockRe = new RegExp(`(\\.${rootCls}\\s*\\{)([^}]*)`, 'm');
 
   const patchStyle = (source, targetPath) => {
@@ -261,10 +267,15 @@ export function anchorRootContainerInFiles(files, options = {}) {
       // 形态锁，无需 aspect-ratio。对纵向多 section 容器注入 aspect-ratio 会把高度锁死为
       // 「宽×比例」，8 个 section 内容被挤压 →「样式几乎看不到」（traffic-monitor 实锤）。
       if (panelBg) {
+        const bgSize = panelBgStyle?.size || '100% 100%';
+        const bgRepeat = panelBgStyle?.repeat || 'no-repeat';
         injections.push(`  background-image: url('${prefix}${bgFileName}');`);
-        injections.push('  background-size: 100% 100%;');
-        injections.push('  background-repeat: no-repeat;');
-        injections.push('  background-position: center;');
+        injections.push(`  background-size: ${bgSize};`);
+        injections.push(`  background-repeat: ${bgRepeat};`);
+        // cover/contain 天然居中；repeat 平铺以左上为原点（Figma TILE 语义）⇒ 两者都不写 position。
+        if (bgSize !== 'cover' && bgSize !== 'contain' && bgRepeat !== 'repeat') {
+          injections.push('  background-position: center;');
+        }
       }
       if (injections.length === 0) return whole;
       return (
@@ -307,7 +318,13 @@ export function anchorRootContainerInFiles(files, options = {}) {
   }
   if (changed && logger && typeof logger.info === 'function') {
     logger.info(
-      `🎯 根容器中性锚定: .${rootCls}（Figma ${W}×${H}，width/height 100% 补齐${panelBg ? ' + 面板背景 R7' : ''}）`,
+      `🎯 根容器中性锚定: .${rootCls}（Figma ${W}×${H}，width/height 100% 补齐${
+        panelBg
+          ? ` + 面板背景 R7${
+              panelBgStyle ? `（scaleMode=${panelBg.imageScaleMode}→${panelBgStyle.size}）` : '（无 scaleMode 真值→100% 100%）'
+            }`
+          : ''
+      }）`,
     );
   }
   return changed ? out : files;
@@ -456,6 +473,131 @@ function _subjectClasses(selector) {
 }
 
 /**
+ * 🛡️ 2026-11-05 装饰层祖先承载（docs/2026-11-05-四任务样式各异根因修复方案.md §3.4）
+ *
+ * 背景：`723d52c3` 的资源在 `<img :src="icon2" class="…-action-icon">`，而
+ * `common.less` 的 border/background/border-radius 写在父 `<div class="…-action-btn">`。
+ * 旧实现只收资源标签自身 class，`_clsMatches` 只认全等 / `-` 后缀 ⇒ 父容器恒不命中，
+ * `stripBakedDecorationFromFiles` 形同空转。
+ *
+ * 修法：把「直接子元素是资源位图 `<img>`、且其间无文本」的**直接父容器** class
+ * 并入 carriers。判据只认 DOM 结构（标签语义 / 父子 / 兄弟数 / 文本），
+ * **不认类名前缀、不认组件名、不认任务 id**；多兄弟父容器不入 carriers。
+ * 🔴 收紧（定向回归实锤）：带 `:style` 背景图的 `<div>` 是 CSS 背景承载、由既有 ①
+ * 模板信号自己收，**不触发父容器推定**；否则 tab-item 的 border-radius 会被误剥。
+ * 用配平标签栈而非正则解析（门禁反面教材：正则在第一个内层闭合处截断）。
+ */
+const VOID_TAGS = new Set([
+  'img', 'br', 'hr', 'input', 'meta', 'link', 'source', 'area',
+  'base', 'col', 'embed', 'param', 'track', 'wbr',
+]);
+
+function _scanTemplateTags(body) {
+  const events = [];
+  const s = String(body || '');
+  let i = 0;
+  let lastEnd = 0;
+  while (i < s.length) {
+    if (s[i] !== '<') { i += 1; continue; }
+    const textChunk = s.slice(lastEnd, i);
+    if (textChunk.trim()) events.push({ type: 'text', text: textChunk });
+    let j = i + 1;
+    let quote = '';
+    while (j < s.length) {
+      const ch = s[j];
+      if (quote) { if (ch === quote) quote = ''; }
+      else if (ch === '"' || ch === "'" || ch === '`') quote = ch;
+      else if (ch === '>') break;
+      j += 1;
+    }
+    if (j >= s.length) break;
+    const raw = s.slice(i, j + 1);
+    i = j + 1;
+    lastEnd = i;
+    if (/^<!--/.test(raw) || /^<[!?]/.test(raw)) continue;
+    const closeM = /^<\/\s*([\w-]+)\s*>/i.exec(raw);
+    if (closeM) {
+      events.push({ type: 'close', tag: closeM[1].toLowerCase() });
+      continue;
+    }
+    const openM = /^<\s*([\w-]+)/.exec(raw);
+    if (!openM) continue;
+    const tag = openM[1].toLowerCase();
+    events.push({
+      type: 'open',
+      tag,
+      raw,
+      self: /\/\s*>$/.test(raw) || VOID_TAGS.has(tag),
+    });
+  }
+  if (lastEnd < s.length && s.slice(lastEnd).trim()) {
+    events.push({ type: 'text', text: s.slice(lastEnd) });
+  }
+  return events;
+}
+
+export function collectAncestorCarrierClasses(body, varNames) {
+  const out = new Set();
+  const hostRe = [];
+  for (const v of varNames || []) {
+    const esc = String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    hostRe.push(new RegExp(`url\\(\\s*\\$\\{\\s*${esc}\\s*\\}\\s*\\)`));
+    hostRe.push(new RegExp(`['"]\\s*\\+\\s*${esc}\\s*\\+\\s*['"]`));
+    hostRe.push(new RegExp(`:src\\s*=\\s*["']\\s*${esc}\\s*["']`));
+  }
+  if (hostRe.length === 0) return out;
+  const isResourceTag = (raw) => hostRe.some((re) => re.test(raw));
+  const stack = [];
+
+  for (const ev of _scanTemplateTags(body)) {
+    if (ev.type === 'text') {
+      if (stack.length) stack[stack.length - 1].textLen += ev.text.trim().length;
+      continue;
+    }
+    if (ev.type === 'close') {
+      let idx = -1;
+      for (let k = stack.length - 1; k >= 0; k -= 1) {
+        if (stack[k].tag === ev.tag) { idx = k; break; }
+      }
+      if (idx < 0) continue;
+      const closed = stack.splice(idx);
+      for (let k = closed.length - 1; k >= 0; k -= 1) {
+        const item = closed[k];
+        // 🔴 判据收紧（定向回归实锤）：只认「直接子元素就是资源位图宿主」的父容器，
+        //   不认「子树里含资源」。否则 `<div class="tab-item"><div :style="url(bg3)">`
+        //   会被误判承载，把既有 spec 要求保留的 border-radius 剥掉。
+        if (item.childTags === 1 && item.textLen === 0 && item.directChildIsHost && item.cls) {
+          for (const tok of item.cls.split(/[\s,]+/)) {
+            const t = tok.trim();
+            if (_isPlausibleClass(t)) out.add(t.toLowerCase());
+          }
+        }
+      }
+      continue;
+    }
+    if (stack.length) stack[stack.length - 1].childTags += 1;
+    const cm = /\bclass\s*=\s*["']([^"']*)["']/.exec(ev.raw);
+    const item = {
+      tag: ev.tag,
+      cls: cm ? cm[1].trim().toLowerCase() : '',
+      childTags: 0,
+      textLen: 0,
+      // 「资源位图宿主」按 HTML 语义限定为 <img>：带 :style 背景图的 div 是 CSS
+      // 背景承载，由既有 ① 模板信号自己收，不触发父容器承载推定。
+      isHost: ev.tag === 'img' && isResourceTag(ev.raw),
+      directChildIsHost: false,
+    };
+    if (ev.self) {
+      const parent = stack[stack.length - 1];
+      if (parent && item.isHost) parent.directChildIsHost = true;
+    } else {
+      stack.push(item);
+    }
+  }
+  return out;
+}
+
+/**
  * 收集「承载静态资源」的 class 集合。
  * 见顶部 P1-1 说明的 ① 模板 / ② 样式 两个信号。
  * @returns {{carriers:Set<string>, rootCls:string}}
@@ -526,6 +668,9 @@ export function collectResourceCarrierClasses(files, resourceDomMapping) {
         if (_isPlausibleClass(t)) carriers.add(t.toLowerCase());
       }
     }
+    // 🛡️ 2026-11-05 §3.4：补「唯一子元素是资源宿主」的直接父容器（纯结构判据，
+    //   不认类名前缀）。与上方 ① 同用 stripSlots 后的 body，避免具名插槽截断。
+    for (const cls of collectAncestorCarrierClasses(body, varNames)) carriers.add(cls);
   }
 
   // ② 样式信号：规则体内 url() 命中已知资源文件

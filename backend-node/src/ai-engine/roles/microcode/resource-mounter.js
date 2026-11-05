@@ -1982,15 +1982,28 @@ export function pruneOrphanSubComponents(
   const resolveRelativeVue = (fromFile, spec) =>
     resolveSpecifierToPath(fromFile, spec, present);
   const refQueue = ['package/index.vue'];
+  // 🔴 2026-11-05 治本（c-traffic-monitor-9b36d0ac 实锤）：原实现用 `!keep.has(target)` 作为
+  //   「是否入队」的判据，而 `keep` 已被上方 detectSubComponents(indexVue) **预填了 index 的
+  //   全部直接子组件** ⇒ 队列刚出队 index 就因「目标已在 keep」而一条都不入队 ⇒ 队列立即清空，
+  //   沿 import 的**传递闭包从未真正发生过**（9-08 注释声明的 BFS 是空转的）。
+  //   后果：二层子组件（被 ContentForecast.vue import 的 ForecastAreaChart.vue）永远进不了保留集
+  //   ⇒ 误判孤儿删除 ⇒ 随后「悬空子组件引用剥离」把父组件里的 <ForecastAreaChart> 和它的样式
+  //   一起掏空 ⇒ 图表只剩空容器（刀53h 再删 chart-* 样式只是下游后果）。
+  //   修法：「保留」与「是否已遍历」解耦——keep 只表示保留，visited 单独控制入队。
+  //   keep 预填的直接子组件仍必须被**遍历**，否则闭包不成立。
+  const visited = new Set(['package/index.vue']);
   while (refQueue.length > 0) {
     const cur = refQueue.shift();
     const curContent = allFiles[cur];
     if (typeof curContent !== 'string') continue;
     for (const m of curContent.matchAll(importVueRe)) {
       const target = resolveRelativeVue(cur, m[2]);
-      if (target && allFiles[target] != null && !keep.has(target)) {
+      if (target && allFiles[target] != null) {
         keep.add(target);
-        refQueue.push(target);
+        if (!visited.has(target)) {
+          visited.add(target);
+          refQueue.push(target);
+        }
       }
     }
   }
@@ -2553,9 +2566,35 @@ export function ensureHeaderSlots(code, input, options = {}) {
     header_right: 'header-right',
   };
 
+  // 🛡️ 2026-11-05 治本（mc-max-1793841507552-f461f30f 实锤）：资源型插槽的 content 是
+  //   **诊断描述**，不是 UI 文案。
+  //   真值生产侧 `visual-parser.js:2645-2657` 识别 title-left 装饰图标组时写
+  //   `content: headerChild.content?.title || '装饰图标'` —— 图标没有标题时这四个字就成了
+  //   content；本函数旧逻辑对**每个** slot 都把 content 直接包成 `<span>` 注入（:2600），
+  //   ⇒ 产物 header 右侧凭空出现「装饰图标」四个字（真机 index.vue:5 的 span 内联样式与
+  //   下方 itemStyle 逐字吻合，确认注入源为 T09 而非 LLM 自由发挥）。
+  //   修法落在「headerSlots → DOM」的**唯一注入出口**，判据只认结构：
+  //     elementType 为资源型，或 children 携带资源事实（resourceFile/imageRef/assetVar）
+  //     ⇒ 该槽由资源挂载链承接，不得把描述文案渲染成文本。
+  //   不新增守卫（不触总纲 W7 顺序 / :115 新守卫入库门禁）、不改 headerSlots 数据结构
+  //   （planner `hasDeclaredHeaderSlotContent` 仍以 content 作为「宿主含插槽事实」的证据）。
+  const isResourceBackedHeaderSlot = (slot) => {
+    if (/icon|image|img|resource/i.test(String(slot?.elementType || ''))) return true
+    const children = Array.isArray(slot?.children) ? slot.children : []
+    return children.some(
+      (c) => c && typeof c === 'object' && !!(c.resourceFile || c.imageRef || c.assetVar),
+    )
+  }
+  const t09ResourceSlotStats = { evaluated: 0, blocked: 0 }
+
   // 按插槽名聚合待补内容
   const pending = new Map();
   for (const slot of slots) {
+    t09ResourceSlotStats.evaluated += 1;
+    if (isResourceBackedHeaderSlot(slot)) {
+      t09ResourceSlotStats.blocked += 1;
+      continue;
+    }
     const slotName = slotNameMap[String(slot?.slotType || '').trim()];
     if (!slotName) continue;
     const content = String(slot?.content || '').trim();
@@ -2573,6 +2612,8 @@ export function ensureHeaderSlots(code, input, options = {}) {
     if (!pending.has(slotName)) pending.set(slotName, []);
     pending.get(slotName).push(content);
   }
+  // 🔴 计数行恒打（0 也打）：可区分「没有资源型插槽」与「判据失效」
+  logger?.info('🛡️ T09 资源型插槽文本注入拦截', t09ResourceSlotStats);
   if (pending.size === 0) return code;
 
   let result = code;

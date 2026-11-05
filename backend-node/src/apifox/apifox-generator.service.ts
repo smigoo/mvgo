@@ -7,8 +7,8 @@ import { GenerateApifoxDto } from './dto/generate-apifox.dto';
 import { GenerateFullApifoxDto } from './dto/generate-full-apifox.dto';
 import { apifoxZipsDir } from '../config/backend-root';
 
-// ─── 类型定义 ────────────────────────────────────────────
-interface OasSchema {
+// ─── 类型定义（export 供 MCP 通路复用）────────────────────
+export interface OasSchema {
   type?: string;
   properties?: Record<string, OasSchema>;
   items?: OasSchema;
@@ -20,7 +20,7 @@ interface OasSchema {
   required?: string[];
 }
 
-interface OasParameter {
+export interface OasParameter {
   name: string;
   in: string; // query | path | header
   required?: boolean;
@@ -28,7 +28,7 @@ interface OasParameter {
   description?: string;
 }
 
-interface OasOperation {
+export interface OasOperation {
   summary?: string;
   description?: string;
   tags?: string[];
@@ -40,7 +40,7 @@ interface OasOperation {
   operationId?: string;
 }
 
-interface OasSpec {
+export interface OasSpec {
   openapi: string;
   info?: { title?: string; description?: string; version?: string };
   paths?: Record<string, Record<string, OasOperation>>;
@@ -48,7 +48,7 @@ interface OasSpec {
   servers?: { url: string }[];
 }
 
-interface ParsedApi {
+export interface ParsedApi {
   path: string;
   method: string; // get | post | put | delete
   summary: string;
@@ -65,6 +65,9 @@ const SBDS_PREFIXES = ['/sbds', '/sbds-manage'];
 function isSbds(path: string): boolean {
   return SBDS_PREFIXES.some((p) => path.startsWith(p));
 }
+
+/** 通用 HTTP 方法白名单（单模块/全量/MCP 三通路共用） */
+const HTTP_METHODS = ['get', 'post', 'put', 'delete'];
 
 // ─── 工具函数 ────────────────────────────────────────────
 function toCamelCase(str: string): string {
@@ -406,53 +409,58 @@ export class ApifoxGeneratorService {
     };
   }
 
-  // ─── 全量解析 + 按模块分组 ──────────────────────────
-  private parseAllAndGroup(spec: OasSpec): Map<string, ParsedApi[]> {
+  // ─── 单个 operation → ParsedApi（三通路共用，避免重复实现漂移）───
+  private toParsedApi(path: string, method: string, op: OasOperation): ParsedApi {
+    const responseSchema =
+      op.responses?.['200']?.content?.['application/json']?.schema ||
+      op.responses?.['200']?.content?.['*/*']?.schema;
+    const bodySchema = op.requestBody?.content?.['application/json']?.schema;
+
+    return {
+      path,
+      method,
+      summary: op.summary || '',
+      description: op.description || '',
+      functionName: pathToFunctionName(path, method),
+      parameters: op.parameters || [],
+      hasBody: !!bodySchema,
+      bodySchema,
+      responseSchema,
+    };
+  }
+
+  /** 接口归属模块名：优先 tag，否则路径首段（MCP 通路也用它，保证命名一致） */
+  moduleNameOf(path: string, op: OasOperation): string {
+    if (op.tags && op.tags.length > 0) return toCamelCase(op.tags[0]);
+    const segments = path.split('/').filter(Boolean);
+    return segments[0] ? toCamelCase(segments[0]) : 'default';
+  }
+
+  /** 模块的服务归属：base-server / sbds-server */
+  serviceOf(apis: ParsedApi[]): string {
+    return apis.some((a) => isSbds(a.path)) ? 'sbds-server' : 'base-server';
+  }
+
+  // ─── 全量解析 + 按模块分组（public：MCP 通路复用）──────
+  parseAllAndGroup(spec: OasSpec): Map<string, ParsedApi[]> {
     const moduleMap = new Map<string, ParsedApi[]>();
 
     for (const [path, methods] of Object.entries(spec.paths || {})) {
       for (const [method, op] of Object.entries(methods)) {
-        if (!['get', 'post', 'put', 'delete'].includes(method)) continue;
-
-        // 确定模块名：优先用 tag，否则用路径第一段
-        let moduleName = '';
-        if (op.tags && op.tags.length > 0) {
-          moduleName = toCamelCase(op.tags[0]);
-        }
-        if (!moduleName) {
-          const segments = path.split('/').filter(Boolean);
-          moduleName = segments[0] ? toCamelCase(segments[0]) : 'default';
-        }
-
-        const responseSchema =
-          op.responses?.['200']?.content?.['application/json']?.schema ||
-          op.responses?.['200']?.content?.['*/*']?.schema;
-        const bodySchema = op.requestBody?.content?.['application/json']?.schema;
-
-        const api: ParsedApi = {
-          path,
-          method,
-          summary: op.summary || '',
-          description: op.description || '',
-          functionName: pathToFunctionName(path, method),
-          parameters: op.parameters || [],
-          hasBody: !!bodySchema,
-          bodySchema,
-          responseSchema,
-        };
-
+        if (!HTTP_METHODS.includes(method)) continue;
+        const moduleName = this.moduleNameOf(path, op as OasOperation);
         if (!moduleMap.has(moduleName)) {
           moduleMap.set(moduleName, []);
         }
-        moduleMap.get(moduleName)!.push(api);
+        moduleMap.get(moduleName)!.push(this.toParsedApi(path, method, op as OasOperation));
       }
     }
 
     return moduleMap;
   }
 
-  // ─── 转换为 catalog 函数信息 ────────────────────────
-  private toCatalogFunction(api: ParsedApi, spec: OasSpec): ApiCatalogFunction {
+  // ─── 转换为 catalog 函数信息（public：MCP 通路复用）─────
+  toCatalogFunction(api: ParsedApi, spec: OasSpec): ApiCatalogFunction {
     const responseSchema = resolveRef(api.responseSchema, spec);
     const responsePreview = this.buildResponsePreview(responseSchema);
 
@@ -592,34 +600,16 @@ export class ApifoxGeneratorService {
       if (!path.startsWith(filter)) continue;
 
       for (const [method, op] of Object.entries(methods)) {
-        if (!['get', 'post', 'put', 'delete'].includes(method)) continue;
-
-        const responseSchema =
-          op.responses?.['200']?.content?.['application/json']?.schema ||
-          op.responses?.['200']?.content?.['*/*']?.schema;
-
-        const bodySchema =
-          op.requestBody?.content?.['application/json']?.schema;
-
-        apis.push({
-          path,
-          method,
-          summary: op.summary || '',
-          description: op.description || '',
-          functionName: pathToFunctionName(path, method),
-          parameters: op.parameters || [],
-          hasBody: !!bodySchema,
-          bodySchema,
-          responseSchema,
-        });
+        if (!HTTP_METHODS.includes(method)) continue;
+        apis.push(this.toParsedApi(path, method, op as OasOperation));
       }
     }
 
     return apis;
   }
 
-  // ─── 内存生成 4 类文件 ────────────────────────────────
-  private generateFiles(
+  // ─── 内存生成 4 类文件（public：MCP 通路复用）──────────
+  generateFiles(
     apis: ParsedApi[],
     spec: OasSpec,
     moduleName: string,

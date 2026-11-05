@@ -581,6 +581,9 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   bump('slotAncestor', 0)
   bump('idDirectSkipHallucinated', 0)
   bump('idDirectLeftover', 0)
+  // 🛡️ 2026-11-05 追认补闭环：② 视觉序归一的两态计数（0 也打，便于区分「未生效」与「判据失效」）
+  bump('orderVisualSort', 0)
+  bump('orderVisualSortSkippedOverlap', 0)
 
   // ① figmaNodeId 直命中
   const idMatched = []
@@ -708,12 +711,9 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
         }
       }
       if (leftover.length === idDirectMiss) {
-        const ordered = [...leftover].sort((a, b) => {
-          const ya = Number(a?.absoluteBoundingBox?.y) || 0
-          const yb = Number(b?.absoluteBoundingBox?.y) || 0
-          if (ya !== yb) return ya - yb
-          return (Number(a?.absoluteBoundingBox?.x) || 0) - (Number(b?.absoluteBoundingBox?.x) || 0)
-        })
+        // 🛡️ 2026-11-05：排序口径收敛到单一来源 sortByVisualOrder（② 顺序配对共用同一函数，
+        //    此前 ①-γ 内联一份、② 完全不排 ⇒ 同一图结构两条路径结论相反）。
+        const ordered = sortByVisualOrder(leftover)
         const leftoverMatched = ordered
           .map((r, i) => ({ section: idDirectMissSections[i], node: byId.get(String(r?.id)) }))
           .filter((m) => m.node && m.node.effectiveH > 0)
@@ -843,6 +843,22 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   }
   const orderMatched = []
   if (restSections.length === pairRegions.length && restSections.length >= 2) {
+    // 🛡️ 2026-11-05 治本：区域侧先归一到视觉序，再与 vision 段序（视觉上下序）逐位配对。
+    //   与 ①-γ 剩余区域映射共用 sortByVisualOrder（单一口径，杜绝两处排序语义分叉）。
+    //   文档序与视觉序一致的样本（既有已验收的直配场景）排序后不变 ⇒ 零位移。
+    //
+    // 🛡️ 2026-11-05 追认补闭环（A4 方案 :52 否决场景的 fail-closed 护栏）：
+    //   §3 否决「② 按 y 排序」的理由是 tab 行内 num(y898,h14)/tabs-list(y903,h27)/
+    //   tabs-icon(y905,h24) 的 y 区间相互重叠 ⇒ 纯 y 排序由亚像素差异决定先后，会把 num
+    //   排到首位，不是视觉事实。故此处不把排序提升为无条件默认：只在各区域垂直区间
+    //   **互不重叠**（视觉序唯一确定）时才归一；行内细粒度图元保持文档序 fail-open。
+    //   判据是纯几何事实（区间是否交叠），零阈值、零启发式，不引入 §3 反对的那套分桶。
+    if (hasNonOverlappingVerticalBoxes(pairRegions)) {
+      pairRegions = sortByVisualOrder(pairRegions)
+      bump('orderVisualSort', 1)
+    } else {
+      bump('orderVisualSortSkippedOverlap', 1)
+    }
     for (let i = 0; i < restSections.length; i++) {
       const node = pairRegions[i]
       const bb = node?.absoluteBoundingBox
@@ -865,6 +881,74 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   if (orderMatched.length) bump('order', orderMatched.length)
   if (!matched.length) bump('miss', 1)
   return writeSectionRatios(matched, figmaNodes, stats)
+}
+
+/**
+ * 视觉序：Figma y 升序，同 y 按 x 升序（稳定排序，全等时保留文档序）。
+ *
+ * 🛡️ 2026-11-05 治本（mc-max-1793840255758-76bb6b43 实锤 · cp-环境监测 2:7879）：
+ *   本文件里「按视觉序配对」的口径此前只落在 ①-γ 剩余区域映射一处（内联 sort），
+ *   ② 顺序配对仍用 `collectSectionRegions` 的**文档序** ⇒ 同一份图结构在两条路径上得到相反结果。
+ *   实测病灶：vision 2 段（`89:42 Tab切换栏` 真 id + `chart-section` 自造壳），①-γ 因
+ *   「id 精确命中需 ≥2 段」不接管（只 1 段命中）⇒ 落 ②，文档序 `[@echarts/line(113),
+ *   sub-t(32)]` 对位视觉序 `[Tab, chart]` ⇒ 113px 的图表区被配给 Tab 栏（flexGrow 1.559，
+ *   产物 Tab 栏撑到 78%、图表压成 22%），与设计稿完全相反。
+ *   A4 方案 §9.3.2 已登记此残留并指明「彻底治本应抽公共 sortByVisualOrder 供 ②/①-γ 共用」。
+ *
+ *   🔴 为何可以按 y 排序：vision 的 sections 顺序即视觉上下序（分析模型自上而下描述），
+ *      而 Figma 文档子节点序 ≠ 视觉序（本例 `@echarts/line` y930 排在 `sub-t` y898 之前）。
+ *      「分段序 vs 区域序」按 index 1:1 配对的前提就是两侧同序 —— 不同序时必须显式归一。
+ *
+ * @param {Array<object>} regions Figma 图元/区域（含 absoluteBoundingBox）
+ * @returns {Array<object>} 新数组（不原地修改）
+ */
+function sortByVisualOrder(regions) {
+  return [...(regions || [])].sort((a, b) => {
+    const ya = Number(a?.absoluteBoundingBox?.y) || 0
+    const yb = Number(b?.absoluteBoundingBox?.y) || 0
+    if (ya !== yb) return ya - yb
+    return (Number(a?.absoluteBoundingBox?.x) || 0) - (Number(b?.absoluteBoundingBox?.x) || 0)
+  })
+}
+
+/**
+ * 🛡️ 2026-11-05 · A4 方案 §3（:52）否决场景的 fail-closed 护栏。
+ *
+ * 判定一组区域的**垂直区间是否两两不重叠**。只有不重叠时，「按 y 升序」才是唯一确定的
+ * 视觉序，才允许 ② 顺序配对调用 sortByVisualOrder。
+ *
+ * 反例（A4 §3 逐字）：tab 行内 `num(y898,h14)` / `tabs-list(y903,h27)` /
+ * `tabs-icon(y905,h24)` 三者 y 区间互相交叠，纯 y 排序把 num 排到首位 —— 先后由
+ * Figma 导出的亚像素差异决定，不是视觉事实；此时必须保持文档序（fail-open），
+ * 由 ①-γ 的身份判据或 vision 层去解决，而不是靠排序猜。
+ *
+ * 正例（76bb6b43）：`sub-t(y898,h32)` 底边 930 与 `@echarts/line(y930,h113)` 顶边
+ * 相接 ⇒ 区间不重叠 ⇒ 视觉序唯一 ⇒ 排序得 [32,113]，Tab 栏不再反挂。
+ *
+ * 判据为纯几何事实（区间交叠），零阈值、零启发式、零语义猜测；任一区域缺
+ * absoluteBoundingBox 或高度非法 ⇒ false（fail-open 不排）。
+ *
+ * @param {Array<object>} regions 区域/图元数组
+ * @returns {boolean} true = 可安全按 y 归一
+ */
+function hasNonOverlappingVerticalBoxes(regions) {
+  const list = Array.isArray(regions) ? regions : []
+  if (list.length === 0) return false
+  const boxes = []
+  for (const r of list) {
+    const bb = r?.absoluteBoundingBox
+    const y = Number(bb?.y)
+    const h = Number(bb?.height)
+    if (!Number.isFinite(y) || !Number.isFinite(h) || h <= 0) return false
+    boxes.push({ y, bottom: y + h })
+  }
+  boxes.sort((a, b) => a.y - b.y)
+  let maxBottom = -Infinity
+  for (const b of boxes) {
+    if (b.y < maxBottom) return false
+    maxBottom = Math.max(maxBottom, b.bottom)
+  }
+  return true
 }
 
 /**

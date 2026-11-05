@@ -1,0 +1,61 @@
+{
+  "name": "figma-component-count",
+  "label": "Figma 组件分析",
+  "description": "输入 Figma 链接 → 自动解析 → 取设计稿 → 分析组件数量与清单（需配置 Figma Token）",
+  "scenario": "组件分析",
+  "source": "user",
+  "author": "anonymous",
+  "workflow": {
+    "entryNode": "start",
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "label": "入口节点"
+      },
+      {
+        "id": "parse",
+        "type": "agent",
+        "handler": "url-parser-agent",
+        "label": "URL 解析"
+      },
+      {
+        "id": "fetch",
+        "type": "agent",
+        "handler": "figma-connector",
+        "label": "Figma 取数"
+      },
+      {
+        "id": "analyze",
+        "type": "agent",
+        "handler": "figma-analyzer",
+        "label": "组件分析"
+      },
+      {
+        "id": "end",
+        "type": "end",
+        "label": "结束节点"
+      }
+    ],
+    "edges": [
+      {
+        "source": "start",
+        "target": "parse"
+      },
+      {
+        "source": "parse",
+        "target": "fetch"
+      },
+      {
+        "source": "fetch",
+        "target": "analyze"
+      },
+      {
+        "source": "analyze",
+        "target": "end"
+      }
+    ]
+  },
+  "version": 1,
+  "createdAt": 1787220122193
+}

@@ -19,6 +19,7 @@ import { extractPatches, applyPatchesToWorkspace, hasPatchBlocks } from '../util
 import { neutralizeSectionComments } from '../utils/delimiter-guard.js'
 import { prePatchSnapshot, verifyPatchAndRollback } from '../utils/patch-l0b-guard.js'
 import { recompileIndexCss, hasLessFile } from '../utils/index-css-recompiler.js'
+import { applyBackgroundRedLine, buildScaleModeIndex } from '../utils/bg-redline-scale-mode-guard.js'
 
 const logger = createLogger({ name: 'layout-refiner' })
 
@@ -252,13 +253,13 @@ ${partialInstruction}
     prompt += `
 # 🚨 CRITICAL — 图表与面板 UI 还原红线（6 类高频缺陷，违反输出将被自动修正或拒绝）
 
-以下 6 条是硬约束，精修时必须逐条对照 Figma 数据执行。**不使用 cover/center/no-repeat 作为背景默认值；不使用单值 radius；不漏边框；不漏/错 legend；不遗漏卡片区块。**
-违反第 1 条（bg-size）的输出将在后处理中被**自动替换**为 \`100% 100%\`。
+以下 6 条是硬约束，精修时必须逐条对照 Figma 数据执行。**不把 cover/center/no-repeat 当背景默认值；不使用单值 radius；不漏边框；不漏/错 legend；不遗漏卡片区块。**
+后处理只会改写**没有缩放真值**的 bg-size 声明；带真值（Figma scaleMode）的声明会被保留 —— 所以不要为了「等它被自动改」而写错值。
 
 1. **背景图精确还原（bg-size）** [AUTO-FIX]：
-   - Figma 背景图必须精确设置 \`background-size\` 为实际渲染尺寸或 \`100% 100%\`
-   - **严禁使用 \`cover\` / \`contain\` / \`center\` / \`no-repeat\`**
-   - 正确：\`background-size: 100% 100%;\` 错误：\`backgroundSize: 'cover'\`
+   - \`background-size\` 必须按该资源在 Figma 里的缩放真值填写：STRETCH→\`100% 100%\`、FILL/CROP→\`cover\`、FIT→\`contain\`、TILE→\`auto\`（并配 \`background-repeat: repeat\`）
+   - 真值缺失时，写该图**在容器里的实际渲染尺寸**（如 \`48px 48px\`），而不是无条件铺满
+   - 🚫 禁止无条件写 \`background-size: 100% 100%\` —— 局部装饰图 / 图标 / 状态底图（Tab 激态底、卡片装饰条）会被拉满容器而变形
 
 2. **环形图环厚（radius）**：
    - ECharts 环形图必须用 \`radius: ['内%', '外%']\` 数组控制环厚
@@ -815,48 +816,34 @@ ${partialInstruction}
 
   /**
    * 🔴 6 红线后处理：自动修补 LLM 输出中违反红线的代码（2026-07-24）
+   *
+   * 🛡️ 2026-11-06（R3-legacy）：与 `layout-style-refiner` 同源，委托纯函数
+   * `applyBackgroundRedLine`（F3 白名单）。此前本方法**无条件**把
+   * `background-size: cover|contain` 改写成 `100% 100%`，会推翻
+   * `sizeFromScaleMode`（FILL→cover / FIT→contain）给出的 Figma 真值 ——
+   * 同一份产物走「合并精修」与走「串行精修」会得到不同的背景缩放。
+   * 白名单为空（入参未带 scaleMode 真值）时输出与旧实现逐字一致（零回归）。
    */
   _applyRedLineFixes(modifiedFiles, outputPath, params) {
     const patches = []
 
-    if (!modifiedFiles || modifiedFiles.length === 0) return patches
+    let totalKept = 0
+    let totalRewritten = 0
 
-    for (const relPath of modifiedFiles) {
+    // 不因「无改动文件」早退：计数行必须每轮都打（0 也打），否则无法区分
+    // 「没有待改写文件」与「压根没走这条链路」。
+    for (const relPath of modifiedFiles || []) {
       const fullPath = resolve(outputPath, relPath)
       if (!existsSync(fullPath)) continue
 
       try {
-        let content = readFileSync(fullPath, 'utf-8')
-        let patched = false
+        const original = readFileSync(fullPath, 'utf-8')
+        const redLine = applyBackgroundRedLine(original, params)
+        const content = redLine.content
+        totalKept += redLine.kept
+        totalRewritten += redLine.rewritten
 
-        // 规则 1：bg-size 自动修补
-        if (/background-size\s*:\s*cover/i.test(content)) {
-          content = content.replace(/background-size\s*:\s*cover/gi, 'background-size: 100% 100%')
-          patched = true
-        }
-        if (/background-size\s*:\s*contain/i.test(content)) {
-          content = content.replace(/background-size\s*:\s*contain/gi, 'background-size: 100% 100%')
-          patched = true
-        }
-        if (/backgroundSize\s*:\s*['"]cover['"]/i.test(content)) {
-          content = content.replace(/backgroundSize\s*:\s*['"]cover['"]/gi, "backgroundSize: '100% 100%'")
-          patched = true
-        }
-        if (/background-position\s*:\s*center/i.test(content)) {
-          content = content.replace(/[;\s]*background-position\s*:\s*center\s*;?/gi, '')
-          patched = true
-        }
-        if (/backgroundPosition\s*:\s*['"]center['"]/i.test(content)) {
-          content = content.replace(/,\s*backgroundPosition\s*:\s*['"]center['"]/gi, '')
-          content = content.replace(/backgroundPosition\s*:\s*['"]center['"]\s*,?\s*/gi, '')
-          patched = true
-        }
-        if (/background-repeat\s*:\s*no-repeat/i.test(content)) {
-          content = content.replace(/[;\s]*background-repeat\s*:\s*no-repeat\s*;?/gi, '')
-          patched = true
-        }
-
-        if (patched) {
+        if (content !== original) {
           if (relPath.endsWith('.vue')) {
             const syntaxResult = validateVueSfc(content, relPath)
             if (!syntaxResult.valid) {
@@ -872,6 +859,13 @@ ${partialInstruction}
       }
     }
 
+    // 计数行（0 也打）：kept=被真值救下未改写；rewritten=按旧红线改写；whitelist=本轮真值资源数。
+    logger.info('🎨 背景红线改写', {
+      bgRedLineSkipped: `kept=${totalKept} / rewritten=${totalRewritten}`,
+      whitelist: buildScaleModeIndex(params).size,
+      files: (modifiedFiles || []).length,
+      role: 'layout-refiner',
+    })
     return patches
   }
 

@@ -112,7 +112,10 @@ export const RETRY_POLICIES = [
       `\n\n🔴 上次生成未通过「资源归属校验」：以下资源已成功下载，但代码中没有任何引用，本轮必须使用：\n\n${msg}\n\n` +
       `请为每个未使用资源补上真实引用（不能只出现在 import 行，必须在模板中实际使用）：\n` +
       `- icon / img：用 <img :src="变量名" /> 插入对应容器\n` +
-      `- bg：用 :style 绑定 backgroundImage，值为 url(变量名)，并补 backgroundSize: 100% 100%\n`,
+      `- bg：用 :style 绑定 backgroundImage，值为 url(变量名)，挂在**已有业务容器**上（禁止新建空壳 DOM）；\n` +
+      `  backgroundSize 必须按该资源的缩放真值填写：STRETCH→'100% 100%'、FILL/CROP→'cover'、FIT→'contain'、TILE→'auto'；\n` +
+      `  真值缺失时用它在该容器里的实际像素尺寸（如 '48px 48px'）。\n` +
+      `  🚫 禁止无条件写 '100% 100%' —— 局部装饰图 / 图标会被拉满容器变形（与样式自检「背景图禁止拉伸变形」同一条铁律）\n`,
   },
   {
     id: 'semantic-incomplete',

@@ -1913,6 +1913,31 @@ const bindingWizardOpen = ref(false)
 /** 每秒递增，驱动 taskElapsedTime computed 重新计算 */
 const elapsedTick = ref(0)
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
+// 🛡️ 2026-11-05 生产实锤（mc-max-1793758028293-456e4f3d）：SSE 事件被传输层吞掉
+// （Nginx 代理缓冲）时，本页除 SSE 外没有任何状态刷新通道，任务实际 1 分钟完成、
+// 页面却停在「进行中」数小时，左侧「耗时」墙钟（Date.now()-startTime）跟着狂跳。
+// 兜底：非终态期间每 10s 轻探一次任务状态，状态跃迁才全量 loadTask 渲染结果视图；
+// 平时不动 loading/日志流（SSE 仍是细节流的owner），终态后轮询自动停。
+let statusPollTimer: ReturnType<typeof setInterval> | null = null
+const STATUS_POLL_INTERVAL_MS = 10_000
+const LIVE_TASK_STATUSES = ['running', 'queued', 'paused', 'rate_limited', 'retry_scheduled', 'pending']
+async function pollTaskStatusFallback() {
+  const sid = sessionId.value
+  if (!sid) return
+  const cur = task.value?.status
+  if (!LIVE_TASK_STATUSES.includes(String(cur))) return
+  try {
+    const resp = await fetchTaskStatus(sid)
+    const found = resp?.data?.task || resp?.task || null
+    if (resp?.success === false || !found) return
+    if (found.status !== cur) {
+      // 状态跃迁（最常见：completed/failed 落地而 SSE 没送到）→ 全量刷新渲染结果
+      await loadTask()
+    }
+  } catch {
+    // 网络抖动静默；下一轮继续探
+  }
+}
 const bindingGroupId = computed(
   () => (typeof localStorage !== 'undefined' ? localStorage.getItem('currentGroupId') : null) || 'default-group'
 )
@@ -5518,6 +5543,8 @@ onMounted(() => {
   window.addEventListener('message', handlePreviewFrameMessage)
   // 已用时间每秒刷新
   elapsedTimer = setInterval(() => { elapsedTick.value++ }, 1000)
+  // 🛡️ SSE 卡死兜底轮询（见 pollTaskStatusFallback 注释，2026-11-05）
+  statusPollTimer = setInterval(pollTaskStatusFallback, STATUS_POLL_INTERVAL_MS)
   // 先建立 SSE 连接，再加载任务状态
   // 这样可以避免错过早期的 SSE 事件（如进度更新、日志等）
   // 如果任务已终态，setupProgressSSE 内部会跳过连接
@@ -5537,6 +5564,10 @@ onUnmounted(() => {
   if (elapsedTimer) {
     clearInterval(elapsedTimer)
     elapsedTimer = null
+  }
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer)
+    statusPollTimer = null
   }
 })
 

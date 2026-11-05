@@ -867,3 +867,307 @@ import bg1 from '../../resources/images/image_313-5800.png'
     expect(files['package/index.vue']).toBe(IDX_PLAIN)
   })
 })
+
+/**
+ * 🛡️ 2026-11-05 治本（c-traffic-monitor-de627a9d 实锤）：锚点必须真实存在于产物。
+ * 旧行为：ownerSectionId 有值即返回 ⇒ 中间 group（2:3660）在产物里没有 data-section-id
+ *   ⇒ 锚点悬空 ⇒ 落回中文名匹配英文 class ⇒ 全 fail-closed。
+ * 新行为：在 [owner, ...ancestorIds] 中取第一个 ∈ 产物实际 data-section-id 集合的 id。
+ */
+describe('buildResourceMountPlan（产物存在性锚点 + 祖先上溯）', () => {
+  const secs: any[] = [
+    { id: '88:33', type: 'content', responsibility: '当日总流量', elementCount: 4, sourceNodeIds: ['88:33'] },
+  ]
+  // 忠实形态：bg 88:34 → 中间 group 2:3660 → section 88:33 → root 2:9778
+  const figma: any = {
+    id: '2:9778', name: 'cp-流量监测', type: 'FRAME',
+    children: [
+      { id: '88:33', name: 'slot-当日总流量', type: 'FRAME', children: [
+        { id: '2:3660', name: 'Group 2136636802', type: 'FRAME', children: [
+          { id: '88:34', name: 'bg-[m]', type: 'RECTANGLE' },
+        ] },
+      ] },
+    ],
+  }
+  const entry = (over: any = {}) => bgEntry({
+    assignedVarName: 'bg1',
+    resourceFile: 'bg-_m-34.png',
+    figmaNodeId: '88:34',
+    ownerSectionId: '2:3660', // 中间 group：产物不会为它输出 data-section-id
+    ancestorIds: ['2:3660', '88:33', '2:9778'],
+    mountTarget: 'slot-当日总流量',
+    bgRole: 'container',
+    ...over,
+  })
+
+  it('owner 悬空 + 祖先命中产物 section → 锚点取祖先（anchorSource=ancestor）', () => {
+    const plan = buildResourceMountPlan(secs, [entry()], {
+      figmaRoot: figma,
+      productAnchorIds: new Set(['88:33']),
+    })
+    const m = plan.byFile.get('bg-_m-34.png').mounts[0]
+    expect(m.sectionAnchorId).toBe('88:33')
+    expect(m.anchorSource).toBe('ancestor')
+    expect(plan.anchorStats).toEqual({ owner: 0, ancestor: 1, none: 0 })
+  })
+
+  it('owner 就在产物中 → 优先 owner（anchorSource=owner，不上溯）', () => {
+    const plan = buildResourceMountPlan(secs, [entry()], {
+      figmaRoot: figma,
+      productAnchorIds: new Set(['2:3660', '88:33']),
+    })
+    const m = plan.byFile.get('bg-_m-34.png').mounts[0]
+    expect(m.sectionAnchorId).toBe('2:3660')
+    expect(m.anchorSource).toBe('owner')
+  })
+
+  it('候选全不命中产物 → 锚点 null + unresolved 计数（禁回退根容器）', () => {
+    const plan = buildResourceMountPlan(secs, [entry()], {
+      figmaRoot: figma,
+      productAnchorIds: new Set(['xxx:1']),
+    })
+    const m = plan.byFile.get('bg-_m-34.png').mounts[0]
+    expect(m.sectionAnchorId).toBeNull()
+    expect(m.anchorSource).toBe('none')
+    expect(plan.anchorStats).toEqual({ owner: 0, ancestor: 0, none: 1 })
+  })
+
+  it('未传 productAnchorIds → 保持旧行为（owner 有值即用）', () => {
+    const plan = buildResourceMountPlan(secs, [entry()], { figmaRoot: figma })
+    const m = plan.byFile.get('bg-_m-34.png').mounts[0]
+    expect(m.sectionAnchorId).toBe('2:3660')
+  })
+})
+
+/**
+ * 🛡️ 刀A（2026-11-05 · `c-env-monitor-c324a730` 实锤）：锚点**上提必须几何共位**。
+ *
+ * 真机形态（全部取自 `.mc-gen/resource-dom-mapping.json` + `.checkpoint/analysis.json`）：
+ *   bg-7890.png 295×27（tab 栏底图）ownerSectionId=2:7889，ancestorIds=[2:7889, 89:42, 89:41, 2:7879]
+ *   产物只有 1 个锚点：`data-section-id="89:41"`（380×145 的整段根）
+ * 旧行为：上提到 89:41 ⇒ 背景挂到段根 + `background-size:100% 100%` 拉伸 13.5×。
+ */
+describe('刀A · 锚点上提几何共位（c-env-monitor-c324a730 真机形态）', () => {
+  const secs: any[] = [
+    {
+      id: '89:41',
+      type: 'body',
+      elementCount: 11,
+      sourceNodeIds: ['89:41', '89:42'],
+      figmaBox: { x: 1495, y: 898, width: 380, height: 145 },
+      absoluteBoundingBox: { x: 1495, y: 898, width: 380, height: 145 },
+    },
+  ]
+  const tabBg = (over: any = {}) =>
+    bgEntry({
+      assignedVarName: 'bg1',
+      resourceFile: 'bg-7890.png',
+      figmaNodeId: '2:7890',
+      ownerSectionId: '2:7889',
+      ancestorIds: ['2:7889', '89:42', '89:41', '2:7879'],
+      mountTarget: 'tabs-list',
+      bgRole: 'container',
+      figmaBox: { x: 1495, y: 903, width: 295, height: 27 },
+      parentBox: { x: 1495, y: 903, width: 295, height: 27 },
+      ...over,
+    })
+
+  it('跨层上提（295×27 → 380×145）→ 锚点 null + promotionRejected 留痕', () => {
+    const plan = buildResourceMountPlan(secs, [tabBg()], {
+      productAnchorIds: new Set(['89:41']),
+    })
+    const m = plan.byFile.get('bg-7890.png').mounts[0]
+    expect(m.sectionAnchorId).toBeNull()
+    expect(m.anchorPromotionRejected).toBe(true)
+    expect(m.anchorPromotionRejectedAnchor).toBe('89:41')
+    expect(plan.anchorPromotionRejected).toHaveLength(1)
+    // 跳过的是 owner(2:7889) 与它的一级父(89:42)——证明是「跨两级」上提，不是一级
+    expect(plan.anchorPromotionRejected[0].skippedCandidates).toEqual([
+      '2:7889',
+      '89:42',
+    ])
+    expect(plan.anchorPromotionRejected[0].anchorBox).toEqual({
+      width: 380,
+      height: 145,
+    })
+  })
+
+  it('同层上提（真值盒≈锚点盒）→ 照常挂载，不误拦', () => {
+    const plan = buildResourceMountPlan(
+      secs,
+      [
+        tabBg({
+          figmaBox: { x: 1495, y: 898, width: 378, height: 143 },
+          parentBox: { x: 1495, y: 898, width: 378, height: 143 },
+        }),
+      ],
+      { productAnchorIds: new Set(['89:41']) },
+    )
+    const m = plan.byFile.get('bg-7890.png').mounts[0]
+    expect(m.sectionAnchorId).toBe('89:41')
+    expect(m.anchorPromotionRejected).toBe(false)
+    expect(plan.anchorPromotionRejected || []).toHaveLength(0)
+  })
+
+  it('owner 自身就在产物中（hitIdx=0）→ 不走共位判据（小盒背景照挂）', () => {
+    const plan = buildResourceMountPlan(secs, [tabBg()], {
+      productAnchorIds: new Set(['2:7889', '89:41']),
+    })
+    const m = plan.byFile.get('bg-7890.png').mounts[0]
+    expect(m.sectionAnchorId).toBe('2:7889')
+    expect(m.anchorPromotionRejected).toBe(false)
+  })
+
+  it('缺锚点盒真值 → fail-open（不因缺真值改变旧行为）', () => {
+    const noBox = [
+      { id: '89:41', type: 'body', elementCount: 1, sourceNodeIds: ['89:41'] },
+    ]
+    const plan = buildResourceMountPlan(noBox as any, [tabBg()], {
+      productAnchorIds: new Set(['89:41']),
+    })
+    const m = plan.byFile.get('bg-7890.png').mounts[0]
+    expect(m.sectionAnchorId).toBe('89:41')
+    expect(m.anchorPromotionRejected).toBe(false)
+  })
+
+  it('端到端 fail-closed：拒绝后不写任何文件，且记 anchor-promotion-rejected 诊断', () => {
+    const mainVue =
+      '<template>\n  <div class="c-env-monitor-main" data-section-id="89:41">\n    <div class="c-env-monitor-tab"></div>\n  </div>\n</template>\n'
+    const allFiles: Record<string, string> = {
+      'package/index.vue':
+        '<template>\n  <div class="c-env-monitor-slot-con"></div>\n</template>\n',
+      'package/components/MainSection.vue': mainVue,
+    }
+    const plan = buildResourceMountPlan(secs, [tabBg()], {
+      productAnchorIds: new Set(['89:41']),
+    })
+    const { mounted, diagnostics } = mountPlannedResources(allFiles, plan, {})
+    expect(diagnostics.some((d: any) => d.reason === 'anchor-promotion-rejected')).toBe(
+      true,
+    )
+    expect(mounted).toHaveLength(0)
+    // 关键：背景**没有**被挂到段根（这正是旧实锤的错挂形态）
+    expect(allFiles['package/components/MainSection.vue']).toBe(mainVue)
+  })
+})
+
+describe('刀①·闸门1 · sub-state 锚点分流（c-env-monitor-560fe07a 真机形态）', () => {
+  // 真机：bg1(container 295×27) 与 bg2(sub-state 78×21) 同 owner 2:7889；
+  // α3 补标后锚点 tabs-list 先被 bg1 占坑 ⇒ bg2 被归属判据 fail-closed（occupied-by-other）。
+  const tabsVue = `<template>
+  <div class="c-env-monitor-sub-t" data-section-id="89:42">
+    <div class="c-env-monitor-tabs-list" data-resource-anchor="2:7889">
+      <div v-for="tab in tabs" :key="tab.key" class="c-env-monitor-tab-item" :class="{ 'is-active': activeTab === tab.key }" @click="handleTabClick(tab.key)">
+        <span class="c-env-monitor-tab-text">{{ tab.label }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+<script setup lang="ts">
+import { ref } from 'vue'
+const tabs = ref([{ key: 'co', label: '一氧化碳' }])
+const activeTab = ref('co')
+const handleTabClick = (k: string) => { activeTab.value = k }
+</script>`
+
+  const noActiveVue = tabsVue.replace(
+    ` :class="{ 'is-active': activeTab === tab.key }"`,
+    '',
+  )
+
+  // 真机产物恒有 package/index.vue（owner=null 时回落目标）；缺失会让挂载循环在
+  // owner-file-missing 早退，永远到不了事实链分支（2026-11-05 首版 fixture 失真实锤）。
+  const indexVue = `<template>
+  <div class="c-env-monitor-root"><TabsSection /></div>
+</template>
+<script setup>
+import TabsSection from './components/TabsSection.vue'
+</script>`
+
+  const secs: any[] = [
+    {
+      id: '89:42',
+      type: 'body',
+      name: 'Tab切换栏',
+      sourceNodeIds: ['89:42'],
+      figmaBox: { x: 1495, y: 903, width: 295, height: 27 },
+      absoluteBoundingBox: { x: 1495, y: 903, width: 295, height: 27 },
+    },
+  ]
+  const makeMapping = () => [
+    bgEntry({
+      assignedVarName: 'bg1',
+      resourceFile: 'bg-7890.png',
+      figmaNodeId: '2:7890',
+      ownerSectionId: '2:7889',
+      ancestorIds: ['2:7889', '89:42'],
+      mountTarget: 'tabs-list',
+      bgRole: 'container',
+      figmaBox: { x: 1495, y: 903, width: 295, height: 27 },
+      parentBox: { x: 1495, y: 903, width: 295, height: 27 },
+    }),
+    bgEntry({
+      assignedVarName: 'bg2',
+      resourceFile: 'bg-tab-active-7891.png',
+      figmaNodeId: '2:7891',
+      ownerSectionId: '2:7889',
+      ancestorIds: ['2:7889', '89:42'],
+      mountTarget: 'tabs-list',
+      bgRole: 'sub-state',
+      figmaBox: { x: 1495, y: 903, width: 78, height: 21 },
+      parentBox: { x: 1495, y: 903, width: 295, height: 27 },
+    }),
+  ]
+  const opts = { productAnchorIds: new Set(['2:7889']) }
+
+  it('阳性：bg1 占坑后 bg2（sub-state）仍条件绑定到 active v-for item（不被 occupied 拦死）', () => {
+    const files: any = { 'package/index.vue': indexVue, 'package/components/TabsSection.vue': tabsVue }
+    const plan = buildResourceMountPlan(secs, makeMapping(), opts)
+    const r = mountPlannedResources(files, plan)
+    const file = files['package/components/TabsSection.vue']
+    // bg1：事实链挂 tabs-list（注入为表达式绑定形态 'url(' + bg1 + ')'）
+    expect(file).toContain('tabs-list')
+    expect(file).toContain(`backgroundImage: 'url(' + bg1 + ')'`)
+    // bg2：闸门1 分流 → active item 条件绑定（挂载点在 item 上，非锚点 tabs-list）
+    const bg2Mounted = r.mounted.find((m: any) => m.var === 'bg2')
+    expect(bg2Mounted).toBeTruthy()
+    expect(bg2Mounted.file).toBe('package/components/TabsSection.vue')
+    expect(bg2Mounted.keyword).toBe('active-state')
+    expect(file).toContain(`activeTab === tab.key ? { backgroundImage: 'url(' + bg2 + ')'`)
+    // bg2 的 :style 落在 v-for item 上（is-active 元素），而不是 tabs-list 锚点
+    const itemLine = file.split('\n').find((l: string) => l.includes(`'url(' + bg2`))
+    expect(itemLine).toContain('is-active')
+    // 不再有占坑误杀诊断
+    expect(
+      r.diagnostics.filter((d: any) => d.reason === 'bg-anchor-occupied-by-other-resource'),
+    ).toHaveLength(0)
+  })
+
+  it('阴性：宿主无 active 条件绑定 → sub-state fail-closed 放弃（宁缺不错，不落静态回退）', () => {
+    const files: any = { 'package/index.vue': indexVue, 'package/components/TabsSection.vue': noActiveVue }
+    const plan = buildResourceMountPlan(secs, makeMapping(), opts)
+    const r = mountPlannedResources(files, plan)
+    const file = files['package/components/TabsSection.vue']
+    expect(file).not.toContain('bg2')
+    expect(
+      r.diagnostics.some((d: any) => d.reason === 'sub-state-active-binding-missing'),
+    ).toBe(true)
+    // tabs-list 上也不能出现 bg2（不静态挂锚点/容器）
+    expect(file).not.toContain('bg-tab-active')
+  })
+
+  it('阴性：非 sub-state（container）资源不受闸门影响，占坑判据照常 fail-closed', () => {
+    // 两条都是 container（bg2 换角色）⇒ bg2 仍被 occupied 拦（旧行为保持）
+    const mapping = makeMapping().map((m: any) =>
+      m.assignedVarName === 'bg2' ? { ...m, bgRole: 'container' } : m,
+    )
+    const files: any = { 'package/index.vue': indexVue, 'package/components/TabsSection.vue': tabsVue }
+    const plan = buildResourceMountPlan(secs, mapping, opts)
+    const r = mountPlannedResources(files, plan)
+    const bg2Mounted = r.mounted.find((m: any) => m.var === 'bg2')
+    expect(bg2Mounted).toBeUndefined()
+    expect(
+      r.diagnostics.filter((d: any) => d.reason === 'bg-anchor-occupied-by-other-resource'),
+    ).toHaveLength(1)
+  })
+})

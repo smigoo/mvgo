@@ -1465,3 +1465,118 @@ describe('①-γ id 部分命中 + 剩余区域兜底（2026-11-04 治本 · 4cb
     expect(stats.order).toBe(5)
   })
 })
+
+/**
+ * 🛡️ 2026-11-05 治本：② 顺序配对必须按**视觉序**而非 Figma 文档序
+ *
+ * 事故 mc-max-1793840255758-76bb6b43（cp-环境监测 2:7879）：vision 只切出 2 段
+ * （`89:42 Tab切换栏` 真 id + `chart-section` 自造壳），①-γ 要求 id 精确命中 ≥2 段 ⇒ 不接管
+ * ⇒ 落 ②。`collectSectionRegions` 的文档序是 `[@echarts/line(113), sub-t(32)]`，与视觉上下序
+ * 相反 ⇒ 113px 的图表区被配给 Tab 栏（flexGrow 1.559）⇒ 产物 Tab 栏撑到 78%、图表压成 22%。
+ *
+ * A4 方案 §9.3.2 已登记为残留并指明修法：抽公共 sortByVisualOrder 供 ②/①-γ 共用。
+ */
+describe('② 顺序配对视觉序（2026-11-05 治本 · 76bb6b43 实锤）', () => {
+  // 与 ①-γ 用例同一棵真值树（cp-环境监测），此处独立定义避免跨 describe 依赖
+  const cpEnvMonitor = () => ({
+    document: {
+      id: '2:7879',
+      name: 'cp-环境监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 1475, y: 865, width: 420, height: 186 },
+      children: [
+        { id: '2:7880', name: 'bg', type: 'VECTOR', absoluteBoundingBox: { x: 1475, y: 865, width: 420, height: 186 } },
+        {
+          id: '2:7881', name: 'header', type: 'GROUP',
+          absoluteBoundingBox: { x: 1495, y: 875, width: 377, height: 28.08984375 },
+          children: [
+            { id: '2:7888', name: '环境监测', type: 'TEXT', absoluteBoundingBox: { x: 1495, y: 875, width: 64, height: 19 } },
+          ],
+        },
+        {
+          id: '89:41', name: 'slot-con', type: 'FRAME',
+          absoluteBoundingBox: { x: 1495, y: 898, width: 380, height: 145 },
+          children: [
+            // 🔴 文档序在前、视觉序在后（y930 > y898）——正是本案病灶
+            { id: '2:7898', name: '@echarts/line', type: 'GROUP', absoluteBoundingBox: { x: 1495, y: 930, width: 380, height: 113 } },
+            {
+              id: '89:42', name: 'sub-t', type: 'FRAME',
+              absoluteBoundingBox: { x: 1495, y: 898, width: 380, height: 32 },
+              children: [
+                { id: '2:7889', name: 'tabs-list', type: 'GROUP', absoluteBoundingBox: { x: 1495, y: 903, width: 295, height: 27 } },
+          ]},
+        ]},
+      ],
+    },
+  })
+
+  it('⭐ 阳性：文档序与视觉序相反 ⇒ 按 y 视觉序配对（Tab 32px / 图表 113px）', () => {
+    // 都不带 id ⇒ ①-β/①-γ 均不接管，强制走 ② 顺序配对
+    const sections: any[] = [
+      { name: 'Tab切换栏' },
+      { name: 'CO浓度趋势图' },
+    ]
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, cpEnvMonitor(), stats)).toBe(2)
+    expect(stats.order).toBe(2)
+    // 修复前：[113, 32] —— 图表与标签栏对调，正是用户报「Tab 栏占了半个组件」
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([32, 113])
+    const avg = (32 + 113) / 2
+    expect(sections[0].styles.flexGrow).toBeCloseTo(32 / avg, 2) // ≈0.441
+    expect(sections[1].styles.flexGrow).toBeCloseTo(113 / avg, 2) // ≈1.559
+    // 比例量纲 avg=1（和为段数）
+    const sum = sections.reduce((a: number, s: any) => a + s.styles.flexGrow, 0)
+    expect(sum).toBeCloseTo(2, 2)
+    // header 28.09 仍被容错剥掉，不得被任何段认领
+    expect(sections.some((s: any) => s.styles.figmaHeightPx === 28)).toBe(false)
+  })
+
+  it('阴性（零位移）：文档序即视觉序 ⇒ 配对结果与文档序一致', () => {
+    const sequential = {
+      document: {
+        id: 'root',
+        name: 'root',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 300 },
+        children: [
+          { id: 'a', name: 'block-a', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 100 } },
+          { id: 'b', name: 'block-b', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 100, width: 400, height: 200 } },
+        ],
+      },
+    }
+    const sections: any[] = [{ name: '上段' }, { name: '下段' }]
+    applyFigmaSectionRatios(sections, sequential, {})
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([100, 200])
+  })
+
+  /**
+   * 🛡️ 2026-11-05 追认补闭环：A4 方案 §3(:52) 否决的「四段行内图元」场景必须 fail-open。
+   * 文档序 `[chart(113,y930), num(14,y898), tabs-list(27,y903), tabs-icon(24,y905)]`
+   * 中后三者 y 区间互相交叠 ⇒ hasNonOverlappingVerticalBoxes=false ⇒ 不按 y 排序。
+   * 若误排会得到 `[14,27,24,113]`（num 排首位），正是 §3 否决「② 按 y 排序」的理由。
+   */
+  it('阴性（A4 §3 否决场景）：行内图元 y 区间重叠 ⇒ 不按 y 排序，保持文档序', () => {
+    const overlappingRow = {
+      document: {
+        id: 'root',
+        name: 'root',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 890, width: 400, height: 160 },
+        children: [
+          // 🔴 文档序：视觉在下的图表区排在最前（与 A4 §2 根因链同款）
+          { id: 'd', name: 'chart-block', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 930, width: 400, height: 113 } },
+          { id: 'a', name: 'num', type: 'GROUP', absoluteBoundingBox: { x: 0, y: 898, width: 40, height: 14 } },
+          { id: 'b', name: 'tabs-list', type: 'GROUP', absoluteBoundingBox: { x: 45, y: 903, width: 295, height: 27 } },
+          { id: 'c', name: 'tabs-icon', type: 'GROUP', absoluteBoundingBox: { x: 345, y: 905, width: 40, height: 24 } },
+        ],
+      },
+    }
+    const sections: any[] = [{ name: '段1' }, { name: '段2' }, { name: '段3' }, { name: '段4' }]
+    const stats: any = {}
+    expect(applyFigmaSectionRatios(sections, overlappingRow, stats)).toBe(4)
+    // 不排序 ⇒ 与文档序逐位一致；误排会得到 [14, 27, 24, 113]
+    expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([113, 14, 27, 24])
+    expect(stats.orderVisualSort).toBe(0)
+    expect(stats.orderVisualSortSkippedOverlap).toBe(1)
+  })
+})

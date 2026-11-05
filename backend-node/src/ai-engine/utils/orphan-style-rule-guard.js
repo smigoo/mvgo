@@ -199,6 +199,15 @@ export function findOrphanStyleRules(files) {
   stats.domFiles = Object.keys(facts.byFile || {}).length;
   const factList = Object.values(facts.byFile || {});
 
+  // 🛡️ 零证据护栏（2026-11-05 · file-writer.diff-skip / file-writer.less-heal spec 实锤）：
+  //   产物集中**没有任何 DOM 源文件**（domFiles===0，如单测只喂独立 .less）时，
+  //   「所有类都零引用」是**证据缺失**而非孤儿事实 ⇒ 删除会把整个样式文件清空
+  //   （实测 `.a { color: red; }` 被清成空串落盘）。真机产物恒有 .vue（index.vue 必在）
+  //   ⇒ domFiles>0，护栏不触发。fail-open 语义与文件头注一致：证据不足时不删。
+  //   ⚠️ 实现纪律：护栏挂在**候选删除决策**处（下方 keepReason 判定后），不在本处早退——
+  //   早退会吞掉 less-mixin / dynamic-selector 等前置 skipped 计数（阴性②语义）。
+  const zeroDomEvidence = stats.domFiles === 0;
+
   // 动态插值守护信号（存在插值 ⇒ 变体在模板里不可见 ⇒ 前缀同干者一律保留）
   const dynamicFiles = detectDynamicClassBindings(
     Object.fromEntries(list.map((f) => [f.path, f.content])),
@@ -276,6 +285,12 @@ export function findOrphanStyleRules(files) {
       }
       if (keepReason) {
         stats.kept.push({ file, selector, reason: keepReason });
+        continue;
+      }
+
+      // 🛡️ 零证据护栏：无任何 DOM 源文件时「零引用」不可证 ⇒ 不删（见上方 zeroDomEvidence 注）
+      if (zeroDomEvidence) {
+        stats.skipped.push({ file, selector, reason: 'no-dom-evidence' });
         continue;
       }
 

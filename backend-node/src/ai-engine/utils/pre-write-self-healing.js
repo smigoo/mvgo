@@ -258,6 +258,10 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     flex003: 0,
     flex005: 0,
     bgStyleComplete: 0,
+    // 🛡️ F3′（2026-11-05）：S6 补全的取值来源分流 —— truth=按资源几何/scaleMode 真值，
+    //   fallback=解析不到资源、回落 `inferBackgroundStyle({})` 中性默认。0 也必打（验收计数行）。
+    bgStyleTruthUsed: 0,
+    bgStyleNeutralFallback: 0,
     imgSrcBackfilled: 0,
     // 刀 38 / 刀 40（2026-10-21）：显式初始化 —— 下游若按固定形状序列化 summary，
     // 动态赋值的键会因「条件命中才出现」而缺字段（记忆铁律：加新字段必查下游消费）。
@@ -731,10 +735,14 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   }
 
-  // ⑦ 背景 :style 补全自愈（缺 size/repeat/position → inferBackgroundStyle，无 mapping 才兜底铺满）。
+  // ⑦ 背景 :style 补全自愈（缺 size/repeat/position → `inferBackgroundStyle` 真值；
+  //    解析不出该元素引用的资源才回落中性默认）。
+  //    🛡️ F3′（2026-11-05 · 刀53 三链治本）：此前的 `mapping` 入参**形同虚设**——被调函数
+  //    签名只收 content，一律用 `inferBackgroundStyle({})` 中性默认（`100% 100%`/`0px 0px`），
+  //    把 191×81 的卡片底图铺满整卡（e23b0b40 / 300fe0f7 实锤）。现真正下传并计数。
   for (const [fp, fc] of Object.entries(result)) {
     if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-    const completed = ensureBackgroundStyleComplete(fc, mapping);
+    const completed = ensureBackgroundStyleComplete(fc, mapping, summary);
     if (completed !== fc) {
       result[fp] = completed;
       summary.bgStyleComplete++;
@@ -1336,6 +1344,9 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         judged: det.stats.judged,
         mismatches: det.stats.mismatches,
         skippedNoTruth: det.stats.skippedNoTruth,
+        // 观测型计数（0 也打）：契约段内流式轨道段数 / 其中末行不满被判违规的段数
+        fluidTracks: det.stats.fluidTracks,
+        fluidTracksIllegal: det.stats.fluidTracksIllegal,
       });
       if (det.issues.length > 0) {
         const healed = healGridListLayout(fileArr, det.issues);

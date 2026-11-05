@@ -2025,3 +2025,72 @@ describe("fixMisplacedContainerOpacity 遍历防护（2026-10-15 · a715fafc 爆
     expect(report.fixed).toHaveLength(0)
   })
 })
+
+/**
+ * 🛡️ 2026-11-05 治本（mc-max-1793841507552-f461f30f 实锤）：
+ *   header 右侧插槽出现「装饰图标」四个字。
+ *   真值生产 visual-parser.js:2652 把 `content: … || '装饰图标'` 的描述性兜底塞进 content；
+ *   T09 ensureHeaderSlots 旧逻辑对**每个** slot 都把 content 包成 `<span>` 注入 DOM
+ *   ⇒ 描述文案变成可见 UI 文本。修法在「headerSlots → DOM」唯一出口按**结构**拦截：
+ *   elementType 资源型 / children 携带资源事实的插槽不得渲染文本。
+ *
+ *   验证口径刻意不用实现里的正则：直接断言产物字符串含/不含文本与 <template> 标签。
+ */
+describe('T09 资源型 headerSlots 不得渲染描述文案（2026-11-05）', () => {
+  const BASE = `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-test-root">content</div>
+  </base-panel>
+</template>
+<script setup>
+</script>`
+
+  it('⭐ 阳性：icon-group + resourceFile children ⇒ 不注入「装饰图标」', () => {
+    const input: any = {
+      headerSlots: [
+        {
+          slotType: 'title-left',
+          elementType: 'icon-group',
+          content: '装饰图标',
+          children: [{ resourceFile: 'icon-1.png', recommendedUsage: 'imgSrc' }],
+        },
+      ],
+    }
+    const out = ensureHeaderSlots(BASE, input, {})
+    expect(out).not.toContain('装饰图标')
+    expect(out).not.toContain('<template #title-left>')
+  })
+
+  it('阴性（防误伤）：纯文本 slot 仍照常注入', () => {
+    const input: any = {
+      headerSlots: [{ slotType: 'header-right', content: '共 12 台' }],
+    }
+    const out = ensureHeaderSlots(BASE, input, {})
+    expect(out).toContain('共 12 台')
+    expect(out).toContain('<template #header-right>')
+  })
+
+  it('边界：elementType 未声明但 children 携带 resourceFile ⇒ 仍拦截', () => {
+    const input: any = {
+      headerSlots: [
+        {
+          slotType: 'title-left',
+          content: '装饰图标',
+          children: [{ resourceFile: 'icon-1.png' }],
+        },
+      ],
+    }
+    const out = ensureHeaderSlots(BASE, input, {})
+    expect(out).not.toContain('装饰图标')
+  })
+
+  it('边界：无资源事实的普通插槽不受影响', () => {
+    const input: any = {
+      headerSlots: [
+        { slotType: 'title-left', elementType: 'text', content: '设备总数 28' },
+      ],
+    }
+    const out = ensureHeaderSlots(BASE, input, {})
+    expect(out).toContain('设备总数 28')
+  })
+})

@@ -1,0 +1,71 @@
+{
+  "name": "feat-from-component",
+  "label": "组件改造（读码→需求→新组件）",
+  "description": "选已有组件→分析代码→传需求→生成新功能组件并落盘（需模型 Key；输入 sourcePath/requirement/outputPath）",
+  "scenario": "组件改造",
+  "source": "user",
+  "author": "anonymous",
+  "workflow": {
+    "entryNode": "start",
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "label": "入口节点"
+      },
+      {
+        "id": "read",
+        "type": "agent",
+        "handler": "my-read",
+        "label": "读取组件代码"
+      },
+      {
+        "id": "analyze",
+        "type": "agent",
+        "handler": "code-analyzer",
+        "label": "代码分析"
+      },
+      {
+        "id": "gen",
+        "type": "agent",
+        "handler": "feat-generator",
+        "label": "功能组件生成"
+      },
+      {
+        "id": "write",
+        "type": "agent",
+        "handler": "my-write",
+        "label": "代码落盘"
+      },
+      {
+        "id": "end",
+        "type": "end",
+        "label": "结束节点"
+      }
+    ],
+    "edges": [
+      {
+        "source": "start",
+        "target": "read"
+      },
+      {
+        "source": "read",
+        "target": "analyze"
+      },
+      {
+        "source": "analyze",
+        "target": "gen"
+      },
+      {
+        "source": "gen",
+        "target": "write"
+      },
+      {
+        "source": "write",
+        "target": "end"
+      }
+    ]
+  },
+  "version": 1,
+  "createdAt": 1787277380633
+}

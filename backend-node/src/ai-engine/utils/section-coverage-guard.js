@@ -530,6 +530,448 @@ export function stripDanglingComponentRefs(files, fileList, mutate = true) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ 空段判据 + 诚实降级（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）
+//
+// 事故链：vision 把整个 slot 切成「今日累计 + 统计卡片组」两段后，统计卡片组单段
+//   elementCount=12 触发 planner R2 密度拆分（internalSubcomponents=2）；prompt 又要求
+//   「每个内部子组件也必须是独立 .vue 文件」且**命名自由** ⇒ LLM 写了 3 个 StatsCard*.vue
+//   引用。但子组件发现只跑 index.vue 一层（microcode-engineer 批5）⇒ 二级组件永远没有
+//   生成槽位 ⇒ stripDanglingComponentRefs 把 3 个 import 与 3 个模板标签一并剥离 ⇒
+//   StatsSection.vue 成了空容器，其 141×74 卡片背景被 100% 100% 拉满三卡总宽
+//   （用户截图里的「巨幅蓝色」）。
+//
+// 本段只做「事后判据 + 诚实降级」，不做生成（治本在微码工程师的二级子组件补齐）：
+//   ① detectEmptySectionComponents  —— 纯结构判据，回答「这个 section 组件是不是空壳」；
+//   ② degradeEmptySectionComponents —— 对空壳剥掉背景（宁留白，不出错色）。
+//
+// 判据纪律：
+//   · **纯结构**（tag 配平扫描，不用正则匹配嵌套结构——非贪婪会在第一个内层闭合处截断）；
+//     不以图层名/类名/plan 为依据 ⇒ 命名无关；
+//   · **宁漏不误伤**：只有「单个非 void、非自闭合根元素，其内部既无元素也无非空文本」才判空；
+//     多根 fragment / 纯文本 / 自闭合根 / 无 <template> 一律视为非空；
+//   · 只扫 `package/components/*.vue`（index.vue 有宿主外壳承接，不参与本判据）；
+//   · fail-open：任何异常返回空，绝不阻断生成。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** HTML void 元素（无闭合标签，视作完整单元素） */
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img',
+  'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+/**
+ * 从 `<` 起始下标找标签结束的 `>`（引号感知：属性值内的 `>` 不算结束）。
+ * @returns {number} `>` 的下标；未闭合返回 -1
+ */
+function _tagEnd(html, start) {
+  let quote = '';
+  for (let i = start; i < html.length; i += 1) {
+    const ch = html[i];
+    if (quote) {
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (ch === '>') return i;
+  }
+  return -1;
+}
+
+/**
+ * 配平查找同名闭合标签（tag 栈），用于取单根元素的内段。
+ * @returns {{innerEnd:number, afterEnd:number}|null}
+ */
+function _matchClosingTag(html, from, name) {
+  let depth = 1;
+  let i = from;
+  while (i < html.length) {
+    const lt = html.indexOf('<', i);
+    if (lt === -1) return null;
+    if (html.startsWith('<!--', lt)) {
+      const ce = html.indexOf('-->', lt + 4);
+      i = ce === -1 ? html.length : ce + 3;
+      continue;
+    }
+    if (html[lt + 1] === '/') {
+      const m = /^<\/([A-Za-z][\w.:-]*)\s*>/.exec(html.slice(lt, lt + 80));
+      if (!m) {
+        i = lt + 1;
+        continue;
+      }
+      if (m[1] === name) {
+        depth -= 1;
+        if (depth === 0) return { innerEnd: lt, afterEnd: lt + m[0].length };
+      }
+      i = lt + m[0].length;
+      continue;
+    }
+    const m = /^<([A-Za-z][\w.:-]*)/.exec(html.slice(lt, lt + 80));
+    const end = _tagEnd(html, lt);
+    if (!m || end === -1) {
+      i = end === -1 ? html.length : end + 1;
+      continue;
+    }
+    const selfClosing = html[end - 1] === '/' || VOID_TAGS.has(m[1].toLowerCase());
+    if (m[1] === name && !selfClosing) depth += 1;
+    i = end + 1;
+  }
+  return null;
+}
+
+/**
+ * 扫描一段模板 HTML 的「顶层节点」。
+ * @returns {{nodes:Array<{name:string,selfClosing:boolean,inner:string}>, hasText:boolean}}
+ */
+function _topLevelNodes(html) {
+  const nodes = [];
+  let hasText = false;
+  let i = 0;
+  while (i < html.length) {
+    const lt = html.indexOf('<', i);
+    if (lt === -1) {
+      if (html.slice(i).trim()) hasText = true;
+      break;
+    }
+    if (html.slice(i, lt).trim()) hasText = true;
+    if (html.startsWith('<!--', lt)) {
+      const ce = html.indexOf('-->', lt + 4);
+      i = ce === -1 ? html.length : ce + 3;
+      continue;
+    }
+    if (html[lt + 1] === '/') {
+      const m = /^<\/([A-Za-z][\w.:-]*)\s*>/.exec(html.slice(lt, lt + 80));
+      i = m ? lt + m[0].length : lt + 1;
+      continue;
+    }
+    const m = /^<([A-Za-z][\w.:-]*)/.exec(html.slice(lt, lt + 80));
+    const end = _tagEnd(html, lt);
+    if (!m || end === -1) break;
+    const name = m[1];
+    const selfClosing = html[end - 1] === '/' || VOID_TAGS.has(name.toLowerCase());
+    if (selfClosing) {
+      nodes.push({ name, selfClosing: true, inner: '' });
+      i = end + 1;
+      continue;
+    }
+    const close = _matchClosingTag(html, end + 1, name);
+    nodes.push({
+      name,
+      selfClosing: false,
+      inner: close ? html.slice(end + 1, close.innerEnd) : html.slice(end + 1),
+    });
+    i = close ? close.afterEnd : html.length;
+  }
+  return { nodes, hasText };
+}
+
+/**
+ * 模板内段是否「没有任何可见内容」（元素/非空文本）。
+ * 宁漏不误伤：多根 fragment、纯文本、自闭合根一律判非空。
+ */
+function _isEmptyTemplate(html) {
+  const { nodes, hasText } = _topLevelNodes(html);
+  if (nodes.length === 0) return !hasText; // 纯文本 ⇒ 非空；全空白 ⇒ 空
+  if (nodes.length > 1) return false; // 多根 fragment ⇒ 非空
+  const only = nodes[0];
+  if (only.selfClosing) return false; // 自闭合根（含 void）⇒ 保守视为非空
+  return _isEmptyTemplate(only.inner);
+}
+
+/**
+ * 取 SFC 顶层 `<template>` 的内段；无则 null。
+ * 模板区提取复用 `sfc-template-extractor#extractSfcTemplate`（该模块是模板提取的
+ * 单一事实源，已治过 lazy 正则在具名插槽处提前截断的家族缺陷），此处只做「去掉外层
+ * template 标签」这一步，不新写第二套提取正则。
+ * @returns {string|null}
+ */
+function _sfcTemplateInner(content) {
+  const region = extractSfcTemplate(content);
+  if (!region) return null;
+  const openEnd = _tagEnd(region, 0);
+  if (openEnd === -1) return null;
+  const close = _matchClosingTag(region, openEnd + 1, 'template');
+  return close ? region.slice(openEnd + 1, close.innerEnd) : region.slice(openEnd + 1);
+}
+
+/**
+ * 对 SFC 模板区的**根元素 start tag** 做替换（偏移基于原文，安全）。
+ * @param {string} content .vue 全文
+ * @param {(tag:string)=>string} transform 接收 start tag 文本，返回替换后的文本
+ * @returns {string} 替换后的全文（未命中/无变化时原样返回）
+ */
+function _patchRootStartTag(content, transform) {
+  const tplStart = content.search(/<template\b[^>]*>/i);
+  if (tplStart < 0) return content;
+  const openEnd = _tagEnd(content, tplStart);
+  if (openEnd === -1) return content;
+  let i = openEnd + 1;
+  while (i < content.length) {
+    const lt = content.indexOf('<', i);
+    if (lt === -1) return content;
+    if (content.startsWith('<!--', lt)) {
+      const ce = content.indexOf('-->', lt + 4);
+      i = ce === -1 ? content.length : ce + 3;
+      continue;
+    }
+    if (content[lt + 1] === '/') {
+      const e = _tagEnd(content, lt);
+      i = e === -1 ? content.length : e + 1;
+      continue;
+    }
+    const end = _tagEnd(content, lt);
+    if (end === -1) return content;
+    const tag = content.slice(lt, end + 1);
+    const nextTag = transform(tag);
+    if (nextTag === tag) return content;
+    return `${content.slice(0, lt)}${nextTag}${content.slice(end + 1)}`;
+  }
+  return content;
+}
+
+/** 顶层分隔切分（引号 / 括号 / 花括号/方括号 感知） */
+function _splitTopLevel(body, sep) {
+  const out = [];
+  let depth = 0;
+  let quote = '';
+  let cur = '';
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i];
+    if (quote) {
+      cur += ch;
+      if (ch === quote && body[i - 1] !== '\\') quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      cur += ch;
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') {
+      depth += 1;
+      cur += ch;
+      continue;
+    }
+    if (ch === ')' || ch === ']' || ch === '}') {
+      depth -= 1;
+      cur += ch;
+      continue;
+    }
+    if (ch === sep && depth === 0) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/** 替换某个属性的值（`[^"]*` 约定：属性值内不使用双引号；不匹配即原样返回 = fail-open） */
+function _replaceAttrValue(tag, attrName, transform) {
+  const rx = new RegExp(`(\\s${attrName}\\s*=\\s*")([^"]*)(")`, 'i');
+  const m = rx.exec(tag);
+  if (!m) return tag;
+  const nextVal = transform(m[2]);
+  if (nextVal === m[2]) return tag;
+  return `${tag.slice(0, m.index)}${m[1]}${nextVal}${m[3]}${tag.slice(m.index + m[0].length)}`;
+}
+
+const BG_CSS_DECL_RX = /^\s*background(-[a-z]+)?\s*:/i;
+const BG_OBJ_KEY_RX = /^\s*background[A-Za-z]*\s*:/;
+
+/** 从一个 start tag 文本里剥掉背景声明（CSS 形态 style + JS 对象形态 :style） */
+function _stripBackgroundFromStartTag(tag) {
+  let out = _replaceAttrValue(tag, 'style', (css) => {
+    const kept = _splitTopLevel(css, ';').filter((d) => d.trim() && !BG_CSS_DECL_RX.test(d));
+    return kept.join(';');
+  });
+  out = _replaceAttrValue(out, ':style', (val) => {
+    const t = String(val).trim();
+    // 非对象字面量（如 :style="styleObj"）不动——无法确定性判定其内容
+    if (!t.startsWith('{') || !t.endsWith('}')) return val;
+    const kept = _splitTopLevel(t.slice(1, -1), ',').filter(
+      (e) => e.trim() && !BG_OBJ_KEY_RX.test(e),
+    );
+    return `{${kept.join(',')}}`;
+  });
+  return out;
+}
+
+/**
+ * 递归收集 section 子树里「声明过的文本真值」。
+ *
+ * 字段口径按 plan 实际形态收（真机实测）：统计卡 `label` + `value.parts[].text`、
+ * grid/tabs 项 `label`/`value`、纯文本节点 `text`、以及 `items[]`/`body`/`children` 递归。
+ * **刻意不收 `name`**——图层名是 Figma 命名，不是内容真值。
+ * 深度上限 6 防环；只做字符串收集，不做语义推断。
+ */
+function _collectDeclaredTexts(sec) {
+  const out = [];
+  const push = (v) => {
+    if (typeof v === 'string' && v.trim()) out.push(v.trim());
+  };
+  const walk = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > 6) return;
+    push(node.text);
+    push(node.label);
+    push(node.value);
+    if (Array.isArray(node.parts)) node.parts.forEach((p) => push(p?.text));
+    if (Array.isArray(node.texts)) node.texts.forEach(push);
+    if (Array.isArray(node.children)) node.children.forEach((c) => walk(c, depth + 1));
+    if (Array.isArray(node.items)) node.items.forEach((c) => walk(c, depth + 1));
+    if (Array.isArray(node.elements)) node.elements.forEach((c) => walk(c, depth + 1));
+    if (node.body) walk(node.body, depth + 1);
+    if (node.content) walk(node.content, depth + 1);
+  };
+  walk(sec, 0);
+  return out;
+}
+
+/**
+ * plan 锚点：该 section 是否「本该有非标题内容」。
+ *
+ * 排除纯标题段——面板标题由宿主外壳（base-panel）渲染，section 模板里只有装饰元素
+ * 是**正确形态**（真机 patchHitReport.panelChromeSkippedSelfPanel 已实证），不能判空壳。
+ */
+function _sectionDeclaresNonTitleContent(sec) {
+  if (!sec || typeof sec !== 'object') return false;
+  const title = String(sec.title || '').trim();
+  const texts = _collectDeclaredTexts(sec).filter((t) => t !== title);
+  // 只有「有非标题文本真值」才算本该有内容；纯结构无文本（装饰段/纯图形段）
+  // 一律判 false —— 宁漏不误伤，避免把装饰容器当缺陷去剥背景。
+  return texts.length > 0;
+}
+
+/** 运行时挂载容器：<script> 里用 echarts ⇒ 模板空是正确形态（图表由 JS 填充） */
+function _isRuntimeMountedContainer(content) {
+  const script = (content.match(/<script[^>]*>([\s\S]*?)<\/script>/i) || [])[1] || '';
+  return /echarts|ECharts|@echarts/i.test(script);
+}
+
+/** 取模板内根元素的 data-section-id（命名无关锚点） */
+function _rootSectionId(content) {
+  const inner = _sfcTemplateInner(content);
+  if (!inner) return null;
+  const m = /data-section-id\s*=\s*"([\w:.-]+)"/.exec(inner);
+  return m ? m[1] : null;
+}
+
+/**
+ * 🛡️ 空段检测（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）。
+ *
+ * **空壳本身不是缺陷**——echarts 容器、`display:none` 的刀53 接管产物、纯装饰容器、
+ * 由宿主外壳渲染的标题段，模板为空都是正确形态。缺陷是「plan 说这里有内容，产物却空了」。
+ * 故判据是**三层与门**：
+ *   ① 排除运行时挂载：`<script>` 含 echarts（图表由 JS 填充）；
+ *   ② 排除有意隐藏：根元素内出现 `display:none`；
+ *   ③ plan 锚定：`data-section-id` 命中 plan 的叶子 section，且该 section 声明了
+ *      **非标题**文本真值（纯标题段的内容由 base-panel 外壳渲染，不算缺失）；
+ *   ④ 结构判据：模板除根元素外既无元素也无非空文本（纯 tag 配平扫描，命名无关）。
+ *
+ * 全语料实测（2026-11-05，542 个产物 / 1195 个子组件 .vue）：无 ①②③ 时命中 107 条，
+ * 其中 98 条是 echarts 容器 ⇒ 收紧后仅剩真缺陷。
+ *
+ * @param {Object<string,string>|Array<{path:string,content:string}>} files
+ * @param {object} componentPlan `{ effectiveSections, isForced }`；缺 plan ⇒ 无从锚定 ⇒ 不判
+ * @returns {string[]} 空壳文件相对路径清单
+ */
+export function detectEmptySectionComponents(files, componentPlan) {
+  const out = [];
+  try {
+    const plan =
+      componentPlan && Array.isArray(componentPlan.effectiveSections)
+        ? componentPlan
+        : componentPlan?.generationInput?.componentPlan;
+    const sections = collectLeafSections(plan?.effectiveSections);
+    // 无 plan 锚点 ⇒ 不判（宁漏不误伤：无法区分「本该有内容」与「本就该空」）
+    if (!sections || sections.length === 0) return out;
+
+    // sectionId → 是否本该有非标题内容
+    const wantContent = new Map();
+    const byName = new Map();
+    for (const sec of sections) {
+      const id = String(sec?.id || '');
+      if (!id) continue;
+      wantContent.set(id, _sectionDeclaresNonTitleContent(sec));
+    }
+    let candidates = new Map();
+    try {
+      candidates = sectionNameCandidates(plan) || new Map();
+    } catch (_) {
+      candidates = new Map();
+    }
+    for (const [id, names] of candidates) {
+      for (const n of names || []) byName.set(`package/components/${n}.vue`, id);
+    }
+
+    const entries = Array.isArray(files)
+      ? files.map((f) => [f?.path, f?.content])
+      : Object.entries(files || {});
+    for (const [filePath, content] of entries) {
+      if (typeof content !== 'string' || !filePath) continue;
+      if (!/\.vue$/i.test(String(filePath))) continue;
+      if (!/(^|\/)components\/[^/]+\.vue$/i.test(String(filePath))) continue;
+      if (_isRuntimeMountedContainer(content)) continue; // ① 运行时挂载
+      const inner = _sfcTemplateInner(content);
+      if (inner === null) continue; // 无 <template> ⇒ 不判（fail-open）
+      if (/display\s*:\s*none/i.test(inner)) continue; // ② 有意隐藏
+      if (!_isEmptyTemplate(inner)) continue; // ④ 结构非空
+      // ③ plan 锚定：优先 data-section-id（命名无关），退化为组件名候选
+      const sid = _rootSectionId(content) || byName.get(String(filePath)) || null;
+      if (!sid || wantContent.get(sid) !== true) continue;
+      out.push(String(filePath));
+    }
+    return out;
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * 🛡️ 空段诚实降级（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）。
+ *
+ * 对空壳 section 剥掉根元素背景：空壳里的背景只可能是一张图被拉满（错色源头），
+ * 剥掉后「宁留白不出错色」。**只删 background\* 声明，不动其它属性/结构/class**。
+ *
+ * 变异约定与 `stripDanglingComponentRefs` 一致：
+ *   - `mutate=true`（默认，写盘出口用）：原地修改 `files`，返回的 `files` 是同一引用；
+ *   - `mutate=false`（纯函数调用方 / 单测）：无改动返回原引用，有改动返回浅拷贝。
+ *
+ * @param {Object<string,string>} files
+ * @param {boolean} [mutate=true]
+ * @param {object} [componentPlan] plan 锚点（缺 ⇒ 不判，见 detectEmptySectionComponents）
+ * @returns {{files:Object<string,string>, degraded:Array<{file:string,bgStripped:boolean}>, empty:string[]}}
+ */
+export function degradeEmptySectionComponents(files, mutate = true, componentPlan = null) {
+  const result = { files, degraded: [], empty: [] };
+  try {
+    if (!files || typeof files !== 'object' || Array.isArray(files)) return result;
+    const empty = detectEmptySectionComponents(files, componentPlan);
+    result.empty = empty;
+    if (empty.length === 0) return result;
+    let target = mutate ? files : files;
+    for (const filePath of empty) {
+      const content = target[filePath];
+      if (typeof content !== 'string') continue;
+      const patched = _patchRootStartTag(content, _stripBackgroundFromStartTag);
+      if (patched !== content) {
+        if (!mutate && target === files) target = { ...files };
+        target[filePath] = patched;
+      }
+      result.degraded.push({ file: filePath, bgStripped: patched !== content });
+    }
+    result.files = target;
+    return result;
+  } catch (_) {
+    return { files, degraded: [], empty: [] };
+  }
+}
+
 /**
  * 把 files 对象（{ path: content }）转成 detectMissingSections 需要的数组形态。
  */

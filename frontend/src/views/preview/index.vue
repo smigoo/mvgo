@@ -252,6 +252,9 @@ import {
   PREVIEW_FAIL_KIND,
 } from '@/utils/loadVue3Runtime'
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
+// 🛡️ 2026-11-05 治本：内联注入的 CSS 里相对 `url()` 会按**文档 URL**解析（→ 404 → 背景图不显示），
+//   注入前必须按「该 CSS 文件自身虚拟路径」重写为绝对 URL。单一事实源见 css-asset-url.js。
+import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls } from '@/utils/css-asset-url'
 // 🛡️ 2026-10-25：`.js` 内 ESM 语法的判定（单一真相源，与 Vue3 路径共用）
 import { resolveJsModuleTypeOverride } from '@/utils/sfc-loader-esm-js'
 import { buildSnapshotFileUrl, hasPreviewEntry, resolvePreviewDescriptor } from '@/utils/preview-resolver'
@@ -1418,10 +1421,16 @@ async function loadProd() {
   let precompiledCssOk = false
   if (!isVue3) {
     try {
-      const cssRes = await http.raw(`${base}/resources/styles/index.css`)
+      const cssUrl = `${base}/resources/styles/index.css`
+      const cssRes = await http.raw(cssUrl)
       if (cssRes.ok) {
         precompiledCssOk = true
-        const css = await cssRes.text()
+        // 🔴 2026-11-05 治本（用户报告「icon 能还原、背景资源不还原」，1b5b72d0 / a2bfb5ae 真机实锤）：
+        //   index.css 是 fetch 成**文本**再 `textContent` 内联注入的，内联样式表没有自己的 URL，
+        //   里面的 `url('../images/bg-8439.png')` 会退化为按**文档 URL** 解析
+        //   ⇒ `http://host/images/bg-8439.png` ⇒ 404 ⇒ 背景图整片不显示。
+        //   注入前按 index.css 自身虚拟路径重写为绝对 URL；只动相对引用，绝对/data:/# 原样保留（幂等）。
+        const css = rewriteCssAssetUrls(await cssRes.text(), new URL(cssUrl, location.origin).href)
         const style = document.createElement('style')
         style.setAttribute('data-preview-css', resolvedId)
         style.setAttribute('data-preview-style-scope', previewStyleScopeId)
@@ -1462,6 +1471,13 @@ async function loadProd() {
       // 直接依赖 auto-import；此处与 loadVue3Runtime 的 getFile 保持一致，避免 prod 微码预览
       // 因 ref/computed 等未定义而崩溃（dev 与 Vue3 prod 路径已通过 loadVue3FromWorkspace 注入）。
       src = injectVueAutoImports(src)
+      // 🔴 2026-11-05 治本：`<style>` 块内的相对 `url()` 必须在 LESS 编译**之前**重写——
+      //   此时才知道本文件的相对路径 `rel`，基准最准。放到编译之后会把 `@import` 内联进来的
+      //   规则按本文件目录算错（less 默认 `rewriteUrls:false`，内联规则的相对基准仍是各自源文件）。
+      //   微码入口 index.vue 的 style 稍后会被整体剥掉（样式来自 index.css），此处对其无副作用。
+      if (rel.endsWith('.vue')) {
+        src = rewriteVueStyleAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
+      }
       // 🛡️ 2026-09-16 治本（mc-max-...-dcc8b98d「找不到文件: less」+ ...-3912b7b3「一片蓝色什么都没有」同源实锤）：
       // 微码**子组件**（package/components/*.vue）带 <style lang="less">（含 less 变量/嵌套/@import，
       // 全语料 988 个 style 块中 202 有变量 / 421 有嵌套）→ 原实现只剥 index.vue，子组件未处理 →

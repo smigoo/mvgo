@@ -37,6 +37,10 @@ import {
   nodeAppearanceTruth,
 } from './section-tree.js';
 import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js';
+// 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：图表真值冲突排除复用
+//   下方 `section-anchor-truth.js` 已 re-export 的 `sectionAnchorCandidates`（G14a 下沉，
+//   同一份锚点候选口径）——**不新增第二条 import 路径**，避免第二套口径漂移。
+
 // 🛡️ P3（2026-11-03）：接管产物**自持**面板三件套真值（底色/圆角/发光/满宽）。
 //   判据单一来源 = `container-background-truth.js`（与刀 37/42 heal 共用同一组
 //   构造器，禁在本文件另写 CSS 字面量副本）。为什么接管侧必须自己写：刀 53 的
@@ -57,6 +61,12 @@ import { declaredSectionType, declaredTableHeaderContainerTexts, declaredTableRo
 // 🛡️ 刀33：列表 item 的**卡盒真值**回收要按「行填充色」归一比较（与 N1 真值色值门禁
 //   同一口径，禁止自造颜色归一），故引入 `normalizeCssColor`（纯函数、零依赖，无环）。
 import { normalizeCssColor } from './truth-color-usage-guard.js';
+// 🛡️ T-CONTRACT（2026-11-05）：section 语义类型的**唯一入口**——接管判据只许读它，
+//   禁止在本文件自写「读 type 字段 + 关键词」的第二套推导（与 `declaredSectionType`
+//   同一纪律）。依据 docs/2026-10-31-vision形态漂移治理方案.md Phase A
+//   「同一语义只在一处识别；下游只读规范结论」。`section-semantics.js` 只依赖
+//   vision-facts / section-type-derive（均纯函数集），无循环依赖。
+import { canonicalSectionType } from './section-semantics.js';
 // 🛡️ 刀33：item 内「图条」背景四件套（size/position/repeat）**必须**复用资源挂载层
 //   同一份纯函数判据（`inferBackgroundStyle`），否则 item 挂载形态与容器挂载形态
 //   会分叉成两套 geometry（正是「容器画一遍、item 画另一遍」的温床）。
@@ -89,6 +99,19 @@ import { partitionLeafRegions } from './region-partitioner.js';
  *    （d072d085 实锤病灶之一），且 `DEFAULT_SKIP_SELECTOR_RXS` 也会漏掉它。
  */
 export const FG_TAKEOVER_CLASS_RX = /-fg-(?:header|grid|kvgrid|text|icon|statrow|table|legend|list|footer|regions)-/;
+
+/**
+ * 🛡️ T-CONTRACT（2026-11-05）：「泛化容器」类型桶——**不构成形态主张**，
+ * 故不得作为「拒绝表格接管」的理由。
+ *
+ * 唯一来源是 `vision-facts.js#TYPE_KEYWORDS` 的最后一项
+ * `['body', ['body','content','main','主体','内容']]`：该桶的语义就是「某种内容区」，
+ * 不含任何形状断言。`deriveSectionType` 对显式 `sec.type` 逐字返回（不归一到桶名），
+ * 所以 `content` / `main` 会以字面值出现在这里，必须一并放行。
+ * 反向约束：**不得**把 `stats|list|grid|tabs|card|header|footer|chart|…` 加进来——
+ * 那些是形态语义，与表格互斥，正是本门要拦的对象。
+ */
+const GENERIC_SECTION_KINDS = new Set(['body', 'content', 'main']);
 
 /** fg- 类名的**裸片段**（去两侧 `/`），供需要拼接正则的场合复用，杜绝副本。 */
 const FG_CLASS_SRC = FG_TAKEOVER_CLASS_RX.source;
@@ -1089,6 +1112,20 @@ function resolveDeclaredTableLca(sec, figmaIndex, parentOf) {
 }
 
 export function detectTableLeaf(sec, figmaIndex, parentOf, resourceMapping) {
+  // 🛡️ T-CONTRACT 契约门（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：
+  //   vision 已给出**形态语义**且不是 table ⇒ 表格判据不得接管。
+  //   为什么必须在这里：下方 `detectTableLeafByAnchors` 是**纯几何**判定，而
+  //   「两张 stat-card 并排」与「2 列 5 行表格」在几何上完全同构（同高同 y、每列
+  //   TEXT 数相同且逐项 y 对齐、x 严格递增）⇒ 几何永远无法区分，只能由上游契约仲裁。
+  //   反面教材：本文件历史被改 49 次，每次都是给某个判据加更紧的几何约束。
+  //   🔴 放行条件（三条，缺一不可）：无类型（''）/ 归一为 table / 归一为**泛化容器**
+  //   （`body|content|main` —— 即 `TYPE_KEYWORDS` 里的 body 桶，见 vision-facts.js：
+  //   `['body', ['body','content','main','主体','内容']]`）。泛化容器不是形态主张，
+  //   把它当反对证据会误伤「内容区里确实是一张表」的正常段（`type:'content'` 夹具实锤）。
+  const canonical = canonicalSectionType(sec);
+  if (canonical && canonical !== 'table' && !GENERIC_SECTION_KINDS.has(canonical)) {
+    return { ok: false, reason: `contractMismatch:${canonical}` };
+  }
   const direct = detectTableLeafByAnchors(sec, figmaIndex, parentOf, resourceMapping);
   if (direct.ok) return direct;
   // 🛡️ 形态自洽 fail-closed（e7da39ca，2026-11-02）：仅当表头来自**形态⑤**
@@ -1311,16 +1348,129 @@ function resolveCardNodes(sec, contract, figmaIndex) {
   return null;
 }
 
-/** 卡原始节点 → 内联真值（bg/圆角/文本 runs/卡内 pad+gap）。任一文本不可解析 ⇒ null。 */
-function cardTruth(node) {
+/**
+ * 🛡️ 刀55（2026-11-05 · c-device-monitor-8f4dfed9 / 89c25985 双实锤）：节点是否命中
+ * 「图标用途」的**已下载**资源条目——`isIcon` 排除判据（`subtreeBackground` 内）的
+ * **正向**消费，同一判据单一来源（mapping 按 figmaNodeId 命中 ∧ 非背景用途）。
+ * 额外要求 `assignedVarName/semanticVarName` 与 `resourceFile`（可写 import、可落文件），
+ * 下载失败/missing 不算命中（绝不造资源）。
+ * @returns {object|null} 命中的 mapping 条目
+ */
+function mappingIconHit(node, mapping) {
+  if (!node?.id || !Array.isArray(mapping) || mapping.length === 0) return null;
+  const hit = mapping.find(
+    (e) =>
+      String(e?.figmaNodeId) === String(node?.id) &&
+      !isBackgroundResource(node, mapping) &&
+      String(e?.resourceFile || '') &&
+      String(e?.downloadStatus || '') !== 'failed' &&
+      String(e?.downloadStatus || '') !== 'missing',
+  );
+  if (!hit) return null;
+  if (!String(hit?.assignedVarName || hit?.semanticVarName || '')) return null;
+  return hit;
+}
+
+/**
+ * 🛡️ 刀55：卡子树内**前导 icon**真值。
+ *
+ * 判据（可辩驳、零猜测）：
+ *   · 候选 = 深度 ≤2（与 `subtreeBackground.walk` 同深度）内 `mappingIconHit` 命中的
+ *     非文本节点；
+ *   · 必须在首文本左侧（`b.x < firstTextX`）——本通道的语义就是「被 pad 吸收的
+ *     前导图标区」（:1416 pad 病灶），首文本右侧的装饰图不属于本通道；
+ *   · 选择 = x 最小（最左）；平票面积最大；再平票 id 字典序（确定性，无第三种平票出口）。
+ *
+ * @returns {{varName:string, file:string, dx:number, w:number, h:number, gap:number}|null}
+ *   `dx` = icon 左缘距卡左缘；`gap` = icon 右缘→首文本。无候选 ⇒ null（fail-open，
+ *   调用方 pad/gap 逐字不变）。
+ */
+function subtreeIconTruth(node, resourceMapping, firstTextX) {
+  const mapping = Array.isArray(resourceMapping) ? resourceMapping : [];
+  if (!node || mapping.length === 0 || !Number.isFinite(Number(firstTextX))) return null;
+  const cands = [];
+  const seen = new Set();
+  const walk = (n, d) => {
+    if (!n || seen.has(n) || d > 2) return;
+    seen.add(n);
+    for (const c of n.children || []) {
+      if (!c || typeof c.characters === 'string') continue;
+      const b = bboxOf(c);
+      if (b && b.x < Number(firstTextX) && mappingIconHit(c, mapping)) {
+        cands.push({ node: c, b });
+      }
+      walk(c, d + 1);
+    }
+  };
+  walk(node, 0);
+  if (!cands.length) return null;
+  cands.sort(
+    (a, b) =>
+      a.b.x - b.b.x ||
+      b.b.w * b.b.h - a.b.w * a.b.h ||
+      String(a.node.id).localeCompare(String(b.node.id)),
+  );
+  const pick = cands[0];
+  const hit = mappingIconHit(pick.node, mapping);
+  if (!hit) return null;
+  const varName = String(hit.assignedVarName || hit.semanticVarName);
+  const file = String(hit.resourceFile).split('/').pop().split('\\').pop();
+  const cardBox = bboxOf(node);
+  if (!cardBox) return null;
+  return {
+    varName,
+    file,
+    dx: Math.max(0, Math.round(pick.b.x - cardBox.x)),
+    w: Math.max(0, Math.round(pick.b.w)),
+    h: Math.max(0, Math.round(pick.b.h)),
+    gap: Math.max(0, Math.round(Number(firstTextX) - (pick.b.x + pick.b.w))),
+  };
+}
+
+/** 卡原始节点 → 内联真值（底/圆角/文本 runs/卡内 pad+gap/前导 icon）。任一文本不可解析 ⇒ null。 */
+function cardTruth(node, resourceMapping) {
   const box = bboxOf(node);
   if (!box) return null;
-  const bg = firstSolidFillRgba(node);
-  if (!bg) return null; // 卡底色是本刀核心交付之一，缺 ⇒ fail-open
   let r = node?.cornerRadius;
   if (r == null && Array.isArray(node?.rectangleCornerRadii)) {
     r = Math.max(...node.rectangleCornerRadii);
   }
+  // 🔴 RC2 治本（2026-11-05 · mc-max-1793873426434-f9cae6bf 实锤 12 卡全丢）：
+  //   卡底原先**只看本体** `firstSolidFillRgba` ⇒ Figma GROUP 卡（`fills:[]`，真实填充在
+  //   子 `bg` GROUP 的 GRADIENT VECTOR 上）**双重不命中**（GROUP 无 fills + 唯一 SOLID
+  //   判据不认渐变）⇒ `cardTruthMissing:2:8438` ⇒ 整段 12 张设备卡零渲染。
+  //   修法与 `detectStatRowLeaf` **同构**（`nodeAppearanceTruth` → `subtreeBackground`
+  //   同一份判据），不是新造口径：本体填充（SOLID / 渐变）优先 ⇒ 缺失回退子树最大底候选。
+  //   图片与 CSS **互斥**（`subtreeBackground` 只返回其一）：图片项走导入变量 + 四件套，
+  //   CSS 项走 `background` 内联，不得同时写（近似底覆盖真图 = 2ec8acc7 同型错误）。
+  // 🔴 R2.5（2026-11-05 · 矛盾/重复审查 §2）：本体填充**含渐变**优先 —— 与
+  //   `detectStatRowLeaf:977` 的 `nodeAppearanceTruth(p.node)` 首判**完全同构**。
+  //   原先只认 SOLID ⇒ 本体自带 `GRADIENT_LINEAR` 且子树无底候选的卡整张 fail-open。
+  //   为何仍保留 `firstSolidFillRgba` 首判：**稳定产物色值格式**（SOLID 走 rgba，
+  //   与既有产物逐字一致）；该分支只在无 SOLID 时进入 ⇒ 新增只可能是渐变，
+  //   `fillsToCss` 口径（hex / `linear-gradient`）与子树 CSS 通道本就同格式，零格式回归。
+  let bg = firstSolidFillRgba(node);
+  let bgImage = null;
+  let subR = 0;
+  if (!bg) {
+    const own = nodeAppearanceTruth(node);
+    if (own?.bg) bg = own.bg;
+  }
+  if (!bg) {
+    const sub = subtreeBackground(node, resourceMapping);
+    if (sub) {
+      if (sub.image?.file) {
+        bgImage = toBgChannel(sub.image.hit, 'subtree');
+        // 有图无变量名 ⇒ 无法写 import（绝不造命名空间）⇒ 该卡 fail-open
+        if (!bgImage) return null;
+      } else if (sub.css) {
+        bg = sub.css;
+      }
+      // 导出图只含填充层：本体无圆角真值时继承候选圆角（GROUP 卡的唯一来源）
+      if (Number.isFinite(sub.r) && sub.r > 0) subR = Math.round(sub.r);
+    }
+  }
+  if (!bg && !bgImage) return null; // 卡底色是本刀核心交付之一，缺 ⇒ fail-open
   const texts = [];
   (function walk(n, d) {
     if (!n || d > 3) return;
@@ -1330,11 +1480,35 @@ function cardTruth(node) {
     }
   })(node, 0);
   if (!texts.length) return null;
-  texts.sort((a, b) => {
-    const ab = bboxOf(a), bb = bboxOf(b);
+  // 🛡️ 刀60（2026-11-05 · c-device-0ddd1708 / 43:4892 实锤）：**同行成员 y-then-x 拆序**。
+  //   病灶：卡内文本排序纯 `y差||x差` 无容差 —— 大字号数值（fs24,h≈29）与小字号
+  //   label（fs14,h≈16）垂直居中对齐时 bbox y 必有差（居中基线差）⇒ 数值被排到
+  //   label 前 ⇒ runs 语序颠倒（「8总设备」）+ `pad=首成员x−卡左缘` 取到数值 x
+  //   （实测 pad:86，卡宽 134 内容起点 64% ⇒ 视觉整体靠右）+ gap 失真，一因三症。
+  //   判据：垂直中心差 ≤ 较小盒高一半 ⇒ 同行，按 x 序（x 平局回退 y 序，保护
+  //   左对齐堆叠）；跨行（中心差超容差）仍按 y 序 —— 多行卡（title 上 value 下，
+  //   中心差 > 盒高半）不误伤。文本命名无关：只认几何，不认内容。
+  //   单一口径：比较器只此一份（rowOrderFixed 观测与实际排序共用，禁复制第二份）。
+  const __cardBoxCache = new Map();
+  const cardBoxOf = (t) => {
+    if (!__cardBoxCache.has(t)) __cardBoxCache.set(t, bboxOf(t));
+    return __cardBoxCache.get(t);
+  };
+  const cardTextCmp = (a, b) => {
+    const ab = cardBoxOf(a), bb = cardBoxOf(b);
     if (!ab || !bb) return 0;
+    const rowTol = Math.min(ab.h, bb.h) / 2;
+    const sameRow = Math.abs(ab.y + ab.h / 2 - (bb.y + bb.h / 2)) <= rowTol;
+    if (sameRow) return ab.x - bb.x || ab.y - bb.y;
     return ab.y - bb.y || ab.x - bb.x;
-  });
+  };
+  const rowOrderFixed = (() => {
+    if (texts.length < 2) return false;
+    const before = texts.map((t) => String(t.id));
+    const after = [...texts].sort(cardTextCmp).map((t) => String(t.id));
+    return before.some((v, i) => v !== after[i]);
+  })();
+  texts.sort(cardTextCmp);
   const runs = [];
   for (const t of texts) {
     const ti = textRun(t);
@@ -1342,17 +1516,35 @@ function cardTruth(node) {
     runs.push(ti);
   }
   const tb = runs.map((x) => x.box);
-  const pad = Math.max(0, Math.round((tb[0]?.x ?? box.x) - box.x));
+  let pad = Math.max(0, Math.round((tb[0]?.x ?? box.x) - box.x));
   let gap = 0;
   if (tb.length > 1) {
     const gs = tb.slice(1).map((b, i) => Math.round(b.x - (tb[i].x + tb[i].w)));
     gap = Math.max(0, Math.round(gs.reduce((s, g) => s + g, 0) / gs.length));
   }
+  // 🛡️ 刀55（2026-11-05 · c-device-monitor-8f4dfed9 / 89c25985 双实锤）：**卡内 icon 资源通道**。
+  //   病灶：本函数子树只收 TEXT 节点（上方 walk），icon 节点不可见 ⇒ 其几何足迹被
+  //   `pad = 首文本x − 卡左缘` 整体吸收（实测 8f4dfed9 两状态卡 pad:111/122 恰为 icon
+  //   区宽度）——位置在、图不在，14 个已下载 icon 资源产物零引用。
+  //   治本：`subtreeIconTruth` 取最左前导 icon（判据见其头注），pad 改写为 icon 左缘
+  //   （dx）、gap 改写为 icon→首文本真值间距，渲染层补 `<img>`（RC3 变量池同款）。
+  //   无命中 ⇒ icon=null 且 pad/gap **逐字不变**（阴性零回归是结构保证）。
+  const iconTruth = subtreeIconTruth(node, resourceMapping, tb[0]?.x ?? null);
+  let icon = null;
+  if (iconTruth) {
+    icon = { varName: iconTruth.varName, file: iconTruth.file, w: iconTruth.w, h: iconTruth.h };
+    pad = iconTruth.dx;
+    gap = iconTruth.gap;
+  }
   return {
     bg,
-    r: Number.isFinite(r) ? Math.max(0, Math.round(r)) : 0,
+    bgImage,
+    r: Number.isFinite(r) ? Math.max(0, Math.round(r)) : subR,
     pad,
     gap,
+    icon,
+    // 🛡️ 刀60 观测出参：本卡同行容差判据是否改变了文本序（0 也打，真机计数行用）
+    rowOrderFixed,
     runs: runs.map((x) => ({ text: x.text, color: x.color, fs: x.fs, fw: x.fw })),
   };
 }
@@ -1490,6 +1682,34 @@ function backgroundImageOf(node, mapping) {
 }
 
 /**
+ * 资源映射条目 → 「背景图通道」`{varName, file, style}`（**唯一来源**）。
+ *
+ * 🔴 变量名只取 `assignedVarName` / `semanticVarName`（取不到 ⇒ null，绝不自造命名空间——
+ *    否则资源挂载层 `bgBindingOwnership` 会判 `other` 而 fail-closed + 诊断噪声）。
+ * 🔴 四件套走 `inferBackgroundStyle`（与 list item / statrow 卡底 / footer **同一份**纯函数判据）。
+ *
+ * 消费方：`detectListLeaf#toItemBg`（item 底图）、`cardTruth`（网格卡底截图通道）、
+ *        `resolveFooterBackground`（footer 段基名反查后的通道构造）。
+ * 三者必须共用本函数 —— 见 `detectGridLeaf` 的 RC2 注记（同一份判据被多条通道消费）。
+ *
+ * 🔴 R2.6（2026-11-05 · 矛盾/重复审查 §5.3）：`file` 基名来源加回落链
+ *    `resourceFile → file → src` —— footer 的基名反查按这三字段匹配，命中的条目未必带
+ *   `resourceFile`（否则原 footer 实现在此拿到的会是 `'undefined'` 字符串）。
+ *   分隔符同时切 `/` 与 `\\`（与 `baseNameOf` 同口径）。既有 list/grid 路径的条目由
+ *   `backgroundImageOf` 保证 `resourceFile` 非空 ⇒ 回落链与分隔符扩展均为**零行为变化**。
+ */
+function toBgChannel(hit, source) {
+  const varName = String(hit?.assignedVarName || hit?.semanticVarName || '');
+  if (!varName) return null;
+  return {
+    varName,
+    file: String(hit?.resourceFile || hit?.file || hit?.src || '').split('/').pop().split('\\').pop(),
+    style: inferBackgroundStyle(hit),
+    source,
+  };
+}
+
+/**
  * 卡/格「自绘底」真值：子树内**面积最大的**底候选。
  *
  * 两类候选，二者择一（**不合成**，避免「近似底 + 真图」双重绘制）：
@@ -1502,7 +1722,7 @@ function backgroundImageOf(node, mapping) {
  *
  * 🔴 口径复用 `nodeAppearanceTruth`（单一来源），不在此另造 fills/strokes 解析。
  *
- * @returns {{image:{file:string}, css:null, r:number, border:object|null}
+ * @returns {{image:{file:string, hit:object}, css:null, r:number, border:object|null}
  *          |{image:null, css:string, r:number, border:object|null}
  *          |null}
  */
@@ -1531,6 +1751,9 @@ function subtreeBackground(node, resourceMapping) {
       if (imgRes && area > imgArea) {
         imgBest = {
           file: String(imgRes.resourceFile).split('/').pop(),
+          // 🔴 命中条目随通道回传：调用方需要 `assignedVarName` 才能写 import
+          //    （按文件名反查会歧义 —— 同一 PNG 可由 12 张卡共享，见 RC2 实锤）
+          hit: imgRes,
           r: cornerRadiusOf(c),
           border: nodeAppearanceTruth(c).border,
         };
@@ -1550,7 +1773,7 @@ function subtreeBackground(node, resourceMapping) {
   // 图片优先的判据：面积 ≥ CSS 候选（图片是整块导出，必然覆盖 CSS 那根矢量）
   if (imgBest && imgArea >= cssArea) {
     return {
-      image: { file: imgBest.file },
+      image: { file: imgBest.file, hit: imgBest.hit },
       css: null,
       // 🔴 圆角/描边**必须**从 CSS 候选继承：导出图只含填充层，Figma 的
       //    `strokes` 不进 PNG（实测 bg-5909.png 左缘像素 = 中心像素，无描边色）
@@ -1566,15 +1789,22 @@ function subtreeBackground(node, resourceMapping) {
 /**
  * 折叠网格叶判据：几何复用刀 41 `buildGridContract`（单一来源），
  * 内容真值逐卡可解析 ⇒ 接管；否则 fail-open。
+ *
+ * @param {object} sec plan 叶子
+ * @param {Map} figmaIndex
+ * @param {Array} [resourceMapping] effectiveMapping —— `cardTruth` 卡底回退
+ *   （`subtreeBackground` / `toBgChannel`）用；**可选**（缺省 ⇒ 只走本体 SOLID 与子树
+ *   CSS 候选，图片通道不成立；旧两参调用零回归）。调用方必须传，否则 GROUP 卡的
+ *   截图底无法写 import（见 `cardTruth` RC2 注记）。
  */
-export function detectGridLeaf(sec, figmaIndex) {
+export function detectGridLeaf(sec, figmaIndex, resourceMapping) {
   const contract = buildGridContract(sec, { figmaIndex });
   if (!contract) return { ok: false, reason: 'noGridContract' };
   const cards = resolveCardNodes(sec, contract, figmaIndex);
   if (!cards) return { ok: false, reason: 'cardNodesNotFullyResolvable' };
   const items = [];
   for (const n of cards.nodes) {
-    const t = cardTruth(n);
+    const t = cardTruth(n, resourceMapping);
     if (!t) return { ok: false, reason: `cardTruthMissing:${n?.id ?? '?'}` };
     items.push(t);
   }
@@ -2786,16 +3016,8 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
 
   // 每卡背景独立归属：逐项声明优先；无声明时只消费本卡子树的唯一背景证据。
   // 颜色只参与卡盒/填充真值，不再参与资源共享；相同 URL 只能由各项分别证明。
-  const toItemBg = (hit, source) => {
-    const varName = String(hit?.assignedVarName || hit?.semanticVarName || '');
-    if (!varName) return null;
-    return {
-      varName,
-      file: String(hit.resourceFile).split('/').pop(),
-      style: inferBackgroundStyle(hit),
-      source,
-    };
-  };
+  // 通道构造委托 `toBgChannel`（**唯一来源**，与网格卡底截图通道同一份口径）。
+  const toItemBg = (hit, source) => toBgChannel(hit, source);
   const itemBgs = items.map((it, i) => {
     const declaredFile = String(it?.bg?.resourceFile || '');
     if (declaredFile) {
@@ -2882,8 +3104,9 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
  *   - `detectGridLeaf` / `detectHeaderRowLeaf` / `detectTextLeaf` / `detectIconLeaf` /
  *     `detectLegendDotTextLeaf` / `detectKvGridLeaf`：**全部依赖 Figma 锚点**，而 footer 段
  *     `sourceNodeIds=[]`（planner 无归属）⇒ `noAnchorNode`；
- *   - `detectStatRowLeaf` / `detectTableLeaf`：要求 `role:'stat-card'` / `table-header`+`list`
- *     契约，footer 的 `body.items[].content.elements` 无这些标记；
+ *   - `detectStatRowLeaf` / `detectTableLeaf`：要求 `role:'stat-card'` / 表头契约 +
+ *     归一类型不为其他 kind（T-CONTRACT，2026-11-05：footer 段 `type='footer'` ⇒
+ *     `contractMismatch:footer`），footer 的 `body.items[].content.elements` 也无这些标记；
  *   - `detectListLeaf`：要求 `collapsed:true || renderHint==='v-for'`，footer 无折叠标记。
  * ⇒ footer 段落入 LLM chunk 自由生成：3b0689c9 实测「LLM 把整片内容区 6 节点列表复刻进
  *   footer 组件（`data-section-id="footer-summary"` 但内容是 node-card），footer 本体真值
@@ -2966,9 +3189,9 @@ function baseNameOf(p) {
  *
  * 纪律：
  *  ① 只在**基名唯一命中**时认（歧义 ⇒ null，绝不挑一个）；
- *  ② 变量名只取 `assignedVarName` / `semanticVarName`（取不到 ⇒ null，绝不自造命名空间，
- *     否则资源挂载层 `bgBindingOwnership` 会判 `other` 而 fail-closed + 诊断噪声）；
- *  ③ 四件套走 `inferBackgroundStyle`（与 list item / statrow 同一份纯函数判据）。
+ *  ② 通道构造**委托** `toBgChannel`（唯一来源，R2.6 2026-11-05）—— 本函数只负责
+ *     「无锚点时的基名反查」这一件事，不再自己拼 `{varName, file, style}` 契约
+ *     （原先与 `toBgChannel` 逐行同构，属重复构造；见矛盾/重复审查 §5.3）。
  */
 function resolveFooterBackground(sec, resourceMapping) {
   const src = sec?.body?.backgroundImage?.src;
@@ -2984,10 +3207,8 @@ function resolveFooterBackground(sec, resourceMapping) {
     if (narrowed.length !== 1) return null;
     hits = narrowed;
   }
-  const hit = hits[0];
-  const varName = String(hit.assignedVarName || hit.semanticVarName || '');
-  if (!varName) return null;
-  return { varName, file: want, style: inferBackgroundStyle(hit) };
+  // 命中条目的基名 = `want`（上面的 filter 保证）⇒ `file` 与旧实现在此逐字一致
+  return toBgChannel(hits[0], 'footer');
 }
 
 /** script 内联 JSON（转义 `<`，防 `</script>` 提前闭合）。 */
@@ -3703,22 +3924,87 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     return lines.join('\n');
   }
   const cls = `c-${sem}-fg-grid-${idSlug(tr.sectionId)}`;
+  // 🔴 RC3（2026-11-05 · 与 RC2 同一单）：`cardTruth` 落到图片通道后，本分支必须能消费
+  //   它 —— 否则接管产物的卡底是 `background: null`（比不接管更糟）。
+  //   口径与 list item **完全一致**：唯一 import 变量池（同资源去重共用一个 import），
+  //   每项只持**变量下标** + 自己的四件套（`inferBackgroundStyle` 真值），不拼静态资源文本。
+  //   无任何图片项 ⇒ `bgVars` 为空 ⇒ 产物**逐字不变**（阴性零回归是结构保证）。
+  const bgVars = [];
+  const varIndex = new Map();
+  const itemBgIdx = (Array.isArray(tr.items) ? tr.items : []).map((it) => {
+    const b = it?.bgImage;
+    if (!b?.varName || !b.file) return null;
+    if (!varIndex.has(b.varName)) {
+      varIndex.set(b.varName, bgVars.length);
+      bgVars.push({ varName: b.varName, file: b.file });
+    }
+    return varIndex.get(b.varName);
+  });
+  const hasImg = bgVars.length > 0;
+  const cardImgBind = hasImg
+    ? ", backgroundImage: it.bgImg == null ? undefined : 'url(' + FG_GRID_BGS[it.bgImg] + ')', backgroundSize: it.bgImg == null ? undefined : it.bgSize, backgroundRepeat: it.bgImg == null ? undefined : it.bgRepeat, backgroundPosition: it.bgImg == null ? undefined : it.bgPosition"
+    : '';
+  // 🛡️ 刀55（2026-11-05 · c-device-monitor-8f4dfed9 / 89c25985 双实锤）：卡内 icon 资源池。
+  //   与 bgVars 同构：唯一 import 变量 + 去重下标（593cf7f 铁律：资源变量绝不拼静态文本，
+  //   经 `FG_GRID_ICONS[it.icon]` 数组绑定求值）。无 icon 项 ⇒ iconVars 空 ⇒ 无 import、
+  //   无数组、模板无 `<img>` 行（下方条件展开）⇒ 产物**逐字不变**（RC3 同款结构保证）。
+  const iconVars = [];
+  const iconVarIndex = new Map();
+  const itemIconIdx = (Array.isArray(tr.items) ? tr.items : []).map((it) => {
+    const ic = it?.icon;
+    if (!ic?.varName || !ic.file) return null;
+    if (!iconVarIndex.has(ic.varName)) {
+      iconVarIndex.set(ic.varName, iconVars.length);
+      iconVars.push({ varName: ic.varName, file: ic.file });
+    }
+    return iconVarIndex.get(ic.varName);
+  });
+  const hasIcon = iconVars.length > 0;
   const lines = [
     '<template>',
     // 🔴 justify-content 必须显式内联：只要有写作者（LLM/注入器）给宿主 class 写
     //   `justify-content:space-between`，列不满时第二排卡会被甩到行末尾（round-11 实锤，
     //   战略段第二行「天地伟业」跑到右侧）。真值一律左起排布。
     `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:grid;justify-content:start;grid-template-columns:repeat(${tr.cols}, ${tr.cardW}px);grid-auto-rows:${tr.cardH}px;column-gap:${tr.colGap}px;${tr.rows > 1 && tr.rowGap !== null ? `row-gap:${tr.rowGap}px;` : ''}align-content:start;align-items:stretch;">`,
-    `    <div v-for="(it, i) in items" :key="i" class="${cls}-card" :style="{ background: it.bg, borderRadius: it.r + 'px', paddingLeft: it.pad + 'px', gap: it.gap + 'px' }">`,
+    `    <div v-for="(it, i) in items" :key="i" class="${cls}-card" :style="{ background: it.bg, borderRadius: it.r + 'px', paddingLeft: it.pad + 'px', gap: it.gap + 'px'${cardImgBind} }">`,
+    // 🛡️ 刀55：前导 icon（真值几何 w/h；pad/gap 已在 cardTruth 改写为 icon 左缘/间距）。
+    //   条件展开：无 icon 项 ⇒ 本行整行不存在 ⇒ 产物逐字不变。
+    ...(hasIcon
+      ? [
+          `      <img v-if="it.icon != null" :src="FG_GRID_ICONS[it.icon]" :style="{ width: it.iw + 'px', height: it.ih + 'px', flex: '0 0 auto' }" />`,
+        ]
+      : []),
     `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
     '    </div>',
     '  </div>',
     '</template>',
     '',
     '<script setup>',
+    ...bgVars.map((v) => `import ${v.varName} from '../../resources/images/${v.file}'`),
+    ...iconVars.map((v) => `import ${v.varName} from '../../resources/images/${v.file}'`),
     `const items = ${inlineJson(
-      tr.items.map((it) => ({ bg: it.bg, r: it.r, pad: it.pad, gap: it.gap, runs: it.runs })),
+      tr.items.map((it, i) => {
+        const base = { bg: it.bg, r: it.r, pad: it.pad, gap: it.gap, runs: it.runs };
+        let out = base;
+        if (hasImg) {
+          const b = it.bgImage;
+          out = {
+            ...out,
+            bgImg: itemBgIdx[i],
+            bgSize: b?.style?.size ?? null,
+            bgRepeat: b?.style?.repeat ?? null,
+            bgPosition: b?.style?.position ?? null,
+          };
+        }
+        // 🔴 刀55：icon 项带下标 + 尺寸真值（w/h）；无 icon 项不写字段（阴性逐字不变）
+        if (hasIcon && itemIconIdx[i] != null) {
+          out = { ...out, icon: itemIconIdx[i], iw: it.icon.w, ih: it.icon.h };
+        }
+        return out;
+      }),
     )}`,
+    ...(hasImg ? [`const FG_GRID_BGS = [${bgVars.map((v) => v.varName).join(', ')}];`] : []),
+    ...(hasIcon ? [`const FG_GRID_ICONS = [${iconVars.map((v) => v.varName).join(', ')}];`] : []),
     '</script>',
     '',
     '<style lang="less" scoped>',
@@ -3866,9 +4152,27 @@ function declaredUnconsumedCount(sec, kind) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
+  // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：vision `charts[]` 段归属集合。
+  //   病灶：本文件判据只看「同构标题行 + 折叠网格」结构形态，**对 charts[] 零感知** ⇒
+  //   环形图段（标题行 + 两个圆环容器并排）在结构上被判成折叠网格 ⇒ `kind=table`
+  //   确定性接管（整文件不进 LLM chunk）⇒ 产物是 `<a-table>`、全产物无 pie/doughnut
+  //   series ⇒ `DO-NOT-INVENT-CHART-MISSING`(BLOCK) ⇒ 任务失败（e23b0b40 实锤：
+  //   vision 明确记录 `2:3438 = 环形图`，产物却是表格）。
+  //   判据：vision 声明该段有图表的，**一律不接管**，fail-open 回 LLM 图表生成路径
+  //   （G3 的 chart 接管器未实施，此处只做「不抢占」，不承诺生成）。
+  //   归一：vision 历史上产出过 `chart-2:7989` 前缀形态（2026-11-04 父级孤儿 echarts
+  //   方案实测 id 失锚），故剥 `chart|table|list` 前缀再比对；段的**全部锚点候选**
+  //   任一命中即判冲突（宁可放过，不可误接管）。
+  const _chartNorm = (v) => String(v == null ? '' : v).trim().replace(/^(chart|table|list)-/i, '');
+  const _chartOwned = new Set(
+    (Array.isArray(p.analysisCharts) ? p.analysisCharts : [])
+      .map((c) => _chartNorm(c?.section ?? c?.sectionId ?? c?.figmaSectionId ?? ''))
+      .filter(Boolean),
+  );
+  out.chartOwnedIds = [..._chartOwned];
   const figmaIndex = indexFigmaNodes(
     p.figmaNodeData?.document || p.figmaNodeData || null,
   );
@@ -3894,6 +4198,17 @@ export function collectFoldedGridTakeover(p = {}) {
   for (const sec of collectLeafSections(treeSections)) {
     if (!sec?.id) continue;
     out.evaluated += 1;
+    // 🛡️ F1：图表段不参与结构接管（判据见函数入口 `_chartOwned` 注释）。
+    //   必须放在**所有 kind 判据之前** —— 网格/统计行/表格都能吃下环形图段的结构形态，
+    //   放在后面等于白加。
+    if (_chartOwned.size > 0) {
+      const _anchors = sectionAnchorCandidates(sec).map(_chartNorm).filter(Boolean);
+      if (_anchors.some((k) => _chartOwned.has(k))) {
+        out.chartOwned += 1;
+        out.skipped.push({ id: String(sec.id), reason: 'chartOwned' });
+        continue;
+      }
+    }
     // 🔴 R3：超界段观测计数（段级、与是否实际命中无关 —— 分母口径，真机日志可见）
     if (isScopeIncomplete(sec, figmaIndex)) out.scopeIncomplete += 1;
     // 🔴 判定顺序：网格 → 标题行 → **统计行** → 表格 → 纯文本 → 纯 icon → 图例
@@ -3904,7 +4219,7 @@ export function collectFoldedGridTakeover(p = {}) {
     //    聚类判据也更严格，先判可锁定整行/整表归属。图例/属性网格/footer **放最后**：
     //    与 text/icon 两两互斥，末位 ⇒ 结构上不可能抢走既有命中（只救原本被 skip 的叶，
     //    footer-summary 实测即此类）。
-    let tr = detectGridLeaf(sec, figmaIndex);
+    let tr = detectGridLeaf(sec, figmaIndex, p.resourceMapping);
     if (!tr.ok) {
       const h = detectHeaderRowLeaf(sec, figmaIndex, p.resourceMapping);
       if (h.ok) tr = h;
@@ -4099,6 +4414,20 @@ export function collectFoldedGridTakeover(p = {}) {
     //   gridHits ⇒ 计数失真 = 假绿。
     else if (tr.kind === 'regions') out.regionHits += 1;
     else out.gridHits += 1;
+    // 🎯 [刀55] 接管卡片 icon 通道评估（2026-11-05 · 8f4dfed9/89c25985 实锤）。
+    //   计数行铁律：**0 也打** —— `evaluated>0 && hit=0` 且产物卡内确有 icon 资源 ⇒
+    //   判据失效（mapping 未接 / 几何过滤过严）；`hit>0` ⇒ 真机验签看产物 `<img>` 对数。
+    //   只在带 items 的 tr（grid 族）上计：statrow/table 两阶段已 continue，list 的
+    //   item 无 icon 字段（刀55 只扩 grid 卡），恒 0 不污染。
+    if (Array.isArray(tr.items)) {
+      out.cardIconEvaluated += tr.items.length;
+      out.cardIconHit += tr.items.filter((x) => x?.icon).length;
+      // 🛡️ [刀60] 卡内同行容差排序观测（2026-11-05 · 0ddd1708「8总设备」+pad:86 实锤）。
+      //   计数行铁律：0 也打 —— `evaluated>0 && fixed=0` 只说明本批卡无同行拆序；
+      //   `fixed>0` ⇒ 真机验签看产物 runs 语序与 pad 值。与刀55 cardIcon 同挂点同形态。
+      out.cardRowEvaluated += tr.items.length;
+      out.cardRowOrderFixed += tr.items.filter((x) => x?.rowOrderFixed).length;
+    }
     // 🛡️ P3（2026-11-03）：icon / header 接管产物**自持**面板真值（底色/圆角/发光/满宽）。
     //   病灶：刀 53 终裁覆写（`file-writer.js` 以 `_fgTakeoverFiles` 快照整包替换）的快照
     //   拍于 LLM 分块之前，而刀 37/42 heal 跑在快照**之后** ⇒ 对本类文件的修复被整包回滚

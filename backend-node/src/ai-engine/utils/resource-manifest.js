@@ -345,14 +345,47 @@ export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
   if (!matchedSection || !Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) {
     return undefined
   }
+  const sectionKey =
+    matchedSection.id || matchedSection.sourceNodeIds?.[0] || matchedSection.title
   const manifest = buildResourceManifest(resourceDomMapping)
   // 🛡️ 2026-09-29 治本：优先用 node id（确定性的 ownerSectionId 锚）匹配，name 仅作兜底。
-  const sectionRes = resourcesForSection(
-    manifest,
-    matchedSection.id || matchedSection.sourceNodeIds?.[0] || matchedSection.title,
-  )
-  if (sectionRes.length > 0 && sectionRes.length < resourceDomMapping.length) {
-    return sectionRes
+  const direct = resourcesForSection(manifest, sectionKey)
+
+  // 🛡️ 2026-11-05 治本（mc-max-1793840255758-76bb6b43 实锤）：
+  //   `buildResourceManifest` 只按 `ownerSectionId` **精确相等**分桶，而 section 的**子孙节点**上的
+  //   资源（如 Tab 栏的 tabs-icon(89:43) 下两张图标、激活底图(2:7889)）ownerSectionId 不等于
+  //   section id ⇒ 被子组件裁剪全部漏掉。实测 TabsSection 只拿到 `Tab切换栏 (1/7)`、
+  //   traffic 各段一律 `0/12` ⇒ LLM 手里没有图标资源可用 ⇒ 只能臆造 class（`bar-chart-filled-1`，
+  //   common.less 零定义 ⇒ 图标不可见）或空 `<span>`。
+  //   修法：以**结构归属**（entry.ancestorIds 含 section id ⇒ 资源位于该 section 子树内）补集，
+  //   与 Figma 真值同源、与命名无关；无 ancestorIds 的旧映射自动退化为原「精确相等」行为。
+  const keyStr = sectionKey != null ? String(sectionKey) : null
+  const subtree = []
+  if (keyStr) {
+    for (const m of resourceDomMapping) {
+      if (!m || typeof m !== 'object') continue
+      const anc = Array.isArray(m.ancestorIds) ? m.ancestorIds : null
+      if (!anc) continue
+      if (anc.some((a) => a != null && String(a) === keyStr)) subtree.push(m)
+    }
+  }
+
+  const seen = new Set()
+  const merged = []
+  for (const m of [...direct, ...subtree]) {
+    if (!m || typeof m !== 'object') continue
+    const k = [
+      m.figmaNodeId ?? m.imageRef ?? m.targetDomSelector ?? '',
+      m.varName ?? m.semanticVarName ?? '',
+    ].join('|')
+    if (seen.has(k)) continue
+    seen.add(k)
+    merged.push(m)
+  }
+
+  // 过滤后未减少 ⇒ 视为无意义过滤，保持既有 fail-closed 语义（返回 []）
+  if (merged.length > 0 && merged.length < resourceDomMapping.length) {
+    return merged
   }
   return []
 }

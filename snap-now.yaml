@@ -1,0 +1,184 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - img "company" [ref=e8]
+        - generic [ref=e10]:
+          - img "logo" [ref=e12]
+          - generic [ref=e13]:
+            - heading "感智｜晓界工坊" [level=1] [ref=e14]
+            - generic [ref=e15]: $ Figma → Vue3组件
+      - navigation [ref=e17]:
+        - link "组件开发" [ref=e18] [cursor=pointer]:
+          - /url: /generator/components
+        - link "组件库" [ref=e19] [cursor=pointer]:
+          - /url: /components
+        - link "接口开发" [ref=e20] [cursor=pointer]:
+          - /url: /generator/api
+        - link "任务中心" [ref=e21] [cursor=pointer]:
+          - /url: /tasks
+        - link "大屏布局" [ref=e22] [cursor=pointer]:
+          - /url: /screen
+        - link "管理后台" [ref=e23] [cursor=pointer]:
+          - /url: /admin/operation-log
+      - generic [ref=e24]:
+        - button "切换到工作台模式" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+          - generic: TEST
+          - text: 工作台
+        - button "设置" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - text: 设置
+        - button "切换到深色" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - text: 切换到深色
+        - generic [ref=e36] [cursor=pointer]:
+          - img [ref=e38]
+          - generic [ref=e41]: dev-local
+    - main [ref=e42]:
+      - generic [ref=e44]:
+        - main [ref=e45]:
+          - heading "新建生成任务" [level=1] [ref=e46]
+          - paragraph [ref=e47]: 选择来源并填写信息，AI 将为你生成对应组件。
+          - tablist "输入来源" [ref=e48]:
+            - tab "上传截图" [selected] [ref=e49] [cursor=pointer]:
+              - img [ref=e50]
+              - text: 上传截图
+            - tab "Figma 链接" [ref=e54] [cursor=pointer]:
+              - img [ref=e55]
+              - text: Figma 链接
+          - generic [ref=e63] [cursor=pointer]:
+            - img [ref=e65]
+            - strong [ref=e68]: 选择或粘贴截图
+            - generic [ref=e69]: 拖拽到这里，或按 Ctrl+V
+            - generic [ref=e70]: PNG、JPG、WebP · 单张图片
+          - generic [ref=e71]:
+            - radiogroup "代码类型" [ref=e73]:
+              - radio "Vue3" [checked] [ref=e74] [cursor=pointer]
+              - radio "微码" [ref=e75] [cursor=pointer]
+            - radiogroup "生成规格" [ref=e77]:
+              - radio "Lite" [checked] [ref=e78] [cursor=pointer]
+              - radio "Max" [disabled] [ref=e79]
+            - button "使用截图生成 Vue3" [disabled]:
+              - generic: 使用截图生成 Vue3
+          - button "高级选项" [ref=e81] [cursor=pointer]:
+            - img [ref=e82]
+            - generic [ref=e85]: 高级选项
+            - img [ref=e86]
+        - complementary [ref=e88]:
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - img [ref=e91]
+              - text: 今日概览
+            - link "查看全部" [ref=e96] [cursor=pointer]:
+              - /url: /tasks
+          - generic [ref=e97]:
+            - button "142 总任务" [ref=e98] [cursor=pointer]:
+              - generic [ref=e99]: "142"
+              - generic [ref=e100]: 总任务
+            - button "108 已完成" [ref=e101] [cursor=pointer]:
+              - generic [ref=e102]: "108"
+              - generic [ref=e103]: 已完成
+            - button "0 进行中" [ref=e104] [cursor=pointer]:
+              - generic [ref=e105]: "0"
+              - generic [ref=e106]: 进行中
+            - button "32 失败" [ref=e107] [cursor=pointer]:
+              - generic [ref=e108]: "32"
+              - generic [ref=e109]: 失败
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - img [ref=e112]
+              - text: 最近生成
+            - link "更多" [ref=e115] [cursor=pointer]:
+              - /url: /tasks
+          - generic [ref=e116]:
+            - button "设备监测 16 分钟前 Figma MC" [ref=e224] [cursor=pointer]:
+              - generic [ref=e119]:
+                - generic "设备监测" [ref=e120]
+                - generic [ref=e121]: 16 分钟前
+                - generic [ref=e123]: Figma
+              - generic [ref=e124]: MC
+            - button "设备监测 1 小时前 Figma MC" [ref=e125] [cursor=pointer]:
+              - generic [ref=e127]:
+                - generic "设备监测" [ref=e128]
+                - generic [ref=e129]: 1 小时前
+                - generic [ref=e131]: Figma
+              - generic [ref=e132]: MC
+            - button "设备监测 1 小时前 Figma MC" [ref=e133] [cursor=pointer]:
+              - generic [ref=e135]:
+                - generic "设备监测" [ref=e136]
+                - generic [ref=e137]: 1 小时前
+                - generic [ref=e139]: Figma
+              - generic [ref=e140]: MC
+            - button "mc-lab-1793873364089-0fbb8a11 1 小时前 Figma MC" [ref=e141] [cursor=pointer]:
+              - generic [ref=e143]:
+                - generic "mc-lab-1793873364089-0fbb8a11" [ref=e144]
+                - generic [ref=e145]: 1 小时前
+                - generic [ref=e147]: Figma
+              - generic [ref=e148]: MC
+            - button "设备监测 1 小时前 Figma MC" [ref=e149] [cursor=pointer]:
+              - generic [ref=e151]:
+                - generic "设备监测" [ref=e152]
+                - generic [ref=e153]: 1 小时前
+                - generic [ref=e155]: Figma
+              - generic [ref=e156]: MC
+            - button "流量监测 1 小时前 Figma MC" [ref=e157] [cursor=pointer]:
+              - generic [ref=e159]:
+                - generic "流量监测" [ref=e160]
+                - generic [ref=e161]: 1 小时前
+                - generic [ref=e163]: Figma
+              - generic [ref=e164]: MC
+            - button "环境监测 1 小时前 Figma MC" [ref=e165] [cursor=pointer]:
+              - generic [ref=e167]:
+                - generic "环境监测" [ref=e168]
+                - generic [ref=e169]: 1 小时前
+                - generic [ref=e171]: Figma
+              - generic [ref=e172]: MC
+            - button "环境监测 2 小时前 Figma MC" [ref=e173] [cursor=pointer]:
+              - generic [ref=e175]:
+                - generic "环境监测" [ref=e176]
+                - generic [ref=e177]: 2 小时前
+                - generic [ref=e179]: Figma
+              - generic [ref=e180]: MC
+            - button "设备监测 2 小时前 Figma MC" [ref=e181] [cursor=pointer]:
+              - generic [ref=e183]:
+                - generic "设备监测" [ref=e184]
+                - generic [ref=e185]: 2 小时前
+                - generic [ref=e187]: Figma
+              - generic [ref=e188]: MC
+            - button "流量监测 2 小时前 Figma MC" [ref=e189] [cursor=pointer]:
+              - generic [ref=e191]:
+                - generic "流量监测" [ref=e192]
+                - generic [ref=e193]: 2 小时前
+                - generic [ref=e195]: Figma
+              - generic [ref=e196]: MC
+          - button "实验管线：lite 布局 + 真值回填 展开" [ref=e198] [cursor=pointer]:
+            - generic [ref=e199]:
+              - img [ref=e200]
+              - text: 实验管线：lite 布局 + 真值回填
+            - generic [ref=e202]: 展开
+    - contentinfo [ref=e203]:
+      - generic [ref=e204]: © 2026 感智晓界工坊 · 感动科技 | 智能体工作室
+      - navigation [ref=e205]:
+        - link "架构介绍" [ref=e206] [cursor=pointer]:
+          - /url: /generator/intro
+        - link "页面开发" [ref=e207] [cursor=pointer]:
+          - /url: /generator/page-skeleton
+        - link "工作流编排" [ref=e208] [cursor=pointer]:
+          - /url: /generator/workflow
+        - button "实验室 ▾" [ref=e210] [cursor=pointer]:
+          - text: 实验室
+          - generic [ref=e211]: ▾
+        - link "会议工作台" [ref=e212] [cursor=pointer]:
+          - /url: /meeting
+        - link "更新日志" [ref=e213] [cursor=pointer]:
+          - /url: /help/changelog
+        - link "系统公告" [ref=e214] [cursor=pointer]:
+          - /url: /announcements
+        - link "建议反馈" [ref=e215] [cursor=pointer]:
+          - /url: https://aio.microvideo.cn/tzy/biz/formCustSql/formCustSqlView/njgd_yjfk
+  - generic "任务监控（按住拖拽可移动位置）" [ref=e216]:
+    - generic [ref=e217]:
+      - img [ref=e218]
+      - generic [ref=e221]: 监控
+    - generic [ref=e222]: ›

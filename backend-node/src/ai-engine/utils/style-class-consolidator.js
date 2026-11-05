@@ -1083,13 +1083,18 @@ export function ensureSubComponentAttrsBinding(files = {}) {
 }
 
 /**
- * 🛡️ 根因 C 修复（2026-09-18）：确保子组件根元素有 width: 100%; height: 100%。
+ * 🛡️ 根因 C 修复（2026-09-18）+ F2 收窄（2026-11-05）：子组件根尺寸契约。
  *
  * 背景：子组件根元素缺少 width/height 时，内部 ECharts 容器 0 高不渲染、flex 比例失效。
  * style-class-consolidator 只补 display/flex-direction，不补 width/height。
  *
  * 修复：对 `package/components/*.vue` 子组件，检查其根 class 在 common.less 中的样式规则，
- * 缺失 width/height 时补 width: 100%; height: 100%。
+ * 缺失时补 `width: 100%`；**`height: 100%` 只补给图表子组件**（含 `echarts`）。
+ *
+ * 🔴 F2（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：此前无差别补 height 造成反向
+ *   伤害 —— 统计卡组 `.c-traffic-monitor-card-group` 在 column flex 父内取父全高，吃掉整个
+ *   section 高度，同段的两个柱状图被挤出可视区（截图：柱图消失、两张卡片底图被拉伸成巨环）。
+ *   判据复用本文件既有 `isChartComponent` 口径（`/echarts/.test(sfc)`），不新增第二套判定。
  *
  * @param {Object<string,string>} files 产物文件表
  * @returns {Object<string,string>} 修复后的文件表
@@ -1126,12 +1131,23 @@ export function ensureSubComponentRootDimensions(files = {}) {
     const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
     const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
 
-    if (!hasWidth || !hasHeight) {
+    // 🛡️ F2（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：`height:100%` 契约收窄到
+    //   **图表子组件**。原规则（2026-09-18「根因 C 修复」）为「让 ECharts canvas 可见」
+    //   而无差别给所有子组件根补 `width/height:100%`；非图表子组件（如统计卡组
+    //   `.c-traffic-monitor-card-group`）位于 column flex 父内时，`height:100%` 取父全高
+    //   ⇒ 吃掉整个 section 高度 ⇒ 同段后面的两个柱状图被挤出可视区（真机截图：柱图完全
+    //   消失、只剩两张被 `100% 100%` 拉成巨环的卡片底图）。
+    //   判据同构：复用本文件既有的 `isChartComponent` 口径（`/echarts/.test(sfc)`，
+    //   见 `:1512` 与 `:473` 的图表豁免），**不新增第二套图表判定**。
+    //   width 仍对所有子组件补（宽度 100% 不会造成高度撑破，且缺宽会导致横向塌陷）。
+    const isChartComponent = /echarts/.test(sfc);
+
+    if (!hasWidth || (!hasHeight && isChartComponent)) {
       let newBody = body;
       if (!hasWidth) {
         newBody = `width: 100%;\n${newBody}`;
       }
-      if (!hasHeight) {
+      if (!hasHeight && isChartComponent) {
         newBody = `height: 100%;\n${newBody}`;
       }
       const newRule = openBrace + newBody + closeBrace;

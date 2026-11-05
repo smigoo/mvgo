@@ -29,8 +29,22 @@
  * 唯一合法契约（两条，渲染等价）：
  *   (a) `display:grid; grid-template-columns: repeat(N, Wpx)` + 列距/行距；
  *   (b) `display:flex; flex-direction:row; flex-wrap:wrap` + 子项 `flex:0 0 Wpx`。
- *   🔴 **禁止 `repeat(N, 1fr)`**：末行不满（items % N ≠ 0）时会把 3 张/2 张卡拉宽
- *      （真值 418 / 272 宽，1fr 会变 174.7 / 264-…）⇒ 与设计稿不符。
+ *   ⚠️ **流式轨道（`repeat(N, 1fr)` / `minmax()` / `auto` / 百分比）只在「末行不满」时违约**
+ *      —— 判据见 `judgeGridContract` 的 `grid-track-fluid` 分支，触发条件是
+ *      `parsePx(track) === null && !contract.lastRowFull`。
+ *      末行满（`items % N === 0`）⇒ 段宽恰好 = N 列 + 间距，`1fr` 与 `Wpx` 渲染等价 ⇒ **不判**。
+ *
+ *   🔴 **归因更正（2026-11-05 实测，勿再沿用旧表述）**：本刀头注释与归档文档曾写
+ *      「`1fr` 违规源 = 刀 22-grid」，实测**不成立**：
+ *        · 刀 22（`flex-sibling-guard.healGridContainer`）在 10-29~11-04 全量日志里 **0 次触发**
+ *          （同窗口「刀 41」有大量评估行，检索有效性已对照）；
+ *        · 产物 3425 文件里 408 处 `repeat(N, 1fr)`，390 处（95.6%）所在规则块**无**本刀
+ *          canonical 指纹（`grid-auto-rows` / `column-gap`）⇒ 既非本刀写、也未被本刀追平；
+ *        · 指令级来源是提示词（`prompt-builder.js`「网格列数：必须使用 repeat(N, 1fr)」）。
+ *      更关键的是**时序**：刀 22 在 `microcode-engineer.generateCode` 早段，本刀在写盘出口
+ *      （`file-writer` / `pre-write-self-healing`）后段 ⇒ 契约段内刀 22 写的 `1fr` 必被本刀
+ *      `WRAPPER_DROP`（含 `grid-template-columns`）+ `canonicalWrapperDecls` 覆盖成 `repeat(N, Wpx)`。
+ *      ⇒ 刀 22 的 `1fr` **从来不是终态违规**；无几何真值的段里它反而是唯一合理的等比兜底。
  *
  * 判据将 (a) 选为**自愈目标形态**，因为 LAYOUT-001 对 `layout=grid` 的段要求 `display:grid`
  * —— 自愈若改写成 flex，会把 WARN 转成 WARN（两段式铁律：门禁与自愈必须同一世界观）。
@@ -410,6 +424,28 @@ function fixedBasisOf(decls) {
  *
  * @returns {Array<{code:string, prop:string, actual:string, want:string}>}
  */
+/**
+ * 解析 `repeat(N, <track>)` 轨道模板 ⇒ `{ cols, track }`；非 repeat 形态返回 null。
+ *
+ * 🔴 单一事实源：判据（`judgeGridContract` 的列数/列宽分支）与观测计数行
+ *    （`detectGridListLayoutIssues` 的 `fluidTracks`）**必须都走这里** ——
+ *    消费侧另写一份「流式轨道」近似判定就是「改一处忘一处 = 假绿闭环」的来源。
+ */
+export function parseRepeatTrack(tpl) {
+  const m = /repeat\(\s*(\d+)\s*,\s*([^)]+)\)/i.exec(String(tpl || ''))
+  if (!m) return null
+  return { cols: Number(m[1]), track: String(m[2]).trim() }
+}
+
+/**
+ * 轨道是否「流式」（无 px 定值）：1fr / minmax() / auto / 百分比皆属流式。
+ * 与 `judgeGridContract` 的 `parsePx(track) === null` 同口径，此处仅做可读封装。
+ */
+export function isFluidTrack(tpl) {
+  const t = parseRepeatTrack(tpl)
+  return t ? parsePx(t.track) === null : false
+}
+
 export function judgeGridContract(contract, wrap = {}, item = {}) {
   const out = []
   if (!contract) return out
@@ -438,10 +474,10 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
   // 列数 / 列宽
   if (isGridImpl) {
     const tpl = String(wrap['grid-template-columns'] || '')
-    const repeatM = /repeat\(\s*(\d+)\s*,\s*([^)]+)\)/i.exec(tpl)
+    const repeatM = parseRepeatTrack(tpl)
     if (repeatM) {
-      const cols = Number(repeatM[1])
-      const track = String(repeatM[2]).trim()
+      const cols = repeatM.cols
+      const track = repeatM.track
       if (cols !== wantCols) {
         out.push({
           code: 'grid-cols',
@@ -625,6 +661,13 @@ export function detectGridListLayoutIssues(files, opts = {}) {
     skippedNoTruth: 0,
     skippedNoVFor: 0,
     skippedNoClass: 0,
+    // 🔴 观测型计数（2026-11-05，纯留痕、不拦截、不改写；0 也必须出现在「已评估」行里）：
+    //   fluidTracks        = 契约段内轨道为流式（1fr / minmax / auto / 百分比）的段数；
+    //   fluidTracksIllegal = 其中**末行不满**、被判 grid-track-fluid 的段数（= 真违规）。
+    //   两者恒等 ⇒ 不存在「末行满时被误判」；Illegal 恒 0 而 fluidTracks 常 0 ⇒ 判据从未生效；
+    //   fluidTracks 暴涨而 Illegal 不动 ⇒ 提示词把 1fr 灌进了契约段（末行恰好都满，属合法）。
+    fluidTracks: 0,
+    fluidTracksIllegal: 0,
   }
   const figmaIndex = opts.figmaIndex && typeof opts.figmaIndex.get === 'function' ? opts.figmaIndex : null
   const sections = toArray(opts.sections)
@@ -677,6 +720,13 @@ export function detectGridListLayoutIssues(files, opts = {}) {
       const item = resolveElementDecls(sources, itemClasses, inlineStyleOf(pair.item?.attrs || ''))
       const found = judgeGridContract(contract, wrap, item)
       stats.judged += 1
+      // 🔴 观测型计数（不参与任何判定分支）：契约段内用了流式轨道就算 1 段，
+      //   其中被判 `grid-track-fluid` 的（末行不满）单列一类 —— 判据输出就是唯一依据，
+      //   此处**不另写** lastRowFull 判断（否则等于第二份口径）。
+      if (isFluidTrack(wrap['grid-template-columns'])) {
+        stats.fluidTracks += 1
+        if (found.some((v) => v.code === 'grid-track-fluid')) stats.fluidTracksIllegal += 1
+      }
       if (found.length === 0) continue
       stats.mismatches += 1
       const wrapperTargets = unshared(wrapClasses)

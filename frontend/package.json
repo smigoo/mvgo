@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@ant-design/icons-vue": "~7.0.1",
+    "@huggingface/transformers": "4.3.2",
     "@inspira-ui/plugins": "^0.0.2",
     "@microcode/designer": "0.0.33",
     "@microcode/microcode-framework": "2.5.5",

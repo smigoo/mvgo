@@ -1,6 +1,6 @@
 /**
  * HTTP 请求（Agent Builder 自动生成，请勿手改）
- * 模板: http-request | 创建: 2026-11-03T02:13:26.333Z
+ * 模板: http-request | 创建: 2026-11-05T11:02:38.423Z
  * 输入: url, method
  * 输出: status, data, ok
  */

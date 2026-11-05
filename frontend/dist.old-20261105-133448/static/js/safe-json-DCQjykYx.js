@@ -1,0 +1,1 @@
+async function s(t){let r="";try{r=await t.text()}catch(a){throw new Error(`读取响应失败（HTTP ${t.status||0}）：${a.message}`)}if(!r){const a=t.status===0||t.status>=500?"（服务可能正在重启，请稍后重试）":"";throw new Error(`服务返回空响应（HTTP ${t.status||0}）${a}`)}try{return JSON.parse(r)}catch{throw new Error(`响应不是合法 JSON（HTTP ${t.status||0}）：${r.slice(0,120)}`)}}export{s as r};

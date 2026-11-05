@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 import { basicRoutes } from './basic-routes'
 import { devRoute } from './dev-route'
+import { meetingRoute } from './meeting-route'
 import { mcRoutes } from '@microcode/designer'
 import generatorRoutes from './generator-routes'
 import componentRoutes from './component-routes'
@@ -22,6 +23,9 @@ const fixedMcRoutes = mcRoutes.map(route => {
 const routes = [
   ...basicRoutes,
   ...devRoute,
+  // meeting 开发工作台：dev / production 均注册（已移除环境门控，随本页一并上生产）。
+  // 不挂任何导航入口，生产可通过 /meeting 直接访问
+  ...meetingRoute,
   ...fixedMcRoutes,
   ...generatorRoutes,
   ...componentRoutes,

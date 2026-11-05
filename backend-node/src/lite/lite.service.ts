@@ -2535,6 +2535,22 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
    </base-panel>
    \`\`\`
    **重要**：所有 \`<base-panel>\` 实例的 panelKey 都必须是 "${panelKeyValue}"，与上方规则 P0 铁律保持一致。
+0.5 **面板头部归属铁律（P0）**：截图最顶部的面板标题栏（标题文字 + 与标题同一水平线的控件）属于**面板壳**（base-panel 自带头部约 36px），不是内容区的一部分，**禁止在内容区自绘标题栏**（实锤 mc-lab-1793862674851：内容区自绘「重点车辆监测」标题行，与面板壳标题叠成双重头部）：
+   - declare.json 的 \`componentName\` 必须写截图面板标题的**中文文字**（如「重点车辆监测」）——面板壳用它渲染头部标题；componentId/目录名不受影响（由外部派生）。
+   - \`<template #header-right>\` 插槽**只放面板壳头部条内的控件**——判据（P0，实锤 mc-lab-1793884391523：内容区右上角图标按钮被误放插槽，与 Figma 真值错位）：控件必须**紧贴面板最顶边、与标题文字处于同一条水平带（约 ≤36px 高度带）**才允许放插槽；**凡位于标题栏以下（哪怕贴近视觉右上角）的图标按钮/分页圆点等小元素，一律属于内容区**，放默认插槽内容容器内（需要贴边时用 \`position:absolute\` + 父容器 \`position:relative\` 定位到右上角）：
+     \`\`\`html
+     <base-panel panelKey="${panelKeyValue}">
+       <template #header-right>
+         <!-- 仅：紧贴面板顶边、与标题同一水平带的控件 -->
+       </template>
+       <div class="${classPrefix}content"><!-- 标题栏以下的内容区（含右上角图标等画布内元素） --></div>
+     </base-panel>
+     \`\`\`
+   - 默认插槽只放标题栏**以下**的区块；高度预算按内容区口径（面板头部 36px 已含标题）。
+0.6 **图标占位铁律（P0）**：截图中任何图标位（卡片图标/状态图标/按钮图标）**禁止臆造图形**——禁止内联 \`<svg>\` 手绘、禁止 \`data:image/svg+xml\` 字符串、禁止用 CSS 类/伪元素拼图形（实锤：手绘卡车/CSS 卡车与真实图标视觉差大且平台无法回填真值）。统一写法：
+   - 模板：\`<img class="xxx-icon" :src="item.icon" :alt="item.name" />\`（v-for 数据驱动）或 \`<img class="xxx-icon" :src="iconXxx" />\`（静态）；
+   - mock 数据：icon 字段一律留**空字符串** \`icon: ''\`（平台的 Figma 真值管线会把真实图标文件回填进来）；
+   - icon 容器必须写背景色 + 圆角（如 \`background: rgba(0,0,0,0.06); border-radius: 8px\`）防回填前空白突兀。
 1. 使用 \`<style scoped>\` 隔离样式。
 2. 所有自定义 class 必须加前缀 \`${classPrefix}\`（如 \`${classPrefix}header\`、\`${classPrefix}title\`）。
 3. 还原截图中可见的 DOM 层级、尺寸比例、间距、对齐、配色、字体、边框、圆角和阴影。

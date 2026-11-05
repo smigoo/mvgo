@@ -13,6 +13,12 @@ import { effectsToBoxShadow } from './figma-effects.js';
 //   复用 figma-coverage-dedupe（零 import 的纯函数模块）——本文件不得复制第二份，
 //   否则「什么算声明内容」会在去重与覆盖率两处各长一套。
 import { haveDisjointDeclaredContent } from './figma-coverage-dedupe.js';
+// 🛡️ G14a（2026-11-05）：「section 自身声明身份」**单一来源**。
+//   复用零依赖模块 section-anchor-identity（候选优先级 figmaAnchorId → figmaNodeId → nodeId
+//   → figmaNode → id，与几何轨 `sectionAnchorKey` / 归属轨 planner **同一张表**）。
+//   🔴 不得改为从 `section-anchor-truth.js` 取：那个文件反向 import 本文件 ⇒ 成环。
+//   🔴 更不得在本文件内联第三份候选序列 —— 锚点优先级出现第二份就是漂移的开始。
+import { sectionAnchorKey } from './section-anchor-identity.js';
 
 export function isLayoutContainerSection(sec) {
   if (!sec || typeof sec !== 'object') return false
@@ -114,7 +120,23 @@ function recordDroppedSection(removed, sec, coveredBy, reason, path) {
   })
 }
 
-export function dedupeDuplicateSections(sections, removed = null, path = '') {
+/**
+ * 段级去重（R1-1 单一归属 + C0.3-B 语义分区 + chart ⑤ + tabs 措辞兜底）。
+ *
+ * 约定：`removed` 是**可选累加器**——调用方传数组才收集，不传则行为与旧版完全一致
+ * （本函数有 9 处调用，签名不得破坏）。
+ *
+ * 🛡️ G14a（2026-11-05）：`stats` 是**可选观测出参**（同样「传才记」）。当前唯一字段
+ *   `nestedExempt` = 命中「父子嵌套豁免」的次数。属**观测型计数**（§4.6：不受「新增修补型
+ *   守卫默认拒绝」约束，但仍须登记），故刻意做成「不改判据输入、只加计数」的旁路参数 ——
+ *   不传 `stats` 时除判据本身的行为变化外，与 G14a 之前完全一致。
+ *
+ * @param {Array|null} sections 待去重段
+ * @param {Array|null} removed 丢弃留痕累加器，元素 { id, coveredBy, size, reason, path }
+ * @param {string} path 层级路径（'/' 分隔）
+ * @param {object|null} stats 观测出参，当前字段 { nestedExempt: number }
+ */
+export function dedupeDuplicateSections(sections, removed = null, path = '', stats = null) {
   if (!Array.isArray(sections)) return sections
   const out = []
   const seen = new Map() // tabs 措辞 key -> out 下标
@@ -132,6 +154,7 @@ export function dedupeDuplicateSections(sections, removed = null, path = '') {
           sec.children,
           removed,
           `${path}/${String(sec.id ?? '')}`,
+          stats,
         ),
       })
       continue
@@ -155,6 +178,58 @@ export function dedupeDuplicateSections(sections, removed = null, path = '') {
         out.push(sec)
         continue
       }
+      // 🛡️ G14a（2026-11-05 · 110 条真机留档重放实锤）：**父子嵌套不是归属冲突**。
+      //
+      //   裂缝：R1-1 用「sourceNodeIds 有交集」判「同一节点被两段争抢」，但
+      //   `subcomponent-planner#collectSourceNodeIds` 是**并集累加器**——把段自身锚点 +
+      //   全部子节点 id 都收进去（`:1227-1235`），于是**大段的 id 集天然是后代段的超集**。
+      //   父段（含子段锚点）与子段（以自己为锚）一相遇就必然「有交集」⇒ R1-1 误判为争抢
+      //   ⇒ 按 elementCount 收敛丢掉父段整块内容。
+      //   重放 `data/tasks.json` 110 条留档：现状 8 段被丢，其中 3 段是**真丢内容**
+      //   （36:1642「GD-Robot-04/编码/ROB004」整块、36:1693「设备头部信息」整块、
+      //   2:8419「设备总数/完好率/98%」整行）——这三处两段声明文本**零重叠**，
+      //   是空间上不同的区域，不存在重复解释。
+      //
+      //   判据（刻意收窄到「恰好一方」，四条同时满足）：
+      //     ① 两段 sourceNodeIds 有交集（否则根本进不到本分支）；
+      //     ② 交集 id **恰好命中其中一方**的自身声明身份（`sectionAnchorKey` 单一来源：
+      //        figmaAnchorId → figmaNodeId → nodeId → figmaNode → id）；
+      //     ③ 另一方的自身身份**不在**交集里 ⇒ 它只是把对方锚点当成自己众多后代之一；
+      //     ④ 命中数 ≠ 2 —— 双方身份相同（同一节点被两个语义段争抢，如 spec 阴性②
+      //        `segHeader`/`other` 同为 `36:1693`）时**不豁免**，仍走原收敛。
+      //   ⇒ 语义：一方的「身份」出现在另一方的「后代集合」里 = 父子关系，不是争抢。
+      //   🔴 刻意不用「一方 id 集 ⊇ 另一方」：实测该口径 110 条里 **0 条**命中
+      //     （大段的 id 集是后代并集，但两段各自的锚点互不包含），救不了任何一段。
+      //   🔴 刻意不放宽到「交集非空」：会把真正同锚争抢（阴性②）一并放过，
+      //     且 `intersect-ratio` 需要「重合率 ≤ 1/3」这类魔法数。
+      //   🔴 明确**不介入** chart↔chart：两条 chart 的归属由下方 ⑤（图表签名）单独裁决，
+      //     这里再叠一套豁免就成了两套判据抢同一件事。实测 110 条留档零命中。
+      const bothChartLeaves = isChartLeaf(prev) && isChartLeaf(sec)
+      const prevAnchor = sectionAnchorKey(prev)
+      const curAnchor = sectionAnchorKey(sec)
+      const prevIds = Array.isArray(prev?.sourceNodeIds) ? prev.sourceNodeIds.map(String) : []
+      const intersection = srcIds.filter((id) => prevIds.includes(id))
+      const prevIsIdentity = !!prevAnchor && intersection.includes(prevAnchor)
+      const curIsIdentity = !!curAnchor && intersection.includes(curAnchor)
+      if (!bothChartLeaves && prevIsIdentity !== curIsIdentity) {
+        if (stats && typeof stats === 'object') {
+          stats.nestedExempt = (Number(stats.nestedExempt) || 0) + 1
+        }
+        if (Array.isArray(sec.children)) {
+          out.push({
+            ...sec,
+            children: dedupeDuplicateSections(
+              sec.children,
+              removed,
+              `${path}/${String(sec.id ?? '')}`,
+              stats,
+            ),
+          })
+        } else {
+          out.push(sec)
+        }
+        continue
+      }
       // 🛡️ ⑤（2026-09-26 · 离线复现实锤）：**两个 chart section 共享 sourceNodeIds 时不得按
       //   elementCount 收敛**。vision 会把「同一 Figma 容器下的多个不同图表」标成同一个 section
       //   （E1 注释已记录该形态），`injectChartSectionIfMissing` 的 chartsTruth 分支因此产出
@@ -172,6 +247,7 @@ export function dedupeDuplicateSections(sections, removed = null, path = '') {
           sec.children,
           removed,
           `${path}/${String(sec.id ?? '')}`,
+          stats,
         ),
       })
         } else {
@@ -196,6 +272,7 @@ export function dedupeDuplicateSections(sections, removed = null, path = '') {
           sec.children,
           removed,
           `${path}/${String(sec.id ?? '')}`,
+          stats,
         ),
       })
         } else {
@@ -269,6 +346,7 @@ export function dedupeDuplicateSections(sections, removed = null, path = '') {
           sec.children,
           removed,
           `${path}/${String(sec.id ?? '')}`,
+          stats,
         ),
       })
       continue
@@ -721,6 +799,9 @@ export function splitTitleValueByStyle(items) {
  * 用最小 y 而非 sourceNodeIds[0]：避免「同一 section 两种 sourceNodeIds 排列」得到不同锚点；
  * section 根节点通常就是自身子树里最上方的节点，因此最小值即根盒。
  *
+ * ⚠️ 语义边界（T-GROW 2026-11-05）：本函数的「最小 y 单节点」是**锚点**，服务**排序**；
+ * 量尺寸（尤其横向容器子项宽度）必须用 `unionSectionBox`，否则「锚点只是首行」的段会被量小。
+ *
  * @param {Object} section
  * @param {Map} index indexFigmaNodes 的产物
  * @returns {{y: number, x: number, width: number, height: number}|null}
@@ -742,6 +823,72 @@ export function figmaSectionBox(section, index) {
     }
   }
   return best
+}
+
+/**
+ * 🛡️ T-GROW（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：section 的**几何并集盒**。
+ *
+ * 与 `figmaSectionBox` 严格分工（二者不得互相替代）：
+ *   - `figmaSectionBox`：`sourceNodeIds` 里 **min-y 单节点** —— 语义是「锚点」，服务**排序**；
+ *     用它量尺寸会把「锚点只是首行」的段量小（如 `2:8419` 锚在 388×30 的 header GROUP，
+ *     两张 stat-card 在**兄弟**节点 `89:38` 下，量出 30 而真值 99）。
+ *   - `unionSectionBox`：section 自身引用 + **整棵子树**引用的**并集** —— 语义是「这段实际占了多少」，
+ *     服务**量尺寸**（横向容器的子项宽度必须走这里）。
+ *
+ * 🔴 为什么必须用 `id` 兜底：vision 主路径的 section **没有 `sourceNodeIds`**
+ * （`debug-ai-response.txt` 实测 keys 里无此字段），只认 sourceNodeIds 会返回 null ⇒ 宽度取不到。
+ *
+ * @param {Object} section
+ * @param {Map} index indexFigmaNodes 的产物
+ * @returns {{x:number,y:number,width:number,height:number,refs:number}|null}
+ */
+export function unionSectionBox(section, index) {
+  if (!index || typeof index.get !== 'function' || !section) return null
+  const ids = new Set()
+  // Figma 节点 id 一律形如 `2:8419`；语义 id（`2:8787-total`）与非 id 字符串自然被排除。
+  const idRx = /^\d+:\d+$/
+  const push = (v) => {
+    if (typeof v === 'string' && idRx.test(v)) ids.add(v)
+  }
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    push(node.id)
+    push(node.figmaNode)
+    push(node.figmaNodeId)
+    push(node.figmaAnchorId)
+    if (Array.isArray(node.sourceNodeIds)) for (const v of node.sourceNodeIds) push(v)
+    if (Array.isArray(node.children)) for (const c of node.children) walk(c)
+    if (node.body && typeof node.body === 'object') {
+      if (Array.isArray(node.body.children)) for (const c of node.body.children) walk(c)
+      if (Array.isArray(node.body.items)) for (const c of node.body.items) walk(c)
+    }
+  }
+  walk(section)
+
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  let refs = 0
+  for (const id of ids) {
+    const b = index.get(String(id))?.bbox
+    if (
+      !b ||
+      typeof b.x !== 'number' ||
+      typeof b.y !== 'number' ||
+      typeof b.width !== 'number' ||
+      typeof b.height !== 'number'
+    ) {
+      continue
+    }
+    refs += 1
+    x0 = Math.min(x0, b.x)
+    y0 = Math.min(y0, b.y)
+    x1 = Math.max(x1, b.x + b.width)
+    y1 = Math.max(y1, b.y + b.height)
+  }
+  if (refs === 0) return null
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0, refs }
 }
 
 /**

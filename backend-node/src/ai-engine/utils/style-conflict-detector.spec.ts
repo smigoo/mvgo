@@ -181,6 +181,56 @@ describe('style-conflict-detector', () => {
 
       expect(r.conflicts).toHaveLength(0);
     });
+
+    it('🔴 嵌套 fallback 的 var() 归一无残留括号：less `var(--fontSize, var(--fontSize))` 与 SFC `var(--fontSize, 14px)` 同值，不报', () => {
+      // 回归真机病灶（common.less:97）：旧 `[^)]*` 正则在内层右括号收口，LESS 侧归一成
+      // `calc(var(fontsize)) * 0.714)`（多一个 ')' 且打断 calc 结构）⇒ 与 SFC 侧永不相等 ⇒ 假阳性。
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.t { font-size: calc(var(--fontSize, var(--fontSize)) * 0.714); }`,
+        'package/components/A.vue': `<style scoped>.t { font-size: calc(var(--fontSize, 14px) * 0.714); }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(0);
+    });
+
+    it('🔴 var() fallback 为函数（rgba）同样括号配平：不因多吞括号产生假阳性', () => {
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.m { background: var(--mask, rgba(0, 0, 0, 0.5)); }`,
+        'package/components/A.vue': `<style scoped>.m { background: var(--mask); }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(0);
+    });
+
+    it('calc 乘数相对差 ≤0.1%（1.143 vs 1.1429 = 0.0087%）视为同值，不报', () => {
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.h { font-size: calc(var(--fontSize, 14px) * 1.143); }`,
+        'package/components/A.vue': `<style scoped>.h { font-size: calc(var(--fontSize, 14px) * 1.1429); }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(0);
+    });
+
+    it('calc 乘数真差异（0.8571 vs 0.714 = 16.7%）仍报 —— 容差不吞真阳性', () => {
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.n { font-size: calc(var(--fontSize, 14px) * 0.8571); }`,
+        'package/components/A.vue': `<style scoped>.n { font-size: calc(var(--fontSize, 14px) * 0.714); }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(1);
+      expect(r.conflicts[0].attrs).toEqual(['font-size']);
+    });
+
+    it('数值容差只作用于 calc：px 即使相对差 <0.1% 也照常报（不误判同值）', () => {
+      // 1000px vs 1000.5px 相对差 0.05%，若容差泛化到纯字面量会被误吞 —— 反向守卫。
+      const r = findCrossFileClassRuleConflicts({
+        'resources/styles/common.less': `.d { width: 1000px; }`,
+        'package/components/A.vue': `<style scoped>.d { width: 1000.5px; }</style>`,
+      });
+
+      expect(r.conflicts).toHaveLength(1);
+      expect(r.conflicts[0].attrs).toEqual(['width']);
+    });
   });
 
   describe('scanProductStyleIssues', () => {

@@ -1381,6 +1381,17 @@ export class FigmaConnector {
           simplified.imageRef = fill.imageRef;
         }
 
+        // 🛡️ 2026-11-05 治本（背景自适应判据 · c-traffic-monitor-de627a9d 实锤）：
+        //   Figma IMAGE fill 的 `scaleMode`（FILL/FIT/STRETCH/TILE）是「缩放语义」的
+        //   **唯一真值来源**。此前本处重建 fill 时把它整层丢掉 ⇒ 下游只能靠几何推断
+        //   （覆盖比≥0.9 → 100% 100%，否则固定 px），既表达不了 FILL≈CSS cover 的
+        //   保形自适应，也分不清 STREETCH 与 FILL ⇒ 组件尺寸变化时背景被拉变形或错位。
+        //   实测证据：76/76 条 IMAGE fill 无 scaleMode；图片为 1x 导出且像素 = 节点 rect。
+        //   仅短字符串，体积可忽略；缺失时下游回落几何推断（零行为变更）。
+        if (fill.type === 'IMAGE' && fill.scaleMode) {
+          simplified.scaleMode = fill.scaleMode;
+        }
+
         // 保留渐变信息
         if (
           (fill.type === 'GRADIENT_LINEAR' ||
@@ -2706,7 +2717,7 @@ export class FigmaConnector {
   _buildResourceDomMapping(nodeData, downloadedImages) {
     const mappings = [];
 
-    const traverse = (node, path = [], parentBox = null, parentId = null) => {
+    const traverse = (node, path = [], parentBox = null, parentId = null, idPath = []) => {
       if (!node) return;
 
       // 🛡️ 技术栈标记子树跳过（与 extractResourceNodes 下载阶段保持一致）：
@@ -2720,7 +2731,7 @@ export class FigmaConnector {
         const kids = Array.isArray(node.children) ? node.children : [];
         for (const k of kids) {
           if (this._isStackControlPart(k)) continue;
-          traverse(k, [...path, node.name], node.absoluteBoundingBox, node.id);
+          traverse(k, [...path, node.name], node.absoluteBoundingBox, node.id, [...idPath, String(node.id)]);
         }
         return;
       }
@@ -2786,6 +2797,13 @@ export class FigmaConnector {
         //推荐使用模式：基于节点属性推断最佳用法
         const recommendedUsage = this._inferRecommendedUsage(node, nodeType);
 
+        // 🛡️ 2026-11-05 治本：IMAGE fill 的缩放语义（FILL/FIT/STRETCH/TILE）随资源条目下发。
+        //   下游 background-size 由「几何猜测」升级为「真值判定」（见 background-size-inference）；
+        //   无 IMAGE fill / 无该字段时为 null ⇒ 下游回落几何推断。
+        const _imageFill = Array.isArray(node.fills)
+          ? node.fills.find((f) => f && f.type === 'IMAGE' && f.visible !== false)
+          : null;
+
         //  根据 CSS/图片类型生成不同的 usage 和 fallbackHint
         let usageHint;
         let fallbackHint = null;
@@ -2813,6 +2831,15 @@ export class FigmaConnector {
           //   供 resource-manifest#annotateResourceOwnership 按 node id（而非 slot-* 名字）分派，
           //   杜绝「LLM 在全量资源里按名字串用 → 跨 section 错绑」。
           ownerSectionId: parentId || null,
+          // 🛡️ 2026-11-05 治本（资源挂载锚点 · c-traffic-monitor-de627a9d 实锤）：
+          //   `ownerSectionId` 只是**直接父节点**，常是中间 group（产物不会为它输出
+          //   data-section-id）⇒ 锚点悬空、挂载 fail-closed。此处固化**完整祖先链**
+          //   （最近→根，不含自身），挂载时取「第一个真实出现在产物里的 id」，
+          //   零名字猜测。实测该单 12 个资源中 10 个可经祖先链命中产物已有 section。
+          ancestorIds: [...idPath].reverse(),
+          // 🛡️ 2026-11-05：IMAGE fill 缩放语义真值（FILL/FIT/STRETCH/TILE），供 background-size 判定
+          imageScaleMode:
+            _imageFill && _imageFill.scaleMode ? String(_imageFill.scaleMode) : null,
           figmaPath: [...path, node.name].join('/'),
           name: node.name,
           figmaBox: node.absoluteBoundingBox,
@@ -2878,7 +2905,7 @@ export class FigmaConnector {
 
       if (node.children) {
         node.children.forEach((child) =>
-          traverse(child, [...path, node.name], node.absoluteBoundingBox, node.id),
+          traverse(child, [...path, node.name], node.absoluteBoundingBox, node.id, [...idPath, String(node.id)]),
         );
       }
     };

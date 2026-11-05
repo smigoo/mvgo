@@ -12,7 +12,10 @@ import { parse } from '@babel/parser';
 const ROOT = process.cwd();
 const FILES = [
   { rel: 'src/ai-engine/utils/pre-write-self-healing.js', expectCatches: 28 },
-  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 67 },
+  // 67→68（2026-11-05 归因）：6b0d14b 之后某提交新增 G11a `catch (bgErr)`
+  // （microcode-engineer.js:3110，背景 fallback 注入），当日未同步本门禁；
+  // 已补接哨兵（S0.2 核对唯一漏网点），基线同步 +1。
+  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 68 },
   { rel: 'src/ai-engine/roles/vue3-engineer.js', expectCatches: 25 },
 ];
 

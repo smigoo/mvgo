@@ -35,6 +35,9 @@ import { MicrocodeEngineer } from '../roles/microcode-engineer.js';
 import {
   buildRejectSummary,
   formatRejectSummaryLine,
+  pickStyleTruthAudit,
+  pickResourceConservationAudit,
+  pickFlexTruthAudit,
 } from '../utils/reject-summary.js';
 //S9: 文档分析编排器（CJS 模块，ESM 默认导入互操作）
 import docAnalyzerModule from '../../phase2/doc/doc-analyzer.js';
@@ -264,6 +267,34 @@ function isUntrustedVisualAnalysis(result = {}) {
     result.layoutStructure?.degraded === true ||
     result.layoutStructure?.visualDegraded === true
   );
+}
+
+/**
+ * 🛡️ 2026-11-05（mc-max-1793884413982-7b49f607 实锤）：结构是否已被 A′ 容器重建改写。
+ *
+ * 用途：缓存命中补跑 A4 前的**前置判据**。A4 的配对语义是「vision 段 ↔ figma 视觉区域」，
+ * 幂等性只在「段集未被改写」时成立；容器重建会把 N 段压成更少的段（4 段→3 段），
+ * 此时 id 直配失配 ⇒ 退回顺序配对 ⇒ 高度整体错位一位（30→65、65→317）。
+ */
+function hasRebuiltContainerSection(obj) {
+  const sections =
+    obj?.layoutStructure?.layout?.sections ||
+    obj?.layout?.sections ||
+    obj?.layoutStructure?.sections ||
+    [];
+  const seen = new Set();
+  const walk = (list) => {
+    if (!Array.isArray(list)) return false;
+    for (const sec of list) {
+      if (!sec || typeof sec !== 'object' || seen.has(sec)) continue;
+      seen.add(sec);
+      if (sec.layoutSource === 'container-rebuild') return true;
+      if (walk(sec.children)) return true;
+      if (walk(sec.body?.children)) return true;
+    }
+    return false;
+  };
+  return walk(sections);
 }
 
 function buildVisualAnalysisBlockError(result = {}) {
@@ -1087,17 +1118,29 @@ export function createPhase2Graph(config = {}) {
         //   事实源仍是实时 Figma 树（state.figmaNodeData），不是缓存里那份。
         try {
           if (state.figmaNodeData) {
-            const a4Stats = {};
-            const a4Count = applyFigmaElementHeightRatios(validatedCachedResult, state.figmaNodeData, {
-              disabled: process.env.MC_DISABLE_FIGMA_ELEM_RATIO === '1',
-              stats: a4Stats,
-            });
-            if (a4Count) {
-              logger.info('A4 元素级高度比例已应用（缓存命中补跑）', {
-                count: a4Count,
-                sectionStats: a4Stats,
+            if (hasRebuiltContainerSection(validatedCachedResult)) {
+              // 🔴 2026-11-05（mc-max-1793884413982-7b49f607 实锤）：缓存里已含 A′ 重建容器
+              //   （`layoutSource:'container-rebuild'`）⇒ 段集已被压扁（4 段→3 段），此时补跑 A4
+              //   会因 id 直配失配退回**顺序配对**，高度整体错位一位
+              //   （`2:8419` 30→65、`89:38` 65→317，产物「fg-grid-8938 高度与设计差很大」）。
+              //   A4 的幂等性只在「段集未被改写」时成立 —— 结构已改写的缓存只能沿用其原值。
+              logger.info('🛡️ A4 缓存补跑·已跳过（缓存结构已含重建容器，顺序配对会错位）', {
                 _uiCacheHit: true,
+                reason: 'container-rebuild',
+              })
+            } else {
+              const a4Stats = {};
+              const a4Count = applyFigmaElementHeightRatios(validatedCachedResult, state.figmaNodeData, {
+                disabled: process.env.MC_DISABLE_FIGMA_ELEM_RATIO === '1',
+                stats: a4Stats,
               });
+              if (a4Count) {
+                logger.info('A4 元素级高度比例已应用（缓存命中补跑）', {
+                  count: a4Count,
+                  sectionStats: a4Stats,
+                  _uiCacheHit: true,
+                });
+              }
             }
           }
         } catch (a4Err) {
@@ -1835,9 +1878,28 @@ export function createPhase2Graph(config = {}) {
       // 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账——刀53 takeover 统计
       //   （含 skipped[].reason 与 0 命中可见）+ D1 契约审计缺失，任务级一行日志
       //   + `.checkpoint/reject-summary.json`。只观测、不阻断；双源皆空不落盘。
+      // 🛡️ 2026-11-05 样式真值依据治理 · P1 接线：第三源来自既有 resourceDomMapping
+      //   checkpoint（inferBackgroundStyle 写回 backgroundInferredBy），空数组也传 ⇒ 全 0 也打。
+      //   非数组不传，保持既有「双源皆空不落盘」契约零回归。
+      const styleTruthMapping = state.resourceDomMapping || state._uiCache?.resourceDomMapping;
+      // 🛡️ 2026-11-05 C1/C2 观测接线（docs/2026-11-05-四任务样式各异根因修复方案.md §3.1/§3.5）：
+      //   产物内容表只取 engineer 返回的 full-truth map（与 :1864 generatedFiles 同源）；
+      //   拿不到就传 null ⇒ filesUnavailable=1 如实打，不编造「未挂载」结论。
+      //   第四/五源与第三源同条件传入，保住「双源皆空不落盘」旧契约零回归。
+      const conservationFiles =
+        result?.generatedFiles && typeof result.generatedFiles === 'object' && !Array.isArray(result.generatedFiles)
+          ? result.generatedFiles
+          : result?.files && typeof result.files === 'object' && !Array.isArray(result.files)
+            ? result.files
+            : null;
       const rejectSummary = buildRejectSummary({
         takeoverAudit: result?.takeoverAudit || null,
         contractAudit: state._contractAudit || null,
+        styleTruthAudit: Array.isArray(styleTruthMapping) ? pickStyleTruthAudit(styleTruthMapping) : null,
+        resourceConservationAudit: Array.isArray(styleTruthMapping)
+          ? pickResourceConservationAudit(styleTruthMapping, conservationFiles)
+          : null,
+        flexTruthAudit: Array.isArray(styleTruthMapping) ? pickFlexTruthAudit(conservationFiles) : null,
       });
       if (rejectSummary) {
         state._saveCheckpoint?.('reject-summary', rejectSummary);
@@ -4682,6 +4744,9 @@ export function createPhase2Graph(config = {}) {
             visualElements: state.visualElements,
             outputPath: state.outputPath,
             generatedFiles: state.generatedFiles,
+            // 🛡️ F3（A1 白名单）：背景红线改写需要「资源 → scaleMode 真值」的归属锚。
+            //   显式下传（不用实例状态），未传/为空 ⇒ 白名单为空 ⇒ 行为与旧实现逐字一致。
+            resourceDomMapping: state.resourceDomMapping,
             _reviseTarget: 'full',
             onProgress: state.onProgress,
             signal: state.signal || state.__abortSignal || null,
@@ -4760,6 +4825,8 @@ export function createPhase2Graph(config = {}) {
           layoutStructure: state.layoutStructure,
           outputPath: state.outputPath,
           generatedFiles: state.generatedFiles,
+          // 🛡️ R3-legacy（2026-11-06）：下传背景真值锚，供 6 红线 scaleMode 白名单使用。
+          resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
           _reviseTarget: state._reviseTarget,
           onProgress: state.onProgress,
           signal: state.signal || state.__abortSignal || null,
@@ -5994,6 +6061,8 @@ export function createPhase2Graph(config = {}) {
         layoutStructure: state.layoutStructure,
         outputPath: state.outputPath,
         generatedFiles: state.generatedFiles,
+        // 🛡️ R3-legacy（2026-11-06）：串行兼容节点同样下传背景真值锚（F3 白名单）。
+        resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
         _reviseTarget: 'full', // 串行模式下不做范围限制
         onProgress: state.onProgress,
       });

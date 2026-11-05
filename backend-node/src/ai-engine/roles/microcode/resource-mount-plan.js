@@ -45,6 +45,19 @@ import {
 } from './resource-mounter.js';
 
 /**
+ * 🛡️ 刀A（2026-11-05 · `c-env-monitor-c324a730` 实锤）：锚点**上提**的几何共位阈值。
+ *
+ * 背景真值盒（`parentBox` 优先、退化 `figmaBox`）与**被上提到的**锚点元素盒，在两轴上的
+ * 覆盖率都必须 ≥ 本阈值，才认定为「同一层容器的背景」。
+ *
+ * 取值依据（非魔法数）：容器背景与容器同层时两轴覆盖率 ≈ 1.0；跨层样本实锤
+ * `bg-7890.png` 295×27 被上提到 380×145 的段根 ⇒ 覆盖率 0.776 / **0.186**（min=0.186）。
+ * 0.5 落在「同层≈1.0」与「跨层 0.186」之间，两侧都留有余量；
+ * 对仅缺一侧真值的样本一律 fail-open（不拦），确保不劣于旧行为。
+ */
+const ANCHOR_PROMOTION_MIN_AXIS_RATIO = 0.5;
+
+/**
  * 🛡️ #2（2026-09-22 · c-device-monitor-9120a940 实锤）：从单个开标签的 :style 中剥离 bg* 键。
  * 共享背景（sharedBy>1）被正确落点到 v-for item 后，需把 LLM 误挂到面板根的同一 bg 变量剔除，
  * 否则 bg 会被 background-size:100% 拉伸铺满整个容器（逐卡背景消失）。仅删 background* 键，
@@ -149,11 +162,24 @@ function findPerItemYieldHost(allFiles, varName, candidateFile, candidateContent
 export function findTagBySectionAnchor(content, anchor) {
   if (typeof content !== 'string' || !content || anchor == null) return null;
   const a = String(anchor);
-  let idx = content.indexOf(`data-section-id="${a}"`);
-  let nlen = `data-section-id="${a}"`.length;
-  if (idx < 0) {
-    idx = content.indexOf(`data-section-id='${a}'`);
-    nlen = `data-section-id='${a}'`.length;
+  // 🛡️ α3（2026-11-05）：`data-section-id` 是段身份（code-generator.js:776 红线：内层节点
+  //   绝不复用）⇒ 资源宿主锚走专用属性 `data-resource-anchor`，此处**次优先级**识别。
+  //   优先级：section-id 单引号 > section-id 双引号 > resource-anchor 单/双引号——
+  //   前两者是既有行为保持不变，仅在其全部 miss 后才落到补标锚。
+  const patterns = [
+    `data-section-id="${a}"`,
+    `data-section-id='${a}'`,
+    `data-resource-anchor="${a}"`,
+    `data-resource-anchor='${a}'`,
+  ];
+  let idx = -1;
+  let nlen = 0;
+  for (const p of patterns) {
+    idx = content.indexOf(p);
+    if (idx >= 0) {
+      nlen = p.length;
+      break;
+    }
   }
   if (idx < 0) return null;
   const lt = content.lastIndexOf('<', idx);
@@ -184,6 +210,12 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
     return plan;
   }
   const sections = Array.isArray(effectiveSections) ? effectiveSections : [];
+
+  // 🛡️ 2026-11-05：产物**实际存在**的 section 锚点集合（allFiles 里真实出现过的
+  //   `data-section-id`）。锚点解析以它为唯一事实：命中即可精确挂载，悬空则换祖先，
+  //   全不命中记 unresolved（禁回退根容器——那是历史「背景消失/错位」的根源）。
+  const productAnchorIds =
+    opts.productAnchorIds instanceof Set ? opts.productAnchorIds : null;
 
   // ① nodeId → owner 组件名（section 单一归属，批次 1 锚定后 src 完备）
   const leaves = collectLeafSections(sections);
@@ -235,6 +267,48 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
     for (const c of sec?.children || []) collectIds(c);
   };
   for (const s of sections) collectIds(s);
+
+  // 🛡️ 刀A（2026-11-05 · c-env-monitor-c324a730 实锤）：锚点**盒真值**索引。
+  //   服务 resolveSectionAnchor 的「上提尺度共位」判据。事实源只用 effectiveSections 自己的
+  //   figmaBox / absoluteBoundingBox —— 刻意**不引 figmaRoot**：本仓调用方传入的是
+  //   `{fileKey,nodeId,tokenHash,cachedAt,document}` 包裹形态，`walk(opts.figmaRoot)` 沿
+  //   `children` 走会得到**空索引**（另一个假绿，见 docs 同文件 §7）。缺盒 ⇒ 判据 fail-open。
+  const sectionBoxById = new Map();
+  const collectBoxes = (sec) => {
+    if (!sec || typeof sec !== 'object') return;
+    const id = sec.id != null ? String(sec.id) : '';
+    const box = sec.figmaBox || sec.absoluteBoundingBox;
+    if (id && box && Number(box.width) > 0 && Number(box.height) > 0) {
+      sectionBoxById.set(id, {
+        width: Number(box.width),
+        height: Number(box.height),
+      });
+    }
+    for (const c of sec.children || []) collectBoxes(c);
+    for (const c of (sec.body && sec.body.children) || []) collectBoxes(c);
+  };
+  for (const s of sections) collectBoxes(s);
+
+  /**
+   * 🛡️ 刀A：上提是否「几何共位」。
+   * @param {string} anchorId 被上提命中的锚点 id
+   * @param {Object} entry mapping 条目（含 parentBox / figmaBox）
+   * @returns {boolean} true=同层可挂；false=跨层，必须拒绝
+   */
+  const isCoLocatedAnchor = (anchorId, entry) => {
+    // 🔴 仅 `bg` 适用（2026-11-05 真机重放实证）：图标/图片的真值盒天然远小于宿主 section
+    //   （icon-7941 52×24 vs 380×145 = 0.137），且它们不以 `background-size:100% 100%` 拉伸
+    //   ⇒ 不存在「跨层拉伸」病灶。若一并套用，会把所有 icon 锚点判死（本单实测 icon2/icon3 命中）。
+    if (entry?.previewAnalysisRole !== 'bg') return true;
+    const anchorBox = sectionBoxById.get(String(anchorId));
+    const resBox = entry.parentBox || entry.figmaBox;
+    if (!anchorBox || !resBox) return true; // 缺任一真值 → fail-open，不拦
+    const w = Number(resBox.width);
+    const h = Number(resBox.height);
+    if (!(w > 0) || !(h > 0)) return true;
+    const ratio = Math.min(w / anchorBox.width, h / anchorBox.height);
+    return ratio >= ANCHOR_PROMOTION_MIN_AXIS_RATIO;
+  };
   // 🛡️ 2026-09-29 治本（本轮实锤：c-traffic-monitor-f0c05ecc「当日总流量」背景图整块丢失）
   //   **直接父节点优先**。`ownerSectionId` = figma-connector 固化的「bg 节点的直接父节点 id」，
   //   与 `targetDomSelector = [data-section-id="<父节点id>"]` **同源**，是 figma 树里可直接读出的
@@ -251,20 +325,68 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
   //   ⚠️ 刻意**不做** `allSectionIds` 过滤：产物里是否有 `data-section-id="<父节点id>"` 由
   //   下游 L403 事实链**自行验证**（找不到即 `continue` 走后续分支）⇒ 锚点不存在时行为
   //   不劣于旧实现，只是「更精确的锚点先试一次」。
+  // 上提拒绝标记（单次调用内传递，供计划条目留痕 ⇒ 下游 fail-closed 短路）
+  let lastPromotionRejected = false;
+  let lastPromotionRejectedAnchor = null;
   const resolveSectionAnchor = (entry) => {
+    lastPromotionRejected = false;
+    lastPromotionRejectedAnchor = null;
     const owner =
       entry.ownerSectionId != null ? String(entry.ownerSectionId) : '';
-    if (owner) return owner;
-    // 兜底（老产物无 ownerSectionId）：上溯到最近的 section 祖先——合法但更粗的锚点，非猜测。
     const nid = entry.figmaNodeId != null ? String(entry.figmaNodeId) : '';
+    // 🛡️ 2026-11-05 治本（c-traffic-monitor-de627a9d 实锤）：锚点必须**真实出现在产物里**。
+    //   旧实现「owner 有值即返回」⇒ owner 是中间 group（2:3660）而非产物 section（88:33）
+    //   时锚点悬空 ⇒ 落回名字匹配 ⇒ 中文 mountTarget 与英文 class 词集交集恒为 0 ⇒ 全部
+    //   fail-closed（该单 9 条诊断）。现改为在候选序列 [owner, ...祖先链] 中取第一个
+    //   ∈ 产物实际 data-section-id 集合的 id；未传该集合时保持旧行为（向后兼容）。
+    const candidates = [];
+    if (owner) candidates.push(owner);
+    if (Array.isArray(entry.ancestorIds)) {
+      for (const id of entry.ancestorIds) {
+        if (id == null) continue;
+        const key = String(id);
+        // 去重：owner 常同时是 ancestorIds[0] ⇒ 重复项会让
+        // `skippedCandidates` 诊断出现同 id 两遍（语义无影响，可读性差）
+        if (!candidates.includes(key)) candidates.push(key);
+      }
+    }
+    if (candidates.length === 0 && nid) {
+      let cur = parentOf.get(nid) || null;
+      while (cur) {
+        candidates.push(cur);
+        cur = parentOf.get(cur) || null;
+      }
+    }
+    if (productAnchorIds) {
+      const hitIdx = candidates.findIndex((id) => productAnchorIds.has(id));
+      if (hitIdx < 0) return null;
+      const hit = candidates[hitIdx];
+      // 🛡️ 刀A（2026-11-05 · c-env-monitor-c324a730 实锤）：**上提必须几何共位**。
+      //   hitIdx>0 ⇒ 候选首位（owner / 直接父节点）在产物里不存在，本次是「上提」。
+      //   旧实现无条件取第一个命中者 ⇒ `2:7889`(295×27 tab 底图) 的 owner 缺失后一路退到
+      //   `89:41`(380×145 整段根) 并被 `background-size:100% 100%` 拉伸 13.5×。
+      //   c72bbe2 的 commit 明写「禁回退根容器」，但实现未兑现 —— 此处补齐。
+      if (hitIdx > 0 && !isCoLocatedAnchor(hit, entry)) {
+        lastPromotionRejected = true;
+        lastPromotionRejectedAnchor = hit;
+        if (!plan.anchorPromotionRejected) plan.anchorPromotionRejected = [];
+        plan.anchorPromotionRejected.push({
+          varName: entry.assignedVarName ?? null,
+          resourceFile: entry.resourceFile ?? null,
+          ownerSectionId: owner || null,
+          anchor: hit,
+          skippedCandidates: candidates.slice(0, hitIdx),
+          box: entry.parentBox || entry.figmaBox || null,
+          anchorBox: sectionBoxById.get(String(hit)) || null,
+        });
+        return null;
+      }
+      return hit;
+    }
+    if (owner) return owner;
     if (!nid) return null;
     if (allSectionIds.has(nid)) return nid;
-    let cur = parentOf.get(nid) || null;
-    while (cur) {
-      if (allSectionIds.has(cur)) return cur;
-      cur = parentOf.get(cur) || null;
-    }
-    return null;
+    return candidates.find((id) => allSectionIds.has(id)) || null;
   };
 
   // ③ 计划固化：同 resourceFile 单变量 + sharedBy；owner 分组
@@ -294,10 +416,24 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
     const nid = m.figmaNodeId != null ? String(m.figmaNodeId) : null;
     if (nid && !g.sharedBy.includes(nid)) g.sharedBy.push(nid);
     const owner = resolveOwner(m);
+    const _anchorId = resolveSectionAnchor(m);
+    // 🛡️ 2026-11-05：锚点来源分档计数（真机日志计数行判据；owner 悬空时 ancestor 兜底）
+    const _anchorSource = _anchorId
+      ? String(m.ownerSectionId != null ? m.ownerSectionId : '') === _anchorId
+        ? 'owner'
+        : 'ancestor'
+      : 'none';
+    if (!plan.anchorStats) plan.anchorStats = { owner: 0, ancestor: 0, none: 0 };
+    plan.anchorStats[_anchorSource] += 1;
     g.mounts.push({
       figmaNodeId: nid,
       owner,
-      sectionAnchorId: resolveSectionAnchor(m), // §六 #4：数据事实链锚点（section id）
+      sectionAnchorId: _anchorId, // §六 #4：数据事实链锚点（产物真实存在的 section id）
+      // 🛡️ 刀A：本次锚点是「上提」且被尺度判据拒绝 ⇒ 下游必须 fail-closed（禁止名字兜底）
+      anchorPromotionRejected: lastPromotionRejected,
+      anchorPromotionRejectedAnchor: lastPromotionRejectedAnchor,
+      anchorSource: _anchorSource,
+      ancestorIds: Array.isArray(m.ancestorIds) ? m.ancestorIds.map(String) : null,
       mountTarget: m.mountTarget || null,
       bgRole: m.bgRole || null,
       kind,
@@ -560,6 +696,27 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         }
       }
 
+      // 🛡️ 刀A 守卫（2026-11-05 · c-env-monitor-c324a730）：锚点上提被「几何共位」判据拒绝 ⇒
+      //   **必须 fail-closed 终止本条目**，不能继续走下游分支。原因：下方「容器状态根」
+      //   （:689）、「名字/关键字匹配」（pickBestMountTarget）等分支在锚点缺失时会**再猜一次**，
+      //   很容易又猜回段根/整槽容器 ⇒ 「拒绝上提」等于没拦（这是历史「背景铺满整块」的复现路径）。
+      //   实测本单 bg1 被下游挂到 `.c-env-monitor-main`（= 段根 89:41），正是该复现。
+      if (g.kind === 'bg' && mount.anchorPromotionRejected) {
+        diagnostics.push({
+          reason: 'anchor-promotion-rejected',
+          file: targetFile,
+          var: varName,
+          ownerSectionId: (mount.ancestorIds && mount.ancestorIds[0]) || null,
+          rejectedAnchor: mount.anchorPromotionRejectedAnchor || null,
+        });
+        options.logger?.warn?.(
+          `🛡️ [资源挂载] ${varName} 的最近 section 锚点不在产物中，唯一可上提的祖先（${mount.anchorPromotionRejectedAnchor || '?'}）与背景真值不同层（跨层挂载会拉伸错位）⇒ 放弃挂载（fail-closed）`,
+          { file: targetFile },
+        );
+        doneKeys.add(key);
+        continue;
+      }
+
       // 🛡️ 事实优先级表 §六 #4（2026-09-28）：**数据事实链优先** —— 资源节点最近祖先里那个
       //   「确实是 section」的 id（`mount.sectionAnchorId`）→ 在**实际产物**里找
       //   `data-section-id="<anchor>"` 的元素 → 命中即精确挂载（零名字猜测）。
@@ -568,7 +725,15 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       if (g.kind === 'bg' && mount.sectionAnchorId) {
         const anchor = String(mount.sectionAnchorId);
         for (const [fp, fc] of Object.entries(allFiles)) {
-          if (typeof fc !== 'string' || !fc.includes(`data-section-id="${anchor}"`)) continue;
+          // 🛡️ α3：预过滤必须同时认 `data-resource-anchor`（补标锚），否则补标文件
+          //   在 findTagBySectionAnchor 之前就被 continue 掉（端到端实测缺口）。
+          if (
+            typeof fc !== 'string' ||
+            (!fc.includes(`data-section-id="${anchor}"`) &&
+              !fc.includes(`data-resource-anchor="${anchor}"`))
+          ) {
+            continue;
+          }
           const tag = findTagBySectionAnchor(fc, anchor);
           if (!tag) continue;
           // 🛡️ ② 归属判据（2026-09-29 治本 · mc-max-1790688321049-447d01cc 实锤）：
@@ -583,6 +748,61 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             break; // 已绑定本资源 → 幂等
           }
           if (own !== 'none') {
+            // 🛡️ 刀①·闸门1（2026-11-05 · c-env-monitor-560fe07a 实锤）：占用分支按 bgRole 分流。
+            //   锚点被**外来**背景占用（bg1 container 295×27 先经事实链占坑 tabs-list）时，
+            //   sub-state 资源（bg2 激活胶囊 78×21）的合法宿主不是锚点元素本身，而是锚点文件内
+            //   v-for 的 active item（mountSubStateBackground 条件绑定）⇒ 分流而非一律 fail-closed
+            //   （旧行为：bg2 被 occupied-by-other-resource 拦死，激活胶囊整批丢失，c324a730 同指纹）。
+            //   非 sub-state（container 等）保持旧行为：occupied fail-closed 不覆写。
+            //   ⚠️ 收窄纪律（2026-11-05 实测纠正）：闸门**只在占用时**分流——锚点空闲（own==='none'）
+            //   的 sub-state 照旧走让位→静态事实链（刀33 反向①②③ 已固化的「不劣化」行为）。
+            //   首版把闸门独立成块插在让位/归属之后、无条件截走一切 sub-state ⇒ 刀33 让位组
+            //   5 例 + 反向①②③ 回归（它们正是「锚点空闲的 sub-state 静态挂载」形态）。
+            if (mount.bgRole === 'sub-state') {
+              // ⚠️ 让位优先纪律：分流前先过让位判据（与下方 :860 事实链落点同款判据）——
+              //   LLM 已把 var 写进外部 per-item 宿主的场景（f461f30f 形态）优先让位。
+              const gateYieldHost = findPerItemYieldHost(allFiles, varName, fp, fc);
+              if (gateYieldHost) {
+                diagnostics.push({
+                  reason: 'per-item-host-external',
+                  file: fp,
+                  var: varName,
+                  host: gateYieldHost.file,
+                });
+                options.logger?.info?.(
+                  `🎯 [资源挂载] ${varName} 为 per-item 资源（外部宿主 ${gateYieldHost.file} 的 v-for item 已引用），闸门1 分流前让位（避免整块只画一次错位）`,
+                  { file: fp },
+                );
+                doneKeys.add(key);
+                result = null;
+                break;
+              }
+              const scoped = { [fp]: fc };
+              const rSub = mountSubStateBackground(scoped, varName, mapping, options);
+              if (rSub && writeGuarded(fp, scoped[fp], fc)) {
+                result = { ...rSub, file: fp, reason: 'section-anchor-sub-state' };
+                mounted.push(result);
+                doneKeys.add(key);
+                options.logger?.info?.(
+                  `🎯 [资源挂载] ${varName}（sub-state）锚点 ${anchor} 已被外来背景占用，闸门1 分流条件绑定到 active v-for item`,
+                  { file: fp },
+                );
+                break;
+              }
+              diagnostics.push({
+                reason: 'sub-state-active-binding-missing',
+                file: fp,
+                var: varName,
+                anchor,
+              });
+              options.logger?.warn?.(
+                `🛡️ [资源挂载] ${varName}（sub-state）锚点宿主 ${fp} 无 active 条件绑定，放弃挂载（fail-closed，宁缺不错）`,
+                { file: fp },
+              );
+              doneKeys.add(key);
+              result = null;
+              break;
+            }
             // fail-closed：锚点元素已被**外来**背景占用 → 不覆写、不落其他分支
             diagnostics.push({
               reason: 'bg-anchor-occupied-by-other-resource',
@@ -619,6 +839,8 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             result = null;
             break;
           }
+          // （刀①·闸门1 已上移至归属判据的占用分支内——锚点空闲的 sub-state 在此照旧
+          //   走让位 → 静态事实链注入，刀33 反向①②③「不劣化」行为保持不变。）
           const injected = injectBgStyleBinding(fc, tag, varName, mapping, diagnostics);
           if (!injected) continue;
           const withImport = ensureResourceImportInVue(injected, varName, mapping, fp);

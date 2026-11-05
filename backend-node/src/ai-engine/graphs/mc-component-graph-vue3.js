@@ -32,6 +32,9 @@ import { Vue3Engineer } from '../roles/vue3-engineer.js';
 import {
   buildRejectSummary,
   formatRejectSummaryLine,
+  pickStyleTruthAudit,
+  pickResourceConservationAudit,
+  pickFlexTruthAudit,
 } from '../utils/reject-summary.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
@@ -879,9 +882,27 @@ export function createPhase2Graph(config = {}) {
       // 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账——刀53 takeover 统计
       //   （含 skipped[].reason 与 0 命中可见）+ D1 契约审计缺失，任务级一行日志
       //   + `.checkpoint/reject-summary.json`。只观测、不阻断；双源皆空不落盘。
+      // 🛡️ 2026-11-05 样式真值依据治理 · P1 接线：第三源来自既有 resourceDomMapping
+      //   checkpoint（inferBackgroundStyle 写回 backgroundInferredBy），空数组也传 ⇒ 全 0 也打。
+      //   非数组不传，保持既有「双源皆空不落盘」契约零回归。
+      const styleTruthMapping = state.resourceDomMapping || state._uiCache?.resourceDomMapping;
+      // 🛡️ 2026-11-05 C1/C2 观测接线（docs/2026-11-05-四任务样式各异根因修复方案.md §3.1/§3.5）：
+      //   vue3 侧若 engineer 未返回 full-truth map，第四/五源标 filesUnavailable=1，
+      //   不编造「未挂载」结论；与 phase2 同条件传入，双端口径一致。
+      const conservationFiles =
+        result?.generatedFiles && typeof result.generatedFiles === 'object' && !Array.isArray(result.generatedFiles)
+          ? result.generatedFiles
+          : result?.files && typeof result.files === 'object' && !Array.isArray(result.files)
+            ? result.files
+            : null;
       const rejectSummary = buildRejectSummary({
         takeoverAudit: result?.takeoverAudit || null,
         contractAudit: state._contractAudit || null,
+        styleTruthAudit: Array.isArray(styleTruthMapping) ? pickStyleTruthAudit(styleTruthMapping) : null,
+        resourceConservationAudit: Array.isArray(styleTruthMapping)
+          ? pickResourceConservationAudit(styleTruthMapping, conservationFiles)
+          : null,
+        flexTruthAudit: Array.isArray(styleTruthMapping) ? pickFlexTruthAudit(conservationFiles) : null,
       });
       if (rejectSummary) {
         state._saveCheckpoint?.('reject-summary', rejectSummary);
@@ -2622,6 +2643,8 @@ export function createPhase2Graph(config = {}) {
             visualElements: state.visualElements,
             outputPath: state.outputPath,
             generatedFiles: state.generatedFiles,
+            // 🛡️ F3（A1 白名单）：同 microcode 端，显式下传背景真值归属锚。
+            resourceDomMapping: state.resourceDomMapping,
             _reviseTarget: 'full',
             onProgress: state.onProgress,
             signal: state.signal || state.__abortSignal || null,
@@ -2682,6 +2705,9 @@ export function createPhase2Graph(config = {}) {
           layoutStructure: state.layoutStructure,
           outputPath: state.outputPath,
           generatedFiles: state.generatedFiles,
+          // 🛡️ R3-legacy（2026-11-06）：与合并精修同源下传背景真值锚，
+          // 否则 6 红线会无条件把 cover|contain 改回 100% 100%（推翻 scaleMode 真值）。
+          resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
           _reviseTarget: state._reviseTarget,
           onProgress: state.onProgress,
           signal: state.signal || state.__abortSignal || null,
@@ -3862,6 +3888,8 @@ export function createPhase2Graph(config = {}) {
         layoutStructure: state.layoutStructure,
         outputPath: state.outputPath,
         generatedFiles: state.generatedFiles,
+        // 🛡️ R3-legacy（2026-11-06）：串行兼容节点同样下传背景真值锚（F3 白名单）。
+        resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
         _reviseTarget: 'full', // 串行模式下不做范围限制
         onProgress: state.onProgress,
       });

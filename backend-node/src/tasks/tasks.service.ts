@@ -1745,6 +1745,80 @@ export class TasksService {
   }
 
   /**
+   * 🆕 2026-11-05：任务记录缺 fileKey/nodeId 时，从**产物目录** `.cache/figma-source.json`
+   * 回填 Figma 源（生成期就由 lite.service#saveFigmaSource 写好的同一约定文件）。
+   *
+   * 背景（真机实锤）：lite-lab 实验任务（`mc-lab-*`）在 fileKey 注入补丁生效**之前**落库，
+   * 34 条全部 `fileKey=''`；前端「最近生成任务」下拉按 `t.fileKey` 重建链接
+   * （components.vue#figmaHistoryTasks）⇒ 这些实验任务既占走 recent 的窗口名额、
+   * 又在历史里彻底隐身，表现为「历史无故减少」。
+   *
+   * 只对 fileKey 为空的任务读盘，结果按 sessionId 缓存 60s（命中即零 IO）；
+   * 回填成功后写回内存任务对象，下一次 persist 自然落盘，从此不再依赖读盘。
+   */
+  private readonly figmaSourceCache = new Map<string, { fileKey: string; nodeId: string; at: number }>();
+
+  private static readonly FIGMA_SOURCE_CACHE_TTL_MS = 60 * 1000;
+
+  private resolveFigmaSource(task: Task): { fileKey: string; nodeId: string } {
+    const fileKey = String(task.fileKey || '');
+    const nodeId = String(task.nodeId || '');
+    // 任务自带真值 → 直接返回（绝大多数任务走这里）
+    if (fileKey) return { fileKey, nodeId };
+
+    const sid = String(task.sessionId || '');
+    if (!sid) return { fileKey: '', nodeId: '' };
+
+    const now = Date.now();
+    const cached = this.figmaSourceCache.get(sid);
+    if (cached && now - cached.at < TasksService.FIGMA_SOURCE_CACHE_TTL_MS) {
+      return { fileKey: cached.fileKey, nodeId: cached.nodeId };
+    }
+
+    const found = this.readFigmaSourceFromCache(task);
+    if (this.figmaSourceCache.size > 600) this.figmaSourceCache.clear();
+    this.figmaSourceCache.set(sid, { ...found, at: now });
+
+    if (found.fileKey) {
+      task.fileKey = found.fileKey;
+      if (!task.nodeId) task.nodeId = found.nodeId;
+    }
+    return found;
+  }
+
+  private readFigmaSourceFromCache(task: Task): { fileKey: string; nodeId: string } {
+    const empty = { fileKey: '', nodeId: '' };
+    const dirs: string[] = [];
+    const componentId = String(task.componentId || task.sessionId || '');
+    // 约定目录：temp-components/<groupId>/<componentId>
+    if (task.groupId) dirs.push(join(tempComponentsDir, String(task.groupId), componentId));
+    if (task.outputPath) dirs.push(String(task.outputPath));
+    // 兜底：groupId 缺失时按 sessionId 扫一层 group 目录（目录数是个位数，且有缓存兜底）
+    if (!task.groupId && existsSync(tempComponentsDir)) {
+      try {
+        for (const group of readdirSync(tempComponentsDir)) {
+          dirs.push(join(tempComponentsDir, group, componentId));
+        }
+      } catch {
+        /* 目录不可读按无源处理 */
+      }
+    }
+    for (const dir of dirs) {
+      const sourceFile = join(dir, '.cache', 'figma-source.json');
+      if (!existsSync(sourceFile)) continue;
+      try {
+        const raw = JSON.parse(readFileSync(sourceFile, 'utf-8'));
+        const fileKey = String(raw?.fileKey || '');
+        if (!fileKey) continue;
+        return { fileKey, nodeId: String(raw?.nodeId || '') };
+      } catch {
+        /* 坏文件/半写文件：按无源处理，继续看下一个候选目录 */
+      }
+    }
+    return empty;
+  }
+
+  /**
    * 产物就绪快照（含缓存）：一次算齐 ready/level/missing/missingFiles 四项，
    * 替代 getAllTasks 原「3 项独立检查 + failed 任务再单独读缺失清单」的重复 fs。
    * 缓存失效规则见 artifactCheckCache 字段注释（终态冻结 / 非终态 10s TTL / status 变化强失效）。
@@ -1816,8 +1890,13 @@ export class TasksService {
           missingFiles.length >
         0;
 
+        // 🆕 2026-11-05：Figma 源回填（缺 fileKey 的历史/实验任务从产物缓存补），
+        //   前端历史下拉按 fileKey 重建链接，缺字段即隐身。
+        const figmaSource = this.resolveFigmaSource(task);
         const item: any = {
           ...task,
+          fileKey: figmaSource.fileKey || task.fileKey || '',
+          nodeId: task.nodeId || figmaSource.nodeId || '',
           // 兜底：旧任务可能缺少 target，从 result.target 推断
           target: task.target || task.result?.target || 'microcode',
           taskType: task.taskType || (sid.startsWith('page-') && !task.parentId ? 'page' : 'component'),

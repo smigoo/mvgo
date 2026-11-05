@@ -307,14 +307,14 @@ ${partialInstruction}
     prompt += `
 # 🚨 CRITICAL — 图表与面板 UI 还原红线（6 类高频缺陷，违反输出将被自动修正或拒绝）
 
-以下 6 条是硬约束，精修时必须逐条对照 Figma 数据执行。**不使用 cover/center/no-repeat 作为背景默认值；不使用单值 radius；不漏边框；不漏/错 legend；不遗漏卡片区块。**
-违反第 1 条（bg-size）的输出将在后处理中被**自动替换**为 \`100% 100%\`。其他条违反将被标记为不合格。
+以下 6 条是硬约束，精修时必须逐条对照 Figma 数据执行。**不把 cover/center/no-repeat 当背景默认值；不使用单值 radius；不漏边框；不漏/错 legend；不遗漏卡片区块。**
+后处理只改写**没有缩放真值**的 bg-size 声明；带真值（Figma scaleMode）的声明会被保留。其他条违反将被标记为不合格。
 
 1. **背景图精确还原（bg-size）** [AUTO-FIX]：
-   - Figma 背景图必须精确设置 \`background-size\` 为实际渲染尺寸或 \`100% 100%\`
-   - **严禁使用 \`cover\` / \`contain\` / \`center\` / \`no-repeat\`**，这些值会破坏 Figma 精确还原
-   - 正确示例：\`backgroundSize: '100% 100%'\` 或 \`background-size: 100% 100%;\`
-   - 错误示例：\`backgroundSize: 'cover'\` / \`backgroundPosition: 'center'\` → 会被自动替换
+   - \`background-size\` 必须按该资源在 Figma 里的缩放真值填写：STRETCH→\`100% 100%\`、FILL/CROP→\`cover\`、FIT→\`contain\`、TILE→\`auto\`（并配 \`background-repeat: repeat\`）
+   - 真值缺失时，写该图**在容器里的实际渲染尺寸**（如 \`48px 48px\`）
+   - 🚫 禁止无条件写 \`background-size: 100% 100%\` —— 局部装饰图 / 图标 / 状态底图会被拉满容器而变形
+   - 错误示例：不问真值直接写 \`background-size: 100% 100%\`（图标 53×55 会被拉成 265×76）
 
 2. **环形图环厚（radius）**：
    - ECharts 环形图必须用 \`radius: ['内%', '外%']\` 数组控制环厚

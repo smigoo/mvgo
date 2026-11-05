@@ -27,6 +27,13 @@ import { injectRepeatedCardTruth, injectTransparentContainerTruth } from '../uti
 // 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
 // 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
 import { fillToRgba } from '../utils/section-tree.js'
+// 🛡️ R3-bg 刀 A（2026-11-05）：`scaleMode → 背景四件套` 的单一实现。本类的轴向比值口径
+// 完全不认 `imageScaleMode`，与 F3 白名单天然互逆；有真值时必须以真值裁决，
+// STRETCH 的 coverage 守卫也在该函数内（否则 D2 治本会在此处被重新造一遍）。
+// 🛡️ R3-bg 刀 B2（2026-11-05）：`areaBackgroundSizing` 是**面积口径**的几何裁决，
+// 取代本类原先「近等/小图标/大图+兜底」三类轴向比值出口（那三类用一维比例猜二维语义，
+// 27×32 挂 117×64 因 hR 恰好 0.5 落兜底 cover，被放大 4.3 倍）。
+import { sizingFromScaleMode, areaBackgroundSizing } from '../utils/background-size-inference.js'
 // 🛡️ P3（2026-11-03）：装饰叶子语义判据单一来源。`_isNonSemanticName` / `_isResourceWrapperName` /
 // `collectDecorLeaves` 全仓唯一实现在 utils/decor-leaf-truth.js，本类方法仅做委托——
 // 覆盖率判定与质量评分必须同源，否则「豁免口径」会在两处各长一套。
@@ -517,6 +524,8 @@ ${available.map(m => {
 🔒 **落点唯一性（CRITICAL）**：每条资源尾部的 \`⚠️仅此落点 data-section-id="X"\` 是该资源的**唯一合法宿主** ——
 只能挂在产物中 \`data-section-id="X"\` 的那个元素上；**禁止**改挂到同名的兄弟容器、父级大容器、单个 tab/icon 元素上。
 若目标区域在本清单里**没有**对应资源 ⇒ **该处不要背景**，禁止从别的区域借一张来凑（借位会造成跨区域错图）。
+
+🚫 **资源黑名单（CRITICAL）**：\`mc-preview.png\` 等预览图/截图/分析输入 **不是资源**，它们只是你分析设计稿用的输入文件。**禁止**在任何 resourceFile、img src、CSS url() 中引用 \`/workspace/mc-preview.png\` 或任何未在上面清单中列出的路径。可用资源**仅有**本清单列出的条目；清单外一律视为幻觉，输出了也会被管线自动剥除（宁留白不出错图）。
 ${headerSlotsBlock}`
       }
     }
@@ -1516,16 +1525,26 @@ ${analysisTask}`
         resourcesFiltered = this._filterPanelChromeResources(parsed, resourceDomMapping)
       }
 
+      // 🛡️ A4（2026-09-03）：元素级**高度比例**覆盖。
+      // generate 模式跳过 layout-refiner（原比例修正环节），必须在主生成链补全，
+      // 否则内层容器（device-switch）/兄弟项（tab 逐项）高度全丢 → 产物被内容撑高。
+      //
+      // 🔴 顺序铁律（2026-11-05 · mc-max-1793884413982-7b49f607 实锤）：A4 **必须在**
+      //   `_overrideVisionDimensionsWithFigma`（内含 merger + A′ 容器重建）**之前**执行。
+      //   病灶：A4 的配对语义是「vision 段 ↔ figma 视觉区域」（id 直配优先、失配才退顺序配对）。
+      //   容器重建把 4 段压成 3 段（`89:39`+`2:8437` 收进新容器 `89:37`）后，id 直配只能命中
+      //   1 段 ⇒ 退回顺序配对 ⇒ 高度整体错位一位：`2:8419`(真值 30) 写成 65（=89:38 的值）、
+      //   `89:38`(真值 65) 写成 317（=89:39 的值）⇒ 产物「fg-grid-8938 高度与设计差很大」。
+      //   实证：`A4 元素级高度比例已应用 {"count":3,"figmaNodeId":1,"order":2}`。
+      const figmaElemRatioApplied = this._applyFigmaElementHeightRatios(parsed, figmaData)
+
       // 🛡️ P0-6: Figma 真实尺寸覆盖 vision 估计（2026-09-03 · mc-1788417205608-55428ff9 实锤）
       // 传导链断裂：extractFigmaHints 输出 @antd/tab 367x317（正确），但 vision 模型基于预览图
       // 视觉估计输出 width: 28px（错误），微码工程师使用 vision 结果生成代码，最终产物 width: 46px。
       // 治本：用 Figma bbox 精确尺寸覆盖 vision 估计的 section/element 尺寸（差异 >50% 时覆盖）。
+      // ⚠️ 本方法内含 L2 几何校验（merger + A′ 容器重建 + 幻觉剔除），会**改变段集**，
+      //   故必须排在 A4 之后（见上方顺序铁律）。
       const figmaDimOverridden = this._overrideVisionDimensionsWithFigma(parsed, figmaData)
-
-      // 🛡️ A4（2026-09-03）：元素级**高度比例**覆盖。
-      // generate 模式跳过 layout-refiner（原比例修正环节），必须在主生成链补全，
-      // 否则内层容器（device-switch）/兄弟项（tab 逐项）高度全丢 → 产物被内容撑高。
-      const figmaElemRatioApplied = this._applyFigmaElementHeightRatios(parsed, figmaData)
 
       const analysisNormalization = this._normalizeAnalysisOutput(parsed, figmaData, resourceDomMapping)
       if (analysisNormalization?.applied > 0 || analysisNormalization?.hasDiagnostics) {
@@ -1760,14 +1779,6 @@ ${analysisTask}`
               figmaData,
               { preserveVisionStructure: true },
             )
-            // 🛡️ A′（2026-09-10）：merger 之后补容器层级重建。merger 只提升「左右并列」
-            // 子节点为 section、丢弃「上下堆叠」的父容器（如 device slot-con 89:40）。
-            // 此处基于 figma 真值回查「全部直接子命中顶层 sections、自身非 section」的容器，
-            // 判定为纵向后恢复为带 children 的嵌套 section。无 figmaData 时零回归。
-            parsed.layoutStructure.layout = rebuildSlotConContainers(
-              parsed.layoutStructure.layout,
-              figmaData,
-            )
           }
           const finalVisionSections = (parsed.layout?.sections || parsed.layoutStructure?.layout?.sections || [])
           const finalVisionIds = finalVisionSections.map((s) => String(s?.id || ''))
@@ -1786,6 +1797,68 @@ ${analysisTask}`
         }
       } catch (e) {
         logger.warn({ err: e?.message }, '[L2] rebuildSectionsPreservingInlineRows 失败，跳过兜底')
+      }
+
+      // 🛡️ A′ Phase 5（2026-09-10）：merger 之后补容器层级重建。merger 只提升「左右并列」
+      // 子节点为 section、丢弃「上下堆叠」的父容器（如 device slot-con 89:40）。此处基于
+      // figma 真值回查「全部直接子命中顶层 sections、自身非 section」的容器，重建为带
+      // children 的嵌套 section（纵向/横向由 `flex-direction-inferrer` 单一裁决）。
+      //
+      // 🔴 T-TOPO（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：本段原被**两处门**卡死，
+      //   在真实 vision 形态下**一次都没执行过**：
+      //     ① 旧守卫 `if (parsed.layoutStructure && parsed.layoutStructure.layout)` —— vision 主路径
+      //        的 AI 响应只有顶层 `layout`、**没有** `layoutStructure`（壳是 analyze() 返回时才包的，
+      //        见下方 `layoutStructure: analysisResult`，时间点晚于本函数）⇒ 守卫恒 false。
+      //        日志里 `vision-structure-guard {injected:0}` 的语义因此是「没重建」，不是「结果被丢弃」。
+      //     ② 旧实现整段嵌在 `if (inlineRows.length)` 内 —— 组件没有可合并的横向行时同样不执行。
+      //   现改为：有 figmaData 即无条件执行，按**实际形态逐槽**重建；零命中也要打计数行
+      //   （计数行铁律：否则「零命中」与「判据不生效」离线不可辨）。
+      if (figmaData) {
+        try {
+          // 逐槽重建：纯函数、幂等，**不做对象身份合并**（避免强行统一 `parsed.layout` 与
+          // `layoutStructure.layout` 引发隐性副作用；两槽同源、函数纯净 ⇒ 内容必然一致，
+          // 下游 `||` 短路读哪个都对）。
+          // 只对「确实是布局容器（有 sections 数组）」的槽动手：若 LLM 返回
+          // `{layoutStructure:{layout,sections}}` 形态，`parsed.layout` 可能是外壳本身（无顶层
+          // sections），盲目重建会把它清空 ⇒ 必须先验 `Array.isArray(cur.sections)`。
+          const rebuiltSlots = []
+          const rebuildSlot = (obj, label) => {
+            const cur = obj?.layout
+            if (!cur || !Array.isArray(cur.sections)) return
+            const before = cur.sections.length
+            obj.layout = rebuildSlotConContainers(cur, figmaData)
+            rebuiltSlots.push({ label, before, after: obj.layout.sections.length })
+          }
+          rebuildSlot(parsed, 'layout')
+          rebuildSlot(parsed.layoutStructure, 'layoutStructure.layout')
+
+          const seen = new Set()
+          let containers = 0
+          let horizontal = 0
+          let vertical = 0
+          let members = 0
+          for (const slot of rebuiltSlots) {
+            const layout = slot.label === 'layout' ? parsed.layout : parsed.layoutStructure?.layout
+            for (const sec of layout?.sections || []) {
+              if (!sec || sec.layoutSource !== 'container-rebuild') continue
+              if (seen.has(sec.id)) continue
+              seen.add(sec.id)
+              containers += 1
+              members += Array.isArray(sec.children) ? sec.children.length : 0
+              if (sec.layout === 'horizontal') horizontal += 1
+              else vertical += 1
+            }
+          }
+          logger.info('🛡️ A′ 容器层级重建·已评估', {
+            slots: rebuiltSlots.map((s) => `${s.label}:${s.before}→${s.after}`).join(' | ') || '(无布局容器槽)',
+            containers,
+            horizontal,
+            vertical,
+            members,
+          })
+        } catch (e) {
+          logger.warn({ err: e?.message }, '[A′] rebuildSlotConContainers 失败，跳过容器重建')
+        }
       }
 
       // 🛡️ 幻觉 section 剔除（2026-09-15 · mc-max-1789446564243-f64ecbed 实锤）：
@@ -2669,16 +2742,44 @@ ${analysisTask}`
    *   widthRatio  = bgNode.width  / parentFrame.width
    *   heightRatio = bgNode.height / parentFrame.height
    *
-   * | 场景          | 判断条件                        | backgroundSize        |
-   * |--------------|--------------------------------|----------------------|
-   * | 完全匹配      | 0.9 ≤ 两比值 ≤ 1.1             | 100% 100%            |
-   * | 细长横条      | hR < 0.3 且 wR ≥ 0.8           | 100% auto            |
-   * | 细长竖条      | wR < 0.3 且 hR ≥ 0.8           | auto 100%            |
-   * | 小图标/装饰   | 两比值均 < 0.5                  | contain              |
-   * | 大图背景      | 任一比值 > 1.2                  | cover                |
-   * | 重复纹理      | 两者均 < 0.5 但装饰             | auto + repeat        |
+   * | 场景（旧轴向口径） | 旧判断条件                     | 旧 backgroundSize     | R3-bg 现状        |
+   * |-------------------|-------------------------------|-----------------------|-------------------|
+   * | 完全匹配          | 0.9 ≤ 两比值 ≤ 1.1             | 100% 100%             | B2 → 面积口径      |
+   * | 细长横条          | hR < 0.3 且 wR ≥ 0.8           | 100% auto + repeat-x  | B1 删 repeat-x     |
+   * | 细长竖条          | wR < 0.3 且 hR ≥ 0.8           | auto 100% + repeat-y  | B1 删 repeat-y     |
+   * | 小图标/装饰       | 两比值均 < 0.5                  | contain               | B2 → 面积口径      |
+   * | 大图背景          | 任一比值 > 1.2                  | cover                 | B2 → 面积口径      |
+   * | 重复纹理          | 两者均 < 0.5 但装饰             | auto + repeat         | 该出口已不存在      |
+   *
+   * 🛡️ R3-bg 刀 A（2026-11-05）：本函数是**几何兜底**。mapping 带 `imageScaleMode` 真值时
+   * 直接由 `sizingFromScaleMode` 裁决并提前返回 —— 因为 scaleMode 能表达几何比值表达不了的语义
+   * （FILL/FIT 保形填充、TILE 平铺，以及 STRETCH 在 `coverage < 0.9` 时只能取图实际像素）。
+   * 真值缺失（语料 97.6%）时走下面的几何分支。
+   *
+   * 🛡️ R3-bg 刀 B1（2026-11-05）：删除 `repeat-x` / `repeat-y` 两个出口。
+   * `repeat` 是**语义真值**（Figma 只有 `TILE` 才平铺），用一维比值去猜平铺等于「用巧合替代真值」；
+   * 语料里 `bg-tab-active`（78×21 激活态渐变条）就是这么被平铺满整条 tabs-list 的。
+   * 删分支后两条原路径落到下方的 `100% auto` / `auto 100%` 出口：**size / position 逐字不变**，
+   * 仅 `backgroundRepeat` 由 `repeat-x`/`repeat-y` 变为 `no-repeat`。
+   *
+   * 🛡️ R3-bg 刀 B2（2026-11-05）：把三类**轴向比值**出口收敛到**面积覆盖比**口径（`areaBackgroundSizing`）：
+   * 近等（原 `100% 100%`）、小图标（原 `contain`）、大图+通用兜底（原 `cover`）。
+   * 轴向比值只回答「占了几成」，回答不了「该不该保形」—— `27×32` 挂 `117×64`（`hR` 恰为 `0.5`）
+   * 落兜底 `cover` 被放大 4.3 倍裁切，`cov=0.114` 本应写 `27px 32px`。
+   *
+   * ⚠️ **保留**四个 `100% auto` / `auto 100%` 贴边出口（`:2736-2791` 区间的 4 个分支）：
+   * 它们表达「贴边 + 保形」，面积口径给不出等价表达。**无几何兜底仍用 `cover`** —— 零证据下
+   * 把「保形填充」改成「拉伸变形」是新增风险，不做。
+   *
+   * @param {Object} bgFigmaBox 背景节点尺寸
+   * @param {Object} parentDims 挂载容器尺寸
+   * @param {Object|null} mapping resourceDomMapping 条目（取 `imageScaleMode`）
    */
-  _calculateBackgroundSizing(bgFigmaBox, parentDims) {
+  _calculateBackgroundSizing(bgFigmaBox, parentDims, mapping = null) {
+    // 🛡️ R3-bg 刀 A：真值优先，几何兜底
+    const fromScaleMode = sizingFromScaleMode(mapping, bgFigmaBox, parentDims)
+    if (fromScaleMode) return fromScaleMode
+
     const bgW = bgFigmaBox?.width || 0
     const bgH = bgFigmaBox?.height || 0
     const pW = parentDims?.width || 0
@@ -2693,24 +2794,21 @@ ${analysisTask}`
     const hR = bgH / pH
 
     // ── 完全匹配：bg 与父容器尺寸几乎一致（含轻微溢出 <20%）
-    //    0.8 ≤ wR ≤ 1.2 且 0.8 ≤ hR ≤ 1.2 → 100% 100%（轻微压缩/拉伸可接受）
+    //    🛡️ R3-bg 刀 B2：改由**面积覆盖比**裁决 —— 轴向「近等」不保证真的铺满
+    //    （图只覆盖容器一部分但两维都接近时，cov 可能远小于 0.9，写 `100% 100%` 会拉开变形）。
     if (wR >= 0.8 && wR <= 1.2 && hR >= 0.8 && hR <= 1.2) {
-      return { backgroundSize: '100% 100%', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat', needsOverflowHidden: false }
+      return areaBackgroundSizing(bgFigmaBox, parentDims, mapping)
     }
 
-    // ── 细长横条：宽度铺满，高度远小于父容器（如 header 背景、底线装饰）
-    if (wR >= 0.8 && hR < 0.3) {
-      return { backgroundSize: '100% auto', backgroundPosition: 'center top', backgroundRepeat: 'repeat-x', needsOverflowHidden: false }
-    }
-
-    // ── 细长竖条：高度铺满，宽度远小于父容器
-    if (hR >= 0.8 && wR < 0.3) {
-      return { backgroundSize: 'auto 100%', backgroundPosition: 'left center', backgroundRepeat: 'repeat-y', needsOverflowHidden: false }
-    }
+    // ── 细长横条 / 细长竖条：原 `repeat-x` / `repeat-y` 出口已按 R3-bg 刀 B1 删除。
+    //    平铺只有 Figma `TILE` 真值才有资格；几何比值猜平铺会把激活态渐变条铺满整条容器。
+    //    两条路径现落到下方 `100% auto` / `auto 100%` 出口 —— size / position 不变，repeat 变 no-repeat。
 
     // ── 小图标/装饰：两者都很小
+    //    🛡️ R3-bg 刀 B2：`contain` 是**保形**语义，轴向「都小」推不出「该保形」——
+    //    27×32 挂 117×64（hR 恰 0.5）落兜底 cover 被放大 4.3 倍。面积口径下写图的实际像素。
     if (wR < 0.5 && hR < 0.5) {
-      return { backgroundSize: 'contain', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat', needsOverflowHidden: false }
+      return areaBackgroundSizing(bgFigmaBox, parentDims, mapping)
     }
 
     // ── 一维偏大另一维偏小（宽但矮 / 窄但高）
@@ -2756,8 +2854,9 @@ ${analysisTask}`
     }
 
     // ── 两维都明显偏大（大图背景）
+    //    🛡️ R3-bg 刀 B2：轴向「都大」不等于「图与容器同源」，面积口径裁决（≥0.9 才铺满）。
     if (wR > 1.2 && hR > 1.2) {
-      return { backgroundSize: 'cover', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat', needsOverflowHidden: true }
+      return areaBackgroundSizing(bgFigmaBox, parentDims, mapping)
     }
 
     // ── 中间情况：宽度接近但高度不够 → 宽度铺满，高度自适应
@@ -2770,8 +2869,8 @@ ${analysisTask}`
       return { backgroundSize: 'auto 100%', backgroundPosition: 'left center', backgroundRepeat: 'no-repeat', needsOverflowHidden: false }
     }
 
-    // ── 通用兜底
-    return { backgroundSize: 'cover', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat', needsOverflowHidden: wR > 1.0 || hR > 1.0 }
+    // ── 通用兜底：🛡️ R3-bg 刀 B2，改由面积口径裁决（此处必带几何 ⇒ 落到 `100% 100%` 或 `Wpx Hpx`）。
+    return areaBackgroundSizing(bgFigmaBox, parentDims, mapping)
   }
 
   /**
@@ -2785,15 +2884,21 @@ ${analysisTask}`
   _calculateAllBackgroundSizing(parsed, resourceDomMapping, figmaData = null) {
     if (!resourceDomMapping || resourceDomMapping.length === 0) return 0
 
-    // 构建 resourceFile → figmaBox / figmaNodeId 映射（快速查找）
+    // 构建 resourceFile → figmaBox / figmaNodeId / 整条 mapping 映射（快速查找）
+    // 🛡️ R3-bg 刀 A：`resourceFigmaMap` 只存 figmaBox，取不到 `imageScaleMode`；
+    //    真值优先需要整条 mapping，故补一条平行 Map（不改变原 Map 的消费语义）。
     const resourceFigmaMap = new Map()
     const resourceNodeIdMap = new Map()
+    const resourceMappingMap = new Map()
     for (const m of resourceDomMapping) {
       if (m.resourceFile && m.figmaBox) {
         if (!resourceFigmaMap.has(m.resourceFile)) resourceFigmaMap.set(m.resourceFile, m.figmaBox)
       }
       if (m.resourceFile && m.figmaNodeId) {
         if (!resourceNodeIdMap.has(m.resourceFile)) resourceNodeIdMap.set(m.resourceFile, m.figmaNodeId)
+      }
+      if (m.resourceFile && !resourceMappingMap.has(m.resourceFile)) {
+        resourceMappingMap.set(m.resourceFile, m)
       }
     }
 
@@ -2836,8 +2941,8 @@ ${analysisTask}`
       const parentDims = node.dimensions || figmaParentDims || structure?.dimensions || null
       if (!parentDims) return
 
-      // 计算精确的 background 属性
-      const sizing = this._calculateBackgroundSizing(bgFigmaBox, parentDims)
+      // 计算精确的 background 属性（真值优先：传入整条 mapping 以读到 imageScaleMode）
+      const sizing = this._calculateBackgroundSizing(bgFigmaBox, parentDims, resourceMappingMap.get(bgResourceFile) || null)
 
       // 应用到 background 字段格式（structure.background）
       if (targetField === 'background' && node.background && typeof node.background === 'object') {
@@ -3266,7 +3371,7 @@ ${analysisTask}`
         // 注意：这里先用默认值，后续 _calculateAllBackgroundSizing 会根据 figmaBox 修正
         const contentDims = content.dimensions || parsed.structure?.dimensions || null
         const sizing = contentBg.figmaBox && contentDims
-          ? this._calculateBackgroundSizing(contentBg.figmaBox, contentDims)
+          ? this._calculateBackgroundSizing(contentBg.figmaBox, contentDims, contentBg)
           : { backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
 
         content.backgroundImage = {
@@ -3298,7 +3403,7 @@ ${analysisTask}`
         if (bodyBg) {
           const bodyDims = body.dimensions || parsed.structure?.dimensions || null
           const sizing = bodyBg.figmaBox && bodyDims
-            ? this._calculateBackgroundSizing(bodyBg.figmaBox, bodyDims)
+            ? this._calculateBackgroundSizing(bodyBg.figmaBox, bodyDims, bodyBg)
             : { backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
 
           body.backgroundImage = {
@@ -3322,17 +3427,47 @@ ${analysisTask}`
 
   /**
    *  从可用 bg 资源中找到属于当前内容区的背景图
-   * 优先匹配路径中包含 slot-con/content 的资源，其次是尺寸接近内容区的资源。
+   * 优先匹配**自身声明的占位名**，其次限定在目标节点子树内的路径匹配，最后才是尺寸兜底。
+   *
+   * 🛡️ 2026-11-05（mc-max-1793869867060-e23b0b40 实锤）：原「策略1」是
+   *   `find(m => /slot-con|content|body/.test(m.figmaPath))` —— 与目标节点**无关**的
+   *   全局正则，返回**列表第一张**，命中即 return，**绕过**了策略3 的全部尺寸/比例过滤
+   *   （策略3 本可挡住 191×82 的 `h<120 && ratio>2.5`）。后果：子卡片的 191×82 底图被铺满
+   *   407×380 的整段 ⇒ 两个巨环（纵向放大 4.5×）；上一单 `bg-8788`（switch/active 的
+   *   193×65 底图）同理被挂到 `89:40 slot-con` 根。
    */
   _findContentBackgroundResource(contentNode, availableBgMappings, parsed) {
     const contentPathHint = contentNode.figmaPath || contentNode.path || ''
 
-    // 策略1：路径语义（最可靠）
-    const pathMatch = availableBgMappings.find(m => {
-      const path = m.figmaPath || ''
-      return /slot-con|content|body/.test(path) && !/header/.test(path)
-    })
-    if (pathMatch) return pathMatch
+    // 策略0（自身占位名，最精确）：只有这一层真的声明了背景占位、且该名能解析到
+    //   真实文件时才采用。解析不到就**不 return**（纯语义标记如 `body-bg-daily-flow`
+    //   属于「设计认为这层有背景但没给图」，不能当成有图）。
+    const selfPlaceholder = String(contentNode?.bgPlaceholder || '').trim()
+    if (selfPlaceholder) {
+      const bySelfName = availableBgMappings.find((m) => {
+        const file = String(m?.resourceFile || '')
+        return file.includes(selfPlaceholder) || String(m?.bgPlaceholder || '').trim() === selfPlaceholder
+      })
+      if (bySelfName) return bySelfName
+    }
+
+    // 策略1：路径语义（次可靠）——**必须限定在目标节点子树内**，且多张时取覆盖面积最大者，
+    //   不再「全局正则 + 列表第一张」。
+    if (contentPathHint) {
+      const inSubtree = availableBgMappings.filter((m) => {
+        const path = String(m.figmaPath || '')
+        if (!path) return false
+        if (/header/.test(path)) return false
+        return path === contentPathHint || path.startsWith(contentPathHint + '/') || path.includes(contentPathHint)
+      })
+      if (inSubtree.length > 0) {
+        return inSubtree.reduce((best, m) => {
+          const mArea = (m.figmaBox?.width || 0) * (m.figmaBox?.height || 0)
+          const bestArea = (best.figmaBox?.width || 0) * (best.figmaBox?.height || 0)
+          return mArea > bestArea ? m : best
+        }, inSubtree[0])
+      }
+    }
 
     // 策略2：如果 content 节点本身有 figmaPath，找同一段路径下的 bg
     if (contentPathHint) {

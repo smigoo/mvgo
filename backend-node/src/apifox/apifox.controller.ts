@@ -13,10 +13,13 @@ import {
 import type { Response } from 'express';
 import { ApifoxService } from './apifox.service';
 import { ApifoxGeneratorService } from './apifox-generator.service';
+import { ApifoxMcpService } from './apifox-mcp.service';
 import { RecordApifoxDto } from './dto/record-apifox.dto';
 import { GenerateApifoxDto } from './dto/generate-apifox.dto';
 import { GenerateFullApifoxDto } from './dto/generate-full-apifox.dto';
 import { ListApifoxPathsDto } from './dto/list-apifox-paths.dto';
+import { McpListApifoxDto } from './dto/mcp-list-apifox.dto';
+import { McpAddApifoxDto } from './dto/mcp-add-apifox.dto';
 import { SessionGuard } from '../auth/session.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
@@ -25,6 +28,7 @@ export class ApifoxController {
   constructor(
     private readonly apifoxService: ApifoxService,
     private readonly generatorService: ApifoxGeneratorService,
+    private readonly mcpService: ApifoxMcpService,
   ) {}
 
   // 单模块生成
@@ -70,6 +74,37 @@ export class ApifoxController {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
         `全量生成失败: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // ─── Apifox MCP 通路（官方 apifox-mcp-server，stdio）────────
+  // 探测：拉取项目 OAS 并列出接口，可选标注相对基准目录「新增」的接口
+  @Post('mcp-list')
+  @UseGuards(SessionGuard)
+  async mcpList(@Body() dto: McpListApifoxDto) {
+    try {
+      return await this.mcpService.listMcpApis(dto);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        `MCP 探测失败: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // 增量新增：只重建目标模块并替换回既有 ZIP / catalog，不整包重生成
+  @Post('mcp-add')
+  @UseGuards(SessionGuard)
+  async mcpAdd(@Body() dto: McpAddApifoxDto, @CurrentUser() userId: string) {
+    try {
+      return await this.mcpService.addMcpApis({ ...dto, ownerId: userId });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        `MCP 新增失败: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

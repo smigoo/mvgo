@@ -879,6 +879,11 @@ export function writeFiles(files, outputPath, options = {}) {
     skipNoTruth: 0,
     skipNoVFor: 0,
     skipNoClass: 0,
+    // 🔴 观测型计数（2026-11-05）：契约段内流式轨道（1fr/minmax/auto/%）段数，
+    //   及其中末行不满被判 grid-track-fluid 的段数。恒 0 也打 —— 用于区分
+    //   「刀 41 确实覆盖了 LLM 写的 1fr」与「判据从未生效」。
+    fluidTracks: 0,
+    fluidTracksIllegal: 0,
   };
   let _r41TreeLogged = false;
   // 刀 41 与刀 51/52 共用同一棵 Figma 索引（惰性建一次；真值兜底要用）
@@ -928,6 +933,8 @@ export function writeFiles(files, outputPath, options = {}) {
       _r41Stats.skipNoTruth = Number(_r41Ds.skippedNoTruth) || 0;
       _r41Stats.skipNoVFor = Number(_r41Ds.skippedNoVFor) || 0;
       _r41Stats.skipNoClass = Number(_r41Ds.skippedNoClass) || 0;
+      _r41Stats.fluidTracks = Number(_r41Ds.fluidTracks) || 0;
+      _r41Stats.fluidTracksIllegal = Number(_r41Ds.fluidTracksIllegal) || 0;
       // 🔴 section 树留痕（一次性）：这是「判据够不着某段」的唯一可判读证据。
       //   真机 2026-10-22 实锤：战略段两行（38:3140 / 38:3153）不在树里 ⇒
       //   只打 `mismatches:0` 会让人以为「已经对了」，实际是「从来没被看过」。

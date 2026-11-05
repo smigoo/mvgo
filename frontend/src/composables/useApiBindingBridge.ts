@@ -1,10 +1,24 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 
+/** S4 确定性自动接线项（来自 s4-meta.json views[].autoBindings，供向导预填） */
+export interface S4AutoBindingBrief {
+  tag: string
+  fn: string
+  target: string
+  params?: Record<string, any>
+}
+
 export interface ApiBindingOpenMessage {
   type: 'MVGO_OPEN_API_BINDING'
   componentId: string
   groupId: string
   componentName?: string
+  /** 'component'（默认，组件开发线）| 's4'（前端开发线 S4 预览） */
+  mode?: 'component' | 's4'
+  /** s4 模式下：本视图可绑定的数据槽名列表（来自 s4-meta.json） */
+  slots?: string[]
+  /** s4 模式下：确定性自动接线结果（数据槽 ↔ api 函数），用于向导预填（无人工绑定侧车时） */
+  autoBindings?: S4AutoBindingBrief[]
 }
 
 /** 全局向导完成「刷新预览」后广播的事件名（内嵌预览页据此重载 iframe） */
@@ -21,6 +35,9 @@ export function useApiBindingBridge() {
   const bindingComponentId = ref('')
   const bindingGroupId = ref('')
   const bindingComponentName = ref('')
+  const bindingMode = ref<'component' | 's4'>('component')
+  const bindingSlots = ref<string[]>([])
+  const bindingAutoBindings = ref<S4AutoBindingBrief[]>([])
 
   function handleMessage(event: MessageEvent) {
     // 同源 OR sandboxed iframe（origin 为 "null" 字符串）均放行；靠 type 字段过滤伪造消息
@@ -30,6 +47,9 @@ export function useApiBindingBridge() {
     bindingComponentId.value = data.componentId || ''
     bindingGroupId.value = data.groupId || ''
     bindingComponentName.value = data.componentName || data.componentId || ''
+    bindingMode.value = data.mode === 's4' ? 's4' : 'component'
+    bindingSlots.value = Array.isArray(data.slots) ? data.slots : []
+    bindingAutoBindings.value = Array.isArray(data.autoBindings) ? data.autoBindings : []
     bindingWizardOpen.value = true
   }
 
@@ -50,6 +70,9 @@ export function useApiBindingBridge() {
     bindingComponentId,
     bindingGroupId,
     bindingComponentName,
+    bindingMode,
+    bindingSlots,
+    bindingAutoBindings,
     emitRefresh,
   }
 }

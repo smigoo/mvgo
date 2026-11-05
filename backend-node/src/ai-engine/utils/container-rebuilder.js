@@ -1,6 +1,6 @@
 /**
- * 🛡️ A′（2026-09-10）：纵向容器层级重建 —— 把视觉分区/merger 阶段被丢弃的
- * slot-con 类纵向容器恢复为带 `children` 的嵌套 section。
+ * 🛡️ A′（2026-09-10）：容器层级重建 —— 把视觉分区/merger 阶段被丢弃的
+ * slot-con 类容器恢复为带 `children` 的嵌套 section。
  *
  * 问题：Vision 把容器子节点拆散（如 device `89:40 slot-con` 的 `switch`/`@antd/tab`
  * 被拆到 `section-main` 之外），`inline-row-merger` 又只把「左右并列」子节点提升为
@@ -9,7 +9,16 @@
  *
  * 治本：确定性几何重建（无 LLM）。在 merger 之后、planner 之前，基于 figma 真值回查
  * 「全部直接子都被提升为平级顶层 section、自身却不在 sections 中」的容器节点，
- * 判定为纵向容器后重建为嵌套 section，children 按 bbox.y 升序。
+ * 重建为带 children 的嵌套 section。方向由 `inferFlexDirection` 单一裁决：
+ *   - vertical   → children 按 bbox.y 升序
+ *   - horizontal → children 按 bbox.x 升序（`layout:'horizontal'`）
+ *
+ * 🔴 T-TOPO（2026-11-05）：旧实现只重建纵向、把横向「交给 merger」，但 merger 在
+ * `preserveVisionStructure:true` 下是纯浅拷贝（零结构改动）⇒ 横向容器的父子关系
+ * 无人生还，下游只看到平级段，生成 `flex-direction: column`（`89:37 @antd/tab` 的
+ * 竖 tab 轨 + 卡片网格被上下堆叠，实锤于 mc-max-1793880532372-38f97905）。
+ * 现改为横向/纵向都由本函数重建；下游 `isLayoutContainerSection` 与 planner 的
+ * `isHorizontalContainer` 分支本就支持 `layout:'horizontal'`，无需改动。
  *
  * 纯函数、零依赖、无 import.meta —— 便于 jest（CJS require）直接单测。
  * 方向判定复用 `flex-direction-inferrer.js` 的 `inferFlexDirection`（sideBySide 单一事实源）。
@@ -59,35 +68,39 @@ export function rebuildSlotConContainers(layout, figmaData) {
     // 一个 member 只能属于一个容器（取第一个命中的容器）
     if (members.some((m) => consumed.has(m.id))) continue
 
-    // 纵向判定：member 的 bbox 主导方向为 vertical（无横向并列对）→ 才重建；
-    // 横向容器（如 device cons 12 子 grid）交给 merger 处理，不在此重建。
-    const memberBoxes = members
-      .map((m) => byId.get(String(m.id)))
-      .filter(Boolean)
-      .map(getBBox)
-      .filter(Boolean)
-    if (memberBoxes.length < 2) continue
-    if (inferFlexDirection(memberBoxes) === 'horizontal') continue
+    // 🛡️ T-TOPO（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：方向由共享 primitive
+    //   单一裁决，**横向与纵向都重建**（旧实现「横向交给 merger」是空承诺：两个调用点都传
+    //   `preserveVisionStructure:true`，`inline-row-merger.js:338-340` 在该开关下只做浅拷贝，
+    //   零结构改动 ⇒ 横向容器的父子关系无人生还，下游只看到平级段 ⇒ flex-direction: column）。
+    //
+    //   🔴 入参形状铁律：必须喂**原始节点/索引记录**（带 `absoluteBoundingBox`/`bbox`）。
+    //   旧实现在此先 `.map(getBBox)` 压成 `{x,y,w,h}` 再判定，而 `inferFlexDirection`
+    //   （flex-direction-inferrer.js:23）只认 `node.absoluteBoundingBox || node.bbox` ⇒
+    //   全部被过滤 ⇒ 恒返回 'vertical' ⇒ 横向容器被**反向**包成竖直容器（正是本刀要修的 bug）。
+    const direction = inferFlexDirection(members) === 'horizontal' ? 'horizontal' : 'vertical'
 
     const sortedMembers = members
       .map((m) => sections.find((s) => s.id === m.id))
       .filter(Boolean)
       .sort((a, b) => {
-        const ba = getBBox(byId.get(String(a.id))) || { y: 0 }
-        const bb = getBBox(byId.get(String(b.id))) || { y: 0 }
-        return (ba.y || 0) - (bb.y || 0)
+        const ba = getBBox(byId.get(String(a.id))) || {}
+        const bb = getBBox(byId.get(String(b.id))) || {}
+        // 横向按 x 升序（左右顺序），纵向按 y 升序（上下顺序）
+        const ka = direction === 'horizontal' ? ba.x || 0 : ba.y || 0
+        const kb = direction === 'horizontal' ? bb.x || 0 : bb.y || 0
+        return ka - kb
       })
 
     const containerSection = {
       id: node.id,
       name: node.name || 'container',
       role: 'content-container',
-      layout: 'vertical',
+      layout: direction,
       layoutSource: 'container-rebuild',
       figmaNodeId: node.id,
       children: sortedMembers,
       header: { title: node.name || 'container' },
-      body: { layout: 'vertical', children: sortedMembers },
+      body: { layout: direction, children: sortedMembers },
     }
     rebuilt.push({ container: containerSection, memberIds: members.map((m) => m.id) })
     members.forEach((m) => consumed.add(m.id))

@@ -1,4 +1,4 @@
-import { detectUnmaterializedSections } from './section-coverage-guard.js';
+import { detectUnmaterializedSections, detectEmptySectionComponents } from './section-coverage-guard.js';
 
 /**
  * 🛡️ P1-4：坏文件隔离降级的**决策层**（纯函数，2026-08-30）
@@ -65,13 +65,23 @@ export function planBadFileIsolation(allFiles, badPaths) {
 /**
  * 发布完整性摘要：P1-4 允许保留健康产物，但调用方必须显式得到“不完整”状态。
  * 同时覆盖非 P1-4 的规划段漏生成，避免 success:true 被误读为全部 section 已交付。
+ *
+ * 🛡️ 2026-11-05（mc-max-1793865322699-ef841b68 实锤）补 `emptySections`：
+ *   原判据只看「section 组件文件在不在」。但真机上出现过「文件在、内容被剥空」——
+ *   section 内部引用的二级子组件从未生成（子组件发现只跑 index.vue 一层），
+ *   stripDanglingComponentRefs 连 import 带模板标签一并剥离 ⇒ 空壳文件仍在
+ *   ⇒ unmaterializedSections 为空 ⇒ artifactIncomplete=false ⇒ success 撒谎。
+ *   空壳与「未物化」在交付语义上等价（用户看到的都是内容缺失），故并入同一出口。
  */
 export function evaluateArtifactCompleteness(allFiles, componentPlan, degradedFiles = []) {
   const files = Object.entries(allFiles || {}).map(([path, content]) => ({ path, content }));
   const unmaterializedSections = detectUnmaterializedSections(files, componentPlan);
   const degraded = (Array.isArray(degradedFiles) ? degradedFiles : []).filter(Boolean);
+  const emptySections = detectEmptySectionComponents(allFiles, componentPlan);
   return {
-    artifactIncomplete: degraded.length > 0 || unmaterializedSections.length > 0,
+    artifactIncomplete:
+      degraded.length > 0 || unmaterializedSections.length > 0 || emptySections.length > 0,
     unmaterializedSections,
+    emptySections,
   };
 }

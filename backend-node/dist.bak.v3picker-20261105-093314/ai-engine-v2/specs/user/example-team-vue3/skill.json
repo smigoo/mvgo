@@ -1,0 +1,21 @@
+{
+  "id": "example-team-vue3",
+  "label": "示例·团队 Vue3 规范",
+  "version": "1.0.0",
+  "description": "演示用规范包：继承 vue3-js，追加团队内部约定。可直接删除本目录。",
+  "author": "example",
+  "baseSpec": "vue3-js",
+  "extendsPromptInjection": true,
+  "naming": {
+    "componentDir": "kebab-case",
+    "idPrefix": "t-"
+  },
+  "style": {
+    "useCssVariables": true
+  },
+  "promptInjection": {
+    "code-engineer": ["prompts/team-conventions.md"],
+    "adversarial-checker": ["prompts/team-conventions.md"]
+  },
+  "validatorRuleSet": "vue3"
+}

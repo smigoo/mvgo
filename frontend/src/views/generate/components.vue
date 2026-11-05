@@ -1330,6 +1330,11 @@
           <span class="es-text">暂无任务记录</span>
           <span class="es-hint">生成组件后将在此显示</span>
         </div>
+        <!-- 🧪 实验管线面板（dev 专用端点，生产 404；仅 UI 层折叠卡片，不干预正式生成）
+             🔴 2026-11-05：历史列表**共用同一个数据源**（figmaHistoryTasks = /api/tasks/recent
+             任务维度重建），实验面板不再自带 localStorage 历史；跑完实验回抛 finished
+             以让本页 recent 立即刷新，实验链接当场出现在两边共用的下拉里。 -->
+        <TruthLabPanel :history="figmaHistoryTasks" @finished="fetchRecent" />
       </aside>
     </div>
   </div>
@@ -1345,6 +1350,8 @@ import type { GenerateLiteParams } from '@/api/lite'
 import { fetchFigmaPreview, fetchTaskStatus } from '@/api/generator'
 import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
+// 🧪 lite-lab 实验管线面板（lite 布局 + Figma node 真值回填，dev 专用，不影响正式生成）
+import TruthLabPanel from './TruthLabPanel.vue'
 import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
 import RippleButton from '@/components/inspira-ui/RippleButton.vue'
 import { useResizableFrame } from '@/composables/useResizableFrame'
@@ -3717,20 +3724,42 @@ function visualQualityWarningTitle(w: any) {
 function figmaUrlFromKeyNode(fileKey: string, nodeId?: string) {
   return `https://www.figma.com/file/${fileKey}${nodeId ? `?node-id=${encodeURIComponent(nodeId)}` : ''}`
 }
+/** lite-lab 实验任务 sessionId：`mc-lab-<ts>-<rand>` / `mv-lab-<ts>-<rand>`
+ *  （`lab` 标记在 TaskMetadata 契约外、createTask 逐字段赋值时不落库 ⇒ 只能认 id。
+ *   不用 `\d{10,}` 卡时间戳位数：卡错只会让旧条目退化成「微码 Lite」徽章，
+ *   而 `-lab-` 前缀本身在正常任务里不可能出现） */
+const LAB_SESSION_RX = /-lab-/
 /**
  * 🔴 2026-10-29：历史条目「档位/类型」徽章 —— 每条任务标明 微码 Max / 微码 Lite / Vue3 / 页面。
  * 判据顺序：taskType 页面 → target Vue3 → generationTier（后端 getAllTasks 已返回；
  * 旧任务缺档位时用 sessionId 前缀兜底：page- / mv- / mc-lite / mc-max）。
+ * 🧪 2026-11-05：新增 lite-lab 实验分支（判据与类型还原见函数内注释）。
  */
-function taskKindInfo(t: any): { label: string; cls: string } {
+function taskKindInfo(t: any): { label: string; cls: string; isLab: boolean; labTarget?: 'microcode' | 'vue3' } {
   const sid = String(t?.sessionId || '')
   const tier = String(t?.generationTier || '')
   const target = String(t?.target || t?.componentType || '')
-  if (t?.taskType === 'page' || sid.startsWith('page-')) return { label: '页面', cls: 'is-page' }
-  if (target === 'vue3' || sid.startsWith('mv-')) return { label: 'Vue3', cls: 'is-vue3' }
-  if (tier === 'lite' || sid.startsWith('mc-lite')) return { label: '微码 Lite', cls: 'is-lite' }
-  if (tier === 'max' || sid.startsWith('mc-max')) return { label: '微码 Max', cls: 'is-max' }
-  return { label: '微码', cls: 'is-mc' }
+  if (t?.taskType === 'page' || sid.startsWith('page-')) return { label: '页面', cls: 'is-page', isLab: false }
+  // 🆕 2026-11-05：lite-lab 实验任务（mc-lab-* / mv-lab-*）单独成类 —— 它们与同链接的
+  //   正式任务产物不同（实验=真值回填验证），按 kind 去重必须各占一条；也让用户一眼看出
+  //   这条历史是「实验室跑的」，而不是误以为是正式档位任务。
+  // 🔴 但**实验管线支持微码和 Vue3 两种产物**（TruthLabPanel 有类型下拉，sessionId 前缀
+  //   mc-lab- / mv-lab-）。cls 统一 is-lab 只承担「徽章配色 + 去重各占一条」；
+  //   真实类型必须另存 labTarget —— 否则 mv-lab 任务会被当作微码，还原到错误入口，
+  //   生成出的东西与历史不是同一类（与 2026-10-29 那条「类型不同即不同产物」同因）。
+  if (t?.lab === 'truth-backfill' || LAB_SESSION_RX.test(sid)) {
+    const labTarget: 'microcode' | 'vue3' = target === 'vue3' || sid.startsWith('mv-') ? 'vue3' : 'microcode'
+    return {
+      label: labTarget === 'vue3' ? '实验室 Vue3' : '实验室 Lite',
+      cls: 'is-lab',
+      isLab: true,
+      labTarget,
+    }
+  }
+  if (target === 'vue3' || sid.startsWith('mv-')) return { label: 'Vue3', cls: 'is-vue3', isLab: false }
+  if (tier === 'lite' || sid.startsWith('mc-lite')) return { label: '微码 Lite', cls: 'is-lite', isLab: false }
+  if (tier === 'max' || sid.startsWith('mc-max')) return { label: '微码 Max', cls: 'is-max', isLab: false }
+  return { label: '微码', cls: 'is-mc', isLab: false }
 }
 /**
  * 最近生成任务里带 Figma 来源的条目 → 重建链接 + 去重。
@@ -3746,7 +3775,9 @@ const figmaHistoryTasks = computed(() => {
     if (!t.fileKey) continue
     const url = figmaUrlFromKeyNode(t.fileKey, t.nodeId)
     const kind = taskKindInfo(t)
-    const dedupeKey = `${url}::${kind.cls}`
+    // 🧪 实验任务 cls 统一 is-lab ⇒ 同链接的「微码实验」与「Vue3 实验」必须再按 labTarget 分开，
+    //   否则两者被折叠成一条（实验面板两种产物都能跑）。
+    const dedupeKey = `${url}::${kind.cls}${kind.isLab ? `::${kind.labTarget}` : ''}`
     if (seen.has(dedupeKey)) continue
     seen.add(dedupeKey)
     const themes = Array.isArray(t.themeNodes) && t.themeNodes.length > 0 ? t.themeNodes : null
@@ -3756,7 +3787,18 @@ const figmaHistoryTasks = computed(() => {
           .map((tn: any, i: number) => `${tn.name || (i === 0 ? '默认' : `主题${i + 1}`)} ${tn.nodeId || ''}`.trim())
           .join(' · ')
       : ''
-    out.push({ ...t, url, themeCount: themes ? themes.length : 1, themeSummary, kindLabel: kind.label, kindClass: kind.cls })
+    out.push({
+      ...t,
+      url,
+      themeCount: themes ? themes.length : 1,
+      themeSummary,
+      kindLabel: kind.label,
+      kindClass: kind.cls,
+      // 🧪 实验任务：isLab 供徽章上色/分析，labTarget 供还原时区分微码与 Vue3
+      //   （is-lab 已让去重键天然与正式任务分开，同链接可各占一条）
+      isLab: kind.isLab,
+      labTarget: kind.labTarget,
+    })
   }
   return out
 })
@@ -3774,12 +3816,15 @@ function restoreHistoryTask(t: any) {
   //   生成出的东西与历史任务不是同一类。档位优先用任务真值，缺失时按 kind 兜底。
   if (!busy.value) {
     if (t?.kindClass === 'is-vue3') compType.value = 'vue3'
+    // 🧪 实验室任务按 labTarget 还原真实类型：一律当微码会让 mv-lab（Vue3 实验）
+    //   落到微码入口，生成出与历史不是同一类的东西。
+    else if (t?.kindClass === 'is-lab') compType.value = t?.labTarget === 'vue3' ? 'vue3' : 'microcode'
     else if (t?.kindClass === 'is-max' || t?.kindClass === 'is-lite' || t?.kindClass === 'is-mc') {
       compType.value = 'microcode'
     }
     const tier = String(t?.generationTier || '')
     if (tier === 'lite' || tier === 'max') genTier.value = tier
-    else if (t?.kindClass === 'is-lite') genTier.value = 'lite'
+    else if (t?.kindClass === 'is-lite' || t?.kindClass === 'is-lab') genTier.value = 'lite'
     else if (t?.kindClass === 'is-max') genTier.value = 'max'
     // 🔴 2026-11-03：高级选项回填。用户点历史任务多半是想「在上次基础上再改一版」，
     //   不续上提示词/组件 ID ⇒ 生成结果与上次不是同一类（甚至产物目录/类前缀都变了）。
@@ -3835,11 +3880,19 @@ function handleClickOutside(e) {
 }
 
 // ═══ 最近任务（空闲右栏）═══
+/**
+ * 🔴 2026-11-05：limit 10 → 20。
+ *   历史下拉（figmaHistoryTasks）与右栏「最近生成」共用本列表，而 list 是**任务**窗口：
+ *   非 Figma 任务（lite-lab 实验、文档驱动）也占名额却不进下拉，10 条窗口下
+ *   跑几次实验就能把 Figma 条目从 10 挤到 6。后端 clamp 上限即 20（tasks.controller.ts），
+ *   放到 20 是把「被无关任务吃掉的窗口」一次补回来，不改后端上限。
+ */
+const RECENT_LIMIT = 20
 async function fetchRecent() {
   try {
-    const j = await http.get('/api/tasks/recent', { limit: 10 })
+    const j = await http.get('/api/tasks/recent', { limit: RECENT_LIMIT })
     const list = Array.isArray(j) ? j : Array.isArray(j.data) ? j.data : j.data?.tasks || []
-    recent.value = list.slice(0, 10).map((t) => ({
+    recent.value = list.slice(0, RECENT_LIMIT).map((t) => ({
       // 🏷️ 展示优先中文 displayName（后端 tasks 已存；componentName 是语义代码名/回退）
       name: t.displayName || t.componentName || t.sessionId || '未命名',
       status: t.status || 'unknown',
@@ -6012,6 +6065,11 @@ html[data-theme='dark'] .spinner--lg {
 .task-hist-kind.is-lite {
   background: rgba(13, 148, 136, 0.1);
   color: #0d9488;
+}
+/* 🆕 2026-11-05：lite-lab 实验任务徽章（与正式 Lite 区分：实验产物是验证用的，不参与交付） */
+.task-hist-kind.is-lab {
+  background: rgba(219, 39, 119, 0.1);
+  color: #db2777;
 }
 .task-hist-kind.is-vue3 {
   background: rgba(37, 99, 235, 0.1);

@@ -24,6 +24,9 @@ import { prePatchSnapshot, verifyPatchAndRollback } from '../utils/patch-l0b-gua
 import { neutralizeSectionComments } from '../utils/delimiter-guard.js'
 import { validateVueSfc } from '../utils/sfc-syntax-validation.js'
 import { recompileIndexCss, hasLessFile } from '../utils/index-css-recompiler.js'
+// 🛡️ F3（2026-11-05 · 刀53 三链治本 · A1 白名单）：背景「6 红线」的 scaleMode 真值护栏
+//   （纯函数下沉，可单测；无真值时输出与旧实现逐字一致）
+import { applyBackgroundRedLine, buildScaleModeIndex } from '../utils/bg-redline-scale-mode-guard.js'
 
 const logger = createLogger({ name: 'layout-style-refiner' })
 
@@ -228,8 +231,10 @@ ${currentCode || '(代码将在运行时读取)'}
 以下 6 条是硬约束，精修时必须逐条对照 Figma 数据执行。违反将被自动修正或标记不合格。
 
 1. **背景图精确还原（bg-size）** [AUTO-FIX]:
-   - 严禁使用 cover/contain/center/no-repeat
-   - 必须使用 \`background-size: 100% 100%;\`
+   - \`background-size\` 按该资源的缩放真值填写：STRETCH→\`100% 100%\`、FILL/CROP→\`cover\`、FIT→\`contain\`、TILE→\`auto\` + \`repeat\`
+   - 真值缺失时写该图在容器里的实际渲染尺寸（如 \`48px 48px\`）
+   - 🚫 禁止无条件写 \`background-size: 100% 100%\`（局部装饰图/图标会被拉满容器变形）
+   - 后处理只改写**无真值**的声明，带真值的不会替你纠正 ⇒ 不要指望被自动修正
 
 2. **环形图环厚（radius）**:
    - ECharts 环形图必须用 \`radius: ['内%', '外%']\` 数组
@@ -712,25 +717,29 @@ ${partialInstruction}
     }
   }
 
+
   _applyRedLineFixes(modifiedFiles, outputPath, params) {
     const patches = []
-    if (!modifiedFiles || modifiedFiles.length === 0) return patches
 
-    for (const relPath of modifiedFiles) {
+    // 6 红线改写下沉为纯函数（可单测）：命中 scaleMode 真值的声明跳过，无真值时逐字等同旧实现。
+    // 依据见 docs/2026-11-05-刀53图表接管与背景缩放高度契约三链治本.md §11.3。
+    let totalKept = 0
+    let totalRewritten = 0
+
+    // 不因「无改动文件」早退：计数行必须每轮都打（0 也打），否则无法区分
+    // 「没有待改写文件」与「压根没走这条链路」。
+    for (const relPath of modifiedFiles || []) {
       const fullPath = resolve(outputPath, relPath)
       if (!existsSync(fullPath)) continue
 
       try {
-        let content = readFileSync(fullPath, 'utf-8')
+        const original = readFileSync(fullPath, 'utf-8')
+        const redLine = applyBackgroundRedLine(original, params)
+        let content = redLine.content
         let patched = false
-
-        // 规则1: bg-size
-        if (/background-size\s*:\s*cover/i.test(content)) { content = content.replace(/background-size\s*:\s*cover/gi, 'background-size: 100% 100%'); patched = true }
-        if (/background-size\s*:\s*contain/i.test(content)) { content = content.replace(/background-size\s*:\s*contain/gi, 'background-size: 100% 100%'); patched = true }
-        if (/backgroundSize\s*:\s*['"]cover['"]/i.test(content)) { content = content.replace(/backgroundSize\s*:\s*['"]cover['"]/gi, "backgroundSize: '100% 100%'"); patched = true }
-        if (/background-position\s*:\s*center/i.test(content)) { content = content.replace(/[;\s]*background-position\s*:\s*center\s*;?/gi, ''); patched = true }
-        if (/backgroundPosition\s*:\s*['"]center['"]/i.test(content)) { content = content.replace(/,\s*backgroundPosition\s*:\s*['"]center['"]/gi, ''); content = content.replace(/backgroundPosition\s*:\s*['"]center['"]\s*,?\s*/gi, ''); patched = true }
-        if (/background-repeat\s*:\s*no-repeat/i.test(content)) { content = content.replace(/[;\s]*background-repeat\s*:\s*no-repeat\s*;?/gi, ''); patched = true }
+        totalKept += redLine.kept
+        totalRewritten += redLine.rewritten
+        if (content !== original) patched = true
 
         if (patched) {
           if (relPath.endsWith('.vue')) {
@@ -747,6 +756,12 @@ ${partialInstruction}
         logger.warn(`_applyRedLineFixes 失败: ${relPath}`, { error: e.message })
       }
     }
+    // 计数行（0 也打）：kept=被真值救下未改写；rewritten=按旧红线改写；whitelist=本轮真值资源数。
+    logger.info('🎨 背景红线改写', {
+      bgRedLineSkipped: `kept=${totalKept} / rewritten=${totalRewritten}`,
+      whitelist: buildScaleModeIndex(params).size,
+      files: (modifiedFiles || []).length,
+    })
     return patches
   }
 

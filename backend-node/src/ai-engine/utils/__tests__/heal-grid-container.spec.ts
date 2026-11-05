@@ -10,6 +10,15 @@
  *   - 父容器 `.c-device-monitor-cons` 当前是 flex-wrap → 改为 `display:grid; grid-template-columns: repeat(3,1fr)`
  *   - 子项 `.c-device-monitor-group` 的百分比宽度声明被清掉（grid 下破坏列宽）
  * 不靠类名硬编码，靠子项同质 + 等宽意图 + 父非 grid 三条件；事实列数缺失时绝不动作。
+ *
+ * ⚠️ 口径更正（2026-11-05，第 2 项 A 方案）：本刀写出的 `repeat(N, 1fr)` 是**中间态**，不是终态。
+ *   · 时序：本刀在 `microcode-engineer.generateCode` 早段，刀 41 在**写盘出口**
+ *     （`file-writer` / `pre-write-self-healing`）⇒ 有 Figma 几何的契约段里，这里的 `1fr` 必被
+ *     刀 41 的 `WRAPPER_DROP` + `canonicalWrapperDecls` 覆盖成 `repeat(N, Wpx)`；
+ *   · 刀 41 自身只在「**末行不满**」（`items % N ≠ 0`）时判 `grid-track-fluid`，末行满时
+ *     `1fr` 与 `Wpx` 渲染等价 ⇒ **合法**；
+ *   · 因此下面的断言只固化「本刀的输出形态」，**不是**在固化「1fr 违规」——旧表述
+ *     「1fr 违规源 = 刀 22」经 10-29~11-04 全量日志实测不成立（本刀触发面 0）。
  */
 import { describe, it, expect } from '@jest/globals';
 import { healGridContainer } from '../flex-sibling-guard.js';
@@ -66,6 +75,7 @@ describe('healGridContainer (刀 22-grid)', () => {
 
     const consFile = res.files.find((f) => f.path === 'resources/styles/common.less');
     expect(consFile.content).toMatch(/display:\s*grid/);
+    // 本刀输出形态（中间态，见文件头「口径更正」）：写盘出口的刀 41 会按 Figma 几何改写成 repeat(N, Wpx)。
     expect(consFile.content).toMatch(/grid-template-columns:\s*repeat\(3,\s*1fr\)/);
     expect(consFile.content).not.toMatch(/flex-wrap/);
 

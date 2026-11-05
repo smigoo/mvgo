@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="docx-page-size" content="A4">
+  <title>感智晓界工坊平台生产数据部门统计报告</title>
+  <style>
+  /* --- 页面规则（页面模型）：正文页脚居中页码 --- */
+  @page {
+    @bottom-center { content: counter(page); }
+  }
+  @page cover {
+    @bottom-center { content: none; }
+  }
+  section[role="cover"] { page: cover; }
+
+  :root {
+    --fs-h1: var(--typography-fontSize-h1, 28pt);
+    --fs-h2: var(--typography-fontSize-h2, 18pt);
+    --fs-h3: var(--typography-fontSize-h3, 14pt);
+    --fs-body: var(--typography-fontSize-body, 12pt);
+    --fs-small: var(--typography-fontSize-small, 10pt);
+    --ff-heading: var(--typography-fontFamily-heading, "微软雅黑", "Microsoft YaHei", "黑体", SimHei, sans-serif);
+    --ff-body: "SimSun", "宋体", "Microsoft YaHei", serif;
+    --lh-body: var(--typography-lineHeight-body, 1.6);
+    --fw-bold: var(--typography-fontWeight-bold, 700);
+    --color-primary: var(--color-primary, #1a73e8);
+    --color-text: var(--color-text, #000000);
+    --color-muted: var(--color-muted, #666666);
+    --color-border: var(--color-border, #cccccc);
+    --color-bg: var(--color-bg, #ffffff);
+    --color-highlight: var(--color-highlight, #f5f7fa);
+    --color-accent: var(--color-primary, #1a73e8);
+    --color-emphasis: var(--color-danger, #c62828);
+    --color-success: #2e7d32;
+    --color-warning: #e65100;
+    --color-info: #01579b;
+    --color-summary-bg: var(--color-highlight, #f5f7fa);
+    --color-summary-border: var(--color-primary, #1a73e8);
+    --summary-border-width: 4px;
+    --radius-card: var(--spacing-block, 8px);
+    --shadow-card: 0 2px 8px rgba(0,0,0,0.08);
+    --spacing-paragraph: var(--spacing-paragraph, 0.8em);
+    --spacing-section: var(--spacing-section, 2em);
+    --spacing-block: var(--spacing-block, 1em);
+    --margin-page: var(--layout-margin, 2.5cm);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--ff-body); font-size: var(--fs-body); line-height: var(--lh-body); color: var(--color-text); background: var(--color-bg); }
+
+  /* Cover */
+  .report-cover {
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    min-height: 60vh; padding: var(--margin-page);
+    background: var(--color-highlight);
+  }
+  .cover-category { font-size: var(--typography-fontSize-coverCategory, 14pt); font-family: var(--ff-heading); font-weight: var(--fw-bold); color: var(--color-primary); letter-spacing: 0.08em; margin-bottom: var(--spacing-paragraph, 0.8em); text-align: left; }
+  .cover-title { font-size: var(--fs-h1); font-family: var(--ff-heading); font-weight: var(--fw-bold); color: var(--color-primary); margin-bottom: var(--spacing-block, 0.5em); text-align: left; }
+  .cover-subtitle { font-size: var(--fs-h2); color: var(--color-muted); margin-bottom: var(--spacing-section); text-align: left; }
+  .cover-meta { font-size: var(--fs-small); color: var(--color-muted); text-align: left; }
+
+  /* TOC */
+  .doc-toc { padding: var(--spacing-block) var(--margin-page); background: var(--color-bg); }
+  .toc-title { font-weight: var(--fw-bold); margin-bottom: var(--spacing-block, 0.5em); font-size: var(--fs-h2); font-family: var(--ff-heading); text-align: left; }
+  .toc-list, .toc-list ol, .toc-list ul { list-style: none; list-style-type: none; padding-left: var(--spacing-block, 1.5em); }
+  .toc-list li { margin-bottom: var(--spacing-paragraph, 0.3em); text-indent: 0; }
+  .toc-list a { color: var(--color-primary); text-decoration: none; }
+
+  /* Executive summary */
+  .executive-summary {
+    margin: var(--spacing-section) var(--margin-page);
+    padding: var(--spacing-section);
+    border-left: var(--summary-border-width) solid var(--color-summary-border);
+    background: var(--color-summary-bg);
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  }
+  .summary-header { display: flex; align-items: center; gap: 1em; margin-bottom: var(--spacing-block); }
+  .summary-header h2 { font-size: var(--fs-h2); font-family: var(--ff-heading); }
+  .summary-badge { font-size: var(--fs-small); color: var(--color-muted); font-style: italic; }
+  .summary-highlights { display: flex; gap: var(--spacing-block); flex-wrap: wrap; margin-bottom: var(--spacing-block); }
+
+  /* Data tables */
+  .data-table { width: 100%; border-collapse: collapse; margin-bottom: var(--spacing-block); }
+  .data-table th, .data-table td { padding: var(--spacing-block, 0.45em 0.6em); border: 1px solid var(--color-border); text-align: left; font-size: var(--fs-small); }
+  .data-table th { background: var(--color-highlight); font-family: var(--ff-heading); font-weight: var(--fw-bold); }
+  .data-table td.num { text-align: right; }
+  .data-table tbody tr:nth-child(even) { background: var(--color-highlight); }
+  .table-caption { font-size: var(--fs-small); color: var(--color-muted); margin-bottom: var(--spacing-paragraph); text-align: left; }
+  .src-note { font-size: var(--fs-small); color: var(--color-muted); background: var(--color-highlight); padding: var(--spacing-block, 0.6em 1em); border-radius: 4px; margin: var(--spacing-paragraph) 0; }
+
+  /* Main body */
+  .report-body { padding: var(--spacing-section) var(--margin-page); }
+  .report-body h2 { font-size: var(--fs-h2); font-family: var(--ff-heading); font-weight: var(--fw-bold); margin-top: var(--spacing-section); margin-bottom: var(--spacing-paragraph); }
+  .report-body h3 { font-size: var(--fs-h3); font-family: var(--ff-heading); font-weight: var(--fw-bold); margin-top: var(--spacing-block); margin-bottom: var(--spacing-paragraph); }
+  .report-body p { margin-bottom: var(--spacing-paragraph); text-indent: 2em; text-align: justify; }
+  .report-body p.no-indent { text-indent: 0; }
+  .data-emphasis { color: var(--color-emphasis); font-weight: var(--fw-bold); }
+  ol.ordered-list { margin: 0 0 var(--spacing-paragraph) var(--spacing-block, 2em); }
+  ol.ordered-list li { margin-bottom: var(--spacing-paragraph, 0.4em); text-indent: 0; text-align: justify; }
+
+  /* Appendix */
+  .appendix { padding: var(--spacing-section) var(--margin-page); border-top: 1px solid var(--color-border); }
+  </style>
+</head>
+<body>
+  <section role="cover" class="report-cover">
+    <p class="cover-category">数据统计报告</p>
+    <h1 class="cover-title">感智晓界工坊平台<br>生产数据部门统计报告</h1>
+    <p class="cover-subtitle">任务与组件生成使用情况 · 累计与本周汇总</p>
+    <div class="cover-meta">
+      <p>感动科技 · 智能体工作室 | 2026 年 11 月 5 日 | V1.0</p>
+    </div>
+  </section>
+
+  <section role="cover">
+    <nav class="doc-toc" aria-label="文档目录">
+      <p class="toc-title">目录</p>
+      <ol class="toc-list">
+        <li><a href="#section-1">一、报告说明</a></li>
+        <li><a href="#section-2">二、总体汇总</a></li>
+        <li><a href="#section-3">三、按部门明细</a></li>
+        <li><a href="#section-4">四、本周数据解读</a></li>
+        <li><a href="#section-5">五、数据口径备注</a></li>
+      </ol>
+    </nav>
+  </section>
+
+  <section role="body" class="report-body" data-page-restart="1">
+    <div class="executive-summary">
+      <div class="summary-header">
+        <h2>执行摘要</h2>
+        <span class="summary-badge">Executive Summary</span>
+      </div>
+      <div class="summary-highlights">
+        <div data-component="data-card" data-title="注册任务（累计）" data-color="primary">
+          <span class="card-value">293</span>
+          <span class="card-unit">个（可归属口径）</span>
+        </div>
+        <div data-component="data-card" data-title="生成完成（累计）" data-color="success">
+          <span class="card-value">198</span>
+          <span class="card-unit">个 · 完成率 67.6%</span>
+        </div>
+        <div data-component="data-card" data-title="落地组件（现存）" data-color="info">
+          <span class="card-value">255</span>
+          <span class="card-unit">个 · 本周新增 34</span>
+        </div>
+        <div data-component="data-card" data-title="本周注册任务" data-color="warning">
+          <span class="card-value">47</span>
+          <span class="card-unit">个 · 完成 34</span>
+        </div>
+      </div>
+      <div class="summary-body">
+        <p class="no-indent">平台自 2026 年 8 月 9 日首个组件落地以来，累计注册生成任务 <span class="data-emphasis">293</span> 个（部门可归属口径），完成 <span class="data-emphasis">198</span> 个；组件库现存落地组件 <span class="data-emphasis">255</span> 个，覆盖 <span class="data-emphasis">14</span> 个部门（二级组已归并至所属业务线/部门）、99 名注册用户。本周（11 月 2 日起）注册任务 47 个、完成 34 个，新增落地组件 34 个，无组件删除。</p>
+      </div>
+    </div>
+
+    <main>
+      <h2 id="section-1">一、报告说明</h2>
+      <p>本报告统计感智晓界工坊平台（mvgo）自上线以来至 2026 年 11 月 5 日的生产运行数据，并单独汇总本周（2026 年 11 月 2 日周一起）数据。统计维度为注册任务、生成任务、落地组件与删除组件四项，全部按所属部门归集。</p>
+      <p>各指标统计口径如下：</p>
+      <ol class="ordered-list">
+        <li><strong>数据源</strong>：任务数据取自生产后端任务持久化记录（tasks.json）；组件数据取自生产数据库组件集合（components，现存记录）；删除组件取自生产访问日志中的组件删除事件。</li>
+        <li><strong>注册任务</strong>：用户提交的生成任务总数（含 lite 快速生成、max 完整生成等全部类型）。</li>
+        <li><strong>生成任务</strong>：注册任务中状态为「已完成」的任务数。</li>
+        <li><strong>落地组件</strong>：成功入库组件库的组件数（现存口径，不含已删除）。</li>
+        <li><strong>删除组件</strong>：组件库中的删除操作事件数（按事件去重）。</li>
+        <li><strong>部门归属</strong>：按用户门户信息中的部门名称（deptName）归集。</li>
+      </ol>
+
+      <div data-component="divider" data-style="section-break"></div>
+
+      <h2 id="section-2">二、总体汇总</h2>
+      <table class="data-table">
+        <thead>
+          <tr><th>指标</th><th>累计（2026-08-09 起）</th><th>本周（11-02 起）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>注册任务</td><td class="num">293</td><td class="num">47</td></tr>
+          <tr><td>生成完成</td><td class="num">198</td><td class="num">34</td></tr>
+          <tr><td>落地组件（现存）</td><td class="num">255</td><td class="num">本周新增 34</td></tr>
+          <tr><td>删除组件</td><td class="num">25</td><td class="num">0</td></tr>
+          <tr><td>平台注册用户</td><td class="num">99</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+      <p>任务类型分布：lite 快速生成共 <span class="data-emphasis">217</span> 个（mv-lite 115、mc-lite 102），max 完整生成共 <span class="data-emphasis">65</span> 个（mc-max 64、mv-max 1）。平台最早落地组件时间为 2026 年 8 月 9 日。</p>
+
+      <div data-component="divider" data-style="section-break"></div>
+
+      <h2 id="section-3">三、按部门明细</h2>
+      <p class="table-caption">表 1：各部门任务与组件统计明细（按综合使用量降序；已按部门层级将二级「组」归并至所属业务线/部门）</p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>部门</th><th>注册任务<br>（累计）</th><th>生成完成<br>（累计）</th><th>本周<br>注册</th><th>本周<br>完成</th><th>落地组件<br>（现存）</th><th>本周新增<br>组件</th><th>删除组件<br>（累计）</th><th>本周<br>删除</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>综管研发部</td><td class="num">58</td><td class="num">39</td><td class="num">3</td><td class="num">2</td><td class="num">39</td><td class="num">2</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>桥隧研发部</td><td class="num">35</td><td class="num">32</td><td class="num">7</td><td class="num">4</td><td class="num">61</td><td class="num">4</td><td class="num">1</td><td class="num">0</td></tr>
+          <tr><td>前端部</td><td class="num">39</td><td class="num">10</td><td class="num">8</td><td class="num">7</td><td class="num">10</td><td class="num">7</td><td class="num">17</td><td class="num">0</td></tr>
+          <tr><td>高速业务线</td><td class="num">34</td><td class="num">19</td><td class="num">6</td><td class="num">2</td><td class="num">26</td><td class="num">2</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>平台研发部（视频）</td><td class="num">31</td><td class="num">27</td><td class="num">2</td><td class="num">2</td><td class="num">28</td><td class="num">2</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>出行服务线</td><td class="num">28</td><td class="num">22</td><td class="num">6</td><td class="num">5</td><td class="num">29</td><td class="num">5</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>养护运维技术研发部</td><td class="num">16</td><td class="num">9</td><td class="num">2</td><td class="num">2</td><td class="num">16</td><td class="num">2</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>收费系统研发部</td><td class="num">16</td><td class="num">15</td><td class="num">6</td><td class="num">5</td><td class="num">15</td><td class="num">5</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>技术研发部</td><td class="num">14</td><td class="num">10</td><td class="num">3</td><td class="num">2</td><td class="num">12</td><td class="num">2</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>政务业务线</td><td class="num">7</td><td class="num">4</td><td class="num">2</td><td class="num">2</td><td class="num">6</td><td class="num">2</td><td class="num">5</td><td class="num">0</td></tr>
+          <tr><td>数智业务线</td><td class="num">8</td><td class="num">4</td><td class="num">2</td><td class="num">1</td><td class="num">5</td><td class="num">1</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>结算系统研发部</td><td class="num">4</td><td class="num">4</td><td class="num">0</td><td class="num">0</td><td class="num">4</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>基础研发部（视频）</td><td class="num">3</td><td class="num">3</td><td class="num">0</td><td class="num">0</td><td class="num">3</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>OA 部</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">2</td><td class="num">0</td></tr>
+        </tbody>
+      </table>
+      <p class="src-note">注 1：部门口径的注册任务为可归属部分（293 个），另有 189 个历史任务因用户注销或早期未记录归属未计入，详见第五节。</p>
+      <p class="src-note">注 2：已按部门编码层级归并二级部门——综管研发一/二/四组并入综管研发部；出行渠道组、出行客服组并入出行服务线；高速调度组、高速服务组、高速安管组并入高速业务线；公路云控组、交通重货组并入政务业务线；数智营运组并入数智业务线；执法交警组、主动管控组并入技术研发部。</p>
+
+      <div data-component="divider" data-style="section-break"></div>
+
+      <h2 id="section-4">四、本周数据解读</h2>
+      <ol class="ordered-list">
+        <li><strong>活跃度</strong>：本周 14 个部门中有 11 个产生新任务，共注册 47 个任务、完成 34 个，完成率 <span class="data-emphasis">72.3%</span>，与全量完成率（67.6%）基本持平。</li>
+        <li><strong>组件产出</strong>：本周新增落地组件 34 个，其中前端部 7 个，出行服务线、收费系统研发部各 5 个，桥隧研发部 4 个。</li>
+        <li><strong>删除行为</strong>：本周无组件删除。累计 25 起删除中，前端部占 17 起（试验性使用为主）、政务业务线 5 起（公路云控组）、OA 部 2 起、桥隧研发部 1 起。</li>
+        <li><strong>重点部门</strong>：桥隧研发部累计落地组件 <span class="data-emphasis">61</span> 个居首，生成完成 32 个、完成率 91.4% 为大规模使用部门中最高；综管研发部（含综管研发一/二/四组）注册任务最多（58 个）、落地组件 39 个；前端部完成率 25.6%，以试验验证为主。</li>
+      </ol>
+
+      <div data-component="divider" data-style="section-break"></div>
+
+      <h2 id="section-5">五、数据口径备注</h2>
+      <p>1. 有 189 个历史任务未纳入部门统计：其中 132 个归属于一个已从用户表注销的早期开发/测试账号，57 个为早期未记录用户归属的任务。部门口径的累计注册任务（293 个）为可归属部分，全量任务总数为 482 个。</p>
+      <p>2. 组件库现存 255 个组件中有 1 个因创建者账号注销无法归属部门，已在合计中如实包含。</p>
+      <p>3. 删除组件按访问日志事件统计，同一组件重复删除按事件分别计数。</p>
+      <p>4. 部门明细已按部门编码层级归并：各二级「组」并入所属业务线/部门（综管研发一/二/四组→综管研发部，出行渠道组、出行客服组→出行服务线，高速调度组、高速服务组、高速安管组→高速业务线，公路云控组、交通重货组→政务业务线，数智营运组→数智业务线，执法交警组、主动管控组→技术研发部）；归并依据为门户部门编码（deptCode）前缀层级，归属关系唯一确定。</p>
+    </main>
+
+    <div class="appendix">
+      <p class="no-indent" style="font-size: var(--fs-small); color: var(--color-muted);">数据来源：生产环境任务持久化记录、组件库数据库、访问操作日志。统计执行时间：2026-11-05 13:30（GMT+8）。</p>
+    </div>
+  </section>
+
+  <style>
+  /* 装饰组件：data-card */
+  [data-component="data-card"] {
+    display: inline-flex;
+    flex-direction: column;
+    padding: var(--spacing-block, 1em);
+    background: var(--color-bg, #ffffff);
+    border-radius: var(--radius-card, 8px);
+    box-shadow: var(--shadow-card);
+    border-top: 3px solid var(--color-primary, #333333);
+    min-width: 140px;
+    gap: 0.3em;
+  }
+  [data-component="data-card"][data-title]::before {
+    content: attr(data-title);
+    font-size: var(--fs-small, 10pt);
+    color: var(--color-muted, #666666);
+    font-weight: 400;
+    margin-bottom: var(--spacing-paragraph, 0.2em);
+    text-align: left;
+    text-indent: 0;
+  }
+  .card-value {
+    font-size: var(--fs-h2, 18pt);
+    font-weight: var(--fw-bold, 700);
+    line-height: 1.1;
+    color: var(--color-text, #000000);
+    text-align: left;
+    text-indent: 0;
+  }
+  .card-unit { font-size: var(--fs-small, 10pt); color: var(--color-muted, #666666); text-align: left; text-indent: 0; }
+  [data-component="data-card"][data-color="primary"] { border-top-color: var(--color-primary, #1a73e8); }
+  [data-component="data-card"][data-color="primary"] .card-value { color: var(--color-primary, #1a73e8); }
+  [data-component="data-card"][data-color="success"] { border-top-color: var(--color-success); }
+  [data-component="data-card"][data-color="success"] .card-value { color: var(--color-success); }
+  [data-component="data-card"][data-color="warning"] { border-top-color: var(--color-warning); }
+  [data-component="data-card"][data-color="warning"] .card-value { color: var(--color-warning); }
+  [data-component="data-card"][data-color="info"] { border-top-color: var(--color-info); }
+  [data-component="data-card"][data-color="info"] .card-value { color: var(--color-info); }
+
+  /* 装饰组件：divider */
+  [data-component="divider"] {
+    margin: var(--spacing-section, 2em) 0;
+    border: none;
+    position: relative;
+  }
+  [data-component="divider"][data-style="section-break"] {
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      var(--color-primary, #1a73e8) 15%,
+      var(--color-primary, #1a73e8) 85%,
+      transparent 100%
+    );
+    opacity: 0.3;
+    margin: var(--spacing-section, 2em) 0;
+  }
+  </style>
+</body>
+</html>

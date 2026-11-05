@@ -36,6 +36,10 @@ import { McSpecModule } from './mc-spec/mc-spec.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { WorkbenchModule } from './workbench/workbench.module';
 import { isV2Exposed } from './ai-engine-v2/api/dev-only.guard';
+import { LiteLabModule } from './lite-lab/api/lite-lab.module';
+import { isLiteLabExposed } from './lite-lab/api/lite-lab-dev-only.guard';
+import { ProjectPipelineModule } from './ai-engine-v3/project/api/project-pipeline.module';
+import { isV3ProjectExposed } from './ai-engine-v3/project/api/project-dev-only.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -88,6 +92,14 @@ import { AppService } from './app.service';
     // v2 可配管线（规范 × 档位 × 模型），dev 专用：
     // 生产环境整个模块不注册，连路由都不存在；控制器上的 DevOnlyGuard 是第二道保险。
     ...(isV2Exposed() ? [V2PipelineModule] : []),
+    // v3 项目级管线（M1：S0 扫描 + S2 契约冻结），dev 专用：
+    // 开关与控制器上的 ProjectDevOnlyGuard **同一个函数**（isV3ProjectExposed），
+    // 避免「模块注册了但守卫 404」的静默失效。
+    ...(isV3ProjectExposed() ? [ProjectPipelineModule] : []),
+    // lite-lab 真值回填实验管线（lite 布局 + Figma node 真值匹配回填），dev 专用：
+    // 开关与控制器守卫同一个函数（isLiteLabExposed），Stage A 复用 LiteModule，
+    // 摘掉本模块对既有生成链路零影响。
+    ...(isLiteLabExposed() ? [LiteLabModule] : []),
   ],
   controllers: [AppController],
   providers: [

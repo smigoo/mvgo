@@ -30,6 +30,7 @@ import {
   sortSectionsByFigmaY,
   indexFigmaNodes,
   figmaSectionBox,
+  unionSectionBox,
   stripFabricatedSourceIds,
   uniqueSectionIds,
   deriveSectionsFromFigmaTree,
@@ -2375,8 +2376,23 @@ function applyFigmaHeightGrow(nodes, figmaIndex) {
     return 0;
   }
   let changed = 0;
-  const apply = (list) => {
+  // 🛡️ T-GROW（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：归一必须**方向感知**。
+  //   病灶：本函数原只有高度口径，且递归进容器 `children` 时沿用高度。
+  //   而 CSS 里 `flex-direction: row` 分发的是**宽度** ⇒ T-TOPO 重建出的横向容器
+  //   （`89:39` 46×317 + `2:8437` 367×295）拿到 317:295 ≈ 1.04:0.96，
+  //   真值宽度比是 46:367 = 0.11:0.89 ⇒ 渲染成 ~52:48（比原 column 全宽更离谱）。
+  //   方向判据复用 `isHorizontalContainer` 同一正则（见 buildEffectiveSection），不新起第二套。
+  const dirOf = (sec) => {
+    const raw = String(sec?.layout || sec?.body?.layout || '');
+    if (/grid/i.test(raw)) return 'grid';
+    if (/horizontal|row/i.test(raw)) return 'row';
+    return 'column';
+  };
+  const apply = (list, direction) => {
     if (!Array.isArray(list) || list.length === 0) return;
+    // grid：列宽由 `grid-template-columns` 决定，flex-grow 不参与主轴 ⇒ 不改写（保留原值）。
+    if (direction === 'grid') return;
+    const axis = direction === 'row' ? 'width' : 'height';
     const measured = [];
     for (const s of list) {
       // header section 归 base-panel 标题栏插槽，不参与列内 flex 分配，也不该污染平均值。
@@ -2386,38 +2402,62 @@ function applyFigmaHeightGrow(nodes, figmaIndex) {
       // 但 A4 已从其他真实 Figma 行独立解析出高度时仍可使用——禁的是根盒回灌，
       // 不是丢弃已验证的非根几何，否则三段会错误退化成两段归一。
       if (s?.geometryAnchorInvalid && !(resolvedHeight > 0)) continue;
-      // 已解析的 Figma 整体高度优先：A4 区域配对 / vision 主路径的逐项并集均写在这里。
-      // figmaSectionBox 的 min-y 语义服务于排序，其首行/首卡高度不得覆盖整体高度；
-      // 只有整体事实缺失时才回退到该旧路径（fail-open，保留既有组件行为）。
-      const box = resolvedHeight > 0 ? null : figmaSectionBox(s, figmaIndex);
-      const height = resolvedHeight > 0 ? resolvedHeight : Number(box?.height);
-      if (height > 0) measured.push({ s, height });
+      // 高度事实：`figmaHeightPx` 优先；缺失时才几何兜底。
+      // 🛡️ 容器段（A′ 重建产物）必须用**并集盒**：`figmaSectionBox` 只读 `sourceNodeIds`，
+      //   而重建容器没有该字段，且其 bbox 可能只是某一侧栏（`89:37` 46×317 而内容横跨 410）
+      //   ⇒ 取不到高度 ⇒ 该段不参与归一 ⇒ 同层其他段瓜分全部高度（比例全错）。
+      //   union 只用于**容器**，非容器段的 C1（并集高度）单独立项，避免一刀铺开 279 段。
+      const heightBox =
+        resolvedHeight > 0
+          ? null
+          : isLayoutContainerSection(s)
+            ? unionSectionBox(s, figmaIndex) || figmaSectionBox(s, figmaIndex)
+            : figmaSectionBox(s, figmaIndex);
+      const height = resolvedHeight > 0 ? resolvedHeight : Number(heightBox?.height);
+      // 主轴事实：row 用宽度（`figmaWidthPx` 优先，缺失用并集盒 —— 不能用 figmaSectionBox：
+      // 它读 sourceNodeIds，而 vision 主路径的 section 没有该字段 ⇒ 恒 null ⇒ 宽度取不到）。
+      let axisValue = height;
+      if (axis === 'width') {
+        const resolvedWidth = Number(s.styles?.figmaWidthPx);
+        if (resolvedWidth > 0) {
+          axisValue = resolvedWidth;
+        } else {
+          const union = unionSectionBox(s, figmaIndex);
+          axisValue = Number(union?.width);
+          if (axisValue > 0) {
+            // 宽度事实落库：下游 code-generator / prompt 直接读这里，避免二次几何推导。
+            s.styles = { ...(s.styles || {}), figmaWidthPx: Math.round(axisValue) };
+          }
+        }
+      }
+      if (axisValue > 0) measured.push({ s, axisValue, height });
     }
     if (measured.length >= 2) {
       const avg =
-        measured.reduce((sum, m) => sum + m.height, 0) / measured.length;
+        measured.reduce((sum, m) => sum + m.axisValue, 0) / measured.length;
       if (avg > 0) {
-        for (const { s, height } of measured) {
+        for (const { s, axisValue, height } of measured) {
           const meta = s.layoutMetadata;
           if (!meta) continue;
-          const next = Math.round((height / avg) * 1000) / 1000;
+          const next = Math.round((axisValue / avg) * 1000) / 1000;
+          const needHeight = height > 0 && !(meta.height > 0);
           // 🛡️ 治本（2026-09-16 · mc-1789501340553-e25b9b55 实锤）：同步写入 Figma 实测高度。
           //   此前只更新 flexGrow 不更新 height → height 始终为 0（extractLayoutMetadata 从 LLM 产出的
           //   section 读不到 absoluteBoundingBox）→ microcode-engineer.js line 935 的 `if (meta.height > 0)`
           //   恒 false → 整个布局提示块被跳过 → LLM 拿不到 flex 比例信息 → 所有 section flex:1 平分。
-          if (meta.flexGrow !== next || !(meta.height > 0)) {
+          if (meta.flexGrow !== next || needHeight) {
             meta.flexGrow = next;
-            meta.height = height;
+            if (height > 0) meta.height = height;
             changed += 1;
           }
         }
       }
     }
     for (const s of list) {
-      if (Array.isArray(s.children)) apply(s.children);
+      if (Array.isArray(s.children)) apply(s.children, dirOf(s));
     }
   };
-  apply(nodes);
+  apply(nodes, 'column');
   return changed;
 }
 
@@ -3152,7 +3192,12 @@ export class SubcomponentPlanner {
       }
 
       // 🛡️ 治本：flex 比例同样以 Figma 实测高度为事实源（vision 自报 flexGrow 只作兜底）。
-      const figmaIndex = indexFigmaNodes(opts.figmaNodeData);
+      // ⚠️ 必须解包 `.document`（T-GROW 2026-11-05）：`opts.figmaNodeData` 存在
+      //   `{document, fileKey, cachedAt}` 包裹形态，而 `indexFigmaNodes` 只沿 `children` 走
+      //   ⇒ 直接把包裹对象喂进去会得到**空索引** ⇒ `applyFigmaHeightGrow` 的
+      //   `size === 0` 守卫静默 return 0 ⇒「归一从未执行」却零报警（假绿）。
+      //   与同文件 `buildItemLevelFacts` / `enrichSectionsWithTechStack` 的解包口径一致。
+      const figmaIndex = indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData);
       const growChanged = applyFigmaHeightGrow(effectiveSections, figmaIndex);
       if (growChanged > 0) {
         logger.info('flexGrow 已按 Figma 实测高度重新归一', {

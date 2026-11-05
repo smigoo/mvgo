@@ -40,6 +40,9 @@
         :componentId="bindingComponentId"
         :groupId="bindingGroupId"
         :componentName="bindingComponentName"
+        :mode="bindingMode"
+        :s4-slots="bindingSlots"
+        :s4-auto-bindings="bindingAutoBindings"
         surface="drawer"
         @refresh-preview="emitRefresh"
       />
@@ -87,7 +90,7 @@ const isPreviewPage = computed(
 const isWorkbenchPage = computed(() => route.path.startsWith('/workbench'))
 const hideFooter = computed(() => isDemoPage.value || route.path.startsWith('/demo'))
 // 全局接口对接向导（跨 iframe 消息桥）
-const { bindingWizardOpen, bindingComponentId, bindingGroupId, bindingComponentName, emitRefresh } =
+const { bindingWizardOpen, bindingComponentId, bindingGroupId, bindingComponentName, bindingMode, bindingSlots, bindingAutoBindings, emitRefresh } =
   useApiBindingBridge()
 const runtimeBuilder = $runtimeBuilder()
 onMounted(() => {

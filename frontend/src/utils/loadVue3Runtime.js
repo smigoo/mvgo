@@ -22,6 +22,9 @@
  */
 
 import { BINARY_EXTS, extOf } from './sfc-loader-binary.js'
+// 🛡️ 2026-11-05 治本：内联注入的 CSS 里相对 `url()` 按**文档 URL**解析 ⇒ 404 ⇒ 背景图不显示。
+//   注入/编译前按「该 CSS 文件自身虚拟路径」重写为绝对 URL（单一事实源）。
+import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls } from './css-asset-url'
 // 🛡️ 2026-10-25：`.js` 内 ESM 语法的判定（单一真相源，与微码预览路径共用）
 import { resolveJsModuleTypeOverride } from './sfc-loader-esm-js'
 import { buildSnapshotFileUrl } from './preview-resolver'
@@ -157,7 +160,19 @@ function resolveSnapshotRelativePath(fromRel, requestPath) {
   return base.join('/')
 }
 
-async function preprocessSnapshotStyles(src, rel, snapshotFileUrl) {
+/**
+ * 递归内联 `<style>` 里的 LESS `@import`，并按**每个源文件自身路径**把 `url()` 重写成可直接请求的绝对 URL。
+ *
+ * 🔴 为什么必须内联而不是"编译后再改"（2026-11-05 真机实锤 1b5b72d0）：
+ *   less 默认 `rewriteUrls:false`，`@import` 进来的规则里 `url('../images/x.png')` 的相对基准
+ *   仍然是**该 less 文件**（`resources/styles/`），而编译产物的基准会被当成入口 `package/index.vue`。
+ *   只在入口改 → common.less 的 `../images/` 被算成 `<组件根>/images/`（少一层 resources）⇒ 404。
+ *   故这里先按各自 `currentRel` 把 url 提升为绝对，再交给 less 编译，编译期已无相对引用。
+ *
+ * @param fileUrl (relPath: string) => string  把「相对组件根的文件路径」映射为可 fetch 的 URL
+ *        —— snapshot 链路传 snapshotFileUrl，workspace 直读链路传 `${base}/${rel}`
+ */
+async function preprocessStyleUrls(src, rel, fileUrl) {
   const seen = new Set()
 
   const inlineLess = async (css, currentRel, depth = 0) => {
@@ -173,7 +188,7 @@ async function preprocessSnapshotStyles(src, rel, snapshotFileUrl) {
         chunks.push(match[0])
       } else if (!seen.has(importedRel)) {
         seen.add(importedRel)
-        const response = await http.raw(snapshotFileUrl(importedRel))
+        const response = await http.raw(fileUrl(importedRel))
         if (!response.ok) throw new Error(`找不到 LESS 文件: ${importedRel}`)
         chunks.push(await inlineLess(await response.text(), importedRel, depth + 1))
       }
@@ -183,7 +198,7 @@ async function preprocessSnapshotStyles(src, rel, snapshotFileUrl) {
 
     return chunks.join('').replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/g, (full, _quote, assetPath) => {
       const assetRel = resolveSnapshotRelativePath(currentRel, assetPath)
-      return assetRel ? `url(${JSON.stringify(snapshotFileUrl(assetRel))})` : full
+      return assetRel ? `url(${JSON.stringify(fileUrl(assetRel))})` : full
     })
   }
 
@@ -279,7 +294,7 @@ function collectVueImportedLocals(script) {
  * 只处理 <script> 块，绝不碰 <style>（background-color 是合法 CSS 属性）与 template。
  * 作用：对已生成/历史产物在预览编译前自动修复，消除 `[vue/compiler-sfc] Unexpected token` 加载失败。
  */
-function normalizeObjectStringKeysInVue(source) {
+export function normalizeObjectStringKeysInVue(source) {
   if (!source || typeof source !== 'string') return source
   return source.replace(
     /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi,
@@ -688,7 +703,22 @@ export async function loadVue3FromWorkspace(
       // 镜像 vite.config workspace-css-guard：修正资源路径。
       // snapshot URL 使用 query 传 path，LESS 的相对 @import / url() 必须先改写到同 revision。
       src = fixResourcePaths(src, rel)
-      if (snapshotSource) src = await preprocessSnapshotStyles(src, rel, snapshotFileUrl)
+      // 🔴 2026-11-05 治本（1b5b72d0：DOM 规则里 `background:url(...)` 明明在，肉眼却没有背景图）：
+      //   预览把 CSS fetch 成文本再 `textContent` 内联注入 ⇒ 样式表失去自身 URL ⇒ 相对 url()
+      //   退化为按**文档 URL** 解析 ⇒ 404。必须在 LESS 编译**之前**、按**每个源文件自己的路径**
+      //   把 url() 提升为绝对（含 @import 链条，`common.less` 的 `../images/` 与入口基准不同）。
+      //   原实现只有 snapshot 链路做了（preprocessSnapshotStyles），workspace 直读链路完全没有
+      //   ⇒ 这正是「icon 能还原、背景资源不还原」的直接原因（icon 走 import，绕开了 CSS url 解析）。
+      if (rel.endsWith('.vue')) {
+        const fileUrl = snapshotSource ? (r) => snapshotFileUrl(r) : (r) => `${base}/${r}`
+        try {
+          src = await preprocessStyleUrls(src, rel, fileUrl)
+        } catch {
+          // 降级：@import 内联失败时至少修正 SFC 自身 <style> 的相对 url，
+          // 让「样式整体能加载」优先于「背景图完美」。
+          src = rewriteVueStyleAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
+        }
+      }
       // 🛡️ 确定性修复：对象字面量裸 key 漏引号（如 { c-monitor-beijing: true }），
       // 预览编译前自动补齐，消除 compiler-sfc Unexpected token 加载失败（历史产物同样生效）。
       src = normalizeObjectStringKeysInVue(src)
@@ -848,8 +878,12 @@ async function injectGlobalIndexCss({ cssUrl, scopeKey }) {
   if (existing) return true // 幂等：同一预览实例只注入一次
   const res = await fetch(cssUrl)
   if (!res.ok) return false
-  const css = await res.text()
-  if (!css || !css.trim()) return false
+  const rawCss = await res.text()
+  if (!rawCss || !rawCss.trim()) return false
+  // 🔴 2026-11-05 治本（「icon 能还原、背景资源不还原」真机实锤）：fetch 成文本再内联注入后，
+  //   样式表失去自身 URL，`url('../images/bg-x.png')` 按**文档 URL** 解析 ⇒ 404 ⇒ 背景图不显示。
+  //   注入前按 index.css 自身虚拟路径重写为绝对 URL（只动相对引用，幂等）。单一事实源 css-asset-url.js。
+  const css = rewriteCssAssetUrls(rawCss, new URL(cssUrl, location.origin).href)
   const style = document.createElement('style')
   style.setAttribute(attr, scopeKey)
   style.setAttribute('data-preview-style-scope', scopeKey)

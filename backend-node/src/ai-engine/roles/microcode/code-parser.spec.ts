@@ -3,6 +3,9 @@ jest.mock('../../../config/backend-root.js', () => ({
   logsDir: '/tmp/mvgo-test-logs',
   backendRoot: process.cwd(),
   projectRoot: process.cwd(),
+  // 🛡️ 2026-11-05：model-config.js 顶部 `join(dataDir, 'model-capability-cache.json')`
+  //   在模块加载期求值，mock 缺 dataDir ⇒ join(undefined) TypeError ⇒ 整套件 fail-to-run。
+  dataDir: process.cwd() + '/data',
 }), { virtual: true });
 
 import { parseCodeOutput } from './code-parser.js';

@@ -228,6 +228,78 @@ describe('registerBuiltinFixRules（STYLE 阶段接线）', () => {
 })
 
 /**
+ * 🛡️ R3-legacy（2026-11-06）：R7 面板背景注入不得推翻 scaleMode 真值。
+ *
+ * 旧实现无条件写 `background-size: 100% 100%` —— 对 FILL（保形填充）/ FIT（完整装入）
+ * 的设计意图就是把图拉变形，与合并精修的 F3 白名单产出不一致：同一份 Figma 走
+ * 「串行精修」与走「合并精修」得到不同缩放。本组锁「有真值按真值、无真值逐字等同旧行为」。
+ */
+describe('R7 panelBg · scaleMode 真值优先（R3-legacy）', () => {
+  const mappingOf = (mode?: string) => {
+    const m: Record<string, unknown> = {
+      previewAnalysisRole: 'bg',
+      skipMount: true,
+      resourceFile: 'resources/images/bg-7880.png',
+    };
+    if (mode) m.imageScaleMode = mode;
+    return [m];
+  };
+  const styleOf = (mode?: string) => {
+    const out = anchorRootContainerInFiles(
+      { 'package/index.vue': DIAMOND_INCIDENT_VUE },
+      { figmaNodeData: FIGMA_425x807, resourceDomMapping: mappingOf(mode) },
+    );
+    return out['package/index.vue'].match(/<style[^>]*>([\s\S]*?)<\/style>/)![1];
+  };
+
+  it('无 scaleMode ⇒ 逐字等同旧行为（100% 100% + no-repeat + center）', () => {
+    const s = styleOf();
+    expect(s).toContain('background-size: 100% 100%;');
+    expect(s).toContain('background-repeat: no-repeat;');
+    expect(s).toContain('background-position: center;');
+  });
+
+  it('FILL ⇒ cover（保形填充），不再拉满变形', () => {
+    const s = styleOf('FILL');
+    expect(s).toContain('background-size: cover;');
+    expect(s).not.toContain('background-size: 100% 100%;');
+    // cover 天然居中 ⇒ 不写 position（写了是噪声）
+    expect(s).not.toContain('background-position: center;');
+  });
+
+  it('FIT ⇒ contain', () => {
+    const s = styleOf('FIT');
+    expect(s).toContain('background-size: contain;');
+    expect(s).not.toContain('background-position: center;');
+  });
+
+  it('STRETCH ⇒ 100% 100%（真值本就要求铺满，与旧行为重合）', () => {
+    const s = styleOf('STRETCH');
+    expect(s).toContain('background-size: 100% 100%;');
+    expect(s).toContain('background-position: center;');
+  });
+
+  it('TILE ⇒ auto + repeat，且不写 position（平铺以左上为原点）', () => {
+    const s = styleOf('TILE');
+    expect(s).toContain('background-size: auto;');
+    expect(s).toContain('background-repeat: repeat;');
+    expect(s).not.toContain('background-position: center;');
+    expect(s).not.toContain('no-repeat');
+  });
+
+  it('有真值时仍幂等：二次执行内容不变', () => {
+    const files = { 'package/index.vue': DIAMOND_INCIDENT_VUE };
+    const opts = {
+      figmaNodeData: FIGMA_425x807,
+      resourceDomMapping: mappingOf('FILL'),
+    };
+    const once = anchorRootContainerInFiles(files, opts);
+    const twice = anchorRootContainerInFiles(once, opts);
+    expect(twice['package/index.vue']).toBe(once['package/index.vue']);
+  });
+});
+
+/**
  * 🔴 接线回归守卫说明（2026-09-11 P2-1 更新）
  *
  * 事故：2026-08-31「迁出为共享规则」重构后，旧 `generation-context.js#createFixPipeline`

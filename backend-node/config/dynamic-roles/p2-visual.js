@@ -1,6 +1,6 @@
 /**
  * 视觉分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer（视觉模式） | 创建: 2026-11-03T02:13:26.381Z
+ * 模板: llm-analyzer（视觉模式） | 创建: 2026-11-05T11:02:38.440Z
  * 输入: previewImage, designTree
  * 输出: layoutStructure
  */

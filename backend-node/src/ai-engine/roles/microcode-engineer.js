@@ -6,6 +6,7 @@
  */
 
 import { BaseAgent } from '../agents/base-agent.js';
+import { createGapWatchdog, resolveGapWatchdogTimeoutMs, wrapOnProgressWithTouch } from '../utils/gap-watchdog.js';
 // 🔴 2026-10-12 A8-3：静态导入 dark 三核心枚举（`normalizeDeclareJson` 是**同步**函数，
 //   不能用 await 动态 import；该常量是纯数据，静态导入安全且无循环依赖 ——
 //   style-tokens.js 不import roles/*）。
@@ -77,6 +78,10 @@ import {
   formatFontGuardLog,
 } from '../utils/font-size-guard.js';
 import * as resourceMountPlan from './microcode/resource-mount-plan.js';
+import { injectResourceAnchors } from './microcode/resource-anchor-injector.js';
+// 🛡️ 刀B·B1（2026-11-05 · c-env-monitor-c324a730 实锤）：资源 URL 白名单对账 ——
+//    mc-preview.png 类幻觉 URL 命中即换真值/剥除，保证永不落盘
+import { healUndeclaredResourceUrls } from './microcode/resource-url-guard.js';
 // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B，文字颜色白字黑底根治）
 import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
 // P1-Slice2（增量补丁式更新）：分块快照推送器 —— 先合并再推送，杜绝并行 worker 交错导致快照回退
@@ -142,6 +147,8 @@ import {
   validateResourceUsage as _validateResourceUsagePure,
   autoFixSubComponentSize as _autoFixSubComponentSizePure,
   inferChartMinHeight as _inferChartMinHeightPure,
+  // 🛡️ 刀C（P3，2026-11-05）：图表 min-height 真值解析（单一来源 post-process.js）
+  resolveChartMinHeightTruth,
   injectChartMinHeightIntoClass,
   createChartClassBlockIfAbsent,
   stripZeroMinHeightForClass,
@@ -318,7 +325,13 @@ import { consolidateSubComponentClasses, ensureSubComponentAttrsBinding, ensureS
 import { collectClassFacts } from '../utils/class-facts.js';
 import { normalizeClassNameDialect } from '../utils/class-dialect-normalizer.js';
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js';
-import { stripDanglingComponentRefs } from '../utils/section-coverage-guard.js';
+import {
+  stripDanglingComponentRefs,
+  detectDanglingComponentRefs,
+  degradeEmptySectionComponents,
+} from '../utils/section-coverage-guard.js';
+// 🛡️ fail-open 显性化台账（component-meta.json#failOpenEvents，与 RES-UNREF 同源出口）
+import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
 import {
   extractSections,
   extractElements,
@@ -342,6 +355,7 @@ import {
   inferComponentPrefix,
   selectAnchorMountCandidate,
   isResourceRendered,
+  HOST_SHELL_TAG_RE,
 } from '../utils/mount-target-scoring.js';
 // 🛡️ P1-5（2026-08-30）：chunk-meta.files 多段映射（读写两侧共用，杜绝 R10 后写覆盖前写）
 import {
@@ -382,6 +396,24 @@ import { reportPatchChainError } from '../utils/patch-chain-observer.js';
  * 如需回退旧行为（不引入），设 env MC_EMIT_THEME_OVERRIDES=0。
  */
 const EMIT_THEME_OVERRIDES = process.env.MC_EMIT_THEME_OVERRIDES !== '0';
+
+/**
+ * 🛡️ 二级子组件补齐上限（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）
+ *
+ * 事故：子组件发现只跑 `index.vue` 一层（批5 `_detectSubComponents`），section 内部再
+ * 引用的子组件（planner R2 密度拆分要求的 internalSubcomponents、LLM 自造的子组件）
+ * **永远没有生成槽位** ⇒ `stripDanglingComponentRefs` 连 import 带模板标签一并剥离 ⇒
+ * section 组件变空壳、内容整段消失（真机：三张统计卡片全丢，一张卡背景被拉满三卡总宽）。
+ *
+ * `genSubComponents` 末尾补一轮「被引用但缺文件」的递归（深度上限 1 层 = 第二层组件）：
+ *   - `SUBCMP_WAVE_MAX = 2` —— 总波次上限。wave1 = index.vue 直接子组件，
+ *     wave2 = 这些子组件内部再引用的组件；**到此为止**，防 LLM 无限嵌套。
+ *   - `SUBCMP_SECOND_WAVE_CAP = 8` —— 单次补齐数量上限。取值依据：全量 `server.log`
+ *     剥离动作仅 1 次触发、真实悬空数 1~6；超过 8 更像「LLM 整体跑飞」，交给
+ *     空段诚实降级 + 收尾断言，不烧 8 次以上模型调用。
+ */
+const SUBCMP_WAVE_MAX = 2;
+const SUBCMP_SECOND_WAVE_CAP = 8;
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i`
 //   及其 docblock（P0-5「兜底背景/图标挂载的禁区」，事故 mc-max-1788056145870-6e65dc88，
@@ -721,11 +753,14 @@ export class MicrocodeEngineer extends BaseAgent {
     //   dropped 段在日志与产物里 0 次出现 → COMP-001 假绿 → 用户肉眼才发现「三个 section 内容缺少」。
     //   口径与 figma-coverage-dedupe#removed[] 对齐（id/coveredBy/size/reason/path）；计数行 0 也打。
     const _dedupeRemoved = [];
+    // 🛡️ G14a（2026-11-05）：同一次去重里「父子嵌套豁免」的计数（观测出参，0 也打）。
+    const _dedupeStats = { nestedExempt: 0 };
     const effectiveSections =
-      dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemoved) || [];
+      dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemoved, '', _dedupeStats) || [];
     this.logger.info('🛡️ G14b 段去重留痕', {
       kept: effectiveSections.length,
       dropped: _dedupeRemoved.length,
+      nestedExempt: _dedupeStats.nestedExempt,
       items: _dedupeRemoved,
     });
     // 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格契约原先只在 `pre-write-self-healing`
@@ -1302,6 +1337,13 @@ export class MicrocodeEngineer extends BaseAgent {
           p += `- section 级子组件 import 其内部子组件并在 template 中引用\n`;
           p += `- 严禁将多个叶子 section 合并到同一个文件\n`;
           p += `- 严禁省略任何叶子 section 的子组件或内部子组件\n`;
+          // 🛡️ 刀56（2026-11-05 · c-env-monitor-1287c878 实锤）：**装配唯一性**。
+          //   病灶：LLM 把 89:42 的 tabs 内容在 TabsSection.vue 里内联渲染了一份
+          //   （游离 tabs div），又 import TabsInteractionArea 再渲染一份 ⇒ tabs 双行，
+          //   32px 容器装 ~72px 内容 ⇒ 第二行（含 icon 操作区）被裁剪、icons「消失」。
+          //   裂缝：本清单原「禁止把 children 打平到根模板」只管容器节点不建文件场景，
+          //   对「已拆内部子组件的内容被父文件复刻」零约束。
+          p += `- 🚨 **装配唯一性**：叶子 section 拆出内部子组件后，本文件模板**只允许**引用内部子组件标签（如 \`<InteractionArea/>\`）；已拆给内部子组件的内容**禁止**在本文件再内联渲染一份（禁止复刻其 DOM 结构 / v-for / 类名）——内部子组件存在时，本文件除子组件标签与其最小布局包裹外不得出现承载其内容的 DOM\n`;
 
           // 🎯 Phase 2 方案1: 布局元数据提示（只对叶子；容器不计高度槽）
           const sectionsWithLayout = leafSections.filter(
@@ -2004,7 +2046,7 @@ export class MicrocodeEngineer extends BaseAgent {
     // 并发度默认 3（env: SUBCOMP_CONCURRENCY），每块独立校验/重试/落盘，互不影响。
     // 🔒 动态封顶：子组件并行 worker 的并发不得超过 AI 网关全局槽位（resolveRequestPolicy().requestConcurrency），
     // 否则单个微码任务内部并发请求会超过全局上限 → 多余 worker 排队 → 120s 队列超时失败。
-    const genSubComponents = async (subComps, startIndex) => {
+    const genSubComponents = async (subComps, startIndex, wave = 1) => {
       if (!subComps || subComps.length === 0) return;
 
       // 🆕 方案 2（2026-09-07）：子组件分组生成
@@ -2076,6 +2118,14 @@ export class MicrocodeEngineer extends BaseAgent {
         figmaNodeData: input?.figmaNodeData || null,
         resourceMapping: effectiveMapping || input.resourceDomMapping || [],
         componentName: input?.componentName || '',
+        // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：把 vision 的
+        //   `charts[]` 真值交给接管器做冲突排除 —— 否则判据只看结构形态，会把
+        //   环形图段（标题行 + 两个圆环容器并排）接管成 `kind=table` 的 `<a-table>`，
+        //   产物无 pie series ⇒ DO-NOT-INVENT-CHART-MISSING(BLOCK) ⇒ 整单失败。
+        //   数据源用既有的 `input.previewAnalysis.charts`（graph 侧传的就是它，
+        //   缓存短路路径 `mc-component-graph-phase2.js:1037` 也是同一字段）——
+        //   **不新增数据通道**，不另派生第二套图表真值。
+        analysisCharts: input?.previewAnalysis?.charts || [],
         logger: this.logger,
       });
       // 🛡️ Phase E（2026-10-31 治理方案）：接管评估无条件单行可见 + 统计子集回写。
@@ -2392,6 +2442,60 @@ export class MicrocodeEngineer extends BaseAgent {
       this.logger.info(
         `⚡ 子组件并行生成完成: ${subComps.length} 个（并发 ${Math.min(CONCURRENCY, subComps.length)}）`,
       );
+
+      // 🛡️ 二级子组件补齐（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）
+      //
+      //   本波生成的 section 组件内部可能又引用了「从未生成」的更下层组件
+      //   （planner R2 密度拆分要求的 internalSubcomponents、或 LLM 自造的子组件）。
+      //   子组件发现原先只跑 index.vue 一层 ⇒ 这些引用没有任何生成槽位 ⇒ 写盘前
+      //   stripDanglingComponentRefs 连 import 带模板标签一并剥掉 ⇒ section 空壳、
+      //   整段内容消失（真机：三张统计卡片全丢 + 一张卡背景被拉满三卡总宽）。
+      //
+      //   在此按「被引用但缺文件」的**统一出口**补一轮（复用 detectDanglingComponentRefs，
+      //   不写第二套引用识别正则）。深度上限 SUBCMP_WAVE_MAX、数量上限 SUBCMP_SECOND_WAVE_CAP。
+      //   宿主外壳（base-panel / mc-panel）由宿主全局注册，绝不生成，故显式排除
+      //   （HOST_SHELL_TAG_RE 单一事实源）——否则会产出 package/components/base-panel.vue。
+      try {
+        const _danglingPaths = Array.from(
+          new Set(
+            detectDanglingComponentRefs(allFiles)
+              .map((d) => String(d?.expected || ''))
+              .filter((p) => p.endsWith('.vue'))
+              .filter(
+                (p) => !HOST_SHELL_TAG_RE.test(String(p).split('/').pop().replace(/\.vue$/i, '')),
+              ),
+          ),
+        );
+        const _verdict =
+          _danglingPaths.length === 0
+            ? 'none'
+            : _danglingPaths.length <= SUBCMP_SECOND_WAVE_CAP
+              ? 'generated'
+              : 'skippedOverCap';
+        // 观测纪律：0 也打（否则「没补齐」与「没检出」无法区分）
+        this.logger.info('🔗 二级子组件补齐评估', {
+          wave,
+          dangling: _danglingPaths.length,
+          verdict: wave >= SUBCMP_WAVE_MAX ? `${_verdict}(depth-limit)` : _verdict,
+          cap: SUBCMP_SECOND_WAVE_CAP,
+          files: _danglingPaths.slice(0, SUBCMP_SECOND_WAVE_CAP),
+        });
+        if (wave < SUBCMP_WAVE_MAX && _verdict === 'generated') {
+          await genSubComponents(
+            _danglingPaths,
+            startIndex + subComps.length,
+            wave + 1,
+          );
+        }
+      } catch (_secondWaveErr) {
+        reportPatchChainError(_secondWaveErr, {
+          logger: this.logger,
+          pass: 'genSubComponents:secondWave',
+        });
+        this.logger.warn('🔗 二级子组件补齐异常（非阻断，交由空段降级兜底）', {
+          error: _secondWaveErr?.message || String(_secondWaveErr),
+        });
+      }
     };
 
     // 🎨 P1 style 拆分：common.less 与 theme-vars.less 拆为两个独立分块（顺序生成，通用路径，三条复杂度分支共用）。
@@ -3105,6 +3209,8 @@ export class MicrocodeEngineer extends BaseAgent {
               });
             }
           } catch (bgErr) {
+            // 🛡️ S0.2 补接（2026-11-05 核对：6b0d14b AST 口径 120 处中唯一漏网点）
+            reportPatchChainError(bgErr, { logger: this.logger, pass: 'generateCode:3110' });
             this.logger.warn('🛡️ G11a 背景 fallback 注入跳过', {
               file: relPath,
               error: bgErr?.message || String(bgErr),
@@ -3981,6 +4087,61 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.warn('🔧 悬空引用剥离异常（非阻断）', { error: _stripErr?.message || String(_stripErr) });
       }
 
+      // 🛡️ 空段诚实降级（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）
+      //
+      //   二级子组件补齐（genSubComponents）之后仍有悬空 ⇒ 上面那步会把标签剥掉，
+      //   section 组件从此变成空壳。空壳里的背景只可能是一张图被拉满（真机：
+      //   141×74 的单卡背景被 100% 100% 拉满三卡总宽 = 用户看到的巨幅蓝），
+      //   故剥掉背景「宁留白不出错色」。**只删 background\*，不动结构与 class**。
+      //
+      //   顺序即正确性：紧跟剥离、同一出口完成，不依赖其它 pass 的相对顺序。
+      //   fail-open：任何异常不阻断生成（观测仍由 §收尾断言 保留）。
+      let _emptySections = [];
+      try {
+        const _degradeRes = degradeEmptySectionComponents(allFiles, true, input.componentPlan);
+        _emptySections = _degradeRes.empty || [];
+        if (_degradeRes.degraded.length > 0) {
+          appendFailOpenEvent(outputPath, {
+            rule: 'EMPTY-SECTION',
+            reason: `${_degradeRes.degraded.length} 个 section 组件内容被剥空（二级子组件未生成），已剥背景避免错色`,
+            detail: {
+              sections: _degradeRes.degraded.slice(0, 10),
+              total: _degradeRes.degraded.length,
+            },
+          });
+        }
+        this.logger.warn('🛡️ 空段诚实降级', {
+          emptySections: _emptySections.length,
+          bgStripped: _degradeRes.degraded.filter((d) => d.bgStripped).length,
+          files: _emptySections.slice(0, 10),
+        });
+      } catch (_emptyErr) {
+        reportPatchChainError(_emptyErr, {
+          logger: this.logger,
+          pass: 'generateCode:emptySectionDegrade',
+        });
+        this.logger.warn('🛡️ 空段降级异常（非阻断）', {
+          error: _emptyErr?.message || String(_emptyErr),
+        });
+      }
+
+      // 🛡️ 产物收尾断言（2026-11-05 · 防回归，不重试）
+      //   A1 补齐 + 空段降级落地后，两条断言「应由构造保证为 0」；这里只在被绕过或
+      //   新增第二条生成路径时报警。失败不触发重试（重跑同一份不可达条件只会烧预算，
+      //   见 section-coverage-guard.js 对 BLOCK 不可行性的论证），只计入 artifactIncomplete。
+      //   0 也打 —— 否则「全绿」与「断言没跑」无法区分。
+      let _danglingLeft = 0;
+      try {
+        _danglingLeft = detectDanglingComponentRefs(allFiles).length;
+      } catch (_assertErr) {
+        reportPatchChainError(_assertErr, { logger: this.logger, pass: 'generateCode:danglingAssert' });
+      }
+      this.logger.info('🛡️ 产物收尾断言', {
+        danglingRefs: _danglingLeft,
+        emptySections: _emptySections.length,
+        verdict: _danglingLeft === 0 && _emptySections.length === 0 ? 'pass' : 'incomplete',
+      });
+
       const artifactCompleteness = evaluateArtifactCompleteness(
         allFiles,
         input.componentPlan,
@@ -3991,6 +4152,8 @@ export class MicrocodeEngineer extends BaseAgent {
         complexity,
         artifactIncomplete: artifactCompleteness.artifactIncomplete,
         unmaterializedSections: artifactCompleteness.unmaterializedSections.map((s) => s.id),
+        emptySections: _emptySections.length,
+        danglingRefs: _danglingLeft,
         degradedScriptParts: input._degradedScriptParts || [],
         // 🛡️ P1-4：被隔离降级的坏文件清单（供任务状态/前端「不完整，可二次生成」标签）
         degradedFiles: input._degradedFiles || [],
@@ -4000,6 +4163,9 @@ export class MicrocodeEngineer extends BaseAgent {
         success: true,
         artifactIncomplete: artifactCompleteness.artifactIncomplete,
         unmaterializedSections: artifactCompleteness.unmaterializedSections,
+        // 🛡️ 2026-11-05：空段与残留悬空引用随结果上抛，由 execute() 落进 component-meta.json
+        emptySections: _emptySections,
+        danglingRefs: _danglingLeft,
         files: allFiles,
         // 🆕 Loop 0.5/1：把 Working Manifest（含 contracts[]）带回 execute 层，供落盘终验兜底
         // 按契约注入主组件 import（避免 forceAll 冲掉收窄结果）。
@@ -6533,11 +6699,81 @@ export class MicrocodeEngineer extends BaseAgent {
    * @returns {{mounted: Array, diagnostics: Array}}
    */
   _mountPlannedResources(allFiles, effectiveSections, resourceDomMapping, input = {}) {
+    // 🛡️ 2026-11-05 治本（c-traffic-monitor-de627a9d 实锤）：锚点解析必须以**产物实际存在**的
+    //   section 为准。旧实现直接信 `ownerSectionId`（常是中间 group，产物不会输出该
+    //   data-section-id）⇒ 锚点悬空 ⇒ 落回中文名匹配英文 class ⇒ 词集交集恒 0 ⇒ 9 条诊断
+    //   全 fail-closed、图标位退化为纯色块。此处收集产物锚点集合交给计划层做祖先上溯。
+    // 🛡️ α3（2026-11-05 · c-env-monitor-c324a730 实锤）：bg owner 在产物里没有锚点时，
+    //   先按「section 树 ↔ 模板 DOM」结构对位补 `data-resource-anchor`（专用属性，
+    //   绝不复用 data-section-id——见 code-generator.js:776 红线），再收集锚点集合，
+    //   让事实链能精确挂载而非被 β 判据 fail-closed。计数行恒打（0 也打）。
+    // 🛡️ 刀B·B1（2026-11-05 · c-env-monitor-c324a730 实锤）：资源 URL 白名单对账。
+    //   mc-preview.png 是 prompt 高频「分析输入」token，LLM 在落点失配时会把它当资源
+    //   写进 CSS（/workspace/ 静态挂载运行时真能加载 ⇒ 幻觉可见而非 404）。此处按
+    //   「已下载资源白名单」分类：未声明本地路径 → 词集匹配换真值 / 匹配不到剥声明。
+    //   计数行恒打（0 也打）。必须在锚点补标之前（清完幻觉再谈锚点）。
+    const urlGuardStats = healUndeclaredResourceUrls(
+      allFiles,
+      resourceDomMapping || [],
+    );
+    this.logger.info('🛡️ 资源URL白名单对账', {
+      scannedFiles: urlGuardStats.scannedFiles,
+      scanned: urlGuardStats.scanned,
+      legal: urlGuardStats.legal,
+      variableRefs: urlGuardStats.variableRefs,
+      dataUris: urlGuardStats.dataUris,
+      external: urlGuardStats.external,
+      undeclared: urlGuardStats.undeclared,
+      replaced: urlGuardStats.replaced,
+      stripped: urlGuardStats.stripped,
+      templateWarns: urlGuardStats.templateWarns,
+      ...(urlGuardStats.skipped ? { skipped: urlGuardStats.skipped } : {}),
+    });
+    if ((urlGuardStats.items || []).length > 0) {
+      this.logger.warn('🛡️ 未声明资源URL已处置（mc-preview 类幻觉禁止落盘）', {
+        items: urlGuardStats.items.slice(0, 5),
+      });
+    }
+    const anchorInjectStats = injectResourceAnchors(
+      allFiles,
+      effectiveSections || [],
+      resourceDomMapping || [],
+    );
+    this.logger.info('🛡️ 资源挂载锚点补标', anchorInjectStats);
+    const productAnchorIds = new Set();
+    for (const content of Object.values(allFiles || {})) {
+      if (typeof content !== 'string') continue;
+      // 🛡️ α3：补标锚与段锚同属「产物真实存在的锚点元素」，一并进入集合。
+      //   不污染语义：刀A 的 hitIdx>0 上提判定只关心「候选是否在产物里」，补标后
+      //   owner 命中位置回到 candidates[0]，天然不再触发上提守卫。
+      for (const mm of content.matchAll(
+        /data-(?:section-id|resource-anchor)="([^"]+)"/g,
+      )) {
+        productAnchorIds.add(mm[1]);
+      }
+    }
     const plan = resourceMountPlan.buildResourceMountPlan(
       effectiveSections || [],
       resourceDomMapping || [],
-      { figmaRoot: input.figmaNodeData || null },
+      {
+        figmaRoot: input.figmaNodeData || null,
+        productAnchorIds,
+      },
     );
+    if (plan.anchorStats) {
+      // 计数行（判据单一来源：resolveSectionAnchor 的归档结果）
+      // 🛡️ 刀A（2026-11-05）：promotionRejected 恒打（0 也打）—— 判据必须可辩驳。
+      this.logger.info('🛡️ 资源挂载锚点统计', {
+        ...plan.anchorStats,
+        productAnchors: productAnchorIds.size,
+        promotionRejected: (plan.anchorPromotionRejected || []).length,
+      });
+      if ((plan.anchorPromotionRejected || []).length > 0) {
+        this.logger.warn('🛡️ 锚点上提被拒（跨层挂载会拉伸错位）', {
+          items: plan.anchorPromotionRejected.slice(0, 5),
+        });
+      }
+    }
     // 🛡️ P-08：构建 nodeId→node 索引（含 __parent 反链）供状态根布局几何判定
     const figmaIndex = new Map();
     if (input.figmaNodeData && typeof input.figmaNodeData === 'object') {
@@ -6862,6 +7098,45 @@ export class MicrocodeEngineer extends BaseAgent {
    * 执行完整的代码生成流程
    */
   async execute(params) {
+    // 🛡️ 分块间隙看门狗（2026-11-05，mc-max-1793849505022-7cb7125d 实锤）：
+    // 「chunk N 完成 → chunk N+1 模型请求」之间的 await 无任何超时保护，挂死即任务
+    // 永远 running（无日志/无进度/无异常，进程健康、无对外 LLM 连接）。此处用
+    // Promise.race 在外层兜底：onProgress 事件即喂狗，超阈值无活动强制失败并携带
+    // 「最后活动」快照定位挂点区间。阈值 16min > 单次模型尝试合法静默上限
+    // （585s×1.5 重试 ≈ 877s，尝试边界必有事件喂狗），不会误杀慢请求。
+    const timeoutMs = resolveGapWatchdogTimeoutMs();
+    const componentName = String(params?.componentName || params?.displayName || '');
+    const baseOnProgress = params?.onProgress;
+    const watchdog = createGapWatchdog({
+      label: `microcode-engineer:${componentName}`,
+      timeoutMs,
+      onFire: (err) => {
+        // 旁路：把失活告警推给前端（此时任务很快会被外层 rejection 置 failed）
+        try {
+          baseOnProgress?.({
+            stage: 'gap-watchdog',
+            status: 'error',
+            level: 'error',
+            message: `🚨 ${err.message}`,
+          });
+        } catch {
+          /* 进度通道已死时静默 */
+        }
+      },
+    });
+    watchdog.touch('execute 入口');
+    try {
+      const corePromise = this._executeCore({
+        ...params,
+        onProgress: wrapOnProgressWithTouch(baseOnProgress, watchdog),
+      });
+      return await Promise.race([corePromise, watchdog.promise]);
+    } finally {
+      watchdog.stop();
+    }
+  }
+
+  async _executeCore(params) {
     const {
       layoutStructure,
       visualElements,
@@ -6990,11 +7265,14 @@ export class MicrocodeEngineer extends BaseAgent {
     const subPlan = resolveSubComponentPlan(generationInput, subComponentPlan);
     // 🛡️ G14b（2026-11-04）：execute 路径同源留痕（与 generateCode 同一事实源，计数行 0 也打）
     const _dedupeRemovedExec = [];
+    // 🛡️ G14a（2026-11-05）：execute 路径同源计数（0 也打）
+    const _dedupeStatsExec = { nestedExempt: 0 };
     const effectiveSections =
-      dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemovedExec) || [];
+      dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemovedExec, '', _dedupeStatsExec) || [];
     this.logger.info('🛡️ G14b 段去重留痕（execute）', {
       kept: effectiveSections.length,
       dropped: _dedupeRemovedExec.length,
+      nestedExempt: _dedupeStatsExec.nestedExempt,
       items: _dedupeRemovedExec,
     });
     if (useGenerationInput) {
@@ -7528,7 +7806,16 @@ export class MicrocodeEngineer extends BaseAgent {
         //   刀 2 —— echarts 挂载容器 == 组件根元素时插入内层 wrapper。**必须在 elMatch 之前**：
         //          改写后 chartCls 解析到内层 canvas class，T2 的 min-height 才会落在内层容器上。
         //   刀 1 —— 本循环收尾后，把 index.vue 里图表组件标签的 inline `min-height:0` 剥掉。
+        // 🛡️ 刀C（P3，2026-11-05 · c-env-monitor-c324a730 实锤）：本循环内 min-height
+        //   兜底值必须经 resolveChartMinHeightTruth 真值封顶（160 > 段 145 恒溢出）。
+        //   统计行在循环尾恒打（0 也打）。
         const _chartTagNames = [];
+        const _chartMinHeightTruthStats = {
+          evaluated: 0,
+          byChartBox: 0,
+          bySection: 0,
+          clamped: 0,
+        };
         for (const [fp, fc0] of Object.entries(codeResult.files || {})) {
           if (
             !fp.endsWith('.vue') ||
@@ -7562,10 +7849,47 @@ export class MicrocodeEngineer extends BaseAgent {
           if (!elMatch) continue;
           const chartCls = elMatch[1].trim().split(/\s+/)[0];
           const chartsForHeight = Array.isArray(charts) ? charts : [];
-          const minHeight = _inferChartMinHeightPure(chartCls, '', {
+          let minHeight = _inferChartMinHeightPure(chartCls, '', {
             chartType: chartsForHeight[0]?.type,
             chartRole: chartsForHeight[0]?.role,
           });
+          // 🛡️ 刀C（P3，2026-11-05 · c-env-monitor-c324a730 实锤）：真值封顶。
+          //   兜底 160/100 是纯类名分级、零真值 ⇒ 下限高于容器必溢出（段 145 / 图表盒 113
+          //   vs 兜底 160，实锤溢出 47px）。取值优先级：
+          //   ① 图表盒真值（internalGeometry 非文本最大 h）→ ② 段真值（仅图表是唯一子项时
+          //   直接取用）→ ③ 旧兜底；且终值恒 ≤ 段真值（clamp）。缺真值 fail-open 不劣化。
+          {
+            _chartMinHeightTruthStats.evaluated += 1;
+            const _truth = resolveChartMinHeightTruth(
+              effectiveSections,
+              chartsForHeight[0]?.section,
+            );
+            if (_truth.chartBoxH > 0) {
+              _chartMinHeightTruthStats.byChartBox += 1;
+              if (minHeight > _truth.chartBoxH) {
+                minHeight = _truth.chartBoxH;
+                this.logger.info(
+                  `🎯 [mc] 图表 min-height 按图表盒真值取值: .${chartCls} → ${minHeight}px（兜底值超真值，已封顶）`,
+                );
+              }
+            } else if (_truth.sectionH > 0 && _truth.isOnlyChild) {
+              _chartMinHeightTruthStats.bySection += 1;
+              if (minHeight > _truth.sectionH) {
+                minHeight = Math.round(_truth.sectionH);
+                this.logger.info(
+                  `🎯 [mc] 图表 min-height 按段真值取值: .${chartCls} → ${minHeight}px（图表是段唯一子项）`,
+                );
+              }
+            }
+            // clamp 上限：无论走哪档，终值不得超段真值（缺段真值时跳过）
+            if (_truth.sectionH > 0 && minHeight > _truth.sectionH) {
+              minHeight = Math.round(_truth.sectionH);
+              _chartMinHeightTruthStats.clamped += 1;
+              this.logger.info(
+                `🎯 [mc] 图表 min-height 按段真值封顶: .${chartCls} → ${minHeight}px（兜底值超段高，宁小不溢）`,
+              );
+            }
+          }
           // 🛡️ T2-C/T2-D（2026-09-15，收敛到 post-process 单一事实源）：
           // min-height:0 不算保护（LLM 按 chart-standards 示例惯写 min-width:0;min-height:0），
           // 旧守卫当已保护 → 跳过注入，兜底块又建在 @import 后（文件顶部）→ 后置 0 值块
@@ -7598,6 +7922,11 @@ export class MicrocodeEngineer extends BaseAgent {
             }
           }
         }
+        // 🛡️ 刀C 计数行（恒打，0 也打）：evaluated= 参与真值封顶评估的图表容器数；
+        //   byChartBox/bySection= 走①/②档命中；clamped= 兜底超段高被压。全 0 = 无图表单。
+        this.logger.info('🎯 [mc] 图表 min-height 真值封顶评估', {
+          ..._chartMinHeightTruthStats,
+        });
         // 🎯 刀 1（2026-09-29）：装配产物 index.vue 里，图表组件标签上的 inline
         //   `min-height: 0/0px/auto/...` 一律剥除（保留 flex 比例）。
         //   与 T2-D 的 stripZeroMinHeightForClass（.vue style 块 / .less 共享表）**同一 0 值口径**，
@@ -9042,6 +9371,34 @@ export default declareInfo
               distBuildAt,
               writtenAt: Date.now(),
             },
+            // 🛡️ 2026-11-05（mc-max-1793865322699-ef841b68 实锤）：产物完整性**恒写** ——
+            //   原 `artifactIncomplete` 只进返回值：全仓零消费、也不落 meta，真机产物里
+            //   连该字段都没有 ⇒ 空壳产物对外仍表现为完全成功。这里恒写布尔，并条件携带
+            //   空段明细；恢复为完整时显式清除历史残留（同 gateSkipped* 的处置口径）。
+            artifactIncomplete: codeResult.artifactIncomplete === true,
+            ...(Array.isArray(codeResult.emptySections) && codeResult.emptySections.length > 0
+              ? {
+                  emptySections: codeResult.emptySections,
+                  emptySectionsAt: Date.now(),
+                  emptySectionsReason:
+                    'section 组件内容被剥空（二级子组件未生成），背景已剥离（宁留白不出错色）',
+                }
+              : {
+                  ...Object.fromEntries(
+                    ['emptySections', 'emptySectionsAt', 'emptySectionsReason']
+                      .filter((k) => k in prevMeta)
+                      .map((k) => [k, undefined]),
+                  ),
+                }),
+            ...(Number.isFinite(codeResult.danglingRefs) && codeResult.danglingRefs > 0
+              ? { danglingRefs: codeResult.danglingRefs, danglingRefsAt: Date.now() }
+              : {
+                  ...Object.fromEntries(
+                    ['danglingRefs', 'danglingRefsAt']
+                      .filter((k) => k in prevMeta)
+                      .map((k) => [k, undefined]),
+                  ),
+                }),
             ...(degradedFiles.length > 0
               ? {
                   degradedFiles,

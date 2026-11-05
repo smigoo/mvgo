@@ -1,0 +1,477 @@
+{
+  "loop": "TTR",
+  "definition": "Task → Test → Review",
+  "milestone": "LIVE_WORKBENCH__REAL_RECORDING__T030_STILL_BLOCKED",
+  "currentTask": "T-030",
+  "phase": "REVIEW",
+  "iteration": 1,
+  "maxIterations": 50,
+  "advanceGuard": "BLOCKED_BY_EXTERNAL_DEPS",
+  "checks": {
+    "structure": true,
+    "build": true,
+    "devOnly": true,
+    "noEntry": true,
+    "review": true
+  },
+  "completedTasks": [
+    "T-000",
+    "T-020",
+    "T-021",
+    "T-022",
+    "T-023",
+    "T-024",
+    "T-025",
+    "T-026",
+    "T-027"
+  ],
+  "blocked": [
+    {
+      "task": "T-030",
+      "type": "PARTIAL_BLOCKER",
+      "reason": "A 档前端能力 + PRD 符合性修复 + P5 整合输出稿件 + Q-13 四格式导出（md/html/word(doc)/pdf 打印）已全部落地并通过 225 项冒烟与双构建；但对象存储接入、云端 ASR 转写、真实 LID / 说话人分离 / 性别标注、云 LLM 合成、真 docx/pdf 服务端渲染仍依赖云密钥 / 后端上传接口 / SEC-05 协议 / CJK 字体，均未就绪。gate 5/5 通过不等于任务闭环，advance 由 ttr-loop.mjs 的 Blocker 守卫强制拒绝。",
+      "unblockNeeds": [
+        "云 ASR 服务商选型与密钥 (D-01)",
+        "后端音频上传接口 (T-013)",
+        "SEC-05 委托处理协议法务确认"
+      ]
+    }
+  ],
+  "progress": {
+    "T-030": {
+      "done": [
+        "浏览器 getUserMedia 采集",
+        "16k mono 重采样 + 交织下混",
+        "VAD 分段",
+        "16bit PCM WAV 编码",
+        "DSP 纯函数 Node 冒烟 15 项",
+        "CloudAudioAdapter 同构骨架与依赖就绪度",
+        "A1：wav 纯函数解析（8/16/24/32bit、多声道）+ mp3/m4a/aac/ogg/flac 浏览器本地解码",
+        "A2：E-18 语种清单门禁（L1 only，L2=[]）",
+        "S3：draft_schema_v1 运行时校验 + 3 套模板 schema",
+        "S4：9 接口（含 E-09 合成）/ 15 表 / 5 状态机契约固化（未实现服务端）",
+        "S5：field_overlay 编辑保存 / 确认 / 驳回 / 定稿冻结 / md+csv+json 导出（仅已定稿）",
+        "S6：C-1~C-8 可执行评测 + 25 条注入用例真实跑批",
+        "FR-11：导出发布门禁 + CSV 导出",
+        "FR-12：RunVersion 输入指纹 + 版本序号 + 重跑确认 + 历史版本列表",
+        "FR-13：字段级 diff 审计留痕（持久化 / 恢复 / 导出）",
+        "T-047：CloudGenerationAdapter 同构骨架与生成侧就绪度",
+        "PRD v1.1 附录 D RTM 16 行状态回填",
+        "P5：CompositionAdapter 契约 + 本地确定性整合（5 段稿件）+ 云合成骨架 NOT_CONNECTED",
+        "P5：稿件层校验 A-1~A-8 + 输入指纹 / 过期失效 + 三态来源与证据边界",
+        "P5：draft-store.exportArticle 复用 FR-11 发布门禁；页面整合稿件区块（默认 + debug）",
+        "S4：新增 E-09 合成接口契约（8 → 9 接口），OUTPUT_TARGETS 固化稿件落点",
+        "Q-13：mock/export-formats.js 统一导出内容模型 + md/html/word/pdf 四格式渲染",
+        "Q-13：draft-store.getExportPayload() 复用 FR-11 门禁，渲染层二次校验 frozen",
+        "Q-13：index.vue 统一导出区（内容范围 × 4 格式），收敛草稿区/稿件区重复导出按钮",
+        "Q-13：契约层 E-08 / OUTPUT_TARGETS 固化格式、降级路径、跨格式硬约束与生产阻塞项",
+        "PRD v1.1：Q-13 + §14.2 导出格式能力矩阵 + §14.3 变更评估行 + U-14 溯源",
+        "布局：纪要草稿字段列表改为面板内固定上限高度 + Y 滚动（mm-scroll-body），定稿按钮永在滚动区外",
+        "布局：转写稿 / 稿件全文 / 稿件侧栏统一 min(_, _vh) 上限 + overscroll-behavior: contain + scrollbar-gutter: stable",
+        "布局：滚动条跟随主题（scrollbar-color + ::-webkit-scrollbar-thumb），窄屏 1100px 以下按 62vh 放宽",
+        "FR-03 告知同意门禁（mock/consent.js）：fail-closed 不可绕过（force/adminBypass 无效）+ 拒绝优先 + 撤回锁死 + 逐人审计 + startRealRecording/onAudioFile 两处入口前置",
+        "FR-14 留存与生命周期（mock/retention.js）：90 天默认（Q-04 待确认）+ unknown 不自动删 + 到期真删并同步索引 + 审计脱敏 + 导出不含原始音频",
+        "RTM#4 压缩音频解码 Node 侧自动化（mock/audio-file.js）：env 依赖注入 + magic bytes 嗅探 + decodeAudioData 双形态一次调用 + close 不吞主错误 + DOMException 可操作化（49 项断言）",
+        "FR-03 / FR-14 服务端契约形状（contracts/api-contract.js）：E-10~E-18 九接口（implemented 全 false）+ 同意状态机（已撤回不可直接回已通过 / 无死状态）+ 4 张新表（consent_disclosure / consent_record / retention_policy / retention_audit）+ SEC-05/SEC-01/Q-04 三项阻塞依赖 + consentRetentionContractCheck 并入 selfCheckApiContract",
+        "FR-03 / FR-14 契约可见性：debug 契约视图展示同意状态机、合规契约自检结果与 SEC-01 未审定 / Q-04 待确认（保留估算值标注）",
+        "实时记录来源诚实性（真实录制为默认路径）：示例稿推流降为 DEV 专属（下拉 + 按钮均 v-if=debugMode，改标「离线转写稿（DEV）」「推演示例稿（DEV）」）；默认工作台只保留「开始真实录音」入口；实时记录区在非真实内容上显式打「示例稿推演 · 非真实录制」警示标；空态/环境不支持/未登记参会人提示全部指向真实录音而非示例稿",
+        "「录制告知与同意」面板从工作台下线（产品要求）：删除整块 .mm-consent 模板（告知条目 / 逐人表态 / 拒绝撤回 / 待删兜底）+ 全部 consent* 状态与动作 + .mm-consent* 样式 + mock/consent.js 引用；真实录音与音频文件解码不再做同意前置校验（startRealRecording / onAudioFile 直奔环境能力判定与解码）；mock/consent.js 领域逻辑与契约层 consentRetentionContractCheck 保留，debug 契约视图仍展示 FR-03 / FR-14 形状自检",
+        "本地转写失败文案拆细（8 类分类 + 各自可操作提示）：local-asr.js 新增 ASR_FAILURES / describeAsrFailure(error, phase) / describeAsrNoAudio()，按 fetch 网络层（权重下载）/ 加载期无特征（模型资源）/ 模块导入（引擎库）/ wasm·backend（推理环境）/ 内存 / 推理期异常 / 无音频 / 兜底 分类，每类配一条下一步建议并保留原始报错供定位；index.vue 的 runAsrWindow catch 与 flushRealTranscription 无音频分支改走分类器，状态条给分类结论、其下 .mm-live-asr-hint 给下一步；分类只改措辞不改失败判定（失败仍如实显示、不回落示例稿）",
+        "T-030 A 方案（多轨采集，工程化最优）：mock/multi-track-capture.js 451 行纯函数层 + 浏览器采集层分离——createDominanceMixer 逐 20ms 帧取各轨 RMS，能量最大者为主导轨、次大 secondRms；bestRms < silenceRms(0.01) 记静音；secondRms >= bestRms*overlapRatio(0.7)（约 -3dB）标 overlap；换轨迟滞 switchHysteresisMs(60)（连续 3 帧指向新轨才切）；帧归属合成 run 后桥接 < minRunMs(200) 且前后同轨的碎 run；各轨取最短公共长度，差值记 driftSamples；snapshot() 输出 { mixed, runs, trackStats, silenceMs, overlapMs, basis:'device_track', driftSamples }；push 增量只处理新攒够的整帧（非 O(n²)）",
+        "T-030 A 方案页面接线：index.vue 录制链路由单轨 startCapture 全面切到 startMultiTrackCapture（多路 deviceId 共用同一 AudioContext，保证时间轴同源可帧对齐）；增量转写改取 snapshot.mixed（不再是单轨 result.pcm）；逐句归属用 speakerAt(runs, startMs) 覆写 speaker/speakerLabel/speakerDiarized/speakerBasis；停录后用完整 runs 走 applyFinalAttribution 重算全量归属（修正录制中局部快照的末段桥接态），changed 时重算 deriveInsights；单轨（trackCount < 2）、静音帧（trackIndex < 0）或未命中一律不标说话人，交由 Whisper 的「说话人未区分」兜底；未勾选设备时 targets=[''] 走系统默认输入（单轨、不标）",
+        "T-030 A 方案设备选择 UI：mm-live-mic-pick 区块（设备清单 checkbox + 选择摘要 micSelectionText + 刷新按钮 + 录制中各轨实时电平条 levelPct + maxTracks 上限提示 + 未授权时列不出设备名的说明 + micListError 出口）；mm-live-track-stats 展示逐轨 voicedMs / voicedRatio / peakRms 与 silenceMs / overlapMs / driftSamples / basis；单轨时给「本次仅 1 路输入：分不出谁在说」显式警示；liveSpeakerText 在多轨时改述为「N 路设备轨 · 按设备归属（非声纹）」",
+        "T-030 A 方案合规边界：归属依据硬写 basis/speakerBasis = 'device_track'，不产生、不留存任何声纹 embedding（与 audio-adapter.js 硬约束一致）；页面文案明示「依据是设备轨（哪只麦能量占主导），不是声纹分离」；live-session.js toSessionUtterance 透传 speakerDiarized / speakerBasis 两个字段供页面区分归属依据",
+        "转写空态成因分流（「没有语音内容」按真值分四支）：index.vue 新增 asrErrorCode（失败分类 code，四处同步写入） + liveEmptyCase / liveEmptyInfo 判别器（engine / noAudio / silent / noText，有失败优先于「没语音」，noAudio 从故障里摘出） + 实时记录面板与总结面板空态接入成因文案（故障态 --mm-warn 明示是故障；真没语音按时长分档给下一步） + 「正在转写」收紧为仅录制时说；纯文案分支，不改失败判定、不回落示例稿"
+      ],
+      "pending": [
+        "对象存储接入",
+        "云端 ASR 转写",
+        "真实 LID / 说话人分离 / 性别标注（注：T-030 多轨采集已能做「按设备轨」归属，可回答「哪只麦在说」，但不等于声纹分离——换麦、串音、单人跨麦场景仍无法归一，声纹方案未做）",
+        "生产态 DB + 对象存储持久化（契约已定义，未实现、未部署）",
+        "T-038 生成侧 cloud 真实输出结构契约测试（需云密钥）",
+        "P5 云 LLM 合成接入（D-01 / COM-01 / COM-02 三项未就绪；当前为本地确定性整合）",
+        "Q-13 生产态真 .docx（OOXML）与自动下载 .pdf：docx 库 / CJK 字体授权 / PDF 渲染服务未就绪",
+        "Q-13 E-08 服务端导出接口 + 模板版本管理（契约已定义，implemented=false）",
+        "PRD v1.1 §14.2 Q-12：整合稿件是否纳入 FR 基线（待需求方拍板）",
+        "PRD v1.1 §14.2 Q-13：导出格式是否纳入 FR 基线、Word/PDF 原生文件是否为硬要求（待需求方拍板）",
+        "FR-03 / FR-14 服务端落地：E-10~E-18 接口实现 + 权限矩阵 + 服务端留存清理定时任务 + SEC-01 告知文案法务审定 + Q-04 留存天数拍板（dev 侧规则层、门禁与契约形状均已完成）"
+      ],
+      "note": "不执行 advance：外部依赖 Blocker 未解除，避免把「前端验证通过」虚报为「任务完成」"
+    },
+    "A_TIER": {
+      "done": [
+        "A1 文件格式归一化",
+        "A2 语种清单门禁",
+        "S3 契约层",
+        "S4 后端契约固化",
+        "S5 人工确认闭环（编辑保存）",
+        "S6 评测集"
+      ],
+      "notDone": [
+        "C 档：云 ASR 密钥 / 后端上传接口 / SEC-05 法务协议（外部依赖，不自行执行）",
+        "D 档：灰度上线 / 部署 / git commit / push（需用户明确确认）",
+        "B 档：Q-07/Q-08/Q-09 默认假设是否推翻、Q-04 留存期限、Q-05 基线、Q-06 评测规模（待用户拍板）"
+      ]
+    },
+    "PRD_COMPLIANCE_FIX": {
+      "trigger": "按 PRD v1.1 条款与 WBS DoD 逐条核对 A 档实现，发现 6 处不一致",
+      "fixed": [
+        "FR-11 草稿态可导出 → 三种导出统一发布门禁，抛 EXPORT_NOT_PUBLISHED",
+        "FR-12 RunVersion 固定 → 输入指纹 + 序号，重跑新建版本且旧 overlay 不覆盖",
+        "FR-13 无字段级 diff → state.audit 全操作留痕并随导出与持久化",
+        "T-047 生成侧云适配器缺位 → cloud-generation-adapter.js 同构骨架",
+        "FR-11 缺 CSV → exportCsv 含来源标注 / 证据引用 / 内部使用声明",
+        "RTM 16 行全「待开发」→ 按 dev 态真实程度回填状态 + 脚注"
+      ],
+      "scopeNote": "只修实现使其回到已定验收口径，未改动任何 FR 条款、验收口径与需求范围",
+      "verified": "fr-11 6 项 / fr-12 8 项 / fr-13 7 项 / t-047 5 项，全部 PASS"
+    },
+    "P5_COMPOSITION": {
+      "trigger": "需求方追加：草稿预览后应整合会议内容，用 AI 合成一个输出稿件",
+      "delivered": [
+        "mock/composition-adapter.js：CompositionAdapter 契约 / localCompositionAdapter / cloudCompositionAdapter 骨架",
+        "article_schema_v1：会议概况 / 核心内容 / 发言与证据索引 / 待确认事项 / 来源与边界说明 5 段",
+        "validateArticle A-1~A-8：三态来源、结论来源边界、证据可追溯、注入痕迹、未确认显式、markdown 一致性",
+        "buildCompositionFingerprint + isCompositionCurrent：人工 overlay 变更后旧稿件自动过期，禁止复制 / 导出",
+        "draft-store.exportArticle：复用 assertPublished，草稿态 EXPORT_NOT_PUBLISHED / 空稿件 ARTICLE_EMPTY",
+        "index.vue P5 整行区块：全文预览 / 来源与证据统计 / 重新整合 / 定稿后复制与导出；debug 显示 A-1~A-8、云就绪度、稿件指纹",
+        "contracts/api-contract.js：E-09 POST /api/meeting/runs/:id/compose（implemented=false）+ dev/production composition 落点",
+        "composition 冒烟 30 项：三份 fixture、确定性、overlay、过期、注入抑制、云骨架、发布门禁全部 PASS"
+      ],
+      "boundary": "云 LLM 密钥 / JSON mode 输出约束 / 合成后校验均未就绪；本地为规则式确定性整合，不宣称 AI 已生成，不伪造云合成结果。该能力未写入 PRD FR 基线（Q-12 待拍板）。",
+      "verified": "composition 30/30 PASS；A-1~A-8 8/8；总计 198/198 PASS；双构建 + SFC 167 bindings 通过"
+    },
+    "Q13_EXPORT": {
+      "trigger": "需求方追加（U-14）：会议智能纪要内容最终要支持导出，可选 md / word / pdf / html",
+      "routing": "范围扩大类变更 → PRD §14.2 Q-13 + §14.3 变更评估行 + 依赖三档 + RK-14~17 + GWT 验收口径；未改既有 FR 条款",
+      "delivered": [
+        "mock/export-formats.js：EXPORT_FORMATS / EXPORT_SCOPES + 统一内容模型 + md/html/word/pdf 渲染 + HTML 转义 + 单文件内联样式",
+        "draft-store.getExportPayload()：所有格式唯一数据入口，复用 assertPublished，渲染层二次校验 frozen",
+        "index.vue：统一「导出」区（3 种内容范围 × 4 格式卡片）；草稿区与稿件区重复导出按钮收敛，CSV/JSON 仅 debug 保留",
+        "pdf：iframe 打印预览另存，mode=browser_print / filename=null，不谎称生成 .pdf 文件",
+        "word：Word 兼容 HTML .doc + mso 命名空间，明确非 OOXML .docx",
+        "contracts/api-contract.js：E-08 口径、dev degraded / hardConstraints、production blockers",
+        "export-formats 冒烟 27 项：4 格式、3 范围、门禁、转义、确定性、契约固化全部 PASS"
+      ],
+      "boundary": "真 .docx 与自动 .pdf 属生产态阻塞依赖（docx 库 / CJK 字体 / 渲染服务）；dev 走降级路径且 UI 明示。Q-13 是否纳入 FR 基线待需求方拍板。",
+      "verified": "225/225 PASS；SFC 177 bindings；production 日志产物 253 个命中 0 / development 255 个命中 1"
+    },
+    "LAYOUT_SCROLL": {
+      "trigger": "需求方反馈：会议纪要内容无限增高、页面被撑长，需要有 Y 滚动条",
+      "problem": "纪要草稿字段按模板字段数量线性撑高，稿件全文与逐句证据列表同样无上限；长会（字段多 / 发言多）下整页被顶到上万 px，定稿按钮被推到屏幕外，需要长距离滚动才能操作",
+      "delivered": [
+        "模板：纪要草稿字段列表包入 .mm-scroll-body，前置 .mm-scroll-bar 说明条（N 项草稿内容 / 区域内滚动查看）",
+        "模板：编辑与定稿区 .mm-store 与定稿按钮移到滚动容器之外，字段怎么滚都可见",
+        "样式：.mm-scroll-body max-height min(56vh, 540px) + overflow-y auto + overscroll-behavior contain + scrollbar-gutter stable",
+        "样式：.mm-scroll / .mm-ev-table / .mm-article / .mm-article-side 同步改为 min(_, _vh) 上限，替换原固定 px",
+        "样式：主题化滚动条（scrollbar-width thin / scrollbar-color / ::-webkit-scrollbar-thumb），浅深色均不吃系统默认亮条",
+        "样式：@media (max-width: 1100px) 内滚动上限统一放宽到 62vh，窄屏按视口比例适配"
+      ],
+      "designNote": "用 vh 比例而非固定 px：1080p 与笔记本小屏都不会占满首屏；overscroll-behavior: contain 防滚到底带动外层页面；scrollbar-gutter: stable 防出现滚动条时宽度跳动导致卡片重排",
+      "verified": "冒烟 layout-scroll 5/5 PASS（容器包裹 / max-height+overflow-y / 主题滚动条 / 定稿区在滚动外 / 稿件与转写稿有上限）；SFC 177 bindings；总计 230/230 PASS"
+    },
+    "LIVE_WORKBENCH": {
+      "trigger": "需求方给出参考界面：分项目 / 主题，中间实时记录 + 人工记录，再往下 AI 分析，最下面输出总结",
+      "problem": "原默认工作台只有一段逐句推流演示，没有「项目 / 主题 → 实时记录 → AI 分析 → 会议总结」的分段结构；人工记录与 AI 抽取混在一起，看不出哪些是人写的、哪些是机器抽的",
+      "delivered": [
+        "版式四段重排：项目 / 主题 + 会议类型 + 实时时钟 → 实时记录（推流 + 人工记录入口）→ AI 分析（逐项字段与证据）→ 会议总结（生成 / 合成稿件 / 定稿 / 导出）",
+        "实时记录区：示例会议选择、开始 / 暂停 / 结束并生成总结、进度 N/M 句；人工记录按 kind 分类打标（不参与 AI 抽取，显式声明）",
+        "会议总结侧栏 mm-live-summary-side 收纳生成 / 合成 / 复制 / 定稿 / 保存 / 载入 + 逐项确认修订折叠区 + 导出区",
+        "视图分层：默认只显示实际使用的工作台；?debug=1 才展开 43 处开发视图（状态条 / runbar / 契约 / 审计 / 指纹等）",
+        "主题：默认浅色 + prefers-color-scheme: dark 自动切深色，全部复用 --mm-* 变量"
+      ],
+      "verified": "冒烟 workbench-layout 组 PASS；默认视图导出说明已去掉技术词；双构建 devOnly gate 通过"
+    },
+    "REAL_RECORDING": {
+      "trigger": "需求方追加：检查现在是否可以录制，要真实数据记录",
+      "problem": "真实麦克风录音此前只存在于 ?debug=1 的「现场录音」区块（beginCapture / endCapture），默认工作台没有入口；默认工作台此前只有对示例转写稿的逐句推流演示，看起来像能录、实际不能",
+      "delivered": [
+        "index.vue 新增录音状态机 recState（idle / recording / done / error / unsupported）+ recResult / recElapsedMs / recLevel / recWavUrl",
+        "startRealRecording()：先 await startCapture({ onLevel }) 拿真实麦克风流（getUserMedia + AudioContext.createScriptProcessor(4096) + 0 增益节点防啸叫），再 beginLive()",
+        "T-030 起 startRealRecording() 改调 startMultiTrackCapture({ deviceIds, labels, onLevel })：一人一麦各采一轨、共用同一 AudioContext，按帧取能量主导那一路合成 1 路（时间轴不变 ⇒ 增量转写 / 重叠去重 / 证据回跳全部复用）；失败时 refreshAudioInputs() 让用户改选设备",
+        "T-030 起 stopRealRecording() 改走 stopMultiTrackCapture(handle) → applyFinalAttribution(result)（用完整 runs 重算全量句归属）→ recState='done'",
+        "stopRealRecording()：stopCapture(handle) → normalizeAudio 归一化 16k mono + VAD 分段，产出真实 durationMs / sourceRate / wav / segments，并生成 blob URL 供下载",
+        "resetRealRecording()：释放 blob、停采集、复位状态；onBeforeUnmount 一并清理，离开页面不会留着麦克风",
+        "beginLive() 改为返回布尔：用户在「重开确认」点取消时 startRealRecording 用 if (!beginLive()) 回滚已打开的麦克风，不留半截录音",
+        "liveClock 在录音中显示真实采集时长（recElapsedMs），否则回落演示推流计时；resetLiveStream 录音中不把时长归零",
+        "模板 mm-live-rec-bar：状态灯 + 状态文案 + 真实时长 + 真实电平条 + 电平百分比 + 开始录音 / 停止录音并生成总结 / 保存音频 WAV；附 unsupported 提示、recError 出口、mm-live-rec-stats 真实数据统计",
+        "样式 .mm-live-rec-bar 全套（is-recording 脉冲动画 / 电平条 / is-done / is-error / is-unsupported 状态色）+ .mm-live-rec-stats",
+        "模板 mm-live-mic-pick 设备选择区（勾选设备 / 选择摘要 / 刷新 / 录制中各轨实时电平条 / maxTracks 上限提示 / 未授权时设备名不可见的说明）+ mm-live-track-stats 逐轨统计（voicedMs / voicedRatio / peakRms / silenceMs / overlapMs / driftSamples / basis）+ 单轨警示「本次仅 1 路输入：分不出谁在说」"
+      ],
+      "boundary": "录音只做本地多轨麦克风真实采集与能量主导合成：产出真实时长 / 真实电平 / 各轨归属 runs / 16k mono PCM / 可下载 WAV。不上传、不落库、不调云 ASR；页面明示「云端 ASR 未接入，逐句文字仍来自本机离线 Whisper」，不得暗示「录音已转写」。说话人标注依据只能是「设备轨」（哪只麦能量占主导），不是声纹分离——单轨、抢话或未命中一律如实标「说话人未区分」，不编造说话人编号。",
+      "verified": "冒烟 real-recording 15/15 PASS（录音条在默认工作台且不在 debug 分支 / 真调多轨采集链路 / 录音段内不残留单轨调用 / 数据取自 recResult / blob 与句柄回收 / 录音段无 fetch 云调用 / 增量取按轨快照 / 取消回滚 / ASR 未接入声明 / 不宣称已转写 / 只存本地 / unsupported 提示 / recError 出口）；multi-track 16 项 + multi-track-wiring 10 项 PASS；SFC 351 bindings 0 错误；build:safe 28.76s PASS"
+    },
+    "SUMMARY_SOURCE": {
+      "trigger": "需求方反馈：会议总结依旧是硬编码",
+      "rootCause": "生成器不是硬编码（generation-adapter.js 是规则抽取，抽不到就 value=null + note 待人工确认；constraint-composer.js 在 0 句时 context='' 不抛错）。硬编码来自「喂进去的是示例 fixture」：① run.js 的 useLive = Boolean(liveUtterances && liveUtterances.length)，真实会议一句都没转出来时判定为「没有真实内容」，静默回落示例 fixture，规则抽取就在演示文案（联调/压测/里程碑…）上匹配成功；② index.vue 总结面板「生成总结 / 重新生成总结」按钮 @click=\"startRun\" 不传参数，恒走示例稿路径（isRealLive 已可用但没被这个入口使用）。",
+      "fixed": [
+        "run.js：useLive 改为看「调用方是否显式传入数组」而非长度 —— 传了 [] 也算真实转写，ctx.source='local_whisper'、fixture 换 _live 版本、expected 清空，0 句就是 0 句",
+        "run.js：ctx.source / effectiveFixture.label / 创建日志「来源=…」全部跟随新判定，0 句也标「本地 Whisper 真实转写」",
+        "index.vue 新增 generateSummary()：真实场次传 [...live.utterances] 快照 + realAudioFacts()，示例场次才走 startRun()；仍在记录/暂停时直接返回（该走「结束会议」以 flush 尾段转写）",
+        "index.vue：总结面板按钮改绑 generateSummary，disabled 收紧为 running || live.status !== 'finished'（没结束/没内容时不给出「点了就有总结」的错觉，空态文案已写明要先结束记录）",
+        "index.vue：runMode 判定同步改为 Array.isArray(utterances)，0 句仍显示「标准链路 · 本地转写」",
+        "local-asr.js：ORT_WASM_BASE 改 import.meta.env?.BASE_URL ?? '/'，修掉纯 Node 下 import.meta.env 为 undefined 导致整份冒烟脚本崩掉的回归"
+      ],
+      "verified": "mock-smoke 新增 summary-source 组 13 项 PASS（0 句仍归 local_whisper / _live fixture / expected 清空 / 全阶段 done / 字段值全 null / 值里无演示文案 / 示例稿路径仍能抽出演示文案作对照 / 页面接线 4 项）；总计 547/547 PASS；SFC 352 bindings 0 错误；build:safe 30.81s PASS；产物路径固化为 /mvgo/static/wasm/，无 import.meta.env 残留",
+      "boundary": "修复后真实会议若一句都没转出来，总结会如实呈现「未确认，待人工核实」而不是演示文案 —— 这是正确行为，但内容仍需本地 Whisper 转写跑通才有；见 ORT_SELF_HOST.wall3。"
+    },
+    "ORT_SELF_HOST": {
+      "trigger": "方案 C：同时打通「模型权重下载」与「推理内核加载」两堵墙",
+      "wall1": "墙 1 = hf-mirror.com 前置 Cloudflare Referer 防盗链：浏览器跨域 fetch 自动带 Referer，服务端返 200 但剥离 Access-Control-Allow-Origin → CORS 失败。已在 local-asr.js 用 installReferrerFreeFetch() 对 hf-mirror.com / huggingface.co / hf.co 补 referrerPolicy:'no-referrer'（import 库之前装，避免库缓存 fetch 引用）。",
+      "wall2": "墙 2 = transformers.web.js 在 !wasmPaths 时硬编码 jsdelivr CDN，境内 ERR_CONNECTION_RESET。已自托管：vite.config.js 的 ort-wasm-self-host 插件（dev 中间件 + writeBundle 拷贝），local-asr.js 覆写 env.backends.onnx.wasm.wasmPaths。",
+      "wall123Status": {
+        "wall1": "已通（页面内无 CORS 报错，模型加载进度跑到 53707539/53707539）",
+        "wall2": "已通（产物 /mvgo/static/wasm/ 下 asyncify.mjs + asyncify.wasm 齐全，.mjs=text/javascript、.wasm=application/wasm 均 200；页面无 jsdelivr 连接重置、无 no available backend）",
+        "wall3": "未解决（阻塞推理）"
+      },
+      "wall3": "ort-wasm-simd-threaded.asyncify.wasm 是多线程构建；页面无 SharedArrayBuffer（实测 sab=undefined、crossOriginIsolated=false、12 核）时 ORT 不退回单线程，而是死等 pthread 池 → transcribe 永不返回、主线程被同步占死。已试无效：numThreads=1；proxy=true+numThreads=1+useWasmCache=false（load 成功进入「已就绪」，transcribe 仍不返回）。可能方向：① dev/build 加 COOP+COEP 让页面 crossOriginIsolated=true（会影响第三方资源的 CORP，属全局行为变更，需授权）；② 换单线程 wasm 构建产物。",
+      "honest": "不得宣称「本地转写已跑通」：加载链路（墙1+墙2）通了，推理链路（墙3）没通。"
+    },
+    "EMPTY_REASON": {
+      "trigger": "需求方提问：如果没有语音内容怎么办",
+      "problem": "「没有语音内容」表面都是「0 句」，实际是性质完全不同的多种成因，混成一句「暂无内容」会出两类事故：① 把**故障**说成会议室太安静（引擎挂了 / 麦克风没采到音频，却告诉用户「本次没检测到语音」）；② 把**真实结论**说成故障（这段音频确实没人说话，却被当成系统出错）。此外「正在用本机离线模型转写麦克风音频」这句在「已结束录制」后仍会显示，是假状态。",
+      "rootCause": "① asrError 只存了失败文案、没存分类 code，页面无法判别「引擎/资源不可用」还是「真的没语音」；② 总结面板空态此前完全不看转写成败（只判断 fileResult），失败只在录音区状态条可见；③ 实时记录面板空态用一句「正在转写」覆盖了录制中/已结束/已失败三种状态。",
+      "fixed": [
+        "index.vue：新增 asrErrorCode（失败分类 code），在 runAsrWindow 成功/失败、flushRealTranscription、resetAsrState 四处同步写入 —— 只存文案判别不了故障",
+        "index.vue：新增 liveEmptyCase 判别器，只依据两个真值（asrErrorCode + recResult.segments.length）分出 engine / noAudio / silent / noText；有失败优先于「没语音」，引擎没跑起来时不给「没人说话」下结论的机会",
+        "index.vue：新增 liveEmptyInfo 文案计算，四种成因各给独立的标题 + 下一步，真没语音再按录音时长分两档（时长≥3s 却全程静音 = 优先查输入设备；<3s = 有效时长太短）",
+        "index.vue：实时记录面板空态接入成因文案，「正在转写」收紧为仅在 live.status === 'recording' 时说（录完了再说这句就是假状态）",
+        "index.vue：总结面板空态接入成因文案，并明示「仍可生成总结 → 会得到字段全空的草稿，逐项标未确认待人工核实，不会拿示例稿顶替」",
+        "index.vue：新增 .mm-empty-title / .mm-empty-next 样式，故障态用主题变量 --mm-warn（不硬编颜色，浅深色均生效）"
+      ],
+      "scope": "纯前端文案与判别分支，未改转写逻辑、未改失败判定口径、未动响应头、未新增依赖；示例稿（fixture）路径文案不受影响。",
+      "verified": "mock-smoke 新增 empty-reason 组 25 项 PASS（失败分类真跑：noAudio / engine×2 / weights / memory 的 code 逐一断言；asrErrorCode 三处写入；判别顺序与 noAudio 摘除；四种成因文案独立；两块面板接线；「正在转写」仅录制时；成因块内无示例稿兜底；样式类走主题变量）；总计 572/572 PASS；SFC 355 bindings / template errors 0 / _ctx.* 0 / script 未定义 无；build:safe 33.95s PASS；产物中 4 条新文案与 mm-empty-title 均已命中",
+      "boundary": "本次只解决「怎么说」，不解决「能不能转写」：墙 3（threaded wasm 无 SharedArrayBuffer 死锁）未解决，本地转写仍跑不出句子。因此当前最可能看到的是 engine 那一支文案（如实报故障），而 silent / noText 两支是给「转写跑通之后」准备的真实结论出口——不得据此宣称转写已可用。"
+    }
+  },
+  "lastReview": {
+    "mockSmoke": "572/572 PASS（547 原有 + empty-reason 25 项新增：失败分类真跑 code 逐一断言（noAudio / engine×2 / weights / memory）/ asrErrorCode 三处写入 / 判别顺序与 noAudio 摘除 / silent 与 noText 二分 / 四种成因文案独立 / 两块面板接线 / 「正在转写」仅在录制时出现 / 成因块内无示例稿兜底 / 样式类走主题变量）",
+    "evalSuite": "C-1~C-8 8/8 PASS；注入用例 25/25；攻击命中 17/17；良性误伤 0；稿件层 A-1~A-8 8/8",
+    "exportFormats": "md / html / word(.doc) / pdf(打印) 四格式 + 3 内容范围全通过；默认工作台 mm-live-summary-side 内即可导出（不依赖 ?debug=1）；跨格式声明/来源/证据/版本/审计不丢失；HTML 单文件无外链无脚本；<script> 字段值被转义；PDF filename=null",
+    "productionBuild": "PASS · npm run build:safe（vite build --mode production --emptyOutDir false）· 33.95s",
+    "developmentBuild": "PASS · vite build --mode development --outDir dist-dev2 · 34.57s · 干净目录 static/ 下 mm-live-stream=2 / MeetingDev=1 / 会议纪要开发工作台=1 / mm-live-rec-bar=2",
+    "devOnly": "用干净输出目录（--outDir）复核，避免 --emptyOutDir false 保留旧 development chunk 造成 dist/ 污染；判定按内容特征而非文件名（异步 chunk 名为 index-<hash>，不含 meeting 字样）",
+    "noEntry": "router/index.js 仅新增 import + spread + 注释共 4 行（当前已在仓库基线中，diff 为空），符号核验 meetingRoute 出现在第 4 / 28 行；未碰任何菜单/导航",
+    "theme": "默认浅色 + prefers-color-scheme: dark 自动切深色；P5 / Q-13 / 实时工作台 / 真实录音新增面板全部复用 --mm-* 变量，导出 HTML 单文件自带打印样式与主题跟随",
+    "sfc": "vue/compiler-sfc parse + compileScript + compileTemplate 全通过（355 bindings / template errors 0 / _ctx.* 命中 0 / 模板引用新增符号 38-43 / script 未定义 无）；脚本固化在 .dev-loop/sfc-check.mjs",
+    "outputLocation": "dev 态 → localStorage mvgo.meeting.draft.<runVersion> + 索引 + 冻结 snapshot + audit；导出文件 → 浏览器下载目录 meeting-draft-<runVersion>.md/.html/.doc/.csv/.json/-article.md（仅已定稿）；PDF 走打印另存、不落文件；整合稿件为内存态；**真实录音 WAV → 内存 blob + 浏览器下载目录 meeting-recording-<时间戳>.wav，不上传不落库**；生产态 → DB field_overlay + E-08/E-09 接口（契约已定义，未实现）",
+    "compliance": "FR-11 / FR-12 / FR-13 口径对齐；四格式导出复用 FR-11 双重门禁；PRD v1.1 附录 D RTM 与 Q-12/Q-13 追加说明已回填；advance 实测被 Blocker 守卫拒绝（exit=1）",
+    "viewLayer": "默认只显示实际使用的工作台；?debug=1 展开全部开发视图；43 处 v-if=debugMode，P5 与 Q-13 新增开发态文案逐行核验全部在 debug 分支内；默认视图导出说明已去掉技术词",
+    "composition": "P5 整合稿件已落地：本地确定性整合 + 云合成骨架；云 LLM 密钥未就绪时不宣称 AI 已生成；Q-12 是否纳入 FR 基线待需求方拍板",
+    "q13": "四格式导出已落地 dev 降级路径；Word 为兼容 .doc 非 OOXML、PDF 为打印另存非 .pdf 文件，UI 明示；真 docx/pdf 与 Q-13 是否纳入 FR 基线待拍板",
+    "realRecording": "默认工作台只有一条录制路径：真实麦克风「开始真实录音」（getUserMedia 采集 + 16k mono 归一化 + VAD 分段 + 可下载 WAV，只存本地、不上传）→ 本机离线 Whisper 逐句转写进「实时记录」；示例稿推流已降为 ?debug=1 专属并标 DEV，默认工作台不再露出「开始记录（示例稿）」按钮与示例稿下拉；非真实内容一律带「示例稿推演 · 非真实录制」警示标，不冒充真实录制",
+    "t030": "前端 A 档 + 符合性修复 + P5 + Q-13 + 实时工作台 + 真实录音已闭合；云端 3 项 Blocker 与导出渲染依赖未就绪，adapter_mode=mock",
+    "layout": "纪要草稿 / 转写稿 / 稿件全文 / 稿件侧栏全部改为面板内固定上限 + Y 滚动；定稿按钮在滚动区外始终可见；滚动条跟随主题；长会不再把整页顶长",
+    "audioDecode": "格式嗅探 5 种容器 + 扩展名不符提示 + Promise/callback 双形态（各只调一次）+ 空值/超时/无 ctx 三类兜底 + close 失败不顶掉主错误 + Safari 仅回调链路端到端 + 页面仍走默认 env",
+    "consentRetentionContract": "FR-03 / FR-14 服务端契约形状已固化：E-10~E-18 九接口（consent 5 + retention 4，implemented 全 false）+ 同意状态机 5 态（已撤回不可直接回已通过、未发起不可直达已通过、无死状态）+ 19 张表（新增 consent_disclosure / consent_record / retention_policy / retention_audit，删除审计与常规审计分表）+ 5 项阻塞依赖（新增 SEC-01 告知文案法务审定、Q-04 留存天数待确认）；consentRetentionContractCheck 已并入 selfCheckApiContract，避免两套真相；debug 契约视图展示状态机与自检结果；E-02 明示服务端须二次校验同意门禁、E-08 明示不得含原始音频",
+    "contractScope": "仅固化接口 / 状态机 / 数据落点 / 依赖就绪度，未实现服务端、未起服务、未连数据库、未部署；implemented 全为 false，不得对外宣称后端已接通",
+    "liveSourceHonesty": "「实时记录」内容来源只有两种，且必须自证：mic = 本机麦克风 + 离线 Whisper（标「本机离线转写 · 音频不出本机」）；fixture = DEV 示例稿推演（标「示例稿推演 · 非真实录制」）。失败出口（环境不支持 / 采集异常 / 转写失败按分类细分）都不回落示例稿，且提示均指向真实录音路径。FR-03 告知同意门禁已下线（见 consentPanelRemoved）",
+    "asrFailureTaxonomy": "本地转写失败文案按「哪一步挂了」拆成 8 类（mock/local-asr.js 的 ASR_FAILURES + describeAsrFailure / describeAsrNoAudio），每类一条可操作提示，原始报错只作定位不替代人话结论：weights 模型权重下载失败（fetch 网络层失败，提示查 hf-mirror.com 连通性）/ assets 模型资源加载失败（加载期无特征）/ lib 转写引擎加载失败（模块导入）/ engine 离线推理环境不可用（wasm / backend 未就绪）/ memory 本地内存不足（含 wasm memory 越界）/ runtime 本地推理失败（推理期异常）/ noAudio 没有采到可转写的音频 / unknown 兜底。页面：状态条给分类结论（asrError），其下 mm-live-asr-hint 给下一步（asrErrorHint）。边界：分类只改提示措辞，不改失败判定，失败仍如实显示、绝不回落示例稿；防误命中（'oom' 裸子串会把 'boom' 判成内存不足，已改为完整短语）",
+    "consentPanelRemoved": "「录制告知与同意」面板按要求从工作台移除：.mm-consent 模板块、consent* 状态与动作、.mm-consent* 样式、mock/consent.js 引用全部删除；真实录音（startRealRecording）与音频文件解码（onAudioFile）不再有同意前置校验，空态与失败提示同步去掉「需先完成录制告知与同意」；mock/consent.js 领域逻辑、E-10~E-18 契约与 consentRetentionContractCheck 保留（debug 契约视图仍显示 FR-03 / FR-14 自检）。边界：本页不再承担采前告知同意校验",
+    "externalDependencyMatrix": {
+      "summary": "四份依赖表共 15 条记录、去重后 10 项独立依赖（阻塞 9 + 并行 1）。本地四条链路都能跑通，但跑的是离线 fixture / 规则式抽取 / 本机 Whisper / 确定性整合 —— 没有任何一条接云，也没有任何一条连到服务端。本地实现的价值不是替代云，而是把契约、字段集、校验与门禁先跑通：切云时只换 adapter，页面与门禁不动。",
+      "dedupe": "15 条记录 = 10 项独立依赖：D-01 在音频 / 生成 / 合成 / 后端四张表各记一次，T-013 与 SEC-05 在音频与后端各记一次，重复 5 条（15-5=10）。D-01 在四处指的是同一件事（服务商选型 + 密钥），谈排期时按 1 项算，别被 4 次出现放大成 4 个阻塞。",
+      "groups": [
+        {
+          "domain": "音频链路（归一化 / LID / 说话人分离 / 转写 / 性别）",
+          "source": "mock/cloud-audio-adapter.js · CLOUD_DEPENDENCIES（4 条）+ CONTRACT_METHODS",
+          "readiness": "cloudReadiness()：只统计 level==='阻塞' 且未就绪的项，缺口清空才返回 adapterMode='cloud'，否则 'mock' —— 四组里唯一按条件切换的一处",
+          "local": {
+            "adapter": "mockAudioAdapter（mock/audio-adapter.js）+ localAsr（mock/local-asr.js）",
+            "adapterMode": "offline_fixture；本地转写结果另标 source='local_whisper'",
+            "methods": [
+              "normalize",
+              "detectLanguage",
+              "diarize",
+              "transcribe",
+              "classifyGender"
+            ],
+            "capability": "五个方法全实现：normalize 在传入 audio 时用真实时长 / 采样率，不拿示例稿冒充真实录音；localAsr 在浏览器 wasm 里真做 Whisper 推理（Xenova/whisper-base 默认 q8，约 40MB，按需从 hf-mirror.com 拉权重），PCM 只在本页内存、不上传也不 fetch",
+            "boundary": "fixture 文稿是离线标注，不是这次录音的真实内容；本地 Whisper 不做说话人分离（speakerDiarized=false / speakerLabel='说话人未区分'）、不产逐句置信度（confidence=null，不当 0 也不当低置信）、不做性别判定（classifyGender 返回 mode='disabled'）"
+          },
+          "deps": [
+            {
+              "id": "D-01",
+              "name": "云 ASR 服务商选型与密钥",
+              "level": "阻塞",
+              "owner": "需求方 / 后端",
+              "ready": false
+            },
+            {
+              "id": "T-013",
+              "name": "后端音频上传接口",
+              "level": "阻塞",
+              "owner": "后端",
+              "ready": false
+            },
+            {
+              "id": "SEC-05",
+              "name": "委托处理协议法务确认",
+              "level": "阻塞",
+              "owner": "法务",
+              "ready": false
+            },
+            {
+              "id": "Q-07",
+              "name": "语种清单与供应商支持列表",
+              "level": "并行",
+              "owner": "产品",
+              "ready": false
+            }
+          ],
+          "gap": "缺口全在外部：没密钥调不了云 ASR，没上传接口云端拿不到音频，没 SEC-05 不能把音频交出去。本地侧不缺「能出稿」，缺的是「谁说的话」—— 说话人分离与身份绑定，本地 Whisper 给不出来",
+          "switchCondition": "cloudReadiness().ready 为真（处阻塞 3 项全 ready）；Q-07 是并行项，不 ready 也允许切，但切完语种覆盖会受限"
+        },
+        {
+          "domain": "生成链路（Map-Reduce 草稿）",
+          "source": "mock/cloud-generation-adapter.js · CLOUD_GENERATION_DEPENDENCIES（3 条）+ GENERATION_CONTRACT_METHODS / GENERATION_OUTPUT_FIELDS",
+          "ownerNote": "生成与合成两张表原文未写 owner 字段，此处责任方按「密钥归需求方 + 后端、schema 约束与重试归服务端」推定，未经确认",
+          "readiness": "cloudGenerationReadiness()：adapterMode 写死 'mock'，不随 ready 变化 —— 3 项依赖明天全绿也不会自动切，必须改代码",
+          "local": {
+            "adapter": "mockGenerationAdapter（mock/generation-adapter.js）",
+            "adapterMode": "offline_rule_based",
+            "methods": [
+              "generate"
+            ],
+            "capability": "generate(contract, utterances, fixture) 按会议类型模板做规则式字段抽取，输出 runVersion / template / detectedLanguages / outputLanguage / warnings / truncatedRatio / injectionEvents / fields，与云侧同一组输出字段（GENERATION_OUTPUT_FIELDS）",
+            "boundary": "不是大模型生成，是规则抽取；未实现的 kind 一律保持 null 并写 note，不臆造；字段置信度取命中 utterance.asrConfidence 均值，未知返回 null，不求和成 0"
+          },
+          "deps": [
+            {
+              "id": "D-01",
+              "name": "云 LLM API 密钥",
+              "level": "阻塞",
+              "owner": "需求方 / 后端（推定）",
+              "ready": false
+            },
+            {
+              "id": "T-047-A",
+              "name": "JSON mode + draft_schema_v1 输出约束",
+              "level": "阻塞",
+              "owner": "后端 / 生成侧（推定）",
+              "ready": false
+            },
+            {
+              "id": "T-047-B",
+              "name": "解析失败 2 次重试 + E-11 部分字段降级",
+              "level": "阻塞",
+              "owner": "后端 / 生成侧（推定）",
+              "ready": false
+            }
+          ],
+          "gap": "密钥 + 两个服务端能力（schema 强约束、重试与降级）。云端一旦返回不合 schema 的 JSON，没 T-047-A/B 就保证不了「宁可少字段也不编」",
+          "switchCondition": "cloudGenerationReadiness().ready 只是必要条件；adapterMode 当下写死，切换要改代码"
+        },
+        {
+          "domain": "合成链路（稿件整合）",
+          "source": "mock/composition-adapter.js · CLOUD_COMPOSITION_DEPENDENCIES（3 条）+ COMPOSITION_CONTRACT_METHODS / COMPOSITION_OUTPUT_FIELDS / ARTICLE_SECTION_IDS",
+          "ownerNote": "同上，原文未写 owner，责任方为推定",
+          "readiness": "cloudCompositionReadiness()：adapterMode 写死 'local_deterministic'，同理不随 ready 切换",
+          "local": {
+            "adapter": "localCompositionAdapter（mock/composition-adapter.js）+ composeArticle",
+            "adapterMode": "local_deterministic",
+            "methods": [
+              "compose"
+            ],
+            "capability": "compose() 把草稿字段 / 会议发言 / 背景资料 / 来源标注 / 证据引用整合成 5 节稿件（overview / core / evidence / open_items / boundary）+ markdown + fingerprint + stats + warnings + sourceSummary；不写时间戳，同输入必得同 fingerprint（Node 冒烟可重复断言）",
+            "boundary": "规则式确定性整合，不是 AI 写稿，任何地方不得宣称「AI 已生成稿件」；正文只取 mergedFields（含人工 overlay）与被引用的 utterance / span 原文；三态来源标注、证据引用、未确认显式列出、FR-11 发布门禁在合成层不可关闭；合成层独立做提示注入筛查，不依赖上游是否已过滤"
+          },
+          "deps": [
+            {
+              "id": "D-01",
+              "name": "云 LLM API 密钥",
+              "level": "阻塞",
+              "owner": "需求方 / 后端（推定）",
+              "ready": false
+            },
+            {
+              "id": "COM-01",
+              "name": "JSON mode + article_schema_v1 输出约束",
+              "level": "阻塞",
+              "owner": "后端 / 生成侧（推定）",
+              "ready": false
+            },
+            {
+              "id": "COM-02",
+              "name": "合成结果仍需过 V-1~V-6 与 FR-11 发布门禁",
+              "level": "阻塞",
+              "owner": "后端 / 生成侧（推定）",
+              "ready": false
+            }
+          ],
+          "gap": "密钥 + article_schema_v1 约束；另外 COM-02 说明「换云合成不是减门禁」—— 云出的稿同样要过 V-1~V-6 与 FR-11，不能因为是大模型产出就免检",
+          "switchCondition": "cloudCompositionReadiness().ready 只是必要条件；adapterMode 写死，且切换前必须先让 COM-02 的校验链在云侧也跑通"
+        },
+        {
+          "domain": "后端契约 + 合规（接口 / 数据表 / 告知 / 留存）",
+          "source": "contracts/api-contract.js · BACKEND_DEPENDENCIES（5 条）+ BACKEND_ENDPOINTS / DB_TABLES",
+          "readiness": "backendReadiness()：adapterMode 写死 'mock'，implementedCount 恒为 0",
+          "local": {
+            "adapter": "OUTPUT_TARGETS.dev（localStorage）+ consentRetentionContractCheck()",
+            "adapterMode": "mock",
+            "methods": [
+              "dev 态 localStorage 落盘",
+              "契约自检"
+            ],
+            "capability": "接口 18 条（E-01~E-18）形状全冻结、全部 implemented:false；数据表 19 张（含 consent_disclosure / consent_record / retention_policy / retention_audit）；dev 态产出真落 localStorage；合规契约自检 PASS（E-10~E-18 + 4 张表 + 同意状态机「已撤回不可直接回已通过」）",
+            "boundary": "只有契约与前端落盘，服务端 0 行代码、未起服务、未连数据库、未部署；18 条接口一条都不通"
+          },
+          "deps": [
+            {
+              "id": "D-01",
+              "name": "云 ASR / LLM 密钥",
+              "level": "阻塞",
+              "owner": "需求方 / 后端",
+              "ready": false
+            },
+            {
+              "id": "T-013",
+              "name": "后端音频上传接口",
+              "level": "阻塞",
+              "owner": "后端",
+              "ready": false
+            },
+            {
+              "id": "SEC-05",
+              "name": "云服务商委托处理协议（法务）",
+              "level": "阻塞",
+              "owner": "法务",
+              "ready": false
+            },
+            {
+              "id": "SEC-01",
+              "name": "告知文案法务审定（FR-03 disclosure v1）",
+              "level": "阻塞",
+              "owner": "法务",
+              "ready": false
+            },
+            {
+              "id": "Q-04",
+              "name": "留存天数产品 / 法务确认（默认 90 天为估算值）",
+              "level": "阻塞",
+              "owner": "产品 / 法务",
+              "ready": false
+            }
+          ],
+          "gap": "5 项全在外部：密钥、上传接口、SEC-05、SEC-01 告知文案审定、Q-04 留存天数确认。Q-04 的默认 90 天是估算值不是定案，页面与契约都保留「待确认」标注",
+          "switchCondition": "5 项全 ready，且服务端把 18 条接口真正实现出来（现在实现数 0）"
+        }
+      ],
+      "honestGaps": [
+        "三处 adapterMode 写死（生成 'mock' / 合成 'local_deterministic' / 后端 'mock'），只有音频 cloudReadiness() 是按条件切换 —— 依赖明天全绿，也只有音频会自动切，其余三处必须改代码。这是当前真实状态，不是「已就绪只是没打开」。",
+        "生成与合成两张依赖表原文没有 owner 字段，责任方是推定的，不能当成已确认的分工。",
+        "本地对两块能力是「真没有」而不是「mock 替代」：说话人分离（谁说的话）与 AI 生成（大模型写稿）。前者本地 Whisper 给不出，后者本地是规则抽取；对外表述不能含混成「本地已实现」。"
+      ]
+    },
+    "emptyReason": "「没有语音内容」由单一「暂无内容」拆成按真值分流的四种成因（engine / noAudio / silent / noText）：判别只依据两个真值 —— asrErrorCode（失败分类 code）+ recResult.segments.length，且**有失败优先于「没语音」**（引擎没跑起来时不给「没人说话」下结论的机会）；noAudio（没采到可转写音频，属真实情况而非引擎故障）从其余失败 code 中摘出、独立成支。实时记录面板与总结面板空态均接入成因文案：故障态（engine / noAudio）用 --mm-warn 明示是故障、不代表团里没人说话；真没语音（silent / noText）再按录音时长分档给下一步（≥3s 却全程静音 → 优先查输入设备；<3s → 有效时长太短）。「正在用本机离线模型转写」收紧为仅 live.status === 'recording' 时说（录完再说这句就是假状态）。边界：纯前端文案与判别分支，未改转写逻辑、未改失败判定口径、未动响应头、未新增依赖、示例稿路径不受影响；**只解决「怎么说」不解决「能不能转写」**——墙 3 未解，当前最可能看到的是 engine 那一支（如实报故障），silent / noText 是给「转写跑通之后」准备的真实结论出口，不得据此宣称转写已可用"
+  },
+  "updatedAt": "2026-11-05T15:45:58.000Z",
+  "remapLog": [
+    {
+      "from": "T-001",
+      "to": "T-020",
+      "reason": "S0 与 S1 原按独立工程/后端接口编写，在已有 mvgo/frontend 内重映射到前端 Mock 链路 T-020~T-027；原任务不标记完成",
+      "at": "2026-11-05T03:35:33.556Z"
+    }
+  ]
+}

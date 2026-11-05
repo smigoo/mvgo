@@ -18,6 +18,7 @@ import {
   detectStatRowLeaf,
   detectTableLeaf,
   detectLegendDotTextLeaf,
+  detectFooterSummaryLeaf,
   buildParentMap,
   matchFgTakeoverTargets,
   FG_TAKEOVER_CLASS_RX,
@@ -1295,6 +1296,84 @@ describe('刀 53e · detectTableLeaf（列式表格整表接管）', () => {
     expect(FG_TAKEOVER_CLASS_RX.test('c-x-fg-statrow-434893')).toBe(true);
     expect(FG_TAKEOVER_CLASS_RX.test('c-x-fg-other-1')).toBe(false);
   });
+
+  // ── T-CONTRACT 契约门（2026-11-05 · mc-max-1793880532372-38f97905 实锤）──────────
+  // 病灶：`detectTableLeafByAnchors` 是纯几何判定，而「两张并排 stat-card」与
+  //   「2 列 5 行表格」在几何上完全同构（同高同 y / 每列 TEXT 数相同且逐项 y 对齐 /
+  //   x 严格递增）⇒ statRow 因「恰好 2 TEXT」拒绝后，table 把统计卡整段吃下，
+  //   生成 325px 高的 a-table 塞进 65px 容器 ⇒ 纵向溢出覆盖下方两个 section。
+  // 治本：vision 归一类型（`canonicalSectionType`）是契约，几何只能填细节、不能推翻契约。
+  it('T-CONTRACT 阳性：type=stats ⇒ contractMismatch:stats（统计卡不得被当表格）', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const statsSec = { id: 'c0', type: 'stats', sourceNodeIds: ['c0'] };
+    const r = detectTableLeaf(statsSec, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('contractMismatch:stats');
+  });
+
+  it('T-CONTRACT 阳性：type=list ⇒ contractMismatch:list（车型分布那类长期误接管）', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const r = detectTableLeaf({ id: 'c0', type: 'list', sourceNodeIds: ['c0'] }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('contractMismatch:list');
+  });
+
+  it('T-CONTRACT 阴性①：type=table ⇒ 仍接管（几何判据逐字不变）', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const r = detectTableLeaf(sec('c0'), idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('table');
+  });
+
+  it('T-CONTRACT 阴性②：无任何类型声明 ⇒ 契约门放行，仍按纯几何接管（全语料 69.7% 走这条）', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const r = detectTableLeaf({ id: 'c0', sourceNodeIds: ['c0'] }, idx, buildParentMap(idx));
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('table');
+  });
+
+  it('T-CONTRACT 阴性③：type 空但 header.type=table ⇒ 归一为 table，仍接管', () => {
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const r = detectTableLeaf(
+      { id: 'c0', header: { type: 'table' }, sourceNodeIds: ['c0'] },
+      idx,
+      buildParentMap(idx),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('table');
+  });
+
+  it('T-CONTRACT 阴性④：显式表头契约优先于 type（type=tabs 但带完整 headers ⇒ 仍接管）', () => {
+    // deriveSectionType 第一条即 `declaredTableHeaders(sec) ⇒ 'table'`：
+    // 具体事实（表头契约）优先于粗粒度 type，故契约门不得误伤真表格。
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    const r = detectTableLeaf(
+      { id: 'c0', type: 'tabs', headers: HEAD, columnCount: 4, cells: colTexts, sourceNodeIds: ['c0'] },
+      idx,
+      buildParentMap(idx),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe('table');
+  });
+
+  it('T-CONTRACT 阴性⑤：泛化容器 body/content/main 不是形态主张 ⇒ 放行（防误伤内容区真表格）', () => {
+    // `vision-facts.js#TYPE_KEYWORDS` 的 body 桶 = body|content|main，语义是
+    // 「某种内容区」，零形状断言。首版契约门把它们当反对证据，实测打崩
+    // `code-generator.p1b-suppressed-flex.spec.ts`（夹具 sec 就是 type:'content'）。
+    const colTexts = HEAD.map((h, ci) => [h, ...ROWS.map((r) => r[ci])]);
+    const idx = idxOf(table(colTexts));
+    for (const t of ['body', 'content', 'main']) {
+      const r = detectTableLeaf({ id: 'c0', type: t, sourceNodeIds: ['c0'] }, idx, buildParentMap(idx));
+      expect([t, r.ok]).toEqual([t, true]);
+      expect(r.kind).toBe('table');
+    }
+  });
 });
 
 /**
@@ -1926,5 +2005,481 @@ describe('R8-7 内容量对账与 header 递归口径', () => {
     doc2.children.push(text('38:9999', '别人的文本', 200, 25, 40, 16, '#333333', 14, 400));
     const r = detectHeaderRowLeaf({ id: '38:3137-tail-text', sourceNodeIds: ['38:3139', '38:3160'] }, indexFigmaNodes(doc2), ICON_MAPPING);
     expect(r.ok).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * RC2 / RC3 治本（2026-11-05 · mc-max-1793873426434-f9cae6bf 实锤 12 卡全丢）
+ *
+ * 病灶：Figma 卡的底不是「卡本体 fills」而是子 `bg` GROUP 里的渐变 VECTOR
+ * （真机 `2:8438` GROUP `fills:[]` → `2:8439 "bg"` → `2:8440/2:8441` GRADIENT_LINEAR）。
+ * `cardTruth` 原先只看本体 `firstSolidFillRgba` ⇒ 双重不命中（GROUP 无 fills +
+ * 唯一 SOLID 判据不认渐变）⇒ `cardTruthMissing:2:8438` ⇒ 12 张设备卡零渲染。
+ *
+ * 三臂：
+ *   A 图片通道：`bg` 子树已导出为资源（mapping 命中）⇒ 整卡底快照 + 四件套；
+ *   B CSS 通道：子树有底候选但无资源 ⇒ 走 CSS（与 statrow 同口径的能力扩展）；
+ *   C 阴性：子树无任何底候选 ⇒ 仍 fail-open（不填兜底色）。
+ * ------------------------------------------------------------------ */
+describe('刀 53 RC2 卡底真值回落（GROUP 卡）+ RC3 卡底截图通道', () => {
+  const GRADIENT = {
+    type: 'GRADIENT_LINEAR',
+    visible: true,
+    opacity: 1,
+    gradientHandlePositions: [
+      { x: 0.5, y: 0.997 },
+      { x: 0.5, y: 0 },
+      { x: -0.47, y: 0.997 },
+    ],
+    gradientStops: [
+      { color: { r: 0.12, g: 0.46, b: 0.58, a: 1 }, position: 0 },
+      { color: { r: 0.12, g: 0.52, b: 0.58, a: 0 }, position: 1 },
+    ],
+  };
+  /** 真机同构：GROUP 卡本体无 fills，底在子 `bg` GROUP 里。 */
+  const groupedCard = (id, x, y, name, value, inner) => ({
+    id,
+    type: 'GROUP',
+    name: `group-${id}`,
+    absoluteBoundingBox: { x, y, width: 126, height: 64 },
+    children: [
+      {
+        id: `${id}-bg`,
+        type: 'GROUP',
+        name: 'bg',
+        absoluteBoundingBox: { x, y, width: 126, height: 64 },
+        children: [
+          {
+            id: `${id}-bgv`,
+            type: 'VECTOR',
+            name: 'Vector',
+            absoluteBoundingBox: { x, y, width: 126, height: 64 },
+            fills: [inner],
+          },
+        ],
+      },
+      text(`${id}-n`, name, x + 16, y, 56, 21, '#333333', 12, 400),
+      text(`${id}-v`, value, x + 16, y + 26, 22, 21, '#ffffff', 16, 500),
+    ],
+  });
+  const groupedRow = (inner) => ({
+    id: 'G:row',
+    type: 'FRAME',
+    name: 'row',
+    absoluteBoundingBox: { x: 0, y: 0, width: 564, height: 64 },
+    children: [
+      groupedCard('G:c1', 0, 0, '摄像机', '(2/484)', inner),
+      groupedCard('G:c2', 146, 0, '雷达', '(1/12)', inner),
+      groupedCard('G:c3', 292, 0, '卡口', '(8/90)', inner),
+      groupedCard('G:c4', 438, 0, '球机', '(3/7)', inner),
+    ],
+  });
+  const GRID_MAPPING = [
+    {
+      figmaNodeId: 'G:c1-bg',
+      resourceFile: '../resources/images/bg-Gc1.png',
+      assignedVarName: 'bg3',
+      ownerSectionId: 'G:c1',
+      previewAnalysisRole: 'bg',
+      bgRole: 'container',
+      recommendedUsage: 'backgroundBlock',
+      downloadStatus: 'success',
+      figmaBox: { x: 0, y: 0, width: 126, height: 64 },
+      parentBox: { x: 0, y: 0, width: 126, height: 64 },
+    },
+    {
+      figmaNodeId: 'G:c2-bg',
+      // 同资源被多卡共享（真机 12 条同指 bg-8439.png，assignedVarName 同为 bg3）
+      resourceFile: '../resources/images/bg-Gc1.png',
+      assignedVarName: 'bg3',
+      ownerSectionId: 'G:c2',
+      previewAnalysisRole: 'bg',
+      bgRole: 'container',
+      recommendedUsage: 'backgroundBlock',
+      downloadStatus: 'success',
+      figmaBox: { x: 146, y: 0, width: 126, height: 64 },
+      parentBox: { x: 146, y: 0, width: 126, height: 64 },
+    },
+  ];
+
+  it('A 图片通道：GROUP 卡本体无 fills ⇒ 回落子树底快照（真机 RC2 复现）', () => {
+    const idx = indexFigmaNodes(groupedRow(GRADIENT));
+    const r = detectGridLeaf({ id: 'G:row', layout: 'grid' }, idx, GRID_MAPPING);
+    expect(r.ok).toBe(true);
+    expect(r.items).toHaveLength(4);
+    // 图片与 CSS 互斥：图片命中 ⇒ 不得同时写 background（近似底覆盖真图 = 2ec8acc7 同型错误）
+    expect(r.items[0].bg).toBe(null);
+    expect(r.items[0].bgImage).toMatchObject({
+      varName: 'bg3',
+      file: 'bg-Gc1.png',
+      source: 'subtree',
+    });
+    expect(r.items[0].bgImage.style.size).toBe('100% 100%');
+    expect(r.items[0].runs.map((x) => x.text)).toEqual(['摄像机', '(2/484)']);
+    // 🔴 同资源共享 ⇒ 同一 import 变量（不重复定义）
+    expect(r.items[1].bgImage.varName).toBe('bg3');
+  });
+
+  it('A2 图片优先判据：图片面积 ≥ CSS 候选 ⇒ 取图片（真机 117x64 同尺寸）', () => {
+    // 无 mapping 时同结构退化为 CSS 通道 —— 两条通道用同一份面积判据
+    const idx = indexFigmaNodes(groupedRow(GRADIENT));
+    const noMap = detectGridLeaf({ id: 'G:row', layout: 'grid' }, idx);
+    expect(noMap.ok).toBe(true);
+    expect(noMap.items[0].bgImage).toBe(null);
+    expect(noMap.items[0].bg).toMatch(/^linear-gradient\(/);
+  });
+
+  it('B CSS 通道：子树只有实底、无资源 ⇒ 仍可接管（不因缺图放弃整段）', () => {
+    const idx = indexFigmaNodes(groupedRow(solid('#fffdf1')));
+    const r = detectGridLeaf({ id: 'G:row', layout: 'grid' }, idx, []);
+    expect(r.ok).toBe(true);
+    // 底走 `subtreeBackground` → `nodeAppearanceTruth`/`fillsToCss` 口径（hex 归一，
+    // 与本体 `firstSolidFillRgba` 的 rgba 写法不同）——同一色值的两种等价串
+    expect(r.items[0].bg).toMatch(/^(#fffdf1|rgba\(255,\s*253,\s*241,\s*1\))$/);
+    expect(r.items[0].bgImage).toBe(null);
+  });
+
+  it('C 阴性：GROUP 卡子树无任何底候选 ⇒ 仍 fail-open（绝不填兜底色）', () => {
+    const doc = groupedRow(GRADIENT);
+    for (const c of doc.children) c.children = c.children.filter((x) => x.type === 'TEXT');
+    const r = detectGridLeaf({ id: 'G:row', layout: 'grid' }, indexFigmaNodes(doc), GRID_MAPPING);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('cardTruthMissing');
+  });
+
+  it('C2 阴性：有图但无 assignedVarName ⇒ fail-open（绝不自造命名空间）', () => {
+    const idx = indexFigmaNodes(groupedRow(GRADIENT));
+    const bad = [{ ...GRID_MAPPING[0], assignedVarName: '', semanticVarName: '' }];
+    const r = detectGridLeaf({ id: 'G:row', layout: 'grid' }, idx, bad);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('cardTruthMissing');
+  });
+
+  it('RC3 渲染：图片通道写唯一 import + 变量池下标 + 四件套绑定', () => {
+    const idx = indexFigmaNodes(groupedRow(GRADIENT));
+    const tr = detectGridLeaf({ id: 'G:row', layout: 'grid' }, idx, GRID_MAPPING);
+    const vue = renderFoldedGridLeafVue(tr, 'component');
+    expect(vue).toContain("import bg3 from '../../resources/images/bg-Gc1.png'");
+    expect(vue).toContain('const FG_GRID_BGS = [bg3];');
+    expect(vue).toContain(
+      "backgroundImage: it.bgImg == null ? undefined : 'url(' + FG_GRID_BGS[it.bgImg] + ')'",
+    );
+    expect(vue).toContain('backgroundSize: it.bgImg == null ? undefined : it.bgSize');
+    expect(vue).toContain('backgroundPosition: it.bgImg == null ? undefined : it.bgPosition');
+    expect(vue).toContain('"bgImg": 0');
+    expect(vue).toContain('"bgSize": "100% 100%"');
+    // 同一变量只 import 一次
+    expect(vue.match(/import bg3 from/g)).toHaveLength(1);
+    expect(vue.match(/backgroundImage:/g)).toHaveLength(1);
+  });
+
+  it('RC3 阴性零回归：无图片项 ⇒ 产物不含截图通道任何字样', () => {
+    const idx = indexFigmaNodes(FIGMA_DOC);
+    const tr = detectGridLeaf({ id: '38:3140', layout: 'grid' }, idx);
+    const vue = renderFoldedGridLeafVue(tr, 'component');
+    expect(vue).not.toContain('FG_GRID_BGS');
+    expect(vue).not.toContain('backgroundImage');
+    expect(vue).not.toContain('bgImg');
+    expect(vue).toContain('background: it.bg');
+  });
+
+  it('R2.5 阳性：卡本体自带 GRADIENT（子树无底候选）⇒ 取本体填充，不再 fail-open', () => {
+    // 病灶：`cardTruth` 首判只用 `firstSolidFillRgba`（仅认 SOLID）⇒ 本体渐变卡整张丢。
+    // 与 `detectStatRowLeaf` 的 `nodeAppearanceTruth(p.node)` 首判对齐后应命中。
+    const doc = groupedRow(GRADIENT);
+    for (const c of doc.children) {
+      c.children = c.children.filter((x) => x.type === 'TEXT'); // 子树无任何底候选
+      c.fills = [GRADIENT]; // 本体直接带渐变
+    }
+    const r = detectGridLeaf({ id: 'G:row', layout: 'grid' }, indexFigmaNodes(doc));
+    expect(r.ok).toBe(true);
+    expect(r.items).toHaveLength(4);
+    expect(r.items[0].bg).toMatch(/^linear-gradient\(/);
+    expect(r.items[0].bgImage).toBe(null);
+  });
+
+  it('R2.5 零回归：本体 SOLID 仍走 rgba 口径（产物色值串逐字不变）', () => {
+    const doc = groupedRow(GRADIENT);
+    for (const c of doc.children) {
+      c.children = c.children.filter((x) => x.type === 'TEXT');
+      c.fills = [solid('#fffdf1')];
+    }
+    const r = detectGridLeaf({ id: 'G:row', layout: 'grid' }, indexFigmaNodes(doc));
+    expect(r.ok).toBe(true);
+    // 保留 `firstSolidFillRgba` 首判的唯一理由：色值格式稳定（这份断言就是它的守门人）
+    expect(r.items[0].bg).toBe('rgba(255,253,241,1)');
+  });
+
+  it('R2.6 footer 背景通道：委托 toBgChannel ⇒ 形状统一且基名来源含 file 回落', () => {
+    // footer 无 Figma 锚点 ⇒ 按资源**基名**反查；此处条目故意只给 `file`（无 `resourceFile`），
+    // 锁 `toBgChannel` 的回落链（`resourceFile → file → src`），并锁 `source:'footer'` 标记。
+    const sec = {
+      id: 'footer-38:3167',
+      type: 'footer',
+      body: { backgroundImage: { src: '../resources/images/image_313-5800.png' } },
+      items: [
+        {
+          content: {
+            elements: [{ text: '数据来源：交通管理局', styles: { fontSize: 12, color: '#999999', fontWeight: '400' } }],
+          },
+        },
+      ],
+    };
+    const mapping = [
+      {
+        figmaNodeId: 'x:1',
+        file: '../resources/images/image_313-5800.png',
+        assignedVarName: 'bg7',
+        figmaBox: { x: 0, y: 0, width: 100, height: 40 },
+        parentBox: { x: 0, y: 0, width: 100, height: 40 },
+      },
+    ];
+    const r = detectFooterSummaryLeaf(sec, mapping);
+    expect(r.ok).toBe(true);
+    expect(r.bg).toMatchObject({
+      varName: 'bg7',
+      file: 'image_313-5800.png',
+      source: 'footer',
+    });
+    expect(r.bg.style.size).toBe('100% 100%');
+  });
+
+  it('R2.6 footer 阴性：无 assignedVarName ⇒ bg=null（绝不自造命名空间）', () => {
+    const sec = {
+      id: 'footer-38:3167',
+      type: 'footer',
+      body: { backgroundImage: { src: '../resources/images/image_313-5800.png' } },
+      items: [{ content: { elements: [{ text: '数据来源', styles: { fontSize: 12 } }] } }],
+    };
+    const r = detectFooterSummaryLeaf(sec, [
+      { figmaNodeId: 'x:1', resourceFile: '../resources/images/image_313-5800.png' },
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.bg).toBe(null);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ * 🛡️ 刀 55（2026-11-05 · c-device-monitor-8f4dfed9 / 89c25985 双实锤）
+ * 接管卡片 icon 通道：cardTruth 扩维（subtreeIconTruth）+ 渲染 <img>。
+ *
+ * 病灶：cardTruth 子树只收 TEXT ⇒ icon 几何足迹被 pad 吸收（8f4dfed9 两状态卡
+ * pad:111/122 = icon 区宽）——位置在、图不在，14 个已下载 icon 产物零引用。
+ * 改验分离留痕：本组阳性用**独立构造 fixture**（非真机 JSON 摘录）；真机回放
+ * 以重投任务的 🎯 cardIcon= 计数与产物 <img> 对数为准。
+ * ════════════════════════════════════════════════════════════════════ */
+describe('刀 55 · 接管卡片 icon 通道', () => {
+  const iconChild = (id, x, w = 16, h = 16) => ({
+    id,
+    type: 'FRAME',
+    name: `icon-${id}`,
+    absoluteBoundingBox: { x, y: 64, width: w, height: h },
+    fills: [solid('#ffffff')],
+  });
+  // 卡：x=20 w=126 h=30；icon 16×16（dx=8）+ 2 TEXT（x=52 起，间距 4）
+  const iconCard = (id, x, iconId, iconX) => ({
+    id,
+    type: 'FRAME',
+    name: `card-${id}`,
+    absoluteBoundingBox: { x, y: 57, width: 126, height: 30 },
+    fills: [solid('#eef4ff')],
+    cornerRadius: 6,
+    children: [
+      ...(iconId ? [iconChild(iconId, iconX)] : []),
+      text(`${id}-n`, '隧道设备', x + 32, 57, 56, 30, '#333333', 14, 400),
+      text(`${id}-v`, '56302', x + 32 + 56 + 4, 57, 22, 30, '#ffffff', 14, 700),
+    ],
+  });
+  const buildDoc = (withIcon, secondIconX = 174) => ({
+    id: '55:root',
+    children: [
+      {
+        id: '55:100',
+        type: 'FRAME',
+        name: 'row-55',
+        absoluteBoundingBox: { x: 20, y: 57, width: 292, height: 30 },
+        children: [
+          iconCard('55:100-c0', 20, withIcon ? '55:100-c0-ic' : null, 28),
+          iconCard('55:100-c1', 166, withIcon ? '55:100-c1-ic' : null, secondIconX),
+        ],
+      },
+    ],
+  });
+  const ICON_MAP = [
+    { figmaNodeId: '55:100-c0-ic', resourceFile: '../resources/images/icon-a.png', assignedVarName: 'iconA', downloadStatus: 'success' },
+    { figmaNodeId: '55:100-c1-ic', resourceFile: '../resources/images/icon-b.png', assignedVarName: 'iconB', downloadStatus: 'success' },
+  ];
+
+  it('阳性（真值）：icon 命中 ⇒ items[].icon 几何真值 + pad→dx + gap→icon间距', () => {
+    const idx = indexFigmaNodes(buildDoc(true));
+    const r = detectGridLeaf({ id: '55:100', layout: 'grid' }, idx, ICON_MAP);
+    expect(r.ok).toBe(true);
+    expect(r.items).toHaveLength(2);
+    expect(r.items[0].icon).toEqual({ varName: 'iconA', file: 'icon-a.png', w: 16, h: 16 });
+    // pad 原 = 首文本 x − 卡 x = 32；icon 命中 ⇒ 改写为 dx = 28 − 20 = 8
+    expect(r.items[0].pad).toBe(8);
+    // gap 原 = 文本间距 4；icon 命中 ⇒ 改写为 icon 右缘 → 首文本 = 52 − (28+16) = 8
+    expect(r.items[0].gap).toBe(8);
+  });
+
+  it('阳性（渲染）：<img> 行 + FG_GRID_ICONS 数组绑定 + import（资源变量不拼静态文本）', () => {
+    const idx = indexFigmaNodes(buildDoc(true));
+    const tr = detectGridLeaf({ id: '55:100', layout: 'grid' }, idx, ICON_MAP);
+    const vue = renderFoldedGridLeafVue(tr, 'component');
+    expect(vue).toContain(`<img v-if="it.icon != null" :src="FG_GRID_ICONS[it.icon]"`);
+    expect(vue).toContain(`:style="{ width: it.iw + 'px', height: it.ih + 'px', flex: '0 0 auto' }"`);
+    expect(vue).toContain(`const FG_GRID_ICONS = [iconA, iconB];`);
+    expect(vue).toContain(`import iconA from '../../resources/images/icon-a.png'`);
+    expect(vue).toContain(`import iconB from '../../resources/images/icon-b.png'`);
+    expect(vue).toContain('"icon": 0');
+    expect(vue).toContain('"iw": 16');
+    // 底图通道与 icon 通道并存不互斥
+    expect(vue).toContain('background: it.bg');
+  });
+
+  it('阴性：卡无 icon 子节点 ⇒ 无 <img>/无数组/无 import，pad/gap 逐字不变（旧值 32/4）', () => {
+    const idx = indexFigmaNodes(buildDoc(false));
+    const tr = detectGridLeaf({ id: '55:100', layout: 'grid' }, idx, ICON_MAP);
+    expect(tr.ok).toBe(true);
+    expect(tr.items[0].icon).toBeNull();
+    expect(tr.items[0].pad).toBe(32);
+    expect(tr.items[0].gap).toBe(4);
+    const vue = renderFoldedGridLeafVue(tr, 'component');
+    expect(vue).not.toContain('<img');
+    expect(vue).not.toContain('FG_GRID_ICONS');
+    expect(vue).not.toContain('icon-a.png');
+  });
+
+  it('阴性：icon 子树存在但未入 mapping ⇒ 不造 import、不渲染（fail-open）', () => {
+    const idx = indexFigmaNodes(buildDoc(true));
+    const r = detectGridLeaf({ id: '55:100', layout: 'grid' }, idx, []);
+    expect(r.ok).toBe(true);
+    expect(r.items[0].icon).toBeNull();
+    expect(r.items[0].pad).toBe(32);
+    const vue = renderFoldedGridLeafVue(r, 'component');
+    expect(vue).not.toContain('<img');
+    expect(vue).not.toContain('icon-a.png');
+  });
+
+  it('阳性对照（最左确定性）：双 icon 候选 ⇒ 取 x 最小者（平票面积、再平票 id 序）', () => {
+    // 🔴 fixture 纪律：bboxOf 读 absoluteBoundingBox ⇒ 子节点坐标一律**绝对坐标**。
+    //   c1 卡 x=166；两个候选：x=174（small 12×12，= iconB）与 x=190（big 20×20），
+    //   均在首文本（x=198）左侧 ⇒ 判据取 x 最小的 small，而不是面积更大的 big。
+    const doc = buildDoc(true);
+    const c1 = doc.children[0].children[1];
+    c1.children = [
+      iconChild('55:100-c1-ic-big', 190, 20, 20),
+      iconChild('55:100-c1-ic-small', 174, 12, 12),
+      ...c1.children.filter((c) => c.type === 'TEXT'),
+    ];
+    const idx = indexFigmaNodes(doc);
+    const r = detectGridLeaf({ id: '55:100', layout: 'grid' }, idx, [
+      ...ICON_MAP,
+      { figmaNodeId: '55:100-c1-ic-big', resourceFile: '../resources/images/icon-big.png', assignedVarName: 'iconBig', downloadStatus: 'success' },
+      { figmaNodeId: '55:100-c1-ic-small', resourceFile: '../resources/images/icon-b.png', assignedVarName: 'iconB', downloadStatus: 'success' },
+    ]);
+    expect(r.ok).toBe(true);
+    const c1Icon = r.items[1].icon;
+    expect(c1Icon.varName).toBe('iconB');
+    expect(c1Icon.w).toBe(12);
+    // pad = dx = 174 − 166 = 8；gap = 198 − (174+12) = 12
+    expect(r.items[1].pad).toBe(8);
+    expect(r.items[1].gap).toBe(12);
+  });
+
+  it('审计行：pickTakeoverAudit 投影 cardIcon + formatTakeoverAuditLine 打出 cardIcon=hit/evaluated（0 也打）', () => {
+    const audit = pickTakeoverAudit({ evaluated: 0, map: new Map(), cardIconEvaluated: 5, cardIconHit: 3 });
+    expect(audit.cardIcon).toEqual({ hit: 3, evaluated: 5 });
+    const line = formatTakeoverAuditLine(audit);
+    expect(line).toContain('cardIcon=3/5');
+    const auditZero = pickTakeoverAudit({ evaluated: 0, map: new Map(), cardIconEvaluated: 0, cardIconHit: 0 });
+    expect(formatTakeoverAuditLine(auditZero)).toContain('cardIcon=0/0');
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ * 🛡️ 刀 60 · 卡内同行容差排序（2026-11-05 · c-device-0ddd1708 / 43:4892 实锤）
+ *
+ * 病灶：cardTruth 卡内文本排序纯 `y差||x差` 无容差 —— fs24 数值（h≈29）与
+ * fs14 label（h≈16）垂直居中对齐时 bbox y 必有差（居中基线差）⇒ 数值排前
+ * ⇒ runs 颠倒（「8总设备」）+ pad 取数值 x（实测 86，卡宽 134 起点在 64%）
+ * ⇒ 视觉整体靠右。一因三症。
+ *
+ * 判据：垂直中心差 ≤ 较小盒高一半 ⇒ 同行按 x 序（x 平局回退 y 序）；
+ * 跨行仍按 y 序。rowOrderFixed 为观测出参（真机计数行 cardRow=fixed/evaluated）。
+ * ════════════════════════════════════════════════════════════════════ */
+describe('刀 60 · 卡内同行容差排序', () => {
+  // 0ddd1708 真机形态：卡 134×66；label fs14(h16) 与数值 fs24(h29) 垂直居中
+  // 共同中心 y=33：label y=25（25+8=33）、数值 y=18.5（18.5+14.5=33）。
+  // 旧序（y-then-x）：数值 y=18.5 < label y=25 ⇒ 数值在前（颠倒）。
+  // 新序（同行 x 序）：label x=12 < 数值 x=64 ⇒ label 在前（真值语序）。
+  const statCard = (id, x) => ({
+    id,
+    type: 'FRAME',
+    name: `card-${id}`,
+    absoluteBoundingBox: { x, y: 0, width: 134, height: 66 },
+    fills: [solid('#eaf3ff')],
+    children: [
+      text(`${id}-v`, '8', x + 64, 18.5, 16, 29, '#3965ff', 24, 400),
+      text(`${id}-n`, '总设备', x + 12, 25, 42, 16, '#333333', 14, 400),
+    ],
+  });
+  const buildDoc = () => ({
+    id: '60:root',
+    children: [
+      {
+        id: '60:100',
+        type: 'FRAME',
+        name: 'row-60',
+        absoluteBoundingBox: { x: 0, y: 0, width: 436, height: 66 },
+        children: [statCard('60:100-c0', 0), statCard('60:100-c1', 168)],
+      },
+    ],
+  });
+
+  it('阳性（真值）：同行居中卡 ⇒ runs 按 x 序 [label,数值] + pad=label.x−卡x + rowOrderFixed=true', () => {
+    const idx = indexFigmaNodes(buildDoc());
+    const r = detectGridLeaf({ id: '60:100', layout: 'grid' }, idx, []);
+    expect(r.ok).toBe(true);
+    expect(r.items[0].runs.map((x: any) => x.text)).toEqual(['总设备', '8']);
+    // pad = 首成员（label）x − 卡 x = 12（旧序取数值 x = 64 ⇒ 修复点）
+    expect(r.items[0].pad).toBe(12);
+    // gap = 数值.x − (label.x+label.w) = 64 − 54 = 10
+    expect(r.items[0].gap).toBe(10);
+    expect(r.items[0].rowOrderFixed).toBe(true);
+  });
+
+  it('阴性（多行卡不误伤）：title 上 value 下（中心差 > 容差）保持 y 序', () => {
+    const doc = buildDoc();
+    const c0 = doc.children[0].children[0];
+    // title y=8 h16（中心 16）；value y=36 h20（中心 46）：中心差 30 > min(16,20)/2=8 ⇒ 跨行
+    c0.children = [
+      text('60:100-c0-n', '总设备', 12, 8, 42, 16, '#333333', 14, 400),
+      text('60:100-c0-v', '8', 12, 36, 16, 20, '#3965ff', 24, 400),
+    ];
+    const idx = indexFigmaNodes(doc);
+    const r = detectGridLeaf({ id: '60:100', layout: 'grid' }, idx, []);
+    expect(r.ok).toBe(true);
+    expect(r.items[0].runs.map((x: any) => x.text)).toEqual(['总设备', '8']);
+    expect(r.items[0].rowOrderFixed).toBe(false);
+  });
+
+  it('阴性（单文本卡）：rowOrderFixed=false 零观测噪声', () => {
+    const doc = buildDoc();
+    doc.children[0].children[0].children = [
+      text('60:100-c0-n', '总设备', 12, 25, 42, 16, '#333333', 14, 400),
+    ];
+    const idx = indexFigmaNodes(doc);
+    const r = detectGridLeaf({ id: '60:100', layout: 'grid' }, idx, []);
+    expect(r.ok).toBe(true);
+    expect(r.items[0].rowOrderFixed).toBe(false);
+  });
+
+  it('审计行：pickTakeoverAudit 投影 cardRow + formatTakeoverAuditLine 打出 cardRow=fixed/evaluated（0 也打）', () => {
+    const audit = pickTakeoverAudit({ evaluated: 0, map: new Map(), cardRowEvaluated: 3, cardRowOrderFixed: 3 });
+    expect(audit.cardRow).toEqual({ fixed: 3, evaluated: 3 });
+    expect(formatTakeoverAuditLine(audit)).toContain('cardRow=3/3');
+    const auditZero = pickTakeoverAudit({ evaluated: 0, map: new Map(), cardRowEvaluated: 0, cardRowOrderFixed: 0 });
+    expect(formatTakeoverAuditLine(auditZero)).toContain('cardRow=0/0');
   });
 });

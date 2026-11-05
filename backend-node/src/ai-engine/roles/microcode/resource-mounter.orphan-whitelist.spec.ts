@@ -125,3 +125,83 @@ describe('F5：L0-B 重试轮孤儿白名单（splitLessSafeOrphans 分区）', 
     expect(files['package/components/StalePanel.vue']).toBeUndefined();
   });
 });
+
+/**
+ * 🛡️ 2026-11-05 治本：P1-2 传递闭包恒空转（c-traffic-monitor-9b36d0ac 实锤）
+ *
+ * 病灶：`keep` 已被 detectSubComponents(indexVue) 预填 index 的直接子组件，BFS 的入队条件却是
+ * `!keep.has(target)` ⇒ index 的直接子组件一条都不入队 ⇒ 队列出队一次就空 ⇒ 沿 import 的
+ * **传递闭包从未发生**。三层引用链的末端文件永远进不了保留集 → 误判孤儿删除 →
+ * 「悬空子组件引用剥离」把父组件里的标签与样式一起掏空（真机：ForecastAreaChart 被删后
+ * ContentForecast 的 chart-wrap 变成空 div，刀53h 再删 chart-* 样式）。
+ *
+ * 修法：「保留」与「是否已遍历」解耦（keep 表示保留，visited 单独控制入队）。
+ */
+describe('P1-2 传递闭包：二层子组件不得误判孤儿（2026-11-05）', () => {
+  const mkChain = () => ({
+    'package/index.vue': `<template>
+  <div class="c-test-root"><CompA /></div>
+</template>
+<script setup>
+import CompA from './components/CompA.vue';
+</script>`,
+    'package/components/CompA.vue': `<template><div><CompB /></div></template>
+<script setup>
+import CompB from './CompB.vue';
+</script>`,
+    'package/components/CompB.vue': `<template><div><CompC /></div></template>
+<script setup>
+import CompC from './CompC.vue';
+</script>`,
+    'package/components/CompC.vue': '<template><div>c</div></template>',
+    'package/components/Orphan.vue': '<template><div>orphan</div></template>',
+    'resources/styles/theme-vars.less': THEME_VARS,
+  });
+
+  it('三层引用链 a→b→c：末端 c 必须保留，只剔真孤儿', () => {
+    const files = mkChain();
+    const pruned = pruneOrphanSubComponents(files, null, null, {});
+    expect(pruned).toEqual(['package/components/Orphan.vue']);
+    expect(files['package/components/CompB.vue']).toBeDefined();
+    expect(files['package/components/CompC.vue']).toBeDefined();
+    expect(files['package/components/Orphan.vue']).toBeUndefined();
+  });
+
+  it('真实形态：index 只 import 父组件，父组件 import 图表子组件 → 子组件保留', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <div class="c-test-root"><ContentForecast /></div>
+</template>
+<script setup>
+import ContentForecast from './components/ContentForecast.vue';
+</script>`,
+      'package/components/ContentForecast.vue': `<template>
+  <div class="forecast-wrap"><ForecastAreaChart /></div>
+</template>
+<script setup>
+import ForecastAreaChart from './ForecastAreaChart.vue';
+</script>`,
+      'package/components/ForecastAreaChart.vue':
+        '<template><div ref="chartRef" class="chart-canvas"></div></template>',
+      'resources/styles/theme-vars.less': THEME_VARS,
+    };
+    const pruned = pruneOrphanSubComponents(files, null, null, {});
+    expect(pruned).toEqual([]);
+    expect(files['package/components/ForecastAreaChart.vue']).toBeDefined();
+  });
+
+  it('阴性：index 无任何引用 → components 内文件仍按原语义全部剔除（不得放松）', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <div class="c-test-root">plain</div>
+</template>
+<script setup>
+</script>`,
+      'package/components/Lonely.vue': '<template><div>lonely</div></template>',
+      'resources/styles/theme-vars.less': THEME_VARS,
+    };
+    const pruned = pruneOrphanSubComponents(files, null, null, {});
+    expect(pruned).toEqual(['package/components/Lonely.vue']);
+    expect(files['package/components/Lonely.vue']).toBeUndefined();
+  });
+});

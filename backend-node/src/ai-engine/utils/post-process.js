@@ -3,7 +3,12 @@
  * 用于 TDD 测试，不依赖 MicrocodeEngineer 类的复杂依赖链
  */
 
-import { inferBackgroundStyle } from './background-size-inference.js';
+import {
+  inferBackgroundStyle,
+  buildBackgroundResourceIndex,
+  buildBgVarToResource,
+  resolveBackgroundResourceRef,
+} from './background-size-inference.js';
 import { removeClassBlocks } from './style-class-consolidator.js';
 // 🛡️ R19（2026-10-21）：文本 run 真值单一来源。下方 `extractPerCharTextTruth` 与
 //   `injectNodeLevelColorTruth` 一律委托本模块，**禁止再写第二套逐字符求值**。
@@ -24,6 +29,93 @@ export function inferChartMinHeight(className = '', styles = '', options = {}) {
   const haystack = `${className} ${styles} ${options.chartType || ''} ${options.chartRole || ''}`;
   if (COMPACT_CHART_RE.test(haystack)) return 100;
   return 160;
+}
+
+/**
+ * 🛡️ 刀C（P3，2026-11-05 · `c-env-monitor-c324a730` 实锤）：图表 min-height 真值解析。
+ *
+ * 病灶：兜底 160px 是纯类名分级（零真值），图表段 89:41 真值 145px、图表盒真值 113px
+ * ⇒ 下限 160 > 容器 145 必溢出；体系里没有任何环节知道真值（`chart-container-guard`
+ * F3 恢复的也是 160）。
+ *
+ * 真值链（判据单一来源，调用方 microcode-engineer T2 注入点消费）：
+ *   ① 图表盒真值 `chartBoxH` —— 段 `internalGeometry`（P-4 采集的锚点子树顶层元素盒）
+ *      中**非文本条目里 h 最大者**（图表容器无直接 characters，且在图表段内通常是
+ *      最高的大块；tabs 等兄弟条目 h 显著更小）。
+ *   ② 段真值 `sectionH` —— `styles.figmaHeightPx` 优先，退 `figmaBox/absoluteBoundingBox.height`
+ *      （与 `resource-mount-plan.sectionBoxById` 同口径）。仅当图表是段唯一子项
+ *      （`isOnlyChild = internalGeometry.length === 1`）时才允许**直接取用**；
+ *      否则只作 **clamp 上限**（终值 ≤ 段真值）。
+ *
+ * 无任何真值 ⇒ 全部返回 0（fail-open，调用方保持旧兜底 160/100 不劣化）。
+ * 🔴 不引入任何新高度常量；160/100 仍是既有兜底。
+ *
+ * @param {Array} sections effectiveSections（planner 产物，含 styles.figmaHeightPx / internalGeometry）
+ * @param {string|number} chartSectionId vision `charts[].section`（Figma node id，如 "89:41"）
+ * @returns {{chartBoxH:number, sectionH:number, isOnlyChild:boolean}}
+ */
+export function resolveChartMinHeightTruth(sections, chartSectionId) {
+  const out = { chartBoxH: 0, sectionH: 0, isOnlyChild: false };
+  const want = chartSectionId != null ? String(chartSectionId) : '';
+  if (!want || !Array.isArray(sections)) return out;
+  const walk = (sec) => {
+    if (!sec || typeof sec !== 'object') return null;
+    if (sec.id != null && String(sec.id) === want) return sec;
+    for (const c of sec.children || []) {
+      const hit = walk(c);
+      if (hit) return hit;
+    }
+    for (const c of ((sec.body && sec.body.children) || [])) {
+      const hit = walk(c);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  let sec = null;
+  for (const s of sections) {
+    sec = walk(s);
+    if (sec) break;
+  }
+  if (!sec) return out;
+
+  // 段真值（clamp 上限）
+  const px = Number(sec.styles?.figmaHeightPx);
+  if (Number.isFinite(px) && px > 0) {
+    out.sectionH = px;
+  } else {
+    const box = sec.figmaBox || sec.absoluteBoundingBox;
+    const h = Number(box?.height);
+    if (Number.isFinite(h) && h > 0) out.sectionH = h;
+  }
+
+  // ① 图表盒真值：internalGeometry 非文本条目 h 最大者
+  const geo = Array.isArray(sec.internalGeometry) ? sec.internalGeometry : [];
+  out.isOnlyChild = geo.length === 1;
+  let best = null;
+  let tie = false;
+  for (const g of geo) {
+    if (!g || g.text) continue; // 文本条目不是图表容器
+    const h = Number(g.h);
+    if (!Number.isFinite(h) || h <= 0) continue;
+    if (best == null || h > best) {
+      best = h;
+      tie = false;
+    } else if (h === best) {
+      tie = true;
+    }
+  }
+  if (best != null && !tie) {
+    // 🛡️ 比例校验（真机 tasks.json 2:8069 实锤）：小图标段 geo 最大 h 仅 18px
+    //   （段真值 145 的 0.12），若当图表盒会把 min-height 压到 18 致图表塌缩。
+    //   判据：最大非文本盒须 ≥ 段真值 1/3 才可信（图表容器通常占段主体；
+    //   89:44 实测 113/145=0.78 ✓）。无段真值时无法校验，保留原值（clamp 亦不会发生）。
+    const hPx = out.sectionH;
+    if (!(hPx > 0) || best >= hPx / 3) {
+      out.chartBoxH = Math.round(best);
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -296,11 +388,20 @@ export function deduplicateBackgroundImages(code) {
  * 逐字符扫描跳过字符串/模板字符串（`` `url(${bg1})` `` 里的 `${}` 不误判为对象边界）。
  *
  * @param {string} content .vue 文件内容
+ * @param {Array|object|null} mapping resourceDomMapping 真值（用于按资源取几何/scaleMode；
+ *        缺省或未命中 → 回落 `inferBackgroundStyle({})` 中性默认，与旧行为一致）
+ * @param {object|null} stats 可选计数位（`bgStyleTruthUsed` / `bgStyleNeutralFallback`）
  * @returns {string} 补全后的内容（无改动时原样返回，引用相等）
  */
-export function ensureBackgroundStyleComplete(content) {
+export function ensureBackgroundStyleComplete(content, mapping = null, stats = null) {
   if (typeof content !== 'string' || !content) return content;
   if (!/backgroundImage\s*:/.test(content)) return content;
+
+  // 🛡️ F3′：真值索引只在首次需要时构建（绝大多数文件无 backgroundImage，零开销）
+  //   三个解析函数下沉到 `background-size-inference.js`（唯一事实源，与
+  //   `layout-style-refiner#_applyRedLineFixes` 的 scaleMode 白名单共用同一口径）。
+  const resIndex = buildBackgroundResourceIndex(mapping);
+  const varToRes = resIndex.size > 0 ? buildBgVarToResource(content) : null;
 
   const edits = [];
   const bgRe = /backgroundImage\s*:/g;
@@ -349,12 +450,29 @@ export function ensureBackgroundStyleComplete(content) {
     // 🛡️ §七 B7（2026-09-28）：此处补的是**缺失属性**（size/repeat/position），用的是
     //   `inferBackgroundStyle({})` 的**中性默认**（'100% 100%' / 'no-repeat' / '0px 0px'），
     //   而非按组件臆造的**值** —— 属「属性补全」而非「值臆造」（与已删的 §七 B3 合成几何区分）。
-    const inferred = inferBackgroundStyle({});
+    //
+    // 🛡️ F3′（2026-11-05 · 刀53 三链治本）：中性默认**只在没有几何真值时**才成立。
+    //   真机 `bg-_m-36.png`（191×81 / parent 192×114）真值是 `191px 80px` @ `1px 31px`，
+    //   被中性默认铺成 `100% 100%` + `0px 0px` ⇒ 小底图拉满整卡（e23b0b40 / 300fe0f7 实锤，
+    //   产物里 `backgroundPosition: '0px 0px'` 即该路径指纹）。现按 `backgroundImage`
+    //   引用的资源（`url(${bg4})` → 文件内 `import` → `bg-_m-36.png`）取真值 mapping；
+    //   解析不出才回落中性默认（旧行为，零回归）。
+    let truthMapping = null;
+    if (varToRes) {
+      const res = resolveBackgroundResourceRef(content.slice(valStart, valEnd), varToRes);
+      if (res) truthMapping = resIndex.get(res) || null;
+    }
+    const inferred = inferBackgroundStyle(truthMapping || {});
     const patches = [];
     if (!/backgroundSize\s*:/.test(objSlice)) patches.push(`backgroundSize: '${inferred.size}'`);
     if (!/backgroundRepeat\s*:/.test(objSlice)) patches.push(`backgroundRepeat: '${inferred.repeat}'`);
     if (!/backgroundPosition\s*:/.test(objSlice)) patches.push(`backgroundPosition: '${inferred.position}'`);
     if (patches.length === 0) continue;
+    // 计数只统计「真的补了」的发生次数（已完整的元素不计入分母）
+    if (stats && typeof stats === 'object') {
+      if (truthMapping) stats.bgStyleTruthUsed = (stats.bgStyleTruthUsed || 0) + 1;
+      else stats.bgStyleNeutralFallback = (stats.bgStyleNeutralFallback || 0) + 1;
+    }
     edits.push({ at: valEnd, text: ', ' + patches.join(', ') });
   }
 

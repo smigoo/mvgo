@@ -96,6 +96,43 @@ function stripOrphanCssValues(cssContent) {
   return { cleaned: result.join('\n'), dropped }
 }
 
+/**
+ * ONNX Runtime 自托管产物清单（文件名与 ORT dist 完全一致）。
+ * 两套变体都收录：asyncify 是默认档；无后缀版对应 Safari < 26 且无 WebGPU 时
+ * transformers.js 会选择的变体（见其内部 wasmPathSuffix 分支）。
+ */
+const ORT_WASM_FILES = Object.freeze([
+  'ort-wasm-simd-threaded.asyncify.mjs',
+  'ort-wasm-simd-threaded.asyncify.wasm',
+  'ort-wasm-simd-threaded.mjs',
+  'ort-wasm-simd-threaded.wasm'
+])
+
+/**
+ * 定位 onnxruntime-web 的 dist 目录（绝对路径）。
+ * pnpm 布局下该包不在顶层 node_modules —— 它是 @huggingface/transformers 的依赖，
+ * 真实位置在 node_modules/.pnpm/onnxruntime-web@<ver>/node_modules/onnxruntime-web/dist。
+ * 因此先扫 .pnpm，再退回 npm/yarn 的扁平布局。
+ * @returns {string|null} 找不到返回 null；调用方按 404 / 跳过处理，不中断构建。
+ */
+function resolveOrtWasmDist() {
+  const marker = 'ort-wasm-simd-threaded.asyncify.mjs'
+  const flat = path.join(process.cwd(), 'node_modules', 'onnxruntime-web', 'dist')
+  if (fs.existsSync(path.join(flat, marker))) return flat
+  const pnpmRoot = path.join(process.cwd(), 'node_modules', '.pnpm')
+  try {
+    const hits = fs
+      .readdirSync(pnpmRoot)
+      .filter((name) => name.startsWith('onnxruntime-web@'))
+      .map((name) => path.join(pnpmRoot, name, 'node_modules', 'onnxruntime-web', 'dist'))
+      .filter((dir) => fs.existsSync(path.join(dir, marker)))
+    if (hits.length) return hits[hits.length - 1]
+  } catch {
+    /* node_modules/.pnpm 不存在：忽略，走下面的 null 分支 */
+  }
+  return null
+}
+
 export default defineConfig(({ command, mode }) => {
   const isBuild = command === 'build'
   const viteEnv = loadEnv(mode, process.cwd())
@@ -232,6 +269,57 @@ export default defineConfig(({ command, mode }) => {
               res.end(String((e && e.message) || e))
             }
           })
+        }
+      },
+      // 自定义插件：自托管 ONNX Runtime 推理内核（wasm 二进制 + 加载器 .mjs）
+      //
+      // 背景：@huggingface/transformers 初始化时把 env.backends.onnx.wasm.wasmPaths
+      // 指向 https://cdn.jsdelivr.net/npm/onnxruntime-web@<ver>/dist/，境内该域连接被
+      // 重置（ERR_CONNECTION_RESET）→ 本地 Whisper 离线转写即使权重下完了也报
+      // "no available backend found"。这里把 ORT 产物以**同源静态资源**形式提供：
+      //   · dev   —— 中间件直接从 node_modules 流式读（不进 Vite 模块图，不参与 transform）
+      //   · build —— 构建收尾把文件拷进 dist/static/wasm/
+      // 前缀 /static/wasm/ 与前端 src/views/meeting/mock/local-asr.js 的 ORT_WASM_BASE
+      // 约定一致；.mjs 与 .wasm 必须同目录，因为加载器内部用
+      //   new URL('ort-wasm-simd-threaded.asyncify.wasm', import.meta.url) 就地定位二进制。
+      // 走中间件而非 public/ 的好处：约 41MB 二进制不必提交进仓库。
+      {
+        name: 'ort-wasm-self-host',
+        configureServer(server) {
+          // 直接 use（不返回函数）→ 注册在 Vite 内部中间件**之前**，
+          // 避免 .mjs 被 transformMiddleware 当成源码模块截获。
+          server.middlewares.use('/static/wasm', (req, res, next) => {
+            const fileName = decodeURIComponent((req.url || '').split('?')[0]).replace(/^\/+/, '')
+            if (!ORT_WASM_FILES.includes(fileName)) return next()
+            const ortDist = resolveOrtWasmDist()
+            const abs = ortDist ? path.join(ortDist, fileName) : ''
+            if (!abs || !fs.existsSync(abs)) {
+              res.statusCode = 404
+              return res.end('ORT wasm asset not found: ' + fileName)
+            }
+            res.setHeader(
+              'Content-Type',
+              fileName.endsWith('.wasm') ? 'application/wasm' : 'text/javascript; charset=utf-8'
+            )
+            res.setHeader('Cache-Control', 'no-cache')
+            if (req.method === 'HEAD') return res.end()
+            fs.createReadStream(abs).pipe(res)
+          })
+        },
+        writeBundle(options) {
+          const ortDist = resolveOrtWasmDist()
+          if (!ortDist) {
+            this.warn('[ort-wasm-self-host] 未找到 onnxruntime-web/dist，跳过自托管资源拷贝')
+            return
+          }
+          const outDir = options?.dir || path.resolve(process.cwd(), 'dist')
+          const targetDir = path.join(outDir, 'static', 'wasm')
+          fs.mkdirSync(targetDir, { recursive: true })
+          for (const fileName of ORT_WASM_FILES) {
+            const src = path.join(ortDist, fileName)
+            if (!fs.existsSync(src)) continue
+            fs.copyFileSync(src, path.join(targetDir, fileName))
+          }
         }
       },
       Vue(),
