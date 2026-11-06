@@ -157,7 +157,7 @@ export function normalizeVForRowListDirection(files) {
     if (!rt) continue;
     const body = rt.tpl;
     const stack = []; // 每层 { classes }
-    for (const tag of body.matchAll(/<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/g)) {
+    for (const tag of body.matchAll(/<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g)) {
       const [, closing, tagName, attrs, selfClose] = tag;
       const isVoid = /^(img|br|hr|input|meta|link|source|area|base|col|embed|track|wbr)$/i.test(tagName);
       if (closing) {

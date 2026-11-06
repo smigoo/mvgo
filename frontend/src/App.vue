@@ -40,7 +40,7 @@
         :componentId="bindingComponentId"
         :groupId="bindingGroupId"
         :componentName="bindingComponentName"
-        :mode="bindingMode"
+        :s4-mode="bindingMode === 's4'"
         :s4-slots="bindingSlots"
         :s4-auto-bindings="bindingAutoBindings"
         surface="drawer"

@@ -374,6 +374,25 @@ export function extractRenderedText(content) {
 }
 
 /**
+ * 🧬 刀67（2026-11-06 · mc-max-1793902330765-7d3fc546 实锤）：文本比对归一出口（单一事实源）。
+ *
+ * 病灶：`extractRenderedText` 把每个标签边界替换为一个空格（`replace(/<[^>]*>/g,' ')`），
+ * LLM 把「共6个节点」拆成 `<span>共</span><span> </span><span>6</span>…` ⇒ 抽取结果
+ * `共  6  个节点`；而真值文本来自 Figma（无空白）⇒ `includes(真值)` 恒 false
+ * ⇒ `checkSectionExclusiveEvidence` 借据判据（section-content-guard:1480）与
+ * duplicateText 判据（:54/:140/:272）双双失明，越界文案无人拦。
+ *
+ * 口径：只去空白类字符（含全角空格 U+3000、零宽字符、BOM），**不做**大小写/繁简变更
+ *（避免引入新的误匹配面）。所有「真值文本 vs 渲染文本」的 includes 判定必须走本函数，
+ * 禁止在各判据点内联第二个归一实现（判据单一来源纪律）。
+ * @param {string} s 任意文本
+ * @returns {string} 去空白后的文本
+ */
+export function normalizeForMatch(s) {
+  return String(s || '').replace(/[\s\u3000\u200b-\u200d\ufeff]/g, '');
+}
+
+/**
  * 提取模板里「会渲染到界面」的文本节点。
  * 剥离 HTML 注释 / 标签（含 alt/title/aria-label 等属性值）/ 插值表达式 {{ }}，
  * 只留下标签之间的静态文字（如 `<span>监控</span>` → 「监控」）。

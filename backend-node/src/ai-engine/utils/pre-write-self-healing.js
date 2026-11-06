@@ -130,7 +130,7 @@ export function stripDuplicateSectionRootBg(content) {
   const tpl = content.match(/<template>([\s\S]*?)<\/template>/i);
   if (!tpl) return content;
   const tplBody = tpl[1];
-  const rootRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?data-section-id="[^"]+"(?:"[^"]*"|'[^']*'|[^>])*)>/;
+  const rootRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="[^"]+"(?:"[^"]*"|'[^']*'|[^>"'])*)>/;
   const rm = tplBody.match(rootRe);
   if (!rm) return content;
   const rootTag = rm[0];

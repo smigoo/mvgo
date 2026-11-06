@@ -339,9 +339,24 @@ async function handleOpen() {
  */
 async function fixItem(it: McSpecItem) {
   if (fixingId.value) return
+  // 🔴 2026-11-06：后端 env / 全局 ai-config.json 兜底均已移除，模型完全由用户级配置提供。
+  // 与 Playground（useAIChat）/ 预览页 AI 修复（preview getLlmConfig）同一取法：
+  // 从配置 store 取 text 槽组成 llmConfig 随请求传给后端，否则 createLLM 必抛「API Key 未配置」。
+  const { useConfigStore } = await import('@/stores/config')
+  const configStore = useConfigStore()
+  const globalConfig = configStore.config || {}
+  const llmConfig = {
+    apiKey: globalConfig.textApiKey || globalConfig.aiApiKey || undefined,
+    baseURL: globalConfig.textBaseURL || globalConfig.aiBaseURL || undefined,
+    model: globalConfig.textModel || globalConfig.aiModel || undefined,
+  }
+  if (!llmConfig.apiKey) {
+    message.error('文本模型未配置：请到「设置 - 模型配置」添加文本模型并保存后重试')
+    return
+  }
   fixingId.value = it.id
   try {
-    await fixMcSpecItem(props.componentId, it)
+    await fixMcSpecItem(props.componentId, it, llmConfig)
     message.success(`[${it.id}] AI 修复完成，正在重新检查`)
     await run()
   } catch (e: any) {

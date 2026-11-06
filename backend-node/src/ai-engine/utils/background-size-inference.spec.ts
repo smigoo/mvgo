@@ -45,7 +45,7 @@ describe('background-size-inference（scaleMode 权威 + 几何回落）', () =>
     expect(r.position).toBe('0px 0px')
   })
 
-  it('🔴 STRETCH + 图节点只是容器局部（coverage<0.9）⇒ 必须用 figmaBox 实际尺寸，禁止拉满', () => {
+  it('🔴 STRETCH + 图节点只是容器局部（coverage<0.9）⇒ 必须用比例口径（🧬刀70 T4），禁止拉满', () => {
     // 2026-11-05 D2 治本回归防线 · c-aiot-dpjh-bsjd-09636315 实锤：
     // 卡 470×72，其顶部装饰带 `image 313` 为 459×29 @ 相对 y=0（coverage=0.393）。
     // 旧行为：scaleMode=STRETCH 无条件 → `100% 100%` ⇒ 29px 带子被拉伸 2.48 倍铺满整卡，
@@ -56,9 +56,13 @@ describe('background-size-inference（scaleMode 权威 + 几何回落）', () =>
       figmaBox: { x: 6, y: 0, width: 459, height: 29 },
       parentBox: { x: 0, y: 0, width: 470, height: 72 },
     })
-    expect(r.size).toBe('459px 29px')
+    // 🧬 刀70 T4：百分比口径（相对 parentBox），容器弹性时等比跟随；与实现同公式计算期望
+    const sw = ((459 / 470) * 100).toFixed(2)
+    const sh = ((29 / 72) * 100).toFixed(2)
+    expect(r.size).toBe(`${sw}% ${sh}%`)
     expect(r.cover).toBe(false)
-    expect(r.position).toBe('6px 0px') // 相对父容器的真实偏移，不再是 0 0
+    const gapX = 470 * (1 - parseFloat(sw) / 100)
+    expect(r.position).toBe(`${((6 / gapX) * 100).toFixed(2)}% 0px`)
     expect(r.repeat).toBe('no-repeat')
     // 来源仍必须是 scaleMode（不得因走了几何尺寸就降级为 geometry，否则来源分布失真）
     expect(r.inferredBy).toBe('scaleMode')
@@ -92,13 +96,15 @@ describe('background-size-inference（scaleMode 权威 + 几何回落）', () =>
     // 覆盖比 0.986 ≥ 0.9 → 100% 100%（旧规则）
     expect(r.size).toBe('100% 100%')
     expect(r.cover).toBe(true)
-    // 局部小图 → 固定 px（旧规则）
+    // 局部小图 → 🧬刀70 T4 比例口径（有 parentBox）；与实现同公式计算期望
     const small = inferBackgroundStyle({
       figmaBox: { x: 5, y: 3, width: 78, height: 21 },
       parentBox: { x: 0, y: 0, width: 295, height: 27 },
     })
     expect(small.inferredBy).toBe('geometry')
-    expect(small.size).toBe('78px 21px')
+    const ssw = ((78 / 295) * 100).toFixed(2)
+    const ssh = ((21 / 27) * 100).toFixed(2)
+    expect(small.size).toBe(`${ssw}% ${ssh}%`)
     expect(small.repeat).toBe('no-repeat') // 维度约束：21/27=0.78>0.5
   })
 
@@ -107,6 +113,87 @@ describe('background-size-inference（scaleMode 权威 + 几何回落）', () =>
     expect(inferBackgroundSize({ ...box, imageScaleMode: 'WEIRD' }).inferredBy).toBe('geometry')
   })
 })
+
+
+describe('3b-A：sub-state 的 parentBox ≠ DOM 状态子项时回落 px', () => {
+  const tabState = {
+    bgRole: 'sub-state',
+    mountTarget: 'tabs-list',
+    figmaBox: { x: 1500, y: 906, width: 78, height: 21 },
+    parentBox: { x: 1495, y: 903, width: 295, height: 27 },
+  }
+
+  it('⭐ 5bf49590 真机同构：78×21 / 295×27 不再写成 26.44% 77.78%', () => {
+    const mapping: any = { ...tabState }
+    const r = inferBackgroundStyle(mapping)
+    expect(r.size).toBe('78px 21px')
+    expect(r.position).toBe('5px 3px')
+    expect(r.repeat).toBe('no-repeat')
+    expect(r.percentFallback).toBe('sub-state-mount-container')
+    expect(mapping.backgroundPercentFallback).toBe('sub-state-mount-container')
+  })
+
+  it('scaleMode 入口同源：STRETCH 局部状态图也回落真实像素与偏移', () => {
+    const mapping: any = {
+      ...tabState,
+      imageScaleMode: 'STRETCH',
+      figmaBox: { x: 6, y: 0, width: 459, height: 29 },
+      parentBox: { x: 0, y: 0, width: 470, height: 72 },
+    }
+    expect(sizingFromScaleMode(mapping)).toEqual({
+      backgroundSize: '459px 29px',
+      backgroundPosition: '6px 0px',
+      backgroundRepeat: 'no-repeat',
+      needsOverflowHidden: false,
+    })
+  })
+
+  it('面积几何入口同源：调用方缺覆盖盒时仍读取 mapping 并回落 px', () => {
+    const mapping: any = {
+      bgRole: 'sub-state',
+      figmaBox: { x: 6, y: 16, width: 27, height: 32 },
+      parentBox: { x: 0, y: 0, width: 117, height: 64 },
+    }
+    const r = areaBackgroundSizing(null, null, mapping)
+    expect(r.backgroundSize).toBe('27px 32px')
+    expect(r.backgroundPosition).toBe('6px 16px')
+    expect(mapping.backgroundPercentFallback).toBe('sub-state-mount-container')
+  })
+
+  it('阴性：普通局部容器没有 sub-state 反证，继续使用刀70 百分比', () => {
+    const r = inferBackgroundStyle({ ...tabState, bgRole: 'container' })
+    expect(r.size).toBe(expectPctSize(78, 21, 295, 27))
+    expect(r.position).toBe(expectPctPos(5, 3, 295, 27, 26.44, 77.78))
+    expect(r.percentFallback).toBeNull()
+  })
+
+  it('阴性：sub-state 满铺仍 100% 100%；冻结 mapping 也能回落且不写回', () => {
+    const full: any = {
+      bgRole: 'sub-state',
+      figmaBox: { x: 0, y: 0, width: 100, height: 40 },
+      parentBox: { x: 0, y: 0, width: 100, height: 40 },
+    }
+    expect(inferBackgroundStyle(full).size).toBe('100% 100%')
+    expect(full.backgroundPercentFallback).toBeUndefined()
+
+    const frozen: any = Object.freeze({ ...tabState })
+    const r = inferBackgroundStyle(frozen)
+    expect(r.size).toBe('78px 21px')
+    expect(r.percentFallback).toBeNull()
+    expect(frozen.backgroundPercentFallback).toBeUndefined()
+  })
+})
+
+// 🧬 刀70 T4：与 background-size-inference.js 同公式的期望值计算（改验不同正则：断言值由独立公式推导）
+function expectPctSize(bw: number, bh: number, pw: number, ph: number) {
+  return `${((bw / pw) * 100).toFixed(2)}% ${((bh / ph) * 100).toFixed(2)}%`
+}
+function expectPctPos(dx: number, dy: number, pw: number, ph: number, sw: number, sh: number) {
+  // 镜像实现语义：偏移 0 → '0px'（percentOffsetFrom 边界分支）
+  const gx = dx === 0 ? '0px' : `${(dx / (pw * (1 - sw / 100)) * 100).toFixed(2)}%`
+  const gy = dy === 0 ? '0px' : `${(dy / (ph * (1 - sh / 100)) * 100).toFixed(2)}%`
+  return `${gx} ${gy}`
+}
 
 /**
  * 🛡️ R3-bg 刀 A（2026-11-05）：`sizingFromScaleMode` —— 视觉解析层（`visual-parser._calculateBackgroundSizing`）
@@ -148,16 +235,23 @@ describe('sizingFromScaleMode —— 背景四件套真值裁决（R3-bg 刀 A�
   })
 
   it('STRETCH + cov < 0.9 ⇒ 图片实际像素 + 真实偏移（D2 守卫不被重造）', () => {
+    const decoSize = expectPctSize(459, 29, 470, 72)
+    const decoSw = parseFloat(decoSize.split('%')[0])
+    const decoSh = parseFloat(decoSize.split('%')[1])
     expect(sizingFromScaleMode(deco)).toEqual({
-      backgroundSize: '459px 29px',
-      backgroundPosition: '6px 0px',
+      backgroundSize: decoSize,
+      backgroundPosition: expectPctPos(6, 0, 470, 72, decoSw, decoSh),
       backgroundRepeat: 'no-repeat',
       needsOverflowHidden: false,
     })
     // 旧几何口径对这条给 cover（47.52/120=0.396、47.52/74.2=0.641 落进 cover 兜底）⇒ 图标被放大铺满
+    // 🧬刀70 T4：百分比口径用 Figma 原始真值（47.52×47.52 @ 120×74.195），不做取整
+    const iconSize = expectPctSize(47.52, 47.52, 120, 74.1953125)
+    const iconSw = parseFloat(iconSize.split('%')[0])
+    const iconSh = parseFloat(iconSize.split('%')[1])
     expect(sizingFromScaleMode(icon)).toEqual({
-      backgroundSize: '48px 48px',
-      backgroundPosition: '4px 20px',
+      backgroundSize: iconSize,
+      backgroundPosition: expectPctPos(4, 20, 120, 74.1953125, iconSw, iconSh),
       backgroundRepeat: 'no-repeat',
       needsOverflowHidden: false,
     })
@@ -202,7 +296,7 @@ describe('sizingFromScaleMode —— 背景四件套真值裁决（R3-bg 刀 A�
   it('mapping 缺坐标时用「轴向比积」代理 coverage（不含伪精度）', () => {
     // 只有 scaleMode、无 figmaBox/parentBox ⇒ 由调用方传入的尺寸算代理覆盖比
     const r = sizingFromScaleMode({ imageScaleMode: 'STRETCH' }, { width: 459, height: 29 }, { width: 470, height: 72 })
-    expect(r.backgroundSize).toBe('459px 29px') // 代理 cov 0.393 < 0.9
+    expect(r.backgroundSize).toBe(expectPctSize(459, 29, 470, 72)) // 🧬刀70 T4 比例口径；代理 cov 0.393 < 0.9
     expect(r.backgroundPosition).toBe('0px 0px') // 无偏移可算 ⇒ 原点
     // 调用方尺寸与容器一致 ⇒ 代理 cov = 1 ⇒ 铺满
     expect(sizingFromScaleMode({ imageScaleMode: 'STRETCH' }, { width: 470, height: 72 }, { width: 470, height: 72 }).backgroundSize)
@@ -259,8 +353,8 @@ describe('areaBackgroundSizing —— 面积口径几何裁决（R3-bg 刀 B2）
       { x: 6, y: 16, width: 27, height: 32 },
       { x: 0, y: 0, width: 117, height: 64 },
     )
-    expect(r.backgroundSize).toBe('27px 32px')
-    expect(r.backgroundPosition).toBe('6px 16px')
+    expect(r.backgroundSize).toBe(expectPctSize(27, 32, 117, 64)) // 🧬刀70 T4
+    expect(r.backgroundPosition).toBe(expectPctPos(6, 16, 117, 64, 23.08, 50.00))
     expect(r.backgroundRepeat).toBe('no-repeat')
     expect(r.needsOverflowHidden).toBe(false)
   })
@@ -271,8 +365,8 @@ describe('areaBackgroundSizing —— 面积口径几何裁决（R3-bg 刀 B2）
       { x: 83, y: 4, width: 16, height: 16 },
       { x: 0, y: 0, width: 388, height: 30 },
     )
-    expect(r.backgroundSize).toBe('16px 16px')
-    expect(r.backgroundPosition).toBe('83px 4px')
+    expect(r.backgroundSize).toBe(expectPctSize(16, 16, 388, 30)) // 🧬刀70 T4
+    expect(r.backgroundPosition).toBe(expectPctPos(83, 4, 388, 30, 4.12, 53.33))
   })
 
   it('小图标（旧判 contain 的那批）⇒ 图实际像素，保形语义不再被一维比例伪造', () => {
@@ -280,13 +374,13 @@ describe('areaBackgroundSizing —— 面积口径几何裁决（R3-bg 刀 B2）
       { x: 18, y: 8, width: 8, height: 8 },
       { x: 0, y: 0, width: 388, height: 30 },
     )
-    expect(r.backgroundSize).toBe('8px 8px')
-    expect(r.backgroundPosition).toBe('18px 8px')
+    expect(r.backgroundSize).toBe(expectPctSize(8, 8, 388, 30)) // 🧬刀70 T4
+    expect(r.backgroundPosition).toBe(expectPctPos(18, 8, 388, 30, 2.06, 26.67))
   })
 
   it('cov < 0.9 且无偏移可算（只给尺寸）⇒ 位置回落 0px 0px', () => {
     const r = areaBackgroundSizing({ width: 27, height: 32 }, { width: 117, height: 64 })
-    expect(r.backgroundSize).toBe('27px 32px')
+    expect(r.backgroundSize).toBe(expectPctSize(27, 32, 117, 64)) // 🧬刀70 T4
     expect(r.backgroundPosition).toBe('0px 0px')
   })
 
@@ -302,8 +396,8 @@ describe('areaBackgroundSizing —— 面积口径几何裁决（R3-bg 刀 B2）
       parentBox: { x: 0, y: 0, width: 117, height: 64 },
     }
     const r = areaBackgroundSizing(null, null, mapping)
-    expect(r.backgroundSize).toBe('27px 32px')
-    expect(r.backgroundPosition).toBe('6px 16px')
+    expect(r.backgroundSize).toBe(expectPctSize(27, 32, 117, 64)) // 🧬刀70 T4
+    expect(r.backgroundPosition).toBe(expectPctPos(6, 16, 117, 64, 23.08, 50.00))
   })
 
   it('无交集 ⇒ cov = 0 ⇒ 图实际像素 + 真实偏移（不被 clamp 成 0,0）', () => {

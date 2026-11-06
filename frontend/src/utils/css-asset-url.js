@@ -86,3 +86,89 @@ export function rewriteVueStyleAssetUrls(src, baseUrl) {
     return open + rewriteCssAssetUrls(body, baseUrl) + close;
   });
 }
+
+/**
+ * 重写 SFC `<template>` 里 img 的**静态相对 src** 为绝对 URL（模板兜底通道）。
+ *
+ * 背景（2026-11-06 真机实锤 · mc-lite-1793913244590-bdfba71d 续跑后预览图标破图）：
+ *   Lite AI 定位路径的历史产物把模板 img 写成 `src="../resources/images/x.png"`——
+ *   它是 HTML 属性，不经 script import（handleModule）也不经 style url() 两条重写管道，
+ *   vue3-sfc-loader 原样保留 ⇒ 浏览器按当前页面 URL 解析 `../resources/...` ⇒ 404 破图。
+ *
+ *   本函数在模板编译**之前**调用（与 rewriteVueStyleAssetUrls 同位、同基准），把
+ *   `src="相对路径"` 提升为绝对 URL。判据纪律与 rewriteCssAssetUrls 一致：
+ *   - 只重写相对引用（SELF_ANCHORED_RE：绝对/协议/data:/blob: 原样，幂等）；
+ *   - `:src="expr"` 是**动态绑定**（运行时值，编译期不可解析）——本函数的正则只匹配
+ *     静态 `src=`，不会碰 `:src=`（属性名不同）；
+ *   - 解析结果完全由 `new URL(raw, baseUrl)` 决定，不猜扩展名不补目录。
+ *
+ * @param src     `.vue` 源码
+ * @param baseUrl 该 `.vue` 文件自身的绝对 URL（`${base}/${rel}`）
+ */
+export function rewriteVueTemplateAssetUrls(src, baseUrl) {
+  if (!src || !baseUrl || !/<template\b/i.test(src)) return src;
+  let absBase;
+  try {
+    const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'http://localhost';
+    absBase = new URL(baseUrl, origin).href;
+  } catch {
+    return src;
+  }
+  // 只匹配 <template>…</template> 块内、静态 src 属性（排除 :src/v-bind:src——属性名前带 : 或 v-bind: 即不匹配 ` src="` 形态）
+  return src.replace(
+    /(<template\b[^>]*>)([\s\S]*?)(<\/template>)/gi,
+    (_full, open, body, close) => {
+      const rewritten = body.replace(
+        /(\ssrc=)(["'])([^"']+)\2/g,
+        (full, attr, quote, raw) => {
+          const v = String(raw).trim();
+          if (!v || SELF_ANCHORED_RE.test(v)) return full;
+          try {
+            return `${attr}${quote}${new URL(v, absBase).href}${quote}`;
+          } catch {
+            return full;
+          }
+        },
+      );
+      return open + rewritten + close;
+    },
+  );
+}
+
+/**
+ * 🔴 2026-11-06 67cd38d8 形态扩展：重写 `:src="<expr> || '../resources/images/x.png'"`
+ * **表达式内相对路径字面量**为绝对 URL（仅存量兜底；挂载链第七形态已在生成期把该
+ * 字面量抽成 labAsset import）。判据与 rewriteVueTemplateAssetUrls 一致：
+ * 只提升相对引用（SELF_ANCHORED_RE 幂等）、`new URL(raw, baseUrl)` 决定结果。
+ * 只匹配「单引号字面量在 || 右侧」的保守形态，不做通用表达式解析。
+ */
+export function rewriteVueExprAssetUrls(src, baseUrl) {
+  if (!src || !baseUrl || !/<template\b/i.test(src)) return src;
+  let absBase;
+  try {
+    const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'http://localhost';
+    absBase = new URL(baseUrl, origin).href;
+  } catch {
+    return src;
+  }
+  return src.replace(
+    /(<template\b[^>]*>)([\s\S]*?)(<\/template>)/gi,
+    (_full, open, body, close) => {
+      const rewritten = body.replace(
+        /(\|\|\s*)(['"])(\.\.?\/[^'"]+)\2/g,
+        (full, pipe, quote, raw) => {
+          const v = String(raw).trim();
+          if (!SELF_ANCHORED_RE.test(v)) {
+            try {
+              return `${pipe}${quote}${new URL(v, absBase).href}${quote}`;
+            } catch {
+              return full;
+            }
+          }
+          return full;
+        },
+      );
+      return open + rewritten + close;
+    },
+  );
+}

@@ -2015,7 +2015,7 @@ export function stripRedundantInnerBgWhenHostHasBg(code) {
   const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
   const styleText = styleSeg ? styleSeg[1] : '';
   const hostCls = new Set();
-  const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+  const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
   let m;
   while ((m = tagRe.exec(tplSeg[1])) !== null) {
     const attrs = m[2] || '';

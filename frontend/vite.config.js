@@ -529,6 +529,9 @@ export default defineConfig(({ command, mode }) => {
         ['/api/admin/ai-configs']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
         ['/api/admin/users']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
         ['/api/admin/components']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
+        // 任务反馈处置台在 Node 端（FeedbackModule，/api/admin/feedbacks*），
+        // 必须在 /api/admin 兜底（→ Java 8080）之前声明，否则 500 No static resource
+        ['/api/admin/feedbacks']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
         ['/api/admin']: { target: 'http://localhost:8080', changeOrigin: true, secure: false },
         // 操作日志：读接口在 Java 侧（Node 只有 fire-and-forget 写，无 GET），显式路由到 8080
         // 不补这条则前端请求落到默认 /api → Node 13030 → 404

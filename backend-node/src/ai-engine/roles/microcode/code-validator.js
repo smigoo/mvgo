@@ -1456,7 +1456,51 @@ export function validateClassNames(
       });
     }
 
-    return { mismatches, fixed: fallbackCss !== null, fallbackCss, crossRefWarnings };
+    // 🛡️ 刀56（2026-11-05 · c-env-monitor-1287c878 / c-device-c0d64b92 双实锤）：
+    //   **装配唯一性 + label/value 方向**两审计（reportOnly WARN，0 也打）。
+    //   病灶①：LLM 把叶子 section 已拆给内部子组件的内容在父文件再内联渲染一份
+    //   （TabsSection 游离 tabs div）⇒ tabs 双行、32px 容器装 ~72px ⇒ icons 被裁没。
+    //   病灶②：属性字段 label/value 按 Figma 子树文档序机械落字 ⇒ 「8088 端口号」反转。
+    //   口径：见文件尾 `findLeafInlineDuplicateEvidence` / `findLabelValueSwapEvidence`。
+    //   观测期 WARN 不拒收——误报率真机跑一轮后再决定是否收紧（方案 §2 判据为假设）。
+    const dao56 = {
+      leafInlineDuplicate: { hit: 0, checked: 0 },
+      labelValueSwap: { hit: 0, checked: 0 },
+    };
+    try {
+      for (const [p, c] of Object.entries(allFiles)) {
+        if (!p.endsWith('.vue') || typeof c !== 'string') continue;
+        const dup = findLeafInlineDuplicateEvidence(p, c, allFiles);
+        if (dup) {
+          dao56.leafInlineDuplicate.checked += 1;
+          dao56.leafInlineDuplicate.hit += 1;
+          options.logger?.warn?.('🛡️ 刀56 叶子装配唯一性审计（WARN，只报不改）', {
+            file: p,
+            overlapTexts: dup.overlapTexts,
+          });
+        } else if (hasSubComponentImports(c)) {
+          dao56.leafInlineDuplicate.checked += 1;
+        }
+        const swaps = findLabelValueSwapEvidence(c);
+        dao56.labelValueSwap.checked += 1;
+        if (swaps.length > 0) {
+          dao56.labelValueSwap.hit += swaps.length;
+          options.logger?.warn?.('🛡️ 刀56 label/value 方向审计（WARN，只报不改）', {
+            file: p,
+            swaps: swaps.slice(0, 5),
+          });
+        }
+      }
+      options.logger?.info?.(
+        `🛡️ 刀56 计数: leafInlineDuplicate=${dao56.leafInlineDuplicate.hit}/${dao56.leafInlineDuplicate.checked} labelValueSwap=${dao56.labelValueSwap.hit}/${dao56.labelValueSwap.checked}`,
+      );
+    } catch (e) {
+      options.logger?.warn?.('刀56 装配唯一性/方向审计异常（非阻断）', {
+        error: e?.message || String(e),
+      });
+    }
+
+    return { mismatches, fixed: fallbackCss !== null, fallbackCss, crossRefWarnings, dao56 };
   }
 
 export function validateContainerSize(code, rootWidth, rootHeight, options = {}) {
@@ -2757,3 +2801,112 @@ export async function validateAndFixGeneratedFiles(
 
     return { fixedFiles, fixes };
   }
+
+// ══════════════════════════════════════════════════════════════
+// 🛡️ 刀56（2026-11-05）：装配唯一性 + label/value 方向 纯判据
+// 消费点：`validateClassNames` 内逐 .vue 审计（reportOnly WARN，0 也打）。
+// 判据为假设（方案 §2），以真机重投 1287c878 / c0d64b92 形态任务验签。
+// ══════════════════════════════════════════════════════════════
+
+/** 叶子/父文件是否 import 了（同级或 components/ 下的）.vue 子组件 */
+export function hasSubComponentImports(content = '') {
+  if (!content || typeof content !== 'string') return false;
+  return /import\s+[A-Za-z_$][\w$]*\s+from\s*['"]\.\/(?:components\/)?[A-Za-z][\w$]*\.vue['"]/.test(
+    content,
+  );
+}
+
+const DAO56_CJK_RX = /[\u4e00-\u9fff]{2,}/g;
+
+function dao56ExtractCjkTexts(content) {
+  const out = new Set();
+  if (!content || typeof content !== 'string') return out;
+  const rx = new RegExp(DAO56_CJK_RX.source, 'g');
+  let m;
+  while ((m = rx.exec(content))) out.add(m[0]);
+  return out;
+}
+
+/**
+ * 🛡️ 刀56-A 叶子装配唯一性判据（纯函数、确定性、fail-open）。
+ *
+ * 形态：叶子 .vue import 了内部子组件（`./Xxx.vue` 同级 或 `./components/Xxx.vue`），
+ * 且叶子全文（模板+script）与子组件全文出现 **≥2 个不同的中文文案重叠** ⇒
+ * 「同一组内容文案父子两份」= 内联重复渲染高置信信号（1287c878：tabList 四个
+ * 监测项文案两文件都在）。
+ *
+ * 阈值 ≥2：单个公共词（如「设备」）可能是领域词汇，≥2 个独立文案重叠才够置信。
+ * 已知误报形态（观测期接受）：父文件经 props 传同文案数据给子组件的合法装配 ——
+ * WARN 不拒收，真机观测误报率后决定收紧。
+ *
+ * @returns {null | {overlapTexts: string[]}} null = 未构成检查形态（无子组件 import /
+ *   子组件文件解析不到 / 重叠不足），调用方按 checked 口径区分
+ */
+export function findLeafInlineDuplicateEvidence(leafPath, leafContent, allFiles) {
+  if (!leafContent || typeof leafContent !== 'string' || !allFiles) return null;
+  if (!hasSubComponentImports(leafContent)) return null;
+  const leafDir = leafPath.includes('/')
+    ? leafPath.slice(0, leafPath.lastIndexOf('/'))
+    : '';
+  const resolveChild = (relImport) => {
+    const rel = String(relImport).replace(/^\.\//, '');
+    const direct = leafDir ? `${leafDir}/${rel}` : rel;
+    if (typeof allFiles[direct] === 'string') return allFiles[direct];
+    for (const [p, c] of Object.entries(allFiles)) {
+      if (typeof c !== 'string') continue;
+      if (p === direct || p.endsWith(`/${direct}`) || p.endsWith(direct)) return c;
+    }
+    return null;
+  };
+  const importRe =
+    /import\s+[A-Za-z_$][\w$]*\s+from\s*['"]\.\/((?:components\/)?[A-Za-z][\w$]*)\.vue['"]/g;
+  const childTexts = new Set();
+  let resolved = 0;
+  let m;
+  while ((m = importRe.exec(leafContent))) {
+    const child = resolveChild(m[1] + '.vue');
+    if (child == null) continue;
+    resolved += 1;
+    for (const t of dao56ExtractCjkTexts(child)) childTexts.add(t);
+  }
+  if (resolved === 0 || childTexts.size === 0) return null;
+  const leafTexts = dao56ExtractCjkTexts(leafContent);
+  const overlap = [...leafTexts].filter((t) => childTexts.has(t));
+  return overlap.length >= 2 ? { overlapTexts: overlap.slice(0, 6) } : null;
+}
+
+/**
+ * 🛡️ 刀56-B label/value 方向判据（纯函数、确定性）。
+ *
+ * 形态：模板中相邻（≤200 字符）的 label 侧（类名含 label|title|key）与 value 侧
+ * （类名含 value|val|num|count|amount）文本对，且 label 侧为**纯数值**（数字/单位
+ * 符号）∧ value 侧含中文 ⇒ 方向反转实锤（c0d64b92：label=8088/value=端口号、
+ * label=118.782781/value=设备精度）。
+ *
+ * 阴性：真值方向「端口号 8088」⇒ label=端口号（非纯数值）不命中。
+ *
+ * @returns {Array<{label: string, value: string}>}
+ */
+export function findLabelValueSwapEvidence(content) {
+  if (!content || typeof content !== 'string') return [];
+  const tplMatch = content.match(/<template>([\s\S]*)<\/template>/i);
+  const tpl = tplMatch ? tplMatch[1] : content;
+  const hits = [];
+  const pairRx =
+    /<(\w+)([^>]*class="[^"]*(?:label|title|key)[^"]*"[^>]*)>([^<]{1,40})<\/\1>([\s\S]{0,200}?)<(\w+)([^>]*class="[^"]*(?:value|val|num|count|amount)[^"]*"[^>]*)>([^<]{1,40})<\/\5>/g;
+  const NUMERIC_RX = /^[\d.,%\s+\-/:x×台个次°℃]+$/;
+  let m;
+  while ((m = pairRx.exec(tpl))) {
+    const labelTxt = String(m[3] || '').trim();
+    const valueTxt = String(m[7] || '').trim();
+    if (
+      labelTxt &&
+      valueTxt &&
+      NUMERIC_RX.test(labelTxt) &&
+      /[\u4e00-\u9fff]/.test(valueTxt)
+    ) {
+      hits.push({ label: labelTxt, value: valueTxt });
+    }
+  }
+  return hits;
+}

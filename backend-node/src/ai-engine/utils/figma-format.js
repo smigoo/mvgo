@@ -37,6 +37,50 @@ export function extractSections(layoutStructure) {
 }
 
 /**
+ * 统一回写 sections（刀64 · 2026-11-06）：与 `extractSections` 同形态探测顺序定位
+ * sections 容器，将其替换为 `keptSections` 并返回**新对象**（绝不 mutate 输入，
+ * 输入的其余顶层字段如 repeatedCardTruth/degraded 全部保留）。
+ *
+ * 背景：Phase I-1/2 蓝图段裁剪（buildSubcomponentScopedInput §3）曾手写
+ * `input.layoutStructure.sections` 读取/回写，而 visual-parser 实际返回
+ * `layoutStructure.layout.sections`（见 `extractSections` 注释）→ 形态失配 →
+ * 裁剪自上线起静默失效（keptSections/totalSections 恒 0/0）→ 全量蓝图下发
+ * → LLM 复写兄弟段内容（真机 6c554acf 双 table）。读（extractSections）与
+ * 写（本函数）必须同源同形态，禁止再手写第二份探测口径。
+ *
+ * @returns {Object|null} 替换后的新对象；无可识别容器时返回 null（调用方 fail-open 原样保留）
+ */
+export function replaceSections(layoutStructure, keptSections) {
+  if (!layoutStructure || typeof layoutStructure !== 'object') return null
+  if (!Array.isArray(keptSections) || keptSections.length === 0) return null
+  if (Array.isArray(layoutStructure.sections)) {
+    return { ...layoutStructure, sections: keptSections }
+  }
+  if (layoutStructure.layout && Array.isArray(layoutStructure.layout.sections)) {
+    return { ...layoutStructure, layout: { ...layoutStructure.layout, sections: keptSections } }
+  }
+  if (
+    layoutStructure.layoutStructure &&
+    Array.isArray(layoutStructure.layoutStructure.sections)
+  ) {
+    return {
+      ...layoutStructure,
+      layoutStructure: {
+        ...layoutStructure.layoutStructure,
+        sections: keptSections,
+      },
+    }
+  }
+  for (const key of ['layout', 'analysis', 'structure']) {
+    const sub = layoutStructure[key]
+    if (sub && typeof sub === 'object' && Array.isArray(sub.sections)) {
+      return { ...layoutStructure, [key]: { ...sub, sections: keptSections } }
+    }
+  }
+  return null
+}
+
+/**
  * 统一提取 elements：兼容三种结构
  *   1. layoutStructure.elements
  *   2. layoutStructure.layout.elements

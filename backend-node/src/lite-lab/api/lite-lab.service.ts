@@ -18,9 +18,9 @@ import {
   backfillContainerFill,
   backfillSfcFiles,
   backfillScriptOptionTruth,
-  bgFileNameCore,
   clearRootContentBackground,
   collectFigmaTruth,
+  isBgClassAsset,
   mountAssetIcons,
   relocatePanelTitle,
   type BackfillOptions,
@@ -37,6 +37,22 @@ import {
   type E2nMap,
 } from '../lib/e2n-map';
 import { buildBackfillPlan, renderPlanMarkdown, type BackfillPlan } from '../lib/backfill-plan';
+import {
+  detectUnsourcedStyles,
+  countAutoApplicable,
+  renderUnsourcedMarkdown,
+  unsourcedStatsLine,
+  type UnsourcedFinding,
+  type UnsourcedStats,
+} from '../lib/unsourced-style';
+import {
+  applyUnsourcedStyles,
+  renderUnsourcedAppliedMarkdown,
+  unsourcedApplyStatsLine,
+  type AppliedUnsourcedEdit,
+  type ApplyUnsourcedStats,
+  type SkippedUnsourcedEdit,
+} from '../lib/unsourced-apply';
 import { readPngStatsMap } from '../lib/asset-opacity';
 import {
   applyBackfillPlan,
@@ -79,6 +95,42 @@ export interface LabReportSummary {
     reconcile: { both: number; planOnly: string[]; legacyOnly: string[]; agree: boolean };
   };
   assets?: Array<{ nodeId: string; name: string; fileName?: string }>;
+  /**
+   * 闸④ · 无源样式检测结果（产物里无 Figma 真值来源的视觉声明）。
+   * 明细走 `backfill-plan.md`，这里只放聚合 + 盲区清单——盲区必须能从报告直接读到，
+   * 否则 `findings=0` 会被误读成「没有问题」。
+   */
+  unsourced?: {
+    stats: UnsourcedStats;
+    findings: Array<{
+      cls: string;
+      prop: string;
+      value: string;
+      verdict: string;
+      figmaId: string;
+      evidence: string;
+    }>;
+  };
+  /**
+   * 闸③ · 无源样式**落地**结果（v1-lite：删 `box-shadow` / 改 `border-radius`）。
+   *
+   * `remainingAuto` 是收敛断言：落地后重检仍「可落地」的条数，**必须为 0**；
+   * 不为 0 说明检测与落地的判据分叉（实现缺陷），不是数据噪声。
+   */
+  unsourcedApplied?: {
+    stats: ApplyUnsourcedStats;
+    remainingAuto: number;
+    applied: Array<{
+      file: string;
+      cls: string;
+      rawProp: string;
+      kind: string;
+      from: string;
+      to: string;
+      figmaId: string;
+    }>;
+    skipped: Array<{ cls: string; rawProp: string; verdict: string; reason: string }>;
+  };
   files?: Array<{ path: string; changed: boolean; editCount: number }>;
   /** 回填后已覆盖同步到 workspace（任务详情页预览可看回填后效果） */
   workspaceSynced?: boolean;
@@ -248,70 +300,20 @@ export class LiteLabService {
       let downloadedAssets: any[] = [];
       try {
         downloadedAssets = await connector.downloadAssets(fileKey, nodeData, assetsDir);
-        // 🆕 imageRef 对齐（2026-11-05 实锤 mc-lab-1793865328825）：downloadAssets 下载的是
-        //   命名启发式选中的外层容器（icon-8036），truth 收集的是 IMAGE fill 内层节点
-        //   （2:8037）——节点 id 两套体系对不上；改按「子树 imageRef」对齐（同一张图
-        //   imageRef 必相同），节点 id 精确/name 兜底降级为后备。
-        const { buildImageRefIndex } = await import('../lib/truth-matcher.js');
-        const imageRefIndex = buildImageRefIndex(nodeData);
-        for (const a of downloadedAssets) {
-          if (!a.localPath) continue;
-          const fileName = String(a.localPath).split('/').pop();
-          // 三级对齐：imageRef（子树映射）> nodeId 精确 > name 兜底
-          const imgRef = imageRefIndex.get(String(a.ref));
-          let hit = imgRef ? truth.assets.find((x) => x.imageRef === imgRef) : undefined;
-          if (!hit) hit = truth.assets.find((x) => x.nodeId === a.ref);
-          if (!hit && a.name) hit = truth.assets.find((x) => !x.fileName && x.name === a.name);
-          if (hit && fileName) hit.fileName = fileName;
-        }
-        // 🆕 反哺（mc-lab-1793869928144 实锤）：VECTOR 图标无 IMAGE fill，collectFigmaTruth
-        //   收不到 ⇒ truth.assets=0 ⇒ 拷贝/挂载全链路空转、产物留空 src 破图；而
-        //   downloadAssets 命名启发式实际下载成功。按文件名后缀反查 nodeId 造真值条目。
-        //   🆕 2026-11-05 grill 决议：扩前缀 icon-/bg-/g- 全反哺（bg- 走命名↔结构锚定
-        //   换 CSS background；g- 本轮只采集+计数不消费），并补 absoluteBoundingBox 几何
-        //   （img 尺寸还原真值来源）。
-        const { findNodeIdBySuffix, findNodeById, findParentFillById, buildNodeTextContext, collectAssetParentMeta } =
-          await import('../lib/truth-matcher.js');
-        const textCtx = buildNodeTextContext(nodeData);
-        let fed = 0;
-        for (const a of downloadedAssets) {
-          if (!a.localPath) continue;
-          const fn = String(a.localPath).split('/').pop() ?? '';
-          if (!/^(?:icon|bg|g)-\d+\./.test(fn)) continue;
-          const suffix = fn.replace(/^(?:icon|bg|g)-/, '').replace(/\.\w+$/, '');
-          const nodeId = findNodeIdBySuffix(nodeData, suffix);
-          if (!nodeId || truth.assets.some((x) => x.nodeId === nodeId)) continue;
-          const bbox = findNodeById(nodeData, nodeId)?.absoluteBoundingBox;
-          // 🆕 bg 结构锚定（c91f6190 实锤）：本设计稿没有 IMAGE fill，资产全靠本段反哺，
-          // 而 collectFigmaTruth 的 parentTexts 只在 imageFill 分支里写 ⇒ 反哺条目必须自己补，
-          // 否则 structCand=0、结构通道整条空转（真机 bgAiStructCand=0 / parentTexts=None）。
-          // 取词与容器级判定共用 collectAssetParentMeta（判据单一来源）。
-          const pMeta = collectAssetParentMeta(nodeData, nodeId);
-          truth.assets.push({
-            nodeId,
-            name: String(a.name ?? fn),
-            fileName: fn,
-            // 近邻文本放 nearbyTexts（字段语义锚定专用，不进模板锚点路径）
-            siblingTexts: [],
-            nearbyTexts: textCtx.get(nodeId) ?? [],
-            width: bbox?.width,
-            height: bbox?.height,
-            // 🆕 Q2：父容器 SOLID fill（icon-wrap 臆造底色纠正的真值来源）
-            parentFill: findParentFillById(nodeData, nodeId) ?? null,
-            ...(pMeta.parentTexts.length > 0 ? { parentTexts: pMeta.parentTexts } : {}),
-            ...(pMeta.parentId ? { parentId: pMeta.parentId } : {}),
-            containerLevel: pMeta.containerLevel,
-          });
-          fed += 1;
-        }
-        if (fed > 0) {
-          this.logger.log(
-            `[lite-lab] ${sessionId} 下载侧反哺真值清单 ${fed} 个条目（icon/bg/g + bbox 几何）`,
-          );
-        }
-        const unmatched = truth.assets.filter((x) => !x.fileName).length;
-        if (unmatched > 0) {
-          this.logger.warn(`[lite-lab] ${sessionId} ${unmatched} 个资产未对齐到下载文件（将计入 noFile）`);
+        // 🔴 S3（2026-11-06）：truth 组装抽到 lib/truth-inventory#buildTruthInventory
+        //   （纯函数：imageRef 三级对齐 + VECTOR 反哺 + parentMeta + S1 x/y）——
+        //   lite 资源续跑（upgradeAssets 换芯）与 lab 共用同一组装层，判据单一来源。
+        const { buildTruthInventory } = await import('../lib/truth-inventory.js');
+        const { truth: inv, feed } = buildTruthInventory(nodeData, downloadedAssets);
+        truth.assets = inv.assets;
+        truth.texts = inv.texts;
+        truth.containers = inv.containers;
+        truth.containerCount = inv.containerCount;
+        this.logger.log(
+          `[lite-lab] ${sessionId} 真值清单组装：下载 ${feed.downloaded}，对齐 ${feed.aligned}，反哺 ${feed.fed}，未匹配 ${feed.unmatched}`,
+        );
+        if (feed.unmatched > 0) {
+          this.logger.warn(`[lite-lab] ${sessionId} ${feed.unmatched} 个资产未对齐到下载文件（将计入 noFile）`);
         }
       } catch (e: any) {
         this.logger.warn(`[lite-lab] ${sessionId} 资源下载失败（不影响文本回填）: ${e?.message}`);
@@ -369,6 +371,22 @@ export class LiteLabService {
       let e2nBg: BgE2nResult | undefined;
       let plan: BackfillPlan | undefined;
       let planApply: PlanApplyResult | undefined;
+      /**
+       * 闸④ 检出（⚠️ 这份是 **回填后** 的快照，只用于计划阶段日志；报告口径以 C2f 的
+       * `unsourcedFinal` 为准——C2c/C2e 之后产物又变过，用旧快照写报告会与落盘内容不符）。
+       */
+      let unsourced: { findings: UnsourcedFinding[]; stats: UnsourcedStats } | undefined;
+      /** C2f 终检（报告口径）+ 闸③ 落地结果 */
+      let unsourcedFinal: { findings: UnsourcedFinding[]; stats: UnsourcedStats } | undefined;
+      let unsourcedApply:
+        | {
+            stats: ApplyUnsourcedStats;
+            applied: AppliedUnsourcedEdit[];
+            skipped: SkippedUnsourcedEdit[];
+            /** 落地后重检仍可落地的条数（必须为 0，否则收敛断言失败） */
+            remainingAuto: number;
+          }
+        | undefined;
       let planRecon: PlanReconcileReport | undefined;
       // 被改但不在 finalFiles 里的文件（预编译 resources/styles/index.css）——
       // 🔴 快照同源化只刷 finalFiles.changed + images，漏了它则任务详情页预览仍是旧样式。
@@ -418,8 +436,25 @@ export class LiteLabService {
         for (const f of planApply.files) {
           if (f.changed) writeFileSync(join(outputPath, f.path), f.content, 'utf8');
         }
+        // 闸④ · 无源样式检测：跑在**回填后**的内容上 —— 回填已尽力补过的值不该再报，
+        // 剩下的才是「所有通道都没管、纯属臆造」的声明。背景被回填成 url(...) 后会自动
+        // 让位给 bg 通道（isBackgroundManagedElsewhere），不会重复记账。
+        unsourced = detectUnsourcedStyles({
+          figmaRoot: nodeData,
+          prodFiles: planApply.files.map((f) => ({ path: f.path, content: f.content })),
+          e2n,
+        });
+        this.logger.log(`[lite-lab] ${sessionId} 无源样式: ${unsourcedStatsLine(unsourced.stats)}`);
+        if (unsourced.stats.unmappedRiskClasses.length > 0) {
+          this.logger.warn(
+            `[lite-lab] ${sessionId} 闸④ 盲区 ${unsourced.stats.unmappedRiskClasses.length} 个类名无 E2N 映射` +
+              `（未检查，不代表无问题）: ${unsourced.stats.unmappedRiskClasses.slice(0, 8).join(', ')}` +
+              (unsourced.stats.unmappedRiskClasses.length > 8 ? ' …' : ''),
+          );
+        }
         writeFileSync(join(cacheDir, PLAN_FILE), JSON.stringify(plan, null, 2));
-        writeFileSync(join(cacheDir, PLAN_MD_FILE), renderPlanMarkdown(plan), 'utf8');
+        // 🔴 人读版报告**推迟到 Stage C2f** 写：闸④ 在这里只是「回填后快照」，
+        //   C2b~C2e 还会改产物，且闸③ 要落地。写在这里会让报告与落盘内容不符。
         if (!planRecon.agree) {
           this.logger.warn(
             `[lite-lab] ${sessionId} 计划与旧 bg 通道不一致：计划独有 ${planRecon.planOnly.length}，旧通道独有 ${planRecon.legacyOnly.length}`,
@@ -463,11 +498,13 @@ export class LiteLabService {
       try {
         const imgDir = join(outputPath, 'resources', 'images');
         // E2N 已挂的直接剔除，避免 AI 通道重复消费同一 bg（重复插入会产生两条 url）
+        // 🔴 S2（bfac46ac 实锤）：候选收口到 isBgClassAsset 单一来源——`bg-` 前缀
+        //   之外的底图（image_313 459×29 footer 条带，走 bg 命名锚定因无 bg- 前缀
+        //   拿不到 bgFileNameCore ⇒ 旧判据永远进不了本通道）按结构分类纳入。
         const noCoreBgs = truth.assets.filter(
           (a) =>
             a.fileName &&
-            /^bg-/.test(a.fileName) &&
-            !bgFileNameCore(a.fileName) &&
+            isBgClassAsset(a) &&
             !e2nConsumedBgs.has(a.fileName),
         );
         const shotPath = join(imgDir, 'source-screenshot.png');
@@ -566,6 +603,72 @@ export class LiteLabService {
         this.logger.warn(`[lite-lab] ${sessionId} 根内容容器背景清除失败（非致命）: ${e?.message}`);
       }
 
+      // ---------- Stage C2f：闸③ 无源样式落地（v1-lite） ----------
+      // 🔴 位置必须在 C2e **之后**：它是本链最后一个 CSS 写盘者（C2c 容器 fill 会把颜色写回来、
+      //   C2e 清根内容背景）。闸③ 提前落地会被后续阶段覆盖，且「报告 = 磁盘」不再成立。
+      // 可落地集合 = `unsourced-style#isAutoApplicable`（单一来源），收敛断言也调它。
+      try {
+        const uaFiles = [...finalFiles, ...this.collectPrecompiledCss(outputPath)];
+        const detectForApply = detectUnsourcedStyles({
+          figmaRoot: nodeData,
+          prodFiles: uaFiles.map((f) => ({ path: f.path, content: f.content })),
+          e2n,
+        });
+        unsourcedFinal = detectForApply;
+        const ua = applyUnsourcedStyles({
+          findings: detectForApply.findings,
+          prodFiles: uaFiles,
+        });
+        for (const f of ua.files) {
+          if (f.changed) writeFileSync(join(outputPath, f.path), f.content, 'utf8');
+        }
+        const uaChanged = new Map(ua.files.filter((f) => f.changed).map((f) => [f.path, f.content]));
+        if (uaChanged.size > 0) {
+          const inFinal = new Set(finalFiles.map((f) => f.path));
+          for (const p of uaChanged.keys()) if (!inFinal.has(p)) extraChanged.add(p);
+          finalFiles = finalFiles.map((f) =>
+            uaChanged.has(f.path) ? { ...f, content: uaChanged.get(f.path)!, changed: true } : f,
+          );
+        }
+        this.logger.log(`[lite-lab] ${sessionId} 闸③ 落地: ${unsourcedApplyStatsLine(ua.stats)}`);
+
+        // 🔴 收敛自证：落地后重检，「可落地项」必须归零。不为 0 说明检测与落地口径分叉
+        //   （实现缺陷，而非数据问题），必须吵出来而不是静默放过。
+        const after = detectUnsourcedStyles({
+          figmaRoot: nodeData,
+          prodFiles: [...finalFiles, ...this.collectPrecompiledCss(outputPath)].map((f) => ({
+            path: f.path,
+            content: f.content,
+          })),
+          e2n,
+        });
+        const remainingAuto = countAutoApplicable(after.findings);
+        unsourcedApply = { stats: ua.stats, applied: ua.applied, skipped: ua.skipped, remainingAuto };
+        if (remainingAuto > 0) {
+          this.logger.warn(
+            `[lite-lab] ${sessionId} 闸③ 收敛断言失败：落地后仍有 ${remainingAuto} 条可落地项` +
+              `（检测与落地口径不一致，需排查）`,
+          );
+        }
+      } catch (e: any) {
+        this.logger.warn(`[lite-lab] ${sessionId} 闸③ 落地失败（非致命）: ${e?.message}`);
+      }
+
+      // 人读版报告：计划 + 闸④ 终检 + 闸③ 落地（三者同源同刻，落盘内容即报告内容）
+      try {
+        const planMd = plan ? renderPlanMarkdown(plan) : '';
+        const us = unsourcedFinal ?? unsourced;
+        const usMd = us ? renderUnsourcedMarkdown(us.findings, us.stats) : '';
+        const uaMd = unsourcedApply
+          ? renderUnsourcedAppliedMarkdown(unsourcedApply.stats, unsourcedApply.applied, unsourcedApply.skipped)
+          : '';
+        writeFileSync(join(cacheDir, PLAN_MD_FILE), `${planMd}\n${usMd}${uaMd}`, 'utf8');
+      } catch (e: any) {
+        this.logger.warn(`[lite-lab] ${sessionId} 计划报告写入失败（非致命）: ${e?.message}`);
+      }
+      // 报告口径改用终检结果（C2f 之后的产物状态）
+      if (unsourcedFinal) unsourced = unsourcedFinal;
+
       // 🔴 回填后覆盖 workspace：任务详情页预览读 workspace，不同步则预览仍是回填前版本
       const changedCount = finalFiles.filter((f) => f.changed).length;
       const syncedTargets =
@@ -634,7 +737,10 @@ export class LiteLabService {
           `assets=${truth.assets.length},assetsCopied=${copiedCount},` +
           `assetMounted=${m.mounted},assetNoAnchor=${m.noAnchor},assetNoSiblingTexts=${m.noSiblingTexts},assetNoFile=${m.noFile},` +
           `svgReplaced=${m.svgReplaced},dataUriReplaced=${m.dataUriReplaced},iconClassReplaced=${m.iconClassReplaced},` +
-          `emptyVars=${m.emptyIconVarsReplaced},emptyFields=${m.emptyIconFieldsReplaced},svgSkipped=${m.svgSkipped},` +
+          `emptyVars=${m.emptyIconVarsReplaced},emptyFields=${m.emptyIconFieldsReplaced},` +
+          `emptyObjProps=${m.emptyObjPropsReplaced},newEl=${m.newElementInserted},` +
+          `newElSkipNoAnchor=${m.newElSkipNoAnchor},newElSkipAmbiguous=${m.newElSkipAmbiguous},` +
+          `svgSkipped=${m.svgSkipped},` +
           `bgAnchored=${m.bgAnchored},bgSkipNoClass=${m.bgSkipNoClass},bgSkipAmbiguous=${m.bgSkipAmbiguous},bgSkipNoBgKey=${m.bgSkipNoBgKey},` +
           `bgSkipAlreadyUrl=${m.bgSkipAlreadyUrl},` +
           `rootBgPanels=${rc?.stats.panels ?? 0},rootBgClasses=${rc?.stats.rootClasses ?? 0},rootBgCleared=${rc?.stats.cleared ?? 0},` +
@@ -670,7 +776,8 @@ export class LiteLabService {
           `planNoop=${planApply?.stats.noop ?? 0},planStale=${planApply?.stats.stale ?? 0},` +
           `planReconBoth=${planRecon?.both.length ?? 0},planReconPlanOnly=${planRecon?.planOnly.length ?? 0},` +
           `planReconLegacyOnly=${planRecon?.legacyOnly.length ?? 0},` +
-          `sizeRestored=${m.sizeRestored},` +
+          `sizeRestored=${m.sizeRestored},containerSizeFixed=${m.containerSizeFixed},` +
+          `parentBoxRelaxed=${m.parentBoxRelaxed},` +
           `snapshotSynced=${snapshotSynced},` +
           `extraFilesChanged=${extraChanged.size},` +
           `filesChanged=${changedCount}`,
@@ -695,6 +802,10 @@ export class LiteLabService {
           iconClassReplaced: m.iconClassReplaced,
           emptyIconVarsReplaced: m.emptyIconVarsReplaced,
           emptyIconFieldsReplaced: m.emptyIconFieldsReplaced,
+          emptyObjPropsReplaced: m.emptyObjPropsReplaced,
+          newElementInserted: m.newElementInserted,
+          newElSkipNoAnchor: m.newElSkipNoAnchor,
+          newElSkipAmbiguous: m.newElSkipAmbiguous,
           svgSkipped: m.svgSkipped,
           bgAnchored: m.bgAnchored,
           bgSkipNoClass: m.bgSkipNoClass,
@@ -769,7 +880,27 @@ export class LiteLabService {
           planReconPlanOnly: planRecon?.planOnly.length ?? 0,
           planReconLegacyOnly: planRecon?.legacyOnly.length ?? 0,
           planReconAgree: planRecon?.agree ? 1 : 0,
+          // 闸④ 无源样式（产物里无 Figma 真值来源的视觉声明）
+          unsourcedScanned: unsourced?.stats.classesScanned ?? 0,
+          unsourcedFindings: unsourced?.stats.findings ?? 0,
+          unsourcedDelete: unsourced?.stats.delete ?? 0,
+          unsourcedOverride: unsourced?.stats.override ?? 0,
+          unsourcedFanout: unsourced?.stats.fanout ?? 0,
+          unsourcedUnmapped: unsourced?.stats.unmappedRiskClasses.length ?? 0,
+          // 闸③ 落地（v1-lite）：删阴影 / 改圆角；其余按设计只报告
+          unsourcedApplied: unsourcedApply?.stats.applied ?? 0,
+          unsourcedAppliedDelete: unsourcedApply?.stats.delete ?? 0,
+          unsourcedAppliedOverride: unsourcedApply?.stats.override ?? 0,
+          unsourcedApplyReportOnly: unsourcedApply?.stats.reportOnly ?? 0,
+          unsourcedApplySkipped: unsourcedApply?.stats.skipped ?? 0,
+          unsourcedApplyStale: unsourcedApply?.stats.byReason['stale-offset'] ?? 0,
+          unsourcedApplyRules: unsourcedApply?.stats.rulesRewritten ?? 0,
+          // 收敛断言：必须为 0
+          unsourcedRemainingAuto: unsourcedApply?.remainingAuto ?? 0,
           sizeRestored: m.sizeRestored,
+          // tx 通道（2026-11-06）：图片专用壳按 Figma 容器真值改宽高 / 父容器抬 min-height
+          containerSizeFixed: m.containerSizeFixed,
+          parentBoxRelaxed: m.parentBoxRelaxed,
           snapshotSynced,
           extraFilesChanged: extraChanged.size,
           xAxisBackfilled: sb.xAxisBackfilled,
@@ -780,6 +911,44 @@ export class LiteLabService {
           scriptSkipped: sb.scriptSkipped,
         },
         assets: truth.assets.map((a) => ({ nodeId: a.nodeId, name: a.name, fileName: a.fileName })),
+        ...(unsourced
+          ? {
+              unsourced: {
+                stats: unsourced.stats,
+                findings: unsourced.findings.map((f) => ({
+                  cls: f.cls,
+                  prop: f.prop,
+                  value: f.value,
+                  verdict: f.verdict,
+                  figmaId: f.figmaId,
+                  evidence: f.evidence,
+                })),
+              },
+            }
+          : {}),
+        ...(unsourcedApply
+          ? {
+              unsourcedApplied: {
+                stats: unsourcedApply.stats,
+                remainingAuto: unsourcedApply.remainingAuto,
+                applied: unsourcedApply.applied.map((a) => ({
+                  file: a.file,
+                  cls: a.cls,
+                  rawProp: a.rawProp,
+                  kind: a.kind,
+                  from: a.from,
+                  to: a.to,
+                  figmaId: a.figmaId,
+                })),
+                skipped: unsourcedApply.skipped.map((s) => ({
+                  cls: s.cls,
+                  rawProp: s.rawProp,
+                  verdict: s.verdict,
+                  reason: s.reason,
+                })),
+              },
+            }
+          : {}),
         ...(plan
           ? {
               plan: {
@@ -1187,7 +1356,41 @@ export class LiteLabService {
     return out;
   }
 
-  getReport(sessionId: string): LabReportSummary & { edits?: any } {
+  /**
+   * 产物读路径的**唯一归属入口**（2026-11-06 用户裁决「lab 生成任务也要 ownerId，每个人独立」）。
+   *
+   * 🔴 为什么读路径也必须过归属：
+   *   `report` / `artifact` 返回的是**回填后的组件代码与报告**（Stage B/C/D 的产物）——那就是
+   *   用户资产。此前这两个方法只有「目录/白名单/防穿越」三件事，**没有身份**，
+   *   ⇒ 任何知道 sessionId 的人都能读到别人的产物。sessionId 虽随机，但会出现在
+   *   前端 URL / 日志 / 分享截图里，等于一次「知道 ID 即可读全部」。
+   *
+   * 判据来源：`TasksService.getTask(sessionId).userId`（`run()` 建任务时由
+   *   `createTask(..., { userId })` 写入，值就是 `session.guard.ts` 落的 24-hex 平台用户 ID）。
+   *   **刻意不在本模块再引一份 owner 正则**：任务的 userId 是我方自己写入的，不是外部入参，
+   *   多一份形态判据就多一处会漂移的真相源（与 project-pipeline 的取舍相反，因为那里
+   *   `ownerId` 可来自 DTO，必须收敛形态）。
+   *
+   * 语义（两条，缺一不可）：
+   *   ① 任务**无 userId** → 放行。lab 的 `run` 一直挂 SessionGuard ⇒ 正常不存在无主任务；
+   *      此分支是为「历史/异常目录」兜底，避免把老任务对作者本人也锁死（可见性事故不可逆）。
+   *   ② 越权一律 **404 而非 403**：403 等于承认「这个 sessionId 存在、只是不给你看」，
+   *      与 dev-only 开关「不暴露存在性」的口径一致（生产本就连路由都没有）。
+   */
+  private assertLabAccess(sessionId: string, userId?: string): void {
+    const task = this.tasksService.getTask(sessionId) as any;
+    const owner = typeof task?.userId === 'string' ? task.userId.trim() : '';
+    if (!owner) return; // ① 存量/无主任务：放行（见上）
+    if (owner !== (userId ?? '').trim()) {
+      this.logger.warn(
+        `[lite-lab][owner] 拒绝访问 sessionId=${sessionId}：归属不一致（caller=${userId ?? 'anonymous'}）`,
+      );
+      throw Object.assign(new Error(`任务 ${sessionId} 不存在`), { status: 404 });
+    }
+  }
+
+  getReport(sessionId: string, userId?: string): LabReportSummary & { edits?: any } {
+    this.assertLabAccess(sessionId, userId);
     const outputPath = this.locateOutputPath(sessionId, join('.cache', REPORT_FILE));
     const reportPath = outputPath ? join(outputPath, '.cache', REPORT_FILE) : undefined;
     if (!reportPath || !existsSync(reportPath)) {
@@ -1200,7 +1403,8 @@ export class LiteLabService {
     return JSON.parse(readFileSync(reportPath, 'utf8'));
   }
 
-  getArtifact(sessionId: string, relPath: string): { buffer: Buffer; ext: string } {
+  getArtifact(sessionId: string, relPath: string, userId?: string): { buffer: Buffer; ext: string } {
+    this.assertLabAccess(sessionId, userId);
     const outputPath = this.locateOutputPath(sessionId, relPath);
     if (!outputPath) throw Object.assign(new Error(`任务 ${sessionId} 产物目录不存在`), { status: 404 });
     const base = normalize(outputPath);

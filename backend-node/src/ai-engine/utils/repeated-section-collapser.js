@@ -28,6 +28,7 @@ import { extractTextRuns, linesForNode, hasMixedRunStyles } from './text-runs.js
 //   ⇒ 本模块**不写第二份**「横排/网格」判定。依赖方向：本模块 → layout-facts → section-tree
 //   → figma-effects（无环）。
 import { decideLayoutForBoxes } from './figma-node-layout-facts.js';
+import { canonicalListItem } from './section-semantics.js';
 // 🔍 L1 文档同构折叠（2026-11-03）：文档页面元素表「同 api+同控件」声明组 → 第二折叠证据。
 // ⚠️ 与 doc-homogeneity-hints.js 存在环引用（hints 复用本模块 geoBox）——双方仅函数
 //   调用期使用对方绑定、无模块求值期依赖，ESM live binding 语义下安全（node/jest/rollup 均如此）。
@@ -186,7 +187,91 @@ function groupSections(sections, opts = {}) {
     const geo = !!geoBox(sec) && getChildren(sec).length > 0;
     groups.push({ sig, idxs: [i], geo, absorb: null });
   }
-  return groups.filter((g) => g.idxs.length >= minRepeat);
+  // 🛡️ 刀72-B（2026-11-06 · mc-max-1793909345196-e0deef47「依旧多份」实锤）：
+  //   ③ 内容同构组——vision 顶层段（无内联 box、items 形态、段名各异、条目数各异）
+  //   对①②判据系统性失明：geo 启用判据裸 geoBox（无 figmaRoot 兜底）+ children>0
+  //   对 items 形态恒假；精确签名对 6/12/15 条目数必不同；几何同构仅横排。
+  //   ③ 组以「逐项 canonicalListItem 归一签名」为强同构证据（单一来源，禁第二套
+  //   归一），四重判据：签名相同 / 归一非空 / 几何同方向（geoBoxWithRoot 兜底，
+  //   横排 y±4 同行或纵排 x±4 同列）/ 数量≥2（minRepeat=3 仅服务①②组）。
+  //   旧①②组逐字不动（零回潮）；③ 组 sig 前缀 `content:`，折叠时条目级拍平
+  //   （collapseRepeatedSiblingSections 的 CONTENT_GROUP_PREFIX 分支）。
+  const valid = groups.filter((g) => g.idxs.length >= minRepeat);
+  const claimed = new Set(valid.flatMap((g) => g.idxs));
+  return [...valid, ...groupByContentIsomorphism(sections, opts, claimed)];
+}
+
+/** ③ 组 sig 前缀（折叠时按此前缀走条目级拍平分支）。 */
+export const CONTENT_GROUP_PREFIX = 'content:';
+
+/**
+ * ③ 组内容同构签名：逐项 canonicalListItem 归一（texts/stats/icon 结构），
+ * 段内条目结构唯一且归一非空才返回签名；否则 null（fail-open 不折）。
+ */
+function contentShapeSignature(sec) {
+  const items =
+    Array.isArray(sec?.body?.items) && sec.body.items.length > 0
+      ? sec.body.items
+      : getChildren(sec);
+  if (!items.length) return null;
+  const shapes = new Set();
+  for (const it of items) {
+    const n = canonicalListItem(it);
+    if (n.texts.length + n.stats.length === 0) return null; // 归一空 ⇒ 内容不健康，不折
+    shapes.add(`${n.texts.length}/${n.stats.length}/${n.icon ? 1 : 0}`);
+  }
+  if (shapes.size !== 1) return null; // 段内条目异构 ⇒ 无统一签名
+  return [...shapes][0];
+}
+
+/** ③ 组几何同方向：横排（y±4 同行）或纵排（x±4 同列且 y 有差），等宽或等高其一。 */
+function sameContentDirection(a, b, figmaRoot) {
+  const ba = geoBoxWithRoot(a, figmaRoot);
+  const bb = geoBoxWithRoot(b, figmaRoot);
+  if (!ba || !bb) return false; // 无几何证据 ⇒ fail-open 不折
+  const rowAligned = Math.abs(ba.y - bb.y) <= 4;
+  const colAligned = Math.abs(ba.x - bb.x) <= 4 && Math.abs(ba.y - bb.y) > 4;
+  const sizeSimilar = Math.abs(ba.h - bb.h) <= 3 || Math.abs(ba.w - bb.w) <= 3;
+  return (rowAligned || colAligned) && sizeSimilar;
+}
+
+/** ③ 内容同构分组：仅收未被①②有效组吸收的段。 */
+function groupByContentIsomorphism(sections, opts, claimed) {
+  const figmaRoot = opts.figmaRoot || null;
+  const sizeGate = typeof opts._sizeGate === 'function' ? opts._sizeGate : null;
+  const bySig = new Map();
+  for (let i = 0; i < sections.length; i++) {
+    if (claimed.has(i)) continue;
+    const sec = sections[i];
+    if (!sec || typeof sec !== 'object') continue;
+    if (sizeGate && !sizeGate(sec)) continue;
+    const sig = contentShapeSignature(sec);
+    if (!sig) continue;
+    if (!bySig.has(sig)) bySig.set(sig, []);
+    bySig.get(sig).push(i);
+  }
+  const out = [];
+  for (const [sig, idxs] of bySig) {
+    if (idxs.length < 2) continue; // 内容签名强证据 ⇒ 数量≥2 即可（minRepeat=3 仅服务①②）
+    const first = sections[idxs[0]];
+    if (!idxs.every((i) => sameContentDirection(first, sections[i], figmaRoot))) continue;
+    out.push({ sig: `${CONTENT_GROUP_PREFIX}${sig}`, idxs, absorb: null });
+  }
+  return out;
+}
+
+/** ③ 组折叠的条目级拍平：各段 body.items / body.children 并集为条目序列。 */
+function flattenContentGroupEntries(g, sections) {
+  const out = [];
+  for (const idx of g.idxs) {
+    const sec = sections[idx];
+    const entries =
+      Array.isArray(sec?.body?.items) && sec.body.items.length > 0
+        ? sec.body.items
+        : getChildren(sec);
+    for (const e of entries) out.push(e);
+  }
+  return out;
 }
 
 function isInterleaved(a, b) {
@@ -513,7 +598,9 @@ function buildCollapsedSection(first, items, type, opts = {}) {
  */
 export function collapseRepeatedSiblingSections(sections, opts = {}) {
   const minRepeat = opts.minRepeat ?? 3;
-  if (!Array.isArray(sections) || sections.length < minRepeat) return sections;
+  // 🛡️ 刀72-B：入口数量门槛放宽到 2——③ 内容同构组允许 2 成员（2 张纵排统计卡）。
+  //   ①②组仍受 groupSections 内 `idxs.length >= minRepeat(3)` 拦截，2 段不会被①②误折。
+  if (!Array.isArray(sections) || sections.length < 2) return sections;
 
   // 🔍 L1 文档同构折叠（2026-11-03）：几何分组为空时，文档页面元素表
   //   「同 api+同控件」声明组作为第二证据放行（方案 docs/2026-11-03-折叠器文档同构判据.md）。
@@ -564,13 +651,19 @@ export function collapseRepeatedSiblingSections(sections, opts = {}) {
       g.idxs.forEach((i) => skip.add(i));
       continue;
     }
-    const items = g.idxs.map((idx, n) => {
-      const item = sections[idx];
-      if (g.absorb) {
-        return { ...item, deco: sections[g.absorb.idxs[n]] };
-      }
-      return item;
-    });
+    // 🛡️ 刀72-B：③ 组（content: 前缀）条目级拍平——各段 body.items/body.children
+    //   是「条目集合」（段只是容器），折叠产物 items=条目并集，供 canonicalListItem
+    //   逐项归一（detectListLeaf/fg-list 消费）。①②组与带 absorb 组走原路径逐字不动。
+    const items =
+      String(g.sig).startsWith(CONTENT_GROUP_PREFIX) && !g.absorb
+        ? flattenContentGroupEntries(g, sections)
+        : g.idxs.map((idx, n) => {
+            const item = sections[idx];
+            if (g.absorb) {
+              return { ...item, deco: sections[g.absorb.idxs[n]] };
+            }
+            return item;
+          });
     // 🛡️ 1a：按视觉顺序排序（横排 x 升序 / 纵排 y 升序），修卡片左右序倒置
     const itemsSorted = sortItemsByVisualOrder(items.map((item) => ({ item })), opts.figmaRoot).map((p) => p.item);
     g.idxs.forEach((i) => skip.add(i));

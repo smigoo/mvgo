@@ -29,6 +29,7 @@ import {
 } from '../../utils/resource-manifest.js';
 import {
   extractSections,
+  replaceSections,
   extractElements,
   formatFigmaStyleData,
   formatFigmaStructureOnly,
@@ -862,11 +863,13 @@ export function buildChecklistByType(fileType, input, options = {}) {
 
 ## 📋 核心规范自检
 
-- [ ] **资源变量铁律（违反即编译崩溃）**：bg1/bg2/icon1/icon2 等资源变量是 **Vue 模板作用域变量**，只能以模板插值方式使用：
-  - ✅ 正确：\`<img :src="icon1">\` 或 \`<div :style="{ backgroundImage: 'url(' + bg1 + ')' }">\`
-  - ❌ 错误：在 \`<style>\` 块内写 \`url(\${bg1})\` / \`url(@bg1)\` / \`url(\$bg1)\` —— LESS 会把它们当变量解析，未声明即编译崩溃
-  - ❌ 错误：手写 \`import bg1 from '...'\` —— 资源 import 由系统后处理注入
-- [ ] **bg/icon DOM 语义铁律（违反即门禁重试）**：\`bg*\` 资源（背景图）是**父元素的 CSS 背景**，**禁止**为它单独创建 DOM 节点；\`icon*\`/\`img*\` 资源（图标/图片）才是独立 DOM。正确做法是把 bg 直接绑定到**已有业务容器**的 \`:style\` 上（如 \`:style="{ backgroundImage: 'url(' + bg3 + ')' }"\` 挂在卡片容器上），**禁止**再包一层 \`<div class="xxx-bg"><div class="xxx-deco"></div></div>\` 空壳节点。**半透明背景例外（唯一允许独立 DOM 的情况）**：当 Figma 中 bg 层自身 opacity<1（半透明底图）时，背景无法内联进容器（背景图无法单独设透明度），必须独立成层：容器 \`position:relative\`，首子元素 \`<div class="xxx-bg">\` 挂 \`:style\` 背景四件套 + CSS \`position:absolute; inset:0; opacity:<真值>; pointer-events:none\`，其余内容子元素 \`position:relative\`（防半透明层盖住内容）；**🚫 严禁**把 opacity 写到容器本身——那会把图标/文字一并变透明（透明度只属于 bg 层）
+- [ ] **资源变量铁律（违反即编译崩溃）**：icon1/icon2 等资源变量是 **Vue 模板作用域变量**，只能以模板插值方式使用：
+  - ✅ 正确：\`<img :src="icon1">\`
+  - ❌ 错误：在 \`<style>\` 块内写 \`url(\${icon1})\` / \`url(@icon1)\` / \`url(\$icon1)\` —— LESS 会把它们当变量解析，未声明即编译崩溃
+  - ❌ 错误：手写 \`import icon1 from '...'\` —— 资源 import 由系统后处理注入
+  - 🚫 **bg\*（背景图）变量与你无关**：背景挂载由系统写盘前确定性注入（见下条红线），你在模板里**不需要也不允许**引用 bg\* 变量
+- [ ] **🔴 背景挂载系统独占红线（2026-11-06 · ea959204 实锤，违反=违规产物）**：背景图的挂载（哪个元素挂哪张图、尺寸/位置/平铺四件套）**由系统在写盘前确定性注入**。**你禁止在任何模板 \`:style\` / CSS 里自写 background 图绑定**——包括 \`backgroundImage\`/\`backgroundSize\`/\`backgroundPosition\`/\`backgroundRepeat\`/\`background: url(...)\` 的任何形态。只负责 DOM 结构与内容：Figma 里哪个容器有背景图，你**留空容器**即可，系统会挂对地方、挂对尺寸。反面教材（真机事故原样，**禁止复现**）：\`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\` 写半截 → CSS 默认 repeat → 459×29 状态条在卡片内平铺 N 遍。检测到违规绑定会被 WARN 留痕并由守卫剥离/修正
+- [ ] **bg/icon DOM 语义铁律（违反即门禁重试）**：\`bg*\` 资源（背景图）是**父元素的 CSS 背景**，**禁止**为它单独创建 DOM 节点；\`icon*\`/\`img*\` 资源（图标/图片）才是独立 DOM。背景绑定由系统注入（见上条红线），你的职责是**保证挂载容器存在**（业务卡片/区块的真实容器），不要建 \`<div class="xxx-bg"></div>\` 空壳专用层。**半透明背景例外（唯一允许独立 DOM 壳的情况）**：当 Figma 中 bg 层自身 opacity<1（半透明底图）时，背景无法内联进容器，允许建独立层壳：容器 \`position:relative\`，首子元素 \`<div class="xxx-bg">\`（**壳上不写任何背景绑定**，四件套由系统注入）+ CSS \`position:absolute; inset:0; opacity:<真值>; pointer-events:none\`，其余内容子元素 \`position:relative\`（防半透明层盖住内容）；**🚫 严禁**把 opacity 写到容器本身——那会把图标/文字一并变透明（透明度只属于 bg 层）
 - [ ] **L4-003**: common.less 中所有 class 都使用了 \`.c-\` 前缀（如 \`.c-vehicle-card\`，没有 .item、.box、.wrapper 等通用名）
 - [ ] **index.less**: 不要输出 resources/styles/index.less（由生成器按「根作用域默认主题 + @import common.less」固定模板生成）
 - [ ] **common.less 作用域**: common.less 内所有业务 class 写在文件根层，**禁止**用 \`.dark {}\` / \`.light {}\` / 任何外层选择器包裹（宿主不会给组件根加主题类，包裹后编译成 \`.dark .c-xxx\`，真实 DOM 0 命中 → 样式全部失效）
@@ -877,7 +880,7 @@ export function buildChecklistByType(fileType, input, options = {}) {
 - [ ] **theme-vars.less 变量类型**：无 CSS 变量（禁止 var(--xxx)），只使用 Less 变量 @xxx
 - [ ] **theme-vars.less 作用域**：根级不调用 .common()/.theme-dark()/.theme-light()，由生成器在 index.less 根作用域调用默认主题
 - [ ] **theme-vars.less 完整性**：三个 mixin .common()、.theme-dark()、.theme-light() 均已定义且闭合
-- [ ] **背景图禁止拉伸变形**：局部/状态背景图（如 Tab 激态背景、卡片装饰条）使用 \`background-size: contain\` 保持原图比例，禁止 \`background-size: 100% 100%\` 强制拉伸导致图案放大变形
+- [ ] **段级布局属性适用域（2026-11-06 刀70 · c-a03fe 实锤）**：\`flex: <系数> 1 0\`、\`flex: 1\`、\`min-height: 0\` 等**段级布局声明只允许出现在本组件根类选择器**（如 \`.c-x-content-section { flex: 1.188 1 0 }\)，**禁止**复读到任何后代/子元素选择器（\`.section .item { flex: …; min-height: 0 }\` 属违规——会把卡片内部错误切成等分轨道）。子元素内部是内容布局，与段级 flex 分配无关
 - [ ] **Tab 容器禁止边框**：Tab 切换容器（.c-xxx-tabs / tab-list）禁止输出 \`border\` 属性（Figma 描边非真实边框，会生成多余白边）；图标容器同样禁止 \`border\`
 `;
 
@@ -1881,8 +1884,64 @@ export function buildSectionIdentityContract(chunk) {
   return out.join('\n') + '\n';
 }
 
-export function buildSubcomponentScopedInput(subPath, indexContent, input, options = {}) {
-    const tagName = String(subPath || '')
+/**
+ * 🧬 刀 66（2026-11-06）：同构段收敛 —— 代表段参数化模板契约。
+ * 只读 `chunk.isoContract`（由 microcode-engineer 在命中同构组时对**代表段** chunk 注入）。
+ * 未注入 ⇒ 空串（所有非同构任务零漂移）。
+ *
+ * 背景：同构兄弟段（如三厂商段）历史上各自独立 LLM 生成 ⇒ 三副面孔。
+ * 方案 A：代表段生成一次参数化模板（props: title/icon/items），兄弟段由系统
+ * 确定性渲染薄包装转发 props —— 结构单源，一致性由代码保证。
+ * 本契约与 isomorphic-section-group.js#validateIsoTemplateProps 的池后校验一一对应，
+ * 违约会被校验拦截并回退独立生成路径（不会静默出坏产物）。
+ */
+export function buildIsoTemplateContract(chunk) {
+  const iso = chunk?.isoContract;
+  if (!iso || !iso.groupSize) return '';
+  const file = (chunk.files || [])[0] || '本文件';
+  const out = [];
+  out.push('\n## 🧬 同构段模板契约（本文件是 N 个同构段的唯一模板 · 强制）');
+  out.push('');
+  out.push(
+    `本文件 \`${file}\` 对应的 section 与其他 ${iso.groupSize - 1} 个兄弟段**结构完全同构**` +
+      `（系统已判定）。兄弟段**不会各自生成**——\`index.vue\` 会用 \`v-for\` 遍历一份段数据数组、` +
+      `反复渲染本模板（并转发 props），因此本文件必须是**参数化模板**，任何硬编码都会被复制 ${iso.groupSize} 份：`,
+  );
+  out.push('');
+  out.push(
+    `1. **必须声明 props**（defineProps）：\`title\`（String, 段标题）、\`icon\`（String, 图标图片地址，可默认 ''）、\`items\`（Array&lt;{ name: string, value: string }&gt;, 段内条目）。`,
+  );
+  out.push(
+    `2. **头部**用 \`title\` + \`icon\` 渲染（\`<img :src="icon">\`）；**主体**用 \`v-for="item in items"\` 渲染条目，` +
+      `条目文案取 \`item.name\`、条目数值取 \`item.value\`（\`value\` 可能为空串 ⇒ 用 \`v-if\` 决定渲不渲染该槽）；` +
+      `**禁止**在本文件内联任何条目文案数组、**禁止** import 图片资源（icon 由 props 传入）。`,
+  );
+  out.push(
+    `3. **根元素必须带 \`v-bind="$attrs"\`**（使用方经 fallthrough 注入各段 data-section-id）；样式与结构按本段 Figma 真值实现（下方真值表仍有效）。`,
+  );
+  // 🛡️ 2026-11-06（245878e6 实锤）：列数由系统归一后**直接下发**，不让模型从
+  //   `horizontal-4-columns` 之类自由文本里猜 —— 实测三个同构段各自猜出三种结果
+  //   （扁平文本 / 自造嵌套子组 / 正确网格）。
+  const cols = Number(iso.columns);
+  if (Number.isInteger(cols) && cols >= 2) {
+    out.push(
+      `4. **条目排布**：本模板主体是 **${cols} 列** 的重复条目区（Figma 真值）。容器用网格或等分换行实现，` +
+        `每个条目是**独立单元**；**禁止**把名称与数值拼成同一段文本（如 \`{{ item.name }}{{ item.value }}\` 连排）——` +
+        `名称与数值必须落在**不同的元素**里（可用 grid 的两个列/上下两行），否则渲染出来是「华为技术8台」这种粘连形态。`,
+    );
+  } else {
+    out.push(
+      `4. **条目排布**：每个条目是**独立单元**；**禁止**把名称与数值拼成同一段文本（如 \`{{ item.name }}{{ item.value }}\` 连排），` +
+        `名称与数值必须落在不同的元素里。`,
+    );
+  }
+  out.push(
+    `5. 本模板会被 ${iso.groupSize} 个段复用，请按「最通用、最贴真值」的形态实现，不要为单一段做特殊分支。`,
+  );
+  return out.join('\n') + '\n';
+}
+
+export function buildSubcomponentScopedInput(subPath, indexContent, input, options = {}) {    const tagName = String(subPath || '')
       .split('/')
       .pop()
       .replace(/\.vue$/, '');
@@ -2039,17 +2098,28 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
     // 3) layoutStructure sections 子集
     // Phase I-1/2：映射反查命中时按 **id 精确** 收窄（`nameMatchesKeywords` 只作 fallback）——
     // 关键词会因 CJK token 重叠一次留下两段，等于没收窄。
+    // 🛡️ 刀64（2026-11-06 · 6c554acf 双 table）：读取/回写必须走 `extractSections`/`replaceSections`
+    //   单一口径——visual-parser 返回 `layoutStructure.layout.sections`，旧实现手写
+    //   `ls.sections` 形态失配，裁剪自上线起静默失效（keptSections/totalSections 恒 0/0），
+    //   全量蓝图（含兄弟段表格数据）下发 → LLM 复写兄弟段 → 接管器再出一份 → 双 table。
     const ls = input.layoutStructure;
-    if (ls && Array.isArray(ls.sections) && ls.sections.length > 1) {
-      const keepId = byMapper && matchedSection?.id != null ? String(matchedSection.id) : null;
-      const kept = ls.sections.filter((s) =>
-        keepId
-          ? String(s?.id ?? '') === keepId
-          : nameMatchesKeywords(s?.title || s?.id || s?.name, kws),
-      );
-      if (kept.length > 0 && kept.length < ls.sections.length) {
-        scoped.layoutStructure = { ...ls, sections: kept };
-        report.sections = `${kept.length}/${ls.sections.length}`;
+    if (ls && typeof ls === 'object') {
+      const allSections = extractSections(ls);
+      if (allSections.length > 1) {
+        const keepId = byMapper && matchedSection?.id != null ? String(matchedSection.id) : null;
+        const kept = allSections.filter((s) =>
+          keepId
+            ? String(s?.id ?? '') === keepId
+            : nameMatchesKeywords(s?.title || s?.id || s?.name, kws),
+        );
+        if (kept.length > 0 && kept.length < allSections.length) {
+          const replaced = replaceSections(ls, kept);
+          if (replaced) {
+            scoped.layoutStructure = replaced;
+            report.sections = `${kept.length}/${allSections.length}`;
+          }
+          // replaced === null（形态不可识别）⇒ fail-open 保持全量，与旧行为一致
+        }
       }
     }
 
@@ -2079,17 +2149,15 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
     }
 
     // 📊 Phase I-1/2 观测：真机必须能从这一行判断「走的是映射还是启发式」
+    // 🛡️ 刀64：计数必须走 extractSections 同口径——手写 `.sections` 判空在
+    //   `layout.sections` 形态下恒 0，观测行失真（历史日志 keptSections 恒 0 的来源）。
     report.scopedInputCut = {
       byMapper,
       sectionId: matchedSection?.id != null ? String(matchedSection.id) : null,
-      keptSections: Array.isArray(scoped.layoutStructure?.sections)
-        ? scoped.layoutStructure.sections.length
-        : Array.isArray(input.layoutStructure?.sections)
-          ? input.layoutStructure.sections.length
-          : 0,
-      totalSections: Array.isArray(input.layoutStructure?.sections)
-        ? input.layoutStructure.sections.length
-        : 0,
+      keptSections: scoped.layoutStructure
+        ? extractSections(scoped.layoutStructure).length
+        : extractSections(input.layoutStructure).length,
+      totalSections: extractSections(input.layoutStructure).length,
       subtreeNodes: scoped.figmaNodeData
         ? countNodes(scoped.figmaNodeData)
         : countNodes(input.figmaNodeData),
@@ -2563,6 +2631,7 @@ ${fileList}
   - 🆔 根容器的实例 id 类 \`c-mc-max-{INSTANCE_ID}\`（INSTANCE_ID 为运行时随机标识）由**系统自动注入**，你无需也无法手写它；只需给根元素一个语义 class（如 \`c-env-monitor-root\`），系统会另行追加实例 id 类。内部 class 切勿手写 \`c-mc-max-...\` 长前缀（会被后处理剥离并导致 .vue/.less 错配）。
 - **资源变量白名单**：${availVarsBlock}
 ${buildSectionIdentityContract(chunk)}
+${buildIsoTemplateContract(chunk)}
 ${sectionStyleFactsBlock
   ? `
 ## 🧭 布局与顺序真值 + 🧩 语义化样式真值（按业务区块归属 · 生成模板与 style 时最高优先级）
@@ -3365,7 +3434,7 @@ ${layoutSkeleton}
 
 **✅ 实施规则**：
 - **布局方向**：严格按标注实现CSS（横向=flex-row，竖向=flex-column，网格=grid）
-- **网格列数**：必须使用 \`grid-template-columns: repeat(N, 1fr)\`，N为标注列数
+- **网格列数**：仅允许声明在**段容器自身的选择器**上（如 \`.c-x-content-section { grid-template-columns: repeat(N, 1fr) }\`）。**禁止**写在任何后代/子元素选择器上（\`.section .item { grid-template-columns: … }\` 属违规——grid 轨道会把卡片内部强行切格，与内容份数无关）。卡片/条目内部是内容布局（flex），**不继承段网格**（2026-11-06 刀70 · c-a03fe 实锤：段网格复读到卡片 → 5 字厂商名被切进 25% 格 → ellipsis 截断）
 - **段落顺序**：从上到下的数字序号即为在DOM中的出现顺序
 - **子元素数量**：与骨架标注的子元素数量一致，不得增减
 

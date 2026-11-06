@@ -442,3 +442,98 @@ describe('Phase I-1/2b · chunk 事实源作用域（堵住「契约约束得住
     expect(pruned[0].children.map((s: any) => s.id)).toEqual(['leaf-1'])
   })
 })
+
+// ── 刀64（2026-11-06 · 6c554acf 双 table）：蓝图段裁剪形态失配治本 ──────────────
+// 病灶：visual-parser 返回 `layoutStructure.layout.sections`（真机形态），Phase I-1/2
+// 蓝图裁剪手写 `ls.sections` → 形态失配 → 裁剪自上线起静默失效（keptSections 恒 0/0）→
+// 全量蓝图（含兄弟段表格数据）下发 → LLM 复写兄弟段 → 接管器再出一份 → 双 table。
+// 本 describe 用**真机形态** fixture 锁：① 裁剪真收口；② 观测行计数非 0；③ fail-open。
+// 🔴 教训：旧 fixture（:159 顶层数组形态）与真机形态不一致 = 改者与验者同口径假绿。
+import { extractSections, replaceSections } from '../../utils/figma-format.js'
+
+describe('刀64 · 蓝图段裁剪形态失配（真机 layout.sections 形态）', () => {
+  /** 真机形态：visual-parser `layoutStructure: analysisResult` → sections 在 `.layout.sections` */
+  const makeInputRealShape = (extraTop: any = {}) => ({
+    ...makeInput(),
+    ...extraTop,
+    // 覆盖 makeInput 的顶层数组形态为真机嵌套形态
+    layoutStructure: {
+      ...extraTop,
+      layout: {
+        type: 'vertical-stack',
+        sections: PLAN.effectiveSections.map((s: any) => ({ id: s.id, title: s.title })),
+      },
+    },
+  })
+
+  test('阳性·真机形态：ContentSection 裁剪收口到本段，顶层其他字段保留', () => {
+    const { logs, logger } = makeLogger()
+    const scoped = buildSubcomponentScopedInput(
+      'package/components/ContentSection.vue',
+      '',
+      makeInputRealShape({ repeatedCardTruth: { kind: 'uniform', size: 3 } }),
+      { logger },
+    )
+    const cut = cutOf(logs)
+    expect(cut).toBeDefined()
+    expect(cut.byMapper).toBe(true)
+    expect(cut.sectionId).toBe('footer-summary')
+    // 🔴 核心：真机形态下旧实现 keptSections/totalSections 恒 0/0（形态失配静默失效）
+    expect(cut.totalSections).toBe(2)
+    expect(cut.keptSections).toBe(1)
+    // 回写必须落在 `.layout.sections` 容器（保持原形态），且顶层字段不丢
+    expect(scoped.layoutStructure?.layout?.sections?.map((s: any) => s.id)).toEqual([
+      'footer-summary',
+    ])
+    expect(scoped.layoutStructure?.repeatedCardTruth).toEqual({ kind: 'uniform', size: 3 })
+    expect(extractSections(scoped.layoutStructure)).toHaveLength(1)
+  })
+
+  test('阳性·真机形态：ListSection 同样收口（id 精确）', () => {
+    const { logs, logger } = makeLogger()
+    const scoped = buildSubcomponentScopedInput(
+      'package/components/ListSection.vue',
+      '',
+      makeInputRealShape(),
+      { logger },
+    )
+    const cut = cutOf(logs)
+    expect(cut.keptSections).toBe(1)
+    expect(extractSections(scoped.layoutStructure).map((s: any) => s.id)).toEqual(['48:5798'])
+  })
+
+  test('阴性·无可识别 sections 形态 ⇒ fail-open 保持全量（不写 scoped.layoutStructure）', () => {
+    const input = { ...makeInput(), layoutStructure: { summary: '无 sections 字段' } }
+    const { logger } = makeLogger()
+    const scoped = buildSubcomponentScopedInput(
+      'package/components/ContentSection.vue',
+      '',
+      input,
+      { logger },
+    )
+    expect(scoped.layoutStructure).toBeUndefined()
+  })
+
+  test('replaceSections 纯函数：不 mutate 输入、顶层字段保留、未知形态返回 null', () => {
+    const real = {
+      componentName: 'x',
+      layout: { type: 'vertical-stack', sections: [{ id: 'a' }, { id: 'b' }] },
+    }
+    const snapshot = JSON.stringify(real)
+    const out = replaceSections(real, [{ id: 'b' }])
+    // 输入不被 mutate
+    expect(JSON.stringify(real)).toBe(snapshot)
+    // 返回新对象、容器替换、顶层字段保留
+    expect(out).not.toBe(real)
+    expect(out.layout.sections).toEqual([{ id: 'b' }])
+    expect(out.componentName).toBe('x')
+    // 顶层数组形态
+    const flat: any = { sections: [{ id: 'a' }], degraded: false }
+    expect(replaceSections(flat, [{ id: 'c' }]).sections).toEqual([{ id: 'c' }])
+    expect(replaceSections(flat, [{ id: 'c' }]).degraded).toBe(false)
+    // 未知形态 ⇒ null（调用方 fail-open）
+    expect(replaceSections({ summary: 'x' }, [{ id: 'a' }])).toBeNull()
+    expect(replaceSections(null, [{ id: 'a' }])).toBeNull()
+    expect(replaceSections(real, [])).toBeNull()
+  })
+})

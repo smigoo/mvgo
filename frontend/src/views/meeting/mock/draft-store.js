@@ -3,8 +3,15 @@
 // dev 态保存位置为浏览器 localStorage（不上传、不落库）；生产应为服务端 DB + 对象存储。
 // 本文件纯 JS，storage 可注入，Node 冒烟脚本用内存 storage 做确定性验证。
 
+import { currentMeetingOwnerId, sanitizeOwnerId, scopedStorageKey } from './owner-scope.js'
+
 export const STORAGE_PREFIX = 'mvgo.meeting.draft.'
-export const INDEX_KEY = 'mvgo.meeting.draft.index'
+// 索引里只放 key / 时间戳 / RunVersion，**不含正文**，但仍是「某个用户存过哪些版本」的清单，
+// 所以与草稿同 owner 分区：`mvgo.meeting.draft.<ownerId>.index`（对齐 api-contract.js OUTPUT_TARGETS.dev）。
+// 注意它已从常量改为函数：owner 在运行时可变（同浏览器换账号），常量会锁死成导入那一刻的分区。
+export function draftIndexKey(ownerId = currentMeetingOwnerId()) {
+  return scopedStorageKey(STORAGE_PREFIX, 'index', ownerId)
+}
 
 // P5 整合输出稿件：与 Markdown / CSV / JSON 同受 FR-11 发布门禁
 export const ARTICLE_EXPORT_NOTICE =
@@ -53,7 +60,11 @@ export function createDraftStore(draft, options = {}) {
   }
   const storage = options.storage || resolveStorage()
   const now = options.now || (() => new Date().toISOString())
-  const storageKey = STORAGE_PREFIX + draft.runVersion
+  // 归属在建店时定一次并整店沿用：save/load/clear 必须与 storageKey 用同一个 owner，
+  // 否则「存进 A 区、索引写进 B 区」会让历史版本列表与服务端归属口径（run.ownerId）分叉。
+  const ownerId = sanitizeOwnerId(options.ownerId ?? currentMeetingOwnerId())
+  const storageKey = scopedStorageKey(STORAGE_PREFIX, draft.runVersion, ownerId)
+  const indexKey = draftIndexKey(ownerId)
   const state = {
     runVersion: draft.runVersion,
     templateId: draft.template?.id || 'unknown',
@@ -195,7 +206,7 @@ export function createDraftStore(draft, options = {}) {
     storage.setItem(storageKey, JSON.stringify(state))
     let index = []
     try {
-      index = JSON.parse(storage.getItem(INDEX_KEY) || '[]')
+      index = JSON.parse(storage.getItem(indexKey) || '[]')
     } catch {
       index = []
     }
@@ -204,7 +215,7 @@ export function createDraftStore(draft, options = {}) {
       { runVersion: state.runVersion, key: storageKey, updatedAt: state.updatedAt, savedAt: now() },
       ...index.filter((i) => i.runVersion !== state.runVersion)
     ]
-    storage.setItem(INDEX_KEY, JSON.stringify(index))
+    storage.setItem(indexKey, JSON.stringify(index))
     return { key: storageKey, at: state.updatedAt }
   }
 
@@ -230,13 +241,13 @@ export function createDraftStore(draft, options = {}) {
     storage.removeItem(storageKey)
     let index = []
     try {
-      index = JSON.parse(storage.getItem(INDEX_KEY) || '[]')
+      index = JSON.parse(storage.getItem(indexKey) || '[]')
     } catch {
       index = []
     }
     if (Array.isArray(index)) {
       storage.setItem(
-        INDEX_KEY,
+        indexKey,
         JSON.stringify(index.filter((i) => i.runVersion !== state.runVersion))
       )
     }
@@ -400,6 +411,8 @@ export function createDraftStore(draft, options = {}) {
   return {
     state,
     storageKey,
+    ownerId,
+    indexKey,
     getMerged,
     canPublish,
     publish,
@@ -418,9 +431,10 @@ export function createDraftStore(draft, options = {}) {
   }
 }
 
-export function listSaved(storage = resolveStorage()) {
+// ownerId 默认取当前分区；history 面板只该看到自己的版本，不跨用户串。
+export function listSaved(storage = resolveStorage(), ownerId = currentMeetingOwnerId()) {
   try {
-    const index = JSON.parse(storage.getItem(INDEX_KEY) || '[]')
+    const index = JSON.parse(storage.getItem(draftIndexKey(ownerId)) || '[]')
     return Array.isArray(index) ? index : []
   } catch {
     return []

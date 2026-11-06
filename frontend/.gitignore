@@ -49,3 +49,5 @@ requirement.md
 
 # 生成组件工作区产物（generator 运行时产出，不纳入版本控制）
 workspace/
+dist.old-*/
+

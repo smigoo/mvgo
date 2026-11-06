@@ -178,9 +178,12 @@ export class LiteController {
   async upgradeAssets(
     @Param('sessionId') sessionId: string,
     @Body() body?: { figmaUrl?: string },
+    @Req() req?: any,
   ) {
+    // 🔴 S4（ownerId 隔离口径）：续跑产物是用户资产，AI 兜底（bg vision）按操作者配置取凭证
+    const userId: string | undefined = req?.user?.userId ?? req?.user?.sub;
     try {
-      const result = await this.liteService.upgradeAssets(sessionId, body?.figmaUrl);
+      const result = await this.liteService.upgradeAssets(sessionId, body?.figmaUrl, userId);
       if (!result.success) {
         throw new HttpException(result.message, HttpStatus.BAD_REQUEST);
       }

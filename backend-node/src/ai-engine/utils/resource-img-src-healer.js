@@ -311,6 +311,382 @@ export function insertImport(code, varName, relPath) {
   return code.slice(0, at) + line + code.slice(at)
 }
 
+// ─────────────────── C 类：数据对象空图字段（v-for 列表） ───────────────────
+
+const IDENT = '[A-Za-z_$\\u4e00-\\u9fa5][\\w$\\u4e00-\\u9fa5]*'
+
+/** `:src="obj.field"` 的成员绑定（两级成员访问；更深的表达式一律不认） */
+export function memberBindingOf(tagText) {
+  const m = /(?::src|v-bind:src)\s*=\s*["']([^"']+)["']/i.exec(String(tagText || ''))
+  if (!m) return null
+  const v = m[1].trim()
+  const mm = new RegExp(`^(${IDENT})\\.(${IDENT})$`).exec(v)
+  return mm ? { obj: mm[1], field: mm[2] } : null
+}
+
+/** 字符串/模板串感知的括号配对：返回与 `code[openIdx]` 配对的闭合下标；失败 -1 */
+function matchBracket(code, openIdx, open = '[', close = ']') {
+  let depth = 0
+  for (let i = openIdx; i < code.length; i += 1) {
+    const ch = code[i]
+    if (ch === "'" || ch === '"' || ch === '`') {
+      // 跳过整段字符串（含转义）
+      const q = ch
+      i += 1
+      while (i < code.length) {
+        if (code[i] === '\\') {
+          i += 2
+          continue
+        }
+        if (code[i] === q) break
+        i += 1
+      }
+      continue
+    }
+    if (ch === open) depth += 1
+    else if (ch === close) {
+      depth -= 1
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
+/** 定位 `const|let|var X = [ … ]` 的数组字面量区间（绝对偏移，`bodyStart` 指向 `[` 之后） */
+export function findArrayLiteral(code, name) {
+  const esc = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!esc) return null
+  const rx = new RegExp(`(?:const|let|var)\\s+${esc}\\s*=\\s*\\[`)
+  const m = rx.exec(code)
+  if (!m) return null
+  const openIdx = m.index + m[0].length - 1
+  const closeIdx = matchBracket(code, openIdx, '[', ']')
+  if (closeIdx < 0) return null
+  return { openIdx, closeIdx, bodyStart: openIdx + 1, bodyEnd: closeIdx }
+}
+
+/** 数组体内顶层 `{ … }` 元素区间（绝对偏移） */
+export function splitTopLevelObjects(code, bodyStart, bodyEnd) {
+  const out = []
+  let i = bodyStart
+  while (i < bodyEnd) {
+    const ch = code[i]
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const q = ch
+      i += 1
+      while (i < bodyEnd) {
+        if (code[i] === '\\') {
+          i += 2
+          continue
+        }
+        if (code[i] === q) break
+        i += 1
+      }
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      const closeIdx = matchBracket(code, i, '{', '}')
+      if (closeIdx < 0 || closeIdx > bodyEnd) return out
+      out.push({ start: i, end: closeIdx + 1 })
+      i = closeIdx + 1
+      continue
+    }
+    i += 1
+  }
+  return out
+}
+
+/** 对象字面量里某字段的**空值**位置（`icon: ''` / `icon: ""` / `` icon: `` ``） */
+export function emptyFieldSpan(code, objStart, objEnd, field) {
+  const slice = code.slice(objStart, objEnd)
+  const rx = new RegExp(`\\b${String(field).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*(['"\`])\\1`)
+  const m = rx.exec(slice)
+  if (!m) return null
+  return { start: objStart + m.index, end: objStart + m.index + m[0].length }
+}
+
+/** 候选资源按视觉顺序（左→右、上→下）排序；缺 figmaBox 的保持原序垫后 */
+function sortByVisualOrder(cands) {
+  const withBox = []
+  const without = []
+  for (const c of cands) {
+    const b = c?.figmaBox
+    if (b && typeof b.x === 'number' && typeof b.y === 'number') withBox.push({ c, b })
+    else without.push(c)
+  }
+  withBox.sort((p, q) => p.b.x - q.b.x || p.b.y - q.b.y)
+  return [...withBox.map((x) => x.c), ...without]
+}
+
+/** `v-for="item in statList"` / `v-for="(item, i) in list"` → `item` → `statList` */
+export function vforListNames(code) {
+  const range = templateRange(code)
+  const map = new Map()
+  if (!range) return map
+  const rx = /v-for\s*=\s*["']\s*\(?\s*([A-Za-z_$\u4e00-\u9fa5][\w$\u4e00-\u9fa5]*)[^"']*?\bin\s+([A-Za-z_$\u4e00-\u9fa5][\w$\u4e00-\u9fa5]*)/g
+  let m
+  while ((m = rx.exec(range.body)) !== null) {
+    if (!map.has(m[1])) map.set(m[1], m[2])
+  }
+  return map
+}
+
+/**
+ * 段自身的父链签名：`ancestorIds` 去掉首项（自身）后 join。
+ * mapping 的 `ancestorIds` 形态是 `[ownerSectionId, 父, 祖父…]`；首项不等于
+ * `ownerSectionId`、或长度 <2 时无法判断父子关系 ⇒ 返空串（不参与扩展）。
+ */
+export function ancestorSig(mapping) {
+  const a = Array.isArray(mapping?.ancestorIds) ? mapping.ancestorIds.map(String) : []
+  if (a.length < 2) return ''
+  const self = String(mapping?.ownerSectionId ?? a[0])
+  if (a[0] !== self) return ''
+  return a.slice(1).join('/')
+}
+
+/** 同排：parentBox 的 y 与 height 都在 1px 容差内（缺任一侧即判否，宁可漏） */
+export function sameVisualRow(a, b) {
+  const pa = a?.parentBox
+  const pb = b?.parentBox
+  if (!pa || !pb) return false
+  if (typeof pa.y !== 'number' || typeof pb.y !== 'number') return false
+  if (Math.abs(pa.y - pb.y) > 1) return false
+  if (
+    typeof pa.height === 'number' &&
+    typeof pb.height === 'number' &&
+    Math.abs(pa.height - pb.height) > 1
+  ) {
+    return false
+  }
+  return true
+}
+
+/**
+ * 候选补齐：仅当「本段候选数 < 空字段数」时，把**同父同排的兄弟段候选**并入。
+ *
+ * ── 为什么需要（真机 c-a3c56-9a3c56bb 实锤）───────────────────────────────
+ * Figma 里是 N 个同构兄弟段，LLM 合成一个 `v-for` 后 DOM 只留首个段的
+ * `data-section-id`：`187:262`∈`38:3260`、`187:263`∈`38:3282`，
+ * 两段同父（`796:3`）同排（`parentBox.y=51483`）⇒ 只认本段永远只见 1 个候选。
+ *
+ * ── 判据（全部成立才采纳，否则原样返回 base）─────────────────────────────────
+ *   ① 本段所有 mapping 的父链签名唯一且非空（父子关系不明确就不猜）；
+ *   ② 兄弟候选与 `base[0]` **同排**（`parentBox.y`/`height` 一致，1px 容差）；
+ *   ③ 并入后总数 **精确等于** `want`（不等即有歧义，宁可漏）；
+ *   ④ 全部候选 `figmaBox.x` 齐备且互不重复（同 x 无法定序）。
+ *
+ * 注意：同父但不同排的段（真机 `38:3137` / `38:3162` / `38:3206` 各自一行）会被
+ * 判据②挡掉，绝不被误并进同一行的 v-for。
+ */
+export function resolveSiblingCandidates(base, mappings, sectionId, want) {
+  if (!Array.isArray(base) || base.length === 0) return base
+  if (typeof want !== 'number' || base.length >= want) return base
+
+  const pool = Array.isArray(mappings) ? mappings.filter((m) => m && m.resourceFile) : []
+  const sigs = new Set(
+    pool
+      .filter((m) => String(m.ownerSectionId) === String(sectionId))
+      .map(ancestorSig)
+      .filter(Boolean),
+  )
+  if (sigs.size !== 1) return base
+  const sig = [...sigs][0]
+
+  const baseIds = new Set(base.map((m) => String(m.figmaNodeId)))
+  const extra = []
+  for (const m of pool) {
+    const id = String(m.figmaNodeId)
+    if (baseIds.has(id)) continue
+    if (String(m.ownerSectionId) === String(sectionId)) continue
+    if (ancestorSig(m) !== sig) continue
+    if (!sameVisualRow(m, base[0])) continue
+    if (extra.some((x) => String(x.figmaNodeId) === id)) continue
+    extra.push(m)
+  }
+  if (extra.length === 0) return base
+
+  const merged = sortByVisualOrder([...base, ...extra])
+  if (merged.length !== want) return base
+  const xs = merged.map((m) => m?.figmaBox?.x)
+  if (xs.some((v) => typeof v !== 'number')) return base
+  if (new Set(xs).size !== xs.length) return base
+  return merged
+}
+
+/**
+ * C 类：**v-for 数据对象里的空图字段**（`{ label:'合作厂商', icon:'' }`）。
+ *
+ * ── 为什么 A/B 类救不了（真机 mc-max-1793899537377-9a3c56bb 实锤）──────────────
+ * `StatsSection.vue` 模板是 `<img :src="item.icon" />`：
+ *   · A 类只在「完全没有 src」时触发 ⇒ `hasSrc=true`，跳过；
+ *   · B 类只在「变量未声明且名字与权威名归一后相同」时触发 ⇒ `item.icon` 是成员访问，
+ *     `simpleBindingName` 直接返回空 ⇒ 跳过；
+ *   · `healEmptyImgSrc` 还有一道硬闸 `candidates.length !== 1` ⇒ 本 section
+ *     （`38:3260`）下有 **2 个**资源（`187:262` / `187:263`）⇒ 判 `ambiguous-resource` 放弃。
+ * 结果：mapping 里 `icon2` / `icon3` 已分配、文件已下载落盘，产物却 `icon: ''` ⇒ 两张统计卡破图。
+ *
+ * ── 判据（宁可漏，不可错配）────────────────────────────────────────────────
+ *   ① 文件内 `data-section-id` 唯一（多值 ⇒ 装配层，跳过）；无则用 `opts.ownerSectionId`；
+ *   ② 模板里存在 `:src="obj.field"`，且 script 里能找到 `const obj = [ … ]` 数组字面量；
+ *   ③ 候选 = `candidatesForSection`，**数量必须 ≥2**（1 个交给 A/B 类，不抢活）；
+ *   ④ **空字段数 === 候选数** 才 zip，否则一律不动（数量不等即有歧义）；
+ *   ⑤ 顺序由 `figmaBox`（左→右、上→下）决定，不信任 mapping 数组顺序；
+ *   ⑥ 每个候选必须有 `assignedVarName|semanticVarName`，且互不重复；
+ *   ⑦ 只填**空串字段**，非空字段说明别的通道已处理，绝不复写。
+ *
+ * 幂等：第二次运行空字段已消失 ⇒ 原样返回。
+ *
+ * @param {string} code SFC 源码
+ * @param {Array<object>} mappings resourceDomMapping
+ * @param {string} relBase 资源相对基准
+ * @param {{ownerSectionId?:string}} [opts] 无 data-section-id 时的归属兜底
+ * @returns {{code:string, changed:boolean, healed:Array<object>, skipped:Array<object>}}
+ */
+export function healEmptyDataIconFields(code, mappings, relBase = '../resources/images/', opts = {}) {
+  const result = { code, changed: false, healed: [], skipped: [] }
+  if (typeof code !== 'string' || code.length === 0) return result
+
+  const imgs = findImgTags(code)
+  if (imgs.length === 0) return result
+
+  // 模板里的成员绑定（obj.field）→ 按 obj 分组
+  const binds = new Map()
+  for (const t of imgs) {
+    const b = memberBindingOf(t.tag)
+    if (!b) continue
+    if (!binds.has(b.obj)) binds.set(b.obj, b.field)
+  }
+  if (binds.size === 0) return result
+
+  const sectionIds = collectSectionIds(code)
+  let sectionId = ''
+  if (sectionIds.length === 1) sectionId = sectionIds[0]
+  else if (sectionIds.length === 0 && opts?.ownerSectionId) sectionId = String(opts.ownerSectionId)
+  else {
+    result.skipped.push({
+      reason: sectionIds.length === 0 ? 'no-section-id' : 'ambiguous-section',
+      sectionIds,
+    })
+    return result
+  }
+
+  const baseCandidates = sortByVisualOrder(candidatesForSection(mappings, sectionId))
+  if (baseCandidates.length === 0) {
+    result.skipped.push({ reason: 'no-resource', sectionIds: [sectionId], candidates: 0 })
+    return result
+  }
+
+  let out = code
+  let anyFilled = false
+  /** 待注入的 import（顺序 = 视觉顺序）；统一在末尾一次性插入，避免逐条插到 script 开头导致倒序 */
+  const pendingImports = []
+  // 🔴 `:src="item.icon"` 里的 `item` 是 **v-for 别名**，数组名在 `v-for="item in statList"` 里。
+  //    直接拿别名当数组名会 `no-array-literal`（真机复刻时踩过）。别名无对应 v-for 时
+  //    才把 obj 本身当变量名（单对象形态 `const cfg = { icon: '' }` + `:src="cfg.icon"`）。
+  const aliasToList = vforListNames(out)
+
+  for (const [objName, field] of binds) {
+    const listName = aliasToList.get(objName) ?? objName
+    const arr = findArrayLiteral(out, listName)
+    if (!arr) {
+      result.skipped.push({ reason: 'no-array-literal', obj: objName, list: listName, sectionIds: [sectionId] })
+      continue
+    }
+    const objs = splitTopLevelObjects(out, arr.bodyStart, arr.bodyEnd)
+    const empties = []
+    for (const o of objs) {
+      const span = emptyFieldSpan(out, o.start, o.end, field)
+      if (span) empties.push(span)
+    }
+
+    // ③′ 本段候选不够时按「同父兄弟段 + 同一 parentBox.y」扩展：
+    //     LLM 常把 Figma 里 **N 个同构兄弟段** 合成一个 `v-for`，DOM 只保留首个段的
+    //     `data-section-id`（真机 9a3c56bb：`187:262`∈`38:3260`、`187:263`∈`38:3282`，
+    //     两段同父 `796:3`、同排 `parentBox.y=51483`）。只认本段会永远只看到 1 个候选。
+    const candidates = resolveSiblingCandidates(baseCandidates, mappings, sectionId, empties.length)
+    if (candidates.length < 2) {
+      // 0 个：无资源；1 个：交给 healEmptyImgSrc 的 A/B 类，避免两处抢同一处改动
+      result.skipped.push({
+        reason: candidates.length === 0 ? 'no-resource' : 'single-resource-defer-ab',
+        obj: objName,
+        sectionIds: [sectionId],
+        candidates: candidates.length,
+      })
+      continue
+    }
+    const varNames = candidates.map((m) => varNameOf(m))
+    if (varNames.some((v) => !v) || new Set(varNames).size !== varNames.length) {
+      result.skipped.push({
+        reason: 'var-name-missing-or-duplicate',
+        obj: objName,
+        sectionIds: [sectionId],
+        varNames,
+      })
+      continue
+    }
+
+    // ④ 数量精确相等才 zip
+    if (empties.length !== candidates.length) {
+      result.skipped.push({
+        reason: 'count-mismatch',
+        obj: objName,
+        emptyFields: empties.length,
+        candidates: candidates.length,
+        sectionIds: [sectionId],
+      })
+      continue
+    }
+    // 从后往前替换，偏移不失效
+    for (let i = empties.length - 1; i >= 0; i -= 1) {
+      const span = empties[i]
+      out = `${out.slice(0, span.start)}${field}: ${varNames[i]}${out.slice(span.end)}`
+    }
+    anyFilled = true
+    result.healed.push({
+      obj: objName,
+      field,
+      sectionId,
+      fields: empties.length,
+      pairs: candidates.map((m, i) => ({
+        varName: varNames[i],
+        figmaNodeId: m.figmaNodeId,
+        x: m.figmaBox?.x,
+      })),
+    })
+
+    // 收集 import（不立即插入，避免后插入的跑到前面去、顺序与视觉顺序相反）
+    for (let i = 0; i < candidates.length; i += 1) {
+      const varName = varNames[i]
+      if (isDeclared(out, varName)) continue
+      if (pendingImports.some((p) => p.varName === varName)) continue
+      const fileName = String(candidates[i].resourceFile).split('/').pop()
+      const relPath = String(relBase || '').endsWith('/')
+        ? `${relBase}${fileName}`
+        : `${relBase}/${fileName}`
+      pendingImports.push({ varName, relPath })
+    }
+  }
+
+  // 一次性插入整块（顺序 = 视觉顺序）。
+  // 🔴 不能循环调用 insertImport —— 它每次都插在 `<script setup>` 正下方，
+  //    第二条会顶到第一条前面 ⇒ 产物 import 顺序与视觉顺序相反（真机复刻时踩过）。
+  if (pendingImports.length > 0) {
+    const sm = /<script\b[^>]*\bsetup\b[^>]*>/.exec(out)
+    if (!sm) {
+      result.skipped.push({ reason: 'no-script-setup', sectionIds: [sectionId] })
+      return result
+    }
+    const at = sm.index + sm[0].length
+    const block = pendingImports.map((p) => `\nimport ${p.varName} from '${p.relPath}'`).join('')
+    out = out.slice(0, at) + block + out.slice(at)
+  }
+
+  result.code = out
+  result.changed = anyFilled && out !== code
+  return result
+}
+
 /**
  * 给「无 src / 引用未声明权威变量」的 img 补齐资源绑定。
  *

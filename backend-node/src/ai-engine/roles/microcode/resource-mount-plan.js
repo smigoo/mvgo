@@ -148,7 +148,7 @@ function findPerItemYieldHost(allFiles, varName, candidateFile, candidateContent
  * 🛡️ 2026-09-29：按 `data-section-id="<anchor>"` 取回**开标签全文**（含属性）。
  *
  * 原实现用正则
- * `<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?\bdata-section-id="…"(?:"[^"]*"|'[^']*'|[^>])*)>`
+ * `<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?\bdata-section-id="…"(?:"[^"]*"|'[^']*'|[^>"'])*)>`
  * —— 该模式含**嵌套量词** `(?:A|B|C)*?`，属典型 **ReDoS**：全语料离线遍历时直接被 OOM/Kill
  * （2026-09-29 审计进程 SIGTERM 实锤）。改为**线性扫描**（先定位 needle，再向两侧找 `<` / `>`，
  * 向后扫描时跳过引号内的 `>`），复杂度 O(n) 且行为与正则一致（取文件中**第一个**该锚点开标签）。
@@ -1256,7 +1256,7 @@ export function removeContainerBgOffTargetRefs(
     const tplMatch = c.match(/<template>([\s\S]*?)<\/template>/);
     if (!tplMatch) continue;
     let tpl = tplMatch[1];
-    const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?)>/g;
+    const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)>/g;
     let m;
     // 🛡️ 根标签判据必须基于「当前文件内容」重算：branch 注入后根标签已带 :style，
     // 若用注入前的 rootTag 快照做精确字符串比较会漏判根 → 把刚挂上的背景误删（a772a7a6 实锤）。

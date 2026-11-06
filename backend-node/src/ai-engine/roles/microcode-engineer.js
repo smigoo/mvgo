@@ -128,6 +128,18 @@ import {
   stripLlmTailGarbageFromFiles,
   stripLlmTailGarbage,
 } from '../utils/llm-tail-garbage.js';
+// 🛡️ 2026-11-06（8cfbd218 实锤）：静态属性里的 `{{ }}` 归一（Vue 插值只在文本节点生效）
+import { rewriteAttributeInterpolation } from '../utils/attribute-interpolation-guard.js';
+// 🧵 2026-11-06（a9364bd4 实锤）：样式补缺的确定性部分（差距计算 / 块回收过滤 / 追加）
+import { injectChartSubProps } from '../utils/internal-subs-props-injector.js';
+import {
+  collectUsedClasses,
+  collectDefinedClasses,
+  diffMissingClasses,
+  harvestMissingRuleBlocks,
+  appendRules,
+  buildStructuralFallback,
+} from '../utils/style-class-completion.js';
 // 🛡️ 2026-09-13：`invokeWithTimeout` 死 import 已移除——微码 LLM 调用点早前已下沉到
 // microcode/code-generator.js（分块生成器），此处仅剩 import 无任何调用（死接线）。
 import { generateDeclareJson as _templateDeclareJson } from '../templates/component-template.js';
@@ -217,6 +229,17 @@ import { buildRetryPrompt } from '../utils/retry-prompt.js';
 // 整文件由 Figma 真值渲染（数据内联/标题左对齐/类名唯一），跳过 LLM chunk。
 // 病灶与判据详见 folded-grid-section-takeover.js 头注释。
 import { collectFoldedGridTakeover } from '../utils/folded-grid-section-takeover.js';
+// 🧬 刀 66（2026-11-06）：同构段收敛 —— 单模板参数化 + 兄弟薄包装（docs/2026-11-06-刀66-同构段收敛-单模板参数化-269cb2cf.md）
+// assignSectionComponentNames 已在上方 utils 家族导入块（:114）引入，不重复导入
+import {
+  collectIsomorphicSectionGroups,
+  validateIsoTemplateProps,
+  renderIsoWrapperSfc,
+} from '../utils/isomorphic-section-group.js';
+// 🧬 刀 66-C（2026-11-06 · 用户裁决「vfor 的是三个厂商段」）：index.vue 段级 v-for 改写。
+//   刀66 v1 的薄包装让结构单源了，但 index 里仍是三个并排标签 —— 用户明确要求收成一个循环。
+//   判据（相邻兄弟 + 每名一次）、改写与自校验见该模块头注释。
+import { rewriteIndexRepeatGroups, pruneRepeatMemberArtifacts } from '../utils/index-repeat-group-rewrite.js';
 // 🛡️ Phase E（2026-10-31 治理方案）：接管评估归一 + 单行日志（utils/reject-summary.js）
 import {
   pickTakeoverAudit,
@@ -1226,6 +1249,12 @@ export class MicrocodeEngineer extends BaseAgent {
               sec.internalSubcomponents.length > 0
             ) {
               p += `   → 该 section 需进一步拆分为 ${sec.internalSubcomponents.length} 个内部子组件：\n`;
+              // 🧩 2026-11-06（90eae287 实锤）：**数据契约**必须写进 prompt ——
+              //   旧版只列 prop 名字（`Props: chartData, chartConfig`），模型拿到名字也不知道
+              //   数据该由谁持有，产物里 `<XxxChartSection class="…" />` 一个 prop 都不传
+              //   ⇒ 子组件 `cfg.series=[]` ⇒ 只有坐标轴没有柱子。
+              p += `      ⚠️ 数据契约（强制）：上述子组件的业务数据**必须由父组件以 props 传入**，子组件内禁止 \`ref([])\` 自造空数据。\n`;
+              p += `         若子组件声明了 chartConfig / chartData，父组件须持有常量并在标签上绑定（如 \`:chart-config="xxxChartConfig"\`），禁止留空标签。\n`;
               sec.internalSubcomponents.forEach((sub, subIdx) => {
                 p += `      ${subIdx + 1}. ${sub.responsibility} (${sub.reason})\n`;
                 if (sub.props && sub.props.length > 0) {
@@ -2153,6 +2182,80 @@ export class MicrocodeEngineer extends BaseAgent {
         }
       }
 
+      // 🧬 刀 66：同构段收敛评估（docs/2026-11-06-刀66-同构段收敛-单模板参数化-269cb2cf.md）。
+      // ≥2 个语义同构的「标题行+grid 标签卡」段（如三厂商段）历史上各自独立 LLM 生成 ⇒
+      // 三副面孔（9a3c56bb / 269cb2cf 实锤；补充提示词管不到跨 chunk 结构复用）。
+      // 方案 A：代表段生成参数化模板（props: title/icon/items，契约见 prompt-builder#
+      // buildIsoTemplateContract），兄弟段由系统确定性渲染薄包装；index.vue 零改动。
+      // 与刀 53 互斥：已接管段不入组。fail-open：任何映射缺失 ⇒ 整组放弃走旧路径。
+      const _isoTreeSections = microcodePrompt.resolvePlanSections(input);
+      let _isoEvaluated = 0;
+      let _isoGroups = [];
+      try {
+        const _isoRes = collectIsomorphicSectionGroups(_isoTreeSections);
+        _isoEvaluated = _isoRes.evaluated;
+        _isoGroups = _isoRes.groups;
+      } catch (_isoEvalErr) {
+        reportPatchChainError(_isoEvalErr, { logger: this.logger, pass: 'generateCode:iso-eval' });
+      }
+      // repLayout：代表段的**归一布局事实**（direction/columns）—— 模板契约要用列数，
+      // 不让 LLM 从 `horizontal-4-columns` 之类自由文本里猜（245878e6 实锤：三段各自猜，
+      // 一段渲成扁平文本、一段自造嵌套组、一段渲成网格）。
+      const _isoPlan = { repGroupSize: new Map(), repLayout: new Map(), wrapperBySubPath: new Map(), indexGroups: [] };
+      try {
+        const _fgTakenIds = new Set();
+        for (const tr of _fgFiles.values()) _fgTakenIds.add(String(tr.sectionId));
+        const _nameMap = assignSectionComponentNames(_isoTreeSections);
+        for (const g of _isoGroups) {
+          // 刀 53 已接管的段不让同构收敛碰（互斥，接管优先级更高）
+          if (g.sectionIds.some((id) => _fgTakenIds.has(id))) continue;
+          const repName = _nameMap.get(g.representativeId);
+          const repSubPath = repName ? `package/components/${repName}.vue` : null;
+          if (!repSubPath || !subComps.includes(repSubPath)) continue;
+          const membersBySub = new Map();
+          let groupOk = true;
+          // 🧬 刀 66-C：index 改写的成员清单（compName = 各段组件名，用于定位 index 标签）
+          const indexMembers = [{ ...g.members.find((m) => m.id === g.representativeId), compName: repName }];
+          for (const m of g.members) {
+            if (m.id === g.representativeId) continue;
+            const nm = _nameMap.get(m.id);
+            const sp = nm ? `package/components/${nm}.vue` : null;
+            if (!sp || !subComps.includes(sp)) {
+              groupOk = false;
+              break;
+            }
+            membersBySub.set(sp, m);
+            indexMembers.push({ ...m, compName: nm });
+          }
+          if (!groupOk || membersBySub.size === 0) continue;
+          _isoPlan.repGroupSize.set(repSubPath, g.members.length);
+          _isoPlan.repLayout.set(repSubPath, {
+            direction: g.direction || '',
+            columns: Number.isInteger(g.columns) ? g.columns : null,
+          });
+          if (indexMembers.every((m) => m.compName)) {
+            _isoPlan.indexGroups.push({ repName, members: indexMembers });
+          }
+          for (const [sp, m] of membersBySub) {
+            _isoPlan.wrapperBySubPath.set(sp, {
+              templateSubPath: repSubPath,
+              templateName: repName,
+              member: m,
+            });
+          }
+        }
+      } catch (_isoPlanErr) {
+        reportPatchChainError(_isoPlanErr, { logger: this.logger, pass: 'generateCode:iso-plan' });
+        _isoPlan.repGroupSize.clear();
+        _isoPlan.wrapperBySubPath.clear();
+        _isoPlan.repLayout.clear();
+        _isoPlan.indexGroups.length = 0;
+      }
+      // 观测纪律：0 命中也恒打（「无同构组」必须与「没评估」可区分）
+      this.logger.info(
+        `🧬 同构段收敛评估: evaluated=${_isoEvaluated} groupsRaw=${_isoGroups.length} groups=${_isoPlan.repGroupSize.size} members=${_isoPlan.wrapperBySubPath.size + _isoPlan.repGroupSize.size} reps=[${[..._isoPlan.repGroupSize.keys()].map((p) => p.split('/').pop()).join(',')}] wrapped=${_isoPlan.wrapperBySubPath.size}`,
+      );
+
       // 🆕 方案 2：按组构建 chunks，同组子组件共享 scopedInput 缓存
       // 同组子组件通常引用相同的 figma 父节点区域，缓存 scopedInput 避免重复计算
       const _scopedInputCache = new Map();
@@ -2167,6 +2270,9 @@ export class MicrocodeEngineer extends BaseAgent {
         for (const subPath of group.paths) {
           // 🛡️ 刀 53：确定性接管的叶不进 LLM chunk（文件在下方整体写入）
           if (_fgFiles.has(subPath)) continue;
+          // 🧬 刀 66：同构兄弟段不进 LLM chunk——池后由系统确定性渲染薄包装
+          // （转发代表模板 props）。代表段 chunk 在下方携带 isoContract。
+          if (_isoPlan.wrapperBySubPath.has(subPath)) continue;
           // 🧩 SubcomponentContract：本子组件专属事实（figma 子树/elementStyleMap 子集/sections 子集），
           // 替代全量重复的 215KB figmaNodeData —— 预计单块 -60%+ tokens；匹配失败自动回退全量（保真）。
           // 🛡️ 2026-09-19 缓存污染修复（mc-max-1789811323065 实锤）：原实现按 group.name（目录名）
@@ -2199,6 +2305,16 @@ export class MicrocodeEngineer extends BaseAgent {
             scopedInput,
             // 🆕 方案 2：记录所属分组（便于性能监控和日志追踪）
             groupName: group.name,
+            // 🧬 刀 66：代表段携带参数化模板契约（buildIsoTemplateContract 消费；
+            // 兄弟段 chunk 已被跳过，池后写入薄包装；违约池后校验回退）
+            isoContract: _isoPlan.repGroupSize.has(subPath)
+              ? {
+                  groupSize: _isoPlan.repGroupSize.get(subPath),
+                  // 归一布局事实（列数/方向）随契约下发：模板不需要从
+                  // `horizontal-4-columns` 这类自由文本里猜列数（245878e6 实锤）
+                  ...(_isoPlan.repLayout.get(subPath) || {}),
+                }
+              : undefined,
             // usage 摘要替代全量 index.vue：子组件只需知道父组件如何使用自己（props/插槽/布局位置）
             contextFiles: usage
               ? [
@@ -2435,6 +2551,124 @@ export class MicrocodeEngineer extends BaseAgent {
       for (let i = 0; i < Math.min(CONCURRENCY, chunks.length); i++)
         workers.push(worker());
       await Promise.all(workers);
+      // 🧬 刀 66 池后阶段（docs/2026-11-06-刀66-同构段收敛-单模板参数化-269cb2cf.md）：
+      //   代表模板契约校验（validateIsoTemplateProps，与 prompt 契约一一对应）→
+      //   兄弟段确定性渲染薄包装（renderIsoWrapperSfc，走刀 53 同款最小修复管线）。
+      //   校验违约 / 渲染异常 ⇒ 兄弟段重新组 chunk 进池二次跑（既有独立生成路径，零损失回退）。
+      let _isoWrapped = 0;
+      let _isoFallback = 0;
+      if (_isoPlan.wrapperBySubPath.size > 0) {
+        for (const [subPath, w] of _isoPlan.wrapperBySubPath) {
+          const tag = subPath.split('/').pop().replace(/\.vue$/, '');
+          try {
+            const tpl = allFiles[w.templateSubPath];
+            const verdict = validateIsoTemplateProps(tpl);
+            if (!verdict.ok) {
+              throw new Error(`代表模板契约违约: ${verdict.reasons.join(',')}`);
+            }
+            let wrapperSfc = renderIsoWrapperSfc({
+              wrapperName: tag,
+              templateName: w.templateName,
+              member: w.member,
+            });
+            if (!wrapperSfc) throw new Error('wrapper 渲染为空');
+            wrapperSfc = this._ensureSubComponentStyleAttrs(wrapperSfc);
+            wrapperSfc = this._ensureSubComponentStyleImport(wrapperSfc);
+            allFiles[subPath] = wrapperSfc;
+            if (!fileSectionMap[subPath]) fileSectionMap[subPath] = w.member.id;
+            _isoWrapped += 1;
+            this.logger.info(
+              `🧬 刀66 同构薄包装已写入: ${subPath} → ${w.templateSubPath}`,
+              { sectionId: w.member.id, title: w.member.title, items: (w.member.items || []).length },
+            );
+          } catch (_isoWErr) {
+            // 哨兵（PATCH-CHAIN-ERROR 覆盖门禁）：本 catch 是**预期内的 fail-open**
+            //（契约违约即回退独立生成），但失败原因必须进 patch 链，否则「为什么回退」
+            // 只能在 warn 里翻，且门禁要求每个 catch 都有可归因出口。
+            reportPatchChainError(_isoWErr, { logger: this.logger, pass: 'generateCode:iso-wrapper' });
+            _isoFallback += 1;
+            this.logger.warn('🧬 刀66 包装写入失败，兄弟段回退独立 LLM chunk', {
+              subPath,
+              error: _isoWErr?.message || String(_isoWErr),
+            });
+            const usage = this._extractUsageSnippet(tag, allFiles['package/index.vue'] || '');
+            chunks.push({
+              title: '子组件 ' + subPath,
+              files: [subPath],
+              index: startIndex + chunks.length,
+              total,
+              segmentType: 'component',
+              contextFiles: usage
+                ? [{ path: `package/index.vue（${tag} 使用处摘要）`, content: usage }]
+                : [{ path: 'package/index.vue', content: allFiles['package/index.vue'] || '' }],
+            });
+          }
+        }
+        // 回退 chunk 二次池跑（cursor/chunks/worker 复用既有池模式）
+        if (_isoFallback > 0) {
+          const fbWorkers = [];
+          for (let i = 0; i < Math.min(CONCURRENCY, chunks.length - cursor); i++)
+            fbWorkers.push(worker());
+          await Promise.all(fbWorkers);
+        }
+        // 观测纪律：wrapped/fallback 逐单恒打（三厂商段一致性闭环的验签锚点）
+        this.logger.info(`🧬 同构段收敛完成: wrapped=${_isoWrapped} fallback=${_isoFallback}`);
+      }
+      // 🧬 刀 66-C（2026-11-06 · 用户裁决）：把 `index.vue` 里三个并排段标签收成**一个 v-for**。
+      //
+      //   为什么放在包装之后：改写要在 index 内容已定稿（index chunk + heal 完成）后做，
+      //   且必须在「二级子组件补齐 / 引用扫描」之前 —— 否则前者会按旧的三个标签再算一遍引用。
+      //   失败一律 fail-open（原因入日志），此时 index 保持三个标签、由薄包装保证三份一致，
+      //   即回落到刀66 v1 的既定形态（零损失，不会半成品）。
+      let _isoIndexApplied = 0;
+      let _isoIndexSkipped = [];
+      let _isoPrune = { removedImports: [], removedFiles: [], kept: [] };
+      // 🔴 只有「全部薄包装都成功」才改 index：若某成员已回退独立生成，说明该段没走参数化
+      //   模板，此时把它的 index 标签收进 v-for 会让那份独立产物变成死文件（数据不再被消费）。
+      if (_isoPlan.indexGroups.length > 0 && _isoFallback === 0) {
+        try {
+          const _idxPath = 'package/index.vue';
+          const _before = allFiles[_idxPath];
+          if (typeof _before === 'string' && _before.trim()) {
+            const _rw = rewriteIndexRepeatGroups(_before, _isoPlan.indexGroups);
+            _isoIndexApplied = _rw.applied.length;
+            _isoIndexSkipped = _rw.skipped;
+            if (_isoIndexApplied > 0) {
+              // 🧬 2026-11-06 评审修正（P1）：**包装文件与 import 原子清理**。
+              //   只收模板不收文件 ⇒ 交付仍是 3 个组件文件 + 2 条模板零引用的 import，
+              //   用户「不该有三个重复 section」只兑现一半；且后续任一「未使用 import
+              //   清理」pass 若与文件删除不同步，会让覆盖门禁与文件集互相矛盾。
+              //   覆盖门禁已同步支持「v-for 数据数组覆盖段 id ⇒ 已物化」（section-coverage-guard）。
+              const _pr = pruneRepeatMemberArtifacts(_rw.content, _rw.applied, allFiles);
+              _isoIndexApplied = _rw.applied.length;
+              _isoPrune = {
+                removedImports: _pr.removedImports,
+                removedFiles: _pr.removedFiles,
+                kept: _pr.kept,
+              };
+              allFiles[_idxPath] = _pr.content;
+              for (const f of _pr.removedFiles) {
+                if (fileSectionMap[f] != null) delete fileSectionMap[f];
+              }
+            }
+          } else {
+            _isoIndexSkipped = _isoPlan.indexGroups.map((g) => ({ repName: g.repName, reason: 'no-index' }));
+          }
+        } catch (_isoIdxErr) {
+          reportPatchChainError(_isoIdxErr, { logger: this.logger, pass: 'generateCode:iso-index' });
+          _isoIndexSkipped = _isoPlan.indexGroups.map((g) => ({ repName: g.repName, reason: 'exception' }));
+        }
+        // 计数行恒打（0 也打）：「改写未命中」必须与「没尝试改写」可区分
+        this.logger.info(
+          `🧬 刀66-C index 段级 v-for: groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied} skipped=${_isoIndexSkipped.length} removedTags=${_isoIndexApplied > 0 ? _isoIndexApplied : 0} pruneFiles=${_isoPrune.removedFiles.length} pruneImports=${_isoPrune.removedImports.length} pruneKept=${_isoPrune.kept.length}${_isoIndexSkipped.length ? ` reasons=[${_isoIndexSkipped.map((s) => `${s.repName}:${s.reason}`).join(',')}]` : ''}${_isoPrune.kept.length ? ` pruneKeptReasons=[${_isoPrune.kept.join(',')}]` : ''}`,
+        );
+      }
+      // 🛡️ 2026-11-06（5d1eb324 用户质询）：**多卡段的装饰背景不属于段容器**。
+      //   ⚠️ 位置在 2026-11-06 评审后**移到落盘前出口**（与 `dropRedundantCssOpacity` 同点）：
+      //   此处（子组件生成阶段）样式 chunk（`common.less`）尚未生成，卡片底若只在
+      //   合并后的样式表里，判据会因「找不到子级背景证据」静默 miss（假阴性）；
+      //   且两个互补的透明度/背景出口分处两个阶段会造成口径漂移。
+      //   判据见 resource-mounter#dropContainerBgWhenChildrenOwnCards（同源证明 + fail-open）。
       // 🛡️ S3 第一片（2026-09-28 · (b) 切片三 · **命名无关版**）：section 真值文案**原地填槽**。
       //   只改文字、不动结构/class/属性（保住 LLM 的样式锚点）；命名无关（characters + 视觉序 + DOM 序）。
       //   灰度开关：`MC_LEAF_TEXT_ASSEMBLY=1` 或 `input.leafTextAssembly=true`；默认**关**。
@@ -2548,6 +2782,18 @@ export class MicrocodeEngineer extends BaseAgent {
           ? resCommon
           : { files: {}, debug: {} };
       Object.assign(allFiles, safeResCommon.files || {});
+
+      // 🧵 2026-11-06（mc-max-1799319861321-a9364bd4 实锤）：**样式补缺（一轮定向请求）**。
+      //   真机：style chunk prompt 给了 59 个类，模型只写出 21 个（outputTokens 2555）⇒
+      //   `ContentForecast` 的 24 个 `forecast-*` 类零规则 ⇒ 整段渲染成裸文本堆叠。
+      //   既有 `CLASS-MUST-EXIST` 检出了 38 个缺失，但 reportOnly 只 WARN、无人补。
+      //   这里在样式分块结束后做一次**只补缺失类**的定向请求，且**只回收缺失类的规则块**
+      //   （不覆盖已生成内容），从根上把覆盖率补到 100%（仍缺则计入降级，见 execute）。
+      await this._completeMissingStyleClasses(runChunk, allFiles, classList || [], {
+        themeVarsPath: THEME_VARS_PATH,
+        commonLessPath: COMMON_LESS_PATH,
+        idx,
+      });
     };
 
     try {
@@ -4971,6 +5217,142 @@ export class MicrocodeEngineer extends BaseAgent {
   }
 
   /**
+   * 🧵 样式补缺（2026-11-06 · mc-max-1799319861321-a9364bd4 实锤）：**缺失类定向补一轮**。
+   *
+   * ## 病灶
+   * `common.less` 分块一次性要给 59 个类写规则，模型只产出 21 个（outputTokens 2555）。
+   * 子组件 `ContentForecast` 用到的 24 个 `forecast-*` 类**零规则** ⇒ 该段渲染成裸文本堆叠
+   * （结构在、样式全无）。既有 `CLASS-MUST-EXIST` 检出 38 个缺失却只 WARN，没人补。
+   *
+   * ## 判据（只用已有事实，零硬编码）
+   *  · used = 样式分块拿到的 `classNamesList` ∪ 所有 `.vue` 模板里 `class="..."` 的字面 token
+   *  · defined = 现有 `common.less` + `theme-vars.less` 的**选择器**里出现过的类名
+   *  · missing = used − defined（只保留合法标识符，动态片段/插值天然被正则排除）
+   *
+   * ## 行为
+   *  ① missing=0 ⇒ 打 0 计数行直接返回（「无需补」必须与「没跑」可区分）；
+   *  ② missing>0 ⇒ 发一轮**只带缺失类**的定向 chunk（上下文 = 现有 common.less + 指令），
+   *     回收时**只摘取**「选择器命中缺失类且当前仍未定义」的规则块追加到末尾，
+   *     **绝不覆盖**已生成内容（模型即使整篇重写也只取需要的块）；
+   *  ③ 追加后重算 stillMissing，写入 `this._styleClassGaps` 供上层计入降级（C）。
+   *
+   * fail-open：任何异常只记哨兵 + 计数，不影响已生成样式（宁可样式不全，不能把好的改坏）。
+   *
+   * @param {Function} runChunk 既有分块执行器
+   * @param {Object<string,string>} allFiles 产物文件表（原地更新 common.less）
+   * @param {string[]} classNamesList 样式分块拿到的类名清单
+   * @param {{themeVarsPath?:string, commonLessPath?:string, idx?:number}} opts
+   * @returns {Promise<{used:number, definedBefore:number, missingBefore:number, requested:number, added:number, stillMissing:string[]}>}
+   */
+  async _completeMissingStyleClasses(runChunk, allFiles, classNamesList, opts = {}) {
+    const COMMON = opts.commonLessPath || 'resources/styles/common.less';
+    const THEME = opts.themeVarsPath || 'resources/styles/themes/theme-vars.less';
+    const base = opts.idx || 0;
+    const gaps = {
+      used: 0,
+      definedBefore: 0,
+      missingBefore: 0,
+      requested: 0,
+      added: 0,
+      structuralAdded: 0,
+      stillMissing: [],
+    };
+    // 单个请求最多补 80 个类（再多说明样式根本没生成，应整体重试而不是无限补）
+    const MAX_REQUEST = 80;
+    this._styleClassGaps = null;
+    try {
+      const cur = typeof allFiles[COMMON] === 'string' ? allFiles[COMMON] : '';
+      if (!cur.trim()) return gaps;
+      const used = collectUsedClasses(classNamesList, allFiles);
+      gaps.used = used.length;
+      const definedSet = collectDefinedClasses(cur, allFiles[THEME] || '');
+      gaps.definedBefore = definedSet.size;
+
+      const missing = diffMissingClasses(used, definedSet);
+      gaps.missingBefore = missing.length;
+      if (missing.length === 0) {
+        this.logger.info(
+          `🧵 样式补缺: used=${gaps.used} definedBefore=${gaps.definedBefore} missingBefore=0 requested=0 added=0 stillMissing=0`,
+        );
+        return gaps;
+      }
+
+      const requested = missing.slice(0, MAX_REQUEST);
+      gaps.requested = requested.length;
+      const missingSet = new Set(missing);
+      const instruction = [
+        '【系统指令 · 样式补缺（唯一任务）】',
+        `下列 ${requested.length} 个类在模板中已使用，但 common.less 中**没有任何规则**。`,
+        '请**只为这些类**输出 LESS 规则块，格式严格为：`.类名 { 声明; }`，不要输出任何其它类、不要输出完整文件、不要解释。',
+        '样式取值优先来自上下文里的 Vue 模板（内联 style / 结构）与 Figma 真值；无真值时只写结构性最小集（display / flex-direction / gap / width / height / box-sizing），**不要编造颜色与字号**。',
+        '',
+        '缺失类清单：',
+        ...requested.map((c) => `- ${c}`),
+      ].join('\n');
+
+      const chunk = {
+        title: '样式补缺（仅缺失类）',
+        files: [COMMON],
+        index: base + 2,
+        total: base + 3,
+        contextFiles: [
+          { path: COMMON, content: cur },
+          { path: '（系统指令·样式补缺）', content: instruction },
+        ],
+        classNamesList: requested,
+        segmentType: 'style',
+      };
+      const res = await runChunk(chunk, this._buildChunkMiddle);
+      const text = String((res && res.files && res.files[COMMON]) || '');
+
+      // 只摘取「命中缺失类 且 当前仍未定义」的规则块（宁可漏，不可覆盖已有规则）
+      const append = harvestMissingRuleBlocks(text, missingSet, definedSet);
+      if (append.length > 0) allFiles[COMMON] = appendRules(cur, append);
+      gaps.added = append.length;
+
+      // 🧱 选项 A（结构性兜底）：补缺后仍零规则的类，补**纯布局骨架**（不猜颜色/字号/宽高）。
+      //   目的：避免元素退回浏览器默认样式导致整块塌陷（文字竖堆 / 卡片挤行）。
+      //   兜底≠还原：这些类**仍计入 stillMissing**（诚实降级），只额外记 structural 计数。
+      let afterDefined = collectDefinedClasses(allFiles[COMMON] || '', allFiles[THEME] || '');
+      let still = missing.filter((c) => !afterDefined.has(c));
+      if (still.length > 0) {
+        const fb = buildStructuralFallback(still, allFiles);
+        if (fb.blocks.length > 0) {
+          allFiles[COMMON] = appendRules(allFiles[COMMON] || cur, fb.blocks);
+          gaps.structuralAdded = fb.blocks.length;
+          this.logger.warn(
+            `🧱 样式结构性兜底: structuralAdded=${fb.blocks.length} skipped=${fb.skipped.length} —— 仅补 display/flex-direction/min-width（不猜视觉）`,
+            { samples: fb.covered.slice(0, 8) },
+          );
+        }
+        afterDefined = collectDefinedClasses(allFiles[COMMON] || '', allFiles[THEME] || '');
+        still = missing.filter((c) => !afterDefined.has(c));
+      }
+      gaps.stillMissing = still;
+
+      this.logger.info(
+        `🧵 样式补缺: used=${gaps.used} definedBefore=${gaps.definedBefore} missingBefore=${gaps.missingBefore} requested=${gaps.requested} added=${gaps.added} stillMissing=${gaps.stillMissing.length}`,
+        gaps.stillMissing.length > 0 ? { samples: gaps.stillMissing.slice(0, 8) } : {},
+      );
+      if (gaps.stillMissing.length > 0) {
+        this.logger.warn('⚠️ 样式补缺后仍有零规则类（将计入不完整产物）', {
+          count: gaps.stillMissing.length,
+          samples: gaps.stillMissing.slice(0, 8),
+        });
+      }
+      this._styleClassGaps = gaps;
+      return gaps;
+    } catch (err) {
+      reportPatchChainError(err, { logger: this.logger, pass: 'generateCode:style-complete' });
+      this.logger.warn('⚠️ 样式补缺失败（非阻断，保留已生成样式）', {
+        error: err?.message || String(err),
+      });
+      this._styleClassGaps = gaps;
+      return gaps;
+    }
+  }
+
+  /**
    *  从所有 Vue 模板中程序化提取绑定变量（ref/事件/数据源）
    * 用于跨批次一致性校验 — 确保 template/script/style 使用一致的变量名
    * @returns {{ refs: string[], events: string[], dataSources: string[], interpolations: string[] }}
@@ -5652,6 +6034,11 @@ export class MicrocodeEngineer extends BaseAgent {
     return microcodeWriter.writeFiles(targetFiles, outputPath, {
       logger: this.logger,
       componentType: this.componentType,
+      // 🧩 C9 二次注入（15484123 实锤）：写盘前（filesForWrite 定稿后）按 plan 事实再跑一遍
+      //   注入——幂等；覆盖「execute 出口注入后 index 又被重写」的孤儿场景。
+      ...(Array.isArray(this._internalSubsFlat) && this._internalSubsFlat.length > 0
+        ? { internalSubs: this._internalSubsFlat }
+        : {}),
       // 🛡️ #139（N3）：透传真值真值源——颜色变量补齐由「按名猜色」改为「真值优先」。
       //   ⚠️ 白名单坑（#123 dualTruth / #127 secondaryNode / #138 rowPeerIds 同族）：
       //   新增入参必须在**每一层**显式透传，否则静默丢弃、零报错。此处为落盘唯一出口。
@@ -7119,8 +7506,9 @@ export class MicrocodeEngineer extends BaseAgent {
             level: 'error',
             message: `🚨 ${err.message}`,
           });
-        } catch {
-          /* 进度通道已死时静默 */
+        } catch (_progressErr) {
+          /* 进度通道已死时静默——但失败仍进 patch 链（PATCH-CHAIN-ERROR 门禁要求可归因） */
+          reportPatchChainError(_progressErr, { logger: this.logger, pass: 'execute:progress-report' });
         }
       },
     });
@@ -9172,6 +9560,124 @@ export default declareInfo
             });
           }
         }
+        // 🛡️ 2026-11-06（5d1eb324 用户质询）：**多卡段的装饰背景不属于段容器**。
+        //   真机：StatsSection 根 div 行内 gradient（90deg）与两张 `.stat-card`
+        //   各自 gradient（180deg）**色标逐位相同** —— 段 fills = 首卡 fills 的残留形态。
+        //   判据（同源证明，见 resource-mounter）：段根带 data-section-id + 条目 ≥2 +
+        //   根有 gradient/url + 模板内子级卡片 class 的底与根**同指纹**（忽略方向角）。
+        //   不同源 ⇒ 保留（段可能合法自带面板底），计入 keptDiffers。
+        //   ⚠️ 必须在落盘前、且在所有样式合并之后（此处 `common.less` 已在
+        //   finalTruthFiles 中，证据跨文件可见）。
+        if (typeof microcodeResources.dropContainerBgWhenChildrenOwnCards === 'function') {
+          const _treeSecsForBg = microcodePrompt.resolvePlanSections({
+            generationInput,
+            subComponentPlan: params?.subComponentPlan,
+          });
+          const _rootBg = microcodeResources.dropContainerBgWhenChildrenOwnCards(
+            finalTruthFiles,
+            _treeSecsForBg,
+            { logger: this.logger },
+          );
+          // 计数行恒打（0 也打）：「没有可删」必须与「判据没跑」可区分；
+          // keptDiffers/keptNoChildBg 暴露「不敢删」的两类原因（防静默保留）。
+          this.logger.info(
+            `🛡️ 段容器重复背景评估: dropped=${_rootBg.dropped.length} keptDiffers=${_rootBg.keptDiffers.length} keptNoChildBg=${_rootBg.keptNoChildBg.length}`,
+          );
+        }
+        // 🛡️ 2026-11-06（8cfbd218 实锤）：**静态属性内插值归一**。
+        //   真机产物 `class="c-vehicle-monitor-slot c-vehicle-monitor-slot--{{ item.key }}"`
+        //   —— Vue 插值只在文本节点生效，属性里的 `{{ }}` 是普通字符串 ⇒ 类名永不生效
+        //   （状态区分色全丢）+ DOM 出现 `{`/`}` 非法类名。既有类名守卫只查「类名是否在
+        //   样式表里」，对「属性值里写模板语法」全盲区。此处改为等价绑定表达式。
+        try {
+          const _attrInterp = rewriteAttributeInterpolation(finalTruthFiles, {
+            logger: this.logger,
+          });
+          // 计数行恒打（0 也打）：「已修」与「判据没跑」必须可区分
+          this.logger.info(
+            `🛡️ 属性内插值归一: rewritten=${_attrInterp.rewritten.length} skipped=${_attrInterp.skipped.length}`,
+          );
+        } catch (_attrInterpErr) {
+          reportPatchChainError(_attrInterpErr, { logger: this.logger, pass: 'execute:attr-interp' });
+        }
+        // 🧩 2026-11-06（90eae287 实锤）：**内部子组件 props 契约注入（通道②确定性兜底）**。
+        //   通道①（prompt 数据契约）已下发；但真机证明纯提示词路径会被绕过（模型拿到
+        //   `Props: chartData, chartConfig` 仍一个都不传）⇒ 此处按产物事实兜底接线。
+        //   判据来源：子组件自身 defineProps（有 chartConfig 才动）+ plan 的 internalSubs（取 chartType/series）。
+        //   宁空勿造：series 真值缺失只注入结构 config，`:chart-data` 不注入并计 dataMissing。
+        //   安全：注入后逐个 SFC 校验，不合法即回滚该文件（拒绝把好文件改坏）。
+        try {
+          const _treeSecsForSubs = microcodePrompt.resolvePlanSections({
+            generationInput,
+            subComponentPlan: params?.subComponentPlan,
+          });
+          const _subsFlat = [];
+          const _walkSubs = (list) => {
+            for (const sec2 of Array.isArray(list) ? list : []) {
+              if (sec2 && Array.isArray(sec2.internalSubcomponents)) {
+                _subsFlat.push(...sec2.internalSubcomponents);
+              }
+              if (sec2 && Array.isArray(sec2.children)) _walkSubs(sec2.children);
+            }
+          };
+          _walkSubs(_treeSecsForSubs);
+          // 🧩 挂到实例上：writeFiles 包装器二次注入（15484123 实锤——execute 出口注入后
+          //   index 仍可能被后续 pass 重写，标签迁移 ⇒ 绑定丢、常量成孤儿）。
+          this._internalSubsFlat = _subsFlat;
+          if (_subsFlat.length > 0) {
+            const _snapshot = new Map();
+            for (const [k, v] of Object.entries(finalTruthFiles)) {
+              if (typeof v === 'string' && /\.vue$/i.test(k)) _snapshot.set(k, v);
+            }
+            const _ins = injectChartSubProps(finalTruthFiles, _subsFlat, { logger: this.logger });
+            // 回滚：注入后 SFC 不合法 ⇒ 恢复该文件原文
+            const _changed = [..._snapshot.keys()].filter(
+              (k) => finalTruthFiles[k] !== _snapshot.get(k),
+            );
+            let _rolledBack = 0;
+            for (const rel of _changed) {
+              try {
+                const _chk = validateVueSfc(finalTruthFiles[rel], rel);
+                if (!_chk?.valid) {
+                  finalTruthFiles[rel] = _snapshot.get(rel);
+                  _rolledBack += 1;
+                  this.logger.warn('🧩 props 契约注入自检失败，已回滚该文件', {
+                    file: rel,
+                    errors: (_chk?.errors || []).slice(0, 2),
+                  });
+                }
+              } catch (_chkErr) {
+                reportPatchChainError(_chkErr, {
+                  logger: this.logger,
+                  pass: 'execute:chart-props:verify',
+                });
+                finalTruthFiles[rel] = _snapshot.get(rel);
+                _rolledBack += 1;
+              }
+            }
+            // 计数行恒打（0 也打）：subs=0 表示本单没拆图表子组件，与「没跑」可区分
+            this.logger.info(
+              `🧩 内部子组件 props 契约: subs=${_ins.subs} declared=${_ins.declared} bound=${_ins.bound} injected=${_ins.injected} conflict=${_ins.conflict} rolledBack=${_rolledBack} dataMissing=${_ins.dataMissing} unmatched=${_ins.unmatched} unboundAfter=${_ins.unboundAfter}`,
+            );
+          }
+        } catch (_insErr) {
+          reportPatchChainError(_insErr, { logger: this.logger, pass: 'execute:chart-props' });
+        }
+        // 🛡️ 2026-11-06（5d1eb324 用户质询）：**透明度不得在 CSS 里二次表达**。
+        //   背景 rgba/素材 URL 已带 alpha 时，同规则里的 `opacity` 是重复通道：
+        //   既把透明度叠成乘积（0.4×0.5=0.2），又让卡内文字/图标一起被压淡（设计里文字不透明）。
+        //   与上面的归属修正互补：那条处理「上提到容器的 bg 层透明度」（有第三层可搬），
+        //   这条处理「同一规则两个通道重复」（无可搬层 ⇒ 删重复项）。
+        if (typeof microcodeResources.dropRedundantCssOpacity === 'function') {
+          const _opacityDup = microcodeResources.dropRedundantCssOpacity(finalTruthFiles, {
+            logger: this.logger,
+          });
+          if (_opacityDup.dropped.length > 0) {
+            this.logger.info(`🛡️ 落盘前 CSS 透明度去重: ${_opacityDup.dropped.length} 处`, {
+              samples: _opacityDup.dropped.slice(0, 6),
+            });
+          }
+        }
       } catch (_bgFormFinalErr) {
         reportPatchChainError(_bgFormFinalErr, { logger: this.logger, pass: 'execute:8734' });
         this.logger.warn('⚠️ 落盘前背景形态修复失败（非阻断）', {
@@ -9276,14 +9782,30 @@ export default declareInfo
         );
       }
 
-      const { written: finalTruthWritten, skipped: finalTruthSkipped } =
+      const {
+        written: finalTruthWritten,
+        skipped: finalTruthSkipped,
+        sfcBlocked: finalTruthSfcBlocked = [],
+      } =
         _lockedForFinal
-          ? { written: [], skipped: [] }
+          ? { written: [], skipped: [], sfcBlocked: [] }
           : this.writeFiles(finalTruthFiles, outputPath);
       if (finalTruthSkipped.length > 0) {
         this.logger.warn('⚠️ 统一终态落盘有文件被跳过', {
           skipped: finalTruthSkipped,
           count: finalTruthSkipped.length,
+        });
+      }
+      // 🛡️ 2026-11-06（f91aa545 实锤）：**坏 SFC 已被门禁拦下，不得伪装成功**。
+      //   旧行为：WARN + 跳过 ⇒ 文件不落盘、index 仍 import ⇒ 预览 load-error ⇒
+      //   RUNTIME-004 判死，但任务结果里没有任何「产物不完整」证据。
+      //   现在显式留痕并计入 degraded（→ artifactIncomplete=true），让上层诚实失败。
+      this._sfcBlockedFiles = Array.isArray(finalTruthSfcBlocked) ? finalTruthSfcBlocked : [];
+      if (this._sfcBlockedFiles.length > 0) {
+        this.logger.error('🚫 产物含被门禁阻断的坏 SFC（不落盘，计入不完整产物）', {
+          files: this._sfcBlockedFiles.map((f) => f.path),
+          reasons: this._sfcBlockedFiles.map((f) => f.reason),
+          count: this._sfcBlockedFiles.length,
         });
       }
       // 🛡️ R2（2026-09-08 补强）：writeFiles 的写盘门禁自愈（SFC 内嵌 style 括号平衡、
@@ -9325,6 +9847,27 @@ export default declareInfo
       const degradedFiles = Array.isArray(codeResult.degradedFiles)
         ? codeResult.degradedFiles.filter(Boolean)
         : [];
+      // 🛡️ 2026-11-06（f91aa545 实锤）：被 SFC 门禁阻断的坏文件同样计入降级清单
+      //   （它们是「已生成但内容不合法、拒绝落盘」⇒ 产物不完整），与 gateSkipped 同源留痕。
+      for (const f of Array.isArray(this._sfcBlockedFiles) ? this._sfcBlockedFiles : []) {
+        if (f?.path && !degradedFiles.includes(f.path)) degradedFiles.push(f.path);
+      }
+      // 🧵 2026-11-06（a9364bd4 实锤 · C 诚实化）：**样式表不完整必须计入降级**。
+      //   真机 59 个模板类只有 21 个有规则（38 个零规则），`CLASS-MUST-EXIST` 只 WARN、
+      //   `artifactIncomplete=false`、`runtimeGate=PASS` —— 交付"成功"但页面是裸文本。
+      //   补缺后仍缺的类 ⇒ 把 common.less 计入 degradedFiles（→ artifactIncomplete=true）。
+      {
+        const _gaps = this._styleClassGaps;
+        const _still = Array.isArray(_gaps?.stillMissing) ? _gaps.stillMissing : [];
+        if (_still.length > 0) {
+          const _p = 'resources/styles/common.less';
+          if (!degradedFiles.includes(_p)) degradedFiles.push(_p);
+          this.logger.error(
+            `🚫 样式表不完整：${_still.length}/${_gaps.used} 个模板类仍零规则（已计入不完整产物）`,
+            { samples: _still.slice(0, 10), addedByCompletion: _gaps.added },
+          );
+        }
+      }
       const gateSkippedFiles = [
         ...new Set([
           ...writeSkipped1,

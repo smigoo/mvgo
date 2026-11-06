@@ -99,7 +99,10 @@ export class ComponentController {
     };
   }
 
+  // 🛡️ 2026-11-06 补守卫：原先仅 @OptionalUser ⇒ 匿名时 service 走 `userId ? 校验 : 放行`
+  //   的跳过分支，任何人可按 sessionId 拉他人组件。调用方只有 api/component.ts(authAxios 带 Token)。
   @Get('by-session/:sessionId')
+  @UseGuards(SessionGuard)
   async getComponentBySessionId(
     @Param('sessionId') sessionId: string,
     @OptionalUser() userId: string | undefined,
@@ -117,8 +120,14 @@ export class ComponentController {
   /**
    * 代理 GitLab API：列出当前 Token 用户参与的项目
    * 前端无法直连 GitLab（CORS），故由后端转发
+   * 🛡️ 2026-11-06 补守卫：三个 gitlab-* 端点原先零守卫，且 `accessToken` 由
+   *   `@Body()` 由调用方自带、服务端无条件转发 —— 等于任何人（无需登录）
+   *   都能把它当成访问公司 GitLab 的开放代理；`gitlab-projects-proxy` 更甚，
+   *   `endpoint` 也是入参，可拼任意 GET 路径（SSRF/越权枚举）。
+   *   调用方只有前端 GitLabPushModal.vue（http.post → 带 Token），补守卫安全。
    */
   @Post('gitlab-projects')
+  @UseGuards(SessionGuard)
   async listGitLabProjects(
     @Body() body: { accessToken: string },
   ) {
@@ -134,6 +143,7 @@ export class ComponentController {
    * 代理 GitLab API：列出指定项目的分支
    */
   @Post('gitlab-branches')
+  @UseGuards(SessionGuard)
   async listGitLabBranches(
     @Body() body: { accessToken: string; repoUrl: string },
   ) {
@@ -146,6 +156,7 @@ export class ComponentController {
   }
 
   @Post('gitlab-projects-proxy')
+  @UseGuards(SessionGuard)
   async proxyGitLabProjects(
     @Body() body: { accessToken: string; endpoint: string },
   ) {
@@ -315,7 +326,10 @@ export class ComponentController {
     };
   }
 
+  // 🛡️ 2026-11-06 补守卫：匿名可枚举读任意组件源码文件清单（越权读取）。
+  //   调用方 DocComparePanel.vue / api/component.ts 均 http.get/authAxios 带 Token，零误伤。
   @Get(':componentId/files')
+  @UseGuards(SessionGuard)
   async getComponentFiles(
     @Param('componentId') componentId: string,
     @OptionalUser() userId: string | undefined,
@@ -334,7 +348,10 @@ export class ComponentController {
     }
   }
 
+  // 🛡️ 2026-11-06 补守卫：同 files —— 匿名可读任意组件 declare 配置。
+  //   调用方 demo/index.vue:2514 http.get 带 Token，零误伤。
   @Get(':componentId/declare')
+  @UseGuards(SessionGuard)
   async getComponentDeclare(
     @Param('componentId') componentId: string,
     @OptionalUser() userId: string | undefined,
@@ -490,7 +507,13 @@ export class ComponentController {
     }
   }
 
+  // 🛡️ 2026-11-06 补守卫：匿名可打包下载任意组件源码。调用方 TaskDetail.vue(downloadArtifact
+  //   →fetch 带 Token) / RightPanel.vue(downloadByUrl→http.raw 带 Token)；
+  //   2026-09-04 已实证原生 <a href> 裸链不带 Token 并全部改造完毕，此处补守卫零误伤。
+  // ⚠️ 姊妹端点 GET :componentId/file 保持匿名 —— 质量面板 <img src="/file?…&raw=1">
+  //   截图/预览图无法带 Token 头，raw=1 逃生舱即为此设计（方法内 session 有 userId 仍做归属校验）。
   @Get('download/:componentId')
+  @UseGuards(SessionGuard)
   async downloadComponent(
     @Param('componentId') componentId: string,
     @OptionalUser() userId: string | undefined,

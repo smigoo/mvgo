@@ -8,13 +8,15 @@ export const OUTPUT_TARGETS = Object.freeze({
     status: '已实现（dev 工作台）',
     draftOverlay: {
       type: 'browser-localStorage',
-      keyPattern: 'mvgo.meeting.draft.<runVersion>',
-      indexKey: 'mvgo.meeting.draft.index',
-      note: 'AI 原草稿不可变；人工编辑只写 field_overlay，重跑新版本不覆盖'
+      keyPattern: 'mvgo.meeting.draft.<ownerId>.<runVersion>',
+      indexKey: 'mvgo.meeting.draft.<ownerId>.index',
+      note: 'AI 原草稿不可变；人工编辑只写 field_overlay，重跑新版本不覆盖。' +
+        '🔴 key 必带 ownerId（2026-11-06 补）：同浏览器换账号登录时，' +
+        '无前缀的 key 会把上一个用户的草稿直接呈现给下一个用户（dev 态越权）。'
     },
     frozenSnapshot: {
       type: 'browser-localStorage · state.snapshot',
-      note: '发布后 frozen=true，不可回草稿态'
+      note: '发布后 frozen=true，不可回草稿态。快照随草稿同 key 分区（<ownerId>.<runVersion>）'
     },
     audio: {
       type: 'memory-only',
@@ -62,30 +64,43 @@ export const OUTPUT_TARGETS = Object.freeze({
 
 // ---- 接口契约 ----
 // 约定：implemented=false 表示「形状已冻结、服务端未实现」，不得对外宣称已接通。
+//
+// 归属（ownership）字段（2026-11-06 补）：每一条都必须显式声明「这份数据按谁的 ownerId 隔离」。
+// 补它的原因：此前 18 条零归属字段，导致「新功能要按用户独立」这件事在契约里无处可查，
+// 只能靠读实现反推 —— 实现一改，隔离口径就静默漂移。
+//   run.ownerId      —— 归属落在 meeting run 上的 ownerId（创建者唯一写入，读写都要过归属闸）
+//   retention.actor  —— 归属落在留存审计条目的 actor（E-17 只清自己名下，E-18 只看自己记录）
+//   global           —— 全局单例配置（留存策略），不按 owner 分区；但**仍要求已登录**
+// requiresAuth=true ⇒ 服务端必须挂阻断型身份守卫；只有 requireAuth=false 才允许匿名可达。
+// Node 侧由 src/meeting/meeting.controller.ts 的类级 `@UseGuards(MeetingDevOnlyGuard, SessionGuard)`
+// 逐条兑现，并由 backend-node/src/meeting/meeting-contract-parity.spec.ts 双向钉住。
 export const BACKEND_ENDPOINTS = Object.freeze([
-  { id: 'E-01', method: 'POST', path: '/api/meeting/runs', purpose: '创建 RunVersion（三路输入 + 模板 + 语种配置）', implemented: false },
+  { id: 'E-01', method: 'POST', path: '/api/meeting/runs', purpose: '创建 RunVersion（三路输入 + 模板 + 语种配置）', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
   // E-02 门禁约束：前端 consent.canRecord() 只是本地镜像，服务端必须再判一次，
   // 否则改前端/直接调接口即可绕过 FR-03「任一人拒绝即禁止处理」。
-  { id: 'E-02', method: 'POST', path: '/api/meeting/runs/:id/audio', purpose: '音频上传，返回 audio_ref（服务端须二次校验同意门禁，不信任前端判定）', implemented: false },
-  { id: 'E-03', method: 'GET', path: '/api/meeting/runs/:id', purpose: '轮询阶段状态与 partial_artifacts', implemented: false },
-  { id: 'E-04', method: 'POST', path: '/api/meeting/runs/:id/retry', purpose: '断点续跑，只重跑失败阶段及之后', implemented: false },
-  { id: 'E-05', method: 'GET', path: '/api/meeting/runs/:id/draft', purpose: '读取 draft_ai + field_overlay 合并结果', implemented: false },
-  { id: 'E-06', method: 'PATCH', path: '/api/meeting/runs/:id/draft/fields/:fieldId', purpose: '编辑 / 确认 / 驳回，写 field_overlay', implemented: false },
-  { id: 'E-07', method: 'POST', path: '/api/meeting/runs/:id/publish', purpose: '人工确认齐备后定稿冻结快照', implemented: false },
-  { id: 'E-08', method: 'GET', path: '/api/meeting/runs/:id/export', purpose: '按格式导出 md / html / word / pdf / csv / json / 整合稿件（过 FR-11 发布门禁；不得含原始音频）', implemented: false },
-  { id: 'E-09', method: 'POST', path: '/api/meeting/runs/:id/compose', purpose: '整合草稿 + 转写稿 + 证据为输出稿件（过 V-1~V-6 与 FR-11）', implemented: false },
+  { id: 'E-02', method: 'POST', path: '/api/meeting/runs/:id/audio', purpose: '音频上传，返回 audio_ref（服务端须二次校验同意门禁，不信任前端判定）', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-03', method: 'GET', path: '/api/meeting/runs/:id', purpose: '轮询阶段状态与 partial_artifacts', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-04', method: 'POST', path: '/api/meeting/runs/:id/retry', purpose: '断点续跑，只重跑失败阶段及之后', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-05', method: 'GET', path: '/api/meeting/runs/:id/draft', purpose: '读取 draft_ai + field_overlay 合并结果', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-06', method: 'PATCH', path: '/api/meeting/runs/:id/draft/fields/:fieldId', purpose: '编辑 / 确认 / 驳回，写 field_overlay', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-07', method: 'POST', path: '/api/meeting/runs/:id/publish', purpose: '人工确认齐备后定稿冻结快照', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-08', method: 'GET', path: '/api/meeting/runs/:id/export', purpose: '按格式导出 md / html / word / pdf / csv / json / 整合稿件（过 FR-11 发布门禁；不得含原始音频）', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-09', method: 'POST', path: '/api/meeting/runs/:id/compose', purpose: '整合草稿 + 转写稿 + 证据为输出稿件（过 V-1~V-6 与 FR-11）', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
   // ---- FR-03 告知同意（SEC-01）：判定权威在服务端 ----
-  { id: 'E-10', method: 'POST', path: '/api/meeting/runs/:id/consent/disclosure', purpose: '发起告知，返回 disclosure_version 与待表态参会人清单', implemented: false },
-  { id: 'E-11', method: 'POST', path: '/api/meeting/runs/:id/consent/decisions', purpose: '提交单人参会人的同意 / 拒绝，逐人留痕', implemented: false },
-  { id: 'E-12', method: 'GET', path: '/api/meeting/runs/:id/consent', purpose: '查询权威门禁状态（canRecord / blockers / blocking），前端据此展示与放行', implemented: false },
-  { id: 'E-13', method: 'POST', path: '/api/meeting/runs/:id/consent/withdraw', purpose: '撤回同意：停止处理并触发产物删除；不可直接改回同意', implemented: false },
-  { id: 'E-14', method: 'GET', path: '/api/meeting/runs/:id/consent/audit', purpose: '查询逐人同意留痕（declare / accepted / declined / withdraw 全链路 + 告知版本）', implemented: false },
+  { id: 'E-10', method: 'POST', path: '/api/meeting/runs/:id/consent/disclosure', purpose: '发起告知，返回 disclosure_version 与待表态参会人清单', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-11', method: 'POST', path: '/api/meeting/runs/:id/consent/decisions', purpose: '提交单人参会人的同意 / 拒绝，逐人留痕', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-12', method: 'GET', path: '/api/meeting/runs/:id/consent', purpose: '查询权威门禁状态（canRecord / blockers / blocking），前端据此展示与放行', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-13', method: 'POST', path: '/api/meeting/runs/:id/consent/withdraw', purpose: '撤回同意：停止处理并触发产物删除；不可直接改回同意', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
+  { id: 'E-14', method: 'GET', path: '/api/meeting/runs/:id/consent/audit', purpose: '查询逐人同意留痕（declare / accepted / declined / withdraw 全链路 + 告知版本）', ownership: 'run.ownerId', requiresAuth: true, implemented: false },
   // ---- FR-14 留存与数据生命周期（SEC-07）----
-  { id: 'E-15', method: 'GET', path: '/api/meeting/retention/policy', purpose: '读取留存策略（未配置时返回默认 90 天并标 source=default）', implemented: false },
-  { id: 'E-16', method: 'PUT', path: '/api/meeting/retention/policy', purpose: '管理员写入留存天数（合法区间 1~3650），写审计', implemented: false },
-  { id: 'E-17', method: 'POST', path: '/api/meeting/retention/purge', purpose: '执行到期清理：删音频 / 转写 / 中间产物 / embedding，保留脱敏统计与审计', implemented: false },
-  { id: 'E-18', method: 'GET', path: '/api/meeting/retention/audit', purpose: '查询删除审计（expire_purge / user_delete，仅脱敏计数，无正文）', implemented: false }
+  { id: 'E-15', method: 'GET', path: '/api/meeting/retention/policy', purpose: '读取留存策略（未配置时返回默认 90 天并标 source=default）', ownership: 'global', requiresAuth: true, implemented: false },
+  { id: 'E-16', method: 'PUT', path: '/api/meeting/retention/policy', purpose: '管理员写入留存天数（合法区间 1~3650），写审计', ownership: 'global', requiresAuth: true, implemented: false },
+  { id: 'E-17', method: 'POST', path: '/api/meeting/retention/purge', purpose: '执行到期清理：删音频 / 转写 / 中间产物 / embedding，保留脱敏统计与审计', ownership: 'retention.actor', requiresAuth: true, implemented: false },
+  { id: 'E-18', method: 'GET', path: '/api/meeting/retention/audit', purpose: '查询删除审计（expire_purge / user_delete，仅脱敏计数，无正文）', ownership: 'retention.actor', requiresAuth: true, implemented: false }
 ])
+
+// 归属合法取值（自检与 parity 判据共用；新增取值必须同步 Node 侧 parity spec）
+export const OWNERSHIP_SCOPES = Object.freeze(['run.ownerId', 'retention.actor', 'global'])
 
 // ---- 状态机（DB 条件更新 + 单 Worker 轮询，v1 不引入 MQ / K8s）----
 export const RUN_STATUS = Object.freeze([
@@ -222,6 +237,12 @@ export function selfCheckApiContract() {
   if (BACKEND_ENDPOINTS.some((e) => e.implemented)) problems.push('出现已实现标记，与未部署边界冲突')
   if (BACKEND_ENDPOINTS.length !== 18) problems.push('接口清单数量异常')
   if (DB_TABLES.length !== 19) problems.push('数据表数量异常')
+  // 归属口径自检（2026-11-06 补）：18 条全部显式声明 ownership 且取值合法、一律 requiresAuth。
+  // 缺这一层，隔离口径就只存在于实现里，契约（这份「单一来源」）反而查不到 —— 正是本次要治的病。
+  const badOwnership = BACKEND_ENDPOINTS.filter((e) => !OWNERSHIP_SCOPES.includes(e.ownership)).map((e) => e.id)
+  if (badOwnership.length) problems.push(`接口未声明 ownership 或取值非法：${badOwnership.join('/')}`)
+  const noAuth = BACKEND_ENDPOINTS.filter((e) => e.requiresAuth !== true).map((e) => e.id)
+  if (noAuth.length) problems.push(`会议接口必须要求身份（requiresAuth=true），异常：${noAuth.join('/')}`)
   if (canTransition('已定稿', '待确认')) problems.push('定稿冻结后可回草稿态，违反 FR-12')
   if (!canTransition('处理中', '待确认')) problems.push('处理中 → 待确认 迁移缺失')
   // FR-03 / FR-14 服务端契约形状（E-10~E-18 + 4 张新表 + 同意状态机）并入主自检，

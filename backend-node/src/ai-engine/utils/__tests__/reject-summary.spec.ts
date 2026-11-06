@@ -166,7 +166,7 @@ describe('Phase E · formatRejectSummaryLine（一行确定性日志）', () => 
     expect(line).toContain('listItemBg=3,declared=2,subtree=1,skipped=0');
     // 🔴 步①②：`listGeo:negGap=0` 而产物含负值 ⇒ 判据失效。故 0 也必须打出来。
     // 🔴 步③：`widthNotUniform=0` 而产物仍含异宽 `FG_LIST_WIDTHS` ⇒ 步③ 判据失效，同样 0 也打。
-    expect(line).toContain('listGeo:negGap=1,geoNotReady=0,widthNotUniform=0');
+    expect(line).toContain('listGeo:negGap=1,geoNotReady=0,relaxed=0,widthNotUniform=0');
     expect(line).toContain('suppressed:statRow=1');
     expect(line).toContain('skipped=2');
     expect(line).toContain('anchorRepairs=2');
@@ -256,7 +256,7 @@ describe('步①② · 列表卡盒负间距总闸（阴性/阳性对照 + 同�
     expect(a.listGeo.negGapClamped).toBe(0);
     expect(a.listGeo.samples).toEqual([]);
     const line = formatRejectSummaryLine(buildRejectSummary({ takeoverAudit: a, contractAudit: null }));
-    expect(line).toContain('listGeo:negGap=0,geoNotReady=0,widthNotUniform=0');
+    expect(line).toContain('listGeo:negGap=0,geoNotReady=0,relaxed=0,widthNotUniform=0');
   });
 
   it('samples 封顶 8（审计行不因段数增长而膨胀）', () => {
@@ -341,8 +341,12 @@ describe('步③ · 列表 row 异宽拦横向几何（同宽/已证明二支路
     expect(src).toMatch(/const\s+sameWidth\s*=\s*boxesReady\s*&&\s*cardBoxes\.every\(/);
     // ② 防误伤支路：逐项已证明（node 非空）
     expect(src).toMatch(/const\s+horizProven\s*=\s*boxesReady\s*&&\s*cards\.every\(\s*\(c\)\s*=>\s*!!c\.node\s*\)/);
-    // ③ 判定式：row ∧ !sameWidth ∧ !horizProven
-    expect(src).toMatch(/const\s+widthNotUniform\s*=\s*boxesReady\s*&&\s*direction\s*===\s*'row'\s*&&\s*!sameWidth\s*&&\s*!horizProven/);
+    // ③ 判定式：row ∧ !similarWidth ∧ !horizProven
+    //    🛡️ 2026-11-06：否定项由 `sameWidth`（精确等值）改为 `similarWidth`（近似带）——
+    //    视觉阶段只能判「大概相似」，用等值当闸门会让一个 11px 离群盒废掉整段真值
+    //    （64a1a31f 实锤）。相似带判据本身必须存在且单一来源：
+    expect(src).toMatch(/const\s+similarWidth\s*=\s*boxesReady\s*&&\s*axisSimilar\(/);
+    expect(src).toMatch(/const\s+widthNotUniform\s*=\s*boxesReady\s*&&\s*direction\s*===\s*'row'\s*&&\s*!similarWidth\s*&&\s*!horizProven/);
     // ④ 同门：`cardWidths` 与 `gaps` 赋值都必须在 `if (!widthNotUniform)` 内
     expect(src).toMatch(/if\s*\(!widthNotUniform\)\s*\{/);
     // ⑤ 计数聚合必须存在（否则审计侧静默）

@@ -75,3 +75,5 @@ export const configDir = join(backendRoot, 'config')
 export const chatAttachmentsDir = join(backendRoot, 'temp-chat-attachments')
 export const apifoxZipsDir = join(dataDir, 'apifox-zips')
 export const apiCatalogsDir = join(dataDir, 'api-catalogs')
+/** 任务反馈截图（按 sessionId 分子目录；落 data/ 走持久盘，不进临时目录） */
+export const feedbackAttachmentsDir = join(dataDir, 'feedback-attachments')

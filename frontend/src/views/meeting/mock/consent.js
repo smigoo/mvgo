@@ -10,10 +10,19 @@
 // Node 冒烟脚本用内存 storage 做确定性验证（不依赖浏览器）。
 // dev 态持久化到 localStorage；生产应由服务端记录并绑定会议 ID（契约未落地，此处不伪造）。
 
+import { currentMeetingOwnerId, sanitizeOwnerId, scopedStorageKey } from './owner-scope.js'
+
 export const CONSENT_PREFIX = 'mvgo.meeting.consent.'
-export const CONSENT_INDEX_KEY = 'mvgo.meeting.consent.index'
-// 当前进行中会议的 ID：刷新页面要能接着用同一份同意记录，不能每次刷新都变成「新会议」
-export const CONSENT_CURRENT_KEY = 'mvgo.meeting.consent.current'
+// 同意记录含参会人姓名与逐人表态，属敏感数据：一律按 owner 分区，避免换账号后读到他人会议。
+// 三个 key 由「常量」改为「函数」的原因同 draft-store：owner 运行时可变，常量会锁死分区。
+export function consentIndexKey(ownerId = currentMeetingOwnerId()) {
+  return scopedStorageKey(CONSENT_PREFIX, 'index', ownerId)
+}
+// 当前进行中会议的 ID：刷新页面要能接着用同一份同意记录，不能每次刷新都变成「新会议」，
+// 但也不能把上一个账号的进行中会议「接着用」—— 所以同样按 owner 分区。
+export function consentCurrentKey(ownerId = currentMeetingOwnerId()) {
+  return scopedStorageKey(CONSENT_PREFIX, 'current', ownerId)
+}
 
 // 告知版本：告知内容一旦实质变化必须升版，旧版同意不可复位成新版同意
 export const DISCLOSURE_VERSION = 'v1'
@@ -79,10 +88,10 @@ function defaultIdFactory() {
   return `mtg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export function currentMeetingId(storage = resolveStorage()) {
+export function currentMeetingId(storage = resolveStorage(), ownerId = currentMeetingOwnerId()) {
   if (!storage) return null
   try {
-    return storage.getItem(CONSENT_CURRENT_KEY) || null
+    return storage.getItem(consentCurrentKey(ownerId)) || null
   } catch {
     return null
   }
@@ -93,6 +102,7 @@ export function createConsentLedger(meetingId, options = {}) {
   const now = options.now || (() => new Date().toISOString())
   const idFactory = options.idFactory || defaultIdFactory
   const id = meetingId || idFactory()
+  const ownerId = sanitizeOwnerId(options.ownerId ?? currentMeetingOwnerId())
 
   const state = {
     meetingId: id,
@@ -106,7 +116,9 @@ export function createConsentLedger(meetingId, options = {}) {
     purgedAt: null
   }
 
-  const storageKey = CONSENT_PREFIX + state.meetingId
+  const storageKey = scopedStorageKey(CONSENT_PREFIX, state.meetingId, ownerId)
+  const indexKey = consentIndexKey(ownerId)
+  const currentKey = consentCurrentKey(ownerId)
 
   function record(action, participantId, before, after) {
     state.audit.push({
@@ -295,7 +307,7 @@ export function createConsentLedger(meetingId, options = {}) {
     storage.setItem(storageKey, JSON.stringify(state))
     let index = []
     try {
-      index = JSON.parse(storage.getItem(CONSENT_INDEX_KEY) || '[]')
+      index = JSON.parse(storage.getItem(indexKey) || '[]')
     } catch {
       index = []
     }
@@ -310,8 +322,8 @@ export function createConsentLedger(meetingId, options = {}) {
       purgedAt: state.purgedAt
     }
     index = [entry, ...index.filter((i) => i.meetingId !== state.meetingId)]
-    storage.setItem(CONSENT_INDEX_KEY, JSON.stringify(index))
-    storage.setItem(CONSENT_CURRENT_KEY, state.meetingId)
+    storage.setItem(indexKey, JSON.stringify(index))
+    storage.setItem(currentKey, state.meetingId)
     return { key: storageKey, at: now(), persisted: true }
   }
 
@@ -347,6 +359,7 @@ export function createConsentLedger(meetingId, options = {}) {
   return {
     state,
     storageKey,
+    ownerId,
     counts,
     addParticipant,
     removeParticipant,
@@ -362,10 +375,10 @@ export function createConsentLedger(meetingId, options = {}) {
   }
 }
 
-export function listConsentRecords(storage = resolveStorage()) {
+export function listConsentRecords(storage = resolveStorage(), ownerId = currentMeetingOwnerId()) {
   if (!storage) return []
   try {
-    const index = JSON.parse(storage.getItem(CONSENT_INDEX_KEY) || '[]')
+    const index = JSON.parse(storage.getItem(consentIndexKey(ownerId)) || '[]')
     return Array.isArray(index) ? index : []
   } catch {
     return []

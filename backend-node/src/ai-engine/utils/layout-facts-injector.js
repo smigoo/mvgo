@@ -15,7 +15,7 @@ import { FG_TAKEOVER_CLASS_RX } from './folded-grid-section-takeover.js'
  * 🛡️ 模板标签扫描（2026-09-30 §8.10 提为共享导出）
  *
  * 口径 = 逐标签扫描，**不假设属性顺序**（`class` 可写在 `data-section-id` 之后）。
- * 属性段 `(?:"[^"]*"|'[^']*'|[^>])*` 让**引号内的 `>`** 不提前截断标签
+ * 属性段 `(?:"[^"]*"|'[^']*'|[^>"'])*` 让**引号内的 `>`** 不提前截断标签
  * （`CardGrid.vue` 的 `:style="{ ... }"` 里就可能出现 `>`）。
  *
  * 同一口径同时服务两处（此前是两处独立正则，易漂移）：
@@ -28,7 +28,7 @@ import { FG_TAKEOVER_CLASS_RX } from './folded-grid-section-takeover.js'
 export function matchTemplateTags(content) {
   const out = []
   if (typeof content !== 'string' || !content) return out
-  const re = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g
+  const re = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
   let m
   while ((m = re.exec(content))) {
     out.push({ name: m[1], attrs: m[2] || '', full: m[0], index: m.index })

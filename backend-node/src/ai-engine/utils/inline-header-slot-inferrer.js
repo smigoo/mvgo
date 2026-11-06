@@ -310,3 +310,101 @@ export function ensureHeaderSlots(sections, headerSlots = [], opts = {}) {
     existingCount: existing.length,
   }
 }
+
+// ── 刀65-B（2026-11-06 · mc-1793897995094-b445e302 实锤）─────────────────────────
+// 插槽资格复核：vision 把 9.8×9.8 的右上角 VECTOR 角标（36:1697）判成「头部设备标识」段
+// 且标 slotCandidate=header-right → 整个头部组件（98px 图片+标题+编码）被 LLM 装进
+// #header-right 插槽。根治：slotCandidate 只是 vision 的**语义假设**，装配前必须过
+// Figma 真值几何资格复核——小锚点/空内容的段没有资格成为插槽内容源。
+
+/**
+ * 小锚点阈值（px）。来源：微码面板 header 区控件（图标/按钮/统计块）的最小合理内容尺寸
+ * 远大于 24px；≤24px 的锚定节点只能是角标/装饰图标（本单 36:1697=9.8px），不构成插槽内容区。
+ */
+export const SLOT_ANCHOR_MAX_PX = 24;
+
+/** 在 Figma 真值树中按 id 查节点（纯函数自包含，不依赖实例方法）。 */
+function findFigmaNodeByIdIn(root, id) {
+  if (!root || typeof root !== 'object') return null;
+  if (String(root.id ?? '') === String(id)) return root;
+  const kids = Array.isArray(root.children) ? root.children : [];
+  for (const c of kids) {
+    const hit = findFigmaNodeByIdIn(c, id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** 节点 bbox 最大边（无几何 ⇒ null）。 */
+function maxEdgeOf(node) {
+  const bb = node?.absoluteBoundingBox;
+  const w = Number(bb?.width);
+  const h = Number(bb?.height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return Math.max(w, h);
+}
+
+/**
+ * 撤销不合格段的 header 插槽资格（原地改 sections，fail-open）。
+ *
+ * 判据（两支，任一命中即撤销；均结构化、命名无关）：
+ *   ① 锚点尺度矛盾：段锚定节点在 Figma 真值中最大边 ≤ SLOT_ANCHOR_MAX_PX；
+ *   ② 空内容段：body 与 items 均空（无内容可装配）。
+ *
+ * 撤销动作：`sec.slotCandidate` 与 `sec.header?.slotCandidate` 置 null ⇒
+ * 下游 `ensureHeaderSlots`（normalizeSlotCandidate(null)=null）与 prompt 蓝图透传全链一致。
+ * 查不到锚点几何时**不撤销**（fail-open：证据不足不动语义）。
+ *
+ * @param {Array} sections preview-analysis sections
+ * @param {object} figmaNodeData Figma 真值树（cached document）
+ * @returns {{evaluated: number, revoked: number, revokedIds: string[], reasons: Object<string,string>}}
+ */
+export function revokeUnqualifiedHeaderSlotCandidates(sections, figmaNodeData) {
+  const list = Array.isArray(sections) ? sections : [];
+  let evaluated = 0;
+  let revoked = 0;
+  const revokedIds = [];
+  const reasons = {};
+
+  for (const sec of list) {
+    if (!sec || typeof sec !== 'object') continue;
+    const cand = sec.slotCandidate ?? sec.header?.slotCandidate ?? null;
+    const slotType = typeof cand === 'object' && cand !== null
+      ? String(cand.slotType ?? '')
+      : String(cand ?? '');
+    if (!/^header-/i.test(slotType)) continue;
+    evaluated += 1;
+
+    // ① 锚点尺度矛盾（真值几何优先查证）
+    const secId = sec.id != null ? String(sec.id) : '';
+    let reason = '';
+    if (secId && figmaNodeData) {
+      const anchor = findFigmaNodeByIdIn(figmaNodeData, secId);
+      const edge = anchor ? maxEdgeOf(anchor) : null;
+      if (edge != null && edge <= SLOT_ANCHOR_MAX_PX) {
+        reason = `anchorMaxEdge=${edge}px<=${SLOT_ANCHOR_MAX_PX}px`;
+      }
+    }
+    // ② 空内容段
+    if (!reason) {
+      const hasBodyChildren =
+        Array.isArray(sec.body?.children) && sec.body.children.length > 0;
+      const hasItems = Array.isArray(sec.items) && sec.items.length > 0;
+      const hasHeaderControls =
+        Array.isArray(sec.header?.controls) && sec.header.controls.length > 0;
+      if (!hasBodyChildren && !hasItems && !hasHeaderControls) {
+        reason = 'emptyBodyAndItems';
+      }
+    }
+
+    if (reason) {
+      sec.slotCandidate = null;
+      if (sec.header && typeof sec.header === 'object') sec.header.slotCandidate = null;
+      revoked += 1;
+      revokedIds.push(secId);
+      reasons[secId] = reason;
+    }
+  }
+
+  return { evaluated, revoked, revokedIds, reasons };
+}

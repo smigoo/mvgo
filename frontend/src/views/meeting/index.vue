@@ -7,15 +7,15 @@
       </div>
       <div v-if="debugMode" class="mm-header-note">
         <span>路由 /meeting</span>
-        <span>无导航入口</span>
-        <span>生产构建不包含本页</span>
+        <span>页脚「实验室」下拉常驻入口（全环境可见）</span>
+        <span>生产可通过 /meeting 直接访问</span>
         <span>Mock 全链路已贯通</span>
         <span class="mm-theme-light">主题 · 浅色（跟随系统）</span>
         <span class="mm-theme-dark">主题 · 深色（跟随系统）</span>
       </div>
       <div v-else class="mm-header-note">
         <span>AI 产出为内部草稿，需人工确认后定稿</span>
-        <span>本地演示：音频不上传、不调用云端识别</span>
+        <span>本机转写（默认）：音频不出本机，权重首次按需下载</span>
         <span class="mm-theme-light">主题 · 浅色（跟随系统）</span>
         <span class="mm-theme-dark">主题 · 深色（跟随系统）</span>
       </div>
@@ -180,20 +180,54 @@
       </div>
       <div v-if="recState !== 'unsupported'" class="mm-live-asr-bar" :class="{ 'is-error': Boolean(asrError) }">
         <div class="mm-live-asr-main">
-          <b>本机离线转写</b>
+          <b>{{ asrEngineLabel }}</b>
           <span class="mm-live-asr-state">{{ asrPhaseText }}</span>
           <span v-if="asrBusy" class="mm-live-asr-spin">处理中</span>
           <span class="mm-live-asr-status">{{ asrStatusText }}</span>
         </div>
         <div class="mm-live-asr-sub">
-          <span>{{ asrModelLabel }}</span>
-          <span v-if="asrLoadedText" class="mm-live-asr-dl">已下载 {{ asrLoadedText }}</span>
-          <span class="mm-live-tag-plain">PCM 只在本页内存推理 · 不上传、不调用云端识别</span>
+          <span>{{ asrModelName }}</span>
+          <span v-if="asrSegmentText" class="mm-live-asr-dl">{{ asrSegmentText }}</span>
+          <span v-if="isLocalAsr" class="mm-live-tag-plain">本机推理 · 音频不出本机</span>
+          <span v-else class="mm-live-tag-plain">音频按段上传后端转写 · 由后端调用云端 ASR</span>
         </div>
-        <div v-if="asrPercent > 0 && asrPhase === ASR_PHASES.loading" class="mm-live-asr-progress">
+        <!-- 引擎切换：默认本机（不依赖后端密钥即可出字）；服务端为可选，需后端配好密钥 -->
+        <div class="mm-live-asr-switch">
+          <span class="mm-live-asr-switch-key">转写引擎</span>
+          <button
+            type="button"
+            class="mm-live-asr-opt"
+            :class="{ 'is-on': isLocalAsr }"
+            @click="switchAsrEngine('local')"
+          >本机推理</button>
+          <button
+            type="button"
+            class="mm-live-asr-opt"
+            :class="{ 'is-on': !isLocalAsr }"
+            @click="switchAsrEngine('server')"
+          >服务端转写</button>
+          <label v-if="isLocalAsr" class="mm-live-asr-model">
+            <span>模型档位</span>
+            <select :value="asrLocalModel" @change="switchAsrModel($event.target.value)">
+              <option v-for="m in asrLocalModels" :key="m.id" :value="m.id">{{ m.label }}</option>
+            </select>
+          </label>
+        </div>
+        <div v-if="isLocalAsr && asrLocalModelNote" class="mm-live-asr-modelnote">{{ asrLocalModelNote }}</div>
+        <div v-if="asrPercent > 0 && asrPhase === ASR_PHASES.running" class="mm-live-asr-progress">
           <i :style="{ width: asrPercent + '%' }" />
-          <span>模型权重下载 {{ asrPercent }}%</span>
+          <span>{{ asrProgressText }}</span>
         </div>
+      </div>
+      <!-- 环境预检：HTTP（非 HTTPS / 非 localhost）下浏览器禁用 getUserMedia 与 WebGPU，
+           麦克风录音与本机推理都起不来 —— 生产域为 HTTP，进页就主动告知，不等用户点了才报错 -->
+      <div v-if="asrEnvBlocked" class="mm-live-asr-envblock">
+        当前页面为<b>非安全上下文（HTTP）</b>：浏览器已禁用麦克风采集（getUserMedia）与 WebGPU ——
+        「开始真实录音」与本机推理转写在此环境不可用，需通过 <b>HTTPS</b> 或 localhost 访问。
+      </div>
+      <!-- 降级只在「服务端这条可选路径失败并自动切回本机」时出现：必须有原因，不许静默切换 -->
+      <div v-if="asrFallbackReason" class="mm-live-asr-fallback">
+        服务端转写不可用，已自动降级到<b>本机推理</b>（音频不出本机，权重首次按需下载）· 原因：{{ asrFallbackReason }}
       </div>
       <div v-if="asrErrorHint" class="mm-live-asr-hint">{{ asrErrorHint }}</div>
       <div v-if="recError" class="mm-audio-error">{{ recError }}</div>
@@ -203,7 +237,8 @@
         <span>WAV {{ (recResult.wav.byteLength / 1024).toFixed(1) }}KB</span>
         <span>静音分段后 {{ recResult.segments.length }} 段语音</span>
         <span>{{ recResult.trackCount }} 路输入 → 按能量主导合成 1 路</span>
-        <span class="mm-live-tag-plain">真实音频数据 · 只存本地、不上传</span>
+        <span v-if="isLocalAsr" class="mm-live-tag-plain">真实音频数据 · 本地留档；本机推理不出本机</span>
+        <span v-else class="mm-live-tag-plain">真实音频数据 · 本地留档；转写时按段上传后端</span>
       </div>
 
       <div v-if="recAttribution" class="mm-live-track-stats">
@@ -239,14 +274,22 @@
         录音为本地多轨麦克风真实采集：每路输入各采一轨，按帧取能量主导那一路合成为 1 路
         （时间轴与原音一致，增量转写 / 重叠去重 / 证据回跳全部复用）。
         产出真实时长、各轨电平与 WAV 音频文件，可下载留档。
-        逐句文字由本机离线 Whisper 模型转写，<b>音频不出本机、不调用云端识别</b>；
-        首次使用需下载模型权重到浏览器缓存。
+        逐句文字由<b>本机推理</b>产出：在设备内跑 Whisper（WebGPU），<b>音频不出本机</b>；
+        模型权重首次按需从镜像下载后缓存，之后不再重复下载。
+        <b v-if="!isLocalAsr">本次已切到服务端转写：每段封成 16k 单声道 WAV 上传 backend-node，再由后端调用云端 ASR（默认 Qwen3-ASR-Flash），音频会离开本机 —— 这与上面的本机口径相反，是你在上方主动切换的结果。</b>
       </div>
 
       <div class="mm-live-note">
         本地边界：说话人标注依据是<b>设备轨</b>（哪只麦能量占主导），<b>不是声纹分离</b>——
         不产生、不留存任何声纹特征；单轨或抢话时无法归属，行内如实标「说话人未区分」，不编造「男A/女A」。
         逐句置信度模型不返回，显示为「—」。AI 分析为本地规则抽取，未调用云端大模型。
+      </div>
+      <div class="mm-live-note">
+        数据边界：录音与 WAV 留档在本机，<b>默认逐句转写也在本机完成、音频不出本机</b>
+        （只在本机推理需要时下载模型权重，下载的是权重、不是你的音频）；
+        只有你在上方把引擎切到「服务端转写」时，音频才会按段上传到 backend-node
+        （再由后端转给云端 ASR）——那一刻由状态条与「实时记录」标签明确标出。
+        上传的只是音频本身，不含任何声纹特征；后端不落盘音频，只在内存里转发一次。
       </div>
     </section>
 
@@ -255,7 +298,8 @@
         <header class="mm-live-pane-head">
           <b>实时记录</b>
           <span>{{ liveStats.utteranceCount }} 句 · {{ formatDuration(liveStats.durationMs) }} · {{ liveSpeakerText }}</span>
-          <span v-if="isRealLive" class="mm-live-tag-plain">本机离线转写 · 音频不出本机</span>
+          <span v-if="isRealLive && isLocalAsr" class="mm-live-tag-plain">本机推理 · 音频不出本机</span>
+          <span v-else-if="isRealLive" class="mm-live-tag-warn">服务端转写 · 音频按段上传</span>
           <span v-else-if="live.utterances.length" class="mm-live-tag-warn">示例稿推演 · 非真实录制</span>
           <span v-if="live.status === 'recording'" class="mm-live-rec">记录中</span>
         </header>
@@ -269,18 +313,19 @@
             </template>
             <!-- 「正在转写」只在真的还在录时才是实话，录完了再说这句就是假状态 -->
             <template v-else-if="isRealLive && live.status === 'recording'">
-              正在用本机离线模型转写麦克风音频，识别出内容会逐句出现在这里；
-              音频不出本机，不调用云端识别。
+              <template v-if="isLocalAsr">正在本机推理转写（音频不出本机），识别出内容会逐句出现在这里；模型权重首次加载最慢。</template>
+              <template v-else>正在把麦克风音频按段上传到服务端转写，识别出内容会逐句出现在这里；音频会上传到后端（再由后端调用云端 ASR）。</template>
             </template>
             <template v-else-if="isRealLive">
-              本机离线转写已就绪，但这段录音没有产出句子；本次音频的真实时长与语音段数在下方的录音区。
+              <template v-if="isLocalAsr">本机推理已就绪，但这段录音没有产出句子；本次音频的真实时长与语音段数在下方的录音区。</template>
+              <template v-else>服务端转写已就绪，但这段录音没有产出句子；本次音频的真实时长与语音段数在下方的录音区。</template>
             </template>
             <template v-else-if="debugMode">
               （DEV）点「推演示例稿」把示例会议的句子逐句推流进来——这条路径不采集麦克风，不是真实录制。
             </template>
             <template v-else>
-              点上方「开始真实录音」后，本机麦克风音频由离线 Whisper 模型逐句转写显示在这里；
-              音频不出本机、不调用云端识别，首次使用需先把模型权重下载到浏览器缓存。
+              <template v-if="isLocalAsr">点上方「开始真实录音」后，麦克风音频在本机转写、逐句显示在这里，<b>音频不出本机</b>；首次会自动下载模型权重（约 138MB），需浏览器支持 WebGPU（Chrome / Edge 113+ 或 Safari 26+）。</template>
+              <template v-else>点上方「开始真实录音」后，麦克风音频由服务端云端 ASR 逐句转写显示在这里；音频会按段上传到后端，需后端先配好转写密钥，未配时本页会如实报错、不会用示例稿顶替。</template>
             </template>
           </div>
           <div
@@ -610,8 +655,8 @@
 
         <div class="mm-placeholder">
           <b>音频输入</b>
-          <p>可现场录音，或上传本地音频文件。音频仅在浏览器内处理，不上传、不落盘。</p>
-          <p>当前为本地演示环境：草稿由所选示例会议的转写稿生成，录音与上传文件不参与云端转写。</p>
+          <p>可现场录音，或上传本地音频文件。本调试列的音频只在浏览器内做归一化 / 解码与统计，不上传、不落盘。</p>
+          <p>转写不在本列：真实录音走默认工作台，音频按段上传后端由云端 ASR 转写；示例会议转写稿仅用于 DEV 演示路径。</p>
           <p>使用提示：结论只取会议发言，背景资料仅用于名词消歧；AI 产出为内部草稿，须人工确认后定稿。</p>
         </div>
 
@@ -805,7 +850,8 @@
             </div>
             <div class="mm-note">导出格式请在下方「导出」区选择；草稿态所有导出均不可用。</div>
             <div v-if="debugMode" class="mm-kv"><b>保存键</b><span><code>{{ storeKey }}</code></span></div>
-            <div v-if="debugMode" class="mm-kv"><b>索引键</b><span><code>{{ INDEX_KEY }}</code> · 已存 {{ savedIndex.length }} 个版本</span></div>
+            <div v-if="debugMode" class="mm-kv"><b>归属分区</b><span><code>{{ ownerId }}</code>（按登录用户隔离；生产归属由服务端会话判定）</span></div>
+            <div v-if="debugMode" class="mm-kv"><b>索引键</b><span><code>{{ indexKeyLabel }}</code> · 已存 {{ savedIndex.length }} 个版本</span></div>
             <div class="mm-kv"><b>已修订</b><span>{{ overlayCount }} 个字段 · {{ savedAt ? '最后更新 ' + savedAt : '尚未保存' }}</span></div>
             <div v-if="debugMode" class="mm-kv"><b>当前版本</b><span><code>{{ draft?.runVersion }}</code> · r{{ runSeq }}</span></div>
             <div v-if="savedIndex.length" class="mm-history">
@@ -1197,7 +1243,7 @@
       <div>刷新页面读取最新 loop 状态（loop-state.json 为单一事实源）。本页不含部署动作。</div>
     </footer>
     <footer v-else class="mm-footer">
-      <div>本地演示环境：使用示例会议转写稿，音频不上传、不调用云端识别。</div>
+      <div>转写链路：录音与 WAV 留档在本机，逐句转写按段上传后端（由后端转给云端 ASR）；示例稿推演为 DEV 演示路径。</div>
       <div>AI 产出为内部草稿，须人工确认后定稿；未定稿版本不可导出。</div>
     </footer>
   </div>
@@ -1207,6 +1253,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { pxRem } from '@/utils/rem'
+import { useUserStore } from '@/store/modules/user'
+import { currentMeetingOwnerId, setMeetingOwnerId } from './mock/owner-scope.js'
 import loopState from './loop-state.json'
 import { tasks, phaseLabels, sourceLabels } from './dev-data'
 import { fixtures, createRun, REQUIRED_FIELDS, mockGenerationAdapter } from './mock/index.js'
@@ -1229,7 +1277,7 @@ import {
   cloudGenerationReadiness,
   generationAdapterContractCheck
 } from './mock/cloud-generation-adapter.js'
-import { createDraftStore, listSaved, STORAGE_PREFIX, INDEX_KEY } from './mock/draft-store.js'
+import { createDraftStore, listSaved, STORAGE_PREFIX, draftIndexKey } from './mock/draft-store.js'
 import {
   DEFAULT_RETENTION_DAYS,
   EXPIRING_SOON_DAYS,
@@ -1281,15 +1329,25 @@ import {
   summarizeSession,
   formatDuration
 } from './mock/live-session.js'
+// 阶段枚举 / 说话人标签 / 「没采到音频」分类复用本地模块的通用件（与「在哪儿转写」无关）。
+// 转写有两条路径，**默认走本机**（不依赖任何服务端密钥即可出字）：
+//   默认 = local-asr.js（本机 WebGPU 推理，音频不出本机；拿不到 WebGPU 就如实拒绝，不静默回落）；
+//   可选 = server-asr.js（音频按段上传后端 → 云端 ASR），由用户在本页显式切换才启用。
+// 服务端这条线**服务端失败时可自动降级回本机**，见下方 ASR_NO_FALLBACK_CODES 的说明。
 import {
-  LOCAL_ASR_MODELS,
-  LOCAL_ASR_DEFAULT_MODEL,
   ASR_PHASES,
+  LOCAL_ASR_DEFAULT_MODEL,
+  LOCAL_ASR_MODELS,
   createLocalAsr,
-  describeSpeaker,
   describeAsrFailure,
-  describeAsrNoAudio
+  describeAsrNoAudio,
+  describeSpeaker
 } from './mock/local-asr.js'
+import { SERVER_ASR_LABEL, createServerAsr, describeServerAsrFailure } from './mock/server-asr.js'
+// 上传通道注入给适配器：适配器本身刻意不 import @/api（要能在 Node 冒烟里被直 import）
+import { fetchMeetingAsrStatus, transcribeMeetingAudio } from '@/api/meeting-asr'
+// 错误码单一事实源：降级白名单按码判断，不写字符串字面量（改码时只改一处）
+import { MEETING_ASR_CODES } from '@/api/meeting-asr-codes'
 import { resampleTo16k } from './mock/audio-dsp.js'
 import {
   CONTRACT_VERSION,
@@ -1577,9 +1635,10 @@ function resetConfig() {
 }
 
 // ---- 实时会议工作台：项目 / 主题 → 实时记录 + 人工记录 → AI 分析 → 会议总结 ----
-// 全程本地：转写稿按示例会议逐句推流，音频不上传、不调云端识别；「AI 分析」= live-session.js 的
-// 本地规则抽取，未调用云端大模型（页面须保留该声明）。人工记录只留痕、不参与抽取，
-// 避免把人工判断包装成「AI 从会议里听出来的结论」。
+// 转写默认在本机完成（WebGPU 推理，不依赖服务端密钥）；服务端转写为可选引擎，
+// 由用户在本页切到「服务端转写」才走 backend-node → 云端 ASR（见下方转写引擎段）。
+// 「AI 分析」仍是 live-session.js 的本地规则抽取，未调用云端大模型（页面须保留该声明）。
+// 人工记录只留痕、不参与抽取，避免把人工判断包装成「AI 从会议里听出来的结论」。
 const live = reactive(
   createLiveSession({
     projectId: LIVE_PROJECTS[0].id,
@@ -1600,12 +1659,14 @@ const LIVE_STEP_MS = 1400
 // 领域逻辑 mock/consent.js 与服务端契约自检（consentRetentionContractCheck）保留，供接入服务端时复用；
 // 但本页「真实录音」与「音频文件解码」已无前置同意校验 —— 采前告知改由线下流程保证。
 
-// ---- 真实录音（本地多轨麦克风采集）：本地采集 + 本地离线转写，音频全程不出本机 ----
+// ---- 真实录音（本地多轨麦克风采集 + 本机推理转写，服务端转写可选）----
 // 边界：录音只做本地采集 + 16k mono 归一化 + 静音分段，产出真实 WAV（可下载留档）；
-// 逐句文本由本机离线 Whisper 模型转写（见下方「本地 Whisper 离线转写」段），不再取自示例转写稿。
+// 逐句文本默认由**本机推理**产出（见下方转写引擎段）——音频不出本机；
+// 只有用户主动切到服务端转写时音频**才会按段上传**后端。
+// 两条路都不取自示例转写稿。
 // 说话人归属按「设备轨」：一人一麦时谁的能量占主导就取谁那一路，归属依据是设备、不是声纹，
 // 故不产生、不留存任何声纹 embedding；单轨（或未命中）时一律「说话人未区分」，不硬标人名。
-// 仍未做：声纹分离（不编人名）、逐句置信度（模型不返回，显示「—」）。
+// 仍未做：声纹分离（不编人名）、逐句置信度（上游不返回，显示「—」）。
 const recState = ref('idle') // idle | recording | done | error | unsupported
 const recError = ref('')
 const recResult = shallowRef(null)
@@ -1861,75 +1922,243 @@ function resetAsrState() {
   asrPendingMs.value = 0
   asrCommittedEndMs = 0
   asrIdCounter = 0
+  // 新一场会议回到**默认引擎（本机推理）**：上一场可能从服务端降级过，也可能被手动切过服务端，
+  // 都不该带到这一场。重置引擎实例，避免沿用上一场的后端与已下权重。
+  // 代价是若上一场已加载过本机权重，这一场第一次转写要重新加载一次 —— 比「悄悄停在服务端」划算。
+  asrEngineKind.value = DEFAULT_ASR_ENGINE
+  asrFallbackReason.value = ''
+  asrEngine = null
+  asrModelName.value = LOCAL_ASR_LABEL
+  asrPhase.value = ASR_PHASES.idle
+  asrDetail.value = ''
+  asrProgress.value = { file: '', loaded: 0, total: 0, percent: 0 }
 }
 
-// ---- 本地 Whisper 离线转写：「实时记录」的真实内容来源 ----
+// ---- 转写引擎：默认本机推理（不依赖任何服务端密钥），服务端转写为可选 ----
 // 边界（勿放宽）：
-// 1. PCM 只在本页内存里过推理管线，不 fetch、不上传、不写后端；
-// 2. 说话人分离本地未实现（Whisper 不做声纹聚类），行内一律「说话人未区分」，不编人名；
-// 3. 转写失败/无语音就如实显示 0 句 + 错误，**绝不回落示例转写稿**。
-const asrModel = ref(LOCAL_ASR_DEFAULT_MODEL)
+// 1. **默认音频不出本机**：走本机 WebGPU 推理，权重按需从 hf-mirror 下载并缓存；
+//    只有用户在本页显式切到「服务端转写」时，音频才会按段上传后端（那一刻模板会写明）。
+// 2. 本机转写**只走 WebGPU**，拿不到适配器就当场如实拒绝。不回落 wasm 的原因见
+//    local-asr.js 头部：现版 ORT 的 dist 只有 threaded 构建，本页无跨域隔离、
+//    SharedArrayBuffer 不可用，threaded wasm 会同步死等 pthread 池（连报错都跑不出来）。
+// 3. 说话人归属只依据**设备轨**（哪只麦能量主导），不做声纹分离，行内「说话人未区分」；
+// 4. 转写失败/无语音就如实显示 0 句 + 错误，**绝不回落示例转写稿**；
+// 5. 服务端这条可选路径失败时，可按错误码自动降级回本机（见 ASR_NO_FALLBACK_CODES），
+//    降级原因必须写进 asrFallbackReason 并在页面上渲染出来，不许静默切换。
+// 6. 本机转写**已在 WebGPU + Chrome 内核上端到端实测跑通**（tiny：load 27s / 12s 音频 46s；
+//    base：load 47s 首跑、缓存后 3s / 转写 87s，均返回 4 段带时间戳文字）。但实测跑在
+//    无头软渲染（SwiftShader，f16 不可用 → 走 fp32+q4）上，中文错字明显，真机长会议未验证。
+//    因此页面与文档都**不得宣称「所有浏览器都能本机转写」**。
+// 默认引擎 'local'：没有后端密钥也能真出字；用户可切到 'server'（需后端配好转写密钥）。
+const DEFAULT_ASR_ENGINE = 'local'
+const LOCAL_ASR_LABEL = '本机转写（设备内推理）'
+const asrModelName = ref(LOCAL_ASR_LABEL)
 const asrPhase = ref(ASR_PHASES.idle)
 const asrDetail = ref('')
 const asrError = ref('')
 // 失败分类给出的「下一步怎么办」，与主文案分开渲染，避免一长句挤在状态条里
 const asrErrorHint = ref('')
-// 失败分类的 code（weights/assets/lib/engine/memory/runtime/noAudio/unknown）。
+// 失败分类的 code（服务端错误码，见 mock/server-asr.js 的 SERVER_ASR_FAILURES）。
 // 只存文案不够用：总结面板要据此区分「转写引擎/资源不可用」与「真的一段语音都没有」——
 // 两者都是 0 句，但一个是故障、一个是真实结论，混成一句就是把故障说成会议室太安静。
 const asrErrorCode = ref('')
+// 当前实际使用的转写引擎：'local' = 本机推理（默认）；'server' = 服务端云端（可选）。
+// 单独存一个 ref 而不是从 asrEngine 反推：引擎实例是普通变量、不是响应式，
+// 模板要能随切换即时更新，否则会出现「已经在本机推理、页面还写着上传后端」。
+const asrEngineKind = ref(DEFAULT_ASR_ENGINE)
+// 本机推理的模型档位与可选项（用户可在页面上改；换档要重建引擎，见 switchAsrModel）。
+const asrLocalModel = ref(LOCAL_ASR_DEFAULT_MODEL)
+const asrLocalModels = LOCAL_ASR_MODELS
+// 从服务端降级下来的原因（人话 + 错误码）。空串 = 没降级过。
+const asrFallbackReason = ref('')
+const asrEngineLabel = computed(() =>
+  asrEngineKind.value === 'local' ? LOCAL_ASR_LABEL : SERVER_ASR_LABEL
+)
 const asrProgress = ref({ file: '', loaded: 0, total: 0, percent: 0 })
 const asrBusy = ref(false)
 const asrDoneMs = ref(0) // 已交给推理的音频时长（时间游标）
 const asrPendingMs = ref(0) // 已采到但还没转写的音频时长
 // 增量转写参数：攒够 3s 才送一次（再短中文识别质量明显下降）；
 // 相邻窗口留 1.2s 重叠，重叠区重复识别的句段按时间游标丢弃；
-// 单窗上限 30s，避免一次吃满 wasm 内存把页面卡死。
+// 单窗上限 30s —— 服务端单次上传上限 10MB，16k mono 30s ≈ 0.92MB，留足余量。
 const ASR_MIN_CHUNK_MS = 3000
 const ASR_TAIL_MIN_MS = 400
 const ASR_OVERLAP_MS = 1200
 const ASR_MAX_WINDOW_MS = 30000
 const ASR_DEDUPE_GRACE_MS = 120
 const ASR_TICK_MS = 2500
-const ASR_LANGUAGE = 'chinese'
+// 语言提示：**不从前端硬传**。原先的 'chinese' 是 Whisper 档位的写法，
+// 百炼 ASR 要的是 'zh' 这类语言码；硬传错了反而把识别带偏。
+// 正确层序是后端 MEETING_ASR_LANGUAGE / data/meeting-asr-config.json 决定，缺省则让模型自判。
+const ASR_LANGUAGE = ''
 
 let asrEngine = null
 let asrTimer = null
 let asrCommittedEndMs = 0
 let asrIdCounter = 0
 
-const asrPhaseText = computed(() => ASR_PHASES[asrPhase.value] || '未加载')
+// asrPhase 里存的是**标签**：onPhase 直接给 ASR_PHASES.loading 这一层值，
+// 而 ASR_PHASES 的 value 本身就是中文标签（idle:'未加载' / loading:'加载中' …）。
+// 所以这里不能再拿它去 ASR_PHASES 里查一次键 —— 查不到会一路回落成「未加载」，
+// 加载权重时明明在转，界面上却写着「未加载」。直接显示相位标签即可。
+const asrPhaseText = computed(() => asrPhase.value || ASR_PHASES.idle)
 const asrPercent = computed(() => asrProgress.value.percent || 0)
-const asrLoadedText = computed(() =>
-  asrProgress.value.total
-    ? `${(asrProgress.value.loaded / 1048576).toFixed(1)} / ${(asrProgress.value.total / 1048576).toFixed(1)} MB`
-    : ''
-)
-const asrModelLabel = computed(
-  () => LOCAL_ASR_MODELS.find((m) => m.id === asrModel.value)?.label || asrModel.value
+const isLocalAsr = computed(() => asrEngineKind.value === 'local')
+// 环境预检：HTTP（非 HTTPS / 非 localhost）下浏览器会同时禁用 getUserMedia 与 WebGPU，
+// 「开始真实录音」与本机推理都起不来 —— 生产域 go.microvideo.cn:13030 已确认为 HTTP，
+// 所以进页就主动告知（不等用户点了才报错）。页面生命周期内安全上下文不会变，setup 求值一次即可。
+const asrEnvBlocked = typeof isSecureContext !== 'undefined' && !isSecureContext
+// 两条路径的进度口径**不同**，不能混着写：
+// 服务端每次只传一段 WAV，分母是「本窗切了几段」；本机推理要下权重，分母是字节数。
+const asrSegmentText = computed(() => {
+  const p = asrProgress.value
+  if (isLocalAsr.value) {
+    if (!p.total) return ''
+    const mb = (n) => (n / 1024 / 1024).toFixed(0)
+    return `权重 ${mb(p.loaded || 0)} / ${mb(p.total)}MB`
+  }
+  return p.total ? `本窗 ${p.loaded} / ${p.total} 段` : ''
+})
+// 当前档位的代价说明（体积 / 质量），直接取自模型表，避免在模板里再硬编码第二份文案
+const asrLocalModelNote = computed(() => {
+  const m = asrLocalModels.find((x) => x.id === asrLocalModel.value)
+  return m ? m.note : ''
+})
+const asrProgressText = computed(() =>
+  isLocalAsr.value ? `权重下载 ${asrPercent.value}%` : `分段上传转写 ${asrPercent.value}%`
 )
 const asrStatusText = computed(() => {
   if (asrError.value) return asrError.value
   if (asrBusy.value) return `转写中 · 正在处理 ${(asrPendingMs.value / 1000).toFixed(1)}s 新音频`
-  if (asrPhase.value === ASR_PHASES.loading) return '首次使用：正在下载模型权重到浏览器缓存'
+  if (asrPhase.value === ASR_PHASES.loading) {
+    return isLocalAsr.value ? '正在加载本机推理内核与权重（首次最慢）' : '正在探测服务端转写就绪度'
+  }
   if (asrDoneMs.value > 0) return `已转写 ${(asrDoneMs.value / 1000).toFixed(1)}s 音频`
-  if (asrPhase.value === ASR_PHASES.ready) return '模型已就绪，等待音频'
+  if (asrPhase.value === ASR_PHASES.ready) {
+    return isLocalAsr.value ? '本机推理已就绪，等待音频' : '服务端已就绪，等待音频'
+  }
   return '尚未开始转写'
 })
 
-function ensureAsrEngine() {
+// ---- 降级策略：什么情况下才允许从服务端切到本机推理 ----
+// 判定只用错误码（后端 / API 层给的），不用报错文案猜。
+// 三类**不**降级 —— 否则就是拿兜底把故障藏起来：
+//   1) 音频本身不对（BAD_AUDIO / AUDIO_TOO_LARGE）：换引擎同样转不出，
+//      降级只会把「设备/格式坏了」说成「会议室很安静」；
+//   2) 接线 bug（TRANSPORT_MISSING）：页面漏传上传通道，必须改代码，不能绕过；
+//   3) unknown（原因说不清）：说不清就别换引擎，先把原始报错暴露出来。
+// 其余（缺密钥 / 密钥被拒 / 限流 / 超时 / 上游错误 / 网络不通 / 返回体不可解析 /
+// 后端无业务码）都属于「服务端这条链路此刻不可用」，本机推理能真实产出文字，才切。
+const ASR_NO_FALLBACK_CODES = Object.freeze([
+  MEETING_ASR_CODES.BAD_AUDIO,
+  MEETING_ASR_CODES.AUDIO_TOO_LARGE,
+  MEETING_ASR_CODES.TRANSPORT_MISSING
+])
+
+function canFallbackToLocal(code) {
+  if (asrEngineKind.value !== 'server') return false
+  if (!code || code === 'unknown') return false
+  return !ASR_NO_FALLBACK_CODES.includes(code)
+}
+
+// 切到本机推理。必须把原因留在页面上：这一刻「音频是否离开本机」已经反转，
+// 不写清楚就是拿旧口径骗人。切完清空错误三件套 —— 服务端那次失败已经有了结论（降级），
+// 否则页面会同时显示「服务端未配置密钥」和「本机正在转写」，看起来像两个故障。
+function switchAsrToLocal(failure) {
+  asrEngineKind.value = 'local'
+  asrFallbackReason.value = failure?.label
+    ? `${failure.label}（${failure.code}）`
+    : '服务端转写不可用'
+  asrEngine = null // 丢掉服务端实例，下一次 ensureAsrEngine 建本机引擎
+  asrModelName.value = LOCAL_ASR_LABEL
+  asrPhase.value = ASR_PHASES.idle
+  asrDetail.value = ''
+  asrProgress.value = { file: '', loaded: 0, total: 0, percent: 0 }
+  asrError.value = ''
+  asrErrorHint.value = ''
+  asrErrorCode.value = ''
+}
+
+// 手动切换转写引擎（页面上的「本机 / 服务端」）。切换是用户显式动作，不算降级 ——
+// 所以顺带清掉上一轮的降级原因与错误，避免出现「手动切到本机」却还挂着
+// 「服务端不可用，已降级」这种自相矛盾的状态。
+function switchAsrEngine(kind) {
+  if (kind !== 'local' && kind !== 'server') return
+  if (asrEngineKind.value === kind && asrEngine) return
+  asrEngineKind.value = kind
+  asrFallbackReason.value = ''
+  asrEngine = null
+  asrError.value = ''
+  asrErrorHint.value = ''
+  asrErrorCode.value = ''
+  asrPhase.value = ASR_PHASES.idle
+  asrDetail.value = ''
+  asrProgress.value = { file: '', loaded: 0, total: 0, percent: 0 }
+  asrModelName.value = kind === 'local' ? LOCAL_ASR_LABEL : SERVER_ASR_LABEL
+}
+
+// 换本机模型档位。不同档位的权重不同，必须丢掉已建引擎重新加载，
+// 否则会拿旧档位的权重继续转写（页面显示的档位和实际推理的档位就对不上了）。
+function switchAsrModel(id) {
+  if (!id || id === asrLocalModel.value) return
+  asrLocalModel.value = id
+  // 在服务端模式下改档位只是记账，切回本机时才生效；只有当前正在用本机才需要重建
+  if (!isLocalAsr.value) return
+  asrEngine = null
+  asrError.value = ''
+  asrErrorHint.value = ''
+  asrErrorCode.value = ''
+  asrPhase.value = ASR_PHASES.idle
+  asrDetail.value = ''
+  asrProgress.value = { file: '', loaded: 0, total: 0, percent: 0 }
+}
+
+// 可选路径：服务端云端转写（音频按段上传后端）。只有用户主动切过来才走。
+function ensureServerAsrEngine() {
   if (asrEngine) return asrEngine
-  asrEngine = createLocalAsr({
-    model: asrModel.value,
+  asrEngine = createServerAsr({
+    // 留空 = 交给服务端配置；见 ASR_LANGUAGE 处的说明
+    language: ASR_LANGUAGE,
     onPhase: (phase, detail) => {
       asrPhase.value = phase
       asrDetail.value = detail || ''
+      // detail 在 ready / running 时是服务端真实模型名（探测阶段取回），别丢掉
+      if (detail) asrModelName.value = detail
+    },
+    onProgress: (p) => {
+      asrProgress.value = p
+    },
+    // 上传通道与就绪度探测都由页面注入：适配器本身保持零 @/ 依赖，可在 Node 下直测
+    transport: transcribeMeetingAudio,
+    probeStatus: () => fetchMeetingAsrStatus()
+  })
+  return asrEngine
+}
+
+// 默认路径：本机推理（只走 WebGPU；音频不出本机）。
+// 惰性到底：不进这个分支就不会去下权重，正常路径不多花一个字节流量。
+function ensureLocalAsrEngine() {
+  if (asrEngine) return asrEngine
+  asrEngine = createLocalAsr({
+    // 档位由页面选择（默认 base）；换档会重建引擎，见 switchAsrModel
+    model: asrLocalModel.value,
+    // 语言提示不传：留空后 local-asr 内部按 Whisper 档位用 'chinese'，
+    // 与服务端要的 'zh' 不是同一套写法，不能共用 ASR_LANGUAGE。
+    onPhase: (phase, detail) => {
+      asrPhase.value = phase
+      asrDetail.value = detail || ''
+      // detail 是本地模型 id，不是服务端模型名 —— 不覆盖 asrModelName，
+      // 那一栏要一直显示「本机转写（设备内推理）」，否则又变成「以为在上传后端」。
     },
     onProgress: (p) => {
       asrProgress.value = p
     }
   })
   return asrEngine
+}
+
+function ensureAsrEngine() {
+  return isLocalAsr.value ? ensureLocalAsrEngine() : ensureServerAsrEngine()
 }
 
 function stopAsrTimer() {
@@ -1970,7 +2199,8 @@ function waitAsrIdle(maxMs = 120000) {
 
 // 转写一个窗口。返回本次推进到的时间戳（ms）；0 = 跳过（窗口不足 / 上一次还没跑完 / 出错）。
 // 即使这一段是静音也要推进游标，否则下一轮会在原地打转。
-async function runAsrWindow(samples, sourceRate, { minMs = ASR_MIN_CHUNK_MS } = {}) {
+// retried：本窗口是否已经因降级重试过一次 —— 只给一次机会，避免服务端/本机来回抖。
+async function runAsrWindow(samples, sourceRate, { minMs = ASR_MIN_CHUNK_MS, retried = false } = {}) {
   if (asrBusy.value) return 0
   if (!samples || !samples.length || !sourceRate) return 0
   const totalMs = (samples.length / sourceRate) * 1000
@@ -1978,6 +2208,8 @@ async function runAsrWindow(samples, sourceRate, { minMs = ASR_MIN_CHUNK_MS } = 
   if (totalMs - asrCommittedEndMs < minMs) return 0
 
   asrBusy.value = true
+  // 降级后要在 finally 放掉 asrBusy 才能重入 runAsrWindow，所以用标记延后一跳
+  let retryAfterFallback = false
   try {
     const engine = ensureAsrEngine()
     const fromMs = asrCommittedEndMs > 0 ? Math.max(0, asrCommittedEndMs - ASR_OVERLAP_MS) : 0
@@ -1993,7 +2225,7 @@ async function runAsrWindow(samples, sourceRate, { minMs = ASR_MIN_CHUNK_MS } = 
       // 重叠区会被重复识别：丢掉结束时间早于上次提交点的句段
       .filter((u) => u.endMs > asrCommittedEndMs + ASR_DEDUPE_GRACE_MS)
       .map((u) => ({ ...u, id: `asr-${++asrIdCounter}` }))
-      // 多轨时按「设备轨」覆写说话人；单轨 / 未命中保持 Whisper 的「说话人未区分」
+      // 多轨时按「设备轨」覆写说话人；单轨 / 未命中保持转写层的「说话人未区分」
       .map((u) => {
         const hit = trackSpeakerFields(attribution?.runs, recTracks.value.length, u.startMs)
         return hit ? { ...u, ...hit } : u
@@ -2015,15 +2247,34 @@ async function runAsrWindow(samples, sourceRate, { minMs = ASR_MIN_CHUNK_MS } = 
     asrErrorCode.value = ''
     return Math.round(toMs)
   } catch (e) {
-    // 失败分类：区分「权重下载 / 库加载 / 推理环境 / 内存 / 推理期」，各自给一条可操作提示
-    const failure = describeAsrFailure(e, asrPhase.value)
-    asrError.value = failure.text
-    asrErrorHint.value = failure.hint
-    asrErrorCode.value = failure.code
+    if (asrEngineKind.value === 'server') {
+      // 服务端失败面：未配密钥 / 音频格式 / 上游鉴权 / 限流 / 超时 / 网关 / 会话失效
+      const failure = describeServerAsrFailure(e)
+      if (!retried && canFallbackToLocal(failure.code)) {
+        // 服务端这条链路此刻不可用 → 切本机推理，同一窗口立刻重跑一次。
+        // 不把这次失败当结论显示：它已经被「降级」这件事取代了（原因记在降级横条上）。
+        switchAsrToLocal(failure)
+        retryAfterFallback = true
+      } else {
+        asrError.value = failure.text
+        asrErrorHint.value = failure.hint
+        asrErrorCode.value = failure.code
+      }
+    } else {
+      // 本机路径自己的失败面：拿不到 WebGPU / 权重下载 / 推理内核 / 内存 / 推理期异常。
+      // 文案里点明是「本机转写」，否则用户会以为是服务端还没修好。
+      const failure = describeAsrFailure(e, asrPhase.value)
+      asrError.value = `本机转写失败：${failure.text}`
+      asrErrorHint.value = failure.hint
+      asrErrorCode.value = failure.code
+    }
     return 0
   } finally {
     asrBusy.value = false
   }
+  // 放在 finally 之后：重入 runAsrWindow 需要 asrBusy 已经放开
+  if (retryAfterFallback) return runAsrWindow(samples, sourceRate, { minMs, retried: true })
+  return 0
 }
 
 // 停录后把尾巴补齐：录音期间是「边录边转」，最后不足一个窗口的余量在这里一次结清
@@ -2053,7 +2304,7 @@ async function flushRealTranscription() {
 const sourceUtterances = computed(() => fixtures[selectedFixture.value]?.utterances || [])
 const liveStats = computed(() => summarizeSession(live))
 const liveProgress = computed(() => liveStats.value.progress)
-// 记录来源：fixture = 示例会议演示；mic = 本机麦克风 + 本地 Whisper 真实转写
+// 记录来源：fixture = 示例会议演示（不采集音频、不上传）；mic = 本机麦克风 + 转写（默认本机推理，可切服务端）
 const liveSource = ref('fixture')
 const isRealLive = computed(() => liveSource.value === 'mic')
 // 说话人只在「确实有归属依据」时才报数字：多轨按「设备轨」归属（不是声纹），
@@ -2174,7 +2425,7 @@ function onLiveProject(event) {
 }
 
 // 返回 true = 会话已启动；false = 被用户取消或状态不允许（调用方需回滚）
-// mode='mic' 时不推示例稿、不起推流计时器：句子等本地 Whisper 真实转写出来
+// mode='mic' 时不推示例稿、不起推流计时器：句子等转写引擎（默认本机）出来
 function beginLive(options = {}) {
   const mode = options?.mode === 'mic' ? 'mic' : 'fixture'
   if (live.status === 'recording' || live.status === 'paused') return false
@@ -2295,7 +2546,7 @@ const liveEmptyInfo = computed(() => {
   if (kind === 'engine') {
     return {
       tone: 'warn',
-      title: asrError.value || '本机离线转写不可用',
+      title: asrError.value || (isLocalAsr.value ? '本机转写不可用' : '服务端转写不可用'),
       detail:
         asrErrorHint.value ||
         '转写引擎没跑起来，这段音频压根没进入识别。这是**故障**，不代表团里没人说话。'
@@ -2423,6 +2674,12 @@ async function endCapture() {
   }
 }
 
+// ---- 归属分区（ownerId）：dev 态 localStorage 按登录用户隔离 ----
+// 身份来自平台会话（user store 的 uid；由后端 /api/auth/current 落到 state.uid）。
+// 不在模块顶层读 store（会命中 pinia 求值时的 TDZ），只在 setup 内取一次再 watch。
+const userStore = useUserStore()
+const ownerId = ref(currentMeetingOwnerId())
+
 // ---- S5 人工确认闭环：field_overlay 编辑 / 保存 / 定稿冻结 / 导出 ----
 // AI 原草稿不可变；人工修改只写 overlay。dev 态持久化到 localStorage，生产为 DB（契约已定义，未实现）。
 const store = shallowRef(null)
@@ -2434,6 +2691,49 @@ const rejectInputs = reactive({})
 const savedIndex = ref([])
 const publishBlockers = ref([])
 
+// 分区切换必须重列历史：否则换了账号还看着上一个账号的版本列表（dev 态越权）。
+// 已建好的 store 不迁移也不清空 —— 它按建店时的 owner 落盘，切换后新 store 走新分区，
+// 老分区数据留在浏览器里等留存策略清理，避免「切账号即静默删数据」。
+function applyMeetingOwner(uid) {
+  const changed = setMeetingOwnerId(uid)
+  ownerId.value = currentMeetingOwnerId()
+  if (!changed) return
+  savedIndex.value = listSaved()
+  storeTick.value += 1
+  // store 若建在旧分区（uid 晚到：门户路径下 state.uid 由 /api/auth/current 回填），
+  // 不能继续用它落盘。延到下一 tick 再重建：resetInputs / syncStore 声明在本行之后，
+  // 同步重建会命中 TDZ。
+  nextTick(refreshStoreForOwner)
+}
+
+// 身份取值口径：门户路径（守卫第 40 行早退）下 state.uid 可能未回填，此时用门户注入的 userInfo.uid。
+function meetingIdentity() {
+  return userStore.uid || userStore.userInfo?.uid || ''
+}
+
+function refreshStoreForOwner() {
+  const current = store.value
+  if (!current || current.ownerId === currentMeetingOwnerId()) return
+  try {
+    current.save() // 先把手工作业救回旧分区，不丢；冻结态不可存则忽略
+  } catch {
+    // 已定稿冻结：save 会抛，忽略即可（快照本就在旧分区）
+  }
+  const d = draft.value
+  if (!d) {
+    store.value = null
+    return
+  }
+  const s = createDraftStore(d)
+  const restored = s.load()
+  store.value = s
+  resetInputs(s.getMerged())
+  savedNotice.value = restored ? '已自动恢复本地保存的编辑' : ''
+  syncStore()
+}
+
+watch(meetingIdentity, (uid) => applyMeetingOwner(uid), { immediate: true })
+
 const mergedFields = computed(() => {
   storeTick.value // 显式依赖，store 内部 state 变更后触发重算
   return store.value ? store.value.getMerged() : []
@@ -2441,7 +2741,11 @@ const mergedFields = computed(() => {
 const displayFields = computed(() =>
   mergedFields.value.length ? mergedFields.value : draft.value?.fields || []
 )
-const storeKey = computed(() => store.value?.storageKey || `${STORAGE_PREFIX}<runVersion>`)
+// 键名展示必须带 owner 分区：调试面板若显示无前缀的旧形态，会让人误以为隔离没生效
+const storeKey = computed(
+  () => store.value?.storageKey || `${STORAGE_PREFIX}${ownerId.value}.<runVersion>`
+)
+const indexKeyLabel = computed(() => store.value?.indexKey || draftIndexKey(ownerId.value))
 const isFrozen = computed(() => {
   storeTick.value
   return Boolean(store.value?.state.publishedAt)
@@ -3855,7 +4159,7 @@ onBeforeUnmount(() => {
 }
 .mm-live-rec-save { text-decoration: none; }
 
-/* 本机离线转写状态条：模型档位 / 阶段 / 进度 / 已处理时长 */
+/* 转写状态条：引擎（默认本机 / 可选服务端）/ 模型档位 / 阶段 / 进度 / 已处理时长 */
 .mm-live-asr-bar {
   margin-top: 8px;
   padding: 8px 12px;
@@ -3896,6 +4200,50 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 .mm-live-asr-dl { color: var(--mm-text-3); }
+/* 引擎切换：默认本机（无后端密钥也能出字），服务端为可选 */
+.mm-live-asr-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--mm-border);
+}
+.mm-live-asr-switch-key { color: var(--mm-text-4); font-size: 12px; }
+.mm-live-asr-opt {
+  padding: 2px 12px;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mm-text-3);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.mm-live-asr-opt:hover { border-color: var(--mm-primary); color: var(--mm-text); }
+.mm-live-asr-opt.is-on {
+  border-color: var(--mm-primary);
+  background: var(--mm-primary);
+  color: #fff;
+}
+.mm-live-asr-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mm-text-4);
+  font-size: 12px;
+}
+.mm-live-asr-model select {
+  max-width: 220px;
+  padding: 2px 8px;
+  border: 1px solid var(--mm-border-strong);
+  border-radius: 999px;
+  background: var(--mm-card);
+  color: var(--mm-text-3);
+  font-size: 12px;
+}
+.mm-live-asr-modelnote { margin-top: 4px; color: var(--mm-text-4); font-size: 12px; }
 .mm-live-asr-progress {
   position: relative;
   height: 6px;
@@ -3925,6 +4273,35 @@ onBeforeUnmount(() => {
   color: var(--mm-text-2);
   font-size: 12px;
   line-height: 1.6;
+}
+/* 环境预检横条：HTTP（非安全上下文）下 getUserMedia 与 WebGPU 都被浏览器禁用，
+   麦克风录音与本机推理都起不来 —— 进页就明说，不等用户点了才报错 */
+.mm-live-asr-envblock {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--mm-danger-bg);
+  border: 1px solid var(--mm-danger);
+  border-radius: 10px;
+  color: var(--mm-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.mm-live-asr-envblock b {
+  color: var(--mm-danger);
+}
+/* 降级横条：不是报错，是「换了一条能用的路」—— 用 warn 色，别跟上面那条红色失败提示抢眼 */
+.mm-live-asr-fallback {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--mm-warn-bg);
+  border: 1px solid var(--mm-warn);
+  border-radius: 10px;
+  color: var(--mm-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.mm-live-asr-fallback b {
+  color: var(--mm-warn-fg);
 }
 .mm-live-rec-stats {
   display: flex;

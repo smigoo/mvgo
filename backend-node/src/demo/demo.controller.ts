@@ -36,6 +36,7 @@ export class DemoController {
       selectedFiles?: any[];
       attachments?: any[];
       history?: any[];
+      llmConfig?: { apiKey?: string; baseURL?: string; model?: string };
     },
   ) {
     if (!body.message || !body.componentId) {

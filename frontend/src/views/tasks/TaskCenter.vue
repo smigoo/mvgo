@@ -206,6 +206,9 @@
           </div>
           <div class="task-meta">
             <span class="task-status" :class="task.status">{{ statusLabel(task.status) }}</span>
+            <span v-if="task.assetUpgradedAt" class="task-status human-review" :title="`素材续跑：${task.assetUpgradeNote || '静态资源确定性挂载 + 无源样式清理'}（${new Date(task.assetUpgradedAt).toLocaleString()}），生成新版本可回滚`">
+              续跑完成*
+            </span>
             <span v-if="task.humanReview" class="task-status human-review" :title="reviewTooltip(task)">
               {{ task.humanReview.action === 'passed' ? '人工通过*' : '人工警告*' }}
             </span>
@@ -589,7 +592,17 @@ watch(
 )
 
 // ── 档位推断（从 sessionId 提取，兼容旧数据无 generationTier 字段） ──
+/**
+ * 🧪 2026-11-06：lab 实验任务**优先判**，必须先于 `generationTier`。
+ *   后端 lite-lab 建任务时写死 `generationTier: 'lite'`（实验确实跑 lite 布局），
+ *   直接读档位字段 ⇒ 实验任务在列表里显示成「Lite」，与真正的 Lite 档位任务无法区分。
+ *   lab 是**管线标识**不是档位，判据只能看 sessionId（`mc-lab-*` / `mv-lab-*`；
+ *   `lab` 标记在 TaskMetadata 契约外，createTask 逐字段赋值时不落库）。
+ */
+const LAB_SESSION_RX = /-lab-/
+
 function getTaskTier(task: any): string {
+  if (LAB_SESSION_RX.test(String(task?.sessionId || ''))) return 'lab'
   if (task.generationTier) return task.generationTier
   const parts = (task.sessionId || '').split('-')
   if (parts.length >= 2) {
@@ -621,10 +634,10 @@ function sourceLabel(source: 'screenshot' | 'figma' | 'html' | 'traditional') {
   return map[source]
 }
 
-// 生成档位：lite / max
+// 生成档位：lite / max / lab（🧪 lab = 实验管线条目，不是可选档位）
 function tierLabel(tier: string) {
   if (!tier) return ''
-  const map = { lite: 'Lite', max: 'Max' }
+  const map = { lite: 'Lite', max: 'Max', lab: 'Lab' }
   return map[tier] || tier || ''
 }
 
@@ -1759,6 +1772,11 @@ html[data-theme="dark"] .task-source-box {
 .task-tier-badge.max {
   background: var(--tier-max-grad);
   color: var(--tier-max-text);
+}
+/* 🧪 实验管线（lite-lab）：与 Lite 同一个 lite 布局，但产物是验证用的，不是交付档位 */
+.task-tier-badge.lab {
+  background: linear-gradient(135deg, #fbcfe8, #f9a8d4);
+  color: #9d174d;
 }
 .task-meta {
   display: flex;

@@ -86,7 +86,7 @@ export function findVForPairs(content, file = '') {
   const close = content.lastIndexOf('</template>')
   const src = open >= 0 && close > open ? content.slice(open + 10, close) : content
 
-  const re = /<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g
+  const re = /<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
   const stack = []
   let rootIndex = -1
   let m

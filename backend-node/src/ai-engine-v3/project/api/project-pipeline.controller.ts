@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { OptionalSessionGuard } from '../../../auth/optional-session.guard';
+import { SessionGuard } from '../../../auth/session.guard';
 import { ProjectDevOnlyGuard } from './project-dev-only.guard';
 import {
   FreezeProjectDto,
@@ -38,6 +39,7 @@ import { ProjectPipelineService } from '../project-pipeline.service';
  *   POST decisions           人裁决落盘（追加式，永不覆盖）
  *   GET  runs                最近运行列表
  *   GET  runs/:runId         单次运行完整视图
+ *   GET  runs/:runId/units   单元拆分预览（按需构建 + 分隔级缓存；?refresh=true 强制重算）
  *   GET  runs/:runId/artifact?name=spec/conflicts.md   读产物全文（白名单）
  *   DELETE runs/:runId       删除单次运行（整个运行目录 = 历史记录 + 全部产物，不可恢复）
  *
@@ -45,10 +47,17 @@ import { ProjectPipelineService } from '../project-pipeline.service';
  *   · **同步**，不建异步任务。S0 在本样本上 60~100ms，S2 是纯格式转换。
  *     不引入 sessionId + SSE + 任务卡片，故障面小一个数量级；
  *     将来遇到大仓扫不动再改异步，接口形状不用变（把返回值换成 sessionId）。
- *   · 不加 SessionGuard：M1 不消耗模型额度、不落用户资产，
- *     只读本机目录 + 写 backend-node/data 下的运行目录。
- *     但仍挂 OptionalSessionGuard —— 只为让 `req.session` 存在，
- *     将来要按用户隔离运行目录时不用改守卫链。
+ *
+ * 🔴 守卫与归属（2026-11-06 用户裁决「项目级生成要 ownerId，每个人独立」后改写）：
+ *   · 原设计（M1 初版）**全类不挂 SessionGuard**，理由是「不消耗模型额度、不落用户资产」。
+ *     该理由在 S3/S4（生成代码）与 ownerId 隔离落地后已不成立 —— 运行目录里就是用户资产，
+ *     而「不知道调用者是谁」就**不可能**做隔离（无身份的过滤等价于不过滤）。
+ *   · 现行口径：**写端点一律 SessionGuard**（scan / freeze / generate / generate-vue /
+ *     decisions / set-binding / set-embeds / delete），保证每条新运行都带得走一个真实
+ *     ownerId（`run.json.ownerId`）；**读端点保持 OptionalSessionGuard**，只解析身份不阻断，
+ *     由 service 按归属过滤（`resolveRunDir` / `listRuns`）。
+ *   · DevOnly 开关与本层归属是**两件事**：开关管「这个环境暴露不暴露」，归属管「暴露后谁能看
+ *     谁的」。前者在生产关掉只说明现在摸不到，一旦有人为上线打开开关，后者才是唯一防线。
  */
 @Controller('v3/project')
 @UseGuards(ProjectDevOnlyGuard, OptionalSessionGuard)
@@ -92,11 +101,16 @@ export class ProjectPipelineController {
   }
 
   @Post('scan')
+  @UseGuards(SessionGuard)
   async scan(@Body() dto: ScanProjectDto, @Req() req: any) {
     try {
       return {
         success: true,
-        ...(await this.service.scan(dto.projectDir, dto.note, req?.session?.userId ?? undefined)),
+        ...(await this.service.scan(dto.projectDir, dto.note, req?.session?.userId ?? undefined, {
+          vision: dto.vision === true,
+          // 默认 defer：确定性结果秒回，文本 LLM 增强转后台（见 run.featureEnrich）
+          enrich: dto.enrich === 'sync' ? 'sync' : 'defer',
+        })),
       };
     } catch (e: any) {
       if (e instanceof HttpException) throw e;
@@ -108,8 +122,8 @@ export class ProjectPipelineController {
   }
 
   @Get('runs')
-  runs() {
-    return { success: true, ...this.service.listRuns() };
+  runs(@Req() req: any) {
+    return { success: true, ...this.service.listRuns(req?.session?.userId ?? undefined) };
   }
 
   @Get('runs/:runId')
@@ -120,15 +134,51 @@ export class ProjectPipelineController {
     };
   }
 
+  /**
+   * 单元拆分预览（P0 契约 · P1/P2 的 Figma 分支）。
+   *
+   * 🔴 **按需构建，刻意不挂进 `POST scan`**：拆单元要联网取 Figma 节点树，
+   *    塞进同步扫描链路会把 `/scan` 重新拖成长时间 pending（这正是长期被投诉的那个问题）。
+   *    命中缓存（`spec/components.json`）时零网络；`?refresh=true` 强制重算。
+   * 🔴 偶发降级（Figma 限流/网络）**不落盘**，所以刷新一次就能自愈，不会被钉死。
+   */
+  @Get('runs/:runId/units')
+  async units(
+    @Param('runId') runId: string,
+    @Query('refresh') refresh: string,
+    @Req() req: any,
+  ) {
+    try {
+      return {
+        success: true,
+        units: await this.service.getUnits(runId, req?.session?.userId ?? undefined, {
+          refresh: refresh === 'true' || refresh === '1',
+        }),
+      };
+    } catch (e: any) {
+      if (e instanceof HttpException) throw e;
+      throw new HttpException(
+        { code: 'UNITS_BUILD_FAILED', message: e.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get('runs/:runId/artifact')
-  async artifact(@Param('runId') runId: string, @Query('name') name: string) {
+  async artifact(@Param('runId') runId: string, @Query('name') name: string, @Req() req: any) {
     // readArtifact 对 `spec/shots/*.png` 缺失时会**按需生成**（有超时上界），故是 async
-    return { success: true, artifact: await this.service.readArtifact(runId, name) };
+    return {
+      success: true,
+      artifact: await this.service.readArtifact(runId, name, req?.session?.userId ?? undefined),
+    };
   }
 
   @Get('runs/:runId/generated-files')
-  generatedFiles(@Param('runId') runId: string) {
-    return { success: true, files: this.service.listGeneratedFiles(runId) };
+  generatedFiles(@Param('runId') runId: string, @Req() req: any) {
+    return {
+      success: true,
+      files: this.service.listGeneratedFiles(runId, req?.session?.userId ?? undefined),
+    };
   }
 
   /**
@@ -138,9 +188,10 @@ export class ProjectPipelineController {
    *    删完前端自行刷新列表；若被删的正是当前查看的运行，详情区一并清空。
    */
   @Delete('runs/:runId')
-  deleteRun(@Param('runId') runId: string) {
+  @UseGuards(SessionGuard)
+  deleteRun(@Param('runId') runId: string, @Req() req: any) {
     try {
-      return { success: true, ...this.service.deleteRun(runId) };
+      return { success: true, ...this.service.deleteRun(runId, req?.session?.userId ?? undefined) };
     } catch (e: any) {
       if (e instanceof HttpException) throw e;
       throw new HttpException(
@@ -151,14 +202,16 @@ export class ProjectPipelineController {
   }
 
   @Post('decisions')
-  decisions(@Body() dto: SaveDecisionsDto) {
+  @UseGuards(SessionGuard)
+  decisions(@Body() dto: SaveDecisionsDto, @Req() req: any) {
     return {
       success: true,
-      ...this.service.saveDecisions(dto.runId, dto.entries ?? []),
+      ...this.service.saveDecisions(dto.runId, dto.entries ?? [], req?.session?.userId ?? undefined),
     };
   }
 
   @Post('freeze')
+  @UseGuards(SessionGuard)
   async freeze(@Body() dto: FreezeProjectDto, @Req() req: any) {
     try {
       return {
@@ -179,6 +232,7 @@ export class ProjectPipelineController {
    * 零 LLM、可重入（再次调用会覆盖 generated/）。
    */
   @Post('generate')
+  @UseGuards(SessionGuard)
   async generate(@Body() dto: GenerateProjectDto, @Req() req: any) {
     try {
       return {
@@ -200,6 +254,7 @@ export class ProjectPipelineController {
    * 零 LLM、可重入。
    */
   @Post('generate-vue')
+  @UseGuards(SessionGuard)
   async generateVue(@Body() dto: GenerateProjectDto, @Req() req: any) {
     try {
       return {
@@ -220,9 +275,9 @@ export class ProjectPipelineController {
    * 供前端「对接接口」向导填充下拉。
    */
   @Get('runs/:runId/binding')
-  getBinding(@Param('runId') runId: string) {
+  getBinding(@Param('runId') runId: string, @Req() req: any) {
     try {
-      return this.service.getBinding(runId);
+      return this.service.getBinding(runId, req?.session?.userId ?? undefined);
     } catch (e: any) {
       if (e instanceof HttpException) throw e;
       throw new HttpException(
@@ -237,9 +292,10 @@ export class ProjectPipelineController {
    * 写完后前端应再调一次 generate-vue 把绑定烘焙进 GenView 产物。
    */
   @Post('runs/:runId/binding')
-  setBinding(@Param('runId') runId: string, @Body() dto: any) {
+  @UseGuards(SessionGuard)
+  setBinding(@Param('runId') runId: string, @Body() dto: any, @Req() req: any) {
     try {
-      return this.service.setBinding(runId, dto);
+      return this.service.setBinding(runId, dto, req?.session?.userId ?? undefined);
     } catch (e: any) {
       if (e instanceof HttpException) throw e;
       throw new HttpException(
@@ -253,9 +309,9 @@ export class ProjectPipelineController {
    * 读取 S4 组件嵌入上下文（当前嵌入侧车 + 各视图），供前端「插入组件」面板填充视图下拉。
    */
   @Get('runs/:runId/embeds')
-  getEmbeds(@Param('runId') runId: string) {
+  getEmbeds(@Param('runId') runId: string, @Req() req: any) {
     try {
-      return this.service.getEmbeds(runId);
+      return this.service.getEmbeds(runId, req?.session?.userId ?? undefined);
     } catch (e: any) {
       if (e instanceof HttpException) throw e;
       throw new HttpException(
@@ -270,9 +326,10 @@ export class ProjectPipelineController {
    * 写完后前端应再调一次 generate-vue 把组件烘焙进 GenView 产物。
    */
   @Post('runs/:runId/embeds')
-  setEmbeds(@Param('runId') runId: string, @Body() dto: any) {
+  @UseGuards(SessionGuard)
+  setEmbeds(@Param('runId') runId: string, @Body() dto: any, @Req() req: any) {
     try {
-      return this.service.setEmbeds(runId, dto);
+      return this.service.setEmbeds(runId, dto, req?.session?.userId ?? undefined);
     } catch (e: any) {
       if (e instanceof HttpException) throw e;
       throw new HttpException(

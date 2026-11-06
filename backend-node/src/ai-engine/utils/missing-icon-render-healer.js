@@ -147,7 +147,7 @@ export function lockHostAxisInline(code, root) {
  */
 function countTopLevelChildren(code, from, to) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
-  const rx = /<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+  const rx = /<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
   rx.lastIndex = from;
   let depth = 0;
   let count = 0;
@@ -199,7 +199,7 @@ function findSectionRootOpenTag(code, sectionId) {
   const range = templateRange(code);
   if (!range) return null;
   const body = range.body;
-  const rx = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+  const rx = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
   let m;
   while ((m = rx.exec(body)) !== null) {
     const attrs = m[2] || '';

@@ -684,3 +684,66 @@ const VehicleDistSection = defineAsyncComponent(() => import('./VehicleDistSecti
     expect(r.stripped).toEqual([])
   })
 })
+
+/**
+ * 🧬 2026-11-06（刀66-C 收尾 · 评审 P1）：**段级 v-for 物化**
+ *
+ * 背景：index 的三个重复段标签被收成一个 `v-for` 后，兄弟段的薄包装文件与 import
+ * 会被原子清理（`index-repeat-group-rewrite#pruneRepeatMemberArtifacts`）。若覆盖门禁
+ * 仍按「每个段必须有同名 .vue 文件」判，会翻成 UNMATERIALIZED ⇒ `artifactIncomplete=true`
+ * ⇒ 明明渲染正确却判「段未落地」。
+ *
+ * 判据只认结构：模板 `v-for="… in NAME"` + script `const NAME = [ { id: '<段id>' … } ]`。
+ */
+describe('COMP-001 · 段级 v-for 物化（刀66-C 收尾）', () => {
+  const REPEAT_INDEX = `<template>
+  <div class="c-vendor-slot-con">
+    <ContentSection
+      v-for="(isoItem, isoIndex) in ISO_REPEAT_CONTENT_SECTION"
+      :key="isoItem.id"
+      :title="isoItem.title"
+      :items="isoItem.items"
+      :style="isoItem.style"
+    />
+  </div>
+</template>
+<script setup>
+import ContentSection from './components/ContentSection.vue'
+const ISO_REPEAT_CONTENT_SECTION = [
+  { id: "38:3137", title: "战略合作厂商", items: [] },
+  { id: "38:3162", title: "优质厂商", items: [] },
+  { id: "38:3206", title: "普通厂商", items: [] }
+]
+</script>`
+
+  const SECS = [
+    { id: '38:3137', title: '战略合作厂商', type: 'content' },
+    { id: '38:3162', title: '优质厂商', type: 'content' },
+    { id: '38:3206', title: '普通厂商', type: 'content' },
+  ];
+
+  const filesFor = (index: string) => [
+    { path: 'package/index.vue', content: index },
+    { path: 'package/components/ContentSection.vue', content: '<template><div>rep</div></template>' },
+  ];
+
+  it('⭐ 阳性：循环数据数组覆盖全部段 + 代表模板已组装 ⇒ 0 未物化（不翻 artifactIncomplete）', () => {
+    expect(detectUnmaterializedSections(filesFor(REPEAT_INDEX), plan(SECS))).toEqual([])
+  })
+
+  it('反向：数据数组里没有的段仍然判未物化（豁免只认显式 id）', () => {
+    const secs = [...SECS, { id: '38:9999', title: '未覆盖段', type: 'content' }]
+    const miss = detectUnmaterializedSections(filesFor(REPEAT_INDEX), plan(secs))
+    expect(miss.map((m) => m.id)).toEqual(['38:9999'])
+  })
+
+  it('反向：v-for 指向的数据数组找不到（无 const 声明）⇒ 不豁免，兄弟两段判未物化', () => {
+    const broken = REPEAT_INDEX.replace(
+      /const ISO_REPEAT_CONTENT_SECTION[\s\S]*?\n\]/,
+      'const OTHER_CONST = []',
+    )
+    const miss = detectUnmaterializedSections(filesFor(broken), plan(SECS))
+    // 代表段（38:3137）由代表模板本身组装 ⇒ 仍然物化；兄弟两段无文件、无数据覆盖 ⇒ 缺失
+    expect(miss.map((m) => m.id).sort()).toEqual(['38:3162', '38:3206'])
+  })
+})

@@ -99,7 +99,16 @@ function normListValueGroupStats(group) {
     const value = els[i];
     const label = els[i + 1];
     if (roleOf(value) !== 'value' || !['label', 'unit'].includes(roleOf(label))) return [];
-    const vn = normListText(value);
+    // 🛡️ 2026-11-06（mc-max-1793913231075-64a1a31f 实锤）：value 位置可能是
+    //   **parts 容器**（`{type:'value', parts:[{text:'3,792',type:'number'}]}`，自身
+    //   无 text）——旧读法只走 normListText(value) ⇒ 返回 null ⇒ 整组 fail-open ⇒
+    //   `trailing` 的在线/离线两列在产物里整片消失（FG_LIST_ITEMS stats:[]）。
+    //   与 content.elements.parts 同一归一（normListPartsStat），非新语义；无 parts
+    //   时逐字保留原文案读法。
+    const viaParts = Array.isArray(value?.parts) ? normListPartsStat(value) : null;
+    const vn = viaParts
+      ? { t: viaParts.v, c: viaParts.vc, fs: viaParts.vfs, fw: viaParts.vfw }
+      : normListText(value);
     const ln = normListText(label);
     if (!vn || !ln) return [];
     out.push({
@@ -131,6 +140,30 @@ export function canonicalListItem(it) {
     if (Array.isArray(el?.parts)) {
       const stat = normListPartsStat(el);
       if (stat) contentStats.push(stat);
+      continue;
+    }
+    // 🛡️ 刀71（2026-11-06 · c-f7451-8f7451ae「华为技术8台」连排实锤）：elements
+    //   平铺**角色轨**——vision 对行内「名称+数值」直接给 type:'label'/'value'
+    //   平铺数组（无 parts、无 children 子树）。旧链只认 parts/children 两形态
+    //   ⇒ value 文本被 normListText 当普通文本混进 texts（名称与台数连排 span、
+    //   margin-left:auto 右值区失效），stats=0 还让 detectListLeaf 双轨比分
+    //   两轨同染（都走本函数）⇒ 平局维持拍平轨。读 roleOf(el)（role||type）：
+    //   value ⇒ 单文本 stat（value 单独成值、label 空）；其余 ⇒ 原 texts 轨。
+    //   显式 stats 在场时本轨自然让位（contentStats 只在 statEntries 空时并入），
+    //   杜绝双份。
+    if (ROLE_VALUE_SET.has(roleOf(el))) {
+      const vn = normListText(el);
+      if (vn) {
+        contentStats.push({
+          v: vn.t,
+          l: '',
+          vc: vn.c,
+          vfs: vn.fs,
+          vfw: vn.fw,
+          lc: null,
+          lfs: null,
+        });
+      }
       continue;
     }
     const n = normListText(el);
@@ -248,7 +281,12 @@ export function canonicalListItem(it) {
       ? it.valueGroup
       : Array.isArray(it?.status?.elements)
         ? { elements: it.status.elements }
-        : null;
+        : // 🛡️ 2026-11-06（mc-max-1793913231075-64a1a31f 实锤）：形态⑦ `trailing`
+          //   平铺交替（value,label,value,label——行尾「数值/单位」两列）。与 valueGroup/
+          //   status 同构同序，故并入同一条回退链，不另立归一函数。
+          Array.isArray(it?.trailing)
+          ? { elements: it.trailing }
+          : null;
     stats.push(...normListValueGroupStats(vgSource));
   }
   for (const s of statEntries) {

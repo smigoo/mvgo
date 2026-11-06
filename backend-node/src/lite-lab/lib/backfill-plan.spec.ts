@@ -336,3 +336,165 @@ describe('backfill-plan · 不可写落点', () => {
     expect(t.evidence.join('\n')).toContain('不能写 style');
   });
 });
+
+/**
+ * 🔴 渐变渲染图判据（真机 `2:8439`/`2:8788`/`2:8807` 驱动）：
+ * 三张 `bg-*.png` 对应的 Figma 节点都是 `GROUP「bg」` + `VECTOR(GRADIENT_LINEAR)`、
+ * 子树**零 IMAGE fill** —— png 是 Figma 渲染的渐变位图，不是切图资源。
+ * 判据：无 IMAGE 且含 GRADIENT_* ⇒ 不主张挂 url()，转 gradient-fill 缺口。
+ * 阳性对照：同一棵树里只要出现 IMAGE fill，判据必须**不**命中（回到正常背景图流程）。
+ */
+describe('backfill-plan · 渐变渲染图（bg png 其实是渐变组）', () => {
+  /** 把 2:101 从「带 IMAGE fill 的 RECTANGLE」换成「含渐变的 GROUP」 */
+  function gradientBgRoot(withImage: boolean) {
+    const root = figmaRoot();
+    const bg = root.children[0].children[0] as any;
+    bg.type = 'GROUP';
+    bg.fills = [];
+    bg.children = [
+      {
+        id: '2:101a',
+        type: 'VECTOR',
+        name: 'Vector',
+        absoluteBoundingBox: { x: 0, y: 0, width: 193, height: 65 },
+        opacity: 0.8,
+        fills: [
+          {
+            type: 'GRADIENT_LINEAR',
+            gradientStops: [
+              { position: 0, color: { r: 0.03, g: 0.34, b: 0.4, a: 1 } },
+              { position: 1, color: { r: 0.12, g: 0.5, b: 0.58, a: 0 } },
+            ],
+          },
+        ],
+      },
+    ];
+    if (withImage) {
+      // 阳性对照：只要子树里有一张真图片，就不能判成「渐变渲染图」
+      bg.children.push({
+        id: '2:101b',
+        type: 'RECTANGLE',
+        name: 'photo',
+        absoluteBoundingBox: { x: 0, y: 0, width: 40, height: 40 },
+        fills: [{ type: 'IMAGE', visible: true, imageRef: 'ref-photo' }],
+      });
+    }
+    return root;
+  }
+
+  it('子树零 IMAGE + 有 GRADIENT_* → skip/gradient-render，并登记 gradient-fill 缺口', () => {
+    const p = plan('.card { background: linear-gradient(135deg, #2E7BF6 0%, #1E62E8 100%); }', {
+      figma: gradientBgRoot(false),
+    });
+    const e = bgEntry(p);
+    expect(e.decision).toBe('skip');
+    expect(e.skipReason).toBe('gradient-render');
+    // 依据必须点出「渲染图」这个事实，而不是只说「不满足」
+    expect(e.evidence.join('\n')).toMatch(/零 IMAGE fill.*GRADIENT_\*.*渲染图/);
+    const gap = p.gaps.find((g) => g.kind === 'gradient-fill' && g.figmaId === '2:101')!;
+    expect(gap).toBeTruthy();
+    // 不主张写任何 url()（落点一个都不该产生）
+    expect(e.targets).toHaveLength(0);
+  });
+
+  it('阳性对照：子树含 IMAGE fill → 判据不命中，仍按容器级底图执行', () => {
+    const p = plan('.card { background: linear-gradient(135deg, #2E7BF6 0%, #1E62E8 100%); }', {
+      figma: gradientBgRoot(true),
+    });
+    const e = bgEntry(p);
+    expect(e.decision).toBe('apply');
+    expect(e.skipReason).toBeUndefined();
+    expect(e.targets[0].action).toBe('replace-gradient');
+    expect(p.gaps.some((g) => g.kind === 'gradient-fill' && g.figmaId === '2:101')).toBe(false);
+  });
+});
+
+/**
+ * 叶子填充矩形通道（③c）—— 2026-11-06（真机 mc-lab-1793898003372-63cc238e）。
+ *
+ * Figma 里「产品描述卡底」= **叶子 RECTANGLE + 平级兄弟 TEXT**，没有子节点 ⇒ containers
+ * 通道（靠「直接子级 TEXT」锚定）恒空 ⇒ 背景色系统性漏回、只剩 LLM 给的 #FFFFFF。
+ * 落点靠几何覆盖文本 → E2N seed 文本 → 最近公共祖先（anchorByCoveredTexts）。
+ */
+describe('backfill-plan · 叶子填充矩形（背景板几何覆盖通道）', () => {
+  const descRect = (color: string) => ({
+    id: '36:1695',
+    type: 'RECTANGLE',
+    name: 'Rectangle 346242326',
+    absoluteBoundingBox: { x: 0, y: 300, width: 547, height: 193 },
+    fills: [
+      {
+        type: 'SOLID',
+        visible: true,
+        color: {
+          r: parseInt(color.slice(1, 3), 16) / 255,
+          g: parseInt(color.slice(3, 5), 16) / 255,
+          b: parseInt(color.slice(5, 7), 16) / 255,
+          a: 1,
+        },
+      },
+    ],
+  });
+  const tree = () => ({
+    id: '36:1693',
+    type: 'FRAME',
+    name: 'root',
+    absoluteBoundingBox: { x: 0, y: 0, width: 603, height: 555 },
+    children: [
+      descRect('#e1ebff'),
+      {
+        id: '36:1700',
+        type: 'TEXT',
+        name: '产品描述',
+        characters: '产品描述',
+        absoluteBoundingBox: { x: 10, y: 310, width: 64, height: 16 },
+        style: { fontSize: 16 },
+        fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0, a: 1 } }],
+      },
+    ],
+  });
+  const PROD = (descBg: string) => [
+    {
+      path: 'package/index.vue',
+      content: `<template>
+  <div class="c-content">
+    <div class="c-desc"><span class="c-desc-title">产品描述</span></div>
+  </div>
+</template>
+
+<style lang="less">
+.c-content { background: transparent; }
+.c-desc { background: ${descBg}; }
+</style>`,
+    },
+  ];
+  const build = (descBg: string) =>
+    buildBackfillPlan({
+      figmaRoot: tree(),
+      prodFiles: PROD(descBg),
+      now: '2026-11-06T00:00:00.000Z',
+    });
+
+  it('叶子矩形 SOLID 覆盖「产品描述」→ 落点 c-desc，动作 set-background-color', () => {
+    const p = build('#FFFFFF');
+    const e = p.entries.find((x) => x.id === 'fillrect/36:1695')!;
+    expect(e).toBeTruthy();
+    expect(e.decision).toBe('apply');
+    // 依据必须点出「几何覆盖」这条 Figma 内部事实，而不是含糊的「推断」
+    expect(e.evidence.join('\n')).toMatch(/叶子填充矩形.*#e1ebff/);
+    expect(e.evidence.join('\n')).toMatch(/几何覆盖文本/);
+    const t = e.targets.find((x) => x.selector.includes('c-desc'))!;
+    expect(t).toBeTruthy();
+    expect(t.action).toBe('set-background-color');
+    expect(t.after).toBe('#e1ebff');
+  });
+
+  it('幂等阳性对照：产物已是 #e1ebff → action 退化为 noop、不主张写入', () => {
+    const p = build('#e1ebff');
+    const e = p.entries.find((x) => x.id === 'fillrect/36:1695')!;
+    expect(e).toBeTruthy();
+    // 计划不得声称一个不会执行的动作（否则报表「apply 但零写入」自相矛盾）
+    expect(e.targets.every((t) => t.satisfied)).toBe(true);
+    expect(e.targets.every((t) => t.action === 'noop')).toBe(true);
+  });
+});

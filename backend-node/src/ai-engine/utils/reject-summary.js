@@ -113,6 +113,12 @@ export function pickTakeoverAudit(takeover) {
     listGeo: {
       negGapClamped: num(takeover.listGeoNegGapClamped),
       geoNotReady: num(takeover.listGeoGeoNotReady),
+      // 🛡️ 2026-11-06（64a1a31f 实锤）：「近似相似带」救回的段数 —— **0 也打**。
+      //   视觉阶段只能判「大概相似」（帧盒 470 vs 内容盒 459 这类 ±几 px 是常态），
+      //   故同组资格走容差；`relaxed>0` ⇒ 容差生效并保住了 cardH/gaps。
+      //   `relaxed=0` 且 `geoNotReady>0` ⇒ 真异形（不是容差没生效）；`relaxed>0` 而
+      //   产物仍无 cardH/`FG_LIST_GAPS` ⇒ 下游未消费（判据被架空）。
+      relaxed: num(takeover.listGeoRelaxed),
       widthNotUniform: num(takeover.listGeoWidthNotUniform),
       geomPicked: num(takeover.listGeoGeomPicked),
       spanRejected: num(takeover.listGeoSpanRejected),
@@ -424,7 +430,7 @@ export function formatRejectSummaryLine(summary) {
       // 🔴 2026-11-03：列表卡盒几何真值（负间距总闸 + geoReady 覆盖 + 步③ 异宽拦宽度）。0 也打 ——
       //   `listGeo:negGap=0` 而产物含负值即判据失效；`widthNotUniform=0` 而产物仍含异宽
       //   `FG_LIST_WIDTHS` 即步③ 判据失效。这是本行的唯一用途。
-      `listGeo:negGap=${t.listGeo?.negGapClamped ?? 0},geoNotReady=${t.listGeo?.geoNotReady ?? 0},widthNotUniform=${t.listGeo?.widthNotUniform ?? 0},geomPicked=${t.listGeo?.geomPicked ?? 0},spanRejected=${t.listGeo?.spanRejected ?? 0},innerStacked=${t.listGeo?.innerStacked ?? 0},innerInline=${t.listGeo?.innerInline ?? 0},innerConflict=${t.listGeo?.innerConflict ?? 0},vPartsInline=${t.listGeo?.valuePartsInline ?? 0},vPartsStacked=${t.listGeo?.valuePartsStacked ?? 0}`,
+      `listGeo:negGap=${t.listGeo?.negGapClamped ?? 0},geoNotReady=${t.listGeo?.geoNotReady ?? 0},relaxed=${t.listGeo?.relaxed ?? 0},widthNotUniform=${t.listGeo?.widthNotUniform ?? 0},geomPicked=${t.listGeo?.geomPicked ?? 0},spanRejected=${t.listGeo?.spanRejected ?? 0},innerStacked=${t.listGeo?.innerStacked ?? 0},innerInline=${t.listGeo?.innerInline ?? 0},innerConflict=${t.listGeo?.innerConflict ?? 0},vPartsInline=${t.listGeo?.valuePartsInline ?? 0},vPartsStacked=${t.listGeo?.valuePartsStacked ?? 0}`,
     );
     parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`, `panelBg=${t.panelBg?.injected ?? 0}/${t.panelBg?.tried ?? 0}`, `chartOwned=${t.chartOwned ?? 0}${Array.isArray(t.chartOwnedIds) && t.chartOwnedIds.length ? '[' + t.chartOwnedIds.join(',') + ']' : ''}`, `cardIcon=${t.cardIcon?.hit ?? 0}/${t.cardIcon?.evaluated ?? 0}`, `cardRow=${t.cardRow?.fixed ?? 0}/${t.cardRow?.evaluated ?? 0}`);
   }

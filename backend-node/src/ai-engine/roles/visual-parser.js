@@ -211,6 +211,7 @@ import {
   inferHeaderSlotsFromInlineRows,
   mergeHeaderSlots,
   ensureHeaderSlots,
+  revokeUnqualifiedHeaderSlotCandidates,
 } from '../utils/inline-header-slot-inferrer.js'
 export { inferHeaderSlotsFromInlineRows, mergeHeaderSlots, ensureHeaderSlots }
 // 🛡️ P1（2026-09-11）：tab 项资源引用幻觉校验 + 纠正（纯函数，无 import.meta，jest 可 require）。
@@ -3931,6 +3932,33 @@ ${analysisTask}`
     //      ③ inlineCompositeRows 几何 tab 行（_inferHeaderSlotsFromInlineRows，补缺）
     // 三者均为去重 union，**绝不删任何既有 slot**；事实先行，启发式只填缺口。
     let slotsAcc = Array.isArray(parsed.headerSlots) ? parsed.headerSlots : []
+
+    // 🛡️ 刀65-B（2026-11-06 · mc-1793897995094-b445e302 实锤）：插槽资格复核。
+    // vision 的 slotCandidate 只是语义假设——9.8px 角标（36:1697）被当「头部设备标识」段
+    // 且标 header-right ⇒ 整个头部组件被 LLM 装进 #header-right。装配前按 Figma 真值几何
+    // 复核资格（小锚点/空内容 ⇒ 撤销），撤销后 ensureHeaderSlots 与蓝图透传全链一致。
+    // 判据与常量单一事实源：inline-header-slot-inferrer.js#revokeUnqualifiedHeaderSlotCandidates。
+    try {
+      const slotAudit = revokeUnqualifiedHeaderSlotCandidates(sections, figmaData)
+      logger.info(
+        `🎯 插槽资格复核 evaluated=${slotAudit.evaluated} revoked=${slotAudit.revoked}` +
+        (slotAudit.revoked > 0
+          ? ` ids=${slotAudit.revokedIds.join(',')} reasons=${JSON.stringify(slotAudit.reasons)}`
+          : ''),
+      )
+      if (slotAudit.revoked > 0 && slotsAcc.length > 0) {
+        const revokedSet = new Set(slotAudit.revokedIds)
+        const before = slotsAcc.length
+        slotsAcc = slotsAcc.filter((s) => !revokedSet.has(String(s?.sectionId ?? '')))
+        if (slotsAcc.length !== before) {
+          pushFix('headerSlots', `插槽资格复核剔除 ${before - slotsAcc.length} 个不合格 slot`, {
+            count: before - slotsAcc.length,
+          })
+        }
+      }
+    } catch (slotAuditErr) {
+      logger.warn('插槽资格复核失败（fail-open 跳过）', { error: slotAuditErr?.message })
+    }
 
     // ① 事实优先：headerRelation / slotCandidate 确定性装配
     if (sections.length > 0) {

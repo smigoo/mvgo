@@ -150,6 +150,77 @@ export function isCoveringBackground(mapping) {
 }
 
 /**
+ * 🧬 刀70 T4（2026-11-06）：百分比 size（相对 parentBox 的比例口径）。
+ *
+ * 用户裁决：背景位置/大小应该是**比例**（容器弹性缩放时等比跟随），大小不能盲目 100%。
+ * 死像素（`459px 29px`）在容器 width:100% 时错位/留白；CSS background-size 百分比
+ * 天然相对挂载容器，语义直接对口。
+ *
+ * 守恒约束：coverage < COVER_RATIO 时换算结果恒 < 100%（D2 守卫语义保留）。
+ * coverage === 0（图节点与容器无交集，退化数据）→ 返回 null 回落 px：
+ *   此时偏移动辄数百 px，换算成超界百分比（如 625%）在预览沙箱与浏览器间行为不可控，
+ *   px 实际像素 + 真实偏移才是最保真表达（D2 守卫原文语义）。
+ * 无 parentBox → 返回 null（无比例依据不臆造，调用方回落 px）。
+ *
+ * @returns {string|null} `'<sw>% <sh>%'` 或 null
+ */
+export const PERCENT_FALLBACK_SUB_STATE = 'sub-state-mount-container';
+
+/**
+ * 状态子项的 DOM 挂载容器不是 Figma parentBox，禁止把两容器尺寸混算成百分比。
+ * 只在百分比所需的图/父盒与正交集都齐备时留痕；其余缺事实分支沿用原回落，不伪报命中。
+ */
+function markPercentFallback(mapping, reason) {
+  if (mapping && typeof mapping === 'object' && !Object.isFrozen(mapping)) {
+    mapping.backgroundPercentFallback = reason;
+  }
+}
+
+function percentSizeFrom(mapping, bgBox = null, parentBox = null) {
+  const m = mapping || {};
+  const p = _box(parentBox) || _box(m.parentBox);
+  if (!p) return null;
+  const b = _box(bgBox) || _box(m.figmaBox);
+  const cov = coverageRatio(b, p);
+  if (cov !== null && cov <= 0) return null; // 无交集：退化几何，百分比语义失效
+  const fallbackSize = backgroundBoxSize(m);
+  const fw = b ? b.width : fallbackSize.width;
+  const fh = b ? b.height : fallbackSize.height;
+  if (fw <= 0 || fh <= 0) return null;
+  // 🛡️ 3b-A：sub-state 由 mountSubStateBackground 绑到 active 状态子项，而非 parentBox
+  // 对应的列表/父容器。此时 fw/pw 只是跨容器比例，写到子项会被二次缩小（5bf49590 实锤）。
+  if (m.bgRole === 'sub-state') {
+    markPercentFallback(m, PERCENT_FALLBACK_SUB_STATE);
+    return null;
+  }
+  const sw = (fw / p.width) * 100;
+  const sh = (fh / p.height) * 100;
+  return `${sw.toFixed(2)}% ${sh.toFixed(2)}%`;
+}
+
+/**
+ * 🧬 刀70 T4：size 百分比形态下的 position 换算。
+ *
+ * ⚠️ CSS 语义陷阱：`background-position` 的百分比**不是偏移比例**，是「图的 x% 点
+ * 对齐容器的 x% 点」。直接把 6px 偏移写成 `1.28%` 是错的。正确换算：
+ *   `posX% = offsetX / (容器宽 − 图渲染宽) × 100`，图渲染宽 = 容器宽 × sizeX%
+ * ⇒ `posX% = offsetX / (pw × (1 − sw/100)) × 100`。
+ * 容器缩放时该百分比保持视觉等比偏移 ✓。
+ * 边界：分母 0（sizeX=100%，无空隙）或偏移 0 → 该轴退 `0px`。
+ *
+ * @param {number} offsetPx 像素偏移
+ * @param {number} containerDim 容器该轴尺寸
+ * @param {number} sizePct size 该轴百分比（0~100）
+ * @returns {string} `'N.NN%'` 或 `'0px'`
+ */
+function percentOffsetFrom(offsetPx, containerDim, sizePct) {
+  if (!Number.isFinite(offsetPx) || offsetPx === 0) return '0px';
+  const gap = containerDim * (1 - sizePct / 100);
+  if (gap <= 0.01) return '0px'; // size≈100% 无空隙，百分比无意义
+  return `${((offsetPx / gap) * 100).toFixed(2)}%`;
+}
+
+/**
  * 推断 background-size。
  * @returns {{size:string, cover:boolean, coverage:number|null}}
  */
@@ -172,10 +243,10 @@ export function inferBackgroundSize(mapping) {
     //   `inferredBy` 仍记 'scaleMode'：该资源的 size 裁决确实源自 Figma scaleMode 真值，
     //   不得降级为 'geometry'（否则 `pickStyleTruthAudit` 的来源分布失真）。
     //   图节点≈父容器（coverage ≥ COVER_RATIO）时几何裁决结果仍是 100% 100%，零行为变化。
+    // 🧬 刀70 T4：几何裁决从 px 升级为百分比（有 parentBox 时），容器弹性时等比跟随
     let size = authoritative.size;
     if (size === '100% 100%' && coverage !== null && coverage < COVER_RATIO) {
-      const { width: fw, height: fh } = backgroundBoxSize(m);
-      if (fw > 0 && fh > 0) size = `${fw}px ${fh}px`;
+      size = percentSizeFrom(m) || backgroundBoxSizeText(m);
     }
     return { size, cover: size === '100% 100%', coverage, inferredBy: 'scaleMode' };
   }
@@ -183,7 +254,7 @@ export function inferBackgroundSize(mapping) {
   if (fw > 0 && fh > 0) {
     const cover = isCoveringBackground(m);
     return {
-      size: cover ? '100% 100%' : `${fw}px ${fh}px`,
+      size: cover ? '100% 100%' : (percentSizeFrom(m) || `${fw}px ${fh}px`),
       cover,
       coverage,
       inferredBy: 'geometry',
@@ -191,6 +262,12 @@ export function inferBackgroundSize(mapping) {
   }
   // 无尺寸真值 → 兜底铺满（与旧行为一致）
   return { size: '100% 100%', cover: false, coverage, inferredBy: 'geometry' };
+}
+
+/** figmaBox 像素口径文本（百分比不可用时的回落，保持旧行为）。 */
+function backgroundBoxSizeText(mapping) {
+  const { width: fw, height: fh } = backgroundBoxSize(mapping);
+  return fw > 0 && fh > 0 ? `${fw}px ${fh}px` : '100% 100%';
 }
 
 /**
@@ -215,16 +292,30 @@ export function inferBackgroundRepeat(mapping) {
 }
 
 /**
- * 推断 background-position（相对 parentBox 的偏移，取整）。
+ * 推断 background-position（相对 parentBox 的偏移）。
  * cover=true 时强制归零：`background-size:100% 100%` 已铺满，再带偏移会露白边。
+ *
+ * 🧬 刀70 T4：size 为百分比形态（`a% b%`）时，偏移按 CSS 语义换算为百分比
+ * （`posX% = dx / (pw × (1 − sw/100)) × 100`，见 percentOffsetFrom）——
+ * 容器缩放时视觉偏移等比保持。size 为 px/cover/缺省 → 维持像素偏移（旧行为）。
  */
-export function inferBackgroundPosition(mapping, cover = false) {
+export function inferBackgroundPosition(mapping, cover = false, sizeStr = null) {
   const m = mapping || {};
   if (cover) return '0px 0px';
   const p = _box(m.parentBox);
   const b = _box(m.figmaBox);
   if (!p || !b) return '0px 0px';
-  return `${Math.round(b.x - p.x)}px ${Math.round(b.y - p.y)}px`;
+  const dx = Math.round(b.x - p.x);
+  const dy = Math.round(b.y - p.y);
+  if (dx === 0 && dy === 0) return '0px 0px';
+  // 🧬 刀70 T4：百分比 size → 百分比 position（逐轴换算）
+  const pct = typeof sizeStr === 'string' ? sizeStr.match(/^([\d.]+)%\s+([\d.]+)%$/) : null;
+  if (pct) {
+    const sw = parseFloat(pct[1]);
+    const sh = parseFloat(pct[2]);
+    return `${percentOffsetFrom(dx, p.width, sw)} ${percentOffsetFrom(dy, p.height, sh)}`;
+  }
+  return `${dx}px ${dy}px`;
 }
 
 /**
@@ -247,11 +338,13 @@ export function inferBackgroundStyle(mapping = {}) {
   }
   return {
     size,
-    position: inferBackgroundPosition(mapping, cover),
+    // 🧬 刀70 T4：size 百分比形态时 position 同口径换算（容器缩放时视觉偏移等比保持）
+    position: inferBackgroundPosition(mapping, cover, size),
     repeat: inferBackgroundRepeat(mapping),
     cover,
     coverage,
     inferredBy,
+    percentFallback: mapping?.backgroundPercentFallback || null,
   };
 }
 
@@ -287,16 +380,39 @@ export function sizingFromScaleMode(mapping = null, bgBox = null, parentDims = n
   let size = authoritative.size;
   if (size === '100% 100%' && bw > 0 && bh > 0 && pw > 0 && ph > 0) {
     const cov = _coverageFor(m, bgBox, parentDims, bw, bh, pw, ph);
-    if (cov !== null && cov < COVER_RATIO) size = `${Math.round(bw)}px ${Math.round(bh)}px`;
+    if (cov !== null && cov < COVER_RATIO) {
+      // 🧬 刀70 T4 + 3b-A：统一换算；sub-state 等容器语义不一致时由单一出口回落 px。
+      size = percentSizeFrom(
+        m,
+        { width: bw, height: bh },
+        { width: pw, height: ph },
+      ) || `${Math.round(bw)}px ${Math.round(bh)}px`;
+    }
   }
 
   // position：保形语义（cover / contain）与整框拉伸都按容器中心对齐；TILE 以左上为原点平铺；
-  // 像素回退取图相对容器的真实偏移（与 `inferBackgroundPosition` 同口径）。
+  // 像素/百分比局部尺寸取图相对容器的真实偏移（与 `inferBackgroundPosition` 同口径）。
   let position = 'center center';
   if (size === 'auto') {
     position = '0px 0px';
   } else if (!/^(?:cover|contain|100% 100%)$/.test(size)) {
-    position = _offsetFor(m) || '0px 0px';
+    const pct = size.match(/^([\d.]+)%\s+([\d.]+)%$/);
+    if (pct) {
+      // 🧬 刀70 T4：百分比 size → 百分比 position（与 percentOffsetFrom 同公式）
+      const pBox = _box(parentDims) || _box(m.parentBox);
+      const fBox = _box(bgBox) || _box(m.figmaBox);
+      const dx = fBox && pBox ? Math.round(fBox.x - pBox.x) : 0;
+      const dy = fBox && pBox ? Math.round(fBox.y - pBox.y) : 0;
+      if (dx === 0 && dy === 0) {
+        position = '0px 0px';
+      } else {
+        const px = _percentOffset(dx, pBox.width, parseFloat(pct[1]));
+        const py = _percentOffset(dy, pBox.height, parseFloat(pct[2]));
+        position = `${px} ${py}`;
+      }
+    } else {
+      position = _offsetFor(m) || '0px 0px';
+    }
   }
 
   return {
@@ -307,8 +423,15 @@ export function sizingFromScaleMode(mapping = null, bgBox = null, parentDims = n
   };
 }
 
-function _coverageFor(m, bgBox, parentDims, bw, bh, pw, ph) {
-  // ⚠️ 覆盖比必须与「尺寸来自哪组框」同源：调用方给了自己的尺寸（`visual-parser` 的
+/** 🧬 刀70 T4：percentOffsetFrom 的模块内共享形态（sizingFromScaleMode 用）。 */
+function _percentOffset(offsetPx, containerDim, sizePct) {
+  if (!Number.isFinite(offsetPx) || offsetPx === 0) return '0px';
+  const gap = containerDim * (1 - sizePct / 100);
+  if (gap <= 0.01) return '0px';
+  return `${((offsetPx / gap) * 100).toFixed(2)}%`;
+}
+
+function _coverageFor(m, bgBox, parentDims, bw, bh, pw, ph) {  // ⚠️ 覆盖比必须与「尺寸来自哪组框」同源：调用方给了自己的尺寸（`visual-parser` 的
   //    `parentDims` 是挂载容器，可能与 `mapping.parentBox` 不同）时，若仍取 mapping 的真实交集，
   //    会出现「尺寸按调用方算、铺满判据按 mapping 算」的混口径 —— 单测实测会给出
   //    `470px 72px`（cover 判据失败）与 `100% 100%`（覆盖比 1）自相矛盾的结果。
@@ -345,7 +468,8 @@ function _offsetFor(m) {
  *
  * ## 裁决规则（与 `inferBackgroundSize` 同口径，不另立第三套）
  * - `cov ≥ COVER_RATIO(0.9)` → `100% 100%`（响应式铺满，位置归零 —— 已铺满再带偏移会露白边）
- * - 否则有图尺寸 → `${W}px ${H}px` + **图相对容器的真实偏移**（`inferBackgroundPosition` 同式）
+ * - `0 < cov < COVER_RATIO` 且有图尺寸 → 🧬刀70 T4 百分比口径（相对 parentBox）+ CSS 语义换算偏移
+ * - `cov === 0`（无交集退化数据）→ 图实际像素 + 真实偏移（D2 守卫：数百 px 偏移不换算成超界百分比）
  * - 无图尺寸（真·无几何）→ `cover`：旧行为逐字保留。**不**改成 `100% 100%` ——
  *   未知尺寸时「保形填充」比「拉伸变形」安全，且此处无任何证据支持拉伸。
  *
@@ -374,11 +498,22 @@ export function areaBackgroundSizing(bgBox = null, parentDims = null, mapping = 
   const fw = fb ? Math.round(fb.width) : 0;
   const fh = fb ? Math.round(fb.height) : 0;
   if (fw > 0 && fh > 0) {
-    const pos = fb && pb
-      ? `${Math.round(fb.x - pb.x)}px ${Math.round(fb.y - pb.y)}px`
-      : '0px 0px';
+    // 🧬 刀70 T4 + 3b-A：统一换算；无容器/无交集/sub-state 容器不一致时回落 px。
+    const sizePct =
+      pb && cov !== 0
+        ? percentSizeFrom(m, { ...fb, width: fw, height: fh }, pb) || `${fw}px ${fh}px`
+        : `${fw}px ${fh}px`;
+    const pos = (() => {
+      if (!fb || !pb) return '0px 0px';
+      const dx = Math.round(fb.x - pb.x);
+      const dy = Math.round(fb.y - pb.y);
+      if (dx === 0 && dy === 0) return '0px 0px';
+      const pct = sizePct.match(/^([\d.]+)%\s+([\d.]+)%$/);
+      if (!pct) return `${dx}px ${dy}px`;
+      return `${_percentOffset(dx, pb.width, parseFloat(pct[1]))} ${_percentOffset(dy, pb.height, parseFloat(pct[2]))}`;
+    })();
     return {
-      backgroundSize: `${fw}px ${fh}px`,
+      backgroundSize: sizePct,
       backgroundPosition: pos,
       backgroundRepeat: 'no-repeat',
       needsOverflowHidden: false,

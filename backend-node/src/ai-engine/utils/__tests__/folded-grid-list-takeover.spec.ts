@@ -1327,3 +1327,113 @@ describe('769789af normListItem — value.elements[].parts 容器统计形态', 
     expect(r.items[0].stats.map((s: any) => s.v)).toEqual(['3,792']);
   });
 });
+
+/**
+ * 🛡️ 2026-11-06（mc-max-1793913231075-64a1a31f 实锤）：**「是否同一循环组」不能用精确等值判**。
+ *
+ * 真机病灶：6 项盒集 `[470,459,459,459,459,459]` —— 首卡走帧盒（选中态描边 470），其余走
+ * 几何锚（内容盒 459），差 11px（2.3%）。旧判据 `geoReady = sameWidth && sameHeight` 判否
+ * ⇒ column 分支整段不写 `cardH`/`gaps` ⇒ 产物 `FG_LIST_GAPS=null`、行无高度，
+ * 设计稿 72px 行高 + 20px 间距全部丢失。
+ *
+ * 事实：视觉阶段只能判「大概相似」，同组成员盒本就不会逐像素相等。故同组资格改走
+ * 容差相似带（max(2px, 3%)），逐项尺寸/间距仍精确相减。
+ * 本组用例是该判据的**阳性对照**（旧代码下第一条必失败）+ 反向对照（真异宽仍不下发）。
+ */
+describe('列表几何 · 视觉近似带（64a1a31f 阳性对照）', () => {
+  /** 两卡：宽 `w0`/`w1`，高均 72，y=0/92 ⇒ 间距真值 20 */
+  const figmaWithWidths = (w0: number, w1: number) => ({
+    id: 'root', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 500, height: 300 },
+    children: [
+      { id: '10:2', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: w0, height: 72 }, children: [
+        { id: '10:3', type: 'FRAME', absoluteBoundingBox: { x: 20, y: 16, width: 40, height: 40 }, children: [] },
+      ] },
+      { id: '10:5', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 92, width: w1, height: 72 }, children: [
+        { id: '10:6', type: 'FRAME', absoluteBoundingBox: { x: 20, y: 108, width: 40, height: 40 }, children: [] },
+      ] },
+    ],
+  });
+
+  it('⭐ 阳性：470 vs 459（差 11px / 2.3%）⇒ 仍判同组，cardH=72 + gaps=[20] 全部下发', () => {
+    const r = detectListLeaf(LIST_SEC, indexFigmaNodes(figmaWithWidths(470, 459)));
+    expect(r.ok).toBe(true);
+    expect(r.cardH).toBe(72);
+    expect(r.gaps).toEqual([20]);
+    // 容差生效痕迹（真机日志 listGeo:relaxed 的数据源）：相似但非精确等值
+    expect(r.listGeo.geoReady).toBe(true);
+    expect(r.listGeo.exactUniform).toBe(false);
+    expect(r.listGeo.relaxed).toBe(true);
+  });
+
+  it('⭐ 阳性：精确等值样本 relaxed=false（容差不会被误记为生效）', () => {
+    const r = detectListLeaf(LIST_SEC, indexFigmaNodes(figmaWithWidths(470, 470)));
+    expect(r.cardH).toBe(72);
+    expect(r.gaps).toEqual([20]);
+    expect(r.listGeo.exactUniform).toBe(true);
+    expect(r.listGeo.relaxed).toBe(false);
+  });
+
+  it('反向：真异宽（470 vs 300，36%）且盒未逐卡证明 ⇒ 几何仍不下发（不因放宽而失真）', () => {
+    const r = detectListLeaf(LIST_SEC, indexFigmaNodes(figmaWithWidths(470, 300)));
+    expect(r.ok).toBe(true);
+    expect(r.cardH).toBeNull();
+    expect(r.gaps).toBeNull();
+    expect(r.listGeo.geoReady).toBe(false);
+  });
+});
+
+/**
+ * 🛡️ 2026-11-06（mc-max-1793913231075-64a1a31f 实锤）：vision 形态⑦ `trailing` 平铺交替。
+ *
+ * 真机条真值：`trailing: [{value,parts:[number]}, {label:'在线'}, {value,parts:[number]}, {label:'离线'}]`
+ * —— `value` 位置是 **parts 容器**（自身无 text）。旧链：`canonicalListItem` 无 `trailing`
+ * 分支 ⇒ `stats=[]` ⇒ 产物 `FG_LIST_ITEMS` 六项全无右侧数值列（在线 3,792 / 离线 28 整片丢失）。
+ */
+describe('列表条目 · trailing 平铺交替（64a1a31f 阳性对照）', () => {
+  const mkTrailingItem = (id: string, name: string, online: string, offline: string) => ({
+    id,
+    layout: 'horizontal',
+    content: {
+      layout: 'vertical', position: 'right',
+      elements: [
+        { type: 'label', text: name, styles: { fontSize: '16px', fontWeight: 'bold', color: 'rgba(51, 51, 51, 1)' } },
+        { type: 'label', text: '地址-' + name, styles: { fontSize: '12px', color: 'rgba(102, 102, 102, 1)' } },
+      ],
+    },
+    trailing: [
+      { type: 'value', parts: [{ text: online, type: 'number', styles: { fontSize: '18px', fontWeight: 'bold', color: 'rgba(0, 170, 0, 1)' } }] },
+      { type: 'label', text: '在线', styles: { fontSize: '12px', color: 'rgba(102, 102, 102, 1)' } },
+      { type: 'value', parts: [{ text: offline, type: 'number', styles: { fontSize: '14px', color: 'rgba(255, 0, 0, 1)' } }] },
+      { type: 'label', text: '离线', styles: { fontSize: '12px', color: 'rgba(102, 102, 102, 1)' } },
+    ],
+  });
+  const SEC = {
+    id: '10:1-list', type: 'list', collapsed: true, renderHint: 'v-for', itemCount: 2,
+    items: [mkTrailingItem('10:2', '甲节点', '3,792', '28'), mkTrailingItem('10:5', '乙节点', '128', '6')],
+  };
+
+  it('⭐ 阳性：trailing 两组成对 ⇒ stats 双列（含 parts 数值与逐项颜色/字号）', () => {
+    const r = detectListLeaf(SEC, indexFigmaNodes(FIGMA));
+    expect(r.ok).toBe(true);
+    expect(r.items[0].stats).toHaveLength(2);
+    expect(r.items[0].stats[0]).toMatchObject({
+      v: '3,792', l: '在线', vc: 'rgba(0, 170, 0, 1)', vfs: 18, vfw: 'bold', lc: 'rgba(102, 102, 102, 1)', lfs: 12,
+    });
+    expect(r.items[0].stats[1]).toMatchObject({ v: '28', l: '离线', vfs: 14 });
+    expect(r.items[1].stats.map((s: any) => s.v)).toEqual(['128', '6']);
+    // 名字/地址仍在 texts，数值不得混进 texts 纵堆
+    expect(r.items[0].texts.map((t: any) => t.t)).toEqual(['甲节点', '地址-甲节点']);
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    expect(vue).toContain('3,792');
+    expect(vue).toContain('离线');
+  });
+
+  it('反向：trailing 奇数位（数值无配对标签）⇒ 整组 fail-open 不猜，stats 空且不交叉错配', () => {
+    const broken = { ...SEC, items: SEC.items.map((it: any) => ({ ...it, trailing: it.trailing.slice(0, 3) })) };
+    const r = detectListLeaf(broken, indexFigmaNodes(FIGMA));
+    expect(r.ok).toBe(true);
+    expect(r.items[0].stats).toHaveLength(0);
+    // 文本轨不受影响：名字/地址照旧
+    expect(r.items[0].texts.map((t: any) => t.t)).toEqual(['甲节点', '地址-甲节点']);
+  });
+});

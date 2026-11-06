@@ -42,6 +42,7 @@ const BG_7890 = {
 /** bg-tab-active-7891：激活态渐变条 78×21，位于 295×27 的 tabs-list 内偏移 (5,3) */
 const BG_TAB_ACTIVE = {
   resourceName: 'bg-tab-active',
+  bgRole: 'sub-state',
   figmaBox: box(1500, 906.000000405209, 78.0000009179389, 20.999999594791007),
   parentBox: box(1495, 903, 295, 27),
   visualMeta: { width: 78, height: 21, fillsSummary: 'linear-gradient(#1099b1 0%, #038fff 100%)' },

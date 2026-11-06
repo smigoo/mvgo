@@ -190,9 +190,9 @@ describe('template 限定与资源挂载（真机回归）', () => {
 
   it('资源挂载阴性：无兄弟文本 / 文件缺失 / 锚点未命中，如实分档且零改动', () => {
     const assets = [
-      { nodeId: '1:1', name: 'a', imageRef: 'r1', fileName: 'a.png', siblingTexts: [] },
-      { nodeId: '1:2', name: 'b', imageRef: 'r2', fileName: 'b.png', siblingTexts: ['不存在文本'] },
-      { nodeId: '1:3', name: 'c', imageRef: 'r3', siblingTexts: ['别的'] },
+      { nodeId: '1:1', name: 'a', imageRef: 'r1', fileName: 'icon-a.png', siblingTexts: [] },
+      { nodeId: '1:2', name: 'b', imageRef: 'r2', fileName: 'icon-b.png', siblingTexts: ['不存在文本'] },
+      { nodeId: '1:3', name: 'c', imageRef: 'r3', siblingTexts: ['别的'] }, // 无 fileName ⇒ noFile
     ];
     const src = '<template><p>别的</p></template>';
     const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
@@ -900,6 +900,333 @@ describe('字段路径分组锚定与尺寸对应（mc-lab-1793873410979 三实�
     const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
     expect(r.stats.emptyIconFieldsReplaced).toBe(0);
     expect(r.files[0].content).toContain("icon: ''");
+  });
+});
+
+describe('第六形态空对象属性回填 + 新元素插入（mc-lab-1793905044222-10d48f4c 真机回归）', () => {
+  it('空值对象属性（statIcons={partner:\'\'}）：alt 语义锚定 + 数量相等 zip 双路径回填', () => {
+    // 真机形态改写：两 icon nearbyTexts 相同（alt 可区分）；无 alt 时走 zip
+    const assets = [
+      { nodeId: '187:262', name: 'icon', fileName: 'icon-262.png', siblingTexts: [], nearbyTexts: ['33', '合作厂商', '66', '在线设备'], width: 53, height: 55.45 },
+      { nodeId: '187:263', name: 'icon', fileName: 'icon-263.png', siblingTexts: [], nearbyTexts: ['33', '合作厂商', '66', '在线设备'], width: 53, height: 55.45 },
+    ];
+    const src = [
+      '<template>',
+      '  <div class="stat-card">',
+      '    <img class="stat-icon" :src="statIcons.partner" alt="合作厂商" />',
+      '    <div class="stat-label">合作厂商</div>',
+      '  </div>',
+      '  <div class="stat-card">',
+      '    <img class="stat-icon" :src="statIcons.device" alt="在线设备" />',
+      '    <div class="stat-label">在线设备</div>',
+      '  </div>',
+      '</template>',
+      '<script setup>',
+      'const statIcons = {',
+      "  partner: '',",
+      "  device: ''",
+      '}',
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyObjPropsReplaced).toBe(2);
+    expect(r.stats.svgSkipped).toBe(0);
+    const out = r.files[0].content;
+    expect(out).toContain("partner: labAsset_187_262");
+    expect(out).toContain("device: labAsset_187_263");
+    expect(out).toContain("import labAsset_187_262 from '../resources/images/icon-262.png'");
+    expect(out).toContain("import labAsset_187_263 from '../resources/images/icon-263.png'");
+  });
+
+  it('空值对象属性 zip 兜底：无 alt/近邻全同 ⇒ 剩余属性↔剩余资产数量相等按序绑', () => {
+    const assets = [
+      { nodeId: '187:262', name: 'icon', fileName: 'icon-262.png', siblingTexts: [], nearbyTexts: [] },
+      { nodeId: '187:263', name: 'icon', fileName: 'icon-263.png', siblingTexts: [], nearbyTexts: [] },
+    ];
+    const src = [
+      '<template>',
+      '  <img :src="statIcons.a" />',
+      '  <img :src="statIcons.b" />',
+      '</template>',
+      '<script setup>',
+      "const statIcons = { a: '', b: '' }",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyObjPropsReplaced).toBe(2);
+    const out = r.files[0].content;
+    expect(out).toContain("a: labAsset_187_262");
+    expect(out).toContain("b: labAsset_187_263");
+  });
+
+  it('未被 :src 引用的空属性不绑（无 icon 角色证据）；icon 属性让位字段通道', () => {
+    const assets = [
+      { nodeId: '2:7001', name: 'icon', fileName: 'icon-7001.png', siblingTexts: [], nearbyTexts: ['备注占位不绑'] },
+    ];
+    const src = [
+      '<template>',
+      '  <div>{{ meta.note }}</div>',
+      '</template>',
+      '<script setup>',
+      "const meta = { note: '', icon: '已有值' }",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyObjPropsReplaced).toBe(0); // note 未被 :src 引用；icon 非空串
+    expect(r.stats.newElementInserted).toBe(0); // nearbyTexts '备注占位不绑' 在模板无字面命中
+  });
+
+  it('新元素插入：唯一文本锚前插 <img>；紧邻空 span（CSS 圆点假图标）被替换防双图标', () => {
+    // 真机形态改写：分组标题 icon 产物零引用，标题旁是空 span 圆点
+    const assets = [
+      { nodeId: '38:3160', name: 'icon-战略厂商', fileName: 'icon-战略厂商-3160.png', siblingTexts: [], nearbyTexts: ['战略合作厂商'], width: 16, height: 16 },
+      { nodeId: '38:3164', name: 'icon-优质厂商', fileName: 'icon-优质厂商-3164.png', siblingTexts: [], nearbyTexts: ['优质厂商'], width: 16, height: 16 },
+    ];
+    const src = [
+      '<template>',
+      '  <div class="group-header">',
+      '    <span class="group-icon group-icon--strategic"></span>',
+      '    <span class="group-title">战略合作厂商</span>',
+      '  </div>',
+      '  <div class="group-header">',
+      '    <span class="group-icon group-icon--quality"></span>',
+      '    <span class="group-title">优质厂商</span>',
+      '  </div>',
+      '</template>',
+      '<script setup>',
+      'const placeholder = 1',
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.newElementInserted).toBe(2);
+    expect(r.stats.newElSkipAmbiguous).toBe(0);
+    const out = r.files[0].content;
+    // 空 span 被替换成真 icon img（防双图标），带真值尺寸
+    expect(out).toContain('<img class="lab-asset-img" :src="labAsset_38_3160" style="width:16px;height:16px" />');
+    expect(out).toContain('<img class="lab-asset-img" :src="labAsset_38_3164" style="width:16px;height:16px" />');
+    expect(out).not.toContain('group-icon--strategic');
+    expect(out).toContain("import labAsset_38_3160 from '../resources/images/icon-战略厂商-3160.png'");
+  });
+
+  it('新元素插入：锚文本命中多个叶子 ⇒ 歧义保守放弃（newElSkipAmbiguous）', () => {
+    const assets = [
+      { nodeId: '38:3208', name: 'icon-普通厂商', fileName: 'icon-普通厂商-3208.png', siblingTexts: [], nearbyTexts: ['普通厂商'] },
+    ];
+    const src = [
+      '<template>',
+      '  <span class="t1">普通厂商</span>',
+      '  <span class="t2">普通厂商</span>',
+      '</template>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.newElementInserted).toBe(0);
+    expect(r.stats.newElSkipAmbiguous).toBe(1);
+    expect(r.files[0].content).toBe(src); // 零改动
+  });
+
+  it('🔴 真机回归（10d48f4c 缺陷1）：多行对象 const statIcons = {\\n partner… ownVar 反查不得因换行失明', () => {
+    const assets = [
+      { nodeId: '187:262', name: 'icon', fileName: 'icon-262.png', siblingTexts: [], nearbyTexts: ['33', '合作厂商', '66', '在线设备'], width: 53, height: 55.45 },
+    ];
+    const src = [
+      '<template>',
+      '  <img :src="statIcons.partner" alt="合作厂商" />',
+      '</template>',
+      '<script setup>',
+      'const statIcons = {',
+      "  partner: ''",
+      '}',
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyObjPropsReplaced).toBe(1);
+    expect(r.files[0].content).toContain("partner: labAsset_187_262");
+  });
+
+  it('🔴 真机回归（10d48f4c 缺陷2）：zip 池归一化精确收敛——语义包含混入的分组资产不得稀释数量相等判据', () => {
+    // 真机形态：2 顶部 icon（nearbyTexts 含 alt 字面）+ 3 分组 icon（nearbyTexts 为包含式长文本）
+    // 旧判据 assetSemMatch 双向包含 ⇒ '战略合作厂商'⊃'合作厂商' 混进池（3≠2 误放弃）
+    const assets = [
+      { nodeId: '187:262', name: 'icon', fileName: 'icon-262.png', siblingTexts: [], nearbyTexts: ['33', '合作厂商', '66', '在线设备'] },
+      { nodeId: '187:263', name: 'icon', fileName: 'icon-263.png', siblingTexts: [], nearbyTexts: ['33', '合作厂商', '66', '在线设备'] },
+      { nodeId: '38:3160', name: 'icon-战略厂商', fileName: 'icon-战略厂商-3160.png', siblingTexts: [], nearbyTexts: ['战略合作厂商'] },
+    ];
+    const src = [
+      '<template>',
+      '  <img :src="statIcons.partner" alt="合作厂商" />',
+      '  <img :src="statIcons.device" alt="在线设备" />',
+      '</template>',
+      '<script setup>',
+      'const statIcons = {',
+      "  partner: '',",
+      "  device: ''",
+      '}',
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    // alt 相同文本 ⇒ 第一轮语义锚歧义（cands=2）⇒ unbound=2；zip 池只含 262/263（字面精确）⇒ 2=2 绑定
+    expect(r.stats.emptyObjPropsReplaced).toBe(2);
+    expect(r.stats.newElementInserted).toBe(0); // 分组资产无模板锚（'战略合作厂商'未字面出现）⇒ noAnchor
+    expect(r.stats.newElSkipNoAnchor).toBe(1);
+    const out = r.files[0].content;
+    expect(out).toContain("partner: labAsset_187_262");
+    expect(out).toContain("device: labAsset_187_263");
+  });
+
+  it('🔴 S1 视觉序回归（cec84299 实锤）：资产带 x/y 后盲 zip 按 (y,x) 对位不错栏', () => {
+    // 真机形态：产物空变量按视觉序声明（战略 header 最上），truth 数组序故意打乱
+    // （战略 icon 在数组末位）——有 x/y 时 zip 必须按视觉序修正，而非数组序
+    const assets = [
+      { nodeId: '187:263', name: 'icon', fileName: 'icon-263.png', siblingTexts: [], nearbyTexts: [], x: 10, y: 300 },
+      { nodeId: '38:3160', name: 'icon-战略厂商', fileName: 'icon-战略厂商-3160.png', siblingTexts: [], nearbyTexts: [], x: 10, y: 100 },
+      { nodeId: '38:3164', name: 'icon-优质厂商', fileName: 'icon-优质厂商-3164.png', siblingTexts: [], nearbyTexts: [], x: 10, y: 200 },
+    ];
+    const src = [
+      '<template>',
+      '  <img :src="a" />',
+      '  <img :src="b" />',
+      '  <img :src="c" />',
+      '</template>',
+      '<script setup>',
+      "const a = ''",
+      "const b = ''",
+      "const c = ''",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyIconVarsReplaced).toBe(3);
+    const out = r.files[0].content;
+    // a（模板首位=视觉最上）应拿 y=100 的战略 icon，而非数组序的 263
+    expect(out).toContain('const a = labAsset_38_3160');
+    expect(out).toContain('const b = labAsset_38_3164');
+    expect(out).toContain('const c = labAsset_187_263');
+  });
+
+  it('🔴 S1 byVisualOrder 缺坐标沉底：有 x/y 者排前，双缺保持稳定不与 0 混排', () => {
+    const { byVisualOrder } = require('./truth-matcher');
+    const arr = [
+      { id: 'no-xy-1' },
+      { id: 'mid', x: 5, y: 50 },
+      { id: 'top', x: 5, y: 10 },
+      { id: 'no-xy-2' },
+    ];
+    const out = byVisualOrder(arr).map((a: any) => a.id);
+    expect(out).toEqual(['top', 'mid', 'no-xy-1', 'no-xy-2']);
+  });
+
+  it('🔴 S2 classifyAsset 四类阳性对照：container-bg / strip / icon / decor', () => {
+    const { classifyAsset, STRIP_MIN_WIDTH_PX } = require('./truth-matcher');
+    // 38:8788 型容器底图：bbox≈父容器
+    expect(classifyAsset({ containerLevel: true, width: 193, height: 64, fileName: 'bg-8788.png' })).toBe('bg');
+    // bfac46ac image_313：459×29 footer 条带（bg- 前缀外，几何判据捕获）
+    expect(classifyAsset({ width: 459, height: 29, fileName: 'image_313-5800.png' })).toBe('strip');
+    expect(STRIP_MIN_WIDTH_PX).toBe(120);
+    // 导出器语义 icon
+    expect(classifyAsset({ width: 40, height: 40, fileName: 'icon-5808.png' })).toBe('icon');
+    expect(classifyAsset({ width: 26, height: 32, fileName: 'img-1725.png' })).toBe('icon');
+    // g- 装饰导出（24468462 实锤：8×8 被 newElement 误消费）
+    expect(classifyAsset({ width: 8, height: 8, fileName: 'g-8421.png' })).toBe('decor');
+  });
+
+  it('🔴 S2 路由回归（bfac46ac）：strip 资产走 bg 通道不再插 <img>；decor(g-) 零消费', () => {
+    // strip（无 bg- 前缀、宽条带）+ g- 装饰 + 1 个常规 icon
+    const assets = [
+      { nodeId: '48:5800', name: 'image 313', fileName: 'image_313-5800.png', width: 459, height: 29, siblingTexts: ['共 6 个节点'], nearbyTexts: [] },
+      { nodeId: '2:8421', name: 'g', fileName: 'g-8421.png', width: 8, height: 8, siblingTexts: [], nearbyTexts: ['设备监测'] },
+      { nodeId: '48:5903', name: 'icon-关闭', fileName: 'icon-关闭-5903.png', width: 9.86, height: 9.84, siblingTexts: [], nearbyTexts: ['全国'] },
+    ];
+    // 模板有「共 6 个节点」锚（旧路由会把 459×29 巨图插在它旁边炸 footer）
+    const src = [
+      '<template>',
+      '  <span class="f">共 6 个节点</span>',
+      '  <span class="r">全国</span>',
+      '</template>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    // strip 不进 icon 主通道/新元素通道（bgPathAssets 分流）；g- 不消费；icon-关闭 唯一锚插入
+    expect(r.stats.newElementInserted).toBe(1);
+    const out = r.files[0].content;
+    expect(out).toContain('labAsset_48_5903');
+    expect(out).not.toContain('labAsset_48_5800'); // strip 未被 <img> 消费
+    expect(out).not.toContain('labAsset_2_8421'); // g- 未被消费
+  });
+
+  it('🔴 第七形态（bdfba71d 实锤）：模板静态 src="../resources/images/x.png" → import + :src 绑定；同名文件收敛单一 import', () => {
+    // 产物形态：模板 2 处静态 src（icon-5808 / icon-5823），script 里已有 AI 路径残留的
+    // 6 个 import（其中 4 个重复指向 icon-5823.png——不同 nodeId 同文件）
+    const assets = [
+      { nodeId: '48:5808', name: 'icon', fileName: 'icon-5808.png', siblingTexts: [], nearbyTexts: [] },
+      { nodeId: '48:5823', name: 'icon', fileName: 'icon-5823.png', siblingTexts: [], nearbyTexts: [] },
+    ];
+    const src = [
+      '<template>',
+      '  <img v-if="i===0" class="ic" src="../resources/images/icon-5808.png" :alt="n" />',
+      '  <img v-else class="ic" src="../resources/images/icon-5823.png" :alt="n" />',
+      '</template>',
+      '<script setup>',
+      "const list = [{ icon: '' }]",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.staticSrcRewritten).toBe(2);
+    const out = r.files[0].content;
+    // 静态 src → :src 绑定
+    expect(out).not.toContain('src="../resources/images/');
+    expect(out).toContain(':src="labAsset_48_5808"');
+    expect(out).toContain(':src="labAsset_48_5823"');
+    // import 注入且每文件只 1 条（收敛）
+    expect(out.match(/import labAsset_48_5808 from/g)?.length).toBe(1);
+    expect(out.match(/import labAsset_48_5823 from/g)?.length).toBe(1);
+    // 幂等：对改后产物再跑一遍不再新增（:src 已是绑定，静态 src 计数 0）
+    const r2 = mountAssetIcons([{ path: 'package/index.vue', content: out }], assets as any);
+    expect(r2.stats.staticSrcRewritten ?? 0).toBe(0);
+  });
+
+  it('🔴 第七形态对账（bdfba71d 第二轮实锤）：产物已有同文件 import ⇒ 复用既有变量名，不再注入重复 import', () => {
+    // 产物残留（上一轮 AI 路径）：labAsset_48_5808 已声明；模板静态 src 未消费
+    const assets = [
+      { nodeId: '48:5808', name: 'icon', fileName: 'icon-5808.png', siblingTexts: [], nearbyTexts: [] },
+    ];
+    const src = [
+      '<template>',
+      '  <img class="ic" src="../resources/images/icon-5808.png" :alt="n" />',
+      '</template>',
+      '<script setup>',
+      "import labAsset_48_5808 from '../resources/images/icon-5808.png'",
+      "const a = ref('')",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.staticSrcRewritten).toBe(1);
+    const out = r.files[0].content;
+    // 模板改绑到既有变量名（canonical），不再新增 import（全文件只有 1 条该 import）
+    expect(out).toContain(':src="labAsset_48_5808"');
+    expect(out.match(/import labAsset_48_5808 from/g)?.length).toBe(1);
+  });
+
+  it('🔴 第七形态扩展（67cd38d8 实锤）：:src 表达式内 fallback 相对路径字面量 → 抽成 labAsset import', () => {
+    // 真机形态：8 行 v-for 设备表，icon 字段全空，:src 用 || fallback 到相对路径
+    const assets = [
+      { nodeId: '48:473938', name: 'image 473938', fileName: 'image_473938-37.png', siblingTexts: [], nearbyTexts: [] },
+    ];
+    const src = [
+      '<template>',
+      "  <img class=\"ic\" :src=\"record.icon || '../resources/images/image_473938-37.png'\" :alt=\"record.name\" />",
+      '</template>',
+      '<script setup>',
+      "const list = [{ icon: '', name: '服务区巡检狗K1' }]",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.staticSrcRewritten).toBe(1);
+    const out = r.files[0].content;
+    // 字面量被抽成变量，表达式保留 || 语义
+    expect(out).toContain(":src=\"record.icon || labAsset_48_473938\"");
+    // 模板区不再有相对路径字面量（import 语句里合法存在，走 handleModule）
+    const tpl = out.slice(0, out.indexOf('</template>'));
+    expect(tpl).not.toContain("'../resources/images/");
+    // import 注入一条
+    expect(out.match(/import labAsset_48_473938 from/g)?.length).toBe(1);
   });
 });
 
@@ -1890,5 +2217,357 @@ describe('面板根内容容器背景清除（微码语义：内容区不该有�
     expect(r.stats.panels).toBe(0);
     expect(r.stats.rootClasses).toBe(0);
     expect(r.files[0].content).toBe(src);
+  });
+});
+
+/**
+ * 叶子填充矩形（背景板）采集 —— 2026-11-06（真机 mc-lab-1793898003372-63cc238e）。
+ *
+ * 背景：Figma 里「垫在内容下面的色块」常画成 **叶子 RECTANGLE** 平级兄弟，
+ * 无子节点 ⇒ 不含「直接子级 TEXT」⇒ containers 通道恒空 ⇒ 背景色系统性漏回。
+ * 判据改为几何覆盖（文本 bbox 中心落入矩形），多矩形重叠归**面积最小**者。
+ * 每例配阳性对照：判据必须能在对照态下不命中。
+ */
+describe('叶子填充矩形采集（背景板通道）', () => {
+  const text = (id: string, chars: string, x: number, y: number, w = 46, h = 21) => ({
+    id,
+    type: 'TEXT',
+    name: chars,
+    characters: chars,
+    absoluteBoundingBox: { x, y, width: w, height: h },
+    style: { fontSize: 14 },
+    fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0, a: 1 } }],
+  });
+  const rect = (id: string, x: number, y: number, w: number, h: number, fills: any[], children?: any[]) => ({
+    id,
+    type: 'RECTANGLE',
+    name: id,
+    absoluteBoundingBox: { x, y, width: w, height: h },
+    fills,
+    ...(children ? { children } : {}),
+  });
+  const SOLID = (hex: [number, number, number]) => [
+    { type: 'SOLID', visible: true, color: { r: hex[0], g: hex[1], b: hex[2], a: 1 } },
+  ];
+  const rootOf = (children: any[]) => ({
+    id: '36:1693',
+    type: 'FRAME',
+    name: 'root',
+    absoluteBoundingBox: { x: 0, y: 0, width: 603, height: 555 },
+    children,
+  });
+
+  it('叶子 SOLID 矩形覆盖文本 → 采集，并记下归一化覆盖文本', () => {
+    // 真机 36:1695 = rgb(225,235,255) ⇒ #e1ebff（Figma 存 0-1 浮点）
+    const root = rootOf([
+      rect('36:1695', 0, 300, 547, 193, SOLID([225 / 255, 235 / 255, 1])),
+      text('36:1700', '产品描述', 10, 310),
+    ]);
+    const inv = collectFigmaTruth(root);
+    expect(inv.fillRects).toHaveLength(1);
+    const r = inv.fillRects[0];
+    expect(r.nodeId).toBe('36:1695');
+    expect(r.color).toBe('#e1ebff');
+    expect(r.gradient).toBeUndefined();
+    expect(r.coveredTexts).toEqual(['产品描述']);
+  });
+
+  it('阳性对照：矩形有子节点 → 不进 fillRects（该形态归 containers 通道，避免双写）', () => {
+    const root = rootOf([
+      rect('36:1695', 0, 300, 547, 193, SOLID([0.88, 0.92, 1]), [text('36:1700', '产品描述', 10, 310)]),
+    ]);
+    const inv = collectFigmaTruth(root);
+    expect(inv.fillRects).toHaveLength(0);
+  });
+
+  it('阳性对照：矩形不覆盖任何文本 → 不采集（否则产出无处可落的计划条目）', () => {
+    const root = rootOf([
+      rect('36:1695', 0, 0, 50, 50, SOLID([0.88, 0.92, 1])),
+      text('36:1700', '产品描述', 200, 310),
+    ]);
+    const inv = collectFigmaTruth(root);
+    expect(inv.fillRects).toHaveLength(0);
+  });
+
+  it('多矩形重叠 → 文本归面积最小者（同屏 603×555 渐变 + 547×193 卡片底）', () => {
+    const root = rootOf([
+      rect('36:1694', 0, 0, 603, 555, [
+        {
+          type: 'GRADIENT_LINEAR',
+          gradientHandlePositions: [{ x: 0.5, y: 0 }, { x: 0.5, y: 1 }, { x: 0, y: 0 }],
+          gradientStops: [
+            { position: 0, color: { r: 0.83, g: 0.89, b: 1, a: 1 } },
+            { position: 1, color: { r: 0.756, g: 0.839, b: 1, a: 1 } },
+          ],
+        },
+      ]),
+      rect('36:1695', 0, 300, 547, 193, SOLID([0.88, 0.92, 1])),
+      text('36:1700', '产品描述', 10, 310),
+      text('36:1701', '编码', 10, 40),
+    ]);
+    const inv = collectFigmaTruth(root);
+    const by = Object.fromEntries(inv.fillRects.map((r) => [r.nodeId, r]));
+    // 描述卡底的文本归小的那个
+    expect(by['36:1695'].coveredTexts).toEqual(['产品描述']);
+    // 整屏渐变只剩其余文本，锚点自然落到根容器
+    expect(by['36:1694'].coveredTexts).toEqual(['编码']);
+    expect(by['36:1694'].gradient).toBe('linear-gradient(180deg, #d4e3ff 0%, #c1d6ff 100%)');
+  });
+});
+
+/**
+ * 空 icon 字段的 zip 兜底准入门槛（真机 mc-lab-1793898003372-63cc238e）：
+ * 单对象 `{name, icon:''}` + 单张 `img-1725.png`，资产零近邻文本 ⇒ 语义通道结构性不可用。
+ */
+describe('空 icon 字段回填 · zip 兜底准入', () => {
+  it('语义零命中 + 1 资产 ↔ 1 空字段 → 挂载（img- 也算元素级图片）', () => {
+    const assets = [
+      { nodeId: '36:1729', name: '设备缩略图', fileName: 'img-1725.png', x: 0, y: 0, width: 98, height: 98, siblingTexts: [] },
+    ];
+    const src = [
+      '<template>',
+      '  <img class="thumb" :src="deviceInfo.icon" alt="设备缩略图" />',
+      '</template>',
+      '<script setup>',
+      "const deviceInfo = { name: 'GD-Robot-04', icon: '' }",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyIconFieldsReplaced).toBe(1);
+    const out = r.files[0].content;
+    expect(out).toContain('icon: labAsset_36_1729');
+    expect(out).toContain("import labAsset_36_1729 from '../resources/images/img-1725.png'");
+    expect(out).toContain('style="width:98px;height:98px"');
+  });
+
+  it('阳性对照：数量不等（2 空字段 ↔ 1 资产）→ 一个都不挂（禁止瞎猜）', () => {
+    const assets = [
+      { nodeId: '36:1729', name: '设备缩略图', fileName: 'img-1725.png', x: 0, y: 0, width: 98, height: 98, siblingTexts: [] },
+    ];
+    const src = [
+      '<template>',
+      '  <img class="thumb" :src="deviceInfo.icon" alt="设备缩略图" />',
+      '</template>',
+      '<script setup>',
+      "const deviceInfo = { name: 'GD-Robot-04', icon: '' }",
+      "const other = { name: 'GD-Robot-05', icon: '' }",
+      '</script>',
+    ].join('\n');
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+    expect(r.stats.emptyIconFieldsReplaced).toBe(0);
+    expect(r.files[0].content).not.toContain('labAsset_36_1729');
+  });
+});
+
+/**
+ * tx 通道 · img 专用包裹层尺寸真值（真机 mc-lab-1793898003372-63cc238e）：
+ * Figma `img 98×98`，产物写成 `.thumb{width:64px;height:64px;overflow:hidden}` ⇒ 图被裁切。
+ * 授权只看 Figma 内部事实（containerLevel）+ 产物结构事实（专用包裹 = 唯一元素子节点）。
+ */
+describe('img 专用包裹层尺寸（tx 通道）', () => {
+  /** Figma：GROUP(容器) > RECTANGLE(IMAGE)。容器尺寸可配，用来切换 containerLevel */
+  function figmaTree(containerW: number, containerH: number, imgW = 98, imgH = 98) {
+    return {
+      id: '36:1693',
+      type: 'FRAME',
+      name: 'root',
+      absoluteBoundingBox: { x: 0, y: 0, width: 603, height: 555 },
+      children: [
+        {
+          id: '36:1725',
+          type: 'GROUP',
+          name: 'img',
+          absoluteBoundingBox: { x: 0, y: 0, width: containerW, height: containerH },
+          children: [
+            {
+              id: '36:1729',
+              type: 'RECTANGLE',
+              name: 'image 473932',
+              absoluteBoundingBox: { x: 0, y: 0, width: imgW, height: imgH },
+              fills: [{ type: 'IMAGE', visible: true, imageRef: 'ref-thumb' }],
+            },
+          ],
+        },
+      ],
+    };
+  }
+  const assetsOf = (tree: any) => {
+    const inv = collectFigmaTruth(tree);
+    inv.assets[0].fileName = 'img-1725.png';
+    return inv.assets;
+  };
+  // 专用壳（唯一元素子节点 = img）
+  const SRC_DEDICATED = (shellStyle = '') => [
+    '<template>',
+    '  <div class="thumb" style="width:64px;height:64px">',
+    '    <img class="thumb-img" :src="deviceInfo.icon" alt="设备缩略图" />',
+    '  </div>',
+    '</template>',
+    '<script setup>',
+    "const deviceInfo = { name: 'GD-Robot-04', icon: '' }",
+    '</script>',
+  ].join('\n');
+  // 共享行（img + 文本并列）——照搬尺寸会毁布局
+  const SRC_SHARED = [
+    '<template>',
+    '  <div class="row">',
+    '    <img class="thumb-img" :src="deviceInfo.icon" alt="设备缩略图" />',
+    '    <span class="name">{{ deviceInfo.name }}</span>',
+    '  </div>',
+    '</template>',
+    '<script setup>',
+    "const deviceInfo = { name: 'GD-Robot-04', icon: '' }",
+    '</script>',
+  ].join('\n');
+
+  it('容器与图同尺寸 + 专用壳 → 壳宽高改写为 Figma 真值', () => {
+    const assets = assetsOf(figmaTree(98, 98));
+    expect(assets[0].containerLevel).toBe(true);
+    expect(assets[0].parentBox).toEqual({ width: 98, height: 98 });
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: SRC_DEDICATED() }], assets as any);
+    expect(r.stats.containerSizeFixed).toBe(1);
+    const out = r.files[0].content;
+    expect(out).toContain('<div class="thumb" style="width:98px;height:98px">');
+    // img 自身的尺寸还原不受影响（两条判据互不替代）
+    expect(out).toContain('style="width:98px;height:98px" />');
+  });
+
+  it('阳性对照：壳里还有别的元素（共享行）→ 一个数都不改', () => {
+    const assets = assetsOf(figmaTree(98, 98));
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: SRC_SHARED }], assets as any);
+    expect(r.stats.containerSizeFixed).toBe(0);
+    const out = r.files[0].content;
+    expect(out).toContain('<div class="row">'); // 没有被塞 style
+    expect(out).not.toContain('<div class="row" style=');
+  });
+
+  it('阳性对照：图与容器不同尺寸（20×20 装在 24×24 带内边距的容器里）→ 不动', () => {
+    const assets = assetsOf(figmaTree(24, 24, 20, 20));
+    expect(assets[0].containerLevel).toBe(false);
+    const r = mountAssetIcons([{ path: 'package/index.vue', content: SRC_DEDICATED() }], assets as any);
+    expect(r.stats.containerSizeFixed).toBe(0);
+    expect(r.files[0].content).toContain('style="width:64px;height:64px"');
+  });
+
+  it('幂等：壳已是真值尺寸 → 不产编辑（带空格的写法也不重写）', () => {
+    const assets = assetsOf(figmaTree(98, 98));
+    for (const style of ['width:98px;height:98px', 'width: 98px; height: 98px;']) {
+      const src = [
+        '<template>',
+        `  <div class="thumb" style="${style}">`,
+        '    <img class="thumb-img" :src="deviceInfo.icon" alt="设备缩略图" />',
+        '  </div>',
+        '</template>',
+        '<script setup>',
+        "const deviceInfo = { name: 'GD-Robot-04', icon: '' }",
+        '</script>',
+      ].join('\n');
+      const r = mountAssetIcons([{ path: 'package/index.vue', content: src }], assets as any);
+      expect(r.stats.containerSizeFixed).toBe(0);
+      expect(r.files[0].content).toContain(`<div class="thumb" style="${style}">`);
+    }
+  });
+});
+
+/**
+ * tx 通道配套 · 父容器装不下就抬 min-height（真机 63cc238e）：
+
+ * LLM 把 header 写死 `height:76px` 来凑自己的总高预算（产物注释里就写着
+ * `76 + 14 + 196 + 14 + 187 = 487`），缩略图按真值改回 98 后，flex 居中会让它
+ * 上下溢出压住下一个区块。判据只有一条：**父容器固定 height < 子元素真值高度**，
+ * 这个固定高度可证明是错的；只抬 min-height（CSS 中 min-height 优先于 height）。
+ */
+describe('父容器装不下子元素真值 → 抬 min-height', () => {
+  function figma98() {
+    return {
+      id: '36:1693',
+      type: 'FRAME',
+      name: 'root',
+      absoluteBoundingBox: { x: 0, y: 0, width: 603, height: 555 },
+      children: [
+        {
+          id: '36:1725',
+          type: 'GROUP',
+          name: 'img',
+          absoluteBoundingBox: { x: 0, y: 0, width: 98, height: 98 },
+          children: [
+            {
+              id: '36:1729',
+              type: 'RECTANGLE',
+              name: 'image',
+              absoluteBoundingBox: { x: 0, y: 0, width: 98, height: 98 },
+              fills: [{ type: 'IMAGE', visible: true, imageRef: 'ref-thumb' }],
+            },
+          ],
+        },
+      ],
+    };
+  }
+  const assets = () => {
+    const inv = collectFigmaTruth(figma98());
+    inv.assets[0].fileName = 'img-1725.png';
+    return inv.assets as any;
+  };
+  const src = (styleBlock: string, headerStyle = '') =>
+    [
+      '<template>',
+      `  <div class="header"${headerStyle}>`,
+      '    <div class="thumb">',
+      '      <img class="thumb-img" :src="deviceInfo.icon" alt="设备缩略图" />',
+      '    </div>',
+      '    <div class="title">{{ deviceInfo.name }}</div>',
+      '  </div>',
+      '</template>',
+      '<script setup>',
+      "const deviceInfo = ref({ name: 'GD-Robot-04', icon: '' })",
+      '</script>',
+      '<style lang="less">',
+      styleBlock,
+      '</style>',
+    ].join('\n');
+
+  it('父容器 height:76px < 98px → 抬 min-height:98px（height 键保留不动）', () => {
+    const r = mountAssetIcons(
+      [{ path: 'package/index.vue', content: src('.header { height: 76px; }') }],
+      assets(),
+    );
+    expect(r.stats.parentBoxRelaxed).toBe(1);
+    const out = r.files[0].content;
+    expect(out).toContain('<div class="header" style="min-height:98px">');
+    // 只抬 min-height，不改 height 键
+    expect(out).toContain('.header { height: 76px; }');
+    expect(out).toContain('<div class="thumb" style="width:98px;height:98px">');
+  });
+
+  it('阳性对照：父容器 height:120px 装得下 → 不动', () => {
+    const r = mountAssetIcons(
+      [{ path: 'package/index.vue', content: src('.header { height: 120px; }') }],
+      assets(),
+    );
+    expect(r.stats.parentBoxRelaxed).toBe(0);
+    expect(r.files[0].content).toContain('<div class="header">');
+  });
+
+  it('阳性对照：父容器没有固定高度（自适应）→ 不动', () => {
+    const r = mountAssetIcons(
+      [{ path: 'package/index.vue', content: src('.header { min-height: 40px; }') }],
+      assets(),
+    );
+    expect(r.stats.parentBoxRelaxed).toBe(0);
+    expect(r.files[0].content).toContain('<div class="header">');
+  });
+
+  it('幂等：父容器已有 min-height:98px → 不重复注入', () => {
+    const r = mountAssetIcons(
+      [
+        {
+          path: 'package/index.vue',
+          content: src('.header { height: 76px; }', ' style="min-height:98px"'),
+        },
+      ],
+      assets(),
+    );
+    expect(r.stats.parentBoxRelaxed).toBe(0);
+    expect(r.files[0].content).toContain('<div class="header" style="min-height:98px">');
   });
 });

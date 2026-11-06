@@ -254,7 +254,7 @@ import {
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
 // 🛡️ 2026-11-05 治本：内联注入的 CSS 里相对 `url()` 会按**文档 URL**解析（→ 404 → 背景图不显示），
 //   注入前必须按「该 CSS 文件自身虚拟路径」重写为绝对 URL。单一事实源见 css-asset-url.js。
-import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls } from '@/utils/css-asset-url'
+import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls, rewriteVueTemplateAssetUrls, rewriteVueExprAssetUrls } from '@/utils/css-asset-url'
 // 🛡️ 2026-10-25：`.js` 内 ESM 语法的判定（单一真相源，与 Vue3 路径共用）
 import { resolveJsModuleTypeOverride } from '@/utils/sfc-loader-esm-js'
 import { buildSnapshotFileUrl, hasPreviewEntry, resolvePreviewDescriptor } from '@/utils/preview-resolver'
@@ -1477,6 +1477,14 @@ async function loadProd() {
       //   微码入口 index.vue 的 style 稍后会被整体剥掉（样式来自 index.css），此处对其无副作用。
       if (rel.endsWith('.vue')) {
         src = rewriteVueStyleAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
+        // 🆕 2026-11-06 模板兜底通道（bdfba71d 实锤）：Lite AI 定位路径的历史产物模板
+        //   img 用静态相对 src（HTML 属性，不经 import/handleModule 与 style url 两条
+        //   重写管道）⇒ 预览 404 破图。编译前按本文件基准提升为绝对 URL；:src= 动态
+        //   绑定不受影响（属性名不同，正则只匹配静态 src=）。挂载链第七形态
+        //   （truth-matcher#rewriteStaticTemplateSrc）已在生成期消此形态，本处保存量。
+        src = rewriteVueTemplateAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
+        // 🆕 67cd38d8 形态兜底：`:src="<expr> || '../resources/...'"` 表达式内字面量
+        src = rewriteVueExprAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
       }
       // 🛡️ 2026-09-16 治本（mc-max-...-dcc8b98d「找不到文件: less」+ ...-3912b7b3「一片蓝色什么都没有」同源实锤）：
       // 微码**子组件**（package/components/*.vue）带 <style lang="less">（含 less 变量/嵌套/@import，

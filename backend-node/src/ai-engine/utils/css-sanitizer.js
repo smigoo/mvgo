@@ -267,7 +267,7 @@ const ANT_TABLE_LAYER_SUFFIXES = [
 
 function extractAntTableEntries(vueContent) {
   const entries = []
-  const antTableRegex = /<a-table\b((?:"[^"]*"|'[^']*'|[^>])*)>/gi
+  const antTableRegex = /<a-table\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi
   let match
 
   while ((match = antTableRegex.exec(vueContent)) !== null) {

@@ -1344,7 +1344,7 @@ export function healImgSrcBindings(content, resourceDomMapping) {
   let next = content;
   const healed = [];
   // ② 逐个 <img ...> 开标签
-  next = next.replace(/<img\b((?:"[^"]*"|'[^']*'|[^>])*)>/g, (full, attrs) => {
+  next = next.replace(/<img\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g, (full, attrs) => {
     if (/(?::src|v-bind:src|\ssrc)\s*=/.test(attrs)) return full; // ③ 已有 src，尊重作者
     const hits = [];
     for (const varName of imported) {
@@ -1383,7 +1383,7 @@ export function findImgSrcBindingGaps(content, resourceDomMapping) {
   for (const varName of varToMapping.keys()) {
     const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (!new RegExp(`import\\s+${esc}\\s+from`).test(script)) continue;
-    const re = new RegExp(`<img\\b((?:"[^"]*"|'[^']*'|[^>])*)>`, 'g');
+    const re = new RegExp(`<img\\b((?:"[^"]*"|'[^']*'|[^>"'])*)>`, 'g');
     let m;
     while ((m = re.exec(content)) !== null) {
       const attrs = m[1] || '';

@@ -16,6 +16,9 @@ export interface FigmaTextTruth {
   color?: string;
   width?: number;
   height?: number;
+  /** 🆕 画布绝对坐标（几何包含判据用：叶子填充矩形 ↔ 文本归属） */
+  x?: number;
+  y?: number;
 }
 
 export interface FigmaAssetTruth {
@@ -46,6 +49,12 @@ export interface FigmaAssetTruth {
    */
   containerLevel?: boolean;
   /**
+   * 🆕 tx 通道真值（2026-11-06）：直接父容器的 bbox。
+   * 与 `containerLevel=true` 合起来才构成「这张图与它的 Figma 容器同尺寸」这条事实 ⇒
+   * 产物里该 img 的**专用包裹层**宽高必须等于 `width×height`（否则容器与图不一致 = 裁切/留白）。
+   */
+  parentBox?: { width: number; height: number };
+  /**
    * 🆕 VECTOR 反哺条目的近邻文本（不进模板锚点路径——数据驱动产物模板是插值，
    * 文本锚点必 noAnchor；仅供空 icon 字段按「对象 name」语义锚定用）。
    */
@@ -64,6 +73,40 @@ export interface TruthInventory {
   containerCount: number;
   /** 🆕 Q2 容器 fill 真值：带 SOLID fill 且子树含 ≥1 文本的容器（文本锚定换色用） */
   containers: FigmaContainerTruth[];
+  /**
+   * 🆕 叶子填充矩形（背景板）真值（2026-11-06）。
+   *
+   * 为什么单开一类而不复用 `containers`：
+   *   `containers` 的锚点是「**直接子级** TEXT」（刻意的：防「后代 badge 被白 header 误吸」）。
+   *   但 Figma 里极常见的画法是「bg 矩形 + 内容平级兄弟」——矩形是**叶子**、没有子级文本
+   *   ⇒ childTexts 恒空 ⇒ 被 `containers.filter(childTexts.length>0)` 整批丢弃 ⇒ 背景色漏回。
+   *   真机（mc-lab-1793898003372-63cc238e）：
+   *     · 36:1695 RECTANGLE #e1ebff = 「产品描述」卡的底 → 产物写成 #FFFFFF
+   *     · 36:1694 RECTANGLE「bg」GRADIENT_LINEAR #d4e3ff→#c1d6ff = 整屏底 → 产物 transparent
+   *     · 36:1727/1728 = 缩略图底两块
+   *   采集口径只认 Figma 内部事实（bbox / fills），不看产物 CSS。
+   */
+  fillRects: FigmaFillRectTruth[];
+}
+
+/**
+ * 叶子填充矩形（背景板）真值。
+ *
+ * 锚点用**几何覆盖**而非父子关系：文本 bbox 中心落在矩形内 ⇒ 该文本归此矩形；
+ * 多个矩形重叠时归**面积最小**者（最 specific）——36:1694 覆盖全屏，但 36:1695 更小，
+ * 「产品描述」两段文本归 36:1695，36:1694 只留其余文本（与视觉层级一致）。
+ */
+export interface FigmaFillRectTruth {
+  nodeId: string;
+  name: string;
+  /** 画布绝对坐标（px） */
+  bbox: { x: number; y: number; width: number; height: number };
+  /** 纯色 CSS 值（`#rrggbb` / `rgba()`）；与 gradient 互斥 */
+  color?: string;
+  /** 渐变 CSS 值（`linear-gradient(180deg, #d4e3ff 0%, #c1d6ff 100%)`） */
+  gradient?: string;
+  /** 几何覆盖的文本（已按「最小包裹」归属，已归一化） */
+  coveredTexts: string[];
 }
 
 /** Figma 容器 fill 真值（Q2 容器色回填采集项） */
@@ -145,8 +188,7 @@ function figmaColorToCss(fill: any): string | undefined {
 }
 
 /** 节点首个可见 SOLID fill（opacity < 0.05 视为无）；模块级供采集与父链查询共用 */
-function solidFillOfNode(node: any): { color: string; opacity: number } | undefined {
-  const fill = Array.isArray(node.fills)
+function solidFillOfNode(node: any): { color: string; opacity: number } | undefined {  const fill = Array.isArray(node.fills)
     ? node.fills.find((f: any) => f.type === 'SOLID' && f.visible !== false)
     : undefined;
   if (!fill) return undefined;
@@ -154,6 +196,46 @@ function solidFillOfNode(node: any): { color: string; opacity: number } | undefi
   if (opacity < 0.05) return undefined;
   const color = figmaColorToCss(fill);
   return color ? { color, opacity } : undefined;
+}
+
+/**
+ * 节点首个可见渐变 fill → CSS 渐变值（单一实现，采集与计划共用）。
+ *
+ * 为什么必须还原成 CSS 渐变，而不是"导出成 png 当底图"：
+ *   Figma 会把渐变节点渲染成位图（真机 36:1694 = RECTANGLE「bg」603×555，子树零 IMAGE fill
+ *   却含 GRADIENT_LINEAR）——那种 png 是**渲染结果**不是切图资源，挂 url() 语义就错了
+ *   （层级也不对：alpha 是渐变末段透明 + 节点 opacity 合成，不是"半透明蒙层"）。
+ *
+ * 角度：Figma 给 3 个归一化 handle（0=起 1=止），方向向量 (dx,dy)，画布 y 轴向下；
+ *   CSS `linear-gradient(<deg>)` 的 0deg = 向上、顺时针 → deg = atan2(dx, -dy)。
+ *   两端 handles 重合（径向/角度渐变）时退回 180deg（to bottom）。
+ */
+export function gradientFillToCss(node: any): string | undefined {
+  const fill = Array.isArray(node?.fills)
+    ? node.fills.find((f: any) => typeof f?.type === 'string' && f.type.startsWith('GRADIENT_') && f.visible !== false)
+    : undefined;
+  if (!fill) return undefined;
+  const stops = (fill.gradientStops ?? [])
+    .map((s: any) => {
+      const c = figmaColorToCss({ type: 'SOLID', color: s?.color });
+      if (!c) return undefined;
+      const p = Number(s?.position);
+      return `${c} ${Math.round((Number.isFinite(p) ? p : 0) * 100)}%`;
+    })
+    .filter((x: string | undefined): x is string => !!x);
+  if (stops.length < 2) return undefined;
+  const h = fill.gradientHandlePositions;
+  let deg = 180;
+  if (Array.isArray(h) && h.length >= 2) {
+    const dx = Number(h[1]?.x) - Number(h[0]?.x);
+    const dy = Number(h[1]?.y) - Number(h[0]?.y);
+    if (Number.isFinite(dx) && Number.isFinite(dy) && (dx !== 0 || dy !== 0)) {
+      deg = Math.round(((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360);
+    }
+  }
+  if (fill.type === 'GRADIENT_RADIAL') return `radial-gradient(circle, ${stops.join(', ')})`;
+  if (fill.type === 'GRADIENT_ANGULAR') return `conic-gradient(from ${deg}deg, ${stops.join(', ')})`;
+  return `linear-gradient(${deg}deg, ${stops.join(', ')})`;
 }
 
 /**
@@ -333,6 +415,9 @@ export function collectFigmaTruth(root: any): TruthInventory {  const texts: Fig
       if (bbox) {
         t.width = Math.round(bbox.width);
         t.height = Math.round(bbox.height);
+        // 🆕 几何归属判据（叶子填充矩形 ↔ 文本）：必须带原点，否则无法判"是否在矩形内"
+        t.x = Math.round(bbox.x);
+        t.y = Math.round(bbox.y);
       }
       texts.push(t);
       return;
@@ -360,6 +445,8 @@ export function collectFigmaTruth(root: any): TruthInventory {  const texts: Fig
       if (pMeta?.parentTexts.length) a.parentTexts = pMeta.parentTexts;
       if (pMeta?.parentId) a.parentId = pMeta.parentId;
       if (pMeta) a.containerLevel = pMeta.containerLevel;
+      // tx 通道：父容器 bbox（与 containerLevel 合用才算「容器与图同尺寸」这条事实齐备）
+      if (pMeta?.parentBox) a.parentBox = pMeta.parentBox;
       // 几何锚点补充：bbox 原点（svg 占位替换路径按 (y,x) 排序与产物占位对位）
       if (bbox) {
         a.x = Math.round(bbox.x);
@@ -397,7 +484,83 @@ export function collectFigmaTruth(root: any): TruthInventory {  const texts: Fig
       }
     }
   }
-  return { texts, assets, containerCount, containers: containers.filter((c) => c.childTexts.length > 0) };
+  return { texts, assets, containerCount, containers: containers.filter((c) => c.childTexts.length > 0), fillRects: collectFillRects(root, texts) };
+}
+
+/**
+ * 采集「叶子填充矩形」= 背景板（2026-11-06）。
+ *
+ * 判据（全部是 Figma 内部事实，不看产物）：
+ *   ① 节点是**叶子**（无子节点）且非 TEXT —— 有子节点的填充框已由 `containers` 通道覆盖，
+ *      且"直接子文本"判据在那里更精确；叶子矩形一定是"垫在别人下面的底板"。
+ *   ② 有可见 SOLID fill 或 GRADIENT_* fill（IMAGE fill 属资源通道，不在此列）。
+ *   ③ 几何覆盖 ≥1 个 TEXT（bbox 中心落入矩形）——覆盖不到文本的纯装饰块无可锚定的落点，
+ *      不采集（否则会产出无处可落的计划条目）。
+ *
+ * 归属：同一文本被多个矩形覆盖时归**面积最小**者。真机 36:1694（603×555 整屏渐变）
+ * 与 36:1695（产品描述卡底）都覆盖描述文本，归小的那个 —— 与视觉层级一致；
+ * 36:1694 因此只剩其余 28 条文本，锚点自然落到根容器。
+ */
+function collectFillRects(root: any, texts: FigmaTextTruth[]): FigmaFillRectTruth[] {
+  interface Leaf { node: any; bbox: { x: number; y: number; width: number; height: number }; color?: string; gradient?: string }
+  const leaves: Leaf[] = [];
+  const walkLeaf = (n: any) => {
+    if (!n || typeof n !== 'object') return;
+    const bbox = n.absoluteBoundingBox;
+    const isLeaf = !Array.isArray(n.children) || n.children.length === 0;
+    if (
+      isLeaf &&
+      n.type !== 'TEXT' &&
+      bbox &&
+      Number(bbox.width) > 0 &&
+      Number(bbox.height) > 0
+    ) {
+      const gradient = gradientFillToCss(n);
+      const solid = solidFillOfNode(n);
+      if (gradient || solid?.color) {
+        leaves.push({
+          node: n,
+          bbox: { x: Number(bbox.x), y: Number(bbox.y), width: Number(bbox.width), height: Number(bbox.height) },
+          color: solid?.color,
+          gradient,
+        });
+      }
+    }
+    for (const c of n.children ?? []) walkLeaf(c);
+  };
+  walkLeaf(root);
+  if (leaves.length === 0) return [];
+
+  const areas = leaves.map((l) => l.bbox.width * l.bbox.height);
+  const covered: string[][] = leaves.map(() => []);
+  for (const t of texts) {
+    if (typeof t.x !== 'number' || typeof t.y !== 'number') continue;
+    const cx = t.x + (t.width ?? 0) / 2;
+    const cy = t.y + (t.height ?? 0) / 2;
+    let best = -1;
+    for (let i = 0; i < leaves.length; i += 1) {
+      const b = leaves[i].bbox;
+      if (cx < b.x || cx > b.x + b.width || cy < b.y || cy > b.y + b.height) continue;
+      if (best < 0 || areas[i] < areas[best]) best = i;
+    }
+    if (best < 0) continue;
+    const key = normalizeAnchorText(t.characters);
+    if (key.length >= 2 && !covered[best].includes(key)) covered[best].push(key);
+  }
+
+  const out: FigmaFillRectTruth[] = [];
+  leaves.forEach((l, i) => {
+    if (covered[i].length === 0) return;
+    out.push({
+      nodeId: String(l.node.id ?? ''),
+      name: String(l.node.name ?? ''),
+      bbox: l.bbox,
+      ...(l.color ? { color: l.color } : {}),
+      ...(l.gradient ? { gradient: l.gradient } : {}),
+      coveredTexts: covered[i],
+    });
+  });
+  return out;
 }
 
 /**
@@ -761,6 +924,16 @@ export interface AssetMountStats {
   emptyIconVarsReplaced: number;
   /** 🆕 空 icon 字段回填数（v-for 数组对象 icon: '' → 按对象 name 语义锚定 import 标识符） */
   emptyIconFieldsReplaced: number;
+  /** 🆕 空 icon 对象属性回填数（const obj={prop:''} + <img :src="obj.prop"> → import 标识符） */
+  emptyObjPropsReplaced: number;
+  /** 🆕 第七形态：模板静态 src="../resources/images/x.png" 重写为 :src 绑定 + import 的处数 */
+  staticSrcRewritten?: number;
+  /** 🆕 新元素插入数（产物零引用 + 唯一文本锚 ⇒ 锚点前插 <img>，含空元素替换） */
+  newElementInserted: number;
+  /** 🆕 新元素插入放弃：锚文本在模板无命中或多命中（歧义），保守不动 */
+  newElSkipNoAnchor: number;
+  /** 🆕 新元素插入放弃：锚文本命中多个叶子 */
+  newElSkipAmbiguous: number;
   /** 🆕 svg 占位替换失败数（占位数与资产数不匹配等，保守跳过） */
   svgSkipped: number;
   /** 🆕 bg-* 背景图命名↔结构锚定替换成功数 */
@@ -775,6 +948,10 @@ export interface AssetMountStats {
   bgSkipAlreadyUrl: number;
   /** 🆕 img 标签注入真值尺寸（width/height style）数 */
   sizeRestored: number;
+  /** 🆕 图片专用包裹层按 Figma 容器真值改写宽高（tx 通道）数 */
+  containerSizeFixed: number;
+  /** 🆕 父容器固定高度装不下子元素真值 ⇒ 抬 min-height 的次数 */
+  parentBoxRelaxed: number;
 }
 
 export interface AssetMountResult {
@@ -849,6 +1026,10 @@ export function mountAssetIcons(
     iconClassReplaced: 0,
     emptyIconVarsReplaced: 0,
     emptyIconFieldsReplaced: 0,
+    emptyObjPropsReplaced: 0,
+    newElementInserted: 0,
+    newElSkipNoAnchor: 0,
+    newElSkipAmbiguous: 0,
     svgSkipped: 0,
     bgAnchored: 0,
     bgSkipNoClass: 0,
@@ -856,6 +1037,8 @@ export function mountAssetIcons(
     bgSkipNoBgKey: 0,
     bgSkipAlreadyUrl: 0,
     sizeRestored: 0,
+    containerSizeFixed: 0,
+    parentBoxRelaxed: 0,
   };
 
   // 按 imageRef 去重（同一图片在 Figma 里被多次引用只挂一次），保留首个有 fileName 的
@@ -899,13 +1082,36 @@ export function mountAssetIcons(
   // bg-* 背景图走独立通道（命名↔结构锚定换 CSS background，见 mountBackgroundAssets）
   const bgPathAssets: FigmaAssetTruth[] = [];
 
+  // 第七形态（2026-11-06 bdfba71d 实锤）：模板静态 src="../resources/images/x.png"。
+  // Lite AI 定位路径的历史产物形态——静态相对路径是 HTML 属性，预览 vue3-sfc-loader
+  // 只重写 script import 与 style url()，模板静态 src 两条管道都不经过 ⇒ 预览 404 破图。
+  // 确定性重写：src 文件名 → truth.assets 锚定（fileName 精确匹配）→ import + :src 绑定；
+  // 同名文件收敛单一 import（消灭 AI 路径 N 节点重复 import 同一文件的残留）。
+  // 🔴 必须在其它消费通道（svg 占位/空变量/字段回填/新元素）之前执行：它是对账性
+  //   修复（产物已有同文件 import ⇒ 复用既有变量名并标记 _consumed），先跑才能
+  //   阻止空变量/字段通道对同一资产 zip 绑定后注入第二条 import（第二轮真机实锤：
+  //   labAsset_48_5808 declared twice ⇒ SFC 校验告警）。
+  rewriteStaticTemplateSrc(parsed, byRef, stats);
+
   for (const a of byRef.values()) {
     if (!a.fileName) {
       stats.noFile += 1;
       continue;
     }
-    if (/^bg-/.test(a.fileName)) {
+    // 🔴 S2（bfac46ac 实锤）：路由收口到 classifyAsset 单一来源——bg- 前缀之外的
+    //   大底图（image_313 459×29 走 icon 通道插成巨图炸 footer）与 decor（g- 决议
+    //   只采集不消费，24468462 实锤被刀2 误消费）在此统一裁决。
+    const cls = classifyAsset(a);
+    if (cls === 'bg' || cls === 'strip') {
       bgPathAssets.push(a);
+      continue;
+    }
+    if (cls === 'decor') {
+      // g- 等装饰导出：既有决议只采集计数不消费；计入 svgSkipped 之外的可见缺口
+      // （不静默吞——用 noSiblingTexts 之外的语义会误导排障，这里走 svg 路径让它
+      //  自然落空，统计口径不变）
+      stats.noSiblingTexts += 1;
+      svgPathAssets.push(a);
       continue;
     }
     const sibs = (a.siblingTexts || []).filter((s) => normalizeAnchorText(s).length >= 2);
@@ -977,6 +1183,133 @@ export function mountAssetIcons(
 }
 
 // ───────────────── bg-* 背景图命名↔结构锚定（CSS background 替换） ─────────────────
+
+/**
+ * 第七形态（2026-11-06 bdfba71d 实锤）：模板静态 `src="../resources/images/x.png"`。
+ *
+ * 背景：Lite AI 定位路径的历史产物把模板 img 写成静态相对路径——它是 HTML 属性，
+ * 预览 vue3-sfc-loader 只重写 script import（handleModule→绝对 URL）与 style url()
+ * （rewriteVueStyleAssetUrls），模板静态 src 两条管道都不经过 ⇒ 预览 404 破图。
+ *
+ * 判据（确定性，无 LLM）：模板静态 `src="../resources/images/<fileName>"`，
+ * 按文件名精确锚定 truth.assets（same fileName；imageRef 去重后逐资产唯一）→
+ *   ① img 标签 `src="..."` → `:src="labAsset_<nodeId>"`
+ *   ② script 注入 `import labAsset_<nodeId> from '../resources/images/<fileName>'`
+ *   ③ 同名文件收敛：多节点引用同一文件只保留首个命中资产的 import（`_consumed` 标记
+ *      防后续通道重复消费），其余资产不再生成 import（模板侧本就只有一个静态 src 点）。
+ * 统计：每重写一处 src 计 mounted +=1，归集 stats.staticSrcRewritten。
+ */
+function rewriteStaticTemplateSrc(
+  parsed: Array<{
+    path: string;
+    content: string;
+    imports: Set<string>;
+    svgEdits: Insertion[];
+    consumed: Set<string>;
+  }>,
+  byRef: Map<string, FigmaAssetTruth>,
+  stats: AssetMountStats,
+): void {
+  // fileName → 首个命中资产（同文件收敛单一 import 源）
+  const byFileName = new Map<string, FigmaAssetTruth>();
+  for (const a of byRef.values()) {
+    if (a.fileName && !byFileName.has(a.fileName)) byFileName.set(a.fileName, a);
+  }
+  // 🔴 与产物既有 import 对账（bdfba71d 第二轮实锤）：上一轮（AI 路径）残留的
+  //   `import labAsset_x from '.../<fileName>'` 原样留在产物里，本轮若不感知就会
+  //   对同一文件再注入一条 import ⇒ `Identifier has already been declared`（SFC
+  //   校验告警、编译失败）。对账口径：产物中「from 路径含该 fileName」的既有
+  //   import 变量名 → 该文件视为已声明（canonical 名取既有变量，保持产物自洽）；
+  //   模板 :src 绑定一律指向 canonical 名。
+  const existingImportRe =
+    /import\s+(labAsset_\d+_\d+)\s+from\s+['"][^'"]*\/([^'"/]+)['"]/g;
+  const declaredByFile = new Map<string, string>(); // fileName → canonical varName
+  for (const pf of parsed) {
+    let dm: RegExpExecArray | null;
+    existingImportRe.lastIndex = 0;
+    while ((dm = existingImportRe.exec(pf.content)) !== null) {
+      const fn = dm[2];
+      if (!declaredByFile.has(fn)) declaredByFile.set(fn, dm[1]);
+    }
+  }
+  const srcRe = /\ssrc="(\.\.?\/resources\/images\/([^"]+))"/g;
+  // 🔴 2026-11-06 67cd38d8 实锤：`:src="record.icon || '../resources/images/x.png'"`
+  //   ——表达式内相对路径字面量（fallback 形态）。与静态 src= 同理不经任何重写管道
+  //   ⇒ 预览 404。确定性锚同样是「路径即文件名」：抽字面量为 labAsset import，
+  //   表达式改 `record.icon || labAsset_x`（record.icon 有值时用值，空时用真值图）。
+  const exprLitRe =
+    /(\|\|\s*)(['"])(\.\.?\/resources\/images\/([^'"]+))\2/g;
+
+  for (const pf of parsed) {
+    const edits: Insertion[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = srcRe.exec(pf.content)) !== null) {
+      const fileName = m[2];
+      // canonical 变量名：优先产物既有声明（零新增 import）；否则按本轮资产造名
+      const canonical = declaredByFile.get(fileName);
+      const asset = byFileName.get(fileName);
+      let varName: string;
+      if (canonical) {
+        varName = canonical;
+        // 🔴 资产本体也标 _consumed（空变量/字段通道按资产对象过滤），pf.consumed
+        //   只是本文件坐标记账——两个维度都要堵，否则空变量通道照样 zip 绑定
+        //   同一资产并注入第二条 import（第二轮真机实锤 declared twice）。
+        if (asset) (asset as any)._consumed = true;
+      } else {
+        if (!asset || !asset.nodeId) continue;
+        if (pf.consumed.has(`nid:${asset.nodeId}`)) continue;
+        varName = assetVarName(asset.nodeId);
+        const depth = importDepthFor(pf.path);
+        pf.imports.add(
+          `import ${varName} from '${depth}resources/images/${fileName}'`,
+        );
+        pf.consumed.add(`nid:${asset.nodeId}`);
+        (asset as any)._consumed = true;
+      }
+      // src 属性 → :src 绑定（整段替换，含前导空格原样保留）
+      edits.push({
+        pos: m.index,
+        end: m.index + m[0].length,
+        text: ` :src="${varName}"`,
+      });
+      stats.mounted += 1;
+      stats.staticSrcRewritten = (stats.staticSrcRewritten ?? 0) + 1;
+    }
+
+    // 🔴 67cd38d8 形态：`:src="<expr> || '../resources/images/x.png'"` 表达式内
+    //   fallback 字面量。抽成 labAsset import，表达式改 `<expr> || labAsset_x`。
+    //   （对账纪律与静态 src 相同：产物已有同文件 import ⇒ 复用 canonical 名零新增。）
+    while ((m = exprLitRe.exec(pf.content)) !== null) {
+      const fileName = m[4];
+      const canonical = declaredByFile.get(fileName);
+      const asset = byFileName.get(fileName);
+      let varName: string;
+      if (canonical) {
+        varName = canonical;
+        if (asset) (asset as any)._consumed = true;
+      } else {
+        if (!asset || !asset.nodeId) continue;
+        if (pf.consumed.has(`nid:${asset.nodeId}`)) continue;
+        varName = assetVarName(asset.nodeId);
+        const depth = importDepthFor(pf.path);
+        pf.imports.add(
+          `import ${varName} from '${depth}resources/images/${fileName}'`,
+        );
+        pf.consumed.add(`nid:${asset.nodeId}`);
+        (asset as any)._consumed = true;
+      }
+      // `<expr> || '相对路径'` → `<expr> || labAsset_x`（整段替换引号字面量）
+      edits.push({
+        pos: m.index,
+        end: m.index + m[0].length,
+        text: `${m[1]}${varName}`,
+      });
+      stats.mounted += 1;
+      stats.staticSrcRewritten = (stats.staticSrcRewritten ?? 0) + 1;
+    }
+    if (edits.length > 0) pf.svgEdits.push(...edits);
+  }
+}
 
 /**
  * bg 文件名核心段提取（单一来源）：
@@ -2066,6 +2399,158 @@ function injectImgSize(
   return true;
 }
 
+/**
+ * tx 通道：img **专用包裹层**的宽高按 Figma 容器真值改写（2026-11-06）。
+ *
+ * 真机 `mc-lab-1793898003372-63cc238e`：Figma `img 98×98`，LLM 产物写成
+ * `.c-equipment-detail-thumb { width:64px;height:64px;overflow:hidden }` + `:100%`
+ * 收不住 98px 的图 ⇒ 缩略图被裁切放大。只改 img 自己的尺寸（旧 `injectImgSize`）
+ * 解释不了容器，必须动容器。
+ *
+ * 🔴 授权只看 Figma 内部事实（两条同时成立才动手），不看产物 CSS 数值：
+ *   ① `containerLevel=true` —— 图 bbox ≈ 父容器 bbox（±1px）⇒ Figma 里容器紧贴图片、
+ *      没有内边距，容器尺寸**就是** 图尺寸；图 20×20 装在 24×24 的内边距容器里则
+ *      containerLevel=false，天然被排除。
+ *   ② 产物侧该 img 的父元素**只有它这一个元素子节点** ⇒ 这个 div 是给这张图的专用
+ *      壳（尺寸可以照搬），而不是顺带包着别的兄弟元素的共享行/列（照搬会毁布局）。
+ *
+ * 落点选**内联 style**（不用类规则）：类规则同时存在于 `package/index.vue`、
+ * `common.less`、`index.css` 三处，本阶段只拿到 SFC，改一处会被另一处覆盖；
+ * 内联优先级确定。与文本真值（`backfillScriptOptionTruth`）同一做法。
+ */
+function injectWrapperBox(
+  pf: any,
+  tagRe: RegExp,
+  asset: FigmaAssetTruth,
+  stats: AssetMountStats,
+): boolean {
+  const w = asset.width;
+  const h = asset.height;
+  if (!w || !h) return false;
+  // ① Figma 侧事实：容器与图同尺寸（紧贴、无内边距）
+  if (asset.containerLevel !== true) return false;
+  const m = tagRe.exec(pf.content);
+  if (!m) return false;
+  // ② 产物侧事实：专用包裹层（唯一元素子节点就是这张图）
+  const { nodes } = parseTemplateTree(pf.content);
+  const imgNode = nodes.find((n) => n.tag === 'img' && n.start === m.index);
+  const wrap = imgNode?.parent;
+  if (!imgNode || !wrap || wrap.tag === '#root') return false;
+  if (nodes.filter((n) => n.parent === wrap).length !== 1) return false;
+
+  const openTag = pf.content.slice(wrap.start, wrap.afterOpen);
+  const styleM = /style\s*=\s*"([^"]*)"/.exec(openTag);
+  const decls = `width:${Math.round(w)}px;height:${Math.round(h)}px`;
+  if (styleM) {
+    const merged = upsertBoxDecls(styleM[1], Math.round(w), Math.round(h));
+    if (merged === styleM[1]) return false; // 已是目标态 → 不产编辑（重跑幂等）
+    const ins = wrap.start + styleM.index + styleM[0].length - 1 - styleM[1].length;
+    pf.svgEdits.push({ pos: ins, end: ins + styleM[1].length, text: merged });
+  } else {
+    // 插在开标签 `>` 之前
+    pf.svgEdits.push({ pos: wrap.afterOpen - 1, text: ` style="${decls}"` });
+  }
+  stats.containerSizeFixed += 1;
+  // ③ 装不下就抬高父容器：壳按真值变高了，父容器若还是旧的固定 height，
+  //    flex 居中会让壳上下溢出、压住下一个区块（真机：header 76px 里塞 98px 的图）。
+  ensureParentFits(pf, wrap, Math.round(h), stats);
+  return true;
+}
+
+/**
+ * 父容器固定高度装不下子元素真值 ⇒ 抬 `min-height`（2026-11-06）。
+ *
+ * 判据只有一条：**父容器自己的固定 height < 子元素真值高度** —— 这个固定高度可证明
+ * 是错的（它连自己的直接子元素都装不下），与产物 CSS 的其余数值无关。
+ * 只抬 `min-height`（不改 `height`）：min-height 在 CSS 里优先于 height，既能消除溢出，
+ * 又不动设计者可能另有用途的 height 键。
+ *
+ * 幂等：父容器内联样式已有 ≥ 真值的 min-height 时不产编辑。
+ */
+function ensureParentFits(
+  pf: any,
+  wrap: TplTreeNode,
+  h: number,
+  stats: AssetMountStats,
+): boolean {
+  const parent = wrap.parent;
+  if (!parent || parent.tag === '#root') return false;
+  const openTag = pf.content.slice(parent.start, parent.afterOpen);
+  const styleM = /style\s*=\s*"([^"]*)"/.exec(openTag);
+  const fixed = fixedPxOf(pf, parent, 'height', styleM?.[1]);
+  if (fixed == null || fixed >= h) return false; // 装得下 / 没有固定高度（auto 自适应）
+  const minH = /(?:^|;)\s*min-height\s*:\s*([\d.]+)px/i.exec(styleM?.[1] ?? '');
+  if (minH && parseFloat(minH[1]) >= h) return false; // 已抬过（幂等）
+
+  const decls = `min-height:${h}px`;
+  if (styleM) {
+    const merged = mergeStyleDecls(styleM[1], decls);
+    const ins = parent.start + styleM.index + styleM[0].length - 1 - styleM[1].length;
+    pf.svgEdits.push({ pos: ins, end: ins + styleM[1].length, text: merged });
+  } else {
+    pf.svgEdits.push({ pos: parent.afterOpen - 1, text: ` style="${decls}"` });
+  }
+  stats.parentBoxRelaxed += 1;
+  return true;
+}
+
+/** 元素自身的固定 px 高度：内联 style 优先，其次本文件里匹配其类名单类的规则 */
+function fixedPxOf(
+  pf: any,
+  node: TplTreeNode,
+  prop: 'height',
+  inlineCss?: string,
+): number | undefined {
+  const read = (css: string): number | undefined => {
+    const m = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)px`, 'i').exec(css);
+    return m ? parseFloat(m[1]) : undefined;
+  };
+  const fromInline = inlineCss ? read(inlineCss) : undefined;
+  if (fromInline != null) return fromInline;
+  const classes = [...node.attrs.matchAll(/class\s*=\s*"([^"]*)"/g)]
+    .flatMap((m) => m[1].split(/\s+/))
+    .filter(Boolean);
+  if (classes.length === 0) return undefined;
+  for (const rule of collectStyleRulesFromContent(pf.content)) {
+    if (!classes.some((c) => classMatchesSelector(rule.selNorm, c))) continue;
+    const v = read(pf.content.slice(rule.bodyStart, rule.bodyEnd));
+    if (v != null) return v;
+  }
+  return undefined;
+}
+
+/** style 属性值追加/覆盖声明（`;` 归一，保证重复执行不产生编辑） */
+function mergeStyleDecls(css: string, decls: string): string {
+  const parts = css.split(';').map((s) => s.trim()).filter(Boolean);
+  for (const d of decls.split(';').map((s) => s.trim()).filter(Boolean)) {
+    const name = d.split(':')[0].trim().toLowerCase();
+    const i = parts.findIndex((p) => p.split(':')[0].trim().toLowerCase() === name);
+    if (i >= 0) parts[i] = d;
+    else parts.push(d);
+  }
+  return parts.join(';');
+}
+
+/**
+ * 在 style 属性值里改宽高：已有且**数值相同**的原样保留（否则「98px」与「98px; 」
+ * 这类写法差异会让每次重跑都产生编辑，幂等判据失效）；其余声明一律不动。
+ */
+function upsertBoxDecls(css: string, w: number, h: number): string {
+  const setOne = (src: string, prop: 'width' | 'height', val: number): string => {
+    const rx = new RegExp(`(^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i');
+    const m = rx.exec(src);
+    if (m) {
+      const num = parseFloat(m[2]);
+      const isPx = /^\s*-?[\d.]+px\s*$/i.test(m[2]);
+      if (isPx && Math.round(num) === val) return src; // 已一致
+      return src.slice(0, m.index) + `${m[1]}${prop}:${val}px` + src.slice(m.index + m[0].length);
+    }
+    const body = src.replace(/;\s*$/, '');
+    return `${body}${body ? ';' : ''}${prop}:${val}px`;
+  };
+  return setOne(setOne(css, 'width', w), 'height', h);
+}
+
 // ───────────────────── svg 占位替换（数据驱动产物挂载） ─────────────────────
 
 const SVG_RX = /<svg[\s\S]*?<\/svg>/g;
@@ -2206,12 +2691,74 @@ function injectIconsIntoScriptArray(
  * - 静态 1:1：svg 块数 === 资产数且不受 v-for 管辖时按文档序 zip 直接替换。
  * 数量不匹配等一切不确定情形 ⇒ svgSkipped 保守跳过，零改动。
  */
+/**
+ * 资产视觉序（判据单一来源，2026-11-06 S1 抽取）：(y,x) 升序，缺坐标者沉底（保持传入序）。
+ * 🔴 不用 `(a.y ?? 0)`：x/y 全缺时全部塌 0 ⇒ 排序退化为稳定数组序——反哺条目一旦
+ *   缺坐标，盲 zip 会按「truth.assets 数组序」对位（cec84299 实锤：战略区拿到优质图标）。
+ *   「缺坐标沉底」让有坐标者始终可靠排前，缺者明确是未知而非 0。
+ */
+export function byVisualOrder<T extends { x?: number; y?: number }>(arr: T[]): T[] {
+  return [...arr].sort((a, b) => {
+    const ax = typeof a.x === 'number' && typeof a.y === 'number';
+    const bx = typeof b.x === 'number' && typeof b.y === 'number';
+    if (ax && bx) return a.y! - b.y! || a.x! - b.x!;
+    if (ax) return -1; // 有坐标在前
+    if (bx) return 1;
+    return 0; // 双缺：保持稳定（Array.prototype.sort V8 稳定）
+  });
+}
+
+// ───────────── S2 资产分类（单一来源，2026-11-06） ─────────────
+
+/** 资产消费类别（S2：替代散落各通道的文件名前缀过滤） */
+export type AssetClass = 'bg' | 'strip' | 'icon' | 'decor';
+
+/** bfac46ac 实锤阈值来源：image_313 底图 459×29（footer 宽），icon 40×40；>120px 宽即非图标（命名常量） */
+export const STRIP_MIN_WIDTH_PX = 120;
+
+/**
+ * 结构派生资产分类（S2 单函数，替代 4 处前缀过滤的散落口径）：
+ * - bg：导出器按容器底图语义命名（bg-，强证据）；
+ * - strip：非 icon/img 命名 + 宽 ≥ STRIP_MIN_WIDTH_PX 且明显扁/宽于高
+ *   （bfac46ac 实锤：459×29 走 icon 通道插成巨图炸 footer）；
+ * - icon：导出名 icon-/img-（既有导出器语义）；
+ * - decor：其余（g- 等，**既有决议只采集计数不消费**）。
+ * 🔴 判据顺序（三条真机证据裁决）：
+ *   ① 命名最强（导出器采集期已定的语义）：bg- ⇒ bg、icon-/img- ⇒ icon；
+ *   ② containerLevel（bbox≈父容器）**不足以**判 bg——mc-lab-1793898003372 实锤
+ *      img-1725（98×98≈卡容器）同时走 icon:'' 字段回填通道且 tx 壳改写生效，
+ *      按几何判 bg 会误分流（本函数第一版踩过，tx spec 阳性对照拦下）；
+ *   ③ strip 只对无 icon/img 命名的资产生效（icon- 大图不失 icon 资格）。
+ */
+export function classifyAsset(a: FigmaAssetTruth): AssetClass {
+  const fn = String(a.fileName ?? '');
+  if (/^bg-/.test(fn)) return 'bg';
+  if (/^(?:icon|img)-/.test(fn)) return 'icon';
+  const w = a.width ?? 0;
+  const h = a.height ?? 0;
+  if (w >= STRIP_MIN_WIDTH_PX && w > h * 2) return 'strip';
+  if (a.containerLevel === true) return 'bg';
+  return 'decor';
+}
+
+/** 通道守卫：背景通道消费 bg+strip（底图类）；icon/插入通道只消费 icon。decor 一律不消费（既有 g- 决议收编） */
+export function isBgClassAsset(a: FigmaAssetTruth): boolean {
+  const c = classifyAsset(a);
+  return c === 'bg' || c === 'strip';
+}
+export function isIconClassAsset(a: FigmaAssetTruth): boolean {
+  return classifyAsset(a) === 'icon';
+}
+
+/**
+ * 资产视觉序（判据单一来源，2026-11-06 S1 抽取）：(y,x) 升序，缺坐标者沉底（保持传入序）。
+ */
 function mountBySvgPlaceholder(
   parsed: any[],
   assets: FigmaAssetTruth[],
   stats: AssetMountStats,
 ): void {
-  const sorted = [...assets].sort((a, b) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0));
+  const sorted = byVisualOrder(assets);
   const blocks: SvgBlock[] = [];
   for (const pf of parsed) blocks.push(...collectSvgBlocks(pf));
   if (blocks.length === 0) {
@@ -2229,10 +2776,20 @@ function mountBySvgPlaceholder(
         // 用剩余资产——mc-lab-1793869911710：12 字段 + 2 变量共分 15 个下载图标
         fillEmptyIconFields(parsed, sorted, stats);
         replaceEmptyIconVars(parsed, sorted, stats);
+        // 第六形态（2026-11-06，mc-lab-1793905044222-10d48f4c）：空值对象属性
+        //   const statIcons={partner:''} + <img :src="statIcons.partner">；
+        //   必须排在字段/变量之后（icon 属性名让位 + _consumed 资产不复用）。
+        fillEmptyObjectProps(parsed, sorted, stats);
+        // 新元素插入（链尾）：仍零消费的资产（产物零引用、CSS 圆点假图标等）
+        //   按唯一文本锚落点受限插入——放链尾是为了让所有「有占位可换」的通道先走。
+        insertNewElementAssets(parsed, sorted, stats);
         if (
           stats.emptyIconVarsReplaced === 0 &&
-          stats.emptyIconFieldsReplaced === 0
+          stats.emptyIconFieldsReplaced === 0 &&
+          stats.emptyObjPropsReplaced === 0 &&
+          stats.newElementInserted === 0
         ) {
+          // 历史口径：全部兜底空转才计 svgSkipped；部分挂载时欠计为已知口径（不追溯）
           stats.svgSkipped += sorted.length;
         }
       }
@@ -2435,8 +2992,15 @@ const EMPTY_ICON_VAR_RX = /const\s+(\w+)\s*=\s*(ref\(\s*)?''(\s*\))?/g;
 /**
  * 空 icon 变量回填：规则 0.6 要求 LLM 留空待回填（mc-lab-1793869928144 实锤：
  * `const barIcon = ref('')`；mc-lab-1793869911710 变体 `const shieldIcon = ''`）。
- * 契约：模板中实际被 :src 引用的空变量（声明序）↔ fileName 以 icon- 开头的资产
- * （(y,x) 序）zip，数量不等保守放弃；bg- 与 g- 前缀等非 icon 资产不参与（无消费路径）。
+ * 契约：模板中实际被 :src 引用的空变量（声明序）↔ **元素级图片**资产（(y,x) 序）zip，
+ * 数量不等保守放弃；bg- 前缀（容器级底图）不参与（它有独立通道）。
+ *
+ * 🔴 2026-11-06 修：资产类从「只认 icon-」放宽为「icon- / img- 两类」。
+ *   导出器（`figma-image-exporter.js`）按 Figma 图层名语义分流前缀，普通图片层
+ *   一律命名 `img-<id>.png`；而本通道只收 `icon-` ⇒ `img-` 资产**全链路无消费方**
+ *   （bg- 通道明确排除、svg 占位通道需要模板里有 <svg>）。
+ *   真机（mc-lab-1793898003372-63cc238e）：设备缩略图 36:1729 下载成 img-1725.png，
+ *   产物 `<img :src="deviceInfo.icon">` 的 icon 恒为 '' ⇒ 破图占位框。
  */
 function replaceEmptyIconVars(
   parsed: any[],
@@ -2444,7 +3008,7 @@ function replaceEmptyIconVars(
   stats: AssetMountStats,
 ): void {
   // 字段路径已语义消费的资产不再复用（先字段后变量，见调用链注释）
-  const iconAssets = sorted.filter((a) => /^icon-/.test(a.fileName ?? '') && !(a as any)._consumed);
+  const iconAssets = sorted.filter((a) => isIconClassAsset(a) && !(a as any)._consumed);
   const vars: Array<{
     pf: any;
     start: number;
@@ -2478,6 +3042,7 @@ function replaceEmptyIconVars(
   if (vars.length === 0 || iconAssets.length === 0) return;
   const used = new Set<string>();
   const bind = (v: (typeof vars)[number], a: FigmaAssetTruth): void => {
+    (a as any)._consumed = true; // 与字段通道一致：先跑的通道消费资产，后续通道（对象属性/新元素）不复用
     const varName = assetVarName(a.nodeId);
     v.pf.imports.add(
       `import ${varName} from '${importDepthFor(v.pf.path)}resources/images/${a.fileName}'`,
@@ -2490,7 +3055,10 @@ function replaceEmptyIconVars(
     });
     // 🔴 尺寸还原（2026-11-05）：变量↔img 一一对应，直接映射注入真值尺寸
     if (v.tagStart !== undefined && v.tagText && a.width && a.height) {
-      injectImgSize(v.pf, new RegExp(`<img[^>]*:src="${v.name}"[^>]*>`), { w: a.width, h: a.height }, stats);
+      const re = new RegExp(`<img[^>]*:src="${v.name}"[^>]*>`);
+      injectImgSize(v.pf, re, { w: a.width, h: a.height }, stats);
+      // tx 通道（2026-11-06）：图与 Figma 容器同尺寸时，专用包裹层也得是那个尺寸
+      injectWrapperBox(v.pf, re, a, stats);
     }
     used.add(a.nodeId);
     stats.emptyIconVarsReplaced += 1;
@@ -2530,19 +3098,36 @@ const NAME_FIELD_RX = /\bname\s*:\s*'([^']*)'/;
  * 下载 icon 资产数常多于字段数（15+ vs 12），几何 zip 不可行 ⇒ 语义锚定：
  * 对象内 name 字段 ↔ 资产 siblingTexts（service 反哺时经 buildNodeTextContext 填充的
  * 图标近邻文本）精确匹配；匹配不上的字段保守留空。
+ *
+ * 🔴 资产类同 `replaceEmptyIconVars`：`icon-` 与 `img-` 都是「元素级图片」，产物侧
+ *   消费方式一样（`<img :src>` / `icon:` 字段），只认 `icon-` 会让 `img-` 静默漏挂。
+ *   无近邻文本时走「数量相等按序 zip」兜底（本单 1 资产 ↔ 1 字段）。
+ *
+ * 🔴🔴 zip 兜底的**准入门槛**：本文件语义锚定**一条都没成**。
+ *   语义通道局部可用（有字段锚上了）说明「锚不上的字段是真的对不上」——Figma 里
+ *   常有多余装饰图标，按序 zip 会配错图，**配错图比留空更糟**（留空至少布局正确）。
+ *   语义通道整体不可用（资产完全没带近邻文本，如 63cc238e 单对象）时，位置配对是
+ *   唯一信号，且 1:1 数量相等无歧义，才允许 zip。
  */
+/**
+ * 资产↔文本键语义匹配（判据单一来源，2026-11-06 抽取）：
+ * 资产近邻文本（nearbyTexts 优先，兼容 siblingTexts）与产物侧语义键（img alt / 对象 name）
+ * 双向包含即命中。空 icon 字段 / 空变量 / 空对象属性三通道共用，禁止再复制内联版。
+ */
+function assetSemMatch(a: FigmaAssetTruth, key: string): boolean {
+  return (a.nearbyTexts ?? a.siblingTexts ?? []).some((t) => {
+    const nt = normalizeAnchorText(t);
+    return nt === key || (nt.length > 1 && nt.includes(key)) || (key.length > 1 && key.includes(nt));
+  });
+}
+
 function fillEmptyIconFields(
   parsed: any[],
   sorted: FigmaAssetTruth[],
   stats: AssetMountStats,
 ): void {
-  const iconAssets = sorted.filter((a) => /^icon-/.test(a.fileName ?? ''));
+  const iconAssets = sorted.filter((a) => isIconClassAsset(a));
   if (iconAssets.length === 0) return;
-  const semMatch = (a: FigmaAssetTruth, key: string): boolean =>
-    (a.nearbyTexts ?? a.siblingTexts ?? []).some((t) => {
-      const nt = normalizeAnchorText(t);
-      return nt === key || (nt.length > 1 && nt.includes(key)) || (key.length > 1 && key.includes(nt));
-    });
   // 绑定组：按「消费标签变量」分组——同一 pf 内不同变量（statLeft.item…）各有各的
   // 共享标签，混组会让 unanimousSize 把 A 组尺寸错标到 B 组标签上
   // （🔴 mc-lab-1793873410979 实锤：stat 卡标签被 12 卡尺寸错标、12 卡标签反而不上尺寸）
@@ -2594,6 +3179,8 @@ function fillEmptyIconFields(
     EMPTY_ICON_FIELD_OBJ_RX.lastIndex = 0;
     let m: RegExpExecArray | null;
     const pendingAlt: Array<{ objM: RegExpExecArray; ownVar: string }> = [];
+    /** 有 name 但语义锚定失败的空字段（留给第三轮「数量相等 zip」兜底） */
+    const unboundFieldNodes: Array<{ objM: RegExpExecArray; ownVar: string | null }> = [];
     while ((m = EMPTY_ICON_FIELD_OBJ_RX.exec(pf.content)) !== null) {
       const objText = m[0];
       // 对象自身变量名（顶层单对象 `const statLeft = {icon:''}`；数组元素无）
@@ -2605,7 +3192,7 @@ function fillEmptyIconFields(
       let bound = false;
       if (key.length >= 2) {
         // 第一轮：对象 name 语义锚定（优先 nearbyTexts，兼容 siblingTexts）
-        const a = iconAssets.find((x) => !(x as any)._consumed && semMatch(x, key));
+        const a = iconAssets.find((x) => !(x as any)._consumed && assetSemMatch(x, key));
         if (a && a.fileName) {
           // 组标签：有自身变量用自身变量；数组元素 tagVar 留 null，注入期再解析
           const tagVar = ownVar && tplTagVars.includes(ownVar) ? ownVar : null;
@@ -2616,6 +3203,8 @@ function fillEmptyIconFields(
         // 第二轮素材收集：无 name 的顶层单对象（statLeft={icon:''}）→ 走 img alt 锚定
         // （🔴 mc-lab-1793873410979 实锤：alt="隧道设备" ↔ nearbyTexts 可锚但无通道）
         pendingAlt.push({ objM: m, ownVar });
+      } else if (!bound && nameM) {
+        unboundFieldNodes.push({ objM: m, ownVar });
       }
     }
     // 第二轮：img alt ↔ 资产 nearbyTexts 语义锚定，唯一命中才绑（禁止瞎猜）
@@ -2625,9 +3214,27 @@ function fillEmptyIconFields(
       const alt = /alt="([^"]*)"/.exec(tagM[0])?.[1] ?? '';
       const altKey = normalizeAnchorText(alt);
       if (altKey.length < 2) continue;
-      const cands = iconAssets.filter((x) => !(x as any)._consumed && semMatch(x, altKey));
+      const cands = iconAssets.filter((x) => !(x as any)._consumed && assetSemMatch(x, altKey));
       if (cands.length !== 1) continue; // 0 或多候选 = 歧义，保守放弃
       bindField(pf, pfIdx, p.objM, cands[0], p.ownVar, p.ownVar);
+    }
+
+    // 第三轮：**数量相等才 zip**（与 `replaceEmptyIconVars` 同一条「禁止瞎猜」纪律）。
+    // 真机（mc-lab-1793898003372-63cc238e）：单对象 `{ name:'GD-Robot-04', …, icon:'' }`
+    // + 单张 `img-1725.png`，资产没有任何近邻文本（siblingTexts=[]）⇒ 第一轮语义锚定
+    // 结构性不可能命中，第二轮又被「有 name」排除 ⇒ 空字段永远填不上 ⇒ 破图占位框。
+    // 1 个空字段 ↔ 1 张图不存在歧义；数量不等一律不动。
+    // 🔴 且必须「语义锚定零命中」才准入：已锚上过 ⇒ 剩余是真的对不上，zip 会配错图。
+    const semanticBound = [...groups.values()].reduce((n, g) => n + g.bound.length, 0);
+    if (unboundFieldNodes.length > 0 && semanticBound === 0) {
+      const restAssets = iconAssets.filter((x) => !(x as any)._consumed);
+      if (unboundFieldNodes.length === restAssets.length) {
+        for (let i = 0; i < unboundFieldNodes.length; i += 1) {
+          const { objM, ownVar } = unboundFieldNodes[i];
+          const tagVar = ownVar && tplTagVars.includes(ownVar) ? ownVar : null;
+          bindField(pf, pfIdx, objM, restAssets[i], ownVar ?? 'arr', tagVar);
+        }
+      }
     }
   }
   // 🔴 尺寸还原（2026-11-05）：按绑定组各自的标签变量精确注入，
@@ -2648,7 +3255,222 @@ function fillEmptyIconFields(
       if (distinct.length !== 1) continue; // 0 或多候选 = 歧义，保守放弃
       tagVar = distinct[0];
     }
-    injectImgSize(g.pf, new RegExp(`<img[^>]*:src="${tagVar}\\.icon"[^>]*>`), sz, stats);
+    const imgRe = new RegExp(`<img[^>]*:src="${tagVar}\\.icon"[^>]*>`);
+    injectImgSize(g.pf, imgRe, sz, stats);
+    // 🔴 tx 通道（2026-11-06）：图与 Figma 容器同尺寸时，产物里这张图的**专用壳**也必须
+    //   是那个尺寸——否则壳（LLM 写的 64×64）+ `overflow:hidden` 会把 98px 的图裁切。
+    //   🔴 放在这里而不是 bindField：`const deviceInfo = ref({icon:''})` 形态下 ownVar 取不到
+    //   （`(\w+)\s*=\s*$` 撞上 `ref(`），bind 期 tagVar=null ⇒ 通道静默失效（真机实锤）。
+    //   本处 tagVar 已确定，且这里一个组只改一次（不会对同一壳重复注入 style）。
+    if (g.bound.every((a) => a.containerLevel === true && a.width && a.height)) {
+      injectWrapperBox(g.pf, imgRe, g.bound[0], stats);
+    }
+  }
+}
+
+// ───────────── 空 icon 对象属性回填（第六形态，2026-11-06） ─────────────
+
+/**
+ * 形态：`const statIcons = { partner: '', device: '' }` + 模板 `<img :src="statIcons.partner" alt="合作厂商">`。
+ * 真机实锤 mc-lab-1793905044222-10d48f4c：规则 0.6 的「留空待回填」被 LLM 写成**空值对象属性**
+ * （而非空变量/`icon:''` 字段）⇒ 兜底链四形态全不命中 ⇒ svgSkipped、破图。
+ *
+ * 准入判据（纯结构，不认名字）：
+ * - flat 对象字面量（嵌套 `{` 一律保守跳过——数组对象是字段通道的领地）；
+ * - 属性值为**空字符串字面量**；
+ * - 该属性被模板 `:src="<objVar>.<prop>"` 实际引用——「被 :src 引用」即 icon 角色证明，
+ *   普通空串占位（如备注字段）不会被误绑；
+ * - 属性名 `icon` 让位：`fillEmptyIconFields` 先跑且坐标同源（都基于原 content），
+ *   同一 `icon: ''` 命中两通道会双重改写产物。
+ *
+ * 锚定（与空变量通道同构，资产消费纪律 `_consumed` 互通）：
+ * 1) img alt ↔ 资产 nearbyTexts/siblingTexts 语义锚（assetSemMatch，唯一命中才绑）；
+ * 2) 剩余属性 ↔ 剩余资产**数量相等才 zip**（属性声明序 ↔ 资产传入序），不等保守放弃。
+ */
+function fillEmptyObjectProps(
+  parsed: any[],
+  sorted: FigmaAssetTruth[],
+  stats: AssetMountStats,
+): void {
+  const iconAssets = sorted.filter((a) => isIconClassAsset(a) && !(a as any)._consumed);
+  if (iconAssets.length === 0) return;
+  // objVar → {prop → {start,end,alt,pf}}：从 :src="objVar.prop" 反查 img alt 语义键
+  const propsByObj = new Map<string, Map<string, { start: number; end: number; pf: any; alt?: string }>>();
+  for (const pf of parsed) {
+    // flat 对象字面量：起止花括号之间无嵌套 { }，且含至少一个空串属性
+    const objRx = /\{[^{}]*\}/g;
+    let om: RegExpExecArray | null;
+    while ((om = objRx.exec(pf.content)) !== null) {
+      const objText = om[0];
+      const before = pf.content.slice(Math.max(0, om.index - 120), om.index);
+      // 🔴 多行形态（10d48f4c 实锤）：`const statIcons = {\n  partner: '',`——
+      //   `(\w+)\s*=\s*$` 撞 `\n` 失败 ⇒ 必须允许 `=` 与 `{` 之间跨换行空白。
+      const ownVarM = /(\w+)\s*=\s*$/.exec(before) ?? /(\w+)\s*=\s*\n\s*$/.exec(before);
+      if (!ownVarM) continue; // 数组元素对象（字段通道领地）
+      const objVar = ownVarM[1];
+      const emptyRx = /(\w+)\s*:\s*''/g;
+      let em: RegExpExecArray | null;
+      while ((em = emptyRx.exec(objText)) !== null) {
+        const prop = em[1];
+        if (prop === 'icon') continue; // 字段通道先跑，让位防双改
+        const tagM = new RegExp(`<img[^>]*:src="${objVar}\\.${prop}"[^>]*>`).exec(pf.content);
+        if (!tagM) continue; // 未被 :src 引用 ⇒ 无 icon 角色证据
+        const alt = /alt="([^"]*)"/.exec(tagM[0])?.[1];
+        const absStart = om.index + em.index;
+        const map = propsByObj.get(objVar) ?? new Map();
+        map.set(prop, { start: absStart, end: absStart + em[0].length, pf, alt });
+        propsByObj.set(objVar, map);
+      }
+    }
+  }
+  // 展平为有序 prop 列表（按 objVar 出现序；Map 保持插入序）
+  const pending: Array<{ objVar: string; prop: string; start: number; end: number; pf: any; alt?: string }> = [];
+  for (const [objVar, props] of propsByObj) {
+    for (const [prop, meta] of props) {
+      pending.push({ objVar, prop, ...meta });
+    }
+  }
+  if (pending.length === 0) return;
+  const bindProp = (p: (typeof pending)[number], a: FigmaAssetTruth): void => {
+    (a as any)._consumed = true;
+    const pf = p.pf;
+    const varName = assetVarName(a.nodeId);
+    pf.imports.add(
+      `import ${varName} from '${importDepthFor(pf.path)}resources/images/${a.fileName}'`,
+    );
+    pf.svgEdits.push({ pos: p.start, end: p.end, text: `${p.prop}: ${varName}` });
+    // 尺寸还原：与空变量通道同构，限定 :src="objVar.prop" 标签
+    if (a.width && a.height) {
+      const re = new RegExp(`<img[^>]*:src="${p.objVar}\\.${p.prop}"[^>]*>`);
+      injectImgSize(pf, re, { w: a.width, h: a.height }, stats);
+      injectWrapperBox(pf, re, a, stats);
+    }
+    stats.emptyObjPropsReplaced += 1;
+    stats.mounted += 1;
+  };
+  // 第一轮：alt 语义锚定（唯一命中才绑）
+  const unbound: typeof pending = [];
+  for (const p of pending) {
+    const key = p.alt ? normalizeAnchorText(p.alt) : '';
+    const cands =
+      key.length >= 2
+        ? iconAssets.filter((x) => !(x as any)._consumed && assetSemMatch(x, key))
+        : [];
+    if (cands.length === 1) bindProp(p, cands[0]);
+    else unbound.push(p);
+  }
+  // 第二轮：剩余属性 ↔ 候选资产数量相等才 zip（禁止瞎猜），不等保守放弃。
+  // 🔴 zip 池收敛（10d48f4c 实锤）：同文件常混多路资产（如 3 个分组 icon 产物零引用），
+  //   全量 rest 会稀释数量相等判据（2 属性 vs 5 资产 ⇒ 误放弃）；而 assetSemMatch 的
+  //   双向包含又太宽（'战略合作厂商' ⊃ '合作厂商' ⇒ 分组 icon 混进池）。故：
+  //   - 有 alt 键 ⇒ 池 = 「nearbyTexts/siblingTexts 归一化精确等于某键」的资产
+  //     （字面同值才进池，分组长文本资产出局，留给后续通道）；
+  //   - 无任何 alt 键 ⇒ 池 = 全量未消费资产（纯位置 zip，与空变量通道第二轮同款纪律，
+  //     仅在数量严格相等时兜底）。
+  const unboundKeys = new Set(
+    unbound
+      .map((p) => (p.alt ? normalizeAnchorText(p.alt) : ''))
+      .filter((k) => k.length >= 2),
+  );
+  const unconsumed = iconAssets.filter((x) => !(x as any)._consumed);
+  const zipPool =
+    unboundKeys.size > 0
+      ? unconsumed.filter((x) =>
+          [...(x.nearbyTexts ?? []), ...(x.siblingTexts ?? [])].some((t) =>
+            unboundKeys.has(normalizeAnchorText(t)),
+          ),
+        )
+      : unconsumed;
+  if (unbound.length > 0 && unbound.length === zipPool.length) {
+    for (let i = 0; i < unbound.length; i++) bindProp(unbound[i], zipPool[i]);
+  }
+}
+
+// ───────────────────── 新元素插入通道（2026-11-06） ─────────────────────
+
+/**
+ * 产物**零引用**资产的受限落地（plan 层 needs-new-element 的挂载侧兑现）：
+ * 真机 mc-lab-1793905044222-10d48f4c：3 个分组标题 icon 在产物零引用，标题旁是
+ * LLM 违规用 CSS 圆点拼的假图标（规则 0.6 禁止 CSS 拼图形）⇒ 四形态兜底全部无占位可换。
+ *
+ * 准入：fileName 存在、非 bg-、未被任何通道消费（_consumed）。
+ * 锚定：nearbyTexts ∪ siblingTexts（归一化 ≥2 字）在模板叶子**唯一精确命中**
+ *   （0=无锚 → newElSkipNoAnchor；>1=歧义 → newElSkipAmbiguous；均保守不动）。
+ * 插入：锚点开标签前插 `<img class="lab-asset-img" :src=… style=width/height/>`；
+ *   🔴 防双图标：锚点紧邻前方若为**空元素**（无文本内容的占位 span——结构性判据，
+ *   inner.trim()===''，不认名字），则**替换**它（正是 CSS 圆点假图标位）；img 标签除外
+ *   （可能是合法已渲染图）。空元素识别窗口 NEW_EL_LOOKBACK（命名常量，非魔法数）。
+ */
+const NEW_EL_LOOKBACK = 240;
+
+function insertNewElementAssets(
+  parsed: any[],
+  sorted: FigmaAssetTruth[],
+  stats: AssetMountStats,
+): void {
+  // 🔴 S2：只消费 icon 类（bg/strip 有独立通道、decor 不消费——g- 误消费 24468462 实锤）
+  const cands = sorted.filter((a) => a.fileName && isIconClassAsset(a) && !(a as any)._consumed);
+  if (cands.length === 0) return;
+  for (const a of cands) {
+    const keys = new Set(
+      [...(a.nearbyTexts ?? []), ...(a.siblingTexts ?? [])]
+        .map((t) => normalizeAnchorText(t))
+        .filter((k) => k.length >= 2),
+    );
+    if (keys.size === 0) {
+      stats.newElSkipNoAnchor += 1;
+      continue;
+    }
+    // 唯一精确命中（跨全文件；与主循环 consumed 纪律一致，防与文本锚点通道抢占）
+    let hit: { pfIdx: number; leaf: LeafElement } | undefined;
+    let hitCount = 0;
+    for (let i = 0; i < parsed.length; i++) {
+      for (const l of parsed[i].leaves) {
+        if (keys.has(normalizeAnchorText(l.inner)) && !parsed[i].consumed.has(`${i}:${l.openStart}`)) {
+          hitCount += 1;
+          if (!hit) hit = { pfIdx: i, leaf: l };
+        }
+      }
+    }
+    if (hitCount !== 1 || !hit) {
+      // 0 = 无锚 → newElSkipNoAnchor；>1 = 歧义 → newElSkipAmbiguous（均保守不动）
+      if (hitCount === 0) stats.newElSkipNoAnchor += 1;
+      else stats.newElSkipAmbiguous += 1;
+      continue;
+    }
+    const pf = parsed[hit.pfIdx];
+    const leaf = hit.leaf;
+    // 空元素探测：锚点开标签前 NEW_EL_LOOKBACK 窗口内找紧邻空元素
+    //   （自闭合 <x/> 或 <x …></x>——CSS 圆点假图标正是这种无文本占位 span；
+    //    img 除外：可能是合法已渲染图）
+    const tpl = pf.content;
+    const absOpen = pf.range.start + leaf.openStart;
+    const windowStart = Math.max(tpl.lastIndexOf('>', Math.max(0, absOpen - NEW_EL_LOOKBACK)) + 1, 0);
+    const before = tpl.slice(windowStart, absOpen);
+    const emptyElM =
+      /<([a-zA-Z][\w-]*)((?:\s[^<>]*)?)\/>\s*$/.exec(before) ??
+      /<([a-zA-Z][\w-]*)((?:\s[^<>]*)?)><\/\1>\s*$/.exec(before);
+    let insertPos = absOpen;
+    let replaceEnd: number | undefined = undefined;
+    if (emptyElM && emptyElM[1].toLowerCase() !== 'img') {
+      insertPos = absOpen - emptyElM[0].length;
+      replaceEnd = absOpen;
+    }
+    const varName = assetVarName(a.nodeId);
+    pf.imports.add(
+      `import ${varName} from '${importDepthFor(pf.path)}resources/images/${a.fileName}'`,
+    );
+    const sizeStyle =
+      a.width && a.height ? ` style="width:${a.width}px;height:${a.height}px"` : '';
+    pf.insertions.push({
+      pos: insertPos,
+      ...(replaceEnd !== undefined ? { end: replaceEnd } : {}),
+      text: `<img class="lab-asset-img" :src="${varName}"${sizeStyle} />`,
+    });
+    pf.consumed.add(`${hit.pfIdx}:${leaf.openStart}`);
+    (a as any)._consumed = true;
+    stats.newElementInserted += 1;
+    stats.mounted += 1;
   }
 }
 

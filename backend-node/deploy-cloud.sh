@@ -84,7 +84,11 @@ NODE_VERSION="22"
 # 改为同机内网 portlet 地址（实测 2.4ms），彻底不依赖公网 egress；配合 auth.service.ts 的 axios proxy:false 双保险。
 PORTAL_BASE_URL="http://192.168.112.1:39680/portlet/api"
 # 真实预览页基准地址（前端真实根，截图器探测用）
-MC_PREVIEW_BASE_URL="https://go.microvideo.cn/mvgo"
+# 2026-11-06 修正：原写公网域名 https://go.microvideo.cn/mvgo，但截图器在 ECS 本机跑，
+#   服务器内访问公网域名经 NAT 回环实测 curl 000（不可达）→ 探测永远失败 → RUNTIME-001，
+#   近 20 个 completed 任务 0 张输出截图。改同机 nginx 回环地址（实测 /mvgo/ 与
+#   /mvgo/preview/* 均 200），与上方 PORTAL_BASE_URL 同一先例：截图器只在本机跑，无需公网可达。
+MC_PREVIEW_BASE_URL="http://127.0.0.1/mvgo"
 # 前端 workspace 绝对路径（生产必填）
 FRONTEND_WORKSPACE="/home/mvbt/mvgo/frontend/workspace"
 # Java 后端地址（操作日志 fire-and-forget 上报目标）

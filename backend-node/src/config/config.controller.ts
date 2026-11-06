@@ -368,7 +368,20 @@ export class AiConfigController {
     );
   }
 
+  /**
+   * 🛡️ 2026-11-06 补守卫（test-text / test-vision / test-figma / test-apifox / test-gitlab）
+   *   这五个原先零守卫，理由是「纯转发、不读库里的凭证、不需要 userId」——
+   *   但它们会把 **调用方传入的 baseURL / token** 原样发出去：
+   *     · test-text / test-vision：`baseURL` 完全可控 ⇒ 匿名 SSRF 探测口
+   *       （服务器替你向任意 URL 发 POST，并把报错/延迟回显）
+   *     · test-figma / test-apifox / test-gitlab：匿名可用的第三方 Token 校验器
+   *       （可被拿来批量验证盗号凭证是否有效，即「凭证撞库代理」）
+   *   同文件的 test-model-capability / test-provider 早就带守卫，
+   *   这里不是「设计如此」而是漏挂。调用方只有 ConfigPanel.vue → runTest →
+   *   http.post（带 Token header），补 SessionGuard 不影响任何已登录场景。
+   */
   @Post('test-text')
+  @UseGuards(SessionGuard)
   async testText(@Body() body: Record<string, any>) {
     const { apiKey, baseURL, model, temperature, providerType } = body || {};
     if (!apiKey || !baseURL || !model) {
@@ -381,6 +394,7 @@ export class AiConfigController {
   }
 
   @Post('test-vision')
+  @UseGuards(SessionGuard)
   async testVision(@Body() body: Record<string, any>) {
     const { apiKey, baseURL, model, temperature, providerType } = body || {};
     if (!apiKey || !baseURL || !model) {
@@ -453,6 +467,7 @@ export class AiConfigController {
   }
 
   @Post('test-figma')
+  @UseGuards(SessionGuard)
   async testFigma(@Body() body: Record<string, any>) {
     const { token } = body || {};
     if (!token) {
@@ -465,6 +480,7 @@ export class AiConfigController {
   }
 
   @Post('test-apifox')
+  @UseGuards(SessionGuard)
   async testApifox(@Body() body: Record<string, any>) {
     const { token } = body || {};
     if (!token) {
@@ -477,6 +493,7 @@ export class AiConfigController {
   }
 
   @Post('test-gitlab')
+  @UseGuards(SessionGuard)
   async testGitlab(@Body() body: Record<string, any>) {
     const { token } = body || {};
     if (!token) {

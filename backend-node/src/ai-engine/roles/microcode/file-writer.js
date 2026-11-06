@@ -33,6 +33,7 @@ import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.j
 //   （零 DOM/字面/动态引用 ⇒ 删块 + 留痕），并**复用** class-facts + style-class-consolidator
 //   的同一份解析（禁造第三份）。只改 .less 源：.css 由下游 `recompileIndexCss` 自动重生成。
 import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
+import { stripSectionContractBleed } from '../../utils/section-contract-bleed-guard.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
@@ -75,6 +76,7 @@ import { repairSelfClosingSlashInsideTag } from '../../utils/pre-write-self-heal
 //   ⇒ 只有这里能保证「校验的内容 === 落盘的内容」。
 import {
   healEmptyImgSrc,
+  healEmptyDataIconFields,
   buildComponentOwnerMap,
   ownerSectionIdForFile,
   collectSectionIds,
@@ -352,6 +354,12 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
  * @param {string} source Vue SFC 全文
  * @returns {{ source: string, removed: string[] }} removed 形如 ['</style>']
  */
+// 🛡️ 2026-11-06（185ac2ff 实锤）：<script> 多余右花括号自愈（写盘门禁前置、确定性）
+import { healScriptSurplusBrace } from '../../utils/script-brace-healer.js';
+// 🧩 2026-11-06（15484123 实锤）：C9 注入兜底第二入口 —— index 可能在 execute 出口注入后
+// 又被后续 pass 重写（标签迁移/删除 ⇒ 常量成孤儿），写盘前按 plan 事实**再跑一遍**（幂等）
+import { injectChartSubProps } from '../../utils/internal-subs-props-injector.js';
+
 export function stripSurplusBlockClosers(source = '') {
   const src = String(source);
   if (!src) return { source: src, removed: [] };
@@ -830,6 +838,11 @@ export function writeFiles(files, outputPath, options = {}) {
 
   const writtenFiles = [];
   const skippedFiles = [];
+  // 🛡️ 2026-11-06（f91aa545 实锤）：**坏 SFC 不进产物**。旧实现把 SFC 语法/解析失败
+  //   降级成 WARN + `continue`（该文件不写，但任务照旧成功、上层无从得知），真机后果是
+  //   index 里仍 import 它、预览加载失败 ⇒ RUNTIME-004 直接判死，却没有任何「产物不完整」留痕。
+  //   现在单独收集，供上层计入 degraded/artifactIncomplete（诚实失败，不伪装成功）。
+  const sfcBlocked = [];
   let currentFile = '';
   let currentStep = 'init';
 
@@ -1042,6 +1055,67 @@ export function writeFiles(files, outputPath, options = {}) {
     if (logger) {
       logger.warn('🛡️ 刀 53h 写盘出口跳过（fail-open）', {
         error: _r53hErr?.message || String(_r53hErr),
+      });
+    }
+  }
+
+  // ── 刀70 T3：段契约下放剥离 + 间距 Phase 1 钳制（写盘出口·循环外整体）────────
+  //   病灶：prompt 段级强契约（repeat(N,1fr) + flex:N 1 0）被 LLM 复读到深层子元素
+  //   选择器上 ⇒ 卡片内部被切成 grid 轨道 ⇒ 文字截断（c-a03fe 实锤 7 处）。
+  //   判据与计数行见 utils/section-contract-bleed-guard.js 文件头。
+  //   恒打计数（含 0）：归零 = T2 提示词收窄生效（双通道归因·通道 A）。
+  try {
+    const { map: _t3Map, stats: _t3Stats } = stripSectionContractBleed(filesForWrite);
+    if (_t3Map.size > 0) {
+      for (const [p, c] of _t3Map) {
+        if (filesForWrite[p] !== c) filesForWrite[p] = c;
+      }
+    }
+    if (logger) {
+      logger.warn(
+        `🧾 段契约剥离: contractBleedStripped=${_t3Stats.contractBleedStripped} evaluated=${_t3Stats.evaluated} gapClamped=${_t3Stats.gapClamped} titleGapClamped=${_t3Stats.titleGapClamped}`,
+        { scannedFiles: _t3Stats.scannedFiles },
+      );
+    }
+  } catch (_t3Err) {
+    // fail-open：守卫异常不阻断写盘
+    if (logger) {
+      logger.warn('🧾 刀70 T3 段契约剥离跳过（fail-open）', {
+        error: _t3Err?.message || String(_t3Err),
+      });
+    }
+  }
+
+  // 🧩 2026-11-06（15484123 实锤）：**C9 二次注入**。execute 出口注入后，index 仍可能被
+  //   后续 pass 重写（子组件标签迁移 ⇒ 绑定随标签走、常量成孤儿）。此处 filesForWrite 已定稿，
+  //   按上层传入的 `options.internalSubs`（plan 事实）再跑一遍：幂等（已绑定 ⇒ 只计 bound），
+  //   标签新落点补绑定；SFC 校验失败即回滚该文件。宁多跑一遍，不可让契约丢在中间态。
+  if (Array.isArray(options.internalSubs) && options.internalSubs.length > 0) {
+    try {
+      const _vueSnapshot = new Map();
+      for (const [k, v] of Object.entries(filesForWrite)) {
+        if (typeof v === 'string' && /\.vue$/i.test(k)) _vueSnapshot.set(k, v);
+      }
+      const _ins2 = injectChartSubProps(filesForWrite, options.internalSubs, { logger });
+      let _rolledBack2 = 0;
+      for (const [k, v] of _vueSnapshot) {
+        if (filesForWrite[k] === v) continue;
+        const _chk = validateVueSfc(filesForWrite[k], k);
+        if (!_chk?.valid) {
+          filesForWrite[k] = v;
+          _rolledBack2 += 1;
+          logger.warn('🧩 C9 二次注入自检失败，已回滚该文件', {
+            file: k,
+            errors: (_chk?.errors || []).slice(0, 2),
+          });
+        }
+      }
+      logger.info(
+        `🧩 C9 写盘前二次注入: declared=${_ins2.declared} bound=${_ins2.bound} injected=${_ins2.injected} conflict=${_ins2.conflict} rolledBack=${_rolledBack2} dataMissing=${_ins2.dataMissing} unboundAfter=${_ins2.unboundAfter}`,
+      );
+    } catch (_ins2Err) {
+      logger.warn('🧩 C9 二次注入失败（非阻断，保留现状）', {
+        error: _ins2Err?.message || String(_ins2Err),
       });
     }
   }
@@ -1377,6 +1451,22 @@ export function writeFiles(files, outputPath, options = {}) {
             );
           }
         }
+        // 🛡️ 2026-11-06（185ac2ff 实锤）：**脚本多余 `}` 前置自愈**。
+        //   真机 index.vue `onUnmounted(() => { } }` 多一个 `}` ⇒ SFC 解析失败 ⇒ 门禁
+        //   隔离整个文件（不落盘）⇒ 预览入口不存在 + 完整性断言「缺失 index.vue」⇒ 整单失败。
+        //   机械可修缺陷必须在校验前还原（与上方自闭合斜杠修复同款纪律）。
+        try {
+          const _braceHealed = healScriptSurplusBrace(sanitizedContent, { logger });
+          if (_braceHealed.healed) {
+            sanitizedContent = _braceHealed.content;
+          }
+        } catch (braceErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ 脚本括号自愈跳过: ${relativePath}（${braceErr?.message || braceErr}）`,
+            );
+          }
+        }
         const syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
           lessGlobalVars,
         });
@@ -1431,23 +1521,25 @@ export function writeFiles(files, outputPath, options = {}) {
             } else {
               // 修复后仍失败：降级为 warn + 跳过该文件，不阻断其他文件落盘
               if (logger) {
-                logger.warn(
-                  `🛡️ Vue SFC 写盘门禁失败（已跳过）: ${relativePath}`,
+                logger.error(
+                  `🚫 Vue SFC 写盘门禁阻断（坏文件不落盘）: ${relativePath}`,
                   { errors: retry.errors },
                 );
               }
               skippedFiles.push(relativePath);
+              sfcBlocked.push({ path: relativePath, errors: retry.errors, reason: 'sfc-invalid-after-fix' });
               continue;
             }
           } else {
             // 无缺失变量/mixin，直接是语法错误：同样 warn + 跳过，避免整体任务作废
             if (logger) {
-              logger.warn(
-                `🛡️ Vue SFC 写盘门禁失败（已跳过）: ${relativePath}`,
+              logger.error(
+                `🚫 Vue SFC 写盘门禁阻断（坏文件不落盘）: ${relativePath}`,
                 { errors: syntaxResult.errors },
               );
             }
             skippedFiles.push(relativePath);
+            sfcBlocked.push({ path: relativePath, errors: syntaxResult.errors, reason: 'sfc-invalid' });
             continue;
           }
         }
@@ -1781,6 +1873,39 @@ export function writeFiles(files, outputPath, options = {}) {
               sectionIds: collectSectionIds(sanitizedContent),
               mappingCount: _r24Mapping.length,
               skipped: _r24.skipped,
+            });
+          }
+
+          // 🛡️ R24-C（2026-11-06 · mc-max-1793899537377-9a3c56bb 实锤）：**v-for 数据对象里的空图字段**。
+          //   上面 A/B 类只处理模板里的裸 `<img>`；`<img :src="item.icon" />` 三条路全够不着：
+          //     ① A 类见 src 属性存在就跳过；② B 类拿成员访问 `item.icon` 归一变量名返空；
+          //     ③ `healEmptyImgSrc` 的 `candidates.length !== 1` 硬闸把本节 2 个资源判歧义。
+          //   结果：mapping 里 `icon2`/`icon3` 已分配、图片已下载落盘，产物仍是 `icon: ''` ⇒ 统计卡破图。
+          //   判据：本 section 唯一 + 空字段数 === 候选数，按 `figmaBox` 视觉顺序 zip，绝不臆造配对。
+          const _r24c = healEmptyDataIconFields(
+            sanitizedContent,
+            _r24Mapping,
+            _r24RelBase,
+            { ownerSectionId: _r24Owner },
+          );
+          if (_r24c.changed) {
+            sanitizedContent = _r24c.code;
+            currentStep = 'heal_data_icon_field';
+            if (logger) {
+              logger.warn(
+                `🛡️ R24-C 落盘前终验（v-for 空图字段已填）: ${relativePath}`,
+                {
+                  ownerSectionId: _r24Owner || undefined,
+                  healed: _r24c.healed,
+                },
+              );
+            }
+          } else if (logger && _r24c.skipped.length > 0) {
+            logger.debug(`R24-C 写盘出口未命中: ${relativePath}`, {
+              ownerSectionId: _r24Owner || null,
+              sectionIds: collectSectionIds(sanitizedContent),
+              mappingCount: _r24Mapping.length,
+              skipped: _r24c.skipped,
             });
           }
         } catch (r24Err) {
@@ -2279,7 +2404,7 @@ export function writeFiles(files, outputPath, options = {}) {
         skippedPaths: skippedFiles.length > 0 ? skippedFiles.slice(0, 5) : [],
       });
     }
-    return { written: writtenFiles, skipped: skippedFiles };
+    return { written: writtenFiles, skipped: skippedFiles, sfcBlocked };
   } catch (error) {
     if (logger) {
       logger.error('文件写入失败', {

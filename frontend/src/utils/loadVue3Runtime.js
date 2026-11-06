@@ -24,7 +24,7 @@
 import { BINARY_EXTS, extOf } from './sfc-loader-binary.js'
 // 🛡️ 2026-11-05 治本：内联注入的 CSS 里相对 `url()` 按**文档 URL**解析 ⇒ 404 ⇒ 背景图不显示。
 //   注入/编译前按「该 CSS 文件自身虚拟路径」重写为绝对 URL（单一事实源）。
-import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls } from './css-asset-url'
+import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls, rewriteVueTemplateAssetUrls, rewriteVueExprAssetUrls } from './css-asset-url'
 // 🛡️ 2026-10-25：`.js` 内 ESM 语法的判定（单一真相源，与微码预览路径共用）
 import { resolveJsModuleTypeOverride } from './sfc-loader-esm-js'
 import { buildSnapshotFileUrl } from './preview-resolver'
@@ -718,6 +718,11 @@ export async function loadVue3FromWorkspace(
           // 让「样式整体能加载」优先于「背景图完美」。
           src = rewriteVueStyleAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
         }
+        // 🆕 2026-11-06 模板兜底通道（bdfba71d 实锤，与 preview/index.vue 同步）：
+        //   模板静态相对 src 不经 import/style 两条重写管道 ⇒ 预览 404。编译前提升。
+        src = rewriteVueTemplateAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
+        // 🆕 67cd38d8 形态兜底：`:src="<expr> || '../resources/...'"` 表达式内字面量
+        src = rewriteVueExprAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
       }
       // 🛡️ 确定性修复：对象字面量裸 key 漏引号（如 { c-monitor-beijing: true }），
       // 预览编译前自动补齐，消除 compiler-sfc Unexpected token 加载失败（历史产物同样生效）。

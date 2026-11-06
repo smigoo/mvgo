@@ -248,7 +248,7 @@ export function detectIconSlotIssues(code, opts = {}) {
   const resolveAbs = typeof opts.resolveAbs === 'function' ? opts.resolveAbs : () => null;
   const sizeOf = typeof opts.sizeOf === 'function' ? opts.sizeOf : readImageSizeFromDisk;
 
-  const tagRe = /<img\b((?:"[^"]*"|'[^']*'|[^>])*)>/gi;
+  const tagRe = /<img\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi;
   let m;
   while ((m = tagRe.exec(templateRegion(text))) !== null) {
     const tag = m[0];

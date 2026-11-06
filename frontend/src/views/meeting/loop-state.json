@@ -1,7 +1,7 @@
 {
   "loop": "TTR",
   "definition": "Task → Test → Review",
-  "milestone": "LIVE_WORKBENCH__REAL_RECORDING__T030_STILL_BLOCKED",
+  "milestone": "LIVE_WORKBENCH__REAL_RECORDING__LOCAL_ASR_DEFAULT__SERVER_ASR_OPTIONAL__T030_STILL_BLOCKED",
   "currentTask": "T-030",
   "phase": "REVIEW",
   "iteration": 1,
@@ -10,9 +10,16 @@
   "checks": {
     "structure": true,
     "build": true,
-    "devOnly": true,
-    "noEntry": true,
+    "defaultView": true,
+    "entryWiring": true,
     "review": true
+  },
+  "gateScope": {
+    "structure": "页面 / 路由 / 数据 / 状态机 / Mock 模块文件齐备",
+    "build": "双构建均通过且 mock-smoke 全绿；本页已上生产，双构建用于证明两种模式下页面都进产物（不再用于证明 devOnly 折叠）",
+    "defaultView": "剥离 v-(if|else-if)=debugMode 子树后，残留默认视图无任何开发态标记；「示例稿」只作警示与边界声明",
+    "entryWiring": "meeting-route.js 无 import.meta.env 判断、/meeting 恒挂、router spread 注入；2026-11-06 起页脚「实验室」三条条目全部 devOnly:true（meeting 生产隐藏，条目全空时整组下拉隐藏），dev 可直连 /meeting",
+    "review": "逐文件复核：无假开关、无密钥入库、无 embedding 落库、浅色为主且主题跟随系统"
   },
   "completedTasks": [
     "T-000",
@@ -177,10 +184,10 @@
         "版式四段重排：项目 / 主题 + 会议类型 + 实时时钟 → 实时记录（推流 + 人工记录入口）→ AI 分析（逐项字段与证据）→ 会议总结（生成 / 合成稿件 / 定稿 / 导出）",
         "实时记录区：示例会议选择、开始 / 暂停 / 结束并生成总结、进度 N/M 句；人工记录按 kind 分类打标（不参与 AI 抽取，显式声明）",
         "会议总结侧栏 mm-live-summary-side 收纳生成 / 合成 / 复制 / 定稿 / 保存 / 载入 + 逐项确认修订折叠区 + 导出区",
-        "视图分层：默认只显示实际使用的工作台；?debug=1 才展开 43 处开发视图（状态条 / runbar / 契约 / 审计 / 指纹等）",
+        "视图分层：默认只显示实际使用的工作台；?debug=1 才展开 11 块 debugMode 子树（状态条 / runbar / 契约 / 审计 / 指纹等）",
         "主题：默认浅色 + prefers-color-scheme: dark 自动切深色，全部复用 --mm-* 变量"
       ],
-      "verified": "冒烟 workbench-layout 组 PASS；默认视图导出说明已去掉技术词；双构建 devOnly gate 通过"
+      "verified": "冒烟 workbench-layout 组 PASS；默认视图导出说明已去掉技术词；双构建均含页面（环境门控已移除）"
     },
     "REAL_RECORDING": {
       "trigger": "需求方追加：检查现在是否可以录制，要真实数据记录",
@@ -222,10 +229,11 @@
       "wall123Status": {
         "wall1": "已通（页面内无 CORS 报错，模型加载进度跑到 53707539/53707539）",
         "wall2": "已通（产物 /mvgo/static/wasm/ 下 asyncify.mjs + asyncify.wasm 齐全，.mjs=text/javascript、.wasm=application/wasm 均 200；页面无 jsdelivr 连接重置、无 no available backend）",
-        "wall3": "未解决（阻塞推理）"
+        "wall3": "仅在 wasm 后端存在，WebGPU 后端不存在（已绕过）"
       },
-      "wall3": "ort-wasm-simd-threaded.asyncify.wasm 是多线程构建；页面无 SharedArrayBuffer（实测 sab=undefined、crossOriginIsolated=false、12 核）时 ORT 不退回单线程，而是死等 pthread 池 → transcribe 永不返回、主线程被同步占死。已试无效：numThreads=1；proxy=true+numThreads=1+useWasmCache=false（load 成功进入「已就绪」，transcribe 仍不返回）。可能方向：① dev/build 加 COOP+COEP 让页面 crossOriginIsolated=true（会影响第三方资源的 CORP，属全局行为变更，需授权）；② 换单线程 wasm 构建产物。",
-      "honest": "不得宣称「本地转写已跑通」：加载链路（墙1+墙2）通了，推理链路（墙3）没通。"
+      "wall3": "结论（本轮实测推翻旧判断）：wall3 = ort-wasm-simd-threaded.asyncify.wasm 依赖 SharedArrayBuffer；本页无跨域隔离（实测 crossOriginIsolated=false、SharedArrayBuffer=undefined、12 核）时 ORT 不退回单线程，而是死等 pthread 池并**同步占死主线程**（Promise / 定时器全不再执行），所以连超时报错都跑不出来。**关键事实：wall3 只在 wasm 后端存在 —— WebGPU 后端不依赖 SAB，实测完全跑通。** 因此：① 旧备选「换单线程 wasm」已证伪（ORT 1.31.0-dev.20260914 的 dist 只有 threaded 构建，asyncify / jsep / jspi / 普通全是 `*-threaded`，没有单线程产物）；② 旧备选「必须加 COOP+COEP」不再必要（那是给 wasm 后端用的），**故本轮未动任何响应头**。改法：local-asr.js 只走 WebGPU，拿不到适配器就当场如实拒绝，不回落 wasm。",
+      "runtimeEvidence": "2026-11-06 puppeteer 无头（--enable-unsafe-webgpu --use-angle=swiftshader）+ 自托管 wasm 200/200：tiny → device=webgpu / dtype={fp32,q4} / fallback=false、load 27s、12.27s 中文音频 transcribe 46s、返回 4 段带时间戳文字（结构全对但错字明显：「讨论」→「炒论」、「项目」→「向目」、「预算」→「与此万」、「风险应对」→「光写订队」）；base → device=webgpu / dtype={fp32,q4}、load 首跑 47s（缓存后 3s）、transcribe 87~91s、4 段（错字仍明显：「讨论」→「调论」、「项目进度」→「向路进度」、「风险应对」→「关闲议罪」）。**注意：实测跑在软渲染 SwiftShader 上（shader-f16=false → 只能走 fp32+q4），真机独显走 fp16 应显著更好，但未验证。**",
+      "honest": "可以宣称「本机转写已在 WebGPU + Chrome 内核上端到端跑通并真出字」（有上面实测为证）；**不得**宣称「所有浏览器都能本机转写」——仅 WebGPU 后端 + Chrome 内核验证过，真机长会议与 fp16 路径未验证；wasm 后端在本页不可用（wall3）。"
     },
     "EMPTY_REASON": {
       "trigger": "需求方提问：如果没有语音内容怎么办",
@@ -245,27 +253,31 @@
     }
   },
   "lastReview": {
-    "mockSmoke": "572/572 PASS（547 原有 + empty-reason 25 项新增：失败分类真跑 code 逐一断言（noAudio / engine×2 / weights / memory）/ asrErrorCode 三处写入 / 判别顺序与 noAudio 摘除 / silent 与 noText 二分 / 四种成因文案独立 / 两块面板接线 / 「正在转写」仅在录制时出现 / 成因块内无示例稿兜底 / 样式类走主题变量）",
+    "mockSmoke": "602/602 PASS。本轮 599 → 602（+3）：把 Task #39 遗留的反回归断言「页面已移除 local-asr」改写为正向要求「主路径仍是服务端、local-asr 只从降级分支进入」，并拆出「降级白名单排除音频问题与接线 bug」「降级显式可见（写清原因 + 点明音频不出本机）」两条；另新增「阶段文案直接取 asrPhase 的标签值、不得二次查表」。同轮把「失败分类真被调用」由反向断言改为正向（主路径用服务端分类器、兜底用本地分类器传当前 phase），把「失败写口都落 code」由硬编码 2 处改为写口计数一致。历史 599 项构成：在和空稿成因分类 572 项基础上新增 default-view 组 5 项「剥离法」+ prod-entry 组 6 项「入口一致性」，并把 export-formats 扩到渲染层断言（格式差异化 / 无外部资源 / 元数据自洽 / Markdown 竖线换行转义 / null 值标注 / 人工修订留痕 / markdownToHtml 覆盖 / FR-11 门禁优先）",
     "evalSuite": "C-1~C-8 8/8 PASS；注入用例 25/25；攻击命中 17/17；良性误伤 0；稿件层 A-1~A-8 8/8",
     "exportFormats": "md / html / word(.doc) / pdf(打印) 四格式 + 3 内容范围全通过；默认工作台 mm-live-summary-side 内即可导出（不依赖 ?debug=1）；跨格式声明/来源/证据/版本/审计不丢失；HTML 单文件无外链无脚本；<script> 字段值被转义；PDF filename=null",
-    "productionBuild": "PASS · npm run build:safe（vite build --mode production --emptyOutDir false）· 33.95s",
-    "developmentBuild": "PASS · vite build --mode development --outDir dist-dev2 · 34.57s · 干净目录 static/ 下 mm-live-stream=2 / MeetingDev=1 / 会议纪要开发工作台=1 / mm-live-rec-bar=2",
-    "devOnly": "用干净输出目录（--outDir）复核，避免 --emptyOutDir false 保留旧 development chunk 造成 dist/ 污染；判定按内容特征而非文件名（异步 chunk 名为 index-<hash>，不含 meeting 字样）",
-    "noEntry": "router/index.js 仅新增 import + spread + 注释共 4 行（当前已在仓库基线中，diff 为空），符号核验 meetingRoute 出现在第 4 / 28 行；未碰任何菜单/导航",
+    "productionBuild": "PASS · npm run build:safe（vite build --mode production --emptyOutDir false）· 27.52s；另跑干净目录对照 vite build --mode production --outDir dist-prod-check · 28.78s",
+    "developmentBuild": "PASS · vite build --mode development --outDir dist-dev-check · 33.08s · 干净目录 static/js（184 文件）下 mm-live-rec-bar / 需求会议智能纪要 均命中",
+    "defaultView": "剥离法：按标签配对剥掉 index.vue 模板里所有 v-(if|else-if)=debugMode 子树（实测 11 块：span,div,section,section,label,button,button,template,template,main,footer），残留默认视图对 9 类开发态标记（（DEV）/?debug=1/mm-runbar/mm-grid-debug/DEV ONLY/契约自检/adapterMode/就绪度/稿件指纹）命中 0；「示例稿」残留 10 处经逐条核对全为注释 / 警示标 / 边界声明。边界：本页已上生产，不能再拿「production 产物有无页面」证明默认视图干净",
+    "entryWiring": "meeting-route.js 无 import.meta.env.DEV/MODE 判断（沿革注释已先剥离再判定）、/meeting 恒挂、router/index.js 用 spread 注入；页脚「实验室」三条条目 2026-11-06 起全部 devOnly:true（meeting 生产隐藏：生产域为 HTTP，getUserMedia/WebGPU 被非安全上下文禁用，待 HTTPS 部署后放开；条目全空时整组下拉隐藏 v-if=labLinks.length），dev 可直连 /meeting；页面 / 路由注释不再声称「无导航入口」",
     "theme": "默认浅色 + prefers-color-scheme: dark 自动切深色；P5 / Q-13 / 实时工作台 / 真实录音新增面板全部复用 --mm-* 变量，导出 HTML 单文件自带打印样式与主题跟随",
     "sfc": "vue/compiler-sfc parse + compileScript + compileTemplate 全通过（355 bindings / template errors 0 / _ctx.* 命中 0 / 模板引用新增符号 38-43 / script 未定义 无）；脚本固化在 .dev-loop/sfc-check.mjs",
-    "outputLocation": "dev 态 → localStorage mvgo.meeting.draft.<runVersion> + 索引 + 冻结 snapshot + audit；导出文件 → 浏览器下载目录 meeting-draft-<runVersion>.md/.html/.doc/.csv/.json/-article.md（仅已定稿）；PDF 走打印另存、不落文件；整合稿件为内存态；**真实录音 WAV → 内存 blob + 浏览器下载目录 meeting-recording-<时间戳>.wav，不上传不落库**；生产态 → DB field_overlay + E-08/E-09 接口（契约已定义，未实现）",
+    "outputLocation": "dev 态 → localStorage mvgo.meeting.draft.<runVersion> + 索引 + 冻结 snapshot + audit；导出文件 → 浏览器下载目录 meeting-draft-<runVersion>.md/.html/.doc/.csv/.json/-article.md（仅已定稿）；PDF 走打印另存、不落文件；整合稿件为内存态；**真实录音 WAV 留档 → 内存 blob + 浏览器下载目录 meeting-recording-<时间戳>.wav（WAV 文件本身不上传、不落库；转写时只把音频按段 POST 给后端）**；生产态 → DB field_overlay + E-08/E-09 接口（契约已定义，未实现）",
     "compliance": "FR-11 / FR-12 / FR-13 口径对齐；四格式导出复用 FR-11 双重门禁；PRD v1.1 附录 D RTM 与 Q-12/Q-13 追加说明已回填；advance 实测被 Blocker 守卫拒绝（exit=1）",
-    "viewLayer": "默认只显示实际使用的工作台；?debug=1 展开全部开发视图；43 处 v-if=debugMode，P5 与 Q-13 新增开发态文案逐行核验全部在 debug 分支内；默认视图导出说明已去掉技术词",
+    "viewLayer": "默认只显示实际使用的工作台；?debug=1 展开全部开发视图；共 11 块 v-(if|else-if)=debugMode 子树，P5 与 Q-13 新增开发态文案逐行核验全部在 debug 分支内；默认视图导出说明已去掉技术词",
     "composition": "P5 整合稿件已落地：本地确定性整合 + 云合成骨架；云 LLM 密钥未就绪时不宣称 AI 已生成；Q-12 是否纳入 FR 基线待需求方拍板",
     "q13": "四格式导出已落地 dev 降级路径；Word 为兼容 .doc 非 OOXML、PDF 为打印另存非 .pdf 文件，UI 明示；真 docx/pdf 与 Q-13 是否纳入 FR 基线待拍板",
-    "realRecording": "默认工作台只有一条录制路径：真实麦克风「开始真实录音」（getUserMedia 采集 + 16k mono 归一化 + VAD 分段 + 可下载 WAV，只存本地、不上传）→ 本机离线 Whisper 逐句转写进「实时记录」；示例稿推流已降为 ?debug=1 专属并标 DEV，默认工作台不再露出「开始记录（示例稿）」按钮与示例稿下拉；非真实内容一律带「示例稿推演 · 非真实录制」警示标，不冒充真实录制",
+    "realRecording": "默认工作台只有一条录制路径：真实麦克风「开始真实录音」（getUserMedia 多轨采集 + 16k mono 归一化 + VAD 分段 + 可下载 WAV 留档，WAV 文件只存本地）；逐句文字**默认由本机 WebGPU 推理（mock/local-asr.js）产出，音频不出本机**，见 localDefaultAsr；服务端云端转写（音频按段上传 backend-node，见 serverTranscription）**本轮降为可选引擎**，由用户在本页「转写引擎」处显式切换才走；示例稿推流已降为 ?debug=1 专属并标 DEV，默认工作台不再露出「开始记录（示例稿）」按钮与示例稿下拉；非真实内容一律带「示例稿推演 · 非真实录制」警示标，不冒充真实录制",
     "t030": "前端 A 档 + 符合性修复 + P5 + Q-13 + 实时工作台 + 真实录音已闭合；云端 3 项 Blocker 与导出渲染依赖未就绪，adapter_mode=mock",
+    "serverTranscription": "服务端转写（Task #39 引入；本轮降为可选引擎：默认走本机推理，仅用户在本页「转写引擎」处切到「服务端」才启用）：前端 mock/server-asr.js 与 local-asr.js 同构（createServerAsr → { phase, progress, load, transcribe, toUtterances, describe }），transport / probeStatus 由页面注入（server-asr.js 不 import @/api，保证 Node 冒烟可直 import）；后端 POST /api/meeting-asr/transcribe 用 FileInterceptor 内存态（10MB 上限、音频不落盘），MEETING_ASR_API_KEY → DASHSCOPE_API_KEY → data/meeting-asr-config.json → 内置默认 逐级解析，/status 返回 keySource 绝不含 apiKey；错误码单一事实源 frontend/src/api/meeting-asr-codes.js（9 后端码 + TRANSPORT_MISSING / REQUEST_FAILED），改码须同步 后端 MEETING_ASR_ERROR_CODES 与 server-asr.js 的 SERVER_ASR_FAILURES 三处；缺密钥如实返回 asr_config_missing。**该密钥不再阻塞默认路径**（默认本机推理不需要它）；服务端链路失败可按白名单降级回本机，见 serverFallback",
+    "localDefaultAsr": "**本机推理（mock/local-asr.js）本轮提为默认引擎**（需求方：「不走真实百炼密钥 走前端实现功能」——不再依赖后端密钥打通服务端链路）。只走 **WebGPU**：load() 先 probeComputeDevice() 三步探测（navigator.gpu 存在 → isSecureContext → requestAdapter() 拿到适配器），拿不到就当场如实拒绝，**不回落 wasm**（旧「WebGPU 失败回退 wasm」已删）。dtype 运行时自动选：支持 shader-f16 → fp16 编解码；否则 encoder fp32 + decoder q4。默认档位显式写死 LOCAL_ASR_DEFAULT_MODEL = Xenova/whisper-base（≈138MB/195MB；**不取数组第 0 项**，第 0 项是「最快」而非「默认」）；三档 = tiny 71/113MB · base 138/195MB · small 462/558MB（hf-mirror 真实 Content-Length）。页面新增「转写引擎」切换（本机推理 / 服务端转写）与「模型档位」下拉；DEFAULT_ASR_ENGINE = local，LOCAL_ASR_LABEL = 本机转写（设备内推理），resetAsrState 复位回本机。**实测（2026-11-06，puppeteer 无头 --enable-unsafe-webgpu --use-angle=swiftshader + 自托管 wasm 200/200）**：tiny → device=webgpu / dtype={fp32,q4} / fallback=false、load 27s、12.27s 中文音频 transcribe 46s、返回 4 段带时间戳文字（结构全对、错字明显）；base → device=webgpu / dtype={fp32,q4}、load 首跑 47s（缓存后 3s）、transcribe 87~91s、4 段（错字仍明显：「讨论」→「调论」、「项目进度」→「向路进度」、「风险应对」→「关闲议罪」）。**注意：实测跑在软渲染 SwiftShader 上（shader-f16=false → 只能 fp32+q4），真机独显走 fp16 应显著更好但未验证。****可宣称「本机转写已在 WebGPU + Chrome 内核上端到端跑通并真出字」；不得宣称「所有浏览器都能本机转写」**；UI 级走查（2026-11-06）：默认引擎=本机、档位=base、空态如实声明「音频不出本机 / 约 138MB / 需 WebGPU」，录 20s 后默认本机路径产出 1 句真实文字，全程无后端密钥参与。生产域 go.microvideo.cn:13030 已确认为 HTTP → isSecureContext=false → 浏览器禁用 getUserMedia 与 WebGPU → 麦克风录音与本机转写均不可用；页面已加进页预检横条（asrEnvBlocked / .mm-live-asr-envblock，进页即告知并给出 HTTPS 或 localhost 出路），页脚「实验室」入口 2026-11-06 起生产隐藏（三条全 devOnly:true，条目全空时整组下拉隐藏）以配合发布。**wall3 只在 wasm 后端存在，WebGPU 后端不依赖 SAB、不撞它**（详见 ORT_SELF_HOST）。",
+    "serverFallback": "服务端为**可选引擎**，其链路失败时按错误码白名单**降级回本机**（方向与本轮反转前相反）：BAD_AUDIO / AUDIO_TOO_LARGE（换引擎同样转不出，降级会把「设备或格式坏了」说成「会议室很安静」）、TRANSPORT_MISSING（接线 bug，必须改代码）、unknown（原因说不清，先暴露原始报错）**不降级**；CONFIG_MISSING / AUTH_FAILED / RATE_LIMITED / TIMEOUT / UPSTREAM_ERROR / NETWORK_ERROR / BAD_RESPONSE / REQUEST_FAILED **降级**。白名单按错误码判定（单一事实源 meeting-asr-codes.js）；canFallbackToLocal 首行守卫 asrEngineKind !== server → false。切换把失败原因写进 asrFallbackReason，由 .mm-live-asr-fallback 横条显式渲染（「服务端转写不可用，已自动降级到本机推理（音频不出本机，权重首次按需下载）· 原因：…」，v-if=asrFallbackReason），实时记录标签同步由「服务端转写 · 音频按段上传」翻转为「本机推理 · 音频不出本机」；switchAsrEngine(kind) / switchAsrModel(id) 会丢弃旧引擎实例并清错误态。",
+    "productionBoundary": "已上生产的能力：页面 / 路由 / 页脚入口 / 服务端转写接口形状。**未就绪（未部署、未联调、不得宣称已接通）**：D-01 云 ASR 密钥（缺则接口返回 asr_config_missing）、T-013 后端上传接口端到端联调（接口已实现，需真实音频 + 密钥）、SEC-05 委托处理协议法务确认（采前告知同意门禁已从页面下线，仅在 debug 契约视图保留自检）。**硬边界：不重启 :2610 / :13030、不部署、不 git push；本地 git commit 仅在用户明确授权后执行（用户长期规则：源码可改、可本地提交，部署与 push 一律停下等指令）；动全局响应头（COOP/COEP）或新增依赖须先征得用户授权。**",
     "layout": "纪要草稿 / 转写稿 / 稿件全文 / 稿件侧栏全部改为面板内固定上限 + Y 滚动；定稿按钮在滚动区外始终可见；滚动条跟随主题；长会不再把整页顶长",
     "audioDecode": "格式嗅探 5 种容器 + 扩展名不符提示 + Promise/callback 双形态（各只调一次）+ 空值/超时/无 ctx 三类兜底 + close 失败不顶掉主错误 + Safari 仅回调链路端到端 + 页面仍走默认 env",
     "consentRetentionContract": "FR-03 / FR-14 服务端契约形状已固化：E-10~E-18 九接口（consent 5 + retention 4，implemented 全 false）+ 同意状态机 5 态（已撤回不可直接回已通过、未发起不可直达已通过、无死状态）+ 19 张表（新增 consent_disclosure / consent_record / retention_policy / retention_audit，删除审计与常规审计分表）+ 5 项阻塞依赖（新增 SEC-01 告知文案法务审定、Q-04 留存天数待确认）；consentRetentionContractCheck 已并入 selfCheckApiContract，避免两套真相；debug 契约视图展示状态机与自检结果；E-02 明示服务端须二次校验同意门禁、E-08 明示不得含原始音频",
     "contractScope": "仅固化接口 / 状态机 / 数据落点 / 依赖就绪度，未实现服务端、未起服务、未连数据库、未部署；implemented 全为 false，不得对外宣称后端已接通",
-    "liveSourceHonesty": "「实时记录」内容来源只有两种，且必须自证：mic = 本机麦克风 + 离线 Whisper（标「本机离线转写 · 音频不出本机」）；fixture = DEV 示例稿推演（标「示例稿推演 · 非真实录制」）。失败出口（环境不支持 / 采集异常 / 转写失败按分类细分）都不回落示例稿，且提示均指向真实录音路径。FR-03 告知同意门禁已下线（见 consentPanelRemoved）",
+    "liveSourceHonesty": "「实时记录」内容来源只有两种，且必须自证：mic = 本机麦克风采集（WAV 留档只在本地）+ **默认本机 WebGPU 推理（音频不出本机）**；可选服务端云端转写（音频按段上传 backend-node 由后端调云端 ASR；缺云密钥时如实返回 asr_config_missing，绝不回落示例稿）；fixture = DEV 示例稿推演（标「示例稿推演 · 非真实录制」）。失败出口（环境不支持 / 采集异常 / 转写失败按分类细分）都不回落示例稿，且提示均指向真实录音路径。**口径更新（本轮反转）**：「本机推理 · 音频不出本机」**重新成为默认来源**（默认走本机 WebGPU 推理，不需后端密钥）；服务端云端转写降为**可选引擎**，只有用户在本页显式切到「服务端」时才按段上传后端，切到服务端后页面必须改口（mm-live-note 的 v-if=!isLocalAsr 例外句、实时记录标签翻转为「服务端转写 · 音频按段上传」），见 localDefaultAsr / serverFallback。FR-03 告知同意门禁已下线（见 consentPanelRemoved）",
     "asrFailureTaxonomy": "本地转写失败文案按「哪一步挂了」拆成 8 类（mock/local-asr.js 的 ASR_FAILURES + describeAsrFailure / describeAsrNoAudio），每类一条可操作提示，原始报错只作定位不替代人话结论：weights 模型权重下载失败（fetch 网络层失败，提示查 hf-mirror.com 连通性）/ assets 模型资源加载失败（加载期无特征）/ lib 转写引擎加载失败（模块导入）/ engine 离线推理环境不可用（wasm / backend 未就绪）/ memory 本地内存不足（含 wasm memory 越界）/ runtime 本地推理失败（推理期异常）/ noAudio 没有采到可转写的音频 / unknown 兜底。页面：状态条给分类结论（asrError），其下 mm-live-asr-hint 给下一步（asrErrorHint）。边界：分类只改提示措辞，不改失败判定，失败仍如实显示、绝不回落示例稿；防误命中（'oom' 裸子串会把 'boom' 判成内存不足，已改为完整短语）",
     "consentPanelRemoved": "「录制告知与同意」面板按要求从工作台移除：.mm-consent 模板块、consent* 状态与动作、.mm-consent* 样式、mock/consent.js 引用全部删除；真实录音（startRealRecording）与音频文件解码（onAudioFile）不再有同意前置校验，空态与失败提示同步去掉「需先完成录制告知与同意」；mock/consent.js 领域逻辑、E-10~E-18 契约与 consentRetentionContractCheck 保留（debug 契约视图仍显示 FR-03 / FR-14 自检）。边界：本页不再承担采前告知同意校验",
     "externalDependencyMatrix": {
@@ -465,7 +477,7 @@
     },
     "emptyReason": "「没有语音内容」由单一「暂无内容」拆成按真值分流的四种成因（engine / noAudio / silent / noText）：判别只依据两个真值 —— asrErrorCode（失败分类 code）+ recResult.segments.length，且**有失败优先于「没语音」**（引擎没跑起来时不给「没人说话」下结论的机会）；noAudio（没采到可转写音频，属真实情况而非引擎故障）从其余失败 code 中摘出、独立成支。实时记录面板与总结面板空态均接入成因文案：故障态（engine / noAudio）用 --mm-warn 明示是故障、不代表团里没人说话；真没语音（silent / noText）再按录音时长分档给下一步（≥3s 却全程静音 → 优先查输入设备；<3s → 有效时长太短）。「正在用本机离线模型转写」收紧为仅 live.status === 'recording' 时说（录完再说这句就是假状态）。边界：纯前端文案与判别分支，未改转写逻辑、未改失败判定口径、未动响应头、未新增依赖、示例稿路径不受影响；**只解决「怎么说」不解决「能不能转写」**——墙 3 未解，当前最可能看到的是 engine 那一支（如实报故障），silent / noText 是给「转写跑通之后」准备的真实结论出口，不得据此宣称转写已可用"
   },
-  "updatedAt": "2026-11-05T15:45:58.000Z",
+  "updatedAt": "2026-11-05T18:44:42.804Z",
   "remapLog": [
     {
       "from": "T-001",

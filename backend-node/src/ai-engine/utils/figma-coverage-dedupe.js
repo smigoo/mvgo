@@ -445,6 +445,24 @@ function dedupeLevelByCoverage(sections, closureIndex, removed, path, opts = {})
         continue
       }
       if (!isSubset(cov[i], big)) continue
+      // 🛡️ 刀72-A（2026-11-06 · mc-max-1793909328537-0f0468b7「底部汇总」段消失实锤）：
+      //   单节点自锚退化段豁免。段锚点选在 TEXT 叶子自身（Figma 非专业结构）且
+      //   visual-parser LCA 修复失败（anchor-not-ancestor）⇒ 闭包退化为 {自身 id}
+      //   （正常段锚容器时闭包 ≥ 容器子树，size=1 即修复失败信号）。此时
+      //   `size:1 ⊆ size:N` 的子集判定无信息量——段内容（兄弟子树，如接入设备统计
+      //   48:5889）既不在被删者闭包也不在吸收者闭包，「完全覆盖」是假象 ⇒ 删除即
+      //   整块业务内容丢失。豁免条件：闭包恰为自身锚点 + 段声明了内容结构
+      //   （body.children 非空）⇒ fail-open 保留（宁多勿漏总原则）。
+      //   阴性对照：91544b38 折叠段（闭包 15 节点）、b93589ae 壳段（闭包含子树）、
+      //   3b06a019 双容器（等闭包多节点）均不命中本豁免，原删除行为不变。
+      if (
+        cov[i].size === 1 &&
+        cov[i].has(String(sections[i].id)) &&
+        Array.isArray(sections[i]?.body?.children) &&
+        sections[i].body.children.length > 0
+      ) {
+        continue
+      }
       // 🛡️ 刀 22：被删者是折叠列表段而吸收者自身不携带列表内容 ⇒ 不删
       //   （否则唯一起内容轨消失，整列坍缩成首卡，b2086a9c 实锤）
       if (isCollapsedListShape(sections[i]) && !isListContentCarrier(sections[j])) continue

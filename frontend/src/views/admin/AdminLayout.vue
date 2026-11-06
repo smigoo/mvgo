@@ -23,6 +23,10 @@
           <template #icon><DashboardOutlined /></template>
           <span>任务统计</span>
         </a-menu-item>
+        <a-menu-item key="feedbacks">
+          <template #icon><MessageOutlined /></template>
+          <span>任务反馈</span>
+        </a-menu-item>
       </a-menu>
     </div>
     <div class="admin-content">
@@ -34,7 +38,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { HomeOutlined, FileTextOutlined, UserOutlined, DashboardOutlined } from '@ant-design/icons-vue'
+import { HomeOutlined, FileTextOutlined, UserOutlined, DashboardOutlined, MessageOutlined } from '@ant-design/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,6 +56,8 @@ const updateSelectedKeys = () => {
     selectedKeys.value = ['users']
   } else if (path.includes('task-stats')) {
     selectedKeys.value = ['task-stats']
+  } else if (path.includes('feedbacks')) {
+    selectedKeys.value = ['feedbacks']
   } else if (path.includes('my-stats')) {
     selectedKeys.value = ['my-stats']
   }

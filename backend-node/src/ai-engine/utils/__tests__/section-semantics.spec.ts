@@ -337,12 +337,84 @@ describe('Phase A · 结构判据：双轨同源，防私有统计分支回潮',
     const src = readSrc('repeated-section-collapser.js');
     expect(src).not.toMatch(/function\s+\w*[Ss]tats?\w*\(/);
     expect(src).not.toMatch(/valueGroup/);
-    expect(src).not.toMatch(/canonicalListItem\(/);
+    // 🛡️ 2026-11-06：锁的语义是「不得有**私有实现**」，不是「不得调用」。
+    //   刀72-B 在 collapser 内 `canonicalListItem(it)` 归一内容同构签名——那正是
+    //   单一来源的正确用法；旧断言 `/canonicalListItem\(/` 把「调用」也一并禁掉，
+    //   与该测试自己的标题（无私有分支）相矛盾。故收紧为「只禁定义」。
+    expect(src).not.toMatch(/function\s+canonicalListItem\s*\(/);
+    expect(src).not.toMatch(/const\s+canonicalListItem\s*=/);
+    // 且必须真的从单一来源导入（调用即证明复用，而非另写一份）
+    expect(src).toMatch(/import\s*\{\s*canonicalListItem\s*\}\s*from\s*'\.\/section-semantics\.js'/);
   });
 
   it('header-geometry-fallback 业务判据收拢（本地不再内联 hasBusinessContent 定义）', () => {
     const src = readSrc('header-geometry-fallback.js');
     expect(src).toMatch(/section-semantics/);
     expect(src).not.toMatch(/const hasBusinessContent = /);
+  });
+});
+
+// ── 🛡️ 刀71（2026-11-06 · c-f7451-8f7451ae「华为技术8台」连排实锤）──────────
+//   elements 平铺角色轨：content.elements 直接给 type:'label'/'value' 平铺数组
+//   （无 parts、无 children 子树）。value 必须进 stats（右值区），不得混进 texts。
+describe('canonicalListItem —— elements 平铺角色轨（刀71）', () => {
+  const flatRoleItem = {
+    id: '38:3140',
+    layout: 'horizontal',
+    repeatedFill: '#ffffff',
+    content: {
+      layout: 'horizontal',
+      elements: [
+        { type: 'label', text: '华为技术', styles: { fontSize: 14, color: 'rgba(51,51,51,1)' } },
+        { type: 'value', text: '8台', styles: { fontSize: 14, color: 'rgba(44,104,255,1)' } },
+      ],
+    },
+  };
+
+  it('type:value 平铺元素 ⇒ 进 stats（单文本 value、label 空），不混进 texts', () => {
+    const n = canonicalListItem(flatRoleItem);
+    expect(n.texts).toEqual([{ t: '华为技术', c: 'rgba(51,51,51,1)', fs: 14, fw: null }]);
+    expect(n.stats).toEqual([
+      { v: '8台', l: '', vc: 'rgba(44,104,255,1)', vfs: 14, vfw: null, lc: null, lfs: null },
+    ]);
+    expect(n.fill).toBe('#ffffff');
+  });
+
+  it('双份防护：显式 stats 在场时角色轨让位（不重复计值）', () => {
+    const withExplicit = {
+      ...flatRoleItem,
+      stats: [{ label: '在线', text: '3,792', styles: { color: '#0a0' } }],
+    };
+    const n = canonicalListItem(withExplicit);
+    expect(n.stats).toHaveLength(1);
+    expect(n.stats[0].v).toBe('3,792');
+  });
+
+  it('parts 形态优先级不变（value 容器带 parts 仍走 parts 轨）', () => {
+    const partsItem = {
+      content: {
+        elements: [
+          { type: 'value', parts: [{ type: 'number', text: '2' }, { type: 'unit', text: '次' }] },
+        ],
+      },
+    };
+    const n = canonicalListItem(partsItem);
+    expect(n.texts).toHaveLength(0);
+    expect(n.stats[0].v).toBe('2');
+    expect(n.stats[0].l).toBe('次');
+  });
+
+  it('无角色标记的平铺文本维持拍平轨（零漂移）', () => {
+    const plain = {
+      content: {
+        elements: [
+          { type: 'text', text: '甲' },
+          { type: 'text', text: '乙' },
+        ],
+      },
+    };
+    const n = canonicalListItem(plain);
+    expect(n.texts.map((t) => t.t)).toEqual(['甲', '乙']);
+    expect(n.stats).toHaveLength(0);
   });
 });

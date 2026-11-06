@@ -1922,6 +1922,15 @@ export function createPhase2Graph(config = {}) {
         figmaRoot: figmaRootForGuard,
         resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
       });
+      // 🧬 刀67：归一比对口径灰度观测（恒打，0 也打；与 phase2 图同款）
+      logger.info(
+        `🧾 文本比对归一: files=${files.filter((f) => String(f.path || '').endsWith('.vue')).length}` +
+          ` matchedBefore=${Math.max(0, exclusiveCheck.borrowedTextIssues.length - (exclusiveCheck.caliber?.normalizedOnly || 0))}` +
+          ` matchedAfter=${exclusiveCheck.borrowedTextIssues.length}` +
+          ` normalizedOnly=${exclusiveCheck.caliber?.normalizedOnly || 0}` +
+          ` healed=${borrowedHeal.healed.text.length}` +
+          ` skipped:noSafeContainer=${borrowedHeal.skippedNoSafeContainer || 0}`,
+      );
       if (
         contentCheck.memberOrderIssues.length > 0 ||
         contentCheck.duplicateTextIssues.length > 0 ||

@@ -17,10 +17,13 @@
 import {
   collectFigmaTruth,
   findNodeById,
+  isBgClassAsset,
+  isIconClassAsset,
   type FigmaAssetTruth,
   type TruthInventory,
 } from './truth-matcher';
 import {
+  anchorByCoveredTexts,
   bgUrlFor,
   buildE2nMap,
   buildStyleRuleIndex,
@@ -291,6 +294,37 @@ function isRuntimeExpr(v: string | undefined): boolean {
   return /(^|[^\w-])(calc|var|clamp|min|max)\s*\(|@[\w-]+/.test(v);
 }
 
+/**
+ * 🔴 节点自身 + 整棵子树的 fill 画像 —— 判「这个 bg 资源到底是图片还是渐变渲染图」。
+ *
+ * 真机实锤（设备面板 `2:8439`/`2:8788`/`2:8807`，2026-11-05）：三张 `bg-*.png` 对应的
+ * Figma 节点都是 `GROUP「bg」` + `VECTOR(GRADIENT_LINEAR)`，**子树零 IMAGE fill**。
+ * 也就是说 png 是 Figma 把**渐变渲染出来的位图**（images API 可渲染任意节点），
+ * 不是设计稿里切出来的图片资源。把它当背景图挂 `url()` 会带来三个错误：
+ *   ① 语义错：真值是渐变，应还原 `linear-gradient(...)`（可主题化、无缩放失真）；
+ *   ② 层级错：渲染图自带合成后的 alpha（`bg-8439` alpha≈12/255），会被误判成「半透明叠加层」；
+ *   ③ 自相矛盾：同一视觉既进 bg 通道、又进 gradient-fill 缺口（父组挂图 / 子节点缺真值）。
+ *
+ * 判据只看 Figma 内部事实，不看文件名：**无 IMAGE 且含 GRADIENT_* ⇒ 渐变渲染图**。
+ * 有 IMAGE fill 的节点（真·切图/位图）行为完全不变（阳性对照：fixture 无 fills 时不触发）。
+ */
+function fillProfileOf(node: any): { hasImage: boolean; gradients: number; solids: number } {
+  let hasImage = false;
+  let gradients = 0;
+  let solids = 0;
+  (function walk(n: any) {
+    if (!n || typeof n !== 'object') return;
+    for (const f of Array.isArray(n.fills) ? n.fills : []) {
+      const t = String(f?.type || '');
+      if (t === 'IMAGE' || t === 'VIDEO') hasImage = true;
+      else if (t.startsWith('GRADIENT')) gradients += 1;
+      else if (t === 'SOLID') solids += 1;
+    }
+    for (const c of n.children || []) walk(c);
+  })(node);
+  return { hasImage, gradients, solids };
+}
+
 // ───────────────────────── 计划构建 ─────────────────────────
 
 export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
@@ -322,7 +356,8 @@ export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
 
   // ── ① 背景图（容器级底图）：资源 bbox ≈ 父容器 bbox ─────────────────────
   for (const a of truth.assets as FigmaAssetTruth[]) {
-    if (!a.fileName || !/^bg-/.test(a.fileName)) continue;
+    // 🔴 S2：bg 路由收口 isBgClassAsset（bg- 前缀外底图同入 bg-image 计划）
+    if (!a.fileName || !isBgClassAsset(a)) continue;
     const parent = a.parentId ? findNodeById(figmaRoot, a.parentId) : undefined;
     const pb = parent?.absoluteBoundingBox;
     const evidence: string[] = [];
@@ -371,6 +406,25 @@ export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
         overlay,
       },
     };
+
+    // 🔴 先判「这张 png 是不是渐变组的渲染图」——它决定后面所有落点/叠加判定是否成立。
+    //   顺序必须在父容器/容器级判据之前：渲染图不是图片资源，挂不挂 url 与落点无关。
+    const bgNode = findNodeById(figmaRoot, String(a.nodeId));
+    const fillProfile = bgNode ? fillProfileOf(bgNode) : undefined;
+    if (fillProfile && !fillProfile.hasImage && fillProfile.gradients > 0) {
+      base.decision = 'skip';
+      base.skipReason = 'gradient-render';
+      evidence.push(
+        `🔴 节点子树零 IMAGE fill、含 ${fillProfile.gradients} 条 GRADIENT_* ⇒ 该 png 是**渐变组渲染图**，不是图片资源：应以 CSS 渐变还原，不主张挂 url()`,
+      );
+      pushEntry(base);
+      gaps.push({
+        kind: 'gradient-fill',
+        figmaId: String(a.nodeId),
+        detail: `渐变渲染图（${fillProfile.gradients} 条 GRADIENT_*、零 IMAGE fill）—— 待采集 colorStops/handles 还原 linear-gradient`,
+      });
+      continue;
+    }
 
     if (!a.parentId) {
       base.decision = 'skip';
@@ -435,6 +489,10 @@ export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
         satisfied = cur === a.fileName && (overlay || !leftover);
         action = satisfied ? 'noop' : 'replace-url';
         before = d.value.trim();
+        // 🔴 已满足 ⇒ 现状就是目标态，after 必须回填现状。否则报告会出现
+        //   「已满足 / 叠图（留底色）」却在 after 列把底色剥掉 —— 照报告手改会把底色删光，
+        //   半透明叠加层下整块编白（白底 + 白字 = 看不见）。
+        if (satisfied) after = before;
         if (cur !== a.fileName) {
           evidence.push(`⚠ ${h.file.path} 该规则已挂其他图（${cur ?? '?'}）⇒ 计划替换`);
         } else if (!satisfied && leftover) {
@@ -481,7 +539,8 @@ export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
 
   // ── ② 静态图（元素级 <img> / 图标变量） ─────────────────────────────
   for (const a of truth.assets as FigmaAssetTruth[]) {
-    if (!a.fileName || /^bg-/.test(a.fileName)) continue;
+    // 🔴 S2：inline 路由收口 isIconClassAsset（bg/strip 归 bg-image、decor 不进计划）
+    if (!a.fileName || !isIconClassAsset(a)) continue;
     const evidence: string[] = [];
     evidence.push(`资源 bbox ${fmtNum(a.width)}×${fmtNum(a.height)}（元素级，非容器底图）`);
     if (a.parentTexts?.length) {
@@ -596,11 +655,100 @@ export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
     pushEntry(entry);
   }
 
+  // ── ③c 叶子填充矩形（背景板）：SOLID 与 GRADIENT 同一通道（2026-11-06）──────
+  // ③ 只覆盖「有直接子文本的容器」；Figma 常见的「bg 矩形 + 内容平级」画法下矩形是叶子，
+  // 永远进不了 ③ ⇒ 背景色/整屏渐变系统性漏回（36:1695 #e1ebff、36:1694 渐变）。
+  // 这里用「几何覆盖文本 → 产物公共祖先」补上（anchorByCoveredTexts），
+  // 判定与落点仍只看 Figma 事实 + 结构映射，不看产物 CSS 数值。
+  for (const r of truth.fillRects ?? []) {
+    const after = r.gradient ?? r.color;
+    if (!after) continue;
+    const isGradient = !!r.gradient;
+    const evidence: string[] = [
+      `Figma 叶子填充矩形「${r.name}」${Math.round(r.bbox.width)}×${Math.round(r.bbox.height)} ${isGradient ? '渐变' : '纯色'} ${after}`,
+      `几何覆盖文本 ${r.coveredTexts.length} 条 [${r.coveredTexts.slice(0, 5).map((t) => `「${t}」`).join(' ')}${r.coveredTexts.length > 5 ? ' …' : ''}]`,
+    ];
+    const entry: PlanEntry = {
+      id: `fillrect/${r.nodeId}`,
+      kind: 'fill-color',
+      decision: 'apply',
+      figma: { nodeId: String(r.nodeId), name: String(r.name ?? '') },
+      evidence,
+      targets: [],
+      conflicts: [],
+      payload: { color: after },
+    };
+    const edge = anchorByCoveredTexts(e2n, r.coveredTexts);
+    if (!edge) {
+      entry.decision = 'skip';
+      entry.skipReason = 'no-anchor';
+      evidence.push('覆盖文本在产物里没有共同祖先（分布在不同子树）');
+      pushEntry(entry);
+      gaps.push({ kind: 'container-fill', figmaId: String(r.nodeId), detail: '叶子填充矩形的覆盖文本无共同祖先' });
+      continue;
+    }
+    evidence.push(
+      `矩形 → ${edge.prodPath} ${edge.classes.map((x) => `.${x}`).join('')}（fill-rect-cover，覆盖 ${edge.matched} 文本）`,
+    );
+    entry.prod = { file: edge.prodPath, classes: edge.classes };
+    const resolved = resolveClassRules(index, edge);
+    if (resolved.skip) {
+      entry.decision = 'skip';
+      entry.skipReason = resolved.skip;
+      evidence.push(`落点解析失败：${resolved.detail}`);
+      pushEntry(entry);
+      continue;
+    }
+    const cls = resolved.cls!;
+    for (const h of resolved.hits!) {
+      const content = contentByPath.get(h.file.path) ?? h.file.content;
+      const body = content.slice(h.rule.bodyStart, h.rule.bodyEnd);
+      const d = readBgDecl(body);
+      const target: PlanTarget = {
+        file: h.file.path,
+        key: `${h.file.path}::${h.rule.bodyStart}`,
+        selector: selKeyOf(h.rule.selNorm),
+        cls,
+        action: 'set-background-color',
+        after,
+        satisfied: false,
+      };
+      if (d.kind === 'background' && d.hasUrl) {
+        // 背景图通道已接管该元素：background 是简写，塞颜色会把 url 整条吃掉
+        target.action = 'noop';
+        target.before = d.value.trim();
+        entry.conflicts.push({
+          entryId: `bg@${h.file.path}:${h.rule.bodyStart}`,
+          rule: 'background 是简写属性，只能有一个值',
+          resolution: '底图优先：该元素已由背景图通道接管，矩形 fill 不再写入',
+        });
+      } else if (d.kind === 'none') {
+        target.before = '(无背景声明)';
+      } else {
+        target.before = d.value.trim();
+        // 🔴 幂等判据：渐变不能走 normColor（会把 linear-gradient(...) 归一成空/误判），
+        //   按「去空白后的字面量」比较；纯色仍走 normColor（#FFF ≡ #ffffff）。
+        target.satisfied = isGradient
+          ? d.value.replace(/\s+/g, '') === after.replace(/\s+/g, '')
+          : normColor(d.value) === normColor(after);
+        // 已是目标态 ⇒ 不主张动作（与背景图通道 line 487 同一约定：satisfied → action=noop），
+        // 否则报表会出现「计划 apply、实际零写入」的自相矛盾条目。
+        if (target.satisfied) target.action = 'noop';
+      }
+      entry.targets.push(target);
+    }
+    pushEntry(entry);
+  }
+
   // ── ③b 渐变 fill：属于「需要颜色真值」但当前真值采集器不收（SOLID/IMAGE 之外） ──
   // 只登记**容器级**（bbox ≈ 父容器）或设计者命名为 `bg` 的渐变节点——它们是"这块区域的背景"，
   // 产物里的渐变目前是 LLM 猜的色标，无法对账。这是计划必须显式承认的事实缺口。
   {
     const seenSig = new Set<string>();
+    /** ③c 已能落地的渐变矩形，不再登记为「事实缺口」（否则报告自相矛盾：既执行又报缺口） */
+    const handledGradIds = new Set(
+      (truth.fillRects ?? []).filter((r) => !!r.gradient).map((r) => String(r.nodeId)),
+    );
     const walkGrad = (n: any, parent?: any) => {
       if (!n || typeof n !== 'object') return;
       const fills = Array.isArray(n.fills) ? n.fills.filter((f: any) => f?.visible !== false) : [];
@@ -610,7 +758,12 @@ export function buildBackfillPlan(opts: BuildPlanOptions): BackfillPlan {
       const containerLevel =
         typeof b.width === 'number' && typeof pb.width === 'number' &&
         Math.abs(b.width - pb.width) <= 1 && Math.abs(b.height - pb.height) <= 1;
-      if (isGrad && n.type !== 'TEXT' && (containerLevel || /^bg$/i.test(String(n.name ?? '')))) {
+      if (
+        isGrad &&
+        n.type !== 'TEXT' &&
+        (containerLevel || /^bg$/i.test(String(n.name ?? ''))) &&
+        !handledGradIds.has(String(n.id ?? ''))
+      ) {
         const sig = `${n.name}#${Math.round(Number(b.width) || 0)}x${Math.round(Number(b.height) || 0)}`;
         if (!seenSig.has(sig)) {
           seenSig.add(sig);

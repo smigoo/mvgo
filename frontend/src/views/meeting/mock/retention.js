@@ -10,10 +10,17 @@
 // 浏览器本地存储里的纪要草稿与中间产物元数据；不谎称删除了从未存在的服务端对象。
 // 真实删除的实现位置在服务端，契约未落地前此处只做本地可验证的部分。
 
-import { STORAGE_PREFIX, INDEX_KEY } from './draft-store.js'
+import { STORAGE_PREFIX, draftIndexKey } from './draft-store.js'
+import { currentMeetingOwnerId, sanitizeOwnerId } from './owner-scope.js'
 
+// 留存策略是**全局单例配置**（契约 ownership: 'global'）：改的是「所有会议留多少天」，
+// 不是某人的私有设置，所以**刻意不加 owner 分区**。但读写它仍必须已登录（服务端 E-15/E-16 挂身份守卫）。
 export const RETENTION_POLICY_KEY = 'mvgo.meeting.retention.policy'
-export const RETENTION_AUDIT_KEY = 'mvgo.meeting.retention.audit'
+// 删除审计的 ownership 是 'retention.actor'（E-17 只清自己名下，E-18 只看自己记录）⇒ 按 actor 分区。
+// 若审计全局共享，A 用户能读到 B 用户删掉了哪些会议（即便只有脱敏计数，也是越权信息）。
+export function retentionAuditKey(ownerId = currentMeetingOwnerId()) {
+  return `mvgo.meeting.retention.audit.${sanitizeOwnerId(ownerId)}`
+}
 export const RETENTION_AUDIT_LIMIT = 200
 
 // Q-04 待产品 / 法务确认，v1 取 90 天为估算上限而非承诺值
@@ -200,11 +207,12 @@ function redactedStatsOf(raw) {
   }
 }
 
-function appendAudit(storage, entry) {
-  const list = readJson(storage, RETENTION_AUDIT_KEY, [])
+function appendAudit(storage, entry, ownerId = currentMeetingOwnerId()) {
+  const key = retentionAuditKey(ownerId)
+  const list = readJson(storage, key, [])
   const rows = Array.isArray(list) ? list : []
   const next = [entry, ...rows].slice(0, RETENTION_AUDIT_LIMIT)
-  if (storage) storage.setItem(RETENTION_AUDIT_KEY, JSON.stringify(next))
+  if (storage) storage.setItem(key, JSON.stringify(next))
   return next
 }
 
@@ -216,14 +224,16 @@ export function deleteDraftByVersion(runVersion, options = {}) {
   const storage = options.storage ?? resolveStorage()
   const at = nowIso(options.now)
   const reason = options.reason || 'user_delete'
+  const ownerId = sanitizeOwnerId(options.ownerId ?? currentMeetingOwnerId())
   if (!storage || !runVersion) {
     return { deleted: false, reason: 'NO_STORAGE_OR_VERSION', runVersion: runVersion || null }
   }
 
-  const index = readJson(storage, INDEX_KEY, [])
+  const indexKey = draftIndexKey(ownerId)
+  const index = readJson(storage, indexKey, [])
   const rows = Array.isArray(index) ? index : []
   const entry = rows.find((r) => r.runVersion === runVersion) || null
-  const storageKey = entry?.key || STORAGE_PREFIX + runVersion
+  const storageKey = entry?.key || `${STORAGE_PREFIX}${ownerId}.${runVersion}`
   const rawText = storage.getItem(storageKey)
 
   if (rawText === null && !entry) {
@@ -239,7 +249,7 @@ export function deleteDraftByVersion(runVersion, options = {}) {
 
   storage.removeItem(storageKey)
   if (entry) {
-    storage.setItem(INDEX_KEY, JSON.stringify(rows.filter((r) => r.runVersion !== runVersion)))
+    storage.setItem(indexKey, JSON.stringify(rows.filter((r) => r.runVersion !== runVersion)))
   }
 
   const auditEntry = {
@@ -248,12 +258,14 @@ export function deleteDraftByVersion(runVersion, options = {}) {
     action: reason === 'expired' ? 'expire_purge' : 'user_delete',
     reason,
     runVersion,
+    // 归属留痕：E-18「只看自己记录」依赖这一列，缺了就只能靠 key 分区，审计本身失去归属证据
+    actor: ownerId,
     artifacts: [...PURGE_ARTIFACTS],
     keeps: [...PURGE_KEEPS],
     // 只有计数，没有任何正文
     redactedStats: redactedStatsOf(raw)
   }
-  const list = appendAudit(storage, auditEntry)
+  const list = appendAudit(storage, auditEntry, ownerId)
   auditEntry.seq = list.length
 
   return { deleted: true, runVersion, storageKey, stats: auditEntry.redactedStats, auditEntry }
@@ -268,9 +280,11 @@ export function purgeExpired(options = {}) {
   // 统一取一次「当前时刻」再分发：readRetentionPolicy / buildPurgePlan / deleteDraftByVersion
   // 三者都接受 string | function，这里固定成 ISO 字符串，避免同一次清理跨秒不一致。
   const now = nowIso(options.now)
+  const ownerId = sanitizeOwnerId(options.ownerId ?? currentMeetingOwnerId())
+  // 策略是全局的（不分区），草稿索引是分区的一一 两者取 key 的方式不同，勿套用同一前缀。
   const policy = readRetentionPolicy(storage, now)
   const days = resolveRetentionDays({ days: options.days ?? policy.days })
-  const index = readJson(storage, INDEX_KEY, [])
+  const index = readJson(storage, draftIndexKey(ownerId), [])
   const rows = Array.isArray(index) ? index : []
   const plan = buildPurgePlan(rows, { now, days })
 
@@ -280,7 +294,7 @@ export function purgeExpired(options = {}) {
 
   const purged = []
   plan.expired.forEach((row) => {
-    const result = deleteDraftByVersion(row.runVersion, { storage, now, reason: 'expired' })
+    const result = deleteDraftByVersion(row.runVersion, { storage, now, ownerId, reason: 'expired' })
     if (result.deleted) purged.push(result)
   })
 
@@ -298,8 +312,8 @@ export function purgeExpired(options = {}) {
   }
 }
 
-export function listRetentionAudit(storage = resolveStorage()) {
-  const list = readJson(storage, RETENTION_AUDIT_KEY, [])
+export function listRetentionAudit(storage = resolveStorage(), ownerId = currentMeetingOwnerId()) {
+  const list = readJson(storage, retentionAuditKey(ownerId), [])
   return Array.isArray(list) ? list : []
 }
 

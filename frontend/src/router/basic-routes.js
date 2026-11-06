@@ -92,6 +92,15 @@ export const basicRoutes = [
         }
       },
       {
+        name: 'Feedbacks',
+        path: 'feedbacks',
+        component: () => import('@/views/admin/FeedbackView.vue'),
+        meta: {
+          title: '任务反馈',
+          adminOnly: true
+        }
+      },
+      {
         name: 'MyStats',
         path: 'my-stats',
         component: () => import('@/views/admin/MyStatsView.vue'),

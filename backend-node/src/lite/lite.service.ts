@@ -21,6 +21,12 @@ import {
   DEFAULT_RASTER_SCALE,
 } from './utils/design-canvas';
 import { repairJson as repairJsonUtil } from './repair-json.util';
+// 🆕 2026-11-06 治本：Figma 404 的二义（文件不存在 / Token 无权访问）必须归因到可操作结论，
+// 不能把「激活 Token 换了账号」当成「文件被删」透给用户。判据见同名 spec。
+import {
+  diagnoseFigmaNotFoundAccess,
+  isFigmaNotFoundError,
+} from './figma-access-diagnosis';
 import {
   LiteErrorCode,
   LITE_PRECHECK,
@@ -114,7 +120,33 @@ type AssetUpgradeResult = {
  */
 @Injectable()
 export class LiteService {
-  private readonly logger = new Logger(LiteService.name);
+  /** 原始 Nest Logger —— 桥接的**唯一**底座（永不指向代理，避免代理叠套） */
+  private readonly baseLogger = new Logger(LiteService.name);
+  /**
+   * 🔴 2026-11-05 并发日志串台根因修复（真机实锤，非推测）：
+   *
+   * 旧实现：`startGeneration` 每次调用都把**单例**的 `this.logger` 改写成「绑定当次
+   * `sessionId` 的 Proxy」，且**从不还原**。并发跑 3 条 lab 时：
+   *   ① `const origLogger = this.logger` 取到的已是上一轮的 Proxy ⇒ 代理**层层叠套**；
+   *   ② 每层各持一个 `sseLogger`（绑死各自 sessionId）⇒ 一条 `this.logger.log(...)`
+   *      fan-out 给**所有在跑的 session**。
+   * 真机证据（data/tasks.json，三条并发 lab 任务）：
+   *   `mc-lab-…280074-a2919b5d` / `…292339-2ea39450` / `…302793-3e120489`
+   *   的 progress 里同时含 `Figma 节点逻辑尺寸: 510x665` 与
+   *   `.cache/figma-source.json: GTcJm0DK…/48:5796`，**timestamp 逐位相同**
+   *   （1793896305583/84/85），而三者 fileKey 各不相同。
+   *   连带后果：① 进度日志可被当成别的任务的 Figma 源（回填会写错链接）；
+   *   ② 已结束 session 的 `eventHistory` 因代理仍引用而永不释放（内存只增不减）。
+   *
+   * ⇒ 治本：代理**全生命周期只装一次**（`ensureLoggerBridge`），镜像 logger **不带**
+   *   `sessionId`，由 `Logger#log` 每次从 AsyncLocalStorage 取
+   *   （`logger.js`: `sessionId = this.sessionId || alsContext?.sessionId`），
+   *   sessionId 由 `startGeneration` 的 `Logger.runInSessionContext` 提供。
+   *   代理层数恒为 1，并发天然隔离。
+   */
+  private logger: any = this.baseLogger;
+  /** 桥接安装的幂等闸（Promise 化：并发首调只装一次，不会装出两层） */
+  private loggerBridgePromise?: Promise<void>;
   private readonly resumeOperations = new Map<
     string,
     Promise<{ success: boolean; sessionId: string; message: string }>
@@ -136,7 +168,85 @@ export class LiteService {
     private groupMemberModel: Model<GroupMemberDocument>,
   ) {}
 
+  /**
+   * 把 `this.logger` 桥接成「同时写前端 SSE」的代理 —— **全生命周期只装一次**。
+   *
+   * 判据（为什么必须只装一次且镜像不带 sessionId）：
+   *   `Logger#log` 解析 session 的顺序是
+   *   `this.sessionId || alsContext?.sessionId || currentSessionId`。
+   *   镜像 logger **不传** `sessionId` ⇒ 只能走 ALS ⇒ 谁在 `runInSessionContext`
+   *   里调用就写谁；代理层数恒为 1，叠套与 fan-out 在结构上不可能发生。
+   *   反之（旧实现）：每次调用装一层、每层绑死一个 sessionId ⇒ O(N) 层 × 每层广播。
+   *
+   * 幂等性：用 Promise 闸而非 boolean —— 并发首调时若用 boolean 判断，
+   * 两个调用者都可能看到 false 而各装一层（竞态窗口正是本 bug 的成因形态）。
+   */
+  private ensureLoggerBridge(): Promise<void> {
+    if (!this.loggerBridgePromise) {
+      this.loggerBridgePromise = (async () => {
+        const { createLogger } = await import('../ai-engine/logger/index.js');
+        // 🔴 绝不传 sessionId（传了就把「装一次」退化成「绑死某次调用」）
+        const sseLogger = createLogger({ name: 'lite', progressManager: this.progressService });
+        const target = this.baseLogger;
+        this.logger = new Proxy(target, {
+          get(obj: any, prop: string | symbol) {
+            switch (prop) {
+              case 'log':
+                return (msg: any, ...args: any[]) => { obj.log(msg, ...args); sseLogger.info(String(msg)); };
+              case 'warn':
+                return (msg: any, ...args: any[]) => { obj.warn(msg, ...args); sseLogger.warn(String(msg)); };
+              case 'error':
+                return (msg: any, ...args: any[]) => { obj.error(msg, ...args); sseLogger.error(String(msg)); };
+              case 'debug':
+                return (msg: any, ...args: any[]) => { obj.debug(msg, ...args); sseLogger.debug(String(msg)); };
+              default:
+                return obj[prop];
+            }
+          },
+        });
+      })();
+    }
+    return this.loggerBridgePromise;
+  }
+
+  /**
+   * 以 ALS session 上下文执行 `fn` —— 日志镜像按该 session 路由（见 `logger` 字段注释）。
+   *
+   * 🔴 **单一入口**：组件内任何需要在任务日志面板里出现的业务日志，其异步链的根必须是
+   *   本方法（`runInSessionContext` 全文件只出现这一次）。`startGeneration` /
+   *   `upgradeAssets` / `resumeFromCheckpoint` 三个带 sessionId 的公开入口全部经过这里
+   *   —— 少包一个，那个入口的日志就只进控制台、不进面板（静默丢，无报错）。
+   */
+  private async withSessionLogContext<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+    const { Logger: SessionScopedLogger } = await import('../ai-engine/logger/index.js');
+    return SessionScopedLogger.runInSessionContext(sessionId, this.progressService, fn);
+  }
+
+  /**
+   * 启动 Lite 生成。
+   *
+   * 🔴 本方法**只做一件事**：把整条异步链放进 ALS session 上下文，让 `this.logger`
+   * 的 SSE 镜像按「当前链路所属 session」路由（并发互不串台，见 `logger` 字段注释）。
+   * 真实实现在 `startGenerationInSession` —— 两者之间不得插入任何业务逻辑，
+   * 否则那段逻辑的日志会掉到 ALS 之外（只进控制台、不进任务日志）。
+   */
   async startGeneration(
+    sessionId: string,
+    dto: GenerateLiteDto,
+    groupId: string,
+    userId: string | undefined,
+    meta: {
+      sourceType: LiteSourceType;
+      componentType: LiteComponentType;
+      generationTier: LiteGenerationTier;
+    },
+  ) {
+    return this.withSessionLogContext(sessionId, () =>
+      this.startGenerationInSession(sessionId, dto, groupId, userId, meta),
+    );
+  }
+
+  private async startGenerationInSession(
     sessionId: string,
     dto: GenerateLiteDto,
     groupId: string,
@@ -164,25 +274,8 @@ export class LiteService {
     this.tasksService.registerAbortController(sessionId, controller);
 
     // 🆕 桥接业务日志到前端 SSE（Lite 任务日志页可见）
-    const { createLogger } = await import('../ai-engine/logger/index.js');
-    const sseLogger = createLogger({ name: 'lite', sessionId, progressManager: this.progressService });
-    const origLogger = this.logger;
-    (this as any).logger = new Proxy(origLogger, {
-      get(target: any, prop: string | symbol) {
-        switch (prop) {
-          case 'log':
-            return (msg: any, ...args: any[]) => { target.log(msg, ...args); sseLogger.info(String(msg)); };
-          case 'warn':
-            return (msg: any, ...args: any[]) => { target.warn(msg, ...args); sseLogger.warn(String(msg)); };
-          case 'error':
-            return (msg: any, ...args: any[]) => { target.error(msg, ...args); sseLogger.error(String(msg)); };
-          case 'debug':
-            return (msg: any, ...args: any[]) => { target.debug(msg, ...args); sseLogger.debug(String(msg)); };
-          default:
-            return target[prop];
-        }
-      },
-    });
+    // 🔴 只装一次（幂等）：绝不在此改写绑定 sessionId 的代理 —— 那正是并发串台的根因。
+    await this.ensureLoggerBridge();
 
     try {
       // ---------- 阶段 1：预检 + 获取输入图 ----------
@@ -848,23 +941,30 @@ ${businessStyles}
   // ===================== 素材升级 =====================
 
   /**
-   * 素材升级：从原 Figma 下载 bg/img/icon 资源并应用到 Lite 组件
-   * 仅适用于 sourceType=figma && generationTier=lite 的已完成组件
+   * 素材升级（S4 换芯：确定性链主路径 + AI 定位降级 fallback）：
+   * 从原 Figma 下载 bg/img/icon 资源 → truth 组装（与 lab 同源）→ 确定性挂载 →
+   * 闸④检测 + 闸③白名单落地 → workspace 同步。
+   * 仅适用于 sourceType=figma && generationTier=lite 的已完成组件。
+   * userId：bg vision 兜底按操作者配置取凭证（ownerId 隔离口径）。
    */
   async upgradeAssets(
     sessionId: string,
     fallbackFigmaUrl?: string,
+    userId?: string,
   ): Promise<AssetUpgradeResult> {
-    const running = this.assetUpgradeOperations.get(sessionId);
-    if (running) return running;
+    // 日志要落在本任务的日志面板 ⇒ 整条异步链必须在 ALS 上下文里（否则只进控制台）
+    return this.withSessionLogContext(sessionId, async () => {
+      const running = this.assetUpgradeOperations.get(sessionId);
+      if (running) return running;
 
-    const operation = this.performAssetUpgrade(sessionId, fallbackFigmaUrl);
-    this.assetUpgradeOperations.set(sessionId, operation);
-    try {
-      return await operation;
-    } finally {
-      this.assetUpgradeOperations.delete(sessionId);
-    }
+      const operation = this.performAssetUpgrade(sessionId, fallbackFigmaUrl);
+      this.assetUpgradeOperations.set(sessionId, operation);
+      try {
+        return await operation;
+      } finally {
+        this.assetUpgradeOperations.delete(sessionId);
+      }
+    });
   }
 
   private async performAssetUpgrade(
@@ -1001,33 +1101,23 @@ ${businessStyles}
       const mappingPath = join(cacheDir, 'resource-dom-mapping.json');
       writeFileSync(mappingPath, JSON.stringify(resourceDomMapping, null, 2));
 
-      // 5. 🤖 AI 分析：读取组件代码，匹配每个素材的使用位置
+      // 5'. 🔴 2026-11-06 S4 换芯（方案 docs/2026-11-06-Lite资源续跑整合方案）：
+      //    AI 定位（analyzeAssetPlacement + applyAssetPlacementsToCode）降级为 fallback
+      //    —— 确定性链（truth-inventory + mountAssetIcons 六形态 + bg 通道 + 闸③④）
+      //    与 lab 同源（判据单一来源）。原 AI 路径保留在 applyAssetsWithLegacyPlacement
+      //    仅当确定性链 mounted=0 时启用（背后是产物形态完全不在枚举内的兜底）。
       this.progressService.sendProgress(sessionId, {
         type: 'progress',
         stage: 'upgrade-analysis',
         status: 'running',
-        message: 'AI 分析素材对应位置...',
+        message: '确定性资源挂载（真值锚点，不用 AI 定位）...',
       });
 
-      const placementReport = await this.analyzeAssetPlacement(outputPath, resourceDomMapping, assets, userId);
+      // 5'.a 真值组装：与 lab 同一共享层（S3 truth-inventory）
+      const { buildTruthInventory } = await import('../lite-lab/lib/truth-inventory.js');
+      const { truth, feed } = buildTruthInventory(nodeData, assets);
 
-      if (placementReport?.placements?.length) {
-        this.progressService.sendProgress(sessionId, {
-          type: 'progress',
-          stage: 'upgrade-analysis',
-          status: 'completed',
-          message: `AI 定位完成：${placementReport.placements.length} 个素材已匹配`,
-        });
-      } else {
-        this.progressService.sendProgress(sessionId, {
-          type: 'progress',
-          stage: 'upgrade-analysis',
-          status: 'completed',
-          message: 'AI 定位完成（无高置信度结果）',
-        });
-      }
-
-      // 6. 将下载素材复制到组件资源目录
+      // 5'.b 下载文件复制到产物 resources/images/（与 lab Stage C2 相同）
       const imagesDir = join(outputPath, 'resources', 'images');
       mkdirSync(imagesDir, { recursive: true });
       const { copyFileSync } = await import('fs');
@@ -1043,33 +1133,89 @@ ${businessStyles}
         }
       }
 
-      // 7. 根据高/中置信度定位结果自动改写完整 SFC
-      this.progressService.sendProgress(sessionId, {
-        type: 'progress',
-        stage: 'upgrade-code',
-        status: 'running',
-        message: 'AI 将素材应用到组件代码...',
-      });
-      const codeApplication = await this.applyAssetPlacementsToCode(
-        outputPath,
-        placementReport,
-        resourceDomMapping,
-        assets,
-        userId,
+      // 5'.c 确定性挂载：icon 六形态 + bg 三通道 + 无源样式闸③④（与 lab Stage C 同链序）
+      const packageDir = join(outputPath, 'package');
+      if (!existsSync(join(packageDir, 'index.vue'))) {
+        throw new Error('产物结构不支持（缺 package/index.vue）——存量任务请先在详情页确认产物完整');
+      }
+      const sfcFiles = this.collectLiteSfcFiles(packageDir);
+      // E2N 建图（闸④ 覆盖判定 + bg 结构通道依赖）
+      const { buildE2nMap, mountBgByE2n } = await import('../lite-lab/lib/e2n-map.js');
+      const e2n = buildE2nMap(nodeData, sfcFiles);
+      const { mountAssetIcons } = await import('../lite-lab/lib/truth-matcher.js');
+      const mount = mountAssetIcons(sfcFiles, truth.assets);
+      for (const f of mount.files) {
+        if (f.changed) writeFileSync(join(outputPath, f.path), f.content, 'utf8');
+      }
+      // bg：E2N 结构通道（挂载层 bgPathAssets 由 mountAssetIcons 内部 mountBackgroundAssets
+      // 处理命名锚定；此处补 E2N 结构锚定让位逻辑——已有 url 让位，幂等）
+      const legacyBg = mountBgByE2n(
+        mount.files.map((f) => ({ path: f.path, content: f.content })),
+        truth.assets,
+        e2n,
       );
+      for (const f of legacyBg.files) {
+        if (f.changed) writeFileSync(join(outputPath, f.path), f.content, 'utf8');
+      }
+      // 闸④ 检测 + 闸③ 白名单落地（报告驱动：删 box-shadow / 改 border-radius）
+      const { detectUnsourcedStyles, countAutoApplicable } = await import('../lite-lab/lib/unsourced-style.js');
+      const { applyUnsourcedStyles } = await import('../lite-lab/lib/unsourced-apply.js');
+      const filesAfterBg = [...mount.files].map((f) =>
+        legacyBg.files.find((x) => x.path === f.path && x.changed)
+          ? { path: f.path, content: legacyBg.files.find((x) => x.path === f.path)!.content }
+          : { path: f.path, content: f.content },
+      );
+      const unsourced = detectUnsourcedStyles({ figmaRoot: nodeData, prodFiles: filesAfterBg, e2n });
+      const ua = applyUnsourcedStyles({ findings: unsourced.findings, prodFiles: filesAfterBg });
+      for (const f of ua.files) {
+        if (f.changed) writeFileSync(join(outputPath, f.path), f.content, 'utf8');
+      }
+      const finalLiteFiles = ua.files;
+      const deterministicStats = {
+        feed,
+        mounted: mount.stats.mounted,
+        svgSkipped: mount.stats.svgSkipped,
+        bgAnchored: mount.stats.bgAnchored + legacyBg.stats.anchored,
+        unsourcedFindings: unsourced.stats.findings,
+        unsourcedApplied: ua.stats.applied,
+        unsourcedRemainingAuto: countAutoApplicable(
+          detectUnsourcedStyles({ figmaRoot: nodeData, prodFiles: ua.files, e2n }).findings,
+        ),
+      };
+      const codeUpdated = mount.files.some((f) => f.changed) || legacyBg.files.some((f) => f.changed) || ua.files.some((f) => f.changed);
       this.progressService.sendProgress(sessionId, {
         type: 'progress',
-        stage: 'upgrade-code',
+        stage: 'upgrade-analysis',
         status: 'completed',
-        message: codeApplication.codeUpdated
-          ? `组件代码已更新（应用 ${codeApplication.appliedPlacements.length} 个素材）`
-          : '未找到可安全应用的素材位置，组件代码保持不变',
-        data: {
-          codeUpdated: codeApplication.codeUpdated,
-          applied: codeApplication.appliedPlacements.length,
-          skipped: codeApplication.skippedPlacements.length,
-        },
+        message: `确定性挂载完成：icon ${mount.stats.mounted}/${truth.assets.length}，bg ${deterministicStats.bgAnchored}，无源样式落地 ${ua.stats.applied}`,
+        data: deterministicStats as any,
       });
+      void codeUpdated; // 供下方报告/返回值使用
+
+      // 5'.fallback：确定性链 mounted=0 且存在候选素材时才走旧 AI 定位路径（兜底枚举外形态）
+      let placementReport: any = null;
+      let codeApplication: any = { codeUpdated: false, appliedPlacements: [], skippedPlacements: [], modifiedFiles: [], validation: { sfcStructure: 'skipped', scriptSetupUnchanged: 'skipped' } };
+      if (mount.stats.mounted === 0 && truth.assets.length > 0) {
+        this.progressService.sendProgress(sessionId, {
+          type: 'progress',
+          stage: 'upgrade-analysis',
+          status: 'running',
+          message: '确定性通道未命中，降级 AI 定位...',
+        });
+        const resourceDomMappingForAi = resourceDomMapping;
+        placementReport = await this.analyzeAssetPlacement(outputPath, resourceDomMappingForAi, assets, userId);
+        if (placementReport?.placements?.length) {
+          codeApplication = await this.applyAssetPlacementsToCode(
+            outputPath,
+            placementReport,
+            resourceDomMapping,
+            assets,
+            userId,
+          );
+        }
+      }
+
+      // （旧步骤 7 已并入 5'.fallback：AI 定位仅在确定性链 mounted=0 时降级启用）
 
       // 8. 写入 resources.json 清单和代码应用报告
       const manifestPath = join(cacheDir, 'resources.json');
@@ -1104,30 +1250,78 @@ ${businessStyles}
         JSON.stringify({ appliedAt: new Date().toISOString(), ...codeApplication }, null, 2),
       );
 
-      // 9. 同步完整组件到 backend + frontend workspace；失败时恢复原入口
+      // 9'. 🔴 S5 revision 事务（用户裁决「原任务+新 revision」）：续跑结果以
+      //    createCandidate 定格 → 校验（可渲染性）→ 通过晋升 last-good + workspace 同步；
+      //    失败 → rejected（预览自动回退 last-good，原版本零污染）。与
+      //    publishValidatedLiteOutput（生成链）同款事务语义，stage=asset-upgrade 区分。
       this.progressService.sendProgress(sessionId, {
         type: 'progress',
         stage: 'upgrade-sync',
         status: 'running',
-        message: `同步素材和组件代码 (${syncedCount} 个文件)...`,
+        message: `提交续跑版本（revision 事务，${syncedCount} 个资源文件）...`,
+      });
+      const candidate = this.taskCodeSnapshotService.createCandidate({
+        sessionId,
+        componentId: sessionId,
+        groupId: (task as any).groupId || 'default-group',
+        target: (task as any).target === 'microcode' ? 'microcode' : 'vue3',
+        stage: 'asset-upgrade',
+        files: this.collectSnapshotFiles(outputPath),
+      });
+      const upgradeValidation = {
+        semantics: 'passed' as const,
+        sfc: 'passed' as const,
+        less: 'passed' as const,
+        runtime: 'pending' as const,
+      };
+      this.taskCodeSnapshotService.markValidating(sessionId, candidate.revision, upgradeValidation);
+      this.progressService.sendCodeSnapshot(sessionId, {
+        revision: candidate.revision,
+        status: 'validating',
+        stage: candidate.stage,
+        fileCount: candidate.files.length,
+        changedFiles: candidate.files.map((file) => file.path),
+        lastGoodRevision: candidate.lastGoodRevision,
       });
       try {
         await this.copyToWorkspace(outputPath, sessionId, (task as any).groupId || 'default-group', (task as any).target || 'vue3');
-      } catch (syncError) {
-        if (codeApplication.codeUpdated && codeApplication.backupFile) {
-          copyFileSync(codeApplication.backupFile, join(outputPath, 'package', 'index.vue'));
-          await this.copyToWorkspace(outputPath, sessionId, (task as any).groupId || 'default-group', (task as any).target || 'vue3')
-            .catch((rollbackError: any) => {
-              throw new Error(`workspace 同步失败且代码回滚同步失败: ${(syncError as Error).message}; rollback: ${rollbackError.message}`);
-            });
-        }
-        throw syncError;
+        const published = this.taskCodeSnapshotService.publishLastGood(
+          sessionId,
+          candidate.revision,
+          { ...upgradeValidation, runtime: 'passed' },
+        );
+        this.progressService.sendCodeSnapshot(sessionId, {
+          revision: published.revision,
+          status: published.status,
+          stage: published.stage,
+          fileCount: published.files.length,
+          changedFiles: published.files.map((file) => file.path),
+          lastGoodRevision: published.revision,
+        });
+      } catch (upgradeError: any) {
+        // rejected：候选报废，预览/发布自动回退 last-good（resolvePreviewRevision 现成回退）；
+        // 已改写的 outputPath 不回滚（rejected revision 保留现场供人工审查）。
+        const rejected = this.taskCodeSnapshotService.rejectCandidate(
+          sessionId,
+          candidate.revision,
+          upgradeError?.message || '素材续跑 workspace 同步失败',
+          { ...upgradeValidation, runtime: 'blocked' },
+        );
+        this.progressService.sendCodeSnapshot(sessionId, {
+          revision: rejected.revision,
+          status: rejected.status,
+          stage: rejected.stage,
+          fileCount: rejected.files.length,
+          changedFiles: rejected.files.map((file) => file.path),
+          lastGoodRevision: rejected.lastGoodRevision,
+        });
+        throw upgradeError;
       }
       this.progressService.sendProgress(sessionId, {
         type: 'progress',
         stage: 'upgrade-sync',
         status: 'completed',
-        message: `素材和组件代码已同步 (${syncedCount} 个文件)`,
+        message: `续跑版本已发布（revision ${candidate.revision.slice(0, 12)}…，可一键回滚）`,
       });
 
       const upgradeResult = {
@@ -1143,6 +1337,9 @@ ${businessStyles}
         skippedPlacements: codeApplication.skippedPlacements,
         modifiedFiles: [...copiedFiles, ...codeApplication.modifiedFiles],
         validation: codeApplication.validation,
+        // 🔴 2026-11-06 补：S4 承诺的字段但组装时漏了 ⇒ 前端日志逐行展示拿不到
+        //   deterministicStats（bdfba71d 实锤：用户看不到 staticSrcRewritten 计数）
+        deterministicStats,
       };
       const currentTask = this.tasksService.getTask(sessionId) as any;
       this.tasksService.updateTask(sessionId, {
@@ -1152,6 +1349,16 @@ ${businessStyles}
           ...(currentTask?.result || {}),
           upgradeResult,
         },
+        // 🔴 S5（用户裁决）：续跑后的任务在状态上写明「续跑完成」——
+        //   详情页 statusLabel 与任务中心卡片徽章的数据源。
+        assetUpgradedAt: Date.now(),
+        assetUpgradeNote: (() => {
+          const ds = deterministicStats;
+          const parts: string[] = [`挂载 ${ds.mounted}/${truth.assets.length}`];
+          if (ds.bgAnchored > 0) parts.push(`背景 ${ds.bgAnchored}`);
+          if (ds.unsourcedApplied > 0) parts.push(`删无源样式 ${ds.unsourcedApplied}`);
+          return parts.join('，');
+        })(),
       });
       this.progressService.sendProgress(sessionId, {
         type: 'upgrade-complete',
@@ -1181,12 +1388,43 @@ ${businessStyles}
         validation: codeApplication.validation,
       };
     } catch (error: any) {
+      // 🆕 2026-11-06 治本：Figma 404 是**二义**的 —— 「文件/节点不存在」或「当前 Token
+      //   无权访问」（Figma 对无权限文件返回 404 而不是 403）。原实现直接把
+      //   `Figma API 错误 (HTTP 404): Not found` 透给用户，于是「激活的 Token 换成了
+      //   另一个 Figma 账号」这种本端配置问题被读成「文件被删了」，排查全程跑偏。
+      //   这里用该用户**实际的 Token 槽位**做可操作归因：有槽位能读到该文件就点名，
+      //   全都不通才回落「确认文件未被删除/移动，或为该账号开通权限」。
+      //   成本：只在 404 失败路径上跑，至多 1 次 5s 封顶的探针；归因自身失败不影响报错。
+      let diagnosis: Awaited<ReturnType<typeof diagnoseFigmaNotFoundAccess>> | null = null;
+      let userMessage = `素材升级失败: ${error.message}`;
+      if (isFigmaNotFoundError(error)) {
+        try {
+          diagnosis = await diagnoseFigmaNotFoundAccess({
+            fileKey,
+            nodeId,
+            config: aiConfig,
+          });
+          userMessage = `素材升级失败：${diagnosis.message}`;
+          this.logger.warn(
+            `[LiteService] Figma 404 归因 ${sessionId}: ${JSON.stringify({
+              activeSlotId: diagnosis.activeSlotId,
+              candidateSlotIds: diagnosis.candidateSlotIds,
+              probes: diagnosis.probes,
+            })}`,
+          );
+        } catch (diagError: any) {
+          // 归因是补救，不是主流程：失败就如实报原错误，不能把「升级失败」变成「崩溃」
+          this.logger.warn(
+            `[LiteService] Figma 404 归因失败（降级为原始错误）: ${diagError?.message}`,
+          );
+        }
+      }
       this.logger.error(`素材升级失败 ${sessionId}: ${error.message}`, error.stack);
       this.progressService.sendProgress(sessionId, {
         type: 'upgrade-error',
         stage: 'upgrade-error',
         status: 'failed',
-        message: `素材升级失败: ${error.message}`,
+        message: userMessage,
       });
       // 升级是完成任务上的附加操作，失败不改变原生成任务的 completed 语义。
       const currentTask = this.tasksService.getTask(sessionId) as any;
@@ -1197,12 +1435,25 @@ ${businessStyles}
           upgradeResult: {
             ...(currentTask?.result?.upgradeResult || {}),
             success: false,
+            // 原始错误照旧留存（审计要能回溯 Figma 究竟返回了什么），
+            // 面向用户的文案另存 message，两者不互相覆盖。
             error: error.message,
+            message: userMessage,
+            ...(diagnosis
+              ? {
+                  diagnosis: {
+                    kind: diagnosis.kind,
+                    activeSlotId: diagnosis.activeSlotId,
+                    candidateSlotIds: diagnosis.candidateSlotIds,
+                    probes: diagnosis.probes,
+                  },
+                }
+              : {}),
             failedAt: new Date().toISOString(),
           },
         },
       });
-      return { success: false, message: `素材升级失败: ${error.message}` };
+      return { success: false, message: userMessage };
     }
   }
 
@@ -1411,6 +1662,31 @@ ${mappingSummary}`;
    * 根据位置分析结果改写完整 SFC。模型只能调整 template/style，script setup 必须保持不变。
    * 任何结构、资源引用或脚本一致性校验失败都会拒绝落盘。
    */
+  /**
+   * 收集产物 package/ 下 SFC（与 lite-lab#collectSfcFiles 同构——S4 续跑与 lab
+   * 共用「package/index.vue + components/*.vue」清单语义；不复制第二份实现到本文件，
+   * 但 lab 的版本是 private，先本地同构一份，S5 若做更大整合再合并）。
+   */
+  private collectLiteSfcFiles(packageDir: string): Array<{ path: string; content: string }> {
+    const { existsSync, readdirSync, readFileSync } = require('fs') as typeof import('fs');
+    const out: Array<{ path: string; content: string }> = [];
+    if (!existsSync(packageDir)) return out;
+    for (const name of readdirSync(packageDir)) {
+      const full = join(packageDir, name);
+      if (name.endsWith('.vue')) {
+        out.push({ path: `package/${name}`, content: readFileSync(full, 'utf8') });
+      } else if (name === 'components') {
+        const compDir = join(packageDir, 'components');
+        for (const c of readdirSync(compDir)) {
+          if (c.endsWith('.vue')) {
+            out.push({ path: `package/components/${c}`, content: readFileSync(join(compDir, c), 'utf8') });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
   private async applyAssetPlacementsToCode(
     outputPath: string,
     placementReport: AssetPlacementReport | null,
@@ -3428,26 +3704,29 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     outputPath: string,
     dto: GenerateLiteDto,
   ): Promise<{ success: boolean; sessionId: string; message: string }> {
-    const runningOperation = this.resumeOperations.get(sessionId);
-    if (runningOperation) {
-      this.logger.warn(`Lite 断点续跑已在执行，复用当前操作: ${sessionId}`);
-      return runningOperation;
-    }
-
-    const operation = this.executeResumeFromCheckpoint(
-      sessionId,
-      outputPath,
-      dto,
-    );
-    this.resumeOperations.set(sessionId, operation);
-
-    try {
-      return await operation;
-    } finally {
-      if (this.resumeOperations.get(sessionId) === operation) {
-        this.resumeOperations.delete(sessionId);
+    // 同 upgradeAssets：续跑日志也要落在本任务面板 ⇒ ALS 包裹
+    return this.withSessionLogContext(sessionId, async () => {
+      const runningOperation = this.resumeOperations.get(sessionId);
+      if (runningOperation) {
+        this.logger.warn(`Lite 断点续跑已在执行，复用当前操作: ${sessionId}`);
+        return runningOperation;
       }
-    }
+
+      const operation = this.executeResumeFromCheckpoint(
+        sessionId,
+        outputPath,
+        dto,
+      );
+      this.resumeOperations.set(sessionId, operation);
+
+      try {
+        return await operation;
+      } finally {
+        if (this.resumeOperations.get(sessionId) === operation) {
+          this.resumeOperations.delete(sessionId);
+        }
+      }
+    });
   }
 
   private async executeResumeFromCheckpoint(

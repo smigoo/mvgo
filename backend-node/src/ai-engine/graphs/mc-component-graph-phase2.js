@@ -3588,6 +3588,17 @@ export function createPhase2Graph(config = {}) {
         resourceDomMapping:
           state.resourceDomMapping || state._uiCache?.resourceDomMapping,
       });
+      // 🧬 刀67：归一比对口径灰度观测（恒打，0 也打）。
+      //   normalizedOnly = 「归一后才命中、原口径 includes 不中」的增量（7d3fc546 跨 span 拆词病灶）；
+      //   matchedBefore = 原口径命中数；skipped = 借据命中但三重护栏不满足、只留痕未删。
+      logger.info(
+        `🧾 文本比对归一: files=${files.filter((f) => String(f.path || '').endsWith('.vue')).length}` +
+          ` matchedBefore=${Math.max(0, exclusiveCheck.borrowedTextIssues.length - (exclusiveCheck.caliber?.normalizedOnly || 0))}` +
+          ` matchedAfter=${exclusiveCheck.borrowedTextIssues.length}` +
+          ` normalizedOnly=${exclusiveCheck.caliber?.normalizedOnly || 0}` +
+          ` healed=${borrowedHeal.healed.text.length}` +
+          ` skipped:noSafeContainer=${borrowedHeal.skippedNoSafeContainer || 0}`,
+      );
       // 🎯 2026-10-03 治本：techstack 契约-产物一致性（per-section，65808cdd 实锤——
       //   210:45499 保存按钮契约 a-button 被 LLM 用 <img alt="关闭"> 顶替且无任何防线拦截）。
       //   检测类，只留痕不阻断（与借用证据处置同级）：violations 进 meta.contentMappingIssues。

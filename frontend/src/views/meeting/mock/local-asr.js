@@ -1,32 +1,58 @@
 // 本地 Whisper 离线转写（真实 ASR，非示例稿）
 //
+// 计算后端：**只走 WebGPU**。
+//
+// 为什么不再回落 WebAssembly（2026-11-06 实测结论，别再改回去）：
+// ORT 1.31 的 dist 里只有 threaded 构建（asyncify / jsep / jspi / 普通，全是 *-threaded），
+// 而 threaded 构建依赖 SharedArrayBuffer。本页没有开跨域隔离（crossOriginIsolated=false、
+// SharedArrayBuffer 为 undefined），ORT 不会退回单线程，而是在 pthread 池初始化处死等，
+// 而且是**同步占死主线程** —— Promise、定时器统统不再执行，连「超时后报错」都跑不出来。
+// 同一台机器上换 WebGPU 后端（不依赖 SAB）实测可跑通：load 27s、12s 中文音频转写 46s
+// 正常返回 4 段带时间戳的文字。因此这里在探测不到 WebGPU 时**明确拒绝**，
+// 不假装 wasm 还能兜底（那只会让页面永久卡死、还报不出原因）。
+// 代价：需要 Chrome / Edge 113+ 或 Safari 26+；不满足就如实提示改用服务端转写。
+//
+// 实际用到的后端与权重精度会被记录并在 describe() 里如实暴露，不允许「以为在 GPU 上、其实在 CPU 上」。
+//
 // 边界（硬约束，勿在未完成验证前放宽）：
 // 1. 音频**不出本机**：PCM 只在本页内存里传给推理管线，不 fetch、不上传、不写后端。
 // 2. 模型权重从镜像站按需下载到浏览器缓存（Cache Storage），首次会慢，之后走缓存。
 // 3. 说话人分离（男A/女A）**本地未实现**：Whisper 只给文字与时间戳，不做声纹聚类。
 //    因此 speaker 一律标成 S1 且 speakerDiarized=false，页面不得伪造成「男A/女A」。
 // 4. 转写不到文字就返回空数组，**绝不用示例稿兜底**。空就是空，页面要如实展示 0 句。
+// 5. 跑通的范围仅限「WebGPU 后端 + Chrome 内核」：wasm 后端与真机长会议未验证，
+//    不得据此宣称「所有浏览器都能本机转写」。
 
 import { formatDuration } from './live-session.js'
 
-// 默认模型：base 的 q8 量化版，中文可识别，权重约 40MB 级。
-// small 更准但约 3 倍权重与推理耗时，作为可选档位。
+// 档位与体积均取自实测（hf-mirror 上各文件的真实 Content-Length，2026-11-06）：
+//   fp16 配方 = encoder_model_fp16 + decoder_model_merged_fp16（适配器支持 shader-f16 时）
+//   fp32+q4  = encoder_model(fp32) + decoder_model_merged_q4（适配器不支持 f16 时）
+// tiny 71MB / 113MB，base 138MB / 195MB，small 462MB / 558MB。
+// 默认 base：tiny 实测错字明显（「讨论」→「炒论」、「项目」→「向目」），base 才够日常会议用。
 export const LOCAL_ASR_MODELS = Object.freeze([
+  {
+    id: 'Xenova/whisper-tiny',
+    label: 'Whisper Tiny（最快）',
+    note: '约 71MB / 113MB · 中文错字明显 · 只适合通路验证或弱网',
+    approxBytes: 71 * 1024 * 1024
+  },
   {
     id: 'Xenova/whisper-base',
     label: 'Whisper Base（默认）',
-    note: '约 40MB 权重 · 中文可识别 · 速度较快',
-    approxBytes: 44 * 1024 * 1024
+    note: '约 138MB / 195MB · 中文日常会议可用 · 首次下载最慢的一步',
+    approxBytes: 138 * 1024 * 1024
   },
   {
     id: 'Xenova/whisper-small',
     label: 'Whisper Small（更准）',
-    note: '约 120MB 权重 · 中文更准 · 明显更慢',
-    approxBytes: 130 * 1024 * 1024
+    note: '约 462MB / 558MB · 中文最准 · 下载与耗时都明显更高',
+    approxBytes: 462 * 1024 * 1024
   }
 ])
 
-export const LOCAL_ASR_DEFAULT_MODEL = LOCAL_ASR_MODELS[0].id
+// 默认档位 = Base，不取数组第 0 项：tiny 只用于通路验证，第 0 项是「最快」而非「默认」
+export const LOCAL_ASR_DEFAULT_MODEL = 'Xenova/whisper-base'
 
 // 镜像：huggingface.co 在境内不可达，用 hf-mirror.com 拉权重
 export const LOCAL_ASR_REMOTE_HOST = 'https://hf-mirror.com/'
@@ -57,7 +83,7 @@ export const ASR_FAILURES = Object.freeze({
 
 const ASR_FAILURE_HINTS = Object.freeze({
   weights:
-    '权重是按需从 hf-mirror.com 拉的（Base 约 40MB / Small 约 120MB），' +
+    '权重是按需从 hf-mirror.com 拉的（Base 约 73MB / Small 约 238MB，WebGPU 档更大），' +
     '请确认网络或代理能连通该镜像站，然后重试；已下载部分会留在浏览器缓存里。',
   assets:
     '加载模型资源这一步失败了（可能是权重，也可能是推理内核 wasm）。' +
@@ -65,8 +91,9 @@ const ASR_FAILURE_HINTS = Object.freeze({
   lib: '转写库（@huggingface/transformers）没能加载：先刷新页面重试；' +
     '若持续失败，检查构建产物里是否包含该依赖与配套的 wasm 资源。',
   engine:
-    '本机浏览器的离线推理环境不可用（WebAssembly 后端没就绪）：' +
-    '建议换最新版 Chrome / Edge，或开启页面跨域隔离（COOP/COEP）后重试。',
+    '本机推理依赖浏览器的 WebGPU：请用最新版 Chrome / Edge（113+）或 Safari 26+ 打开本页。' +
+    '当前浏览器若拿不到 WebGPU 适配器，本机转写就不可用（这与网络无关，也不会自动退回 CPU 兜底），' +
+    '请改用服务端转写。',
   memory:
     '本机内存不足：换用「Whisper Base」档位、缩短单次录音时长，或先关掉其他标签页再重试。',
   runtime:
@@ -112,6 +139,7 @@ const ASR_FAILURE_PATTERNS = Object.freeze({
   engine: [
     'webassembly',
     'wasm',
+    'webgpu',
     'no available backend',
     'no backend',
     'backend not',
@@ -257,6 +285,101 @@ function resolveOrtWasmPaths() {
   }
 }
 
+// ---- 计算后端：WebGPU 优先，不可用则回落 WebAssembly ----
+//
+// 为什么不是「有 navigator.gpu 就用」：navigator.gpu 存在只说明浏览器**实现了这个 API**，
+// 不代表**本机有可用适配器** —— 驱动在黑名单里、跑在无头/虚拟 GPU 上、被企业策略禁用，
+// requestAdapter() 都会返回 null。所以必须真发一次 requestAdapter 才能下结论。
+//
+// 为什么 dtype 要跟着后端走：权重精度决定要下载哪些文件。
+// wasm 与 WebGPU 的推荐配方不同，用错配方要么报错、要么白白多下几百 MB。
+
+// wasm 后端已不再用于建会话（见文件头实测记录），这里保留 q8 只为了让
+// probeComputeDevice 在无 WebGPU 的机器上仍能返回一个「若可用会是哪种精度」的
+// 可解释口径，以及 describe() 有值可填 —— 不要据此以为页面会跑 wasm。
+const WASM_DTYPE = 'q8'
+
+// WebGPU 下按适配器能力二选一：
+// - 支持 shader-f16 → 全 fp16（Base 139MB / Small 463MB，最快）
+// - 否则 → 编码器 fp32 + 解码器 q4（Base 197MB / Small 559MB，transformers.js 官方配方）
+const WEBGPU_DTYPE_F16 = Object.freeze({ encoder_model: 'fp16', decoder_model_merged: 'fp16' })
+const WEBGPU_DTYPE_FP32_Q4 = Object.freeze({
+  encoder_model: 'fp32',
+  decoder_model_merged: 'q4'
+})
+
+/**
+ * 探测本机可用的推理后端与配套权重精度。
+ * 三步全过才算 WebGPU：navigator.gpu 存在 → 安全上下文 → requestAdapter() 拿到适配器。
+ * 任何一步不满足或抛错都判为 `wasm`（= 本机转写不可用，由 load() 如实拒绝）；
+ * **探测失败不是转写失败**，所以这里只返回结论、不上抛异常。
+ * 纯 Node 环境（冒烟脚本直接 import 本文件）没有可用的 navigator.gpu，会安全判为 wasm。
+ * @returns {Promise<{ device: 'webgpu'|'wasm', dtype: string|object, reason: string, shaderF16: boolean }>}
+ */
+export async function probeComputeDevice() {
+  const wasmPlan = (why) => ({ device: 'wasm', dtype: WASM_DTYPE, reason: why, shaderF16: false })
+  try {
+    if (typeof navigator === 'undefined' || !navigator.gpu) {
+      return wasmPlan('浏览器未提供 navigator.gpu')
+    }
+    if (typeof isSecureContext !== 'undefined' && !isSecureContext) {
+      return wasmPlan('非安全上下文（WebGPU 仅在 HTTPS 或 localhost 下可用）')
+    }
+    if (typeof navigator.gpu.requestAdapter !== 'function') {
+      return wasmPlan('navigator.gpu 缺少 requestAdapter')
+    }
+    const adapter = await navigator.gpu.requestAdapter()
+    if (!adapter) {
+      return wasmPlan('未取得 GPU 适配器（驱动黑名单 / 无头环境 / 策略禁用）')
+    }
+    const hasF16 =
+      typeof adapter.features?.has === 'function' && adapter.features.has('shader-f16')
+    return hasF16
+      ? {
+          device: 'webgpu',
+          dtype: WEBGPU_DTYPE_F16,
+          reason: 'WebGPU（适配器支持 shader-f16）',
+          shaderF16: true
+        }
+      : {
+          device: 'webgpu',
+          dtype: WEBGPU_DTYPE_FP32_Q4,
+          reason: 'WebGPU（适配器无 shader-f16，改用 fp32+q4）',
+          shaderF16: false
+        }
+  } catch (error) {
+    return wasmPlan(`WebGPU 探测异常：${error?.message || String(error)}`)
+  }
+}
+
+/**
+ * 尽力核实 pipeline 真实跑在哪个后端上。
+ * transformers.js / onnxruntime-web 没有公开的「本次用了哪个 EP」接口，会话对象是内部结构，
+ * 路径可能随版本变化，因此这里**只做只读的尽力探测**：
+ * 拿不到就返回 null（页面显示「未核实」），绝不把「请求的设备」当成「实际使用的设备」上报。
+ */
+function sniffBackend(asr) {
+  const picks = [
+    () => asr?.model?.encoder?.session,
+    () => asr?.model?.encoder_session,
+    () => asr?.model?.decoder?.session,
+    () => asr?.model?.decoder_model_merged?.session
+  ]
+  for (const pick of picks) {
+    try {
+      const session = pick()
+      const name =
+        session?.handler?.backendName ||
+        session?.session?.handler?.backendName ||
+        session?.backendName
+      if (typeof name === 'string' && name) return name
+    } catch {
+      // 内部结构不可读：忽略，试下一个候选
+    }
+  }
+  return null
+}
+
 let libPromise = null
 
 function loadLib() {
@@ -295,6 +418,14 @@ export function createLocalAsr(options = {}) {
   let loadedBytes = 0
   let totalBytes = 0
 
+  // 实际使用的后端 / 精度 / 是否发生过回落 / 尽力核实到的真实后端。
+  // 未加载前一律为 null，不预设默认值 —— 默认值会变成「没测过也敢说」。
+  let activeDevice = null
+  let activeDtype = null
+  let deviceReason = ''
+  let deviceBackend = null
+  let deviceFallback = false
+
   function setPhase(next, detail = '') {
     phase = next
     onPhase(next, detail)
@@ -321,12 +452,30 @@ export function createLocalAsr(options = {}) {
     if (pipelinePromise) return pipelinePromise
     setPhase(ASR_PHASES.loading, model)
     pipelinePromise = (async () => {
+      // 先探测后端再定 dtype：探测自身已兜底（拿不到就 wasm），不会把 load 带崩
+      const plan = await probeComputeDevice()
+      activeDevice = plan.device
+      activeDtype = plan.dtype
+      deviceReason = plan.reason
+      deviceFallback = false
+      deviceBackend = null
+
+      // 硬门槛：本机转写只走 WebGPU。拿不到适配器就**当场如实拒绝** ——
+      // 不能像以前那样「回落 wasm 再试一次」，那一步会在 pthread 池处同步卡死主线程，
+      // 页面既出不了字也出不了错（详见文件头实测记录）。
+      if (plan.device !== 'webgpu') {
+        throw new Error(`本机转写需要 WebGPU，当前环境不可用：${plan.reason}`)
+      }
+
       const { pipeline } = await loadLib()
       const asr = await pipeline('automatic-speech-recognition', model, {
-        dtype: 'q8',
-        device: 'wasm',
+        dtype: plan.dtype,
+        device: plan.device,
         progress_callback: handleProgress
       })
+
+      // 尽力核实真实后端；核实不到就是 null，页面显示「未核实」，不臆造
+      deviceBackend = sniffBackend(asr)
       setPhase(ASR_PHASES.ready, model)
       return asr
     })().catch((error) => {
@@ -441,6 +590,13 @@ export function createLocalAsr(options = {}) {
         remoteHost: LOCAL_ASR_REMOTE_HOST,
         uploaded: false,
         diarization: false,
+        // 本次**实际使用**的后端与精度（含回落结果）；未加载时为 null
+        device: activeDevice,
+        dtype: activeDtype,
+        deviceReason,
+        // 尽力核实到的真实后端；核实不到为 null，页面应显示「未核实」而不是拿 device 顶替
+        deviceBackend,
+        deviceFallback,
         phase
       }
     }

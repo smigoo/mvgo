@@ -209,6 +209,13 @@ function analyzeSectionCoverage(files, componentPlan) {
   }
 
   const candidates = sectionNameCandidates(componentPlan);
+  // 🧬 2026-11-06（刀66-C 收尾 · 评审 P1）：**段级 v-for 物化**——index 的循环数据数组
+  //   显式枚举了该段 id ⇒ 该段由代表模板渲染，已物化，不得判缺失。
+  //   背景：index 三个重复段标签被收成一个 `v-for` 后，兄弟段不再有独立组件文件
+  //   （薄包装与 import 一并原子清理）。若此处不认这条通道，会翻成 UNMATERIALIZED
+  //   ⇒ `artifactIncomplete=true` ⇒ 明明渲染正确却判「段未落地」。
+  //   判据只认**结构**：`v-for="… in NAME"` 且 `const NAME = [ { id: '<段id>' … } ]`。
+  const repeatIds = collectVForDataIds(tpl, script);
   const missing = [];
   for (const sec of sections) {
     const id = String(sec?.id || '');
@@ -217,6 +224,8 @@ function analyzeSectionCoverage(files, componentPlan) {
     const expected = cands[0] || kebabToPascal(normalizeSectionId(id));
     const viaComponent = cands.some((n) => n && assembled(n));
     const viaTitle = title.length >= 2 && reachable.includes(title);
+    // 🧬 段级 v-for 数据数组覆盖 ⇒ 已由代表模板物化（与刀66-C 同一契约）
+    const viaRepeatGroup = repeatIds.has(id);
     const viaListTemplate =
       isListLikeSection(sec) &&
       (viaComponent ||
@@ -226,11 +235,62 @@ function analyzeSectionCoverage(files, componentPlan) {
           reachable,
           Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0),
         ));
-    if (viaComponent || viaTitle || viaListTemplate) continue;
+    if (viaComponent || viaTitle || viaRepeatGroup || viaListTemplate) continue;
     const hasFile = cands.some((n) => n && fileByPath.has(`package/components/${n}.vue`));
     missing.push({ id, title: title || id, expected, hasFile });
   }
   return { missing };
+}
+
+/**
+ * 从 index.vue 提取「被 v-for 数据数组覆盖的段 id」集合。
+ *
+ * 只认一种极窄形态（避免正则解析模板树的老坑）：
+ *   `v-for="(x, i) in NAME"` 或 `v-for="x in NAME"`  +  `const NAME = [ … ]`
+ * 然后在数组字面量里取所有 `id: '<value>'`。
+ * 取不到 / 括号不配平 ⇒ 返回空集（fail-open：不豁免任何段，行为与旧实现一致）。
+ *
+ * @param {string} tpl index.vue 模板区
+ * @param {string} script index.vue script 区
+ * @returns {Set<string>}
+ */
+function collectVForDataIds(tpl, script) {
+  const out = new Set();
+  const text = String(tpl || '');
+  const src = String(script || '');
+  if (!text || !src) return out;
+  const names = new Set();
+  for (const m of text.matchAll(/\bv-for\s*=\s*["'`][^"'`]*?\bin\b\s+([A-Za-z_$][\w$]*)/g)) {
+    if (m[1]) names.add(m[1]);
+  }
+  for (const name of names) {
+    const declRx = new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*\\[`);
+    const dm = declRx.exec(src);
+    if (!dm) continue;
+    // 从 `[` 起做深度配平，取数组字面量原文（字符串内的括号不参与配平）
+    const start = dm.index + dm[0].length - 1;
+    let depth = 0;
+    let inStr = null;
+    let end = -1;
+    for (let i = start; i < src.length; i += 1) {
+      const ch = src[i];
+      if (inStr) {
+        if (ch === '\\') { i += 1; continue; }
+        if (ch === inStr) inStr = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+      if (ch === '[') depth += 1;
+      else if (ch === ']') {
+        depth -= 1;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end < 0) continue;
+    const literal = src.slice(start, end + 1);
+    for (const m of literal.matchAll(/\bid\s*:\s*(['"])([^'"]+)\1/g)) out.add(String(m[2]));
+  }
+  return out;
 }
 
 /**

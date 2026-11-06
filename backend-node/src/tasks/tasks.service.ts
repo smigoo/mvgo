@@ -206,6 +206,10 @@ export interface Task {
   userId?: string;
   /** 质量门禁语义：passed=文本、运行时与视觉均通过；warned=可运行但仍需继续优化 */
   qualityGate?: 'passed' | 'warned';
+  /** 🔴 S5（2026-11-06）：素材续跑（upgrade-assets）完成时间戳——详情/列表「续跑完成」徽章依据 */
+  assetUpgradedAt?: number;
+  /** 素材续跑摘要（挂载/背景/无源样式落地计数，一行文案） */
+  assetUpgradeNote?: string;
   /** P0-3: 视觉分析降级标志（视觉超时→Figma 兜底 或 完全降级），「最近生成」卡片展示用 */
   visualDegraded?: boolean;
   /** P0-3: 布局结构来源（figma=兜底重建 / degraded=完全降级 / structure-order-failed=门禁重试后仍颠倒） */
@@ -1745,16 +1749,20 @@ export class TasksService {
   }
 
   /**
-   * 🆕 2026-11-05：任务记录缺 fileKey/nodeId 时，从**产物目录** `.cache/figma-source.json`
-   * 回填 Figma 源（生成期就由 lite.service#saveFigmaSource 写好的同一约定文件）。
+   * 🆕 2026-11-05：任务记录缺 fileKey/nodeId 时回填 Figma 源。
    *
    * 背景（真机实锤）：lite-lab 实验任务（`mc-lab-*`）在 fileKey 注入补丁生效**之前**落库，
    * 34 条全部 `fileKey=''`；前端「最近生成任务」下拉按 `t.fileKey` 重建链接
    * （components.vue#figmaHistoryTasks）⇒ 这些实验任务既占走 recent 的窗口名额、
    * 又在历史里彻底隐身，表现为「历史无故减少」。
    *
-   * 只对 fileKey 为空的任务读盘，结果按 sessionId 缓存 60s（命中即零 IO）；
-   * 回填成功后写回内存任务对象，下一次 persist 自然落盘，从此不再依赖读盘。
+   * 🔴 2026-11-06 修订（用户口径「清理任务不应该影响历史记录」）：
+   *   **回填优先级 = 任务记录 > 产物读盘**，见 `readFigmaSourceFromProgress`。
+   *   原实现只有「读产物 `.cache/figma-source.json`」一条路，用户清理产物后
+   *   历史连带丢链接 —— 数据源选错层级，不是清理的错。
+   *
+   * 结果按 sessionId 缓存 60s（命中即零 IO）；回填成功后写回内存任务对象，
+   * 下一次 persist 自然落盘（= 一次性的自动迁移，无需单独跑脚本）。
    */
   private readonly figmaSourceCache = new Map<string, { fileKey: string; nodeId: string; at: number }>();
 
@@ -1775,7 +1783,7 @@ export class TasksService {
       return { fileKey: cached.fileKey, nodeId: cached.nodeId };
     }
 
-    const found = this.readFigmaSourceFromCache(task);
+    const found = this.readFigmaSourceFromProgress(task) ?? this.readFigmaSourceFromCache(task);
     if (this.figmaSourceCache.size > 600) this.figmaSourceCache.clear();
     this.figmaSourceCache.set(sid, { ...found, at: now });
 
@@ -1784,6 +1792,64 @@ export class TasksService {
       if (!task.nodeId) task.nodeId = found.nodeId;
     }
     return found;
+  }
+
+  /**
+   * 从任务**自身的进度日志**回填 Figma 源（不依赖产物目录）。
+   *
+   * 🔴 2026-11-06 用户实锤：清理产物目录（`temp-components/<group>/<sessionId>`）后，
+   *   历史里的实验任务全部丢了 Figma 链接 —— 因为唯一副本是产物里的
+   *   `.cache/figma-source.json`。但生成期 lite 管线本来就把**同一事实**写进了进度日志：
+   *     `💾 Figma 源信息已保存到 .cache/figma-source.json: <fileKey>/<nodeId>`
+   *   这条日志随任务持久化在 tasks.json ⇒ **即使产物被清也在**。
+   *
+   * 因此回填优先级必须是「任务记录 > 产物读盘」：
+   *   ① `task.fileKey`（写侧已有）
+   *   ② 本条进度日志（本条方法）
+   *   ③ 产物 `.cache/figma-source.json`（产物可能已被清理，仅作最后兜底）
+   *
+   * 真机统计（2026-11-06）：33 条缺 fileKey 的 lab 任务中 **31 条**可据此恢复，
+   * 另 2 条生成期就没打这条日志（只能重跑）。
+   *
+   * ⚠️ 必须读**完整 progress**：`getAllTasks(slim)` 只在返回副本上截断到最近 20 条，
+   *   本方法拿到的是内存原始 task（完整数组），否则如图中那条 seq=3 的早期日志会被截掉。
+   *
+   * 🔴🔴 2026-11-05 防串味（必须先读 `lite.service.ts#logger` 字段注释）：
+   *   进度日志**曾经不可信** —— `LiteService` 把单例 logger 改写成绑定当次 sessionId 的
+   *   Proxy 且从不还原，并发时一条日志 fan-out 给所有在跑的 session。真机证据：
+   *   3 条并发 lab 任务的 progress 里含**同一个** `.cache/figma-source.json: GTcJm0DK…/48:5796`
+   *   （timestamp 逐位相同），而三者 fileKey 各不相同。
+   *   根因已在 lite 侧治本（代理只装一次 + ALS 路由），但**历史数据仍带着污染**，
+   *   且未来任何回归都会重新污染 ⇒ 本方法必须自证，不能盲信"最后一条"：
+   *     - 全文扫出**所有** figma-source 命中；
+   *     - 去重后**恰好一种**取值 ⇒ 可信（单条或多条同值，同值即无歧义）；
+   *     - **两种及以上** ⇒ 该任务日志被并发污染，**拒绝回填**（宁可缺链接，不可写错链接——
+   *       写错会让「最近使用」把 A 设计稿的链接挂到 B 组件上，比缺更糟）。
+   */
+  private readFigmaSourceFromProgress(task: Task): { fileKey: string; nodeId: string } | undefined {
+    const parts: string[] = [];
+    for (const p of (task.progress as any[]) || []) {
+      // 进度条目形态历史上有 {message} / {text} / 纯字符串几种
+      if (!p) continue;
+      if (typeof p === 'string') parts.push(p);
+      else if (typeof p.message === 'string') parts.push(p.message);
+      else if (typeof p.text === 'string') parts.push(p.text);
+    }
+    if (!parts.length) return undefined;
+    const RX = /figma-source\.json:\s*([A-Za-z0-9]{10,})\/(\d+:\d+)/gi;
+    const seen = new Map<string, { fileKey: string; nodeId: string }>();
+    let m: RegExpExecArray | null;
+    while ((m = RX.exec(parts.join('\n'))) !== null) {
+      seen.set(`${m[1]}/${m[2]}`, { fileKey: m[1], nodeId: m[2] });
+    }
+    if (seen.size === 0) return undefined;
+    if (seen.size > 1) {
+      this.logger.warn(
+        `[figma-source 回填] ${task.sessionId} 进度日志含 ${seen.size} 个不同 Figma 源（并发串味），拒绝回填: ${[...seen.keys()].join(' , ')}`,
+      );
+      return undefined;
+    }
+    return [...seen.values()][0];
   }
 
   private readFigmaSourceFromCache(task: Task): { fileKey: string; nodeId: string } {

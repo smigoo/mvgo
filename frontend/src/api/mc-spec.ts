@@ -116,14 +116,20 @@ export function buildMcSpecFixPrompt(item: McSpecItem): string {
 /**
  * AI 修复单个规范失败项：走 Playground 对话式修改管线（/api/demo/ai-chat），
  * AI 修改结果直接写入组件 workspace 文件（耗时约 1~2 分钟）。
+ *
+ * 🔴 2026-11-06：后端 env 兜底（MC_GEN_TEXT_*）与全局 ai-config.json 兜底均已移除，
+ * Playground Agent 的文本模型完全靠请求体 llmConfig 提供（与 useAIChat / preview 同一约定）。
+ * 不传 = 后端 createLLM 必抛「API Key 未配置」。
  */
 export async function fixMcSpecItem(
   componentId: string,
   item: McSpecItem,
+  llmConfig?: { apiKey?: string; baseURL?: string; model?: string },
 ): Promise<any> {
   const res: any = await http.post('/api/demo/ai-chat', {
     componentId,
     message: buildMcSpecFixPrompt(item),
+    llmConfig,
   })
   const data = unwrap(res) ?? res
   // ⚠️ agent 失败时后端仍返回 HTTP 200，但 success=false（如 API Key 未配置）。

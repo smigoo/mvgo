@@ -25,7 +25,7 @@ import {
 } from './section-tree.js';
 import { techStackRequiredPatterns } from '../validators/element-coverage-validator.js';
 import { assessStatRowConfidence } from './inline-row-assembler.js';
-import { extractRenderedText } from './text-truth-guard.js';
+import { extractRenderedText, normalizeForMatch } from './text-truth-guard.js';
 import {
   collectNodeTexts,
   collectSectionBodyTexts,
@@ -51,7 +51,9 @@ function signatureText(nodeId, index, childrenOf, vueFiles) {
   const scored = items
     .map((i) => ({
       ...i,
-      hostCount: vueFiles.filter((f) => f.renderedText.includes(i.text)).length,
+      hostCount: vueFiles.filter((f) =>
+        normalizeForMatch(f.renderedText).includes(normalizeForMatch(i.text)),
+      ).length,
     }))
     .filter((i) => i.hostCount >= 1); // 未在任何组件渲染的文本无法作为定位签名
   if (scored.length === 0) return null;
@@ -137,7 +139,9 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
 
     const expected = [...entries].sort((a, b) => a.x - b.x); // 视觉左→右
     const hostFiles = vueFiles.filter((f) =>
-      expected.every((e) => f.renderedText.includes(e.sig)),
+      expected.every((e) =>
+        normalizeForMatch(f.renderedText).includes(normalizeForMatch(e.sig)),
+      ),
     );
     if (hostFiles.length === 0) continue; // 找不到同载体的宿主文件 → 无法判定
 
@@ -269,7 +273,9 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
     } else {
       continue; // 多 section 子树共有（图例类）→ 合法重复
     }
-    const hostFiles = vueFiles.filter((f) => f.renderedText.includes(text));
+    const hostFiles = vueFiles.filter((f) =>
+      normalizeForMatch(f.renderedText).includes(normalizeForMatch(text)),
+    );
     if (hostFiles.length >= 2) {
       result.duplicateTextIssues.push({
         text,
@@ -509,6 +515,8 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
 
   const byPath = new Map(files.map((f) => [f.path, f]));
   const healed = [];
+  // 🧬 刀67：容器级整块删除命中的文件（灰度/回滚定位锚点）
+  const containerRemovedFrom = [];
   // 🔴 R8-1（2026-11-02 · 50d7793f 实锤）：幻觉段整段收敛 + 保护档空壳计数。
   const collapsedSections = [];
   const emptyShellSections = [];
@@ -550,21 +558,35 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
     if (wrongFiles.length === 0) continue;
 
     const removedFrom = [];
+    containerRemovedFrom.length = 0; // 🧬 刀67：按 issue 轮次清空，防跨条串记录
     for (const wrongPath of wrongFiles) {
       const rec = byPath.get(wrongPath);
       if (!rec || typeof rec.content !== 'string') continue;
       const text = String(issue.text);
       // 🔴 方案 F：形态扩维（静态 → Mustache 整段 → 数组整行），不再只认静态文本
-      const cleaned = removeTextBinding(rec.content, text);
-      if (cleaned === null) continue; // 未找到可安全删除的节点形态
+      // 🧬 刀67：跨 span 拆词形态 removeTextBinding 认不出 → 容器级整块删除兜底
+      let cleaned = removeTextBinding(rec.content, text);
+      let viaContainer = false;
+      if (cleaned === null) {
+        const cr = removeBorrowedTextContainer(rec.content, text);
+        if (cr === null) continue; // 节点形态与容器护栏均不满足 → 不猜
+        cleaned = cr.content;
+        viaContainer = true;
+      }
       if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, wrongPath)) {
         continue; // 删除**引入新错误** → 回退（预先存在的问题不再否决）
       }
       rec.content = cleaned;
       removedFrom.push(wrongPath);
+      if (viaContainer) containerRemovedFrom.push(wrongPath);
     }
     if (removedFrom.length > 0) {
-      healed.push({ text: issue.text, removedFrom });
+      healed.push({
+        text: issue.text,
+        removedFrom,
+        // 🧬 刀67：非空 = 该条由容器级整块删除完成（跨 span 拆词形态）
+        ...(containerRemovedFrom.length ? { viaContainer: containerRemovedFrom } : {}),
+      });
     }
 
     // ── 🔴 R8-1（2026-11-02 · 50d7793f 实锤）：剥后空壳段的**整段收敛**（主刀）──
@@ -669,12 +691,23 @@ export function healBorrowedEvidence({
   }
 
   // ── ① 借用文本：从非归属组件删除该文本（方案 F：静态 → Mustache 整段）──
+  // 🧬 刀67：removeTextBinding 认不出的跨 span 拆词形态 → 容器级整块删除兜底
+  //   （三重护栏：非组件根 / 非 data-section-id 载体 / 纯文本容器；缺一 skipped 留痕）
+  let skippedNoSafeContainer = 0;
   for (const issue of check.borrowedTextIssues) {
     const rec = byPath.get(issue.file);
     if (!rec || typeof rec.content !== 'string') continue;
-    // 🔴 方案 F：形态扩维（与 healDuplicateTextIssues 同一实现，禁止副本）
-    const cleaned = removeTextBinding(rec.content, String(issue.text));
-    if (cleaned === null) continue; // 找不到可安全删除的形态 → 不猜
+    let cleaned = removeTextBinding(rec.content, String(issue.text));
+    let viaContainer = null;
+    if (cleaned === null) {
+      const cr = removeBorrowedTextContainer(rec.content, String(issue.text));
+      if (cr === null) {
+        skippedNoSafeContainer += 1; // 节点形态与容器护栏均不满足 → 只留痕不删
+        continue;
+      }
+      cleaned = cr.content;
+      viaContainer = cr.container;
+    }
     if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, issue.file)) {
       continue;
     }
@@ -683,6 +716,7 @@ export function healBorrowedEvidence({
       text: issue.text,
       removedFrom: issue.file,
       ownerSection: issue.ownerSection,
+      ...(viaContainer ? { viaContainer } : {}),
     });
   }
 
@@ -745,7 +779,12 @@ export function healBorrowedEvidence({
     }
   }
 
-  return { files: [...byPath.values()], healed: { text: healedText, asset: healedAsset } };
+  // 🧬 刀67：skippedNoSafeContainer = 命中借据但三重护栏不满足、只留痕未删的条数（灰度观测）
+  return {
+    files: [...byPath.values()],
+    healed: { text: healedText, asset: healedAsset },
+    skippedNoSafeContainer,
+  };
 }
 
 /**
@@ -1049,6 +1088,142 @@ export function removeTextBinding(content, text) {
   if (asStatic !== null) return asStatic;
   // ② {{ expr }} Mustache 整段 + 同步删声明
   return removeMustacheBinding(content, t);
+}
+
+/**
+ * 🧬 刀67：容器级整块删除（跨 span 拆词形态的兜底）。
+ *
+ * 病灶（7d3fc546 实锤）：LLM 把「共6个节点」拆成 `<span>共</span><span> </span><span>6</span>…`，
+ * `removeTextBinding` 只认「整句在单个文本节点/Mustache 里」两种形态 ⇒ 返回 null ⇒
+ * 跨段文案重复缺陷原样发货。
+ *
+ * 定位判据（**归一恰等**，不是 includes —— F1 评审：归一后子串语义会退化，容器级
+ * 二次定位必须整块相等，纯数字 `10810` 与跨容器拼字场景因此不可能按子串盲删）：
+ *   该元素 innerHTML 剥标签+归一后 **恰等于** 目标文本。
+ *
+ * 「最外层」：嵌套时（`<div><footer>文案</footer></div>`）取**满足三重护栏的最外层**
+ * 恰等元素（depth 最小）；并列多个 ⇒ 不唯一 ⇒ 不删（宁漏不误伤）。
+ *
+ * 三重护栏（F2 评审，缺一即 null）：
+ *   ① 非组件根元素（`<template>` 的直接子级）；
+ *   ② 元素自身不带 `data-section-id`（段身份载体）；
+ *   ③ 纯文本容器：无 `{{ }}` 插值、无 `v-` 指令属性、直接子元素全部 ∈ inline 文本标签白名单
+ *      （img/svg/chart/业务子组件一律不合格）。
+ *
+ * 删除后由调用方跑 `validateSfc` 回退（与 removeTextBinding 同口径）。
+ *
+ * @param {string} content SFC 源码
+ * @param {string} text 要删除的文本（真值原文，函数内做归一对齐）
+ * @returns {{content: string, container: string}|null} container = 被删元素描述（留痕用）
+ */
+export function removeBorrowedTextContainer(content, text) {
+  if (typeof content !== 'string' || !content || text == null) return null;
+  const target = normalizeForMatch(text);
+  if (!target) return null;
+
+  const elements = scanTemplateElements(content);
+  if (elements.length === 0) return null;
+
+  // 直接子元素索引（parent 引用比较）
+  const byParent = new Map();
+  for (const el of elements) {
+    if (!byParent.has(el.parent)) byParent.set(el.parent, []);
+    byParent.get(el.parent).push(el);
+  }
+
+  // inline 文本标签白名单（纯文本容器判据 ③）
+  const INLINE_OK = new Set(['span', 'i', 'b', 'em', 'strong', 'small', 'label', 'u', 'sup', 'sub', 'br']);
+  const safeCandidates = [];
+  for (const el of elements) {
+    const inner = content.slice(el.contentStart, el.contentEnd);
+    if (inner.includes('{{')) continue; // 动态插值 ⇒ 不是纯静态容器
+    if (/\bv-[\w-]+/.test(el.attrs || '')) continue; // v-if/v-for/v-html 等指令 ⇒ 不碰
+    if (/data-section-id/.test(el.attrs || '')) continue; // 护栏②：段身份载体
+    // 护栏③：直接子元素全部 ∈ inline 白名单
+    const kids = byParent.get(el) || [];
+    if (!kids.every((k) => INLINE_OK.has(k.tag))) continue;
+    // 护栏①：非组件根（根元素 = <template> 的直接子级）
+    if (!el.parent || el.parent.tag === 'template') continue;
+    // 归一恰等（剥标签后）
+    const text0 = inner.replace(/<[^>]*>/g, ' ');
+    if (normalizeForMatch(text0) !== target) continue;
+    safeCandidates.push(el);
+  }
+  if (safeCandidates.length === 0) return null;
+  // 最外层唯一性：取 depth 最小的一组，多于 1 个 ⇒ 无法唯一定位 ⇒ 不删
+  const minDepth = Math.min(...safeCandidates.map((e) => e.depth));
+  const outermost = safeCandidates.filter((e) => e.depth === minDepth);
+  if (outermost.length !== 1) return null;
+  const el = outermost[0];
+  const out = content.slice(0, el.start) + content.slice(el.end);
+  if (out === content) return null;
+  return { content: out, container: `<${el.tag}${el.attrs || ''}>` };
+}
+
+/** void 标签（HTML 不要求闭合；Vue 模板常写 `<br>` 无闭合）——不入栈，避免配对错乱。 */
+const VOID_TAGS = new Set(['br', 'hr', 'img', 'input', 'meta', 'link', 'source', 'wbr']);
+
+/**
+ * 轻量标签栈扫描：在 `<template>…</template>` 区域内收集所有**闭合配对成功**的元素。
+ * 只服务 removeBorrowedTextContainer 的护栏判定，不追求完整 HTML 解析：
+ * 注释/不配对标签一律忽略（fail-open）；自闭合 `<div/>` 按「无内容元素」收集。
+ *
+ * @returns {Array<{tag:string, attrs:string, start:number, end:number,
+ *   contentStart:number, contentEnd:number, depth:number,
+ *   parent:{tag:string}|null}>} depth = 嵌套深度（template 内第一层为 1）
+ */
+function scanTemplateElements(content) {
+  const tplStart = content.indexOf('<template');
+  const tplEnd = content.lastIndexOf('</template>');
+  if (tplStart < 0 || tplEnd < 0 || tplEnd <= tplStart) return [];
+  const tagRx = /<(\/?)([A-Za-z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g;
+  tagRx.lastIndex = tplStart;
+  const stack = [];
+  const elements = [];
+  let m;
+  while ((m = tagRx.exec(content)) && m.index < tplEnd) {
+    const full = m[0];
+    const isClose = m[1] === '/';
+    const tag = m[2].toLowerCase();
+    const attrs = m[3] || '';
+    const selfClose = m[4] === '/';
+    if (!isClose) {
+      if (VOID_TAGS.has(tag) || selfClose) {
+        const el = {
+          tag,
+          attrs,
+          start: m.index,
+          end: m.index + full.length,
+          contentStart: m.index + full.length,
+          contentEnd: m.index + full.length,
+          depth: stack.length,
+          parent: stack.length ? stack[stack.length - 1] : null,
+        };
+        elements.push(el);
+        continue;
+      }
+      stack.push({
+        tag,
+        attrs,
+        start: m.index,
+        contentStart: m.index + full.length,
+        depth: stack.length + 1,
+        parent: stack.length ? stack[stack.length - 1] : null,
+      });
+    } else {
+      let idx = -1;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === tag) { idx = i; break; }
+      }
+      if (idx === -1) continue; // 不配对（注释残留等）⇒ 忽略
+      const el = stack[idx];
+      el.contentEnd = m.index;
+      el.end = m.index + full.length;
+      elements.push(el);
+      stack.length = idx; // 弹出该层及以上
+    }
+  }
+  return elements;
 }
 
 /** 标识符在全文的出现次数（词边界）。 */
@@ -1407,17 +1582,24 @@ function isMeaningfulTruthText(text) {
  */
 export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resourceDomMapping }) {
   const result = { borrowedTextIssues: [], borrowedAssetIssues: [] };
-  if (!Array.isArray(files) || files.length === 0) return result;
-  if (!plan || !Array.isArray(plan.effectiveSections)) return result;
+  // 🧬 刀67：normalizedOnly = 归一口径新增命中数（灰度/回滚定位锚点），恒打进计数行
+  const caliberStats = { normalizedOnly: 0 };
+  // 🧬 刀67：所有出口（含 fail-open 提前返回）统一回填 caliber，消费面向后兼容（新增字段零漂移）
+  const finish = () => {
+    result.caliber = caliberStats;
+    return result;
+  };
+  if (!Array.isArray(files) || files.length === 0) return finish();
+  if (!plan || !Array.isArray(plan.effectiveSections)) return finish();
 
   const index = indexFigmaNodes(figmaRoot);
-  if (index.size === 0) return result;
+  if (index.size === 0) return finish();
 
   const vueFiles = vueComponentFiles(files);
-  if (vueFiles.length === 0) return result;
+  if (vueFiles.length === 0) return finish();
 
   const ctx = buildSectionEvidenceCtx({ plan, figmaRoot });
-  if (!ctx) return result;
+  if (!ctx) return finish();
   const { subIds, subTexts, textOwner, sectionByComponent } = ctx;
 
   // 资源文件名 → figmaNodeId 集合
@@ -1474,10 +1656,15 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
     const renderedText = extractRenderedText(f.content);
 
     // ── ① 借用文本 ──
+    // 🧬 刀67：比对走 normalizeForMatch（跨 span 拆词/空白差异不再失明）；
+    //   normalizedOnly = 「归一后才命中、原口径 includes 不中」的增量（灰度/回滚定位用）。
     for (const [text, ownerId] of textOwner) {
       if (ownerId === sid) continue;
       if (ownTexts.has(text)) continue; // S 子树自己也有 → 合法
-      if (!renderedText.includes(text)) continue;
+      const normText = normalizeForMatch(text);
+      const normMatch = normalizeForMatch(renderedText).includes(normText);
+      if (!normMatch) continue;
+      if (!renderedText.includes(text)) caliberStats.normalizedOnly += 1;
       const ownerSub = subIds.get(ownerId);
       if (intersects(own, ownerSub)) continue; // 祖孙/兄弟重叠 → 合法共用
       result.borrowedTextIssues.push({
@@ -1545,7 +1732,7 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
     }
   }
 
-  return result;
+  return finish();
 }
 
 /**

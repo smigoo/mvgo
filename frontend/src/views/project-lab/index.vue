@@ -105,6 +105,8 @@
           </button>
           <!-- 🔴 扫描中显示已耗时：让用户区分「8s 的正常等待」与「真的卡死」，并为超时提供可观测性 -->
           <span v-if="scanning" class="scan-elapsed">已耗时 {{ scanElapsed }}s</span>
+          <!-- 后台 AI 增强状态：扫描结果已可查看，这里只告知「描述还在补」 -->
+          <span v-if="enrichHint" class="scan-elapsed">{{ enrichHint }}</span>
         </div>
 
         <div class="path-side">
@@ -277,6 +279,84 @@
               >{{ envelopeConfirmed ? '已声明证实' : '未证实' }}</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════ 单元拆分预览（U，不打乱步骤序号） ══════════════════════ -->
+      <section v-if="run" class="card">
+        <div class="card-head">
+          <span class="no ghost">U</span>
+          <h2>单元拆分预览</h2>
+          <span class="hint">
+            按 S0 事实派生：项目声明了画板 → Figma 分支（max）；否则有 HTML 原型页 → HTML 分支（lite，一页一单元）。命中缓存不落盘；改声明 / 增删原型页会按输入指纹自动作废旧快照。
+          </span>
+        </div>
+
+        <div class="units-actions">
+          <button class="btn" :disabled="unitsLoading || !run" @click="loadUnits(false)">
+            {{ unitsLoading ? '拆分中…' : '拆分预览' }}
+          </button>
+          <button class="btn ghost" :disabled="unitsLoading || !run" @click="loadUnits(true)">
+            强制重算
+          </button>
+        </div>
+
+        <p v-if="unitsErr" class="err">{{ unitsErr }}</p>
+
+        <div v-if="units && units.degraded" class="units-degraded">
+          <span class="units-degraded-code mono">降级 · {{ units.degraded.code }}</span>
+          <span class="units-degraded-msg">{{ units.degraded.message }}</span>
+        </div>
+
+        <p v-if="units && units.validationErrors && units.validationErrors.length" class="err">
+          契约自检未通过（未落盘）：{{ units.validationErrors.join('；') }}
+        </p>
+
+        <div v-if="units" class="units-meta mono">
+          <span>契约 {{ units.version }}</span>
+          <span>来源 {{ units.source.kind }}</span>
+          <span>缓存 {{ units.cached ? '命中' : '本次重算' }}</span>
+          <span>单元 {{ units.stats.total }}</span>
+          <span>档位 {{ unitsTierText }}</span>
+          <span>未归属 {{ units.stats.unmatched }}</span>
+          <span class="units-meta-key" :title="units.source.inputKey">输入指纹 {{ units.source.inputKey }}</span>
+        </div>
+
+        <div v-if="units && units.units && units.units.length === 0" class="units-empty">
+          未拆出任何单元 —— 若项目既没有画板也没有 HTML 原型页，属预期（降级原因见上）
+        </div>
+
+        <div v-else-if="units && units.units && units.units.length" class="units-tbl-wrap">
+          <table class="units-table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>来源</th>
+                <th>档位</th>
+                <th>锚点</th>
+                <th>归属</th>
+                <th>状态</th>
+                <th>尺寸</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in units.units" :key="u.componentId">
+                <td class="u-name">{{ u.name }}</td>
+                <td class="mono">{{ u.sourceType }}</td>
+                <td class="mono">{{ u.tier }}</td>
+                <td class="mono u-anchor">{{ unitAnchorText(u) }}</td>
+                <td :class="u.feature ? '' : 'u-warn'">{{ u.feature || '未归属' }}</td>
+                <td class="mono">{{ u.status }}</td>
+                <td class="mono u-box">
+                  {{
+                    u.box && (u.box.width !== null || u.box.height !== null)
+                      ? `${u.box.width ?? '—'}×${u.box.height ?? '—'}`
+                      : '—'
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -1127,6 +1207,19 @@ const scanErr = ref('')
 const scanning = ref(false)
 // 扫描已耗时（秒），scanning 为真时在按钮旁展示，供用户判断「正常等待 / 卡死」
 const scanElapsed = ref(0)
+
+// 单元拆分预览（GET /runs/:runId/units）—— 刻意手动触发，不在 onMounted 自动拉取
+const units = ref(null)
+const unitsLoading = ref(false)
+const unitsErr = ref('')
+// 档位拼接（如「max 3 · lite 2」），供元信息行展示
+const unitsTierText = computed(() => {
+  const by = (units.value && units.value.stats && units.value.stats.byTier) || {}
+  const parts = Object.keys(by)
+    .filter((k) => by[k])
+    .map((k) => `${k} ${by[k]}`)
+  return parts.length ? parts.join(' · ') : '—'
+})
 let scanTimer = null
 function startScanTimer() {
   stopScanTimer()
@@ -1141,6 +1234,71 @@ function stopScanTimer() {
     clearInterval(scanTimer)
     scanTimer = null
   }
+}
+
+/* ── 扫描后的「功能描述 AI 增强」后台任务 ─────────────────────────────────
+ * 后端 scan 已改为秒回：确定性结果先返回，文本 LLM 的具体功能描述/建议接口
+ * 由后台任务补写并回写 spec/feature-details.json。这里轮询 run 视图把增强后的
+ * 结果换进来，用户不必重扫。
+ * 终态：done / failed / skipped / stale（服务重启把 running 钉死时后端判 stale）。
+ */
+const enrichStatus = ref('')
+const ENRICH_POLL_MS = 2000
+const ENRICH_MAX_TICKS = 60
+let enrichTimer = null
+let enrichTicks = 0
+let enrichFails = 0
+
+const enrichHint = computed(() => {
+  if (enrichStatus.value === 'pending' || enrichStatus.value === 'running') {
+    return 'AI 补充功能描述中…（当前结果已可用）'
+  }
+  if (enrichStatus.value === 'failed') return 'AI 增强失败，已用确定性结果'
+  return ''
+})
+
+function stopEnrichPoll() {
+  if (enrichTimer) {
+    clearInterval(enrichTimer)
+    enrichTimer = null
+  }
+  enrichTicks = 0
+  enrichFails = 0
+}
+
+function startEnrichPoll(runId) {
+  stopEnrichPoll()
+  if (!runId) return
+  enrichTimer = setInterval(async () => {
+    enrichTicks += 1
+    // 用户已切到另一次运行 / 运行已清空 → 立刻停，避免把旧结果盖回来
+    if (!run.value || run.value.runId !== runId) return stopEnrichPoll()
+    if (enrichTicks > ENRICH_MAX_TICKS) return stopEnrichPoll()
+    try {
+      const r = await request('GET', `/runs/${encodeURIComponent(runId)}`)
+      enrichFails = 0
+      const st = r?.run?.featureEnrich?.status || ''
+      enrichStatus.value = st
+      if (st && st !== 'pending' && st !== 'running') {
+        stopEnrichPoll()
+        if (!run.value || run.value.runId !== runId) return
+        run.value = r.run
+        // 增强可能改了 relatedPages / suggestedEndpoints → 若功能面板开着，补拉截图
+        if (featTarget.value) {
+          const d = run.value?.featureDetails?.[featTarget.value]
+          if (d) loadShotsForFeature(d)
+        }
+        if (st === 'done') message.success('功能描述已由 AI 补充完成')
+      }
+    } catch (err) {
+      enrichFails += 1
+      // 连续 3 次拉不到就停：网络/后端挂了不该无限轮询打扰
+      if (enrichFails >= 3) {
+        console.warn('[project-lab] 功能增强轮询失败：', err)
+        stopEnrichPoll()
+      }
+    }
+  }, ENRICH_POLL_MS)
 }
 
 const blocks = ref([])
@@ -1734,6 +1892,7 @@ async function doScan() {
     localStorage.setItem(LS_KEY, dir)
     const resp = await request('POST', '/scan', { projectDir: dir })
     run.value = resp
+    enrichStatus.value = resp?.featureEnrich?.status || ''
     freezeResult.value = null
     freezeErr.value = ''
     artifact.value = null
@@ -1744,7 +1903,12 @@ async function doScan() {
     )
     await loadConflictsDoc(resp.runId)
     await loadRuns()
+    // 后台增强未完成 → 轮询补齐（本次响应不等它，属于后台任务）
+    if (enrichStatus.value === 'pending' || enrichStatus.value === 'running') {
+      startEnrichPoll(resp.runId)
+    }
   } catch (e) {
+    stopEnrichPoll()
     // 超时场景明确提示可能是后端仍在处理/已挂起，按钮恢复可点即可重试
     scanErr.value =
       e.code === 'TIMEOUT'
@@ -1787,6 +1951,7 @@ async function refreshRun(runId) {
   if (!runId) return
   const r = await request('GET', `/runs/${runId}`)
   run.value = r.run
+  enrichStatus.value = r.run?.featureEnrich?.status || ''
   await loadConflictsDoc(runId)
 }
 
@@ -2161,6 +2326,41 @@ function closeGenVuePreview() {
   }
 }
 
+/** 锚点文本：figmaNodeId 优先，其次 pagePath / shotPath / selector；anchor 字段可能缺失 */
+function unitAnchorText(u) {
+  const a = (u && u.anchor) || {}
+  if (a.figmaNodeId) {
+    return a.figmaFileKey ? `figma:${a.figmaFileKey}#${a.figmaNodeId}` : `figma:#${a.figmaNodeId}`
+  }
+  if (a.pagePath) return `page: ${a.pagePath}`
+  if (a.shotPath) return `shot: ${a.shotPath}`
+  if (a.selector) return `sel: ${a.selector}`
+  return '—'
+}
+
+/**
+ * 拉取单元拆分预览。request() 已剥掉全局 envelope，这里拿到的是 { success, units }。
+ * force=true 走 ?refresh=true，强制重算并覆盖快照。
+ */
+async function loadUnits(force = false) {
+  const rid = run.value && run.value.runId
+  if (!rid) {
+    unitsErr.value = '先扫描或选一个运行'
+    return
+  }
+  unitsLoading.value = true
+  unitsErr.value = ''
+  try {
+    const r = await request('GET', `/runs/${rid}/units${force ? '?refresh=true' : ''}`)
+    units.value = r && r.units ? r.units : null
+  } catch (e) {
+    unitsErr.value = e && e.message ? e.message : String(e)
+    units.value = null
+  } finally {
+    unitsLoading.value = false
+  }
+}
+
 async function selectRun(runId) {
   if (!runId) return
   scanErr.value = ''
@@ -2169,6 +2369,9 @@ async function selectRun(runId) {
   artifact.value = null
   artName.value = ''
   featTarget.value = null
+  // 换运行不能留上一个运行的单元
+  units.value = null
+  unitsErr.value = ''
   try {
     const r = await request('GET', `/runs/${runId}`)
     run.value = r.run
@@ -2189,6 +2392,8 @@ onUnmounted(() => {
   window.removeEventListener(API_BINDING_REFRESH_EVENT, onApiBindingRefresh)
   // 🔴 清理扫描计时器：防止组件卸载后 setInterval 继续跑（泄漏 + 卸载后 setState 警告）
   stopScanTimer()
+  // 🔴 同理清理 AI 增强轮询：组件卸载后不得再拉 /runs 或 setState
+  stopEnrichPoll()
 })
 </script>
 
@@ -4088,5 +4293,110 @@ onUnmounted(() => {
   padding: 12px 16px;
   border-top: 1px solid #eef1f6;
   flex: 0 0 auto;
+}
+
+/* ══════════════════════ 单元拆分预览（U） ══════════════════════ */
+.units-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.units-degraded {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 11px;
+  border: 1px solid #fde68a;
+  border-radius: var(--r-sm);
+  background: #fffbeb;
+  font-size: 12px;
+  color: var(--c-warn);
+}
+.units-degraded-code {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.units-degraded-msg {
+  color: var(--txt-2);
+  word-break: break-word;
+}
+.units-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--txt-3);
+}
+.units-meta-key {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.units-empty {
+  margin-top: 10px;
+  padding: 14px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--txt-3);
+  text-align: center;
+}
+.units-tbl-wrap {
+  margin-top: 10px;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.units-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.units-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txt-3);
+  background: var(--surface-2);
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.units-table td {
+  padding: 6px 9px;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--txt-1);
+  vertical-align: top;
+}
+.units-table tr:last-child td {
+  border-bottom: none;
+}
+.units-table .u-name {
+  max-width: 220px;
+  font-weight: 600;
+}
+.units-table .u-anchor {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt-2);
+}
+.units-table .u-box {
+  white-space: nowrap;
+  color: var(--txt-2);
+}
+.u-warn {
+  color: var(--c-warn);
 }
 </style>

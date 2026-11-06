@@ -644,7 +644,7 @@ export function collectResourceCarrierClasses(files, resourceDomMapping) {
       const plain = body.match(/<[a-zA-Z][^>]*\bclass="([\w-]+)"/);
       rootCls = (withPanel ? withPanel[1] : plain ? plain[1] : '') || '';
     }
-    const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
+    const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)>/g;
     let m;
     while ((m = tagRe.exec(body)) !== null) {
       const tag = m[0];
@@ -994,7 +994,7 @@ export function injectSectionAnchorsIntoSubComponents(files, input = {}) {
     if (tplIdx < 0) continue;
     const winLen = 4000;
     const head = src.slice(tplIdx, tplIdx + winLen);
-    const m = /<template>\s*<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/s.exec(head);
+    const m = /<template>\s*<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/s.exec(head);
     if (!m) continue;
     const openTag = m[0];
     if (/\bdata-section-id\s*=/.test(m[2] || '')) continue; // 幂等：已有锚点
@@ -1086,7 +1086,7 @@ function findRootCloseIndex(src, templateIdx, rootTag) {
   const seg = src.slice(templateIdx);
   const firstGt = seg.indexOf('>');
   if (firstGt < 0) return -1;
-  const tagRe = /<\/?([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+  const tagRe = /<\/?([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
   // 从 <template> 的 `>` 之后开始扫 → 根元素的**开标签尚未计入**，故 depth 从 0 起算：
   //   根开标签 → 1，根闭标签 → 0（同名嵌套 div 套 div 亦正确）。
   tagRe.lastIndex = firstGt + 1;

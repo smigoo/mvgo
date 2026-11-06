@@ -1,0 +1,1 @@
+#note# 子仓指针: backend-node f0aa354(V5 视觉同步预算收敛:截图/覆盖/L2定位共用唯一 visionDeadline) + frontend 8fc8ec0((b)-3 修复 S4 绑定面板断点 App.vue :s4-mode)。子仓内均仍有并行 WIP(backend-node app.module.ts/backend-root.ts/lite-lab 四件/未跟踪 feedback+meeting-asr; frontend router/meeting/tasks 等)未纳入本指针。

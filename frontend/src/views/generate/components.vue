@@ -1159,10 +1159,11 @@
                 />
               </div>
             </div>
-            <div class="adv-field">
+            <div class="adv-field" :class="{ 'adv-locked': advDocPromptLocked }">
               <div class="adv-label-row">
                 <label>补充提示词</label>
                 <span class="adv-opt-tag">选填 · {{ advExtraPrompt.length }}/4000</span>
+                <span v-if="advDocPromptLocked" class="adv-lock-tag">仅微码 + Max 生效</span>
               </div>
               <textarea
                 v-model="advExtraPrompt"
@@ -1170,13 +1171,14 @@
                 rows="3"
                 maxlength="4000"
                 placeholder="对生成结果的额外要求，如：标题固定为「××」、图表用 ECharts。优先级低于 Figma 设计稿。"
-                :disabled="busy"
+                :disabled="busy || advDocPromptLocked"
               ></textarea>
             </div>
-            <div class="adv-field">
+            <div class="adv-field" :class="{ 'adv-locked': advDocPromptLocked }">
               <div class="adv-label-row">
                 <label>需求文档</label>
                 <span class="adv-opt-tag">选填 · .md / .txt / .html · ≤1MB</span>
+                <span v-if="advDocPromptLocked" class="adv-lock-tag">仅微码 + Max 生效</span>
               </div>
               <input
                 ref="advDocInput"
@@ -1188,7 +1190,7 @@
               <div v-if="advDocName" class="adv-doc-chip">
                 <span class="adv-doc-icon">📄</span>
                 <span class="adv-doc-name" :title="advDocName">{{ advDocName }}</span>
-                <button class="adv-doc-remove" type="button" @click="clearAdvDoc">✕</button>
+                <button class="adv-doc-remove" type="button" :disabled="advDocPromptLocked" @click="clearAdvDoc">✕</button>
               </div>
               <!-- 🔴 2026-11-03：历史任务的需求文档**不自动灌入**（可能 2 万字，静默塞进输入框
                    用户不知道自己在复用旧约束）。改为显式提示 + 按需「复用」，
@@ -1199,14 +1201,14 @@
                 <button
                   class="adv-doc-reuse"
                   type="button"
-                  :disabled="busy || advDocHint.loading"
+                  :disabled="busy || advDocHint.loading || advDocPromptLocked"
                   @click="reuseHistoryDoc"
                 >
                   {{ advDocHint.loading ? '读取中…' : '复用' }}
                 </button>
                 <button class="adv-doc-remove" type="button" title="忽略该文档" @click="dismissHistoryDoc">✕</button>
               </div>
-              <button v-else class="adv-doc-btn" type="button" :disabled="busy" @click="advDocInput?.click()">
+              <button v-else class="adv-doc-btn" type="button" :disabled="busy || advDocPromptLocked" @click="advDocInput?.click()">
                 + 上传需求文档
               </button>
             </div>
@@ -1330,11 +1332,7 @@
           <span class="es-text">暂无任务记录</span>
           <span class="es-hint">生成组件后将在此显示</span>
         </div>
-        <!-- 🧪 实验管线面板（dev 专用端点，生产 404；仅 UI 层折叠卡片，不干预正式生成）
-             🔴 2026-11-05：历史列表**共用同一个数据源**（figmaHistoryTasks = /api/tasks/recent
-             任务维度重建），实验面板不再自带 localStorage 历史；跑完实验回抛 finished
-             以让本页 recent 立即刷新，实验链接当场出现在两边共用的下拉里。 -->
-        <TruthLabPanel :history="figmaHistoryTasks" @finished="fetchRecent" />
+        <!-- 实验管线面板暂时隐藏；TruthLabPanel.vue 与后端能力保留，后续方案收敛后再恢复入口。 -->
       </aside>
     </div>
   </div>
@@ -1350,8 +1348,6 @@ import type { GenerateLiteParams } from '@/api/lite'
 import { fetchFigmaPreview, fetchTaskStatus } from '@/api/generator'
 import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
-// 🧪 lite-lab 实验管线面板（lite 布局 + Figma node 真值回填，dev 专用，不影响正式生成）
-import TruthLabPanel from './TruthLabPanel.vue'
 import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
 import RippleButton from '@/components/inspira-ui/RippleButton.vue'
 import { useResizableFrame } from '@/composables/useResizableFrame'
@@ -1869,12 +1865,20 @@ const advDocInput = ref<HTMLInputElement | null>(null)
  *   所以这里只记 sessionId + 字数，用户点「复用」时才按 sessionId 拉详情取全文。
  */
 const advDocHint = ref<{ sessionId: string; len: number; loading: boolean } | null>(null)
-// 折叠条收起时的已填摘要
+/**
+ * 🔴 2026-11-06：补充提示词 / 需求文档**仅微码 + Max 管线消费**（ Lite 微码分支的
+ *   buildMicrocodeCodegenPrompt 不含这两字段，填了也不生效）；组件 ID 两档都生效，不锁。
+ *   用户拍板：Lite 档位下置灰（2026-11-06），vue3 类型同理（整块本就不下发）。
+ */
+const advDocPromptLocked = computed(
+  () => compType.value !== 'microcode' || genTier.value !== 'max'
+)
+// 折叠条收起时的已填摘要（锁定态的两字段不再进摘要，避免「提示词」chip 误导为会生效）
 const advSummaryChips = computed(() => {
   const chips: string[] = []
   if (advUserId.value.trim()) chips.push('ID')
-  if (advExtraPrompt.value.trim()) chips.push('提示词')
-  if (advDocText.value) chips.push('文档')
+  if (!advDocPromptLocked.value && advExtraPrompt.value.trim()) chips.push('提示词')
+  if (!advDocPromptLocked.value && advDocText.value) chips.push('文档')
   return chips
 })
 function onAdvDocPick(e: Event) {
@@ -3407,10 +3411,12 @@ async function goSingle(aiConfig) {
     //   declare.json themeConfig.list[].panelType 留痕。单稿/未就绪时仍用全局开关。
     const primaryPanel = nThemeRows.value[0]?.panelType
     p.panelType = nThemeEnabled.value && primaryPanel ? primaryPanel : panelType.value
-    // 高级选项三字段（仅微码生效）
+    // 高级选项三字段（仅微码生效）。🔴 2026-11-06：补充提示词 / 需求文档仅 Max 管线
+    //   消费（Lite 微码 prompt 不含），锁定态不下发——防止「Max 时填了、切回 Lite 提交」
+    //   把不生效的字段带进任务记录误导排查。组件 ID 两档都生效，照常下发。
     if (advUserId.value.trim()) p.userComponentId = advUserId.value.trim()
-    if (advExtraPrompt.value.trim()) p.extraPrompt = advExtraPrompt.value.trim()
-    if (advDocText.value.trim()) p.requirementDocText = advDocText.value
+    if (!advDocPromptLocked.value && advExtraPrompt.value.trim()) p.extraPrompt = advExtraPrompt.value.trim()
+    if (!advDocPromptLocked.value && advDocText.value.trim()) p.requirementDocText = advDocText.value
   }
   if (requirementDoc.value.trim().length >= 20) {
     p.requirementDoc = requirementDoc.value
@@ -6499,6 +6505,28 @@ html[data-theme='dark'] .spinner--lg {
 }
 .adv-options.dark .adv-label-row label {
   color: #1f2937;
+}
+
+/* 🔴 2026-11-06：Lite（或非微码）下「补充提示词 / 需求文档」整字段置灰——
+   这两字段仅 Max 管线消费，置灰替代「填了不生效」的静默缺口。 */
+.adv-field.adv-locked {
+  opacity: 0.45;
+}
+.adv-field.adv-locked .adv-prompt-input,
+.adv-field.adv-locked .adv-doc-btn {
+  cursor: not-allowed;
+  background: #f3f4f6;
+}
+.adv-lock-tag {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 /* ══ CTA 按钮（:deep 穿透到 RippleButton 子组件）  */

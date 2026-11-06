@@ -1165,6 +1165,32 @@ describe('mountSubStateBackground：激活态背景挂载（2026-09-15 刀24-A/D
     }
     expect(mountSubStateBackground(files, 'bgActive', m)).toBeNull()
   })
+
+  it('⭐ 3b-A：真实 tab 子项回落 78px 21px，并留下可观测阳性计数', () => {
+    const files = {
+      'package/components/TabsSection.vue': `<template><div class="tabs"><div v-for="tab in tabs" :key="tab.value" class="c-env-monitor-tab" :class="{ 'c-env-monitor-tab--active': activeTab === tab.value }">x</div></div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
+    }
+    const info = jest.fn()
+    const mapping = {
+      ...m,
+      resourceFile: '../resources/images/bg-tab-active-7891.png',
+      mountTarget: 'tabs-list',
+      figmaBox: { x: 1500, y: 906, width: 78, height: 21 },
+      parentBox: { x: 1495, y: 903, width: 295, height: 27 },
+    }
+    const r = mountSubStateBackground(files, 'bgActive', mapping, { logger: { info } })
+    expect(r).toBeTruthy()
+    const out = files['package/components/TabsSection.vue']
+    expect(out).toContain("backgroundSize: '78px 21px'")
+    expect(out).toContain("backgroundPosition: '5px 3px'")
+    expect(out).not.toContain("backgroundSize: '26.44% 77.78%'")
+    expect(info).toHaveBeenCalledWith('🛡️ T4 状态背景口径评估', expect.objectContaining({
+      varName: 'bgActive',
+      evaluated: 1,
+      percentFallbackSubState: 1,
+      backgroundSize: '78px 21px',
+    }))
+  })
 })
 
 describe('findVForItemTag：识别 v-for 重复单元（阶段3）', () => {
@@ -2094,3 +2120,216 @@ describe('T09 资源型 headerSlots 不得渲染描述文案（2026-11-05）', (
     expect(out).toContain('设备总数 28')
   })
 })
+
+describe('T09 头部Tab结构升级（fe2b79ed 真机同构）', () => {
+  const CODE = `<template>
+  <base-panel panelKey="default-panel">
+    <template #header-right>
+      <!-- 模型漏生成 -->
+    </template>
+    <div class="c-test-root">content</div>
+  </base-panel>
+</template>
+<script setup>
+import { onMounted } from 'vue'
+onMounted(() => {})
+</script>`
+
+  function inputFixture(): any {
+    return {
+      headerSlots: [
+        { slotType: 'header-right', elementType: 'label', figmaNodeId: '2:7954', content: '江阴靖江长江隧道 江阴大桥' },
+      ],
+      interactions: [{ type: 'tab-switch', target: '标题右侧Tab切换栏' }],
+      layoutStructure: {
+        layout: {
+          sections: [{
+            id: '2:7959',
+            headerSlots: [{ slotType: 'header-right', elementType: 'tab', figmaNodeId: '2:7954', content: '江阴靖江长江隧道（激活）/ 江阴大桥' }],
+            body: {
+              children: [
+                { id: '2:7955', type: 'tab', text: '江阴靖江长江隧道', active: true, styles: { fontSize: 13, color: '#fff', backgroundColor: '#1990ff', borderRadius: '10px', padding: '2px 10px', width: '380px' } },
+                { id: '2:7957', type: 'tab', text: '江阴大桥', active: false, styles: { fontSize: 13, color: '#6680a0', backgroundColor: '#223344', borderRadius: '10px', padding: '2px 10px', width: '380px' } },
+              ],
+            },
+          }],
+        },
+      },
+    }
+  }
+
+  it('⭐ 生成两个真实 tab 的响应式模型，合并 vue import，且重复调用幂等', () => {
+    const input = inputFixture()
+    const files = { 'package/index.vue': CODE }
+    const info = jest.fn()
+    const out = ensureHeaderSlots(CODE, input, {
+      files,
+      componentType: 'microcode',
+      logger: { info, warn: jest.fn() },
+    })
+    expect(out).toContain('v-for="tab in __mcHeaderTabs_2_7954"')
+    expect(out).toContain('@click="__mcActiveHeaderTab_2_7954 = tab.id"')
+    expect(out).toContain("const __mcActiveHeaderTab_2_7954 = ref(\"2:7955\")")
+    expect(out).toContain('江阴靖江长江隧道')
+    expect(out).toContain('江阴大桥')
+    expect(out).not.toContain('江阴靖江长江隧道 江阴大桥</span>')
+    expect(out).toContain("import { onMounted, ref } from 'vue'")
+    expect(out.match(/from 'vue'/g)).toHaveLength(1)
+    expect(out).not.toContain('"width":"380px"')
+    expect(info).toHaveBeenCalledWith('🛡️ T09 头部Tab结构升级', expect.objectContaining({
+      evaluated: 1,
+      resolved: 1,
+      upgraded: 1,
+      failed: 0,
+    }))
+    expect(ensureHeaderSlots(out, input, { files: { 'package/index.vue': out }, componentType: 'microcode' })).toBe(out)
+  })
+
+  it('允许升级 T09 自己此前注入的纯文本，但不覆盖其他非空 slot', () => {
+    const input = inputFixture()
+    const legacy = CODE
+      .replace('<!-- 模型漏生成 -->', '<!-- 由生成器按 Figma headerSlots 确定性补齐（模型漏生成兜底） -->\n      <span>江阴靖江长江隧道 江阴大桥</span>')
+    const upgraded = ensureHeaderSlots(legacy, input, {
+      files: { 'package/index.vue': legacy },
+      componentType: 'microcode',
+    })
+    expect(upgraded).toContain('v-for="tab in __mcHeaderTabs_2_7954"')
+    expect(upgraded).not.toContain('<span>江阴靖江长江隧道 江阴大桥</span>')
+
+    const custom = CODE.replace('<!-- 模型漏生成 -->', '<button>自定义切换</button>')
+    const preserved = ensureHeaderSlots(custom, input, {
+      files: { 'package/index.vue': custom },
+      componentType: 'microcode',
+    })
+    expect(preserved).toContain('<button>自定义切换</button>')
+    expect(preserved).not.toContain('__mcHeaderTabs')
+  })
+
+  it('激活态歧义时保留旧文本兜底，不注入 ref 或 click', () => {
+    const input = inputFixture()
+    input.layoutStructure.layout.sections[0].body.children.forEach((item: any) => { item.active = false })
+    const info = jest.fn()
+    const out = ensureHeaderSlots(CODE, input, {
+      files: { 'package/index.vue': CODE },
+      componentType: 'microcode',
+      logger: { info, warn: jest.fn() },
+    })
+    expect(out).toContain('江阴靖江长江隧道 江阴大桥</span>')
+    expect(out).not.toContain('__mcHeaderTabs')
+    expect(out).not.toContain('@click=')
+    expect(info).toHaveBeenCalledWith('🛡️ T09 头部Tab结构升级', expect.objectContaining({
+      skippedAmbiguous: 1,
+      upgraded: 0,
+    }))
+  })
+})
+
+/**
+ * 🛡️ 2026-11-06（mc-max-1793913218521-5d1eb324 用户质询实锤）：
+ * ① 透明度不得在 CSS 里二次表达（背景 alpha/素材已带透明度时删 `opacity`）；
+ * ② 多卡段的装饰背景属于卡片，不属于段容器。
+ */
+describe('CSS 透明度去重 / 段容器背景去重（5d1eb324 阳性对照）', () => {
+  const cssHelpers = jest.requireActual('./resource-mounter.js') as any;
+
+  it('⭐ 阳性：gradient(rgba 0.4) + opacity 0.5 同规则 ⇒ 删 opacity，背景保留', () => {
+    const files: any = {
+      'resources/styles/common.less': `.c-demo-stat-card {\n  background: linear-gradient(180deg, rgba(212, 227, 254, 0.4) 0%, rgba(0, 132, 255, 0.4) 100%);\n  opacity: 0.5;\n  border-radius: 12px;\n}`,
+    };
+    const r = cssHelpers.dropRedundantCssOpacity(files, {});
+    expect(r.dropped).toHaveLength(1);
+    expect(files['resources/styles/common.less']).not.toMatch(/opacity\s*:/);
+    expect(files['resources/styles/common.less']).toContain('linear-gradient(180deg');
+    expect(files['resources/styles/common.less']).toContain('border-radius: 12px');
+  });
+
+  it('🔴 反向（2026-11-06 评审修正）：背景是素材 url() ⇒ **保留** opacity（素材 alpha 不可读），只计数', () => {
+    const files: any = { 'package/components/A.vue': `<style>.a{background-image:url(x.png);opacity:.45;}</style>` };
+    const r = cssHelpers.dropRedundantCssOpacity(files, {});
+    expect(r.dropped).toHaveLength(0);
+    // 不可证形态必须留痕（「没跑」与「不敢删」可区分）
+    expect(r.keptUrlBg).toHaveLength(1);
+    expect(files['package/components/A.vue']).toMatch(/opacity\s*:\s*\.45/);
+    expect(files['package/components/A.vue']).toContain('background-image:url(x.png)');
+  });
+
+  it('反向：不透明背景 + opacity ⇒ 保留（opacity 是唯一表达通道）', () => {
+    const src = `.b{background:#ffffff;opacity:.5;}`;
+    const files: any = { 'x.less': src };
+    const r = cssHelpers.dropRedundantCssOpacity(files, {});
+    expect(r.dropped).toHaveLength(0);
+    expect(files['x.less']).toBe(src);
+  });
+
+  it('反向：opacity:1 或纯无背景 ⇒ 不动', () => {
+    const files: any = { 'x.less': `.c{background:rgba(0,0,0,.3);opacity:1;}\n.d{opacity:.5;}` };
+    const r = cssHelpers.dropRedundantCssOpacity(files, {});
+    expect(r.dropped).toHaveLength(0);
+  });
+
+  it('⭐ 阳性：多卡段根行内 gradient + 子级 class 也有底 ⇒ 删根背景，段内两卡底保留', () => {
+    const vue = `<template>
+  <div class="c-demo-stats" data-section-id="38:3260" style="background:linear-gradient(90deg, rgba(212,227,254,0.4) 0%, rgba(0,132,255,0.4) 100%);display:flex">
+    <div class="c-demo-stat-card"><span>甲</span></div>
+    <div class="c-demo-stat-card"><span>乙</span></div>
+  </div>
+</template>
+<style>.c-demo-stat-card{background:linear-gradient(180deg, rgba(212,227,254,0.4) 0%, rgba(0,132,255,0.4) 100%);}</style>`;
+    const files: any = { 'package/components/StatsSection.vue': vue };
+    const secs = [{ id: '38:3260', type: 'stats', body: { children: [{ role: 'stat-card' }, { role: 'stat-card' }] } }];
+    const r = cssHelpers.dropContainerBgWhenChildrenOwnCards(files, secs, {});
+    expect(r.dropped).toHaveLength(1);
+    const out = files['package/components/StatsSection.vue'];
+    // 根元素不再有 background，但布局样式与卡片底都保留
+    expect(out).toMatch(/data-section-id="38:3260" style="display:flex"/);
+    expect(out).toContain('.c-demo-stat-card{background:linear-gradient(180deg');
+  });
+
+  it('反向：单卡段（条目 <2）⇒ 容器背景保留（可能是段自己的面板底）', () => {
+    const vue = `<template><div class="a" data-section-id="1:1" style="background:linear-gradient(90deg,#fff,#000)"><div class="b"/></div></template><style>.b{background:linear-gradient(90deg,#fff,#000)}</style>`;
+    const files: any = { 'package/components/A.vue': vue };
+    const r = cssHelpers.dropContainerBgWhenChildrenOwnCards(files, [{ id: '1:1', body: { children: [{ role: 'x' }] } }], {});
+    expect(r.dropped).toHaveLength(0);
+    expect(files['package/components/A.vue']).toBe(vue);
+  });
+
+  it('反向：根无背景 ⇒ 不动（即使多卡且卡有底）', () => {
+    const vue = `<template><div class="a" data-section-id="1:2"><div class="b"/><div class="b"/></div></template><style>.b{background:linear-gradient(90deg,#fff,#000)}</style>`;
+    const files: any = { 'package/components/A.vue': vue };
+    const r = cssHelpers.dropContainerBgWhenChildrenOwnCards(files, [{ id: '1:2', body: { children: [{}, {}] } }], {});
+    expect(r.dropped).toHaveLength(0);
+  });
+
+  it('🔴 反向（2026-11-06 评审修正）：容器底与卡片底**不同源** ⇒ 保留容器底（可能是合法面板）', () => {
+    // 容器 rgba(0,0,0,.2) vs 卡片 rgba(212,227,254,.4) ⇒ 不是同一块底，不得删
+    const vue = `<template>
+  <div class="c-panel" data-section-id="9:9" style="background:linear-gradient(90deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.1) 100%);display:flex">
+    <div class="c-card"><span>甲</span></div>
+    <div class="c-card"><span>乙</span></div>
+  </div>
+</template>
+<style>.c-card{background:linear-gradient(180deg, rgba(212,227,254,0.4) 0%, rgba(0,132,255,0.4) 100%);}</style>`;
+    const files: any = { 'package/components/A.vue': vue };
+    const r = cssHelpers.dropContainerBgWhenChildrenOwnCards(files, [{ id: '9:9', body: { children: [{}, {}] } }], {});
+    expect(r.dropped).toHaveLength(0);
+    expect(r.keptDiffers).toHaveLength(1);
+    expect(files['package/components/A.vue']).toBe(vue);
+  });
+
+  it('⭐ 阳性（评审修正后仍成立）：卡片规则在**另一个文件**（common.less）也能证明同源', () => {
+    const vue = `<template>
+  <div class="c-panel" data-section-id="9:8" style="background:linear-gradient(90deg, rgba(212,227,254,0.4) 0%, rgba(0,132,255,0.4) 50%, rgba(213,227,254,0.4) 100%);display:flex">
+    <div class="c-card"><span>甲</span></div>
+    <div class="c-card"><span>乙</span></div>
+  </div>
+</template>`;
+    const files: any = {
+      'package/components/A.vue': vue,
+      'resources/styles/common.less': `.c-card{background:linear-gradient(180deg, rgba(212,227,254,0.4) 0%, rgba(0,132,255,0.4) 50%, rgba(213,227,254,0.4) 100%);}`,
+    };
+    const r = cssHelpers.dropContainerBgWhenChildrenOwnCards(files, [{ id: '9:8', body: { children: [{}, {}] } }], {});
+    expect(r.dropped).toHaveLength(1);
+    expect(files['package/components/A.vue']).toMatch(/data-section-id="9:8" style="display:flex"/);
+    expect(files['resources/styles/common.less']).toContain('.c-card{background');
+  });
+});

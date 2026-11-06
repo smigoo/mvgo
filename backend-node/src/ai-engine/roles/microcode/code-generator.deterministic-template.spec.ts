@@ -44,7 +44,7 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
+import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize, evaluateColumnCanvasConvergence } from './code-generator.js'
 import { stripSurplusBlockClosers } from './file-writer.js'
 import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
@@ -1587,5 +1587,50 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     expect(facts).not.toBeNull();
     expect(facts!.template).toContain('style="display:flex;flex-direction:column;height:100%;min-height:0;"');
     expect(facts!.template).not.toContain('data-absorbed-bg');
+  });
+});
+
+/**
+ * 🛡️ G10v2（2026-11-06 · mc-max-1799861321-a9364bd4 实锤）：段高比例「画布收敛」
+ *
+ * 病灶：四段 flex = 0.223+0.223+0.249+0.305 = **1.000**，再叠 margin-top 14+14+15 = **43px**
+ * ⇒ 子项总高 = 容器 100% + 43px ⇒ 末段被压/溢出。v1 只比「兄弟盒跨度 vs 容器高」，
+ * 这种「比例刚好满 + 再叠间距」的形态照样通过 ⇒ 需要两条新判据：
+ *   ① 分母让出间距份额：flex = h / (Σh + Σgap)，使 Σflex < 1；
+ *   ② 绝对真值收敛复核：Σh + Σgap 与容器高偏差 > 15% ⇒ 判比例不可信，弃用 flex。
+ */
+describe('G10v2 · 竖排 flex 分母与画布收敛', () => {
+  it('⭐ 阳性：分母含间距 ⇒ flex 之和 < 1（不再「100% + 43px」）', () => {
+    const heights = [127, 127, 142, 174]; // Σh = 570
+    const gaps = [14, 14, 15]; // Σgap = 43
+    const denom = heights.reduce((a, b) => a + b, 0) + gaps.reduce((a, b) => a + b, 0);
+    const styles = heights.map((_, i) => flexItemStyleFromHeights(heights, i, denom));
+    const sum = styles.reduce((a, s) => a + Number(/flex:([\d.]+)/.exec(s)[1]), 0);
+    expect(sum).toBeLessThan(1);
+    expect(sum).toBeCloseTo(570 / 613, 2);
+    // 逐项比例仍与设计高同比例（142:174 不变）
+    expect(styles[2]).toMatch(/^flex:0\./);
+    expect(Number(/flex:([\d.]+)/.exec(styles[3])[1]) / Number(/flex:([\d.]+)/.exec(styles[2])[1])).toBeCloseTo(174 / 142, 2);
+  });
+
+  it('零回归：不传分母时行为与旧实现逐字一致', () => {
+    expect(flexItemStyleFromHeights([32, 207], 0)).toBe('flex:0.134;min-height:0;');
+    expect(flexItemStyleFromHeights([0, 0], 0)).toBe('flex:1;min-height:0;');
+  });
+
+  it('⭐ 阳性：Σh+Σgap 与容器高偏差 27% ⇒ mismatch（a87c2ba5 形态 708 vs 557）', () => {
+    const r = evaluateColumnCanvasConvergence({ containerH: 557, childHeights: [300, 250, 100], gaps: [29, 29] });
+    expect(r.mismatch).toBe(true);
+    expect(Math.round(r.deviance * 100)).toBe(27);
+  });
+
+  it('阴性：偏差在 15% 内 ⇒ 不下结论（比例可信，照常下发）', () => {
+    const r = evaluateColumnCanvasConvergence({ containerH: 570, childHeights: [127, 127, 142, 174], gaps: [14, 14, 15] });
+    expect(r.mismatch).toBe(false);
+  });
+
+  it('反向：无容器高 / 无子项真值 ⇒ 不可证，绝不误判', () => {
+    expect(evaluateColumnCanvasConvergence({ containerH: 0, childHeights: [100], gaps: [10] }).mismatch).toBe(false);
+    expect(evaluateColumnCanvasConvergence({ containerH: 500, childHeights: [0, 0], gaps: [] }).mismatch).toBe(false);
   });
 });

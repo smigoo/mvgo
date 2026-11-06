@@ -2532,12 +2532,25 @@ export class SubcomponentPlanner {
       evaluated: rawSections.length,
       removed: rawSections.length - businessSections.length,
     });
-    const preservedHeaderSlotContent = skipPanelHeaderFilter
-      ? 0
-      : businessSections.filter((sec) => isPanelHeader(sec, false) && hasDeclaredHeaderSlotContent(sec)).length;
+    // 🛡️ 2026-11-06（f91aa545 实锤「插槽又去了内容部分」）：**承载插槽内容的宿主段不得被过滤**。
+    //   旧实现把 `preservedHeaderSlotContent` 只当**计数**用（filter 条件里没有它）：
+    //   panel-header 段一律删 ⇒ 其后 `section 结构契约` 找不到 header 叶 ⇒ `headerSlotsEmitted=0`
+    //   ⇒ index 无 `#header-right` 插槽 ⇒ 插槽内容退回 body 再渲一遍（用户看到的就是这个）。
+    //   判据：`isPanelHeader` ∧ `hasDeclaredHeaderSlotContent`（段里确有插槽业务内容）⇒ 保留，
+    //   并显式打上 `_headerSlotHost` 供结构契约当插槽叶（不靠 type 猜测）。
+    const headerSlotHosts = skipPanelHeaderFilter
+      ? []
+      : businessSections.filter((sec) => isPanelHeader(sec, false) && hasDeclaredHeaderSlotContent(sec));
+    const headerSlotHostIds = new Set(headerSlotHosts.map((sec) => String(sec?.id ?? '')));
+    for (const sec of headerSlotHosts) {
+      if (sec && typeof sec === 'object') sec._headerSlotHost = true;
+    }
+    const preservedHeaderSlotContent = headerSlotHosts.length;
     let sections = skipPanelHeaderFilter
       ? businessSections
-      : businessSections.filter((sec) => !isPanelHeader(sec));
+      : businessSections.filter(
+          (sec) => !isPanelHeader(sec) || headerSlotHostIds.has(String(sec?.id ?? '')),
+        );
     let filteredCount = rawSections.length - sections.length;
     logger.info('🛡️ panel-header 插槽事实过滤·已评估', {
       evaluated: skipPanelHeaderFilter ? 0 : businessSections.length,

@@ -17,6 +17,7 @@ import {
   classMatchesSelector,
   collectStyleRulesFromContent,
   importDepthFor,
+  isBgClassAsset,
   normalizeAnchorText,
   parseTemplateTree,
   type TplTreeNode,
@@ -68,7 +69,7 @@ export interface E2nNodeEdge {
   prodPath: string;
   /** 产物元素的类名（挂载时择优取规则） */
   classes: string[];
-  how: 'subtree-set-equal' | 'vfor-unit';
+  how: 'subtree-set-equal' | 'vfor-unit' | 'fill-rect-cover';
   /** 该 Figma 容器子树内已 seed 的文本数 */
   matched: number;
   /** v-for 单元的实例数（仅 how=vfor-unit 有意义） */
@@ -661,6 +662,55 @@ export function findE2nEdge(e2n: E2nMap, figmaId: string | undefined): E2nNodeEd
   return e2n.nodes.find((n) => n.figmaId === figmaId);
 }
 
+/**
+ * 叶子填充矩形（背景板）的落点：用「它几何覆盖的文本」在产物里的**最近公共祖先**。
+ *
+ * 为什么不能直接建边：E2N 建边靠「Figma 容器子树内已 seed 的文本集合」，
+ * 叶子矩形没有子节点 ⇒ 集合恒空 ⇒ 永远建不出边（背景色系统性漏回的根因）。
+ * 但它覆盖的文本本身是已 seed 的（文本回填早就把 30 条都 seed 了），
+ * ⇒ 「覆盖文本 → 各自产物节点 → 取公共祖先」就是它的确定性落点。
+ *
+ * 纪律：
+ *   · 单条覆盖文本且公共祖先就是那个文本元素本身时，上浮一层（底板应落在承载它的块上，
+ *     不能把背景写到 <span> 上）；上浮不到就放弃（宁可不改）。
+ *   · 覆盖文本分布在**不同子树**（交集为空）⇒ 真歧义，返回 undefined，不猜。
+ */
+export function anchorByCoveredTexts(e2n: E2nMap, coveredTexts: string[]): E2nNodeEdge | undefined {
+  if (!coveredTexts.length) return undefined;
+  const byKey = new Map(e2n.prodNodes.map((p) => [p.key, p]));
+  const want = new Set(coveredTexts.map((t) => normalizeAnchorText(t)));
+  const seedKeys: string[] = [];
+  for (const s of e2n.seeds) {
+    if (want.has(normalizeAnchorText(s.text)) && !seedKeys.includes(s.prodKey)) seedKeys.push(s.prodKey);
+  }
+  if (seedKeys.length === 0) return undefined;
+  const chainOf = (key: string): string[] => {
+    const chain: string[] = [];
+    for (let cur = byKey.get(key); cur; cur = byKey.get(cur.parentKey ?? '')) chain.push(cur.key);
+    return chain;
+  };
+  const chains = seedKeys.map(chainOf).filter((c) => c.length > 0);
+  if (chains.length === 0) return undefined;
+  // chain 是 self → root，第一个「出现在所有链里」的即最深公共祖先
+  let lcaKey = chains[0].find((k) => chains.every((c) => c.includes(k)));
+  if (!lcaKey) return undefined;
+  if (chains.length === 1 && lcaKey === chains[0][0]) lcaKey = chains[0][1] ?? lcaKey;
+  const node = byKey.get(lcaKey);
+  if (!node) return undefined;
+  return {
+    figmaId: '',
+    figmaType: 'FILL_RECT',
+    figmaName: '',
+    prodKey: node.key,
+    prodPath: node.path,
+    classes: node.classes,
+    how: 'fill-rect-cover',
+    matched: seedKeys.length,
+    instCount: node.vforCount,
+    unique: true,
+  };
+}
+
 // ───────────────────────── 容器级 bg 挂载（消费 E2N） ─────────────────────────
 
 export interface BgE2nStats {
@@ -699,9 +749,18 @@ const BG_URL_TAIL = 'center / 100% 100% no-repeat';
 
 /** 选择器归一：剥注释 + 剥 at-rule 残留 + 剥 .dark/.light 主题前缀（唯一性判定的比较口径）
  *  🔴 首条规则的 selNorm 会带 `<style>` 开头的 `@import '…/index.less';`（83cfb20e 实锤），
- *    其中的 `.less` 会被算成第二个类 token ⇒ 取最后一个 `;` 之后的部分才是真选择器。 */
+ *    其中的 `.less` 会被算成第二个类 token ⇒ 取最后一个 `;` 之后的部分才是真选择器。
+ *  🔴 2026-11-06 补：**less 行注释 `//`** 同样要剥。less 产物里规则前常有一排
+ *    `// ─────── 业务样式 ───────` 装饰注释，只剥 `/* *\/` 时这段会留在 selNorm 里
+ *    ⇒ 同一逻辑规则被判成两个不同选择器 ⇒ skipRuleAmbiguous ⇒ 落点永远解析失败
+ *    （真机 mc-lab-1793898003372：整屏渐变锚到 `.c-equipment-detail-content` 却写不进去）。
+ *    行注释必须在 `split(';')` **之前**剥，否则注释里的分号会切断选择器。
+ */
 export function selKeyOf(sel: string): string {
-  return (sel.replace(/\/\*[\s\S]*?\*\//g, ' ').split(';').pop() ?? '')
+  return (sel
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[\r\n])[ \t]*\/\/[^\r\n]*/g, ' ')
+    .split(';').pop() ?? '')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^(\.(?:dark|light)\s+)+/, '');
@@ -822,7 +881,15 @@ export function readBgDecl(body: string): BgDecl {
  */
 export function mountBgByE2n(
   files: Array<{ path: string; content: string }>,
-  assets: Array<{ nodeId: string; fileName?: string; parentId?: string; containerLevel?: boolean }>,
+  assets: Array<{
+    nodeId: string;
+    name: string;
+    width?: number;
+    height?: number;
+    fileName?: string;
+    parentId?: string;
+    containerLevel?: boolean;
+  }>,
   e2n: E2nMap,
 ): BgE2nResult {
   const stats: BgE2nStats = {
@@ -838,7 +905,8 @@ export function mountBgByE2n(
   const index = buildStyleRuleIndex(files);
 
   for (const a of assets) {
-    if (!a.fileName || !/^bg-/.test(a.fileName)) continue;
+    // 🔴 S2：bg 路由收口 isBgClassAsset（bg- 前缀外的底图同入 E2N bg 结构通道）
+    if (!a.fileName || !isBgClassAsset(a)) continue;
     if (!a.containerLevel || !a.parentId) continue;
     stats.candidates += 1;
     const edge = findE2nEdge(e2n, a.parentId);

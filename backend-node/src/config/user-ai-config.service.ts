@@ -6,8 +6,24 @@ import {
   UserAiConfig,
   UserAiConfigDocument,
 } from '../schemas/user-ai-config.schema';
-import { AI_CONFIG_SCHEMA } from './config.service';
 import { encryptField, decryptField } from '../common/crypto/field-encryption';
+
+/**
+ * 🔴🔴 禁止改成静态 import `AI_CONFIG_SCHEMA`（2026-11-06 实锤）：
+ * `config.service.ts` 反向 import 本文件的 `UserAiConfigService` 作构造参数类型，
+ * 两者构成**模块级循环**。谁先被 require，后加载那方的 `design:paramtypes` 就会拿到
+ * `undefined` —— Nest 启动即报
+ *   `Nest can't resolve dependencies of the AiConfigService (?)`。
+ * 复现（编译产物）：先 require user-ai-config.service 再 require config.service，
+ * `Reflect.getMetadata('design:paramtypes', AiConfigService)` = `[undefined]`；反序 = `[UserAiConfigService]`。
+ * 触发条件随「谁先引入」漂移（新增模块引入 UserAiConfigService 就会翻车），
+ * 故此处改为**运行时取值**：调用时 config.service 必已加载完毕。
+ * 结构性正解是把 schema 抽到独立模块（见 memory 待办），届时可直接恢复静态 import。
+ */
+function aiConfigSchema() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return (require('./config.service') as typeof import('./config.service')).AI_CONFIG_SCHEMA;
+}
 
 /**
  * 按用户持久化 AI/API 配置（管理后台只读视图的数据源）。
@@ -30,7 +46,7 @@ export class UserAiConfigService {
   ): Promise<void> {
     let parsed: Record<string, any>;
     try {
-      parsed = AI_CONFIG_SCHEMA.parse(input || {});
+      parsed = aiConfigSchema().parse(input || {});
     } catch (err) {
       if (err instanceof ZodError) {
         const message = err.issues

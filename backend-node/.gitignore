@@ -26,6 +26,12 @@ node_modules/
 # ==== 构建产物 ====
 dist/
 dist-*.tar.gz
+# 构建备份目录（回滚用）：daily auto-sync 会 git add -A，必须忽略，
+# 否则每天凌晨把旧构建（数千文件/数十 MB）重复提交进仓库
+dist.bak.*
+dist.old-*
+dist.bak
+dist.old
 
 # ==== 日志 ====
 logs/
@@ -37,12 +43,18 @@ server.log.*
 temp-components/
 output/
 workspace/
+# 运行时数据目录整体不入库（daily auto-sync 用 git add -A，逐项规则易漏）
+data/
 data/*.json
 data/*.jsonl
 data/*.db
 data/*.tmp
 data/*.bak-*
 data/apifox-zips/
+# 根目录探针残留（EPERM rename / 重启探针，0 字节）
+.__*
+.restart-probe*
+.rename-probe*
 # 微码解析失败 dump（运行时诊断产物，不入库）
 data/microcode-parse-fail-*.txt
 # Apifox 接口生成产物（个人隔离目录，不入库）
@@ -50,6 +62,16 @@ data/apifox/
 data/apifox-tasks.json
 # API 绑定快照（运行时生成，不入库）
 data/api-binding-snapshots/
+# 运行时数据目录（不入库；daily auto-sync 用 git add -A，会把它们扫进来）
+data/api-catalogs/
+data/figma-node-cache/
+data/project-runs/
+# 探针与回收站残留（EPERM rename 探针 / 组件删除回收站，0 字节或无用）
+data/.__*
+data/.__*/
+data/.rename-probe-*
+data/.restart-probe*
+data/.trash/
 
 # ==== 构建缓存 / 清理残留 ====
 # TypeScript 增量编译缓存

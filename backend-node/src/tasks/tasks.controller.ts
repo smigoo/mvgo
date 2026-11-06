@@ -473,8 +473,11 @@ export class TasksController {
   /**
    * GET /api/tasks/queue/stats
    * 获取当前等待队列统计信息
+   * 🛡️ 2026-11-06 补守卫：调用方 api/generator/generator.ts:453 走 generatorRequest
+   *   (拦截器注入 Token 头)，同文件 /tasks 列表等 29 处早已 SessionGuard —— 此处属漏挂。
    */
   @Get('queue/stats')
+  @UseGuards(SessionGuard)
   getQueueStats() {
     return {
       success: true,
@@ -485,8 +488,10 @@ export class TasksController {
   /**
    * GET /api/tasks/queue/status/:sessionId
    * 获取单个任务的队列状态
+   * 🛡️ 2026-11-06 补守卫：同上，generatorRequest 带 Token，零误伤。
    */
   @Get('queue/status/:sessionId')
+  @UseGuards(SessionGuard)
   getTaskQueueStatus(@Param('sessionId') sessionId: string) {
     return {
       success: true,

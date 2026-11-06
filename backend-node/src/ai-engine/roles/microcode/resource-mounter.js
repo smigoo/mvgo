@@ -21,7 +21,10 @@ import {
   validateContainerSize,
   validateResourceUsage,
 } from '../../utils/post-process.js';
-import { inferBackgroundStyle } from '../../utils/background-size-inference.js';
+import {
+  inferBackgroundStyle,
+  PERCENT_FALLBACK_SUB_STATE,
+} from '../../utils/background-size-inference.js';
 import {
   scoreMountTarget,
   isTextLeafTag,
@@ -55,6 +58,15 @@ import { removeOverlappingSlotDom } from '../../utils/slot-dom-deduper.js';
 // 与 buildSectionHeightsMap（figma-section-heights.js）**同源**——共用同一份 extractRootTemplate，
 // 避免「映射表按 A 口径建、内联改写按 B 口径查」导致查表恒 miss（静默失效）。
 import { extractRootTemplate } from '../../utils/figma-section-heights.js';
+import {
+  resolveHeaderTabModels,
+  renderHeaderTabTemplate,
+  renderHeaderTabScript,
+} from '../../utils/header-tab-slots.js';
+import {
+  validateVueSfc,
+  extractLessGlobalVars,
+} from '../../utils/sfc-syntax-validation.js';
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i`。
 //   该常量与 `microcode-engineer.js` 的死代码副本、`utils/mount-target-scoring.js` 的私有副本
@@ -171,7 +183,7 @@ export function findTagByClassKeyword(content, kw) {
     tok.endsWith(`-${kw}`) ||
     tok.includes(`-${kw}-`);
   const tags = [];
-  const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
+  const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)>/g;
   let m;
   while ((m = tagRe.exec(content)) !== null) {
     if (/^script$/i.test(m[1]) || /^style$/i.test(m[1])) continue;
@@ -242,7 +254,7 @@ export function findVForItemTag(content, preferKeywords = []) {
 export function findTemplateRootTag(content, options = {}) {
   if (!content || typeof content !== 'string') return null;
   const tm = content.match(
-    /<template[^>]*>\s*<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/,
+    /<template[^>]*>\s*<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)>/,
   );
   if (!tm) return null;
   if (/^script$/i.test(tm[1]) || /^style$/i.test(tm[1])) return null;
@@ -268,7 +280,7 @@ export function findRegionContainerCandidates(content) {
 
   // 1. 模板根元素
   const rootMatch = tpl.match(
-    /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/,
+    /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)>/,
   );
   if (!rootMatch) return [];
   const rootTag = rootMatch[1];
@@ -286,7 +298,7 @@ export function findRegionContainerCandidates(content) {
   } else {
     // 组件外壳（base-panel 等）：找其下第一个「非 <template> 插槽」的真实内容子元素作为内容根
     const childRe =
-      /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+      /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g;
     let depth = 0;
     let cm = null;
     const s = tpl.slice(rootOpenEnd);
@@ -310,7 +322,7 @@ export function findRegionContainerCandidates(content) {
   // P1-5：结果只保留内容容器标签（isContentTag）
   const rest = tpl.slice(contentRootOpenEnd);
   const tagRe =
-    /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+    /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g;
   const result = [];
   let depth = 0;
   let m;
@@ -377,7 +389,7 @@ export function collectMountCandidates(files, opts = {}) {
     //   ⚠️ 刻意不剥具名插槽：插槽内组件标签/容器同样是合法挂载候选。
     const body = extractSfcTemplate(content) ?? content;
     const tagRe =
-      /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+      /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g;
     let depth = 0;
     let m;
     while ((m = tagRe.exec(body)) !== null) {
@@ -1331,6 +1343,13 @@ export function mountSubStateBackground(allFiles, varName, m, options = {}) {
     // 🛡️ 2026-09-15（228b63d5）：size/position/repeat 不再硬编码 `100% 100%`，改走
     //   inferBackgroundStyle（几何真值推断：铺满型→100% 100%，局部尺寸→写死 px + 偏移）。
     const bgStyle = inferBackgroundStyle(m || {});
+    const percentFallbackSubState = bgStyle.percentFallback === PERCENT_FALLBACK_SUB_STATE ? 1 : 0;
+    options.logger?.info?.('🛡️ T4 状态背景口径评估', {
+      varName,
+      evaluated: 1,
+      percentFallbackSubState,
+      backgroundSize: bgStyle.size,
+    });
     
     // 🛡️ 2026-09-15（P0 修复）：根据 mountTarget 判断是 active 还是 default 状态
     const isDefaultState = m.mountTarget === 'default';
@@ -2409,9 +2428,33 @@ function extractTextFragments(content) {
  * 下游两路消费：section → HeaderStats 子组件；headerSlots → T09 兜底注入插槽 → 重复渲染。
  * 治本：注入前检查子组件是否已渲染相同内容，重叠则跳过注入。
  */
+/**
+ * 🛡️ 2026-11-06（mc-max-1793923099707-3e924a69 实锤）：插槽内容是否已被 body 段组件表达。
+ *
+ * 判据（零硬编码）：slot content 按空白分词，**全部** token（长度≥2）都能在 body 组件
+ * （`components/*.vue`，除 index.vue）文本中找到 ⇒ 重复。body 版信息更完整（真渲染 vs 裸
+ * span 兜底），故插槽让位、计数 `slotBodyDuplicate`，由调用方跳过注入。
+ * fail-open：files 缺失 / 无 token ⇒ false（保守注入）。
+ */
+export function isSlotContentDuplicatedInBody(content, files) {
+  const tokens = String(content || '')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+  if (tokens.length === 0 || !files || typeof files !== 'object') return false;
+  let corpus = '';
+  for (const [p, c] of Object.entries(files)) {
+    if (!/\.vue$/i.test(p) || /index\.vue$/i.test(p)) continue;
+    corpus += typeof c === 'string' ? c : '';
+  }
+  if (!corpus) return false;
+  return tokens.every((t) => corpus.includes(t));
+}
+
 export function ensureHeaderSlots(code, input, options = {}) {
   const { componentType, files } = options;
   const logger = safeLogger(options.logger);
+  const originalCode = code;
   if (!code || typeof code !== 'string') return code;
   if (componentType === 'vue3') return code; // vue3 无 base-panel 宿主
 
@@ -2585,9 +2628,14 @@ export function ensureHeaderSlots(code, input, options = {}) {
       (c) => c && typeof c === 'object' && !!(c.resourceFile || c.imageRef || c.assetVar),
     )
   }
-  const t09ResourceSlotStats = { evaluated: 0, blocked: 0 }
+  const t09ResourceSlotStats = { evaluated: 0, blocked: 0, slotBodyDuplicate: 0 }
 
-  // 按插槽名聚合待补内容
+  // 🛡️ 案①：同一 figmaNodeId 的 section 结构契约优先；顶层 label/content 不再决定只能拼文本。
+  const tabResolution = resolveHeaderTabModels(input);
+  const tabStats = { ...tabResolution.stats, upgraded: 0, failed: 0 };
+  const upgradedTabModels = new Map();
+
+  // 按插槽名聚合待补内容（普通文本与结构 tabs 分描述符，旧文本行为不变）
   const pending = new Map();
   for (const slot of slots) {
     t09ResourceSlotStats.evaluated += 1;
@@ -2599,22 +2647,39 @@ export function ensureHeaderSlots(code, input, options = {}) {
     if (!slotName) continue;
     const content = String(slot?.content || '').trim();
     if (!content) continue;
+    // 🛡️ 2026-11-06（mc-max-1793923099707-3e924a69 实锤）：**插槽内容与 body 段重复 ⇒ 让位**。
+    //   病灶：derived 插槽「江阴靖江长江隧道 江阴大桥」进了 #header-right（裸 span 简样式），
+    //   而同文本的 tabs 已由 body 段组件（ContentMonitor）真渲染 ⇒ 同内容两处、样式各异。
+    //   根因：插槽资格复核把 2:7959 撤出插槽候选（emptyBodyAndItems ⇒ 段留 body），但 derived
+    //   插槽是独立机制，不读撤单结果 ⇒ 双表达无人拦。
+    //   判据（单一出口）：slot 内容按空白分词后**全部** token（长度≥2）都能在 body 组件
+    //   （components/*.vue，除 index）文本中找到 ⇒ 视为重复。body 版信息更完整，插槽让位。
+    if (isSlotContentDuplicatedInBody(content, files)) {
+      t09ResourceSlotStats.slotBodyDuplicate += 1;
+      continue;
+    }
 
-    // 已有该插槽且内部有非注释实体内容 → 跳过
+    const tabModel = tabResolution.byNodeId.get(String(slot?.figmaNodeId || '').trim());
+    // 已有该插槽且内部有非注释实体内容 → 跳过；唯一例外是本次可用结构 tabs
+    // 替换 T09 自己此前注入的纯文本兜底（带系统标记），不得覆盖 LLM/其他非空内容。
     const existing = new RegExp(
       `<template\\s+#${slotName}\\s*>([\\s\\S]*?)</template>`,
       'i',
     ).exec(code);
     if (existing) {
       const inner = existing[1].replace(/<!--[\s\S]*?-->/g, '').trim();
-      if (inner) continue;
+      const isPriorT09TextFallback = existing[0].includes('由生成器按 Figma headerSlots 确定性补齐');
+      if (inner && !(tabModel && isPriorT09TextFallback)) continue;
     }
     if (!pending.has(slotName)) pending.set(slotName, []);
-    pending.get(slotName).push(content);
+    pending.get(slotName).push(tabModel ? { kind: 'tabs', model: tabModel } : { kind: 'text', content });
   }
   // 🔴 计数行恒打（0 也打）：可区分「没有资源型插槽」与「判据失效」
   logger?.info('🛡️ T09 资源型插槽文本注入拦截', t09ResourceSlotStats);
-  if (pending.size === 0) return code;
+  if (pending.size === 0) {
+    logger?.info('🛡️ T09 头部Tab结构升级', tabStats);
+    return code;
+  }
 
   let result = code;
   const injected = [];
@@ -2625,7 +2690,13 @@ export function ensureHeaderSlots(code, input, options = {}) {
     'font-size:13px;line-height:1;white-space:nowrap;';
   for (const [slotName, contents] of pending) {
     const items = contents
-      .map((text) => `        <span style="${itemStyle}">${text}</span>`)
+      .map((entry) => {
+        if (entry.kind === 'tabs') {
+          upgradedTabModels.set(entry.model.nodeId, entry.model);
+          return `        ${renderHeaderTabTemplate(entry.model).replace(/\n/g, '\n        ')}`;
+        }
+        return `        <span style="${itemStyle}">${entry.content}</span>`;
+      })
       .join('\n');
     const block =
       `      <template #${slotName}>\n` +
@@ -2646,10 +2717,52 @@ export function ensureHeaderSlots(code, input, options = {}) {
     injected.push(slotName);
   }
 
+  if (upgradedTabModels.size > 0) {
+    const declarations = [...upgradedTabModels.values()]
+      .map((model) => renderHeaderTabScript(model))
+      .join('\n');
+    const scriptOpen = result.match(/<script\s+setup[^>]*>/i);
+    if (!scriptOpen) {
+      tabStats.failed = upgradedTabModels.size;
+      logger?.warn('🛡️ T09 头部Tab结构升级弃权：缺少 script setup，已回退原始代码');
+      logger?.info('🛡️ T09 头部Tab结构升级', tabStats);
+      return originalCode;
+    }
+    let next = result;
+    const scriptBody = next.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/i)?.[1] || '';
+    // ref 已声明/导入则复用；否则优先合并进既有 vue import，避免重复声明。
+    if (!/\bref\b/.test(scriptBody)) {
+      const vueImportRe = /import\s*\{([^}]+)\}\s*from\s*(['"])vue\2/;
+      if (vueImportRe.test(next)) {
+        next = next.replace(vueImportRe, (_all, names, quote) => {
+          return `import { ${names.trim()}, ref } from ${quote}vue${quote}`;
+        });
+      } else {
+        next = next.replace(scriptOpen[0], `${scriptOpen[0]}\nimport { ref } from 'vue'`);
+      }
+    }
+    next = next.replace(/<\/script>/i, `\n${declarations}\n</script>`);
+    const check = validateVueSfc(next, 'package/index.vue', {
+      lessGlobalVars: extractLessGlobalVars(files || {}),
+    });
+    if (!check.valid) {
+      tabStats.failed = upgradedTabModels.size;
+      logger?.warn('🛡️ T09 头部Tab结构升级产生非法 SFC，已回退原始代码', {
+        errors: (check.errors || []).slice(0, 2),
+      });
+      logger?.info('🛡️ T09 头部Tab结构升级', tabStats);
+      return originalCode;
+    }
+    result = next;
+    tabStats.upgraded = upgradedTabModels.size;
+  }
+  logger?.info('🛡️ T09 头部Tab结构升级', tabStats);
+
   if (injected.length > 0 && logger) {
     logger.warn('🔧 T09 已确定性补齐 base-panel 头部插槽（模型漏生成）', {
       injected,
       slotCount: slots.length,
+      upgradedTabs: tabStats.upgraded,
     });
   }
   return result;
@@ -3523,7 +3636,7 @@ export function healAbsoluteOverlayParents(files, options = {}) {
 
     // 2. 栈追踪模板，找 absolute class 元素的直接父元素 class
     const parentClsSet = new Set();
-    const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+    const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g;
     const VOID = /^(img|br|hr|input|meta|link|source|path|circle|rect)$/i;
     const stack = [];
     let m;
@@ -3788,7 +3901,7 @@ export function healStandaloneBgLayers(files, options = {}) {
   const report = { collapsed: [], absoluteFixed: [] };
   if (!files || typeof files !== 'object') return report;
 
-  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g;
   const VOID = /^(img|br|hr|input|meta|link|source|path|circle|rect|ellipse|line|polyline|polygon|use|stop)$/i;
 
   for (const [path, content] of Object.entries(files)) {
@@ -4040,7 +4153,7 @@ export function fixMisplacedContainerOpacity(files, nodeData, options = {}) {
   if (nodeData && typeof nodeData === 'object') collect(nodeData);
   if (lowOpacityVals.length === 0) return report; // 真值无低透明度节点 → 无从「搬运」，fail-open
 
-  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g;
   const VOID = /^(img|br|hr|input|meta|link|source|path|circle|rect|ellipse|line|polyline|polygon|use|stop)$/i;
   const OPACITY_CSS_RE = /opacity\s*:\s*(0?\.\d+|0|1(?:\.0+)?|\d+%)/i;
 
@@ -4254,7 +4367,7 @@ export function fixMisplacedContainerOpacity(files, nodeData, options = {}) {
       if (openIdx >= 0) {
         // 找容器配对闭标签（同 tag 计数）
         let depth2 = 1;
-        const tagTokenRe = new RegExp(`<(\\/?)${cand.tag}(?=[\\s/>])((?:"[^"]*"|'[^']*'|[^>])*)>`, 'g');
+        const tagTokenRe = new RegExp(`<(\\/?)${cand.tag}(?=[\\s/>])((?:"[^"]*"|'[^']*'|[^>"'])*)>`, 'g');
         tagTokenRe.lastIndex = openIdx + newOpenTag.length;
         let closeIdx = -1;
         let t;
@@ -4265,7 +4378,7 @@ export function fixMisplacedContainerOpacity(files, nodeData, options = {}) {
         if (closeIdx > openIdx) {
           const seg = tpl2.slice(openIdx + newOpenTag.length, closeIdx);
           const segPatched = seg.replace(
-            /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g,
+            /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/'"])*)(\/?)>/g,
             (full2, tag2, attrs2, selfClose2) => {
               if (VOID.test(tag2) || selfClose2) return full2;
               if (/\bstyle=/.test(attrs2) || /:style=/.test(attrs2)) return full2;
@@ -4346,6 +4459,289 @@ export function fixMisplacedContainerOpacity(files, nodeData, options = {}) {
         }
       }
     }
+  }
+  return report;
+}
+
+/**
+ * 🛡️ 2026-11-06（mc-max-1793913218521-5d1eb324 用户质询实锤）：
+ * **透明度不得在 CSS 里二次表达** —— 素材/填充已带 alpha 时，删掉同规则的 `opacity`。
+ *
+ * 【用户原话】「透明是静态资源本身的属性，依旧合在一起导出了，不应该再写到 css 中（opacity）」
+ *
+ * 【真机证据】产物 `resources/styles/common.less` / `index.css`：
+ *   `.c-5d1eb3-stat-card { background: linear-gradient(... rgba(...,0.4) ...); opacity: 0.5; }`
+ *   —— 背景 alpha 0.4 已经是「卡片半透明」这一事实的表达通道；再叠 `opacity:0.5` 会
+ *   把透明度变成 0.2（双重透明），且 `opacity` 作用于整棵子树 ⇒ 卡内文字/图标一并被压淡
+ *   （设计稿里文字是全不透明的）。
+ *
+ * 【判据】（零硬编码，只看同一条规则内部的两个通道是否重复表达同一事实）
+ *   同一条 CSS 规则内同时满足：
+ *     a) 声明 `opacity: v` 且 0 < v < 0.999；
+ *     b) 该规则自身已通过**可证**的背景透明度表达同一事实 ——
+ *        `background(-image|-color)?` 的值里出现 `rgba(...)` 且 alpha < 1。
+ *   ⇒ 删除 `opacity` 声明（保留背景，作为唯一表达通道）。
+ *
+ * 🔴 2026-11-06 评审修正（P0）：**`url()` 背景不再是删除依据**。
+ *   旧实现把 `url(...)` 当作「素材导出时已烘焙 alpha」的证据 —— 这是**不可证假设**：
+ *   不透明 PNG 背景 + `opacity:.5` 时，`opacity` 恰恰是**唯一**的透明通道，删掉即把
+ *   元素改回全不透明（比双重透明更难排查）。素材 alpha 在 CSS 层不可读 ⇒ 一律保留，
+ *   只计数留痕（`keptUrlBg`：有 url 背景 + opacity，但无 alpha 证据 ⇒ 诚实保留）。
+ *   `rgba(...)` 分支保留：那是同一规则内**两个通道重复表达同一事实**，可证。
+ *
+ * 【为什么不是「搬到独立背景层」】`fixMisplacedContainerOpacity` 处理的是「真值里是
+ *   bg 子层半透明、被上提到容器」的情形（需要有独立 bg 层可承接）。本函数处理的是
+ *   **同一规则里两个通道重复**：没有第三层可搬，删掉重复项即可，且必须删 `opacity`
+ *   而不是删背景 alpha —— 删背景会丢掉底色/素材。
+ *
+ * 【fail-open】规则里没有背景 / 背景不透明 / opacity=1 ⇒ 一律不动。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地修改）
+ * @param {{logger?:object}} [options]
+ * @returns {{dropped: Array<{file:string, selector:string, opacity:number}>}}
+ */
+export function dropRedundantCssOpacity(files, options = {}) {
+  const logger = safeLogger(options.logger);
+  const report = { dropped: [], keptUrlBg: [] };
+  if (!files || typeof files !== 'object') return report;
+
+  const TARGET_RX = /\.(vue|less|css)$/i;
+  // 透明度通道（可证）：rgba 的 alpha < 1。**不含 `url(`** —— 素材 alpha 在 CSS 层不可读。
+  const ALPHA_BG_RX = /background(?:-image|-color)?\s*:\s*[^;{}]*?rgba\(\s*[^)]*?,\s*(?:0?\.\d+|0)\s*\)/i;
+  // 不可证形态：背景是素材 url() ⇒ 是否带 alpha 未知 ⇒ 只留痕不删。
+  const URL_BG_RX = /background(?:-image)?\s*:\s*[^;{}]*?url\(/i;
+  const OPACITY_DECL_RX = /(^|[;{\n])[ \t]*opacity\s*:\s*(0?\.\d+|0|1(?:\.0+)?|\d+%)[ \t]*;?/i;
+
+  for (const [path, content] of Object.entries(files)) {
+    if (!TARGET_RX.test(path) || typeof content !== 'string') continue;
+    // 只处理最内层规则块（`[^{}]*` ⇒ 天然排除含嵌套的父块），避免误删父级/媒体查询整体
+    const ruleRx = /([^{}]+)\{([^{}]*)\}/g;
+    let changed = false;
+    let next = content;
+    const pieces = [];
+    let lastIndex = 0;
+    let m;
+    while ((m = ruleRx.exec(content)) !== null) {
+      const [full, selector, body] = m;
+      const opM = OPACITY_DECL_RX.exec(body);
+      const bgTransparent = ALPHA_BG_RX.test(body);
+      if (opM && bgTransparent) {
+        const raw = opM[2];
+        const v = /%$/.test(raw) ? parseFloat(raw) / 100 : parseFloat(raw);
+        if (Number.isFinite(v) && v > 0 && v < 0.999) {
+          const newBody = body.replace(OPACITY_DECL_RX, '$1');
+          const newFull = `${selector}{${newBody}}`;
+          pieces.push(content.slice(lastIndex, m.index), newFull);
+          lastIndex = m.index + full.length;
+          changed = true;
+          report.dropped.push({
+            file: path,
+            selector: String(selector).trim().split('\n').pop().trim(),
+            opacity: v,
+          });
+        }
+        continue;
+      }
+      // 🔴 不可证形态：素材 url() 背景 + opacity ⇒ 保留 opacity（alpha 未知），只留痕。
+      if (opM && URL_BG_RX.test(body)) {
+        const raw = opM[2];
+        const v = /%$/.test(raw) ? parseFloat(raw) / 100 : parseFloat(raw);
+        if (Number.isFinite(v) && v > 0 && v < 0.999) {
+          report.keptUrlBg.push({
+            file: path,
+            selector: String(selector).trim().split('\n').pop().trim(),
+            opacity: v,
+          });
+        }
+      }
+    }
+    if (changed) {
+      pieces.push(content.slice(lastIndex));
+      next = pieces.join('');
+      files[path] = next;
+    }
+  }
+
+  if (report.dropped.length > 0) {
+    logger.info(
+      `🛡️ CSS 透明度去重: dropped=${report.dropped.length} keptUrlBg=${report.keptUrlBg.length} —— 背景已带可证 alpha 时删除同规则 opacity（避免双重透明+子内容被压淡）`,
+      { samples: report.dropped.slice(0, 6) },
+    );
+  } else if (report.keptUrlBg.length > 0) {
+    // 0 删除也要说话：说明判据跑了、命中的是**不可证**形态（避免「没跑」与「不敢删」不可辨）
+    logger.info(
+      `🛡️ CSS 透明度去重: dropped=0 keptUrlBg=${report.keptUrlBg.length} —— 背景为素材 url()，alpha 不可读 ⇒ 保留 opacity（宁留双重透明也不误删唯一通道）`,
+      { samples: report.keptUrlBg.slice(0, 6) },
+    );
+  }
+  return report;
+}
+
+/**
+ * 🛡️ 2026-11-06（mc-max-1793913218521-5d1eb324 用户质询）：
+ * **多卡段的装饰背景不得挂在段容器上** —— 背景属于每张卡片，容器写了就是重复一层。
+ *
+ * 【用户原话】「内 class=c-5d1eb3-stats-section 有两个卡片，背景图应该是挂在单独的 card 上，
+ *   不应该整个 class=c-5d1eb3-stats-section 也有背景」
+ *
+ * 【真机证据】产物 `StatsSection.vue` 根 div（data-section-id=38:3260）行内
+ *   `background:linear-gradient(90deg, …)`，而两张 `.stat-card` 各自又有
+ *   `background:linear-gradient(180deg, …)` —— 段容器整块铺一层渐变，卡片间距/外边
+ *   也被染色，视觉上「整段一块底 + 卡里再一块底」双层。
+ *
+ * 【根因位置说明】残留真值是「段 = 首张卡」的坐标（section bbox 265×76 与首卡同框，
+ *   兄弟卡 38:3282 同尺寸并排）⇒ planner 把一个卡片组归成一段，其 fills 被当作段底
+ *   下发到根元素。段归并属上游 planner 议题；本函数是**输出侧的统一出口**：
+ *   容器不再重复表达「卡片自己的底」。
+ *
+ * 【判据】（结构证据 + **同源证明**，零硬编码）
+ *   ① 元素带 `data-section-id` 且是**该 section 组件的根元素**；
+ *   ② 该 section 的条目轨（body.children / body.items）**≥2 项**（多卡段）；
+ *   ③ 根元素行内样式里有 `background`（gradient 或 url）；
+ *   ④ 该文件模板里出现 **≥2 次**的子级卡片 class，其规则（同文件或跨文件，如 common.less）
+ *      声明了与根**同源**的背景 —— 同源 = `paintSignature` 相同（忽略方向角的色标集合）；
+ *   ⇒ 删除根元素行内 `background*` 声明（保留卡片自己的底）。
+ *
+ * 🔴 2026-11-06 评审修正（P1）：④ 旧实现只要求「同文件存在子级 class 也声明了 background」，
+ *   没有证明二者是**同一块底**。段容器合法自带面板底（外层卡 + 内层小卡）时会被误删真值。
+ *   现改为**同源证明**：只有容器底与卡片底是同一组色标（真机 5d1eb324 正是
+ *   `90deg` 与 `180deg` 方向不同、色标逐位相同的「段 fills 被当成段底」形态）才删。
+ *   不同源 ⇒ 保留 + 计入 `keptDiffers`（「不敢删」与「没跑」必须可区分）。
+ *   证据表跨文件构建：卡片规则常被样式合并进 `resources/styles/common.less`。
+ *
+ * 【fail-open】单卡段 / 根无背景 / 无子级背景 / 背景不同源 ⇒ 逐字不动。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地修改）
+ * @param {Array} treeSections resolvePlanSections 口径的段数组
+ * @param {{logger?:object}} [options]
+ * @returns {{dropped: Array, keptDiffers: Array, keptNoChildBg: Array}}
+ */
+export function dropContainerBgWhenChildrenOwnCards(files, treeSections, options = {}) {
+  const logger = safeLogger(options.logger);
+  const report = { dropped: [], keptDiffers: [], keptNoChildBg: [] };
+  if (!files || typeof files !== 'object') return report;
+  const secById = new Map();
+  for (const sec of Array.isArray(treeSections) ? treeSections : []) {
+    if (sec && sec.id != null) secById.set(String(sec.id), sec);
+  }
+  if (secById.size === 0) return report;
+
+  const entryCount = (sec) => {
+    const body = sec?.body || {};
+    for (const key of ['children', 'items', 'elements']) {
+      if (Array.isArray(body[key]) && body[key].length > 0) return body[key].length;
+    }
+    return 0;
+  };
+
+  /**
+   * 背景「同源指纹」：忽略方向角/厂商前缀差异，只取**色标与素材**的集合。
+   * `linear-gradient(90deg, rgba(212,227,254,.4) 0%, …)` 与
+   * `linear-gradient(180deg, rgba(212,227,254,.4) 0%, …)` ⇒ 同指纹（本次真机形态）。
+   * 取不到任何色标/素材 ⇒ null（不可证，一律不删）。
+   */
+  const paintSignature = (value) => {
+    const v = String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!v) return null;
+    const tokens = [];
+    for (const m of v.matchAll(/rgba?\([^)]*\)|#[0-9a-f]{3,8}\b|url\([^)]*\)/g)) tokens.push(m[0]);
+    if (tokens.length === 0) return null;
+    return tokens.sort().join('|');
+  };
+
+  // 证据表：class → 背景指纹集合（跨 .vue/.less/.css 统一收集，样式可能已被合并进 common.less）
+  const classBgSigs = new Map();
+  const RULE_RX = /([^{}]+)\{([^{}]*)\}/g;
+  const BG_DECL_RX = /(?:^|[;{\s])background(?:-image)?\s*:\s*([^;}]+)/i;
+  const CLASS_TOKEN_RX = /\.([A-Za-z0-9_-]+)/g;
+  for (const [path, content] of Object.entries(files)) {
+    if (!/\.(vue|less|css)$/i.test(path) || typeof content !== 'string') continue;
+    let rm;
+    while ((rm = RULE_RX.exec(content)) !== null) {
+      const selector = rm[1];
+      const bgM = BG_DECL_RX.exec(rm[2]);
+      if (!bgM) continue;
+      const sig = paintSignature(bgM[1]);
+      if (!sig) continue;
+      let cm;
+      CLASS_TOKEN_RX.lastIndex = 0;
+      while ((cm = CLASS_TOKEN_RX.exec(selector)) !== null) {
+        const cls = cm[1];
+        if (!classBgSigs.has(cls)) classBgSigs.set(cls, new Set());
+        classBgSigs.get(cls).add(sig);
+      }
+    }
+  }
+
+  for (const [path, content] of Object.entries(files)) {
+    if (!/\.vue$/i.test(path) || typeof content !== 'string') continue;
+    const tagM = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*data-section-id="([^"]+)"(?:"[^"]*"|'[^']*'|[^>"'])*)>/.exec(content);
+    if (!tagM) continue;
+    const sectionId = tagM[3];
+    const sec = secById.get(String(sectionId));
+    if (!sec) continue;
+    if (entryCount(sec) < 2) continue;
+    const tag = tagM[0];
+    const styleM = /\sstyle\s*=\s*"([^"]*)"/.exec(tag);
+    if (!styleM) continue;
+    const styleVal = styleM[1];
+    const rootBgM = /background(?:-image)?\s*:\s*([^;]+)/i.exec(styleVal);
+    if (!rootBgM) continue;
+    const rootSig = paintSignature(rootBgM[1]);
+    if (!rootSig) continue;
+    // 模板里真实出现的 class（含根 class 自身，比对时排除）
+    const rootClass = (/\sclass\s*=\s*"([^"]*)"/.exec(tag) || [])[1] || '';
+    const rootClasses = new Set(String(rootClass).split(/\s+/).filter(Boolean));
+    const tplClasses = new Map(); // class → 出现次数
+    for (const cm of content.matchAll(/\sclass\s*=\s*"([^"]*)"/g)) {
+      for (const c of String(cm[1]).split(/\s+/).filter(Boolean)) {
+        tplClasses.set(c, (tplClasses.get(c) || 0) + 1);
+      }
+    }
+    // 同源证明：≥1 个子级卡片 class（模板出现 ≥1 次且非根 class）的底与根底同指纹
+    let sameOrigin = false;
+    let hasChildBg = false;
+    for (const [cls, count] of tplClasses) {
+      if (rootClasses.has(cls)) continue;
+      const sigs = classBgSigs.get(cls);
+      if (!sigs || sigs.size === 0) continue;
+      hasChildBg = true;
+      if (count >= 1 && sigs.has(rootSig)) {
+        sameOrigin = true;
+        break;
+      }
+    }
+    if (!sameOrigin) {
+      // 留痕分流：「卡片自己没底」与「底不同源」必须可区分
+      (hasChildBg ? report.keptDiffers : report.keptNoChildBg).push({
+        file: path,
+        sectionId: String(sectionId),
+      });
+      continue;
+    }
+    // 删除行内 background / background-image 声明（保留其余布局样式）
+    const newStyleVal = styleVal
+      .split(';')
+      .filter((decl) => !/^\s*background(?:-image)?\s*:/i.test(decl))
+      .join(';');
+    const trimmed = newStyleVal.replace(/;;+/g, ';').replace(/^\s*;|;\s*$/g, '');
+    const newTag = tag.replace(styleM[0], trimmed ? ` style="${trimmed}"` : '');
+    const next = content.replace(tag, () => newTag);
+    if (next === content) continue;
+    files[path] = next;
+    report.dropped.push({
+      file: path,
+      sectionId: String(sectionId),
+      value: rootBgM[0] || '',
+    });
+  }
+
+  const _summary = `dropped=${report.dropped.length} keptDiffers=${report.keptDiffers.length} keptNoChildBg=${report.keptNoChildBg.length}`;
+  if (report.dropped.length > 0) {
+    logger.info(
+      `🛡️ 段容器重复背景已移除: ${_summary} —— 容器底与卡片底同源（同色标），底归卡片`,
+      { samples: report.dropped.slice(0, 6) },
+    );
   }
   return report;
 }

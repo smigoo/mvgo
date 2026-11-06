@@ -38,6 +38,18 @@ import type { DecisionRecord } from './stages/s2-contract-freezer';
 import { buildCodeGen } from './stages/s3-codegen';
 import { buildVueGen, verifyVueGen, readApiModules } from './stages/s4-vuegen';
 import { AiConfigService } from '../../config/config.service';
+import { FigmaClient } from '../../ai-engine/tools/figma/figma-client.js';
+import { figmaLinkAbsenceNote, readProjectFigmaUrl, splitFigmaUnits } from './units/figma-unit-splitter';
+import { splitHtmlUnits } from './units/html-unit-splitter';
+import {
+  UNIT_CONTRACT_VERSION,
+  UNIT_INPUT_KEY_NONE,
+  isCacheableDegraded,
+  unitInputKeyFigma,
+  unitInputKeyHtml,
+  validateUnitContract,
+  type UnitContract,
+} from './units/unit-contract';
 
 // 扫描器与 src 同构放置，nest-cli 的 assets 规则（**/*.js）会把它拷进 dist
 const SCANNER_PATH = path.resolve(__dirname, 'scanner/s0-scan.js');
@@ -71,6 +83,30 @@ const RUN_ID_RX = /^pj-\d{8}-\d{6}-[a-f0-9]{6}$/;
 const SCAN_TIMEOUT_MS = 180_000;
 const STDOUT_CAP = 1_000_000;
 
+/* ── 运行归属（ownerId）─────────────────────────────────────────────────────
+ * 🔴 2026-11-06 用户裁决「项目级生成要 ownerId，每个人独立」⇒ 运行目录从「本机共享」
+ *    变为「按创建者隔离」。三条设计约束（改之前先读懂，否则会踩可见性事故）：
+ *
+ *   ① **归一只认平台用户 ID 形态**（24 hex，即 `session.guard.ts` 写的 `user._id.toString()`）。
+ *      非该形态的值（空串 / 前端自造的 `default-user` / 任何脏值）一律**不落库**：
+ *      落进去只会让这条运行对**所有人（含作者）**同时不可见 —— 比不隔离更坏，且零报错。
+ *
+ *   ② **存量运行无 ownerId ⇒ 仍然可见**（`assertRunAccess` 的 legacy 分支）。本功能
+ *      2026-11-06 之前产出的 run.json 全都没有该字段；若改成严格相等，这批历史运行会
+ *      对作者本人也消失，属不可逆的可见性事故。要收紧必须先做一次性回填再删兜底。
+ *
+ *   ③ **越权一律 404 而非 403**：403 等于承认「这个 runId 存在、只是不给你看」，
+ *      与 dev-only 开关的「不暴露存在性」口径一致。
+ */
+const OWNER_ID_RX = /^[0-9a-fA-F]{24}$/;
+
+/** 把调用方身份收敛成「可落库的 ownerId」；非平台用户 ID 形态返回 undefined（见 ① ②） */
+export function normalizeProjectOwner(userId?: unknown): string | undefined {
+  if (typeof userId !== 'string') return undefined;
+  const value = userId.trim();
+  return OWNER_ID_RX.test(value) ? value : undefined;
+}
+
 /* ── 原型截图硬预算 ────────────────────────────────────────────────────────
  * 🔴 每一项都必须有显式上界：任何一项超时都走「降级为无截图」，
  *    **绝不**抛到接口、**绝不**让请求无限 pending（原实现 screenshot 无 timeout
@@ -89,6 +125,51 @@ const SHOT_TOTAL_BUDGET_MS = 20_000;
 const SHOT_READY_TIMEOUT_MS = 1_500;
 /** 图表入场动画「收敛」判定的最大等待（echarts 默认入场动画 ~1s，就绪判定管不到） */
 const SHOT_SETTLE_TIMEOUT_MS = 1_500;
+
+/* 🔴 预算留痕（T5）：让「截图是否真的受同一预算约束」成为**可从真机日志读出的事实**。
+ *   挂死页实测 57,956ms（= SHOT_TOTAL_BUDGET_MS 的 2.9 倍）证明过：只写注释说「有上界」没用，
+ *   必须每次 capture 都把 bounded / 截断 label / 各步耗时打出来。 */
+interface ShotBudgetTrace {
+  /** 是否全程受预算收口（每个 await 都由 withBudget 或自身 timeout 封顶） */
+  bounded: boolean;
+  /** 触发截断的步骤 label（无截断为 null） */
+  truncatedBy: string | null;
+  /** waitForPaint 各步耗时（ms），未执行到该步为 null */
+  paintReadyMs: number | null;
+  paintEvaluate1Ms: number | null;
+  paintEvaluate2Ms: number | null;
+}
+/** trace 挂在返回 map 上（不可枚举 symbol ⇒ 不污染 Object.keys / 前端形状 / 既有调用方） */
+const SHOT_BUDGET_TRACE = Symbol('shotBudgetTrace');
+
+/* ── 视觉增强同步预算 ──────────────────────────────────────────────────────
+ * 🔴 视觉增强（puppeteer 截图 + 视觉 LLM 比对/定位）**默认不在扫描同步路径启用**：
+ *    实测登录态 70.99s vs 匿名 0.40s，其中扫描器 S0 仅 117ms，其余 ~70.8s 全耗在
+ *    buildFeatureDetails 的截图 + 两轮串行视觉调用上，且视觉把确定性的正确覆盖结论
+ *    （2/4 等）污染成错误结论（0/4），零收益。
+ *    ⇒ 仅当请求体显式 `vision:true` 才走旧路径，且受本总预算硬闸约束（到点即停）。
+ */
+/** 同步路径里视觉增强的总预算硬闸（不是建议值：到点即停，用已完成的部分） */
+const VISION_SYNC_BUDGET_MS = 45_000;
+/* 🔴 V5 修复（2026-11-06）：上面这个预算是**整块共享**的 wall-clock，不是「每个视觉块各 45s」。
+ *   修复前：`captureShots` 用自己的 SHOT_TOTAL_BUDGET_MS(20s)，覆盖块在截图**之后**才起
+ *   自己的 45s（visionCovT0），L2 定位又起第三个 45s（visionLocT0）⇒ vision:true 最坏
+ *   20+45+45 ≈ 110s，与注释宣称的「45s 总闸」不符，等于给逃生舱留了个 2 倍后门。
+ *   现在：buildFeatureDetails 入口建一次 visionDeadline，截图 / 覆盖 / 定位三者共用；
+ *   截图实际 deadline 取 `min(自身 20s, 剩余预算)`，且 launch 超时也按剩余预算收敛。 */
+
+/* ── 文本 LLM「功能增强」异步化 ─────────────────────────────────────────────
+ * 🔴 事故（2026-11-06）：登录态 scan 57.22s，匿名 0.44s。日志铁证：
+ *     00:39:21 `[scan] 视觉覆盖增强` → 00:40:18 `[scan] 视觉接口定位`，中间 57s 零日志。
+ *   就在这段空档里同步跑 `enrichFeaturesWithLLM`（单次 fetch + AbortController 60s
+ *   超时 + 1 次重试 ⇒ 最坏 ~120s）。它只看「用户配没配文本模型」，与视觉门控无关，
+ *   所以上一轮的 `opts.vision` 修复覆盖不到它。
+ * 治本：确定性结果先落盘秒回，文本 LLM 增强降级为**后台任务**，完成后回写
+ *   `spec/feature-details.json`，状态写进 `run.json.featureEnrich`，前端轮询补齐。
+ *   `enrich:'sync'` 保留为显式逃生舱（调试/对照用），不是默认路径。
+ */
+/** 后台增强「状态过期」判定：服务重启会把 running 钉死，超过此值一律按 stale 呈现 */
+const ENRICH_STALE_MS = 15 * 60_000;
 
 /**
  * 单次 buildFeatureDetails 调用内的按页访问器（**局部缓存，不跨请求**）。
@@ -134,6 +215,8 @@ const ARTIFACT_WHITELIST = [
   'doc/BACKEND-DESIGN.draft.md',
   'doc/REQUIREMENTS.md',
   'spec/feature-details.json',
+  // 单元拆分快照（P0 契约）。**不含运行状态** —— 状态在 spec/unit-state.json（P4 才写）。
+  'spec/components.json',
   'generated/**',
   'spec/shots/**',
 ];
@@ -150,6 +233,12 @@ export class ProjectPipelineService {
 
   /** 按需截图去重：同一 run+页的并发 GET 只截一次（task 完成即删，不跨请求缓存） */
   private readonly shotInflight = new Map<string, Promise<boolean>>();
+
+  /**
+   * 后台「功能描述 AI 增强」在飞集合：同一 runId 只允许一个任务。
+   * 不用 Map<string,Promise> 是因为这里不需要 join 结果，只需要「别重复起」。
+   */
+  private readonly enrichInflight = new Set<string>();
 
   constructor(private readonly aiConfig: AiConfigService) {}
 
@@ -626,7 +715,12 @@ export class ProjectPipelineService {
   /* -------------------------------------------------------------- scan --- */
 
   /** S0：跑扫描器（只读输入目录），产物落到新的 runId 目录 */
-  async scan(projectDir: string, note?: string, userId?: string) {
+  async scan(
+    projectDir: string,
+    note?: string,
+    userId?: string,
+    opts?: { vision?: boolean; enrich?: 'sync' | 'defer' },
+  ) {
     const info = this.inspect(projectDir);
     if (!info.exists) throw new BadRequestException(`项目目录不存在：${info.resolvedPath}`);
     if (!info.isDirectory) throw new BadRequestException(`不是目录：${info.resolvedPath}`);
@@ -662,6 +756,10 @@ export class ProjectPipelineService {
       JSON.stringify(
         {
           runId,
+          // 🔴 归属：唯一写入点。所有读路径的隔离判据都从这一行派生（resolveRunDir）。
+          //    形态不合法的身份不落库（见文件头 ①）——宁可这条运行保持「存量可见」，
+          //    也不能落一个假 ownerId 把它对所有人藏起来。
+          ownerId: normalizeProjectOwner(userId) ?? null,
           projectDir: info.resolvedPath,
           note: note ?? null,
           createdAt: new Date().toISOString(),
@@ -676,15 +774,27 @@ export class ProjectPipelineService {
     );
 
     this.logger.log(
-      `[S0] runId=${runId} dir=${info.resolvedPath} exit=${res.code} ${durationMs}ms`,
+      `[S0] runId=${runId} dir=${info.resolvedPath} exit=${res.code} ${durationMs}ms owner=${normalizeProjectOwner(userId) ?? 'anonymous'}`,
     );
+
+    // 🔴 同步只跑确定性路径：`inspectRun` 收到 `<opts>` 里的 enrich，
+    //    默认 'defer' ⇒ buildFeatureDetails 不调 LLM，确定性结果先返回。
+    const view = await this.inspectRun(runId, userId, opts);
+    // 文本 LLM 增强转后台（**不 await**：内部全量 try/catch，不会变成 unhandledRejection）
+    // 同步解析一次 cfg 只为区分「无模型 → 直接 skipped」与「有模型 → pending」，
+    // 让匿名用户不必白轮询一圈（这是配置读，与 57s 的 LLM 调用不是一个量级）。
+    const enrichCfg = opts?.enrich === 'sync' ? null : await this.resolveTextConfigSafe(userId);
+    const featureEnrich = this.startFeatureEnrichment(runId, outDir, enrichCfg, opts);
 
     return {
       durationMs,
       exitCode: res.code,
       stdout: res.stdout,
       // inspectRun 已带 runId / manifest / 端点 / 冲突 / 产物清单
-      ...(await this.inspectRun(runId, userId)),
+      ...view,
+      // 🔴 必须放在展开之后：inspectRun 里读到的是「后台任务启动前」的 run.json，
+      //    这里用启动后的实时状态覆盖，前端据此决定要不要轮询。
+      featureEnrich,
     };
   }
 
@@ -756,10 +866,58 @@ export class ProjectPipelineService {
     }
   }
 
+  /**
+   * 运行目录的唯一入口：**形态校验 + 存在性 + 归属校验**三合一。
+   *
+   * 🔴 为什么收敛成一个方法（而非在每个调用点各写一遍）：
+   *   本文件原先有 12 处逐字相同的
+   *     `assertRunId(runId); const dir = path.join(RUNS_ROOT, runId); if (!exists) throw …`
+   *   若把归属校验散着加，必然出现「新加的方法忘了校验」——那正是权限漏洞的经典成因。
+   *   现在**任何**读写单个运行的路径都必须经过本方法，漏用即是编译期可见的缺失（拿不到 dir）。
+   *
+   * 归属语义（见文件头 ①②③）：
+   *   · run.json 有 ownerId → 必须与调用方身份严格相等，否则 404
+   *   · run.json 无 ownerId → 存量运行，放行（向后兼容，避免历史对作者消失）
+   */
+  private resolveRunDir(runId: string, userId?: string): string {
+    this.assertRunId(runId);
+    const dir = path.join(RUNS_ROOT, runId);
+    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+
+    const owner = normalizeProjectOwner(this.readRunMeta(dir)?.ownerId);
+    if (owner && owner !== normalizeProjectOwner(userId)) {
+      // 404 而非 403：不向非所有者确认「这个 runId 存在」
+      this.logger.warn(
+        `[owner] 拒绝访问 runId=${runId}：归属不一致（caller=${userId ?? 'anonymous'}）`,
+      );
+      throw new NotFoundException(`运行不存在：${runId}`);
+    }
+    return dir;
+  }
+
+  /** 读 run.json（老目录/损坏文件一律当「无元数据」处理，绝不因此 500） */
+  private readRunMeta(dir: string): any {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
   /* -------------------------------------------------------------- runs --- */
 
-  listRuns() {
+  /**
+   * 最近运行列表（**按归属过滤**）。
+   *
+   * 🔴 隔离语义（与 `resolveRunDir` 同一份判据，勿另写一份）：
+   *   · 有身份 → 只返回「自己的」+「存量无主」的运行
+   *   · 无身份（匿名/未登录，仅 dev 可达）→ 只返回「存量无主」的运行
+   *   · 存量无主 = 2026-11-06 之前的 run.json 没有 ownerId，收紧会让它们对作者也消失
+   *     （见文件头 ②）。要改成严格隔离，必须先回填历史运行再删这条兜底。
+   */
+  listRuns(userId?: string) {
     fs.mkdirSync(RUNS_ROOT, { recursive: true });
+    const me = normalizeProjectOwner(userId);
     const runs = fs
       .readdirSync(RUNS_ROOT, { withFileTypes: true })
       .filter((d) => d.isDirectory() && RUN_ID_RX.test(d.name))
@@ -768,13 +926,15 @@ export class ProjectPipelineService {
         let createdAt: string | null = null;
         let projectDir: string | null = null;
         let note: string | null = null;
+        let ownerId: string | null = null;
         try {
           const meta = JSON.parse(fs.readFileSync(path.join(full, 'run.json'), 'utf8'));
           createdAt = meta.createdAt ?? null;
           projectDir = meta.projectDir ?? null;
           note = meta.note ?? null;
+          ownerId = normalizeProjectOwner(meta.ownerId) ?? null;
         } catch {
-          /* 老目录无 run.json，按 mtime 排 */
+          /* 老目录无 run.json，按 mtime 排；ownerId 视为存量无主 */
         }
         const st = fs.statSync(full);
         return {
@@ -782,9 +942,12 @@ export class ProjectPipelineService {
           createdAt: createdAt ?? st.mtime.toISOString(),
           projectDir,
           note,
+          ownerId,
           frozen: fs.existsSync(path.join(full, 'spec', 'openapi.local.yaml')),
         };
       })
+      // 归属过滤必须**先于**排序截断：否则先截 30 条再过滤，会出现「列表里看不到自己刚跑的」
+      .filter((r) => (r.ownerId === null ? true : me !== undefined && r.ownerId === me))
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
       .slice(0, 30);
     return { runsRoot: RUNS_ROOT, total: runs.length, runs };
@@ -801,10 +964,9 @@ export class ProjectPipelineService {
    * 🔴 先过 assertRunId（^pj-YYYYMMDD-HHMMSS-6hex$）再拼路径：否则 runId 传 `../..`
    *    就能删到运行根外面去（路径穿越）。
    */
-  deleteRun(runId: string): { deleted: string; bytes: number; dir: string } {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  deleteRun(runId: string, userId?: string): { deleted: string; bytes: number; dir: string } {
+    // 归属校验在 resolveRunDir 内：非所有者同样得到 404（不确认存在性）
+    const dir = this.resolveRunDir(runId, userId);
     const bytes = this.measureDir(dir);
     fs.rmSync(dir, { recursive: true, force: true });
     if (fs.existsSync(dir)) {
@@ -842,10 +1004,13 @@ export class ProjectPipelineService {
   }
 
   /** 单次运行的完整视图（manifest + 端点 + 冲突 + 产物清单 + 冻结状态） */
-  async inspectRun(runId: string, userId?: string) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  async inspectRun(
+    runId: string,
+    userId?: string,
+    opts?: { vision?: boolean; enrich?: 'sync' | 'defer' },
+  ) {
+    // 归属校验的唯一入口（见 resolveRunDir 注释）：读详情也必须过，否则「知道 runId 即可看全部」
+    const dir = this.resolveRunDir(runId, userId);
 
     const readJson = (rel: string): any => {
       try {
@@ -930,6 +1095,7 @@ export class ProjectPipelineService {
         endpoints,
         manifest?.projectRoot ?? null,
         userId,
+        opts,
       ),
       conflicts: parsed.conflicts,
       gaps: parsed.gaps,
@@ -937,6 +1103,9 @@ export class ProjectPipelineService {
       decisions,
       artifacts,
       frozen: artifacts.find((a) => a.name === 'spec/openapi.local.yaml')?.exists === true,
+      // 后台「功能描述 AI 增强」状态（只读 run.json，**绝不**因为 GET 就触发新任务）。
+      // 老 run 没有该字段 ⇒ null，前端按「无后台任务」处理。
+      featureEnrich: this.deriveFeatureEnrichStatus(dir),
       // 「项目简介」：纯确定性派生。scan() 是 `...inspectRun(runId)` 展开的，
       // 所以放这里 = 扫描响应与历史运行两条路径同时生效（老 run 无需重扫）。
       briefing: this.buildBriefing(s0, s1, endpoints, manifest?.projectRoot ?? null),
@@ -1025,6 +1194,7 @@ export class ProjectPipelineService {
     endpoints: any,
     projectRoot: string | null,
     userId?: string,
+    opts?: { vision?: boolean; enrich?: 'sync' | 'defer' },
   ): Promise<Record<string, any>> {
     const file = path.join(dir, 'spec', 'feature-details.json');
     try {
@@ -1040,7 +1210,7 @@ export class ProjectPipelineService {
     } catch {
       /* 不存在或损坏 → 重新算 */
     }
-    const built = await this.buildFeatureDetails(dir, s0, s1, endpoints, projectRoot, userId);
+    const built = await this.buildFeatureDetails(dir, s0, s1, endpoints, projectRoot, userId, opts);
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, JSON.stringify(built, null, 2) + '\n');
@@ -1057,6 +1227,7 @@ export class ProjectPipelineService {
     endpoints: any,
     projectRoot: string | null,
     userId?: string,
+    opts?: { vision?: boolean; enrich?: 'sync' | 'defer' },
   ): Promise<Record<string, any>> {
     const { features, featurePoints } = this.extractFeatures(s1, s0);
     const epList: any[] = Array.isArray(endpoints?.endpoints) ? endpoints.endpoints : [];
@@ -1068,7 +1239,15 @@ export class ProjectPipelineService {
     const cfg = await this.resolveTextConfigSafe(userId);
     const aiEnabled = !!cfg;
     // 视觉模型配置（可选；未配置则覆盖比对走确定性基线，不报错）
-    const visionCfg = await this.resolveVisionConfigSafe(userId);
+    // 🔴 同步路径默认不跑视觉（opts.vision !== true ⇒ visionCfg 为 null）：
+    //    关掉后下方自动走 planShotPaths（零 puppeteer），两个视觉块自动跳过。
+    //    实测：登录态 70.99s（视觉得出 0/4 的错误覆盖）vs 匿名 0.40s（确定性基线 2/4）。
+    const visionCfg = opts?.vision === true ? await this.resolveVisionConfigSafe(userId) : null;
+    // 🔴 V5：整个视觉阶段（截图 + 覆盖比对 + 接口定位）共享同一 wall-clock 截止点。
+    //    在此一处建立，三处消费者全部以它为上限 ⇒ 「45s 总闸」名副其实。
+    //    visionCfg 为 null 时该值不被任何分支使用（plan 策略零 puppeteer）。
+    const visionT0 = Date.now();
+    const visionDeadline = visionT0 + VISION_SYNC_BUDGET_MS;
 
     // P2：本次调用内按页共用缓存（读文件 / 小写文本 / JSDOM 解析各只做一次）
     const pageAcc = this.createPageAccessor(projectRoot, htmlPages);
@@ -1097,9 +1276,36 @@ export class ProjectPipelineService {
     //     形状不变：`d.shots` 仍是 string[]（`spec/shots/<shotName(rel)>`），前端零改动。
     //   · 配了视觉模型 → 视觉覆盖比对（下方）与视觉接口定位真的要用图，
     //     保持原来的急生成顺序（captureShots 本身已加超时护栏，见 P1）。
+    // 🔴 V5：截图纳入同一预算（传 visionDeadline），不再自行吃满 20s 才开始算视觉预算。
+    const shotT0 = Date.now();
     const shotMap = visionCfg
-      ? await this.captureShots(dir, projectRoot, htmlPages)
+      ? await this.captureShots(dir, projectRoot, htmlPages, { deadline: visionDeadline })
       : this.planShotPaths(projectRoot, htmlPages);
+    const shotMs = Date.now() - shotT0;
+    // 🔴 T5 留痕：captureShots 把 trace 挂在返回 map 的不可枚举 symbol 上（mode:"plan" 时不存在）
+    const shotTrace = (shotMap as any)[SHOT_BUDGET_TRACE] as ShotBudgetTrace | undefined;
+    // 🔴 真机判据（0 也要打）：区分「走了 plan 策略」与「走了 capture 策略」，避免只看耗时猜链路。
+    this.logger.log(
+      `[scan] 截图策略 ${JSON.stringify({
+        runId: path.basename(dir),
+        mode: visionCfg ? 'capture' : 'plan',
+        pages: htmlPages.length,
+        planned: Object.keys(shotMap).length,
+        // V5 取证：截图耗时 + 剩余预算，用来证明「截图不再游离于总预算之外」
+        elapsedMs: shotMs,
+        budgetLeftMs: visionCfg ? Math.max(0, visionDeadline - Date.now()) : null,
+        // 🔴 T5 取证（挂死页 58s 事故）：让「是否受同一预算约束」是**日志里能读到的事实**
+        bounded: visionCfg ? !!shotTrace?.bounded : null,
+        truncatedBy: visionCfg ? shotTrace?.truncatedBy ?? null : null,
+        paint: visionCfg
+          ? {
+              readyMs: shotTrace?.paintReadyMs ?? null,
+              evaluate1Ms: shotTrace?.paintEvaluate1Ms ?? null,
+              evaluate2Ms: shotTrace?.paintEvaluate2Ms ?? null,
+            }
+          : null,
+      })}`,
+    );
     for (const f of features) {
       const d = details[f];
       d.shots = (d.relatedPages || []).map((p: string) => shotMap[p]).filter(Boolean);
@@ -1115,11 +1321,22 @@ export class ProjectPipelineService {
     }
 
     // 🔴 视觉比对升级：配了视觉模型 → 用截图 + 功能点判定覆盖，覆盖确定性基线（更准）
+    //    🔴 总预算硬闸：到点即停（aborted=true），用已完成的部分；99% 情况下 visionCfg=null 直接跳过。
+    //    🔴 V5：deadline 与截图/L2 共用同一个 visionDeadline（不是另起一个 45s）。
+    const visionCovT0 = Date.now();
+    const visionCovDeadline = visionDeadline;
+    let coverDone = 0;
+    let coverAborted = false;
     if (visionCfg) {
       for (const f of features) {
+        if (Date.now() > visionCovDeadline) {
+          coverAborted = true;
+          break;
+        }
         const d = details[f];
         if (!Array.isArray(d.featurePoints) || !d.featurePoints.length || !d.shots?.length) continue;
         const shotAbs = d.shots.map((s: string) => path.join(dir, s)).filter((p: string) => fs.existsSync(p));
+        coverDone += 1;
         try {
           const visionVerdicts = await this.enrichCoverageWithVision(f, d.featurePoints, shotAbs, visionCfg);
           if (visionVerdicts && visionVerdicts.length) {
@@ -1139,39 +1356,36 @@ export class ProjectPipelineService {
         }
       }
     }
+    // 🔴 真机判据（0 也要打）：enabled:false / done:0 说明视觉块未启用（同步默认），可区分「未走链路」与「走了没结果」。
+    this.logger.log(
+      `[scan] 视觉覆盖增强 ${JSON.stringify({
+        enabled: !!visionCfg,
+        features: features.length,
+        done: coverDone,
+        aborted: coverAborted,
+        budgetMs: VISION_SYNC_BUDGET_MS,
+        elapsedMs: Date.now() - visionCovT0,
+      })}`,
+    );
 
-    // LLM 增强（可选、可降级）
-    if (cfg) {
+    // 文本 LLM 增强（可选、可降级）
+    // 🔴 默认**不在这里跑**：`enrich !== 'sync'` 就跳过，转由 scan() 起的后台任务补写
+    //    （startFeatureEnrichment → runFeatureEnrichment）。这一句就是 57s 空档的开关，
+    //    与视觉门控（opts.vision）是两个独立维度，别把两者混为一谈。
+    const enrichNow = opts?.enrich === 'sync';
+    // 🔴 真机判据（0 也要打）：mode:defer = 走后台任务（scan 默认）；mode:sync = 同步逃生舱。
+    this.logger.log(
+      `[scan] 功能增强 ${JSON.stringify({
+        runId: path.basename(dir),
+        mode: enrichNow ? 'sync' : 'defer',
+        aiEnabled,
+        model: cfg?.model ?? null,
+      })}`,
+    );
+    if (cfg && enrichNow) {
       try {
         const enriched = await this.enrichFeaturesWithLLM(features, epList, pages, cfg);
-        for (const f of features) {
-          const e = enriched?.[f];
-          if (!e || typeof e !== 'object') continue;
-          const d = details[f];
-          if (e.description) d.description = String(e.description);
-          if (Array.isArray(e.relatedEndpointPaths)) {
-            d.relatedEndpoints = this.matchEndpointsByPaths(e.relatedEndpointPaths, epList);
-          }
-          if (Array.isArray(e.suggestedEndpoints) && e.suggestedEndpoints.length) {
-            // LLM 给出建议 → 覆盖确定性兜底（AI 命名更精准）
-            d.suggestedEndpoints = [];
-            for (const s of e.suggestedEndpoints) {
-              if (!s || !s.path) continue;
-              d.suggestedEndpoints.push({
-                path: String(s.path),
-                verb: String(s.verb || 'GET').toUpperCase(),
-                confidence: 'candidate',
-                sources: ['doc-inferred'],
-                inferred: true,
-                note: s.note || '由功能描述 AI 推导，待人工确认',
-              });
-            }
-          }
-          if (Array.isArray(e.relatedPagePaths)) {
-            d.relatedPages = e.relatedPagePaths.map((p: any) => String(p)).filter(Boolean);
-          }
-          if (e.pageDevNote) d.pageDevNote = String(e.pageDevNote);
-        }
+        this.applyEnrichment(details, enriched, epList);
       } catch (err: any) {
         this.logger.warn(`LLM 派生功能详情失败，沿用确定性结果：${err?.message ?? err}`);
       }
@@ -1180,27 +1394,23 @@ export class ProjectPipelineService {
     // 🔴 L1：把接口（真实 + 建议）绑定到关联原型页的具体 UI 区域（确定性 DOM 定位，无需模型）。
     //    —— 让「建议新增接口」能精确告知用在网页的哪个位置（表格/新增按钮/详情链接/表单），
     //       关联页为空 → 接口 locations=[]（前端提示「原型页未检测到对应 UI 元素」）。
-    for (const f of features) {
-      const d = details[f];
-      const eps = [...(d.relatedEndpoints || []), ...(d.suggestedEndpoints || [])];
-      if (!eps.length || !(d.relatedPages || []).length) continue;
-      const locMap = await this.locateEndpointsInPages(
-        eps,
-        htmlPages,
-        d.relatedPages,
-        projectRoot,
-        pageAcc,
-      );
-      const attach = (list: any[]) =>
-        (list || []).map((e) => ({ ...e, locations: locMap[this.epKey(e)] || [] }));
-      d.relatedEndpoints = attach(d.relatedEndpoints);
-      d.suggestedEndpoints = attach(d.suggestedEndpoints);
-    }
+    //    🔴 抽成方法：后台增强补完建议接口后要**再跑一遍**，否则新接口没有 locations。
+    await this.attachEndpointLocations(details, features, htmlPages, projectRoot, pageAcc);
 
     // 🔴 L2：配了视觉模型 → 对 L1 仍未定位到的接口，送截图让模型指出对应区域（归一化 bounding box），
     //    失败/无图/无 box → 优雅降级，沿用 L1 文字定位。
+    //    🔴 总预算硬闸：与覆盖块共用同一预算语义，到点即停（aborted=true）。
+    //    🔴 V5：共用同一个 visionDeadline，因此「截图 + 覆盖」已消耗的预算会直接压缩本块可用时间。
+    const visionLocT0 = Date.now();
+    const visionLocDeadline = visionDeadline;
+    let locDone = 0;
+    let locAborted = false;
     if (visionCfg) {
       for (const f of features) {
+        if (Date.now() > visionLocDeadline) {
+          locAborted = true;
+          break;
+        }
         const d = details[f];
         const eps = [...(d.relatedEndpoints || []), ...(d.suggestedEndpoints || [])].filter(
           (e) => !(e.locations && e.locations.length),
@@ -1208,6 +1418,7 @@ export class ProjectPipelineService {
         if (!eps.length || !d.shots?.length) continue;
         const shotAbs = d.shots.map((s: string) => path.join(dir, s)).filter((p: string) => fs.existsSync(p));
         if (!shotAbs.length) continue;
+        locDone += 1;
         try {
           const boxes = await this.enrichEndpointLocationsWithVision(eps, shotAbs, visionCfg);
           if (boxes && Object.keys(boxes).length) {
@@ -1224,8 +1435,301 @@ export class ProjectPipelineService {
         }
       }
     }
+    // 🔴 真机判据（0 也要打）：enabled:false / done:0 说明视觉定位块未启用（同步默认）。
+    this.logger.log(
+      `[scan] 视觉接口定位 ${JSON.stringify({
+        enabled: !!visionCfg,
+        features: features.length,
+        done: locDone,
+        aborted: locAborted,
+        budgetMs: VISION_SYNC_BUDGET_MS,
+        elapsedMs: Date.now() - visionLocT0,
+      })}`,
+    );
 
     return details;
+  }
+
+  /* ────────────────────── 文本 LLM「功能增强」异步化 ────────────────────── */
+
+  /**
+   * L1 确定性定位：把接口（真实 + 建议）绑到关联原型页的 UI 区域。
+   * 单独成方法是因为**后台增强补完建议接口后要再跑一遍**（否则新接口 locations 恒空）。
+   * 幂等：同输入同输出，重复跑不会漂移。
+   */
+  private async attachEndpointLocations(
+    details: Record<string, any>,
+    features: string[],
+    htmlPages: any[],
+    projectRoot: string | null,
+    pageAcc: PageAccessor,
+  ): Promise<void> {
+    for (const f of features) {
+      const d = details[f];
+      if (!d) continue;
+      const eps = [...(d.relatedEndpoints || []), ...(d.suggestedEndpoints || [])];
+      if (!eps.length || !(d.relatedPages || []).length) continue;
+      const locMap = await this.locateEndpointsInPages(
+        eps,
+        htmlPages,
+        d.relatedPages,
+        projectRoot,
+        pageAcc,
+      );
+      const attach = (list: any[]) =>
+        (list || []).map((e) => ({ ...e, locations: locMap[this.epKey(e)] || [] }));
+      d.relatedEndpoints = attach(d.relatedEndpoints);
+      d.suggestedEndpoints = attach(d.suggestedEndpoints);
+    }
+  }
+
+  /**
+   * 把 LLM 派生结果合并进 details（同步路径与后台任务**共用同一份合并逻辑**，
+   * 保证「同步逃生舱」与「异步后台」产出一致 —— 判据单一来源）。
+   */
+  private applyEnrichment(
+    details: Record<string, any>,
+    enriched: Record<string, any>,
+    epList: any[],
+  ): void {
+    for (const f of Object.keys(details)) {
+      const e = enriched?.[f];
+      if (!e || typeof e !== 'object') continue;
+      const d = details[f];
+      if (e.description) d.description = String(e.description);
+      if (Array.isArray(e.relatedEndpointPaths)) {
+        d.relatedEndpoints = this.matchEndpointsByPaths(e.relatedEndpointPaths, epList);
+      }
+      if (Array.isArray(e.suggestedEndpoints) && e.suggestedEndpoints.length) {
+        // LLM 给出建议 → 覆盖确定性兜底（AI 命名更精准）
+        d.suggestedEndpoints = [];
+        for (const s of e.suggestedEndpoints) {
+          if (!s || !s.path) continue;
+          d.suggestedEndpoints.push({
+            path: String(s.path),
+            verb: String(s.verb || 'GET').toUpperCase(),
+            confidence: 'candidate',
+            sources: ['doc-inferred'],
+            inferred: true,
+            note: s.note || '由功能描述 AI 推导，待人工确认',
+          });
+        }
+      }
+      if (Array.isArray(e.relatedPagePaths)) {
+        d.relatedPages = e.relatedPagePaths.map((p: any) => String(p)).filter(Boolean);
+      }
+      if (e.pageDevNote) d.pageDevNote = String(e.pageDevNote);
+    }
+  }
+
+  /** 读 run 目录下的某个 JSON（缺失/损坏 → null，不抛） */
+  private readRunJson(dir: string, rel: string): any {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 合并写 run.json（只由后台任务调用，扫描已完成 ⇒ 无并发写）。
+   * 写失败只告警：状态写不进去不该让增强结果白跑（结果已落 feature-details.json）。
+   */
+  private patchRunMeta(dir: string, patch: Record<string, any>): void {
+    const meta = this.readRunMeta(dir) ?? {};
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'run.json'),
+        JSON.stringify({ ...meta, ...patch }, null, 2) + '\n',
+      );
+    } catch (e: any) {
+      this.logger.warn(`run.json 状态写入失败：${e?.message ?? e}`);
+    }
+  }
+
+  /**
+   * 对外暴露的后台增强状态（**只读**，GET /runs/:runId 走这里，绝不因此触发新任务）。
+   * 🔴 服务重启会把 running 钉死成永久进行中 ⇒ 超过 ENRICH_STALE_MS 一律呈现 stale，
+   *    前端据此停止轮询（否则会空转 60 次）。
+   */
+  private deriveFeatureEnrichStatus(dir: string): Record<string, any> | null {
+    const fe = this.readRunMeta(dir)?.featureEnrich;
+    if (!fe || typeof fe !== 'object') return null;
+    if (fe.status === 'pending' || fe.status === 'running') {
+      const age = Date.now() - Date.parse(String(fe.startedAt ?? ''));
+      if (Number.isFinite(age) && age > ENRICH_STALE_MS) {
+        return { ...fe, status: 'stale', note: '后台任务状态已过期（服务可能重启过）' };
+      }
+    }
+    return fe;
+  }
+
+  /**
+   * 启动后台「功能描述 AI 增强」，**立即返回**当前状态（绝不 await LLM）。
+   *
+   * 为什么在 scan 里同步解析一次 cfg：要让匿名用户立刻拿到 `skipped` 而不是让前端
+   * 「pending → 2 秒后变 skipped」白转一圈。这一次是配置读（Mongo 用户配置），
+   * 与 57s 的 LLM 调用不是一个量级。
+   */
+  private startFeatureEnrichment(
+    runId: string,
+    dir: string,
+    cfg: { model: string; apiKey: string; baseURL: string; providerType?: string } | null,
+    opts?: { enrich?: 'sync' | 'defer' },
+  ): Record<string, any> {
+    const startedAt = new Date().toISOString();
+    // 同步逃生舱：buildFeatureDetails 里已经跑完（enrich==='sync'），无需后台
+    if (opts?.enrich === 'sync') {
+      const done = { status: 'done', mode: 'sync', startedAt, finishedAt: startedAt };
+      this.patchRunMeta(dir, { featureEnrich: done });
+      return done;
+    }
+    if (!cfg) {
+      const skipped = {
+        status: 'skipped',
+        mode: 'async',
+        startedAt,
+        finishedAt: startedAt,
+        note: '未配置文本模型，功能描述按确定性模板生成',
+      };
+      this.patchRunMeta(dir, { featureEnrich: skipped });
+      return skipped;
+    }
+    // 同一 run 只允许一个后台任务（重复 scan/重入不会叠加 LLM 调用）
+    if (this.enrichInflight.has(runId)) {
+      const running = { status: 'running', mode: 'async', startedAt };
+      this.patchRunMeta(dir, { featureEnrich: running });
+      return running;
+    }
+
+    const pending = { status: 'pending', mode: 'async', model: cfg.model, startedAt, finishedAt: null };
+    this.patchRunMeta(dir, { featureEnrich: pending });
+    this.enrichInflight.add(runId);
+    // 🔴 刻意不 await：内部全量 try/catch + 这里再兜一层，避免 unhandledRejection 打死进程
+    void this.runFeatureEnrichment(runId, dir, cfg).catch((err: any) => {
+      this.enrichInflight.delete(runId);
+      this.logger.warn(`[scan] 功能增强后台任务异常 runId=${runId}：${err?.message ?? err}`);
+    });
+    return pending;
+  }
+
+  /**
+   * 后台任务本体：LLM 补写功能描述/建议接口 → 重算受影响功能点的截图与覆盖 → 重跑 L1 定位
+   * → 回写 `spec/feature-details.json` → 状态置 done/failed。
+   *
+   * 🔴 只改「LLM 能决定的那些字段」，不动 manifest/端点/冲突等真值。
+   * 🔴 失败一律 reason 化：状态写 failed + error，前端提示「已用确定性结果」，绝不静默。
+   */
+  private async runFeatureEnrichment(
+    runId: string,
+    dir: string,
+    cfg: { model: string; apiKey: string; baseURL: string; providerType?: string },
+  ): Promise<void> {
+    const t0 = Date.now();
+    this.patchRunMeta(dir, {
+      featureEnrich: { status: 'running', mode: 'async', model: cfg.model, startedAt: new Date().toISOString() },
+    });
+    try {
+      const manifest = this.readRunJson(dir, 'spec/project.manifest.json');
+      const endpoints = this.readRunJson(dir, 'spec/endpoints.json');
+      const details = this.readRunJson(dir, 'spec/feature-details.json');
+      if (!details || typeof details !== 'object') {
+        throw new Error('spec/feature-details.json 缺失或损坏，无法增强');
+      }
+      const s0 = manifest?.S0 ?? null;
+      const s1 = manifest?.S1 ?? null;
+      const projectRoot: string | null = manifest?.projectRoot ?? null;
+      const { features } = this.extractFeatures(s1, s0);
+      const epList: any[] = Array.isArray(endpoints?.endpoints) ? endpoints.endpoints : [];
+      const htmlPages: any[] = Array.isArray(s0?.html?.pages) ? s0.html.pages : [];
+      const pages: string[] = htmlPages.map((p: any) => String(p?.path ?? ''));
+
+      // 记下改前的 relatedPages：只有被 LLM 改过的功能点才需要重算截图/覆盖
+      const prevPages: Record<string, string> = {};
+      for (const f of features) prevPages[f] = JSON.stringify(details[f]?.relatedPages || []);
+
+      const enriched = await this.enrichFeaturesWithLLM(features, epList, pages, cfg);
+      this.applyEnrichment(details, enriched, epList);
+
+      const changed = features.filter(
+        (f) => details[f] && JSON.stringify(details[f]?.relatedPages || []) !== prevPages[f],
+      );
+      if (changed.length) {
+        // 用 planShotPaths（零 puppeteer）：路径形状与 captureShots 完全一致，幂等可重算
+        const shotMap = this.planShotPaths(projectRoot, htmlPages);
+        const pageAcc = this.createPageAccessor(projectRoot, htmlPages);
+        for (const f of changed) {
+          const d = details[f];
+          d.shots = (d.relatedPages || []).map((p: string) => shotMap[p]).filter(Boolean);
+          // 视觉比对结论不覆盖（byVision=true 是更可信的一档）
+          if (d.coverage?.byVision !== true) {
+            d.coverage = this.computeCoverage(
+              f,
+              d.featurePoints || [],
+              d.relatedPages || [],
+              projectRoot,
+              htmlPages,
+              pageAcc,
+            );
+          }
+        }
+      }
+
+      // 建议接口变了 → 重新做一遍确定性 UI 定位（否则新接口 locations 全空）
+      await this.attachEndpointLocations(
+        details,
+        features,
+        htmlPages,
+        projectRoot,
+        this.createPageAccessor(projectRoot, htmlPages),
+      );
+
+      fs.writeFileSync(
+        path.join(dir, 'spec', 'feature-details.json'),
+        JSON.stringify(details, null, 2) + '\n',
+      );
+
+      const elapsedMs = Date.now() - t0;
+      this.patchRunMeta(dir, {
+        featureEnrich: {
+          status: 'done',
+          mode: 'async',
+          model: cfg.model,
+          startedAt: new Date(Date.now() - elapsedMs).toISOString(),
+          finishedAt: new Date().toISOString(),
+          elapsedMs,
+          features: features.length,
+          llmKeys: Object.keys(enriched || {}).length,
+          pagesRepointed: changed.length,
+        },
+      });
+      this.logger.log(
+        `[scan] 功能增强 完成 ${JSON.stringify({
+          runId,
+          elapsedMs,
+          features: features.length,
+          llmKeys: Object.keys(enriched || {}).length,
+          pagesRepointed: changed.length,
+        })}`,
+      );
+    } catch (err: any) {
+      const elapsedMs = Date.now() - t0;
+      this.patchRunMeta(dir, {
+        featureEnrich: {
+          status: 'failed',
+          mode: 'async',
+          model: cfg.model,
+          finishedAt: new Date().toISOString(),
+          elapsedMs,
+          error: String(err?.message ?? err).slice(0, 300),
+        },
+      });
+      this.logger.warn(
+        `[scan] 功能增强 失败 ${JSON.stringify({ runId, elapsedMs, error: String(err?.message ?? err).slice(0, 200) })}：沿用确定性结果`,
+      );
+    } finally {
+      this.enrichInflight.delete(runId);
+    }
   }
 
   /** 功能提取（buildBriefing 与功能详情共用，单一事实来源） */
@@ -1648,8 +2152,23 @@ export class ProjectPipelineService {
    * 每一步都有上界：①②≤SHOT_READY_TIMEOUT_MS，③≤SHOT_SETTLE_TIMEOUT_MS，
    * 到点即放行（绝不无限等）——宁可截一张可能不完整的图，也绝不挂起。
    */
-  private async waitForPaint(page: any, budgetLeftMs: number): Promise<void> {
-    const cap = Math.max(200, Math.min(SHOT_READY_TIMEOUT_MS, budgetLeftMs));
+  private async waitForPaint(
+    page: any,
+    budgetLeftMs: number,
+  ): Promise<Pick<ShotBudgetTrace, 'paintReadyMs' | 'paintEvaluate1Ms' | 'paintEvaluate2Ms'>> {
+    // 🔴 本函数自己的硬截止点：两步 evaluate 都要按「此刻剩余预算」重新封顶，
+    //    因为 `page.evaluate()` **不接受 timeout 参数**（只能被 launch 级 protocolTimeout 兜底，
+    //    实测两步各吃满 16s，waitForPaint 合计 33,502ms）。
+    const stats = {
+      paintReadyMs: 0,
+      paintEvaluate1Ms: null as number | null,
+      paintEvaluate2Ms: null as number | null,
+    };
+    const deadline = Date.now() + Math.max(0, budgetLeftMs);
+    const left = () => deadline - Date.now();
+    if (budgetLeftMs <= 0) return stats;
+    const cap = Math.min(SHOT_READY_TIMEOUT_MS, Math.max(1, left()));
+    const readyT0 = Date.now();
     await page
       .waitForFunction(
         () => {
@@ -1675,10 +2194,15 @@ export class ProjectPipelineService {
       .catch(() => {
         /* 到点放行 */
       });
+    stats.paintReadyMs = Date.now() - readyT0;
     // ③ 图表动画收敛：canvas 像素签名连续 3 帧不变（无 canvas 的页立即返回）
-    const settleCap = Math.max(100, Math.min(SHOT_SETTLE_TIMEOUT_MS, budgetLeftMs));
-    await page
-      .evaluate((maxMs: number) => {
+    //    🔴 包 withBudget：evaluate 自身没有 timeout 参数，不封顶就能吃满 protocolTimeout(16s)
+    const eval1Left = left();
+    if (eval1Left <= 0) return stats;
+    const settleCap = Math.max(100, Math.min(SHOT_SETTLE_TIMEOUT_MS, eval1Left));
+    const eval1T0 = Date.now();
+    await this.withBudget(
+      page.evaluate((maxMs: number) => {
         const canvases = Array.from(document.querySelectorAll('canvas')) as any[];
         if (!canvases.length) return true;
         const sig = () =>
@@ -1706,19 +2230,61 @@ export class ProjectPipelineService {
           };
           requestAnimationFrame(tick);
         });
-      }, settleCap)
-      .catch(() => {
-        /* 到点放行 */
-      });
+      }, settleCap),
+      Math.min(settleCap, eval1Left),
+      'paint-evaluate#1',
+    ).catch(() => {
+      /* 到点放行（拿不到就降级，不阻断扫描） */
+    });
+    stats.paintEvaluate1Ms = Date.now() - eval1T0;
     // ④ 最后两帧 rAF：让最后一拍布局/绘制落地
-    await page
-      .evaluate(
+    const eval2Left = left();
+    if (eval2Left <= 0) return stats;
+    const eval2T0 = Date.now();
+    await this.withBudget(
+      page.evaluate(
         () =>
           new Promise<void>((r) =>
             requestAnimationFrame(() => requestAnimationFrame(() => r())),
           ),
-      )
-      .catch(() => {});
+      ),
+      eval2Left,
+      'paint-evaluate#2',
+    ).catch(() => {
+      /* 到点放行 */
+    });
+    stats.paintEvaluate2Ms = Date.now() - eval2T0;
+    return stats;
+  }
+
+  /**
+   * 🔴 预算收口原语（**全局唯一**：判据断言它的定义恰 1 处、调用 ≥3 处）：
+   * 用剩余预算给任意 promise 封顶，到点即 reject（label 用于定位是哪一步吃的预算）。
+   *
+   * 为什么必须在本层做：puppeteer 有两条**不受调用方控制**的等待路径 ——
+   *   ① `page.evaluate()` 不接受 timeout（只能被 launch 级 protocolTimeout=16s 兜底）；
+   *   ② v25 的 `ScreenshotOptions` **没有** `timeout` 字段（已 awk types.d.ts 核实），
+   *      传 timeout 是空操作：微测传 `timeout:2000` 实测仍 16,003ms。
+   * 定时器在 finally 必清：否则每页残留一个挂钟定时器，测试跑不完、进程不退出。
+   */
+  private async withBudget<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+    const guarded = Promise.resolve(p);
+    // 被我们放弃的那一路之后仍可能 reject：先挂空 catch，避免 UnhandledPromiseRejection 炸进程
+    guarded.catch(() => {});
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        guarded,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`[budget] ${label} 超时（${Math.max(0, Math.round(ms))}ms）`)),
+            Math.max(0, ms),
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /**
@@ -1753,8 +2319,19 @@ export class ProjectPipelineService {
     dir: string,
     projectRoot: string | null,
     htmlPages: any[],
+    opts?: { deadline?: number },
   ): Promise<Record<string, string>> {
     const map: Record<string, string> = {};
+    // 预算留痕（T5）：captureShots 自己产出 trace 并挂成 map 的**不可枚举 symbol 属性**
+    // （不进 Object.keys、不改返回形状 ⇒ 既有调用方零改动），调用方读来打真机日志。
+    const trace: ShotBudgetTrace = {
+      bounded: false,
+      truncatedBy: null,
+      paintReadyMs: null,
+      paintEvaluate1Ms: null,
+      paintEvaluate2Ms: null,
+    };
+    Object.defineProperty(map, SHOT_BUDGET_TRACE, { value: trace, enumerable: false });
     if (!projectRoot || !Array.isArray(htmlPages) || !htmlPages.length) return map;
     const shotsDir = path.join(dir, 'spec', 'shots');
     fs.mkdirSync(shotsDir, { recursive: true });
@@ -1771,7 +2348,14 @@ export class ProjectPipelineService {
     }
     if (have >= Math.min(htmlPages.length, 12)) return map;
 
-    const deadline = Date.now() + SHOT_TOTAL_BUDGET_MS;
+    // 🔴 V5：调用方（视觉同步路径）传入共享 visionDeadline ⇒ 取二者更紧的一个。
+    //    不传时（readArtifact 按需截图）行为不变，仍是自己的 SHOT_TOTAL_BUDGET_MS。
+    //    T4：这个 deadline 是**硬上限**，循环内任何单步都不得突破它。
+    const ownDeadline = Date.now() + SHOT_TOTAL_BUDGET_MS;
+    const deadline =
+      typeof opts?.deadline === 'number' ? Math.min(ownDeadline, opts.deadline) : ownDeadline;
+    // 走到这里 ⇒ 下面每个 await 都由 withBudget / 自身 timeout 封顶（T4 的「名副其实」）
+    trace.bounded = true;
     let browser: any;
     try {
       // 懒加载，避免模块加载期就拉起 puppeteer
@@ -1779,7 +2363,8 @@ export class ProjectPipelineService {
       browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
-        timeout: SHOT_LAUNCH_TIMEOUT_MS,
+        // 🔴 V5：launch 也必须服从共享预算，否则 15s 的 launch 上限能突破总闸
+        timeout: Math.max(1000, Math.min(SHOT_LAUNCH_TIMEOUT_MS, deadline - Date.now())),
         // 单个 CDP 协议调用也不可能无限等
         protocolTimeout: SHOT_GOTO_TIMEOUT_MS + SHOT_SCREENSHOT_TIMEOUT_MS,
       });
@@ -1789,9 +2374,6 @@ export class ProjectPipelineService {
       let n = 0;
       for (const p of htmlPages) {
         if (n >= CAP) break;
-        // 总预算到点 → 用已完成的部分直接收尾
-        const budgetLeft = deadline - Date.now();
-        if (budgetLeft <= 0) break;
         const rel = String(p?.path ?? p);
         const safe = this.shotName(rel);
         if (map[rel]) {
@@ -1802,22 +2384,51 @@ export class ProjectPipelineService {
         const out = path.join(shotsDir, safe);
         try {
           if (!fs.existsSync(abs)) continue;
+          // 🔴 步前复检（T3）：预算不是「进本页判一次」，而是**每个 await 之前**都重算，
+          //    否则一页内 goto→waitForPaint→screenshot 就能把 20s 总闸吃穿（实测单页 58s）。
+          const gotoLeft = deadline - Date.now();
+          if (gotoLeft <= 0) {
+            if (!trace.truncatedBy) trace.truncatedBy = 'goto';
+            break;
+          }
           // 本地 file:// 页 → load 即可（networkidle2 每页白等 500ms 空闲判定）
-          await page
-            .goto('file://' + abs, {
-              waitUntil: 'load',
-              timeout: Math.max(1000, Math.min(SHOT_GOTO_TIMEOUT_MS, budgetLeft)),
-            })
-            .catch(() => {});
+          await this.withBudget(
+            Promise.resolve(
+              page.goto('file://' + abs, {
+                waitUntil: 'load',
+                timeout: Math.max(1000, Math.min(SHOT_GOTO_TIMEOUT_MS, gotoLeft)),
+              }),
+            ).catch(() => {}),
+            gotoLeft,
+            'goto',
+          ).catch(() => {
+            if (!trace.truncatedBy) trace.truncatedBy = 'goto';
+          });
           // 内容就绪判定 + 2 帧 rAF（代替原固定 600ms 盲等）
-          await this.waitForPaint(page, deadline - Date.now());
-          await page
-            .screenshot({
-              path: out,
-              fullPage: true,
-              timeout: Math.max(1000, Math.min(SHOT_SCREENSHOT_TIMEOUT_MS, budgetLeft)),
-            })
-            .catch(() => {});
+          const paintLeft = deadline - Date.now();
+          if (paintLeft <= 0) {
+            if (!trace.truncatedBy) trace.truncatedBy = 'waitForPaint';
+            break;
+          }
+          const paint = await this.waitForPaint(page, paintLeft);
+          trace.paintReadyMs = paint.paintReadyMs;
+          trace.paintEvaluate1Ms = paint.paintEvaluate1Ms;
+          trace.paintEvaluate2Ms = paint.paintEvaluate2Ms;
+          // 🔴 puppeteer v25 的 ScreenshotOptions **没有 timeout 字段** ⇒ 传了也被静默忽略
+          //    （微测：传 timeout:2000 实测仍 16,003ms）。参数里不再保留 timeout，避免误导后来人；
+          //    唯一有效上界是本层 withBudget。
+          const shotLeft = deadline - Date.now();
+          if (shotLeft <= 0) {
+            if (!trace.truncatedBy) trace.truncatedBy = 'screenshot';
+            break;
+          }
+          await this.withBudget(
+            Promise.resolve(page.screenshot({ path: out, fullPage: true })).catch(() => {}),
+            shotLeft,
+            'screenshot',
+          ).catch(() => {
+            if (!trace.truncatedBy) trace.truncatedBy = 'screenshot';
+          });
           if (fs.existsSync(out)) map[rel] = `spec/shots/${safe}`;
         } catch {
           /* 单页失败不阻断其他页 */
@@ -2134,6 +2745,331 @@ export class ProjectPipelineService {
     return JSON.parse(t);
   }
 
+  /* ------------------------------------------------------------- units --- */
+
+  /**
+   * 单元拆分（P0 契约 / P1-P2 · Figma 分支 + 非 Figma 的 HTML 原型页分支）——
+   * 「功能点 → 可独立生成的最小单元」。
+   *
+   * 🔴 为什么**不塞进 `scan()`**：scan 是同步链路（S0 扫描器本机 117ms），而拆单元要
+   *    **联网取 Figma 节点树**。塞进去等于给已经被投诉「一直 pending」的
+   *    `POST /api/v3/project/scan` 再挂一段不可控的网络等待。故走**按需 GET**：
+   *    前端切到「拆分预览」时才拉一次，结果落盘 `spec/components.json` 复用。
+   *
+   * 🔴 缓存按降级码分级（**不是「有缓存就用」**）：
+   *    · 确定性降级（NO_FIGMA_LINK / NO_FIGMA_TOKEN / BAD_FIGMA_URL / NO_CP_COMPONENT）
+   *      —— 除非人改配置或改画板，结果不会变 ⇒ **可缓存**，免得每次点开都白打一次；
+   *    · 偶发降级（FIGMA_FETCH_FAILED：限流/网络/权限）—— **不落盘**，下次必须重试，
+   *      否则一次 429 会把「拆不出单元」永久钉死在这个运行上。
+   *
+   * 判据/档位全在 `units/` 三个模块里（契约 + figma/html 两个拆分器），本方法只做四件事：取配置、调拆分、
+   * 判定缓存是否仍对应当前输入、决定落不落盘。
+   *
+   * 🔴 缓存还要过「输入一致性」门（`unitsCacheMatchesInput`）：缓存里的 `source.inputKey`
+   *    必须等于当前输入算出来的指纹 —— 覆盖**两条轴**：① `links.figma` 是否换；
+   *    ② 原型页集合（`S0.html.pages`）是否增删。否则「人换了画板」或「HTML 项目加了/删了
+   *    一个原型页」之后，旧快照（尤其是成功路径的 units）会一直被端上来，直到有人手工
+   *    `?refresh=true`。作废时要打 `mode:'stale'` 计数行 —— 静默失效等于不可观测。
+   *
+   * ⚠️ 已知限制（本轮刻意不做；要动之前先看这里）：
+   *    1. **功能点归属不失效**：`readUnitFeatures` 读的 `spec/feature-details.json` 变了
+   *       **不会**让缓存失效 —— 要覆盖它必须把「当时使用的 features 快照」写进
+   *       `UnitContract.source`，那是**契约形状变更、必须再 bump `UNIT_CONTRACT_VERSION`**，
+   *       超出本轮范围。在此之前，功能点增删后需要人工
+   *       `GET runs/:runId/units?refresh=true` 重算。
+   *       （注：输入一致性门本身已覆盖 figma 链接与原型页集合两条轴，契约版本已 bump 到 `unit.v2`。）
+   *    2. **落盘是非原子的**（与仓内 12+ 处兄弟产物一致，本仓无原子写助手）：裸
+   *       `fs.writeFileSync` 在进程被杀/磁盘满时会留下半截 `components.json`。读端有
+   *       version + 形状（含 `stats.total` 一致性）把关 ⇒ **挡得住「用坏数据」，挡不住
+   *       「产生坏文件」**。
+   */
+  async getUnits(
+    runId: string,
+    userId?: string,
+    opts?: { refresh?: boolean },
+  ): Promise<UnitContract & { cached: boolean; validationErrors?: string[] }> {
+    const dir = this.resolveRunDir(runId, userId);
+
+    if (opts?.refresh !== true) {
+      const cached = this.readUnits(dir, runId);
+      // 缓存还必须对得上**当前输入**：声明层换了画板，旧快照就是另一个画板的产物
+      if (cached && this.unitsCacheMatchesInput(cached, dir)) {
+        // 真机判据（0 也要打）：区分「命中缓存」与「真去拆了」，免得只看耗时猜链路
+        this.logger.log(
+          `[units] ${JSON.stringify({
+            runId,
+            mode: 'cache',
+            units: cached.units.length,
+            degraded: cached.degraded?.code ?? null,
+            // 命中即未写盘；与 summary 行字段集对齐（按 persisted 聚合的消费方不踩空）
+            persisted: false,
+          })}`,
+        );
+        return { ...cached, cached: true };
+      }
+      if (cached) {
+        // 真机计数行：缓存「看着有」却因输入变了而作废，必须可见
+        const s0 = this.readManifest(dir)?.S0 ?? null;
+        this.logger.log(
+          `[units] ${JSON.stringify({
+            runId,
+            mode: 'stale',
+            reason: 'input-changed',
+            cachedFigmaUrl: cached.source?.figmaUrl ?? null,
+            expectedKey: this.computeUnitInputKey(readProjectFigmaUrl(s0), this.htmlPageRels(s0)),
+            cachedKey: cached.source?.inputKey ?? null,
+          })}`,
+        );
+      }
+    }
+    return { ...(await this.buildUnits(runId, dir, userId)), cached: false };
+  }
+
+  /**
+   * 读缓存。四重把关，任一不过就当**没有缓存**（宁可重算，也不用可疑数据）：
+   *   ⓪ `runId` 必须与目录一致（挡跨运行拷贝/误放的缓存 —— 否则前端拿到的
+   *      `runId` 与本次请求不符，等于把别人的快照挂到本运行上）
+   *   ① `version` 必须等于 `UNIT_CONTRACT_VERSION`（形状变了，旧缓存作废）
+   *   ② 形状必须过 `validateUnitContract`（挡手工编辑/半截写入）
+   *   ③ 降级必须属于**可缓存**白名单（挡住历史上被写进去的偶发失败）
+   *
+   * 🔴 ③ 刻意留在本方法而不是 `validateUnitContract`：那是**缓存策略**，单一来源必须
+   *    在本层 —— 塞进契约校验会让策略判据失去独立性（删掉这里仍绿）。
+   */
+  private readUnits(dir: string, runId: string): UnitContract | null {
+    let raw: any = null;
+    try {
+      raw = JSON.parse(fs.readFileSync(path.join(dir, 'spec', 'components.json'), 'utf8'));
+    } catch {
+      return null;
+    }
+    if (raw?.version !== UNIT_CONTRACT_VERSION) return null;
+    if (raw.runId !== runId) {
+      this.logger.warn(
+        `components.json 的 runId=${raw.runId} 与目录 ${runId} 不一致，按无缓存重算`,
+      );
+      return null;
+    }
+    const errs = validateUnitContract(raw);
+    if (errs.length) {
+      this.logger.warn(
+        `components.json 形状不合格，按无缓存重算：${errs.slice(0, 3).join('；')}`,
+      );
+      return null;
+    }
+    if (raw.degraded && !isCacheableDegraded(raw.degraded.code)) return null;
+    return raw as UnitContract;
+  }
+
+  /**
+   * 读 S0 清单（`spec/project.manifest.json`）。读不到 / 解析失败 → null。
+   * 🔴 单一读盘入口：`unitsCacheMatchesInput` 与 stale 计数行都走这里，
+   *    避免「同一份清单在缓存门里被读成两种形状」。
+   */
+  private readManifest(dir: string): any {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dir, 'spec', 'project.manifest.json'), 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * `S0.html.pages`（形状 [{path,bytes}]，也容忍裸字符串）→ 归一后的相对路径（去空、dedupe、升序）。
+   * 🔴 刻意**不再判一次存在性**：`S0.html.pages` 就是扫描出来的真实文件；
+   *    这里若再 existsSync，会和 `planShotPaths` 的行内判据形成第二份会漂移的口径。
+   */
+  private htmlPageRels(s0: any): string[] {
+    const pages = s0?.html?.pages;
+    if (!Array.isArray(pages)) return [];
+    const rels = pages
+      .map((pg: any) => String((pg && typeof pg === 'object' ? pg.path : pg) ?? '').trim())
+      .filter(Boolean);
+    return [...new Set(rels)].sort();
+  }
+
+  /**
+   * 输入指纹单一来源：figma 优先 → 有原型页走 html → 否则 none。
+   * 🔴 figma 优先是**刻意的**：画板有节点树真值（max 档），同时声明画板与原型页时
+   *    只按 figma 拆一次，不再对原型页做第二次拆分（否则同一运行会产出两套语义不同的单元）。
+   */
+  private computeUnitInputKey(figmaUrl: string | null, pageRels: string[]): string {
+    if (figmaUrl) return unitInputKeyFigma(figmaUrl);
+    if (pageRels.length) return unitInputKeyHtml(pageRels);
+    return UNIT_INPUT_KEY_NONE;
+  }
+
+  /**
+   * 缓存是否对得上**当前输入**。比 `source.inputKey`（输入指纹的单一判据）——
+   * 覆盖**两条轴**：① `links.figma` 是否变；② 原型页集合是否增删。
+   *
+   * 🔴 为什么要比 inputKey 而不是只比 figmaUrl：HTML 项目没有 figma 链接，两边
+   *    figmaUrl 都是 null，若只比它，`null === null` 会让「加/删了一个原型页」
+   *    永远命中旧快照 —— 新页永远不会被拆出来。
+   *
+   * ⚠️ 功能点归属（features）仍不在此列，理由见 `getUnits` JSDoc。
+   */
+  private unitsCacheMatchesInput(cached: UnitContract, dir: string): boolean {
+    const s0 = this.readManifest(dir)?.S0 ?? null;
+    const key = this.computeUnitInputKey(readProjectFigmaUrl(s0), this.htmlPageRels(s0));
+    return key === cached.source?.inputKey;
+  }
+
+  /** 拆分一次并（按降级码分级）决定是否落盘 */
+  private async buildUnits(
+    runId: string,
+    dir: string,
+    userId?: string,
+  ): Promise<UnitContract & { validationErrors?: string[] }> {
+    const t0 = Date.now();
+    const readJson = (rel: string): any => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'));
+      } catch {
+        return null;
+      }
+    };
+    const manifest = readJson('spec/project.manifest.json');
+    const s0 = manifest?.S0 ?? null;
+    const figmaUrl = readProjectFigmaUrl(s0);
+    const features = this.readUnitFeatures(dir, s0, manifest?.S1 ?? null);
+    const token = await this.resolveFigmaTokenSafe(userId);
+
+    const htmlPageRels = this.htmlPageRels(s0);
+    const inputKey = this.computeUnitInputKey(figmaUrl, htmlPageRels);
+    // figma 有值时永远走 figma（有节点树真值；同时有画板与原型页时不做第二次拆分）
+    const branch = figmaUrl ? 'figma' : htmlPageRels.length ? 'html' : 'none';
+    // 真机判据（0 也要打）：一眼看出这次走的是哪条分支、为什么
+    this.logger.log(
+      `[units] ${JSON.stringify({
+        runId,
+        mode: 'dispatch',
+        branch,
+        figmaUrl: figmaUrl ?? null,
+        htmlPages: htmlPageRels.length,
+      })}`,
+    );
+
+    const contract =
+      branch === 'html'
+        ? splitHtmlUnits({
+            runId,
+            inputKey,
+            pages: htmlPageRels,
+            features,
+            onLog: (payload) => this.logger.log(`[units] ${JSON.stringify(payload)}`),
+          })
+        : await splitFigmaUnits(
+            {
+              runId,
+              inputKey,
+              figmaUrl,
+              // 文案增强：`mvgo.project.json` 解析失败与「未声明」都会得到 figmaUrl=null，
+              // 但修复动作一个在清单、一个在配置项 —— 必须让降级 message 能区分（只影响文案）
+              figmaUrlAbsenceNote: figmaLinkAbsenceNote(s0),
+              features,
+              // 只回答「有没有」，凭证解析口径留在本服务一处（与 lite 链路同源）
+              tokenAvailable: !!token,
+              onLog: (payload) => this.logger.log(`[units] ${JSON.stringify(payload)}`),
+            },
+            {
+              // 走到这里 token 必存在（tokenAvailable=false 时拆分层根本不会调 getNode）
+              getNode: (fileKey, nodeId) => {
+                try {
+                  return new FigmaClient({ token: token as string }).getNode(fileKey, nodeId);
+                } catch (e) {
+                  return Promise.reject(e);
+                }
+              },
+            },
+          );
+
+    const errs = validateUnitContract(contract);
+    const cacheable = !contract.degraded || isCacheableDegraded(contract.degraded.code);
+    // 🔴 persisted 是**磁盘事实**而非意图：只有 writeFileSync 真的返回了才置 true。
+    //    否则「日志说落盘了、其实抛了 EACCES」—— 观测口径与磁盘不一致，等于假绿。
+    let persisted = false;
+    // ⚠️ 已知限制（有意保留，改前先看）：这里的落盘是裸 `fs.writeFileSync`，**非原子**。
+    //    与仓内 12+ 处兄弟产物一致（本仓无 `writeFileAtomic` / `renameSync` 助手），
+    //    单独为 components.json 做 tmp+rename 会让它成为唯一特例。代价：进程被杀 / 磁盘满
+    //    会留下半截文件。读端有 version + 形状（含 `stats.total` 一致性）把关 ⇒
+    //    **挡得住「用坏数据」，挡不住「产生坏文件」**；将来引入统一原子写助手时应一并迁移。
+    if (errs.length) {
+      // 形状不合格：**不落盘** —— 宁可下次重算，也不把坏数据钉进运行目录
+      this.logger.error(`[units] 契约形状自检未通过，不落盘：${errs.slice(0, 3).join('；')}`);
+    } else if (!cacheable) {
+      this.logger.warn(
+        `[units] 偶发降级 ${contract.degraded?.code} 不落盘（persisted:false），下次请求会重试`,
+      );
+    } else {
+      try {
+        const file = path.join(dir, 'spec', 'components.json');
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, JSON.stringify(contract, null, 2) + '\n');
+        persisted = true;
+      } catch (e: any) {
+        this.logger.warn(
+          `components.json 落盘失败（不影响本次返回，persisted:false）：${e?.message ?? e}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `[units] ${JSON.stringify({
+        runId,
+        mode: 'summary',
+        elapsedMs: Date.now() - t0,
+        units: contract.units.length,
+        degraded: contract.degraded?.code ?? null,
+        persisted,
+      })}`,
+    );
+    return { ...contract, ...(errs.length ? { validationErrors: errs } : {}) };
+  }
+
+  /**
+   * 单元归属用的功能点清单 —— **与前端 chips 同一份 key**。
+   *
+   * 优先读已落盘的 `spec/feature-details.json`（前端展示的就是它的 key，单一口径）；
+   * 该文件还没生成时才临时派生，且**不写盘** —— 落盘是 `inspectRun` 的职责，
+   * GET 接口悄悄造数据会让「产物清单」与「实际写过什么」对不上。
+   */
+  private readUnitFeatures(dir: string, s0: any, s1: any): string[] {
+    try {
+      const cached = JSON.parse(
+        fs.readFileSync(path.join(dir, 'spec', 'feature-details.json'), 'utf8'),
+      );
+      if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
+        const keys = Object.keys(cached);
+        if (keys.length) return keys;
+      }
+    } catch {
+      /* 未落盘 → 临时派生 */
+    }
+    try {
+      return this.extractFeatures(s1, s0).features ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 取 Figma Token（不硬编码、按用户配置）。
+   * 口径与 `lite/lite.service.ts:1789-1791` 一致：`aiCfg.figmaToken > FIGMA_ACCESS_TOKEN`。
+   * 任何异常 → null（走 NO_FIGMA_TOKEN 确定性降级，**绝不**因此报错）。
+   */
+  private async resolveFigmaTokenSafe(userId?: string): Promise<string | null> {
+    let cfgToken: any = null;
+    try {
+      const merged: any = await this.aiConfig.getMergedAiConfig(userId);
+      cfgToken = merged?.figmaToken;
+    } catch {
+      /* 配置读不到不是故障，继续看环境变量 */
+    }
+    const token = cfgToken || process.env.FIGMA_ACCESS_TOKEN;
+    return typeof token === 'string' && token.trim() ? token.trim() : null;
+  }
+
   /* --------------------------------------------------------- conflicts --- */
 
   /**
@@ -2172,10 +3108,8 @@ export class ProjectPipelineService {
   /**
    * 人裁决留痕。追加式：同 id 多次出现时**最后一条生效**（裁决可推翻，但推翻要留痕）。
    */
-  saveDecisions(runId: string, entries: DecisionEntry[]) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  saveDecisions(runId: string, entries: DecisionEntry[], userId?: string) {
+    const dir = this.resolveRunDir(runId, userId);
     if (!Array.isArray(entries) || !entries.length) {
       throw new BadRequestException('entries 不能为空');
     }
@@ -2255,9 +3189,7 @@ export class ProjectPipelineService {
 
   /** S2：契约冻结（确定性，无 LLM） */
   async freeze(runId: string, userId?: string) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+    const dir = this.resolveRunDir(runId, userId);
 
     const manifestPath = path.join(dir, 'spec', 'project.manifest.json');
     const endpointsPath = path.join(dir, 'spec', 'endpoints.json');
@@ -2436,9 +3368,7 @@ export class ProjectPipelineService {
    * 类型降级为 any：S2 当前不吐字段级 components/schemas/*，真正类型化是未来增强。
    */
   async generate(runId: string, userId?: string) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+    const dir = this.resolveRunDir(runId, userId);
 
     const yamlPath = path.join(dir, 'spec', 'openapi.local.yaml');
     if (!fs.existsSync(yamlPath)) {
@@ -2500,9 +3430,7 @@ export class ProjectPipelineService {
    * 零 LLM、可重入（再次调用覆盖 generated/frontend/ 下 S4 产出的文件）。
    */
   async generateVue(runId: string, userId?: string) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+    const dir = this.resolveRunDir(runId, userId);
 
     const yamlPath = path.join(dir, 'spec', 'openapi.local.yaml');
     if (!fs.existsSync(yamlPath)) {
@@ -2582,10 +3510,8 @@ export class ProjectPipelineService {
    * 读取 S4 接口绑定上下文：当前绑定侧车 + 可选 API 模块（tag→导出函数）+ 各视图数据槽。
    * 供前端 project-lab 在「对接接口」向导里填充下拉选项。
    */
-  getBinding(runId: string) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  getBinding(runId: string, userId?: string) {
+    const dir = this.resolveRunDir(runId, userId);
     const bindingPath = path.join(dir, 'binding.json');
     let binding: any;
     if (fs.existsSync(bindingPath)) {
@@ -2617,10 +3543,12 @@ export class ProjectPipelineService {
    * workspace/vue3-components 逻辑；写完后调用方应再跑一次 generate-vue 烘焙进产物。
    * 校验：tag 必须落在已生成的 api 模块、target 必须落在某视图数据槽。
    */
-  setBinding(runId: string, dto: { tag: string; fn: string; params?: Record<string, any>; target: string }) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  setBinding(
+    runId: string,
+    dto: { tag: string; fn: string; params?: Record<string, any>; target: string },
+    userId?: string,
+  ) {
+    const dir = this.resolveRunDir(runId, userId);
     if (!dto || !dto.tag || !dto.fn || !dto.target) {
       throw new BadRequestException('绑定缺少必要字段：tag / fn / target');
     }
@@ -2660,10 +3588,8 @@ export class ProjectPipelineService {
   /**
    * 读取 S4 组件嵌入上下文：当前嵌入侧车 + 各视图（供前端「插入组件」面板填充视图下拉）。
    */
-  getEmbeds(runId: string) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  getEmbeds(runId: string, userId?: string) {
+    const dir = this.resolveRunDir(runId, userId);
     const embedsPath = path.join(dir, 'embeds.json');
     let embeds: any[] = [];
     if (fs.existsSync(embedsPath)) {
@@ -2694,10 +3620,8 @@ export class ProjectPipelineService {
    * workspace/vue3-components 逻辑；写完后调用方应再跑一次 generate-vue 烘焙进产物。
    * 校验：每个嵌入项的 view 必须落在 s4-meta.json 的 views（若已生成）。
    */
-  setEmbeds(runId: string, dto: { embeds?: any[] }) {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+  setEmbeds(runId: string, dto: { embeds?: any[] }, userId?: string) {
+    const dir = this.resolveRunDir(runId, userId);
     const incoming = Array.isArray(dto?.embeds) ? dto.embeds : [];
     const genDir = path.join(dir, 'generated');
     let views: string[] = [];
@@ -2761,9 +3685,7 @@ export class ProjectPipelineService {
    * 返回 Buffer + 文件名，由控制器以 StreamableFile 流出，避开全局信封拦截器。
    */
   async generateZip(runId: string, userId?: string): Promise<{ buffer: Buffer; filename: string }> {
-    this.assertRunId(runId);
-    const dir = path.join(RUNS_ROOT, runId);
-    if (!fs.existsSync(dir)) throw new NotFoundException(`运行不存在：${runId}`);
+    const dir = this.resolveRunDir(runId, userId);
     const genDir = path.join(dir, 'generated');
     if (!fs.existsSync(genDir)) {
       throw new BadRequestException('尚未生成代码（generated/ 不存在），请先跑 S3 生成');
@@ -2847,8 +3769,9 @@ export class ProjectPipelineService {
   }
 
   /** 读单个产物全文（白名单 + 大小上限）；截图不存在时**先按需生成再返回**（P0-2） */
-  async readArtifact(runId: string, name: string) {
-    this.assertRunId(runId);
+  async readArtifact(runId: string, name: string, userId?: string) {
+    // 归属校验：产物含 generated/**（用户代码），不能只靠「知道 runId」
+    this.resolveRunDir(runId, userId);
     const rel = String(name ?? '').replace(/^\/+/, '');
     if (rel.includes('..')) {
       throw new BadRequestException(`路径不合法（含 .. 穿越）：${rel}`);
@@ -2907,9 +3830,9 @@ export class ProjectPipelineService {
   }
 
   /** 列出某 run 的 generated/ 下全部产物文件（只读，供前端 S4/S3 文件清单展示） */
-  listGeneratedFiles(runId: string): string[] {
-    this.assertRunId(runId);
-    const genDir = path.join(RUNS_ROOT, runId, 'generated');
+  listGeneratedFiles(runId: string, userId?: string): string[] {
+    const runDir = this.resolveRunDir(runId, userId);
+    const genDir = path.join(runDir, 'generated');
     if (!fs.existsSync(genDir)) return [];
     const out: string[] = [];
     const walk = (dir: string, base: string) => {

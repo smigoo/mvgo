@@ -602,6 +602,18 @@ export class FigmaConnector {
       let userMsg;
       if (figStatus === 401 || figStatus === 403) {
         userMsg = `Figma Token 无效或已过期 (HTTP ${figStatus})，请前往 Figma → Settings → Personal Access Tokens 重新生成 Token，并在前端「设置」面板中更新`;
+      } else if (figStatus === 404) {
+        // 🛡️ 2026-11-06 治本：Figma 对**无权限**的文件/节点同样返回 404（不是 403），
+        //    故 404 只能断言「当前 Token 读不到这个 fileKey/nodeId」，「文件被删」仅是其中一种可能。
+        //    旧文案 `Figma API 错误 (HTTP 404): Not found` 把三种原因压成一句「Not found」，
+        //    实测真因是「激活的 Token 换成了另一个 Figma 账号」，却被读成文件被删。
+        //    本层只陈述**事实**（这里不知道用户配了几个 Token、哪个有权限）；
+        //    「切到哪个 Token」的可操作建议由 lite.service 的 404 归因层给出。
+        userMsg =
+          `Figma 读取失败 (HTTP 404)：当前 Figma Token 读不到该文件或节点（fileKey=${fileKey}，nodeId=${nodeId}）。` +
+          `Figma 对「无权限」的文件同样返回 404（不是 403），因此不能据此认为文件已被删除。` +
+          `常见原因：① 当前 Token 属于另一个 Figma 账号、未被授予该文件访问权；` +
+          `② 文件或节点已被删除/移动；③ fileKey/nodeId 抄错。`;
       } else if (figStatus) {
         userMsg = `Figma API 错误 (HTTP ${figStatus}): ${figMsg}`;
       } else {

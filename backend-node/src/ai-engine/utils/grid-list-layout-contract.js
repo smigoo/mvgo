@@ -385,7 +385,7 @@ function matchAllTags(content) {
   const close = text.lastIndexOf('</template>')
   const src = open >= 0 && close > open ? text.slice(open + 10, close) : text
   const out = []
-  const rx = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g
+  const rx = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
   let m
   while ((m = rx.exec(src)) !== null) out.push(m[2] || '')
   return out

@@ -71,6 +71,16 @@ export function buildSectionStructureContract(sections, opts = {}) {
     )
     if (matched.length > 0) candidates = matched
   }
+  // 🛡️ 2026-11-06（f91aa545 实锤）：**planner 显式声明的插槽宿主段**优先兜底。
+  //   真机 vision 从没产出 `type==='header'` 的段（标题栏被当 chrome），插槽 id 又是文本/
+  //   统计节点、不在任何段的 `sourceNodeIds` 里 ⇒ 上面两条全空 ⇒ `headerSlotsEmitted=0`
+  //   ⇒ index 无 `#header-right` ⇒ 插槽内容退回 body 再渲一遍。
+  //   planner 已按「isPanelHeader ∧ 有插槽业务内容」保住宿主并打 `_headerSlotHost`，
+  //   本契约认这个显式事实（不靠 type 猜、不做几何推断）。
+  if (candidates.length === 0) {
+    const hosts = leaves.filter((section) => section && section._headerSlotHost === true)
+    if (hosts.length > 0) candidates = [hosts[0]]
+  }
 
   if (candidates.length > 1) {
     const topLevelHeaderIds = new Set(

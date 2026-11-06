@@ -104,7 +104,7 @@ const NON_TEXT_TAGS = new Set([
  */
 export function extractTextSlots(templateInner) {
   const seg = String(templateInner || '');
-  const tagRe = /<\/?([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>])*)>|([^<]+)/g;
+  const tagRe = /<\/?([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>|([^<]+)/g;
   const stack = [];
   let root = null;
   let m;

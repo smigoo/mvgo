@@ -2745,9 +2745,46 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   const sameWidth = boxesReady && cardBoxes.every(
     (b) => Math.round(b.w) === Math.round(cardBoxes[0].w),
   );
-  // 卡高/圆角仍要求统一卡盒；逐项背景归属在下方独立解析，异宽不得阻断资源真值。
-  // （`sameWidth && sameHeight` 与原 `every(w 相等 && h 相等)` 逐字等价）
-  const geoReady = sameWidth && sameHeight;
+  // 🛡️ 2026-11-06（mc-max-1793913231075-64a1a31f 实锤）：**「是否同一循环组」不能用精确等值判**。
+  //
+  //   病灶：6 项盒集 `[470,459,459,459,459,459]` —— 首卡走帧盒（选中态描边使其帧盒 470），
+  //   其余 5 卡走几何锚（内容盒 459）。差 11px（2.3%）⇒ 旧 `geoReady = sameWidth && sameHeight`
+  //   判否 ⇒ column 分支**整段不写 cardH / gaps** ⇒ 产物 `FG_LIST_GAPS=null`、行无高度，
+  //   设计稿 72px 行高 + 20px 间距全部丢失（三轮前同段真值本是 [470×6] + [20×5]，几何完全可证）。
+  //
+  //   事实：视觉阶段/Bbox 只能给出「大概相似」，同组成员的盒**本就不会逐像素相等**
+  //   （内容盒 vs 帧盒、选中态描边、1px 描边归属都会造成 ±几 px）。用等值当闸门 = 让一个
+  //   离群项废掉整段真值。故「同组资格」改走**容差相似带**；「每项实际尺寸/间距」仍逐项精确
+  //   （间距用各卡自己的 y/h 相减，不经中位数抹平）。
+  //
+  //   判据（相对带宽，无绝对上限）：容差 = max(2px, 3% × 最大边)。小盒（40px 图标级）
+  //   不吃 3% 的 1.2px（2px 托底），大盒（470px）得 14.1px —— 本次病灶差 11px（2.3%）
+  //   据此落回组内；真异形（120 vs 140.5，17%）仍判否。**不设绝对上限**：上限会把
+  //   「大盒 + 混源」这种最常见的病灶形态又挡回门外（首版写 6px 上限，11px 差仍判否，
+  //   等于没修）。真异宽样本仍由 `horizProven`/逐项精确间距各自兜住，不因放宽而失真。
+  const BOX_SIMILAR_RATIO = 0.03;
+  const BOX_SIMILAR_MIN_PX = 2;
+  const axisSimilar = (vals) => {
+    const v = (vals || []).filter((n) => Number.isFinite(n));
+    if (v.length === 0) return false;
+    const hi = Math.max(...v);
+    const lo = Math.min(...v);
+    const tol = Math.max(BOX_SIMILAR_MIN_PX, hi * BOX_SIMILAR_RATIO);
+    return hi - lo <= tol;
+  };
+  const similarWidth = boxesReady && axisSimilar(cardBoxes.map((b) => b.w));
+  const similarHeight = boxesReady && axisSimilar(cardBoxes.map((b) => b.h));
+  /** 相似带内的代表值：中位数（等值集退化为该值，行为与原 `cardBoxes[0]` 逐字一致）。 */
+  const axisMedian = (vals) => {
+    const v = (vals || []).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+    if (v.length === 0) return null;
+    const mid = Math.floor(v.length / 2);
+    return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+  };
+  // 共享几何（卡高/间距）的可用性：以「相似」为准（视觉阶段可达的事实），不是「等值」。
+  const geoReady = similarWidth && similarHeight;
+  // 精确一致仍留作可回溯事实（`listGeoRelaxed` = 相似但不等值 ⇒ 容差生效的段数）。
+  const exactUniform = sameWidth && sameHeight;
 
   // ── 步⑤（P0-2）卡内布局几何真值：名称/数值的相对排布 + 数值/单位的相对排布 ─────
   // 🛡️ 病灶（设计稿 vs 产物）：真机三卡是「名称在上、`51`+`次` 同一行在名称**正下方**且左对齐」，
@@ -2908,11 +2945,14 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   //     `x(后) − (x(前) + w(前))`，**同一个不可信盒**同时决定宽度与间距 —— 宽度不可证则间距同样不可证。
   //     只拦宽度会留下「宽度不下发、间距照发」的自相矛盾态。
   const horizProven = boxesReady && cards.every((c) => !!c.node);
-  const widthNotUniform = boxesReady && direction === 'row' && !sameWidth && !horizProven;
+  // 🛡️ 2026-11-06：`widthNotUniform` 的否定项从**等宽**改为**相似宽**（同 `geoReady` 口径）。
+  //   理由与列分支同一根因：混源盒集（帧盒 470 / 内容盒 459）在视觉阶段就是「大概相似」，
+  //   用等值拦会连带把逐项宽度真值一起丢掉；越出相似带（真异宽）仍照拦。
+  const widthNotUniform = boxesReady && direction === 'row' && !similarWidth && !horizProven;
   // 🔴 G9：icon 回退盒污染 ⇒ cardH/cardWidths/gaps 全部不可证（盒高/宽是子元素尺寸，
   //   非行盒真值）⇒ 一律不下发（宁缺勿错：错误 40px 限高比自然流危害大）。
   if (boxesReady && direction === 'row' && !iconFallbackPolluted) {
-    if (sameHeight) cardH = Math.round(cardBoxes[0].h);
+    if (similarHeight) cardH = Math.round(axisMedian(cardBoxes.map((b) => b.h)));
     if (!widthNotUniform) {
       cardWidths = cardBoxes.map((b) => Math.round(b.w));
       const byX = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.x - z.b.x);
@@ -2921,13 +2961,23 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
         return Math.round(p.b.x - (prev.x + prev.w));
       });
     }
-  } else if (geoReady && !iconFallbackPolluted) {
-    cardH = Math.round(cardBoxes[0].h);
-    const byY = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
-    gaps = byY.slice(1).map((p, k) => {
-      const prev = byY[k].b;
-      return Math.round(p.b.y - (prev.y + prev.h));
-    });
+  } else if (similarHeight && !iconFallbackPolluted && (similarWidth || horizProven)) {
+    // 🛡️ 2026-11-06：`similarHeight` 取代 `geoReady`（后者要求**宽度也等值**，与纵向间距
+    //   无关却成了闸门）。纵向间距只依赖各卡自身的 y/h，逐项精确相减 —— 不使用中位数抹平。
+    //   🔴 保留「不可证 ⇒ 不下发」的原意（2026-11-03 步③）：若宽度轴明显不同形**且**各卡盒
+    //   并非逐卡独立证明（全是回退帧盒），说明盒集本身不可信 ⇒ 整段几何仍不下发。
+    //   即「相似宽」与「逐卡已证明」二选一成立即可 —— 本次病灶正是后者不成立、前者成立。
+    cardH = Math.round(axisMedian(cardBoxes.map((b) => b.h)));
+    // 🔴 退化守卫（保留 2026-11-03 column −86 教训）：若全部卡回退到**同一个盒**
+    //   （y 全同），逐项相减得到的是同一盒自比 ⇒ 无意义。判据零语义：y 去重数 == 卡数。
+    const distinctY = new Set(cardBoxes.map((b) => Math.round(b.y))).size === cardBoxes.length;
+    if (distinctY) {
+      const byY = cardBoxes.map((b, i) => ({ b, i })).sort((a, z) => a.b.y - z.b.y);
+      gaps = byY.slice(1).map((p, k) => {
+        const prev = byY[k].b;
+        return Math.round(p.b.y - (prev.y + prev.h));
+      });
+    }
   }
   // 🔴🔴 2026-11-03（列表卡盒真值治本 · 步①②）：**间距不得为负** —— 几何恒真约束。
   //
@@ -2969,6 +3019,13 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     geoReady: !!geoReady,
     sameWidth: !!sameWidth,
     sameHeight: !!sameHeight,
+    // 🛡️ 2026-11-06：相似带判据可见化。`relaxed` = 判为可用但**并非精确等值** ⇒ 容差生效；
+    //   `relaxed=0 && geoReady=0` ⇒ 真异形（不是容差没生效）；`relaxed>0` 而产物仍无
+    //   cardH/gaps ⇒ 下游未消费（判据被架空）。
+    similarWidth: !!similarWidth,
+    similarHeight: !!similarHeight,
+    exactUniform: !!exactUniform,
+    relaxed: !!geoReady && !exactUniform,
     // 🔴 G9：icon 回退盒污染标记（真机计数行 listCardHIconFallbackRejected 的数据源）
     iconFallbackPolluted,
     cardW: boxesReady ? Math.round(cardBoxes[0].w) : null,
@@ -4152,7 +4209,7 @@ function declaredUnconsumedCount(sec, kind) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：vision `charts[]` 段归属集合。
@@ -4363,6 +4420,11 @@ export function collectFoldedGridTakeover(p = {}) {
         if (lg.iconFallbackPolluted) out.listCardHIconFallbackRejected += 1;
         if (lg.negGapClamped) out.listGeoNegGapClamped += 1;
         if (!lg.geoReady) out.listGeoGeoNotReady += 1;
+        // 🛡️ 2026-11-06（64a1a31f 实锤）：「近似相似带」生效段数 —— 0 也打。
+        //   relaxed>0 ⇒ 容差救了「混源盒集/选中态描边」样本（正是本次病灶形态）；
+        //   relaxed=0 且 geoNotReady=0 ⇒ 全是精确等值样本（容差未被需要）；
+        //   relaxed=0 且 geoNotReady>0 ⇒ 真异形，不是容差没生效。
+        if (lg.relaxed) out.listGeoRelaxed += 1;
         if (lg.widthNotUniform) out.listGeoWidthNotUniform += 1;
         // 🔴 步④：几何锚（按几何选可见底）命中段数 + 跨度自校验拒绝段数。
         //   `geomPicked>0` ⇒ 颜色锚结构性失效的样本已被几何锚救回（真机病灶即此类）；

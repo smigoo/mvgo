@@ -505,3 +505,71 @@ describe('C0.2 三段判据：祖先/后代单一归属（mc-max-1793750471950-b
     expect(buildFigmaTextCharactersIndex(null)).toBeNull()
   })
 })
+
+// ── 🛡️ 刀72-A（2026-11-06 · mc-max-1793909328537-0f0468b7「底部汇总」段消失实锤）──
+//   单节点自锚退化段豁免：锚点修复失败的 TEXT 自锚段闭包={自身}，size:1⊆N 的
+//   子集判定无信息量，「完全覆盖」是假象 ⇒ 豁免保留（宁多勿漏）。
+describe('刀72-A：单节点自锚退化段豁免（0f0468b7 底部汇总消失实锤）', () => {
+  // 底部区容器：节点列表区 565:3 物理上包含列表卡 + 底部汇总两行文本
+  const makeBottomFigma = () => ({
+    id: '0:1',
+    type: 'FRAME',
+    name: 'root',
+    absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 500 },
+    children: [
+      {
+        id: '565:3',
+        type: 'GROUP',
+        name: '列表区',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 500 },
+        children: [
+          { id: '48:5798', type: 'GROUP', name: 'card1', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 60 }, children: [
+            { id: '48:5799', type: 'TEXT', name: '节点', characters: '江苏联网节点' },
+          ] },
+          { id: '48:5888', type: 'TEXT', name: '共6个节点', characters: '共6个节点' },
+          { id: '48:5889', type: 'GROUP', name: '接入设备统计', absoluteBoundingBox: { x: 0, y: 400, width: 400, height: 60 }, children: [
+            { id: '48:5890', type: 'TEXT', name: '接入设备', characters: '接入设备 10810' },
+          ] },
+        ],
+      },
+    ],
+  })
+  const bottomIdx = () => buildFigmaClosureIndex(makeBottomFigma())!
+  // 吸收者：items 轨段（闭包含整个 565:3 子树）
+  const absorber = () => ({
+    id: '565:3',
+    sourceNodeIds: ['565:3'],
+    body: { items: [{ id: '48:5798' }] },
+    children: [{ id: '48:5799' }],
+  })
+  // 被删者候选：48:5888 TEXT 自锚段（锚点修复失败形态：body.children 指回自身）
+  const selfAnchored = () => ({
+    id: '48:5888',
+    sourceNodeIds: ['48:5888'],
+    body: { children: [{ childId: '48:5888', childName: '共6个节点' }] },
+  })
+
+  test('阳性：闭包={自身}+声明了内容结构 ⇒ 豁免保留（底部汇总不再消失）', () => {
+    const r = dedupeSectionsByCoverage([absorber(), selfAnchored()], bottomIdx())
+    expect(r.sections).toHaveLength(2)
+    expect(r.removed).toHaveLength(0)
+  })
+
+  test('阴性：闭包含真实内容（size>1）⇒ 原一段判据照常删除（不回潮）', () => {
+    const wider = {
+      ...selfAnchored(),
+      sourceNodeIds: ['48:5888', '48:5889'],
+      children: [{ id: '48:5890' }],
+    }
+    const r = dedupeSectionsByCoverage([absorber(), wider], bottomIdx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed[0]).toMatchObject({ id: '48:5888', reason: 'full' })
+  })
+
+  test('阴性：单节点自锚但无 body.children（纯壳）⇒ 不豁免照常删', () => {
+    const bare = { id: '48:5888', sourceNodeIds: ['48:5888'] }
+    const r = dedupeSectionsByCoverage([absorber(), bare], bottomIdx())
+    expect(r.sections).toHaveLength(1)
+    expect(r.removed).toHaveLength(1)
+  })
+})

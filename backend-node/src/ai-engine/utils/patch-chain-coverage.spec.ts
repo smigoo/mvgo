@@ -15,7 +15,20 @@ const FILES = [
   // 67→68（2026-11-05 归因）：6b0d14b 之后某提交新增 G11a `catch (bgErr)`
   // （microcode-engineer.js:3110，背景 fallback 注入），当日未同步本门禁；
   // 已补接哨兵（S0.2 核对唯一漏网点），基线同步 +1。
-  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 68 },
+  // 68→76（2026-11-06 归因，两次合并计数）：
+  //   68→75：刀72-B（顶层并列同构段折叠）在 collapser 接入后于本文件新增 7 处 catch，
+  //          当日未同步本门禁（该套件在本轮改动前即已失败，非本轮引入）。
+  //   75→76：刀66-C「index 段级 v-for 改写」新增 `catch (_isoIdxErr)`
+  //          （generateCode 内、包装写入之后），已接哨兵 pass='generateCode:iso-index'。
+  // 78→80（2026-11-06 归因）：90eae287 内部子组件 props 契约注入新增 2 处 catch
+  // （`catch (_insErr)` 接哨兵 pass=execute:chart-props；`catch (_chkErr)` 为同文件回滚兜底，
+  //  同块内已由外层哨兵覆盖，计数 +2）。
+  // 77→78（2026-11-06 归因）：a9364bd4 样式补缺新增 `catch (err)`（_completeMissingStyleClasses），
+  // 已接 reportPatchChainError 哨兵（pass='generateCode:style-complete'）。
+  // 76→77（2026-11-06 归因）：8cfbd218 属性内插值归一新增
+  // `catch (_attrInterpErr)`（execute 落盘前出口），已接 reportPatchChainError
+  // 哨兵（pass='execute:attr-interp'）；基线同步 +1。
+  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 80 },
   { rel: 'src/ai-engine/roles/vue3-engineer.js', expectCatches: 25 },
 ];
 

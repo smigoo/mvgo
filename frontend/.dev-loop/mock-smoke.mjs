@@ -50,7 +50,6 @@ import {
 import {
   LOCAL_ASR_MODELS,
   LOCAL_ASR_DEFAULT_MODEL,
-  LOCAL_ASR_REMOTE_HOST,
   ASR_PHASES,
   ASR_FAILURES,
   createLocalAsr,
@@ -58,6 +57,18 @@ import {
   describeAsrFailure,
   describeAsrNoAudio
 } from '../src/views/meeting/mock/local-asr.js'
+// 转写有两条路径（Task #40 起）：主路径 server-asr（音频按段上传后端 → 云端 ASR），
+// 兜底 local-asr（本机 WebGPU 优先推理，仅在服务端链路明确不可用时启用）。
+// 共享件（ASR_PHASES / describeSpeaker / describeAsrNoAudio）仍从 local-asr 取，
+// 所以两组 import 都要保留：页面同时 import 两个适配器。
+import {
+  SERVER_ASR_LABEL,
+  SERVER_ASR_FAILURES,
+  ServerAsrError,
+  createServerAsr,
+  describeServerAsrFailure
+} from '../src/views/meeting/mock/server-asr.js'
+import { MEETING_ASR_CODES } from '../src/api/meeting-asr-codes.js'
 import { mockAudioAdapter } from '../src/views/meeting/mock/audio-adapter.js'
 import {
   MULTI_TRACK_LIMITS,
@@ -1095,6 +1106,92 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
     Boolean(OUTPUT_TARGETS.dev.exportFile.degraded.pdf) &&
     OUTPUT_TARGETS.dev.exportFile.hardConstraints.length === 3 &&
     OUTPUT_TARGETS.production.exportFile.blockers.length === 3)
+
+  // ---- 渲染细节：格式差异化 / 数据转义 / 附录忠实度 ----
+  // 这一组防的是「渲染层静默改写或漏写内容」——门禁过了不等于导出物可信。
+
+  assert(group, '打印提示只出现在 pdf，html / word 不预告打印',
+    docs.pdf.content.includes('当前为打印预览') &&
+    !docs.html.content.includes('当前为打印预览') &&
+    !docs.word.content.includes('当前为打印预览'))
+  assert(group, 'pdf 与 html 正文同源，差异仅在打印提示（不改写内容）',
+    docs.pdf.content.replace(/<div class="no-print">[\s\S]*?<\/div>/, '') === docs.html.content)
+  assert(group, 'mso 条件块只在 word 出现，html / pdf 不冒充 Word 文档',
+    docs.word.content.includes('<!--[if gte mso 9]>') &&
+    !docs.html.content.includes('mso 9') &&
+    !docs.pdf.content.includes('mso 9'))
+  assert(group, '四种格式均无外部资源引用（无 http / script / @import / url()）',
+    EXPORT_FORMAT_IDS.every((id) =>
+      !/https?:\/\//i.test(docs[id].content) &&
+      !/<script/i.test(docs[id].content) &&
+      !/@import/i.test(docs[id].content) &&
+      !/url\(/i.test(docs[id].content)))
+  assert(group, '4 格式元数据自洽：download 带扩展名与 mime，pdf 无扩展名走打印',
+    EXPORT_FORMAT_IDS.every((id) => {
+      const m = EXPORT_FORMATS.find((f) => f.id === id)
+      const modeOk = m.mode === 'browser_print'
+        ? m.ext === null && m.mime === 'text/html'
+        : typeof m.ext === 'string' && m.ext.length > 0 && String(m.mime).includes('/')
+      return m.ready === true && Boolean(m.note) && modeOk
+    }) &&
+    EXPORT_FORMATS.find((f) => f.id === 'word').mime === 'application/msword')
+
+  // 表格内容里的竖线与换行若原样写入，会把 Markdown 表格从中间劈开（结构性破坏）
+  const tricky = {
+    ...payload,
+    fields: payload.fields.map((f, i) =>
+      i === 0 ? { ...f, label: '标题|管道', value: '含竖线|与\n换行' } : f
+    )
+  }
+  const trickyMd = exportDocument(tricky, 'md').content
+  assert(group, 'Markdown 字段表转义竖线 / 压平换行，表格结构不被内容破坏',
+    trickyMd.includes('标题\\|管道') &&
+    trickyMd.includes('含竖线\\|与 换行') &&
+    trickyMd.split('\n').filter((l) => l.startsWith('| 标题')).length === 1)
+  assert(group, '同一内容在 HTML 里按数据转义，不当成结构',
+    exportDocument(tricky, 'html').content.includes('<td>标题|管道</td>'))
+
+  // 未确认字段：既不能渲染成空串（看不出缺内容），也不能被补成 0 / 无 之类的假值
+  const blank = {
+    ...payload,
+    fields: payload.fields.map((f, i) => (i === 0 ? { ...f, value: null } : f))
+  }
+  assert(group, 'null 字段值统一标注「未确认 / 值保持 null」，不渲染成空白或伪造值',
+    exportDocument(blank, 'md').content.includes('（未确认 / 值保持 null）') &&
+    exportDocument(blank, 'html').content.includes('（未确认 / 值保持 null）'))
+
+  // 人工修订必须可回溯：AI 原值与驳回原因都要进附录，否则导出物等于抹掉了修订依据
+  const revised = {
+    ...payload,
+    fields: payload.fields.map((f, i) =>
+      i === 0
+        ? { ...f, humanEdited: true, aiValue: 'AI 原值-甲', value: '人工改后-乙', rejectReason: '证据不足' }
+        : f
+    )
+  }
+  const revisedMd = exportDocument(revised, 'md').content
+  const revisedHtml = exportDocument(revised, 'html').content
+  assert(group, '人工修订留痕进导出物：AI 原值 + 驳回原因 + 修订列',
+    revisedMd.includes('AI 原值-甲') && revisedMd.includes('证据不足') && revisedMd.includes('人工改后-乙') &&
+    revisedHtml.includes('AI 原值：AI 原值-甲') && revisedHtml.includes('驳回原因：证据不足'))
+
+  assert(group, 'markdownToHtml 覆盖标题 / 列表 / 引用 / 行内 code，且先转义后补标签',
+    (() => {
+      const h = markdownToHtml('# 标题\n- 甲\n- 乙\n> 引用&<b>\n`code`')
+      return h.includes('<h1>标题</h1>') &&
+        h.includes('<ul><li>甲</li><li>乙</li></ul>') &&
+        h.includes('<blockquote>引用&amp;&lt;b&gt;</blockquote>') &&
+        h.includes('<code>code</code>')
+    })())
+
+  // 校验顺序也是契约：草稿态即便带了非法 scope，也只能报「未发布」，不得先泄露范围错误
+  let c6 = ''
+  try {
+    exportDocument({ frozen: false, scope: 'nope' }, 'md')
+  } catch (e) {
+    c6 = e.code
+  }
+  assert(group, 'FR-11 门禁优先于范围 / 稿件校验（草稿态先报未发布）', c6 === 'EXPORT_NOT_PUBLISHED')
   console.log('')
 }
 
@@ -1335,12 +1432,121 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
     tpl.includes('本地规则抽取，未调用云端大模型') && tpl.includes('未调用云端大模型'))
   assert(group, '人工记录标注「不参与 AI 抽取」（语义隔离，不冒充 AI 结论）',
     tpl.includes('只留痕，不参与 AI 抽取') && tpl.includes('不参与 AI 抽取）'))
-  assert(group, '顶部保留「音频不上传、不调用云端识别」声明',
-    tpl.includes('音频不上传、不调用云端识别') && tpl.includes('本地演示'))
+  // 架构反转（本轮）：默认本机推理（音频不出本机、不依赖任何后端密钥），服务端转写降为可选引擎。
+  // 所以这里断言的是**新默认口径**，并且必须确认旧的「默认按段上传后端」口径已彻底消失 ——
+  // 只改正向断言、留着旧的「默认上传」不管，等于给「文案偷偷退回失真版」发了通行证。
+  assert(group, '顶部声明改成「默认本机转写 · 音频不出本机」口径，旧「默认按段上传后端」口径已清除',
+    tpl.includes('本机转写（默认）：音频不出本机') &&
+    !tpl.includes('服务端转写：音频按段上传后端') &&
+    !tpl.includes('音频不上传、不调用云端识别') &&
+    !tpl.includes('本地演示：音频不上传'))
   assert(group, '重新开始会先确认，不静默清掉已记录内容',
     /开始新会议会清空当前实时记录与已生成的总结/.test(vue) && /window\.confirm\(/.test(vue))
   assert(group, '工作台不出现「AI 已生成结论」之类夸大措辞',
     !/AI 已生成/.test(tpl) && !/AI 自动定稿/.test(tpl) && !/自动发布/.test(tpl))
+  console.log('')
+}
+
+// ============================================================
+// default-view：默认视图开发态核验（把 v-if / v-else-if="debugMode" 子树整块剥离后再看还剩什么）
+// 目的：本页已上生产，所以「默认视图不含开发态内容」这条不再靠 build 产物有无页面来保证，
+//       改为对模板本身做剥离核验 —— 剥离后仍残留的开发态文案就是会真的显示给生产用户的东西。
+// ============================================================
+{
+  const group = 'default-view'
+  console.log(`\n=== ${group}：默认视图不残留开发态内容 ===`)
+  const vue = readFileSync(new URL('../src/views/meeting/index.vue', import.meta.url), 'utf8')
+  const tpl = vue.slice(vue.indexOf('<template>'), vue.lastIndexOf('</template>'))
+
+  // 按标签配对剥离子树：v-if / v-else-if 的 debugMode 分支都算开发态（v-else 分支保留，那是默认视图）
+  const stripDebug = (src) => {
+    let out = src
+    let removed = 0
+    for (let guard = 0; guard < 600; guard += 1) {
+      const m = /<([a-zA-Z][\w-]*)([^>]*\bv-(?:if|else-if)="debugMode"[^>]*)>/.exec(out)
+      if (!m) break
+      const tag = m[1]
+      const start = m.index
+      if (/\/>$/.test(m[0])) {
+        out = out.slice(0, start) + out.slice(start + m[0].length)
+        removed += 1
+        continue
+      }
+      const re = new RegExp(`<${tag}\\b|</${tag}>`, 'g')
+      re.lastIndex = start
+      let depth = 0
+      let end = -1
+      let mm
+      while ((mm = re.exec(out))) {
+        if (mm[0].startsWith('</')) {
+          depth -= 1
+          if (depth === 0) { end = mm.index + mm[0].length; break }
+        } else depth += 1
+      }
+      if (end < 0) break // 标签不配对就地停手，交给下面的断言暴露问题
+      out = out.slice(0, start) + out.slice(end)
+      removed += 1
+    }
+    return { out, removed }
+  }
+
+  const { out: defView, removed } = stripDebug(tpl)
+  assert(group, 'debugMode 分支可被完整剥离（断言不空转）',
+    removed >= 8 && !/v-(?:if|else-if)="debugMode"/.test(defView), `剥离 ${removed} 块`)
+
+  // 这些词只要出现在默认视图，就说明开发态内容漏给了生产用户
+  const DEV_MARKERS = ['（DEV）', '?debug=1', 'mm-runbar', 'mm-grid-debug', 'DEV ONLY',
+    '契约自检', 'adapterMode', '就绪度', '稿件指纹']
+  const leaked = DEV_MARKERS.filter((k) => defView.includes(k))
+  assert(group, `默认视图不残留 ${DEV_MARKERS.length} 类开发态标记`, leaked.length === 0, leaked.join('、'))
+
+  // 「示例稿」在默认视图只能作为警示标 / 边界声明 / 注释出现，不能是能点的入口
+  const sampleRefs = defView.split('\n').filter((l) => l.includes('示例稿'))
+  assert(group, '默认视图的「示例稿」只作警示与边界声明，没有可点击的推演入口',
+    !/@click="[^"]*"[^>]*>[^<]*示例稿/.test(defView) && !/推演示例稿（DEV）/.test(defView) &&
+    sampleRefs.length > 0)
+
+  // 标题三元：开发标题只挂在 debugMode 分支上，默认分支必须是生产口径
+  assert(group, '标题默认走生产口径，开发标题只在 debugMode 分支',
+    /debugMode \? '会议纪要 · 开发工作台' : '需求会议智能纪要 · 工作台'/.test(defView))
+
+  // 剥离不能把正式能力一起删掉：录音条与导出区仍须留在默认视图
+  assert(group, '剥离后默认视图仍保留真实录音条与导出区（没连带删掉正式能力）',
+    defView.includes('mm-live-rec-bar') && defView.includes('doExportFormat'))
+  console.log('')
+}
+
+// ============================================================
+// prod-entry：路由与入口恒注册（本页已上生产，防止有人把环境门控悄悄加回来）
+// ============================================================
+{
+  const group = 'prod-entry'
+  console.log(`\n=== ${group}：生产可达与入口一致性 ===`)
+  const routeSrc = readFileSync(new URL('../src/router/meeting-route.js', import.meta.url), 'utf8')
+  const routerSrc = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
+  const footerSrc = readFileSync(new URL('../src/components/generator/AppFooter.vue', import.meta.url), 'utf8')
+  const vue = readFileSync(new URL('../src/views/meeting/index.vue', import.meta.url), 'utf8')
+
+  // 注释里会提到「不再判断 import.meta.env.DEV」（沿革说明），所以先剥注释再看真实代码
+  const routeCode = routeSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  assert(group, '路由不做环境判断（无 import.meta.env.DEV / MODE），构建期不会被折叠',
+    !/import\.meta\.env\.(DEV|MODE)/.test(routeCode))
+  assert(group, '路由仍挂 /meeting 并动态引入页面',
+    /path:\s*'\/meeting'/.test(routeSrc) && /import\('@\/views\/meeting\/index\.vue'\)/.test(routeSrc))
+  assert(group, 'router/index.js 用 spread 注入 meetingRoute',
+    /import\s*\{\s*meetingRoute\s*\}/.test(routerSrc) && /\.\.\.meetingRoute/.test(routerSrc))
+  // 2026-11-06 入口口径再次反转：生产域为 HTTP（非安全上下文，getUserMedia/WebGPU 被禁），
+  // 实验室三条条目全部 devOnly、生产隐藏；路由仍恒注册（本组前三条断言不变）。
+  assert(group, '页脚「实验室」meeting 已收回 dev-only（devOnly: true，生产不露出）',
+    /\{\s*path:\s*'\/meeting'[^}]*devOnly:\s*true\s*\}/.test(footerSrc))
+  assert(group, '实验室三条全为 devOnly: true（meeting / components-test / project-lab）',
+    /\{\s*path:\s*'\/generator\/components-test'[^}]*devOnly:\s*true\s*\}/.test(footerSrc) &&
+    /\{\s*path:\s*'\/project-lab'[^}]*devOnly:\s*true\s*\}/.test(footerSrc))
+  assert(group, '生产条目全空时整组下拉隐藏（不露空菜单，且不是分组级 v-if=isDev 回归形态）',
+    /v-if="labLinks\.length"/.test(footerSrc) && !/v-if="isDev"/.test(footerSrc))
+  // 入口口径反转后，页面与路由注释里都不许再写「无导航入口」
+  assert(group, '页面与路由注释不再声称「无导航入口」',
+    !/无导航入口/.test(vue) && !/无导航入口/.test(routeSrc) && !/不挂任何导航入口/.test(routerSrc))
   console.log('')
 }
 
@@ -1351,6 +1557,8 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
 {
   const group = 'real-recording'
   console.log(`\n=== ${group}：真实录音与真实数据 ===`)
+  // 适配器源码直读：本组既要断言「页面怎么接线」，也要断言「适配器自己怎么如实声明」
+  const serverAsrSrc = readFileSync(new URL('../src/views/meeting/mock/server-asr.js', import.meta.url), 'utf8')
   const vue = readFileSync(new URL('../src/views/meeting/index.vue', import.meta.url), 'utf8')
   const tpl = vue.slice(vue.indexOf('<template>'), vue.lastIndexOf('</template>'))
   const script = vue.slice(vue.indexOf('<script setup>'), vue.indexOf('</script>'))
@@ -1379,10 +1587,12 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
     /await stopMultiTrackCapture\(handle\)/.test(script))
   assert(group, '录音段内不残留单轨采集调用（归一化演示面板的单轨用法见 multi-track-wiring 组）',
     (() => {
-      // 只扫「真实录音」段（段头注释 → 下一段段头），避免误伤归一化演示面板里合法的 stopCapture(handle)
+      // 只扫「真实录音」段（段头注释 → 下一段段头），避免误伤归一化演示面板里合法的 stopCapture(handle)。
+      // 段尾锚点是 index.vue 的转写段头，本轮已从「// ---- 服务端云端转写」改为
+      // 「// ---- 转写引擎：默认本机推理」——两处必须同时跟改，否则这里切出空段 → 直接 FAIL。
       const sec = script.slice(
         script.indexOf('// ---- 真实录音（本地'),
-        script.indexOf('// ---- 本地 Whisper 离线转写')
+        script.indexOf('// ---- 转写引擎：默认本机推理')
       )
       return sec.length > 0 && !/startCapture\(|stopCapture\(/.test(sec) &&
         !script.includes('recHandle = await startCapture(')
@@ -1403,28 +1613,108 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
 
   // 6) 录音段不进云端。
   // 锚点用「段头注释」前缀（// ---- …），不用正文里的文字提及——
-  // 正文提到「本地 Whisper 离线转写」只是交叉引用，若用它当段尾会切出空段（本组曾因此整体 FAIL）。
+  // 正文提到服务端转写只是交叉引用，若用它当段尾会切出空段（本组曾因此整体 FAIL）。
+  // 注意：段尾锚点必须跟 index.vue 里的段头一字不差；本轮段头已从
+  // 「// ---- 服务端云端转写」改成「// ---- 转写引擎：默认本机推理」，这里同步跟改，
+  // 否则 recEnd 取到 -1 → 切片为空 → 下面两条断言直接 FAIL。
   const recStart = script.indexOf('// ---- 真实录音（本地')
-  const recEnd = script.indexOf('// ---- 本地 Whisper 离线转写')
+  const recEnd = script.indexOf('// ---- 转写引擎：默认本机推理')
   const recScript = recStart > 0 && recEnd > recStart ? script.slice(recStart, recEnd) : ''
   assert(group, '录音逻辑段无 fetch / XMLHttpRequest / 云调用',
     recScript.length > 0 && !/fetch\(|XMLHttpRequest|https?:\/\//.test(recScript))
 
-  // 6b) 转写段（本地模型）也不上传：PCM 只在内存里过推理
-  // 6b) 转写段（本地模型）也不上传：PCM 只在内存里过推理。
-  // 增量取的是「按轨混音快照」（snapshot.mixed + snapshot.sampleRate），不再是单轨 result.pcm。
-  assert(group, '录音中增量转写：按轨混音快照 → 推理（边录边出句）',
+  // 6b) 转写段改走**服务端上传**（Task #39）。
+  //      「页面转写段没有裸 fetch」仍然成立，但它**不再是**「音频不出本机」的证据 ——
+  //      请求由 API 层（@/api/meeting-asr）发出、以 transport 注入适配器，
+  //      所以这里改成断言「不裸写上传原语 + 通道确实是注入的」，并把诚实边界挪到 adapter 上验。
+  //      增量取的是「按轨混音快照」（snapshot.mixed + snapshot.sampleRate），不再是单轨 result.pcm。
+  assert(group, '录音中增量转写：按轨混音快照 → 转写（边录边出句）',
     /collectMultiTrackSnapshot\(recHandle\)[\s\S]*?runAsrWindow\(snapshot\.mixed, snapshot\.sampleRate\)/.test(script))
   const asrEnd = script.indexOf('const sourceUtterances')
   const asrScript = recEnd > 0 && asrEnd > recEnd ? script.slice(recEnd, asrEnd) : ''
-  assert(group, '增量转写逻辑段无上传原语（fetch / XHR / FormData / base64）',
-    asrScript.length > 0 && !/fetch\(|XMLHttpRequest|FormData|btoa\(|base64/i.test(asrScript))
+  assert(group, '转写段不裸写上传原语（上传走注入的 transport，不在此段直接 fetch / XHR）',
+    asrScript.length > 0 && !/fetch\(|XMLHttpRequest/.test(asrScript))
+  assert(group, '页面把上传通道与就绪度探测注入适配器，适配器保持零 @/ 依赖（可在 Node 直测）',
+    /transport:\s*transcribeMeetingAudio/.test(script) &&
+    /probeStatus:\s*\(\)\s*=>\s*fetchMeetingAsrStatus\(\)/.test(script) &&
+    !/from '@\//.test(serverAsrSrc))
+
+  // 6c) 服务端适配器的诚实边界：音频确实出本机，但**不**做声纹分离、**不**编造置信度
+  assert(group, '服务端适配器如实声明 uploaded=true / remote=true / diarization=false',
+    serverAsrSrc.includes('uploaded: true') && serverAsrSrc.includes('remote: true') &&
+    serverAsrSrc.includes('diarization: false'))
+  assert(group, '服务端转写逐句不编造：speaker 未区分 / speakerDiarized=false / confidence=null',
+    (() => {
+      const one = createServerAsr({ transport: () => {} })
+        .toUtterances({ chunks: [{ startMs: 0, endMs: 900, text: '这是一句测试' }] })[0]
+      return one.speakerDiarized === false && one.speakerLabel === '说话人未区分' &&
+        one.confidence === null && one.source === 'server_asr'
+    })())
+  assert(group, '服务端失败分类覆盖全部错误码（漏一个就落到 unknown，给出误导性的下一步）',
+    Object.keys(SERVER_ASR_FAILURES).length >= 11 &&
+    Object.values(MEETING_ASR_CODES).every((code) => code in SERVER_ASR_FAILURES))
+  assert(group, '未配密钥归到「去配密钥」这一结论，不假装成功、也不归成音频问题',
+    (() => {
+      const meta = describeServerAsrFailure(
+        new ServerAsrError(MEETING_ASR_CODES.CONFIG_MISSING, '服务端未配置语音转写密钥，无法转写', 503)
+      )
+      return meta.code === MEETING_ASR_CODES.CONFIG_MISSING &&
+        /密钥/.test(meta.label + meta.hint) &&
+        meta.text.includes(meta.label) && meta.text.includes('服务端未配置')
+    })())
+  assert(group, '漏注入 transport 时显式报错（属接线错误，不能静默当成「音频没问题但没文字」）',
+    (() => {
+      const meta = describeServerAsrFailure(
+        new ServerAsrError(MEETING_ASR_CODES.TRANSPORT_MISSING, '未注入上传通道（transport），无法进行服务端转写')
+      )
+      return meta.code === MEETING_ASR_CODES.TRANSPORT_MISSING && /transport/.test(meta.hint)
+    })())
+
+  // 6d) 转写两条路径的**默认与降级方向**必须钉住（本轮架构：本机为默认、服务端可选）。
+  //     默认必须是不依赖后端密钥的本机推理；服务端只在用户显式切换时才走；
+  //     服务端失败时按白名单降级回本机 —— 方向与 Task #40 相反，别再按旧方向断言。
   const asrSrc = readFileSync(new URL('../src/views/meeting/mock/local-asr.js', import.meta.url), 'utf8')
-  assert(group, '本地转写模块声明 uploaded=false / diarization=false',
-    asrSrc.includes('uploaded: false') && asrSrc.includes('diarization: false') &&
-    asrSrc.includes('不上传'))
-  assert(group, '模型权重走境内镜像（huggingface.co 境内不可达）',
-    LOCAL_ASR_REMOTE_HOST === 'https://hf-mirror.com/' && asrSrc.includes('hf-mirror.com'))
+  assert(group, '转写默认走本机推理，服务端为可选引擎（显式切换才走，且失败可降级回本机）',
+    // (a) 两个适配器都在用，分派点按 asrEngineKind 选引擎
+    /createServerAsr\(/.test(script) &&
+    /createLocalAsr\(/.test(script) &&
+    /function ensureAsrEngine\(\) \{\s*return isLocalAsr\.value \? ensureLocalAsrEngine\(\) : ensureServerAsrEngine\(\)/.test(script) &&
+    // (b) 默认引擎 = 本机，且页面提供显式切换入口（两个方向的按钮都在）
+    /const DEFAULT_ASR_ENGINE = 'local'/.test(script) &&
+    /const asrEngineKind = ref\(DEFAULT_ASR_ENGINE\)/.test(script) &&
+    /switchAsrEngine\('server'\)/.test(tpl) &&
+    /switchAsrEngine\('local'\)/.test(tpl) &&
+    // (c) 每场会议都回到默认引擎（本机），不把上一场手动切的服务端带过来
+    /asrEngineKind\.value = DEFAULT_ASR_ENGINE/.test(script) &&
+    // (d) 降级方向仍是「服务端失败 → 本机」，且只在用户选了服务端时才允许降级
+    /function switchAsrToLocal\(failure\)/.test(script) &&
+    /if \(asrEngineKind\.value !== 'server'\) return false/.test(script) &&
+    // (e) 本机模块本身如实声明「不上传 / 不做声纹分离」
+    createLocalAsr().describe().uploaded === false &&
+    createLocalAsr().describe().diarization === false &&
+    asrSrc.includes('speakerLabel: \'说话人未区分\''))
+  assert(group, '降级白名单排除音频问题与接线 bug（不许拿本机兜底掩盖故障）',
+    // 音频本身不对 / 页面漏传 transport：换引擎也白搭或必须改代码，一律不降级
+    /const ASR_NO_FALLBACK_CODES = Object\.freeze\(\[[\s\S]{0,160}BAD_AUDIO[\s\S]{0,140}TRANSPORT_MISSING[\s\S]{0,20}\]\)/.test(script) &&
+    // 原因说不清（unknown）时也不换引擎，先把原始报错暴露出来
+    /if \(!code \|\| code === 'unknown'\) return false/.test(script))
+  assert(group, '降级是显式可见的（写清原因 + 点明音频不出本机），不做静默切换',
+    tpl.includes('已自动降级到') && tpl.includes('音频不出本机') &&
+    /asrFallbackReason/.test(tpl) &&
+    // 降级横条只在真有原因时才出现：默认本来就是本机，不能把「本来就本机」误报成「已降级」
+    /v-if="asrFallbackReason"/.test(tpl) &&
+    !/v-if="isLocalAsr" class="mm-live-asr-fallback"/.test(tpl))
+  // 非安全上下文（HTTP 生产域）进页预检：麦克风与 WebGPU 都被浏览器禁用，必须进页就告知
+  assert(group, 'HTTP 环境预检横条存在（v-if=asrEnvBlocked，进页主动告知不等点击）',
+    flatTpl.includes('v-if="asrEnvBlocked" class="mm-live-asr-envblock"'))
+  assert(group, '预检横条写清后果与出路（getUserMedia + WebGPU 被禁、HTTPS/localhost 补救）',
+    (() => {
+      const m = flatTpl.match(/<div v-if="asrEnvBlocked" class="mm-live-asr-envblock">([\s\S]*?)<\/div>/)
+      const t = m ? m[1] : ''
+      return t.includes('getUserMedia') && t.includes('WebGPU') && t.includes('HTTPS') && t.includes('localhost')
+    })())
+  assert(group, 'asrEnvBlocked 按安全上下文判定（typeof 守卫，非 HTTPS 如实置真）',
+    /const asrEnvBlocked = typeof isSecureContext !== 'undefined' && !isSecureContext/.test(script))
 
   // 7) 取消重开确认要回滚已打开的麦克风
   assert(group, '用户在重开确认里取消时回滚麦克风（beginLive 返回 false 即复位）',
@@ -1545,14 +1835,21 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
     deriveInsights([{ id: 'x1', text: '这个接口要不要一起改？', confidence: null, endMs: 1 }])
       .question[0].confidence === null)
 
-  // 8) 诚实边界：录音 + 本地离线转写，但不能宣称做了声纹分离
-  assert(group, '声明逐句文字由本机离线模型转写、音频不出本机',
-    tpl.includes('本机离线 Whisper 模型转写') && tpl.includes('音频不出本机') &&
-    tpl.includes('不上传、不调用云端识别'))
+  // 8) 诚实边界：默认本机推理（音频**不出**本机），主动切到服务端时音频**会**离开本机。
+  //    两个方向都必须写在页面上；旧版「本机离线 Whisper / PCM 只在本页内存推理」等
+  //    已经不再准确的措辞也不得残留（否则就是定义不清的失真文案）。
+  assert(group, '声明默认本机推理、音频不出本机，且切服务端时写明音频离开本机（旧口径已清除）',
+    tpl.includes('本机推理 · 音频不出本机') &&
+    tpl.includes('音频不出本机') &&
+    tpl.includes('服务端转写 · 音频按段上传') &&
+    tpl.includes('由后端调用云端 ASR') &&
+    !tpl.includes('本机离线 Whisper 模型转写') &&
+    !tpl.includes('PCM 只在本页内存推理') &&
+    !tpl.includes('音频不上传、不调用云端识别'))
   assert(group, '不宣称「录音已转写 / 自动转写」',
     !/录音已转写|自动转写|已把录音转成文字/.test(tpl))
-  assert(group, '录音声明音频只存本地、不上传',
-    tpl.includes('只存本地、不上传') && tpl.includes('不上传、不调用云端识别'))
+  assert(group, '录音统计行如实区分「本地留档」与「转写时按段上传后端」',
+    tpl.includes('本地留档；转写时按段上传后端'))
   assert(group, '行内说话人标签走 describeSpeaker（未归属时显示「说话人未区分」）',
     /describeSpeaker\(row\)/.test(flatTpl) &&
     tpl.includes('不是声纹分离') &&
@@ -1568,13 +1865,17 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
   assert(group, '非真实录制的内容在实时记录区有显式警示标注',
     tpl.includes('示例稿推演 · 非真实录制') &&
     /v-else-if="live\.utterances\.length"[\s\S]{0,90}?mm-live-tag-warn/.test(tpl))
-  assert(group, '默认工作台空态指向真实录音路径（不再引导去点示例稿）',
-    tpl.includes('开始真实录音') && tpl.includes('离线 Whisper 模型逐句转写') &&
+  assert(group, '默认工作台空态指向「真实录音 + 本机推理（音频不出本机）」，服务端口径只在切过去时出现',
+    tpl.includes('开始真实录音') && tpl.includes('音频不出本机') &&
+    tpl.includes('音频会按段上传到后端') &&
+    tpl.includes('未配时本页会如实报错、不会用示例稿顶替') &&
     !tpl.includes('需先完成录制告知与同意'))
-  assert(group, '默认模型档位与阶段文案来自配置（非写死）',
-    LOCAL_ASR_MODELS.length >= 2 && ASR_PHASES.running === '转写中' &&
-    createLocalAsr().describe().uploaded === false &&
-    LOCAL_ASR_DEFAULT_MODEL === LOCAL_ASR_MODELS[0].id)
+  assert(group, '阶段枚举与档位常量仍来自模块（页面不硬编码阶段文案 / 档位不写死）',
+    LOCAL_ASR_MODELS.length >= 3 && ASR_PHASES.running === '转写中' &&
+    LOCAL_ASR_MODELS.some((m) => m.id === LOCAL_ASR_DEFAULT_MODEL) &&
+    LOCAL_ASR_DEFAULT_MODEL === 'Xenova/whisper-base' &&
+    SERVER_ASR_LABEL === '云端转写（服务端）' &&
+    createServerAsr({ transport: () => {} }).describe().uploaded === true)
 
   // 8b) 转写失败文案要拆细：不同失败点给不同分类 + 不同可操作提示
   const failNetwork = describeAsrFailure(new TypeError('Failed to fetch'), ASR_PHASES.error)
@@ -1602,7 +1903,18 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
   assert(group, '分类只改提示措辞、不改失败判定：原始报错仍保留供定位',
     failNetwork.raw === 'Failed to fetch' && failNetwork.text.includes('Failed to fetch') &&
     failNoAudio.raw === '')
-  assert(group, '失败分类在页面上真的被调用（含无音频分支），且页面不再硬编码原错误句',
+  // asrPhase 里存的是**标签**（onPhase 给的就是 ASR_PHASES.* 这层值），页面不许再拿它当键去查一遍：
+  // 查不到会一路回落成「未加载」，于是加载权重时界面写着「未加载」—— 睁眼说瞎话。
+  assert(group, '阶段文字直接取 asrPhase 的标签值，不把它当键去 ASR_PHASES 里二次查表',
+    /const asrPhaseText = computed\(\(\) => asrPhase\.value \|\| ASR_PHASES\.idle\)/.test(script) &&
+    !/ASR_PHASES\[asrPhase\.value\]/.test(script) &&
+    /onPhase: \(phase, detail\) => \{\s*asrPhase\.value = phase/.test(script) &&
+    ASR_PHASES.loading === '加载中')
+  assert(group, '失败分类在页面上真的被调用（主路径用服务端分类器、兜底用本地分类器），且不硬编码原错误句',
+    /describeServerAsrFailure\(e\)/.test(script) &&
+    // 兜底分支必须用自己的分类器，并且**传当前 phase**：
+    // 本地失败面是「权重 / 推理内核 / 内存」，与服务端那套毫无交集；
+    // 不传 phase 会把推理期失败误判成「资源加载失败」，给出的下一步就是错的。
     /describeAsrFailure\(e, asrPhase\.value\)/.test(script) &&
     /describeAsrNoAudio\(\)/.test(script) &&
     !script.includes('本地转写失败：') &&
@@ -1703,8 +2015,9 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
     /clearLabTimer\(\)/.test(script))
 
   // 4) devOnly 约定不能因改交互而被破坏。
-  // 2026-11-05 起门控从「分组级 v-if="isDev"」下沉到「条目级 devOnly 过滤」：
-  // 下拉全环境常驻 /meeting，components-test 与 project-lab 仍仅 dev（生产接口 404）。
+  // 2026-11-05 起门控从「分组级 v-if="isDev"」下沉到「条目级 devOnly 过滤」；
+  // 2026-11-06 起三条全部 devOnly，条目全空时下拉整组隐藏（v-if="labLinks.length"，
+  // 这是「生产条目为空」的合法形态，不属于「分组级 v-if=isDev」回归）。
   assert(group, '「实验室」条目级 dev-only 门控仍在（未把 dev 入口泄漏到生产导航）',
     /const isDev = import\.meta\.env\.DEV/.test(script) &&
     /\.filter\(\(link\) => !link\.devOnly \|\| isDev\)/.test(script) &&
@@ -2360,8 +2673,15 @@ function synthSignal(sampleRate = 44100, durationSec = 2.1) {
   // 2) 失败 code 必须被页面留存：只存文案的话总结面板判别不了「引擎挂了」
   assert(group, 'asrErrorCode 把失败分类存了下来',
     vue.includes('const asrErrorCode = ref('))
-  assert(group, '推理失败处写入 code（不是只写文案）',
-    (vue.match(/asrErrorCode\.value = failure\.code/g) || []).length === 2)
+  // 原先写死「恰好 2 处」，Task #40 加了本机兜底分支变成 3 处。
+  // 死数字一改分支就要跟着改，容易变成「改断言迁就代码」；改成一一对应：
+  // 有几处「失败文案」写口，就必须有几处 code 写口 —— 少一处就是只写文案不写 code。
+  assert(group, '每个失败写口都同时落下 code（只写文案的话，总结面板判别不了「引擎挂了」）',
+    (() => {
+      const writes = (vue.match(/asrError\.value = [^\n]*failure\.text/g) || []).length
+      const codes = (vue.match(/asrErrorCode\.value = failure\.code/g) || []).length
+      return writes >= 2 && codes === writes
+    })())
   assert(group, '重置状态时清空 code', vue.includes("asrErrorCode.value = ''"))
 
   // 3) 判别顺序：有失败优先判故障，不给「没人说话」下结论的机会

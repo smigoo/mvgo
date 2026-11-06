@@ -8,7 +8,9 @@
 // 注意：rollup 在 resolve 阶段本就会解析下方的动态 import，因此本页及其
 // 依赖（含上述 wasm 资产）会一并进入生产产物 —— 这是预期行为。
 //
-// 当前已开放生产入口（页脚「会议工作台」），故不再标记 devOnly。
+// 2026-11-06 页脚「会议工作台」入口已隐藏（生产域为 HTTP，非安全上下文下
+// getUserMedia / WebGPU 被浏览器禁用，真实录音不可用；待 HTTPS 部署后放开入口）。
+// 路由仍恒注册，dev 环境可直连 /meeting。
 export const meetingRoute = [
   {
     name: 'MeetingDev',

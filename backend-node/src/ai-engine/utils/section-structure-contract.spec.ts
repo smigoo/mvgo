@@ -100,3 +100,48 @@ describe('section 装配结构契约', () => {
     expect(second.bodyRoots.map((s) => s.id)).toEqual(first.bodyRoots.map((s) => s.id))
   })
 })
+
+/**
+ * 🛡️ 2026-11-06（mc-max-1793918742773-f91aa545 实锤「插槽又去了内容部分」）
+ *
+ * 真机：vision 从未产出 `type==='header'` 的段（标题栏被当 chrome 过滤），headerSlots 的
+ * figmaNodeId 又是「设备类型/28…」这类文本/统计节点、不在任何段的 sourceNodeIds 里
+ * ⇒ 上面两条候选路径全空 ⇒ `headerSlotsEmitted=0` ⇒ index 无 `#header-right` ⇒
+ * 插槽内容（设备类型 28 / 设备总数 68562 / 完好率 98%）退回 body，被渲成 StatsSection。
+ *
+ * 修法：planner 按「isPanelHeader ∧ 有插槽业务内容」保住宿主并打 `_headerSlotHost`，
+ * 本契约认这个**显式事实**兜底（不靠 type 猜、不做几何推断）。
+ */
+describe('section 装配结构契约 · 插槽宿主显式兜底（f91aa545）', () => {
+  test('⭐ 阳性：无 type=header 段时，_headerSlotHost 段成为插槽叶（bodyLeaves 不再重复渲染它）', () => {
+    const sections = [
+      leaf('89:38', 'content', { _headerSlotHost: true, sourceNodeIds: ['89:38'] }),
+      leaf('89:37', 'content', { sourceNodeIds: ['89:37'] }),
+      leaf('89:42', 'content', { sourceNodeIds: ['89:42'] }),
+    ]
+    const c = buildSectionStructureContract(sections, {
+      headerSlots: [{ slotType: 'header-right', figmaNodeId: '89:39' }],
+    })
+    expect(c.stats.headerSlotsEmitted).toBe(1)
+    expect(c.headerLeaves.map((s) => s.id)).toEqual(['89:38'])
+    expect(c.bodyLeaves.map((s) => s.id)).toEqual(['89:37', '89:42'])
+    expect(c.byId.get('89:38').placement).toBe('header-right')
+  })
+
+  test('反向：没有 _headerSlotHost 时行为逐字不变（仍 0 个插槽叶，不凭空造）', () => {
+    const sections = [leaf('a', 'content'), leaf('b', 'content')]
+    const c = buildSectionStructureContract(sections, {
+      headerSlots: [{ slotType: 'header-right', figmaNodeId: 'ghost' }],
+    })
+    expect(c.stats.headerSlotsEmitted).toBe(0)
+    expect(c.bodyLeaves.map((s) => s.id)).toEqual(['a', 'b'])
+  })
+
+  test('反向：type=header 与 _headerSlotHost 同时存在 ⇒ type 优先（显式兜底不抢戏）', () => {
+    const sections = [leaf('h', 'header', { sourceNodeIds: ['real-h'] }), leaf('x', 'content', { _headerSlotHost: true })]
+    const c = buildSectionStructureContract(sections, {
+      headerSlots: [{ slotType: 'header-right', figmaNodeId: 'real-h' }],
+    })
+    expect(c.headerLeaves.map((s) => s.id)).toEqual(['h'])
+  })
+})

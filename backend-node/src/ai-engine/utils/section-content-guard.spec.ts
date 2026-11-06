@@ -781,10 +781,11 @@ describe('checkSectionExclusiveEvidence · 借用文本/资源（2026-09-29 治�
   });
 
   it('空输入零崩溃', () => {
+    // 🧬 刀67：所有出口统一回填 caliber（灰度计数），fail-open 空结果也带 { normalizedOnly: 0 }
     expect(checkSectionExclusiveEvidence({ files: [], plan: makePlan(), figmaRoot }))
-      .toEqual({ borrowedTextIssues: [], borrowedAssetIssues: [] });
+      .toEqual({ borrowedTextIssues: [], borrowedAssetIssues: [], caliber: { normalizedOnly: 0 } });
     expect(checkSectionExclusiveEvidence({ files: [{ path: 'package/components/A.vue', content: 'x' }], plan: null }))
-      .toEqual({ borrowedTextIssues: [], borrowedAssetIssues: [] });
+      .toEqual({ borrowedTextIssues: [], borrowedAssetIssues: [], caliber: { normalizedOnly: 0 } });
   });
 });
 

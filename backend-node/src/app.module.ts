@@ -40,6 +40,10 @@ import { LiteLabModule } from './lite-lab/api/lite-lab.module';
 import { isLiteLabExposed } from './lite-lab/api/lite-lab-dev-only.guard';
 import { ProjectPipelineModule } from './ai-engine-v3/project/api/project-pipeline.module';
 import { isV3ProjectExposed } from './ai-engine-v3/project/api/project-dev-only.guard';
+import { MeetingAsrModule } from './meeting-asr/meeting-asr.module';
+import { MeetingModule } from './meeting/meeting.module';
+import { isMeetingExposed } from './meeting/meeting-dev-only.guard';
+import { FeedbackModule } from './feedback/feedback.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -89,6 +93,14 @@ import { AppService } from './app.service';
     McSpecModule, // 微码组件规范检查（调用 skills/frontend-mc-check 的 mc-check.cjs）
     AnnouncementModule, // 系统公告（管理员发布，用户端通知铃铛）
     WorkbenchModule, // 工作台模式（对话式交互）
+    // 会议录音转写（ASR）：2026-11-06 源文件丢失后由 dist 产物机械重建后补注册。
+    // 控制器挂类级 SessionGuard（写入端点有副作用，必须归属）；密钥仍为全局配置
+    // （用户 2026-11-06 裁决「保持全局」，不改成 per-user）。
+    MeetingAsrModule,
+    // 任务反馈（详情页「💬 反馈」→ 管理端处置台）：2026-11-06 源文件丢失后由 dist
+    // 产物机械重建，此处补回注册。用户端 POST /tasks/:sid/feedback 挂 SessionGuard，
+    // 管理端 /admin/feedbacks 全量 assertAdmin，路由不存在时前端报 Cannot POST。
+    FeedbackModule,
     // v2 可配管线（规范 × 档位 × 模型），dev 专用：
     // 生产环境整个模块不注册，连路由都不存在；控制器上的 DevOnlyGuard 是第二道保险。
     ...(isV2Exposed() ? [V2PipelineModule] : []),
@@ -100,6 +112,11 @@ import { AppService } from './app.service';
     // 开关与控制器守卫同一个函数（isLiteLabExposed），Stage A 复用 LiteModule，
     // 摘掉本模块对既有生成链路零影响。
     ...(isLiteLabExposed() ? [LiteLabModule] : []),
+    // 会议纪要管线（契约 E-01~E-18，含 ownerId 用户级归属），dev 专用：
+    // 契约 BACKEND_DEPENDENCIES 五项（D-01/T-013/SEC-05/SEC-01/Q-04）全部 ready:false 且「阻塞」
+    // ⇒ 依赖就绪前不得对外暴露。开关与控制器上的 MeetingDevOnlyGuard 同一个函数
+    // （isMeetingExposed），避免「模块注册了但守卫 404」的静默失效。
+    ...(isMeetingExposed() ? [MeetingModule] : []),
   ],
   controllers: [AppController],
   providers: [

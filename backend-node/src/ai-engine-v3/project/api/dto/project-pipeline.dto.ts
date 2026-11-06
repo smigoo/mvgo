@@ -1,4 +1,12 @@
-import { IsArray, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 /**
  * 项目级管线（M1：S0 扫描 + S2 冻结）请求体
@@ -22,6 +30,24 @@ export class ScanProjectDto extends InspectProjectDto {
   @IsString()
   @MaxLength(200)
   note?: string;
+
+  /**
+   * 是否在扫描同步路径里跑视觉增强（puppeteer 截图 + 视觉 LLM 比对/定位）。
+   * 默认 false：扫描必须秒回；只有需要视觉增强的调用方显式传 true 才走旧路径。
+   */
+  @IsOptional()
+  @IsBoolean()
+  vision?: boolean;
+
+  /**
+   * 文本 LLM「功能描述增强」的时机。
+   *   · defer（默认）= 扫描只跑确定性路径秒回，增强转后台任务，完成后回写
+   *     `spec/feature-details.json`，状态见 `run.json.featureEnrich`，前端轮询补齐。
+   *   · sync = 逃生舱：像以前一样同步跑完再返回（调试/对照用，登录态约 57s）。
+   */
+  @IsOptional()
+  @IsIn(['defer', 'sync'])
+  enrich?: 'defer' | 'sync';
 }
 
 /**

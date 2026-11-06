@@ -27,13 +27,11 @@
       </template>
       <span v-else class="af-link af-link-disabled" @click="showDisabledHint('工作流编排')"> 工作流编排 </span>
 
-      <!-- 实验室：一级入口 + 下拉展开（2026-11-05 自头部 AppHeader 下拉移入页脚；
-           同日晚「会议工作台」并入本组，故下拉本身改为全环境常驻、门控下沉到条目级）。
-           条目级门控：meeting 为纯前端 mock 页（dev-data + mock/**，无后端依赖），
-           全环境显示；components-test / project-lab 沿用 devOnly 约定仅 dev 显示 ——
-           它们依赖的 /api/v2/pipeline、/api/v3/project 在生产由 DevOnlyGuard 拦为 404，
-           暴露入口只会让用户点进报错页。 -->
+      <!-- 实验室：一级入口 + 下拉展开；会议工作台、项目管线实验室入口暂时隐藏，
+           页面与路由均保留，待功能验收后再恢复。components-test 仅 dev 显示，
+           避免生产进入不可用页面。条目全空时整组下拉隐藏，避免生产露出空菜单。 -->
       <div
+        v-if="labLinks.length"
         ref="labRootRef"
         class="af-dropdown"
         @mouseenter="onLabEnter"
@@ -101,16 +99,15 @@ const pageSkeletonEnabled = computed(() => featureStore.isEnabled('generator.pag
 const workflowEnabled = computed(() => featureStore.isEnabled('generator.workflow'))
 // 「大屏布局」已于 2026-09-30 移入头部主导航 AppHeader，不再在页脚重复出现
 
-// 实验室链接组：下拉本身全环境常驻，门控下沉到条目级（见模板注释）
-// meeting 全环境可见；components-test / project-lab 仅 dev（生产接口 404）
+// 实验室链接组：门控在条目级；会议工作台、项目管线实验室入口暂时隐藏，
+// /meeting 与 /project-lab 路由及页面均保留，待功能验收后恢复。
+// 条目全空时整组下拉隐藏，避免生产露出空菜单。
 const isDev = import.meta.env.DEV
 const labOpen = ref(false)
 const labRootRef = ref<HTMLElement | null>(null)
 const labLinks = computed(() =>
   [
-    { path: '/meeting', label: '会议工作台', devOnly: false },
     { path: '/generator/components-test', label: '组件生成测试', devOnly: true },
-    { path: '/project-lab', label: '项目管线实验室', devOnly: true },
   ].filter((link) => !link.devOnly || isDev),
 )
 

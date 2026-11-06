@@ -258,6 +258,43 @@ export function createLiteProgressStream(sessionId: string): EventSource {
  */
 export { fetchTaskStatus, cancelTask }
 
+// ─── Figma 资源续跑（S4 换芯：确定性链；原任务新 revision，可一键回滚） ───
+
+export interface UpgradeAssetsResult {
+  success: boolean
+  message: string
+  totalAssets?: number
+  downloaded?: number
+  syncedToWorkspace?: number
+  codeUpdated?: boolean
+  modifiedFiles?: string[]
+  /** 🆕 S4 确定性链统计（feed/挂载/bg/闸③④） */
+  deterministicStats?: {
+    feed: { downloaded: number; aligned: number; fed: number; unmatched: number }
+    mounted: number
+    svgSkipped: number
+    bgAnchored: number
+    unsourcedFindings: number
+    unsourcedApplied: number
+    unsourcedRemainingAuto: number
+  }
+  [key: string]: any
+}
+
+/**
+ * POST /api/lite/upgrade-assets/:sessionId
+ * 仅适用于 sourceType=figma 的已完成任务；figmaUrl 仅历史任务（任务记录无 fileKey）需要。
+ */
+export async function upgradeAssets(
+  sessionId: string,
+  figmaUrl?: string
+): Promise<UpgradeAssetsResult> {
+  const response = await liteRequest.post(`/lite/upgrade-assets/${sessionId}`, {
+    figmaUrl: figmaUrl || undefined,
+  })
+  return response.data
+}
+
 export default {
   generateLite,
   batchPreCheck,
@@ -272,4 +309,5 @@ export default {
   createLiteProgressStream,
   fetchTaskStatus,
   cancelTask,
+  upgradeAssets,
 }

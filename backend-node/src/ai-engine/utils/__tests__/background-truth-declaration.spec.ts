@@ -4,8 +4,9 @@
  * 根因（真机 `mc-max-1793869867060-e23b0b40` / `mc-max-1793869846208-300fe0f7` 实锤）：
  * S6 自愈补缺失的 size/repeat/position 时一律用 `inferBackgroundStyle({})` 的**中性默认**
  * （`100% 100%` / `no-repeat` / `0px 0px`），但 `bg-_m-36.png`（191×81 / parent 192×114）
- * 的真值是 `191px 80px` @ `1px 31px` ⇒ 小底图被拉满整卡（环形图变巨环）。
- * 产物里 `backgroundPosition: '0px 0px'` 就是该路径的指纹。
+ * 是局部底图，不应被中性默认拉满整卡（环形图变巨环）。刀70 T4 后真值按父容器百分比
+ * 表达为 `99.48% 70.41%` @ `100.16% 91.90%`；本 spec 同步锁定该口径。
+ * 产物里 `backgroundPosition: '0px 0px'` 就是旧中性默认路径的指纹。
  *
  * 本 spec 锁三件事：
  *   ① 三个解析器（索引/import 变量/值原文）口径正确；
@@ -93,13 +94,14 @@ describe('F3′ 背景声明级真值归属', () => {
   });
 
   describe('阳性：有真值 → 按资源装配（不再用中性默认）', () => {
-    it('bg-_m-36 补出 191px 80px @ 1px 31px，而不是 100% 100% @ 0px 0px', () => {
+    it('bg-_m-36 按 T4 补出 99.48% 70.41% @ 100.16% 91.90%，而非中性默认', () => {
       const stats: Record<string, number> = {};
       const out = ensureBackgroundStyleComplete(SFC, MAPPING, stats);
       const [a] = styleLines(out);
 
-      expect(a).toContain("backgroundSize: '191px 80px'");
-      expect(a).toContain("backgroundPosition: '1px 31px'");
+      // 独立算术：size=191/192、80.267578125/114；position=offset/(parent-size)。
+      expect(a).toContain("backgroundSize: '99.48% 70.41%'");
+      expect(a).toContain("backgroundPosition: '100.16% 91.90%'");
       expect(a).toContain("backgroundRepeat: 'no-repeat'");
       expect(a).not.toContain("backgroundSize: '100% 100%'");
     });
@@ -117,14 +119,14 @@ describe('F3′ 背景声明级真值归属', () => {
       const stats: Record<string, number> = {};
       const out = ensureBackgroundStyleComplete(SFC, MAPPING, stats);
       const d = styleLines(out)[3];
-      expect(d).toContain("backgroundSize: '191px 81px'");
-      expect(d).toContain("backgroundPosition: '1px 30px'");
+      expect(d).toContain("backgroundSize: '99.48% 71.29%'");
+      expect(d).toContain("backgroundPosition: '100.16% 91.66%'");
     });
 
     it('真值装配结果与 inferBackgroundStyle 同一口径（单一事实源）', () => {
       const truth = inferBackgroundStyle({ ...MAPPING[0] });
-      expect(truth.size).toBe('191px 80px');
-      expect(truth.position).toBe('1px 31px');
+      expect(truth.size).toBe('99.48% 70.41%');
+      expect(truth.position).toBe('100.16% 91.90%');
     });
   });
 

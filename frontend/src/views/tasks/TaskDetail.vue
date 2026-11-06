@@ -35,6 +35,9 @@
           ✕ 取消
         </button>
         <button class="btn-refresh" @click="handleManualRefresh">↻ 刷新</button>
+        <button class="btn-action btn-feedback" title="把任务号、日志、模型、Figma 链接或截图反馈给管理员" @click="openFeedback">
+          💬 反馈
+        </button>
         <McSpecCheckButton
           v-if="!pageTaskFlag && taskTarget === 'microcode' && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
           :component-id="task.componentId || sessionId"
@@ -54,6 +57,15 @@
         </button>
       </div>
     </div>
+
+    <!-- ═══ 一键反馈抽屉（任务号/日志/模型/Figma 链接/Token 指纹/截图） ═══ -->
+    <TaskFeedbackDrawer
+      v-model:open="feedbackOpen"
+      :session-id="sessionId"
+      :task="task"
+      :logs="logLines"
+      @submitted="handleFeedbackSubmitted"
+    />
 
     <!-- ═══ 主布局 ═══ -->
     <div class="detail-layout">
@@ -221,16 +233,22 @@
             <div class="sidebar-field" v-if="!pageTaskFlag">
               <div class="field-label">生成规格</div>
               <div class="seg-control">
-                <button
-                  class="seg-opt"
-                  :class="{ active: taskTier === 'lite', 'seg-lite': taskTier === 'lite' }"
-                  disabled
-                >
-                  Lite
+                <!-- 🧪 实验管线：没有 Lite/Max 之分，只标 Lab（两个都亮或都灭都会误导） -->
+                <button v-if="taskTier === 'lab'" class="seg-opt active seg-lab" disabled>
+                  Lab
                 </button>
-                <button class="seg-opt" :class="{ active: taskTier === 'max' }" disabled>
-                  Max
-                </button>
+                <template v-else>
+                  <button
+                    class="seg-opt"
+                    :class="{ active: taskTier === 'lite', 'seg-lite': taskTier === 'lite' }"
+                    disabled
+                  >
+                    Lite
+                  </button>
+                  <button class="seg-opt" :class="{ active: taskTier === 'max' }" disabled>
+                    Max
+                  </button>
+                </template>
               </div>
             </div>
             <!-- 🆕 2026-11-03 生成约束（生成页「高级选项」：组件 ID / 补充提示词 / 需求文档）。
@@ -283,9 +301,12 @@
               <span class="info-key">任务号</span>
               <span class="info-val info-mono">{{ sessionId }}</span>
               <span class="info-key">状态</span>
-              <span class="status-badge" :class="statusBadgeClass">
+              <span class="status-badge" :class="statusBadgeClass" :title="task.assetUpgradeNote ? `素材续跑摘要：${task.assetUpgradeNote}（${new Date(task.assetUpgradedAt).toLocaleString()}）` : undefined">
                 <span v-if="task.status === 'running'" class="sb-dot"></span>
                 {{ statusLabel }}
+              </span>
+              <span v-if="task.assetUpgradedAt" class="task-status human-review" title="已执行「升级素材」资源续跑：静态资源确定性挂载 + 无源样式清理，生成新版本可回滚">
+                续跑完成*
               </span>
               <span class="info-key" v-if="task.componentName">名称</span>
               <!-- 2026-09-03：名称显示「组件中文名 · 组件ID」（原为 componentName=任务号，不直观） -->
@@ -429,7 +450,7 @@
                             }}
                           </span>
                           <span class="tag-pill" v-if="!pageTaskFlag && taskTier">
-                            {{ taskTier === 'lite' ? 'Lite' : 'Max' }}
+                            {{ taskTier === 'lab' ? 'Lab' : taskTier === 'lite' ? 'Lite' : 'Max' }}
                           </span>
                           <!-- 🔴 2026-10-20：主题徽章（单/多主题 + 设计真值主题数 + 默认一体化主题） -->
                           <span class="tag-pill tag-multitheme">{{ themeModeLabel }}</span>
@@ -1744,6 +1765,7 @@ import {
   type TaskCodeSnapshotManifest,
   type TaskCodeSnapshotFile
 } from '@/api/generator/generator'
+import { upgradeAssets as apiUpgradeAssets } from '@/api/lite'
 import type { TaskUsageResponse } from '@/types/token-usage'
 import {
   getComponentBySessionId,
@@ -1758,6 +1780,7 @@ import { downloadByUrl } from '@/utils/download-file'
 import { useResizableFrame } from '@/composables/useResizableFrame'
 import ComponentAnalysisDrawer from '@/components/ComponentAnalysisDrawer.vue'
 import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
+import TaskFeedbackDrawer from '@/components/TaskFeedbackDrawer.vue'
 import QualityScoreAdminButton from '@/components/QualityScoreAdminButton.vue'
 import { usePermission } from '@/composables/usePermission'
 import { useConfigStore } from '@/stores/config'
@@ -1823,6 +1846,18 @@ function handleGitLabPushSuccess() {
 }
 
 const task = ref<any>(null)
+
+// ═══ 一键反馈（任务详情页 → 管理端反馈台） ═══
+const feedbackOpen = ref(false)
+
+function openFeedback() {
+  feedbackOpen.value = true
+}
+
+function handleFeedbackSubmitted() {
+  // 提交成功后的本地反馈：抽屉内部已提示，这里只留一个可观测钩子
+  // （后续如需「反馈后自动刷新任务」在此加，当前不额外拉接口，避免打断用户）
+}
 
 // ═══ 🆕 2026-11-03 生成约束（生成页「高级选项」在详情页的展示） ═══
 // 数据源＝任务记录三字段（extraPrompt / requirementDocText / userComponentId）。
@@ -2494,6 +2529,10 @@ const statusLabel = computed(() => {
       }
     }
     return '生成中'
+  }
+  // 🔴 S5：素材续跑完成的任务，状态写明「续跑完成」（区分于普通「已完成」）
+  if (task.value?.status === 'completed' && task.value?.assetUpgradedAt) {
+    return '续跑完成'
   }
   return map[task.value?.status] || task.value?.status || '未知'
 })
@@ -3926,8 +3965,12 @@ function getTaskSource(t: any): 'screenshot' | 'figma' | 'html' {
   return t.sourceType || 'screenshot'
 }
 
-function getTaskTier(t: any): 'lite' | 'max' {
+function getTaskTier(t: any): 'lite' | 'max' | 'lab' {
   if (!t) return 'lite'
+  // 🧪 2026-11-06：lab 实验任务优先判 —— lite-lab 建任务时 `generationTier` 写死 'lite'
+  //   （实验确实跑 lite 布局），直接读档位会让实验任务在详情页显示成「Lite」。
+  //   lab 是管线标识不是档位，判据看 sessionId（`mc-lab-*` / `mv-lab-*`）。
+  if (/-lab-/.test(String(t.sessionId || ''))) return 'lab'
   // 注意：任务记录字段是 generationTier，不是 tier（早期误读 t.tier 导致徽章永远显示 Lite）
   if (t.generationTier) return t.generationTier
   // 兜底：从 sessionId 前缀推断（mc-max- / mc-lite-）
@@ -5329,21 +5372,50 @@ async function handleUpgradeAssets() {
   if (!task.value) return
   const t = task.value
 
+  // 🔴 S4/S5（用户要求）：续跑过程与结果**追加到既有日志流**（不另开面板），
+  //   并跟随「自动滚动」开关滚到底部——与 SSE 日志同一渲染管道（appendFoldedLog）。
+  const appendUpgradeLog = (level: 'info' | 'success' | 'warning' | 'error', message: string) => {
+    const nextLines = [...logLines.value]
+    appendFoldedLog(nextLines, createTaskLogEntry({ level, message, timestamp: Date.now() }, true))
+    logLines.value = nextLines
+    triggerRef(logLines)
+    if (autoScroll.value) nextTick(scrollLogToBottom)
+  }
+
   try {
     upgrading.value = true
-    message.loading({ content: '正在升级素材...', duration: 0 })
+    appendUpgradeLog('info', '── 素材续跑开始：从原 Figma 下载静态资源（图标/背景图）→ 确定性挂载 → 删多余样式 ──')
 
     const data = await http.post(`/api/lite/upgrade-assets/${t.sessionId}`)
 
     if (data.success) {
+      const ds = data.deterministicStats
+      if (ds) {
+        appendUpgradeLog('info', `真值组装：下载 ${ds.feed?.downloaded ?? 0}，对齐 ${ds.feed?.aligned ?? 0}，反哺 ${ds.feed?.fed ?? 0}，未匹配 ${ds.feed?.unmatched ?? 0}`)
+        appendUpgradeLog('info', `图标挂载 ${ds.mounted ?? 0}/${ds.feed?.downloaded ?? 0}（svgSkipped ${ds.svgSkipped ?? 0}），背景挂载 ${ds.bgAnchored ?? 0}`)
+        appendUpgradeLog('info', `无源样式：检出 ${ds.unsourcedFindings ?? 0}，落地 ${ds.unsourcedApplied ?? 0}${ds.unsourcedRemainingAuto ? `，⚠️ 残留可落地 ${ds.unsourcedRemainingAuto}` : ''}`)
+      }
+      appendUpgradeLog('success', `素材续跑完成（新版本已发布，可回滚）：${data.message || ''}`)
       message.success('素材升级完成')
       await loadTask()
       previewKey.value++
+      if (autoScroll.value) {
+        activeTab.value = 'logs'
+        nextTick(scrollLogToBottom)
+      }
     } else {
+      appendUpgradeLog('warning', data.message || '升级未产生变更')
       message.error(data.message || '升级失败')
     }
   } catch (error: any) {
-    message.error('升级失败: ' + (error.message || '未知错误'))
+    // 🔴 2026-11-06 治本：core/http.js 是 fetch 封装，抛的是 HttpError（带 data/status，没有 response 对象）。
+    // 旧写法 `error?.response?.data?.message` 恒为 undefined，于是后端那句可操作文案
+    // （如「Figma 对无权限文件也返回 404，请把 Token 切到 zq」）永远到不了用户眼前，
+    // 用户只看到「升级失败: 未知错误」。这里按 HttpError 的真实结构取文案。
+    const errMsg = error?.data?.message || error?.message || '未知错误'
+    appendUpgradeLog('error', `素材续跑失败: ${errMsg}`)
+    // 归因文案可能较长（含 fileKey / 可切换的 Token 名），给足 8s 让用户读完
+    message.error(errMsg, 8)
   } finally {
     upgrading.value = false
   }
@@ -5899,6 +5971,11 @@ watch(bindingWizardOpen, (open) => {
 .seg-opt.active.seg-lite {
   background: linear-gradient(135deg, #a7f3d0, #6ee7b7);
   color: #065f46;
+}
+/* 🧪 实验管线（lite-lab）：lite 布局但不是交付档位，配色与 Lite 明确区分 */
+.seg-opt.active.seg-lab {
+  background: linear-gradient(135deg, #fbcfe8, #f9a8d4);
+  color: #9d174d;
 }
 
 .info-grid {

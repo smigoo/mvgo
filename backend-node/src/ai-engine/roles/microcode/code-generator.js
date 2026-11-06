@@ -423,9 +423,15 @@ export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, gu
  * @param {number} index
  * @returns {string}
  */
-export function flexItemStyleFromHeights(heights, index) {
+export function flexItemStyleFromHeights(heights, index, denominatorOverride) {
   const nums = (Array.isArray(heights) ? heights : []).map((h) => Number(h) || 0);
-  const total = nums.reduce((sum, h) => sum + h, 0);
+  const sumH = nums.reduce((sum, h) => sum + h, 0);
+  // 🛡️ G10v2：分母可覆盖为 `Σ子项高 + Σ兄弟间距`（= 容器可用高的真实份额）。
+  //   否则 `h/Σh` 之和恒为 1，再叠 margin 就是「100% + 间距」⇒ 必然溢出。
+  const total =
+    Number.isFinite(denominatorOverride) && denominatorOverride > 0
+      ? Number(denominatorOverride)
+      : sumH;
   const h = nums[index] || 0;
   // 🛡️ P6 wrapper 容器化合并（同 flexItemStyleFromWidths）：只输出比例 + min 约束，
   //   目标元素（容器 div / 子组件标签）自身内联该比例，无需 wrapper 中转。
@@ -433,6 +439,44 @@ export function flexItemStyleFromHeights(heights, index) {
     return `flex:${(h / total).toFixed(3)};min-height:0;`;
   }
   return 'flex:1;min-height:0;';
+}
+
+/**
+ * 🛡️ G10 v2（2026-11-06 · mc-max-1799861321-a9364bd4 实锤）：**竖排容器「比例 + 间距」画布收敛复核**。
+ *
+ * ## 为什么要第二版
+ * v1（a87c2ba5）只比「兄弟盒跨度 vs 容器盒高」，能抓跨坐标系错位；但抓不到本单这种形态：
+ * 四段 flex 之和正好 = 1.000（0.223+0.223+0.249+0.305），**再叠 43px 的 margin-top**
+ * ⇒ 子项实际总高 = 容器 100% + 43px ⇒ 末段被压 / 溢出，而「盒跨度 ≈ 容器高」照样成立。
+ *
+ * ## 判据（几何恒等式，零硬编码）
+ *   `Σ(子项真值高) + Σ(兄弟间距) ≈ 容器高` —— 超阈值即判「比例不可信」。
+ *   注意：flex 值本身是归一化的（Σ=1），所以**只能**用绝对真值高来核，
+ *   不能用 flex 之和（恒为 1，永远"收敛"，正是 v1 的盲区）。
+ *
+ * ## 处置（由调用方执行）
+ *   mismatch ⇒ 该容器**不写 flex**（回落自然流 + 保 `min-height:0`）、**不写兄弟间距**，
+ *   并计入 `ratioCanvasMismatch`。宁可不拉伸，也不下发一组必然溢出的比例。
+ *
+ * @param {{containerH:number, childHeights:number[], gaps:number[], threshold?:number}} p
+ * @returns {{containerH:number, sumH:number, sumGap:number, total:number, deviance:number, mismatch:boolean}}
+ */
+export function evaluateColumnCanvasConvergence(p = {}) {
+  const threshold = Number.isFinite(p.threshold) ? Number(p.threshold) : 0.15;
+  const containerH = Number(p.containerH) || 0;
+  const heights = (Array.isArray(p.childHeights) ? p.childHeights : [])
+    .map((h) => Number(h) || 0)
+    .filter((h) => h > 0);
+  const sumH = heights.reduce((a, b) => a + b, 0);
+  const sumGap = (Array.isArray(p.gaps) ? p.gaps : [])
+    .map((g) => (Number(g) > 0 ? Number(g) : 0))
+    .reduce((a, b) => a + b, 0);
+  const total = sumH + sumGap;
+  const out = { containerH, sumH, sumGap, total, deviance: 0, mismatch: false };
+  if (!(containerH > 0) || sumH <= 0) return out; // 无容器高 / 无子项真值 ⇒ 不可证，不下结论
+  out.deviance = Math.abs(total - containerH) / containerH;
+  out.mismatch = out.deviance > threshold;
+  return out;
 }
 
 /**
@@ -524,7 +568,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let __rowBandHits = 0;
   let __gapApplied = 0; // 刀16 兄弟间距真值注入计数
   let __gapRebased = 0; // 刀16b 间距基准被上移到「与 flex 同源高度」的注入数（修双计）
-  let __canvasMismatchCount = 0; // G10 画布收敛复核拦停数（兄弟盒跨度 vs 容器高偏差>15%）
+  let __canvasMismatchCount = 0; // G10 v1 画布收敛复核拦停数（兄弟盒跨度 vs 容器高偏差>15%）
+  let __ratioCanvasGroups = 0; // G10 v2 进入「Σ子项高+Σ间距 vs 容器高」复核的竖排容器数
+  let __ratioCanvasMismatch = 0; // G10 v2 判不收敛 ⇒ 弃用 flex 的容器数（0 也打）
   const __gapGuardStats = { guarded: 0 }; // 🛡️ G1 异常间距守卫计数（≥100px 不注入）
   if (!leaves.length) return null;
 
@@ -1054,6 +1100,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   自然流），flex 相对比例保留（内部自洽）；计数 ratioCanvasMismatch 恒打。
         //   根治段锚层级归位属 G3/上游锚审计，本刀只做错位拦截。
         let __canvasMismatch = false;
+        let __ratioMismatch = false; // G10v2：本容器比例不可信 ⇒ 不写 flex / 不写间距
+        let __columnDenominator = 0; // G10v2：flex 分母 = Σ子项高 + Σ兄弟间距（让出 margin 份额）
         if (!intrinsic.ok && !isHorizontal && (sec.children || []).length >= 2) {
           const __cbox = resolveSectionBox(sec, figmaIndex);
           const __cboxes = sec.children.map((c) => resolveSectionBox(c, figmaIndex));
@@ -1070,6 +1118,40 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
                 containerH: Math.round(__cbox.h),
                 deviance: `${Math.round(Math.abs(__span - __cbox.h) / __cbox.h * 100)}%`,
               });
+            }
+            // 🛡️ G10 v2：Σ(子项真值高 + 兄弟间距) vs 容器高 —— 抓 v1 盲区
+            //   （flex 归一化后 Σ=1 永远"收敛"，但再叠 margin 就溢出容器）。
+            const __gapsNumeric = [];
+            for (let gi = 1; gi < sec.children.length; gi += 1) {
+              const pb = resolveSectionBox(sec.children[gi - 1], figmaIndex);
+              const cb = resolveSectionBox(sec.children[gi], figmaIndex);
+              if (!pb || !cb) continue;
+              const prevExtent = Math.max(pb.h, childHeights[gi - 1] || 0);
+              const gapPx = cb.y - (pb.y + prevExtent);
+              if (Number.isFinite(gapPx) && gapPx > 0) __gapsNumeric.push(Math.round(gapPx));
+            }
+            __ratioCanvasGroups += 1;
+            __columnDenominator =
+              childHeights.reduce((a, h) => a + (Number(h) || 0), 0) +
+              __gapsNumeric.reduce((a, g) => a + g, 0);
+            const __conv = evaluateColumnCanvasConvergence({
+              containerH: __cbox.h,
+              childHeights,
+              gaps: __gapsNumeric,
+            });
+            if (__conv.mismatch) {
+              __ratioMismatch = true;
+              __ratioCanvasMismatch += 1;
+              options?.logger?.warn?.(
+                '🛡️ G10v2 比例不收敛：Σ子项高+Σ间距 与容器高偏差超阈 ⇒ 弃用 flex 与间距（回落自然流）',
+                {
+                  sectionId: String(sec.id ?? ''),
+                  sumH: Math.round(__conv.sumH),
+                  sumGap: Math.round(__conv.sumGap),
+                  containerH: Math.round(__conv.containerH),
+                  deviance: `${Math.round(__conv.deviance * 100)}%`,
+                },
+              );
             }
           }
         }
@@ -1097,13 +1179,18 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             if (g && prevBox && childWidths[i - 1] > prevBox.w) __gapRebased += 1;
             renderBodyNode(child, indent + 1, flexStyle + g);
           } else {
-            const flexStyle = flexItemStyleFromHeights(childHeights, i);
+            // 🛡️ G10v2：① 不收敛 ⇒ 不写 flex（回落自然流，保 min-height:0）；
+            //   ② 收敛时分母用「Σ子项高 + Σ兄弟间距」⇒ flex 之和 < 1，剩余份额正好留给 margin，
+            //   不再出现「比例 100% + 43px 间距」的必然溢出。
+            const flexStyle = __ratioMismatch
+              ? 'min-height:0;'
+              : flexItemStyleFromHeights(childHeights, i, __columnDenominator > 0 ? __columnDenominator : undefined);
             // 🛡️ 刀16：纵向兄弟间距（真值 y 差）
             //   🔴 刀16b：prev 基准与 flex 同源（childHeights = figmaHeightPx > 段盒高度时取前者）
             //   🔴 G10：画布不收敛（跨坐标系错位）⇒ 间距弃用（绝对 margin 是错位最大放大器）
             const prevBox = i > 0 ? resolveSectionBox(sec.children[i - 1], figmaIndex) : null;
             const g =
-              i > 0 && !__canvasMismatch
+              i > 0 && !__canvasMismatch && !__ratioMismatch
                 ? siblingGapStyle(prevBox, resolveSectionBox(child, figmaIndex), 'vertical', childHeights[i - 1], __gapGuardStats)
                 : '';
             if (g) __gapApplied += 1;
@@ -1216,6 +1303,14 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     });
     // 🛡️ 刀 50 生效自检：`evaluated` 是「进入容器分支的段数」（本实现里含叶子前的所有容器
     //   都会评估，含 horizontal/grid/单子项等 fail-open 情形），`applied` 才是真正改写段内几何的段数。
+    // 🛡️ G10v2 生效自检（0 也打）：`groups` = 进入「Σ子项高+Σ间距 vs 容器高」复核的竖排容器数；
+    //   `mismatch` = 判比例不可信并弃用 flex 的容器数（>0 = 真有容器被拦下，
+    //   与「没跑」用 groups 区分）。本刀只拦不修：段锚归位属 G3/上游。
+    options.logger.info('🛡️ G10v2 段高比例画布收敛·已评估', {
+      groups: __ratioCanvasGroups,
+      mismatch: __ratioCanvasMismatch,
+      canvasMismatchV1: __canvasMismatchCount,
+    });
     options.logger.info('🛡️ 刀 50 段内固有几何·已评估', {
       evaluated: __intrinsicEvaluated,
       applied: __intrinsicHits,
