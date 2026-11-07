@@ -16,6 +16,7 @@ import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { markSessionLocked } from '../ai-engine/utils/session-lock-registry.js';
 import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
+import { sweepStalePersistTmp } from '../ai-engine/utils/persist-tmp-sweeper.js';
 
 const { ZipArchive } = require('archiver');
 
@@ -391,6 +392,13 @@ export class TasksService {
 
     // 僵尸任务恢复和队列清理（异步执行，不阻塞服务启动）
     await this.recoverZombieTasks();
+
+    // 🛡️ tmp 泄漏治理（2026-11-07）：EPERM 降级路径的 unlink 在沙箱态下同样静默失败，
+    //   残留 tmp 无限堆积（实测两天 7146 个 / 522GB）。启动即扫 + 每 10 分钟扫一次，
+    //   清理 data/ 下超 1 小时的遗留 `*.json[.prev].<pid>.<ts>.<hex>.tmp`（覆盖全部写入点）。
+    const sweepDataDir = join(this.persistFile, '..');
+    sweepStalePersistTmp(sweepDataDir, { label: 'TasksService' });
+    setInterval(() => sweepStalePersistTmp(sweepDataDir, { label: 'TasksService' }), 10 * 60 * 1000);
 
     // 周期性垃圾回收（每5分钟）
     setInterval(() => this.gc(), 5 * 60 * 1000);

@@ -134,7 +134,7 @@ function recordDroppedSection(removed, sec, coveredBy, reason, path) {
  * @param {Array|null} sections 待去重段
  * @param {Array|null} removed 丢弃留痕累加器，元素 { id, coveredBy, size, reason, path }
  * @param {string} path 层级路径（'/' 分隔）
- * @param {object|null} stats 观测出参，当前字段 { nestedExempt: number }
+ * @param {object|null} stats 观测出参，字段 { nestedExempt, identityNormalized, evaluated }
  */
 export function dedupeDuplicateSections(sections, removed = null, path = '', stats = null) {
   if (!Array.isArray(sections)) return sections
@@ -209,8 +209,25 @@ export function dedupeDuplicateSections(sections, removed = null, path = '', sta
       const curAnchor = sectionAnchorKey(sec)
       const prevIds = Array.isArray(prev?.sourceNodeIds) ? prev.sourceNodeIds.map(String) : []
       const intersection = srcIds.filter((id) => prevIds.includes(id))
-      const prevIsIdentity = !!prevAnchor && intersection.includes(prevAnchor)
-      const curIsIdentity = !!curAnchor && intersection.includes(curAnchor)
+      const canonicalIdentity = (section, anchor) => {
+        const derivedFromId = section?._derivedFromId
+        if (
+          typeof derivedFromId === 'string' && derivedFromId.length > 0 &&
+          anchor === String(section?.id ?? '') &&
+          section?.figmaAnchorId == null && section?.figmaNodeId == null &&
+          section?.nodeId == null && section?.figmaNode == null
+        ) return derivedFromId
+        return anchor
+      }
+      const prevIdentity = canonicalIdentity(prev, prevAnchor)
+      const curIdentity = canonicalIdentity(sec, curAnchor)
+      const prevIsIdentity = !!prevIdentity && intersection.includes(prevIdentity)
+      const curIsIdentity = !!curIdentity && intersection.includes(curIdentity)
+      if (stats && typeof stats === 'object') {
+        const normalized = (prevIdentity !== prevAnchor ? 1 : 0) + (curIdentity !== curAnchor ? 1 : 0)
+        stats.identityNormalized = (Number(stats.identityNormalized) || 0) + normalized
+        stats.evaluated = (Number(stats.evaluated) || 0) + 1
+      }
       if (!bothChartLeaves && prevIsIdentity !== curIsIdentity) {
         if (stats && typeof stats === 'object') {
           stats.nestedExempt = (Number(stats.nestedExempt) || 0) + 1
@@ -395,7 +412,7 @@ export function uniqueSectionIds(sections) {
       if (id && (count.get(id) || 0) > 1) {
         const n = seen.get(id) || 0
         seen.set(id, n + 1)
-        if (n > 0) next = { ...sec, id: `${id}-${n + 1}` }
+        if (n > 0) next = { ...sec, _derivedFromId: sec._derivedFromId || id, id: `${id}-${n + 1}` }
       }
       if (Array.isArray(sec.children)) {
         next = { ...next, children: walk(sec.children) }

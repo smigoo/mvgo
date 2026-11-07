@@ -145,3 +145,59 @@ describe('section 装配结构契约 · 插槽宿主显式兜底（f91aa545）',
     expect(c.headerLeaves.map((s) => s.id)).toEqual(['h'])
   })
 })
+
+/**
+ * 🛡️ 2026-11-07（mc-max-1794041862682-9f43a112 实锤）：**尊重插槽资格复核的撤单**。
+ *
+ * 真机病灶：段 2:8419（设备监测统计栏，146 行组件）被插槽资格复核撤销
+ * （`emptyBodyAndItems` ⇒ 段留 body），但其子节点（2:8429/2:8431 统计值）被 derived 成
+ * header-right 插槽；结构契约按 `sourceNodeIds ⊇ 插槽节点 id` 匹配 ⇒ **整个父段被拉进
+ * 38px 定高的 #header-right** ⇒ 溢出压住 body（两张统计卡被盖、视觉分 0.15）。
+ *
+ * 修法：visual-parser 撤单时把 `_slotRevoked` 挂到段对象（单一事实源），契约照办。
+ */
+describe('section 装配结构契约 · 撤单段回落 body（9f43a112）', () => {
+  const statsSection = (id: string, extra: any = {}) => ({
+    id,
+    type: 'stats',
+    sourceNodeIds: [id, `${id}-c1`, `${id}-c2`],
+    ...extra,
+  })
+  const SLOTS = [
+    { slotType: 'header-right', figmaNodeId: '2:8419-c1' },
+    { slotType: 'header-right', figmaNodeId: '2:8419-c2' },
+  ]
+
+  it('⭐ 阳性（9f43a112 形态）：段被撤单（_slotRevoked）且插槽 id 命中其子节点 ⇒ 不作 header 叶，回落 body', () => {
+    const sections = [
+      statsSection('2:8419', { _slotRevoked: 'emptyBodyAndItems' }),
+      statsSection('2:8787'),
+    ]
+    const c = buildSectionStructureContract(sections, { headerSlots: SLOTS })
+    expect(c.stats.slotRevokedRespected).toBe(1)
+    expect(c.stats.headerSlotsEmitted).toBe(0)
+    expect(c.headerLeaves).toHaveLength(0)
+    expect(c.bodyLeaves.map((s) => s.id)).toEqual(['2:8419', '2:8787'])
+    expect(c.byId.get('2:8419').placement).toBe('body')
+  })
+
+  it('零回归：未撤单的段仍按原逻辑匹配进插槽（3e924a69 修复不受影响）', () => {
+    const sections = [
+      statsSection('2:8419'),
+      statsSection('2:8787'),
+    ]
+    const c = buildSectionStructureContract(sections, { headerSlots: SLOTS })
+    expect(c.stats.slotRevokedRespected).toBe(0)
+    expect(c.headerLeaves.map((s) => s.id)).toEqual(['2:8419'])
+  })
+
+  it('反向：matched 全被撤 ⇒ 不产 header 叶，也不回落 _headerSlotHost 兜底', () => {
+    const sections = [
+      statsSection('2:8419', { _slotRevoked: 'emptyBodyAndItems', _headerSlotHost: true }),
+      statsSection('2:8787'),
+    ]
+    const c = buildSectionStructureContract(sections, { headerSlots: SLOTS })
+    expect(c.headerLeaves).toHaveLength(0)
+    expect(c.bodyLeaves).toHaveLength(2)
+  })
+})

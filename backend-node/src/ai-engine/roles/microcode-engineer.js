@@ -777,13 +777,15 @@ export class MicrocodeEngineer extends BaseAgent {
     //   口径与 figma-coverage-dedupe#removed[] 对齐（id/coveredBy/size/reason/path）；计数行 0 也打。
     const _dedupeRemoved = [];
     // 🛡️ G14a（2026-11-05）：同一次去重里「父子嵌套豁免」的计数（观测出参，0 也打）。
-    const _dedupeStats = { nestedExempt: 0 };
+    const _dedupeStats = { nestedExempt: 0, identityNormalized: 0, evaluated: 0 };
     const effectiveSections =
       dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemoved, '', _dedupeStats) || [];
     this.logger.info('🛡️ G14b 段去重留痕', {
       kept: effectiveSections.length,
       dropped: _dedupeRemoved.length,
       nestedExempt: _dedupeStats.nestedExempt,
+      identityNormalized: _dedupeStats.identityNormalized,
+      evaluated: _dedupeStats.evaluated,
       items: _dedupeRemoved,
     });
     // 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格契约原先只在 `pre-write-self-healing`
@@ -7654,13 +7656,15 @@ export class MicrocodeEngineer extends BaseAgent {
     // 🛡️ G14b（2026-11-04）：execute 路径同源留痕（与 generateCode 同一事实源，计数行 0 也打）
     const _dedupeRemovedExec = [];
     // 🛡️ G14a（2026-11-05）：execute 路径同源计数（0 也打）
-    const _dedupeStatsExec = { nestedExempt: 0 };
+    const _dedupeStatsExec = { nestedExempt: 0, identityNormalized: 0, evaluated: 0 };
     const effectiveSections =
       dedupeDuplicateSections(subPlan.effectiveSections || [], _dedupeRemovedExec, '', _dedupeStatsExec) || [];
     this.logger.info('🛡️ G14b 段去重留痕（execute）', {
       kept: effectiveSections.length,
       dropped: _dedupeRemovedExec.length,
       nestedExempt: _dedupeStatsExec.nestedExempt,
+      identityNormalized: _dedupeStatsExec.identityNormalized,
+      evaluated: _dedupeStatsExec.evaluated,
       items: _dedupeRemovedExec,
     });
     if (useGenerationInput) {

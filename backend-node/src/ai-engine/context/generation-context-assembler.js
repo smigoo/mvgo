@@ -167,7 +167,7 @@ const BODY_PASSTHROUGH_KEYS = new Set([
   // 🛡️ 2026-11-04（mc-max-1793771678347-18544d9c 实锤）：internalSubcomponents 是图表宿主归属
   //   事实源（chart-section.js 几何宿主挂载），此前被白名单剥掉 → production 输入 internalSubcomponents:0
   //   → 宿主 section 永远不知道自己名下有图表 → 双渲染/图表缺失。白名单放行 + 下方显式归一化透传。
-  'internalSubcomponents',
+  'internalSubcomponents', '_derivedFromId',
 ])
 
 /** internalSubcomponents 透传字段（最小契约，与 planner R1/chart-section 产出字段对齐）。 */
@@ -235,6 +235,8 @@ function normalizeSectionNode(section, ctx = null) {
     }
     // R7：修复锚点透传计数（递归容器/叶子共用同一 ctx，0 也必须可观测）。
     if (typeof section.figmaAnchorId === 'string' && section.figmaAnchorId) ctx.repairedAnchors += 1
+    // 🛡️ G14a 同源续接：显式核算 E1 派生身份留痕，字符串字段不由 droppedKeys 观测。
+    if (typeof section._derivedFromId === 'string' && section._derivedFromId) ctx.derivedIdPassthrough += 1
     if (bodyResult) {
       ctx.bodySections += 1
       ctx.bodyNodes += bodyResult.nodes
@@ -274,6 +276,10 @@ function normalizeSectionNode(section, ctx = null) {
       : undefined,
     // R7：主锚与归属集合是两种契约——sourceNodeIds 再完整也不能替代 figmaAnchorId。
     ...(section.figmaAnchorId ? { figmaAnchorId: String(section.figmaAnchorId) } : {}),
+    // 🛡️ G14a 同源续接：保留 E1 派生身份留痕供后续统一去重判据消费；不进入锚点候选与归属集合。
+    ...(typeof section._derivedFromId === 'string' && section._derivedFromId
+      ? { _derivedFromId: section._derivedFromId }
+      : {}),
     // 🛡️ 刀 29b（mc-max-1793255115028-7ec263c9 实锤）：几何三件套透传。
     //   此前白名单重建剥掉 absoluteBoundingBox/figmaBox ⇒ engineer 的
     //   resolveSubComponentPlan 优先取本函数产物（generationInput.componentPlan）
@@ -332,6 +338,7 @@ export function normalizeComponentPlan(plan) {
     bodyTruncated: 0,
     bodyDroppedByBudget: 0,
     bodyBytes: 0,
+    derivedIdPassthrough: 0,
   }
   const sections = Array.isArray(plan.effectiveSections)
     ? plan.effectiveSections.map((sec) => normalizeSectionNode(sec, ctx)).filter(Boolean)

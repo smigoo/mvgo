@@ -150,6 +150,52 @@ describe('G14a · 父子嵌套锚点不得按 elementCount 收敛', () => {
     expect(twice.map((s) => s.title)).toEqual(['设备标题信息', '设备属性详情'])
   })
 
+  it('E1 阳性：只归一带留痕的派生身份，原始 sourceNodeIds 交集不变并由既有 R1-1 收敛', () => {
+    const stats = { nestedExempt: 0, identityNormalized: 0, evaluated: 0 }
+    const removed: any[] = []
+    const original = {
+      id: '2:8437', type: 'tabs', elementCount: 6,
+      sourceNodeIds: ['2:8437'],
+    }
+    const derived = {
+      id: '2:8437-2', _derivedFromId: '2:8437', type: 'stats', elementCount: 12,
+      sourceNodeIds: ['2:8437'],
+    }
+    const originalIds = [...original.sourceNodeIds]
+    const r = dedupeDuplicateSections([original, derived], removed, '', stats)
+    expect(r).toHaveLength(1)
+    expect(r[0].type).toBe('stats')
+    expect(removed).toHaveLength(1)
+    expect(removed[0].reason).toBe('shared-anchor-superseded')
+    expect(stats).toEqual({ nestedExempt: 0, identityNormalized: 1, evaluated: 1 })
+    expect(original.sourceNodeIds).toEqual(originalIds)
+    expect(derived.sourceNodeIds).toEqual(['2:8437'])
+  })
+
+  it('阴性⑥：未带本管线改名留痕的原生 -N 身份不得归一', () => {
+    const stats = { nestedExempt: 0, identityNormalized: 0, evaluated: 0 }
+    const original = { id: '2:100', type: 'content', elementCount: 2, sourceNodeIds: ['2:100', '2:101'] }
+    const nativeDerivedShape = { id: '2:100-2', type: 'content', elementCount: 5, sourceNodeIds: ['2:100'] }
+    const r = dedupeDuplicateSections([original, nativeDerivedShape], null, '', stats)
+    expect(r).toHaveLength(2)
+    expect(stats).toEqual({ nestedExempt: 1, identityNormalized: 0, evaluated: 1 })
+  })
+
+  it('阴性⑦：更高优先级 figmaAnchorId 存在时不得被 id 留痕覆盖', () => {
+    const stats = { nestedExempt: 0, identityNormalized: 0, evaluated: 0 }
+    const parent = {
+      id: '2:200', _derivedFromId: '2:100', figmaAnchorId: '2:200',
+      type: 'content', elementCount: 2, sourceNodeIds: ['2:100'],
+    }
+    const derived = {
+      id: '2:100-2', _derivedFromId: '2:100', type: 'content', elementCount: 5,
+      sourceNodeIds: ['2:100'],
+    }
+    const r = dedupeDuplicateSections([parent, derived], null, '', stats)
+    expect(r).toHaveLength(2)
+    expect(stats).toEqual({ nestedExempt: 1, identityNormalized: 1, evaluated: 1 })
+  })
+
   // ── 阴性对照：作用域必须收窄 ──
 
   it('阴性①：双方身份命中同一个交集 id（同锚争抢）→ 不豁免，仍按 elementCount 收敛', () => {

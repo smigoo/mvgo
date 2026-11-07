@@ -46,7 +46,9 @@ fi
 # LOG 用脚本所在目录，不受 cwd 变化影响
 LOG="$(dirname "$0")/server.log"
 TASKS_FILE="${TASKS_FILE:-$ROOT_DIR/data/tasks.json}"
-NODE_BIN="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-2/bin/node"
+# 2026-11-07：22.22.2-2 已随 WorkBuddy 升级移除，实际版本为 22.22.2-6；
+# 系统回退 node（v20）带不动 undici（markAsUncloneable 缺失，启动即崩），必须用 managed 22
+NODE_BIN="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-6/bin/node"
 if [ ! -x "$NODE_BIN" ]; then
   NODE_BIN="node"
 fi
@@ -93,7 +95,7 @@ fi
 
 # perl: setsid() 创建新会话; fork() 父进程退出让子进程被 init 收养; exec 替换为 node
 # 结果: node 的父进程 = init(1),完全脱离 Bash 工具的进程组
-if [ "$NODE_BIN" = "/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2/bin/node" ]; then
+if [ "$NODE_BIN" = "/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-6/bin/node" ]; then
   echo "[$(date '+%H:%M:%S')] Using managed Node 22" >> "$LOG"
 else
   echo "[$(date '+%H:%M:%S')] Managed Node 22 not found, falling back to system node" >> "$LOG"

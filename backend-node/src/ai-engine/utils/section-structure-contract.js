@@ -51,6 +51,7 @@ export function buildSectionStructureContract(sections, opts = {}) {
   }
   walk(roots)
 
+  let slotRevokedRespected = 0
   const headerSlotNodeIds = new Set()
   for (const slot of Array.isArray(opts.headerSlots) ? opts.headerSlots : []) {
     const slotType = String(slot?.slotType || '').toLowerCase()
@@ -69,7 +70,20 @@ export function buildSectionStructureContract(sections, opts = {}) {
     const matched = leaves.filter((section) =>
       sourceIds(section).some((id) => headerSlotNodeIds.has(id)),
     )
-    if (matched.length > 0) candidates = matched
+    // 🛡️ 2026-11-07（mc-max-1794041862682-9f43a112 实锤）：**尊重插槽资格复核的撤单**。
+    //   病灶：derived 插槽不带 sectionId ⇒ 复核按 sectionId 过滤拦不住它；结构契约又按
+    //   sourceNodeIds（含子节点 id）匹配 ⇒ 整个父段（146 行 StatsMonitor）被拉进 38px 定高
+    //   #header-right ⇒ 溢出压住 body。复核撤单是资格判据的权威结论（`_slotRevoked` 已由
+    //   visual-parser 挂到段对象上），契约必须照办：撤单段一律回落 body。
+    const revokedMatched = matched.filter((section) => section && section._slotRevoked)
+    if (revokedMatched.length > 0) {
+      slotRevokedRespected = revokedMatched.length
+      const keep = matched.filter((section) => !section._slotRevoked)
+      if (keep.length > 0) candidates = keep
+      else candidates = [] // 全被撤 ⇒ 不产 header 叶，全部回落 body
+    } else if (matched.length > 0) {
+      candidates = matched
+    }
   }
   // 🛡️ 2026-11-06（f91aa545 实锤）：**planner 显式声明的插槽宿主段**优先兜底。
   //   真机 vision 从没产出 `type==='header'` 的段（标题栏被当 chrome），插槽 id 又是文本/
@@ -78,7 +92,9 @@ export function buildSectionStructureContract(sections, opts = {}) {
   //   planner 已按「isPanelHeader ∧ 有插槽业务内容」保住宿主并打 `_headerSlotHost`，
   //   本契约认这个显式事实（不靠 type 猜、不做几何推断）。
   if (candidates.length === 0) {
-    const hosts = leaves.filter((section) => section && section._headerSlotHost === true)
+    const hosts = leaves.filter(
+      (section) => section && section._headerSlotHost === true && !section._slotRevoked,
+    )
     if (hosts.length > 0) candidates = [hosts[0]]
   }
 
@@ -114,6 +130,7 @@ export function buildSectionStructureContract(sections, opts = {}) {
       leaves: leaves.length,
       headerLeavesBefore: typedHeaders.length,
       headerSlotsEmitted: candidates.length,
+      slotRevokedRespected,
       contracted: typedHeaders.length > 1 ? 1 : 0,
       bodyRoots: roots.filter(hasBodyLeaf).length,
     },

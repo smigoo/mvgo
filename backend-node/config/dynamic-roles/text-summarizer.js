@@ -1,6 +1,6 @@
 /**
  * 文本总结（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-11-06T00:33:20.167Z
+ * 模板: llm-analyzer | 创建: 2026-11-07T08:38:38.071Z
  * 输入: text
  * 输出: summary, keyPoints
  */

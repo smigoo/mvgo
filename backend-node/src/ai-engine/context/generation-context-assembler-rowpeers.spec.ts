@@ -19,6 +19,23 @@ jest.mock('../logger/index.js', () => ({
 import { assembleGenerationContext } from './generation-context-assembler.js'
 
 describe('normalizeSectionNode 透传 rowPeerIds（#138 续）', () => {
+  test('E1 派生身份留痕透传并计数，未落入 droppedKeys；缺失时不产键', () => {
+    const input = assembleGenerationContext({
+      subComponentPlan: {
+        effectiveSections: [
+          { id: '426:807-2', _derivedFromId: '426:807' },
+          { id: '426:807' },
+        ],
+      },
+    })
+    const [derived, plain] = input.componentPlan.effectiveSections
+    expect(derived._derivedFromId).toBe('426:807')
+    expect(Object.prototype.hasOwnProperty.call(derived.declaredContent ?? {}, '_derivedFromId')).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call(plain, '_derivedFromId')).toBe(false)
+    expect(input.componentPlan.normalization.derivedIdPassthrough).toBe(1)
+    expect(input.componentPlan.normalization.droppedKeys._derivedFromId).toBeUndefined()
+  })
+
   const state = {
     subComponentPlan: {
       effectiveSections: [

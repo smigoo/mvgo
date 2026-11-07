@@ -1013,6 +1013,7 @@ describe('uniqueSectionIds（E1 治本 · 重复 id 唯一化，2026-09-16 c-tra
     ]
     const out = uniqueSectionIds(sections)
     expect(out.map((s) => s.id)).toEqual(['426:807', '426:807-2', '426:807-3'])
+    expect(out.map((s) => s._derivedFromId ?? null)).toEqual([null, '426:807', '426:807'])
     // sourceNodeIds 不变（下游对齐事实源不受影响）
     expect(out.map((s) => s.sourceNodeIds)).toEqual([['2:7459'], ['2:7628'], ['2:3604']])
   })

@@ -1,6 +1,6 @@
 /**
  * Figma 组件分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-11-06T00:33:19.731Z
+ * 模板: llm-analyzer | 创建: 2026-11-07T08:38:38.054Z
  * 输入: figmaNodeData
  * 输出: componentCount, components
  */

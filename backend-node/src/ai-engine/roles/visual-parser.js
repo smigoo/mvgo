@@ -3948,6 +3948,23 @@ ${analysisTask}`
       )
       if (slotAudit.revoked > 0 && slotsAcc.length > 0) {
         const revokedSet = new Set(slotAudit.revokedIds)
+        // 🛡️ 2026-11-07（mc-max-1794041862682-9f43a112 实锤）：**撤单事实落到 section 上**。
+        //   病灶：derived 插槽（统计值节点）不带 sectionId ⇒ 上面按 sectionId 的过滤拦不住它
+        //   ⇒ 下游 section 结构契约又按 sourceNodeIds 匹配把整个父段拉进 #header-right
+        //   （2:8419 的 sourceNodeIds 含统计值节点 2:8429/2:8431）⇒ 146 行大组件塞进
+        //   base-panel 38px 定高 header ⇒ 溢出压住 body（两张统计卡被盖）。
+        //   撤单是资格判据的**权威结论**，必须让全链读到：挂 `_slotRevoked` 到段对象上，
+        //   section-structure-contract 据此拒绝其作 header 叶（回落 body）。
+        const markRevoked = (list) => {
+          for (const sec of Array.isArray(list) ? list : []) {
+            if (!sec || typeof sec !== 'object') continue
+            if (revokedSet.has(String(sec.id ?? ''))) {
+              sec._slotRevoked = slotAudit.reasons?.[String(sec.id ?? '')] || 'revoked'
+            }
+            if (Array.isArray(sec.children)) markRevoked(sec.children)
+          }
+        }
+        markRevoked(sections)
         const before = slotsAcc.length
         slotsAcc = slotsAcc.filter((s) => !revokedSet.has(String(s?.sectionId ?? '')))
         if (slotsAcc.length !== before) {
