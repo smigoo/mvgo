@@ -349,6 +349,8 @@ export class TasksService {
       level: 'full' | 'partial' | false;
       missing: string[];
       missingFiles: string[];
+      // 🧩 2026-11-08：与 component-meta.json 同源的完整性结论（含子组件清单缺件）
+      artifactIncomplete: boolean;
       status: string;
       at: number;
     }
@@ -1626,12 +1628,15 @@ export class TasksService {
 
     // 🛡️ P2#7 统一产物完整度：仅失败任务读 partial 缺失清单。
     const missingFiles = task.status === 'failed' ? this.getPartialMissingFiles(task) : [];
-    const artifactIncomplete =
+    // 🧩 2026-11-08（评审修订版 §3③）：与 component-meta.json 同源（含 planner 强制清单缺件），
+    //   legacy 计数仅作历史任务兜底 —— 停止「meta 说 true、接口说 false」的两套口径。
+    const legacyIncomplete =
       (task.degradedScriptParts?.length || 0) +
         (task.degradedFiles?.length || 0) +
         (task.gateSkippedFiles?.length || 0) +
         missingFiles.length >
       0;
+    const artifactIncomplete = this.readMetaArtifactIncomplete(task) || legacyIncomplete;
 
     return {
       success: true,
@@ -1897,11 +1902,64 @@ export class TasksService {
    * 替代 getAllTasks 原「3 项独立检查 + failed 任务再单独读缺失清单」的重复 fs。
    * 缓存失效规则见 artifactCheckCache 字段注释（终态冻结 / 非终态 10s TTL / status 变化强失效）。
    */
+  /**
+   * 🧩 2026-11-08（评审修订版 §3③）：产物完整性以 `component-meta.json` 为准。
+   *
+   * 病灶：`artifactIncomplete` 在 meta 里恒写（2026-11-05 D1），但任务侧列表/详情另算一套
+   * （`degradedScriptParts + degradedFiles + missingFiles`），两者口径不同 ⇒ 含
+   * 「未物化 section / 空壳 section / planner 强制清单缺件」的产物可能 meta=true 而列表=false。
+   *
+   * 语义：meta 明确 `true` ⇒ 不完整；meta 明确 `false` ⇒ 以交付态为准（不再看更早的 temp 副本）；
+   * 文件缺失 / 解析失败 ⇒ false（不制造假阳性，legacy 计数仍由调用方兜底）。
+   * 优先 workspace 交付目录，回退 `task.outputPath`（生成中断尚未同步）。
+   */
+  private readMetaArtifactIncomplete(task: Task): boolean {
+    const componentId = task.componentId || task.sessionId;
+    if (!componentId) return false;
+    const isVue3 = (task.target || 'microcode') === 'vue3';
+    const candidates: string[] = [];
+    if (isVue3 && task.groupId) {
+      candidates.push(
+        join(vue3ComponentsDir, task.groupId, componentId),
+        join(resolveFrontendWorkspace(), 'vue3-components', task.groupId, componentId),
+      );
+    } else {
+      candidates.push(
+        join(customComponentsDir, componentId),
+        join(resolveFrontendWorkspace(), 'custom-components', componentId),
+      );
+    }
+    if (task.outputPath) {
+      const allowedRoots = [
+        ...this.getTempRoots(),
+        workspaceRoot,
+        resolveFrontendWorkspace(),
+      ].map((root) => `${resolve(root)}${sep}`);
+      const normalizedOutputPath = `${resolve(task.outputPath)}${sep}`;
+      if (allowedRoots.some((root) => normalizedOutputPath.startsWith(root))) {
+        candidates.push(task.outputPath);
+      }
+    }
+
+    for (const dir of candidates) {
+      const metaPath = join(dir, 'component-meta.json');
+      try {
+        if (!existsSync(metaPath)) continue;
+        const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+        return meta?.artifactIncomplete === true;
+      } catch {
+        // 解析失败 → 继续下一个候选；全部失败按 false（不制造假阳性）
+      }
+    }
+    return false;
+  }
+
   private getArtifactSnapshot(task: Task): {
     ready: boolean;
     level: 'full' | 'partial' | false;
     missing: string[];
     missingFiles: string[];
+    artifactIncomplete: boolean;
   } {
     const sid = task.sessionId || '';
     const status = task.status || '';
@@ -1917,16 +1975,26 @@ export class TasksService {
         level: cached.level,
         missing: cached.missing,
         missingFiles: cached.missingFiles,
+        artifactIncomplete: cached.artifactIncomplete,
       };
     }
     const level = this.getArtifactReadyLevel(task);
+    // 🛡️ P2#7：仅失败任务读 partial 缺失清单（completed 不查，避免全量磁盘读）
+    const missingFiles = status === 'failed' ? this.getPartialMissingFiles(task) : [];
+    // 🧩 2026-11-08：meta（含子组件清单缺件）优先，legacy 计数兜底（历史任务无 meta）
+    const legacyIncomplete =
+      (task.degradedScriptParts?.length || 0) +
+        (task.degradedFiles?.length || 0) +
+        (task.gateSkippedFiles?.length || 0) +
+        missingFiles.length >
+      0;
     const snapshot = {
       ready: this.hasTaskArtifacts(task),
       level,
       // missing 仅在 partial 时有意义（getMissingEntryFiles 内部会再判一次 level，partial 任务极少）
       missing: level === 'partial' ? this.getMissingEntryFiles(task) : [],
-      // 🛡️ P2#7：仅失败任务读 partial 缺失清单（completed 不查，避免全量磁盘读）
-      missingFiles: status === 'failed' ? this.getPartialMissingFiles(task) : [],
+      missingFiles,
+      artifactIncomplete: this.readMetaArtifactIncomplete(task) || legacyIncomplete,
     };
     if (this.artifactCheckCache.size > 600) this.artifactCheckCache.clear();
     this.artifactCheckCache.set(sid, { ...snapshot, status, at: Date.now() });
@@ -1958,11 +2026,8 @@ export class TasksService {
       // 产物就绪快照走进程内缓存（终态冻结/非终态 10s TTL），内部才做 existsSync
       const snap = this.getArtifactSnapshot(task);
       const missingFiles = snap.missingFiles;
-      const artifactIncomplete =
-        (task.degradedScriptParts?.length || 0) +
-          (task.degradedFiles?.length || 0) +
-          missingFiles.length >
-        0;
+      // 🧩 2026-11-08：与 getTaskStatus / component-meta.json 同源（snapshot 内已并 legacy 计数）
+      const artifactIncomplete = snap.artifactIncomplete;
 
         // 🆕 2026-11-05：Figma 源回填（缺 fileKey 的历史/实验任务从产物缓存补），
         //   前端历史下拉按 fileKey 重建链接，缺字段即隐身。

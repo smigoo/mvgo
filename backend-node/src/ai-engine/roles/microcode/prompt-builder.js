@@ -20,6 +20,9 @@ import {
   buildResourceConstraintReinforcement,
   buildStyleConstraintReinforcement,
 } from '../../utils/constraint-reinforcement.js';
+// 🧱 段内结构事实（纯函数，零依赖）：段声明里没有任何子结构时，用 Figma 几何补一条
+//   「该段由 N 个并列同构块组成」的事实，防止 LLM 把一行两张卡画成一张（cbcac19a 实锤）。
+import { formatInternalStructureFact } from '../../utils/internal-structure-facts.js';
 import {
   formatResourceMapping,
 } from '../../utils/resource-mapping-formatter.js';
@@ -2550,6 +2553,7 @@ export function buildSubComponentResponsibilityTable(input) {
       p += `\n`;
       p += `   - responsibility: ${sec.responsibility || '未指定'}\n`;
       p += `   - 元素数量: ${sec.elementCount || 0}\n`;
+      p += formatInternalStructureFact(sec);
       p += `   - **强制名称: \`${assigned}\`**（模板用 \`<${assigned} />\`，脚本 \`import ${assigned} from './components/${assigned}.vue'\`）\n`;
       p += `\n`;
     });

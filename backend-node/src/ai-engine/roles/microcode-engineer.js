@@ -16,6 +16,10 @@ import { buildTruthPalette } from '../utils/truth-palette.js';
 import * as microcodeParser from './microcode/code-parser.js';
 import * as microcodeHealer from './microcode/code-healer.js';
 import * as microcodeWriter from './microcode/file-writer.js';
+import {
+  assessSubComponentCoverage,
+  formatSubComponentCoverage,
+} from './microcode/subcomponent-coverage.js';
 import * as microcodePrompt from './microcode/prompt-builder.js';
 // 🔍 高级选项 P0（2026-11-02 抽出）：用户补充需求段构建迁至 utils/user-addendum.js
 //  （单一来源；抽出动机 = engineer 整体不可被 jest 加载，纯函数落 utils 才能挂行为断言 spec）。
@@ -86,7 +90,7 @@ import { healUndeclaredResourceUrls } from './microcode/resource-url-guard.js';
 import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
 // P1-Slice2（增量补丁式更新）：分块快照推送器 —— 先合并再推送，杜绝并行 worker 交错导致快照回退
 import { pushChunkSnapshot } from './microcode/chunk-snapshot-pusher.js';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createLogger } from '../logger/index.js';
 import { dataDir, backendRoot } from '../../config/backend-root.js';
@@ -388,7 +392,11 @@ import {
   planSegmentMerge,
 } from '../utils/chunk-meta-files.js';
 // 🛡️ P1-4（2026-08-30）：坏文件隔离降级的决策层（纯函数，可单测）
-import { planBadFileIsolation, evaluateArtifactCompleteness } from '../utils/bad-file-isolation.js';
+import {
+  planBadFileIsolation,
+  evaluateArtifactCompleteness,
+  resolveArtifactIncomplete,
+} from '../utils/bad-file-isolation.js';
 // 🛡️ P2-1（2026-08-30）：背景尺寸四件套推断（纯函数，可单测；修 R11 覆盖率不足与 repeat 误判）
 import {
   inferBackgroundStyle,
@@ -463,6 +471,12 @@ export class MicrocodeEngineer extends BaseAgent {
 
     //模型分级路由：简单块可走轻量模型（env: LLM_LITE_MODEL 或 config.liteModel）
     this.liteModel = config.liteModel || process.env.LLM_LITE_MODEL || null;
+
+    // 🧩 2026-11-08（评审修订版 §3①）：覆盖度判据的 planner 记账。
+    //   null = 本轮尚未记账（如 bootstrap 写盘早于 :807）⇒ 判据打 `skipped=no-plan`，
+    //   与「已评估且零缺失」可区分；禁止用 `{}` 兜底，否则 expected=0 假绿。
+    this._coverageMeta = null;
+    this._subComponentCoverage = null;
 
     // ─── 约束/规范文档（一次加载，多处引用）──────────────────────────
     // 加载结果存入 this.constraints，以下文件在 buildCodePrompt / buildStylePrompt
@@ -582,6 +596,10 @@ export class MicrocodeEngineer extends BaseAgent {
     this.logger.info('开始生成组件代码（自适应分块生成模式）', {
       stage: input.stage,
     });
+
+    // 🧩 2026-11-08：每轮重置覆盖度记账（重试轮必须重新评估，不继承上一轮结论）。
+    this._coverageMeta = null;
+    this._subComponentCoverage = null;
 
     // 可读性优化：class 前缀使用短语义前缀（如 f0abee / env-overview），
     // 取代 c-mc-max-<时间戳>-<随机串>- 这类超长且不可读的前缀。
@@ -795,6 +813,18 @@ export class MicrocodeEngineer extends BaseAgent {
     //   `flex-direction:column;flex-wrap:wrap`（真值 4 列 × 126px、列距 20）。
     //   与刀 43/49/51 同一条纪律：真值判据必须挂在**写盘出口**。此处记账，由 writeFiles 透传。
     this._effectiveSectionsForLayout = effectiveSections;
+
+    // 🧩 2026-11-08（402679ed 实锤）：把「强制拆分期望数」记到实例，供写盘出口做覆盖度校验。
+    //   病灶：planner 出 totalSubcomponents=5（prompt `:1064` 也写了「必须拆分为 5 个独立子组件文件」），
+    //   模型只落 3 个组件文件，microcode 链无 minFiles 消费、C8 只在「被引用缺文件」时补 ⇒ 缩水无人拦。
+    //   判据单一来源：microcode/subcomponent-coverage.js（与 vue3-engineer#subComponentCoverage 同口径）。
+    this._coverageMeta = {
+      isForced: subPlan.isForced === true,
+      minFiles: Number.isFinite(subPlan.minFiles) ? subPlan.minFiles : 0,
+      internalSubcomponents: Array.isArray(subPlan.internalSubcomponents)
+        ? subPlan.internalSubcomponents
+        : [],
+    };
 
     // 🎯 A' Phase 5: 叶子遍历（布局容器不占 .vue 槽，只做纵向包裹）
     const leafSections = collectLeafSections(effectiveSections);
@@ -2853,6 +2883,17 @@ export class MicrocodeEngineer extends BaseAgent {
           allFiles['package/index.vue'] = indexVue;
         }
 
+        // 🛡️ R1（2026-11-08 · mc-max-1794114472183-b79b1ed8 实锤）：complex 分支同样收回「装配」。
+        //   病灶：本分支 index.vue 由 LLM 整文件写（`_generateIndexVue`），section 排布与
+        //   flex 高度比例全由模型即兴决定 —— 实测 `StatsSection flex:0.473 / tab flex:0.830`
+        //   （和 1.303≠1，真值比例 0.158:0.769）⇒ 统计区 140px（真值 64.8）、卡片区 247px
+        //   （真值 295，12 卡第 4 行溢出）。medium/simple 已用同一入口收回装配（见 :2994/:3039），
+        //   complex 只是漏接，导致同一产品内两套装配职责。
+        //   复用 `_applyDeterministicIndexTemplate`：只覆盖 <template>（flex 来自
+        //   `flexItemStyleFromHeights` 的 Figma 真高、锚点来自同一 `sectionRoots`），
+        //   保留 LLM <script>；失败 fail-open 保留原模板并 warn。
+        this._applyDeterministicIndexTemplate(allFiles, input);
+
         // 批5: 子组件（据 index.vue import 引用动态补生成，并行）
         const subComps = this._detectSubComponents(
           allFiles['package/index.vue'] || '',
@@ -4394,6 +4435,9 @@ export class MicrocodeEngineer extends BaseAgent {
         allFiles,
         input.componentPlan,
         input._degradedFiles || [],
+        // 🧩 2026-11-08（评审修订版 §3②）：把 planner 强制清单缺件并入同一完整性出口，
+        //   否则 coverage 判据说「缺 2 个」而 artifactIncomplete 仍 false（402679ed 原始病灶）。
+        { subComponentPlan: subPlan },
       );
       this.logger.info('✅ 组件代码分块生成完成', {
         fileCount: Object.keys(allFiles).length,
@@ -4909,7 +4953,7 @@ export class MicrocodeEngineer extends BaseAgent {
       logger: this.logger,
     });
     if (!r.applied) {
-      this.logger.warn('🛡️ 确定性模板装配未生效（simple/medium 分支，保留 LLM 模板）', {
+      this.logger.warn('🛡️ 确定性模板装配未生效（保留 LLM 模板）', {
         componentName: input.componentName,
         reason: r.reason,
       });
@@ -6033,7 +6077,8 @@ export class MicrocodeEngineer extends BaseAgent {
       }
       targetFiles = files;
     }
-    return microcodeWriter.writeFiles(targetFiles, outputPath, {
+
+    const writeResult = microcodeWriter.writeFiles(targetFiles, outputPath, {
       logger: this.logger,
       componentType: this.componentType,
       // 🧩 C9 二次注入（15484123 实锤）：写盘前（filesForWrite 定稿后）按 plan 事实再跑一遍
@@ -6059,6 +6104,30 @@ export class MicrocodeEngineer extends BaseAgent {
         ? { fgTakeoverFiles: this._fgTakeoverFiles }
         : {}),
     });
+
+    // 🧩 2026-11-08（R2 · mc-max-1794114472183-b79b1ed8 实锤）：判据改看**磁盘实际落盘**。
+    //   病灶：CardGrid.vue 被 SFC 写盘门禁跳过（`skippedPaths` 含它），但 `targetFiles` 里仍有它
+    //   ⇒ 旧实现 `generated=4 ok=true` 假绿（磁盘实际只有 3 个 .vue）。门禁 / 用户补丁 / 增量跳过
+    //   全部在 `microcodeWriter.writeFiles` 内部结算 —— 落盘后的磁盘是唯一事实源。
+    //   判据本体不变（`subcomponent-coverage.js` 单一来源），只换输入来源。
+    try {
+      const onDisk = readComponentVueFiles(outputPath);
+      const coverage = assessSubComponentCoverage({
+        // null（未记账）⇒ skipped=no-plan，不得用 {} 兜底成「零缺失」
+        subPlan: this._coverageMeta,
+        files: onDisk,
+      });
+      this._subComponentCoverage = coverage;
+      const coverageLog = formatSubComponentCoverage(coverage);
+      this.logger.info(coverageLog.message, coverageLog.meta);
+    } catch (e) {
+      reportPatchChainError(e, {
+        logger: this.logger,
+        pass: 'writeFiles:subcomponent-coverage',
+      });
+    }
+
+    return writeResult;
   }
 
   /**
@@ -7495,6 +7564,7 @@ export class MicrocodeEngineer extends BaseAgent {
     // （585s×1.5 重试 ≈ 877s，尝试边界必有事件喂狗），不会误杀慢请求。
     const timeoutMs = resolveGapWatchdogTimeoutMs();
     const componentName = String(params?.componentName || params?.displayName || '');
+
     const baseOnProgress = params?.onProgress;
     const watchdog = createGapWatchdog({
       label: `microcode-engineer:${componentName}`,
@@ -7527,6 +7597,13 @@ export class MicrocodeEngineer extends BaseAgent {
   }
 
   async _executeCore(params) {
+    // 🧩 2026-11-08（R2）：产物完整性最终结论 —— **本方法作用域**声明、收尾赋值。
+    //   🔴 两次踩坑记录：
+    //     ① 首版写在 try 块内 `const`、return 处引用 ⇒ 运行时 `is not defined`；
+    //     ② 第二版写在 `execute()` 里，但 return 在 `_executeCore()` 里 —— 两个方法不共享作用域，
+    //        仍然 `is not defined`（堆栈 `_executeCore ... :10268`）。
+    //   `tsc` 不检查 `.js` 源码，类型检查抓不到；已用 ESLint `no-undef` 复扫确认。
+    let finalArtifactIncomplete = false;
     const {
       layoutStructure,
       visualElements,
@@ -9911,6 +9988,19 @@ export default declareInfo
           recoveredOnDisk: gateSkippedFiles.filter((rel) => !gateSkippedFinal.includes(rel)),
         });
       }
+      // 🧩 2026-11-08（R2 · mc-max-1794114472183-b79b1ed8 实锤）：产物完整性**唯一时点** ——
+      //   写盘门禁 / 降级 / 覆盖度全部结算之后。病灶：`generateCode:4409` 计算 completeness 时
+      //   `degradedFiles` 尚未产生（写盘门禁在 execute 阶段）⇒ 真机出现
+      //   `degradedFiles=['CardGrid.vue']` 而 `artifactIncomplete=false`。
+      //   此处以「最终磁盘事实」统一裁决，meta / 任务接口 / 日志同源，不再各自算一套。
+      const _coverage = this._subComponentCoverage || null;
+      finalArtifactIncomplete = resolveArtifactIncomplete({
+        codeResult,
+        degradedFiles,
+        gateSkippedFinal,
+        coverage: _coverage,
+      });
+
       const nextMeta = {
             ...prevMeta,
             codeVersion: {
@@ -9922,7 +10012,17 @@ export default declareInfo
             //   原 `artifactIncomplete` 只进返回值：全仓零消费、也不落 meta，真机产物里
             //   连该字段都没有 ⇒ 空壳产物对外仍表现为完全成功。这里恒写布尔，并条件携带
             //   空段明细；恢复为完整时显式清除历史残留（同 gateSkipped* 的处置口径）。
-            artifactIncomplete: codeResult.artifactIncomplete === true,
+            artifactIncomplete: finalArtifactIncomplete,
+            // 🧩 R2：缺口明细随 meta 落盘（验收看组名/原因，不必反查日志）
+            ...(Array.isArray(_coverage?.missingSubcomponents) &&
+            _coverage.missingSubcomponents.length > 0
+              ? {
+                  missingSubcomponents: _coverage.missingSubcomponents,
+                  missingSubcomponentsAt: Date.now(),
+                }
+              : _coverage && Array.isArray(_coverage.missingSubcomponents)
+                ? { missingSubcomponents: undefined, missingSubcomponentsAt: undefined }
+                : {}),
             ...(Array.isArray(codeResult.emptySections) && codeResult.emptySections.length > 0
               ? {
                   emptySections: codeResult.emptySections,
@@ -10165,7 +10265,8 @@ export default component
         autoFixes: fixes, //返回自动修复的问题列表
         degradedScriptParts: codeResult.degradedScriptParts || [], // 🛡️ 脚本子段降级清单（供任务状态/前端「不完整」标签）
         degradedFiles, // 🛡️ P1-4 坏文件隔离降级清单（与 degradedScriptParts 并列，计入统一产物完整度）
-        artifactIncomplete: codeResult.artifactIncomplete === true || gateSkippedFiles.length > 0,
+        // 🧩 2026-11-08（R2）：与 component-meta.json 同一结论（写盘/降级/覆盖度结算后）
+        artifactIncomplete: finalArtifactIncomplete,
         unmaterializedSections: codeResult.unmaterializedSections || [],
         // 🛡️ #10 静默失败降级：gateSkippedFiles 暴露到任务级 result（经 execute → tasks.service 落库）
         // 前端据此展示「N 个文件被写盘门禁跳过」+ 缺失清单，避免静默丢失
@@ -10206,6 +10307,39 @@ export default component
 // 🛡️ R4 `_imagesRelPrefixFor` 已删（2026-08-31）：唯一调用方是旧 N4 根容器锚定内联块，
 // 该块已迁出为 validators/code-fix-rules.js 的 anchor-root-container 规则（复用同语义的
 // 模块内 _imagesRelPrefix），此处不再需要重复实现。
+
+/**
+ * 🧩 2026-11-08（R2）：读取产物目录中「真实落盘」的 .vue 文件表。
+ *
+ * 覆盖度判据（`subcomponent-coverage`）消费的必须是**磁盘事实**，不是内存里的待写文件表：
+ * 写盘门禁会跳过坏 SFC（`skippedPaths`）、用户补丁会保留旧版本、增量写盘会跳过 identical——
+ * 这些都在 `microcodeWriter.writeFiles` 内部结算，落盘后的磁盘才是唯一可信来源。
+ *
+ * @param {string} outputPath 组件产物根目录
+ * @returns {Record<string,string>} `{ 'package/index.vue': content, 'package/components/X.vue': content }`
+ */
+function readComponentVueFiles(outputPath) {
+  const out = {};
+  if (!outputPath) return out;
+  const compDir = join(outputPath, 'package', 'components');
+  try {
+    if (existsSync(compDir)) {
+      for (const f of readdirSync(compDir)) {
+        if (!f.endsWith('.vue')) continue;
+        out[`package/components/${f}`] = readFileSync(join(compDir, f), 'utf-8');
+      }
+    }
+  } catch (_e) {
+    reportPatchChainError(_e, { logger: null, pass: 'readComponentVueFiles:components' });
+  }
+  const idx = join(outputPath, 'package', 'index.vue');
+  try {
+    if (existsSync(idx)) out['package/index.vue'] = readFileSync(idx, 'utf-8');
+  } catch (_e) {
+    reportPatchChainError(_e, { logger: null, pass: 'readComponentVueFiles:index' });
+  }
+  return out;
+}
 
 /**
  * 🛡️ C 方案：判断某相对路径是否已被用户在 Playground 编辑过（生成应保留用户版本、跳过覆盖）。

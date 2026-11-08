@@ -49,6 +49,12 @@ import {
 //  实际执行以下校验器并把结果写入 state.checkResult，供下游 condition 决策。
 import { PreviewAnalysisValidator } from '../validators/preview-analysis-validator.js';
 import { CodeStructureValidator } from '../validators/code-structure-validator.js';
+// 🛡️ 2026-11-08 A/C：拓扑契约与条件边标签的唯一判据源（无副作用，可单测）
+import {
+  assertWorkflowTopology,
+  resolveDecisionTarget,
+  GATE_VALIDATOR_IDS,
+} from './workflow-topology-validator.js';
 
 const logger = createLogger({ name: 'dynamic-workflow-graph' });
 
@@ -154,6 +160,10 @@ async function instantiateRole(handlerName, state) {
  * @returns {Graph}
  */
 export function buildDynamicGraph(workflow, runtime = {}) {
+  // 🛡️ 2026-11-08 A：构图统一出口校验（与 save() 共用同一判据）。
+  // 无论 workflow 来自 API 保存、手工落盘还是测试构造，运行前都必须过这一关；
+  // 非法 gate handler / 节点类型在此显式抛错，不再落到旧 :396 的静默放行分支。
+  assertWorkflowTopology(workflow);
   const { onProgress, onNodeSnapshot } = runtime;
   const graph = new Graph({ name: `dynamic-${workflow.name || 'workflow'}` });
 
@@ -198,25 +208,12 @@ export function buildDynamicGraph(workflow, runtime = {}) {
       if (graph.edges.some((e) => e.from === edge.source && e.to === null))
         continue;
       const branches = conditionOutgoing.get(edge.source) || [];
-      graph.addConditionalEdge(edge.source, (state) => {
-        const decision = state._decision;
-        // 优先精确匹配 condition 标签
-        const matched = branches.find((b) => b.condition === decision);
-        if (matched) return matched.target;
-        // 容错：decision 为 needs_revision 匹配 failed/needs-revision
-        if (decision === 'needs_revision') {
-          const alt = branches.find((b) =>
-            ['failed', 'needs-revision', 'revise'].includes(b.condition),
-          );
-          if (alt) return alt.target;
-        }
-        // 默认走 passed/success 分支
-        const def =
-          branches.find((b) =>
-            ['passed', 'success', 'done'].includes(b.condition),
-          ) || branches[0];
-        return def?.target || null;
-      });
+      // 🛡️ 2026-11-08 C：路由判据统一收口到 workflow-topology-validator.js。
+      // 变化点：pass/retry 等实际标签按 DECISION_LABELS 归类；
+      // needs_revision 无匹配边时显式抛错，不再静默 fallback 到 branches[0]（常为通过边）。
+      graph.addConditionalEdge(edge.source, (state) =>
+        resolveDecisionTarget(state._decision, branches, edge.source),
+      );
     } else if (!isDecisionNode(src)) {
       // 普通节点：直接连边
       if (edge.target) {
@@ -393,8 +390,14 @@ function buildNodeHandler(node, { onProgress, onNodeSnapshot, nodeMap }) {
             { target: state.target || 'microcode' },
           );
         } else {
-          logger.warn(`未注册的校验器: ${handler}，按通过处理`);
-          raw = { pass: true, blockCount: 0, errors: [] };
+          // 🛡️ 2026-11-08 A：主判据在 buildDynamicGraph 的 assertWorkflowTopology，
+          // 构图前应已拦截未知校验器；此处是运行时纵深防御，**不再按通过处理**。
+          // 抛错由下方 catch 统一转成 needs_revision + blockCount=1，
+          // 终态再由 workflow.service.ts 的 B 判据明确判失败。
+          throw new Error(
+            `未注册的校验器: ${handler}；可用: [${GATE_VALIDATOR_IDS.join(', ')}]` +
+              `（拓扑校验应在构图前拦截，请检查 workflow 来源）`,
+          );
         }
       } catch (err) {
         logger.error(`校验器 ${handler} 执行失败`, { error: err.message });

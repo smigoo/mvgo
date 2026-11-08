@@ -23,7 +23,10 @@ import {
   stripDanglingComponentRefs,
 } from '../section-coverage-guard.js'
 // @ts-ignore js 模块无类型声明
-import { evaluateArtifactCompleteness } from '../bad-file-isolation.js'
+import {
+  evaluateArtifactCompleteness,
+  resolveArtifactIncomplete,
+} from '../bad-file-isolation.js'
 
 /** 真机 LLM 原始 chunk（.mc-gen/cache/code-chunks/6-package_components_StatsSection.vue 摘要） */
 const REAL_LLM_CHUNK = `<template>
@@ -381,6 +384,76 @@ describe('evaluateArtifactCompleteness（空段并入完整性摘要）', () => 
     ])
     const res = evaluateArtifactCompleteness(files, PLAN_STATS, [])
     expect(res.emptySections).toEqual([])
+    expect(res.artifactIncomplete).toBe(false)
+  })
+
+  // 🧩 2026-11-08（评审修订版 §3②）：planner 强制清单缺件并入同一完整性出口。
+  it('子组件清单缺件 ⇒ artifactIncomplete=true，并随结果上抛 missingSubcomponents', () => {
+    const files = asFiles([
+      ['package/index.vue', '<template><div><StatsSection /></div></template>'],
+      ['package/components/StatsSection.vue', NON_EMPTY_VFOR],
+    ])
+    const subComponentPlan = {
+      isForced: true,
+      minFiles: 5,
+      internalSubcomponents: [
+        { id: 'g1', textTruths: ['【锚点A】'] },
+        { id: 'g2', textTruths: ['【锚点B】'] },
+      ],
+    }
+    const res = evaluateArtifactCompleteness(files, { effectiveSections: [] }, [], {
+      subComponentPlan,
+    })
+    expect(res.missingSubcomponents.map((s: any) => s.subId)).toEqual(['g1', 'g2'])
+    expect(res.artifactIncomplete).toBe(true)
+  })
+
+  it('resolveArtifactIncomplete：降级文件 / 门禁跳过 / 清单缺件 任一命中即不完整', () => {
+    const base = { codeResult: { artifactIncomplete: false }, degradedFiles: [], gateSkippedFinal: [] }
+    expect(resolveArtifactIncomplete(base)).toBe(false)
+    expect(resolveArtifactIncomplete({ ...base, degradedFiles: ['package/components/A.vue'] })).toBe(true)
+    expect(resolveArtifactIncomplete({ ...base, gateSkippedFinal: ['package/components/B.vue'] })).toBe(true)
+    expect(
+      resolveArtifactIncomplete({
+        ...base,
+        coverage: { missing: 0, orphanCheck: 'evaluated', missingSubcomponents: [{ subId: 'g1' }] },
+      }),
+    ).toBe(true)
+    // partial 写盘（没有 index.vue）时数量缺口不可信，不得误报
+    expect(
+      resolveArtifactIncomplete({
+        ...base,
+        coverage: { missing: 3, orphanCheck: 'skipped:partial', missingSubcomponents: [] },
+      }),
+    ).toBe(false)
+    // 全量写盘的数量缺口可信
+    expect(
+      resolveArtifactIncomplete({
+        ...base,
+        coverage: { missing: 2, orphanCheck: 'evaluated', missingSubcomponents: [] },
+      }),
+    ).toBe(true)
+  })
+
+  it('子组件锚点已落独立 .vue ⇒ 不因该维度置为不完整（阴性对照）', () => {
+    const files = asFiles([
+      ['package/index.vue', '<template><div><StatsSection /><CardsA /><CardsB /></div></template>'],
+      ['package/components/StatsSection.vue', NON_EMPTY_VFOR],
+      ['package/components/CardsA.vue', '<template><div>【锚点A】</div></template>'],
+      ['package/components/CardsB.vue', '<template><div>【锚点B】</div></template>'],
+    ])
+    const subComponentPlan = {
+      isForced: true,
+      minFiles: 3,
+      internalSubcomponents: [
+        { id: 'g1', textTruths: ['【锚点A】'] },
+        { id: 'g2', textTruths: ['【锚点B】'] },
+      ],
+    }
+    const res = evaluateArtifactCompleteness(files, { effectiveSections: [] }, [], {
+      subComponentPlan,
+    })
+    expect(res.missingSubcomponents).toEqual([])
     expect(res.artifactIncomplete).toBe(false)
   })
 })

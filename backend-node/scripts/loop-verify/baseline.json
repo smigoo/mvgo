@@ -1,0 +1,148 @@
+{
+  "anchor": {
+    "repo": "backend-node",
+    "commit": "95054ed",
+    "takenAt": "2026-11-08T15:03:41.070Z"
+  },
+  "replayMode": "reuseCache=true (S3 shared-cache, vision/figma 锁定)",
+  "deterministicLayer": [
+    {
+      "label": "2d8f4cc8-流量监测",
+      "sessionId": "mc-1794149420025-edd62b43",
+      "chartOwned": 0,
+      "takeoverHits": {
+        "header": 0,
+        "grid": 0,
+        "text": 0,
+        "icon": 0,
+        "legend": 0,
+        "kvGrid": 0,
+        "list": 0,
+        "statRow": 2,
+        "table": 0,
+        "footer": 0,
+        "regions": 0
+      }
+    },
+    {
+      "label": "e239c8c3-重点车辆监测",
+      "sessionId": "mc-1794149306329-bed5df61",
+      "chartOwned": 0,
+      "takeoverHits": {
+        "header": 0,
+        "grid": 1,
+        "text": 0,
+        "icon": 0,
+        "legend": 0,
+        "kvGrid": 0,
+        "list": 1,
+        "statRow": 0,
+        "table": 0,
+        "footer": 0,
+        "regions": 0
+      }
+    },
+    {
+      "label": "1559f801-设备监测-对照",
+      "sessionId": "mc-1794149598232-4773f769",
+      "chartOwned": 0,
+      "takeoverHits": {
+        "header": 0,
+        "grid": 1,
+        "text": 0,
+        "icon": 0,
+        "legend": 0,
+        "kvGrid": 0,
+        "list": 0,
+        "statRow": 0,
+        "table": 0,
+        "footer": 0,
+        "regions": 0
+      }
+    },
+    {
+      "label": "e33cb213-环境监测-广义对照",
+      "sessionId": "mc-1794149598147-36d19153",
+      "chartOwned": 0,
+      "takeoverHits": {
+        "header": 0,
+        "grid": 0,
+        "text": 0,
+        "icon": 0,
+        "legend": 0,
+        "kvGrid": 0,
+        "list": 0,
+        "statRow": 0,
+        "table": 0,
+        "footer": 0,
+        "regions": 0
+      }
+    }
+  ],
+  "stochasticLayer": [
+    {
+      "label": "2d8f4cc8-流量监测",
+      "status": "completed",
+      "artifactIncomplete": false,
+      "degradedFiles": null,
+      "degradedReason": null,
+      "error": null
+    },
+    {
+      "label": "e239c8c3-重点车辆监测",
+      "status": "failed",
+      "artifactIncomplete": true,
+      "degradedFiles": [
+        "package/components/TabsSection.vue"
+      ],
+      "degradedReason": "SFC 编译失败，已隔离降级（可二次生成）",
+      "error": "最终 LESS 编译门禁阻断: resources/styles/index.less:7:1 variable @color-bg-container is undefined\n已完成分块：1-declare.json、2-package"
+    },
+    {
+      "label": "1559f801-设备监测-对照",
+      "status": "completed",
+      "artifactIncomplete": true,
+      "degradedFiles": [
+        "package/components/StatsTunnel.vue",
+        "package/components/CardGrid.vue"
+      ],
+      "degradedReason": "SFC 编译失败，已隔离降级（可二次生成）",
+      "error": null
+    },
+    {
+      "label": "e33cb213-环境监测-广义对照",
+      "status": "completed",
+      "artifactIncomplete": true,
+      "degradedFiles": [
+        "package/components/ContentSection.vue"
+      ],
+      "degradedReason": "SFC 编译失败，已隔离降级（可二次生成）",
+      "error": null
+    }
+  ],
+  "probe": {
+    "component": "c-device-monitor-4773f769 (1559f801 回放产物)",
+    "rootH": 387,
+    "headerH": 21.6,
+    "switchH": 65,
+    "contentH": 296.4,
+    "pageErrors": 0
+  },
+  "jest": null,
+  "notes": [
+    "LLM 随机层实证：同代码+同缓存 vision，status/degradedFiles 每发不同（2:9778 上午 failed→回放 completed；2:8417 上午 0 降级→回放 2 降级；2:7879 上午健康→回放 1 降级）",
+    "确定性层实证：chartOwned=0 四发全一致（analysisCharts 断链稳定复现）；takeover hits 结构稳定",
+    "判分口径修正：收益/回归判定以确定性层为主（chartOwned/takeover hits/R2 快照校验计数），status/degraded 作参考项"
+  ],
+  "productDiff": {
+    "fileManifest": {
+      "2d8f4cc8": "一致（12 .vue 同名）",
+      "e239c8c3": "一致（3 .vue 同名）",
+      "1559f801": "一致",
+      "e33cb213": "❗粒度随机：上午 MainSection.vue 单组件 vs 回放 ChartChart/ChartSection/ContentSection/ContentSection2 4 组件（同 vision 缓存，LLM 分块随机实证）"
+    },
+    "indexStructure": "三组件 data-section-id 集合 / flex 值 / 子组件挂载清单 diff 全空 —— 装配层确定性实证",
+    "cardGrid": "1559f801 上午版 vs 回放降级版逐要素一致（repeat(3,117px)/auto-rows:64px/v-for×2）——降级标记≠内容变差，运行时编译噪声后保留 last-good，probe 渲染健康（switch 65px）",
+    "cacheVersion": "2:7879 cachedAt=05:08:24Z = 上午 e33cb213 自写 ⇒ 粒度差异非 vision 版本差，为 LLM 分块随机"
+  }
+}

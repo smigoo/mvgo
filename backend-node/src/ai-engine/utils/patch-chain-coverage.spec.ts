@@ -28,7 +28,11 @@ const FILES = [
   // 76→77（2026-11-06 归因）：8cfbd218 属性内插值归一新增
   // `catch (_attrInterpErr)`（execute 落盘前出口），已接 reportPatchChainError
   // 哨兵（pass='execute:attr-interp'）；基线同步 +1。
-  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 80 },
+  // 80→81（2026-11-08 归因）：402679ed 子组件覆盖度校验新增 `catch (e)`
+  // （writeFiles 写盘唯一出口），已接 reportPatchChainError 哨兵
+  // （pass='writeFiles:subcomponent-coverage'）；判据见 microcode/subcomponent-coverage.js。
+  // R2（2026-11-08）：新增 readComponentVueFiles 两处读盘兜底 catch（均已接哨兵）→ 81→83
+  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 83 },
   { rel: 'src/ai-engine/roles/vue3-engineer.js', expectCatches: 25 },
 ];
 

@@ -3229,10 +3229,24 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
   // 内联优先级高于类选择器 ⇒ 规则② 即便写对也被内联覆盖；本产物 StatsSection 根 class
   // `c-slot-con-fg-statrow-434893` 更是在 `resources/` 下 **0 条 CSS 规则**（规则② 无落点）。
   // ⇒ 内联 style 是唯一必然存在、且优先级最高的落点。
+  //
+  // 🧱 2026-11-08 边界（mc-1794130136557-0596cb3c 实锤）：**本轮 template 由确定性装配产出时整条跳过**。
+  //   规则⑥ 的存在理由是「防 LLM 自由发挥的内联 flex 覆盖 CSS 权威比例」；装配层写的是
+  //   `flexItemStyleFromHeights` 的**同层归一**值（h/Σh，Σ=1），而 `sectionHeights` 是
+  //   **avg=1 量纲**（如 0.218/0.473/2.308）。两套量纲混用 ⇒ 产物出现
+  //   `flex: 0.218 / 0.473 / 0.769`（前两段被覆盖、第三段保留装配值）⇒ 归一后 15%/32%/52%，
+  //   真值应 7%/16%/77% ⇒ 统计条拉到 121px、卡片区只剩 205px（4 行放不下）。
+  //   ⇒ 单一事实源：装配已给权威比例时，规则⑥ 不得二次改写。LLM 模板路径行为逐字不变。
   let out6 = out5;
-  if (sectionHeights) {
+  const assemblyAlreadyAuthoritative =
+    String(ctx?.indexTemplateSource || '') === 'deterministic-template';
+  if (sectionHeights && !assemblyAlreadyAuthoritative) {
     out6 = fixInlineSectionFlex(out5, { sectionHeights, files: ctx?.files, path, logger });
     if (out6 !== out5) changed = true;
+  } else if (sectionHeights && assemblyAlreadyAuthoritative && logger) {
+    logger.info('🧱 规则⑥ 跳过：本轮 template 由确定性装配产出，内联 flex 已是权威比例（同层归一）', {
+      file: path,
+    });
   }
 
   if (changed && logger) {

@@ -1428,7 +1428,14 @@ function subtreeIconTruth(node, resourceMapping, firstTextX) {
 }
 
 /** 卡原始节点 → 内联真值（底/圆角/文本 runs/卡内 pad+gap/前导 icon）。任一文本不可解析 ⇒ null。 */
-function cardTruth(node, resourceMapping) {
+/** 卡内文本列「x 对齐」容差（px）：≥2 run 起点 x 差在此范围内才可能是同一文本列 */
+const TEXT_COL_X_TOL = 2;
+
+/**
+ * 卡原始节点 → 内联真值（底/圆角/文本 runs/卡内 pad+gap/前导 icon/文本列方向）。
+ * 任一文本不可解析 ⇒ null。
+ */
+export function cardTruth(node, resourceMapping) {
   const box = bboxOf(node);
   if (!box) return null;
   let r = node?.cornerRadius;
@@ -1522,6 +1529,24 @@ function cardTruth(node, resourceMapping) {
     const gs = tb.slice(1).map((b, i) => Math.round(b.x - (tb[i].x + tb[i].w)));
     gap = Math.max(0, Math.round(gs.reduce((s, g) => s + g, 0) / gs.length));
   }
+  // 🧱 2026-11-08（mc-1794143134686 实锤）：卡内文本列方向 —— 从 runs 几何确定性判定。
+  //   病灶：模板固定 `display:flex`（默认 row）⇒ icon + 「名称」+「数值」全横排，
+  //   实测卡片 117 宽内名称 x=39→75、数值 x=81→138 ⇒ 右边界 138 超出卡宽被裁 21px。
+  //   真值：`摄像机` rel=(39,13) 36×18 与 `(2/484)` rel=(39,35) 55×21 —— **x 对齐、y 递增**（竖排），
+  //   垂直间距 35-(13+18)=4px（与 planner itemSkeleton.gapPx=4 同源同值）。
+  //   判据（几何、零命名）：≥2 run 且「x 起点差 ≤ 2px 且 y 严格递增」⇒ column，否则 row。
+  //   注：gap 只在 column 时有意义（垂直间距），row 时保持原水平间距计算。
+  let textDir = 'row';
+  let stackGap = null;
+  if (tb.length >= 2) {
+    const xAligned = tb.every((b) => Math.abs(b.x - tb[0].x) <= TEXT_COL_X_TOL);
+    const yAsc = tb.every((b, i) => i === 0 || b.y > tb[i - 1].y);
+    if (xAligned && yAsc) {
+      textDir = 'column';
+      const vg = tb.slice(1).map((b, i) => Math.round(b.y - (tb[i].y + tb[i].h)));
+      stackGap = Math.max(0, Math.round(vg.reduce((s, g) => s + g, 0) / vg.length));
+    }
+  }
   // 🛡️ 刀55（2026-11-05 · c-device-monitor-8f4dfed9 / 89c25985 双实锤）：**卡内 icon 资源通道**。
   //   病灶：本函数子树只收 TEXT 节点（上方 walk），icon 节点不可见 ⇒ 其几何足迹被
   //   `pad = 首文本x − 卡左缘` 整体吸收（实测 8f4dfed9 两状态卡 pad:111/122 恰为 icon
@@ -1545,6 +1570,9 @@ function cardTruth(node, resourceMapping) {
     icon,
     // 🛡️ 刀60 观测出参：本卡同行容差判据是否改变了文本序（0 也打，真机计数行用）
     rowOrderFixed,
+    // 🧱 卡内文本列方向（column = icon 左 + 名称上/数值下；row = 单行横排）
+    textDir,
+    ...(stackGap !== null ? { stackGap } : {}),
     runs: runs.map((x) => ({ text: x.text, color: x.color, fs: x.fs, fw: x.fw })),
   };
 }
@@ -4017,6 +4045,13 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     return iconVarIndex.get(ic.varName);
   });
   const hasIcon = iconVars.length > 0;
+  // 🧱 卡内文本列方向：只有**全部卡一致**为 column 才启用（混排时不猜，逐字保持旧结构）。
+  const hasTextColumn =
+    tr.items.length > 0 && tr.items.every((it) => it.textDir === 'column');
+  const stackGapPx = tr.items[0]?.stackGap;
+  const textColGap =
+    Number.isFinite(stackGapPx) && stackGapPx > 0 ? `gap:${stackGapPx}px;` : '';
+
   const lines = [
     '<template>',
     // 🔴 justify-content 必须显式内联：只要有写作者（LLM/注入器）给宿主 class 写
@@ -4031,7 +4066,20 @@ export function renderFoldedGridLeafVue(tr, semantic) {
           `      <img v-if="it.icon != null" :src="FG_GRID_ICONS[it.icon]" :style="{ width: it.iw + 'px', height: it.ih + 'px', flex: '0 0 auto' }" />`,
         ]
       : []),
-    `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+    // 🧱 2026-11-08（mc-1794143134686 实锤）：文本列方向按 Figma 几何还原。
+    //   真值 `摄像机`(39,13) 与 `(2/484)`(39,35) 是 **x 对齐 + y 递增** 的竖排两行；
+    //   旧模板固定 flex(row) ⇒ 两行被拉成一行，数值右边界超出卡宽 21px 被裁。
+    //   现按 `textDir` 决定：column ⇒ 包一层竖排 text 列（垂直 gap 用真值 stackGap）；
+    //   row（默认/单文本/无法判定）⇒ 逐字保持旧结构，阴性零回归。
+    ...(hasTextColumn
+      ? [
+          `      <div class="${cls}-text" style="display:flex;flex-direction:column;${textColGap}min-width:0;">`,
+          `        <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+          '      </div>',
+        ]
+      : [
+          `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+        ]),
     '    </div>',
     '  </div>',
     '</template>',
@@ -4067,6 +4115,7 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     '<style lang="less" scoped>',
     `.${cls} { min-width: 0; }`,
     `.${cls}-card { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; }`,
+    ...(hasTextColumn ? [`.${cls}-text { min-width: 0; }`] : []),
     '</style>',
     '',
   ];

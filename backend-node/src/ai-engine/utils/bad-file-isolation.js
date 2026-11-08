@@ -1,4 +1,7 @@
 import { detectUnmaterializedSections, detectEmptySectionComponents } from './section-coverage-guard.js';
+// 🧩 2026-11-08（评审修订版 §3②）：planner 强制清单缺件并入同一完整性出口。
+//   判据本体仍在 roles/microcode/subcomponent-coverage.js（零依赖纯函数），此处只消费，不复制口径。
+import { assessSubComponentCoverage } from '../roles/microcode/subcomponent-coverage.js';
 
 /**
  * 🛡️ P1-4：坏文件隔离降级的**决策层**（纯函数，2026-08-30）
@@ -73,15 +76,74 @@ export function planBadFileIsolation(allFiles, badPaths) {
  *   ⇒ unmaterializedSections 为空 ⇒ artifactIncomplete=false ⇒ success 撒谎。
  *   空壳与「未物化」在交付语义上等价（用户看到的都是内容缺失），故并入同一出口。
  */
-export function evaluateArtifactCompleteness(allFiles, componentPlan, degradedFiles = []) {
+export function evaluateArtifactCompleteness(
+  allFiles,
+  componentPlan,
+  degradedFiles = [],
+  options = {},
+) {
   const files = Object.entries(allFiles || {}).map(([path, content]) => ({ path, content }));
   const unmaterializedSections = detectUnmaterializedSections(files, componentPlan);
   const degraded = (Array.isArray(degradedFiles) ? degradedFiles : []).filter(Boolean);
   const emptySections = detectEmptySectionComponents(allFiles, componentPlan);
+
+  // 🧩 2026-11-08：子组件强制清单缺件（internalSubcomponents 未落独立 .vue）。
+  //   优先用调用方已算好的 coverage（避免同一入口算两次）；否则按 subComponentPlan 现算。
+  //   缺件与「未物化 section / 空壳」在交付语义上等价 —— 用户看到的都是内容缺失。
+  const coverage =
+    options.subComponentCoverage && typeof options.subComponentCoverage === 'object'
+      ? options.subComponentCoverage
+      : options.subComponentPlan
+        ? assessSubComponentCoverage({ subPlan: options.subComponentPlan, files: allFiles })
+        : null;
+  const missingSubcomponents = Array.isArray(coverage?.missingSubcomponents)
+    ? coverage.missingSubcomponents
+    : [];
+
   return {
     artifactIncomplete:
-      degraded.length > 0 || unmaterializedSections.length > 0 || emptySections.length > 0,
+      degraded.length > 0 ||
+      unmaterializedSections.length > 0 ||
+      emptySections.length > 0 ||
+      missingSubcomponents.length > 0,
     unmaterializedSections,
     emptySections,
+    missingSubcomponents,
+    ...(coverage ? { subComponentCoverage: coverage } : {}),
   };
+}
+
+/**
+ * 🧩 2026-11-08（R2）：产物完整性的**最终裁决**（纯函数，单一来源）。
+ *
+ * 时点：必须在「写盘门禁 / P1-4 隔离降级 / 覆盖度」全部结算之后调用。
+ * 病灶：`generateCode` 中途计算时 `degradedFiles` 尚未产生 ⇒ 真机出现
+ *   `component-meta.json: degradedFiles=['X.vue']` 而 `artifactIncomplete=false`。
+ *
+ * 放在纯函数里而不是散在 execute 方法体：① 作用域明确（曾因块级 const 导致
+ * `finalArtifactIncomplete is not defined` 把任务打挂）；② 可单测；③ 与
+ * `evaluateArtifactCompleteness` 同域，完整性口径只有这一处。
+ *
+ * @param {object} p
+ * @param {object} [p.codeResult] generateCode 返回值（含 artifactIncomplete）
+ * @param {string[]} [p.degradedFiles] P1-4 隔离降级文件
+ * @param {string[]} [p.gateSkippedFinal] 写盘门禁跳过且**最终仍未落盘**的文件
+ * @param {object|null} [p.coverage] assessSubComponentCoverage 输出
+ * @returns {boolean}
+ */
+export function resolveArtifactIncomplete({
+  codeResult,
+  degradedFiles,
+  gateSkippedFinal,
+  coverage,
+} = {}) {
+  if (codeResult?.artifactIncomplete === true) return true;
+  if (Array.isArray(degradedFiles) && degradedFiles.length > 0) return true;
+  if (Array.isArray(gateSkippedFinal) && gateSkippedFinal.length > 0) return true;
+
+  const c = coverage && typeof coverage === 'object' ? coverage : null;
+  if (!c) return false;
+  if (Array.isArray(c.missingSubcomponents) && c.missingSubcomponents.length > 0) return true;
+  // 数量缺口只在「全量写盘」（拿到 index.vue）时可信：partial 写盘 generated=0 会误报
+  return c.orphanCheck === 'evaluated' && Number(c.missing) > 0;
 }

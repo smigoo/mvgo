@@ -75,6 +75,8 @@ import { FIGMA_ID_RE, sectionAnchorCandidates, sectionAnchorKey } from '../utils
 //   病灶：主路径「结构骨架=vision」忠实执行 vision 错序（图标操作区排 Tab 栏前 → badge 红条）。
 //   窄判据几何纠正：锚点全有效 + 严格垂直堆叠 + 数组序≠y 序时才按几何重排，其余一律不动。
 import { auditVisionSectionOrder } from '../utils/vision-order-auditor.js';
+import { auditSectionAnchorScope } from '../utils/section-anchor-scope-auditor.js';
+import { expandOverCoarseSections } from '../utils/over-coarse-section-expander.js';
 
 // 🛡️ 2026-10-30 第2步（刀33 既有步序 · 用户拍板）：**结构骨架 = vision／精确尺寸 = Figma**。
 //   此前 E1（deriveSectionsFromFigmaTree）无条件替代 vision sections 作结构骨架，
@@ -3028,6 +3030,24 @@ export class SubcomponentPlanner {
     // P2': 合并图例 section 到相邻图表 section
     sections = mergeLegendSections(sections);
 
+    // 🛡️ V-4 前移（2026-11-08 · 架构顺序修正）：段锚点范围审计必须在**结构骨架确定之前**。
+    //   理由：`collapseSectionsDeep` 用段的 `figmaBox` 判几何同构签名，若审计落在折叠之后，
+    //   折叠器看到的是**未修正**的段树（例如 4 段形态里的「单卡」与「单卡底图」两个 117×64
+    //   同构段），可能把它们折成错误的 v-for 模板；前移后折叠器拿到的是上提过的正确段。
+    //   安全性：原始 vision 段形态下 `sectionAnchorKey` 仍可解析（候选序含 figmaNodeId / id），
+    //   且 V-4 只改 `id / sourceNodeIds / 锚点四候选 / 段高`，不改变段的语义字段 ⇒ 形态安全。
+    //   🔴 V-5（过粗下拆）**不前移**：它产出的是 E1 形态段（无 body/responsibility），
+    //   混入 vision 段树会被 `buildEffectiveSection` 当成「缺内容段」处理，故留在
+    //   effectiveSections 阶段（见下方 applyOverCoarseExpansion 调用处）。
+    const beforeScopeEarly = sections;
+    sections = applySectionAnchorScopeAudit(sections, opts.figmaNodeData);
+    if (sections !== beforeScopeEarly) {
+      logger.warn('🛡️ [折叠前] 顶层段锚点过窄（单卡/单卡底图被当成整段），已上提到集合容器', {
+        from: beforeScopeEarly.map((s) => s.id),
+        to: sections.map((s) => s.id),
+      });
+    }
+
     // 🛡️ 2026-09-10：同构重复卡片收成 list/grid（device 12 卡 + 12 装饰 → 1 个模板）
     // 🛡️ 2026-09-20 治本：切 collapseSectionsDeep（递归 + 几何同构签名）——
     //   E1 后重复项都在容器 children 里，旧顶层折叠静默失效（mc-max-1789871432610
@@ -3200,6 +3220,37 @@ export class SubcomponentPlanner {
       if (effectiveSections !== beforeSort) {
         logger.info('effectiveSections 已按 Figma 视觉坐标重排', {
           from: beforeSort.map((s) => s.id),
+          to: effectiveSections.map((s) => s.id),
+        });
+      }
+
+      // 🛡️ V-4（2026-11-08 · mc-1794122457556-be2af6c7 实锤）：顶层段锚点范围几何审计。
+      //   病灶：vision 把「一张卡」及其「该卡底图」报成两个顶层业务段
+      //   （`2:8438` 单卡 117×64 标成「左侧功能标签栏」/ `2:8439` 其 bg 标成「设备状态卡片网格」），
+      //   真实网格容器是其祖先 `2:8437 cons` 367×295（12 张卡 3×4）。
+      //   忠实执行错段的连锁：flexGrow 按 64 算 → 装配按 4 段出骨架 → 刀53 对 `2:8439`
+      //   （3 节点 0 TEXT）判 icon 叶 ⇒ **整文件重写 CardGrid.vue 为单图容器**（12 卡全丢）。
+      //   判据：「重复集合中的成员不可能是整个业务段」⇒ 锚点上提到集合容器并按目标合并。
+      //   🔴 位置必须在 applyFigmaHeightGrow 之前——后者按 section.id 查 Figma 节点取高度，
+      //   上提后 id 变了，才能取到 295 而非 64。计数行恒打（0 也打）。
+      // 🛡️ V-4 已前移到 `collapseSectionsDeep` **之前**（见 mergeLegendSections 之后），
+      //   此处不再重复调用 —— 二次执行会让 `coveredIds` 基于不同段集求值，可能误判。
+      //   若需审计「buildEffectiveSection 之后才出现的新段」（如 E1 派生段），另开独立判据。
+
+      // 🧱 V-5（2026-11-08 · mc-1794128973091-c3fe924f 实锤）：段粒度过粗的局部 E1 展开。
+      //   同一 Figma 节点三次生成，vision 给出 4/3/2 段三套粒度：4 段（单卡+单卡底图被当段）
+      //   → 刀53 覆盖整组件；2 段（整块 `89:40`）→ LLM 画成一张大卡、12 卡网格丢失；
+      //   只有 3 段（`2:8419 / 2:8787 / 89:37`）产物合格。
+      //   既有 structure-source 闸门只判「锚点是否存在」，`89:40` 是根槽容器锚点有效
+      //   ⇒ 粗粒度骨架直接放行。本步补「粒度」维：锚点的子是一串垂直堆叠且合计覆盖满高
+      //   的区块 ⇒ 该段只是外壳 ⇒ 用**既有** deriveSectionsFromFigmaTree 局部递归展开。
+      //   🔴 位置在 applyFigmaHeightGrow 之前（后者按 section.id 取高），且在 V-4 之后
+      //   （先修过窄、再修过粗，两个方向互逆，分开调用各自留痕）。计数行恒打。
+      const beforeCoarse = effectiveSections;
+      effectiveSections = applyOverCoarseExpansion(effectiveSections, opts.figmaNodeData);
+      if (effectiveSections !== beforeCoarse) {
+        logger.warn('🧱 顶层段粒度过粗（整块内容区被当成一段），已按 Figma 子结构局部展开', {
+          from: beforeCoarse.map((s) => s.id),
           to: effectiveSections.map((s) => s.id),
         });
       }
@@ -3492,6 +3543,57 @@ function applyVisionOrderAudit(sections, figmaNodeData) {
     return out;
   } catch (e) {
     logger.warn('🛡️ vision 段序几何审计失败（fail-open 维持原序）', { error: e?.message || String(e) });
+    return sections;
+  }
+}
+
+/**
+ * 🧱 V-5 段粒度过粗的局部 E1 展开（纯逻辑在 utils/over-coarse-section-expander.js）。
+ * 「锚点的子是一串垂直堆叠且覆盖满高的区块」⇒ 该段只是外壳 ⇒ 用既有
+ * `deriveSectionsFromFigmaTree` 把它按 Figma 子结构递归展开。
+ * fail-open：任何异常都维持原段，绝不因展开本身让任务失败。
+ */
+function applyOverCoarseExpansion(sections, figmaNodeData) {
+  try {
+    const { sections: out, stats } = expandOverCoarseSections(sections, figmaNodeData);
+    logger.info('🧱 段粒度审计·已评估', {
+      sections: stats.sections,
+      after: Array.isArray(out) ? out.length : null,
+      expanded: stats.expanded,
+      skippedReason: stats.skippedReason,
+      details: stats.details.slice(0, 3),
+    });
+    return out;
+  } catch (e) {
+    logger.warn('🧱 段粒度审计失败（fail-open 维持原样）', {
+      error: e?.message || String(e),
+    });
+    return sections;
+  }
+}
+
+/**
+ * 🛡️ V-4 顶层段锚点范围审计（纯逻辑在 utils/section-anchor-scope-auditor.js，可单测、不拖 langchain）。
+ * 「重复集合中的成员不可能是整个业务段」⇒ 锚点上提到集合容器，同目标段合并。
+ * fail-open：任何异常都维持原段，绝不因审计本身让任务失败。
+ */
+function applySectionAnchorScopeAudit(sections, figmaNodeData) {
+  try {
+    const { sections: out, stats } = auditSectionAnchorScope(sections, figmaNodeData);
+    logger.info('🛡️ 顶层段锚点范围审计·已评估', {
+      sections: stats.sections,
+      after: Array.isArray(out) ? out.length : null,
+      anchoredSections: stats.anchoredSections,
+      promoted: stats.promoted,
+      merged: stats.merged,
+      skippedReason: stats.skippedReason,
+      promotions: stats.promotions.slice(0, 5),
+    });
+    return out;
+  } catch (e) {
+    logger.warn('🛡️ 顶层段锚点范围审计失败（fail-open 维持原样）', {
+      error: e?.message || String(e),
+    });
     return sections;
   }
 }

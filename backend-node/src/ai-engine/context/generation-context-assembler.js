@@ -168,6 +168,20 @@ const BODY_PASSTHROUGH_KEYS = new Set([
   //   事实源（chart-section.js 几何宿主挂载），此前被白名单剥掉 → production 输入 internalSubcomponents:0
   //   → 宿主 section 永远不知道自己名下有图表 → 双渲染/图表缺失。白名单放行 + 下方显式归一化透传。
   'internalSubcomponents', '_derivedFromId',
+  // 🛡️ 2026-11-08（mc-1794126061219-cbcac19a 实锤）：internalGeometry 是**段内结构事实**
+  //   （planner P-4 采集：锚点子树顶层元素 bbox + 直接文本，最多 24 项）。
+  //   此前被白名单剥掉 → production 输入段内结构全空 → 段 `2:8787`（Figma 里是一行两张
+  //   193×64.8 卡）在 prompt 里只剩「一个 tabs 段」 → LLM 只画一张卡，单卡被拉成整条、
+  //   底图箭头变形、卡内文字溢出。白名单放行 + 下方显式归一化透传，与 18544d9c 同款第二断点。
+  'internalGeometry',
+  // 🛡️ 2026-11-08（mc-1794142475652-ad63598d 实锤）：itemSkeleton 是**卡内骨架事实**
+  //   （planner H DOM contract：`deriveItemSkeleton` 从 Figma 几何推导
+  //   `textDirection / gapPx / texts / icon{w,h} / iconPosition`）。
+  //   此前被白名单剥掉 → `section-tree.js:1473/1546` 的「H3 硬骨架 DOM 模板」拿不到事实
+  //   → LLM 把「icon 左 + 文本列竖排（名称上/数值下）」写成**一行横排** ⇒
+  //   实测卡片内「摄像机」(x=601) 与「(2/484)」(x=643) 同行、后者右边界 700 > 卡片 679
+  //   ⇒ 数值被裁 21px。与 internalGeometry 同族第二断点，白名单放行 + 归一化透传。
+  'itemSkeleton',
 ])
 
 /** internalSubcomponents 透传字段（最小契约，与 planner R1/chart-section 产出字段对齐）。 */
@@ -194,8 +208,74 @@ function normalizeInternalSubs(subs) {
   return out.length > 0 ? out : undefined
 }
 
-function normalizeSectionNode(section, ctx = null) {
-  if (!section || typeof section !== 'object') return null
+/** internalGeometry 归一化上限（planner 侧最多 24 项，此处兜底防 prompt 膨胀） */
+const INTERNAL_GEOMETRY_MAX_ITEMS = 24
+
+/** 单条段内元素文本上限（与 planner 采集口径一致） */
+const INTERNAL_GEOMETRY_TEXT_MAX = 40
+
+/**
+ * 段内结构事实归一化（P-4 `internalGeometry`）。
+ *
+ * 只保留「几何 + 直接文本」两类事实，坐标取整、文本截断、非法项丢弃；
+ * 空数组 ⇒ 返回 undefined（缺字段不产键，零副作用）。
+ *
+ * @param {unknown} raw planner 采集的 [{x,y,w,h,text?}]
+ * @returns {Array<{x:number,y:number,w:number,h:number,text?:string}>|undefined}
+ */
+function normalizeInternalGeometry(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const out = []
+  for (const it of raw.slice(0, INTERNAL_GEOMETRY_MAX_ITEMS)) {
+    if (!it || typeof it !== 'object') continue
+    const w = Number(it.w)
+    const h = Number(it.h)
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) continue
+    const item = {
+      x: Number.isFinite(Number(it.x)) ? Math.round(Number(it.x)) : 0,
+      y: Number.isFinite(Number(it.y)) ? Math.round(Number(it.y)) : 0,
+      w: Math.round(w),
+      h: Math.round(h),
+    }
+    const text = typeof it.text === 'string' ? it.text.trim().slice(0, INTERNAL_GEOMETRY_TEXT_MAX) : ''
+    if (text) item.text = text
+    out.push(item)
+  }
+  return out.length > 0 ? out : undefined
+}
+
+/**
+ * 卡内骨架事实归一化（planner H DOM contract 的 `itemSkeleton`）。
+ *
+ * 只保留「文本列方向 / 行间距 / 各行文本 / icon 尺寸与左右位置」五类事实，
+ * 非法值丢弃；无 `textDirection` 或 `texts` 为空 ⇒ 返回 undefined（缺字段不产键，零副作用）。
+ *
+ * @param {unknown} raw planner `deriveItemSkeleton` 产出
+ * @returns {{textDirection:'column'|'row', gapPx:number, texts:string[], icon?:{widthPx:number,heightPx:number}, iconPosition?:'left'|'right'}|undefined}
+ */
+function normalizeItemSkeleton(raw) {
+  if (!raw || typeof raw !== 'object') return undefined
+  const dir = raw.textDirection === 'column' || raw.textDirection === 'row' ? raw.textDirection : null
+  const texts = Array.isArray(raw.texts)
+    ? raw.texts.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 40))
+    : []
+  if (!dir || texts.length === 0) return undefined
+  const out = {
+    textDirection: dir,
+    gapPx: Number.isFinite(Number(raw.gapPx)) ? Math.max(0, Math.round(Number(raw.gapPx))) : 0,
+    texts,
+  }
+  const icon = raw.icon && typeof raw.icon === 'object' ? raw.icon : null
+  const iw = Number(icon?.widthPx)
+  const ih = Number(icon?.heightPx)
+  if (Number.isFinite(iw) && Number.isFinite(ih) && iw > 0 && ih > 0) {
+    out.icon = { widthPx: Math.round(iw), heightPx: Math.round(ih) }
+  }
+  if (raw.iconPosition === 'left' || raw.iconPosition === 'right') out.iconPosition = raw.iconPosition
+  return out
+}
+
+function normalizeSectionNode(section, ctx = null) {  if (!section || typeof section !== 'object') return null
   const children = Array.isArray(section.children)
     ? section.children.map((child) => normalizeSectionNode(child, ctx)).filter(Boolean)
     : undefined
@@ -226,6 +306,10 @@ function normalizeSectionNode(section, ctx = null) {
   // 🛡️ 2026-11-04（18544d9c 实锤）：图表宿主归属（internalSubcomponents）透传——
   //   几何宿主挂载在 section 级与 plan 级两处消费，归一化剥掉即生产断供。
   const internalSubcomponents = normalizeInternalSubs(section.internalSubcomponents)
+  // 🛡️ 2026-11-08（cbcac19a 实锤）：段内结构事实（P-4）。缺省不产键。
+  const internalGeometry = normalizeInternalGeometry(section.internalGeometry)
+  // 🛡️ 2026-11-08（ad63598d 实锤）：卡内骨架事实（H DOM contract）。缺省不产键。
+  const itemSkeleton = normalizeItemSkeleton(section.itemSkeleton)
   if (ctx) {
     // 🔴 R8-7 观测：白名单剔除的**内容型**字段（对象/数组值）按名计数 —— 终结「第 N 次
     //   同类补丁」：今后任何事实被白名单剥掉，真机日志一行可见（聚合于 normalizeComponentPlan）。
@@ -315,6 +399,10 @@ function normalizeSectionNode(section, ctx = null) {
       : {}),
     // 🛡️ 2026-11-04（18544d9c 实锤）：图表宿主归属透传（缺省不产键，零副作用）
     ...(internalSubcomponents ? { internalSubcomponents } : {}),
+    // 🛡️ 2026-11-08（cbcac19a 实锤）：段内结构事实透传（缺省不产键，零副作用）
+    ...(internalGeometry ? { internalGeometry } : {}),
+    // 🛡️ 2026-11-08（ad63598d 实锤）：卡内骨架事实透传（缺省不产键，零副作用）
+    ...(itemSkeleton ? { itemSkeleton } : {}),
     // 🛡️ #138 续（2026-10-20 · 60dee79d/d7abdee8 实锤）：E1 互挂兄弟真值第二断点。
     //   planner 已透传 rowPeerIds，但此处 normalizeSectionNode 白名单重建再次剥掉 ⇒
     //   engineer 的 resolveSubComponentPlan **优先取 generationInput.componentPlan**（本函数产物）

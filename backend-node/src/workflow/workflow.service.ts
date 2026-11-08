@@ -176,6 +176,20 @@ export class WorkflowService {
       };
     }
 
+    // 🛡️ 2026-11-08 A：保存时校验拓扑契约，与 dynamic 构图共用同一判据
+    // （workflow-topology-validator.js 是唯一真相源）。避免未知 gate 校验器
+    // 落盘后被构图/运行时静默按通过处理；错误显式返回给前端。
+    const { validateWorkflowTopology } = await import(
+      '../ai-engine/graphs/workflow-topology-validator.js'
+    );
+    const topologyCheck = validateWorkflowTopology(workflow);
+    if (!topologyCheck.ok) {
+      return {
+        success: false,
+        error: `工作流拓扑不合法: ${topologyCheck.errors.join('; ')}`,
+      };
+    }
+
     try {
       const filePath = join(this.workflowsDir, `${workflow.name}.json`);
       await fs.writeFile(filePath, JSON.stringify(workflow, null, 2), 'utf-8');
@@ -524,14 +538,38 @@ export class WorkflowService {
         }),
       );
 
-      this.logger.log(`[${sessionId}] 工作流执行完成`, {
-        success: result?.success ?? !!result,
+      // 🛡️ 2026-11-08 B：终态按 checkResult 裁决，不再无条件 success:true。
+      // 判据在 workflow-terminal-protocol.js（纯函数、单一真相源）：
+      // 无校验器的示例管线不受影响；明确未通过且未被收敛豁免时判 failed。
+      const { evaluateDynamicTerminal } = await import(
+        './workflow-terminal-protocol.js'
+      );
+      const terminal = evaluateDynamicTerminal(result);
+
+      this.logger.log(`[${sessionId}] 工作流执行结束`, {
+        outcome: terminal.outcome,
+        reason: terminal.reason,
+        blockCount: terminal.quality.blockCount,
       });
+
+      if (terminal.outcome === 'failed') {
+        await this.progressService.sendError(sessionId, {
+          message: `工作流质量门未通过: ${terminal.reason}`,
+          checkResult: terminal.quality.checkResult,
+          blockCount: terminal.quality.blockCount,
+        });
+        return;
+      }
 
       this.progressService.sendComplete(sessionId, {
         success: true,
         message: '工作流执行完成',
         outputPath,
+        // 提升到 result 顶层，供 tasks.service.ts#completeTask 的 qualityGate 读取，
+        // 避免质量字段被嵌在 result.result 里而恒被判成 warned。
+        checkResult: terminal.quality.checkResult,
+        finalQualityScore: terminal.quality.qualityScore ?? undefined,
+        blockCount: terminal.quality.blockCount,
         result,
       });
     } catch (error) {

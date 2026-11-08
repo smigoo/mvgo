@@ -1210,6 +1210,13 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     pipeline.context = {
       ...pipeline.context,
       sectionHeights: context.sectionHeights,
+      // 🧱 2026-11-08（mc-1794130136557-0596cb3c 实锤）：本轮 `<template>` 的来源。
+      //   `deterministic-template` ⇒ 装配层已按**同层归一**（h/Σh）写好内联 flex，
+      //   规则⑥ 不得再用 `sectionHeights`（avg=1 量纲）覆盖 —— 两套量纲混用必错：
+      //   实锤产物 `flex: 0.218 / 0.473 / 0.769`（前两段被 avg=1 值覆盖、第三段保留
+      //   装配值 317/411.9=0.769）⇒ 归一后 15%/32%/52%，真值应 7%/16%/77%
+      //   ⇒ 统计条被拉到 121px、卡片区只剩 205px（4 行放不下）。
+      indexTemplateSource: _indexTemplateFacts?.source || null,
     };
   }
   // 🛡️ R1-2（2026-09-11）：布局事实数据流 —— 把 rootLayoutFacts 并入 pipeline.context，
