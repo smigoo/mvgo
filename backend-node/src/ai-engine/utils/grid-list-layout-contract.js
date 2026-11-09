@@ -668,6 +668,19 @@ export function detectGridListLayoutIssues(files, opts = {}) {
     //   fluidTracks 暴涨而 Illegal 不动 ⇒ 提示词把 1fr 灌进了契约段（末行恰好都满，属合法）。
     fluidTracks: 0,
     fluidTracksIllegal: 0,
+    // 🔴 入口 2 计数（2026-11-09 · fe2acd21 实锤，0 也必须出现在「已评估」行里）：
+    //   扁平直译形态把网格条目拆成 N 个独立组件（宿主与条目都无 v-for）⇒ 入口 1 整体
+    //   skipNoVFor，判据对 `repeat(N,1fr)` 完全失明（真机 skipNoVFor=28 / contracts=0）。
+    //   noVForSections  = 树遍历评估的段数（契约建不出不计）
+    //   noVForContracts = 由树遍历建出契约的段数
+    //   noVForMismatches= 树遍历判出违约的段数
+    //   noVForNoHost    = 有契约但产物里找不到宿主标签的段数
+    noVForSections: 0,
+    noVForContracts: 0,
+    noVForMismatches: 0,
+    noVForNoHost: 0,
+    // 产物宿主不是 grid / flex+row+wrap ⇒ 跳过（见入口 2 章程注释；fe2acd21 实测 89:38 靠它免误伤）
+    noVForNotGridImpl: 0,
   }
   const figmaIndex = opts.figmaIndex && typeof opts.figmaIndex.get === 'function' ? opts.figmaIndex : null
   const sections = toArray(opts.sections)
@@ -679,6 +692,8 @@ export function detectGridListLayoutIssues(files, opts = {}) {
   const usage = buildClassUsage(fileList)
   /** 只保留「不被别的元素复用」的 class（改名/改样式才安全） */
   const unshared = (classes) => toArray(classes).filter((c) => (usage.get(c) || 0) === 1)
+  // 入口 1 已建契约的 sid（双入口去重：单一 sid 只判一次，先到先得）
+  const handledSids = new Set()
 
   for (const f of fileList) {
     const path = String(f.path || '')
@@ -710,6 +725,7 @@ export function detectGridListLayoutIssues(files, opts = {}) {
         continue
       }
       stats.contracts += 1
+      handledSids.add(sid)
       const wrapClasses = classAttrOf(hostAttrs)
       const itemClasses = classAttrOf(pair.item?.attrs || '')
       if (wrapClasses.length === 0 || itemClasses.length === 0) {
@@ -756,6 +772,111 @@ export function detectGridListLayoutIssues(files, opts = {}) {
     }
     if (!matchedAny) stats.skippedNoSection += 1
   }
+
+  // ── 入口 2（2026-11-09 · fe2acd21 实锤）：section 树正向遍历，接住「无 v-for 宿主」─────
+  // 真值单向流动：从树出发，凡能建出契约的段（几何自洽，不自洽 buildGridContract 返回
+  // null ⇒ fail-open 不猜），按 `data-section-id` 反查产物宿主。找不到宿主/无 class 都
+  // 计数留痕、不改写。入口 1 已建过契约的 sid 跳过（先到先得，单一 sid 只判一次）。
+  // 实测无假阳性（fe2acd21 全树）：89:37 colGap=-3 出局、89:39 竖排单列 xs<2 出局、
+  // 2:8467 卡内竖排出局 —— 契约判据本身就是过滤器。
+  const walkTreeSections = (list) => {
+    for (const sec of toArray(list)) {
+      if (!sec || typeof sec !== 'object') continue
+      const sid = String(sec.id ?? '')
+      if (sid && !handledSids.has(sid)) {
+        stats.noVForSections += 1
+        const contract = buildGridContract(sec, { figmaIndex })
+        if (contract) {
+          // 产物宿主：带该 data-section-id 的标签（与 v-for 无关；findHostTag 引号感知）
+          let hostFile = null
+          let hostAttrs = ''
+          for (const f of fileList) {
+            if (!/\.vue$/i.test(String(f.path || ''))) continue
+            const m = findHostTag(f.content, sid)
+            if (m) {
+              hostFile = f
+              hostAttrs = m[0]
+              break
+            }
+          }
+          if (!hostFile) {
+            stats.noVForNoHost += 1
+          } else {
+            const wrapClasses = classAttrOf(hostAttrs)
+            if (wrapClasses.length === 0) {
+              stats.skippedNoClass += 1
+            } else {
+              const wrap = resolveElementDecls(sources, wrapClasses, inlineStyleOf(hostAttrs))
+              // 🔴 实现形态过滤器（防假自愈；fe2acd21 全树 437 节点裸建契约命中 2 个，
+              //   其中 89:38 是「头部两卡横排」而非网格 —— 不过滤的话 judge 的 display
+              //   分支会把 flex-row 容器改写成 2 列网格 ⇒ 误伤）。
+              //   入口 2 章程：只对「产物已是 grid / flex+row+wrap」的容器强制几何契约；
+              //   把非网格实现转换成网格仍归入口 1（v-for 才是意图信号）。判据同构：
+              //   与 judgeGridContract 的 isGridImpl/isFlexImpl 同口径，此处只做门卫不重复判定。
+              const _disp = String(wrap.display || '').trim().toLowerCase()
+              const _gridImpl = _disp === 'grid'
+              const _flexImpl =
+                (_disp === 'flex' || _disp === 'inline-flex') &&
+                String(wrap['flex-direction'] || 'row').trim().toLowerCase().startsWith('row') &&
+                /wrap/.test(String(wrap['flex-wrap'] || ''))
+              if (!_gridImpl && !_flexImpl) {
+                stats.noVForNotGridImpl += 1
+              } else {
+              // 条目：树中**直接子段** id 反查产物标签（扁平直译下每条目是独立组件根）。
+              // 条目同构时取首个即可；判据对 grid 实现的条目只查「会改卡宽」的 width 百分比/calc。
+              const itemClassesAll = []
+              let firstItemDecls = null
+              for (const child of toArray(sec.children || sec.body?.children)) {
+                const cid = String(child?.id ?? '')
+                if (!cid) continue
+                for (const f of fileList) {
+                  if (!/\.vue$/i.test(String(f.path || ''))) continue
+                  const m = findHostTag(f.content, cid)
+                  if (!m) continue
+                  const cls = classAttrOf(m[0])
+                  if (cls.length === 0) break
+                  for (const c of cls) if (!itemClassesAll.includes(c)) itemClassesAll.push(c)
+                  if (!firstItemDecls) firstItemDecls = resolveElementDecls(sources, cls, inlineStyleOf(m[0]))
+                  break
+                }
+              }
+              const found = judgeGridContract(contract, wrap, firstItemDecls || {})
+              stats.noVForContracts += 1
+              handledSids.add(sid)
+              if (found.length > 0) {
+                stats.noVForMismatches += 1
+                const wrapperTargets = unshared(wrapClasses)
+                const itemTargets = unshared(itemClassesAll)
+                if (wrapperTargets.length === 0) stats.skippedNoClass += 1
+                issues.push({
+                  id: 'GRID-CONTRACT-001',
+                  severity: 'WARN',
+                  file: String(hostFile.path || ''),
+                  sectionId: sid,
+                  via: 'section-tree',
+                  host: { name: (/<([a-zA-Z][\w-]*)/.exec(hostAttrs) || [])[1] || '', attrs: hostAttrs },
+                  wrapperClass: wrapperTargets[0] || wrapClasses[0],
+                  wrapperClasses: wrapperTargets,
+                  itemClasses: itemTargets,
+                  contract,
+                  violations: found,
+                  message:
+                    `折叠网格 ${sid}（${wrapClasses[0]}，无 v-for·树遍历入口）与设计稿几何契约不符：` +
+                    found.map((v) => `${v.prop} 实际 ${v.actual}，应 ${v.want}`).join('；') +
+                    `。真值 ${contract.cols} 列 × ${contract.cardW}×${contract.cardH}，列距 ${contract.colGap}` +
+                    `${contract.rowGap !== null ? `，行距 ${contract.rowGap}` : ''}（共 ${contract.itemCount} 项）`,
+                  hint: { suggestion: '按几何契约改写为 grid 固定列宽或 flex+固定基数（见 healGridListLayout）' },
+                })
+              }
+              } // else：实现形态过滤器通过
+            }
+          }
+        }
+      }
+      walkTreeSections(toArray(sec.children || sec.body?.children))
+    }
+  }
+  walkTreeSections(sections)
   return { issues, stats }
 }
 
@@ -1173,6 +1294,7 @@ export function healGridListLayout(files, issues) {
     if (touched > 0) {
       healed.push({
         sectionId: issue.sectionId,
+        via: issue.via || 'v-for',
         wrapperClass: canonicalCls,
         wrapperClasses: wrapClasses,
         itemClasses,

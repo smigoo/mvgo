@@ -12,6 +12,7 @@ import { feedbackAttachmentsDir } from '../config/backend-root'
 import { TaskFeedback, TaskFeedbackDocument, FeedbackStatus, FeedbackCategory } from './feedback.schema'
 import { redactTextSecrets, sanitizeDescription, truncateLogText } from './feedback-redact.util'
 import { FIGMA_CREDENTIAL_FP_FIELD, figmaCredentialFpFromConfig } from '../config/figma-credential'
+import { assessFigmaCredentialDrift } from '../config/figma-credential-ref'
 
 const DEDUP_WINDOW_MS = 10 * 60 * 1000
 const DAILY_LIMIT = 20
@@ -192,6 +193,9 @@ export class FeedbackService {
       snapshot.tokenFingerprintSource = credential.source
       snapshot.tokenFingerprintCurrent = credential.currentFingerprint
       snapshot.tokenFingerprintChanged = credential.changed
+      // 判定依据（`no-ref` / `fingerprint-unusable` / `matched` / `not-found` / `slot-overwritten` / `no-slots`）：
+      // `changed===undefined` 有两种成因，光看布尔分不出来，落地后客服/排障才能一句话说清
+      snapshot.tokenFingerprintDrift = credential.driftReason
     }
     if (includes.includes('logs') && typeof logsText === 'string' && logsText.trim()) {
       const cleaned = redactTextSecrets(logsText)
@@ -283,18 +287,31 @@ export class FeedbackService {
         : ''
     const taskFingerprint: string | undefined = pipelineFp || createFp || undefined
     const source: 'pipeline' | 'create' | undefined = pipelineFp ? 'pipeline' : createFp ? 'create' : undefined
-    const currentFingerprint = await this.readCurrentFigmaFingerprint(userId)
-    const changed = taskFingerprint && currentFingerprint ? taskFingerprint !== currentFingerprint : undefined
-    return { taskFingerprint, source, currentFingerprint, changed }
+    const cfg = await this.readUserFigmaConfig(userId)
+    const currentFingerprint = cfg ? figmaCredentialFpFromConfig(cfg) ?? undefined : undefined
+    // 🔴 2026-11-09（诉求五 #16-②）：`changed` **不再**由两个指纹相减得出。
+    //    原口径 `taskFingerprint !== currentFingerprint` 里的 current 只是**当前 active 槽位**，
+    //    而方案 A 落地后「历史任务沿用当时那个 token」是**正常语义**（它常常不是 active 槽），
+    //    相减会把每一次正常沿用都误报成「凭证已变」——正是这次要消灭的那类噪声。
+    //    改为问「当时那个凭证现在还能不能按引用找回」，判据单一来源
+    //    `assessFigmaCredentialDrift`（与执行期 `resolveFigmaTokenByRef` 同源）。
+    const drift = assessFigmaCredentialDrift(task, cfg)
+    return {
+      taskFingerprint,
+      source,
+      currentFingerprint,
+      changed: drift.changed,
+      driftReason: drift.reason,
+    }
   }
 
-  private async readCurrentFigmaFingerprint(userId: string): Promise<string | undefined> {
+  /** 读用户**原始**配置（不合并、不投影）；读失败只降级为「无从对照」，绝不阻断反馈提交。 */
+  private async readUserFigmaConfig(userId: string): Promise<Record<string, any> | null> {
     try {
-      const cfg = await this.userAiConfigService.getUserConfig(userId)
-      return figmaCredentialFpFromConfig(cfg) ?? undefined
+      return await this.userAiConfigService.getUserConfig(userId)
     } catch (error: any) {
       this.logger.warn(`读取用户 Figma 凭证指纹失败: user=${userId} ${error?.message}`)
-      return undefined
+      return null
     }
   }
 

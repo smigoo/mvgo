@@ -121,6 +121,8 @@ import { LessVariableChecker } from '../validators/less-variable-checker.js';
 import { buildColorSlotMapping, applyColorSlotMapping } from '../utils/color-slot-mapper.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
+// 🛡️ R6（2026-11-09）：缓存命中路径的 headerSlots 聚合补跑（判据单一来源 = inferrer）。
+import { ensureHeaderSlots } from '../utils/inline-header-slot-inferrer.js';
 import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
 // 📊 WP1（2026-10-08）：chartSpec 红线留痕（文字色硬编码/数据混入/seriesTypes 盲区），独立字段只留痕不阻断
 import { scanChartTextColors, validateChartSpec } from '../utils/chart-spec.js';
@@ -1096,6 +1098,45 @@ export function createPhase2Graph(config = {}) {
           cachedResult,
           state.figmaNodeData,
         );
+        // 🛡️ R6（2026-11-09 · loop-verify）：缓存命中路径补跑 headerSlots 聚合。
+        //   病灶：实时路径在 visual-parser.parse() 内跑 ensureHeaderSlots（段级
+        //   headerSlots[] 收编，见 inline-header-slot-inferrer）+ graph :1275/:1322
+        //   契约回写；缓存命中路径 cachedResult 构造**不含 headerSlots 字段** ⇒
+        //   state.headerSlots 恒 []（:1589）⇒ 设备监测 2:8419 段级 4 条插槽真值
+        //   （title-left icon + header-right×3 statistic）在续跑任务永久丢失 ⇒
+        //   header-stats 落主体、tab 无交互。修法：与 A4 缓存补跑同区同思路——
+        //   用缓存里的 sections 补跑聚合（幂等纯函数，同输入同输出，不漂移）。
+        try {
+          const _cachedSections =
+            validatedCachedResult.layoutStructure?.layout?.sections ||
+            validatedCachedResult.layoutStructure?.sections ||
+            [];
+          const _hadInputField = Array.isArray(
+            validatedCachedResult.layoutStructure?.layout?.sections ||
+              validatedCachedResult.layoutStructure?.sections,
+          );
+          const _ensured = ensureHeaderSlots(
+            _cachedSections,
+            validatedCachedResult.headerSlots || [],
+          );
+          validatedCachedResult.headerSlots = _ensured.headerSlots;
+          // 计数行恒打（0 也打）——判据验签入口，采集器 replay.mjs 从 server.log 提取
+          // （🔴 2026-11-09 修订：旧行只有 derived/sectionArray/total，无法区分
+          //   「无插槽真值」与「输入结构缺失」；补 sectionsIn/hadField 两个字段）
+          logger.info('🎯 headerSlots 缓存补跑(ensureHeaderSlots)', {
+            sectionsIn: _cachedSections.length,
+            hadField: _hadInputField,
+            derived: _ensured.derivedCount,
+            sectionArray: _ensured.sectionArrayCount ?? 0,
+            total: _ensured.headerSlots.length,
+          });
+        } catch (_hse) {
+          // 🔴 2026-11-09 修订：fail-open 保留（不阻断任务），但必须 **error 级** 留痕，
+          //   使采集器/判分器能把它当失败信号（此前 warn 级 + 任务 completed 会被误读为生效）。
+          logger.error('🚫 headerSlots 缓存补跑失败（fail-open，维持无插槽状态）', {
+            error: _hse?.message || String(_hse),
+          });
+        }
         if (isUntrustedVisualAnalysis(validatedCachedResult)) {
           const blockError = buildVisualAnalysisBlockError(validatedCachedResult);
           logger.error('🚫 命中的视觉缓存为降级结果，阻断后续生成', {
@@ -5796,7 +5837,13 @@ export function createPhase2Graph(config = {}) {
         [],
       layoutStructure: state.layoutStructure,
     };
-    const res = validateDoNotInvent({ files, analysis });
+    // 🛡️ 豁免判据真值源（文字数字卡承载，00f3626c 实锤）：透传 Figma 树
+    const res = validateDoNotInvent({
+      files,
+      analysis,
+      figmaNodeData:
+        state.figmaNodeData || state._uiCache?.figmaNodeData || state._visualParserCache?.figmaNodeData || null,
+    });
     state._doNotInventResult = res;
     if (!res.pass) {
       const err = new Error(

@@ -13,6 +13,8 @@ import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { customComponentsDir, vue3ComponentsDir, tempComponentsDir, workspaceRoot, backendRoot } from '../config/backend-root';
 import { AiConfigService } from '../config/config.service';
 import { applyFigmaTokenProjection } from '../config/figma-token-projection';
+import { resolveExecutionFigmaTokenWithProbe } from '../config/figma-execution-token-probe';
+import { stripRedactedPlaceholders } from '../common/utils/redact';
 import { UserAiConfigService } from '../config/user-ai-config.service';
 import { QuotaService } from '../quota/quota.service';
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
@@ -711,9 +713,50 @@ export class Phase2Service {
       // 此前只读 config?.figmaToken（前端传）+ getAiConfig().figmaToken（全局），漏掉用户级
       // user_ai_configs 的 figmaToken → 用户配了自己的 Figma token（访问私有文件）却在 max 生成时
       // 被全局 token 覆盖 → Figma API 404（无权限）。
-      const effectiveFigmaToken = this.resolveFigmaToken(
-        config?.figmaToken || mergedAiConfig?.figmaToken,
+      //
+      // 🆕 2026-11-09 诉求五（任务 ↔ Figma Token 关联）：取凭证收敛到唯一入口
+      // `resolveExecutionFigmaToken()`。原口径 `config?.figmaToken || mergedAiConfig?.figmaToken`
+      // 有三个各自独立的缺陷，任一残留都会让「点历史任务连不上当时的 Figma」复发：
+      //   ① 优先级：重试/续跑把前端**当前** config 整个回传，请求 token 若优先于任务引用，
+      //      用户切过 token 后历史任务必然用错凭证（用户实报的原始 bug）；
+      //   ② 假值穿透：`configSnapshot.figmaToken` 是脱敏占位 `'***REDACTED***'`（**非空字符串**）
+      //      ⇒ `||` 链会把它当合法 token 发给 Figma，报错看起来像「文件不存在」；
+      //   ③ 无留痕：回落当前凭证时没有任何日志，排障只能靠猜。
+      // 现优先级固定为：任务凭证引用 > 请求显式 token > 当前 active 槽位 > 环境变量。
+      const figmaCredTask = this.tasksService.getTask(sessionId) || null;
+      // #15：引用无命中 ⇒ 用本次目标 fileKey/nodeId 逐槽探测（首个 200 即用）；
+      // 全不通则 reason='probe-failed' + token=null，下面 resolveFigmaToken 会抛出带
+      // 逐槽结论的可操作错误 —— 绝不回落 active 静默重跑。
+      const figmaTokenRes = await resolveExecutionFigmaTokenWithProbe({
+        task: figmaCredTask,
+        requestConfig: config,
+        activeConfig: mergedAiConfig,
+        fileKey,
+        nodeId,
+      });
+      if (!figmaTokenRes.token) {
+        // probe-failed 的 note 已含「逐槽探测结果 + 怎么处理」，比笼统的「未配置」可操作；
+        // 其余情形（真的没有任何凭证）沿用原口径文案。
+        throw new Error(
+          figmaTokenRes.reason === 'probe-failed'
+            ? `缺少可读取该设计稿的 Figma Token：${figmaTokenRes.note}`
+            : '缺少 Figma Token：当前请求未传入，请在配置面板配置 Figma Token',
+        );
+      }
+      const effectiveFigmaToken = this.resolveFigmaToken(figmaTokenRes.token);
+      // 真机判据：每次生成必须有一行 [figma-cred]，可直接判定「有没有沿用任务当时的凭证」
+      this.logger.log(
+        `[figma-cred] session=${sessionId} source=${figmaTokenRes.source} ` +
+          `reason=${figmaTokenRes.reason} ref=${figmaTokenRes.refSource || '-'} ` +
+          `request-overridden=${figmaTokenRes.requestOverridden} ` +
+          `probed=${figmaTokenRes.probes.length} :: ${figmaTokenRes.note}`,
       );
+      // 首次执行即把「实际用的凭证」pin 到任务上（`refFields` 在任务已有引用时恒为 null，
+      // 绝不覆盖 —— 否则一次异常执行就会把任务永久钉在错的凭证上）。
+      // 键名不含 token（见 figma-credential-ref.ts 文件头约束 ①），落盘不会被 redactSecrets 抹掉。
+      if (figmaTokenRes.refFields) {
+        this.tasksService.updateTask(sessionId, figmaTokenRes.refFields as any);
+      }
 
       genResult = await runGeneration({
         componentName,
@@ -1576,7 +1619,9 @@ export class Phase2Service {
         visualElements,
         styleMappings,
         generatedFiles,
-        config: task.configSnapshot || {},
+        // 🔴 诉求五 #16-①：快照是脱敏落盘的（`figmaToken`/`figmaTokens[].token` 为占位串），
+        // 精修再把它当 config 合并进 `buildMergedAiConfig` 就等于拿假 token 取值。
+        config: stripRedactedPlaceholders(task.configSnapshot || {}),
       }).catch((error: any) => {
         this.logger.error(`精修失败: ${sessionId}: ${error.message}`, error.stack);
         this.progressService.sendError(sessionId, { message: error.message, stack: error.stack });

@@ -128,7 +128,13 @@
     "contentH": 296.4,
     "pageErrors": 0
   },
-  "jest": null,
+  "jest": {
+    "at": "95054ed 基线态（同仓现建，非记忆值）",
+    "suites": "20 failed / 1 skipped / 436 passed / 456 total",
+    "tests": "56 failed / 4 skipped / 6525 passed / 6585 total",
+    "failSetFile": "scripts/loop-verify/jest-baseline-failset-95054ed.txt",
+    "note": "失败含 sandbox file-delete 环境噪声（staging/backup 清理被拦）；后续每轮 diff 以 failset 文件去重比对"
+  },
   "notes": [
     "LLM 随机层实证：同代码+同缓存 vision，status/degradedFiles 每发不同（2:9778 上午 failed→回放 completed；2:8417 上午 0 降级→回放 2 降级；2:7879 上午健康→回放 1 降级）",
     "确定性层实证：chartOwned=0 四发全一致（analysisCharts 断链稳定复现）；takeover hits 结构稳定",

@@ -22,6 +22,7 @@ import { GenerateLiteDto } from './dto/generate-lite.dto';
 import { SplitHtmlDto } from './dto/split-html.dto';
 import { parseFigmaUrl } from '../ai-engine/utils/figma-url-parser.js';
 import { TasksService, RateLimitReason } from '../tasks/tasks.service';
+import { stripRedactedPlaceholders } from '../common/utils/redact';
 import { ProgressService } from '../progress/progress.service';
 import { QuotaService } from '../quota/quota.service';
 import { TaskQueueService } from '../queue/task-queue.service';
@@ -140,7 +141,11 @@ export class LiteController {
         retryDto.groupId = task.groupId;
         retryDto.componentType = (body?.componentType || task.target || 'vue3') as 'vue3' | 'microcode';
         if (body?.config || task.configSnapshot) {
-          retryDto.config = body?.config || task.configSnapshot;
+          // 🔴 诉求五 #16-①：快照是**脱敏后**落盘的（`figmaToken` / `figmaTokens[].token`
+          // 全是 `***REDACTED***`）。直接当 config 回传 = 把假 token 送进生成链路
+          // （`***REDACTED***` 是非空字符串，`if (config.figmaToken)` 挡不住）⇒ 入口先剥干净，
+          // 让下游每一个 `||` 链都退回真实来源（用户配置 / 任务凭证引用）。
+          retryDto.config = stripRedactedPlaceholders(body?.config || task.configSnapshot);
         }
 
         return await this.liteService.resumeFromCheckpoint(sessionId, outputPath, retryDto);
@@ -153,7 +158,8 @@ export class LiteController {
       retryDto.groupId = task.groupId;
       retryDto.componentType = (body?.componentType || task.target || 'vue3') as 'vue3' | 'microcode';
       if (body?.config || task.configSnapshot) {
-        retryDto.config = body?.config || task.configSnapshot;
+        // 同上：脱敏快照不得原样回传（详见断点续跑分支的注释）
+        retryDto.config = stripRedactedPlaceholders(body?.config || task.configSnapshot);
       }
 
       // 复用 generate 完整流程（配额检查/队列/执行）

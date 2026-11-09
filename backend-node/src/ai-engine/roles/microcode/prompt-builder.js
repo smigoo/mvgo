@@ -59,6 +59,7 @@ import {
   assignSectionComponentNames,
   dedupeDuplicateSections,
   buildSectionStyleFacts,
+  fillsToCss,
 } from '../../utils/section-tree.js';
 // 🛡️ 2026-10-19 业务术语规则（rewrite + drop；默认关闭 ⇒ 零回归）
 import {
@@ -2232,29 +2233,23 @@ export function extractFigmaColorEssentials(figmaNodeData, maxNodes = 220) {
     };
     const fmtFills = (fills) => {
       if (!Array.isArray(fills) || fills.length === 0) return null;
-      const solid = fills.find(
-        (f) => f.type === 'SOLID' && f.visible !== false,
+      // 🛡️ S1（2026-11-09 · 25711e88 实锤）：统一走 section-tree#fillsToCss（唯一真值口径）。
+      //   旧实现自拼渐变 `linear-gradient(#e1f0ff → #00ccff)`（箭头非法 CSS），且 TEXT 直接
+      //   拼成 `color:<渐变>` ⇒ 模型只能自行编纯色。此处不再造第二份解析。
+      return fillsToCss(fills);
+    };
+    const fmtTextStroke = (node) => {
+      // TEXT 的「零偏移零模糊阴影」= 文字描边语义（真机 (2/484) 白字 + 黑 a=0.5）。
+      // 宽度/颜色全部取自节点，不写默认色。
+      const ds = (Array.isArray(node?.effects) ? node.effects : []).find(
+        (e) => e && e.visible !== false && (e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW'),
       );
-      if (solid) return toCssColor(solid.color, solid.opacity);
-      const grad = fills.find(
-        (f) => f.type === 'GRADIENT_LINEAR' && f.visible !== false,
-      );
-      if (
-        grad &&
-        Array.isArray(grad.gradientStops) &&
-        grad.gradientStops.length >= 2
-      ) {
-        const s0 = toCssColor(
-          grad.gradientStops[0].color,
-          grad.gradientStops[0].opacity,
-        );
-        const s1 = toCssColor(
-          grad.gradientStops[grad.gradientStops.length - 1].color,
-          grad.gradientStops[grad.gradientStops.length - 1].opacity,
-        );
-        return s0 && s1 ? `linear-gradient(${s0} → ${s1})` : null;
-      }
-      return null;
+      if (!ds) return null;
+      if (Number(ds.offset?.x) || Number(ds.offset?.y) || Number(ds.radius)) return null;
+      const col = toCssColor(ds.color, ds.color?.a);
+      if (!col) return null;
+      const w = Number(node?.strokeWeight) > 0 ? Number(node.strokeWeight) : 1;
+      return `${w}px ${col}`;
     };
     const fmtShadow = (effects) => {
       if (!Array.isArray(effects)) return null;
@@ -2270,11 +2265,26 @@ export function extractFigmaColorEssentials(figmaNodeData, maxNodes = 220) {
       if (lines.length >= maxNodes || !node || typeof node !== 'object') return;
       const parts = [];
       const bg = fmtFills(node.fills);
-      if (bg) parts.push(node.type === 'TEXT' ? `color:${bg}` : `bg:${bg}`);
+      if (bg) {
+        if (node.type === 'TEXT') {
+          // 渐变文字走 CSS 标准实现（background-clip:text），不再拼非法的 color:<渐变>
+          if (/gradient\(/i.test(bg)) {
+            parts.push(`textFill:${bg}（实现用 background-image + background-clip:text + -webkit-text-fill-color:transparent）`);
+          } else {
+            parts.push(`color:${bg}`);
+          }
+        } else {
+          parts.push(`bg:${bg}`);
+        }
+      }
       const border = fmtFills(node.strokes);
       if (border) parts.push(`border:${border}`);
       const shadow = fmtShadow(node.effects);
-      if (shadow) parts.push(`shadow:${shadow}`);
+      if (shadow && node.type !== 'TEXT') parts.push(`shadow:${shadow}`);
+      if (node.type === 'TEXT') {
+        const ts = fmtTextStroke(node);
+        if (ts) parts.push(`textStroke:${ts}`);
+      }
       if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0)
         parts.push(`radius:${node.cornerRadius}px`);
       if (node.type === 'TEXT' && node.style) {

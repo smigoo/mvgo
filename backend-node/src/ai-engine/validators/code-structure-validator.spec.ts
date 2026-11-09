@@ -2169,13 +2169,36 @@ ${inner}
     );
   const axis = (res: any) => (res.issues || []).filter((i: any) => i.id === 'TEXT-AXIS');
 
-  it('文本被嵌进自造 wrapper（深度≥2）→ WARN', () => {
+  it('T1 修正：wrapper 无方向声明（默认块级纵向流）⇒ 不告警（纵向事实仍生效，宁漏不误）', () => {
+    // 2026-11-09：2:8417 四连败实锤——旧口径「深度≥2 即 WARN」对拆组件形态结构性误杀
+    // （高密度数字卡面板几十个 label/value 卡，深度≥2 是拆组件形态的结构必然），
+    // 3 轮重试修不完 ⇒ 升级机制放大成系统性 fail-closed。新口径 = 方向对照。
     const hits = axis(
       run2(`    <div class="c-test-card-label"><span class="l">货车</span></div>
     <div class="c-test-card-value"><span class="v">16270</span></div>`),
     );
+    expect(hits).toHaveLength(0);
+  });
+
+  it('T1 阳性：wrapper 声明横向排列（flex row）⇒ WARN（真横向错位）', () => {
+    const hits = axis(
+      run2(`    <div style="display:flex;flex-direction:row;gap:8px;"><span class="l">货车</span><span class="v">16270</span></div>`),
+    );
     expect(hits).toHaveLength(1);
     expect(hits[0].severity).toBe('WARN');
+  });
+
+  it('T1 阴性：wrapper 声明 column ⇒ 不告警（方向与真值一致）', () => {
+    expect(
+      axis(run2(`    <div style="display:flex;flex-direction:column;"><span class="l">货车</span><span class="v">16270</span></div>`)),
+    ).toHaveLength(0);
+  });
+
+  it('T1 阳性·祖先层：深层嵌套但祖父声明 flex row ⇒ WARN', () => {
+    const hits = axis(
+      run2(`    <div style="display:flex;flex-direction:row;"><div class="col"><span class="l">货车</span><span class="v">16270</span></div></div>`),
+    );
+    expect(hits).toHaveLength(1);
   });
 
   it('文本直接挂在 section 根下（深度 1）→ 不告警（事实方向可正常生效）', () => {

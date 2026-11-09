@@ -895,3 +895,129 @@ const list = []
     })
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// 入口 2（2026-11-09 · mc-max-1794204860661-fe2acd21 实锤）：section 树正向遍历。
+// 扁平直译形态把 12 张同构卡写成 12 个独立组件（宿主与条目都无 v-for）⇒ 入口 1 整体
+// skipNoVFor，判据对 common.less 里的 `repeat(N,1fr)` 完全失明（真机 skipNoVFor=28 /
+// contracts=0 ⇒ 列塌 37.5/37.5/117、15 组文本重叠、25 元件越界）。
+// 本 spec 守五条：
+//   ① 阳性：无 v-for 宿主也能判出违约并确定性修复（复检 residual=0，幂等）；
+//   ② 阴性：有契约但产物无宿主标签 ⇒ 不猜（noVForNoHost 计数）；
+//   ③ 防误伤：产物宿主不是 grid/flex+wrap ⇒ 跳过（noVForNotGridImpl；fe2acd21 实测
+//      全树 437 节点裸建契约命中 2 个，89:38「头部两卡横排」靠本过滤器免于被改写成网格）；
+//   ④ 双入口去重：v-for 入口已建契约的 sid 树遍历不再重复出 issue；
+//   ⑤ 阴性：单列（真纵向列表）契约为 null ⇒ 零 issue。
+// ─────────────────────────────────────────────────────────────────────────
+describe('刀 41 · 入口 2：section 树遍历（无 v-for 宿主 · fe2acd21 扁平直译形态）', () => {
+  // 12 项 3 列网格，卡 117×64、列距 8、行距 13（fe2acd21 · 2:8437 真机几何）
+  function mkFlatBoxes(count: number, cols: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      absoluteBoundingBox: {
+        x: 100 + (i % cols) * 125,
+        y: 100 + Math.floor(i / cols) * 77,
+        width: 117,
+        height: 64,
+      },
+    }))
+  }
+  const FLAT_SEC = {
+    id: '2:8437',
+    items: mkFlatBoxes(12, 3),
+    children: Array.from({ length: 12 }, (_, i) => ({ id: `2:flat-card-${i}` })),
+  }
+  const FLAT_LESS = `
+.flat-grid-con {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+`
+  // 扁平直译形态：宿主无 v-for，12 个条目是独立组件根（各自带子段 data-section-id）
+  const flatFiles = () => [
+    { path: 'resources/styles/common.less', content: FLAT_LESS },
+    {
+      path: 'package/index.vue',
+      content: `<template>\n  <div class="flat-grid-con" data-section-id="2:8437" style="min-height:0;">\n    <FlatCard0 />\n    <FlatCard1 />\n  </div>\n</template>\n<script setup>\nconst x = 1\n</script>\n`,
+    },
+    ...Array.from({ length: 3 }, (_, i) => ({
+      path: `package/components/FlatCard${i}.vue`,
+      content: `<template>\n  <div class="flat-card" data-section-id="2:flat-card-${i}"><span>卡${i}</span></div>\n</template>\n`,
+    })),
+  ]
+
+  it('① 阳性：无 v-for 宿主 ⇒ 树遍历判出违约并确定性修复（复检 residual=0）', () => {
+    const det = detectGridListLayoutIssues(flatFiles(), { sections: [FLAT_SEC] })
+    expect(det.issues).toHaveLength(1)
+    expect(det.issues[0].via).toBe('section-tree')
+    expect(det.issues[0].sectionId).toBe('2:8437')
+    expect(det.issues[0].file).toBe('package/index.vue')
+    // 与真机探针一致：1fr 因 lastRowFull 不判 fluid，但 minmax(0,1fr) 行高与 6px gap（对 13）判死
+    expect(det.issues[0].violations.map((v) => v.code)).toEqual(['grid-auto-rows', 'row-gap'])
+    expect(det.stats.noVForContracts).toBe(1)
+    expect(det.stats.noVForMismatches).toBe(1)
+
+    const healed = healGridListLayout(flatFiles(), det.issues)
+    expect(healed.healed).toHaveLength(1)
+    expect(healed.healed[0].via).toBe('section-tree')
+    const less = healed.files.find((f) => f.path === 'resources/styles/common.less')!
+    expect(less.content).toContain('grid-template-columns: repeat(3, 117px)')
+    expect(less.content).toContain('grid-auto-rows: 64px')
+    expect(less.content).toContain('column-gap: 8px')
+    expect(less.content).toContain('row-gap: 13px')
+
+    // 复检：同一实现自证 ⇒ residual=0，且树遍历入口仍能建契约（只是零违约）
+    const re = detectGridListLayoutIssues(healed.files, { sections: [FLAT_SEC] })
+    expect(re.issues).toHaveLength(0)
+    expect(re.stats.noVForContracts).toBe(1)
+    expect(re.stats.noVForMismatches).toBe(0)
+  })
+
+  it('② 阴性：有契约但产物无宿主标签 ⇒ 不猜（noVForNoHost 计数）', () => {
+    const det = detectGridListLayoutIssues(
+      [{ path: 'resources/styles/common.less', content: FLAT_LESS }],
+      { sections: [FLAT_SEC] },
+    )
+    expect(det.issues).toEqual([])
+    expect(det.stats.noVForNoHost).toBe(1)
+    expect(det.stats.noVForContracts).toBe(0)
+  })
+
+  it('③ 防误伤：产物宿主是 flex-row（无 wrap，如 fe2acd21 · 89:38 头部两卡横排）⇒ 跳过不改写', () => {
+    const rowLess = `\n.header-row-con {\n  display: flex;\n  flex-direction: row;\n  align-items: stretch;\n}\n`
+    const files = [
+      { path: 'resources/styles/common.less', content: rowLess },
+      {
+        path: 'package/index.vue',
+        content: `<template>\n  <div class="header-row-con" data-section-id="2:8437" style="min-height:0;">\n    <CardA />\n    <CardB />\n  </div>\n</template>\n`,
+      },
+    ]
+    const det = detectGridListLayoutIssues(files, { sections: [FLAT_SEC] })
+    expect(det.issues).toEqual([])
+    expect(det.stats.noVForNotGridImpl).toBe(1)
+    expect(det.stats.noVForContracts).toBe(0)
+  })
+
+  it('④ 双入口去重：v-for 入口已建契约的 sid ⇒ 树遍历不再重复出 issue', () => {
+    const vue = `<template>\n  <div class="flat-grid-con" data-section-id="2:8437">\n    <div v-for="(c, i) in cards" :key="i" class="flat-card">{{ c }}</div>\n  </div>\n</template>\n<script setup>\nconst cards = []\n</script>\n`
+    const det = detectGridListLayoutIssues(
+      [{ path: 'resources/styles/common.less', content: FLAT_LESS }, { path: 'package/index.vue', content: vue }],
+      { sections: [FLAT_SEC] },
+    )
+    expect(det.issues).toHaveLength(1)
+    expect(det.issues[0].via).toBeUndefined() // 入口 1 产出
+    expect(det.stats.contracts).toBe(1)
+    expect(det.stats.noVForContracts).toBe(0)
+  })
+
+  it('⑤ 阴性：单列（真纵向列表）契约为 null ⇒ 零 issue', () => {
+    const singleCol = { id: '2:8437', items: mkFlatBoxes(12, 1), children: FLAT_SEC.children }
+    const det = detectGridListLayoutIssues(flatFiles(), { sections: [singleCol] })
+    expect(det.issues).toEqual([])
+    expect(det.stats.noVForContracts).toBe(0)
+  })
+})

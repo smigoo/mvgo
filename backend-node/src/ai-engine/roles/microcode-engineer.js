@@ -2183,10 +2183,14 @@ export class MicrocodeEngineer extends BaseAgent {
         //   `charts[]` 真值交给接管器做冲突排除 —— 否则判据只看结构形态，会把
         //   环形图段（标题行 + 两个圆环容器并排）接管成 `kind=table` 的 `<a-table>`，
         //   产物无 pie series ⇒ DO-NOT-INVENT-CHART-MISSING(BLOCK) ⇒ 整单失败。
-        //   数据源用既有的 `input.previewAnalysis.charts`（graph 侧传的就是它，
-        //   缓存短路路径 `mc-component-graph-phase2.js:1037` 也是同一字段）——
-        //   **不新增数据通道**，不另派生第二套图表真值。
-        analysisCharts: input?.previewAnalysis?.charts || [],
+        //   🔴 R1（2026-11-08 · loop-verify 基线实证）：原实现只读
+        //   `input.previewAnalysis.charts`，但 graph 侧 engineer.execute 入参
+        //   （mc-component-graph-phase2.js:1752）传的是**顶层 `charts: state.charts`**，
+        //   `previewAnalysis` 字段全链路无赋值点（4754b79 注释宣称的通道从未兑现）
+        //   ⇒ analysisCharts 恒空 ⇒ `chartOwned=0` 死代码（2d8f4cc8 四发基线实锤）。
+        //   修法：优先原口径 previewAnalysis.charts，回落真实通道 input.charts；
+        //   两者皆空时保持空数组（fail-open，行为逐字同旧版）。
+        analysisCharts: input?.previewAnalysis?.charts || input?.charts || [],
         logger: this.logger,
       });
       // 🛡️ Phase E（2026-10-31 治理方案）：接管评估无条件单行可见 + 统计子集回写。
@@ -6104,6 +6108,10 @@ export class MicrocodeEngineer extends BaseAgent {
         ? { fgTakeoverFiles: this._fgTakeoverFiles }
         : {}),
     });
+    // 🛡️ 刀 41 计数上抛挂载（noVFor* 供 patchHitReport.selfHealing；execute 组装时合并）
+    if (writeResult && writeResult.blade41Stats) {
+      this._blade41Stats = writeResult.blade41Stats;
+    }
 
     // 🧩 2026-11-08（R2 · mc-max-1794114472183-b79b1ed8 实锤）：判据改看**磁盘实际落盘**。
     //   病灶：CardGrid.vue 被 SFC 写盘门禁跳过（`skippedPaths` 含它），但 `targetFiles` 里仍有它
@@ -9579,12 +9587,26 @@ export default declareInfo
       // 自由变量/TDZ），此前语义校验跑在覆写前、覆写后的坏版本零拦截。此处对终态 .vue 重跑语义校验，
       // 命中 issue 则回退到覆写前版本（allFiles，已通过门禁的好版本）并告警，杜绝坏版本落盘。
       let _revertedSemanticFiles = 0;
+      // 🛡️ S6（2026-11-09 · mc-max-1794233407339-a7b905d1 实锤）：被跳过的回退次数（可验签）。
+      let _revertedSkipped = 0;
       for (const [fp, fc] of Object.entries(finalTruthFiles)) {
         if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
         const _sem = validateVueScriptSemantics(fc, fp, {});
         if (_sem.issues && _sem.issues.length > 0) {
           const _before = allFiles[fp];
           if (typeof _before === 'string' && _before !== fc) {
+            // 🛡️ S6：回退前校验「回退目标」自身的 SFC 结构。若回退版本身就缺闭合标签 /
+            //   双 `<script setup>`，回退只会把本轮确定性自愈（R9-c/R10/R11-A/背景补全…）
+            //   全部作废，且产物更坏（R11 立项已证此机制）。不合法 ⇒ 保留 healing 版并留痕。
+            const _beforeSfc = validateVueSfc(_before, fp);
+            if (!_beforeSfc.valid) {
+              _revertedSkipped += 1;
+              this.logger.warn('🛡️ 语义回退跳过：回退目标自身 SFC 结构不合法（保留 healing 版）', {
+                file: fp,
+                errors: _beforeSfc.errors.slice(0, 3),
+              });
+              continue;
+            }
             finalTruthFiles[fp] = _before;
             _revertedSemanticFiles++;
             this.logger.warn('🛡️ 覆写后语义校验命中，回退覆写前版本', {
@@ -9597,6 +9619,13 @@ export default declareInfo
       if (_revertedSemanticFiles > 0) {
         this.logger.warn(
           '⚠️ 覆写后重校验：回退 ' + _revertedSemanticFiles + ' 个坏文件',
+        );
+      }
+      if (_revertedSkipped > 0) {
+        this.logger.warn(
+          '🛡️ 覆写后重校验：跳过 ' +
+            _revertedSkipped +
+            ' 个回退（回退目标自身 SFC 不合法，保留 healing 版）',
         );
       }
       // 🛡️ A3 / B-2 时序治理（2026-09-29 · 全语料 27/495 组件终态实锤）：
@@ -10279,7 +10308,9 @@ export default component
         //   经 graph 写回 state → complete 节点 merge 进 component-meta.json → S10 saveComponentMeta 透传。
         patchHitReport: {
           patchChainErrors: _preWriteSummary?.patchChainErrors || 0,
-          selfHealing: _preWriteSummary || undefined,
+          // 🛡️ 2026-11-09：合并刀 41 writeFiles 层计数（noVFor* 六键）——此前只在
+          //   server.log 计数行可见，meta 验签不可用（与 R11 发现的白名单缺口同族）。
+          selfHealing: { ...(_preWriteSummary || {}), ...(this._blade41Stats || {}) } || undefined,
         },
         _attributionGuidance: codeResult._attributionGuidance || null, // 🛡️ 资源归属指导（供 graph 写回 state）
       };

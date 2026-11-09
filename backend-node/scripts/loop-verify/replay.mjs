@@ -109,6 +109,35 @@ function extractFromProgress(task) {
 
 function tryJson(s) { try { return JSON.parse(s); } catch { return null; } }
 
+// graph 侧 R6b 计数行：`🎯 headerSlots 缓存补跑(ensureHeaderSlots) {json}`（落 server.log）。
+// 🔴 2026-11-09 修订：R6/R6b 的计数行此前走 graph logger，既不在 task.progress 也不被本
+// 采集器读取 ⇒ 判据不可验签（after-r6b.jsonl 两行 coverage:null 即证据缺失）。现从
+// server.log 串行窗口提取最后一条，暴露 derived/sectionArray/total/sectionsIn/hadField
+// 与补跑失败标记（error 级）——只读落盘事实，与修复代码判据不同源。
+const HEADER_SLOTS_LOG = 'headerSlots 缓存补跑';
+const HEADER_SLOTS_FAIL_LOG = 'headerSlots 缓存补跑失败';
+
+function graphCounterSince(serverLogPath, sinceIso, needle) {
+  if (!serverLogPath || !existsSync(serverLogPath)) return null;
+  try {
+    const fd = readFileSync(serverLogPath, 'utf-8');
+    const tail = fd.slice(Math.max(0, fd.length - SERVER_LOG_TAIL_BYTES));
+    const since = new Date(sinceIso).getTime();
+    let last = null;
+    for (const line of tail.split('\n')) {
+      if (!line.includes(needle)) continue;
+      const tm = line.match(/\[(\d{4}-\d{2}-\d{2}T[^\]]+Z)\]/);
+      if (tm && new Date(tm[1]).getTime() < since) continue;
+      last = line;
+    }
+    if (!last) return null;
+    const jm = last.match(/\{[\s\S]*\}\s*$/);
+    return jm ? tryJson(jm[0]) : { raw: last.slice(0, 200) };
+  } catch {
+    return null;
+  }
+}
+
 // graph 侧缓存命中铁证：server.log 中「视觉分析缓存命中」行的时间戳 ≥ 本发 startedAt。
 // 采集器串行执行（单发在途），时间窗即可归因到本发，无需按 sessionId 关联。
 function graphCacheHitSince(serverLogPath, sinceIso) {
@@ -184,7 +213,12 @@ async function replayOne(cfg, target) {
 
   const prog = extractFromProgress(task);
   const metrics = task.outputPath ? collectMetrics(task.outputPath) : null;
-  // 回放有效性断言（文档 §3）：progress 断言 OR graph 侧 server.log 铁证（串行窗口归因）；  const graphHit = graphCacheHitSince(cfg.serverLog, startedAt);
+  if (metrics) {
+    metrics.headerSlots = graphCounterSince(cfg.serverLog, startedAt, HEADER_SLOTS_LOG);
+    metrics.headerSlotsFailed = !!graphCounterSince(cfg.serverLog, startedAt, HEADER_SLOTS_FAIL_LOG);
+  }
+  // 回放有效性断言（文档 §3）：progress 断言 OR graph 侧 server.log 铁证（串行窗口归因）。
+  const graphHit = graphCacheHitSince(cfg.serverLog, startedAt);
   const replayValid = cfg.reuseCache ? (prog.replayHit || graphHit) : true;
   return {
     label: target.label,

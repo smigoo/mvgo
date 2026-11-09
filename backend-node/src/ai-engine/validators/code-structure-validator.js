@@ -2676,15 +2676,46 @@ export class CodeStructureValidator {
           };
           const nested = slots.filter((s) => depthOf(s) >= 2);
           if (nested.length === 0) continue; // 文本直接落在 section 根子层 ⇒ 事实方向可正常生效 ✅
+          // 🛡️ T1（2026-11-09 · 2:8417 四连败实锤，用户裁 Q4-1）：升级口径收紧——
+          //   「嵌套深度 ≥2」本身不是错：高密度数字卡面板（2:8417，27+ 组件）在「强制子
+          //   组件拆分 + 卡内排版需内层容器」下，文本深度 ≥2 是拆组件形态的结构必然，
+          //   3 轮重试不可能全改「文本直挂 section 根」（hint 修法与拆分约束互斥）⇒
+          //   旧口径 WARN 面巨大，被升级机制放大成系统性 fail-closed（fe2acd21/2ff243a1/
+          //   a9222bf8 三连败同因，hardBlocks 唯一元素即 TEXT-AXIS-ESCALATED）。
+          //   新口径 = **方向对照**：仅当嵌套文本处于「横向排列层」（祖先链任一层 attrs
+          //   声明 flex/inline-flex 且非 column，或 grid 多列）才判——真值纵向 vs 产物
+          //   横向才是真错位。方向声明在 class 块（less）里的形态判不到 ⇒ 保守不计
+          //   （gate-severity 总纲「宁漏不误」；R25-a 同纪律：不猜）。
+          const rowishDecl = (attrs) => {
+            const a = String(attrs || '')
+            if (!/display\s*:\s*(flex|inline-flex|grid)/i.test(a)) return false
+            if (/flex-direction\s*:\s*column/i.test(a)) return false
+            if (/display\s*:\s*grid/i.test(a)) {
+              // grid：多列模板 = 横向；未声明列模板 = 默认单列纵向堆叠
+              return /grid-template-columns\s*:[^;]*\S+[^;]*/i.test(a) &&
+                (a.match(/grid-template-columns\s*:[^;]*/i)?.[0].match(/\S+/g) || []).length >= 3
+            }
+            return true
+          }
+          const inRowLayer = (s) => {
+            let cur = s.parent
+            while (cur) {
+              if (rowishDecl(cur.attrs)) return true
+              cur = cur.parent
+            }
+            return false
+          }
+          const misaligned = nested.filter((s) => inRowLayer(s))
+          if (misaligned.length === 0) continue; // 嵌套但未横向排列 ⇒ 纵向事实仍生效，不判（宁漏不误）
           issues.push({
             id: 'TEXT-AXIS',
             severity: 'WARN',
             file: f.path,
             message:
-              `section ${secId} 的设计是「${texts.length} 条文本纵向堆叠」，但产物把这 ${nested.length}/${slots.length} 条文本` +
-              `嵌进了自造 wrapper（嵌套深度 ≥2）⇒ 该层方向由模型自定，可能被排成一行（视觉与设计不符）。` +
-              `建议：这些文本直接作为 section 根（带 data-section-id="${secId}"）的子节点，方向交由事实 column 生效。`,
-            hint: { suggestion: '去掉仅用于包裹单条文本的 wrapper，让文本直接挂在 section 根下' },
+              `section ${secId} 的设计是「${texts.length} 条文本纵向堆叠」，但产物把 ${misaligned.length}/${slots.length} 条文本` +
+              `嵌进了**横向排列层**（祖先声明 flex-row/grid 多列）⇒ 纵向事实被横向渲染（视觉与设计不符）。` +
+              `建议：去掉横向 wrapper 或改 column，让文本按事实 column 生效。`,
+            hint: { suggestion: '去掉横向排列的包裹层（或改 flex-direction:column），让文本直接按 section 事实的纵向生效' },
           });
         }
       } catch (err) {
@@ -2791,6 +2822,237 @@ export class CodeStructureValidator {
                 suggestion:
                   '按列出的 Figma 真值文案逐条补进对应区块模板；若整块内容缺失，重建该 section 的静态文本',
               },
+            });
+          }
+
+          // ========== 🛡️ Q4-c（2026-11-09 · a9052d6a「对抗性逃逸」实锤）：段锚覆盖联动硬闸 ==========
+          // 病灶：Max 管线 planner 分叉的「l 极简方案」内容大面积残缺（12 张设备卡零生成）
+          //   但 BLOCK=0——文本覆盖率 56% 卡在 WARN 带、TECHSTACK-NOT-RENDERED 各自孤立
+          //   WARN，无联动升级 ⇒ 删内容即可过闸（对抗性逃逸：第 4 轮极简版比全量版更易过）。
+          // 判据（真值文本覆盖率 × 段真值文本承载 双信号联动，a9052d6a 真机校准）：
+          //   信号 A：coverage < 0.6（既有 WARN 阈值；<0.4 已 BLOCK，此处不重复拦）
+          //   信号 B：「暗段文本占比」——vision 段树各 section 子树内 type=text 的
+          //          text（+header.title）去空白后 ≥2 字、含 CJK 或数字的串，在产物
+          //          （productFiles 全量 .vue，去空白）中零出现的条数占比 ≥ DARK_SECTION_TEXT_RATIO
+          //   联动：A && B ⇒ BLOCK（id: TEXT-COVERAGE-GATE，message 带暗段清单）
+          // ⚠️ 为什么是「暗段文本占比」而非「暗段数占比」：a9052d6a 真机 4 个 vision 直接段
+          //   里仅 1 个暗段（25% < 50% 阈值），按段数占比阳性对照**不触发**；按文本量占比
+          //   16/26 ≈ 62% ⇒ 触发。同源异段（vision 2:8438 段 id 重复出现）也按文本聚合消除。
+          // 阈值 DARK_SECTION_TEXT_RATIO = 0.5：判据参数非业务硬编码（a9052d6a=62% 触发、
+          //   669d8bf8=33%/4ae7a7b4=0%/2e747c5d=0% 放行，真机四点校准），真机数据后再调。
+          // fail-open：段树形态不符（A1：`layout?.sections || sections`，443/443 死代码坑）/
+          //   段文本总数为 0 / header.title 与子树文本全空 ⇒ 信号 B 不判（STATS 留痕）。
+          // 防误杀（d4c2726b 锚形态不同但内容在）：段文本承载按「去空白后任意位置出现」
+          //   判定（与 TEXT-COVERAGE 的子串双向同向放宽），不要求段锚 id 物化。
+          if (coverage >= 0.4 && coverage < 0.6) {
+            try {
+              const DARK_SECTION_TEXT_RATIO = 0.5;
+              const secTree =
+                options?.layoutStructure?.layout?.sections ||
+                options?.layoutStructure?.sections;
+              if (Array.isArray(secTree) && secTree.length > 0) {
+                const secTexts = new Set();
+                const collectText = (n) => {
+                  if (!n || typeof n !== 'object') return;
+                  const raw = typeof n.text === 'string' ? n.text : '';
+                  const norm = raw.replace(/\s+/g, '');
+                  if (
+                    norm.length >= 2 &&
+                    (/[\u4e00-\u9fa5]/.test(norm) || /\d/.test(norm))
+                  ) {
+                    secTexts.add(norm);
+                  }
+                  const h = n.header;
+                  if (h && typeof h === 'object' && typeof h.title === 'string') {
+                    const ht = h.title.replace(/\s+/g, '');
+                    if (
+                      ht.length >= 2 &&
+                      (/[\u4e00-\u9fa5]/.test(ht) || /\d/.test(ht))
+                    ) {
+                      secTexts.add(ht);
+                    }
+                  }
+                  for (const c of n.children || []) collectText(c);
+                  if (n.body && typeof n.body === 'object') collectText(n.body);
+                };
+                for (const sec of secTree) collectText(sec);
+                if (secTexts.size > 0) {
+                  // 产物语料（A2：必须 productFiles 全量——增量轮 files 被裁成变更子集）
+                  const gateProdRuns = new Set();
+                  for (const f of productFiles) {
+                    if (
+                      !String(f?.path || '').endsWith('.vue') ||
+                      typeof f?.content !== 'string'
+                    )
+                      continue;
+                    const gStripped = stripVueComments(f.content);
+                    for (const m of gStripped.matchAll(/[^\s{}<>="'/]+/g)) {
+                      const g = m[0];
+                      if (g.length >= 2) gateProdRuns.add(g);
+                    }
+                  }
+                  const darkList = [...secTexts].filter(
+                    (t) =>
+                      !(
+                        gateProdRuns.has(t) ||
+                        [...gateProdRuns].some(
+                          (p) => p.length >= 2 && (p.includes(t) || t.includes(p)),
+                        )
+                      ),
+                  );
+                  const darkRatio = darkList.length / secTexts.size;
+                  issues.push({
+                    id: 'TEXT-COVERAGE-GATE-STATS',
+                    severity: 'INFO',
+                    file: '(段锚覆盖联动)',
+                    message:
+                      `Q4-c 已评估：段真值文本 ${secTexts.size} 条，暗 ${darkList.length} 条` +
+                      `（${Math.round(darkRatio * 100)}%），联动阈值 ≥${DARK_SECTION_TEXT_RATIO * 100}% 且覆盖率 <60% ⇒ BLOCK` +
+                      (darkList.length > 0
+                        ? `；暗清单（前 ${Math.min(darkList.length, 8)} 条）：${darkList.slice(0, 8).join('、')}`
+                        : ''),
+                  });
+                  if (darkRatio >= DARK_SECTION_TEXT_RATIO) {
+                    issues.push({
+                      id: 'TEXT-COVERAGE-GATE',
+                      severity: 'BLOCK',
+                      file: '(段锚覆盖联动)',
+                      message:
+                        `内容完整性硬闸：真值文本覆盖率 ${Math.round(coverage * 100)}%（WARN 带）且段真值文本 ${Math.round(darkRatio * 100)}% 未承载` +
+                        `（${darkList.length}/${secTexts.size} 条）——多信号联动判定为「整层内容缺失」，不得放行。` +
+                        `暗清单（前 ${Math.min(darkList.length, 8)} 条）：${darkList.slice(0, 8).join('、')}。`,
+                      hint: {
+                        suggestion:
+                          ' planner 产物分叉为极简方案：按 Figma 段树重建缺失 section 的子组件与文本，恢复完整规划后重验',
+                      },
+                    });
+                  }
+                }
+              }
+            } catch (gateErr) {
+              issues.push({
+                id: 'TEXT-COVERAGE-GATE-ERROR',
+                severity: 'WARN',
+                file: '(text-coverage-gate)',
+                message: `段锚覆盖联动检测异常（非阻断）：${gateErr?.message || String(gateErr)}`,
+              });
+            }
+          }
+
+          // ========== 🛡️ S4（2026-11-09 · mc-max-1794233412869-25711e88 实锤）：段锚存在性硬闸 ==========
+          // 病灶：头部段 2:8419 整段未生成（设备类型/28/设备总数/68562/完好率/98%/*数据实时更新 全丢），
+          //   但文本覆盖率仍 96%（只缺「完好率」）——Q4-c 只在 coverage<0.6 时评估 ⇒ 整段缺失完全逃逸。
+          // 判据（**不依赖 coverage**，段名零白名单，全部动态取自段树）：
+          //   ① 真值段集 = `layoutStructure.layout.sections`（A1 归一化口径）
+          //   ② 段文本承载率 = 该段子树文本（去空白、≥2 字、含 CJK 或数字）在产物中出现条数 / 总条数
+          //   ③ 「暗段」= 段文本 ≥2 条 且 承载率 < SECTION_DARK_RATE
+          //   ④ 暗段文本量 / 全部段文本量 ≥ SECTION_GAP_RATIO ⇒ BLOCK
+          // 四点真机校准（2026-11-09，全部用 productFiles 全量重放）：
+          //   25711e88 = 100% ⇒ BLOCK；a9052d6a = 65% ⇒ BLOCK
+          //   669d8bf8 = 33% ⇒ 放行（该段仅 1 条文本，属布局问题归 G1）；4ae7a7b4 / 2e747c5d = 0% ⇒ 放行
+          // fail-open：段树缺失 / 段文本总数为 0 ⇒ 不判（STATS 恒打，便于验签）
+          try {
+            const SECTION_DARK_RATE = 0.5;
+            const SECTION_GAP_RATIO = 0.5;
+            const s4Tree =
+              options?.layoutStructure?.layout?.sections ||
+              options?.layoutStructure?.sections;
+            if (Array.isArray(s4Tree) && s4Tree.length > 0) {
+              // 产物语料：productFiles 全量（A2：增量轮 files 会被裁成变更子集）
+              const s4ProdRuns = new Set();
+              for (const f of productFiles) {
+                if (
+                  !String(f?.path || '').endsWith('.vue') ||
+                  typeof f?.content !== 'string'
+                )
+                  continue;
+                const s4Stripped = stripVueComments(f.content);
+                for (const m of s4Stripped.matchAll(/[^\s{}<>="'/]+/g)) {
+                  if (m[0].length >= 2) s4ProdRuns.add(m[0]);
+                }
+              }
+              const s4Norm = (x) => String(x || '').replace(/\s+/g, '');
+              const s4Ok = (t) => t.length >= 2 && (/[\u4e00-\u9fa5]/.test(t) || /\d/.test(t));
+              let s4Total = 0;
+              let s4Dark = 0;
+              const s4DarkSections = [];
+              for (const sec of s4Tree) {
+                if (!sec || typeof sec !== 'object') continue;
+                const s4Texts = new Set();
+                const s4Walk = (n) => {
+                  if (!n || typeof n !== 'object') return;
+                  if (typeof n.text === 'string') {
+                    const t = s4Norm(n.text);
+                    if (s4Ok(t)) s4Texts.add(t);
+                  }
+                  const h = n.header;
+                  if (h && typeof h === 'object' && typeof h.title === 'string') {
+                    const t = s4Norm(h.title);
+                    if (s4Ok(t)) s4Texts.add(t);
+                  }
+                  for (const c of n.children || []) s4Walk(c);
+                  if (n.body && typeof n.body === 'object') s4Walk(n.body);
+                };
+                s4Walk(sec);
+                if (s4Texts.size === 0) continue;
+                s4Total += s4Texts.size;
+                let s4Carried = 0;
+                for (const t of s4Texts) {
+                  if (s4ProdRuns.has(t)) {
+                    s4Carried += 1;
+                    continue;
+                  }
+                  for (const p of s4ProdRuns) {
+                    if (p.length >= 2 && (p.includes(t) || t.includes(p))) {
+                      s4Carried += 1;
+                      break;
+                    }
+                  }
+                }
+                const s4Rate = s4Carried / s4Texts.size;
+                if (s4Texts.size >= 2 && s4Rate < SECTION_DARK_RATE) {
+                  s4Dark += s4Texts.size;
+                  s4DarkSections.push(
+                    `${sec.id || sec.name || '?'}(${s4Carried}/${s4Texts.size})`,
+                  );
+                }
+              }
+              if (s4Total > 0) {
+                const s4Gap = s4Dark / s4Total;
+                issues.push({
+                  id: 'SECTION-ANCHOR-STATS',
+                  severity: 'INFO',
+                  file: '(段锚存在性)',
+                  message:
+                    `S4 段锚评估：段文本 ${s4Total} 条，暗段文本 ${s4Dark} 条（${Math.round(s4Gap * 100)}%），` +
+                    `阈值 ≥${SECTION_GAP_RATIO * 100}% 且段文本 ≥2 条 ⇒ BLOCK` +
+                    (s4DarkSections.length > 0
+                      ? `；暗段：${s4DarkSections.slice(0, 6).join('、')}`
+                      : ''),
+                });
+                if (s4Gap >= SECTION_GAP_RATIO) {
+                  issues.push({
+                    id: 'SECTION-ANCHOR-MISSING',
+                    severity: 'BLOCK',
+                    file: '(段锚存在性)',
+                    message:
+                      `段锚硬闸：${Math.round(s4Gap * 100)}% 的段真值文本（${s4Dark}/${s4Total}）所在段整体未生成` +
+                      `（暗段：${s4DarkSections.slice(0, 6).join('、')}）。` +
+                      `这不是"样式没还原"，是整块结构缺失——不得以覆盖率达标放行。`,
+                    hint: {
+                      suggestion:
+                        '按段树重建缺失段的子组件与文本：先在 index.vue 装配对应子组件，再把该段真值文案原样写入，重验至暗段消失',
+                    },
+                  });
+                }
+              }
+            }
+          } catch (s4Err) {
+            issues.push({
+              id: 'SECTION-ANCHOR-ERROR',
+              severity: 'WARN',
+              file: '(段锚存在性)',
+              message: `段锚存在性检测异常（非阻断）：${s4Err?.message || String(s4Err)}`,
             });
           }
         }

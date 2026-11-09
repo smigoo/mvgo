@@ -115,6 +115,13 @@ import {
   detectGridListLayoutIssues,
   healGridListLayout,
 } from '../../utils/grid-list-layout-contract.js';
+// 🛡️ R11-A（2026-11-09 · a02dbd53 第三实锤）：终态收敛——R10 游离 template 根归位在
+//   healing 链跑过之后，刀 66-C（index 段级 v-for 改写）会用**未 healing 的源内容**重写
+//   index，把游离根带回来（R10 成果被覆盖，离线对磁盘产物重跑 changed=true 实证算法
+//   有效）。本区块在写盘循环前最后一刻重跑幂等 relocator，保证「base-panel 是 template
+//   唯一根」活到磁盘。fail-open：修不了也必须写盘。
+import { relocateStrayTemplateRoots } from '../../utils/stray-template-root-relocator.js';
+import { reportPatchChainError } from '../../utils/patch-chain-observer.js';
 
 /**
  * 验证文件路径是否合法
@@ -796,6 +803,30 @@ export function shouldSkipWrite(fullPath, content) {
  * 判据：①chunk-meta 有登记 ②候选自身过写盘门禁 ③与本轮输出同 class 前缀。
  * @type {import('./cached-chunk-last-good.js').pickCachedChunkLastGood}
  */
+/**
+ * 🛡️ R5（2026-11-09 · loop-verify）：fg- 接管文件快照读取（门禁判死分支的救回判据）。
+ *
+ * 真机 dc734b85 时序：终裁覆写成功(1395)回写内存 ⇒ 修复轮 filesForWrite 含 1395 ⇒
+ * 修复 pass 改坏 ⇒ 门禁 :1470 拦下 ⇒ 走不到终裁点 ⇒ 快照救不回 ⇒ degradedFiles 假阳。
+ * 修法：判死分支发现该文件有快照 ⇒ 回退快照落盘（真值救回）而非判死降级。
+ * 跨轮载体 = options.fgTakeoverFiles 本身（与终裁点同一份 Map，判据单一来源）；
+ * 快照合法性由终裁点 R2 校验保证（首写轮必经）。
+ *
+ * @param {Map<string,string>|Object<string,string>|undefined} fgFinal
+ * @param {string} relativePath
+ * @returns {string|undefined}
+ */
+function _fgFinalSnapshotOf(fgFinal, relativePath) {
+  if (!fgFinal) return undefined;
+  const isMap = typeof fgFinal.get === 'function';
+  const has = isMap
+    ? fgFinal.has(relativePath)
+    : Object.prototype.hasOwnProperty.call(fgFinal, relativePath);
+  if (!has) return undefined;
+  const snap = isMap ? fgFinal.get(relativePath) : fgFinal[relativePath];
+  return typeof snap === 'string' && snap ? snap : undefined;
+}
+
 export function writeFiles(files, outputPath, options = {}) {
   // 🔒 入口归一化（见 logger.js safeLogger）：本函数体内有 18 处裸 logger.* 调用，
   // 其中 3 处在 catch 块内。logger 未传时降级为 no-op，避免 TypeError 掩盖真实写盘错误。
@@ -897,6 +928,14 @@ export function writeFiles(files, outputPath, options = {}) {
     //   「刀 41 确实覆盖了 LLM 写的 1fr」与「判据从未生效」。
     fluidTracks: 0,
     fluidTracksIllegal: 0,
+    // 🔴 入口 2（section 树遍历，2026-11-09 fe2acd21 实锤）：无 v-for 宿主的扁平直译形态
+    //   也必须留痕 —— 0 也打，用于区分「树遍历覆盖了该形态」与「从未生效」。
+    noVForSections: 0,
+    noVForContracts: 0,
+    noVForMismatches: 0,
+    noVForNoHost: 0,
+    noVForNotGridImpl: 0,
+    noVForHealed: 0,
   };
   let _r41TreeLogged = false;
   // 刀 41 与刀 51/52 共用同一棵 Figma 索引（惰性建一次；真值兜底要用）
@@ -948,6 +987,11 @@ export function writeFiles(files, outputPath, options = {}) {
       _r41Stats.skipNoClass = Number(_r41Ds.skippedNoClass) || 0;
       _r41Stats.fluidTracks = Number(_r41Ds.fluidTracks) || 0;
       _r41Stats.fluidTracksIllegal = Number(_r41Ds.fluidTracksIllegal) || 0;
+      _r41Stats.noVForSections = Number(_r41Ds.noVForSections) || 0;
+      _r41Stats.noVForContracts = Number(_r41Ds.noVForContracts) || 0;
+      _r41Stats.noVForMismatches = Number(_r41Ds.noVForMismatches) || 0;
+      _r41Stats.noVForNoHost = Number(_r41Ds.noVForNoHost) || 0;
+      _r41Stats.noVForNotGridImpl = Number(_r41Ds.noVForNotGridImpl) || 0;
       // 🔴 section 树留痕（一次性）：这是「判据够不着某段」的唯一可判读证据。
       //   真机 2026-10-22 实锤：战略段两行（38:3140 / 38:3153）不在树里 ⇒
       //   只打 `mismatches:0` 会让人以为「已经对了」，实际是「从来没被看过」。
@@ -977,6 +1021,7 @@ export function writeFiles(files, outputPath, options = {}) {
         }
         _r41Stats.healed = (_r41Healed.healed || []).length;
         _r41Stats.failed = (_r41Healed.failed || []).length;
+        _r41Stats.noVForHealed = (_r41Healed.healed || []).filter((h) => h && h.via === 'section-tree').length;
         if (_r41Map.size > 0) {
           filesForWrite = { ...files };
           for (const [p, c] of _r41Map) {
@@ -1124,6 +1169,39 @@ export function writeFiles(files, outputPath, options = {}) {
     let pendingThemeVars = '';
     // 🔴 数据源是 `filesForWrite`（= files 经刀 41 改写后）：若这里仍用 `files`，
     //   刀 41 的改写会被**静默丢弃**（它是循环外算好的，不写盘等于白跑一轮）。
+    // 🛡️ R11-A：终态收敛——写盘前最后一刻重跑 R10（幂等；成果此前可能被刀 66-C 覆盖）
+    const _r10Final = { scanned: 0, moved: 0, files: [] };
+    try {
+      const _idxPath = Object.keys(filesForWrite).find(
+        (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+      );
+      if (_idxPath && typeof filesForWrite[_idxPath] === 'string') {
+        _r10Final.scanned = 1;
+        const _r10 = relocateStrayTemplateRoots(filesForWrite[_idxPath]);
+        if (_r10.changed) {
+          filesForWrite = { ...filesForWrite, [_idxPath]: _r10.content };
+          if (files && typeof files === 'object' && _idxPath in files) {
+            files[_idxPath] = _r10.content; // R1：内存单一事实源与落盘同内容
+          }
+          _r10Final.moved = (_r10.moved || []).length;
+          _r10Final.files = [_idxPath];
+          if (logger) {
+            logger.warn('🛡️ R11-A 终态收敛：游离 template 根已归位（写盘前重跑 R10）', {
+              file: _idxPath,
+              moved: _r10.moved,
+            });
+          }
+        }
+      }
+    } catch (_r10Err) {
+      reportPatchChainError(_r10Err, { logger: logger, pass: 'writeFiles:r11a-final-converge', counter: _r10Final });
+      if (logger) {
+        logger.warn('🛡️ R11-A 终态收敛跳过（fail-open）', {
+          error: _r10Err?.message || String(_r10Err),
+        });
+      }
+    }
+
     for (const [relativePath, content] of Object.entries(filesForWrite)) {
       currentFile = relativePath;
       currentStep = 'validating_path';
@@ -1520,27 +1598,61 @@ export function writeFiles(files, outputPath, options = {}) {
               }
             } else {
               // 修复后仍失败：降级为 warn + 跳过该文件，不阻断其他文件落盘
-              if (logger) {
-                logger.error(
-                  `🚫 Vue SFC 写盘门禁阻断（坏文件不落盘）: ${relativePath}`,
-                  { errors: retry.errors },
-                );
+              // 🛡️ R5（2026-11-09）：fg- 接管文件豁免本判死——改写发生在**修复轮**
+              //   （writeFiles 之间，非同轮循环内），坏版入口 content 被门禁拦下后
+              //   走不到终裁点 ⇒ 快照救不回来。豁免 = 该文件有合法快照时回退为快照
+              //   落盘（真值救回），而非判死降级。判据单一来源 = options.fgTakeoverFiles
+              //   （与终裁点同一份 Map）；快照合法性由终裁点的 R2 校验保证。
+              const _frozenSnap = _fgFinalSnapshotOf(options.fgTakeoverFiles, relativePath);
+              if (typeof _frozenSnap === 'string' && _frozenSnap) {
+                // 🔴 2026-11-09 修订（第二轮评审 P1）：先取坏版长度再覆盖——旧实现
+                //   在 `sanitizedContent = _frozenSnap` 之后取 length ⇒ badBytes 恒等于
+                //   restoredBytes，坏版真实字节数丢失，事故排查被误导。
+                const _badBytes = typeof sanitizedContent === 'string' ? sanitizedContent.length : 0;
+                sanitizedContent = _frozenSnap;
+                logger.warn('🛡️ R5 冻结救回：接管文件被修复轮改坏，门禁拦下后回退为终裁快照落盘', {
+                  path: relativePath,
+                  badBytes: _badBytes,
+                  restoredBytes: _frozenSnap.length,
+                  gateErrors: (retry.errors || []).slice(0, 1),
+                });
+              } else {
+                if (logger) {
+                  logger.error(
+                    `🚫 Vue SFC 写盘门禁阻断（坏文件不落盘）: ${relativePath}`,
+                    { errors: retry.errors },
+                  );
+                }
+                skippedFiles.push(relativePath);
+                sfcBlocked.push({ path: relativePath, errors: retry.errors, reason: 'sfc-invalid-after-fix' });
+                continue;
               }
-              skippedFiles.push(relativePath);
-              sfcBlocked.push({ path: relativePath, errors: retry.errors, reason: 'sfc-invalid-after-fix' });
-              continue;
             }
           } else {
             // 无缺失变量/mixin，直接是语法错误：同样 warn + 跳过，避免整体任务作废
-            if (logger) {
-              logger.error(
-                `🚫 Vue SFC 写盘门禁阻断（坏文件不落盘）: ${relativePath}`,
-                { errors: syntaxResult.errors },
-              );
+            // 🛡️ R5：与上方 after-fix 分支同款接管文件豁免（快照救回）。
+            const _frozenSnap = _fgFinalSnapshotOf(options.fgTakeoverFiles, relativePath);
+            if (typeof _frozenSnap === 'string' && _frozenSnap) {
+              // 🔴 2026-11-09 修订（同上方 after-fix 分支）：坏版长度须在覆盖前取。
+              const _badBytes = typeof sanitizedContent === 'string' ? sanitizedContent.length : 0;
+              sanitizedContent = _frozenSnap;
+              logger.warn('🛡️ R5 冻结救回：接管文件被修复轮改坏，门禁拦下后回退为终裁快照落盘', {
+                path: relativePath,
+                badBytes: _badBytes,
+                restoredBytes: _frozenSnap.length,
+                gateErrors: (syntaxResult.errors || []).slice(0, 1),
+              });
+            } else {
+              if (logger) {
+                logger.error(
+                  `🚫 Vue SFC 写盘门禁阻断（坏文件不落盘）: ${relativePath}`,
+                  { errors: syntaxResult.errors },
+                );
+              }
+              skippedFiles.push(relativePath);
+              sfcBlocked.push({ path: relativePath, errors: syntaxResult.errors, reason: 'sfc-invalid' });
+              continue;
             }
-            skippedFiles.push(relativePath);
-            sfcBlocked.push({ path: relativePath, errors: syntaxResult.errors, reason: 'sfc-invalid' });
-            continue;
           }
         }
       } else if (
@@ -1573,6 +1685,20 @@ export function writeFiles(files, outputPath, options = {}) {
                 `🧩 LESS 写盘自愈: ${relativePath}（${_lessGate.fixes.join(', ')}）`,
               );
             }
+          }
+          // 🛡️ R4 计数行（2026-11-09 · 第二轮评审 P1 修订）：**恒打**（通过也打）。
+          //   旧实现把该行放在 `if (!_lessGate.ok)` 内，注释却称「0 也打」⇒ 通过路径无行，
+          //   `defects=none` 分支实际不可达；下游无法区分「查过且干净」与「没走到门禁」。
+          //   现改为单行输出 ok=0|1 两态：ok=1 即阳性干净样本，ok=0 即判死成因。
+          //   语义口径：defects 是**首次扫描的命中集**，其后还有 last-good 回退 / 注释配平
+          //   复检（下方分支），最终可能落盘成功 ⇒ 该计数是「原始命中数」，不是最终失败率。
+          if (logger) {
+            const _defectIds = (Array.isArray(_lessGate.defects) ? _lessGate.defects : [])
+              .map((d) => d?.id)
+              .filter(Boolean);
+            logger.info(
+              `🧩 LESS 写盘门禁: file=${relativePath} ok=${_lessGate.ok ? 1 : 0} defects=${_defectIds.length > 0 ? _defectIds.join(',') : 'none'}`,
+            );
           }
           if (!_lessGate.ok) {
             // 🛡️ 2026-10-15（a715fafc 实锤，B 降级）：「跳过 = 保留磁盘 last-good」只对
@@ -2166,6 +2292,16 @@ export function writeFiles(files, outputPath, options = {}) {
       //
       //   治本：接管文件的内容**完全由 Figma 真值决定**，任何后置改写都是失真 ⇒
       //   在唯一写盘出口、且在所有内容级自愈之后、写盘/diff 之前，用确定性版本终裁覆写。
+      //
+      //   🛡️ R2（2026-11-09 · loop-verify · mc-max-1794142741765-e239c8c3 实锤）：
+      //   **终裁快照本身绕过本文件 :1470 的 SFC 写盘门禁**——门禁验的是被换掉的
+      //   sanitizedContent（e239c8c3 真机：before:1053 合法通过），覆写后的 locked
+      //   快照（after:1395）不再过任何校验直接落盘，78ms 后被标「SFC 编译失败已隔离
+      //   降级」（degradedFiles=['TabsSection.vue']）。快照拍于渲染器内（folded-grid
+      //   renderFoldedGridLeafVue），渲染器输入（vision 真值/几何）异常时产物可能非法
+      //   ——确定性不等于语法合法。治本：覆写点对 locked 快照跑同一 validateVueSfc
+      //   （判据同源，不新增第二套 SFC 解析），非法 ⇒ 弃快照、保留门禁已验证的
+      //   sanitizedContent（heal 后版本），并恒打计数行（0 也打）供真机验签。
       const _fgFinal = options.fgTakeoverFiles;
       if (_fgFinal) {
         const isMap = typeof _fgFinal.get === 'function';
@@ -2175,14 +2311,57 @@ export function writeFiles(files, outputPath, options = {}) {
         if (has) {
           const locked = isMap ? _fgFinal.get(relativePath) : _fgFinal[relativePath];
           if (typeof locked === 'string' && locked) {
-            if (locked !== sanitizedContent) {
-              logger.warn('🛡️ 刀 53 终裁覆写（后置改写被回滚为 Figma 真值渲染版）', {
-                path: relativePath,
-                before: sanitizedContent.length,
-                after: locked.length,
-              });
+            // 🛡️ R2：快照语法校验（与 :1470 门禁同函数同口径）；校验异常 fail-closed 弃快照。
+            //   ⚠️ lessGlobalVars 声明于上方 .vue 门禁分支内（:1428），此覆写点在分支外
+            //   不可达 ⇒ 此处按同一口径现算（同一 extractLessGlobalVars 单一来源，非第二套）。
+            let _lockedOk = false;
+            let _lockedErrs = null;
+            try {
+              const _chk = validateVueSfc(
+                locked,
+                relativePath,
+                { lessGlobalVars: extractLessGlobalVars(files) },
+              );
+              _lockedOk = !!_chk?.valid;
+              if (!_lockedOk) _lockedErrs = _chk?.errors;
+            } catch (_chkErr) {
+              _lockedErrs = [String(_chkErr?.message || _chkErr)];
             }
-            sanitizedContent = locked;
+            if (_lockedOk) {
+              if (locked !== sanitizedContent) {
+                logger.warn('🛡️ 刀 53 终裁覆写（后置改写被回滚为 Figma 真值渲染版）', {
+                  path: relativePath,
+                  before: sanitizedContent.length,
+                  after: locked.length,
+                });
+              }
+              // 🛡️ R2 计数行（2026-11-09 · 第二轮评审 P1）：此前**只有失败 warn**，
+              //   真机 rejected=0 时无法区分「全部校验通过」与「根本没走到覆写点」⇒
+              //   判分器 §6 的 `verified>0` 一臂无法执行。此处恒打（0 也打=必有一方）。
+              if (logger) {
+                logger.info(
+                  `🛡️ R2 终裁快照校验: file=${relativePath} verified=1 rejected=0 bytes=${locked.length}`,
+                );
+              }
+              sanitizedContent = locked;
+              // 🛡️ R5（2026-11-09 · loop-verify）：真机 dc734b85 时序实锤——终裁覆写
+              //   成功后快照回写内存 ⇒ 下一修复轮 pass 改坏 ⇒ 门禁拦下走不到终裁点。
+              //   救回机制见上方门禁判死分支的 `_fgFinalSnapshotOf` 豁免（跨轮载体 =
+              //   options.fgTakeoverFiles 同一份 Map，无需调用内登记）。
+            } else {
+              // 非法快照：保留 heal 后版本（该内容已过 :1470 门禁验证），不落坏文件
+              logger.warn('🛡️ R2 终裁快照校验失败：弃快照，保留门禁已验证的 heal 版本落盘', {
+                path: relativePath,
+                snapshotBytes: locked.length,
+                keptBytes: sanitizedContent.length,
+                errors: (_lockedErrs || []).slice(0, 2),
+              });
+              if (logger) {
+                logger.info(
+                  `🛡️ R2 终裁快照校验: file=${relativePath} verified=0 rejected=1 bytes=${locked.length}`,
+                );
+              }
+            }
           }
         }
       }
@@ -2404,7 +2583,13 @@ export function writeFiles(files, outputPath, options = {}) {
         skippedPaths: skippedFiles.length > 0 ? skippedFiles.slice(0, 5) : [],
       });
     }
-    return { written: writtenFiles, skipped: skippedFiles, sfcBlocked };
+    // 🛡️ 刀 41 计数随返回值上抛（noVFor* 六键进 patchHitReport.selfHealing 供 meta 验签）
+    return {
+      written: writtenFiles,
+      skipped: skippedFiles,
+      sfcBlocked,
+      blade41Stats: { ..._r41Stats, r10FinalScanned: _r10Final.scanned, r10FinalMoved: _r10Final.moved },
+    };
   } catch (error) {
     if (logger) {
       logger.error('文件写入失败', {

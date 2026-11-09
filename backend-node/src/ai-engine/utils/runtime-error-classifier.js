@@ -38,6 +38,24 @@ export const DETERMINISTIC_MISSING_PATTERNS = [
 export const DETERMINISTIC_RENDER_ERROR_TYPES = new Set(['vue-render'])
 
 /**
+ * 🛡️ S5（2026-11-09 · mc-max-1794233407339-a7b905d1 实锤）：**产物空壳类**运行时码。
+ *
+ * 病灶：该单 SFC 降级后产物 7 个 `data-section-id` 节点全 `[0,0]`（RUNTIME-006 blank-render），
+ *   但 `hasDeterministicRuntimeMissing` 只认 RUNTIME-004/009/010 的**错误文本**，006 完全不在
+ *   判据内 ⇒ generate 模式按「环境类」降级放行，坏产物以 completed 发布。
+ *
+ * 语义：这些码的含义就是「组件结构/渲染为空」——与「预览页不可达/网络失败」性质相反，
+ *   重试或降级都无法自愈，必须 fail-closed。码值取自 `validators/runtime-static-rules.js`
+ *   的 RUNTIME_CODES 中心表（唯一事实源），此处只做**语义归类**，不新增错误码。
+ */
+export const PRODUCT_DEFECT_RUNTIME_IDS = new Set([
+  'RUNTIME-005', // 预览根容器尺寸为空（layout）
+  'RUNTIME-006', // 组件 ready 但无可见根节点（blank-render）
+  'RUNTIME-012', // 截图像素近似全白 / 无有效内容（blank-render 像素级）
+  'RUNTIME-013', // 仅静态抽取，无法证明组件可在真实运行时加载
+])
+
+/**
  * 判定运行时门禁失败是否属「确定性运行时缺失」（产物自身缺陷，fail-closed 应当硬 BLOCK）。
  * @param {{issues?: Array}} runtimeGate
  * @returns {boolean}
@@ -45,6 +63,12 @@ export const DETERMINISTIC_RENDER_ERROR_TYPES = new Set(['vue-render'])
 export function hasDeterministicRuntimeMissing(runtimeGate) {
   const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []
   for (const issue of issues) {
+    // 🛡️ S5（2026-11-09 · a7b905d1 实锤）：产物空壳类（无可见根节点/根容器尺寸为空/空白截图/
+    //   仅静态抽取）**先判**，不依赖错误文本取证——这类 issue 本身没有 JS 异常文本，
+    //   旧判据（只扫 RUNTIME-004/009/010 的 errors/renderError）永远命中不了 ⇒ 被降级放行。
+    if (issue?.severity === 'BLOCK' && PRODUCT_DEFECT_RUNTIME_IDS.has(String(issue?.id || ''))) {
+      return true
+    }
     // 只对页面异常 / 控制台错误 / 渲染错误类取证
     // （RUNTIME-004 render-error / RUNTIME-009 pageerror / RUNTIME-010 console）
     if (!/^(RUNTIME-004|RUNTIME-009|RUNTIME-010)$/.test(issue?.id || '')) continue

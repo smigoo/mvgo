@@ -1956,6 +1956,18 @@ export function buildEffectiveSection(sec, idx, ctx) {
       isLayoutContainer: true,
       layout: containerLayout,
       ...(containerGridColumns != null ? { gridColumns: containerGridColumns } : {}),
+      // 🛡️ 容器几何透传（2026-11-09 · fe2acd21/54f523ac 实锤）：container 分支此前不透传
+      //   absoluteBoundingBox/figmaBox，而同函数叶分支（下方「整体几何与高度必须成对透传」）
+      //   一直有 ⇒ 同函数两分支口径不一致。后果：横排行容器子段（如 89:39 tab 列 46×317）
+      //   在 componentPlan 里零几何 ⇒ LLM 无真值可依写 `flex: 0 0 auto` 由内容自撑
+      //   （193px vs 真值 46px），下游 heal 无从对照。与叶分支同口径：事实在 sec 上
+      //   就透传，缺省不产键（零副作用）。宽度真值消费方：R9-c 横排子项定宽 heal。
+      ...(sec.absoluteBoundingBox || sec.figmaBox
+        ? {
+            absoluteBoundingBox: sec.absoluteBoundingBox || sec.figmaBox,
+            figmaBox: sec.figmaBox || sec.absoluteBoundingBox,
+          }
+        : {}),
       layoutSource: 'container-rebuild',
       children,
       collapsed: false,

@@ -41,6 +41,9 @@ import { pruneDuplicateStyleDeclsFromShared } from './style-dedup-guard.js';
 import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
 import { healStructuralTruth } from './structural-truth-healers.js';
 import { healContainerBackgroundTruth } from './container-background-truth.js';
+import { healHorizontalFlexWidth100, collectRowFlexChildComponents, healRowFixedWidthTruth } from './horizontal-flex-width-heal.js';
+import { injectContainerLayoutTruth } from './container-layout-truth.js';
+import { relocateStrayTemplateRoots } from './stray-template-root-relocator.js';
 import { healPanelChromeMisplacement, healPanelTitleSlot } from './panel-chrome-misplacement.js';
 import { healBorderWithoutStrokes } from './border-without-strokes.js';
 // 🛡️ 刀 40（2026-10-21）：同一规则块内同属性重复声明消歧（`display: grid` 被同块后写的
@@ -735,6 +738,31 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   }
 
+  // ⑥-c 🛡️ R10（2026-11-09 · loop-verify · 重点车辆 11bd56c1 实锤）：template 根游离元素归位。
+  //    LLM 把 tab 行写在 <base-panel> 开标签之前（引用 index 自身 ref，非 T09 注入）⇒
+  //    游离于宿主外悬空渲染。归位 = 移入 base-panel 默认插槽首部（语义等价，非判死）。
+  try {
+    const idxPath = Object.keys(result).find(
+      (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+    )
+    if (idxPath && typeof result[idxPath] === 'string') {
+      const relocated = relocateStrayTemplateRoots(result[idxPath])
+      if (relocated.changed) {
+        result[idxPath] = relocated.content
+        summary.r10StrayRelocated = (summary.r10StrayRelocated || 0) + 1
+        logger?.warn?.('🛡️ R10 修复：template 根游离元素已归位 base-panel 默认插槽', {
+          file: idxPath,
+          moved: relocated.moved,
+        })
+      }
+    }
+  } catch (r10Err) {
+    reportPatchChainError(r10Err, { logger: logger, pass: 'runPreWriteSelfHealing:r10', counter: summary });
+    logger?.warn?.('🛡️ R10 游离根归位异常（fail-open）', {
+      error: r10Err?.message || String(r10Err),
+    });
+  }
+
   // ⑦ 背景 :style 补全自愈（缺 size/repeat/position → `inferBackgroundStyle` 真值；
   //    解析不出该元素引用的资源才回落中性默认）。
   //    🛡️ F3′（2026-11-05 · 刀53 三链治本）：此前的 `mapping` 入参**形同虚设**——被调函数
@@ -748,6 +776,223 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       summary.bgStyleComplete++;
       logger?.warn?.('🛡️ S6 修复：背景 :style 补全 size/repeat/position', { file: fp });
     }
+  }
+
+  // ⑥-b 🛡️ R9-b（2026-11-09 · loop-verify · 设备监测 49d23fe1 实锤）：横排 flex 兄弟组
+  //    `width:100%` 挤压裁切的确定性修复。switch-con（89:38 横排）下两张统计卡 scoped CSS
+  //    均 width:100% ⇒ 互相挤压，第二卡文字裁成「南北接：设备」。flex-shrink-guard 判据 A
+  //    已识别此形态但只 WARN 不阻断 ⇒ 本节做 heal 形态：横排佐证下改写
+  //    width:100% → flex:1 1 0 + min-width:0。
+  //    判据同源 flex-shrink-guard.hasShrinkProtection（豁免口径一致，不复制第二套）。
+  //    🔴 2026-11-09 修订（第二轮评审 P0-2）：旧实现用页面级正则判一次 isRow，就给**全部**
+  //    子 .vue 传 `parentFlexRowClasses:['*']` ⇒「页面有任一横排」＝「每个子组件父级都是
+  //    横排」，竖排 stack 里的卡也会被改成 flex:1 1 0（误杀）。现改为结构性判定：
+  //    collectRowFlexChildComponents 解析 index.vue 中**横排容器的直接子组件名**，
+  //    只有命中的文件才获得佐证（零硬编码：只认 display:flex + 非 column 结构）。
+  try {
+    const indexPath = Object.keys(result).find(
+      (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+    );
+    const indexContent = indexPath ? result[indexPath] : '';
+    if (indexContent && typeof indexContent === 'string') {
+      const rowChildNames = collectRowFlexChildComponents(indexContent);
+      if (rowChildNames.length > 0) {
+        // 组件标签名 → 文件（按 basename 精确匹配，不做模糊前缀）
+        const fileByComponent = new Map();
+        for (const fp of Object.keys(result)) {
+          if (!fp.endsWith('.vue') || /index\.vue$/.test(fp)) continue;
+          const base = fp.replace(/^.*\//, '').replace(/\.vue$/, '');
+          fileByComponent.set(base, fp);
+        }
+        summary.r9bRowChildren = rowChildNames.length;
+        for (const compName of rowChildNames) {
+          const fp = fileByComponent.get(compName);
+          if (!fp || typeof result[fp] !== 'string') continue;
+          const healed = healHorizontalFlexWidth100(result[fp], { parentIsRowFlex: true });
+          if (healed.changed) {
+            result[fp] = healed.content;
+            summary.r9bWidthHeal = (summary.r9bWidthHeal || 0) + healed.rewritten.length;
+            logger?.warn?.('🛡️ R9-b 修复：横排 flex 子组件 width:100% → flex:1 1 0 + min-width:0', {
+              file: fp,
+              component: compName,
+              rewritten: healed.rewritten,
+            });
+          }
+        }
+      }
+    }
+  } catch (r9bErr) {
+    reportPatchChainError(r9bErr, { logger: logger, pass: 'runPreWriteSelfHealing:r9b', counter: summary });
+    logger?.warn?.('🛡️ R9-b 横排 width:100% heal 异常（fail-open）', {
+      error: r9bErr?.message || String(r9bErr),
+    });
+  }
+
+  // ⑥-c 🛡️ R9-c（2026-11-09 · fe2acd21/54f523ac 实锤）：横排容器子项「定宽真值」注入。
+  //    病灶：@antd/tab 行（89:37）下 tab 列（89:39）真值 46×317，产物 `flex: 0 0 auto`
+  //    由内容自撑 193px ⇒ 挤占网格 ⇒ 列塌/重叠/越界。W1（planner container 分支几何
+  //    透传）让真值进了 componentPlan；本节为出口兜底：LLM 仍写错时按段树真值行内注入
+  //    `flex: 0 0 Wpx`。判据同源 horizontal-flex-width-heal（R9-b 同文件），真值单一
+  //    事实源 = effectiveSections 树的 figmaBox/absoluteBoundingBox；缺真值计数跳过不猜。
+  try {
+    if (Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+      const indexPath2 = Object.keys(result).find(
+        (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+      );
+      const indexContent2 = indexPath2 ? result[indexPath2] : '';
+      if (indexContent2 && typeof indexContent2 === 'string') {
+        // sid → 真值宽度（树遍历一次；figmaBox 与 absoluteBoundingBox 同源口径）
+        const widthBySid = new Map();
+        const walkW = (list) => {
+          for (const sec of Array.isArray(list) ? list : []) {
+            if (!sec || typeof sec !== 'object') continue;
+            const box = sec.figmaBox || sec.absoluteBoundingBox;
+            const w = Number(box && box.width);
+            if (sec.id && Number.isFinite(w) && w > 0) widthBySid.set(String(sec.id), w);
+            walkW(sec.children || sec.body?.children);
+          }
+        };
+        walkW(effectiveSections);
+        if (widthBySid.size > 0) {
+          const styleSources = Object.entries(result)
+            .filter(([p, c]) => typeof c === 'string' && c && /\.(less|css|vue)$/i.test(p))
+            .map(([p, c]) => ({ path: p, content: c }));
+          const r9c = healRowFixedWidthTruth(indexContent2, styleSources, {
+            truthWidthOf: (sid) => widthBySid.get(String(sid)) ?? null,
+          });
+          summary.r9cRowFlexContainers = r9c.stats.scanned;
+          summary.r9cCandidates = r9c.stats.candidates;
+          summary.r9cNoTruth = r9c.stats.noTruth;
+          summary.r9cHasFlexSemantics = r9c.stats.hasFlexSemantics;
+          if (r9c.changed) {
+            result[indexPath2] = r9c.content;
+            summary.r9cFixedWidthHeal = r9c.stats.healed;
+            logger?.warn?.('🛡️ R9-c 修复：横排容器子项注入定宽真值 flex: 0 0 Wpx', {
+              healed: r9c.healed,
+              stats: r9c.stats,
+            });
+          }
+        }
+      }
+    }
+  } catch (r9cErr) {
+    reportPatchChainError(r9cErr, { logger: logger, pass: 'runPreWriteSelfHealing:r9c', counter: summary });
+    logger?.warn?.('🛡️ R9-c 横排定宽真值 heal 异常（fail-open）', {
+      error: r9cErr?.message || String(r9cErr),
+    });
+  }
+
+  // ⑥-d 🛡️ G1（2026-11-09 · 669d8bf8 实锤）：零样式容器布局真值注入。
+  //    病灶：1263-38-con / 2-3446-con / 2-3496-con 三容器在 common.less 零样式块、
+  //    行内无 display——真值两卡横排（同 y 异 x）被块级堆成纵向 ⇒ 右卡掉位、底图塌陷。
+  //    本节为出口兜底：零样式容器按子节点 bbox 注入方向（row/column）与比例
+  //    （flex: w/sum · h/sum），零硬编码；判据细节见 container-layout-truth.js
+  //    头注释（B1 评审修正：偏移量切片替换 / `>` 组合器 / :style 动态 display
+  //    跳过 / 子项已有 flex 不覆盖）。
+  //    ⚠️ 真值源优先级（669d8bf8 真机实锤）：effectiveSections 树的 figmaBox 优先
+  //    （planner W1 container 分支透传）；**缺失时回退 figmaRoot 直接子节点 bbox**
+  //    （Figma 树恒有 absoluteBoundingBox——669d8bf8 的 effectiveSections 无几何，
+  //    只走第一优先级会 noKids 全跳过，G1 空转）。真值双缺 ⇒ 计数跳过不猜。
+  try {
+    const indexPath3 = Object.keys(result).find(
+      (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+    );
+    const indexContent3 = indexPath3 ? result[indexPath3] : '';
+    if (indexContent3 && typeof indexContent3 === 'string') {
+      // 优先级 1：effectiveSections 树（figmaBox 与 absoluteBoundingBox 同源口径）
+      const kidsBySid = new Map();
+      const walkKids = (list) => {
+        for (const sec of Array.isArray(list) ? list : []) {
+          if (!sec || typeof sec !== 'object') continue;
+          const childList = Array.isArray(sec.children)
+            ? sec.children
+            : sec.body && Array.isArray(sec.body.children)
+              ? sec.body.children
+              : null;
+          if (sec.id && Array.isArray(childList) && childList.length > 0) {
+            const boxes = childList
+              .map((c) => {
+                const b = c && (c.figmaBox || c.absoluteBoundingBox);
+                const x = Number(b && b.x);
+                const y = Number(b && b.y);
+                const w = Number(b && b.width);
+                const h = Number(b && b.height);
+                return Number.isFinite(x) && Number.isFinite(y) &&
+                  Number.isFinite(w) && Number.isFinite(h)
+                  ? { id: String(c.id || ''), box: { x, y, width: w, height: h } }
+                  : null;
+              })
+              .filter(Boolean);
+            if (boxes.length > 0) kidsBySid.set(String(sec.id), boxes);
+          }
+          walkKids(sec.children || sec.body?.children);
+        }
+      };
+      if (Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+        walkKids(effectiveSections);
+      }
+      // 优先级 2：figmaRoot 直接子节点（669d8bf8 实测 effectiveSections 常无几何）
+      let figmaIndexed = false;
+      if (figmaRoot && typeof figmaRoot === 'object') {
+        const nodeById = new Map();
+        const walkIdx = (n) => {
+          if (!n || typeof n !== 'object') return;
+          if (n.id) nodeById.set(String(n.id), n);
+          for (const c of n.children || []) walkIdx(c);
+        };
+        walkIdx(figmaRoot.document || figmaRoot);
+        if (nodeById.size > 0) {
+          figmaIndexed = true;
+          summary.g1TruthSource = 'figmaRoot';
+          for (const [sid] of Array.from(nodeById.entries())) {
+            if (kidsBySid.has(sid)) continue; // 优先级 1 已覆盖
+            const node = nodeById.get(sid);
+            if (!Array.isArray(node.children) || node.children.length === 0) continue;
+            const boxes = node.children
+              .map((c) => {
+                const b = c && (c.absoluteBoundingBox || c.figmaBox);
+                const x = Number(b && b.x);
+                const y = Number(b && b.y);
+                const w = Number(b && b.width);
+                const h = Number(b && b.height);
+                return Number.isFinite(x) && Number.isFinite(y) &&
+                  Number.isFinite(w) && Number.isFinite(h)
+                  ? { id: String(c.id || ''), box: { x, y, width: w, height: h } }
+                  : null;
+              })
+              .filter(Boolean);
+            if (boxes.length > 0) kidsBySid.set(sid, boxes);
+          }
+        }
+      }
+      if (!summary.g1TruthSource && kidsBySid.size > 0) summary.g1TruthSource = 'effectiveSections';
+      if (kidsBySid.size > 0) {
+        const styleSourcesG1 = Object.entries(result)
+          .filter(([p, c]) => typeof c === 'string' && c && /\.(less|css|vue)$/i.test(p))
+          .map(([p, c]) => ({ path: p, content: c }));
+        const g1 = injectContainerLayoutTruth(indexContent3, styleSourcesG1, {
+          childrenBoxesOf: (sid) => kidsBySid.get(String(sid)) ?? null,
+        });
+        summary.g1Scanned = g1.stats.scanned;
+        summary.g1ZeroStyle = g1.stats.zeroStyle;
+        summary.g1Injected = g1.stats.injected;
+        summary.g1ChildFlex = g1.stats.childFlex;
+        summary.g1NoKids = g1.stats.noKids;
+        summary.g1MixedSkipped = g1.stats.mixedSkipped;
+        if (g1.changed) {
+          result[indexPath3] = g1.content;
+          logger?.warn?.('🛡️ G1 修复：零样式容器注入布局真值（方向+比例）', {
+            injected: g1.injected,
+            stats: g1.stats,
+          });
+        }
+      }
+    }
+  } catch (g1Err) {
+    reportPatchChainError(g1Err, { logger: logger, pass: 'runPreWriteSelfHealing:g1', counter: summary });
+    logger?.warn?.('🛡️ G1 容器布局真值注入异常（fail-open）', {
+      error: g1Err?.message || String(g1Err),
+    });
   }
 
   // ⑨ D1 per-card 样式确定性改写（2026-09-20 · mc-1789869245851 实锤）：

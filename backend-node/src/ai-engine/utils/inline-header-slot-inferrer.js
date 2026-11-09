@@ -285,6 +285,7 @@ export function ensureHeaderSlots(sections, headerSlots = [], opts = {}) {
 
   const headerSectionIds = []
   let derivedCount = 0
+  let sectionArrayCount = 0 // 🛡️ R6：段级 headerSlots[] 收编条数（与粗粒度 slotCandidate 推导在真机日志可区分）
 
   for (const sec of list) {
     if (!sec || typeof sec !== 'object') continue
@@ -293,6 +294,26 @@ export function ensureHeaderSlots(sections, headerSlots = [], opts = {}) {
     const isSameRow = rel === HEADER_SAME_ROW_RELATION
     if (!isChrome && !isSameRow) continue
     if (isChrome) headerSectionIds.push(String(sec.id || sec.name || ''))
+
+    // 🛡️ R6（2026-11-09 · loop-verify · 设备监测 2:8419 实锤）：**段级 headerSlots[] 直接收编**。
+    //   病灶：vision 已把完整插槽真值（slotType/elementType/content/figmaNodeId×4）写在
+    //   段级 `sec.headerSlots[]`，但本函数此前只消费 `slotCandidate` 标量 ⇒ 每段至多推出
+    //   1 个粗粒度 slot（content=段名、figmaNodeId 空），段级现成数组被完全无视 ⇒ 顶层
+    //   headerSlots 空 ⇒ T09/资源挂载拿不到插槽事实 ⇒ header-stats 落主体、tab 无交互。
+    //   修法：段带非空 headerSlots[] 时逐条 normalize + 既有 slotKey 去重 + rejectedKeys
+    //   拦截后收编（零新判据，同一出口）；slotCandidate 粗粒度兜底保留（段无数组时照旧）。
+    if (Array.isArray(sec.headerSlots) && sec.headerSlots.length > 0) {
+      for (const raw of sec.headerSlots) {
+        const slot = normalizeSlotCandidate(raw, sec)
+        if (!slot) continue
+        const key = slotKey(slot)
+        if (!key || rejectedKeys.has(key) || byKey.has(key)) continue
+        byKey.set(key, slot)
+        derivedCount += 1
+        sectionArrayCount += 1
+      }
+      continue // 段级数组已消费，slotCandidate 粗粒度兜底不再重复推
+    }
 
     const cand = sec.slotCandidate ?? sec.header?.slotCandidate ?? null
     const slot = normalizeSlotCandidate(cand, sec)
@@ -307,6 +328,7 @@ export function ensureHeaderSlots(sections, headerSlots = [], opts = {}) {
     headerSlots: [...byKey.values()],
     headerSectionIds,
     derivedCount,
+    sectionArrayCount, // 真机验签：>0 ⇒ R6 段级数组路径生效；=0 且 derivedCount>0 ⇒ 全部走粗粒度兜底
     existingCount: existing.length,
   }
 }

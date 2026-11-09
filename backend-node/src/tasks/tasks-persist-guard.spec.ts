@@ -240,10 +240,31 @@ describe('B1 解耦 + C 原子写（静态断言源码契约）', () => {
 
   it('TaskManager.persist 已改原子写（tmp + renameWithCopyFallback + EPERM/EBUSY 降级）', () => {
     const tmSrc = readFileSync(join(__dirname, '../ai-engine/utils/task-manager.js'), 'utf-8');
-    expect(tmSrc).toMatch(/import\s*\{\s*renameWithCopyFallback\s*\}/);
+    expect(tmSrc).toMatch(/import\s*\{[^}]*renameWithCopyFallback[^}]*\}/);
     expect(tmSrc).toMatch(/renameWithCopyFallback\(tmpFile,\s*PERSIST_FILE/);
     // 存在 EPERM/EBUSY 降级直写兜底
     expect(tmSrc).toMatch(/renameErr\?\.code\s*!==\s*'EPERM'/);
+  });
+
+  it('🛡️ 2026-11-09 熔断器接线：三大高频写入点均有 isRenameBroken 直写短路（tmp 泄漏根治）', () => {
+    const utilSrc = readFileSync(join(__dirname, '../ai-engine/utils/rename-with-copy-fallback.js'), 'utf-8');
+    // 熔断器本体：导出 isRenameBroken / markRenameBroken，且 EPERM/EBUSY 时置位
+    expect(utilSrc).toMatch(/export\s+function\s+isRenameBroken\(\)/);
+    expect(utilSrc).toMatch(/export\s+function\s+markRenameBroken\(/);
+    expect(utilSrc).toMatch(/error\.code\s*===\s*'EPERM'\s*\|\|\s*error\.code\s*===\s*'EBUSY'/);
+
+    // TasksService.persist：熔断态直写 + .prev 备份跳过 tmp
+    const svcSrc = readFileSync(join(__dirname, 'tasks.service.ts'), 'utf-8');
+    expect(svcSrc).toMatch(/if\s*\(!isRenameBroken\(\)\)/);
+    expect(svcSrc).toMatch(/markRenameBroken\(`（TasksService\.persist/);
+
+    // TaskManager.persist：熔断态直写
+    const tmSrc = readFileSync(join(__dirname, '../ai-engine/utils/task-manager.js'), 'utf-8');
+    expect(tmSrc).toMatch(/if\s*\(isRenameBroken\(\)\)/);
+
+    // batch.service：熔断态直写
+    const batchSrc = readFileSync(join(__dirname, '../lite/batch.service.ts'), 'utf-8');
+    expect(batchSrc).toMatch(/if\s*\(isRenameBroken\(\)\)/);
   });
 
   it('护栏相关字段与落点齐备（pendingDeletedIds / lastKnownDiskCount）', () => {

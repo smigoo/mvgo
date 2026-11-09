@@ -26,7 +26,7 @@ import { collectFigmaChartColors, resolveSeriesColors } from '../utils/figma-col
 import { injectRepeatedCardTruth, injectTransparentContainerTruth } from '../utils/layout-truth-healer.js'
 // 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
 // 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
-import { fillToRgba } from '../utils/section-tree.js'
+import { fillToRgba, fillsToCss } from '../utils/section-tree.js'
 // 🛡️ R3-bg 刀 A（2026-11-05）：`scaleMode → 背景四件套` 的单一实现。本类的轴向比值口径
 // 完全不认 `imageScaleMode`，与 F3 白名单天然互逆；有真值时必须以真值裁决，
 // STRETCH 的 coverage 守卫也在该函数内（否则 D2 治本会在此处被重新造一遍）。
@@ -133,6 +133,7 @@ import { auditSectionAnchors, emptyAnchorStats } from '../utils/section-anchor-t
 //   「递归收所有字符串、只排 5 个技术键」的全污染口径（真机 475 串 / 可疑 44 → 29 串 / 0）。
 import {
   auditContentAnchorConsistency,
+  reanchorMisalignedDeclaredTexts,
   collectDeclaredTexts,
 } from '../utils/vision-content-anchor-consistency.js'
 // 🛡️ A′（2026-09-10）：纵向容器层级重建（纯函数，无 import.meta，jest 可 require）。
@@ -668,9 +669,13 @@ ${analysisTask}`
         .filter(Boolean)
       if (colors.length > 0) colorStr = ` color=[${colors.join(';')}]`
 
-      // 渐变信息
+      // 渐变信息（🛡️ S1 · 2026-11-09 · 25711e88 实锤）：输出完整 stop 值，不再只给 `[has-gradient]`
+      //   标记——旧标记让模型知道「有渐变」但拿不到颜色，只能自行编纯色（真机数字全成白/红/蓝）。
       const gradients = node.fills.filter(f => f.visible !== false && f.gradientStops)
-      if (gradients.length > 0) colorStr += ' [has-gradient]'
+      if (gradients.length > 0) {
+        const gcss = fillsToCss(gradients, typeof node.opacity === 'number' ? node.opacity : undefined)
+        colorStr += gcss ? ` gradient=[${gcss}]` : ' [has-gradient]'
+      }
     }
 
     // 🛡️ C0.3-A（2026-11-04 · 真机 mc-max-1793755487753-104f5a31）：**行内携带真实节点 id**。
@@ -3983,13 +3988,20 @@ ${analysisTask}`
       if (ensured.derivedCount > 0) {
         slotsAcc = ensured.headerSlots
         appliedKeys.add('headerSlots')
+        // 🛡️ R6：sectionArrayCount>0 ⇒ 段级 headerSlots[] 数组收编路径（R6 新增）；
+        //   =0 ⇒ 全部走 slotCandidate 粗粒度兜底（旧行为）。真机验签以此区分两条路径。
         pushFix(
           'headerSlots',
           `已从 headerRelation/slotCandidate 事实装配 ${ensured.derivedCount} 个 headerSlots`,
-          { count: ensured.derivedCount, total: slotsAcc.length },
+          {
+            count: ensured.derivedCount,
+            total: slotsAcc.length,
+            sectionArrayCount: ensured.sectionArrayCount ?? 0,
+          },
         )
         logger.info('🎯 headerSlots 事实装配(ensureHeaderSlots)', {
           derived: ensured.derivedCount,
+          sectionArray: ensured.sectionArrayCount ?? 0,
           total: slotsAcc.length,
           headerSectionIds: ensured.headerSectionIds,
         })
@@ -4112,6 +4124,36 @@ ${analysisTask}`
       //   纪律：**只诊断、不修复** —— 真机 vision 的文案序（逐行 label,value 交替）与真值
       //   树序（先 12 个 label、再 12 个 value）**不同**，任何「按序重贴 id」的确定性修复都会
       //   猜错并静默丢内容。此处只留痕 + 产出诊断，由调用方决定留痕 / BLOCK / 重跑 vision。
+      //
+      //   🛡️ P0-E（2026-11-09 · 8ebb795b 实锤，用户裁 Q3=A′）：上述纪律否定的是**按序
+      //   重贴**；本处在其后追加第三条路径——**内容唯一命中重锚**（reanchorMisaligned-
+      //   DeclaredTexts）：声明文案在全树 TEXT characters 中恰好命中 1 个节点（零歧义）
+      //   且条目为叶子 ⇒ 才重锚；多命中/零命中保持原样（「不猜」纪律完整保留）。
+      //   实测 8ebb795b 四个 tab 文案 4/4 全树唯一命中。重锚后再对账（计数行反映重锚后状态）。
+      try {
+        const _reanchor = reanchorMisalignedDeclaredTexts({
+          sections: collectSectionArrays(parsed).flat(),
+          figmaNodeData: figmaData,
+        })
+        // 🛡️ P0-E 加强（2026-11-09）：跨容器唯一命中 ⇒ relinkSkipped（不猜）——
+        //   上抛到 parsed.contentAnchorAudit.reanchorSkippedCross 供 meta/后续验签。
+        if (_reanchor.relinkSkipped?.length > 0) {
+          parsed._reanchorSkippedCross = _reanchor.relinkSkipped
+        }
+        if (_reanchor.relinked.length > 0) {
+          logger.warn('🛡️ vision 锚点重定位（内容唯一命中，叶子+同容器限定）', {
+            relinked: _reanchor.relinked,
+            examined: _reanchor.examined,
+          })
+        }
+        if (_reanchor.relinkSkipped?.length > 0) {
+          logger.warn('🛡️ vision 锚点重定位跳过（跨容器唯一命中，保守不重锚）', {
+            skipped: _reanchor.relinkSkipped,
+          })
+        }
+      } catch (_reanchorErr) {
+        logger.warn('vision 锚点重定位失败（非阻断）', { error: _reanchorErr?.message })
+      }
       const contentAnchorAudit =
         parsed.contentAnchorAudit && parsed.contentAnchorAudit.evaluated != null
           ? parsed.contentAnchorAudit

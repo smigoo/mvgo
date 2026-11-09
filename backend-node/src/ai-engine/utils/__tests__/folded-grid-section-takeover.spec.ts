@@ -383,6 +383,40 @@ describe('刀 53 collectFoldedGridTakeover', () => {
     });
     expect([...a.map.entries()]).toEqual([...b.map.entries()]);
   });
+
+  // 🛡️ R1（2026-11-08 · loop-verify R1 轮）：vision charts[] 透传通道（4754b79 F1）
+  //   消费端口径。阳性对照：analysisCharts 声明某段有图表 ⇒ 该段让出（不接管），
+  //   chartOwned / chartOwnedIds 计数可见；与 microcode-engineer.js#collectFoldedGridTakeover
+  //   入参的供给端回落（input.previewAnalysis.charts || input.charts）互补成整链。
+  it('R1 阳性：analysisCharts 声明 38:3140 有图表 ⇒ 该段让出，chartOwned=1', () => {
+    const out = collectFoldedGridTakeover({
+      treeSections: TREE,
+      figmaNodeData: FIGMA_DOC,
+      resourceMapping: ICON_MAPPING,
+      componentName: 'c-component',
+      analysisCharts: [{ section: '38:3140', type: 'pie' }],
+    });
+    expect(out.chartOwned).toBe(1);
+    expect(out.chartOwnedIds).toEqual(['38:3140']);
+    expect(out.evaluated).toBe(4);
+    expect(out.gridHits).toBe(2); // 原 3 网格段让出 1
+    expect(out.map.size).toBe(3); // header 1 + grid 2
+    expect(out.skipped).toContainEqual({ id: '38:3140', reason: 'chartOwned' });
+  });
+
+  it('R1 阴性：analysisCharts 缺省/空数组 ⇒ 与旧版行为逐字一致（chartOwned=0）', () => {
+    const a = collectFoldedGridTakeover({
+      treeSections: TREE, figmaNodeData: FIGMA_DOC, resourceMapping: ICON_MAPPING, componentName: 'c-component',
+    });
+    const b = collectFoldedGridTakeover({
+      treeSections: TREE, figmaNodeData: FIGMA_DOC, resourceMapping: ICON_MAPPING, componentName: 'c-component',
+      analysisCharts: [],
+    });
+    expect(a.chartOwned).toBe(0);
+    expect(b.chartOwned).toBe(0);
+    expect(b.gridHits).toBe(3);
+    expect([...b.map.entries()]).toEqual([...a.map.entries()]);
+  });
 });
 
 /**

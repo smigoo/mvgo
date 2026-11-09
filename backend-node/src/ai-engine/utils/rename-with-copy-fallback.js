@@ -20,12 +20,41 @@ import fs from 'fs'
 
 const FALLBACK_CODES = new Set(['EPERM', 'EBUSY', 'EXDEV'])
 
+// ─── 🛡️ 2026-11-09 熔断器（tmp 泄漏根治）───
+//
+// 背景（实测 522GB 事故）：沙箱异常态下 rename 100% EPERM → 降级直写虽保住数据，
+// 但每次原子写都会：writeFile(tmp) 残留 + unlink(tmp) 同被拦截失败 →
+// 每次持久化泄漏 1-2 个 tmp（30s 一轮 → 两天堆出 7146 个 / 522GB）。
+//
+// 熔断语义：进程内一旦观测到 EPERM/EBUSY（环境拦截、终身不愈），置位后
+// 调用方经 isRenameBroken() 跳过「写 tmp」步骤、直接覆写目标文件——
+// 不再产生 tmp，泄漏从源头归零（数据安全性由既有 .prev 备份机制兜底）。
+// 仅 EPERM/EBUSY 触发；EXDEV（跨设备）是合法降级场景，不视为环境损坏。
+let renameBroken = false
+
+export function isRenameBroken() {
+  return renameBroken
+}
+
+export function markRenameBroken(reason = '', logger = null) {
+  if (renameBroken) return
+  renameBroken = true
+  logger?.warn?.(
+    `[rename-fallback] 熔断置位：rename 已被环境拦截${reason}，后续原子写转直写（不再产生 tmp）`,
+  )
+}
+
 export function renameWithCopyFallback(src, dst, { logger = null, label = 'rename' } = {}) {
   try {
     fs.renameSync(src, dst)
     return { mode: 'rename', srcRemoved: true }
   } catch (error) {
     if (!FALLBACK_CODES.has(error?.code)) throw error
+    // 🛡️ 2026-11-09：EPERM/EBUSY = 环境拦截（终身不愈），同步置位熔断器，
+    // 让所有调用方后续跳过「写 tmp」直接覆写目标，从源头停止 tmp 泄漏。
+    if (error.code === 'EPERM' || error.code === 'EBUSY') {
+      markRenameBroken(`（${label} ${error.code}）`, logger)
+    }
     // 降级：复制落名。
     // 🛡️ 2026-11-03 二次实锤（任务 mc-1793717694558-ca91718c）：沙箱异常态下
     // cpSync(文件 → 已存在文件, force) 内部会先 unlink 目标 → 仍 EPERM。

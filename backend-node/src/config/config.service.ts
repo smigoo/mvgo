@@ -9,6 +9,11 @@ import {
   applyFigmaTokenProjection,
   materializeFigmaTokenSlots,
 } from './figma-token-projection';
+import {
+  FIGMA_CREDENTIAL_REF_FIELDS,
+  buildFigmaCredentialRefForToken,
+  toFigmaCredentialRefFields,
+} from './figma-credential-ref';
 
 /**
  * 服务端 AI 配置存储（接口保存，替代前端 localStorage）。
@@ -248,6 +253,14 @@ const TASK_CONFIG_SNAPSHOT_SCHEMA = z
     panelType: stringField,
     // 🆕 phase2 变体管线：要跳过的节点名数组（createPhase2Graph 消费）
     skipNodes: z.array(z.string()).optional(),
+    // 🆕 2026-11-09 Figma 凭证引用（「当时用的哪个 token」）：只记指纹 + 槽位标识，
+    // **不含 token 明文**，键名也刻意不含 secret 正则命中词，故能穿透
+    // `createTask` / `flushPersistQueue` 两道 `redactSecrets`。
+    // 🔴 必须在此显式声明，本 schema 是 `.strict()` —— 漏声明会让
+    //    `buildTaskConfigSnapshot` 直接抛 400（整个生成链路建不起来）。
+    [FIGMA_CREDENTIAL_REF_FIELDS.fp]: stringField,
+    [FIGMA_CREDENTIAL_REF_FIELDS.slotId]: stringField,
+    [FIGMA_CREDENTIAL_REF_FIELDS.slotName]: stringField,
   })
   .strict();
 
@@ -395,15 +408,27 @@ export class AiConfigService {
   buildTaskConfigSnapshot(input: Record<string, any> = {}): Record<string, any> {
     const existing = this.getAiConfig();
     const patch = this.normalizeTaskSnapshotInput(input || {}, '构建任务配置快照');
-    // 🆕 降维：快照必须存具备完整 legacy 字段的结构，否则任务重跑时
-    // resolveTextConfig(快照) 读不到 legacy 字段会解析失败（幂等，旧结构透传）。
-    return resolveBindingToLegacy({
+    const merged: Record<string, any> = {
       ...this.applyDefaults({
         ...existing,
         ...patch,
       }),
       ...(patch.target ? { target: patch.target } : {}),
       ...(patch.panelType ? { panelType: patch.panelType } : {}),
+    };
+    // 🆕 2026-11-09 Figma 凭证引用随快照落盘（「当时的 token 是哪个」的单一事实源）。
+    // 在此处统一记账而非分散到各调用点：phase2 ×2 + lite ×N 共 5 个建快照入口，
+    // 逐点写必漏一处（漏了就是「某些任务重试还是连不上」，且极难复现）。
+    // 取值用 merged.figmaToken（= 执行链路真正会用的那个，请求覆盖优先于 active 槽位），
+    // 不按 active 槽位记账 —— 两者在「请求显式传 token」时会分叉。
+    const credentialRefFields = toFigmaCredentialRefFields(
+      buildFigmaCredentialRefForToken(merged.figmaToken, merged),
+    );
+    // 🆕 降维：快照必须存具备完整 legacy 字段的结构，否则任务重跑时
+    // resolveTextConfig(快照) 读不到 legacy 字段会解析失败（幂等，旧结构透传）。
+    return resolveBindingToLegacy({
+      ...merged,
+      ...(credentialRefFields || {}),
     });
   }
 

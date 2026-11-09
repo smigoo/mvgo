@@ -3679,14 +3679,36 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         if (isText && chars) parts.push(`文字「${chars.slice(0, 12)}」`)
         if (isText) {
           if (css) {
-            // 🛡️ 文字色必须是实色（2026-09-27 · bd4f69db 实锤）：Figma 文字节点偶发带**渐变** fill，
-            //   旧实现直接写 `color:linear-gradient(...)` —— 非法语义（渐变不可能作文字色），
-            //   模型只能瞎猜或照抄。此处降级为**首停靠点实色**并标注来源，保住可执行性。
+            // 🛡️ S1（2026-11-09 · mc-max-1794233412869-25711e88 实锤）：渐变文字**不再降级为首停靠点实色**。
+            //   旧口径把 GRADIENT_LINEAR(#e1f0ff→#00ccff) 降成 #e1f0ff（近白）并标注「必须是实色」，
+            //   模型拿到的近白在浅底上不可读 ⇒ 自行编纯色（真机 (0/484) 纯白、56302 纯白、5/#e03434）。
+            //   真值用法是 CSS 标准渐变文字：background-image + background-clip:text。数值全部来自
+            //   fillsToCss（唯一真值口径），此处只补**实现语义**，不写任何字面色值。
             if (/gradient\(/i.test(css)) {
-              const first = /rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/.exec(css)
-              if (first) parts.push(`color:${first[0]}⚠（原节点 fill 为渐变，文字色取首停靠点实色）`)
+              parts.push(`textFill:${css}`)
+              parts.push(`textFill实现:background-image+background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent`)
             } else {
               parts.push(`color:${css}`)
+            }
+          } else if (
+            Array.isArray(node.fills) &&
+            node.fills.length > 0 &&
+            node.fills.every((f) => f && f.visible === false)
+          ) {
+            // fill 全部 invisible ⇒ 无文字色真值（真机「设备监测」2:8426 即此形态）。
+            // 如实标注，禁止臆造——不猜任何默认色。
+            parts.push(`colorTruth:absent（fill invisible，禁止臆造颜色，用继承色）`)
+          }
+          // 🛡️ S1：TEXT 的「零偏移零模糊阴影」视觉上等价描边（真机 (2/484) 白字 + 黑 a=0.5 即此形态），
+          //   旧实现只映射 box-shadow ⇒ 白字失去轮廓。宽度/颜色全部取自节点（strokeWeight / effect.color）。
+          const _ds = (Array.isArray(node.effects) ? node.effects : []).find(
+            (e) => e && e.visible !== false && (e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW'),
+          )
+          if (_ds && !Number(_ds.offset?.x) && !Number(_ds.offset?.y) && !Number(_ds.radius)) {
+            const _col = cssRgba(_ds.color, _ds.color?.a)
+            if (_col) {
+              const _w = Number.isFinite(strokeWeight) && strokeWeight > 0 ? strokeWeight : 1
+              parts.push(`textStroke:${_w}px ${_col}`)
             }
           }
         } else if (css) {
@@ -4049,20 +4071,29 @@ export function gradientAngleDeg(grad) {
  */
 export function fillsToCss(fills, fillOpacity) {
   if (!Array.isArray(fills) || fills.length === 0) return null
-  const visible = fills.filter((f) => f.visible !== false)
-  const solid = visible.find((f) => f.type === 'SOLID' && f.color)
-  if (solid) return cssRgba(solid.color, solid.opacity ?? fillOpacity)
-  const grad = visible.find((f) => f.type?.startsWith('GRADIENT_') && f.gradientStops?.length >= 2)
-  if (grad) {
-    const stops = grad.gradientStops
-      .slice()
-      .sort((a, b) => a.position - b.position)
-      .map((s) => `${cssRgba(s.color, s.opacity ?? grad.opacity ?? fillOpacity ?? 1)} ${Math.round(s.position * 100)}%`)
-      .join(', ')
-    const angle = grad.type === 'GRADIENT_LINEAR'
-      ? `${gradientAngleDeg(grad)}deg, `
-      : grad.type === 'GRADIENT_RADIAL' ? 'radial, ' : 'conic, '
-    return `linear-gradient(${angle}${stops})`
+  const visible = fills.filter((f) => f && f.visible !== false)
+  if (visible.length === 0) return null
+  // 🛡️ S1（2026-11-09 · 25711e88 实锤）：按 Figma 图层语义取**最上层可复现 paint**
+  //   （fills 数组自底向上排列）。旧口径「SOLID 优先」在 `[SOLID, GRADIENT]` 形态下
+  //   会丢掉上层渐变（真机 68562/56302/5 正是双层：底层 GRADIENT + 上层 SOLID，
+  //   当前取上层 SOLID 与原行为一致；而 `[SOLID, GRADIENT]` 才是被旧口径吃掉的场景）。
+  //   IMAGE/VIDEO 等不可由本函数复现 ⇒ 向下回退找最近的可复现层（不猜、不造色）。
+  for (let i = visible.length - 1; i >= 0; i -= 1) {
+    const paint = visible[i]
+    if (paint.type === 'SOLID' && paint.color) {
+      return cssRgba(paint.color, paint.opacity ?? fillOpacity)
+    }
+    if (paint.type?.startsWith('GRADIENT_') && paint.gradientStops?.length >= 2) {
+      const stops = paint.gradientStops
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((s) => `${cssRgba(s.color, s.opacity ?? paint.opacity ?? fillOpacity ?? 1)} ${Math.round(s.position * 100)}%`)
+        .join(', ')
+      const angle = paint.type === 'GRADIENT_LINEAR'
+        ? `${gradientAngleDeg(paint)}deg, `
+        : paint.type === 'GRADIENT_RADIAL' ? 'radial, ' : 'conic, '
+      return `linear-gradient(${angle}${stops})`
+    }
   }
   return null
 }

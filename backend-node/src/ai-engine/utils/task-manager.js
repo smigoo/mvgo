@@ -17,7 +17,7 @@
 import fs from 'fs'
 import path from 'path'
 import { dataDir } from '../../config/backend-root.js'
-import { renameWithCopyFallback } from './rename-with-copy-fallback.js'
+import { renameWithCopyFallback, isRenameBroken, markRenameBroken } from './rename-with-copy-fallback.js'
 
 // 独立 sidecar：**不再**指向 data/tasks.json，避免与 TasksService 双写互覆。
 export const PERSIST_FILE = path.join(dataDir, 'task-manager.json')
@@ -108,24 +108,30 @@ class TaskManager {
       fs.mkdirSync(path.dirname(PERSIST_FILE), { recursive: true })
       json = JSON.stringify(list, null, 2)
 
-      // 原子写：同目录唯一 .tmp → rename 覆盖，杜绝读到半写/被小集合整表覆盖。
-      const tmpFile = `${PERSIST_FILE}.${process.pid}.${Date.now()}.${Math.random()
-        .toString(16)
-        .slice(2)}.tmp`
-      fs.writeFileSync(tmpFile, json, 'utf-8')
-      try {
-        renameWithCopyFallback(tmpFile, PERSIST_FILE, { label: 'TaskManager.persist' })
-      } catch (renameErr) {
-        // renameWithCopyFallback 已内建 EPERM/EBUSY/EXDEV → copy 降级；
-        // 能走到这里说明连 copy 也失败 —— 最后再退一步直写目标文件兜底。
-        if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr
+      // 🛡️ 2026-11-09 熔断态直写：rename 被环境拦截后跳过 tmp，直接覆写目标（零 tmp 泄漏）。
+      if (isRenameBroken()) {
         fs.writeFileSync(PERSIST_FILE, json, 'utf-8')
+      } else {
+        // 原子写：同目录唯一 .tmp → rename 覆盖，杜绝读到半写/被小集合整表覆盖。
+        const tmpFile = `${PERSIST_FILE}.${process.pid}.${Date.now()}.${Math.random()
+          .toString(16)
+          .slice(2)}.tmp`
+        fs.writeFileSync(tmpFile, json, 'utf-8')
         try {
-          fs.unlinkSync(tmpFile)
-        } catch {
-          /* 残留 tmp 待启动自愈/延迟清理 */
+          renameWithCopyFallback(tmpFile, PERSIST_FILE, { label: 'TaskManager.persist' })
+        } catch (renameErr) {
+          // renameWithCopyFallback 已内建 EPERM/EBUSY/EXDEV → copy 降级；
+          // 能走到这里说明连 copy 也失败 —— 最后再退一步直写目标文件兜底。
+          if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr
+          markRenameBroken(`（TaskManager.persist rename ${renameErr.code}）`)
+          fs.writeFileSync(PERSIST_FILE, json, 'utf-8')
+          try {
+            fs.unlinkSync(tmpFile)
+          } catch {
+            /* 残留 tmp 待启动自愈/延迟清理 */
+          }
+          console.warn(`[TaskManager] 持久化：rename ${renameErr.code}，已降级为直写（已熔断，后续不再产生 tmp）`)
         }
-        console.warn(`[TaskManager] 持久化：rename ${renameErr.code}，已降级为直写`)
       }
     } catch (err) {
       console.warn('[TaskManager] 持久化任务失败:', err.message)

@@ -733,6 +733,47 @@ export function scanStandaloneLessDefects(source = '') {
     }
   })
 
+  // ⑦ 🛡️ R4（2026-11-09 · loop-verify · mc-1794186438485-3c9509f8 实锤）：
+  //   **根级裸属性**（选择器块外的游离 `prop: value;` 行）。真机 common.less:176-178：
+  //   `[样式补缺]` 段下方混入三行 `font-size: calc();`（无选择器 + 空 calc() 双重非法）
+  //   ⇒ less `Properties must be inside selector blocks. They cannot be in the root`
+  //   ⇒ 最终 LESS 编译门禁 BLOCK ⇒ 整单失败。既有 001-006 均不认此形态（006 的
+  //   `prop: prop:` 双冒号锚定不到单冒号游离声明；001 只数括号平衡——裸属性不影响
+  //   平衡）⇒ 结构级盲区。
+  //   判据（零硬编码、结构判据、与 006 的教训对齐防误伤）：
+  //   逐行深度扫描（cleaned 已剥注释/字符串），维护 `{`/`}` 深度；
+  //   命中须**同时**满足：
+  //     a) 深度 0（不在任何选择器块内 —— 「根级」的定义，跨行状态机而非单行正则）；
+  //     b) 行内无 `{`（有 `{` 即是选择器行，交 006 域管辖）；
+  //     c) 首个非空 token 是 `prop:` 形态且以 `;` 或行尾收束（游离声明的定义）；
+  //     d) 排除：`@` 规则行（@media/@import 合法在根级）、`&` 嵌套选择器、
+  //        注释/变量声明（`@name:` 是 LESS 变量，深度 0 合法）。
+  //   🔴 阴性保障（防误伤）：`@media` 行、根级 `@var: x;` 变量声明、`/* 注释 */`、
+  //     `.a { }` 选择器行、块内正常声明（深度 >0）均不命中。
+  {
+    let depth = 0
+    const rawLines = cleaned.split('\n')
+    rawLines.forEach((cl, index) => {
+      const depthAtLineStart = depth // 行首深度：声明文字所处层级以此为准（行内 `}` 后归零不影响本行判定）
+      for (const ch of cl) {
+        if (ch === '{') depth += 1
+        else if (ch === '}') depth -= 1
+      }
+      const t = cl.trim()
+      if (!t) return
+      if (depthAtLineStart !== 0 || cl.indexOf('{') !== -1) return // 块内 / 选择器行 ⇒ 非本域
+      if (t.startsWith('@') || t.startsWith('&') || t.startsWith('/') || t.startsWith('*')) return
+      // 游离声明形态：`prop:` 起头（属性名字符 + 可选空格 + 冒号），且冒号后非空
+      const m = t.match(/^([-a-zA-Z][\w-]*)\s*:\s*(.+)$/)
+      if (!m) return
+      defects.push({
+        id: 'LESS-WRITE-007',
+        line: index + 1,
+        message: `根级裸属性（选择器块外游离声明，less 报 Properties must be inside selector blocks）：${t.slice(0, 80)}`,
+      })
+    })
+  }
+
   return defects
 }
 

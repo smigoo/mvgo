@@ -72,6 +72,7 @@ import {
 import { Types } from 'mongoose';
 import { FigmaClient } from '../ai-engine/tools/figma/figma-client.js';
 import { parseFigmaUrl } from '../ai-engine/utils/figma-url-parser.js';
+import { resolveExecutionFigmaTokenWithProbe } from '../config/figma-execution-token-probe';
 
 type AssetPlacementReport = {
   placements: any[];
@@ -1032,11 +1033,35 @@ ${businessStyles}
     }
 
     // 获取 Figma Token（复用上方已获取的 task）
+    //
+    // 🆕 2026-11-09 诉求五：走唯一入口。这里 `task` 已在手，且这条路径最典型就是
+    // 「历史任务的资产升级」—— 用户此刻的 active 槽很可能已经不是任务当时的那个 token，
+    // 按 `aiConfig.figmaToken` 取值会用错凭证，而 Figma 对无权限文件返回 404 会伪装成
+    // 「文件不存在」，排障时完全看不出是凭证问题。
     const userId = task?.userId;
     const aiConfig = await this.aiConfigService.getMergedAiConfig(userId);
-    const figmaToken = aiConfig.figmaToken || process.env.FIGMA_ACCESS_TOKEN;
+    // #15：引用无命中时逐槽探测该 fileKey+nodeId，首个可读即用；全不通则显式失败，
+    // 绝不回落 active 静默重跑（Figma 对无权限文件返回 404，静默重跑只会把它伪装成文件问题）。
+    const figmaTokenRes = await resolveExecutionFigmaTokenWithProbe({
+      task: task || null,
+      activeConfig: aiConfig,
+      envToken: process.env.FIGMA_ACCESS_TOKEN,
+      fileKey,
+      nodeId,
+    });
+    this.logger.log(
+      `[figma-cred] lite/upgrade-assets session=${sessionId} source=${figmaTokenRes.source} ` +
+        `reason=${figmaTokenRes.reason} ref=${figmaTokenRes.refSource || '-'} ` +
+        `probed=${figmaTokenRes.probes.length} :: ${figmaTokenRes.note}`,
+    );
+    const figmaToken = figmaTokenRes.token;
     if (!figmaToken) {
-      return { success: false, message: '未配置 Figma Token，请在设置中配置' };
+      // probe-failed 时 note 已含逐槽结果与可操作指引，直接透出（比「未配置」准确）
+      return { success: false, message: figmaTokenRes.note };
+    }
+    // 历史任务首次走升级路径时补 pin 凭证（已有引用时 refFields 为 null，不覆盖）
+    if (figmaTokenRes.refFields) {
+      this.tasksService.updateTask(sessionId, figmaTokenRes.refFields as any);
     }
 
     // 🆕 升级期间将任务状态切换为 running，使前端进度条/SSE 正常展示
@@ -1967,18 +1992,48 @@ ${originalCode}`;
         );
       }
 
-      // 解析 Figma Token：dto.config > 按用户 DB 配置 > 环境变量
+      // 解析 Figma Token：任务凭证引用 > dto.config > 按用户 DB 配置 > 环境变量
+      //
+      // 🆕 2026-11-09 诉求五：收敛到 `resolveExecutionFigmaToken()` 唯一入口。
+      // 原 `dto.config?.figmaToken || aiCfg?.figmaToken || env` 在重试路径上必错：
+      // `/lite/retry` 会把 `task.configSnapshot` 整个当 config 回传，其中的 figmaToken
+      // 是脱敏占位 `'***REDACTED***'`（**非空字符串**）⇒ `||` 链放行假 token ⇒ Figma 401/404，
+      // 用户看到的是「导出失败」，实际是拿了个假凭证。脱敏值与空白现在都在入口被当「没传」。
       const aiCfg = await this.aiConfigService.getMergedAiConfig(userId);
-      const figmaToken =
-        dto.config?.figmaToken ||
-        aiCfg?.figmaToken ||
-        process.env.FIGMA_ACCESS_TOKEN;
+      const figmaCredTask = this.tasksService.getTask(sessionId) || null;
+      // #15：引用无命中时逐槽探测（此处 fileKey/nodeId 已在 :1981 解析就绪，零额外解析成本）
+      const figmaTokenRes = await resolveExecutionFigmaTokenWithProbe({
+        task: figmaCredTask,
+        requestConfig: dto.config,
+        activeConfig: aiCfg,
+        envToken: process.env.FIGMA_ACCESS_TOKEN,
+        fileKey: parsed.fileKey,
+        nodeId: parsed.nodeId,
+      });
+      this.logger.log(
+        `[figma-cred] lite/export session=${sessionId} source=${figmaTokenRes.source} ` +
+          `reason=${figmaTokenRes.reason} ref=${figmaTokenRes.refSource || '-'} ` +
+          `request-overridden=${figmaTokenRes.requestOverridden} ` +
+          `probed=${figmaTokenRes.probes.length} :: ${figmaTokenRes.note}`,
+      );
+      const figmaToken = figmaTokenRes.token;
 
       if (!figmaToken) {
         throw this.wrapError(
           LiteErrorCode.FIGMA_EXPORT_FAILED,
-          '未配置 Figma Token，请在设置中配置或传入 config.figmaToken',
+          // probe-failed 时 note 已含「已逐槽探测 + 每条状态码 + 怎么处理」，比笼统的
+          // 「未配置」有用得多；其余情形 note 也是准确的现状描述。
+          figmaTokenRes.reason === 'probe-failed'
+            ? figmaTokenRes.note
+            : '未配置 Figma Token，请在设置中配置或传入 config.figmaToken',
         );
+      }
+
+      // lite 的初始 createTask 不写 configSnapshot（见 lite.controller），拿不到创建期引用 ⇒
+      // 在这里（首次真正调用 Figma 的时刻）补 pin：此刻用的 token 就是「任务当时那个」。
+      // 已有引用时 `refFields` 为 null，绝不覆盖（一次异常执行不会把任务钉死在错凭证上）。
+      if (figmaTokenRes.refFields) {
+        this.tasksService.updateTask(sessionId, figmaTokenRes.refFields as any);
       }
 
       // 创建 FigmaClient 并导出图片
@@ -3232,7 +3287,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     //   反过来会让 LessVariableChecker 用 LLM 的假主题色先补一遍，
     //   再被真值覆盖 —— 白做一轮，且门禁日志里留下误导性的「补齐 colorPrimary」。
     //   两者都幂等，重复调用安全。
-    if (dto) await this.injectNThemeTruth(dto, outputPath, target);
+    if (dto) await this.injectNThemeTruth(dto, outputPath, target, sessionId);
 
     // 🛡️ 2026-09-11 治本（首次预览走快照报 "variable @x is undefined"，刷新走 workspace 才成功）：
     // createCandidate 会把 outputPath 定格为候选快照。若此时 theme-vars.less 仍缺变量
@@ -3336,6 +3391,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     dto: GenerateLiteDto,
     outputPath: string,
     target: 'microcode' | 'vue3',
+    sessionId?: string,
   ): Promise<void> {
     // 单稿路径：直接返回，不碰任何文件（零回归的第一道闸）
     if (target !== 'microcode') return;
@@ -3356,7 +3412,29 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
       //    但那在 ai-engine/roles/ 下、lite 没导入；getNode 语义一致）。
       const { extractFigmaColorPalette, resolveBackgroundBrightness } =
         await import('../ai-engine/utils/style-tokens.js');
-      const connector = new FigmaClient(this.resolveFigmaToken(dto));
+      // 🆕 2026-11-09 诉求五：与生成主链路同一入口。
+      // 这条路径只在 N 主题（多稿）发布时跑，而「给历史任务补主题」正是用户切过 token 后的
+      // 高频场景 ⇒ 必须按任务引用取「当时那个 token」，不能按用户此刻的 active 槽。
+      // #15：引用无命中时用首个主题的 fileKey/nodeId 逐槽探测择优（该文件可读 ⇔ 能拉到主题）。
+      const firstTheme: any = themes[0] || null;
+      const figmaTokenRes = await resolveExecutionFigmaTokenWithProbe({
+        task: sessionId ? this.tasksService.getTask(sessionId) : null,
+        requestConfig: dto.config,
+        envToken: process.env.FIGMA_ACCESS_TOKEN || this.resolveGlobalFigmaToken(),
+        fileKey: firstTheme?.fileKey,
+        nodeId: firstTheme?.nodeId,
+      });
+      this.logger.log(
+        `[figma-cred] lite/n-theme session=${sessionId} source=${figmaTokenRes.source} ` +
+          `reason=${figmaTokenRes.reason} ref=${figmaTokenRes.refSource || '-'} ` +
+          `probed=${figmaTokenRes.probes.length} :: ${figmaTokenRes.note}`,
+      );
+      if (!figmaTokenRes.token) {
+        // 原来这里把 undefined 交给 FigmaClient（它再自行读 env）⇒ 凭证问题被抹成
+        // 「某个主题拉取失败」。探测层已给出逐槽结论，直接抛，别降级。
+        throw new Error(`无法取得可读取设计稿的 Figma Token：${figmaTokenRes.note}`);
+      }
+      const connector = new FigmaClient(figmaTokenRes.token || undefined);
 
       const entries: LiteThemeEntry[] = [];
       for (let i = 0; i < themes.length; i++) {
@@ -3446,10 +3524,14 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     }
   }
 
-  /** 取 Figma token：dto.config 优先，回落全局配置 */
-  private resolveFigmaToken(dto: GenerateLiteDto): string | undefined {
-    const fromDto = (dto.config as any)?.figmaToken;
-    if (fromDto) return fromDto;
+  /**
+   * 取**部署级全局** ai-config.json 里的 Figma token（兜底口径，非用户级）。
+   *
+   * 原 `resolveFigmaToken(dto)` 的 `dto.config` 分支已由 `resolveExecutionFigmaToken()`
+   * 的 `requestConfig` 承担（且新增了「脱敏占位视为未传」），此处只保留 json 兜底，
+   * 避免同一份「取 token」逻辑存在两个入口。
+   */
+  private resolveGlobalFigmaToken(): string | undefined {
     try {
       const cfg = JSON.parse(
         readFileSync(join(process.cwd(), 'data', 'ai-config.json'), 'utf8'),

@@ -101,3 +101,31 @@ describe('导出物与扩展白名单一致', () => {
     expect(DETERMINISTIC_RENDER_ERROR_TYPES.has('vue-render')).toBe(true)
   })
 })
+
+describe('S5 · 产物空壳类禁止降级（2026-11-09 · a7b905d1 实锤）', () => {
+  it('RUNTIME-006 BLOCK（组件 ready 但无可见根节点）→ true', () => {
+    expect(
+      hasDeterministicRuntimeMissing({
+        issues: [{ id: 'RUNTIME-006', severity: 'BLOCK', message: '没有可见根节点' }],
+      }),
+    ).toBe(true)
+  })
+
+  it('RUNTIME-005 / RUNTIME-012 / RUNTIME-013 BLOCK → true（同属产物空壳）', () => {
+    for (const id of ['RUNTIME-005', 'RUNTIME-012', 'RUNTIME-013']) {
+      expect(hasDeterministicRuntimeMissing({ issues: [{ id, severity: 'BLOCK' }] })).toBe(true)
+    }
+  })
+
+  it('环境类 RUNTIME-001 / RUNTIME-002 即便 BLOCK → false（仍允许降级发布）', () => {
+    for (const id of ['RUNTIME-001', 'RUNTIME-002', 'RUNTIME-007', 'RUNTIME-008']) {
+      expect(hasDeterministicRuntimeMissing({ issues: [{ id, severity: 'BLOCK' }] })).toBe(false)
+    }
+  })
+
+  it('RUNTIME-006 但仅 WARN → false（不越级升级）', () => {
+    expect(
+      hasDeterministicRuntimeMissing({ issues: [{ id: 'RUNTIME-006', severity: 'WARN' }] }),
+    ).toBe(false)
+  })
+})

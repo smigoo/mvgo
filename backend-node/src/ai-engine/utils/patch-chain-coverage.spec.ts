@@ -11,7 +11,18 @@ import { parse } from '@babel/parser';
 
 const ROOT = process.cwd();
 const FILES = [
-  { rel: 'src/ai-engine/utils/pre-write-self-healing.js', expectCatches: 28 },
+  // 28→30（2026-11-09 归因）：`2bdfaab`（R9/R10 轮）在 pre-write-self-healing.js 新增两处
+  // catch——⑥-b R9-b `catch (r9bErr)`（pass='runPreWriteSelfHealing:r9b'）与
+  // ⑥-c R10 `catch (r10Err)`（pass='runPreWriteSelfHealing:r10'），两处均已接哨兵，
+  // 但当日未同步本门禁 ⇒ 该套件自 2bdfaab 起一直是红的，而 R9/R10 轮只跑了「家族 spec」
+  // 未跑全量基线 diff，因此没被发现（第二轮评审 P0-1 的实证）。
+  // 30→31（2026-11-09 归因）：R9-c（横排子项定宽真值 heal，fe2acd21/54f523ac）在
+  //   pre-write-self-healing.js 新增一处 fail-open catch（runPreWriteSelfHealing:r9c），
+  //   已接 reportPatchChainError；本门禁按「登记+接哨兵」同步。
+  // 31→32（2026-11-09 归因）：G1（零样式容器布局真值注入，669d8bf8）在
+  //   pre-write-self-healing.js 新增 ⑥-d fail-open catch（runPreWriteSelfHealing:g1），
+  //   已接 reportPatchChainError；基线同步 +1。
+  { rel: 'src/ai-engine/utils/pre-write-self-healing.js', expectCatches: 32 },
   // 67→68（2026-11-05 归因）：6b0d14b 之后某提交新增 G11a `catch (bgErr)`
   // （microcode-engineer.js:3110，背景 fallback 注入），当日未同步本门禁；
   // 已补接哨兵（S0.2 核对唯一漏网点），基线同步 +1。

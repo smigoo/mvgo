@@ -3643,7 +3643,13 @@ export function createPhase2Graph(config = {}) {
         [],
       layoutStructure: state.layoutStructure,
     };
-    const res = validateDoNotInvent({ files, analysis });
+    // 🛡️ 豁免判据真值源（文字数字卡承载，00f3626c 实锤）：透传 Figma 树
+    const res = validateDoNotInvent({
+      files,
+      analysis,
+      figmaNodeData:
+        state.figmaNodeData || state._uiCache?.figmaNodeData || state._visualParserCache?.figmaNodeData || null,
+    });
     state._doNotInventResult = res;
     if (!res.pass) {
       const err = new Error(

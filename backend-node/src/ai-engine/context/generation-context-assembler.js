@@ -394,8 +394,24 @@ function normalizeSectionNode(section, ctx = null) {  if (!section || typeof sec
           },
         }
       : {}),
-    ...(Number.isFinite(Number(section.styles?.figmaHeightPx))
-      ? { styles: { figmaHeightPx: Number(section.styles.figmaHeightPx) } }
+    ...(Number.isFinite(Number(section.styles?.figmaHeightPx)) || Number.isFinite(Number(section.styles?.flexGrow))
+      ? {
+          styles: {
+            // 🛡️ R9（2026-11-09 · loop-verify · 设备监测 49d23fe1 实锤）：flexGrow 真值透传。
+            //   病灶：A4（figma-height-ratio）把容器级宽度/高度比例写进段级 styles.flexGrow
+            //   （89:39=2.054 / 2:8437=1.911），prompt 下发的 planner plan 原文里有，
+            //   但本函数 styles 归一化只保留 figmaHeightPx ⇒ generationInput.componentPlan
+            //   （engineer 装配/结构契约/healing 的统一输入）里 flexGrow 全部丢失 ⇒
+            //   LLM 无从对照真值，自写 flex:0.111/0.889 ⇒ tab 列塌成 1 字宽、双统计卡被裁。
+            //   修法：figmaHeightPx 与 flexGrow 一起透传（缺省不产键，零副作用）。
+            ...(Number.isFinite(Number(section.styles.figmaHeightPx))
+              ? { figmaHeightPx: Number(section.styles.figmaHeightPx) }
+              : {}),
+            ...(Number.isFinite(Number(section.styles.flexGrow))
+              ? { flexGrow: Number(section.styles.flexGrow) }
+              : {}),
+          },
+        }
       : {}),
     // 🛡️ 2026-11-04（18544d9c 实锤）：图表宿主归属透传（缺省不产键，零副作用）
     ...(internalSubcomponents ? { internalSubcomponents } : {}),

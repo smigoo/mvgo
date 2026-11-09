@@ -25,8 +25,9 @@
  * @returns {{ pass: boolean, blockCount: number, issues: Array, _analyzed: boolean }}
  */
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
+import { indexFigmaNodes } from '../utils/section-tree.js'
 
-export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
+export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData = null } = {}) {
   const issues = []
   const seen = new Set() // 去重：避免 doNotInvent 中重复声明同一「X→Y」产生多条相同违规
 
@@ -88,6 +89,16 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
     }
   }
 
+  // 豁免判据的 Figma 索引（惰性：无 charts 或无 figmaNodeData 时为 null，零开销）
+  let analysisFigmaIndex = null
+  if ((analysis.charts || analysis.layoutStructure?.charts || []).length > 0 && figmaNodeData) {
+    try {
+      analysisFigmaIndex = indexFigmaNodes(figmaNodeData?.document ?? figmaNodeData ?? null)
+    } catch {
+      analysisFigmaIndex = null
+    }
+  }
+
   // ── 2.5 图表类型缺失（治本方向 · 2026-09-15 · 07e31fbb 实锤）──
   // vision 识别到某类型图表，但产物全文件（含子组件）里没有对应类型的 echarts series。
   // 例：vision 有 doughnut，LLM 拆组件时漏写 template 图表容器（chartRef），script 的
@@ -102,9 +113,19 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
     // echarts 的 series 对象缺省 type 时默认为 'line'：vision 说 line 时，
     // 产物只要有任意 series 声明（即便未显式写 type:'line'）即视为满足。
     const hasSeriesDecl = /series\s*:\s*\[/.test(vueContent)
+    // 🛡️ 豁免（2026-11-09 · mc-max-1794208722463-00f3626c 实锤，Figma 真值裁决）：
+    //   「文字数字卡承载」——vision 把「装饰性矢量环（ELLIPSE+arcData 静态弧段）+
+    //   数字 TEXT 卡（客车 66109/货车 16270）」识别为 pie 图表，LLM 用底图+数字行
+    //   形态等价还原 ⇒ 强行要求 echarts pie series 是判据域误伤（该 BLOCK 杀死本单）。
+    //   判据（确定性、与图层命名无关）：vision chart.section 的 Figma 子树内存在
+    //   TEXT 节点（数据以文字形态在场）⇒ 该类型视为已被文字形态承载，不判缺失。
+    //   防线保留：子树无 TEXT 且产物无对应 series ⇒ 仍 BLOCK（真缺失）。
+    const carriedByText = collectTextCarriedChartTypes(analysisCharts, analysisFigmaIndex)
     for (const t of requiredTypes) {
       const satisfied =
-        generatedTypes.has(t) || (t === 'line' && hasSeriesDecl)
+        generatedTypes.has(t) ||
+        (t === 'line' && hasSeriesDecl) ||
+        carriedByText.has(t)
       if (!satisfied) {
         const msg = `图表类型缺失：视觉分析识别到「${t}」类型图表，但产物代码中没有任何对应类型的 echarts series（图表容器/初始化可能漏写）`
         if (!seen.has(msg)) {
@@ -341,6 +362,46 @@ export function collectChartSeriesTypes(vueContent) {
     if (norm) types.add(norm)
   }
   return types
+}
+
+/**
+ * 「文字数字卡承载」图表类型集合（豁免判据，2026-11-09 · 00f3626c 实锤）。
+ *
+ * vision chart.section 的 Figma 子树内存在 TEXT 节点（数据以文字形态在场，
+ * 如「客车 66109 / 货车 16270」数字卡）⇒ 该图表已被文字形态承载，
+ * 不要求产物必须有对应 echarts series（与图层命名无关，只认结构与类型）。
+ *
+ * @param {Array} charts vision charts（{section, type}）
+ * @param {Map|null} figmaIndex indexFigmaNodes 产物；null ⇒ 空集（fail-open 不豁免）
+ * @returns {Set<string>} 归一化类型集合
+ */
+export function collectTextCarriedChartTypes(charts, figmaIndex) {
+  const out = new Set()
+  const idx = figmaIndex && typeof figmaIndex.get === 'function' ? figmaIndex : null
+  if (!idx) return out
+  for (const c of Array.isArray(charts) ? charts : []) {
+    const normT = normalizeChartType(c?.type)
+    const sid = c?.section != null ? String(c.section) : ''
+    if (!normT || !sid) continue
+    const hit = idx.get(sid)
+    const raw = hit?.rawNode
+    if (!raw) continue
+    if (subtreeHasNumericText(raw, 0)) out.add(normT)
+  }
+  return out
+}
+
+/** 子树内是否存在含数字的 TEXT 节点（深度限 8；characters 缺失时按 TEXT 存在计） */
+function subtreeHasNumericText(node, depth) {
+  if (!node || typeof node !== 'object' || depth > 8) return false
+  if (String(node.type) === 'TEXT') {
+    const chars = node.characters
+    if (chars == null || /\d/.test(String(chars))) return true
+  }
+  for (const c of node.children || []) {
+    if (subtreeHasNumericText(c, depth + 1)) return true
+  }
+  return false
 }
 
 /**

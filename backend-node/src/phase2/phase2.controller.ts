@@ -22,6 +22,7 @@ import { DocAnalyzerService } from './doc/doc-analyzer.service.js';
 import type { AnalyzeDocDto } from './doc/doc-analyzer.service.js';
 import { GeneratePhase2Dto } from './dto/generate-phase2.dto';
 import { QuotaService } from '../quota/quota.service';
+import { stripRedactedPlaceholders } from '../common/utils/redact';
 import { TaskQueueService } from '../queue/task-queue.service';
 import { TasksService } from '../tasks/tasks.service';
 import type { Task } from '../tasks/tasks.service';
@@ -119,10 +120,11 @@ export class Phase2Controller implements OnModuleInit {
         dto.panelType = task.panelKey || 'default-panel';
         dto.target = 'microcode';
         if (task.configSnapshot) {
-          dto.config = {
+          // 🔴 诉求五 #16-①：脱敏快照不得原样当 config 回传（占位串是非空字符串，会被当真值）
+          dto.config = stripRedactedPlaceholders({
             outputPath: task.configSnapshot.outputPath,
             ...task.configSnapshot,
-          };
+          });
         }
         await this.phase2Service.startGeneration(
           task.sessionId,

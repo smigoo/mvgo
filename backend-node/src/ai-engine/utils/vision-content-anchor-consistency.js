@@ -292,4 +292,128 @@ export function auditContentAnchorConsistency(params = {}) {
   }
 }
 
+/**
+ * 🛡️ P0-E（2026-11-09 · mc-max-1794210168571-8ebb795b 实锤，用户裁 Q3=A′）：
+ * vision 锚点错位「唯一命中重锚」。
+ *
+ * ── 病灶 ────────────────────────────────────────────────────────────────
+ * vision 把 tab 文案（一氧化碳/能见度/洞内照明/洞外光强）锚到**集体错一格**的节点
+ * （「洞内照明」贴到真值是「一氧化碳」的 2:7892）⇒ 下游文本真值门禁按「声明文案
+ * 不在锚点真值域」剥文本 ⇒ tab 胶囊全空。检测（上方对账）100% 识别但只 WARN。
+ *
+ * ── 与 R25-a「只诊断不修复」裁决的关系（查重结论）────────────────────────
+ * R25-a 否定的是**按序重贴**（vision 文案序 ≠ 真值树序，序推断必猜错）。
+ * 本函数走第三条路径：**内容唯一命中**——声明文案在全树 TEXT 节点的 characters
+ * 中**恰好命中 1 个节点**（零歧义）才重锚；多命中/零命中保持原样（不猜，
+ * R25-a 的「不猜错」纪律完整保留）。且仅重锚**叶子条目**（无 children），
+ * 避免子树语义错位。幂等：重锚后 id == 命中 id ⇒ 再跑不变。
+ *
+ * @param {object} params
+ * @param {Array}  params.sections     vision section 数组（原树引用，原地改节点 id）
+ * @param {object} params.figmaNodeData Figma 节点树（{document} 或裸根）
+ * @returns {{ relinked: Array<{oldId,newId,text}>, examined: number }}
+ */
+export function reanchorMisalignedDeclaredTexts(params = {}) {
+  const sections = Array.isArray(params.sections) ? params.sections : []
+  const relinked = []
+  const relinkSkipped = []
+  let examined = 0
+  const root = params.figmaNodeData?.document ?? params.figmaNodeData
+  if (!root || sections.length === 0) return { relinked, relinkSkipped, examined }
+
+  // ① 全树 TEXT 索引：characters → [{id}]（唯一命中判定用）
+  //    + 全树 id → parentId 映射（P0-E 加强：同容器校验——原锚常为 VECTOR/FRAME
+  //      容器（非 TEXT），textIndex 查不到其父 ⇒ 必须独立建全树父映射）
+  const textIndex = new Map()
+  const parentById = new Map()
+  const indexWalk = (n, parent) => {
+    if (!n || typeof n !== 'object') return
+    if (n.id) parentById.set(String(n.id), parent ? String(parent.id) : null)
+    if (String(n.type) === 'TEXT' && n.id) {
+      const chars = typeof n.characters === 'string' ? n.characters : ''
+      if (chars) {
+        if (!textIndex.has(chars)) textIndex.set(chars, [])
+        textIndex.get(chars).push(String(n.id))
+      }
+    }
+    for (const c of n.children || []) indexWalk(c, n)
+  }
+  indexWalk(root, null)
+
+  // ② 遍历声明条目：唯一命中 + 叶子 + **同容器（LCA ≤1 级容差）** ⇒ 重锚
+  //    唯一性口径：全树「characters 包含该文案」的 TEXT 节点总数恰为 1（跨不同 chars 计入）
+  //    同容器口径（P0-E 加强 · a9052d6a 跨 id 段跳变实锤）：
+  //      · 命中节点与原锚节点 parentId 相同（同容器内平移）⇒ 允许；
+  //      · 原锚是容器、命中 TEXT 在该容器的**兄弟层**（原锚在命中父级内 ≤1 层）⇒ 允许
+  //        （8ebb795b 实测形态：原锚 VECTOR 容器 2:7890 内含装饰 2:7891，声明挂
+  //          2:7891 但文案命中兄弟 TEXT 2:7897——容器锚→兄弟文本锚是合法平移）；
+  //      · 其余跨容器 ⇒ relinkSkipped（不猜——vision 原锚若是 tab 项容器节点，
+  //        重锚到远端纯 TEXT 叶子会把容器锚降级 ⇒ 装配结构错乱）。
+  const uniqueHitFor = (text) => {
+    let hitId = null
+    let count = 0
+    for (const [chars, ids] of textIndex) {
+      if (!chars.includes(text)) continue
+      for (const id of ids) {
+        hitId = id
+        count += 1
+        if (count > 1) return null
+      }
+    }
+    return count === 1 ? hitId : null
+  }
+  /** oldAnchor 的父链向上最多 up 级内是否包含 hitParent（LCA 容差判定） */
+  const withinTolerance = (oldId, hitParent, up = 1) => {
+    let cur = parentById.get(String(oldId).trim())
+    for (let i = 0; i <= up && cur != null; i++) {
+      if (cur === hitParent) return true
+      cur = parentById.get(cur)
+    }
+    return false
+  }
+  const visit = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return
+    if (isDeclaredContentEntry(node)) {
+      examined += 1
+      const hasKids = (node.children?.length || 0) + (node.body?.children?.length || 0) > 0
+      if (!hasKids) {
+        for (const text of readDeclaredTexts(node)) {
+          const hitId = uniqueHitFor(text)
+          if (hitId && hitId !== node.id.trim()) {
+            const oldIdTrim = String(node.id).trim()
+            const oldParent = parentById.get(oldIdTrim)
+            const hitParent = parentById.get(hitId)
+            if (
+              oldParent != null &&
+              hitParent != null &&
+              oldParent !== hitParent &&
+              !withinTolerance(oldIdTrim, hitParent, 1)
+            ) {
+              // 跨容器：保守不重锚（容器锚↔叶子锚降级风险）
+              relinkSkipped.push({ oldId: node.id, hitId, text, reason: 'cross-container' })
+              break
+            }
+            const oldId = node.id
+            node.id = hitId
+            relinked.push({ oldId, newId: hitId, text })
+            break // 一个条目只重锚一次
+          }
+        }
+      }
+    }
+    for (const kid of [].concat(node.children || [], node.body?.children || [])) {
+      visit(kid, depth + 1)
+    }
+  }
+  const visitSection = (section, depth) => {
+    if (!section || typeof section !== 'object' || depth > 8) return
+    for (const kid of [].concat(section.children || [], section.body?.children || [])) {
+      visit(kid, depth + 1)
+    }
+    for (const child of section.children || []) visitSection(child, depth + 1)
+  }
+  sections.forEach((s) => visitSection(s, 0))
+  return { relinked, relinkSkipped, examined }
+}
+
 export default auditContentAnchorConsistency

@@ -25,6 +25,12 @@ export interface FeedbackSnapshot {
   tokenFingerprintSource?: 'pipeline' | 'create'
   tokenFingerprintCurrent?: string
   tokenFingerprintChanged?: boolean
+  /**
+   * `tokenFingerprintChanged` 的**判定依据**（2026-11-09 新增）。
+   * `changed` 为 `undefined` 有两种成因（任务没记引用 `no-ref` / 指纹退化为 `****`
+   * `fingerprint-unusable`），只看布尔分不出来 —— 带上它就无需再翻任务记录猜。
+   */
+  tokenFingerprintDrift?: string
   included?: string[]
   pageUrl?: string
   /**

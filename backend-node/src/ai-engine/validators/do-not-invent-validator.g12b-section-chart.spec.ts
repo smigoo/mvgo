@@ -72,3 +72,58 @@ const option = { series: [{ type: 'line' }] }
     expect(res.warnChartSectionMissing).toBe(0)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2026-11-09 · mc-max-1794208722463-00f3626c 实锤：文字数字卡承载豁免。
+// 设计稿「车型分布环形图」实为 ELLIPSE+arcData 装饰环 + 数字 TEXT 卡（客车 66109/货车
+// 16270），LLM 用底图+数字行形态等价还原 ⇒ 强行要求 pie series 是域误伤（BLOCK 杀死本单）。
+// 守三条：①子树含 TEXT 数值 ⇒ 豁免不判 MISSING；②子树无 TEXT 且产物无 series ⇒ 仍 BLOCK；
+// ③不传 figmaNodeData（旧口径）⇒ 行为不变（fail-open 不豁免）。
+// ─────────────────────────────────────────────────────────────────────────
+describe('G12b-豁免：文字数字卡承载的装饰性图表', () => {
+  const figmaDoc = {
+    children: [
+      {
+        id: '9:1',
+        type: 'FRAME',
+        children: [
+          {
+            id: '2:3446',
+            type: 'FRAME',
+            children: [
+              { id: '2:3455', type: 'GROUP', children: [{ id: '2:3456', type: 'ELLIPSE' }] },
+              { id: '2:3463', type: 'TEXT', characters: '客车 66109' },
+              { id: '2:3468', type: 'TEXT', characters: '货车 16270' },
+            ],
+          },
+          { id: '2:7999', type: 'FRAME', children: [{ id: '2:8000', type: 'ELLIPSE' }] },
+        ],
+      },
+    ],
+  }
+  const FILES = {
+    'package/index.vue':
+      '<template><div data-section-id="2:3446"><div data-section-id="2:7999">x</div></div></template>',
+  }
+  const run = (charts: any[], withFigma = true) =>
+    validateDoNotInvent({
+      files: FILES,
+      analysis: { charts },
+      ...(withFigma ? { figmaNodeData: figmaDoc } : {}),
+    })
+
+  it('① 阳性：段子树含 TEXT 数值卡 ⇒ 豁免不判 CHART-MISSING', () => {
+    const r = run([{ section: '2:3446', type: 'pie' }])
+    expect(r.issues.some((i) => i.id === 'DO-NOT-INVENT-CHART-MISSING')).toBe(false)
+  })
+
+  it('② 阴性：段子树无 TEXT（纯装饰）且产物无 series ⇒ 仍 BLOCK（防线保留）', () => {
+    const r = run([{ section: '2:7999', type: 'pie' }])
+    expect(r.issues.some((i) => i.id === 'DO-NOT-INVENT-CHART-MISSING')).toBe(true)
+  })
+
+  it('③ 旧口径：不传 figmaNodeData ⇒ 不豁免（行为与旧版一致）', () => {
+    const r = run([{ section: '2:3446', type: 'pie' }], false)
+    expect(r.issues.some((i) => i.id === 'DO-NOT-INVENT-CHART-MISSING')).toBe(true)
+  })
+})

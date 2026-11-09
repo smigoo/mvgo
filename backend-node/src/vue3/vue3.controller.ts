@@ -23,6 +23,7 @@ import { SlotAnalyzerService } from './slot-analyzer.service';
 import { DocAnalyzerService } from './doc-analyzer.service';
 import { ApiBindingService } from './api-binding.service';
 import { QuotaService } from '../quota/quota.service';
+import { stripRedactedPlaceholders } from '../common/utils/redact';
 import { TaskQueueService } from '../queue/task-queue.service';
 import { TasksService } from '../tasks/tasks.service';
 import type { Task } from '../tasks/tasks.service';
@@ -69,10 +70,12 @@ export class Vue3Controller implements OnModuleInit {
         dto.groupId = task.groupId || '';
         dto.panelType = task.panelKey || 'default-panel';
         if (task.configSnapshot) {
-          dto.config = {
+          // 🔴 诉求五 #16-①：`configSnapshot` 是脱敏落盘的，占位串（`***REDACTED***`）
+          // 是非空字符串 ⇒ 原样回传等于给生成链路喂假 token。入口剥掉假值再回传。
+          dto.config = stripRedactedPlaceholders({
             outputPath: task.configSnapshot.outputPath,
             ...task.configSnapshot,
-          };
+          });
         }
         await this.vue3Service.startGeneration(
           task.sessionId,

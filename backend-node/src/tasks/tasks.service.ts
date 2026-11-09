@@ -12,10 +12,14 @@ import { PipelineMetricsService } from './pipeline-metrics.service';
 import type { ProgressService } from '../progress/progress.service';
 import { ModuleRef } from '@nestjs/core';
 import { redactSecrets } from '../common/utils/redact';
+import {
+  readTaskFigmaCredentialRef,
+  toFigmaCredentialRefFields,
+} from '../config/figma-credential-ref';
 import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { markSessionLocked } from '../ai-engine/utils/session-lock-registry.js';
-import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
+import { renameWithCopyFallback, isRenameBroken, markRenameBroken } from '../ai-engine/utils/rename-with-copy-fallback.js';
 import { sweepStalePersistTmp } from '../ai-engine/utils/persist-tmp-sweeper.js';
 
 const { ZipArchive } = require('archiver');
@@ -76,6 +80,20 @@ interface TaskMetadata {
    */
   extraPrompt?: string;
   requirementDocText?: string;
+  /**
+   * 🆕 2026-11-09 Figma 凭证引用（「这个任务当时用的是哪个 Figma token」）。
+   * 起因：切换过 Figma token 后点历史记录/重试，执行链路实时取**当前** active 槽位
+   * ⇒ 用旧 token 建的任务被新 token 顶掉 ⇒ Figma 对无权限文件返回 404（不是 403）
+   * ⇒ 用户看到「连不上当时的 figma」。
+   *
+   * 只存**指纹 + 槽位标识**，不存明文（明文由 `redactSecrets` 保证落不了盘），
+   * 复用时按指纹在用户当前 `figmaTokens[]` 里把这个 token 找回来。
+   * 键名刻意不含 token/secret 等词 —— `SECRET_KEY_REGEX` 按键名抹值，带 token 就没了。
+   * 详见 `config/figma-credential-ref.ts`（含三条硬约束与判据）。
+   */
+  figmaCredentialFp?: string;
+  figmaCredentialSlotId?: string;
+  figmaCredentialSlotName?: string;
   userComponentId?: string;
   /** 生成中间产物目录，用于失败恢复和重试定位 */
   outputPath?: string;
@@ -185,6 +203,14 @@ export interface Task {
   extraPrompt?: string;
   /** 高级选项上传的需求文档全文（≤20000 字；只在任务详情接口返回，列表只给字数） */
   requirementDocText?: string;
+  /**
+   * 🆕 2026-11-09 Figma 凭证引用（详见 TaskMetadata 同名字段注释）。
+   * 顶层与 `configSnapshot` 里各存一份：顶层供执行链路/反馈读取（最贴近事实），
+   * 快照那份供历史接口整体回传（前端不必知道字段名）。
+   */
+  figmaCredentialFp?: string;
+  figmaCredentialSlotId?: string;
+  figmaCredentialSlotName?: string;
   /** 高级选项指定的组件 ID（决定产物目录名 / declare / class 前缀） */
   userComponentId?: string;
   /** 设计画布逻辑尺寸，用于前端预览缩放 */
@@ -1135,48 +1161,57 @@ export class TasksService {
       }
 
       const json = JSON.stringify(finalList, null, 2);
-      // 原子化替换：先写唯一 .tmp 再 rename，避免并发持久化互相删除临时文件。
-      // 🛡️ 2026-09-02：环境 safe-delete 钩子会拦截 Node fs（曾观测 tmp 写完后、
-      // rename 前被移除 → ENOENT）。write 后 access 复核，被劫走则换名重试一次。
-      let lastErr: unknown = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const tmpFile = `${this.persistFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-        try {
-          await fs.writeFile(tmpFile, json, 'utf-8');
-          await fs.access(tmpFile);
+      // 🛡️ 2026-11-09 熔断态直写：rename 被环境拦截（EPERM，终身不愈）时，
+      // 「写 tmp → rename」只会泄漏 tmp（unlink 同被拦，实测两天 522GB）——
+      // 熔断置位后跳过 tmp 直接覆写，泄漏从源头归零（.prev 备份仍保留）。
+      if (!isRenameBroken()) {
+        // 原子化替换：先写唯一 .tmp 再 rename，避免并发持久化互相删除临时文件。
+        // 🛡️ 2026-09-02：环境 safe-delete 钩子会拦截 Node fs（曾观测 tmp 写完后、
+        // rename 前被移除 → ENOENT）。write 后 access 复核，被劫走则换名重试一次。
+        let lastErr: unknown = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const tmpFile = `${this.persistFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
           try {
-            await fs.rename(tmpFile, this.persistFile);
-          } catch (renameErr: any) {
-            // 🛡️ 2026-11-03：EPERM rename 风暴降级——rename 不可用时直写目标文件，tmp 尽力清理。
-            if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr;
-            // 🛡️ 补强2（2026-11-04）：直写 `fs.writeFile` 是「先 truncate 再写」的**非原子覆盖**，
-            //   SIGTERM/半写即整表损毁（data/ 下 13 个 0 字节 tasks.json.<pid>.<ts>.<rand>.tmp 即实证）。
-            //   故直写前先落一份 tasks.json.prev（保留最近一次，覆盖旧值）→ 半写可回滚；
-            //   loadSync 在「主文件解析失败」时会回退读 .prev。
-            await this.backupPersistFileBeforeDirectWrite();
-            await fs.writeFile(this.persistFile, json, 'utf-8');
-            try { await fs.unlink(tmpFile); } catch { /* 残留 tmp 待清理 */ }
-            console.warn(`[TasksService] 持久化：rename ${renameErr.code}，已降级为直写`);
+            await fs.writeFile(tmpFile, json, 'utf-8');
+            await fs.access(tmpFile);
+            try {
+              await fs.rename(tmpFile, this.persistFile);
+            } catch (renameErr: any) {
+              // 🛡️ 2026-11-03：EPERM rename 风暴降级——rename 不可用时直写目标文件，tmp 尽力清理。
+              if (renameErr?.code !== 'EPERM' && renameErr?.code !== 'EBUSY') throw renameErr;
+              markRenameBroken(`（TasksService.persist rename ${renameErr.code}）`);
+              // 🛡️ 补强2（2026-11-04）：直写 `fs.writeFile` 是「先 truncate 再写」的**非原子覆盖**，
+              //   SIGTERM/半写即整表损毁（data/ 下 13 个 0 字节 tasks.json.<pid>.<ts>.<rand>.tmp 即实证）。
+              //   故直写前先落一份 tasks.json.prev（保留最近一次，覆盖旧值）→ 半写可回滚；
+              //   loadSync 在「主文件解析失败」时会回退读 .prev。
+              await this.backupPersistFileBeforeDirectWrite();
+              await fs.writeFile(this.persistFile, json, 'utf-8');
+              try { await fs.unlink(tmpFile); } catch { /* 残留 tmp 待清理 */ }
+              console.warn(`[TasksService] 持久化：rename ${renameErr.code}，已降级为直写（已熔断，后续不再产生 tmp）`);
+            }
+            break; // ✅ 落盘成功（rename 或降级直写），退出重试循环
+          } catch (err) {
+            lastErr = err;
+            // tmp 已消失（被外部清理）或 rename 失败：换名重试一次；最终失败落 warn
           }
-          // ✅ 落盘成功。🛡️ 补强1（2026-11-04）：先取旧基线用于「低噪声证人日志」，再更新基线。
-          //    仅在本次落盘条数 ≠ 上一次落盘条数时打印 —— 下次若再缩水，本日志可直接区分
-          //    「进程内变小（磁盘基线≈内存）」还是「磁盘被外部换掉后由护栏合并（合并磁盘独有>0）」。
-          const prevBaseline = this.lastKnownDiskCount;
-          if (finalList.length !== prevBaseline) {
-            console.log(
-              `[TasksService] 落盘 ${finalList.length} 条（磁盘基线 ${prevBaseline}，` +
-              `有意删除 ${this.pendingDeletedIds.size}，合并磁盘独有 ${finalList.length - list.length}）`,
-            );
-          }
-          this.lastKnownDiskCount = finalList.length;
-          this.pendingDeletedIds.clear();
-          return;
-        } catch (err) {
-          lastErr = err;
-          // tmp 已消失（被外部清理）或 rename 失败：换名重试一次；最终失败落 warn
         }
+        if (lastErr) throw lastErr;
+      } else {
+        await this.backupPersistFileBeforeDirectWrite();
+        await fs.writeFile(this.persistFile, json, 'utf-8');
       }
-      throw lastErr;
+      // ✅ 落盘成功。🛡️ 补强1（2026-11-04）：先取旧基线用于「低噪声证人日志」，再更新基线。
+      //    仅在本次落盘条数 ≠ 上一次落盘条数时打印 —— 下次若再缩水，本日志可直接区分
+      //    「进程内变小（磁盘基线≈内存）」还是「磁盘被外部换掉后由护栏合并（合并磁盘独有>0）」。
+      const prevBaseline = this.lastKnownDiskCount;
+      if (finalList.length !== prevBaseline) {
+        console.log(
+          `[TasksService] 落盘 ${finalList.length} 条（磁盘基线 ${prevBaseline}，` +
+          `有意删除 ${this.pendingDeletedIds.size}，合并磁盘独有 ${finalList.length - list.length}）`,
+        );
+      }
+      this.lastKnownDiskCount = finalList.length;
+      this.pendingDeletedIds.clear();
     } catch (err) {
       console.warn('[TasksService] 持久化任务失败:', err.message);
     }
@@ -1229,6 +1264,13 @@ export class TasksService {
     const prevFile = `${this.persistFile}.prev`;
     try {
       if (!existsSync(this.persistFile)) return; // 无主文件可备份
+      // 🛡️ 2026-11-09 熔断态：跳过「tmp + rename」备份——EPERM 环境下 renameWithCopyFallback
+      // 必走 copy 降级且 rmSync(prevTmp) 必失败 → 每次泄漏一个 .prev tmp。直接 copyFile 覆写
+      // .prev（非原子，但仅是回滚备份，可接受；换回零 tmp 泄漏）。
+      if (isRenameBroken()) {
+        await fs.copyFile(this.persistFile, prevFile);
+        return;
+      }
       const prevTmp = `${prevFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
       await fs.copyFile(this.persistFile, prevTmp);
       // renameWithCopyFallback 已内建 EPERM/EBUSY/EXDEV → copy 降级
@@ -1301,6 +1343,12 @@ export class TasksService {
    * 创建新任务
    */
   createTask(sessionId: string, metadata: TaskMetadata = {}, initialStatus?: TaskStatus) {
+    // 🆕 2026-11-09 Figma 凭证引用：优先取 metadata 顶层，回落 configSnapshot
+    // （快照由 `buildTaskConfigSnapshot` 统一记账，故此处零调用点改动即可生效）。
+    // 提到顶层是因为 flushPersistQueue 会整对象落盘、feedback 读取侧也认顶层字段。
+    const credentialRefFields = toFigmaCredentialRefFields(
+      readTaskFigmaCredentialRef(metadata as Record<string, any>).ref,
+    );
       const task: Task = {
       sessionId,
       configSnapshot: metadata.configSnapshot ? redactSecrets(metadata.configSnapshot) : undefined,
@@ -1326,6 +1374,8 @@ export class TasksService {
       // 🆕 2026-11-03 高级选项「生成约束」随任务落库（此前只进 prompt ⇒ 详情/重试/历史全丢）
       extraPrompt: normalizeOptionalText(metadata.extraPrompt, 4000),
       requirementDocText: normalizeOptionalText(metadata.requirementDocText, 20000),
+      // 🆕 2026-11-09 凭证引用（键名不含 secret 命中词 ⇒ 两道 redactSecrets 都抹不掉）
+      ...(credentialRefFields || {}),
       userComponentId: normalizeOptionalText(metadata.userComponentId),
       outputPath: metadata.outputPath,
       lastCompletedStage: metadata.lastCompletedStage,
@@ -3141,6 +3191,11 @@ export class TasksService {
       parentId: task.parentId,
       childIds: [],
       userId: userId || task.userId,
+      // 🆕 2026-11-09 凭证引用随重试任务继承 —— 重试的**唯一目的**是复现当时那次生成，
+      // 用当前 active token 重跑就丢了复现语义（且 Figma 会以 404 伪装成文件不存在）。
+      figmaCredentialFp: task.figmaCredentialFp,
+      figmaCredentialSlotId: task.figmaCredentialSlotId,
+      figmaCredentialSlotName: task.figmaCredentialSlotName,
     };
 
     this.tasks.set(retrySessionId, retryTask);

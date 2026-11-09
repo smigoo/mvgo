@@ -13,6 +13,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { tempComponentsDir, vue3ComponentsDir } from '../config/backend-root';
 import { AiConfigService } from '../config/config.service';
+import { resolveExecutionFigmaTokenWithProbe } from '../config/figma-execution-token-probe';
 import { Model } from 'mongoose';
 import {
   GroupMember,
@@ -189,10 +190,36 @@ export class Vue3Service {
         ? await this.aiConfigService.getMergedAiConfig(params.userId)
         : {};
       const finalAiConfig = { ...mergedAiConfig, ...config };
-      const effectiveFigmaToken = await this.resolveFigmaToken(
-        config?.figmaToken,
-        params.userId,
+      // 🆕 2026-11-09 诉求五（任务 ↔ Figma Token 关联）：与 phase2 / lite 走**同一**入口。
+      // 这条路径是同构缺陷的第四处：`config?.figmaToken` 优先，而历史任务重试时前端回传的
+      // config 可能来自 `task.configSnapshot`（figmaToken 已是脱敏占位 `'***REDACTED***'`），
+      // 非空字符串会一路打到 Figma。取 token 的口径从此只有 `resolveExecutionFigmaToken()` 一处。
+      const figmaCredTask = this.tasksService.getTask(sessionId) || null;
+      // #15：引用无命中时逐槽探测本次目标 fileKey/nodeId，首个可读即用。
+      const figmaTokenRes = await resolveExecutionFigmaTokenWithProbe({
+        task: figmaCredTask,
+        requestConfig: config,
+        activeConfig: mergedAiConfig,
+        fileKey,
+        nodeId,
+      });
+      if (figmaTokenRes.reason === 'probe-failed') {
+        // 逐槽都读不到时必须显式失败：这里的下一跳是 `resolveFigmaToken(undefined, userId)`
+        // （读 DB 配置），若放它过去，等于拿一个**未经验证**的凭证重跑一次 —— 正是要禁止的静默回落。
+        throw new Error(`缺少可读取该设计稿的 Figma Token：${figmaTokenRes.note}`);
+      }
+      const effectiveFigmaToken = figmaTokenRes.token
+        ? figmaTokenRes.token
+        : await this.resolveFigmaToken(undefined, params.userId);
+      this.logger.log(
+        `[figma-cred] vue3 session=${sessionId} source=${figmaTokenRes.source} ` +
+          `reason=${figmaTokenRes.reason} ref=${figmaTokenRes.refSource || '-'} ` +
+          `request-overridden=${figmaTokenRes.requestOverridden} ` +
+          `probed=${figmaTokenRes.probes.length} :: ${figmaTokenRes.note}`,
       );
+      if (figmaTokenRes.refFields) {
+        this.tasksService.updateTask(sessionId, figmaTokenRes.refFields as any);
+      }
       const resolvedVisionCfg = resolveVisionConfig(finalAiConfig);
       const resolvedTextCfg = resolveTextConfig(finalAiConfig);
       visionModelUsed = resolvedVisionCfg?.model || null;
