@@ -88,7 +88,7 @@
             <input type="checkbox" id="ai-disable-thinking" style="width:auto;margin:0;" checked /> 关闭思考模式（推荐，避免返回为空）
           </label>
           <label>命名规范参考（可选）</label>
-          <textarea id="ai-naming-ref" rows="3" placeholder="例：header / header-slot-right / section-title-xxx / item-xxx / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
+          <textarea id="ai-naming-ref" rows="3" placeholder="例：header / header-slot-right / section-title-xxx / section-xxx / graphic-xxx / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
           <button id="btn-save-ai" class="secondary" style="width:100%">保存设置（仅存本机）</button>
           <button id="btn-list-models" class="secondary" style="width:100%;margin-top:8px;">列出可用模型（探测哪些支持视觉）</button>
           <div id="ai-config-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
@@ -847,12 +847,12 @@
 
         // 命名体系说明（约定 > 配置：模型只打前缀语义名，bg/img/icon 文件夹由 code.js 按前缀确定性合并）
         const NAMING_BLOCK = [
-          "【命名体系】表单 form-、列表 list-、卡片 card-、项 item-（重复子项 item-<语义>-N）、组件 cp-（仅最外层唯一业务组件；【本次选区根节点即组件根，必须命名 cp-<语义>】，重复子结构一律 item-/card-/list-，绝不用 cp-）。",
-          "【组件骨架·根级必守】组件根的直接子节点固定三段式：① 标题区 → header（标题文本 + header-slot-* 插槽）；② 背景/装饰层 → bg；③ 其余内容区域 → 统一由插件建的【唯一】slot-con Group 收纳，模块容器命名 item-xxx / card-xxx / list-xxx；【插件会在 Figma 里真建 slot-con Group】把第③类（含视觉分析的多个内容模块）统一收进去，结构契约也会归一化为一个 slot-con 容器，下游按单个内容区生成；【全组件只有这一个 header 和这一个 slot-con】：各模块自己的小标题一律命名 section-title-<语义>，严禁命名 header-* / slot-con-*（会被误判成根级标题或第二个槽）。你只需保证命名清晰，绝不输出 group/reorder。header 内插槽按位置命名 header-title / header-slot-left / header-slot-center / header-slot-right（右侧通常放按钮、tab、图例、时间筛选），下游会按这些名字预留 <slot>。只做命名，不要输出 group/reorder，插件会按几何确定性收纳。",
-          "【子模块】每个 section-title-* 都是模块锚点：插件按视觉顺序把「标题 + 其下方图表」切进独立 item-<语义> Group，结构契约同步输出 slot-con → item-* → section-title-* 三层；段前/跨段的全屏底图保持直属 slot-con。",
-          "【循环组件·重点】list-*/cards-* 等列表容器内的重复子项，一律命名 item-<语义>-1..N（或 card-<语义>-1..N），并保证同组子项结构完全一致；严禁给每个子项起不同语义名（会误导下游生成 N 份重复代码）。Group 只表达包含、不表达可迭代，因此「相同前缀 + 递增序号 + 同构子树」是让大模型识别 v-for/map 的必需信号；插件会在结构契约里把同构项折叠为 [循环 ×N] 并只展开首项。",
+          "【命名体系】固定前缀（不得改写）：@<技术栈>/<类型>（@echarts/bar、@antd/button）、bg / bg-*、icon-*、img-*、header / header-*、slot-con。其余按语义命名：组件根 cp-<语义>（仅最外层唯一业务组件；【本次选区根节点即组件根，必须命名 cp-<语义>】）；异构分区 section-<语义>（与 section-title-* 成套，不可迭代）；静态图形容器 graphic-<语义>（零散矢量拼成，按图片实现）；列表 list-、卡片 card-、表单 form-；同构循环子项 item-<语义>-N（只在带 -N 序号时使用，v-for/map）。重复子结构一律 item-*-N / card-* / list-*，绝不用 cp-；不带序号的 item- 不存在。",
+          "【组件骨架·根级必守】组件根的直接子节点固定三段式：① 标题区 → header（标题文本 + header-slot-* 插槽）；② 背景/装饰层 → bg；③ 其余内容区域 → 统一由插件建的【唯一】slot-con Group 收纳，模块容器命名 section-xxx / card-xxx / list-xxx；【插件会在 Figma 里真建 slot-con Group】把第③类（含视觉分析的多个内容模块）统一收进去，结构契约也会归一化为一个 slot-con 容器，下游按单个内容区生成；【全组件只有这一个 header 和这一个 slot-con】：各模块自己的小标题一律命名 section-title-<语义>，严禁命名 header-* / slot-con-*（会被误判成根级标题或第二个槽）。你只需保证命名清晰，绝不输出 group/reorder。header 内插槽按位置命名 header-title / header-slot-left / header-slot-center / header-slot-right（右侧通常放按钮、tab、图例、时间筛选），下游会按这些名字预留 <slot>。只做命名，不要输出 group/reorder，插件会按几何确定性收纳。",
+          "【子模块】每个 section-title-* 都是模块锚点：插件按视觉顺序把「标题 + 其下方图表」切进独立 section-<语义> Group，结构契约同步输出 slot-con → section-* → section-title-* 三层；段前/跨段的全屏底图保持直属 slot-con。",
+          "【循环组件·重点】item- 是【循环专用】前缀，只用于带 -N 序号的同构子项；异构分区一律 section-*，静态图形一律 graphic-*。list-*/cards-* 等列表容器内的重复子项，一律命名 item-<语义>-1..N（或 card-<语义>-1..N），并保证同组子项结构完全一致；严禁给每个子项起不同语义名（会误导下游生成 N 份重复代码）。Group 只表达包含、不表达可迭代，因此「相同前缀 + 递增序号 + 同构子树」是让大模型识别 v-for/map 的必需信号；插件会在结构契约里把同构项折叠为 [循环 ×N] 并只展开首项。",
           "背景：插件自动把同级背景/装饰层合并为语义文件夹 bg-<父容器语义>（如 bg-card-traffic-flow），该文件夹整体导出 PNG@2x、内部节点不单独导出；背景图/装饰层命名 bg-<角色>（bg-card/bg-glow/bg-ring/bg-panel…）；纯装饰发光环/光晕/纹理归入 bg-，不算 icon。",
-          "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」。【假图表·重点】由零散 VECTOR 弧线 / 刻度 / 光晕拼成、没有坐标轴与数据系列的静态仪表盘、环形进度、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 item-<语义>（如 item-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（legend/axis…）；模块小标题用 section-title-<语义>，同类多实例加序号。",
+          "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」。【假图表·重点】由零散 VECTOR 弧线 / 刻度 / 光晕拼成、没有坐标轴与数据系列的静态仪表盘、环形进度、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 graphic-<语义>（如 graphic-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（legend/axis…）；模块小标题用 section-title-<语义>，同类多实例加序号。",
           "【核心规则·约定>配置】1) 严禁输出 group：背景/静态图/图标文件夹由插件按几何与前缀确定性收纳，你只需给节点打语义名；2) 只给「有意义层级节点」和「同级背景/图标/静态图」打语义名，TEXT 节点不改名；3) 环形仪表/图表/图标内部最小装饰元素（arc/tick/dot/line/vector/union/subtract/boolean）【只命名最外层容器】，内部一律不逐个命名、保留默认名；插件会把这些矢量按容器确定性合并成 img-/bg- 资源文件夹并整体导出，你不需要输出 group、也不要给内部矢量打 bg-/img- 前缀；TEXT 数值与标签必须保留为独立 TEXT 节点，绝不并入图片（下游要生成动态数据）；3.1) 但【与 TEXT 同级、独立表达语义的小图标】（趋势箭头/状态箭头/方向标等）不属于「内部最小装饰」，必须命名为 icon-<语义>（如 icon-arrow-up），严禁跳过；只有图表/环形仪表【容器内部】的 arc/tick 才跳过；4) 严禁输出 reorder：背景合并与从上到下排序由插件按真实 y 坐标确定性完成，模型只做命名与必要归位（reparent）、删冗余副本（delete）。",
         ].join("\n");
 
@@ -863,7 +863,7 @@
           const INTENT_BLOCK = useLayoutIntent ? [
             "【布局意图·必须额外输出】在 JSON 里再输出 layoutIntent 字段：{\"modules\":[{\"order\":1,\"name\":\"<语义名>\",\"nodeIds\":[\"<id>\",...]}],\"decorations\":[{\"nodeId\":\"<id>\",\"role\":\"decoration|content\",\"shared\":false,\"spans\":[1,2]}]}。",
             "modules：对照渲染图，按视觉从上到下给本段的主要模块分组，order 从 1 递增，nodeIds 只填该模块的主要容器 id（不必列全子节点）。",
-            (opts.groupModules ? "【模块容器】name 必须输出小写英文语义 slug（如 response-time / report-efficiency），不要用中文；每个 module 的 nodeIds 至少填 2 个【同父级、视觉上同一行】的主要容器 id（左图右卡这类并排元素），插件会把它们合成 item-<slug>-<order> 容器供下游生成组件；跨父级/不同行/没把握的宁可不填，插件会因几何校验跳过。" : ""),
+            (opts.groupModules ? "【模块容器】name 必须输出小写英文语义 slug（如 response-time / report-efficiency），不要用中文；每个 module 的 nodeIds 至少填 2 个【同父级、视觉上同一行】的主要容器 id（左图右卡这类并排元素），插件会把它们合成 item-<slug>-<order> 容器（同构行，带序号，属循环模板族）供下游生成组件；跨父级/不同行/没把握的宁可不填，插件会因几何校验跳过。" : ""),
             "decorations：标出你判定的背景/装饰层节点（role=decoration），以及视觉上贯穿多个模块、不属于任何单一模块的共享装饰（shared=true，spans 填它跨越的模块 order）；判为业务内容的填 role=content。",
             "【红线】layoutIntent 只是描述，不要输出任何排序/成组/移动/插入序号；插件会用真实 y 坐标排序并按几何合并背景。视觉判断与几何冲突时以几何为准，因此只填你有把握的节点，无把握就留空数组。",
           ].join("\n") : "";
@@ -872,7 +872,7 @@
             useLayoutIntent
               ? '请对照渲染图的视觉结构，给本段节点产出【语义命名 + 必要归位 + 布局意图】方案，严格输出 JSON：{"ops":[{"action":"rename"|"reparent"|"delete","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}],"layoutIntent":{"modules":[],"decorations":[]}}'
               : '请对照渲染图的视觉结构，给本段节点产出【语义命名 + 必要归位】方案，严格输出 JSON：{"ops":[{"action":"rename"|"reparent"|"delete","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}]}',
-            "对照渲染图识别：默认名容器（Frame/Group/INSTANCE + 数字）描绘小图标→icon-<语义slug>（如 icon-building/icon-alarm）；主背景/装饰层→bg 或 bg-<角色>；内容图片→img-<角色>；【严格区分图表】只有带坐标轴/图例/多组数据系列、适合用图表库重建的才是真图表→只命名最外层容器为 @echarts/<类型>（必须 @ 开头，严禁 echarts-gauge 这种写法）；由零散矢量弧线/刻度/光晕拼成的静态仪表盘、环形进度、装饰图形【不是图表】→最外层命名 item-<语义>（如 item-disposal-rate-gauge），绝不写 echarts-/chart-/gauge-；内部 arc/tick/dot/vector 等最小元素一律不逐个命名，由插件自动合并成资源文件夹；TEXT 节点不改名。",
+            "对照渲染图识别：默认名容器（Frame/Group/INSTANCE + 数字）描绘小图标→icon-<语义slug>（如 icon-building/icon-alarm）；主背景/装饰层→bg 或 bg-<角色>；内容图片→img-<角色>；【严格区分图表】只有带坐标轴/图例/多组数据系列、适合用图表库重建的才是真图表→只命名最外层容器为 @echarts/<类型>（必须 @ 开头，严禁 echarts-gauge 这种写法）；由零散矢量弧线/刻度/光晕拼成的静态仪表盘、环形进度、装饰图形【不是图表】→最外层命名 graphic-<语义>（如 graphic-disposal-rate-gauge），绝不写 echarts-/chart-/gauge-；内部 arc/tick/dot/vector 等最小元素一律不逐个命名，由插件自动合并成资源文件夹；TEXT 节点不改名。",
             namingRef,
             NAMING_BLOCK,
             INTENT_BLOCK,
@@ -1158,7 +1158,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.26";
+      const PLUGIN_VERSION = "20261110.27";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存

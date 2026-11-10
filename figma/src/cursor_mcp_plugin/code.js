@@ -1104,7 +1104,7 @@ async function groupModulesByIntent(modules, summary) {
 // 根因二（结构）：旧 prompt 承诺「内部最小元素随容器收纳」，但 code.js 只对 img-/icon-
 //   前缀做补收、对默认名 VECTOR 只按父级做 bg- 装饰收纳（前景装饰 / 视觉 role=content
 //   还会保留原位），从来没有任何「按图表容器合并」的逻辑 ⇒ 零碎矢量既不合并也无导出预设。
-// 治理：① 命名二分：静态矢量图去 echarts → item-<slug>；真图表补 @ → @echarts/<slug>；
+// 治理：① 命名二分：静态矢量图去 echarts → graphic-<slug>；真图表补 @ → @echarts/<slug>；
 //   ② 容器内纯图形子节点合并成 img-<语义> 文件夹（applyAssetExports 挂 PNG@2x），
 //      TEXT 数值/标签保留为独立节点，下游才能生成动态数据；
 //   ③ mvGraphicContainer 标记保证幂等，organizeLayout 直接跳过，避免二次拆组 / z 序漂移。
@@ -1148,11 +1148,11 @@ function hasChartSemantics(container) {
 function normalizeChartName(container, summary) {
   const nm = String(container.name || "");
   if (/^@/.test(nm)) return;                              // @echarts/ @antd/ 已合规，尊重模型判断
-  if (!/^(?:echarts-|chart-|gauge-)/i.test(nm)) return;  // 已是 item-* 等语义名 → 不重复处理
+  if (!/^(?:echarts-|chart-|gauge-)/i.test(nm)) return;  // 已是 graphic-*/item-* 等语义名 → 不重复处理
   const slug = chartSlug(nm);
   try {
     if (hasChartSemantics(container)) { container.name = "@echarts/" + slug; summary.chartAtFixed++; }
-    else { container.name = "item-" + slug; summary.chartNormalized++; }
+    else { container.name = "graphic-" + slug; summary.chartNormalized++; }
   } catch (e) {}
 }
 function organizeGraphicContainers(root, summary) {
@@ -1203,7 +1203,7 @@ function organizeGraphicContainers(root, summary) {
 // ---- 零散图形段合并（v20261110.18）------------------------------------------
 // 用户 node-id=1-1727 实测：item-rate-metric-4 里 8 个默认名 Ellipse、2 个 bg-*
 // 仍散在图层面板。根因是三条启发式判据互相打架：
-//   ① organizeGraphicContainers 只认 echarts-/chart-/gauge- 容器，普通 item-* 完全不进；
+//   ① organizeGraphicContainers 只认 echarts-/chart-/gauge- 容器，普通 graphic-*/item-* 完全不进；
 //   ② isDecoration 只对 VECTOR/BOOLEAN_OPERATION/LINE/STAR/POLYGON 无条件判装饰，
 //      ELLIPSE/RECTANGLE 叶子只有排在 kids 前 30% 才算装饰 ⇒ 排在 TEXT 之后的全部漏判成 content；
 //   ③ isForegroundDecor 把压在 content 上的图形 keepInPlace，只补 bg- 前缀、不成组
@@ -1271,7 +1271,10 @@ function mergeLooseGraphicRuns(containers, summary) {
 // 等价于：content 按 y 降序铺在 children 里，bg 放在最底。
 // 业务语义白名单：这些前缀代表「内容」，绝不作为装饰收纳。
 // 注意 bg- 不在此列——它是模型给出的明确装饰信号，应优先判为装饰（见 isDecoration 开头）。
-const SEMANTIC_PREFIX = /^(cp-|card-|list-|item-|form-|img-|icon-|echarts-|@|header|slot-|chart-|legend|axis|label|value)/i;
+// v20261110.27：section-（异构分区）/ graphic-（静态图形容器）也属于业务内容，
+// 必须进白名单，否则 isDecoration 会把新命名的子模块当成装饰收进 bg-* 文件夹。
+// item- 从此只表示【带 -N 序号的同构循环子项】，不带序号的异构容器一律 section-/graphic-。
+const SEMANTIC_PREFIX = /^(cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|echarts-|@|header|slot-|chart-|legend|axis|label|value)/i;
 const GRAPHIC_TYPES = { VECTOR: 1, BOOLEAN_OPERATION: 1, LINE: 1, ELLIPSE: 1, RECTANGLE: 1, STAR: 1, POLYGON: 1, FRAME: 1, GROUP: 1 };
 
 function hasTextDescendant(n, depth) {
@@ -1502,7 +1505,7 @@ function isBgLike(n) {
 }
 function isModuleLike(n) {
   if (!n || n.type === "TEXT") return false;
-  return isModuleContainer(n) || /^(item|card|list|form|cp)-/i.test(String(n.name || ""));
+  return isModuleContainer(n) || /^(item|card|list|form|cp|section|graphic)-/i.test(String(n.name || ""));
 }
 function countModuleKids(n) {
   if (!n || !("children" in n)) return 0;
@@ -1526,7 +1529,7 @@ function countModules(root) {
 // v20261110.24：组件根级骨架只允许一个 header。AI 常把每个视觉模块的小标题也命名成 header-*，
 // 旧判据只看前缀 ⇒ createSlotConGroup 把它们全部排除，平铺在根级、进不了 slot-con。
 // 这里用「精确名 + 几何」选出唯一根 header，其余降级为 section-title-* 参与内容建组；
-// 误命名的 slot-con-xxx 降级为 item-xxx，避免被当成第二个根级槽复用。
+// 误命名的 slot-con-xxx 降级为 section-xxx，避免被当成第二个根级槽复用。
 // 纯改名：不移动节点、不改坐标、不改 z-order；改名后不再命中前缀，重复整理幂等。
 function pickRootHeader(headers, root) {
   if (!headers || !headers.length) return null;
@@ -1570,7 +1573,7 @@ function demoteSubHeaders(root, summary) {
     if (!/^slot-con(?:-|$)/i.test(nm)) continue;
     const slug = nm.replace(/^slot-con[-/]?/i, "")
       .replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "");
-    try { if (n.locked) n.locked = false; n.name = "item-" + (slug || "section"); slotsDemoted++; } catch (e) {}
+    try { if (n.locked) n.locked = false; n.name = "section-" + (slug || "block"); slotsDemoted++; } catch (e) {}
   }
   s.subHeadersDemoted = (Number(s.subHeadersDemoted) || 0) + demoted;
   s.subSlotConsDemoted = (Number(s.subSlotConsDemoted) || 0) + slotsDemoted;
@@ -1634,8 +1637,10 @@ function sortSlotConChildren(root, summary) {
 
 // ---- v20261110.26 P1：按副标题把内容切成子模块 Group -----------------------------------
 // .24 把模块小标题统一成 section-title-*，.25 保证视觉顺序可用 ⇒ 标题的 y 就是天然分割线。
-// 两种形态：① 平铺型（标题与图表同父级平铺）→ 按 y 区间建 item-<slug> Group；
-//           ② 已有容器型（红框本来就是 Frame，标题在容器内部）→ 只把容器改名 item-<slug>，不套第二层。
+// v20261110.27：容器统一命名 section-<slug>，与锚点 section-title-<slug> 成套；
+// item- 归还给「带 -N 序号的同构循环子项」，不再表示异构分区。
+// 两种形态：① 平铺型（标题与图表同父级平铺）→ 按 y 区间建 section-<slug> Group；
+//           ② 已有容器型（红框本来就是 Frame，标题在容器内部）→ 只把容器改名 section-<slug>，不套第二层。
 // 保护：跨段/全屏底图 pin 住不归段；同父级才合组；插回原最小 index；mvSectionGroup 幂等。
 const SECTION_GROUP_KEY = "mvSectionGroup";
 function isSectionTitle(n) {
@@ -1653,7 +1658,7 @@ function sectionSlug(nm) {
     .slice(0, 48);
   return slug || "section";
 }
-function sectionGroupName(nm) { return "item-" + sectionSlug(nm); }
+function sectionGroupName(nm) { return "section-" + sectionSlug(nm); }
 
 function groupSectionsByTitle(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
@@ -1668,12 +1673,12 @@ function groupSectionsByTitle(root, summary) {
   const anchored = kids.filter(isSectionTitle);
 
   // ② 平铺标题不足 2 个：多半是「红框本来就是 Frame」或「已整理过」。
-  // 只把自带小标题、且还没有语义名的容器改名；已有 item-*/mvSectionGroup 一律不动 ⇒ 幂等。
+  // 只把自带小标题、且还没有语义名的容器改名；已有 section-*/item-*/mvSectionGroup 一律不动 ⇒ 幂等。
   if (anchored.length < 2) {
     let renamed = 0;
     for (const n of kids) {
       if (isSectionGroup(n) || !("children" in n)) continue;
-      if (/^(item|card|list|form|cp)-/i.test(String(n.name || ""))) continue;
+      if (/^(item|card|list|form|cp|section|graphic)-/i.test(String(n.name || ""))) continue;
       const inner = Array.prototype.slice.call(n.children || []).find(isSectionTitle);
       if (!inner) continue;
       try {
@@ -1779,7 +1784,7 @@ function createSlotConGroup(root, summary) {
 // ---- v20261110.22 P1：整理前后结构质量快照（纯只读）------------------------------
 // 目的：把「提高生成质量」变成可度量指标；不写入节点、不影响整理逻辑。
 const DEFAULT_NAME_RE = /^(?:Frame|Group|Rectangle|Ellipse|Vector|Line|Star|Polygon|Boolean\s*Operation|Component|Instance|Text|Union|Subtract|Intersect|Exclude|Image)\s*[\d\s._-]*$/i;
-const SEMANTIC_NAME_RE = /^(?:cp-|card-|list-|item-|form-|img-|icon-|bg-|@echarts\/|@antd\/|header|slot-|chart-|legend|axis|label|value|unit|title|footer)/i;
+const SEMANTIC_NAME_RE = /^(?:cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|bg-|@echarts\/|@antd\/|header|slot-|chart-|legend|axis|label|value|unit|title|footer)/i;
 
 function collectQualityMetrics(root) {
   const m = {
@@ -1861,10 +1866,11 @@ const CONTRACT_HEADER = [
   "# header 插槽按位置命名：header-title / header-slot-left / header-slot-center / header-slot-right；",
   "#   header-slot-right 通常放按钮、tab、图例、时间筛选；生成时预留 <slot> 供外部注入。",
   "# 全组件只有一个 header；模块小标题 section-title-* 属于 slot-con，不是根级 header 插槽。",
-  "# 全组件只有一个 slot-con；模块容器用 item-*/card-*/list-*，绝不出现第二个 slot-con-*。",
-  "# slot-con 下以 section-title-* 为锚点按视觉顺序分成 item-* 子模块；段前/跨段节点直属 slot-con。",
-  "# 循环结构：list-*/cards-* 内的同构序号子项（item-xxx-1..N）按一份模板 + v-for/map 渲染；",
-  "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码。",
+  "# 全组件只有一个 slot-con；异构分区用 section-*，容器用 card-*/list-*/form-*，绝不出现第二个 slot-con-*。",
+  "# slot-con 下以 section-title-* 为锚点按视觉顺序分成 section-* 子模块；段前/跨段节点直属 slot-con。",
+  "# graphic-* 是零散矢量拼成的静态图形容器（内部已合并为 img-* 资源），按图片实现，严禁用图表库重建。",
+  "# item- 只用于【带 -N 序号】的同构循环子项：list-*/cards-* 内 item-xxx-1..N 按一份模板 + v-for/map 渲染；",
+  "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码；不带序号的 item- 不是循环项。",
   "# 资源文件夹 bg-*/img-*/icon-* 整体导出；@echarts/* 用图表库实现。",
   "# 动态数据槽：TEXT 行尾 [data:value|label|unit \"内容摘要\"] 表示可变数据，",
   "#   生成时绑定 props / 接口字段，绝不把字面量写死；data:label 多为静态文案可保留。",
@@ -2072,7 +2078,7 @@ function buildStructureContract(root, opts) {
     if (body.length || slotCons.length) {
       push("slot-con", 1);
       // v20261110.26 P0：平铺的 section-title-* 是天然模块锚点，
-      // 未整理 / 未真建 Group 的文件里也输出一层 item-*（纯文本，不建 Figma 节点）。
+      // 未整理 / 未真建 Group 的文件里也输出一层 section-*（纯文本，不建 Figma 节点）。
       // .25 已保证 body 顺序 = 视觉从上到下；≥2 个锚点才分段，单标题不制造假层级。
       const nameOf = (b) => b.forced || cleanContractName(b.node);
       const emitItem = (b, d) => {
@@ -2083,7 +2089,7 @@ function buildStructureContract(root, opts) {
       body.forEach((b, i) => { if (/^section-title(?:-|$)/i.test(nameOf(b))) anchors.push(i); });
       // 已经真分层的容器（内部自带 section-title）不再造虚拟层，避免重复层级
       const hasRealGroups = body.some(b =>
-        /^(item|card|list|form)-/i.test(cleanContractName(b.node)) &&
+        /^(item|card|list|form|section|graphic)-/i.test(cleanContractName(b.node)) &&
         visibleChildren(b.node).some(c => isSectionTitle(c)));
       if (anchors.length < 2 || hasRealGroups) {
         for (const b of body) emitItem(b, 2);
