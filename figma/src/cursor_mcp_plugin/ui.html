@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>mv-figma 文件自动整理插件</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        color: #e0e0e0;
+        background-color: #1e1e1e;
+      }
+      .container { display: flex; flex-direction: column; height: 100%; }
+      h1 { font-size: 16px; font-weight: 600; margin: 0; color: #ffffff; }
+      h2 { font-size: 14px; font-weight: 600; margin-top: 18px; margin-bottom: 8px; color: #ffffff; }
+      p.subtitle { margin: 4px 0 0 0; font-size: 12px; color: #999999; }
+      button {
+        background-color: #18a0fb; border: none; color: white; padding: 8px 12px;
+        border-radius: 6px; margin-top: 8px; margin-bottom: 8px; cursor: pointer; font-size: 14px;
+        transition: background-color 0.2s;
+      }
+      button:hover { background-color: #0d8ee0; }
+      button.secondary { background-color: #3d3d3d; color: #e0e0e0; }
+      button.secondary:hover { background-color: #4d4d4d; }
+      button:disabled { background-color: #333333; color: #666666; cursor: not-allowed; }
+      input {
+        border: 1px solid #444444; border-radius: 4px; padding: 8px; margin-bottom: 12px;
+        font-size: 14px; width: 100%; box-sizing: border-box; background-color: #2d2d2d; color: #e0e0e0;
+      }
+      label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 500; color: #cccccc; }
+      .status { margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; }
+      .status.connected { background-color: #1a472a; color: #4ade80; }
+      .status.disconnected { background-color: #471a1a; color: #ff9999; }
+      .status.info { background-color: #1a3147; color: #66b3ff; }
+      .section { margin-bottom: 20px; }
+      .hidden { display: none; }
+      .tabs { display: flex; border-bottom: 1px solid #444444; margin: 14px 0 16px; }
+      .tab { padding: 8px 16px; cursor: pointer; font-size: 14px; font-weight: 500; color: #999999; }
+      .tab.active { border-bottom: 2px solid #18a0fb; color: #18a0fb; }
+      .tab-content { display: none; }
+      .tab-content.active { display: block; }
+      .hint { font-size: 11px; color: #888; line-height: 1.5; margin-top: 6px; }
+      .operation-complete { color: #4ade80; }
+      .operation-error { color: #ff9999; }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Figma 节点整理工具</h1>
+        <p class="subtitle">整理后让大模型更容易理解文件结构，提高生成质量</p>
+        <p class="version" id="plugin-version" style="margin:2px 0 0;font-size:11px;color:#7d8590">版本加载中…</p>
+      </div>
+
+      <div class="tabs">
+        <div id="tab-organize" class="tab active">整理</div>
+        <div id="tab-about" class="tab">关于</div>
+      </div>
+
+      <!-- 整理 -->
+      <div id="content-organize" class="tab-content active">
+        <div class="section">
+          <h2>AI 设置（OpenAI 兼容接口）</h2>
+          <label>接口地址 Base URL</label>
+          <input id="ai-base-url" placeholder="如 https://token.microvideo.cn/v1" />
+          <label>API Key</label>
+          <input id="ai-api-key" type="password" placeholder="sk-..." />
+          <label>模型名</label>
+          <input id="ai-model" placeholder="如 qwen/qwen3.8-max" />
+          <label>视觉模型名（可选，用于定层级/顺序；留空则纯文本改名）</label>
+          <input id="ai-vision-model" placeholder="如 qwen/qwen-vl-max（留空=纯文本改名）" />
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-use-vision" style="width:auto;margin:0;" /> 导出渲染图并用视觉模型定层级/顺序
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-use-layout-intent" style="width:auto;margin:0;" checked /> 启用视觉布局分析（默认开）
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-set-export" style="width:auto;margin:0;" checked /> 设置资源导出属性（icon→SVG、img/bg→PNG@2x）
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-group-modules" style="width:auto;margin:0;" checked /> 生成业务模块容器（零 token，默认开）
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-disable-thinking" style="width:auto;margin:0;" checked /> 关闭思考模式（推荐，避免返回为空）
+          </label>
+          <label>命名规范参考（可选）</label>
+          <textarea id="ai-naming-ref" rows="3" placeholder="例：header-xxx / slot-xxx / slot-con / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
+          <button id="btn-save-ai" class="secondary" style="width:100%">保存设置（仅存本机）</button>
+          <button id="btn-list-models" class="secondary" style="width:100%;margin-top:8px;">列出可用模型（探测哪些支持视觉）</button>
+          <div id="ai-config-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
+          <div id="ai-models-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
+          <p class="hint" style="margin-bottom:0;">
+            默认纯文本模型即可；勾选「视觉模式」需网关上有可用视觉模型，保存时会自动探测接口与 Key。<br/>
+            连接本地服务后 AI 请求走代理，可避开浏览器跨域限制。「仅结构化整理」与「📐 生成结构方案」完全零 token。
+          </p>
+        </div>
+
+        <div class="section">
+          <h2>本地服务（AI 代理，可选）</h2>
+          <p class="hint" style="margin-top:0;">
+            先在本机终端运行 <code>node socket-server.mjs</code> 启动本地服务，再点下面连接。连上后 AI 请求改走本地代理，可绕开浏览器跨域限制。
+          </p>
+          <button id="btn-connect" class="primary" style="width:100%">连接服务</button>
+          <label for="port">服务端口（WebSocket）</label>
+          <input type="number" id="port" placeholder="3055" value="3055" min="1024" max="65535" />
+          <div id="connection-status" class="status disconnected">未连接到本地服务（AI 将直连，可能受浏览器跨域限制）</div>
+        </div>
+
+        <div class="section">
+          <h2>一键整理（AI 全自动）</h2>
+          <p class="hint" style="margin-top:0;">
+            在画布中<strong>选中要整理的框架</strong>（选画布最外层），点击下方按钮：AI 自动扫描 → 分析命名 → 重命名完成，全程无需离开 Figma。
+          </p>
+          <div id="sel-state" style="font-size:12px;margin-bottom:10px;padding:8px 10px;border-radius:6px;background:#471a1a;color:#bbb;line-height:1.5;">
+            当前选区：<span id="sel-name" style="color:#ff9999;">未检测到（请先在画布选中框架）</span>
+            <br/><span style="color:#888;font-size:11px;">点按钮前请确认这里显示了你要整理的节点</span>
+            <br/><button id="btn-capture-sel" class="secondary" style="margin-top:6px;font-size:12px;padding:4px 8px;">重新捕获选区</button>
+          </div>
+          <button id="btn-ai-organize" class="primary" style="width:100%">AI 全自动整理选中框架</button>
+          <button id="btn-structure-only" class="secondary" style="width:100%;margin-top:8px;">仅结构化整理（零 token · 不调用模型）</button>
+          <button id="btn-plan-structure" class="secondary" style="width:100%;margin-top:8px;">📐 生成结构方案（阶段 1 · 只读不改文件）</button>
+          <button id="btn-export-contract" class="secondary" style="width:100%;margin-top:8px;">📤 结构契约 → mvgo（名称 + 层级）</button>
+          <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5;">零 token：不填 Key / 不联网也能用；方案可复制给下游模型。</div>
+          <div id="contract-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#161616;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+              <strong style="font-size:12px;color:#66b3ff;">结构契约</strong>
+              <span id="contract-meta" style="font-size:10px;color:#888;"></span>
+              <button id="btn-copy-contract" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
+              <button id="btn-push-mvgo" class="primary" style="font-size:11px;padding:3px 8px;margin:0;">🚀 推送生成</button>
+            </div>
+            <div id="mvgo-tip" style="font-size:11px;color:#4ade80;line-height:1.5;margin-bottom:4px;"></div>
+            <pre id="contract-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;margin:0;"></pre>
+            <details style="margin-top:8px;">
+              <summary style="cursor:pointer;font-size:11px;color:#888;">⚙️ 推送设置</summary>
+              <div style="margin-top:6px;font-size:11px;color:#bbb;line-height:1.6;">
+                <div>mvgo 地址<input id="mvgo-base" value="http://localhost:13030" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                <div style="margin-top:4px;">token<input id="mvgo-token" value="dev" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                <div style="margin-top:4px;">分组 ID（可空）<input id="mvgo-group" placeholder="留空则用私有分组" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                <div style="margin-top:4px;">Figma 链接（Max 档必需）<input id="mvgo-figma-url" placeholder="自动填充，也可手动覆盖" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                <div style="margin-top:4px;">组件类型
+                  <select id="mvgo-type" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;">
+                    <option value="microcode">microcode</option>
+                    <option value="vue3">vue3</option>
+                  </select>
+                </div>
+              </div>
+            </details>
+          </div>
+          <div id="structure-plan-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#161616;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <strong style="font-size:12px;color:#66b3ff;">结构方案（只读预览 · 可复制）</strong>
+              <button id="btn-copy-structure-plan" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
+              <span id="plan-copy-tip" style="font-size:11px;color:#4ade80;"></span>
+            </div>
+            <pre id="structure-plan-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow:auto;margin:0;"></pre>
+          </div>
+          <div id="ai-progress-box" class="hidden" style="margin-top:10px;">
+            <div id="ai-progress-msg" style="font-size:12px;color:#66b3ff;">准备中...</div>
+            <div style="width:100%;background:#444;border-radius:4px;margin-top:6px;">
+              <div id="ai-progress-bar" style="width:0%;height:8px;background:#18a0fb;border-radius:4px;transition:width 0.3s;"></div>
+            </div>
+          </div>
+          <div id="ai-result" style="font-size:12px;margin-top:8px;color:#bbb;line-height:1.6;"></div>
+          <details id="ai-analysis-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#161616;">
+            <summary style="cursor:pointer;font-size:12px;color:#66b3ff;">📋 分析日志（AI 原始返回与改名方案）</summary>
+            <div style="margin:6px 0 0;display:flex;align-items:center;gap:8px;">
+              <button id="btn-copy-analysis" class="secondary" style="font-size:11px;padding:4px 10px;margin:0;">📋 复制全部</button>
+              <span id="copy-tip" style="font-size:11px;color:#4ade80;"></span>
+            </div>
+            <pre id="ai-analysis" style="font-size:11px;color:#ccc;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto;margin:6px 0 0;"></pre>
+          </details>
+        </div>
+      </div>
+
+      <!-- 关于 -->
+      <div id="content-about" class="tab-content">
+        <div class="section">
+          <h2>关于</h2>
+          <p class="hint" style="margin-top:0;font-size:13px;color:#bbb;line-height:1.8;">
+            <strong>Figma 节点整理工具</strong> · by smigoo<br/>
+            整理后让大模型更容易理解文件结构，提高生成质量。
+          </p>
+          <h2>使用步骤</h2>
+          <ol style="font-size:12px;color:#bbb;line-height:1.8;">
+            <li>运行 <code>node socket-server.mjs</code> → 点「连接服务」（端口 3055）</li>
+            <li>填接口 / Key / 模型并保存 → 选中框架 → 「AI 全自动整理」</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---- 本地服务连接状态（仅用于启用 AI 代理，绕开浏览器跨域） ----
+      const state = {
+        connected: false,
+        socket: null,
+        serverPort: 3055,
+        channel: null,
+      };
+
+      const portInput = document.getElementById("port");
+      const connectButton = document.getElementById("btn-connect");
+      const connectionStatus = document.getElementById("connection-status");
+      const tabs = document.querySelectorAll(".tab");
+      const tabContents = document.querySelectorAll(".tab-content");
+
+      function updateConnectionStatus(isConnected, message) {
+        state.connected = isConnected;
+        const statusMessage =
+          message ||
+          (isConnected
+            ? "已连接到本地服务（AI 代理已启用）"
+            : "未连接到本地服务（AI 将直连，可能受浏览器跨域限制）");
+        connectionStatus.innerHTML = statusMessage;
+        connectionStatus.className = `status ${isConnected ? "connected" : "disconnected"}`;
+        connectButton.textContent = isConnected ? "断开连接" : "连接服务";
+        connectButton.className = isConnected ? "secondary" : "primary";
+        portInput.disabled = isConnected;
+      }
+
+      function connectToServer(port) {
+        try {
+          if (state.connected && state.socket) {
+            updateConnectionStatus(true, "已经连接过了");
+            return;
+          }
+          state.serverPort = port;
+          state.socket = new WebSocket(`ws://localhost:${port}`);
+          state.socket.onopen = () => {
+            const channelName = generateChannelName();
+            state.channel = channelName;
+            state.socket.send(JSON.stringify({ type: "join", channel: channelName.trim() }));
+          };
+          state.socket.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === "system" && data.message && data.message.result) {
+                state.connected = true;
+                updateConnectionStatus(true, `已连接本地服务（AI 代理已启用），频道: ${data.channel}`);
+                parent.postMessage({ pluginMessage: { type: "save-server-port", port: state.serverPort } }, "*");
+                parent.postMessage({ pluginMessage: { type: "notify", message: `已连接本地服务 (端口 ${port})` } }, "*");
+              } else if (data.type === "error") {
+                updateConnectionStatus(false, `错误: ${data.message}`);
+                state.socket.close();
+              }
+            } catch (e) {
+              console.error("parse error", e);
+            }
+          };
+          state.socket.onclose = () => {
+            state.connected = false;
+            state.socket = null;
+            updateConnectionStatus(false, "已断开连接");
+          };
+          state.socket.onerror = () => {
+            updateConnectionStatus(false, "连接失败——请确认本地服务已启动");
+            state.connected = false;
+            state.socket = null;
+          };
+        } catch (error) {
+          updateConnectionStatus(false, `连接失败: ${error.message || "未知错误"}`);
+        }
+      }
+
+      function disconnectFromServer() {
+        if (state.socket) { state.socket.close(); state.socket = null; }
+        state.connected = false;
+        updateConnectionStatus(false, "已断开连接");
+      }
+
+      function generateChannelName() {
+        const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+        let r = "";
+        for (let i = 0; i < 8; i++) r += chars.charAt(Math.floor(Math.random() * chars.length));
+        return r;
+      }
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          tabs.forEach((t) => t.classList.remove("active"));
+          tabContents.forEach((c) => c.classList.remove("active"));
+          tab.classList.add("active");
+          document.getElementById("content-" + tab.id.split("-")[1]).classList.add("active");
+        });
+      });
+
+      connectButton.addEventListener("click", () => {
+        if (state.connected) {
+          updateConnectionStatus(false, "断开中...");
+          connectionStatus.className = "status info";
+          disconnectFromServer();
+        } else {
+          const port = parseInt(portInput.value, 10) || 3055;
+          updateConnectionStatus(false, "连接中...");
+          connectionStatus.className = "status info";
+          connectToServer(port);
+        }
+      });
+
+      // ---- AI 全自动整理 ----
+      const btnAi = document.getElementById("btn-ai-organize");
+      const aiProgressBox = document.getElementById("ai-progress-box");
+      const aiProgressBar = document.getElementById("ai-progress-bar");
+      const aiProgressMsg = document.getElementById("ai-progress-msg");
+      const aiResult = document.getElementById("ai-result");
+      const aiConfigStatus = document.getElementById("ai-config-status");
+
+      parent.postMessage({ pluginMessage: { type: "load-ai-config" } }, "*");
+      document.getElementById("btn-capture-sel").addEventListener("click", () => {
+        parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
+      });
+
+      document.getElementById("btn-save-ai").addEventListener("click", async () => {
+        const baseUrl = document.getElementById("ai-base-url").value.trim();
+        const apiKey = document.getElementById("ai-api-key").value.trim();
+        const model = document.getElementById("ai-model").value.trim();
+        const visionModel = document.getElementById("ai-vision-model").value.trim();
+        const useVision = document.getElementById("ai-use-vision").checked;
+        const useLayoutIntent = document.getElementById("ai-use-layout-intent").checked;
+        const setExport = document.getElementById("ai-set-export").checked;
+        const groupModules = document.getElementById("ai-group-modules").checked;
+        const disableThinking = document.getElementById("ai-disable-thinking").checked;
+        const namingRef = document.getElementById("ai-naming-ref").value.trim();
+        if (!baseUrl || !apiKey || !model) {
+          aiConfigStatus.innerHTML = "<span style='color:#ff9999'>❌ 请填写完整的接口地址 / API Key / 模型名</span>";
+          return;
+        }
+        aiConfigStatus.innerHTML = "<span style='color:#66b3ff'>⏳ 正在探测接口可用性（连通性 / Key / 模型名）...</span>";
+        try {
+          const data = await llmRequest(
+            { baseUrl, apiKey, model },
+            [{ role: "user", content: "只回复一个字：ok" }],
+            { temperature: 0, max_tokens: 8 }
+          );
+          const ok = !!(data.choices && data.choices[0] && data.choices[0].message);
+          if (!ok) throw new Error("返回结构异常：" + JSON.stringify(data).slice(0, 200));
+          parent.postMessage(
+            { pluginMessage: { type: "save-ai-config", baseUrl, apiKey, model, visionModel, useVision, useLayoutIntent, autoLayoutIntent: useLayoutIntent, setExport, groupModules, disableThinking, namingRef } },
+            "*"
+          );
+        } catch (e) {
+          let hint = "";
+          if (!state.connected && /fetch|network|Failed to/i.test(e.message)) {
+            hint = "（浏览器跨域/CORS 受限：建议先点「连接服务」连上本地代理，AI 请求将改走本地代理绕过跨域）";
+          }
+          aiConfigStatus.innerHTML =
+            "<span style='color:#ff9999'>❌ 探测未通过，未保存：" + e.message + hint + "</span>";
+        }
+      });
+
+      // 列出网关可用模型（探测哪些支持视觉），GET {baseUrl}/models
+      document.getElementById("btn-list-models").addEventListener("click", async () => {
+        const baseUrl = document.getElementById("ai-base-url").value.trim();
+        const apiKey = document.getElementById("ai-api-key").value.trim();
+        const statusEl = document.getElementById("ai-models-status");
+        if (!baseUrl || !apiKey) { statusEl.innerHTML = "<span style='color:#ff9999'>❌ 请先填写接口地址与 API Key</span>"; return; }
+        statusEl.innerHTML = "<span style='color:#66b3ff'>⏳ 正在向网关查询 /v1/models ...</span>";
+        try {
+          let data;
+          if (state.connected && state.serverPort) {
+            const r = await fetch("http://localhost:" + state.serverPort + "/llm-models?baseUrl=" + encodeURIComponent(baseUrl) + "&apiKey=" + encodeURIComponent(apiKey));
+            data = await r.json();
+            if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+          } else {
+            const r = await fetch(baseUrl.replace(/\/+$/, "") + "/models", { headers: { Authorization: "Bearer " + apiKey, Accept: "application/json" } });
+            if (!r.ok) { const t = await r.text(); throw new Error(extractErrorText(t) || ("HTTP " + r.status)); }
+            data = await r.json();
+          }
+          const list = (data && Array.isArray(data.data)) ? data.data.map((m) => m.id || m.name || m).filter(Boolean)
+            : (Array.isArray(data) ? data : []);
+          if (!list.length) {
+            statusEl.innerHTML = "<span style='color:#ffcc99'>⚠️ 网关返回了响应但没有标准 models 列表（data 字段为空或非数组）。原始：<br>" + JSON.stringify(data).slice(0, 300) + "</span>";
+            return;
+          }
+          const isVision = (id) => /vl|vision|gpt-4o|gpt-4-v|gpt-4\.1|gpt-4v|gemini.*vision|claude.*vision|qwen-vl|qwen2?\.?5?-vl|glm-4v|glm-v|moondream|llava|internvl|step-1v|pixtral|mistral.*vision|phi-3-vision|phi-4-vision|llama-3\.2-vision|deepseek-v4\.?1?-flash|deepseek-v4-flash-vision|qwen-vl-max|qwen3-vl|doubao-vision|seedream|emohawk/i.test(id);
+          const vision = list.filter((id) => isVision(id));
+          const items = list.map((id) => "<li>" + id + (isVision(id) ? " <span style='color:#4ade80'>👁 疑似视觉</span>" : "") + "</li>").join("");
+          statusEl.innerHTML = "✅ 共 " + list.length + " 个模型，疑似支持视觉的 " + vision.length + " 个：<br><ul style='margin:4px 0 0 16px;padding:0;'>" + items + "</ul><br><span style='color:#999'>👁 为启发式判断（模型名含 vl/vision/gpt-4o/deepseek-v4.1-flash 等），以网关实际能力为准。把其中之一填到「视觉模型名」即可。</span>";
+        } catch (e) {
+          statusEl.innerHTML = "<span style='color:#ff9999'>❌ 查询失败：" + e.message + "</span>";
+        }
+      });
+
+      // v20261110.9：业务容器已改为纯几何，不再依赖视觉 layoutIntent，也不再强制联动勾选视觉模式。
+      // v20261110.14：视觉布局分析依赖视觉模式，勾选时自动联动，避免「开关开了却静默不生效」。
+      // 与「业务模块容器」无关 —— 后者是纯几何零 token，不因这个开关消耗 token。
+      document.getElementById("ai-use-layout-intent").addEventListener("change", (e) => {
+        if (e.target.checked) document.getElementById("ai-use-vision").checked = true;
+      });
+
+      btnAi.addEventListener("click", () => {
+        aiResult.textContent = "";
+        aiProgressBox.classList.remove("hidden");
+        aiProgressBar.style.width = "5%";
+        aiProgressMsg.textContent = "准备中...";
+        document.getElementById("ai-analysis-box").classList.add("hidden");
+        btnAi.disabled = true;
+        parent.postMessage({ pluginMessage: {
+          type: "ai-organize",
+          useVision: document.getElementById("ai-use-vision").checked,
+          useLayoutIntent: document.getElementById("ai-use-layout-intent").checked,
+          setExport: document.getElementById("ai-set-export").checked,
+          groupModules: document.getElementById("ai-group-modules").checked,
+        } }, "*");
+      });
+
+      // v20261110.19 结构契约：纯内存把「整理后节点名 + 层级」送进 mvgo 生成请求，不落盘、不缓存。
+      let currentContract = null;
+      function setMvgoTip(s, ok) {
+        const tip = document.getElementById("mvgo-tip");
+        if (!tip) return;
+        tip.textContent = s || "";
+        tip.style.color = ok === false ? "#ff9999" : "#4ade80";
+      }
+      function copyContractText() {
+        const text = (currentContract && currentContract.text) || "";
+        if (!text) { setMvgoTip("请先生成结构契约", false); return; }
+        const done = (s) => setMvgoTip(s, true);
+        const fallback = () => {
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            const ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            done(ok ? "已复制 " + text.length + " 字（兼容模式）" : "复制失败，请手动选择");
+          } catch (e) { setMvgoTip("复制失败，请手动选择文本", false); }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText)
+          navigator.clipboard.writeText(text).then(() => done("已复制 " + text.length + " 字"), fallback);
+        else fallback();
+      }
+      document.getElementById("btn-export-contract").addEventListener("click", () => {
+        document.getElementById("contract-box").classList.remove("hidden");
+        document.getElementById("contract-text").textContent = "⏳ 正在读取整理后的图层树...";
+        setMvgoTip("");
+        parent.postMessage({ pluginMessage: { type: "export-structure-contract" } }, "*");
+      });
+      document.getElementById("btn-copy-contract").addEventListener("click", copyContractText);
+      document.getElementById("btn-push-mvgo").addEventListener("click", async () => {
+        const text = (currentContract && currentContract.text) || "";
+        if (!text) { setMvgoTip("请先生成结构契约", false); return; }
+        const base = (document.getElementById("mvgo-base").value || "").trim().replace(/\/+$/, "");
+        const token = (document.getElementById("mvgo-token").value || "").trim();
+        const groupId = (document.getElementById("mvgo-group").value || "").trim();
+        const componentType = document.getElementById("mvgo-type").value;
+        const figmaUrl = (document.getElementById("mvgo-figma-url").value || "").trim()
+          || (currentContract.figmaUrl || "");
+        if (!base) { setMvgoTip("请填 mvgo 地址", false); return; }
+        if (!figmaUrl) { setMvgoTip("缺少 Figma 链接（Max 档必需）", false); return; }
+        const body = {
+          figmaUrl: figmaUrl,
+          componentType: componentType,
+          componentName: currentContract.rootName || "figma-component",
+          requirementDocText: text,
+        };
+        if (groupId) body.groupId = groupId;
+        setMvgoTip("⏳ 正在提交生成...");
+        try {
+          const headers = { "Content-Type": "application/json" };
+          if (token) headers.token = token;
+          const r = await fetch(base + "/api/lite/generate", {
+            method: "POST", headers: headers, body: JSON.stringify(body),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.message || data.error || ("HTTP " + r.status));
+          const d = data.data || data;
+          const sid = d.sessionId || d.componentId || d.taskId || "";
+          setMvgoTip(sid ? "✅ 已提交：" + sid : "✅ 已提交生成", true);
+        } catch (e) {
+          setMvgoTip("❌ " + e.message + " · 已复制契约，可粘到 mvgo 需求文档", false);
+          copyContractText();
+        }
+      });
+
+      // 阶段 1：只读结构方案（C 双轨：视觉语义分区 + 几何校验兜底）
+      document.getElementById("btn-plan-structure").addEventListener("click", () => {
+        const box = document.getElementById("structure-plan-box");
+        box.classList.remove("hidden");
+        document.getElementById("structure-plan-text").textContent = "⏳ 正在只读扫描图层树并计算结构方案（不修改任何节点）...";
+        parent.postMessage({ pluginMessage: { type: "plan-structure" } }, "*");
+      });
+      document.getElementById("btn-copy-structure-plan").addEventListener("click", () => {
+        const text = document.getElementById("structure-plan-text").textContent || "";
+        const tip = document.getElementById("plan-copy-tip");
+        const done = (s) => { if (tip) { tip.textContent = s; setTimeout(() => { tip.textContent = ""; }, 2500); } };
+        if (navigator.clipboard && navigator.clipboard.writeText)
+          navigator.clipboard.writeText(text).then(() => done("已复制 " + text.length + " 字"), () => done("复制失败，请手动选择"));
+        else done("复制失败，请手动选择文本");
+      });
+
+      // 零 token 入口：完全不调用 LLM，只跑 code.js 的确定性几何后处理。
+      document.getElementById("btn-structure-only").addEventListener("click", () => {
+        aiResult.textContent = "";
+        aiProgressBox.classList.remove("hidden");
+        aiProgressBar.style.width = "10%";
+        aiProgressMsg.textContent = "零 token 结构化整理中（不调用任何模型）...";
+        document.getElementById("ai-analysis-box").classList.add("hidden");
+        btnAi.disabled = true;
+        parent.postMessage({ pluginMessage: {
+          type: "structure-only",
+          setExport: document.getElementById("ai-set-export").checked,
+          groupModules: document.getElementById("ai-group-modules").checked,
+        } }, "*");
+      });
+
+      // 复制分析日志全部内容（完整、不截断），便于贴回给 AI 诊断
+      document.getElementById("btn-copy-analysis").addEventListener("click", () => {
+        const text = document.getElementById("ai-analysis").textContent || "";
+        const tip = document.getElementById("copy-tip");
+        const done = (msg) => { if (tip) { tip.textContent = msg; setTimeout(() => { tip.textContent = ""; }, 2500); } };
+        const fallback = () => {
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            const ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            done(ok ? "已复制 " + text.length + " 字（兼容模式）" : "复制失败，请手动选择");
+          } catch (e) { done("复制失败，请手动选择文本"); }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => done("已复制 " + text.length + " 字"), fallback);
+        } else { fallback(); }
+      });
+
+      function showAiProgress(d) {
+        aiProgressBar.style.width = (d.pct || 0) + "%";
+        aiProgressMsg.textContent = d.msg || "";
+      }
+      function showAiResult(msg) {
+        btnAi.disabled = false;
+        aiProgressBox.classList.add("hidden");
+        if (!msg.ok) {
+          aiResult.innerHTML = "<span style='color:#ff9999'>❌ " + msg.error + "</span>";
+          return;
+        }
+        const parts = [];
+        if (msg.renamed) parts.push("改名 " + msg.renamed);
+        if (msg.reparented) parts.push("归父 " + msg.reparented);
+        if (msg.reordered) parts.push("排序 " + msg.reordered);
+        if (msg.grouped) parts.push("成组 " + msg.grouped);
+        if (msg.deleted) parts.push("删除 " + msg.deleted);
+        if (msg.decorMerged) parts.push("背景收纳 " + msg.decorMerged);
+        if (msg.sorted) parts.push("顺序整理 " + msg.sorted);
+        if (msg.exportSet) parts.push("导出预设 " + msg.exportSet);
+        if (msg.moduleGroups) parts.push("业务容器 " + msg.moduleGroups);
+        if (msg.geometricGroups) parts.push("几何容器 " + msg.geometricGroups);
+        if (msg.frameGroups) parts.push("透明Frame容器 " + msg.frameGroups);
+        const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const diag = [];
+        if (msg.skippedOverlap) diag.push("重叠保护跳过 " + msg.skippedOverlap);
+        if (msg.doubleConfirmed) diag.push("视觉几何双确认 " + msg.doubleConfirmed);
+        if (msg.conflict) diag.push("意图冲突 " + msg.conflict);
+        if (msg.intentShared) diag.push("跨模块共享装饰 " + msg.intentShared);
+        if (msg.orderMismatch) diag.push("视觉顺序与 y 不符 " + msg.orderMismatch);
+        if (msg.exportCleared) diag.push("清除内部导出 " + msg.exportCleared);
+        if (msg.exportLoose) diag.push("孤立资源导出 " + msg.exportLoose);
+        if (msg.foregroundKept) diag.push("前景装饰保留 " + msg.foregroundKept);
+        if (msg.forcedBg) diag.push("强制背景收纳 " + msg.forcedBg);
+        if (msg.groupFailed) diag.push("建组失败 " + msg.groupFailed);
+        if (msg.singleDecor) diag.push("单个装饰 " + msg.singleDecor);
+        if (msg.unlocked) diag.push("解锁 " + msg.unlocked);
+        if (msg.prefixFixed) diag.push("补前缀 " + msg.prefixFixed);
+        if (msg.moduleSkipped) diag.push("模块跳过 " + msg.moduleSkipped);
+        if (msg.moduleGroupFailed) diag.push("模块建组失败 " + msg.moduleGroupFailed);
+        if (msg.groupModulesOn && !(msg.intentModuleCount > 0) && !(msg.geometricGroups > 0))
+          diag.push("⚠️ 几何/视觉模块均为 0：请核对开关与「几何候选 / 几何行 / 几何失败」计数");
+        // 关键计数【始终显示】：旧版用 if(msg.xxx) 导致全 0 时整行消失，无法判断后处理到底跑没跑。
+        const always = [
+          "版本 v" + PLUGIN_VERSION,
+          "容器 " + (msg.containers || 0),
+          "背景收纳 " + (msg.decorMerged || 0),
+          "前景保留 " + (msg.foregroundKept || 0),
+          "建组失败 " + (msg.groupFailed || 0),
+          "布局异常 " + (msg.layoutErrors || 0),
+          "业务开关 " + (msg.groupModulesOn ? "开" : "关"),
+          "视觉模块 " + (msg.intentModuleCount || 0),
+          "业务容器 " + (msg.moduleGroups || 0),
+          "几何容器 " + (msg.geometricGroups || 0),
+          "几何候选 " + (msg.geoCandidates || 0),
+          "几何行 " + (msg.geoRows || 0),
+          "共享层 " + (msg.geoSpanKept || 0),
+          "几何失败 " + (msg.geoGroupFailed || 0),
+          "透明Frame " + (msg.frameGroups || 0),
+          "业务排除 " + (msg.moduleExcluded || 0),
+          "模块扩展 " + (msg.moduleExpanded || 0),
+          "模块跳过 " + (msg.moduleSkipped || 0),
+          "图表去echarts " + (msg.chartNormalized || 0),
+          "图表补@ " + (msg.chartAtFixed || 0),
+          "矢量合并 " + (msg.graphicMerged || 0) + "个/" + (msg.graphicFolders || 0) + "组",
+          "容器外散落 " + (msg.graphicOutside || 0),
+          "零散合并 " + (msg.graphicRunMerged || 0) + "个/" + (msg.graphicRunFolders || 0) + "组",
+          "slot-con " + (msg.slotConCreated ? "新建" : (msg.slotConReused ? "复用" : "无"))
+            + " 收" + (msg.slotConMerged || 0) + " 模块" + (msg.slotConModules || 0)
+            + " 组外" + (msg.slotConOutside || 0) + (msg.slotConFailed ? " 失败" + msg.slotConFailed : ""),
+        ];
+        const diagLine = always.concat(diag.filter(d => !/^(前景装饰保留|建组失败|模块跳过) /.test(d))).join(" / ");
+        aiResult.innerHTML =
+          "<span style='color:#4ade80'>✅ " + (msg.structureOnly ? "零 token 结构化整理完成！" : "整理完成！") + "扫描 " + msg.total + " 节点，" + (parts.join(" / ") || "无改动") +
+          (msg.failed ? "，跳过 " + msg.failed + " 个" : "") + "</span>" +
+          "<br/><span style='color:#8b949e;font-size:11px;'>后处理诊断：" + diagLine + "</span>" +
+          (msg.layoutErrorMsg ? "<br/><span style='color:#ff9999;font-size:11px;'>布局异常：" + esc(msg.layoutErrorMsg) + "</span>" : "") +
+          (msg.groupErrorMsg ? "<br/><span style='color:#ffcc99;font-size:11px;'>建组异常（figma.group 真实报错）：" + esc(msg.groupErrorMsg) + "</span>" : "") +
+          (msg.structurePlanText ? "<br/><span style='color:#66b3ff;font-size:11px;'>结构方案（执行前只读快照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #3a3a3a;border-radius:4px;color:#a9b6c4;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structurePlanText) + "</pre>" : "") +
+          (msg.structureList ? "<br/><span style='color:#4ade80;font-size:11px;'>新建业务容器清单（方案 / 实际对照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #444;border-radius:4px;color:#c9d1d9;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structureList) + "</pre>" : "") +
+          "<br/>回画布刷新查看结果。";
+        // 同步写进分析日志，便于整段复制贴回定位（结果面板在小窗口里容易看漏）
+        try {
+          const el = document.getElementById("ai-analysis");
+          if (el) el.textContent += "\n\n【插件后处理诊断】\n" + diagLine +
+            (msg.layoutErrorMsg ? "\n布局异常：" + msg.layoutErrorMsg : "") +
+            (msg.groupErrorMsg ? "\n建组异常：" + msg.groupErrorMsg : "") +
+            (msg.structurePlanText ? "\n\n【结构方案（执行前快照）】\n" + msg.structurePlanText : "") +
+            (msg.structureList ? "\n\n【新建业务容器清单（方案/实际对照）】\n" + msg.structureList : "");
+        } catch (e) {}
+        // 注意：figma 只在插件主线程(code.js)存在，UI iframe 内必须用 parent.postMessage 让 code.js 调 figma.notify
+        parent.postMessage({ pluginMessage: { type: "notify", message: "AI 整理完成：" + (parts.join("、") || "无改动") } }, "*");
+      }
+
+      // 统一的 LLM 请求入口：已连接本地服务时走 /llm-proxy 代理（绕开浏览器 CORS），
+      // 未连接时直连第三方接口（仅对返回 CORS 头的供应商可用）。统一走流式(stream)，
+      // 避免网关把整段响应缓冲到超时才回（大文件模型推理慢时会被网关上游超时 502）。
+      // 从上游错误响应体提取可读文案：兼容 OpenAI {error:{message}} / {error:"str"} / {message} / {code,message} / 纯文本
+      function extractErrorText(text) {
+        if (!text) return "(空响应体)";
+        try {
+          const j = JSON.parse(text);
+          if (j && typeof j === "object") {
+            if (j.error) {
+              if (typeof j.error === "string") return j.error;
+              if (typeof j.error === "object") return j.error.message || j.error.code || j.error.type || JSON.stringify(j.error);
+            }
+            if (j.message) return j.message;
+            if (j.errmsg) return j.errmsg;
+            if (j.code) return String(j.code);
+            const s = JSON.stringify(j);
+            return s.length > 240 ? s.slice(0, 240) + "…" : s;
+          }
+        } catch (e) {}
+        return text.length > 240 ? text.slice(0, 240) + "…" : text;
+      }
+
+      // 从模型返回文本中稳健提取 JSON：直解析 → 去代码块 → 尾随逗号修复 → 按括号深度扫描顶层对象（避免贪婪误吞后续说明文字里的散落括号）
+      function extractJson(content) {
+        if (!content || !content.trim()) return null;
+        const tryParse = (s) => { try { return JSON.parse(s); } catch (e) { return null; } };
+        const repair = (s) => s.replace(/,(\s*[}\]])/g, "$1"); // 去掉数组/对象尾随逗号
+        let s = content.trim();
+        let r = tryParse(s); if (r && typeof r === "object") return r;
+        s = content.replace(/```json|```/gi, "").trim();
+        r = tryParse(s); if (r && typeof r === "object") return r;
+        r = tryParse(repair(s)); if (r && typeof r === "object") return r;
+        // 优先从 {"ops" 起；否则从第一个 { 起，按括号/字符串状态扫描到匹配的顶层右括号
+        const marker = s.indexOf('{"ops"');
+        const start = marker >= 0 ? marker : s.indexOf("{");
+        if (start >= 0) {
+          let depth = 0, inStr = false, esc = false;
+          for (let i = start; i < s.length; i++) {
+            const c = s[i];
+            if (inStr) {
+              if (esc) esc = false;
+              else if (c === "\\") esc = true;
+              else if (c === "\"") inStr = false;
+              continue;
+            }
+            if (c === "\"") { inStr = true; continue; }
+            if (c === "{" || c === "[") depth++;
+            else if (c === "}" || c === "]") {
+              depth--;
+              if (depth === 0) {
+                const sub = s.slice(start, i + 1);
+                const p = tryParse(sub); if (p && typeof p === "object") return p;
+                const rp = tryParse(repair(sub)); if (rp && typeof rp === "object") return rp;
+                break;
+              }
+            }
+          }
+        }
+        return null;
+      }
+
+      async function llmRequest(cfg, messages, opts = {}) {
+        const payload = {
+          baseUrl: cfg.baseUrl,
+          apiKey: cfg.apiKey,
+          model: opts.modelOverride || cfg.model,
+          messages,
+          temperature: opts.temperature != null ? opts.temperature : 0.2,
+          ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
+          ...(opts.disableThinking ? { reasoning_effort: "none", thinking: { type: "disabled" } } : {}),
+          stream: opts.stream !== false,
+        };
+        if (state.connected && state.serverPort) {
+          const proxyUrl = "http://localhost:" + state.serverPort + "/llm-proxy";
+          const resp = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!resp.ok) {
+            const raw = (await resp.text()).slice(0, 2000);
+            throw new Error("本地代理错误 " + resp.status + "：" + extractErrorText(raw));
+          }
+          return await readLLMResponse(resp);
+        }
+        const url = cfg.baseUrl.replace(/\/+$/, "") + "/chat/completions";
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.apiKey },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const raw = (await resp.text()).slice(0, 2000);
+          throw new Error("AI 接口错误 " + resp.status + "：" + extractErrorText(raw));
+        }
+        return await readLLMResponse(resp);
+      }
+
+      // 流式/普通响应统一解析：SSE 时聚合 delta.content，普通 JSON 直接解析
+      async function readLLMResponse(resp) {
+        const ct = resp.headers.get("content-type") || "";
+        const buf = await resp.arrayBuffer();
+        const text = new TextDecoder("utf-8").decode(buf);
+        if (/text\/event-stream/i.test(ct) || /^\s*data:\s*\{/.test(text)) {
+          let content = "", reasoning = "";
+          const blocks = text.split(/\r?\n\r?\n/);
+          for (const block of blocks) {
+            for (const line of block.split(/\r?\n/)) {
+              const t = line.trim();
+              if (!t.startsWith("data:")) continue;
+              const json = t.slice(5).trim();
+              if (!json || json === "[DONE]") continue;
+              try {
+                const obj = JSON.parse(json);
+                const choice = obj.choices && obj.choices[0];
+                const delta = choice && (choice.delta || choice.message);
+                if (delta && typeof delta.content === "string") content += delta.content;
+                // DeepSeek 等把思考内容放在 reasoning_content（独立于 content），用于诊断思考是否真的关掉
+                if (delta && typeof delta.reasoning_content === "string") reasoning += delta.reasoning_content;
+              } catch (e) { /* 跳过非 JSON 行 */ }
+            }
+          }
+          return { choices: [{ message: { content, reasoning_content: reasoning } }] };
+        }
+        return JSON.parse(text);
+      }
+
+      // 将扁平节点树按「顶层分区」切分为多段：scanTree 是 DFS，同区兄弟节点在数组里连续，
+      // 按顶层祖先分组能保持每个分区的语义完整（如 rank-card-1..5 不会被拆散）。
+      // 单个分区超过 maxPerShard 时再按数量硬拆，确保每段都落在网关上游超时预算内。
+      function shardNodes(nodes, rootId, maxPerShard) {
+        maxPerShard = maxPerShard || 100;
+        const byId = new Map();
+        for (const n of nodes) byId.set(n.id, n);
+        const topKey = (n) => {
+          let cur = n, guard = 0;
+          while (cur && cur.p != null && cur.p !== rootId && guard < 100) {
+            cur = byId.get(cur.p);
+            guard++;
+          }
+          return cur ? cur.id : n.id;
+        };
+        const groups = new Map();
+        for (const n of nodes) {
+          const k = topKey(n);
+          if (!groups.has(k)) groups.set(k, []);
+          groups.get(k).push(n);
+        }
+        const shards = [];
+        for (const arr of groups.values()) {
+          if (arr.length <= maxPerShard) shards.push(arr);
+          else for (let i = 0; i < arr.length; i += maxPerShard) shards.push(arr.slice(i, i + maxPerShard));
+        }
+        return shards;
+      }
+
+      // 精简节点：保留 y/i 供视觉模型判断上下关系（确定性排序另由 code.js 用真实坐标完成），
+      // 去掉 x/p/root 等冗余字段，保留语义字段 + path 上下文。
+      function trimNode(n) {
+        const o = { id: n.id, t: n.t, n: n.n, w: n.w, h: n.h };
+        if (typeof n.y === "number") o.y = n.y;
+        if (typeof n.i === "number") o.i = n.i;
+        if (n.c) o.c = n.c;
+        if (n.f) o.f = n.f;
+        if (typeof n.fs === "number") o.fs = n.fs;
+        if (n.path) o.path = n.path;
+        return o;
+      }
+
+      // 统计一段里仍残留的默认名节点（Figma 默认名 = 类型名 + 数字，如 "Frame 12"/"Rectangle 3"）。
+      // 用于在模型对某段返回空操作时，发现「该段其实还有未整理的默认名节点」这种静默跳过。
+      function countDefaultNames(nodes) {
+        let c = 0;
+        for (const n of nodes) {
+          const nm = n.n || "";
+          if (!/^(Frame|Group|Instance|Rectangle|Ellipse|Vector|Boolean Operation|Star|Polygon|Line)\b/i.test(nm)) continue;
+          // 放宽：父级（path 末段，分隔符 " > "）已带前缀(-)或组件库标记(/) → 内部装饰微件（arc/tick/dot/vector…）按约定随容器收纳，不算漏处理
+          const parentName = ((n.path || "").split(" > ").filter(Boolean).pop()) || "";
+          if (/[-/]/.test(parentName)) continue;
+          c++;
+        }
+        return c;
+      }
+
+      // UI iframe 负责发 LLM 请求（code.js 沙箱无 fetch）。
+      // 文本模式：按顶层分区分段发（避免单请求体过大触发网关上游 502），模型只做语义命名。
+      // 视觉模式：渲染图 + 图层树分片，模型输出语义命名 + 可选 layoutIntent（仅描述布局意图）。
+      // 归组/排序由 code.js 按真实几何确定性完成（P0-a），视觉意图仅作交叉验证（P0-b）。
+      async function callLLM(cfg, report, opts) {
+        opts = opts || {};
+        const useVision = opts.useVision && opts.imageData;
+        // P0-b：视觉布局意图（需同时开启视觉模式 + 布局分析开关），纯文本模式永不触发
+        // 勾选「按视觉模块生成业务容器」时自动启用 layoutIntent 输出，不必再手动勾布局分析开关。
+        // v20261110.9：结构建组已与 LLM 解耦；只有显式开「视觉布局分析」才让模型输出 layoutIntent。
+        const useLayoutIntent = !!opts.useLayoutIntent && !!useVision;
+        const model = useVision && cfg.visionModel ? cfg.visionModel : cfg.model;
+        const namingRef = cfg.namingRef ? ("\n命名规范参考（用户给定，优先遵循）：" + cfg.namingRef) : "";
+        // 隐藏节点（visible===false）确定性删除：由 code.js 收集后传入，不依赖 AI 判断，确保「清理所有隐藏节点」
+        const hiddenDeleteOps = (report.hiddenNodeIds || []).map((id) => ({ action: "delete", nodeId: id }));
+
+        // 命名体系说明（约定 > 配置：模型只打前缀语义名，bg/img/icon 文件夹由 code.js 按前缀确定性合并）
+        const NAMING_BLOCK = [
+          "【命名体系】表单 form-、列表 list-、卡片 card-、项 item-（重复子项 item-<语义>-N）、组件 cp-（仅最外层唯一业务组件；【本次选区根节点即组件根，必须命名 cp-<语义>】，重复子结构一律 item-/card-/list-，绝不用 cp-）。",
+          "【组件骨架·根级必守】组件根的直接子节点固定三段式：① 标题区 → header（标题文本 + header-slot-* 插槽）；② 背景/装饰层 → bg；③ 其余内容区域 → slot-con 相关内容名（slot-con / list-xxx / item-xxx 等）；【插件会在 Figma 里真建 slot-con Group】把第③类（含视觉分析的多个内容模块）统一收进去，结构契约也会归一化为一个 slot-con 容器，下游按单个内容区生成；你只需保证命名清晰，绝不输出 group/reorder。header 内插槽按位置命名 header-title / header-slot-left / header-slot-center / header-slot-right（右侧通常放按钮、tab、图例、时间筛选），下游会按这些名字预留 <slot>。只做命名，不要输出 group/reorder，插件会按几何确定性收纳。",
+          "【循环组件·重点】list-*/cards-* 等列表容器内的重复子项，一律命名 item-<语义>-1..N（或 card-<语义>-1..N），并保证同组子项结构完全一致；严禁给每个子项起不同语义名（会误导下游生成 N 份重复代码）。Group 只表达包含、不表达可迭代，因此「相同前缀 + 递增序号 + 同构子树」是让大模型识别 v-for/map 的必需信号；插件会在结构契约里把同构项折叠为 [循环 ×N] 并只展开首项。",
+          "背景：插件自动把同级背景/装饰层合并为语义文件夹 bg-<父容器语义>（如 bg-card-traffic-flow），该文件夹整体导出 PNG@2x、内部节点不单独导出；背景图/装饰层命名 bg-<角色>（bg-card/bg-glow/bg-ring/bg-panel…）；纯装饰发光环/光晕/纹理归入 bg-，不算 icon。",
+          "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」。【假图表·重点】由零散 VECTOR 弧线 / 刻度 / 光晕拼成、没有坐标轴与数据系列的静态仪表盘、环形进度、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 item-<语义>（如 item-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（header/slot-con/legend/axis…），同类多实例加序号。",
+          "【核心规则·约定>配置】1) 严禁输出 group：背景/静态图/图标文件夹由插件按几何与前缀确定性收纳，你只需给节点打语义名；2) 只给「有意义层级节点」和「同级背景/图标/静态图」打语义名，TEXT 节点不改名；3) 环形仪表/图表/图标内部最小装饰元素（arc/tick/dot/line/vector/union/subtract/boolean）【只命名最外层容器】，内部一律不逐个命名、保留默认名；插件会把这些矢量按容器确定性合并成 img-/bg- 资源文件夹并整体导出，你不需要输出 group、也不要给内部矢量打 bg-/img- 前缀；TEXT 数值与标签必须保留为独立 TEXT 节点，绝不并入图片（下游要生成动态数据）；3.1) 但【与 TEXT 同级、独立表达语义的小图标】（趋势箭头/状态箭头/方向标等）不属于「内部最小装饰」，必须命名为 icon-<语义>（如 icon-arrow-up），严禁跳过；只有图表/环形仪表【容器内部】的 arc/tick 才跳过；4) 严禁输出 reorder：背景合并与从上到下排序由插件按真实 y 坐标确定性完成，模型只做命名与必要归位（reparent）、删冗余副本（delete）。",
+        ].join("\n");
+
+        if (useVision) {
+          // 视觉模式也按「顶层分区」分片：每段带渲染图单独请求，避免整棵树一次性返回巨型 JSON 被 max_tokens 截断（这也是之前 3051 字被截断的根因）。
+          // P0-b：开启布局分析时，模型额外输出 layoutIntent —— 只描述「是什么/属于哪个模块/是否共享/上下顺序」，
+          // 绝不输出结构变更；归组与排序由 code.js 按真实几何确定性完成（交叉验证，防视觉幻觉）。
+          const INTENT_BLOCK = useLayoutIntent ? [
+            "【布局意图·必须额外输出】在 JSON 里再输出 layoutIntent 字段：{\"modules\":[{\"order\":1,\"name\":\"<语义名>\",\"nodeIds\":[\"<id>\",...]}],\"decorations\":[{\"nodeId\":\"<id>\",\"role\":\"decoration|content\",\"shared\":false,\"spans\":[1,2]}]}。",
+            "modules：对照渲染图，按视觉从上到下给本段的主要模块分组，order 从 1 递增，nodeIds 只填该模块的主要容器 id（不必列全子节点）。",
+            (opts.groupModules ? "【模块容器】name 必须输出小写英文语义 slug（如 response-time / report-efficiency），不要用中文；每个 module 的 nodeIds 至少填 2 个【同父级、视觉上同一行】的主要容器 id（左图右卡这类并排元素），插件会把它们合成 item-<slug>-<order> 容器供下游生成组件；跨父级/不同行/没把握的宁可不填，插件会因几何校验跳过。" : ""),
+            "decorations：标出你判定的背景/装饰层节点（role=decoration），以及视觉上贯穿多个模块、不属于任何单一模块的共享装饰（shared=true，spans 填它跨越的模块 order）；判为业务内容的填 role=content。",
+            "【红线】layoutIntent 只是描述，不要输出任何排序/成组/移动/插入序号；插件会用真实 y 坐标排序并按几何合并背景。视觉判断与几何冲突时以几何为准，因此只填你有把握的节点，无把握就留空数组。",
+          ].join("\n") : "";
+          const sysPrompt = [
+            "你是 Figma 设计稿整理助手，可以看渲染图。用户给你：① 一张渲染图（设计稿外观）；② 某一段图层树 JSON（字段 id 节点id, t 类型, n 名称, w/h 宽高, c 文本内容, f 填充类型, y 纵坐标, path 祖先名称链）。",
+            useLayoutIntent
+              ? '请对照渲染图的视觉结构，给本段节点产出【语义命名 + 必要归位 + 布局意图】方案，严格输出 JSON：{"ops":[{"action":"rename"|"reparent"|"delete","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}],"layoutIntent":{"modules":[],"decorations":[]}}'
+              : '请对照渲染图的视觉结构，给本段节点产出【语义命名 + 必要归位】方案，严格输出 JSON：{"ops":[{"action":"rename"|"reparent"|"delete","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}]}',
+            "对照渲染图识别：默认名容器（Frame/Group/INSTANCE + 数字）描绘小图标→icon-<语义slug>（如 icon-building/icon-alarm）；主背景/装饰层→bg 或 bg-<角色>；内容图片→img-<角色>；【严格区分图表】只有带坐标轴/图例/多组数据系列、适合用图表库重建的才是真图表→只命名最外层容器为 @echarts/<类型>（必须 @ 开头，严禁 echarts-gauge 这种写法）；由零散矢量弧线/刻度/光晕拼成的静态仪表盘、环形进度、装饰图形【不是图表】→最外层命名 item-<语义>（如 item-disposal-rate-gauge），绝不写 echarts-/chart-/gauge-；内部 arc/tick/dot/vector 等最小元素一律不逐个命名，由插件自动合并成资源文件夹；TEXT 节点不改名。",
+            namingRef,
+            NAMING_BLOCK,
+            INTENT_BLOCK,
+            "只输出 JSON 不要解释；本段只是完整图层树的一段，只针对本段给出的节点产出方案，不要推测段外节点。",
+          ].join("\n");
+          const shards = shardNodes(report.nodes, report.rootId, 100);
+          let allOps = [];
+          const rawParts = [];
+          const intentModules = [];      // P0-b：跨分片汇总的布局意图
+          const intentDecorations = [];
+          for (let s = 0; s < shards.length; s++) {
+            const shard = shards[s];
+            if (typeof showAiProgress === "function")
+              showAiProgress({ pct: 25 + Math.round((s / shards.length) * 65), msg: `视觉分析（第 ${s + 1}/${shards.length} 段，本段 ${shard.length} 节点）...` });
+            const userContent = [
+              { type: "image_url", image_url: { url: "data:image/png;base64," + opts.imageData } },
+              { type: "text", text: JSON.stringify({ root: { id: report.rootId, name: report.rootName }, segment: { index: s + 1, total: shards.length }, nodes: shard.map(trimNode) }) },
+            ];
+            const data = await llmRequest(cfg, [
+              { role: "system", content: sysPrompt },
+              { role: "user", content: userContent },
+            ], { temperature: 0.2, max_tokens: Math.min(6000, 1024 + shard.length * 30), modelOverride: model, disableThinking: cfg.disableThinking !== false });
+            const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+            const content = ((msg.content) || "").trim();
+            if (!content) {
+              if (msg.reasoning_content) rawParts.push(`【第 ${s + 1}/${shards.length} 段】只返回思考内容（思考未真正关闭；请确认 socket-server 已重启 / 网关支持关闭参数）`);
+              else rawParts.push(`【第 ${s + 1}/${shards.length} 段】返回为空`);
+              continue;
+            }
+            const plan = extractJson(content);
+            if (plan) {
+              // 红线：reorder 一律丢弃（排序由 code.js 按真实 y 完成），避免与确定性后处理打架
+              const valid = (plan.ops || []).filter((o) =>
+                (o.action === "rename" && o.nodeId && o.name) ||
+                (o.action === "reparent" && o.nodeId && o.parentId) ||
+                (o.action === "delete" && o.nodeId)
+              );
+              // P0-b：收集布局意图，只保留结构合法的条目，nodeIds 限定在本段内（防幻觉越界）
+              if (useLayoutIntent && plan.layoutIntent && typeof plan.layoutIntent === "object") {
+                const inShard = new Set(shard.map((n) => n.id));
+                for (const m of (plan.layoutIntent.modules || [])) {
+                  if (!m || !Array.isArray(m.nodeIds)) continue;
+                  const ids = m.nodeIds.filter((id) => inShard.has(id));
+                  if (ids.length) intentModules.push({ order: m.order, name: m.name || "", nodeIds: ids });
+                }
+                for (const d of (plan.layoutIntent.decorations || [])) {
+                  if (d && d.nodeId && inShard.has(d.nodeId) && (d.role === "decoration" || d.role === "content"))
+                    intentDecorations.push({ nodeId: d.nodeId, role: d.role, shared: !!d.shared, spans: d.spans || [] });
+                }
+              }
+              if (valid.length === 0 && !(useLayoutIntent && (intentModules.length || intentDecorations.length))) {
+                const def = countDefaultNames(shard);
+                rawParts.push(`【第 ${s + 1}/${shards.length} 段】⚠️ 未产出有效操作` + (def ? `，但该段仍有 ${def} 个默认名节点未处理（模型可能漏处理，请检查）` : "（该段节点已规范，正常）"));
+              } else {
+                allOps = allOps.concat(valid);
+                rawParts.push(`【第 ${s + 1}/${shards.length} 段视觉 AI 返回】\n` + content);
+              }
+            } else {
+              rawParts.push(`【第 ${s + 1}/${shards.length} 段】未解析出 JSON: ${content.slice(0, 120)}`);
+            }
+          }
+          const hasIntent = useLayoutIntent && (intentModules.length || intentDecorations.length);
+          if (!allOps.length && !hiddenDeleteOps.length && !hasIntent) throw new Error("视觉整理未产出任何有效操作。" + (rawParts.length ? "\n" + rawParts.join("\n") : ""));
+          const plan = { ops: hiddenDeleteOps.concat(allOps) };
+          if (hasIntent) plan.layoutIntent = { modules: intentModules, decorations: intentDecorations };
+          return { plan, rawContent: rawParts.join("\n\n") || "视觉整理完成" };
+        }
+
+        const sysPrompt = [
+          "你是 Figma 设计稿整理助手。用户给出图层树 JSON（字段: id 节点id, t 类型, n 名称, w/h 宽高, c 文本内容, f 填充类型, path 祖先名称链从根到父级）。",
+          '请为其中默认名节点（Frame/Group/INSTANCE/Rectangle/Ellipse + 数字）产出【语义命名 + 必要归位】方案，严格输出 JSON：{"ops":[{"action":"rename"|"delete"|"reparent","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}]}',
+          "图标识别：默认名容器（t 为 FRAME/GROUP/INSTANCE 且名称是 Frame/Group/INSTANCE + 数字）符合「尺寸小（w 与 h 均 ≤ 90）、子节点是矢量/布尔/图形、无大段文本」判定为图标→icon-<语义slug>；纯装饰发光环/光晕/纹理（无语义、仅氛围）归入 bg-，不算 icon。",
+          "背景识别：RECTANGLE 节点无文本(c 空)、f 含 SOLID、尺寸接近父容器（w 或 h ≥ 父 80%）或位于同层最底部=背景→bg 或 bg-<角色>；图表/图标内部最小装饰（宽<15 的 Vector/Frame）跳过不逐个命名。",
+          namingRef,
+          NAMING_BLOCK,
+          "判定规则：结合 path 与子树文本推断语义（中文译英文 slug）；TEXT 节点不改名；无把握的跳过宁缺勿滥；只输出 JSON 不要解释。背景合并与从上到下排序由插件按真实几何确定性完成，你不需要（也不应该）输出排序/成组操作；装饰微件保留默认名不影响合并。本次请求只是完整图层树的一段（分段发送），只针对本段给出的节点产出方案，不要推测段外节点。",
+        ].join("\n");
+
+        const shards = shardNodes(report.nodes, report.rootId, 100);
+        let allOps = [];
+        const rawParts = [];
+        for (let s = 0; s < shards.length; s++) {
+          const shard = shards[s];
+          if (typeof showAiProgress === "function")
+            showAiProgress({ pct: 25 + Math.round((s / shards.length) * 65), msg: `AI 分析中（第 ${s + 1}/${shards.length} 段，本段 ${shard.length} 节点）...` });
+          const userContent = JSON.stringify({
+            root: { id: report.rootId, name: report.rootName },
+            segment: { index: s + 1, total: shards.length },
+            nodes: shard.map(trimNode),
+          });
+          const data = await llmRequest(cfg, [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userContent },
+          ], { temperature: 0.2, max_tokens: Math.min(6000, 1024 + shard.length * 30), disableThinking: cfg.disableThinking !== false });
+          const content = ((data.choices && data.choices[0] && data.choices[0].message.content) || "").trim();
+          if (!content) {
+            rawParts.push(`【第 ${s + 1}/${shards.length} 段】AI 返回为空`);
+            continue;
+          }
+            const plan = extractJson(content);
+          if (plan) {
+            const ops = (plan.ops || []).filter((o) =>
+              (o.action === "rename" && o.nodeId && o.name) ||
+              (o.action === "delete" && o.nodeId) ||
+              (o.action === "reparent" && o.nodeId && o.parentId)
+            );
+            if (ops.length === 0) {
+              const def = countDefaultNames(shard);
+              rawParts.push(`【第 ${s + 1}/${shards.length} 段】⚠️ 未产出有效操作` + (def ? `，但该段仍有 ${def} 个默认名节点未处理（模型可能漏处理，请检查）` : "（该段节点已规范，正常）"));
+            } else {
+              allOps = allOps.concat(ops);
+              rawParts.push(`【第 ${s + 1}/${shards.length} 段 AI 返回】\n` + content);
+            }
+          } else {
+            rawParts.push(`【第 ${s + 1}/${shards.length} 段】未解析出 JSON: ${content.slice(0, 120)}`);
+          }
+        }
+        const byId = new Map();
+        for (const op of allOps) byId.set(op.nodeId, op);
+        for (const op of hiddenDeleteOps) byId.set(op.nodeId, op); // 隐藏节点删除优先（覆盖同名条目）
+        const ops = Array.from(byId.values());
+        return { plan: { ops }, rawContent: rawParts.join("\n\n") };
+      }
+
+      // 统一的插件消息入口
+      window.onmessage = (event) => {
+        const message = event.data.pluginMessage;
+        if (!message) return;
+
+        switch (message.type) {
+          case "selection-state": {
+            const nameEl = document.getElementById("sel-name");
+            const box = document.getElementById("sel-state");
+            if (message.count > 0 && message.name) {
+              nameEl.textContent =
+                message.name +
+                (message.nodeType ? "（" + message.nodeType + "）" : "") +
+                (message.id ? " #" + message.id : "");
+              if (message.live) {
+                nameEl.style.color = "#4ade80";
+                box.style.background = "#1a472a";
+              } else {
+                nameEl.style.color = "#ffcc66";
+                box.style.background = "#473a1a";
+              }
+            } else {
+              nameEl.textContent = "未检测到（请先在画布选中框架）";
+              nameEl.style.color = "#ff9999";
+              box.style.background = "#471a1a";
+            }
+            break;
+          }
+          case "ai-progress":
+            showAiProgress(message);
+            break;
+          case "structure-plan": {
+            const box = document.getElementById("structure-plan-box");
+            const el = document.getElementById("structure-plan-text");
+            box.classList.remove("hidden");
+            el.textContent = message.ok ? message.text : ("❌ " + message.error);
+            if (message.ok) {
+              try {
+                const al = document.getElementById("ai-analysis");
+                const ab = document.getElementById("ai-analysis-box");
+                if (al) al.textContent += "\n\n【结构方案（只读预览）】\n" + message.text;
+                if (ab) { ab.classList.remove("hidden"); ab.open = true; }
+              } catch (e) {}
+            }
+            break;
+          }
+          case "structure-contract": {
+            const box = document.getElementById("contract-box");
+            const el = document.getElementById("contract-text");
+            box.classList.remove("hidden");
+            if (!message.ok) {
+              el.textContent = "❌ " + message.error;
+              currentContract = null;
+              setMvgoTip("", false);
+              break;
+            }
+            currentContract = message;
+            el.textContent = message.text;
+            document.getElementById("contract-meta").textContent =
+              (message.nodes || 0) + " 行"
+              + (message.loops ? " · " + message.loops + " 组循环" : "")
+              + (message.truncated ? " · 已截断" : "");
+            const fu = document.getElementById("mvgo-figma-url");
+            if (fu && message.figmaUrl) fu.value = message.figmaUrl;
+            break;
+          }
+          case "ai-organize-result":
+            showAiResult(message);
+            break;
+          case "ai-config-saved":
+            aiConfigStatus.innerHTML = message.ok
+              ? "<span style='color:#4ade80'>✅ 已保存并验证可用</span>"
+              : "<span style='color:#ff9999'>保存失败: " + message.error + "</span>";
+            break;
+          case "ai-config-loaded":
+            if (message.cfg && message.cfg.baseUrl) {
+              document.getElementById("ai-base-url").value = message.cfg.baseUrl || "";
+              document.getElementById("ai-api-key").value = message.cfg.apiKey || "";
+              document.getElementById("ai-model").value = message.cfg.model || "";
+              document.getElementById("ai-vision-model").value = message.cfg.visionModel || "";
+              document.getElementById("ai-use-vision").checked = !!message.cfg.useVision;
+              // v20261110.14：用新键 autoLayoutIntent 绕开旧配置里已存下的 useLayoutIntent:false
+              // （与 v20261110.8 的 autoModuleGroups 同理）；旧配置无此键 ⇒ 默认开启。
+              document.getElementById("ai-use-layout-intent").checked = message.cfg.autoLayoutIntent !== false;
+              document.getElementById("ai-set-export").checked = message.cfg.setExport !== false; // 默认开启
+              document.getElementById("ai-group-modules").checked = message.cfg.autoModuleGroups !== false; // v20261110.8 起默认开启（旧配置无此键）
+              document.getElementById("ai-disable-thinking").checked = message.cfg.disableThinking !== false;
+              document.getElementById("ai-naming-ref").value = message.cfg.namingRef || "";
+              aiConfigStatus.textContent = "已加载保存的配置";
+            }
+            break;
+          case "ai-scan-done": {
+            const useVision = message.useVision;
+            const modelName = useVision && message.cfg.visionModel ? message.cfg.visionModel : message.cfg.model;
+            showAiProgress({ pct: 20, msg: "AI 分析中（" + modelName + "），共 " + message.report.total + " 节点" + (useVision ? "，含渲染图（视觉定层级/顺序）" : "，已分段发送…") });
+            // 分析中即显示日志框（占位），避免误以为没有日志
+            {
+              const analysisEl = document.getElementById("ai-analysis");
+              const analysisBox = document.getElementById("ai-analysis-box");
+              analysisEl.textContent =
+                (useVision
+                  ? "⏳ 已向 " + modelName + " 发送渲染图 + 图层树（视觉模式：按顶层分区分片对照图定层级/顺序/命名）…\n"
+                  : "⏳ 已向 " + modelName + " 发送请求（共 " + message.report.total + " 节点，按顶层分区自动分段，避免网关上游超时 502）…\n") +
+                "\n服务端终端会同步打印 [llm-proxy] 请求/响应 日志（含 AI 返回预览，不含 Key）。";
+              analysisBox.classList.remove("hidden");
+              analysisBox.open = true;
+            }
+            callLLM(message.cfg, message.report, {
+              useVision: message.useVision,
+              useLayoutIntent: message.useLayoutIntent,
+              groupModules: message.groupModules,
+              imageData: message.imageData,
+            })
+              .then((result) => {
+                const plan = result.plan;
+                // 分析日志：AI 原始返回 + 解析出的操作方案，面板内可查看
+                const analysisEl = document.getElementById("ai-analysis");
+                const analysisBox = document.getElementById("ai-analysis-box");
+                analysisEl.textContent =
+                  "【AI 原始返回】\n" + (result.rawContent ? result.rawContent : "(无内容)") +
+                  "\n\n【解析出的操作方案】\n" + JSON.stringify(plan, null, 2);
+                analysisBox.classList.remove("hidden");
+                analysisBox.open = true;
+                const ops = (plan.ops || []).filter((o) => {
+                  if (o.action === "rename") return o.nodeId && o.name;
+                  if (o.action === "reorder") return o.nodeId && Number.isFinite(Number(o.index));
+                  if (o.action === "reparent") return o.nodeId && o.parentId;
+                  if (o.action === "group") return Array.isArray(o.nodeIds) && o.nodeIds.length >= 2;
+                  if (o.action === "delete") return !!o.nodeId;
+                  return false;
+                });
+                // P0-a 的确定性后处理只需 rootId 即可运行；仅有 layoutIntent 也允许执行（纯整理布局）
+                const applyMsg = {
+                  type: "apply-ai-ops", ops,
+                  total: message.report.total,
+                  rootId: message.report.rootId,
+                  setExport: message.setExport !== false,
+                  groupModules: !!message.groupModules,
+                };
+                if (plan.layoutIntent) {
+                  applyMsg.layoutIntent = plan.layoutIntent;
+                  applyMsg.useLayoutIntent = true;
+                }
+                if (ops.length === 0 && !applyMsg.layoutIntent && !applyMsg.setExport) {
+                  showAiResult({ ok: false, error: "AI 未给出任何有效操作（可能图层已规范命名/层级清晰）" });
+                  return;
+                }
+                showAiProgress({ pct: 30, msg: "AI 完成，共 " + ops.length + " 条操作，开始执行（含确定性布局整理）..." });
+                parent.postMessage({ pluginMessage: applyMsg }, "*");
+              })
+              .catch((e) => showAiResult({ ok: false, error: e.message }));
+            break;
+          }
+        }
+      };
+
+      // UI 就绪后主动去向 code.js 要一次选区（保证响应被收到，避免早期广播被丢）
+      parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
+
+      // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
+      const PLUGIN_VERSION = "20261110.21";
+      try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
+
+      // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
+      window.addEventListener("beforeunload", () => {
+        try { if (state.socket) state.socket.close(); } catch (e) {}
+        try { parent.postMessage({ pluginMessage: { type: "clear-cache" } }, "*"); } catch (e) {}
+      });
+    </script>
+  </body>
+</html>
