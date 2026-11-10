@@ -162,6 +162,7 @@ figma.ui.onmessage = async (msg) => {
     // 纯内存、不写文件、不缓存；由 UI 直接随 mvgo 生成请求进 prompt。
     case "export-structure-contract": {
       try {
+        const cOpts = msg || {};
         let sel = figma.currentPage.selection;
         if (!sel || sel.length === 0) sel = lastNonEmptySelection;
         if (!sel || sel.length === 0) {
@@ -174,7 +175,11 @@ figma.ui.onmessage = async (msg) => {
           figma.ui.postMessage({ type: "structure-contract", ok: false, error: "选中的节点不是容器，请选中框架 / 分组" });
           break;
         }
-        const contract = buildStructureContract(root);
+        // v20261110.28：nodeId 默认关闭，UI 开关显式开启；版本由 UI 的 PLUGIN_VERSION 单一来源传入。
+        const contract = buildStructureContract(root, {
+          includeIds: !!cOpts.includeIds,
+          version: String(cOpts.version || SCHEMA_VERSION),
+        });
         let fileKey = "";
         try { fileKey = String(figma.fileKey || ""); } catch (e) {}
         const nodeId = String(root.id || "").replace(/:/g, "-");
@@ -184,7 +189,8 @@ figma.ui.onmessage = async (msg) => {
         figma.ui.postMessage({
           type: "structure-contract", ok: true,
           text: contract.text, nodes: contract.nodes, truncated: contract.truncated,
-          loops: contract.loops, slots: contract.slots,
+          loops: contract.loops, slots: contract.slots, sections: contract.sections,
+          omitted: contract.omitted, includeIds: !!cOpts.includeIds, version: contract.version,
           rootName: String(root.name || ""), fileKey: fileKey, nodeId: nodeId, figmaUrl: figmaUrl,
         });
       } catch (error) {
@@ -1856,6 +1862,9 @@ function qualityDiffText(before, after) {
 // v20261110.20 结构契约：整理结果 → 下游代码生成模型的唯一载体。
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
+// v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
+const SCHEMA_VERSION = "20261110.28";
+
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
   "# 每行是一个节点名；缩进表示父子包含关系；同级顺序即视觉从上到下（已按 y/x 排序，与 Figma 图层面板无关）。",
@@ -1875,6 +1884,14 @@ const CONTRACT_HEADER = [
   "# 动态数据槽：TEXT 行尾 [data:value|label|unit \"内容摘要\"] 表示可变数据，",
   "#   生成时绑定 props / 接口字段，绝不把字面量写死；data:label 多为静态文案可保留。",
   "# 严格按此层级划分组件边界，不要臆造此树中不存在的节点、模块或数据。",
+  // v20261110.28 P0-1/P0-3：契约是结构约束，不是需求文档；防止文档子管线把它当业务需求分析，
+  // 也防止「视觉样式/布局让位设计稿」被泛化成整套骨架让位（同 2026-11-02 tab 事故）。
+  "# 本段是【结构契约】，不是需求文档：禁止据此分析业务需求、臆造交互事件或数据接口。",
+  "# 优先级例外：本段的结构约束（组件边界/分区划分/循环判定/图表 vs 静态图形/资源实现）等同 Figma @技术栈锚点契约，不让位设计稿；",
+  "#   仅颜色、字号、间距等纯视觉样式可让位设计稿。",
+  // v20261110.28 P0-2：nodeId 可选输出，给管线按 id 回填已有 section。
+  "# 开启「附带节点 ID」时，行尾 #1-283 是 Figma nodeId：用于回填已有同名 section，不要据此新建节点；虚拟骨架行（header/bg/slot-con/section-* 合成行）无 ID。",
+  "# 头部 # @meta 是机器可读摘要；truncated=true 或出现 [省略 N 行] 表示树不完整，勿据此推断缺失模块。",
 ].join("\n");
 
 function cleanContractName(n) {
@@ -1983,15 +2000,30 @@ function buildStructureContract(root, opts) {
   const maxDepth = o.maxDepth || 12;
   const maxChars = o.maxChars || 18000; // requirementDocText 在 mvgo 侧上限 20000 字
   const raw = !!o.raw; // raw=true：原样镜像图层树（不做骨架归一化），供对照与回归
+  const version = String(o.version || SCHEMA_VERSION);
+  const includeIds = !!o.includeIds; // v20261110.28 P0-2：默认关，UI 开关显式开启
   const lines = [];
   let count = 0, chars = 0, truncated = false, loops = 0, slots = 0;
+  let sections = 0, omitted = 0, omittedDepth = -1;
   const slotBudget = { left: 3000 }; // 摘要总预算：超出后只留 [data:xxx] 标签
 
-  function push(name, depth) {
-    if (truncated) return;
-    if (count >= maxNodes || depth > maxDepth) { truncated = true; return; }
-    const line = "  ".repeat(depth) + "- " + name;
-    if (chars + line.length + 1 > maxChars) { truncated = true; return; }
+  // 截断是【骨架优先】：header/bg/slot-con 三段先 push，超限只会砍掉深层内容；
+  // 这里累计被跳过的行数与起始深度，末尾输出显式警示，不再静默丢尾部。
+  function markOmitted(depth) {
+    omitted++;
+    if (omittedDepth < 0) omittedDepth = depth;
+  }
+  function push(name, depth, node) {
+    if (truncated) { markOmitted(depth); return; }
+    if (count >= maxNodes || depth > maxDepth) { truncated = true; markOmitted(depth); return; }
+    let line = "  ".repeat(depth) + "- " + name;
+    // 只有真实 Figma 节点带 id；header/bg/slot-con/section-* 等虚拟骨架行不带。
+    if (includeIds && node) {
+      let id = "";
+      try { id = String((node && node.id) || "").replace(/:/g, "-"); } catch (e) {}
+      if (id) line += "  #" + id;
+    }
+    if (chars + line.length + 1 > maxChars) { truncated = true; markOmitted(depth); return; }
     lines.push(line);
     chars += line.length + 1;
     count++;
@@ -2009,8 +2041,11 @@ function buildStructureContract(root, opts) {
       if (g) {
         walkNode(kids[i], depth);
         const first = g[0], last = g[g.length - 1];
-        const label = cleanContractName(first.node).replace(/[-_]\d+$/, "") + "-" + (first.index + 1) + ".." + last.index;
-        push(label + "  [循环 ×" + g.length + "]", depth);
+        // v20261110.28 P1-3：旧标签从 first.index+1 起、[循环 ×N] 又含首项，模型会误判成 N+1 份。
+        // 改为 1..N 全区间 + 明确「首项即模板」，与已单独展开的首行语义一致。
+        const base = cleanContractName(first.node).replace(/[-_]\d+$/, "");
+        const label = base + "-" + first.index + ".." + last.index;
+        push(label + "  [循环 ×" + g.length + "，首项即模板]", depth);
         loops++;
         continue;
       }
@@ -2023,13 +2058,13 @@ function buildStructureContract(root, opts) {
     try { if (n.visible === false) return; } catch (e) {}
     const slot = describeDataSlot(n, slotBudget);
     if (slot) slots++;
-    push(cleanContractName(n) + slot, depth);
+    push(cleanContractName(n) + slot, depth, n);
     emitChildren(n, depth + 1);
   }
 
   // 组件根级骨架：cp- 根 → header / bg / slot-con 三段；header 内标注插槽。
   function walkSkeleton(rootNode) {
-    push(cpComponentName(rootNode), 0);
+    push(cpComponentName(rootNode), 0, rootNode);
     const kids = visibleChildren(rootNode);
     // v20261110.24：只读导出也要归一化 —— 未整理的文件常有多个 header-* / slot-con-*，
     // 契约里只能有一个根 header；其余副标题按 section-title-* 输出在 slot-con 内。
@@ -2063,7 +2098,7 @@ function buildStructureContract(root, opts) {
         }
         const slot = describeDataSlot(it.node, slotBudget);
         if (slot) slots++;
-        push(out + slot, 2);
+        push(out + slot, 2, it.node);
         emitChildren(it.node, 3);
       });
     }
@@ -2082,16 +2117,18 @@ function buildStructureContract(root, opts) {
       // .25 已保证 body 顺序 = 视觉从上到下；≥2 个锚点才分段，单标题不制造假层级。
       const nameOf = (b) => b.forced || cleanContractName(b.node);
       const emitItem = (b, d) => {
-        if (b.forced) { push(b.forced + "  [data:label]", d); emitChildren(b.node, d + 1); }
+        if (b.forced) { push(b.forced + "  [data:label]", d, b.node); emitChildren(b.node, d + 1); }
         else walkNode(b.node, d);
       };
       const anchors = [];
       body.forEach((b, i) => { if (/^section-title(?:-|$)/i.test(nameOf(b))) anchors.push(i); });
       // 已经真分层的容器（内部自带 section-title）不再造虚拟层，避免重复层级
-      const hasRealGroups = body.some(b =>
+      const realGroups = body.filter(b =>
         /^(item|card|list|form|section|graphic)-/i.test(cleanContractName(b.node)) &&
         visibleChildren(b.node).some(c => isSectionTitle(c)));
-      if (anchors.length < 2 || hasRealGroups) {
+      // v20261110.28 P1-1：分区数进 @meta，供管线做生成后计数校验。
+      sections = (anchors.length >= 2 && !realGroups.length) ? anchors.length : realGroups.length;
+      if (anchors.length < 2 || realGroups.length) {
         for (const b of body) emitItem(b, 2);
       } else {
         let cur = -1;
@@ -2106,12 +2143,30 @@ function buildStructureContract(root, opts) {
 
   if (raw) walkNode(root, 0);
   else walkSkeleton(root);
+  // v20261110.28 P1-1：质量评分与结构统计一并进契约头，管线可据此决定信任权重 / 做门禁。
+  let quality = -1;
+  try { quality = collectQualityMetrics(root).score; } catch (e) {}
+  const meta = "# @meta version=" + version
+    + "; sections=" + sections + "; loops=" + loops + "; slots=" + slots
+    + "; nodes=" + count + "; truncated=" + truncated
+    + "; omitted=" + omitted + (omittedDepth >= 0 ? "; omittedDepth=" + omittedDepth : "")
+    + "; ids=" + (includeIds ? "on" : "off")
+    + "; quality=" + quality + "/100";
+  const tail = truncated
+    ? "\n\n(已达上限，其余节点省略)\n# [省略 " + omitted + " 行 @ 深度 "
+      + (omittedDepth >= 0 ? omittedDepth : "?") + "；结构不完整，勿据此推断缺失模块]"
+    : "";
   return {
-    text: CONTRACT_HEADER + "\n\n" + lines.join("\n") + (truncated ? "\n\n(已达上限，其余节点省略)" : ""),
+    text: CONTRACT_HEADER + "\n" + meta + "\n\n" + lines.join("\n") + tail,
     nodes: count,
     truncated: truncated,
     loops: loops,
     slots: slots,
+    sections: sections,
+    omitted: omitted,
+    quality: quality,
+    version: version,
+    includeIds: includeIds,
     raw: raw,
   };
 }

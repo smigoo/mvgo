@@ -152,6 +152,10 @@
                         <option value="vue3">vue3</option>
                       </select>
                     </div>
+                    <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:11px;color:#bbb;">
+                      <input type="checkbox" id="mvgo-include-ids" style="margin:0;" />
+                      附带 Figma 节点 ID（管线按 ID 回填已有分区）
+                    </label>
                   </div>
                 </details>
               </div>
@@ -441,11 +445,21 @@
           navigator.clipboard.writeText(text).then(() => done("已复制 " + text.length + " 字"), fallback);
         else fallback();
       }
-      document.getElementById("btn-export-contract").addEventListener("click", () => {
+      // v20261110.28：契约格式版本由 PLUGIN_VERSION 单一来源下发；nodeId 开关显式开启。
+      function requestContract() {
         document.getElementById("contract-box").classList.remove("hidden");
         document.getElementById("contract-text").textContent = "⏳ 正在读取整理后的图层树...";
         setMvgoTip("");
-        parent.postMessage({ pluginMessage: { type: "export-structure-contract" } }, "*");
+        const cb = document.getElementById("mvgo-include-ids");
+        parent.postMessage({ pluginMessage: {
+          type: "export-structure-contract",
+          includeIds: !!(cb && cb.checked),
+          version: PLUGIN_VERSION,
+        } }, "*");
+      }
+      document.getElementById("btn-export-contract").addEventListener("click", requestContract);
+      document.getElementById("mvgo-include-ids").addEventListener("change", () => {
+        if (currentContract && currentContract.text) requestContract();
       });
       document.getElementById("btn-copy-contract").addEventListener("click", copyContractText);
       document.getElementById("btn-push-mvgo").addEventListener("click", async () => {
@@ -459,10 +473,14 @@
           || (currentContract.figmaUrl || "");
         if (!base) { setMvgoTip("请填 mvgo 地址", false); return; }
         if (!figmaUrl) { setMvgoTip("缺少 Figma 链接（Max 档必需）", false); return; }
+        // v20261110.28 P1-5：契约首行是 cp-<语义>（已归一化），优先用它做组件名，
+        // 避免把 Figma 原始中文名 / 带空格名当成 componentName 传下游。
+        const cpMatch = text.match(/^-\s+(cp-[^\s#]+)/m);
+        const componentName = (cpMatch && cpMatch[1]) || currentContract.rootName || "figma-component";
         const body = {
           figmaUrl: figmaUrl,
           componentType: componentType,
-          componentName: currentContract.rootName || "figma-component",
+          componentName: componentName,
           requirementDocText: text,
         };
         if (groupId) body.groupId = groupId;
@@ -1056,10 +1074,12 @@
             currentContract = message;
             el.textContent = message.text;
             document.getElementById("contract-meta").textContent =
-              (message.nodes || 0) + " 行"
+              (message.version || "") + " · " + (message.nodes || 0) + " 行"
+              + (message.sections ? " · " + message.sections + " 分区" : "")
               + (message.loops ? " · " + message.loops + " 组循环" : "")
               + (message.slots ? " · " + message.slots + " 数据槽" : "")
-              + (message.truncated ? " · 已截断" : "");
+              + (message.includeIds ? " · 带节点 ID" : "")
+              + (message.truncated ? " · 已截断 " + (message.omitted || 0) + " 行" : "");
             const fu = document.getElementById("mvgo-figma-url");
             if (fu && message.figmaUrl) fu.value = message.figmaUrl;
             break;
@@ -1158,7 +1178,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.27";
+      const PLUGIN_VERSION = "20261110.28";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
