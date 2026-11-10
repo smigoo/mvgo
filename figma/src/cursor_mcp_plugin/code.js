@@ -230,6 +230,7 @@ figma.ui.onmessage = async (msg) => {
           graphicRunFolders: 0, graphicRunMerged: 0, graphicRunFailed: 0,
           slotConCreated: 0, slotConReused: 0, slotConMerged: 0, slotConModules: 0,
           slotConOutside: 0, slotConFailed: 0,
+          subHeadersDemoted: 0, subSlotConsDemoted: 0,
         };
         const intentCtx = { intentMap: new Map(), moduleOrder: new Map(), sharedIds: new Set(), useLayoutIntent: false };
         let planPreview = null;
@@ -253,6 +254,8 @@ figma.ui.onmessage = async (msg) => {
           try { organizeLayout(container, summary, intentCtx); }
           catch (e3) { summary.layoutErrors++; summary.layoutErrorMsg = String((e3 && e3.message) || e3).slice(0, 200); }
         }
+        // v20261110.24：先归一化根级骨架命名（唯一 header / 唯一 slot-con），再建组。
+        try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
         // v20261110.21：收尾建组件骨架 —— 根下 header/bg 保持平级，其余内容（含所有模块 Group）收进一个真 slot-con Group。
         try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
         if (setExport) { try { applyAssetExports(root, summary); } catch (e4) {} }
@@ -289,6 +292,7 @@ figma.ui.onmessage = async (msg) => {
           slotConCreated: summary.slotConCreated, slotConReused: summary.slotConReused,
           slotConMerged: summary.slotConMerged, slotConModules: summary.slotConModules,
           slotConOutside: summary.slotConOutside, slotConFailed: summary.slotConFailed,
+          subHeadersDemoted: summary.subHeadersDemoted, subSlotConsDemoted: summary.subSlotConsDemoted,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
@@ -346,6 +350,7 @@ figma.ui.onmessage = async (msg) => {
           graphicRunFolders: 0, graphicRunMerged: 0, graphicRunFailed: 0,
           slotConCreated: 0, slotConReused: 0, slotConMerged: 0, slotConModules: 0,
           slotConOutside: 0, slotConFailed: 0,
+          subHeadersDemoted: 0, subSlotConsDemoted: 0,
         };
         const ACT_CN = { rename: "改名", reparent: "归父", reorder: "排序", group: "成组", delete: "删除" };
         for (let i = 0; i < ops.length; i++) {
@@ -449,6 +454,8 @@ figma.ui.onmessage = async (msg) => {
               summary.layoutErrorMsg = String((e3 && e3.message) || e3).slice(0, 200);
             }
           }
+          // v20261110.24：先归一化根级骨架命名（唯一 header / 唯一 slot-con），再建组。
+          try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
           // v20261110.21：收尾建组件骨架 —— 视觉/几何模块与其它内容统一收进一个真 slot-con Group。
           try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
           // 收尾：给所有资源文件夹挂导出预设（icon→SVG / img·bg→PNG@2x），并清掉内部子节点的导出项。
@@ -503,6 +510,7 @@ figma.ui.onmessage = async (msg) => {
           slotConCreated: summary.slotConCreated, slotConReused: summary.slotConReused,
           slotConMerged: summary.slotConMerged, slotConModules: summary.slotConModules,
           slotConOutside: summary.slotConOutside, slotConFailed: summary.slotConFailed,
+          subHeadersDemoted: summary.subHeadersDemoted, subSlotConsDemoted: summary.subSlotConsDemoted,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
@@ -1455,7 +1463,9 @@ const SLOT_CON_KEY = "mvSlotCon";
 function isSlotContainer(n) {
   if (!n || !("children" in n)) return false;
   try { if (n.getPluginData(SLOT_CON_KEY) === "1") return true; } catch (e) {}
-  return /^slot-con(?:-|$)/i.test(String(n.name || ""));
+  // v20261110.24：只认精确名 slot-con。旧宽松前缀会把 AI 给局部模块起的
+  // slot-con-xxx 当成「已有根级槽」，createSlotConGroup 走复用分支把内容 append 进局部组。
+  return /^slot-con$/i.test(String((n && n.name) || "").trim());
 }
 function isHeaderLike(n) { return /^header(?:[-/]|$)/i.test(String((n && n.name) || "")); }
 function isBgLike(n) {
@@ -1484,6 +1494,59 @@ function countModules(root) {
   };
   walk(root, isSlotContainer(root), 0);
   return out;
+}
+// v20261110.24：组件根级骨架只允许一个 header。AI 常把每个视觉模块的小标题也命名成 header-*，
+// 旧判据只看前缀 ⇒ createSlotConGroup 把它们全部排除，平铺在根级、进不了 slot-con。
+// 这里用「精确名 + 几何」选出唯一根 header，其余降级为 section-title-* 参与内容建组；
+// 误命名的 slot-con-xxx 降级为 item-xxx，避免被当成第二个根级槽复用。
+// 纯改名：不移动节点、不改坐标、不改 z-order；改名后不再命中前缀，重复整理幂等。
+function pickRootHeader(headers, root) {
+  if (!headers || !headers.length) return null;
+  const nameOf = (n) => String((n && n.name) || "").trim();
+  const exact = headers.filter(n => /^header$/i.test(nameOf(n)));
+  if (exact.length) return exact[0];
+  const titled = headers.filter(n => /^header-title$/i.test(nameOf(n)));
+  if (titled.length) return titled[0];
+  const rootW = Number(root && root.width) || 0;
+  const minY = Math.min.apply(null, headers.map(n => Number(n && n.y) || 0));
+  let best = null, bestScore = -Infinity;
+  for (const n of headers) {
+    const y = Number(n && n.y) || 0, w = Number(n && n.width) || 0;
+    const score = (rootW > 0 ? Math.min(40, (w / rootW) * 40) : 0)
+      + (rootW > 0 && w >= rootW * 0.6 ? 20 : 0)
+      + Math.max(0, 30 - (y - minY));
+    if (score > bestScore) { bestScore = score; best = n; }
+  }
+  return best || headers[0];
+}
+function contractSectionTitle(nm) {
+  const slug = String(nm || "").replace(/^header[-/]?/i, "")
+    .replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "");
+  return "section-title" + (slug ? "-" + slug : "");
+}
+function demoteSubHeaders(root, summary) {
+  if (!root || !("children" in root) || root.type === "PAGE") return null;
+  const s = summary || {};
+  const kids = Array.prototype.slice.call(root.children || []);
+  const headers = kids.filter(isHeaderLike);
+  const keep = pickRootHeader(headers, root);
+  let demoted = 0, slotsDemoted = 0;
+  for (const n of headers) {
+    if (n === keep) continue;
+    const next = contractSectionTitle(String(n.name || ""));
+    try { if (n.locked) n.locked = false; n.name = next; demoted++; } catch (e) {}
+  }
+  for (const n of kids) {
+    if (n === keep || isSlotContainer(n)) continue;
+    const nm = String(n.name || "");
+    if (!/^slot-con(?:-|$)/i.test(nm)) continue;
+    const slug = nm.replace(/^slot-con[-/]?/i, "")
+      .replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "");
+    try { if (n.locked) n.locked = false; n.name = "item-" + (slug || "section"); slotsDemoted++; } catch (e) {}
+  }
+  s.subHeadersDemoted = (Number(s.subHeadersDemoted) || 0) + demoted;
+  s.subSlotConsDemoted = (Number(s.subSlotConsDemoted) || 0) + slotsDemoted;
+  return keep;
 }
 function createSlotConGroup(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
@@ -1617,6 +1680,8 @@ const CONTRACT_HEADER = [
   "#   slot-con → 其余全部内容区域，合成一个整体容器，不要平铺在组件根下",
   "# header 插槽按位置命名：header-title / header-slot-left / header-slot-center / header-slot-right；",
   "#   header-slot-right 通常放按钮、tab、图例、时间筛选；生成时预留 <slot> 供外部注入。",
+  "# 全组件只有一个 header；模块小标题 section-title-* 属于 slot-con，不是根级 header 插槽。",
+  "# 全组件只有一个 slot-con；模块容器用 item-*/card-*/list-*，绝不出现第二个 slot-con-*。",
   "# 循环结构：list-*/cards-* 内的同构序号子项（item-xxx-1..N）按一份模板 + v-for/map 渲染；",
   "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码。",
   "# 资源文件夹 bg-*/img-*/icon-* 整体导出；@echarts/* 用图表库实现。",
@@ -1641,7 +1706,7 @@ function cpComponentName(root) {
 
 function isHeaderNode(n) { return /^header(?:[-/]|$)/i.test(cleanContractName(n)); }
 function isBgNode(n) { return /^bg(?:-|$)/i.test(cleanContractName(n)); }
-function isSlotConNode(n) { return /^slot-con(?:-|$)/i.test(cleanContractName(n)); }
+function isSlotConNode(n) { return /^slot-con$/i.test(cleanContractName(n)); }
 
 function visibleChildren(n) {
   if (!n || !("children" in n) || !Array.isArray(n.children)) return [];
@@ -1663,7 +1728,7 @@ function describeDataSlot(n, budget) {
   let kind = "";
   if (/^(value|number|metric|count|rate|percent|price|amount|total|score)/i.test(nm)) kind = "value";
   else if (/^(unit|suffix)/i.test(nm)) kind = "unit";
-  else if (/^(label|title|name|caption|desc|text|header-title)/i.test(nm)) kind = "label";
+  else if (/^(label|title|name|caption|desc|text|header-title|section-title)/i.test(nm)) kind = "label";
   else {
     const t = txt.replace(/[,，\s]/g, "");
     if (/^[+-]?\d+(?:\.\d+)?[%％]?$/.test(t)) kind = "value";
@@ -1762,7 +1827,12 @@ function buildStructureContract(root, opts) {
   function walkSkeleton(rootNode) {
     push(cpComponentName(rootNode), 0);
     const kids = visibleChildren(rootNode);
-    const headers = kids.filter(isHeaderNode);
+    // v20261110.24：只读导出也要归一化 —— 未整理的文件常有多个 header-* / slot-con-*，
+    // 契约里只能有一个根 header；其余副标题按 section-title-* 输出在 slot-con 内。
+    const allHeaders = kids.filter(isHeaderNode);
+    const rootHeader = pickRootHeader(allHeaders, rootNode);
+    const headers = rootHeader ? [rootHeader] : [];
+    const demotedHeaders = allHeaders.filter(h => h !== rootHeader);
     const bgs = kids.filter(isBgNode);
     const slotCons = kids.filter(isSlotConNode);
     const contents = kids.filter(n => !isHeaderNode(n) && !isBgNode(n) && !isSlotConNode(n));
@@ -1794,9 +1864,19 @@ function buildStructureContract(root, opts) {
       });
     }
     if (bgs.length) push("bg", 1); // 背景整体导出，内部矢量不需要展开
-    if (contents.length || slotCons.length) {
+    // 按根级原始顺序装配 body：副标题按归一化名输出并标 label，其余节点原样展开。
+    const body = [];
+    for (const k of kids) {
+      if (k === rootHeader || isBgNode(k) || isSlotConNode(k)) continue;
+      if (demotedHeaders.indexOf(k) >= 0) body.push({ node: k, forced: contractSectionTitle(cleanContractName(k)) });
+      else if (contents.indexOf(k) >= 0) body.push({ node: k });
+    }
+    if (body.length || slotCons.length) {
       push("slot-con", 1);
-      for (const c of contents) walkNode(c, 2);
+      for (const b of body) {
+        if (b.forced) { push(b.forced + "  [data:label]", 2); emitChildren(b.node, 3); }
+        else walkNode(b.node, 2);
+      }
       for (const s of slotCons) emitChildren(s, 2); // 已存在 slot-con：展开其内容，避免嵌套两层
     }
   }
