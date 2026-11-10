@@ -10,6 +10,7 @@
  * 规避「改的人=验的人用同一正则=假绿」）。阳性对照：空入参必须返回空串。
  */
 import { buildUserAddendumSection } from '../../utils/user-addendum.js';
+import { isStructureContract, buildStructureContractSection } from '../../utils/structure-contract.js';
 
 describe('高级选项 P0 · buildUserAddendumSection（用户补充需求段注入）', () => {
   it('阳性：extraPrompt ⇒ 含「用户补充需求」标题 + 补充提示词小节 + 原文', () => {
@@ -61,5 +62,60 @@ describe('高级选项 P0 · buildUserAddendumSection（用户补充需求段注
     // 旧契约句「与设计稿视觉冲突时以设计稿为准」单句存在 = 模型泛化为一切让位设计稿，禁止回退
     expect(out).toContain('不得以「设计稿没有」为由省略');
     expect(out).toContain('tab 切换');
+  });
+});
+
+/**
+ * 🧩 v20261110.28 P0-1/P0-3：Figma 结构契约分流行为。
+ * 契约全文走 requirementDocText，但不能被标成「需求文档（要点必须落实）」，
+ * 也不能被文档子管线当业务需求分析；结构约束必须显式声明不让位设计稿。
+ */
+const CONTRACT_TEXT = [
+  '# Figma 整理后结构契约（组件骨架）',
+  '# @meta version=20261110.28; sections=3; loops=1; slots=9; nodes=42; truncated=false; ids=on; quality=58/100',
+  '',
+  '- cp-event-analysis  #1-283',
+  '  - header',
+  '  - slot-con',
+  '    - section-type-distribution',
+].join('\n');
+
+describe('v20261110.28 · Figma 结构契约分流', () => {
+  it('识别：契约头 true，普通需求文档 / 空 / 过短片段 false', () => {
+    expect(isStructureContract(CONTRACT_TEXT)).toBe(true);
+    expect(isStructureContract('要点A：隧道流量按小时聚合，需要按日汇总')).toBe(false);
+    expect(isStructureContract('')).toBe(false);
+    expect(isStructureContract('# Figma 结构契约')).toBe(false); // <20 字，防误判
+  });
+
+  it('addendum：契约走独立段落，不带「需求文档」小节', () => {
+    const out = buildUserAddendumSection('', CONTRACT_TEXT);
+    expect(out).toContain('## 📐 Figma 结构契约');
+    expect(out).toContain('- cp-event-analysis  #1-283');
+    expect(out).not.toContain('## 需求文档');
+  });
+
+  it('addendum：结构约束不让位设计稿 + 禁止臆造交互 + nodeId 只回填不新建', () => {
+    const out = buildUserAddendumSection('', CONTRACT_TEXT);
+    expect(out).toContain('不让位设计稿');
+    expect(out).toContain('禁止据此分析业务需求');
+    expect(out).toContain('不得据此新建节点');
+    expect(out).toContain('仅颜色、字号、间距等纯视觉样式可让位设计稿');
+  });
+
+  it('addendum：契约与 extraPrompt 可共存，普通需求文档路径不受影响', () => {
+    const both = buildUserAddendumSection('禁用动画', CONTRACT_TEXT);
+    expect(both).toContain('## 补充提示词');
+    expect(both).toContain('## 📐 Figma 结构契约');
+    const doc = buildUserAddendumSection('', '要点A：隧道流量按小时聚合');
+    expect(doc).toContain('## 需求文档');
+    expect(doc).not.toContain('## 📐 Figma 结构契约');
+  });
+
+  it('独立段落自带契约原文与 @meta 说明', () => {
+    const section = buildStructureContractSection(CONTRACT_TEXT);
+    expect(section).toContain('@meta');
+    expect(section).toContain('truncated=true');
+    expect(section).toContain(CONTRACT_TEXT.trim());
   });
 });

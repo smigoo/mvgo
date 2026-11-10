@@ -19,6 +19,19 @@
  */
 const BUSINESS_INTERACTIVE = new Set(['tab', 'icon', 'button', 'switch', 'input', 'select'])
 
+/**
+ * 🛡️ header 专属插槽通道（2026-11-10 修订 · 设备 15f40155/重点车辆 084e8c19 真机实锤）：
+ *   `title-left|title-right|header-right` 是 headerSlots 通道的专属契约形态（R6/T09 从
+ *   Figma header 容器确定性推导，零臆造）。旧裁决只认 elementType 交互控件（tab/icon/…），
+ *   statistic/label 重叠时判「content 赢」⇒ header 通道清空 ⇒ T09 无数据可兜底 ⇒
+ *   头部统计词全丢（设备「设备类型/设备总数/完好率」10 条未承载）+ LLM 把胶囊塞进内容区
+ *   （重点车辆）——content 赢已实锤为负收益。
+ *   slot 赢时 content 侧同 node 仍被移除（removedContentNodes），「防双份渲染」目的不变，
+ *   只是渲染位置回到语义正确的 header 通道（与 tab 同权）。
+ *   无 slotType 的 slot 保持旧裁决（向后兼容）。
+ */
+const SLOT_CHANNEL_TYPES = new Set(['header-right', 'title-left', 'title-right'])
+
 function isChromeTitle(node) {
   const role = String(node?.role || '').toLowerCase()
   const elementType = String(node?.elementType || '').toLowerCase()
@@ -63,9 +76,12 @@ export function resolveNodeExclusivity(slots, sections) {
       keptSlots.push(slot)
       continue
     }
-    // 重叠：业务交互控件 → slot 赢；否则 content 赢
+    // 重叠：业务交互控件 / header 专属插槽通道 → slot 赢；否则 content 赢
     const et = String(slot?.elementType || '').toLowerCase()
-    if (BUSINESS_INTERACTIVE.has(et)) {
+    const st = String(slot?.slotType || '')
+      .toLowerCase()
+      .replace(/_/g, '-')
+    if (BUSINESS_INTERACTIVE.has(et) || SLOT_CHANNEL_TYPES.has(st)) {
       keptSlots.push(slot)
       removedContentNodes.push(id)
     } else {

@@ -871,6 +871,10 @@ export function createPhase2Graph(config = {}) {
         subComponentPlan: state.subComponentPlan,
         // 🛡️ 资源归属指导（方案5）：上一轮漏用背景时，本轮注入归属指导。
         _attributionGuidance: state._attributionGuidance || null,
+        // 🔍 P0-3：与 mc-component-graph-phase2.js:1862-1864 对齐，让 Vue3Engineer.appendGuidance 读得到。
+        userComponentId: state.userComponentId || null,
+        extraPrompt: state.extraPrompt || null,
+        requirementDocText: state.requirementDocText || null,
       });
 
       state.onProgress?.({
@@ -3999,6 +4003,10 @@ export async function runVue3Generation(options) {
     _resumeData, //断点续跑数据 { stage, cachedReviewResult, cachedStyleMappings }
     generationTier, //生成档位（lite/max），由 controller 透传
     sourceType, //输入来源（screenshot/figma/html）
+    // 🔍 P0-3（2026-11-10）：phase2.service.ts:783-784 已透传，但 vue3 图此前三处白名单全丢弃。
+    extraPrompt,
+    requirementDocText,
+    userComponentId,
   } = options;
 
   logger.info('开始 Vue3 Figma阶段生成', {
@@ -4116,6 +4124,10 @@ export async function runVue3Generation(options) {
     _resumeData: _resumeData || null,
     //检查点保存
     _saveCheckpoint: saveCheckpoint,
+    // 🔍 P0-3：与 mc-component-graph-phase2.js:6413-6414 对齐（graph.js:90 纯对象展开，补进 state 即生效）
+    userComponentId: userComponentId || null,
+    extraPrompt: extraPrompt || null,
+    requirementDocText: requirementDocText || null,
   };
 
   try {

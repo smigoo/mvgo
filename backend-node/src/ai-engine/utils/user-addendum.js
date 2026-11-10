@@ -1,3 +1,5 @@
+import { isStructureContract, buildStructureContractSection } from './structure-contract.js';
+
 /**
  * 🔍 高级选项 P0（2026-11-02 抽出）：用户补充需求 prompt 段构建（纯函数，单一来源）。
  *
@@ -9,6 +11,10 @@
  * 两项都可选；超长防御截断（extraPrompt ≤4000 字 / 文档文本 ≤20000 字——DTO 层已限，
  * 此处兜底防历史调用方绕过）。空内容返回空串（零开销）。
  * 优先级契约：Figma @技术栈 锚点契约 > 本段 > 平台默认规范；与设计稿视觉冲突时以设计稿为准。
+ *
+ * 🔧 v20261110.28 P0-1/P0-3：requirementDocText 若是 Figma 结构契约（带契约头），
+ * 改走 utils/structure-contract.js 的独立段落（硬约束：结构不让位设计稿、禁止臆造交互），
+ * 不再标成「需求文档（要点必须落实）」——后者会诱导模型把命名树当成业务需求展开。
  */
 export function buildUserAddendumSection(extraPrompt, requirementDocText) {
   const ep = String(extraPrompt || '').trim().slice(0, 4000);
@@ -23,6 +29,11 @@ export function buildUserAddendumSection(extraPrompt, requirementDocText) {
   block += '> 优先级：Figma @技术栈 锚点契约 > 本段 > 平台默认规范。\n\n';
   block += '> 视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准；但本段的交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；交互态未在设计稿出现时，沿用设计稿的配色与形态风格实现。\n\n';
   if (ep) block += `## 补充提示词\n\n${ep}\n\n`;
-  if (rd) block += `## 需求文档（用户上传，要点必须落实）\n\n${rd}\n\n`;
+  if (rd) {
+    // v20261110.28：契约与需求文档分流，避免「要点必须落实」诱导模型把命名树当业务需求展开。
+    block += isStructureContract(rd)
+      ? buildStructureContractSection(rd)
+      : `## 需求文档（用户上传，要点必须落实）\n\n${rd}\n\n`;
+  }
   return block;
 }

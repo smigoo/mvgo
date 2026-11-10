@@ -19,7 +19,7 @@ import {
 import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { markSessionLocked } from '../ai-engine/utils/session-lock-registry.js';
-import { renameWithCopyFallback, isRenameBroken, markRenameBroken } from '../ai-engine/utils/rename-with-copy-fallback.js';
+import { renameWithCopyFallback, isRenameBroken, markRenameBroken, probeRenameBroken } from '../ai-engine/utils/rename-with-copy-fallback.js';
 import { sweepStalePersistTmp } from '../ai-engine/utils/persist-tmp-sweeper.js';
 
 const { ZipArchive } = require('archiver');
@@ -409,6 +409,11 @@ export class TasksService {
    * NestJS 生命周期钩子：异步初始化（在服务完全启动后执行）
    */
   async onModuleInit() {
+    // 🛡️ 方案 A（2026-11-10）：启动即探测「覆盖式 rename」是否可用，EPERM 立即置位熔断，
+    //   使随后所有 persist 走直写分支，重启后零 tmp 残留。**必须置于任何 persist() 之前**
+    //   （recoverZombieTasks 内含 persist，故放最顶部）。
+    probeRenameBroken({ dir: join(this.persistFile, '..'), logger: this.logger as any });
+
     // 🛡️ 治本（方案 A）：队列在恢复失败时无权重写任务磁盘状态，注入回调由本服务统一收口。
     // 必须在 recoverZombieTasks() 之前注册——排队任务恢复是在其中「延迟 3 秒」执行的，
     // 若注册晚于恢复，恢复失败的任务将只释放槽位、status 仍停在 queued 而残留磁盘。

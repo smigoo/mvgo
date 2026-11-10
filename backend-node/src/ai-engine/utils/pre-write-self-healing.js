@@ -28,6 +28,7 @@ import {
 } from './flex-sibling-guard.js';
 // 🛡️ S6（2026-09-16）：背景 :style 补全自愈（backgroundImage 缺 size/repeat/position → 补默认值）
 import { ensureBackgroundStyleComplete } from './post-process.js';
+import { collectMissingVueImports } from './vue-import-closure.js';
 import { scanProductStyleIssues } from './style-conflict-detector.js';
 // 🛡️ D1（2026-09-20）：per-card 样式确定性改写（bg 图/数值色/icon 按 vision 真值）
 import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
@@ -103,6 +104,10 @@ import {
   healZebraStripeMisread,
 } from './layout-truth-healer.js';
 import { reportPatchChainError } from './patch-chain-observer.js';
+// 🛡️ 资源相对路径深度归一（复用 Playground 同一实现，单一事实源）
+import { normalizeResourceRelativePaths } from './sfc-syntax-validation.js';
+// 🛡️ 六-i：重复卡组「卡底渐变」真值（纯函数，可单测）
+import { collectCardGroups, collectCardBgByOwner, injectCardBgImages } from './card-background-truth.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -158,6 +163,104 @@ export function stripDuplicateSectionRootBg(content) {
   }
   if (!changed) return content;
   return content.replace(rootTag, newRoot);
+}
+
+/**
+ * 🛡️ ⑥-ii（2026-11-10 · R12 重点车辆 523f16b6 实锤，用户目检「单独 card 的 bg 变成了整体的」）：
+ * 中间容器 bg 双重挂载剥离——stripDuplicateSectionRootBg 只剥**第一个根元素**，但 LLM 会把
+ * 单卡 bg 同时挂到**祖先容器**（136:127 整条统计区 405 宽）与卡级（127×84）双层 ⇒ 渲染时
+ * 祖先层把 141×75 单卡图拉伸铺满整条区域（skill 渲染取证：sec=136:127 fn=bg-126 w=405）。
+ * 判据（与原函数同构，作用域扩到全部 data-section-id 元素）：某容器标签上的 bg 变量在该元素
+ * **之后的模板内容**中再次出现 ⇒ 双重挂载冗余，剥**上层**保留卡级（视觉单卡正确）。
+ * 保守：只剥 :style 动态 backgroundImage 子句；每个 bg 变量至少有一层保留才剥；幂等（剥后不再命中）。
+ */
+export function stripDuplicateAncestorBg(content) {
+  if (typeof content !== 'string' || !content) return content;
+  const tpl = content.match(/<template>([\s\S]*?)<\/template>/i);
+  if (!tpl) return content;
+  const tplBody = tpl[1];
+  const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="[^"]+"(?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  const matches = [...tplBody.matchAll(tagRe)];
+  if (matches.length === 0) return content;
+  let out = tplBody;
+  let changed = false;
+  for (const m of matches) {
+    const tag = m[0];
+    const endIdx = m.index + tag.length;
+    const after = tplBody.slice(endIdx);
+    const vars = [...tag.matchAll(/url\(\s*['"]\s*\+\s*(\w+)\s*\+\s*['"]\s*\)/g)].map((x) => x[1]);
+    let newTag = tag;
+    let tagChanged = false;
+    for (const v of vars) {
+      if (!new RegExp(`url\\([\\s\\S]{0,20}${v}`).test(after)) continue;
+      const clause = new RegExp(
+        `backgroundImage\\s*:\\s*['"\`]url\\(['"\`]\\s*\\+\\s*${v}\\s*\\+\\s*['"\`]\\)['"\`]\\s*,?\\s*`,
+        'g',
+      );
+      const next = newTag.replace(clause, '');
+      if (next !== newTag) {
+        newTag = next;
+        tagChanged = true;
+      }
+    }
+    if (tagChanged) {
+      out = out.slice(0, m.index) + newTag + out.slice(m.index + tag.length);
+      changed = true;
+    }
+  }
+  if (!changed) return content;
+  return content.replace(tplBody, out);
+}
+
+/**
+ * 🛡️ 模板内嵌 SFC 块自愈（2026-11-10 · R9 设备/R13 设备+流量 实锤，3 次复发）：
+ * 病灶：LLM 把 `<script setup>...</script>` / `<style>...</style>` 块写进 `<template>` 体内
+ * ⇒ @vue/compiler-sfc 报 `Tags with side effect (<script> and <style>) are ignored`
+ * ⇒ 写盘门禁判死 → 整组件 failed（index.vue 挂掉 = 全盘崩）。
+ * 修法（确定性、保守）：
+ *   ① 体内 `<script setup>` 块：SFC 顶层**无** script ⇒ 提升到 </template> 之后（保内容）；
+ *      顶层已有 script ⇒ 丢弃（错位重复块）。
+ *   ② 体内 `<style>` 块：顶层无 style ⇒ 提升首个；其余丢弃。
+ *   ③ 全部处理过 ⇒ 从体内剥离，模板体干净（编译可过）。
+ * 幂等：处理后体内无 script/style ⇒ 二次调用零改动。
+ */
+export function healTemplateEmbeddedSfcBlocks(content) {
+  if (typeof content !== 'string' || !content) return content;
+  const tplMatch = content.match(/<template>([\s\S]*)<\/template>/i);
+  if (!tplMatch) return content;
+  const bodyStart = tplMatch.index + '<template>'.length;
+  const bodyEnd = bodyStart + tplMatch[1].length;
+  let body = tplMatch[1];
+  const before = content.slice(0, bodyStart);
+  const after = content.slice(bodyEnd);
+
+  const hasTopScript = /<script[^>]*>/.test(after);
+  const hasTopStyle = /<style[^>]*>/.test(after);
+  const promoted = [];
+  let changed = false;
+
+  // ① script 提升/丢弃
+  body = body.replace(/<script([^>]*)>([\s\S]*?)<\/script>\s*/gi, (m, attrs, inner) => {
+    changed = true;
+    if (!hasTopScript && promoted.filter((p) => p.startsWith('<script')).length === 0 && inner.trim()) {
+      promoted.push(`<script${attrs}>${inner}</script>\n`);
+      return '';
+    }
+    return ''; // 顶层已有 script 或空块 ⇒ 丢弃错位重复块
+  });
+
+  // ② style 提升/丢弃
+  body = body.replace(/<style([^>]*)>([\s\S]*?)<\/style>\s*/gi, (m, attrs, inner) => {
+    changed = true;
+    if (!hasTopStyle && promoted.filter((p) => p.startsWith('<style')).length === 0 && inner.trim()) {
+      promoted.push(`<style${attrs}>${inner}</style>\n`);
+      return '';
+    }
+    return '';
+  });
+
+  if (!changed) return content;
+  return before + body + after + (promoted.length ? '\n' + promoted.join('\n') : '');
 }
 
 /**
@@ -282,6 +385,10 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     containerPanelRadius: 0,
     containerPanelGlow: 0,
     panelChromeMisplaced: 0,
+    // 🛡️ 悬空引用占位兜底计数（2026-11-10）：0 也必打（验收计数行纪律）。
+    danglingImportPatched: 0,
+    // 🛡️ 模板内嵌 SFC 块自愈计数（2026-11-10）：0 也必打（验收计数行纪律）。
+    embeddedSfcHealed: 0,
     // 🛡️ A0（2026-11-04 · c-b04f22-b04f223c 实锤）：刀 42-B **零命中留痕**。
     //   缺口：本刀原先只在命中时落 `panelChromeMisplaced`，三条元素级 `continue` 与 ②-b 的
     //   七条 `continue` **全静默** ⇒ 事后无法区分「跑过但零命中」「未跑到」「被哪条 continue
@@ -467,6 +574,22 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       result[fp] = deduped;
       summary.a2Dedup = (summary.a2Dedup || 0) + 1;
       logger?.warn?.('🛡️ A2 修复：剥离 section 根上重复的背景引用（保留内层 bg 层）', { file: fp });
+    }
+    // 🛡️ ⑥-ii（2026-11-10 · 523f16b6 实锤）：中间容器 bg 双重挂载剥离（扩展 A2 到全部
+    //   data-section-id 元素——136:127 整条容器挂 141×75 单卡图被拉伸 405 宽）。
+    const ancestorDeduped = stripDuplicateAncestorBg(deduped);
+    if (ancestorDeduped !== deduped) {
+      result[fp] = ancestorDeduped;
+      summary.ancestorBgDedup = (summary.ancestorBgDedup || 0) + 1;
+      logger?.warn?.('🛡️ ⑥-ii 修复：剥离中间容器上重复的 bg 挂载（保留卡级单卡视觉，防单卡图拉伸铺满整条）', { file: fp });
+    }
+    // 🛡️ 模板内嵌 SFC 块自愈（2026-11-10 · R9 设备/R13 设备+流量实锤，「Tags with side
+    //   effect」3 次复发 ⇒ 整组件 failed）。提升/剥离体内 script/style，模板体干净可编译。
+    const healedEmbedded = healTemplateEmbeddedSfcBlocks(result[fp]);
+    if (healedEmbedded !== result[fp]) {
+      result[fp] = healedEmbedded;
+      summary.embeddedSfcHealed = (summary.embeddedSfcHealed || 0) + 1;
+      logger?.warn?.('🛡️ 模板内嵌 SFC 块自愈：提升/剥离 template 体内的 script/style（治 Tags with side effect）', { file: fp });
     }
   }
 
@@ -992,6 +1115,124 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     reportPatchChainError(g1Err, { logger: logger, pass: 'runPreWriteSelfHealing:g1', counter: summary });
     logger?.warn?.('🛡️ G1 容器布局真值注入异常（fail-open）', {
       error: g1Err?.message || String(g1Err),
+    });
+  }
+
+  // ⑥-f 🛡️ 资源相对路径深度归一（2026-11-10 · mc-1794240310944-9f4835fa 实锤）
+  //   病灶：模型把子组件放进 `components/<Group>/` 子目录（层级 +1），但
+  //   `@import '../../resources/styles/index.less'` 没跟着加深 ⇒ 落盘后 LESS 门禁报
+  //   「无法加载 LESS 依赖」直接阻断整个任务（设备监测 v2 即此，前一轮同样的组件是能过的）。
+  //   口径：复用 `sfc-syntax-validation#normalizeResourceRelativePaths`（**单一实现**，
+  //   按 path 段数算 `../` 次数），零硬编码路径、零文件名白名单；图片/样式 import 一并覆盖。
+  try {
+    let _pathFixed = 0;
+    for (const [p, c] of Object.entries(result)) {
+      if (typeof c !== 'string' || !p.endsWith('.vue')) continue;
+      const next = normalizeResourceRelativePaths(c, p);
+      if (next !== c) {
+        result[p] = next;
+        _pathFixed += 1;
+      }
+    }
+    summary.resourcePathFixed = _pathFixed;
+    if (_pathFixed > 0) {
+      logger?.warn?.('🛡️ 资源相对路径按文件深度归一（⑥-f）', { files: _pathFixed });
+    }
+  } catch (pathDepthErr) {
+    reportPatchChainError(pathDepthErr, {
+      logger: logger,
+      pass: 'runPreWriteSelfHealing:pathDepth',
+      counter: summary,
+    });
+    logger?.warn?.('🛡️ 资源相对路径归一异常（fail-open）', {
+      error: pathDepthErr?.message || String(pathDepthErr),
+    });
+  }
+
+  // ⑥-h 🛡️ 动态 :src 的 <img> 补 v-if 守卫（2026-11-10 · 重点车辆 fbc0feb5 实锤）
+  //   病灶：模板 `<img :src="item.icon">` 而数据项 `{label,value,valueClass}` **缺 icon 字段**
+  //   ⇒ 渲染成 `<img src="">`（真机 4 张图 1 张空源、探针 emptyImg 告警、视觉上出现破图）。
+  //   判据：只对「无 v-if / v-show 的 `:src="expr"`」补 `v-if="expr"`——表达式真值即是否渲染，
+  //   零硬编码、零字段名依赖；已带条件的不动（幂等）。
+  try {
+    let _imgGuard = 0;
+    for (const [p, c] of Object.entries(result)) {
+      if (typeof c !== 'string' || !p.endsWith('.vue')) continue;
+      const next = c.replace(
+        /<img\b([^>]*?)\s:src="([^"]+)"([^>]*?)>/g,
+        (full, pre, expr, post) => {
+          if (/\bv-if=|\bv-show=/.test(`${pre}${post}`)) return full;
+          // ⚠️ 自闭合 `/>` 必须保持在末尾：v-if 要插在斜杠**之前**，否则产出
+          //   `<img ... class="x" / v-if="...">` 这种非法标签（首版即踩，靠本步验证发现）。
+          const selfClose = /\/\s*$/.test(post);
+          const tail = selfClose ? post.replace(/\/\s*$/, '') : post;
+          _imgGuard += 1;
+          return `<img${pre} :src="${expr}"${tail} v-if="${expr}"${selfClose ? ' /' : ''}>`;
+        },
+      );
+      if (next !== c) result[p] = next;
+    }
+    // 静态空源（`src=""` / `src=''`）⇒ 整标签删除。空源本就不显示，留着只会触发
+    //   无效请求 + 探针 emptyImg + 视觉破图占位（真机 0f1dcc33 两张）。
+    let _imgEmptyRemoved = 0;
+    for (const [p, c] of Object.entries(result)) {
+      if (typeof c !== 'string' || !p.endsWith('.vue')) continue;
+      const cleaned = c.replace(/<img\b[^>]*\bsrc=(""|'')[^>]*\/?>/g, () => {
+        _imgEmptyRemoved += 1;
+        return '';
+      });
+      if (cleaned !== c) result[p] = cleaned;
+    }
+    summary.imgSrcGuard = _imgGuard;
+    summary.imgEmptyRemoved = _imgEmptyRemoved;
+    if (_imgGuard > 0 || _imgEmptyRemoved > 0) {
+      logger?.warn?.('🛡️ 图片守卫（⑥-h）：补 v-if / 删空源', {
+        guard: _imgGuard,
+        emptyRemoved: _imgEmptyRemoved,
+      });
+    }
+  } catch (imgGuardErr) {
+    reportPatchChainError(imgGuardErr, {
+      logger: logger,
+      pass: 'runPreWriteSelfHealing:imgSrcGuard',
+      counter: summary,
+    });
+    logger?.warn?.('🛡️ 图片 v-if 守卫异常（fail-open）', {
+      error: imgGuardErr?.message || String(imgGuardErr),
+    });
+  }
+
+  // ⑥-i 🛡️ 重复卡组「卡底渐变」确定性注入（2026-11-10 · dbdbc813 实锤）
+  //   病灶：Figma 卡底是卡内 RECTANGLE 的渐变（真机 `2:8035` 120×60 + r=1.76），产物
+  //   `.stat-card` 只有 `min-width:0`（注释还写「背景图由系统注入到本容器」但从未注入）
+  //   ⇒ 三张卡全透明，图标浮在白底。
+  //   判据：重复卡组 = 有 ≥2 个等高子项的容器（纯几何）；卡底 = 其子树面积最大的渐变块；
+  //   注入目标 = 产物模板中「首次出现最靠前」的重复 class（外层容器，非内层 value 组）。
+  //   全部取自 Figma 节点与产物自身结构，零色值/类名白名单。
+  try {
+    if (figmaRoot && Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+      const _cardGroups = collectCardGroups(figmaRoot);
+      const _bgByOwner = collectCardBgByOwner(resourceDomMapping);
+      if (_cardGroups.size > 0 && _bgByOwner.size > 0) {
+        const _files = Object.entries(result)
+          .filter(([p, c]) => typeof c === 'string' && p.endsWith('.vue'))
+          .map(([path, content]) => ({ path, content }));
+        const _inj = injectCardBgImages(_files, { cardGroups: _cardGroups, bgByOwner: _bgByOwner });
+        if (_inj.changed) {
+          for (const f of _inj.contents) result[f.path] = f.content;
+          summary.cardBgInjected = _inj.stats.mounted;
+          logger?.warn?.('🛡️ 卡底背景图按 owner 精确挂载（⑥-i v2）', _inj.stats);
+        }
+      }
+    }
+  } catch (_cardBgErr) {
+    reportPatchChainError(_cardBgErr, {
+      logger: logger,
+      pass: 'runPreWriteSelfHealing:cardBg',
+      counter: summary,
+    });
+    logger?.warn?.('🛡️ 卡底渐变注入异常（fail-open）', {
+      error: _cardBgErr?.message || String(_cardBgErr),
     });
   }
 
@@ -1847,6 +2088,49 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   } catch (err) {
     reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:1507', counter: summary });
     logger?.warn?.('🛡️ R8-6 frame 类对账异常（fail-open）', { error: err?.message || String(err) });
+  }
+
+  // 🛡️ 悬空引用占位兜底（2026-11-10 · 流量 cf2742b9/设备 ContentSection26/ContentDailyTotalFlow 实锤）：
+  //   index.vue import 的本地 .vue 从未落盘（LLM chunk 被写盘门禁丢弃/生成中断）⇒ 预览 404
+  //   ⇒ RUNTIME-004 整单崩。判据单一来源 collectMissingVueImports（与 chunk-snapshot-pusher
+  //   /task-code-snapshot 同源，禁两侧口径漂移）。兜底=补最小占位 SFC——缺段诚实降级，
+  //   避免单文件缺陷放大成整组件不可用（expression 语法错误族由写盘门禁继续拦截，不在此豁免）。
+  try {
+    const idxKey = Object.keys(result).find(
+      (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+    );
+    if (idxKey && typeof result[idxKey] === 'string') {
+      const missingImports = collectMissingVueImports(idxKey, (p) =>
+        typeof result[p] === 'string' ? result[p] : null,
+      );
+      let patched = 0;
+      for (const mp of missingImports) {
+        if (typeof result[mp] === 'string') continue;
+        const compName = mp.split('/').pop()?.replace(/\.vue$/i, '') || 'Placeholder';
+        result[mp] = [
+          '<template>',
+          `  <!-- 🛡️ 占位组件：原文件生成失败（LLM chunk 缺失/门禁丢弃），悬空引用兜底自动补齐——缺段诚实降级 -->`,
+          `  <div class="${compName.toLowerCase()}-placeholder" style="display:flex;align-items:center;justify-content:center;min-height:24px;color:inherit;opacity:0.35;font-size:12px;">${compName}</div>`,
+          '</template>',
+          '',
+          '<script setup>',
+          '// 占位组件由 pre-write-self-healing 悬空引用兜底生成（runPreWriteSelfHealing）',
+          '</script>',
+          '',
+        ].join('\n');
+        patched += 1;
+      }
+      summary.danglingImportPatched = patched;
+      if (patched > 0) {
+        logger?.warn?.(
+          `🛡️ 悬空引用占位兜底：补齐 ${patched} 个缺失子组件（缺段降级，防整组件 404 崩溃）`,
+          { missing: missingImports },
+        );
+      }
+    }
+  } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:dangling-import', counter: summary });
+    logger?.warn?.('🛡️ 悬空引用占位兜底异常（fail-open）', { error: err?.message || String(err) });
   }
 
   return { files: result, summary };

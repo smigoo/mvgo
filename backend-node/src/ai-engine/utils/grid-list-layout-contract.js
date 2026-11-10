@@ -238,7 +238,49 @@ export function buildGridContract(sec, opts = {}) {
   if (xs.length < 2) return null
 
   const colPitch = uniformPitch(xs)
-  if (colPitch === null) return null // x 不等距 ⇒ 非规则网格，不猜
+  if (colPitch === null) {
+    // 🛡️ 2026-11-10（重点车辆 2:8023 实锤，用户授权「最小版」）：非等宽行兜底。
+    //   形态：3 卡 x=37/166/274、宽 140/120/140（bbox 含出血，pitch 129/108 不等距）
+    //   ⇒ 旧判据 return null ⇒ 刀41/53 全部不接管 ⇒ LLM 直写（卡底/结构/颜色全裸奔）。
+    //   窄判据（四条全过才产出，fail-open）：① ≥2 项 ② 高度一致 ±2 ③ 宽度众数占比 ≥2/3
+    //   ④ 横向跨度 ≤ 容器宽 + 8。产出 columnWidths/gaps 供接管器逐列消费；
+    //   judge/heal 的等距口径本轮不动（judge 对 columnWidths 契约跳过统一列宽判定）。
+    const widths = boxes.map((b) => Math.round(Number(b.width)))
+    const modeW = modeNumber(widths)
+    const modeCount = widths.filter((w) => Math.abs(w - modeW) <= TOL).length
+    const hs = boxes.map((b) => Math.round(Number(b.height)))
+    const spanW =
+      Math.max(...boxes.map((b) => Number(b.x) + Number(b.width))) -
+      Math.min(...boxes.map((b) => Number(b.x)))
+    const heightsOk = Math.max(...hs) - Math.min(...hs) <= 2
+    const widthsOk = widths.length >= 2 && modeCount / widths.length >= 2 / 3
+    if (heightsOk && widthsOk && spanW <= modeW * boxes.length + 8) {
+      const sorted = boxes.slice().sort((a, b) => Number(a.x) - Number(b.x))
+      const orderedW = sorted.map((b) => Math.round(Number(b.width)))
+      const gaps = []
+      for (let i = 1; i < sorted.length; i += 1) {
+        gaps.push(Math.round(Number(sorted[i].x) - (Number(sorted[i - 1].x) + Number(sorted[i - 1].width))))
+      }
+      const cardH = modeNumber(hs)
+      const ys2 = uniqueSorted(boxes.map((b) => Math.round(Number(b.y))))
+      return {
+        id: String(sec.id ?? ''),
+        cols: boxes.length,
+        cardW: modeW,
+        cardH,
+        colGap: gaps.length ? Math.max(0, gaps[0]) : 0,
+        rowGap: ys2.length > 1 ? 0 : null,
+        rows: ys2.length,
+        itemCount: boxes.length,
+        lastRowFull: true,
+        isGrid,
+        geometryFrom: 'figma-nonuniform',
+        columnWidths: orderedW,
+        gaps,
+      }
+    }
+    return null
+  }
   const colGap = Math.round(colPitch - cardW)
   if (!(colGap >= 0) || colGap > 200) return null
 
@@ -497,6 +539,10 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
             want: `repeat(${wantCols}, ${wantW}px)`,
           })
         }
+      } else if (contract.columnWidths && contract.columnWidths.length > 0) {
+        // 🛡️ 非等宽契约（2026-11-10 · 用户裁决最小版）：逐列宽本轮只产出契约供接管器消费，
+        //   统一 wantW 会对窄卡（120 vs 众数 140）误报 grid-track-width，故跳过宽度判定；
+        //   列数不符仍由上方 grid-cols 分支负责。
       } else if (Math.abs(trackPx - wantW) > TOL) {
         out.push({
           code: 'grid-track-width',

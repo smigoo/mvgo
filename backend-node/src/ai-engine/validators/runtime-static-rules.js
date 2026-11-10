@@ -44,6 +44,7 @@ export const RUNTIME_CODES = {
   'RUNTIME-013': '仅完成静态抽取（static-fallback），无法证明组件可在真实 Vue 运行时加载',
   'RUNTIME-014': '无法构建组件截图容器（renderer）',
   'RUNTIME-015': '截图渲染失败（renderer，异常抛出）',
+  'RUNTIME-016': 'stage 内文本节点 bbox 两两相交（text-overlap，交比>0.15；2026-11-10 流量 6c12ab55 实锤）',
 }
 
 /**

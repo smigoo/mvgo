@@ -1,0 +1,47 @@
+# Figma 结构契约 · 命名解读规范 v20261110.28
+# 用途：拼进代码生成 prompt（extraPrompt / 系统提示），让模型正确解读「结构契约 → mvgo」输出的节点名。
+# 契约是「节点名 + 缩进层级」纯文本树：缩进 = 父子包含，同级顺序 = 视觉从上到下（已按 y/x 排序，与 Figma 图层面板无关）。
+# 契约头 # @meta 给机器摘要：version / sections / loops / slots / nodes / truncated / omitted / ids / quality；truncated=true 或「[省略 N 行]」表示树不完整，勿推断缺失模块。
+
+## 一、固定前缀（用户规定，语义不可改写）
+@<技术栈>/<类型>  技术栈注解。@echarts/bar → 用 ECharts 生成 bar 图；@antd/button → 用对应组件库控件。
+bg / bg-*         背景与装饰层，整体导出 PNG@2x。作为背景实现，绝不逐个重建内部矢量。
+icon-*            小图标，SVG。
+img-*             内容图片，PNG@2x。
+header / header-* 唯一根级标题区。header-slot-left|center|right 预留 <slot> 供外部注入；右侧通常是按钮、tab、图例、时间筛选。
+slot-con          唯一内容槽。其余全部内容都在其中，不要把内容平铺到组件根，也不要出现第二个 slot-con-*。
+
+## 二、语义前缀 → 生成动作
+cp-<语义>              唯一组件根（SFC 外壳 / 微码组件壳）；内部节点不得再叫 cp-。
+section-<语义>         异构分区 → <section> 或独立子组件。数量固定、结构不同、不可迭代，严禁用 v-for 遍历。
+section-title-<语义>   模块小标题，属于同名 section-*；静态文案，通常带 [data:label]。
+graphic-<语义>         零散矢量拼成的静态图形（仪表盘 / 环形进度 / 装饰图形）→ <img>。内部矢量已合并导出，严禁用 echarts / chart 库重建。
+@echarts/<type>        真图表（带坐标轴 / 图例 / 多组数据系列）→ ECharts option，<type> 决定 series.type。
+card-* / list-* / form-*  卡片 / 列表 / 表单容器。
+item-<语义>-N          同构循环子项 → 一份模板 + v-for / map。只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码。
+legend / axis-* / label / value / unit  图表内部语义元素或数据槽，不得压平成图片。
+[data:value|unit]      TEXT 行尾标记 → 绑定 props / 接口字段，绝不写死字面量；[data:label] 多为静态文案可保留。
+[循环 ×N，首项即模板] 折叠区间是完整 1..N，首行已单独展开即模板，绝不生成 N+1 份。
+#1-283                  真实节点行尾的 Figma nodeId（可选开关）。只用于回填已有同名 section，绝不据此新建节点；header / bg / slot-con / section-* 等虚拟骨架行无 ID。
+
+## 二之一、vue3 与 microcode 差异（仅资源实现不同）
+vue3：graphic-* / img-* / bg-* 用 <img> 或 CSS background 实现。
+microcode：同样渲染为图片，但 <img :src="资源变量"> 的 import 必须由 injectResourceImports 后处理注入，严禁 LLM 手写图片 import 或硬编码本地路径；declare.json 里不要重复声明 header-slot-* 同名插槽。其余结构约束两档完全一致。
+
+## 三、根级骨架（必须遵守）
+cp-<语义> → header + bg + slot-con 三段；slot-con 下以 section-title-* 为锚点分成 section-* 子模块，小标题与其下方图表归入同一模块；段前 / 跨段 / 全屏底图直属 slot-con。
+全组件只有一个 header、一个 bg、一个 slot-con。
+
+## 四、硬约束
+1. item- 只表示带 -N 序号的同构循环子项。不带序号的 item-* 是 .26 及之前的历史异构分区，按 section-* 处理，不要按 v-for 展开。
+2. graphic-* 与 @echarts/* 二分：前者是静态图片，后者是可交互图表，不可互换。
+3. TEXT 数值与标签必须保留为独立文本节点并绑定数据，绝不并入位图。
+4. 严格按契约层级划分组件边界，不要臆造树中不存在的节点、模块或数据。
+5. 本段是【结构契约】，不是需求文档：禁止据此分析业务需求、臆造交互事件或数据接口；头部 # @meta 只是统计，不是功能需求。
+6. 结构约束（组件边界 / 分区划分 / 循环判定 / 图表 vs 静态图形 / 资源实现）优先级等同 Figma @技术栈锚点契约，不让位设计稿；仅颜色、字号、间距等纯视觉样式可让位。
+7. graphic-* 与 @echarts/* 二分不可互换：前者静态图片（microcode 走资源注入），后者可交互图表。
+
+## 五、优先级
+Figma @技术栈 锚点契约 > 用户补充需求段 > 平台默认规范。
+视觉样式（颜色 / 尺寸 / 布局 / 字体）与设计稿冲突时以设计稿为准；但交互 / 行为类显式要求（tab 切换、轮播、折叠展开、点击联动）必须落实，不得以「设计稿没有」为由省略。
+结构契约例外（v20261110.28）：组件边界 / 分区 / 循环 / 图表类型属结构约束，不让位设计稿；仅纯视觉样式可让位。

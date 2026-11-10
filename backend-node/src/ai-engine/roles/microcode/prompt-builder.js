@@ -2300,7 +2300,7 @@ export function extractFigmaColorEssentials(figmaNodeData, maxNodes = 220) {
       if (Array.isArray(node.children))
         node.children.forEach((c) => walk(c, depth + 1));
     };
-    walk(figmaNodeData, 0);
+    walk(figmaNodeData?.document ?? figmaNodeData, 0);
     if (lines.length === 0) return '(未提取到颜色数据)';
     return lines.join('\n');
   }

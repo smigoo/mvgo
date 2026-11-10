@@ -408,6 +408,13 @@ import {
 } from '../utils/section-leaf-assembler.js';
 import { THEME_WRAPPER_TEMPLATES } from '../utils/mc-skeleton.js';
 import { reportPatchChainError } from '../utils/patch-chain-observer.js';
+import { relocateStrayTemplateRoots } from '../utils/stray-template-root-relocator.js';
+// 🛡️ F1a/F1b/F2（2026-11-10 · 方案 v4）：段树完整性对账 + headerSlots 落地审计（均 reportOnly 观测）
+import {
+  auditSegTreeIntegrity,
+  contentFingerprint,
+} from '../utils/seg-tree-integrity.js';
+import { auditHeaderSlotLanding } from '../utils/header-slot-landing-audit.js';
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const THEME_WRAPPER_TEMPLATES = { dark: …, light: … }`
 //   及其架构 docblock（2026-08-26 治本修复：宿主/预览从不注入 .dark/.light 类 ⇒
@@ -806,6 +813,38 @@ export class MicrocodeEngineer extends BaseAgent {
       evaluated: _dedupeStats.evaluated,
       items: _dedupeRemoved,
     });
+    // 🛡️ F1a 段树完整性对账（2026-11-10 · 方案 v4，reportOnly 观测，不改变数据流）：
+    //   基准原则 = vision 段树是唯一事实源（用户裁决）。dedupe/过滤/吞并等变换允许，
+    //   但每次偏离必须被看见——此处对账「vision 全树 vs 出口全树」，只读、计数行恒打（0 也打）。
+    //   判据：missing=真丢（全树找不到）/ reparented=容器吞并重挂（不算丢）/
+    //   missingParent·unexpectedParent=父子关系差异子集 / inversions=顶层顺序偏离（vision 序基准）/
+    //   synthetic=合成锚（合法机制只计数）。详见 utils/seg-tree-integrity.js 与方案文档 §3-F1a。
+    try {
+      const _f1aVision =
+        layoutStructure?.layout?.sections || layoutStructure?.sections || [];
+      const _f1a = auditSegTreeIntegrity(_f1aVision, effectiveSections);
+      this.logger.info(
+        `🛡️ F1a 段树对账 missing=${_f1a.missing.length} reparented=${_f1a.reparented.length} missingParent=${_f1a.missingParent} unexpectedParent=${_f1a.unexpectedParent} inversions=${_f1a.orderInversions}/comparable=${_f1a.comparablePairs} synthetic=${_f1a.synthetic} (vision=${_f1a.visionTotal} exit=${_f1a.exitTotal})`,
+      );
+      if (_f1a.missing.length > 0) {
+        this.logger.warn('🛡️ F1a 丢段清单（reportOnly，不拦截）', {
+          missing: _f1a.missing.slice(0, 6),
+        });
+      }
+      if (_f1a.reparented.length > 0) {
+        this.logger.warn('🛡️ F1a 重挂清单（容器吞并观测，Q6 二轮裁决数据源）', {
+          reparented: _f1a.reparented.slice(0, 6),
+        });
+      }
+    } catch (_f1aErr) {
+      reportPatchChainError(_f1aErr, {
+        logger: this.logger,
+        pass: 'execute:seg-tree-integrity',
+      });
+      this.logger.warn('🛡️ F1a 对账异常（fail-open，不影响主流程）', {
+        error: _f1aErr?.message || String(_f1aErr),
+      });
+    }
     // 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格契约原先只在 `pre-write-self-healing`
     //   跑 —— 那一刻段容器的 `data-section-id` 还没补齐（后被 R22/结构自愈补上），
     //   于是 `sectionIdOf(hostAttrs)` 取不到 id、整段 `continue`：
@@ -9628,6 +9667,45 @@ export default declareInfo
             ' 个回退（回退目标自身 SFC 不合法，保留 healing 版）',
         );
       }
+      // 🛡️ R11-B（2026-11-10 · 9fe56c51 / a10db646 双单实锤）：**终写前再跑一次**游离根归位（幂等）。
+      //   病灶：R11-A 已在 file-writer 写盘前归位过，但此后 execute 后段多处用 allFiles /
+      //   finalTruthFiles 覆写（语义回退、absolute 补丁、fixedFiles 合并…）会把成果冲掉
+      //   ——两单磁盘 index.vue 都保留「`<template>` 后紧跟游离 tabs 块」形态，预览宽度
+      //   塌缩到 84 / 24 px（真值 405）。R11-A 本轮日志 0 次命中即为证据。
+      //   与下方 A3/B-2「absolute 补丁在语义回退之后补跑」同一时序治理思路，幂等、零判据。
+      // 🛡️ F2 R11-B 只读追踪（2026-11-10 · 方案 v4）：归位成果是否存活到终写。
+      //   归位后与统一终态落盘前各取一次 index 内容指纹（utils/seg-tree-integrity.js#contentFingerprint），
+      //   不一致 ⇒ 归位成果被后段 pass 覆写（失效点在覆写者，不在 R11-B 本身）。只读，零行为变更。
+      let _r11bTraceIdx = null;
+      let _r11bTraceFingerprint = null;
+      let _r11bTraceRelocated = false;
+      try {
+        const _r11bIdx = Object.keys(finalTruthFiles).find(
+          (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+        );
+        if (_r11bIdx && typeof finalTruthFiles[_r11bIdx] === 'string') {
+          _r11bTraceIdx = _r11bIdx;
+          const _r11b = relocateStrayTemplateRoots(finalTruthFiles[_r11bIdx]);
+          if (_r11b.changed) {
+            finalTruthFiles[_r11bIdx] = _r11b.content;
+            _r11bTraceRelocated = true;
+            this.logger.warn('🛡️ R11-B 终写前二次归位游离根（幂等）', {
+              file: _r11bIdx,
+              moved: _r11b.moved,
+            });
+          }
+          _r11bTraceFingerprint = contentFingerprint(finalTruthFiles[_r11bIdx]);
+        }
+      } catch (_r11bErr) {
+        // 哨兵纪律：fail-open catch 必须接 patch-chain-observer（本仓门禁会逐 catch 校验）
+        reportPatchChainError(_r11bErr, {
+          logger: this.logger,
+          pass: 'execute:r11b-final-relocate',
+        });
+        this.logger.warn('🛡️ R11-B 归位异常（fail-open）', {
+          error: _r11bErr?.message || String(_r11bErr),
+        });
+      }
       // 🛡️ A3 / B-2 时序治理（2026-09-29 · 全语料 27/495 组件终态实锤）：
       //   absolute 遮罩层宿主补 position:relative 的修复原在 generateCode 内执行
       //   （见本文件 absolute 遮罩层修复段），但其后 execute 后段多处重写样式
@@ -9890,6 +9968,91 @@ export default declareInfo
         throw new Error(
           'Loop4 双裁判门禁 BLOCK（MANIFEST_AUDIT_ENFORCE=1）：拒绝统一终态落盘',
         );
+      }
+
+      // 🛡️ F2 追踪比对（只读）：R11-B 归位成果 vs 终写前内容指纹。
+      //   计数行恒打（0 也打）；指纹不一致 ⇒ 归位成果被后段覆写，失效点在覆写者。
+      try {
+        let _r11bSurvive = null;
+        if (_r11bTraceIdx && _r11bTraceFingerprint) {
+          const _now = finalTruthFiles[_r11bTraceIdx];
+          _r11bSurvive =
+            typeof _now === 'string' && contentFingerprint(_now) === _r11bTraceFingerprint;
+        }
+        this.logger.info(
+          `🛡️ F2 R11-B 追踪 key=${_r11bTraceIdx ?? 'none'} relocated=${_r11bTraceRelocated} surviveToFinalWrite=${_r11bSurvive}`,
+        );
+      } catch (_r11bTraceErr) {
+        reportPatchChainError(_r11bTraceErr, {
+          logger: this.logger,
+          pass: 'execute:r11b-trace',
+        });
+      }
+      // 🛡️ T09 终写前补跑（2026-11-10 · 设备 1d9bcc28 实锤）：resource-mounter 的
+      //   ensureHeaderSlots 注入发生在 chunk 修复层，execute 后段（fixedFiles 合并/语义回退）
+      //   会把注入冲掉——真机「T09 已确定性补齐（injected=[header-right]）」×2 日志与
+      //   F1b slotAbsent=3、磁盘无 #header-right 并存即为证据。与 R11-B/A3/B-2 同款时序治理：
+      //   确定性补丁在终写前补跑（幂等：resource-mounter 内部有 P1-3 重叠去重 + 已落插槽幂等）。
+      try {
+        if (Array.isArray(headerSlots) && headerSlots.length > 0) {
+          const _t09Idx =
+            Object.keys(finalTruthFiles).find((p) => p === 'package/index.vue') ||
+            Object.keys(finalTruthFiles).find((p) => p.endsWith('/index.vue'));
+          if (_t09Idx && typeof finalTruthFiles[_t09Idx] === 'string') {
+            const _t09 = microcodeResources.ensureHeaderSlots(
+              finalTruthFiles[_t09Idx],
+              { headerSlots },
+              { logger: this.logger, files: finalTruthFiles },
+            );
+            if (_t09 !== finalTruthFiles[_t09Idx]) {
+              finalTruthFiles[_t09Idx] = _t09;
+              this.logger.warn('🛡️ T09 终写前补跑：headerSlots 插槽注入（chunk 层注入被后段覆写冲掉的确定性兜底）', {
+                file: _t09Idx,
+                slotCount: headerSlots.length,
+              });
+            }
+          }
+        }
+      } catch (_t09FinalErr) {
+        reportPatchChainError(_t09FinalErr, {
+          logger: this.logger,
+          pass: 'execute:t09-final-ensure',
+        });
+        this.logger.warn('🛡️ T09 终写前补跑异常（fail-open）', {
+          error: _t09FinalErr?.message || String(_t09FinalErr),
+        });
+      }
+      // 🛡️ F1b headerSlots 落地审计（2026-11-10 · 方案 v4，reportOnly 只读，不注入不落地）：
+      //   两级锚——结构锚（<template #header-right> 等具名插槽开标签）+ 内容弱锚
+      //   （figmaNodeId / content 文本片段命中插槽块）；结构锚在但无证据 ⇒ unverified
+      //   （不计为未落地，防误报）。落地修复仍由既有 ensure-header-slots 机制承担，本审计只度量。
+      //   计数行恒打（0 也打）。详见 utils/header-slot-landing-audit.js 与方案文档 §3-F1b。
+      try {
+        const _f1bIdxPath =
+          Object.keys(finalTruthFiles).find((p) => p === 'package/index.vue') ||
+          Object.keys(finalTruthFiles).find((p) => p.endsWith('/index.vue'));
+        const _f1bIdxContent = _f1bIdxPath ? finalTruthFiles[_f1bIdxPath] : null;
+        const _f1b = auditHeaderSlotLanding({
+          headerSlots,
+          indexContent: _f1bIdxContent,
+        });
+        this.logger.info(
+          `🛡️ F1b headerSlots落地 total=${_f1b.total} slotAbsent=${_f1b.slotAbsent} landed=${_f1b.landed} unverified=${_f1b.unverified}${_f1b.absentSlotKeys.length ? ` absentKeys=${_f1b.absentSlotKeys.join(',')}` : ''}`,
+        );
+        if (_f1b.slotAbsent > 0) {
+          this.logger.warn('🛡️ F1b 插槽未落地清单（reportOnly，不拦截）', {
+            file: _f1bIdxPath ?? 'index.vue 缺失',
+            details: _f1b.details.filter((d) => d.status === 'slotAbsent').slice(0, 6),
+          });
+        }
+      } catch (_f1bErr) {
+        reportPatchChainError(_f1bErr, {
+          logger: this.logger,
+          pass: 'execute:header-slot-audit',
+        });
+        this.logger.warn('🛡️ F1b 落地审计异常（fail-open，不影响主流程）', {
+          error: _f1bErr?.message || String(_f1bErr),
+        });
       }
 
       const {
@@ -10294,6 +10457,9 @@ export default component
         autoFixes: fixes, //返回自动修复的问题列表
         degradedScriptParts: codeResult.degradedScriptParts || [], // 🛡️ 脚本子段降级清单（供任务状态/前端「不完整」标签）
         degradedFiles, // 🛡️ P1-4 坏文件隔离降级清单（与 degradedScriptParts 并列，计入统一产物完整度）
+        // 🛡️ C 层（2026-11-10）：SFC 门禁阻断明细（path+errors）出参——graph 层据此组装
+        //   单文件重生成指导回灌 L0-B（通用语法自愈，不再逐形态打地鼠）。
+        sfcBlockedDetail: Array.isArray(this._sfcBlockedFiles) ? this._sfcBlockedFiles : [],
         // 🧩 2026-11-08（R2）：与 component-meta.json 同一结论（写盘/降级/覆盖度结算后）
         artifactIncomplete: finalArtifactIncomplete,
         unmaterializedSections: codeResult.unmaterializedSections || [],

@@ -1213,10 +1213,16 @@ export function injectMissingTabUi(content, options = {}) {
   // 幂等：已注入过（含 .c-xxx-tabs 类）则跳过，避免重复注入
   if (/\bc-[\w-]+-tabs\b/.test(content)) return content;
 
-  const tpl = content.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  // 🛡️ 2026-11-10（7cac7ab3 实锤，游离根第四次复发·制造者是本函数）：
+  //   旧实现 lazy 正则 `/<template[^>]*>([\s\S]*?)<\/template>/` 被**命名插槽**
+  //   `<template #header-right>` 的第一个 `</template>` 截断（总纲 §已知反模式），
+  //   后续 `content.replace(tpl[1], …)` 把 tab 栏写进 base-panel 之外 ⇒ 游离根落盘
+  //   （R11-A/B 都在写盘前，写盘出口注入后无人归位 ⇒ 预览左侧文字竖排）。
+  //   治本 A：主 `<template>` 块按 **配平扫描** 提取（depth 计数 template 开/闭），
+  //   与 stray-template-root-relocator 同一反截断纪律。
+  const tplBody = extractMainTemplateBody(content);
   const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/);
-  if (!tpl || !scriptMatch) return content;
-  const tplBody = tpl[1];
+  if (tplBody === null || !scriptMatch) return content;
   const scriptBody = scriptMatch[1];
 
   // ① 探测 tabs 数组变量（必须后接 [ .. ]，排除 activeTab 等字符串 ref）
@@ -1229,6 +1235,13 @@ export function injectMissingTabUi(content, options = {}) {
 
   // ③ 模板是否已渲染该 tabs？已渲染则跳过（不重复注入）
   if (templateRendersTabs(tplBody, tabsVar)) return content;
+
+  // ③-b 🛡️ header 通道已承载闸（2026-11-10 · 7b4ae1d8 双份 tabs 实锤）：header-right 等
+  //   header 专属插槽非空 ⇒ label/tab 契约已由 header 通道消费，内容区再注入 tab 骨架必双份
+  //   （旧判据只认 v-for，HeaderSection 等子组件承载识别不到）。
+  if (headerChannelOccupied(tplBody)) {
+    return content;
+  }
 
   // ④ 探测激活态变量（找不到则放弃：避免注入未声明绑定导致语义门禁失败）
   const activeVar = options.activeVar || detectActiveVar(scriptBody, tplBody, arrInfo.values);
@@ -1252,7 +1265,33 @@ export function injectMissingTabUi(content, options = {}) {
   );
   const newBody = injectTabBarIntoTemplate(tplBody, bar);
   if (!newBody || newBody === tplBody) return content;
-  return content.replace(tpl[1], newBody);
+  // 🛡️ 治本 A 配套：tplBody 现在是完整模板体（含首尾 `<template>` 标签），整块替换主模板。
+  return content.replace(tplBody, newBody);
+}
+
+/**
+ * 🛡️ 主 `<template>` 块配平提取（2026-11-10 · 游离根第四次复发治本 A）。
+ * depth 计数 `<template…>` 开 / `</template>` 闭，跳过 SFC 其他顶层块（script/style，
+ * 其中不会出现 template 标签配对干扰）；返回**含首尾标签的完整块**，未命中返回 null。
+ * 取代旧 lazy 正则——后者被命名插槽 `<template #x>` 的第一个 `</template>` 截断。
+ */
+function extractMainTemplateBody(content) {
+  const open = content.match(/<template[^>]*>/);
+  if (!open) return null;
+  const start = open.index;
+  const tokenRe = /<\/?template\b[^>]*>/gi;
+  tokenRe.lastIndex = start;
+  let depth = 0;
+  let m;
+  while ((m = tokenRe.exec(content)) !== null) {
+    if (/^<\/template/i.test(m[0])) {
+      depth -= 1;
+      if (depth === 0) return content.slice(start, m.index + m[0].length);
+    } else if (!/\/\s*>$/.test(m[0])) {
+      depth += 1;
+    }
+  }
+  return null;
 }
 
 /** 正则转义（变量名用） */
@@ -1310,6 +1349,28 @@ function templateRendersTabs(tplBody, tabsVar) {
   if (/\bclass\s*=\s*["'][^"']*\btab\b/i.test(tplBody)) return true;
   if (/:\s*class\s*=\s*["'][^"']*\btab\b/i.test(tplBody)) return true;
   return false;
+}
+
+/**
+ * 🛡️ header 通道已承载检查（2026-11-10 · 重点车辆 7b4ae1d8 双份 tabs 实锤）：
+ *   模板存在**非空**的 header 专属具名插槽（#header-right/#title-left/#title-right，
+ *   内含真实元素而非纯注释/空白）⇒ headerSlots 契约（label/tab 类）已由 header 通道
+ *   消费（T09 注入或 LLM 生成 HeaderSection 等）。此时 script 里的 tabs 数组即使没有
+ *   v-for 渲染，也**不得**再注入内容区 tab 骨架——否则 header 胶囊 + 内容区 tabs 双份
+ *   （templateRendersTabs 只认 v-for 绑定，子组件/插槽承载识别不到，故需本前置闸）。
+ *   纯结构判据（插槽名 + 非空内容），零硬编码。
+ */
+function headerChannelOccupied(tplBody) {
+  const slotRe = /<template\s+[^>]*(?:#|v-slot:)(?:header-right|title-left|title-right)\b[^>]*>/i;
+  const m = slotRe.exec(tplBody);
+  if (!m) return false;
+  const openEnd = m.index + m[0].length;
+  const close = tplBody.indexOf('</template>', openEnd);
+  if (close === -1) return false;
+  const inner = tplBody.slice(openEnd, close).trim();
+  // 剔除纯注释后仍需有真实元素（含子组件标签——子组件承载也算 header 通道已占用）
+  const withoutComments = inner.replace(/<!--[\s\S]*?-->/g, '').trim();
+  return withoutComments.length > 0 && /<[a-zA-Z]/.test(withoutComments);
 }
 
 /**
@@ -1397,7 +1458,16 @@ function injectTabBarIntoTemplate(tplBody, bar) {
     const idx = m.index + m[0].length;
     return tplBody.slice(0, idx) + '\n' + bar + tplBody.slice(idx);
   }
-  // 回退：注入到模板最前（作为根元素首个子节点）
+  // 🛡️ 治本 B（2026-11-10 · 7cac7ab3 实锤）：回退分支**禁止把 tab 栏插到 base-panel 之外**。
+  //   旧实现 `return bar + '\n' + tplBody` 在含 base-panel 的模板上制造游离根（tab 栏落在
+  //   base-panel 开标签之前 ⇒ 宿主 flex 上下文把它压成竖窄条）。现在：有 base-panel ⇒
+  //   插到其开标签之后（默认插槽首部，与 LLM 本意「tab 行在面板内容顶部」语义等价）；
+  //   确无 base-panel（非微码宿主形态）才允许插到模板最前。
+  const panelOpen = tplBody.match(/<base-panel\b[^>]*>/);
+  if (panelOpen) {
+    const idx = panelOpen.index + panelOpen[0].length;
+    return tplBody.slice(0, idx) + '\n' + bar + tplBody.slice(idx);
+  }
   return bar + '\n' + tplBody;
 }
 

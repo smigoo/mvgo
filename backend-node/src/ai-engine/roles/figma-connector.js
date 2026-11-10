@@ -956,9 +956,19 @@ export class FigmaConnector {
         // 更严格，可同时消除「同 fill 异子树」的误去重）；叶子节点保持原 fill 签名。
         const hasChildren =
           Array.isArray(node.children) && node.children.length > 0;
-        const sig = hasChildren
-          ? generateContainerSignature(node)
-          : this._generateAssetSignature(node);
+        // 🛡️ A 层补全②（2026-11-10 · R18 实锤 14→6：三图被「去重 6」吞）：
+        //   容器壳（bg-[m] 等）的子树签名包含全部后代 fills ⇒ 后代真实 IMAGE 叶子
+        //   （2:7458 等，imageRef 各异）先被父容器签名覆盖入组，后到被判同组 duplicates
+        //   吞掉 ⇒ 永不下载。真实位图叶子永不参与去重（各是各的图，重复判定
+        //   只对 SOLID/GRADIENT 类容器有意义）。
+        const isRealImageLeaf =
+          Array.isArray(node.fills) &&
+          node.fills.some((f) => f && f.type === 'IMAGE' && f.visible !== false);
+        const sig = isRealImageLeaf
+          ? null // 真图叶子：跳过去重，直接下载
+          : hasChildren
+            ? generateContainerSignature(node)
+            : this._generateAssetSignature(node);
         if (sig) {
           if (sigGroups.has(sig)) {
             // 重复签名 → 加入 duplicates，不单独下载
@@ -1200,6 +1210,30 @@ export class FigmaConnector {
         { nodeId: node.id },
       );
       collected.push(node);
+      // 🛡️ A 层补全（2026-11-10 · R17 首验修正）：容器壳（自身无 IMAGE fill 但子树内有
+      //   真实图片节点）push 后**不再 return**——父图照导（bg 层语义不变），同时继续
+      //   递归收集子树内的独立 IMAGE fill 图片（流量 2:7458/2:3473/2:3523、车辆 5 张
+      //   jimeng 图）。旧 return 会吞掉子图 ⇒ 映射侧（已放行）与提取侧口径分裂 ⇒
+      //   子图在映射里永远 missing（R17 实锤 19 条幻影 missing）。真图节点（自身带
+      //   IMAGE fill）保持 return——子 VECTOR 碎片仍不拆。
+      if (
+        !this._selfHasImageFill(node) &&
+        this._hasDescendantImageFill(node)
+      ) {
+        logger.info(
+          `🔀 容器壳继续下钻收集子图: ${node.name}（父图已整体导出）`,
+          { nodeId: node.id },
+        );
+        // ⚠️ 必须**直接走本函数尾部递归**——若落穿到下方 kids/isResourceContainer 段，
+        //   会被二次 push（88:34 重复入清单）且 kidResourceCount<2 时 push+return 再次
+        //   吞掉子图（R19 实锤：分流 6+6 不变，2:7458 仍未下载）。此处内联尾递归语义。
+        if (node.children && Array.isArray(node.children)) {
+          for (const child of node.children) {
+            this.extractResourceNodes(child, collected, false);
+          }
+        }
+        return collected;
+      }
       return collected;
     }
 
@@ -2444,6 +2478,36 @@ export class FigmaConnector {
   }
 
   /**
+   * 🛡️ A 层根治（2026-11-10 · 流量 2:7458/2:3473/2:3523 + 车辆 5 张 jimeng 图实锤）：
+   * 命名节点（bg-[m]/icon 等）整体导出时**吞掉子树内的真实 IMAGE fill 图片**——
+   * 提取侧 :1229 push+return 与映射侧 :2911 return 双双短路，深层真实图片
+   * （如 bg-[m] 内的装饰图、card 内嵌套 RECTANGLE 图）永远进不了资源清单 ⇒
+   * LLM 只能拿降级图/邻图凑数 ⇒「挂错图/放大/同图两挂」全是下游代偿。
+   * 判据（确定性，禁 LLM 猜测）：节点自身无 IMAGE fill 但子树内存在 IMAGE fill
+   * 节点 ⇒ 命名节点是「容器壳」而非「图本身」，必须继续下钻。
+   * 有 IMAGE fill 的命名节点（真图）保持整体导出不变——本刀只捅漏斗，不动既有语义。
+   */
+  _hasDescendantImageFill(node, depth = 0) {
+    if (!node || depth > 8) return false;
+    const kids = Array.isArray(node.children) ? node.children : [];
+    for (const k of kids) {
+      if (Array.isArray(k.fills) && k.fills.some((f) => f && f.type === 'IMAGE' && f.visible !== false)) {
+        return true;
+      }
+      if (this._hasDescendantImageFill(k, depth + 1)) return true;
+    }
+    return false;
+  }
+
+  /** 自身是否带 IMAGE fill（真图节点） */
+  _selfHasImageFill(node) {
+    return (
+      Array.isArray(node?.fills) &&
+      node.fills.some((f) => f && f.type === 'IMAGE' && f.visible !== false)
+    );
+  }
+
+  /**
    *生成资源去重签名（基于 fill 内容）
    * 相同颜色/渐变的节点复用同一张图片，避免重复下载
    * @param {Object} node - Figma 节点
@@ -2907,9 +2971,15 @@ export class FigmaConnector {
         // 例外：tabs-icon / *-list / *-group / icons 等多 icon 容器仍继续递归子节点。
         // 🛡️ 尺寸守卫同口径（2026-10-20 · 477e185d 实锤）：伪 icon 容器必须继续下钻，
         // 否则映射侧与提取侧口径分裂（提取侧拆了、映射侧整挂）⇒ 子树资源无映射。
+        // 🛡️ A 层同口径（2026-11-10）：容器壳（自身无 IMAGE fill 但子树有）不短路，
+        // 与提取侧「父图照导+继续收子图」完全一致——子树真实图片要进映射且可下载。
         if (
           this._isWholeResourceByName(node.name) &&
-          !this._isOversizedIconNamedContainer(node)
+          !this._isOversizedIconNamedContainer(node) &&
+          !(
+            !this._selfHasImageFill(node) &&
+            this._hasDescendantImageFill(node)
+          )
         ) {
           return;
         }

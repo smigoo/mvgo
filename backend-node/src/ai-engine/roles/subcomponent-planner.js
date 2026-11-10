@@ -2590,6 +2590,30 @@ export class SubcomponentPlanner {
       typeof opts.figmaNodeData === 'object'
     ) {
       const anchorIndex = indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData);
+      // 🛡️ 2026-11-10（流量 6c12ab55 实锤，Q6 收口）：结构来源+锚定率计数行（恒打）。
+      //   真机实证：vision 仅 3 段（锚点不完备但 hasAnchoredContent 放行）⇒ 出口结构语义
+      //   漂移 ⇒ 装配自由度爆炸 ⇒ 排版崩（D2 重叠 3 对/横幅溢出）。先可视化覆盖率，
+      //   为后续「覆盖率阈值收紧」留数据基线（当前判据仍按 e7c4197c 只防全局零锚）。
+      const _anchorTotal = Array.isArray(sections) ? sections.length : 0;
+      const _anchorHit = Array.isArray(sections)
+        ? sections.filter((s) => {
+            const key = sectionAnchorKey(s);
+            return !!key && anchorIndex.has(key);
+          }).length
+        : 0;
+      // 🛡️ Figma 顶层业务段参考数（2026-11-10 · 设备 8e3db5f5 实锤：vision 仅 2 段
+      //   anchorCoverage=100% 仍放行 ⇒ 段拆分爆炸成 27 个子组件）。coverage 只测锚定
+      //   比例不测段数合理性——此列让「vision 段数 ≪ Figma 业务段数」的低质量骨架可见，
+      //   为「段数过低触发 vision 重分析」判据留数据基线（本轮只观测不收紧）。
+      const _doc = opts.figmaNodeData?.document || opts.figmaNodeData;
+      const _figmaTop = Array.isArray(_doc?.children?.[0]?.children)
+        ? _doc.children[0].children.length
+        : Array.isArray(_doc?.children)
+          ? _doc.children.length
+          : 0;
+      logger.info(
+        `🛡️ structure-source：anchorCoverage=${_anchorHit}/${_anchorTotal} source=${structureSource} visionSections=${_anchorTotal} figmaTop=${_figmaTop}`,
+      );
       if (!hasAnchoredContent(sections, anchorIndex)) {
         effectiveStructureSource = STRUCTURE_SOURCE_FIGMA;
         logger.warn(

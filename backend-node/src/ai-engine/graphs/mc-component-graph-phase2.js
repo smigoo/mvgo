@@ -124,6 +124,8 @@ import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
 // 🛡️ R6（2026-11-09）：缓存命中路径的 headerSlots 聚合补跑（判据单一来源 = inferrer）。
 import { ensureHeaderSlots } from '../utils/inline-header-slot-inferrer.js';
 import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
+// 🧩 v20261110.28 P0-1：Figma 结构契约不是需求文档，禁止触发文档分析子管线。
+import { isStructureContract } from '../utils/structure-contract.js';
 // 📊 WP1（2026-10-08）：chartSpec 红线留痕（文字色硬编码/数据混入/seriesTypes 盲区），独立字段只留痕不阻断
 import { scanChartTextColors, validateChartSpec } from '../utils/chart-spec.js';
 // 🧩 WP2（2026-10-08）：绑定契约留痕（孤儿资源/主题变体值一致性），独立字段只留痕不阻断
@@ -154,6 +156,7 @@ import {
 } from '../utils/revision-files.js';
 import { withTimeout } from '../orchestrator/orchestrator.js';
 import { buildChatUrl } from '../utils/chat-url.js';
+import { computeSectionAnchorMismatch } from '../utils/section-anchor-geometry.js';
 import { isOpenAICompatibleBaseURL } from '../utils/provider-utils.js';
 import {
   detectNavSignal,
@@ -729,16 +732,22 @@ export function createPhase2Graph(config = {}) {
     let docAnalysis = state.docAnalysis || null;
     let docAnalysisPromise = null;
     let docAnalysisDegraded = false;
+    // 🧩 v20261110.28 P0-1：插件「结构契约 → mvgo」把契约全文放进 requirementDocText。
+    // 旧兜底会把这段命名树当成【需求文档】送进 D0/D1+D2 文档子管线，
+    // buildDocDesignBlock 再注入 events / 数据对接 / interactions ⇒ 模型臆造树里不存在的交互。
+    // 契约仍通过 buildUserAddendumSection 进 codegen prompt（那里用独立段落 + 硬约束），
+    // 这里只切断 docAnalysis 分支；判据单一来源 = utils/structure-contract.js。
+    const _isStructureContract = !!state.requirementDocText && isStructureContract(state.requirementDocText);
     const _docTextSource =
       state.requirementDoc && state.requirementDoc.trim().length >= 20
         ? state.requirementDoc
-        : state.requirementDocText && state.requirementDocText.trim().length >= 20
+        : state.requirementDocText && state.requirementDocText.trim().length >= 20 && !_isStructureContract
           ? state.requirementDocText
           : null;
     const _docSourceKind = state.requirementDoc &&
       state.requirementDoc.trim().length >= 20
       ? 'requirementDoc'
-      : 'requirementDocText';
+      : _isStructureContract ? 'structureContract(skipped)' : 'requirementDocText';
     if (!docAnalysis && _docTextSource) {
       state.onProgress?.({
         stage: '文档分析',
@@ -1945,6 +1954,96 @@ export function createPhase2Graph(config = {}) {
       if (rejectSummary) {
         state._saveCheckpoint?.('reject-summary', rejectSummary);
         logger.info(formatRejectSummaryLine(rejectSummary));
+      }
+
+      // 🛡️ 判分驱动定向重试（2026-11-10 立项 · D2/D3/D4 · docs/2026-11-10-判分驱动定向重试闭环立项.md）：
+      //   generate 完成后跑管线内快速验收（判据单一来源 component-acceptance util，D1），
+      //   FAIL 非空 ⇒ 组装定向修复指导回灌 L0-B 修复轮（_pendingRetry 统一消费，P1-5），
+      //   上限 1 轮（D4：_acceptanceRetried 跨轮保留）。复检行打 effective 供验收门读取。
+      try {
+        const { runAcceptanceChecks, formatAcceptanceGuidance } = await import(
+          '../utils/component-acceptance/index.js'
+        );
+        const accFiles =
+          result?.generatedFiles && typeof result.generatedFiles === 'object'
+            ? result.generatedFiles
+            : conservationFiles;
+        if (accFiles) {
+          if (!state._acceptanceRetried) {
+            const acc = runAcceptanceChecks({
+              files: accFiles,
+              figmaNodeData: state.figmaNodeData,
+            });
+            logger.info(
+              `🛡️ acceptance：FAIL=${acc.fails.length} checked=${acc.checked} retry=0/1`,
+              { fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`) },
+            );
+            if (acc.fails.length > 0) {
+              const guidance = formatAcceptanceGuidance(acc.fails);
+              logger.warn('🛡️ acceptance FAIL ⇒ 判分驱动定向重试（回灌修复轮，上限 1 轮）', {
+                failCount: acc.fails.length,
+                codes: acc.fails.map((f) => f.code),
+              });
+              return {
+                _pendingRetry: true,
+                _pendingRetryPolicyId: 'acceptance-fail',
+                _l0CodeRetryGuidance: (state._l0CodeRetryGuidance || '') + '\n' + guidance,
+                _acceptanceRetried: true,
+                generatedFiles: result.generatedFiles
+                  ? Object.keys(result.generatedFiles)
+                  : state.generatedFiles,
+              };
+            }
+          } else {
+            // 复检（重试后）：Δ 与 effective 落日志，验收门读取
+            const acc = runAcceptanceChecks({
+              files: accFiles,
+              figmaNodeData: state.figmaNodeData,
+            });
+            logger.info(
+              `🛡️ acceptance-retry：FAIL=${acc.fails.length} effective=${acc.fails.length === 0}`,
+              { fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`) },
+            );
+          }
+        }
+      } catch (accErr) {
+        logger.warn('🛡️ acceptance 验收异常（fail-open，不阻断生成）', {
+          error: accErr?.message || String(accErr),
+        });
+      }
+
+      // 🛡️ C 层通用语法自愈（2026-11-10 · R16 设备/环境双杀实锤「Invalid end tag」第 5
+      //   种语法形态——逐形态打地鼠不可持续）：SFC 写盘门禁阻断的文件（错误位置行:列+
+      //   类型齐全）直接组装成**单文件重生成指导**回灌 L0-B 重试，不再依赖自愈链覆盖
+      //   每一种语法形态。上限 1 轮（_sfcSyntaxRetried），重试后仍阻断才 fail-closed。
+      try {
+        const sfcBlocked = result?.sfcBlockedDetail || result?.metrics?.sfcBlocked || result?._sfcBlockedFiles || [];
+        if (Array.isArray(sfcBlocked) && sfcBlocked.length > 0 && !state._sfcSyntaxRetried) {
+          const lines = sfcBlocked.slice(0, 5).map(
+            (f) => `- ${f.path}：${(f.errors || []).slice(0, 2).join('；')}`,
+          );
+          const syntaxGuidance = [
+            '【SFC 语法阻断修复指导（写盘门禁实测命中）】',
+            '以下文件存在语法错误被门禁拒绝落盘，必须**重新生成完整文件内容**（不是局部修补）：',
+            ...lines,
+            '要求：严格自闭合标签、开闭标签配对、模板内禁止 <script>/<style> 标签；逐文件消除全部错误。',
+          ].join('\n');
+          logger.warn('🛡️ SFC 语法阻断 ⇒ 通用单文件重生成重试（上限 1 轮）', {
+            files: sfcBlocked.map((f) => f.path),
+          });
+          state._sfcSyntaxRetried = true;
+          state._l0CodeRetryGuidance = (state._l0CodeRetryGuidance || '') + '\n' + syntaxGuidance;
+          return {
+            _pendingRetry: true,
+            _pendingRetryPolicyId: 'sfc-syntax-blocked',
+            _l0CodeRetryGuidance: state._l0CodeRetryGuidance,
+            generatedFiles: result.generatedFiles
+              ? Object.keys(result.generatedFiles)
+              : state.generatedFiles,
+          };
+        }
+      } catch (sfcErr) {
+        logger.warn('🛡️ SFC 语法阻断重试组装异常（fail-open）', { error: sfcErr?.message || String(sfcErr) });
       }
 
       return {
@@ -3398,6 +3497,28 @@ export function createPhase2Graph(config = {}) {
           /* 旧 meta 损坏则重建 */
         }
         const runtimeVerified = !state._runtimeGateDowngraded;
+
+        // 🛡️ L1（2026-11-10 · 重点车辆 fbc0feb5 实锤）：段锚几何错配留痕。
+        //   产物把 `data-section-id` 挂到与 Figma 同名节点尺寸差 ≥30% 的容器上（典型：父容器
+        //   顶着子节点 id），静态校验看不到（几何在 flex/CSS），只有渲染后 bbox 能比出来。
+        //   此处只**留痕**到 renderProbes，不参与门禁判定（首轮观察，避免误杀）。
+        try {
+          if (state.renderProbes && state.figmaNodeData) {
+            const mism = computeSectionAnchorMismatch(
+              state.renderProbes.sectionAnchors,
+              state.figmaNodeData,
+            );
+            if (Array.isArray(mism) && mism.length > 0) {
+              state.renderProbes.sectionAnchorMismatch = mism;
+              logger.warn('🛡️ L1 段锚几何错配（渲染后实测 vs Figma 真值）', {
+                count: mism.length,
+                items: mism.slice(0, 5).map((m) => `${m.sid} ${m.dom.w}×${m.dom.h} vs ${m.truth.w}×${m.truth.h}`),
+              });
+            }
+          }
+        } catch (_l1Err) {
+          /* fail-open：探针异常绝不影响发布 */
+        }
 
         const nextMeta = {
           ...prevMeta,
@@ -5942,7 +6063,13 @@ export function createPhase2Graph(config = {}) {
         // 降级分支仅对非确定性（环境类：导航/网络/资源缺失）放行；确定性产物缺陷一律走下方硬 BLOCK。
         const isGenerateMode = (state._v3Mode || 'generate') === 'generate';
         const isDeterministicMissing = hasDeterministicRuntimeMissing(runtimeGate);
-        if (isGenerateMode && !isDeterministicMissing) {
+        // 🛡️ 2026-11-10（R12 设备 17e22ea6 实锤，用户目检「布局完全错误」）：RUNTIME-016
+        //   文本重叠是确定性产物缺陷（非环境类）——旧口径走「降级为完成」通道 ⇒ 布局坍缩
+        //   产物带「已过门禁」标交付。文本重叠不参与降级放行，与 RUNTIME-004 同权硬 BLOCK。
+        const textOverlapBlocked = (runtimeGate?.issues || []).some(
+          (i) => i.id === 'RUNTIME-016',
+        );
+        if (isGenerateMode && !isDeterministicMissing && !textOverlapBlocked) {
           logger.warn('generate 运行时门禁未通过，降级为完成（不阻断发布）', {
             issues: (runtimeGate?.issues || []).map((i) => ({
               id: i.id,
@@ -5971,6 +6098,34 @@ export function createPhase2Graph(config = {}) {
               errors: i.evidence?.errors?.slice?.(0, 3),
             })),
           });
+        }
+        // 🛡️ D2 重叠回灌闭环（2026-11-10 · R14 三单实锤）：RUNTIME-016（文本重叠）阻断时，
+        //   先走一轮定向重试（重叠对样本 → guidance → 回 engineer 修复），重试后仍重叠才 fail。
+        //   与 acceptance 闭环（engineer 节点）互补：此处是渲染期数据（runtime-verify 阶段），
+        //   engineer 的静态验收拿不到 overlaps。上限 1 轮（_d2OverlapRetried 跨轮保留）。
+        if (textOverlapBlocked && !state._d2OverlapRetried) {
+          const overlapIssue = (runtimeGate.issues || []).find((i) => i.id === 'RUNTIME-016');
+          const pairs = overlapIssue?.evidence?.overlaps || [];
+          const guidancePairs = (Array.isArray(pairs) ? pairs : [])
+            .slice(0, 8)
+            .map((o) => `「${o.a}」与「${o.b}」重叠 ${Math.round((o.ratio || 0) * 100)}%`)
+            .join('；');
+          const d2Guidance = [
+            '【D2 文本重叠修复指导（渲染实测命中）】',
+            guidancePairs ? `重叠对：${guidancePairs}` : '存在文本节点 bbox 两两相交（交比>15%）',
+            '修复要求：调整布局使重叠文本错位——加间距/换行/缩小字号/改 flex 布局，禁止用绝对定位叠放；必须逐对消除。',
+          ].join('\n');
+          logger.warn('🛡️ RUNTIME-016 首次命中 ⇒ D2 重叠回灌定向重试（上限 1 轮）', {
+            pairs: (Array.isArray(pairs) ? pairs : []).slice(0, 5),
+          });
+          state._d2OverlapRetried = true;
+          state._l0CodeRetryGuidance = (state._l0CodeRetryGuidance || '') + '\n' + d2Guidance;
+          return {
+            runtimeGate,
+            _d2OverlapRetried: true,
+            _pendingRuntimeRetry: true,
+            _l0CodeRetryGuidance: state._l0CodeRetryGuidance,
+          };
         }
         const err = new Error(
           `generate 运行时质量门禁阻断: ${(runtimeGate.issues || []).map((i) => i.id).join(', ')}`,
@@ -6014,6 +6169,16 @@ export function createPhase2Graph(config = {}) {
   });
 
   graph.addEdge('do-not-invent-check', 'generate-runtime-verify');
+  // 🛡️ D2 重叠回灌闭环（2026-11-10 · R14）：RUNTIME-016 首次命中返回 _pendingRetry ⇒
+  //   回 engineer 定向修复（复用 P1-5 统一消费语义）；正常/重试后仍阻断走 complete（fail-closed）。
+  graph.addConditionalEdge('generate-runtime-verify', (state) => {
+    if (state._pendingRuntimeRetry) {
+      state._pendingRuntimeRetry = false;
+      logger.info?.('🛡️ RUNTIME-016 重叠回退 microcode-engineer（带重叠对修复指导）');
+      return 'microcode-engineer';
+    }
+    return 'complete';
+  });
   graph.addEdge('generate-runtime-verify', 'complete');
 
   // ── 精修链路：根据模式选择串行/并行（L0-B 之后到达）──

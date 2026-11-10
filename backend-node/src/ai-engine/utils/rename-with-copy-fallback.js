@@ -17,6 +17,7 @@
  *     EXDEV（跨设备）也降级，复制是合法兜底。
  */
 import fs from 'fs'
+import path from 'path'
 
 const FALLBACK_CODES = new Set(['EPERM', 'EBUSY', 'EXDEV'])
 
@@ -79,4 +80,50 @@ export function renameWithCopyFallback(src, dst, { logger = null, label = 'renam
     logger?.warn?.(`${label}：rename ${error.code}，已降级为复制落名`, { src, dst, srcRemoved })
     return { mode: 'copy', srcRemoved }
   }
+}
+
+// ─── 🛡️ 2026-11-10（方案 A·启动即探测置位熔断）───
+//
+// 背景：熔断器是「进程内首次观测到 EPERM 才置位」，导致每次后端重启后，
+// 第一次 persist 的 rename 必然 EPERM 一次 → 残留 1 个 tmp（进程内 unlink 同被拦，清不掉）。
+// 这台机器实测 rename 覆盖已存在文件 = 100% EPERM（终身不愈），与启动方式无关，
+// 故启动阶段即主动探测一次「覆盖式 rename」，命中则立即 markRenameBroken()，
+// 使随后所有 persist 走直写分支（isRenameBroken()===true），**重启后零 tmp 残留**。
+//
+// 在进程内（TasksService.onModuleInit）探测才能真实反映进程内的 rename 行为——
+// 外部 start-node 探针通过不同 env 跑，结果不代表本进程，故不可复用。
+export function probeRenameBroken({ dir, logger = null, label = 'rename-probe' } = {}) {
+  if (renameBroken) return true
+  if (!dir) return false
+  const a = path.join(dir, `.rename-probe-${process.pid}-a.tmp`)
+  const b = path.join(dir, `.rename-probe-${process.pid}-b.tmp`)
+  try {
+    fs.writeFileSync(a, 'probe')
+    fs.writeFileSync(b, 'probe')
+    try {
+      // 覆盖式 rename：模拟 persist 的「临时文件 → 已存在的目标文件」，正是被 EPERM 拦截的形态。
+      fs.renameSync(a, b)
+    } catch (error) {
+      if (error?.code === 'EPERM' || error?.code === 'EBUSY') {
+        // 实锤进程内 rename 覆盖不可用 → 立即置位，后续 persist 全走直写。
+        markRenameBroken(`（启动探针·覆盖式 rename ${error.code}）`, logger)
+      } else {
+        throw error
+      }
+    }
+  } catch (error) {
+    // 探针自身写/清理异常（如 dataDir 不可写）：保守不置位，交由首次 persist 自然降级置位。
+    logger?.warn?.(`${label}：探针执行异常（${error?.code}），不置位`, { error: error?.message })
+  } finally {
+    // 清理探针文件；异常态 unlink 可能 EPERM，残留极小（几字节）且命名独特（.rename-probe-），
+    // 不污染 sweeper 的 `*.json[.prev].<pid>.<ts>.<hex>.tmp` 匹配，可手动清理或忽略。
+    for (const f of [a, b]) {
+      try {
+        fs.rmSync(f, { force: true })
+      } catch {
+        /* 残留无害 */
+      }
+    }
+  }
+  return renameBroken
 }

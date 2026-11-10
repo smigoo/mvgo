@@ -22,7 +22,7 @@ jest.mock('../../config/backend-root.js', () => ({
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runPreWriteSelfHealing } from './pre-write-self-healing.js';
+import { runPreWriteSelfHealing, stripDuplicateAncestorBg, healTemplateEmbeddedSfcBlocks } from './pre-write-self-healing.js';
 import { injectResourceImports } from './resource-import-guard.js';
 
 /**
@@ -590,5 +590,101 @@ describe('刀 42-B A0 计数行接线（2026-11-04）', () => {
     const { summary } = runPreWriteSelfHealing(files, { figmaRoot } as any, { logger: silentLogger });
     expect(summary.panelChromeClassSkipUnresolved).toBe(0); // 下沉成功 ⇒ 不再零命中
     expect(summary.panelChromeMisplaced).toBe(2); // Deco.vue <style> + common.less 各 1 处
+  });
+});
+
+describe('悬空引用占位兜底（2026-11-10 · cf2742b9/ContentSection26 实锤）', () => {
+  const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
+
+  it('① 阳性：index import 的 .vue 缺失 ⇒ 自动补占位组件（danglingImportPatched>0）', () => {
+    const files: Record<string, string> = {
+      'package/index.vue':
+        '<template><base-panel panelKey="default-panel"><HeaderSection /><ContentDailyTotalFlow /></base-panel></template>\n' +
+        '<script setup>\nimport HeaderSection from \'./components/HeaderSection.vue\'\nimport ContentDailyTotalFlow from \'./components/ContentDailyTotalFlow.vue\'\n</script>',
+      'package/components/HeaderSection.vue': '<template><div class="c-x-h">header</div></template>',
+    };
+    const { files: out, summary } = runPreWriteSelfHealing(files as any, {}, { logger: silentLogger as any });
+    expect(summary.danglingImportPatched).toBe(1);
+    expect(typeof out['package/components/ContentDailyTotalFlow.vue']).toBe('string');
+    expect(out['package/components/ContentDailyTotalFlow.vue']).toContain('占位组件');
+    // 闭包闭合：补齐后不再缺
+    expect(out['package/components/ContentDailyTotalFlow.vue']).toMatch(/<template>/);
+  });
+
+  it('② 阴性：闭包已闭合 ⇒ 零补齐（danglingImportPatched=0）', () => {
+    const files: Record<string, string> = {
+      'package/index.vue':
+        '<template><base-panel><HeaderSection /></base-panel></template>\n' +
+        '<script setup>\nimport HeaderSection from \'./components/HeaderSection.vue\'\n</script>',
+      'package/components/HeaderSection.vue': '<template><div class="c-x-h">header</div></template>',
+    };
+    const { summary } = runPreWriteSelfHealing(files as any, {}, { logger: silentLogger as any });
+    expect(summary.danglingImportPatched).toBe(0);
+  });
+});
+
+describe('⑥-ii 中间容器 bg 双重挂载剥离（523f16b6 实锤：单卡图拉伸铺满整条）', () => {
+  it('① 阳性：祖先容器与卡级同挂 bg1 ⇒ 剥祖先层保留卡级', () => {
+    const src = `<template>
+  <div data-section-id="136:127" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%' }">
+    <div class="card-a" data-section-id="136:128" :style="{ backgroundImage: 'url(' + bg2 + ')' }">A</div>
+    <div class="card-b" data-section-id="136:129" :style="{ backgroundImage: 'url(' + bg1 + ')' }">B</div>
+  </div>
+</template>`;
+    const out = stripDuplicateAncestorBg(src);
+    // 祖先 136:127 的 backgroundImage 子句被剥（其后 bg1 再次出现）——backgroundSize 等其它子句保留
+    const ancestorTag = out.match(/<div data-section-id="136:127"[^>]*>/);
+    expect(ancestorTag).not.toBeNull();
+    expect(ancestorTag[0]).not.toContain('backgroundImage');
+    // 卡级 bg1 保留
+    expect(out).toContain("data-section-id=\"136:129\" :style");
+  });
+
+  it('② 阴性：容器 bg 仅挂一次 ⇒ 不剥', () => {
+    const src = `<template>
+  <div data-section-id="136:127" :style="{ backgroundImage: 'url(' + bg1 + ')' }">
+    <div class="card" data-section-id="136:128" :style="{ backgroundImage: 'url(' + bg2 + ')' }">A</div>
+  </div>
+</template>`;
+    expect(stripDuplicateAncestorBg(src)).toBe(src);
+  });
+});
+
+describe('模板内嵌 SFC 块自愈（R9 设备/R13 设备+流量实锤：Tags with side effect）', () => {
+  it('① 阳性：模板体内 <script setup> 且顶层无 script ⇒ 提升到顶层', () => {
+    const src = `<template>
+  <div class="c-x">
+    <span>内容</span>
+    <script setup>
+    import { ref } from 'vue'
+    const n = ref(1)
+    </script>
+  </div>
+</template>`;
+    const out = healTemplateEmbeddedSfcBlocks(src);
+    // 体内 script 被剥离
+    expect(out.match(/<template>[\s\S]*<\/template>/)[0]).not.toContain('<script');
+    // 提升到顶层（</template> 之后）
+    expect(out).toMatch(/<\/template>\s*<script setup>/);
+    expect(out).toContain("import { ref } from 'vue'");
+  });
+
+  it('② 阳性：体内 style 且顶层已有 style ⇒ 丢弃（错位重复块）', () => {
+    const src = `<template>
+  <div>
+    <style>.a{color:red}</style>
+  </div>
+</template>
+<style scoped>.b{color:blue}</style>`;
+    const out = healTemplateEmbeddedSfcBlocks(src);
+    expect(out.match(/<template>[\s\S]*<\/template>/)[0]).not.toContain('<style');
+    // 顶层原 style 保留，体内块被丢弃（不重复提升）
+    expect(out.match(/<style/g) || []).toHaveLength(1);
+  });
+
+  it('③ 阴性：模板干净 ⇒ 零改动（幂等）', () => {
+    const src = `<template><div><span>x</span></div></template>
+<script setup>const a = 1</script>`;
+    expect(healTemplateEmbeddedSfcBlocks(src)).toBe(src);
   });
 });

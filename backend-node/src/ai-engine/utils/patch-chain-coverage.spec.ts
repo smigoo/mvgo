@@ -22,7 +22,9 @@ const FILES = [
   // 31→32（2026-11-09 归因）：G1（零样式容器布局真值注入，669d8bf8）在
   //   pre-write-self-healing.js 新增 ⑥-d fail-open catch（runPreWriteSelfHealing:g1），
   //   已接 reportPatchChainError；基线同步 +1。
-  { rel: 'src/ai-engine/utils/pre-write-self-healing.js', expectCatches: 32 },
+  // 35→36（2026-11-10 归因）：悬空引用占位兜底新增 `catch (err)`（pass='runPreWriteSelfHealing:dangling-import'，
+  //   index.vue import 的 .vue 缺失 ⇒ 补占位 SFC 缺段降级，cf2742b9/ContentSection26 实锤）；已接哨兵，基线同步 +1。
+  { rel: 'src/ai-engine/utils/pre-write-self-healing.js', expectCatches: 36 },
   // 67→68（2026-11-05 归因）：6b0d14b 之后某提交新增 G11a `catch (bgErr)`
   // （microcode-engineer.js:3110，背景 fallback 注入），当日未同步本门禁；
   // 已补接哨兵（S0.2 核对唯一漏网点），基线同步 +1。
@@ -43,7 +45,15 @@ const FILES = [
   // （writeFiles 写盘唯一出口），已接 reportPatchChainError 哨兵
   // （pass='writeFiles:subcomponent-coverage'）；判据见 microcode/subcomponent-coverage.js。
   // R2（2026-11-08）：新增 readComponentVueFiles 两处读盘兜底 catch（均已接哨兵）→ 81→83
-  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 83 },
+  // 84→87（2026-11-10 归因）：F1a/F1b/F2 观测三 catch（方案 v4）——
+  //   F1a 段树对账 `catch (_f1aErr)`（pass='execute:seg-tree-integrity'）、
+  //   F2 R11-B 追踪比对 `catch (_r11bTraceErr)`（pass='execute:r11b-trace'）、
+  //   F1b headerSlots 落地审计 `catch (_f1bErr)`（pass='execute:header-slot-audit'），
+  //   三处均 reportOnly/fail-open、均已接 reportPatchChainError；基线同步 +3。
+  // 87→88（2026-11-10 归因）：④headerSlots 落地——T09 终写前补跑新增
+  //   `catch (_t09FinalErr)`（pass='execute:t09-final-ensure'，chunk 层注入被 execute
+  //   后段覆写冲掉的确定性兜底，设备 1d9bcc28 实锤）；已接哨兵，基线同步 +1。
+  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 88 },
   { rel: 'src/ai-engine/roles/vue3-engineer.js', expectCatches: 25 },
 ];
 

@@ -96,6 +96,8 @@ import {
   buildVue3ScriptMiddle,
   buildVue3StyleMiddle,
 } from './microcode/vue3-prompt.js';
+// 🔍 P0-3（2026-11-10）：用户补充需求 / Figma 结构契约注入，与 microcode-engineer.js#appendGlobalGuidance 对称。
+import { buildUserAddendumSection } from '../utils/user-addendum.js';
 import {
   wrapBareConstWithRef as _wrapBareConstWithRef,
   sanitizeVue3FileContent,
@@ -396,6 +398,22 @@ export class Vue3Engineer extends MicrocodeEngineer {
 
     const appendGuidance = (p) => {
       if (_l0CodeRetryGuidance) p += _l0CodeRetryGuidance;
+
+      // 🔍 P0-3（2026-11-10）：vue3 链路此前完全不消费 extraPrompt / requirementDocText，
+      // 导致 Figma 节点整理工具推来的「结构契约」只有 microcode 档生效。与
+      // microcode-engineer.js:1090 对称，每个分块 codegen prompt 都携带。
+      // 注意：必须走 input.xxx，裸标识符会 ReferenceError（microcode-engineer.js:1087 已有教训）。
+      const _userAddendum = buildUserAddendumSection(
+        input.extraPrompt,
+        input.requirementDocText,
+      );
+      if (_userAddendum) {
+        p += _userAddendum;
+        // 🔍 真机判据计数行：grep `用户补充需求段已注入` 可辩驳验证（target=vue3 区分链路）
+        this.logger.info(
+          `📎 用户补充需求段已注入分块 prompt (target=vue3, extraPrompt=${String(input.extraPrompt || '').length}字, requirementDoc=${String(input.requirementDocText || '').length}字)`,
+        );
+      }
 
       // 默认技术栈规则（无论是否有 @xxx 标记都生效）
       p += '\n\n##默认技术栈规则（强制）\n\n';

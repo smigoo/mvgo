@@ -44,6 +44,7 @@ const RUNTIME_BLOCK_IDS = new Set([
   'RUNTIME-013',
   'RUNTIME-014',
   'RUNTIME-015',
+  'RUNTIME-016',
 ])
 
 const RUNTIME_INCREMENTAL_IDS = new Set([
@@ -455,6 +456,9 @@ function collectRenderProbesInPage(options) {
   const out = {
     probedAt: Date.now(),
     stageRect: null,
+    // 🛡️ L1（2026-11-10）：段锚几何事实（渲染后真实 bbox）。此处**只采不判**——
+    //   与 Figma 真值的比对放在有 figmaNodeData 的 graph 层（本函数在页面上下文，拿不到真值）。
+    sectionAnchors: [],
     emptyImg: [],
     lowContrast: [],
     clipped: [],
@@ -467,6 +471,17 @@ function collectRenderProbesInPage(options) {
   try {
     const sRect = stageEl.getBoundingClientRect()
     out.stageRect = { w: Math.round(sRect.width), h: Math.round(sRect.height) }
+  } catch (_) { /* 事实缺失不阻断 */ }
+  // 🛡️ L1：采集每个 data-section-id 的真实 bbox（只读事实，不做判定）
+  try {
+    out.sectionAnchors = Array.from(document.querySelectorAll('[data-section-id]')).map((el) => {
+      const r = el.getBoundingClientRect()
+      return {
+        sid: el.getAttribute('data-section-id') || '',
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+      }
+    })
   } catch (_) { /* 事实缺失不阻断 */ }
 
   const desc = (el) => {
@@ -801,6 +816,40 @@ async function renderViaPreviewPage({
         }
       }).filter(item => item.width > 1 && item.height > 1 && item.display !== 'none' && item.visibility !== 'hidden' && Number(item.opacity) > 0)
       const stageRect = stage?.getBoundingClientRect()
+      // 🛡️ RUNTIME-016 文本重叠采集（2026-11-10 · 流量 6c12ab55 实锤）：
+      //   stage 内自有文本节点 bbox 两两相交（交比=交面积/较小面积，>0.15 记一对）。
+      //   与 mvgo-component-acceptance skill 的 D2 同源判据（改验分离：门禁在管线内，
+      //   skill 判分器独立复检）。只扫 stage（防宿主 chrome 误报，skill 首跑教训）。
+      const TEXTISH = new Set(['SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'DIV', 'LABEL', 'A'])
+      const textNodes = []
+      if (stage) {
+        for (const el of stage.querySelectorAll('*')) {
+          if (!TEXTISH.has(el.tagName)) continue
+          const own = [...el.childNodes].filter(
+            (n) => n.nodeType === 3 && n.textContent.trim(),
+          ).length
+          if (!own) continue
+          const r = el.getBoundingClientRect()
+          if (r.width < 4 || r.height < 4) continue
+          textNodes.push({
+            text: (el.textContent || '').trim().slice(0, 24),
+            x: r.x, y: r.y, w: r.width, h: r.height,
+          })
+        }
+      }
+      const textOverlaps = []
+      for (let i = 0; i < textNodes.length; i += 1) {
+        for (let j = i + 1; j < textNodes.length; j += 1) {
+          const a = textNodes[i]
+          const b = textNodes[j]
+          const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
+          const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
+          const inter = ix * iy
+          if (inter <= 0) continue
+          const ratio = inter / Math.max(1, Math.min(a.w * a.h, b.w * b.h))
+          if (ratio > 0.15) textOverlaps.push({ a: a.text, b: b.text, ratio: +ratio.toFixed(2) })
+        }
+      }
       return {
         status,
         errorType,
@@ -808,6 +857,7 @@ async function renderViaPreviewPage({
         renderError,
         stage: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
         visibleChildren,
+        textOverlaps: textOverlaps.slice(0, 12),
       }
     })
 
@@ -819,6 +869,18 @@ async function renderViaPreviewPage({
     }
     if (previewState.status === 'ready' && previewState.visibleChildren.length === 0) {
       addBlock('RUNTIME-006', 'blank-render', '组件已标记 ready，但没有可见根节点', previewState)
+    }
+    // 🛡️ RUNTIME-016 文本重叠门禁（2026-11-10 · 流量 6c12ab55 实锤，用户验收最痛点）：
+    //   stage 内自有文本节点 bbox 两两相交（交比>0.15）即 BLOCK——「客车 22350 叠在
+    //   隧道/大桥标签上」类排版坍缩此前渲染成功即放行。evidence 带重叠对样本。
+    if (
+      previewState.status === 'ready' &&
+      Array.isArray(previewState.textOverlaps) &&
+      previewState.textOverlaps.length > 0
+    ) {
+      addBlock('RUNTIME-016', 'text-overlap', `真实预览存在 ${previewState.textOverlaps.length} 对文本节点重叠`, {
+        overlaps: previewState.textOverlaps,
+      })
     }
 
     if (responseErrors.length > 0) {

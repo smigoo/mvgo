@@ -1305,6 +1305,18 @@ export function writeFiles(files, outputPath, options = {}) {
               );
             }
           }
+          // 🛡️ 兜底（2026-11-10 · 7cac7ab3 实锤）：Tab UI 注入发生在写盘出口，晚于 R11-A/B
+          //   （均在写盘前）——注入若制造 base-panel 外游离根将无人归位（第四次复发实锤）。
+          //   此处对注入后的内容补跑既有归位器（幂等、单一事实源），moved>0 即 WARN 留痕。
+          const relocated = relocateStrayTemplateRoots(sanitizedContent);
+          if (relocated.changed) {
+            sanitizedContent = relocated.content;
+            if (logger) {
+              logger.warn(
+                `🛡️ Tab UI 注入后游离根归位: ${relativePath}（moved=${relocated.moved.length}）`,
+              );
+            }
+          }
         } catch (tabErr) {
           if (logger) {
             logger.warn(
