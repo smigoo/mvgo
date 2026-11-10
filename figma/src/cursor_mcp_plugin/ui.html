@@ -121,43 +121,50 @@
             <br/><button id="btn-capture-sel" class="secondary" style="margin-top:6px;font-size:12px;padding:4px 8px;">重新捕获选区</button>
           </div>
           <button id="btn-ai-organize" class="primary" style="width:100%">AI 全自动整理选中框架</button>
-          <button id="btn-structure-only" class="secondary" style="width:100%;margin-top:8px;">仅结构化整理（零 token · 不调用模型）</button>
-          <button id="btn-plan-structure" class="secondary" style="width:100%;margin-top:8px;">📐 生成结构方案（阶段 1 · 只读不改文件）</button>
-          <button id="btn-export-contract" class="secondary" style="width:100%;margin-top:8px;">📤 结构契约 → mvgo（名称 + 层级）</button>
-          <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5;">零 token：不填 Key / 不联网也能用；方案可复制给下游模型。</div>
-          <div id="contract-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#161616;">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
-              <strong style="font-size:12px;color:#66b3ff;">结构契约</strong>
-              <span id="contract-meta" style="font-size:10px;color:#888;"></span>
-              <button id="btn-copy-contract" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
-              <button id="btn-push-mvgo" class="primary" style="font-size:11px;padding:3px 8px;margin:0;">🚀 推送生成</button>
-            </div>
-            <div id="mvgo-tip" style="font-size:11px;color:#4ade80;line-height:1.5;margin-bottom:4px;"></div>
-            <pre id="contract-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;margin:0;"></pre>
-            <details style="margin-top:8px;">
-              <summary style="cursor:pointer;font-size:11px;color:#888;">⚙️ 推送设置</summary>
-              <div style="margin-top:6px;font-size:11px;color:#bbb;line-height:1.6;">
-                <div>mvgo 地址<input id="mvgo-base" value="http://localhost:13030" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
-                <div style="margin-top:4px;">token<input id="mvgo-token" value="dev" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
-                <div style="margin-top:4px;">分组 ID（可空）<input id="mvgo-group" placeholder="留空则用私有分组" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
-                <div style="margin-top:4px;">Figma 链接（Max 档必需）<input id="mvgo-figma-url" placeholder="自动填充，也可手动覆盖" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
-                <div style="margin-top:4px;">组件类型
-                  <select id="mvgo-type" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;">
-                    <option value="microcode">microcode</option>
-                    <option value="vue3">vue3</option>
-                  </select>
+
+          <!-- v20261110.23：#2/#3/#4 收进「零 token 工具」折叠区；进度条与结果留在区外（#1/#2 共用）。 -->
+          <details id="zero-token-tools" style="margin-top:10px;border:1px solid #3a3a3a;border-radius:6px;padding:8px;background:#161616;">
+            <summary style="cursor:pointer;font-size:12px;color:#66b3ff;">🧰 零 token 工具 <span style="font-size:11px;color:#888;">3 项 · 不填 Key / 不联网</span></summary>
+            <div style="margin-top:8px;">
+              <button id="btn-structure-only" class="secondary" style="width:100%;">仅结构化整理（会改图层 · 不调模型）</button>
+              <button id="btn-plan-structure" class="secondary" style="width:100%;margin-top:8px;">📐 生成结构方案（只读预览）</button>
+              <button id="btn-export-contract" class="secondary" style="width:100%;margin-top:8px;">📤 结构契约 → mvgo</button>
+              <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5;">仅「结构化整理」会改图层；方案与契约只读。</div>
+              <div id="contract-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#1c1c1c;">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+                  <strong style="font-size:12px;color:#66b3ff;">结构契约</strong>
+                  <span id="contract-meta" style="font-size:10px;color:#888;"></span>
+                  <button id="btn-copy-contract" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
+                  <button id="btn-push-mvgo" class="primary" style="font-size:11px;padding:3px 8px;margin:0;">🚀 推送生成</button>
                 </div>
+                <div id="mvgo-tip" style="font-size:11px;color:#4ade80;line-height:1.5;margin-bottom:4px;"></div>
+                <pre id="contract-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;margin:0;"></pre>
+                <details style="margin-top:8px;">
+                  <summary style="cursor:pointer;font-size:11px;color:#888;">⚙️ 推送设置</summary>
+                  <div style="margin-top:6px;font-size:11px;color:#bbb;line-height:1.6;">
+                    <div>mvgo 地址<input id="mvgo-base" value="http://localhost:13030" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                    <div style="margin-top:4px;">token<input id="mvgo-token" value="dev" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                    <div style="margin-top:4px;">分组 ID（可空）<input id="mvgo-group" placeholder="留空则用私有分组" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                    <div style="margin-top:4px;">Figma 链接（Max 档必需）<input id="mvgo-figma-url" placeholder="自动填充，也可手动覆盖" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;" /></div>
+                    <div style="margin-top:4px;">组件类型
+                      <select id="mvgo-type" style="width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;">
+                        <option value="microcode">microcode</option>
+                        <option value="vue3">vue3</option>
+                      </select>
+                    </div>
+                  </div>
+                </details>
               </div>
-            </details>
-          </div>
-          <div id="structure-plan-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#161616;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <strong style="font-size:12px;color:#66b3ff;">结构方案（只读预览 · 可复制）</strong>
-              <button id="btn-copy-structure-plan" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
-              <span id="plan-copy-tip" style="font-size:11px;color:#4ade80;"></span>
+              <div id="structure-plan-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#1c1c1c;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <strong style="font-size:12px;color:#66b3ff;">结构方案（只读预览 · 可复制）</strong>
+                  <button id="btn-copy-structure-plan" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
+                  <span id="plan-copy-tip" style="font-size:11px;color:#4ade80;"></span>
+                </div>
+                <pre id="structure-plan-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow:auto;margin:0;"></pre>
+              </div>
             </div>
-            <pre id="structure-plan-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow:auto;margin:0;"></pre>
-          </div>
+          </details>
           <div id="ai-progress-box" class="hidden" style="margin-top:10px;">
             <div id="ai-progress-msg" style="font-size:12px;color:#66b3ff;">准备中...</div>
             <div style="width:100%;background:#444;border-radius:4px;margin-top:6px;">
@@ -1143,7 +1150,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.22";
+      const PLUGIN_VERSION = "20261110.23";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
