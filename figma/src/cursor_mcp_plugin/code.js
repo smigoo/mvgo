@@ -231,6 +231,7 @@ figma.ui.onmessage = async (msg) => {
           slotConCreated: 0, slotConReused: 0, slotConMerged: 0, slotConModules: 0,
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
+          slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
         };
         const intentCtx = { intentMap: new Map(), moduleOrder: new Map(), sharedIds: new Set(), useLayoutIntent: false };
         let planPreview = null;
@@ -258,6 +259,8 @@ figma.ui.onmessage = async (msg) => {
         try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
         // v20261110.21：收尾建组件骨架 —— 根下 header/bg 保持平级，其余内容（含所有模块 Group）收进一个真 slot-con Group。
         try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
+        // v20261110.25：建组后按视觉顺序重排槽内直接子级（重叠节点 pin 住不动）。
+        try { sortSlotConChildren(root || containers[0] || null, summary); } catch (e11) {}
         if (setExport) { try { applyAssetExports(root, summary); } catch (e4) {} }
         let total = 0;
         const countAll = (n, depth) => {
@@ -293,6 +296,8 @@ figma.ui.onmessage = async (msg) => {
           slotConMerged: summary.slotConMerged, slotConModules: summary.slotConModules,
           slotConOutside: summary.slotConOutside, slotConFailed: summary.slotConFailed,
           subHeadersDemoted: summary.subHeadersDemoted, subSlotConsDemoted: summary.subSlotConsDemoted,
+          slotSorted: summary.slotSorted, slotSortPinned: summary.slotSortPinned,
+          slotConEmptyRemoved: summary.slotConEmptyRemoved,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
@@ -351,6 +356,7 @@ figma.ui.onmessage = async (msg) => {
           slotConCreated: 0, slotConReused: 0, slotConMerged: 0, slotConModules: 0,
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
+          slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
         };
         const ACT_CN = { rename: "改名", reparent: "归父", reorder: "排序", group: "成组", delete: "删除" };
         for (let i = 0; i < ops.length; i++) {
@@ -458,6 +464,8 @@ figma.ui.onmessage = async (msg) => {
           try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
           // v20261110.21：收尾建组件骨架 —— 视觉/几何模块与其它内容统一收进一个真 slot-con Group。
           try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
+          // v20261110.25：建组后按视觉顺序重排槽内直接子级（重叠节点 pin 住不动）。
+          try { sortSlotConChildren(root || containers[0] || null, summary); } catch (e11) {}
           // 收尾：给所有资源文件夹挂导出预设（icon→SVG / img·bg→PNG@2x），并清掉内部子节点的导出项。
           const exportRoot = root || containers[0] || null; // 无 rootId 的兜底路径也要覆盖
           if (setExport) { try { applyAssetExports(exportRoot, summary); } catch (e4) {} }
@@ -511,6 +519,8 @@ figma.ui.onmessage = async (msg) => {
           slotConMerged: summary.slotConMerged, slotConModules: summary.slotConModules,
           slotConOutside: summary.slotConOutside, slotConFailed: summary.slotConFailed,
           subHeadersDemoted: summary.subHeadersDemoted, subSlotConsDemoted: summary.subSlotConsDemoted,
+          slotSorted: summary.slotSorted, slotSortPinned: summary.slotSortPinned,
+          slotConEmptyRemoved: summary.slotConEmptyRemoved,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
@@ -1397,14 +1407,16 @@ function organizeLayout(parent, summary, intentCtx) {
     }
   }
 
-  // 排序：content 两两不重叠才重排，重叠则跳过（保护 z-order，不改画面）。
-  let overlap = false;
-  for (let i = 0; i < content.length && !overlap; i++)
-    for (let j = i + 1; j < content.length; j++) if (rectsOverlap(content[i], content[j])) { overlap = true; break; }
-  // 重叠不排序，但仍要收纳 img-/icon- 资源（此时不会有排序阶段的 appendChild，入组安全）。
-  if (overlap) { summary.skippedOverlap += content.length; groupChildrenByCategory(parent, summary); return; }
-
-  const ordered = content.slice().sort((a, b) => (b.y || 0) - (a.y || 0)); // y 降序 → 图层面板从上到下 = 视觉从上到下
+  // v20261110.25：重叠保护从「整段放弃」改为「重叠节点 pin 住、只排互不重叠的节点」。
+  // 大屏必有 tooltip/浮层重叠，旧逻辑一遇重叠就整段 return，导致顺序永远排不上。
+  // movable 两两不重叠 ⇒ appendChild 改 z-order 也不会改画面；pinned 保持原相对层级。
+  const pinned = new Set();
+  for (let i = 0; i < content.length; i++)
+    for (let j = i + 1; j < content.length; j++)
+      if (rectsOverlap(content[i], content[j])) { pinned.add(content[i]); pinned.add(content[j]); }
+  const movable = content.filter(n => !pinned.has(n));
+  summary.skippedOverlap += pinned.size;
+  const ordered = movable.slice().sort((a, b) => (b.y || 0) - (a.y || 0)); // y 降序 → 图层面板从上到下 = 视觉从上到下
   // 视觉给的 order 与 y 序不一致时只记录，仍以真实 y 为准
   if (ctx.useLayoutIntent && ctx.moduleOrder.size) {
     ordered.forEach((n, rank) => {
@@ -1548,6 +1560,56 @@ function demoteSubHeaders(root, summary) {
   s.subSlotConsDemoted = (Number(s.subSlotConsDemoted) || 0) + slotsDemoted;
   return keep;
 }
+// v20261110.25：复用分支里多余的历史空 slot-con 会夹在图层面板中间，让顺序看起来没排上。
+function mergeExtraSlotCons(existing, slot, summary) {
+  const s = summary || {};
+  let moved = 0, removed = 0;
+  for (const extra of (existing || []).slice(1)) {
+    if (!extra || extra === slot) continue;
+    for (const c of Array.prototype.slice.call(extra.children || [])) {
+      try { slot.appendChild(c); moved++; } catch (e) {}
+    }
+    try {
+      if (!((extra.children || []).length)) {
+        if (extra.locked) extra.locked = false;
+        extra.remove(); removed++;
+      }
+    } catch (e) {}
+  }
+  s.slotConMerged = (Number(s.slotConMerged) || 0) + moved;
+  s.slotConEmptyRemoved = (Number(s.slotConEmptyRemoved) || 0) + removed;
+  return moved;
+}
+
+// v20261110.25：slot-con 建组后统一按视觉顺序排直接子级。
+// Figma 图层面板是 children 的【反序】显示，所以这里按 y 降序 appendChild；
+// 与契约层的 y 升序方向正好相反，两边各自「从上到下」才成立。
+// 保护：与任意其它同级节点重叠的（tooltip/浮层/全屏底图）pin 住不动；
+// movable 两两不重叠，重排 z-order 视觉零变化。重复整理幂等。
+function sortSlotConChildren(root, summary) {
+  if (!root || !("children" in root)) return null;
+  const s = summary || {};
+  const slots = Array.prototype.slice.call(root.children || []).filter(isSlotContainer);
+  let moved = 0, pinnedCount = 0;
+  for (const slot of slots) {
+    const kids = Array.prototype.slice.call(slot.children || []);
+    if (kids.length < 2) continue;
+    const pinned = new Set();
+    for (let i = 0; i < kids.length; i++)
+      for (let j = i + 1; j < kids.length; j++)
+        if (rectsOverlap(kids[i], kids[j])) { pinned.add(kids[i]); pinned.add(kids[j]); }
+    const movable = kids.filter(n => !pinned.has(n));
+    pinnedCount += pinned.size;
+    if (movable.length < 2) continue;
+    movable.sort((a, b) => (Number(b && b.y) || 0) - (Number(a && a.y) || 0));
+    for (const n of movable) {
+      try { if (n.locked) n.locked = false; slot.appendChild(n); moved++; } catch (e) {}
+    }
+  }
+  s.slotSorted = (Number(s.slotSorted) || 0) + moved;
+  s.slotSortPinned = (Number(s.slotSortPinned) || 0) + pinnedCount;
+  return slots[0] || null;
+}
 function createSlotConGroup(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
   const kids = Array.prototype.slice.call(root.children || []);
@@ -1556,6 +1618,8 @@ function createSlotConGroup(root, summary) {
   const contents = kids.filter(n => !isSlotContainer(n) && !isHeaderLike(n) && !isBgLike(n));
   if (!contents.length) {
     if (existing.length) summary.slotConReused = 1;
+    // v20261110.25：即使本次没有新内容，也要清掉多余的历史空槽
+    if (existing.length > 1) mergeExtraSlotCons(existing, existing[0], summary);
     return existing[0] || null;
   }
   let slot = null;
@@ -1564,13 +1628,10 @@ function createSlotConGroup(root, summary) {
     slot = existing[0];
     let moved = 0;
     for (const n of contents) { try { slot.appendChild(n); moved++; } catch (e) {} }
-    for (const extra of existing.slice(1)) {
-      for (const c of Array.prototype.slice.call(extra.children || [])) {
-        try { slot.appendChild(c); moved++; } catch (e) {}
-      }
-    }
     summary.slotConReused = 1;
     summary.slotConMerged = moved;
+    // v20261110.25：并入剩余槽的内容后删掉空槽，避免图层面板夹着多个 slot-con
+    mergeExtraSlotCons(existing, slot, summary);
   } else if (contents.length === 1 && countModuleKids(contents[0]) >= 2) {
     // 视觉/几何模块本来就都挂在同一个内容容器里 → 直接把它标记成 slot-con，
     // 不新建 Group、不移动任何节点，视觉零改动，模块自然都在同一 group 中。
@@ -1673,7 +1734,7 @@ function qualityDiffText(before, after) {
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
-  "# 每行是一个节点名；缩进表示父子包含关系；同级顺序即从上到下。",
+  "# 每行是一个节点名；缩进表示父子包含关系；同级顺序即视觉从上到下（已按 y/x 排序，与 Figma 图层面板无关）。",
   "# 选区根节点 = 组件根，一律命名 cp-<语义>；组件内部固定三段式：",
   "#   header   → 标题区（header-title + header-slot-* 插槽）",
   "#   bg       → 背景/装饰层（整体导出，不要逐个重建矢量）",
@@ -1710,9 +1771,26 @@ function isSlotConNode(n) { return /^slot-con$/i.test(cleanContractName(n)); }
 
 function visibleChildren(n) {
   if (!n || !("children" in n) || !Array.isArray(n.children)) return [];
-  return n.children.filter(c => {
+  const kids = n.children.filter(c => {
     try { return c && c.visible !== false; } catch (e) { return !!c; }
   });
+  // v20261110.25：契约头声明「同级顺序即从上到下」，但 Figma 的 children 是 z-order
+  //（图层面板反序显示），直接输出常常是倒的。这里统一按视觉 y 升序 / 同 y 按 x 升序。
+  // 只影响只读文本，不动任何节点；无几何信息的树（测试桩/纯命名树）保持原序。
+  const num = (v) => (v === undefined || v === null || v === "" ? null
+    : (Number.isFinite(Number(v)) ? Number(v) : null));
+  if (!kids.some(c => num(c && c.y) !== null)) return kids;
+  return kids.map((c, i) => ({ c: c, i: i }))
+    .sort((a, b) => {
+      const ay = num(a.c && a.c.y), by = num(b.c && b.c.y);
+      if (ay !== null && by !== null && ay !== by) return ay - by;
+      const ax = num(a.c && a.c.x), bx = num(b.c && b.c.x);
+      if (ax !== null && bx !== null && ax !== bx) return ax - bx;
+      if (ay !== null && by === null) return -1;
+      if (ay === null && by !== null) return 1;
+      return a.i - b.i;
+    })
+    .map(o => o.c);
 }
 
 // v20261110.22 P0-2：TEXT 节点标成动态数据槽，附内容摘要（限字预算，防止挤压层级信息）。

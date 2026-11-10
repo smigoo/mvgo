@@ -575,6 +575,8 @@
         if (msg.prefixFixed) diag.push("补前缀 " + msg.prefixFixed);
         if (msg.subHeadersDemoted) diag.push("副标题降级 " + msg.subHeadersDemoted);
         if (msg.subSlotConsDemoted) diag.push("误槽降级 " + msg.subSlotConsDemoted);
+        if (msg.slotSorted) diag.push("槽内排序 " + msg.slotSorted);
+        if (msg.slotConEmptyRemoved) diag.push("清理空槽 " + msg.slotConEmptyRemoved);
         if (msg.moduleSkipped) diag.push("模块跳过 " + msg.moduleSkipped);
         if (msg.moduleGroupFailed) diag.push("模块建组失败 " + msg.moduleGroupFailed);
         if (msg.groupModulesOn && !(msg.intentModuleCount > 0) && !(msg.geometricGroups > 0))
@@ -1152,7 +1154,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.24";
+      const PLUGIN_VERSION = "20261110.25";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
