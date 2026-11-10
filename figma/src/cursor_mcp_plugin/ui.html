@@ -577,6 +577,9 @@
         if (msg.subSlotConsDemoted) diag.push("误槽降级 " + msg.subSlotConsDemoted);
         if (msg.slotSorted) diag.push("槽内排序 " + msg.slotSorted);
         if (msg.slotConEmptyRemoved) diag.push("清理空槽 " + msg.slotConEmptyRemoved);
+        if (msg.sectionGroupsCreated) diag.push("子模块 " + msg.sectionGroupsCreated);
+        if (msg.sectionGroupsPinned) diag.push("段外保留 " + msg.sectionGroupsPinned);
+        if (msg.sectionContainersRenamed) diag.push("容器改名 " + msg.sectionContainersRenamed);
         if (msg.moduleSkipped) diag.push("模块跳过 " + msg.moduleSkipped);
         if (msg.moduleGroupFailed) diag.push("模块建组失败 " + msg.moduleGroupFailed);
         if (msg.groupModulesOn && !(msg.intentModuleCount > 0) && !(msg.geometricGroups > 0))
@@ -846,6 +849,7 @@
         const NAMING_BLOCK = [
           "【命名体系】表单 form-、列表 list-、卡片 card-、项 item-（重复子项 item-<语义>-N）、组件 cp-（仅最外层唯一业务组件；【本次选区根节点即组件根，必须命名 cp-<语义>】，重复子结构一律 item-/card-/list-，绝不用 cp-）。",
           "【组件骨架·根级必守】组件根的直接子节点固定三段式：① 标题区 → header（标题文本 + header-slot-* 插槽）；② 背景/装饰层 → bg；③ 其余内容区域 → 统一由插件建的【唯一】slot-con Group 收纳，模块容器命名 item-xxx / card-xxx / list-xxx；【插件会在 Figma 里真建 slot-con Group】把第③类（含视觉分析的多个内容模块）统一收进去，结构契约也会归一化为一个 slot-con 容器，下游按单个内容区生成；【全组件只有这一个 header 和这一个 slot-con】：各模块自己的小标题一律命名 section-title-<语义>，严禁命名 header-* / slot-con-*（会被误判成根级标题或第二个槽）。你只需保证命名清晰，绝不输出 group/reorder。header 内插槽按位置命名 header-title / header-slot-left / header-slot-center / header-slot-right（右侧通常放按钮、tab、图例、时间筛选），下游会按这些名字预留 <slot>。只做命名，不要输出 group/reorder，插件会按几何确定性收纳。",
+          "【子模块】每个 section-title-* 都是模块锚点：插件按视觉顺序把「标题 + 其下方图表」切进独立 item-<语义> Group，结构契约同步输出 slot-con → item-* → section-title-* 三层；段前/跨段的全屏底图保持直属 slot-con。",
           "【循环组件·重点】list-*/cards-* 等列表容器内的重复子项，一律命名 item-<语义>-1..N（或 card-<语义>-1..N），并保证同组子项结构完全一致；严禁给每个子项起不同语义名（会误导下游生成 N 份重复代码）。Group 只表达包含、不表达可迭代，因此「相同前缀 + 递增序号 + 同构子树」是让大模型识别 v-for/map 的必需信号；插件会在结构契约里把同构项折叠为 [循环 ×N] 并只展开首项。",
           "背景：插件自动把同级背景/装饰层合并为语义文件夹 bg-<父容器语义>（如 bg-card-traffic-flow），该文件夹整体导出 PNG@2x、内部节点不单独导出；背景图/装饰层命名 bg-<角色>（bg-card/bg-glow/bg-ring/bg-panel…）；纯装饰发光环/光晕/纹理归入 bg-，不算 icon。",
           "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」。【假图表·重点】由零散 VECTOR 弧线 / 刻度 / 光晕拼成、没有坐标轴与数据系列的静态仪表盘、环形进度、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 item-<语义>（如 item-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（legend/axis…）；模块小标题用 section-title-<语义>，同类多实例加序号。",
@@ -1154,7 +1158,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.25";
+      const PLUGIN_VERSION = "20261110.26";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存

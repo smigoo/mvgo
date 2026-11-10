@@ -232,6 +232,8 @@ figma.ui.onmessage = async (msg) => {
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
           slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
+          sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
+          sectionContainersRenamed: 0, sectionGroupFailed: 0,
         };
         const intentCtx = { intentMap: new Map(), moduleOrder: new Map(), sharedIds: new Set(), useLayoutIntent: false };
         let planPreview = null;
@@ -257,6 +259,8 @@ figma.ui.onmessage = async (msg) => {
         }
         // v20261110.24：先归一化根级骨架命名（唯一 header / 唯一 slot-con），再建组。
         try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
+        // v20261110.26：按副标题把内容切成子模块 Group，再统一收进 slot-con。
+        try { groupSectionsByTitle(root || containers[0] || null, summary); } catch (e12) {}
         // v20261110.21：收尾建组件骨架 —— 根下 header/bg 保持平级，其余内容（含所有模块 Group）收进一个真 slot-con Group。
         try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
         // v20261110.25：建组后按视觉顺序重排槽内直接子级（重叠节点 pin 住不动）。
@@ -298,6 +302,10 @@ figma.ui.onmessage = async (msg) => {
           subHeadersDemoted: summary.subHeadersDemoted, subSlotConsDemoted: summary.subSlotConsDemoted,
           slotSorted: summary.slotSorted, slotSortPinned: summary.slotSortPinned,
           slotConEmptyRemoved: summary.slotConEmptyRemoved,
+          sectionGroupsCreated: summary.sectionGroupsCreated,
+          sectionGroupsMerged: summary.sectionGroupsMerged,
+          sectionGroupsPinned: summary.sectionGroupsPinned,
+          sectionContainersRenamed: summary.sectionContainersRenamed,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
@@ -357,6 +365,8 @@ figma.ui.onmessage = async (msg) => {
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
           slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
+          sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
+          sectionContainersRenamed: 0, sectionGroupFailed: 0,
         };
         const ACT_CN = { rename: "改名", reparent: "归父", reorder: "排序", group: "成组", delete: "删除" };
         for (let i = 0; i < ops.length; i++) {
@@ -462,6 +472,8 @@ figma.ui.onmessage = async (msg) => {
           }
           // v20261110.24：先归一化根级骨架命名（唯一 header / 唯一 slot-con），再建组。
           try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
+          // v20261110.26：按副标题把内容切成子模块 Group，再统一收进 slot-con。
+          try { groupSectionsByTitle(root || containers[0] || null, summary); } catch (e12) {}
           // v20261110.21：收尾建组件骨架 —— 视觉/几何模块与其它内容统一收进一个真 slot-con Group。
           try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
           // v20261110.25：建组后按视觉顺序重排槽内直接子级（重叠节点 pin 住不动）。
@@ -521,6 +533,10 @@ figma.ui.onmessage = async (msg) => {
           subHeadersDemoted: summary.subHeadersDemoted, subSlotConsDemoted: summary.subSlotConsDemoted,
           slotSorted: summary.slotSorted, slotSortPinned: summary.slotSortPinned,
           slotConEmptyRemoved: summary.slotConEmptyRemoved,
+          sectionGroupsCreated: summary.sectionGroupsCreated,
+          sectionGroupsMerged: summary.sectionGroupsMerged,
+          sectionGroupsPinned: summary.sectionGroupsPinned,
+          sectionContainersRenamed: summary.sectionContainersRenamed,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
@@ -1590,8 +1606,13 @@ function sortSlotConChildren(root, summary) {
   if (!root || !("children" in root)) return null;
   const s = summary || {};
   const slots = Array.prototype.slice.call(root.children || []).filter(isSlotContainer);
+  // v20261110.26：子模块容器（mvSectionGroup）内部也按视觉序排，重叠节点仍 pin 住。
+  const targets = slots.slice();
+  for (const slot of slots)
+    for (const ch of Array.prototype.slice.call(slot.children || []))
+      if (isSectionGroup(ch)) targets.push(ch);
   let moved = 0, pinnedCount = 0;
-  for (const slot of slots) {
+  for (const slot of targets) {
     const kids = Array.prototype.slice.call(slot.children || []);
     if (kids.length < 2) continue;
     const pinned = new Set();
@@ -1609,6 +1630,104 @@ function sortSlotConChildren(root, summary) {
   s.slotSorted = (Number(s.slotSorted) || 0) + moved;
   s.slotSortPinned = (Number(s.slotSortPinned) || 0) + pinnedCount;
   return slots[0] || null;
+}
+
+// ---- v20261110.26 P1：按副标题把内容切成子模块 Group -----------------------------------
+// .24 把模块小标题统一成 section-title-*，.25 保证视觉顺序可用 ⇒ 标题的 y 就是天然分割线。
+// 两种形态：① 平铺型（标题与图表同父级平铺）→ 按 y 区间建 item-<slug> Group；
+//           ② 已有容器型（红框本来就是 Frame，标题在容器内部）→ 只把容器改名 item-<slug>，不套第二层。
+// 保护：跨段/全屏底图 pin 住不归段；同父级才合组；插回原最小 index；mvSectionGroup 幂等。
+const SECTION_GROUP_KEY = "mvSectionGroup";
+function isSectionTitle(n) {
+  return /^section-title(?:-|$)/i.test(String((n && n.name) || "").trim());
+}
+function isSectionGroup(n) {
+  if (!n || !("children" in n)) return false;
+  try { return n.getPluginData(SECTION_GROUP_KEY) === "1"; } catch (e) { return false; }
+}
+function sectionSlug(nm) {
+  const slug = String(nm || "")
+    .replace(/^(?:section-title|header)[-/]?/i, "")
+    .replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return slug || "section";
+}
+function sectionGroupName(nm) { return "item-" + sectionSlug(nm); }
+
+function groupSectionsByTitle(root, summary) {
+  if (!root || !("children" in root) || root.type === "PAGE") return null;
+  const s = summary || {};
+  const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  const rootKids = Array.prototype.slice.call(root.children || []);
+  const slot = rootKids.filter(isSlotContainer)[0];
+  // 优先整理已有槽（重跑时内容都在槽内）；首次整理则作用于组件根。
+  const parent = (slot && (slot.children || []).length >= 2) ? slot : root;
+  const kids = Array.prototype.slice.call(parent.children || []).filter(n =>
+    n && !isSlotContainer(n) && !(parent === root && (isHeaderLike(n) || isBgLike(n))));
+  const anchored = kids.filter(isSectionTitle);
+
+  // ② 平铺标题不足 2 个：多半是「红框本来就是 Frame」或「已整理过」。
+  // 只把自带小标题、且还没有语义名的容器改名；已有 item-*/mvSectionGroup 一律不动 ⇒ 幂等。
+  if (anchored.length < 2) {
+    let renamed = 0;
+    for (const n of kids) {
+      if (isSectionGroup(n) || !("children" in n)) continue;
+      if (/^(item|card|list|form|cp)-/i.test(String(n.name || ""))) continue;
+      const inner = Array.prototype.slice.call(n.children || []).find(isSectionTitle);
+      if (!inner) continue;
+      try {
+        if (n.locked) n.locked = false;
+        n.name = sectionGroupName(inner.name);
+        n.setPluginData(SECTION_GROUP_KEY, "1");
+        renamed++;
+      } catch (e) {}
+    }
+    s.sectionContainersRenamed = (Number(s.sectionContainersRenamed) || 0) + renamed;
+    return parent;
+  }
+
+  // ① 平铺型：按标题 y 区间分段。注意 kids 是 children 原序（z-order），
+  // 这里只判断归属、不重排段内顺序，z-order 由 insertChild 原最小 index 保护。
+  const titles = anchored.slice().sort((a, b) => num(a.y) - num(b.y));
+  const parentH = num(parent.height);
+  const segments = titles.map(() => []);
+  let pinnedCount = 0;
+  for (const n of kids) {
+    const y = num(n.y), h = num(n.height);
+    let seg = -1;
+    for (let i = 0; i < titles.length; i++) {
+      const start = num(titles[i].y);
+      const end = i + 1 < titles.length ? num(titles[i + 1].y) : Infinity;
+      if (y >= start - 1 && y < end) { seg = i; break; }
+    }
+    const nextY = (seg >= 0 && seg + 1 < titles.length) ? num(titles[seg + 1].y) : Infinity;
+    // 段前 / 下沿越过下一标题 / 与父级等高（全屏底图）→ 一律留在 parent 直属
+    if (seg < 0 || (h > 0 && y + h > nextY + 1) || (parentH > 0 && h >= parentH * 0.9)) {
+      pinnedCount++; continue;
+    }
+    segments[seg].push(n);
+  }
+  s.sectionGroupsPinned = (Number(s.sectionGroupsPinned) || 0) + pinnedCount;
+
+  let created = 0, merged = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.length < 2 || !seg.some(n => !isSectionTitle(n))) continue; // 只有标题不造空 Group
+    const before = Array.prototype.slice.call(parent.children || []);
+    let minIdx = Math.min.apply(null, seg.map(n => before.indexOf(n)).filter(j => j >= 0));
+    if (!Number.isFinite(minIdx)) minIdx = 0;
+    for (const n of seg) { try { if (n.locked) n.locked = false; } catch (e) {} }
+    const grp = safeGroup(seg, sectionGroupName(titles[i].name));
+    if (!grp) { s.sectionGroupFailed = (Number(s.sectionGroupFailed) || 0) + 1; continue; }
+    try { grp.setPluginData(SECTION_GROUP_KEY, "1"); } catch (e) {}
+    try { parent.insertChild(Math.max(0, Math.min(minIdx, parent.children.length - 1)), grp); } catch (e) {}
+    created++; merged += seg.length;
+    logContainer("[子模块]", grp, seg.length, String(parent.name || ""));
+  }
+  s.sectionGroupsCreated = (Number(s.sectionGroupsCreated) || 0) + created;
+  s.sectionGroupsMerged = (Number(s.sectionGroupsMerged) || 0) + merged;
+  return parent;
 }
 function createSlotConGroup(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
@@ -1743,6 +1862,7 @@ const CONTRACT_HEADER = [
   "#   header-slot-right 通常放按钮、tab、图例、时间筛选；生成时预留 <slot> 供外部注入。",
   "# 全组件只有一个 header；模块小标题 section-title-* 属于 slot-con，不是根级 header 插槽。",
   "# 全组件只有一个 slot-con；模块容器用 item-*/card-*/list-*，绝不出现第二个 slot-con-*。",
+  "# slot-con 下以 section-title-* 为锚点按视觉顺序分成 item-* 子模块；段前/跨段节点直属 slot-con。",
   "# 循环结构：list-*/cards-* 内的同构序号子项（item-xxx-1..N）按一份模板 + v-for/map 渲染；",
   "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码。",
   "# 资源文件夹 bg-*/img-*/icon-* 整体导出；@echarts/* 用图表库实现。",
@@ -1951,9 +2071,28 @@ function buildStructureContract(root, opts) {
     }
     if (body.length || slotCons.length) {
       push("slot-con", 1);
-      for (const b of body) {
-        if (b.forced) { push(b.forced + "  [data:label]", 2); emitChildren(b.node, 3); }
-        else walkNode(b.node, 2);
+      // v20261110.26 P0：平铺的 section-title-* 是天然模块锚点，
+      // 未整理 / 未真建 Group 的文件里也输出一层 item-*（纯文本，不建 Figma 节点）。
+      // .25 已保证 body 顺序 = 视觉从上到下；≥2 个锚点才分段，单标题不制造假层级。
+      const nameOf = (b) => b.forced || cleanContractName(b.node);
+      const emitItem = (b, d) => {
+        if (b.forced) { push(b.forced + "  [data:label]", d); emitChildren(b.node, d + 1); }
+        else walkNode(b.node, d);
+      };
+      const anchors = [];
+      body.forEach((b, i) => { if (/^section-title(?:-|$)/i.test(nameOf(b))) anchors.push(i); });
+      // 已经真分层的容器（内部自带 section-title）不再造虚拟层，避免重复层级
+      const hasRealGroups = body.some(b =>
+        /^(item|card|list|form)-/i.test(cleanContractName(b.node)) &&
+        visibleChildren(b.node).some(c => isSectionTitle(c)));
+      if (anchors.length < 2 || hasRealGroups) {
+        for (const b of body) emitItem(b, 2);
+      } else {
+        let cur = -1;
+        for (let i = 0; i < body.length; i++) {
+          if (anchors.indexOf(i) >= 0) { cur++; push(sectionGroupName(nameOf(body[i])), 2); }
+          emitItem(body[i], cur >= 0 ? 3 : 2);
+        }
       }
       for (const s of slotCons) emitChildren(s, 2); // 已存在 slot-con：展开其内容，避免嵌套两层
     }
