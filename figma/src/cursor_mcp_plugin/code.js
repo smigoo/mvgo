@@ -183,7 +183,8 @@ figma.ui.onmessage = async (msg) => {
           : "";
         figma.ui.postMessage({
           type: "structure-contract", ok: true,
-          text: contract.text, nodes: contract.nodes, truncated: contract.truncated, loops: contract.loops,
+          text: contract.text, nodes: contract.nodes, truncated: contract.truncated,
+          loops: contract.loops, slots: contract.slots,
           rootName: String(root.name || ""), fileKey: fileKey, nodeId: nodeId, figmaUrl: figmaUrl,
         });
       } catch (error) {
@@ -209,6 +210,8 @@ figma.ui.onmessage = async (msg) => {
           figma.ui.postMessage({ type: "ai-organize-result", ok: false, error: "选中的节点不是容器，请选中框架 / 分组" });
           break;
         }
+        let qualityBefore = null, qualityAfter = null;
+        try { qualityBefore = collectQualityMetrics(root); } catch (e) {}
         figma.ui.postMessage({ type: "ai-progress", stage: "apply", pct: 20, msg: "零 token 结构化整理：纯几何行聚类建组..." });
         const setExport = msg.setExport !== false;
         const groupModules = msg.groupModules !== false; // 默认开
@@ -260,6 +263,7 @@ figma.ui.onmessage = async (msg) => {
           if ("children" in n) for (const c of n.children) countAll(c, depth + 1);
         };
         countAll(root, 0);
+        try { qualityAfter = collectQualityMetrics(root); } catch (e) {}
         figma.ui.postMessage({
           type: "ai-organize-result", ok: true, structureOnly: true,
           total, renamed: 0, reparented: 0, reordered: 0, grouped: 0, deleted: 0,
@@ -289,6 +293,8 @@ figma.ui.onmessage = async (msg) => {
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
           layoutErrorMsg: summary.layoutErrorMsg, failed: 0, opsCount: 0,
+          qualityBefore: qualityBefore, qualityAfter: qualityAfter,
+          qualityText: qualityDiffText(qualityBefore, qualityAfter),
         });
       } catch (error) {
         figma.ui.postMessage({ type: "ai-organize-result", ok: false, error: error.message });
@@ -303,6 +309,8 @@ figma.ui.onmessage = async (msg) => {
         // .12 曾把它声明在「P0-a 后处理」的内层 try 里，结果消息在外层引用 ⇒ ReferenceError
         // 'planPreview' is not defined（整理其实已执行完，只是回报失败）。node --check 查不出这种错误。
         let planPreview = null;
+        // v20261110.15 教训：内层 try 算出的值外层要用，必须在外层先声明。
+        let qualityBefore = null, qualityAfter = null;
         const ops = Array.isArray(msg.ops) ? msg.ops : [];
         // P0-b：视觉布局意图（可选）。模型只描述「是什么/属于哪个模块/是否共享」，不输出结构变更。
         const setExport = msg.setExport !== false; // 资源导出属性开关（默认开）
@@ -396,6 +404,7 @@ figma.ui.onmessage = async (msg) => {
         // 后者会让整段没有 rename 的容器（背景层最常出现在这里）永远漏合并。
         try {
           const root = msg.rootId ? await figma.getNodeByIdAsync(msg.rootId) : null;
+          try { qualityBefore = root ? collectQualityMetrics(root) : null; } catch (e) {}
           // 阶段 1 快照：建组前先算只读结构方案（视觉语义分区 + 几何兜底），用于方案/实际对照。
           planPreview = await describeStructurePlan(root, moduleGroups).catch(() => null);
           // P1：先按模块建组（视觉语义 + 纯几何行聚类兜底），再 collect，
@@ -445,6 +454,7 @@ figma.ui.onmessage = async (msg) => {
           // 收尾：给所有资源文件夹挂导出预设（icon→SVG / img·bg→PNG@2x），并清掉内部子节点的导出项。
           const exportRoot = root || containers[0] || null; // 无 rootId 的兜底路径也要覆盖
           if (setExport) { try { applyAssetExports(exportRoot, summary); } catch (e4) {} }
+          try { qualityAfter = root ? collectQualityMetrics(root) : null; } catch (e) {}
         } catch (e) { /* 后处理失败不影响已完成的命名 */ }
         figma.ui.postMessage({
           type: "ai-organize-result",
@@ -497,6 +507,8 @@ figma.ui.onmessage = async (msg) => {
           structureList: structLog.join("\n"),
           structurePlanText: planPreview ? planPreview.text : "",
           layoutErrorMsg: summary.layoutErrorMsg,
+          qualityBefore: qualityBefore, qualityAfter: qualityAfter,
+          qualityText: qualityDiffText(qualityBefore, qualityAfter),
           failed: fail,
           opsCount: ops.length,
         });
@@ -1521,6 +1533,78 @@ function createSlotConGroup(root, summary) {
   return slot;
 }
 
+// ---- v20261110.22 P1：整理前后结构质量快照（纯只读）------------------------------
+// 目的：把「提高生成质量」变成可度量指标；不写入节点、不影响整理逻辑。
+const DEFAULT_NAME_RE = /^(?:Frame|Group|Rectangle|Ellipse|Vector|Line|Star|Polygon|Boolean\s*Operation|Component|Instance|Text|Union|Subtract|Intersect|Exclude|Image)\s*[\d\s._-]*$/i;
+const SEMANTIC_NAME_RE = /^(?:cp-|card-|list-|item-|form-|img-|icon-|bg-|@echarts\/|@antd\/|header|slot-|chart-|legend|axis|label|value|unit|title|footer)/i;
+
+function collectQualityMetrics(root) {
+  const m = {
+    total: 0, defaultNames: 0, maxDepth: 0, duplicates: 0, semantic: 0,
+    resourceFolders: 0, resourceNoExport: 0, hasHeader: false, hasSlotCon: false,
+    modules: 0, texts: 0, score: 0, grade: "-", breakdown: {},
+  };
+  // 重名只在同一父级内计：循环模板 item-1/value 与 item-2/value 是同构子项，不应误扣分。
+  const nameCount = new Map();
+  const walk = (n, depth, parentKey) => {
+    if (!n || depth > 40) return;
+    m.total++;
+    m.maxDepth = Math.max(m.maxDepth, depth);
+    let nm = "";
+    try { nm = String(n.name || "").trim(); } catch (e) {}
+    if (DEFAULT_NAME_RE.test(nm)) m.defaultNames++;
+    if (SEMANTIC_NAME_RE.test(nm)) m.semantic++;
+    if (nm) { const key = parentKey + "::" + nm; nameCount.set(key, (nameCount.get(key) || 0) + 1); }
+    try { if (n.type === "TEXT") m.texts++; } catch (e) {}
+    if (folderRole(n)) {
+      m.resourceFolders++;
+      let ex = [];
+      try { ex = n.exportSettings || []; } catch (e) {}
+      if (!ex.length) m.resourceNoExport++;
+    }
+    if (isHeaderLike(n)) m.hasHeader = true;
+    if (isSlotContainer(n)) m.hasSlotCon = true;
+    if (n !== root && isModuleLike(n)) m.modules++;
+    if ("children" in n && Array.isArray(n.children))
+      for (const c of n.children) walk(c, depth + 1, String(n.id || ""));
+  };
+  walk(root, 0, "");
+  for (const c of nameCount.values()) if (c > 1) m.duplicates += c - 1;
+  const denom = Math.max(1, m.total);
+  const qName = 25 * Math.max(0, 1 - m.defaultNames / denom);
+  const qSemantic = 20 * Math.min(1, m.semantic / denom);
+  const qResource = m.resourceFolders ? 20 * Math.max(0, 1 - m.resourceNoExport / m.resourceFolders) : 20;
+  const qSkeleton = (m.hasHeader ? 5 : 0) + (m.hasSlotCon ? 10 : 0) + (m.modules > 0 ? 5 : 0);
+  const qDepth = Math.max(0, 15 - Math.max(0, m.maxDepth - 6) * 2);
+  const qDup = Math.min(10, m.duplicates);
+  m.score = Math.max(0, Math.min(100, Math.round(qName + qSemantic + qResource + qSkeleton + qDepth - qDup)));
+  m.grade = m.score >= 85 ? "A" : m.score >= 70 ? "B" : m.score >= 55 ? "C" : "D";
+  m.breakdown = {
+    naming: +qName.toFixed(1), semantic: +qSemantic.toFixed(1),
+    resource: +qResource.toFixed(1), skeleton: qSkeleton, depth: qDepth, duplicatePenalty: -qDup,
+  };
+  return m;
+}
+
+// 第一行给 UI 常显（简洁），其余行给折叠详情。
+function qualityDiffText(before, after) {
+  if (!before || !after) return "";
+  const d = after.score - before.score;
+  const head = "质量 " + before.score + "→" + after.score + " (" + (d >= 0 ? "+" : "") + d + " " + after.grade + ")";
+  const rows = [
+    "默认名残留 " + before.defaultNames + "→" + after.defaultNames,
+    "语义命名 " + before.semantic + "→" + after.semantic + "/" + after.total,
+    "重名 " + before.duplicates + "→" + after.duplicates,
+    "最大深度 " + before.maxDepth + "→" + after.maxDepth,
+    "资源文件夹 " + before.resourceFolders + "→" + after.resourceFolders + "（未挂导出 " + after.resourceNoExport + "）",
+    "骨架 header=" + (after.hasHeader ? "Y" : "N") + " slot-con=" + (after.hasSlotCon ? "Y" : "N") + " 模块=" + after.modules,
+    "分项 命名" + after.breakdown.naming + " 语义" + after.breakdown.semantic
+      + " 资源" + after.breakdown.resource + " 骨架" + after.breakdown.skeleton
+      + " 层级" + after.breakdown.depth + " 重名扣分" + after.breakdown.duplicatePenalty,
+  ];
+  return head + "\n" + rows.join("\n");
+}
+
 // v20261110.20 结构契约：整理结果 → 下游代码生成模型的唯一载体。
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
@@ -1536,6 +1620,8 @@ const CONTRACT_HEADER = [
   "# 循环结构：list-*/cards-* 内的同构序号子项（item-xxx-1..N）按一份模板 + v-for/map 渲染；",
   "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码。",
   "# 资源文件夹 bg-*/img-*/icon-* 整体导出；@echarts/* 用图表库实现。",
+  "# 动态数据槽：TEXT 行尾 [data:value|label|unit \"内容摘要\"] 表示可变数据，",
+  "#   生成时绑定 props / 接口字段，绝不把字面量写死；data:label 多为静态文案可保留。",
   "# 严格按此层级划分组件边界，不要臆造此树中不存在的节点、模块或数据。",
 ].join("\n");
 
@@ -1562,6 +1648,35 @@ function visibleChildren(n) {
   return n.children.filter(c => {
     try { return c && c.visible !== false; } catch (e) { return !!c; }
   });
+}
+
+// v20261110.22 P0-2：TEXT 节点标成动态数据槽，附内容摘要（限字预算，防止挤压层级信息）。
+// 纯文本判据，不依赖 LLM：数值/百分比 → value；单位后缀 → unit；其余有文本 → label。
+function describeDataSlot(n, budget) {
+  if (!n || n.type !== "TEXT") return "";
+  let txt = "";
+  try { txt = String(n.characters || "").trim(); } catch (e) {}
+  const rawName = cleanContractName(n);
+  // Figma 默认名（Text 9 / Frame 12 …）不参与语义判断，否则 "Text 9" 会被 ^text 误判成 label；
+  // 这类节点一律按文本内容判数值/文案。
+  const nm = /^(?:Text|Frame|Group|Rectangle|Ellipse|Vector|Line|Star|Polygon|Component|Instance)\s*[\d\s._-]*$/i.test(rawName) ? "" : rawName;
+  let kind = "";
+  if (/^(value|number|metric|count|rate|percent|price|amount|total|score)/i.test(nm)) kind = "value";
+  else if (/^(unit|suffix)/i.test(nm)) kind = "unit";
+  else if (/^(label|title|name|caption|desc|text|header-title)/i.test(nm)) kind = "label";
+  else {
+    const t = txt.replace(/[,，\s]/g, "");
+    if (/^[+-]?\d+(?:\.\d+)?[%％]?$/.test(t)) kind = "value";
+    else if (/^(?:个|人|次|件|条|天|小时|分钟|秒|%|％|px|km|m|元|万|亿)$/.test(txt)) kind = "unit";
+    else if (txt) kind = "label";
+  }
+  if (!kind) return "";
+  let preview = "";
+  if (txt && budget && budget.left > 0) {
+    preview = txt.replace(/[\r\n\t"\[\]]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 24);
+    budget.left -= preview.length + 4;
+  }
+  return "  [data:" + kind + (preview ? " \"" + preview + "\"" : "") + "]";
 }
 
 // 循环模板识别：名称去掉尾部 -N 后相同 + 子树类型指纹相同 + 在原层级连续出现。
@@ -1600,7 +1715,8 @@ function buildStructureContract(root, opts) {
   const maxChars = o.maxChars || 18000; // requirementDocText 在 mvgo 侧上限 20000 字
   const raw = !!o.raw; // raw=true：原样镜像图层树（不做骨架归一化），供对照与回归
   const lines = [];
-  let count = 0, chars = 0, truncated = false, loops = 0;
+  let count = 0, chars = 0, truncated = false, loops = 0, slots = 0;
+  const slotBudget = { left: 3000 }; // 摘要总预算：超出后只留 [data:xxx] 标签
 
   function push(name, depth) {
     if (truncated) return;
@@ -1636,7 +1752,9 @@ function buildStructureContract(root, opts) {
   function walkNode(n, depth) {
     if (truncated || !n) return;
     try { if (n.visible === false) return; } catch (e) {}
-    push(cleanContractName(n), depth);
+    const slot = describeDataSlot(n, slotBudget);
+    if (slot) slots++;
+    push(cleanContractName(n) + slot, depth);
     emitChildren(n, depth + 1);
   }
 
@@ -1669,7 +1787,9 @@ function buildStructureContract(root, opts) {
           else if (w > 0 && x <= w * 0.25) out = "header-slot-left";
           else out = "header-slot-center";
         }
-        push(out, 2);
+        const slot = describeDataSlot(it.node, slotBudget);
+        if (slot) slots++;
+        push(out + slot, 2);
         emitChildren(it.node, 3);
       });
     }
@@ -1688,6 +1808,7 @@ function buildStructureContract(root, opts) {
     nodes: count,
     truncated: truncated,
     loops: loops,
+    slots: slots,
     raw: raw,
   };
 }

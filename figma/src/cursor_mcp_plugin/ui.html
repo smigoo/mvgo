@@ -600,6 +600,12 @@
             + " 组外" + (msg.slotConOutside || 0) + (msg.slotConFailed ? " 失败" + msg.slotConFailed : ""),
         ];
         const diagLine = always.concat(diag.filter(d => !/^(前景装饰保留|建组失败|模块跳过) /.test(d))).join(" / ");
+        // v20261110.22 P1：默认只显示一行评分，分项折叠，延续「界面不要这么多文字」。
+        const qLines = msg.qualityText ? String(msg.qualityText).split("\n") : [];
+        const qualityHtml = qLines.length
+          ? "<br/><details style='margin-top:3px;'><summary style='cursor:pointer;font-size:11px;color:#ffd166;'>📊 " + esc(qLines[0]) + " · 展开分项</summary>" +
+            "<pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #444;border-radius:4px;color:#a9b6c4;font-size:10px;line-height:1.5;white-space:pre-wrap;'>" + esc(qLines.slice(1).join("\n")) + "</pre></details>"
+          : "";
         aiResult.innerHTML =
           "<span style='color:#4ade80'>✅ " + (msg.structureOnly ? "零 token 结构化整理完成！" : "整理完成！") + "扫描 " + msg.total + " 节点，" + (parts.join(" / ") || "无改动") +
           (msg.failed ? "，跳过 " + msg.failed + " 个" : "") + "</span>" +
@@ -608,6 +614,7 @@
           (msg.groupErrorMsg ? "<br/><span style='color:#ffcc99;font-size:11px;'>建组异常（figma.group 真实报错）：" + esc(msg.groupErrorMsg) + "</span>" : "") +
           (msg.structurePlanText ? "<br/><span style='color:#66b3ff;font-size:11px;'>结构方案（执行前只读快照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #3a3a3a;border-radius:4px;color:#a9b6c4;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structurePlanText) + "</pre>" : "") +
           (msg.structureList ? "<br/><span style='color:#4ade80;font-size:11px;'>新建业务容器清单（方案 / 实际对照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #444;border-radius:4px;color:#c9d1d9;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structureList) + "</pre>" : "") +
+          qualityHtml +
           "<br/>回画布刷新查看结果。";
         // 同步写进分析日志，便于整段复制贴回定位（结果面板在小窗口里容易看漏）
         try {
@@ -616,7 +623,8 @@
             (msg.layoutErrorMsg ? "\n布局异常：" + msg.layoutErrorMsg : "") +
             (msg.groupErrorMsg ? "\n建组异常：" + msg.groupErrorMsg : "") +
             (msg.structurePlanText ? "\n\n【结构方案（执行前快照）】\n" + msg.structurePlanText : "") +
-            (msg.structureList ? "\n\n【新建业务容器清单（方案/实际对照）】\n" + msg.structureList : "");
+            (msg.structureList ? "\n\n【新建业务容器清单（方案/实际对照）】\n" + msg.structureList : "") +
+            (msg.qualityText ? "\n\n【结构质量评分】\n" + msg.qualityText : "");
         } catch (e) {}
         // 注意：figma 只在插件主线程(code.js)存在，UI iframe 内必须用 parent.postMessage 让 code.js 调 figma.notify
         parent.postMessage({ pluginMessage: { type: "notify", message: "AI 整理完成：" + (parts.join("、") || "无改动") } }, "*");
@@ -1035,6 +1043,7 @@
             document.getElementById("contract-meta").textContent =
               (message.nodes || 0) + " 行"
               + (message.loops ? " · " + message.loops + " 组循环" : "")
+              + (message.slots ? " · " + message.slots + " 数据槽" : "")
               + (message.truncated ? " · 已截断" : "");
             const fu = document.getElementById("mvgo-figma-url");
             if (fu && message.figmaUrl) fu.value = message.figmaUrl;
@@ -1134,7 +1143,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.21";
+      const PLUGIN_VERSION = "20261110.22";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
