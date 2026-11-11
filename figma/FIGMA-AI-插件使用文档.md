@@ -7,12 +7,15 @@
 
 ## 〇、30 秒上手（给同事的极简版）
 
-1. 装好 **Node.js 18+**（已带 `node` 命令即可）。
-2. 解压 zip，终端进目录：`npm install`（zip 若已含 `node_modules` 可跳过）→ `node socket-server.mjs`。
-3. Figma 桌面端 → 菜单「插件 → 开发 → 导入插件」→ 选 zip 里的 `src/cursor_mcp_plugin/manifest.json`。
-4. 运行插件 → **连接服务**（端口 3055）→ 填 **AI 接口地址 / Key / 模型名** → 保存（自动探测）。
-5. 画布选中要整理的框架 → 看「当前选区」变绿 → 点 **AI 全自动整理选中框架**。
-6. 等 AI 分析完（大文件约 1–3 分钟）→ 回画布刷新看新命名。
+**默认零安装：不需要 Node、不需要开终端、不需要启动任何服务。** 插件 UI 直接请求你填的 LLM 网关；mac / Windows 行为完全一致。
+
+1. 解压 zip → Figma 桌面端「插件 → 开发 → 导入插件」→ 选 `src/cursor_mcp_plugin/manifest.json`。
+2. 运行插件 → 填 **AI 接口地址 / Key / 模型名** → 点「保存设置（仅存本机）」（自动探测）。
+3. 画布选中要整理的框架 → 看「当前选区」变绿 → 点 **AI 全自动整理选中框架**。
+4. 等 AI 分析完（大文件约 1–3 分钟）→ 回画布刷新看新命名。
+5. 只用**零 token 工具**（仅结构化整理 / 结构方案 / 结构契约 → mvgo）时，连 Key 都不用填，纯本地运行。
+
+> 仅当保存设置报 `Failed to fetch`（网关跨域 CORS 被拦）时，才需要 §四 的可选本地代理：mac 双击 `start-relay-mac.command`、Windows 双击 `start-relay-win.bat`，再点「连接本地代理」。
 
 ---
 
@@ -26,13 +29,15 @@ mv-figma-plugin/
 │   ├── manifest.json          # 插件清单（Figma 导入用）
 │   ├── code.js                # 插件主逻辑（扫描 / 执行）
 │   └── ui.html                # 插件界面（AI 配置 / 连接 / 整理按钮）
-├── socket-server.mjs          # 本地服务：WebSocket 中继 + LLM 代理（AI 整理必须）
+├── socket-server.mjs          # 可选本地代理（WebSocket 中继 + LLM 转发）
+├── start-relay-mac.command    # macOS 双击启动代理（可选）
+├── start-relay-win.bat        # Windows 双击启动代理（可选）
 ├── package.json               # 依赖声明（ws）
 ├── node_modules/ws/           # 已附带，免联网安装
 └── README.md                   # 本文件（zip 内为 ASCII 名，避免 Windows 乱码）
 ```
 
-> 说明：`socket-server.mjs` 只依赖 `ws`，且 `node_modules/ws` 已打进包，所以**同事不需要联网 `npm install`**，只要本机有 Node 即可。
+> 默认零安装路径**完全用不到** `socket-server.mjs` / `ws` / 两个启动器。它们只是网关跨域被拦时的可选兜底；此时本机需 Node 18+，而 `node_modules/ws` 已随包附带，无需联网 `npm install`。
 
 ---
 
@@ -40,10 +45,10 @@ mv-figma-plugin/
 
 | 项目 | 要求 | 备注 |
 |---|---|---|
-| 操作系统 | macOS / Windows / Linux | 本地服务是纯 Node |
-| Node.js | **18+**（推荐 20 LTS） | `node -v` 自查；低于 18 没有内置 fetch，代理会报错 |
+| 操作系统 | macOS / Windows / Linux | 插件本体是纯前端 JS，两端行为一致；可选代理是纯 Node |
+| Node.js | **默认不需要**；仅可选本地代理需 18+ | `node -v` 自查；低于 18 没有内置 fetch，代理会报错 |
 | Figma | **桌面端**（不是网页版） | 插件「开发模式导入」需要桌面端 |
-| 网络 | 能访问你的 LLM 接口地址 | 云端 API（DeepSeek/通义/OpenAI 等）或本地/内网网关 |
+| 网络 | 能访问 LLM 接口，且**网关允许跨域** | 云端 API（DeepSeek/通义/OpenAI 等）一般已允许；内网网关若不允许 → 走 §四 可选代理。建议用 `https://` 地址，非 localhost 的 `http://` 可能被插件 iframe 混合内容策略拦 |
 
 ---
 
@@ -57,32 +62,33 @@ mv-figma-plugin/
    ```
 4. 导入成功后，在「开发」子菜单里就能看到 **「Figma节点整理辅助工具」**。
 
-> 插件名由 `manifest.json` 的 `name` 决定。若菜单里仍显示旧名「mv-figma文件自动整理插件」，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.38），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.38（最后更新于 2026-11-11 13:07）`。
+> 插件名由 `manifest.json` 的 `name` 决定。若菜单里仍显示旧名「mv-figma文件自动整理插件」，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.39），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.39（最后更新于 2026-11-11 13:32）`。
 
 > 插件清单已声明可在普通编辑模式和 **Dev Mode（开发模式 inspect 面板）** 下运行。Dev Mode 下它会出现在右侧 inspect 面板里。
 
 ---
 
-## 四、启动本地服务（AI 整理必须）
+## 四、可选：启动本地代理（仅网关跨域被拦时）
 
-AI 整理功能依赖一个**本地中继+代理服务** `socket-server.mjs`（原因见排错章节：浏览器跨域限制）。启动方式二选一：
+> **Figma 插件沙箱（mac / Windows 一样）不能启动本地进程、不能监听端口** —— 没有 `child_process` / `fs` / `net.listen`。所以「在插件里执行 `node socket-server.mjs`」字面意义做不到；正确解法已经落地为：**插件默认直连，不再需要那个进程**。
 
-```bash
-# 方式 A：直接用 node
-cd <zip 解压目录>
-node socket-server.mjs
+判断标准：点「保存设置」若报 `Failed to fetch` / CORS，才启用代理。三种启动方式任选其一：
 
-# 方式 B：用自带脚本（等价）
-./start.sh
-```
+| 平台 | 双击 / 命令 | 说明 |
+|---|---|---|
+| macOS | `start-relay-mac.command` | 首次若被 Gatekeeper 拦：**右键 → 打开 → 仍要打开**；或终端 `bash start-relay-mac.command` |
+| Windows | `start-relay-win.bat` | 双击即可，窗口保持打开 |
+| 任意（手动） | `node socket-server.mjs` / `./start.sh` | 需先 `cd` 到解压目录 |
 
-看到终端输出即成功：
+看到下面输出即成功：
 ```
 WebSocket relay listening on ws://localhost:3055
 Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 ```
 
-> 保持这个终端窗口开着（Ctrl+C 停止）。每次用插件前都要先启动它。
+> 保持窗口开着（Ctrl+C 停止），回插件点「连接本地代理（可选）」，状态变绿后 AI 请求改走本机转发。端口被占：mac `PORT=3060 node socket-server.mjs`，Windows `set PORT=3060 && node socket-server.mjs`，插件里填对应端口。
+>
+> 除绕 CORS 外，代理还有两个附带作用：不在浏览器侧暴露 Key、以及用 Node 的 HTTP/2 + 强制 IPv4 转发（部分网关 ALPN 只接受 h2，见排错 §C）。直连一切正常时无需启用。
 
 ---
 
@@ -90,7 +96,7 @@ Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 
 1. Figma 里 **运行插件**（开发菜单 → Figma节点整理辅助工具）。
 2. 默认在 **「整理」** Tab。
-3. **连接服务**：端口填 `3055` → 点「连接服务」→ 状态变绿「已连接本地服务（AI 代理已启用）」。
+3. **（默认可跳过）连接本地代理**：初始状态是蓝色「直连模式 · 无需启动终端」，AI 请求由插件 UI 直接发往网关。仅当网关跨域被拦，才按 §四 启动代理后点「连接本地代理（可选）」，状态变绿「已连接本地代理」。
 4. **AI 设置**（OpenAI 兼容接口），填三项：
    - **接口地址 Base URL**：以 `/v1` 这类基路径结尾，**不要**带 `/chat/completions`
      - DeepSeek：`https://api.deepseek.com/v1`
@@ -199,7 +205,10 @@ Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 - 若仍为空，把指示块显示的 `#id` / 「未检测到」截图反馈。
 
 ### B. 保存设置报「Failed to fetch」
-- 浏览器跨域(CORS)限制：插件 UI 直连第三方 LLM 被拦。**先「连接服务」**（本地服务会代理转发，绕开跨域），再保存/整理。
+- 浏览器跨域(CORS)限制：插件 UI 直连第三方 LLM 被拦；或 Base URL 用了非 localhost 的 `http://`，被插件 iframe 的混合内容策略拦。
+- 优先改：换用 `https://` 的网关地址（多数云端 OpenAI 兼容网关已允许跨域）。
+- 仍不行 → 按 §四 双击 `start-relay-mac.command` / `start-relay-win.bat` → 点「连接本地代理」→ 重新保存。
+- v20261110.39 起直连只发标准 OpenAI 字段（`baseUrl` / `apiKey` 已从请求体剥离）；若报 400 且提示未知字段，贴回原始错误文本。
 
 ### C. 保存/整理报「本地代理错误 502：代理转发失败…」
 - 含义：本地服务去连你填的 LLM 地址失败。运行 `socket-server.mjs` 的终端会打印 `[llm-proxy] … 转发失败 / 响应` 行，据此判断真实原因（下面列出）。
@@ -224,8 +233,9 @@ Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 - **AI 设置（Base URL / Key / 模型）属「配置」而非缓存，会保留在 clientStorage**，下次打开免重填——这是设计意图。若你希望连配置也清掉，关闭前手动清空三个输入框即可。
 - 选区回退缓存是内存态，插件进程退出即销毁，无需手动清。
 
-### D. 连接服务一直「连接中」/ 连不上
-- 确认 `socket-server.mjs` 已启动且终端有 `listening on ws://localhost:3055`；端口被占就改 `PORT` 环境变量：`PORT=3060 node socket-server.mjs`，插件里填对应端口。
+### D. 连接本地代理一直「连接中」/ 连不上
+- 这是**可选功能**，连不上不影响直连模式（状态保持蓝色「直连模式」即可正常整理）。
+- 确认已双击对应平台启动器且窗口有 `listening on ws://localhost:3055`；端口被占就改 `PORT` 环境变量，插件里填对应端口。
 
 ### E. 插件在 Dev Mode 下位置
 - 插件清单已启用 Dev Mode（inspect 面板）。Dev Mode 右侧 inspect 面板里点开插件即可；普通编辑模式也从「插件 → 开发」运行。
@@ -257,4 +267,4 @@ cd <本仓库根目录>
 ./pack.sh          # 自动产出 mv-figma-plugin-<日期>.zip
 ```
 
-`pack.sh` 只挑上面「Zip 包里应该有什么」列出的必要文件（含 `node_modules/ws`），不会把 `node_modules` 全量、`.git`、构建产物等带进去。文档在包内命名为 `README.md`（ASCII，避免 Windows 资源管理器中文名乱码）。
+`pack.sh` 只挑上面「Zip 包里应该有什么」列出的必要文件（含 `node_modules/ws` 与两个 `start-relay-*` 启动器），不会把 `node_modules` 全量、`.git`、构建产物等带进去。文档在包内命名为 `README.md`（ASCII，避免 Windows 资源管理器中文名乱码）；`start-relay-win.bat` 内容也全 ASCII，避免中文 bat 编码乱码。

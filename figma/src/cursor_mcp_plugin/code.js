@@ -2478,7 +2478,8 @@ function qualityDiffText(before, after) {
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
 // v20261111.37：插件改名为「Figma节点整理辅助工具」，契约内容不变，仅随包升版便于核对重导入。
 // v20261111.38：UI 版本尾注改为「最后更新于 …」，契约内容不变，仅随包升版。
-const SCHEMA_VERSION = "20261110.38";
+// v20261111.39：默认零安装直连、本地代理可选；契约语义不变，仅随包升版。
+const SCHEMA_VERSION = "20261110.39";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",

@@ -100,14 +100,14 @@
         </div>
 
         <div class="section">
-          <h2>本地服务（AI 代理，可选）</h2>
+          <h2>本地代理（可选 · 仅跨域被拦时用）</h2>
           <p class="hint" style="margin-top:0;">
-            先在本机终端运行 <code>node socket-server.mjs</code> 启动本地服务，再点下面连接。连上后 AI 请求改走本地代理，可绕开浏览器跨域限制。
+            默认直连，<strong>无需启动终端</strong>。仅当网关报跨域错误时：mac 双击 <code>start-relay-mac.command</code>、Win 双击 <code>start-relay-win.bat</code>，再点下面连接。
           </p>
-          <button id="btn-connect" class="primary" style="width:100%">连接服务</button>
+          <button id="btn-connect" class="secondary" style="width:100%">连接本地代理（可选）</button>
           <label for="port">服务端口（WebSocket）</label>
           <input type="number" id="port" placeholder="3055" value="3055" min="1024" max="65535" />
-          <div id="connection-status" class="status disconnected">未连接到本地服务（AI 将直连，可能受浏览器跨域限制）</div>
+          <div id="connection-status" class="status info">直连模式 · 无需启动终端</div>
         </div>
 
         <div class="section">
@@ -197,8 +197,8 @@
           </p>
           <h2>使用步骤</h2>
           <ol style="font-size:12px;color:#bbb;line-height:1.8;">
-            <li>运行 <code>node socket-server.mjs</code> → 点「连接服务」（端口 3055）</li>
-            <li>填接口 / Key / 模型并保存 → 选中框架 → 「AI 全自动整理」</li>
+            <li>直接运行插件，<strong>无需启动终端</strong>：填接口 / Key / 模型 → 保存 → 选中框架 → 「AI 全自动整理」</li>
+            <li>仅网关跨域被拦时，双击 <code>start-relay-mac.command</code>（mac）/ <code>start-relay-win.bat</code>（Win）再「连接本地代理」</li>
           </ol>
         </div>
       </div>
@@ -224,11 +224,12 @@
         const statusMessage =
           message ||
           (isConnected
-            ? "已连接到本地服务（AI 代理已启用）"
-            : "未连接到本地服务（AI 将直连，可能受浏览器跨域限制）");
+            ? "已连接本地代理（AI 请求走本机转发）"
+            : "直连模式 · 无需启动终端（AI 请求直接发往网关）");
         connectionStatus.innerHTML = statusMessage;
-        connectionStatus.className = `status ${isConnected ? "connected" : "disconnected"}`;
-        connectButton.textContent = isConnected ? "断开连接" : "连接服务";
+        // v20261111.39：未连接是【正常默认态】，用中性蓝 info，不再显示成红色故障。
+        connectionStatus.className = `status ${isConnected ? "connected" : "info"}`;
+        connectButton.textContent = isConnected ? "断开连接" : "连接本地代理（可选）";
         connectButton.className = isConnected ? "secondary" : "primary";
         portInput.disabled = isConnected;
       }
@@ -251,7 +252,7 @@
               const data = JSON.parse(event.data);
               if (data.type === "system" && data.message && data.message.result) {
                 state.connected = true;
-                updateConnectionStatus(true, `已连接本地服务（AI 代理已启用），频道: ${data.channel}`);
+                updateConnectionStatus(true, `已连接本地代理，频道: ${data.channel}`);
                 parent.postMessage({ pluginMessage: { type: "save-server-port", port: state.serverPort } }, "*");
                 parent.postMessage({ pluginMessage: { type: "notify", message: `已连接本地服务 (端口 ${port})` } }, "*");
               } else if (data.type === "error") {
@@ -265,10 +266,10 @@
           state.socket.onclose = () => {
             state.connected = false;
             state.socket = null;
-            updateConnectionStatus(false, "已断开连接");
+            updateConnectionStatus(false, "已断开，回到直连模式");
           };
           state.socket.onerror = () => {
-            updateConnectionStatus(false, "连接失败——请确认本地服务已启动");
+            updateConnectionStatus(false, "本地代理未启动（直连模式不受影响）");
             state.connected = false;
             state.socket = null;
           };
@@ -356,7 +357,7 @@
         } catch (e) {
           let hint = "";
           if (!state.connected && /fetch|network|Failed to/i.test(e.message)) {
-            hint = "（浏览器跨域/CORS 受限：建议先点「连接服务」连上本地代理，AI 请求将改走本地代理绕过跨域）";
+            hint = "（浏览器跨域/CORS 受限：mac 双击 start-relay-mac.command、Win 双击 start-relay-win.bat 启动本地代理后点「连接本地代理」；或换用支持跨域的 https 网关地址）";
           }
           aiConfigStatus.innerHTML =
             "<span style='color:#ff9999'>❌ 探测未通过，未保存：" + e.message + hint + "</span>";
@@ -781,16 +782,22 @@
 
       async function llmFetch(cfg, payload) {
         if (state.connected && state.serverPort) {
+          // 本地代理分支：payload 里的 baseUrl / apiKey 是给代理用的路由信息，代理会严格挑字段再转发上游。
           return fetch("http://localhost:" + state.serverPort + "/llm-proxy", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
         }
+        // v20261111.39 零安装直连：上游只接受标准 OpenAI 字段。
+        // 旧版把 baseUrl / apiKey 也原样塞进 body —— 严格网关会 400，且 Key 会出现在请求体里。
+        const upstream = Object.assign({}, payload);
+        delete upstream.baseUrl;
+        delete upstream.apiKey;
         const url = cfg.baseUrl.replace(/\/+$/, "") + "/chat/completions";
         return fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.apiKey },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(upstream),
         });
       }
 
@@ -1269,9 +1276,9 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：仅展示版本与本次最后更新时间。
-      // v20261111.38：版本尾注移除重导入提示，括号内改为「最后更新于 …」。
-      const PLUGIN_VERSION = "20261110.38";
-      const PLUGIN_UPDATED = "2026-11-11 13:07";
+      // v20261111.39：默认零安装直连，本地代理降级为可选；直连请求剥离内部字段。
+      const PLUGIN_VERSION = "20261110.39";
+      const PLUGIN_UPDATED = "2026-11-11 13:32";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（最后更新于 " + PLUGIN_UPDATED + "）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
