@@ -241,6 +241,9 @@ figma.ui.onmessage = async (msg) => {
           blurBackdropPinned: 0, bgProtected: 0, imgContentNamed: 0, sortPinned: 0,
           sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
           sectionContainersRenamed: 0, sectionGroupFailed: 0,
+          bandErrors: 0, bandsDetected: 0, bandsPinned: 0, bandGroupsCreated: 0,
+          bandContainersRenamed: 0, bandHeaderCreated: 0, bandFoldersDissolved: 0,
+          bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
         };
         const intentCtx = { intentMap: new Map(), moduleOrder: new Map(), sharedIds: new Set(), useLayoutIntent: false };
         let planPreview = null;
@@ -270,6 +273,8 @@ figma.ui.onmessage = async (msg) => {
         try { groupSectionsByTitle(root || containers[0] || null, summary); } catch (e12) {}
         // v20261110.21：收尾建组件骨架 —— 根下 header/bg 保持平级，其余内容（含所有模块 Group）收进一个真 slot-con Group。
         try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
+        // v20261111.31 Step 2：按 y 空白间隙真建 header / section-NN-*，并拆分跨带资源文件夹。
+        try { groupBySpatialBands(root || containers[0] || null, summary); } catch (e13) { summary.bandErrors++; }
         // v20261110.25：建组后按视觉顺序重排槽内直接子级（重叠节点 pin 住不动）。
         try { sortSlotConChildren(root || containers[0] || null, summary); } catch (e11) {}
         if (setExport) { try { applyAssetExports(root, summary); } catch (e4) {} }
@@ -375,6 +380,9 @@ figma.ui.onmessage = async (msg) => {
           blurBackdropPinned: 0, bgProtected: 0, imgContentNamed: 0, sortPinned: 0,
           sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
           sectionContainersRenamed: 0, sectionGroupFailed: 0,
+          bandErrors: 0, bandsDetected: 0, bandsPinned: 0, bandGroupsCreated: 0,
+          bandContainersRenamed: 0, bandHeaderCreated: 0, bandFoldersDissolved: 0,
+          bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
         };
         const ACT_CN = { rename: "改名", reparent: "归父", reorder: "排序", group: "成组", delete: "删除" };
         for (let i = 0; i < ops.length; i++) {
@@ -484,6 +492,8 @@ figma.ui.onmessage = async (msg) => {
           try { groupSectionsByTitle(root || containers[0] || null, summary); } catch (e12) {}
           // v20261110.21：收尾建组件骨架 —— 视觉/几何模块与其它内容统一收进一个真 slot-con Group。
           try { createSlotConGroup(root || containers[0] || null, summary); } catch (e9) { summary.slotConFailed++; }
+          // v20261111.31 Step 2：按 y 空白间隙真建 header / section-NN-*，并拆分跨带资源文件夹。
+          try { groupBySpatialBands(root || containers[0] || null, summary); } catch (e13) { summary.bandErrors++; }
           // v20261110.25：建组后按视觉顺序重排槽内直接子级（重叠节点 pin 住不动）。
           try { sortSlotConChildren(root || containers[0] || null, summary); } catch (e11) {}
           // 收尾：给所有资源文件夹挂导出预设（icon→SVG / img·bg→PNG@2x），并清掉内部子节点的导出项。
@@ -1935,6 +1945,221 @@ function createSlotConGroup(root, summary) {
   return slot;
 }
 
+// ---- v20261111.31 Step 2：按视觉空白带切分 section / 真建 header -----------------------
+// 根因：.26 groupSectionsByTitle 只有 ≥2 个【平铺】section-title-* 才切段，且全代码没有
+// 创建 header 的逻辑。53:31607 的两个小标题都在已有 Group 内 ⇒ anchored=0 ⇒ 监控画面区 /
+// 告警信息卡区没有容器，详情 TEXT 也被塞进 slot-con。
+// 方案：锚点从「文字标题」泛化为「y 空白间隙」，用 Step0 的 absRect 统一到 root 绝对坐标系。
+// 护栏：insertChild 原最小 index 保 z-order；已有容器只重命名不重建；mvBandGroup 幂等；
+//       纯对象 / 无绝对几何 / 小树严格跳过，历史行为零回归；不引入 REST、不联网。
+const BAND_GROUP_KEY = "mvBandGroup";
+const BAND_GAP_MIN = 8;          // 最小空白间隙 px
+const BAND_GAP_RATIO = 0.01;     // 或 1%·rootH，取较大者
+const HEADER_BAND_RATIO = 0.10;  // 首带高度 ≤10%·rootH 才可能是 header
+const BAND_PIN_RATIO = 0.6;      // 节点高度 ≥60%·rootH 视为跨带，pin 住不归段
+function isBandGroup(n) {
+  if (!n || !("children" in n)) return false;
+  try { return n.getPluginData(BAND_GROUP_KEY) === "1"; } catch (e) { return false; }
+}
+function bandGapOf(base) {
+  return Math.max(BAND_GAP_MIN, (base && base.h > 0 ? base.h : 0) * BAND_GAP_RATIO);
+}
+function twoDigit(i) { return ("0" + i).slice(-2); }
+// 资源文件夹（icon-cp-xxx / img-cp-xxx）把不同 y 带的图标混装：不解包就永远无法按带归组。
+// 解包后按原 index 顺序插回 slot，绝对位置与 z-order 等价；空文件夹随即移除。
+function isAssetFolderLike(n) {
+  if (!n || !("children" in n)) return false;
+  const kids = Array.prototype.slice.call(n.children || []);
+  if (kids.length < 2) return false;
+  // mvAssetFolder 是 createFolder 写入的可信标记：命中即可，成员可能仍是原始默认名。
+  try { if (/^(img|icon)$/.test(String(n.getPluginData("mvAssetFolder") || ""))) return true; } catch (e) {}
+  if (!/^(img|icon)-/.test(String(n.name || ""))) return false;
+  // 无标记的旧文件夹：至少一个成员同前缀即可，避免把业务容器误判为资源文件夹。
+  return kids.some(c => /^(img|icon)-/.test(String((c && c.name) || "")));
+}
+function dissolveCrossBandFolders(slot, base, summary) {
+  const gap = bandGapOf(base);
+  const s = summary || {};
+  let dissolved = 0, freed = 0;
+  for (const folder of Array.prototype.slice.call(slot.children || [])) {
+    if (!isAssetFolderLike(folder)) continue;
+    const members = Array.prototype.slice.call(folder.children || []);
+    const rects = members.map(n => ({ n: n, r: relRect(n, base) })).filter(x => x.r && x.r.h > 0);
+    if (rects.length < 2) continue;
+    rects.sort((a, b) => a.r.y - b.r.y);
+    let cross = false;
+    for (let i = 1; i < rects.length; i++) {
+      const prevBottom = rects[i - 1].r.y + rects[i - 1].r.h;
+      if (rects[i].r.y - prevBottom >= gap) { cross = true; break; }
+    }
+    const fr = relRect(folder, base);
+    if (!cross && fr && fr.h > gap * 4 && rects.length >= 3) cross = true;
+    if (!cross) continue;
+    const before = Array.prototype.slice.call(slot.children || []);
+    let at = before.indexOf(folder);
+    if (at < 0) continue;
+    for (const n of members) {
+      try {
+        if (n.locked) n.locked = false;
+        slot.insertChild(Math.max(0, Math.min(at, slot.children.length)), n);
+        at++;
+      } catch (e) {}
+    }
+    try {
+      if (!(folder.children || []).length) {
+        if (folder.locked) folder.locked = false;
+        folder.remove();
+        freed++;
+      }
+    } catch (e) {}
+    dissolved++;
+  }
+  s.bandFoldersDissolved = (Number(s.bandFoldersDissolved) || 0) + dissolved;
+  s.bandFoldersRemoved = (Number(s.bandFoldersRemoved) || 0) + freed;
+  return dissolved;
+}
+// y 空白间隙聚类：同一带 = 同一视觉区块 + 同一职责。跨带 / 近全屏节点 pin 住留平级。
+function detectBands(slot, base, summary) {
+  const gap = bandGapOf(base);
+  const s = summary || {};
+  const items = [];
+  for (const n of Array.prototype.slice.call(slot.children || [])) {
+    if (!n) continue;
+    try { if (n.visible === false) continue; } catch (e) {}
+    const r = relRect(n, base);
+    if (!r || r.h <= 0) continue;
+    if (r.h >= base.h * BAND_PIN_RATIO) { items.push({ n: n, r: r, pinned: true }); continue; }
+    items.push({ n: n, r: r, pinned: false });
+  }
+  const movable = items.filter(x => !x.pinned).sort((a, b) => (a.r.y - b.r.y) || (a.r.x - b.r.x));
+  const bands = [];
+  for (const it of movable) {
+    const last = bands[bands.length - 1];
+    if (!last || it.r.y - last.end >= gap) {
+      bands.push({ start: it.r.y, end: it.r.y + it.r.h, items: [it] });
+    } else {
+      last.items.push(it);
+      const bottom = it.r.y + it.r.h;
+      if (bottom > last.end) last.end = bottom;
+    }
+  }
+  s.bandsPinned = (Number(s.bandsPinned) || 0) + items.filter(x => x.pinned).length;
+  s.bandsDetected = (Number(s.bandsDetected) || 0) + bands.length;
+  return { bands: bands, gap: gap, pinned: items.filter(x => x.pinned).length };
+}
+// 带名：优先沿用已有语义容器名，其次按内容启发式（图片→media / 多行键值→info / 按钮→actions）。
+// 不臆造业务名，兜底 block-NN。
+function bandSlug(band, idx, base) {
+  const names = band.items.map(x => String((x.n && x.n.name) || ""));
+  for (const nm of names) {
+    const m = /^section-\d{2}-(.+)$/.exec(nm) || /^section-(.+)$/.exec(nm);
+    if (m) return m[1].replace(/^\d{2}-/, "");
+  }
+  let hasImg = false, hasBtn = false, textCount = 0, hasMulti = false;
+  for (const it of band.items) {
+    const n = it.n, nm = String((n && n.name) || "");
+    if (/^img-/.test(nm)) hasImg = true;
+    try { if (fillHas(n, /IMAGE/)) hasImg = true; } catch (e) {}
+    if (/@antd\/button|btn|button|action/i.test(nm)) hasBtn = true;
+    if (n && n.type === "TEXT") {
+      textCount++;
+      if (/\n/.test(String(n.characters || ""))) hasMulti = true;
+    }
+  }
+  if (hasImg) return "media";
+  if (textCount >= 2 && hasMulti) return "info";
+  if (hasBtn) return "actions";
+  if (band.items.every(x => /^(graphic|icon|bg)-/.test(String((x.n && x.n.name) || "")))) return "graphic";
+  return "block-" + twoDigit(idx);
+}
+function markBandGroup(n) {
+  if (!n) return;
+  try { n.setPluginData(BAND_GROUP_KEY, "1"); } catch (e) {}
+  try { n.setPluginData(SECTION_GROUP_KEY, "1"); } catch (e) {}
+}
+// 主入口：createSlotConGroup 之后、sortSlotConChildren 之前调用。
+function groupBySpatialBands(root, summary) {
+  if (!root || !("children" in root) || root.type === "PAGE") return null;
+  const s = summary || {};
+  const base = absRect(root);
+  if (!base || base.w <= 0 || base.h <= 0) return null;
+  const slot = Array.prototype.slice.call(root.children || []).filter(isSlotContainer)[0];
+  if (!slot) return null;
+  const kids0 = Array.prototype.slice.call(slot.children || []);
+  // 纯对象测试桩 / 无绝对几何 / 内容过少：严格跳过，保证历史探针与旧整理结果零回归。
+  if (kids0.length < 4 || !kids0.some(hasAbsGeometry)) return null;
+  // 幂等：槽内直接子级全是已建带 Group → 不重复建组、不重复排序。
+  if (kids0.every(n => isBandGroup(n) || isSectionGroup(n))) { s.bandIdempotent = 1; return slot; }
+
+  dissolveCrossBandFolders(slot, base, s);
+  const det = detectBands(slot, base, s);
+  if (!det.bands || det.bands.length < 2) return slot;
+
+  let created = 0, renamed = 0, headerDone = false, sectionNo = 0;
+  for (let bi = 0; bi < det.bands.length; bi++) {
+    const band = det.bands[bi];
+    const bandH = band.end - band.start;
+    const shortText = band.items.some(x => {
+      const t = String((x.n && x.n.characters) || "").replace(/\s/g, "");
+      return x.n && x.n.type === "TEXT" && t.length > 0 && t.length <= 12;
+    });
+    const hasImg = band.items.some(x => /^img-/.test(String((x.n && x.n.name) || "")));
+    const isHeader = !headerDone && bi === 0 && bandH <= base.h * HEADER_BAND_RATIO && shortText && !hasImg;
+    const nodes = band.items.map(x => x.n);
+
+    if (isHeader) {
+      // 顶带真建 header Group，并提升到 root 平级（createSlotConGroup 会排除 isHeaderLike）。
+      const before = Array.prototype.slice.call(slot.children || []);
+      const idxs = nodes.map(n => before.indexOf(n)).filter(i => i >= 0);
+      const minIdx = idxs.length ? Math.min.apply(null, idxs) : 0;
+      for (const n of nodes) { try { if (n.locked) n.locked = false; } catch (e) {} }
+      const grp = safeGroup(nodes.slice().sort((a, b) => before.indexOf(a) - before.indexOf(b)), "header");
+      if (!grp) { s.bandGroupFailed = (Number(s.bandGroupFailed) || 0) + 1; continue; }
+      markBandGroup(grp);
+      try { slot.insertChild(Math.max(0, Math.min(minIdx, slot.children.length - 1)), grp); } catch (e) {}
+      try { root.appendChild(grp); } catch (e) {}
+      created++; headerDone = true;
+      s.bandHeaderCreated = 1;
+      logContainer("[骨架]", grp, nodes.length, String(root.name || ""));
+      continue;
+    }
+
+    sectionNo++;
+    const target = "section-" + twoDigit(sectionNo) + "-" + bandSlug(band, sectionNo, base);
+    // 单节点且已是语义容器：只重命名 + 打标记，绝不套第二层（.26 护栏）。
+    if (nodes.length === 1) {
+      const only = nodes[0];
+      if ("children" in only || /^section-/.test(String(only.name || ""))) {
+        try {
+          if (String(only.name || "") !== target) { if (only.locked) only.locked = false; only.name = target; renamed++; }
+          markBandGroup(only);
+        } catch (e) {}
+        continue;
+      }
+    }
+    if (nodes.length < 2) continue;
+    const before = Array.prototype.slice.call(slot.children || []);
+    const idxs = nodes.map(n => before.indexOf(n)).filter(i => i >= 0);
+    const minIdx = idxs.length ? Math.min.apply(null, idxs) : 0;
+    for (const n of nodes) { try { if (n.locked) n.locked = false; } catch (e) {} }
+    const grp = safeGroup(nodes.slice().sort((a, b) => before.indexOf(a) - before.indexOf(b)), target);
+    if (!grp) { s.bandGroupFailed = (Number(s.bandGroupFailed) || 0) + 1; continue; }
+    markBandGroup(grp);
+    try { slot.insertChild(Math.max(0, Math.min(minIdx, slot.children.length - 1)), grp); } catch (e) {}
+    created++;
+    logContainer("[子模块]", grp, nodes.length, String(slot.name || ""));
+  }
+  s.bandGroupsCreated = (Number(s.bandGroupsCreated) || 0) + created;
+  s.bandContainersRenamed = (Number(s.bandContainersRenamed) || 0) + renamed;
+  // 毛玻璃底图恒在最底层：header 提升到 root 末尾不影响它，但显式兜底防后续步骤挤位。
+  for (const n of Array.prototype.slice.call(root.children || [])) {
+    if (isBlurBackdrop(n, base) && root.children.indexOf(n) > 0) {
+      try { root.insertChild(0, n); } catch (e) {}
+    }
+  }
+  return slot;
+}
+
 // ---- v20261110.22 P1：整理前后结构质量快照（纯只读）------------------------------
 // 目的：把「提高生成质量」变成可度量指标；不写入节点、不影响整理逻辑。
 const DEFAULT_NAME_RE = /^(?:Frame|Group|Rectangle|Ellipse|Vector|Line|Star|Polygon|Boolean\s*Operation|Component|Instance|Text|Union|Subtract|Intersect|Exclude|Image)\s*[\d\s._-]*$/i;
@@ -2011,7 +2236,7 @@ function qualityDiffText(before, after) {
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
-const SCHEMA_VERSION = "20261110.30";
+const SCHEMA_VERSION = "20261110.31";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
@@ -2024,7 +2249,10 @@ const CONTRACT_HEADER = [
   "#   header-slot-right 通常放按钮、tab、图例、时间筛选；生成时预留 <slot> 供外部注入。",
   "# 全组件只有一个 header；模块小标题 section-title-* 属于 slot-con，不是根级 header 插槽。",
   "# 全组件只有一个 slot-con；异构分区用 section-*，容器用 card-*/list-*/form-*，绝不出现第二个 slot-con-*。",
-  "# slot-con 下以 section-title-* 为锚点按视觉顺序分成 section-* 子模块；段前/跨段节点直属 slot-con。",
+  "# slot-con 下以 section-title-* 或视觉空白带分成 section-* 子模块；段前/跨段节点直属 slot-con。",
+  "# section-NN-<语义> 是插件按 y 空白间隙【真建】的分区容器（NN 为视觉从上到下序号）；",
+  "#   同带节点才归同一 section，禁止把 header/背景/相邻带的图标并进同一分区；",
+  "#   分区内只有标题没有内容的是空壳，勿臆造列表/事件/数据。",
   "# graphic-* 是零散矢量拼成的静态图形容器（内部已合并为 img-* 资源），按图片实现，严禁用图表库重建。",
   "# item- 只用于【带 -N 序号】的同构循环子项：list-*/cards-* 内 item-xxx-1..N 按一份模板 + v-for/map 渲染；",
   "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码；不带序号的 item- 不是循环项。",
@@ -2274,8 +2502,18 @@ function buildStructureContract(root, opts) {
       const realGroups = body.filter(b =>
         /^(item|card|list|form|section|graphic)-/i.test(cleanContractName(b.node)) &&
         visibleChildren(b.node).some(c => isSectionTitle(c)));
+      // v20261111.31：Step 2 真建的 section-NN-* 带容器挂在 slot-con 内，必须计入 @meta sections，
+      // 否则结构切分后 sections 恒为 0，管线做「生成后分区计数校验」会误判为无分区。
+      // 优先级：真容器数 > 平铺标题虚拟分段数。
+      let realSections = 0;
+      for (const sl of slotCons)
+        for (const c of visibleChildren(sl)) {
+          const cnm = cleanContractName(c);
+          if (/^section-(?:\d{2}-)?/i.test(cnm) && !/^section-title(?:-|$)/i.test(cnm)) realSections++;
+        }
       // v20261110.28 P1-1：分区数进 @meta，供管线做生成后计数校验。
-      sections = (anchors.length >= 2 && !realGroups.length) ? anchors.length : realGroups.length;
+      sections = realSections > 0 ? realSections
+        : ((anchors.length >= 2 && !realGroups.length) ? anchors.length : realGroups.length);
       if (anchors.length < 2 || realGroups.length) {
         for (const b of body) emitItem(b, 2);
       } else {

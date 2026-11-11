@@ -14,7 +14,7 @@
 | `header` / `header-title` / `header-slot-*` | 组件标题栏；`header-slot-right` 预留 `<slot>` | 模块小标题叫 `header-*` |
 | `bg` / `bg-*` | 背景装饰层，整体导出 PNG@2x | 逐个重建矢量 |
 | `slot-con` | 唯一内容容器，其余全部内容都在其中 | 第二个 `slot-con-*` / 把内容平铺到组件根 |
-| `section-<语义>` | 异构分区 → `<section>` / 独立子组件，**不可迭代** | 用 `v-for` 遍历 |
+| `section-<语义>` / **`section-NN-<语义>`**（.31） | 异构分区 → `<section>` / 独立子组件，**不可迭代**；`NN` 是视觉从上到下序号 | 用 `v-for` 遍历；按序号臆造缺失分区 |
 | `section-title-<语义>` | 模块小标题（静态文案 `[data:label]`） | 提升成根级 header |
 | `graphic-<语义>` | 静态图形 → `<img>`，内部矢量已合并导出 | 用 echarts / chart 库重建 |
 | `@echarts/<type>` | 真图表 → ECharts option，`type` 决定 series.type | 写成 `echarts-` / `chart-` / `gauge-` |
@@ -61,6 +61,7 @@
 |---|---|---|---|
 | `cp-<语义>` | .20 | 组件根，全树唯一 | — |
 | `section-<语义>` | **.27** | 按 `section-title-*` 锚点切出的异构分区；数量固定、结构不同、不可迭代 | 取代旧的「不带序号 `item-*` 分区」 |
+| `section-NN-<语义>` | **.31** | 按【y 空白间隙】真建的带容器，`NN` 从 `01` 起；同带才归同一分区；已有语义容器只重命名不重建 | 标题不再是切段的必要条件；`NN` 不是循环序号，禁止 `v-for` |
 | `section-title-<语义>` | .24 | 模块小标题，与 `section-<语义>` 同名成套 | — |
 | `graphic-<语义>` | **.27** | 零散矢量拼成的静态仪表 / 环形进度 / 装饰图形 | 取代旧的 `item-disposal-rate-gauge` |
 | `item-<语义>-N` | 初版 | **只**表示带 `-N` 序号的同构循环子项 | 循环专用，歧义已清除 |
@@ -98,7 +99,17 @@ cp-event-analysis                          ← 组件根（唯一）
    └ img-fullscreen-map                    ← 段前 / 跨段 / 全屏底图：直属 slot-con
 ```
 
-切分依据（零 token）：`section-title-*` 的 `y` 坐标作为分割线，按视觉顺序把「标题 + 其下方图表」归入同一 `section-*`；跨段节点、下沿越过下一标题的节点、与父级等高的全屏底图一律 **pin 住留直属**。
+切分依据（零 token，v20261110.31 起）：
+
+1. 所有待分组节点统一换算到 **root 绝对坐标系**（`absRect` → `absoluteBoundingBox` / `absoluteTransform`，不引入 REST）；
+2. 按 `y` 投影做**空白间隙聚类**，间隙阈值 `max(8px, 1%·rootH)`（本组件 `852 → 8.52px`）；同一带 = 同一视觉区块 + 同一职责；
+3. `section-title-*` 降级为**命名来源**，不再是切段前置条件；无小标题的信息卡 / 监控画面区也能真建 Group；
+4. **首带**（高度 ≤ `10%·rootH`、含短 TEXT、无 `img-`）真建并提升到根级 `header`；
+5. 跨带的 `icon-*`/`img-*` 资源文件夹先**解包**再按带归组，杜绝头部关闭叉与翻页箭头混装；
+6. 高度 ≥ `60%·rootH` 的节点、隐藏节点、全屏底图一律 **pin 住留直属**；
+7. 建组用 `safeGroup` + `insertChild(原最小 index)` 保 z-order，`mvBandGroup` 标记保证重跑幂等。
+
+> 旧版（.26–.30）只用 `section-title-*` 的 `y` 作分割线，锚点不足 2 个时退化为「只改名」，因此无小标题的分区永远建不出容器。
 
 ---
 
@@ -144,7 +155,7 @@ cp-event-analysis                          ← 组件根（唯一）
 // 固定前缀（用户规定，优先级最高）
 const FIXED_RE   = /^(?:bg(?:-|$)|img-|icon-|header(?:[-/]|$)|slot-con$|@[a-z0-9-]+\/)/i;
 // 语义容器（注意排除 section-title-）
-const SECTION_RE = /^section-(?!title-)/i;
+const SECTION_RE = /^section-(?:\d{2}-)?(?!title-)/i; // .31 兼容 section-NN-<语义>
 const TITLE_RE   = /^section-title(?:-|$)/i;
 const GRAPHIC_RE = /^graphic-/i;
 const ROOT_RE    = /^cp-/i;
@@ -253,6 +264,9 @@ Figma @技术栈 锚点契约  >  用户补充需求段（本规范 / 契约文�
 | .26 | 按 `section-title-*` 锚点切子模块，契约虚拟分组 + Figma 真建 Group（当时命名 `item-*`） |
 | .27 | 命名体系重设计：异构分区 `item-*` → `section-*`；静态仪表 `item-*` → `graphic-*`；`item-` 收归循环专用；新增「固定前缀（不得改写）」声明 |
 | **.28** | **契约自描述化**：`@meta` 机器摘要、可选 Figma nodeId、结构约束不让位硬声明、循环标签 `1..N 首项即模板`、截断显式警示、`componentName` 取契约 `cp-*`；后端新增契约分流（不再触发文档子管线）；规范补 vue3/microcode 差异 |
+| .29 | Step 0 绝对坐标基座（`absRect`）；Step 1 装饰四分流、毛玻璃 pin 住、图片不进 `bg-*` | 
+| .30 | 补齐 `mergeLooseGraphicRuns` 不得抢收内容图 / 毛玻璃；毛玻璃恒在最底层 |
+| **.31** | **Step 2 空间带切分**：`section-NN-<语义>` 序号体系、真建根级 `header`、跨带资源文件夹解包、`@meta sections` 计入真建分区、契约头声明空壳勿臆造；命名规范同步升版 |
 
 ---
 
