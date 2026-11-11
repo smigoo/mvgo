@@ -108,7 +108,7 @@
           <button id="btn-connect" class="secondary" style="width:100%">连接本地代理（可选）</button>
           <label for="port">服务端口（WebSocket）</label>
           <input type="number" id="port" placeholder="3055" value="3055" min="1024" max="65535" />
-          <div id="connection-status" class="status info">直连模式 · 无需启动终端</div>
+          <div id="connection-status" class="status info">直连模式 · 无需启动终端（当前已生效）</div>
         </div>
 
         <div class="section">
@@ -265,8 +265,10 @@
         connectionStatus.innerHTML = statusMessage;
         // v20261111.39：未连接是【正常默认态】，用中性蓝 info，不再显示成红色故障。
         connectionStatus.className = `status ${isConnected ? "connected" : "info"}`;
-        connectButton.textContent = isConnected ? "断开连接" : "连接本地代理（可选）";
-        connectButton.className = isConnected ? "secondary" : "primary";
+        connectButton.textContent = isConnected ? "断开代理，回到直连" : "连接本地代理（可选）";
+        // v20261111.41：代理按钮恒定 secondary。旧逻辑把「未连接」设回 primary（蓝色主按钮），
+        // 让已经处于直连态的用户误以为还要再点一次按钮才能回去。
+        connectButton.className = "secondary";
         portInput.disabled = isConnected;
       }
 
@@ -292,7 +294,7 @@
                 parent.postMessage({ pluginMessage: { type: "save-server-port", port: state.serverPort } }, "*");
                 parent.postMessage({ pluginMessage: { type: "notify", message: `已连接本地服务 (端口 ${port})` } }, "*");
               } else if (data.type === "error") {
-                updateConnectionStatus(false, `错误: ${data.message}`);
+                updateConnectionStatus(false, `本地代理报错 · 已回到直连模式: ${data.message}`);
                 state.socket.close();
               }
             } catch (e) {
@@ -302,22 +304,22 @@
           state.socket.onclose = () => {
             state.connected = false;
             state.socket = null;
-            updateConnectionStatus(false, "已断开，回到直连模式");
+            updateConnectionStatus(false, "已断开本地代理 · 当前直连模式（无需启动终端）");
           };
           state.socket.onerror = () => {
-            updateConnectionStatus(false, "本地代理未启动（直连模式不受影响）");
+            updateConnectionStatus(false, "本地代理未启动 · 当前直连模式，不影响整理");
             state.connected = false;
             state.socket = null;
           };
         } catch (error) {
-          updateConnectionStatus(false, `连接失败: ${error.message || "未知错误"}`);
+          updateConnectionStatus(false, `连接本地代理失败 · 当前仍是直连模式: ${error.message || "未知错误"}`);
         }
       }
 
       function disconnectFromServer() {
         if (state.socket) { state.socket.close(); state.socket = null; }
         state.connected = false;
-        updateConnectionStatus(false, "已断开连接");
+        updateConnectionStatus(false, "已断开本地代理 · 当前直连模式（无需启动终端）");
       }
 
       function generateChannelName() {
@@ -1313,8 +1315,9 @@
 
       // 插件版本标签：仅展示版本与本次最后更新时间。
       // v20261111.40：文案改写——副标题一句话说清，关于页展开「为什么 / 做什么 / 产出 / 收益」。
-      const PLUGIN_VERSION = "20261110.40";
-      const PLUGIN_UPDATED = "2026-11-11 13:38";
+      // v20261111.41：修复断开态按钮变蓝色主按钮的误导；断开/失败文案统一标明「当前直连」。
+      const PLUGIN_VERSION = "20261110.41";
+      const PLUGIN_UPDATED = "2026-11-11 13:45";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（最后更新于 " + PLUGIN_UPDATED + "）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
