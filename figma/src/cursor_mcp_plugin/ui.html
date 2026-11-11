@@ -871,6 +871,7 @@
           "【循环组件·重点】item- 是【循环专用】前缀，只用于带 -N 序号的同构子项；异构分区一律 section-*，静态图形一律 graphic-*。list-*/cards-* 等列表容器内的重复子项，一律命名 item-<语义>-1..N（或 card-<语义>-1..N），并保证同组子项结构完全一致；严禁给每个子项起不同语义名（会误导下游生成 N 份重复代码）。Group 只表达包含、不表达可迭代，因此「相同前缀 + 递增序号 + 同构子树」是让大模型识别 v-for/map 的必需信号；插件会在结构契约里把同构项折叠为 [循环 ×N] 并只展开首项。",
           "背景：插件自动把同级背景/装饰层合并为语义文件夹 bg-<父容器语义>（如 bg-card-traffic-flow），该文件夹整体导出 PNG@2x、内部节点不单独导出；背景图/装饰层命名 bg-<角色>（bg-card/bg-glow/bg-ring/bg-panel…）；纯装饰发光环/光晕/纹理归入 bg-，不算 icon。",
           "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」。【假图表·重点】由零散 VECTOR 弧线 / 刻度 / 光晕拼成、没有坐标轴与数据系列的静态仪表盘、环形进度、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 graphic-<语义>（如 graphic-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（legend/axis…）；模块小标题用 section-title-<语义>，同类多实例加序号。",
+          "【动态计数徽标·.35 重点】小尺寸（宽高均 ≤26）「纯色底 + 纯数字 TEXT」的红点/角标是 tab 或列表项的未读、待办计数，【不是图标】：绝不命名 icon-* / bg-* / img-*，也不要输出 rename（插件会零 token 归一化为 badge-count-NN，并在结构契约行尾标注 [tab:xxx] 归属）；其纯数字 TEXT 必须保留为独立节点，严禁并入图片资源。其余【含文字的小标签】（如「警署」）同样不是图标，也不要命名 icon-*。",
           "【核心规则·约定>配置】1) 严禁输出 group：背景/静态图/图标文件夹由插件按几何与前缀确定性收纳，你只需给节点打语义名；2) 只给「有意义层级节点」和「同级背景/图标/静态图」打语义名，TEXT 节点不改名；3) 环形仪表/图表/图标内部最小装饰元素（arc/tick/dot/line/vector/union/subtract/boolean）【只命名最外层容器】，内部一律不逐个命名、保留默认名；插件会把这些矢量按容器确定性合并成 img-/bg- 资源文件夹并整体导出，你不需要输出 group、也不要给内部矢量打 bg-/img- 前缀；TEXT 数值与标签必须保留为独立 TEXT 节点，绝不并入图片（下游要生成动态数据）；3.1) 但【与 TEXT 同级、独立表达语义的小图标】（趋势箭头/状态箭头/方向标等）不属于「内部最小装饰」，必须命名为 icon-<语义>（如 icon-arrow-up），严禁跳过；只有图表/环形仪表【容器内部】的 arc/tick 才跳过；4) 严禁输出 reorder：背景合并与从上到下排序由插件按真实 y 坐标确定性完成，模型只做命名与必要归位（reparent）、删冗余副本（delete）。",
         ].join("\n");
 
@@ -1178,7 +1179,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.34";
+      const PLUGIN_VERSION = "20261110.35";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存

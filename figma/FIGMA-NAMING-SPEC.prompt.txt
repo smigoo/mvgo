@@ -1,4 +1,4 @@
-# Figma 结构契约 · 命名解读规范 v20261110.31
+# Figma 结构契约 · 命名解读规范 v20261110.35
 # 用途：拼进代码生成 prompt（extraPrompt / 系统提示），让模型正确解读「结构契约 → mvgo」输出的节点名。
 # 契约是「节点名 + 缩进层级」纯文本树：缩进 = 父子包含，同级顺序 = 视觉从上到下（已按 y/x 排序，与 Figma 图层面板无关）。
 # 契约头 # @meta 给机器摘要：version / sections / loops / slots / nodes / truncated / omitted / ids / quality；truncated=true 或「[省略 N 行]」表示树不完整，勿推断缺失模块。
@@ -7,6 +7,7 @@
 @<技术栈>/<类型>  技术栈注解。@echarts/bar → 用 ECharts 生成 bar 图；@antd/button → 用对应组件库控件。
 bg / bg-*         背景与装饰层，整体导出 PNG@2x。作为背景实现，绝不逐个重建内部矢量。
 icon-*            小图标，SVG。
+badge-count-NN    v20261110.35 起：tab / 列表项上的动态计数徽标（小色块 + 纯数字 TEXT）。不是图标、不是图片，绝不按资源导出。NN 按视觉从左到右编号，名字不含数值。
 img-*             内容图片，PNG@2x。
 header / header-* 唯一根级标题区。header-slot-left|center|right 预留 <slot> 供外部注入；右侧通常是按钮、tab、图例、时间筛选。
 slot-con          唯一内容槽。其余全部内容都在其中，不要把内容平铺到组件根，也不要出现第二个 slot-con-*。
@@ -22,6 +23,7 @@ card-* / list-* / form-*  卡片 / 列表 / 表单容器。
 item-<语义>-N          同构循环子项 → 一份模板 + v-for / map。只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码。
 legend / axis-* / label / value / unit  图表内部语义元素或数据槽，不得压平成图片。
 [data:value|unit]      TEXT 行尾标记 → 绑定 props / 接口字段，绝不写死字面量；[data:label] 多为静态文案可保留。
+[tab:xxx]              v20261110.35 起：badge-count-NN 行尾标记，表示该计数属于哪个 tab（未读 / 待办数）；同一 tab 无 badge 时不要臆造，不同 tab 的计数必须分别绑定，不得合并成一张静态图。
 [循环 ×N，首项即模板] 折叠区间是完整 1..N，首行已单独展开即模板，绝不生成 N+1 份。
 #1-283                  真实节点行尾的 Figma nodeId（可选开关）。只用于回填已有同名 section，绝不据此新建节点；header / bg / slot-con / section-* 等虚拟骨架行无 ID。
 
@@ -49,3 +51,4 @@ Figma @技术栈 锚点契约 > 用户补充需求段 > 平台默认规范。
 视觉样式（颜色 / 尺寸 / 布局 / 字体）与设计稿冲突时以设计稿为准；但交互 / 行为类显式要求（tab 切换、轮播、折叠展开、点击联动）必须落实，不得以「设计稿没有」为由省略。
 结构契约例外（v20261110.28，.31 扩展至空白带分区）：组件边界 / 分区 / 循环 / 图表类型属结构约束，不让位设计稿；仅纯视觉样式可让位。
 分区计数以契约头 # @meta sections 为准（.31 已计入 slot-con 内真建的 section-NN-*）；生成后分区数应与之对齐。
+v20261110.35 补充：紧凑面板（区块间无 y 空白）按自带容器边界切段产生 section-NN-*，语义同上；badge-count-NN 属动态数据槽族，优先级与 [data:value] 相同，不参与资源导出。

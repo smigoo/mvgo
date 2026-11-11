@@ -1,4 +1,4 @@
-# Figma 节点命名规范 / 结构契约（v20261110.28）
+# Figma 节点命名规范 / 结构契约（v20261110.35）
 
 > **用途**：mv-figma 插件 → 「结构契约 → mvgo」→ mvgo 生成管线（vue3 / microcode）。
 > **定位**：插件输出的是「节点名 + 缩进层级」的纯文本树，不含几何、颜色、资源二进制。本文件定义每个名字**应该生成什么代码**，供管线解析、校验、注入 prompt。
@@ -63,6 +63,7 @@
 | `section-<语义>` | **.27** | 按 `section-title-*` 锚点切出的异构分区；数量固定、结构不同、不可迭代 | 取代旧的「不带序号 `item-*` 分区」 |
 | `section-NN-<语义>` | **.31** | 按【y 空白间隙】真建的带容器，`NN` 从 `01` 起；同带才归同一分区；已有语义容器只重命名不重建 | 标题不再是切段的必要条件；`NN` 不是循环序号，禁止 `v-for` |
 | `section-title-<语义>` | .24 | 模块小标题，与 `section-<语义>` 同名成套 | — |
+| `badge-count-NN` | **.35** | tab / 列表项上的【动态计数徽标】（纯色底 + 纯数字 TEXT，≤26×26）；`NN` 按视觉 x 从左到右，**名字不带数值**；契约行尾 `[tab:xxx]` 指明归属 tab | 不是 `icon-*` 资源，禁止按图片导出，禁止写死字面量 |
 | `graphic-<语义>` | **.27** | 零散矢量拼成的静态仪表 / 环形进度 / 装饰图形 | 取代旧的 `item-disposal-rate-gauge` |
 | `item-<语义>-N` | 初版 | **只**表示带 `-N` 序号的同构循环子项 | 循环专用，歧义已清除 |
 | `item-<slug>-<seq\|order>` | .9 / .20 | 几何行聚类 / 视觉模块容器，带序号，同属循环模板族 | 保持不动 |
@@ -178,7 +179,7 @@ const NODE_ID_RE = /\s+#(\d+-\d+)\s*$/;
 插件侧业务语义白名单（`code.js:1277`，用于 `isDecoration` 判定「内容 vs 装饰」）：
 
 ```js
-/^(cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|echarts-|@|header|slot-|chart-|legend|axis|label|value)/i
+/^(cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|badge-|echarts-|@|header|slot-|chart-|legend|axis|label|value)/i
 ```
 
 > 🔴 `section-` / `graphic-` 必须在此白名单内，否则新命名的分区会被 `isDecoration` 当成装饰收进 `bg-*` 文件夹。
@@ -268,6 +269,8 @@ Figma @技术栈 锚点契约  >  用户补充需求段（本规范 / 契约文�
 | .30 | 补齐 `mergeLooseGraphicRuns` 不得抢收内容图 / 毛玻璃；毛玻璃恒在最底层 |
 | **.31** | **Step 2 空间带切分**：`section-NN-<语义>` 序号体系、真建根级 `header`、跨带资源文件夹解包、`@meta sections` 计入真建分区、契约头声明空壳勿臆造；命名规范同步升版 |
 | **.32** | **root 背景层 z-order 归一化**：所有 root 直属 `bg-*` 装饰（含局部卡片底 / 分隔线）恒排在 `slot-con` 之前、全屏毛玻璃恒 `index 0`、`header` 在最上层；修复 .31 因深色卡片底盖住 `section-02-info` 文字的视觉回归。命名体系不变，仅约束绘制顺序。教训：节点 `absoluteBoundingBox` 全部不变 ≠ 视觉等价，必须显式校验 z-order |
+| .33 / .34 | UI 收敛（只显示两个开关）与接口设置恢复平铺，契约语义不变 |
+| **.35** | **三项确定性治本**：① **P0 Auto Layout 护栏** —— `organizeLayout` / `sortSlotConChildren` 两处 y 降序 `appendChild` 在 `layoutMode !== NONE` 的 FRAME 上跳过；教训：**普通 Group 的 children 是 z-order，Auto Layout FRAME 的 children 是视觉坐标**，在列表 FRAME 上重排会把 6 行整体倒序（2:8858 实测 51.7036% 视觉回归）。② **P1 紧凑面板切带** —— 早退阈值 `kids0.length < 4` → `< 2`，并在 `detectBands < 2` 时按【自带容器边界】兜底切出 `section-NN-*`；只改名不建组，53:31607 的 6 带场景不受影响。③ **P2 tab 徽标归一化** —— `normalizeTabBadges` 零 token 把「纯色底 + 纯数字」判为 `badge-count-NN`、写 `mvTabBadge`、契约行尾标 `[tab:xxx]`；`badge-` 进语义白名单，历史 `icon-*` 合并组改名 `badge-group-*`。硬约束：不 reparent / 不建组 / 不动 z-order |
 
 ---
 

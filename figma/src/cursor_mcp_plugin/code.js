@@ -238,6 +238,9 @@ figma.ui.onmessage = async (msg) => {
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
           slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
+          autoLayoutSortSkipped: 0, slotSortAutoLayoutSkipped: 0,
+          badgeFound: 0, badgeRenamed: 0, badgeMatched: 0, badgeGroupRenamed: 0, badgeErrors: 0,
+          bandsContainerFallback: 0,
           blurBackdropPinned: 0, bgProtected: 0, imgContentNamed: 0, sortPinned: 0,
           sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
           sectionContainersRenamed: 0, sectionGroupFailed: 0,
@@ -260,6 +263,9 @@ figma.ui.onmessage = async (msg) => {
         collect(root, 0);
         // v20261110.16：先把图表/矢量仪表容器内部的零散 VECTOR 合并成 img-* 资源文件夹、
         // 并把 echarts- 假图表名归一化，再跑通用装饰收纳（organizeLayout 会跳过已标记容器）。
+        // v20261111.35 P2：badge 必须先于 organizeLayout（内部 groupChildrenByCategory）归一化，
+        // 否则 4 个纯数字徽标会被按 icon-* 前缀并成一张静态图标并挂 SVG 导出。
+        try { normalizeTabBadges(root, summary); } catch (e14) { summary.badgeErrors = (Number(summary.badgeErrors) || 0) + 1; }
         try { organizeGraphicContainers(root, summary); } catch (e7) { summary.graphicFailed++; }
         // v20261110.18：普通业务容器里的连续零散图形（Ellipse / bg-*）按段合并，z 序等价。
         try { mergeLooseGraphicRuns(containers, summary); } catch (e8) { summary.graphicRunFailed++; }
@@ -378,6 +384,9 @@ figma.ui.onmessage = async (msg) => {
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
           slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
+          autoLayoutSortSkipped: 0, slotSortAutoLayoutSkipped: 0,
+          badgeFound: 0, badgeRenamed: 0, badgeMatched: 0, badgeGroupRenamed: 0, badgeErrors: 0,
+          bandsContainerFallback: 0,
           blurBackdropPinned: 0, bgProtected: 0, imgContentNamed: 0, sortPinned: 0,
           sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
           sectionContainersRenamed: 0, sectionGroupFailed: 0,
@@ -477,6 +486,8 @@ figma.ui.onmessage = async (msg) => {
           }
           // v20261110.16：图表/矢量仪表容器治理（命名归一化 + 零散矢量合并 + 导出预设）。
           // 放在 ops 执行之后、通用 organizeLayout 之前；无 rootId 的兜底路径用 containers[0]。
+          // v20261111.35 P2：同上，两条主流程都必须先归一化 badge。
+          try { normalizeTabBadges(root || containers[0] || null, summary); } catch (e14) { summary.badgeErrors = (Number(summary.badgeErrors) || 0) + 1; }
           try { organizeGraphicContainers(root || containers[0] || null, summary); } catch (e7) { summary.graphicFailed++; }
           // v20261110.18：普通业务容器里的连续零散图形按段合并，插回原位保证视觉零改动。
           try { mergeLooseGraphicRuns(containers, summary); } catch (e8) { summary.graphicRunFailed++; }
@@ -1306,7 +1317,7 @@ function mergeLooseGraphicRuns(containers, summary) {
 // v20261110.27：section-（异构分区）/ graphic-（静态图形容器）也属于业务内容，
 // 必须进白名单，否则 isDecoration 会把新命名的子模块当成装饰收进 bg-* 文件夹。
 // item- 从此只表示【带 -N 序号的同构循环子项】，不带序号的异构容器一律 section-/graphic-。
-const SEMANTIC_PREFIX = /^(cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|echarts-|@|header|slot-|chart-|legend|axis|label|value)/i;
+const SEMANTIC_PREFIX = /^(cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|badge-|echarts-|@|header|slot-|chart-|legend|axis|label|value)/i;
 const GRAPHIC_TYPES = { VECTOR: 1, BOOLEAN_OPERATION: 1, LINE: 1, ELLIPSE: 1, RECTANGLE: 1, STAR: 1, POLYGON: 1, FRAME: 1, GROUP: 1 };
 
 function hasTextDescendant(n, depth) {
@@ -1436,6 +1447,104 @@ function isDecoration(n, parent, ctx) {
 
 // organizeLayout：对单个容器做「装饰收纳 + 分层 + 从上到下排序」。
 // 交叉验证：视觉意图只作加权/否决，不产生任何结构变更；几何为默认兜底。
+// v20261111.35 P2：tab 数字徽标（badge）零 token 归一化。
+// 判据（2:8858 原始树 / 整理后树各 4/4 命中、0 误伤）：
+//   ≤26×26 + 恰好 1 个纯数字 TEXT + ≥1 个纯色 RECTANGLE/ELLIPSE/VECTOR。
+// 归属：badge 左边界 ≈ tab 容器右边界（±15px）且 y 重叠 > 0。
+// 硬约束：只改名 + pluginData，不 reparent / 不建组 / 不动 z-order（.31 视觉回归教训）。
+function isTabBadgeNode(n) {
+  if (!n || !("children" in n)) return false;
+  const r = absRect(n);
+  if (!r || r.w <= 0 || r.h <= 0 || r.w > 26 || r.h > 26) return false;
+  const kids = Array.prototype.slice.call(n.children || []);
+  if (kids.length < 2) return false;
+  const nums = kids.filter(c => c && c.type === "TEXT" && /^\d{1,4}$/.test(String(c.characters || "").trim()));
+  if (nums.length !== 1) return false;
+  return kids.some(c => c && /^(RECTANGLE|ELLIPSE|VECTOR)$/.test(c.type) &&
+    Array.prototype.slice.call(c.fills || []).some(f => f && f.type === "SOLID"));
+}
+function normalizeTabBadges(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root)) return 0;
+  const all = [], seen = new Set();
+  (function walk(n, parent, depth) {
+    if (!n || depth > 40 || seen.has(n.id)) return;
+    seen.add(n.id);
+    all.push({ n: n, parent: parent });
+    if ("children" in n) for (const c of Array.prototype.slice.call(n.children || [])) walk(c, n, depth + 1);
+  })(root, null, 0);
+  const badges = all.filter(x => isTabBadgeNode(x.n) || /^badge-count-/i.test(String(x.n.name || "")));
+  if (!badges.length) return 0;
+  // tab 容器：含非纯数字 TEXT、宽 28..90；列表行里的「待办」等按 y 重叠自动排除。
+  const tabFrames = [];
+  for (const x of all) {
+    const r = absRect(x.n);
+    if (!r || r.w < 28 || r.w > 90 || r.h <= 0) continue;
+    const t = Array.prototype.slice.call(x.n.children || []).filter(c =>
+      c && c.type === "TEXT" && !/^\d{1,4}$/.test(String(c.characters || "").trim()))[0];
+    if (!t) continue;
+    tabFrames.push({ r: r, label: String(t.characters || "").trim().replace(/\s+/g, "").slice(0, 12) });
+  }
+  badges.sort((a, b) => {
+    const ra = absRect(a.n) || { x: 0, y: 0 }, rb = absRect(b.n) || { x: 0, y: 0 };
+    return (ra.x - rb.x) || (ra.y - rb.y);
+  });
+  let matched = 0, renamed = 0, idx = 0;
+  for (const b of badges) {
+    idx++;
+    const r = absRect(b.n) || { x: 0, y: 0 };
+    let best = null;
+    for (const t of tabFrames) {
+      const d = Math.abs(r.x - t.r.right);
+      const ov = Math.min(r.y + r.h, t.r.y + t.r.h) - Math.max(r.y, t.r.y);
+      if (ov <= 0 || d > 15) continue;
+      if (!best || d < best.d) best = { t: t, d: d };
+    }
+    const label = best ? best.t.label : "";
+    if (best) matched++;
+    const target = "badge-count-" + twoDigit(idx);
+    try {
+      if (String(b.n.name || "") !== target) {
+        if (b.n.locked) b.n.locked = false;
+        b.n.name = target; renamed++;
+      }
+      b.n.setPluginData("mvTabBadge", label);
+      b.n.setPluginData("mvTabBadgeIndex", String(idx));
+    } catch (e) {}
+    // 历史整理结果里 badge 已被并进 icon-* 文件夹：只把文件夹改名为 badge-group-*，
+    // 使其不再按 icon 资源整体导出；不 reparent、不建组、不动 z-order。
+    const p = b.parent;
+    if (p && /^icon-/i.test(String(p.name || ""))) {
+      const members = Array.prototype.slice.call(p.children || []);
+      if (members.length >= 2 && members.filter(isTabBadgeNode).length >= 2) {
+        const slug = String(p.name || "").replace(/^icon-/i, "").trim() || "tabs";
+        const pn = "badge-group-" + slug;
+        try {
+          if (String(p.name || "") !== pn) {
+            if (p.locked) p.locked = false;
+            p.name = pn;
+            s.badgeGroupRenamed = (Number(s.badgeGroupRenamed) || 0) + 1;
+          }
+        } catch (e) {}
+      }
+    }
+  }
+  s.badgeFound = (Number(s.badgeFound) || 0) + badges.length;
+  s.badgeRenamed = (Number(s.badgeRenamed) || 0) + renamed;
+  s.badgeMatched = (Number(s.badgeMatched) || 0) + matched;
+  return badges.length;
+}
+
+// v20261111.35 P0：Auto Layout 容器的 children 顺序就是【视觉坐标】。
+// 普通 Group 里 appendChild 只改 z-order，但 VERTICAL/HORIZONTAL FRAME 里会直接把行上下颠倒
+// （2:8858 实测 6 行告警列表倒序 → 51.7036% 视觉回归）。:673 已有同类判断，这里统一成唯一入口。
+function isAutoLayoutContainer(n) {
+  if (!n) return false;
+  let mode = "";
+  try { mode = String(n.layoutMode || ""); } catch (e) { return false; }
+  return mode !== "" && mode !== "NONE";
+}
+
 function organizeLayout(parent, summary, intentCtx) {
   if (!parent || !("children" in parent)) return;
   if (folderRole(parent)) return; // 已是插件建的文件夹，避免嵌套
@@ -1445,6 +1554,9 @@ function organizeLayout(parent, summary, intentCtx) {
   // v20261110.21：slot-con 是整块内容区，内部模块位置已定；跳过可避免排序/装饰收纳把模块拉出组，
   // 也保证重复整理幂等。
   if (isSlotContainer(parent)) return;
+  // v20261111.35 P2：badge 内部只有「纯色底 + 纯数字 TEXT」，不能被通用装饰收纳成
+  // bg-badge-count-NN 文件夹（会挂 PNG@2x 导出，把动态计数固化成图片）。
+  if (/^badge-count-/i.test(String(parent.name || ""))) return;
   // 祖先链上已有文件夹 → 说明该容器已被收纳到 bg/img/icon 里，不再向内建组
   let anc = parent.parent, hops = 0;
   while (anc && hops++ < 20) {
@@ -1602,7 +1714,12 @@ function organizeLayout(parent, summary, intentCtx) {
       if (Number.isFinite(o) && o !== rank + 1) summary.orderMismatch++;
     });
   }
-  for (const n of ordered) { try { parent.appendChild(n); summary.sorted++; } catch (e) {} }
+  // v20261111.35 P0：Auto Layout 父级绝不重排 children（只保留前面的装饰收纳/命名）。
+  if (isAutoLayoutContainer(parent)) {
+    summary.autoLayoutSortSkipped = (Number(summary.autoLayoutSortSkipped) || 0) + ordered.length;
+  } else {
+    for (const n of ordered) { try { parent.appendChild(n); summary.sorted++; } catch (e) {} }
+  }
   // 前景装饰（原本盖在内容之上）保持在最上层，且不参与排序，确保遮挡关系不变。
   // 它们在 kids 中的先后即原始相对顺序，按序 append 即可保持彼此层级。
   for (const n of keepInPlace) { try { parent.appendChild(n); } catch (e) {} }
@@ -1791,6 +1908,11 @@ function sortSlotConChildren(root, summary) {
     const movable = kids.filter(n => !pinned.has(n));
     pinnedCount += pinned.size;
     if (movable.length < 2) continue;
+    // v20261111.35 P0：槽内子容器若本身是 Auto Layout FRAME，跳过 appendChild 重排。
+    if (isAutoLayoutContainer(slot)) {
+      s.slotSortAutoLayoutSkipped = (Number(s.slotSortAutoLayoutSkipped) || 0) + movable.length;
+      continue;
+    }
     movable.sort((a, b) => (Number(b && b.y) || 0) - (Number(a && a.y) || 0));
     for (const n of movable) {
       try { if (n.locked) n.locked = false; slot.appendChild(n); moved++; } catch (e) {}
@@ -2074,6 +2196,53 @@ function bandSlug(band, idx, base) {
   if (band.items.every(x => /^(graphic|icon|bg)-/.test(String((x.n && x.n.name) || "")))) return "graphic";
   return "block-" + twoDigit(idx);
 }
+// v20261111.35 P1：紧凑面板（区块间几乎无 y 空白）按【自带容器边界】切段。
+// 仅在 detectBands < 2 时兜底启用，53:31607 那种 6 带面板完全不受影响。
+// 带内只有 1 个容器时主循环走「只改名」分支 ⇒ 不建组、不 reparent、零视觉风险。
+function bandContainerSlug(n) {
+  const nm = String((n && n.name) || "");
+  const m = /^section-(?:title-)?(.+)$/i.exec(nm) || /^(?:list|card|form)-(.+)$/i.exec(nm);
+  if (!m) return "";
+  return m[1].replace(/^\d{2}-/, "").replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 40).toLowerCase();
+}
+function detectContainerBands(slot, base, summary) {
+  const s = summary || {};
+  const cand = [];
+  for (const n of Array.prototype.slice.call(slot.children || [])) {
+    if (!n) continue;
+    try { if (n.visible === false) continue; } catch (e) {}
+    const nm = String(n.name || "");
+    if (/^(bg|icon|img|graphic)-/.test(nm)) continue;   // 资源文件夹不是业务带
+    if (!("children" in n)) continue;                    // 必须是自带容器
+    const r = relRect(n, base);
+    if (!r || r.h <= 0) continue;
+    cand.push({ n: n, r: r });
+  }
+  if (cand.length < 2) return null;
+  cand.sort((a, b) => (a.r.y - b.r.y) || (a.r.x - b.r.x));
+  const bands = [];
+  for (const it of cand) {
+    // 落在已有大带内部的小碎片（悬浮文字标签等）既不单独成带，也不并入该带 items：
+    // 保持 slot-con 平级，避免主循环把「主容器 + 碎片」新建成一个多余 Group。
+    const host = bands.find(b => it.r.y >= b.start - 1 && it.r.bottom <= b.end + 1 &&
+                                 it.r.h < (b.end - b.start) * 0.25);
+    if (host) continue;
+    const last = bands[bands.length - 1];
+    const shorter = last ? Math.min(last.end - last.start, it.r.h) : 0;
+    const ov = last ? Math.min(last.end, it.r.bottom) - Math.max(last.start, it.r.y) : 0;
+    // 重叠超过较矮者一半 → 同带（如标题 + 同排图标）；否则另起一带。
+    if (!last || !(shorter > 0 && ov > shorter * 0.5)) {
+      bands.push({ start: it.r.y, end: it.r.bottom, items: [it], slug: bandContainerSlug(it.n) });
+    } else {
+      last.items.push(it);
+      last.end = Math.max(last.end, it.r.bottom);
+      if (!last.slug) last.slug = bandContainerSlug(it.n);
+    }
+  }
+  if (bands.length >= 2) s.bandsContainerFallback = 1;
+  return bands.length >= 2 ? bands : null;
+}
 function markBandGroup(n) {
   if (!n) return;
   try { n.setPluginData(BAND_GROUP_KEY, "1"); } catch (e) {}
@@ -2129,21 +2298,53 @@ function groupBySpatialBands(root, summary) {
   // 槽内已全是 section Group，若不先纠正 z-order，深色卡片底会继续盖住信息卡文字。
   normalizeRootBackdropOrder(root, base, s);
   // 纯对象测试桩 / 无绝对几何 / 内容过少：严格跳过，保证历史探针与旧整理结果零回归。
-  if (kids0.length < 4 || !kids0.some(hasAbsGeometry)) return null;
+  // v20261111.35 P1：阈值 4→2。紧凑面板 slot-con 直属常只有 2~3 个业务容器，
+  // 旧阈值会让 detectBands 一次都跑不到，section-NN-* 恒为 0（2:8858 实测）。
+  if (kids0.length < 2 || !kids0.some(hasAbsGeometry)) return null;
   // 幂等：槽内直接子级全是已建带 Group → 不重复建组、不重复排序。
   if (kids0.every(n => isBandGroup(n) || isSectionGroup(n))) { s.bandIdempotent = 1; return slot; }
 
   dissolveCrossBandFolders(slot, base, s);
   const det = detectBands(slot, base, s);
-  if (!det.bands || det.bands.length < 2) return slot;
+  let bands = det.bands;
+  // v20261111.35 P1：被 pin 的大业务容器（h ≥ 60%·H）在紧凑面板里往往就是主列表，
+  // detectBands 会把它完全排除，导致主内容区永远拿不到 section-NN-*（2:8858 实测）。
+  // 此时若容器边界能给出不少于原结果的带数，就优先按容器边界切。
+  // 53:31607 的 pin 是近全屏毛玻璃（bg-* 被容器切带过滤），fb 带数 < 6 ⇒ 保持原 6 带，零回归。
+  if (det.pinned > 0) {
+    const fb = detectContainerBands(slot, base, s);
+    if (fb && fb.length >= (bands ? bands.length : 0)) bands = fb;
+  }
+  // 无空白带的紧凑面板：改用自带容器边界切段（严格兜底，不影响已有 6 带场景）。
+  if (!bands || bands.length < 2) {
+    const fb = detectContainerBands(slot, base, s);
+    if (fb) bands = fb;
+  }
+  if (!bands || bands.length < 2) return slot;
 
   let created = 0, renamed = 0, headerDone = false, sectionNo = 0;
-  for (let bi = 0; bi < det.bands.length; bi++) {
-    const band = det.bands[bi];
+  for (let bi = 0; bi < bands.length; bi++) {
+    const band = bands[bi];
     const bandH = band.end - band.start;
+    // v20261111.35 P1：容器边界带里短标题在子树内，需下钻 3 层才能识别顶带 header。
     const shortText = band.items.some(x => {
-      const t = String((x.n && x.n.characters) || "").replace(/\s/g, "");
-      return x.n && x.n.type === "TEXT" && t.length > 0 && t.length <= 12;
+      const n = x.n;
+      if (!n) return false;
+      if (n.type === "TEXT") {
+        const t = String(n.characters || "").replace(/\s/g, "");
+        return t.length > 0 && t.length <= 12;
+      }
+      let hit = false;
+      (function w(k, d) {
+        if (!k || hit || d > 3) return;
+        if (k.type === "TEXT") {
+          const t = String(k.characters || "").replace(/\s/g, "");
+          if (t.length > 0 && t.length <= 12) hit = true;
+          return;
+        }
+        for (const c of Array.prototype.slice.call(k.children || [])) w(c, d + 1);
+      })(n, 0);
+      return hit;
     });
     const hasImg = band.items.some(x => /^img-/.test(String((x.n && x.n.name) || "")));
     const isHeader = !headerDone && bi === 0 && bandH <= base.h * HEADER_BAND_RATIO && shortText && !hasImg;
@@ -2167,7 +2368,7 @@ function groupBySpatialBands(root, summary) {
     }
 
     sectionNo++;
-    const target = "section-" + twoDigit(sectionNo) + "-" + bandSlug(band, sectionNo, base);
+    const target = "section-" + twoDigit(sectionNo) + "-" + (band.slug || bandSlug(band, sectionNo, base));
     // 单节点且已是语义容器：只重命名 + 打标记，绝不套第二层（.26 护栏）。
     if (nodes.length === 1) {
       const only = nodes[0];
@@ -2202,7 +2403,7 @@ function groupBySpatialBands(root, summary) {
 // ---- v20261110.22 P1：整理前后结构质量快照（纯只读）------------------------------
 // 目的：把「提高生成质量」变成可度量指标；不写入节点、不影响整理逻辑。
 const DEFAULT_NAME_RE = /^(?:Frame|Group|Rectangle|Ellipse|Vector|Line|Star|Polygon|Boolean\s*Operation|Component|Instance|Text|Union|Subtract|Intersect|Exclude|Image)\s*[\d\s._-]*$/i;
-const SEMANTIC_NAME_RE = /^(?:cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|bg-|@echarts\/|@antd\/|header|slot-|chart-|legend|axis|label|value|unit|title|footer)/i;
+const SEMANTIC_NAME_RE = /^(?:cp-|card-|list-|item-|section-|graphic-|form-|img-|icon-|badge-|bg-|@echarts\/|@antd\/|header|slot-|chart-|legend|axis|label|value|unit|title|footer)/i;
 
 function collectQualityMetrics(root) {
   const m = {
@@ -2275,7 +2476,7 @@ function qualityDiffText(before, after) {
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
-const SCHEMA_VERSION = "20261110.34";
+const SCHEMA_VERSION = "20261110.35";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
@@ -2296,6 +2497,10 @@ const CONTRACT_HEADER = [
   "# item- 只用于【带 -N 序号】的同构循环子项：list-*/cards-* 内 item-xxx-1..N 按一份模板 + v-for/map 渲染；",
   "#   契约只展开首项，其余折叠为 [循环 ×N]，绝不生成 N 份重复代码；不带序号的 item- 不是循环项。",
   "# 资源文件夹 bg-*/img-*/icon-* 整体导出；@echarts/* 用图表库实现。",
+  // v20261111.35 P2：badge 是动态计数，不是静态资源。
+  "# badge-count-NN 是 tab / 列表项上的【动态计数徽标】：绑定接口计数（行尾 [tab:xxx] 指明归属 tab），",
+  "#   严禁按图片导出、严禁把字面数字写死；它不属于 icon-*/img-*/bg-* 静态资源；",
+  "#   每个 badge 独立绑定自己 [tab:xxx] 的计数，不是循环项，不要按一份模板 + v-for 生成。",
   "# 动态数据槽：TEXT 行尾 [data:value|label|unit \"内容摘要\"] 表示可变数据，",
   "#   生成时绑定 props / 接口字段，绝不把字面量写死；data:label 多为静态文案可保留。",
   "# 严格按此层级划分组件边界，不要臆造此树中不存在的节点、模块或数据。",
@@ -2314,6 +2519,15 @@ function cleanContractName(n) {
   try { nm = String((n && n.name) || "").trim(); } catch (e) {}
   nm = nm.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").slice(0, 80);
   return nm || "(unnamed)";
+}
+
+// v20261111.35 P2：契约行尾标注 badge 归属的 tab，供下游把计数绑到正确的 tab 上。
+function describeTabBadge(n) {
+  if (!n || !/^badge-count-/i.test(cleanContractName(n))) return "";
+  let label = "";
+  try { label = String(n.getPluginData("mvTabBadge") || ""); } catch (e) {}
+  if (!label) return "";
+  return "  [tab:" + label.replace(/[\r\n\t\[\]]+/g, " ").trim().slice(0, 20) + "]";
 }
 
 function cpComponentName(root) {
@@ -2446,7 +2660,11 @@ function buildStructureContract(root, opts) {
 
   function emitChildren(parent, depth) {
     const kids = visibleChildren(parent);
-    const groups = findLoopGroups(kids);
+    // v20261111.35 P2：badge 各自属于不同 tab、数值不同，【不是循环项】。
+    // 否则 4 个同构 badge 会被折成「[循环 ×4，首项即模板]」，下游按一份模板生成，
+    // 导致所有 tab 的未读数变成同一个值。
+    const groups = findLoopGroups(kids).filter(g =>
+      !g.some(x => /^badge-count-/i.test(cleanContractName(x && x.node))));
     const folded = new Set();
     for (const g of groups) for (const item of g.slice(1)) folded.add(item.at);
     for (let i = 0; i < kids.length; i++) {
@@ -2473,7 +2691,7 @@ function buildStructureContract(root, opts) {
     try { if (n.visible === false) return; } catch (e) {}
     const slot = describeDataSlot(n, slotBudget);
     if (slot) slots++;
-    push(cleanContractName(n) + slot, depth, n);
+    push(cleanContractName(n) + slot + describeTabBadge(n), depth, n);
     emitChildren(n, depth + 1);
   }
 
