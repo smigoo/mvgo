@@ -63,18 +63,24 @@
       <!-- 整理 -->
       <div id="content-organize" class="tab-content active">
         <div class="section">
-          <h2>AI 选项</h2>
-          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
-            <input type="checkbox" id="ai-use-layout-intent" style="width:auto;margin:0;" checked /> 启用视觉布局分析（默认开）
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
-            <input type="checkbox" id="ai-disable-thinking" style="width:auto;margin:0;" checked /> 关闭思考模式（推荐，避免返回为空）
-          </label>
+          <h2>AI 设置（OpenAI 兼容接口）</h2>
+          <label>接口地址 Base URL</label>
+          <input id="ai-base-url" placeholder="如 https://token.microvideo.cn/v1" />
+          <label>API Key</label>
+          <input id="ai-api-key" type="password" placeholder="sk-..." />
+          <label>模型名</label>
+          <input id="ai-model" placeholder="如 qwen/qwen3.8-max" />
+          <label>视觉模型名（可选，用于定层级/顺序；留空则纯文本改名）</label>
+          <input id="ai-vision-model" placeholder="如 qwen/qwen-vl-max（留空=纯文本改名）" />
 
-          <!-- v20261111.33：界面只保留上面两个开关。以下开关与命名规范一律不显示，但 DOM + 默认值完整保留，
-               保存配置 / ai-organize / 配置回填仍读取同一批 id，行为与 .32 完全一致（默认全开、命名规范走内置）。 -->
+          <!-- v20261111.34：接口设置区恢复 .32 原样（平铺、原题与原文案）；界面仍只保留
+               「启用视觉布局分析」「关闭思考模式」两个开关。以下开关与命名规范一律不显示，
+               但 DOM + 默认值完整保留，保存配置 / ai-organize / 配置回填仍读取同一批 id，行为与 .32 完全一致。 -->
           <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-use-vision" style="width:auto;margin:0;" /> 导出渲染图并用视觉模型定层级/顺序
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-use-layout-intent" style="width:auto;margin:0;" checked /> 启用视觉布局分析（默认开）
           </label>
           <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-set-export" style="width:auto;margin:0;" checked /> 设置资源导出属性（icon→SVG、img/bg→PNG@2x）
@@ -82,27 +88,15 @@
           <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-group-modules" style="width:auto;margin:0;" checked /> 生成业务模块容器（零 token，默认开）
           </label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+            <input type="checkbox" id="ai-disable-thinking" style="width:auto;margin:0;" checked /> 关闭思考模式（推荐，避免返回为空）
+          </label>
           <label class="hidden">命名规范参考（可选）</label>
           <textarea id="ai-naming-ref" class="hidden" rows="3" placeholder="例：header / header-slot-right / section-title-xxx / section-xxx / graphic-xxx / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
-
-          <!-- 接口配置收进默认折叠：已保存过 Key/模型就无需再看到；视觉模型名留空时按纯文本模型工作。 -->
-          <details id="ai-advanced" style="margin-top:8px;border:1px solid #3a3a3a;border-radius:6px;padding:6px 8px;background:#161616;">
-            <summary style="cursor:pointer;font-size:12px;color:#888;">⚙️ 接口设置</summary>
-            <div style="margin-top:8px;">
-              <label>接口地址 Base URL</label>
-              <input id="ai-base-url" placeholder="如 https://token.microvideo.cn/v1" />
-              <label>API Key</label>
-              <input id="ai-api-key" type="password" placeholder="sk-..." />
-              <label>模型名</label>
-              <input id="ai-model" placeholder="如 qwen/qwen3.8-max" />
-              <label>视觉模型名（可选，留空则纯文本改名）</label>
-              <input id="ai-vision-model" placeholder="如 qwen/qwen-vl-max（留空=纯文本改名）" />
-              <button id="btn-save-ai" class="secondary" style="width:100%">保存设置（仅存本机）</button>
-              <button id="btn-list-models" class="secondary" style="width:100%;margin-top:8px;">列出可用模型</button>
-              <div id="ai-config-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
-              <div id="ai-models-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
-            </div>
-          </details>
+          <button id="btn-save-ai" class="secondary" style="width:100%">保存设置（仅存本机）</button>
+          <button id="btn-list-models" class="secondary" style="width:100%;margin-top:8px;">列出可用模型（探测哪些支持视觉）</button>
+          <div id="ai-config-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
+          <div id="ai-models-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
         </div>
 
         <div class="section">
@@ -1184,7 +1178,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.33";
+      const PLUGIN_VERSION = "20261110.34";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
