@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Node 版 WebSocket relay —— 等价改写自 Bun 版 src/socket.ts
- * 协议完全一致，供 cursor-talk-to-figma-mcp 的 Figma 插件与 MCP server 通信
+ * 协议完全一致，供 mvgo-figma-structure 插件与可选本地中继通信
  * 用法: node socket-server.mjs  (默认端口 3055)
  */
 import http from "node:http";
@@ -106,6 +106,14 @@ const server = http.createServer(async (req, res) => {
   // 直接 fetch 第三方 LLM 常报 Failed to fetch。这里由本地 Node 服务端转发，
   // 浏览器只与 localhost:PORT 通信（已加 CORS 头），真正的 LLM 请求在服务端发出，不受 CORS 限制。
   if (req.method === "POST" && req.url.split("?")[0] === "/llm-proxy") {
+    // 上游超时可配置：旧版写死 300s，网关「收下请求但不回包」时插件 UI 会假死数分钟。
+    // LLM_PROXY_TIMEOUT_MS 覆盖，默认 180s；非法/非正数回落到默认值。
+    // TIMEOUT_LABEL 供所有 hint 文案复用，保证提示与生效值一致。
+    const ENV_TIMEOUT = Number(process.env.LLM_PROXY_TIMEOUT_MS);
+    const UPSTREAM_TIMEOUT_MS = Number.isFinite(ENV_TIMEOUT) && ENV_TIMEOUT > 0 ? ENV_TIMEOUT : 180000;
+    const TIMEOUT_LABEL = UPSTREAM_TIMEOUT_MS % 1000 === 0
+      ? `${UPSTREAM_TIMEOUT_MS / 1000}s`
+      : `${(UPSTREAM_TIMEOUT_MS / 1000).toFixed(1)}s`;
     let body = "";
     for await (const chunk of req) body += chunk;
     let cfg;
@@ -116,7 +124,16 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "请求体不是合法 JSON" }));
       return;
     }
-    const { baseUrl, apiKey, model, messages, temperature = 0.2, max_tokens, reasoning_effort, thinking } = cfg;
+    const { baseUrl, apiKey, model, messages, temperature = 0.2, max_tokens } = cfg;
+    // v20261111.36：透传全部「关思考」方言参数（对齐 mvgo model-config.js 的 4 种形态）。
+    // 旧版只透传 reasoning_effort / thinking，会把 enable_thinking / reasoning /
+    // chat_template_kwargs 静默丢掉 ⇒ 插件端按模型族分流后代理层丢参数，思考仍关不掉。
+    // 白名单透传，不允许任意字段注入上游。
+    const THINKING_PARAM_KEYS = ["reasoning_effort", "thinking", "enable_thinking", "reasoning", "chat_template_kwargs"];
+    const thinkingParams = {};
+    for (const k of THINKING_PARAM_KEYS) {
+      if (cfg[k] !== undefined && cfg[k] !== null) thinkingParams[k] = cfg[k];
+    }
     if (!baseUrl || !apiKey || !model || !Array.isArray(messages)) {
       res.writeHead(400, { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "缺少 baseUrl / apiKey / model / messages" }));
@@ -129,15 +146,15 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const target = new URL(baseUrl.replace(/\/+$/, "") + "/chat/completions");
-      const payload = JSON.stringify({ model, temperature, ...(max_tokens ? { max_tokens } : {}), ...(reasoning_effort ? { reasoning_effort } : {}), ...(thinking ? { thinking } : {}), messages });
+      const payload = JSON.stringify({ model, temperature, ...(max_tokens ? { max_tokens } : {}), ...thinkingParams, messages });
       // 分析日志（请求摘要，绝不打印 apiKey）
-      console.log(`[llm-proxy] 请求: model=${model} messages=${messages.length} body=${payload.length}字节 (key 已隐藏)${reasoning_effort ? " | reasoning_effort=" + reasoning_effort : ""}${thinking ? " | thinking=" + JSON.stringify(thinking) : ""}`);
+      console.log(`[llm-proxy] 请求: model=${model} messages=${messages.length} body=${payload.length}字节 (key 已隐藏) | thinkingParams=${JSON.stringify(thinkingParams)}`);
 
       // 错误归类提示（连接层）
       const classify = (err) => {
         const code = err.code || err.message || "";
         if (/ETIMEDOUT|timeout|ECONNRESET|aborted|GOAWAY|closed/i.test(code))
-          return "（连接/响应超时或会话中断：300s 内未能完成 H2 握手或拿到响应）";
+          return `（连接/响应超时或会话中断：${TIMEOUT_LABEL} 内未能完成 H2 握手或拿到响应）`;
         if (/ENOTFOUND/.test(code)) return "（域名解析失败：检查 Base URL 是否拼错）";
         if (/ECONNREFUSED/.test(code)) return "（连接被拒：目标端口未监听 / 本地网关未启动）";
         if (/CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO_VERIFY|PROTOCOL/i.test(code))
@@ -154,12 +171,15 @@ const server = http.createServer(async (req, res) => {
         // 根因：token.microvideo.cn 等网关 ALPN 仅接受 h2；Node 的 http.request 发 HTTP/1.1 会被网关「收下不回包」→ 120s 超时。
         // curl 默认协商 h2 所以正常；这里用 node:http2 走同一条成功路径。
         log("H2 转发开始:", target.href, "| HTTPS_PROXY=", process.env.HTTPS_PROXY || process.env.https_proxy || "(未设置)");
-        const session = http2.connect(target.origin, { timeout: 300000, family: 4 });
+        const session = http2.connect(target.origin, { timeout: UPSTREAM_TIMEOUT_MS, family: 4 });
         session.on("connect", () => log("H2 会话已连上(TLS完成), ALPN=", session.alpnProtocol));
         session.on("frameError", (type, code, id) => log("H2 frameError type=", type, "code=", code, "stream=", id));
         let settled = false;
+        let clientGone = false;
         const fail = (status, msg, hint) => {
           if (settled) return; settled = true;
+          // 客户端已断开（插件侧 AbortController 触发）：不再回写，避免对已关闭连接写头/写体
+          if (clientGone) { log("客户端已断开，跳过错误回写:", msg); return; }
           console.error("[llm-proxy] H2 转发失败:", msg, "|", hint);
           if (res.headersSent) {
             if (!res.writableEnded) res.end();
@@ -170,9 +190,9 @@ const server = http.createServer(async (req, res) => {
           try { session.close(); } catch {}
         };
         session.on("error", (err) => fail(502, err.message, classify(err)));
-        session.setTimeout(300000, () => {
+        session.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
           try { session.destroy(); } catch {}
-          fail(504, "session timeout (300s)", "（H2 会话在 300s 内未就绪/无活动——多为出网需走代理，或 DNS/IPv6 卡死）");
+          fail(504, `session timeout (${TIMEOUT_LABEL})`, `（H2 会话在 ${TIMEOUT_LABEL} 内未就绪/无活动——多为出网需走代理，或 DNS/IPv6 卡死）`);
         });
 
         const req = session.request({
@@ -181,11 +201,20 @@ const server = http.createServer(async (req, res) => {
           "content-type": "application/json",
           // 下面三项模拟 curl 默认请求头，规避个别网关/代理对头的敏感度
           "content-length": Buffer.byteLength(payload),
-          "user-agent": "mv-figma-plugin/1.0",
+          "user-agent": "mvgo-figma-structure/1.0",
           accept: "application/json",
           authorization: "Bearer " + apiKey,
         });
         log("H2 流已创建, 发送请求体", Buffer.byteLength(payload), "字节 (流式转发)");
+        // 客户端断开（插件侧 AbortController / curl --max-time）时立刻取消上游，不再空等到超时。
+        // settled / clientGone 双重守卫：正常完成时 settled 已为 true，close 事件不会误杀已结束的会话。
+        res.on("close", () => {
+          if (settled) return;
+          clientGone = true;
+          log("客户端连接已关闭，取消上游 H2 请求");
+          try { req.destroy(); } catch {}
+          try { session.destroy(); } catch {}
+        });
         let statusCode = 502, contentType = "application/json", bytes = 0, preview = "";
         req.on("response", (headers) => {
           statusCode = headers[":status"] || 502;
@@ -208,19 +237,23 @@ const server = http.createServer(async (req, res) => {
         });
         req.on("end", () => {
           if (settled) return; settled = true;
+          // destroy() 取消流时也可能触发 end：客户端已走就不必再记「响应完成」/回写
+          if (clientGone) { log("客户端已断开，上游 H2 流已取消，无需回写"); return; }
           log("H2 响应完成:", statusCode, "|", bytes, "字节 | 预览:", preview.replace(/\s+/g, " "));
           if (!res.writableEnded) res.end();
           try { session.close(); } catch {}
         });
         req.on("error", (err) => fail(502, err.message, classify(err)));
-        req.setTimeout(300000, () => {
+        req.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
           try { req.destroy(); } catch {}
-          fail(504, "request timeout (300s)", "（H2 请求在 300s 内未拿到响应——已连上但服务端/中间代理未回包：多为需走代理，或网关对 Node h2 请求头敏感）");
+          fail(504, `request timeout (${TIMEOUT_LABEL})`, `（H2 请求在 ${TIMEOUT_LABEL} 内未拿到响应——已连上但服务端/中间代理未回包：多为需走代理，或网关对 Node h2 请求头敏感）`);
         });
         req.write(payload);
         req.end();
       } else {
         // HTTP 目标（localhost mock 等）：仍用 Node 内置 http 转发，family:4 强制 IPv4，流式 pipe。
+        let httpClientGone = false;
+        let httpTimedOut = false;
         const upstreamReq = http.request(
           target,
           {
@@ -231,7 +264,7 @@ const server = http.createServer(async (req, res) => {
               "Content-Length": Buffer.byteLength(payload),
             },
             family: 4,
-            timeout: 300000,
+            timeout: UPSTREAM_TIMEOUT_MS,
           },
           (upstreamRes) => {
             log("HTTP 收到响应头 :status=", upstreamRes.statusCode, "content-type=", upstreamRes.headers["content-type"]);
@@ -255,12 +288,27 @@ const server = http.createServer(async (req, res) => {
             });
           }
         );
-        upstreamReq.on("timeout", () => upstreamReq.destroy(new Error("request timeout (300s)")));
+        upstreamReq.on("timeout", () => {
+          // 与 H2 分支语义对齐：超时返回 504（旧版 destroy 后走 error 分支误报 502）
+          httpTimedOut = true;
+          upstreamReq.destroy(new Error(`request timeout (${TIMEOUT_LABEL})`));
+        });
+        // 客户端断开时立刻取消上游 HTTP 请求，避免服务端空等到超时。
+        res.on("close", () => {
+          if (res.writableEnded || httpClientGone) return;
+          httpClientGone = true;
+          console.log("[llm-proxy] 客户端连接已关闭，取消上游 HTTP 请求");
+          try { upstreamReq.destroy(); } catch {}
+        });
         upstreamReq.on("error", (err) => {
           const code = err.code || err.message;
+          if (httpClientGone) {
+            console.log("[llm-proxy] 上游已取消（客户端断开）:", err.message, "| cause:", code);
+            return;
+          }
           console.error("[llm-proxy] 转发失败:", err.message, "| cause:", code);
           if (!res.headersSent) {
-            res.writeHead(502, { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" });
+            res.writeHead(httpTimedOut ? 504 : 502, { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "代理转发失败：" + err.message + classify(err) }));
           } else if (!res.writableEnded) {
             res.end();
@@ -379,5 +427,5 @@ wss.on("connection", (ws) => {
 
 server.listen(PORT, () => {
   console.log(`WebSocket relay listening on ws://localhost:${PORT}`);
-  console.log("Open the mv-figma 文件自动整理 plugin in Figma and join a channel.");
+  console.log("Open the mvgo-figma-structure plugin in Figma and join a channel.");
 });

@@ -2251,18 +2251,36 @@ export default component
     // 2. 获取 Figma Token（请求 > 配置 > 用户级 > 环境变量）
     // 🛡️ 2026-09-16：补用户级 figmaToken，与生成链路（resolveFigmaToken）对齐，
     // 避免「截图用前端手动 token 成功、生成读用户级为空报错」的路径不一致。
-    let userSavedToken = '';
+    let mergedAiConfig: Record<string, any> | null = null;
     if (userId) {
       try {
-        userSavedToken =
-          (await this.aiConfigService.getMergedAiConfig(userId))?.figmaToken || '';
+        mergedAiConfig = await this.aiConfigService.getMergedAiConfig(userId);
       } catch {
         // 读用户级失败不阻断，继续走环境变量兜底
       }
     }
-    const token = figmaToken || config?.figmaToken || userSavedToken || process.env.FIGMA_ACCESS_TOKEN;
+    // 🆕 2026-11-11 诉求五 #18（预览链路补齐）：预览也走 `resolveExecutionFigmaToken()`
+    // 唯一入口 —— 历史任务还原后**必须重新确认预览图**才能提交生成，若预览仍按旧口径
+    // （请求 token > active 槽位）取凭证，用户切过 token 后这一步就会 404，生成入口
+    // 直接卡死在预览确认 —— 恰是「点历史记录连不上当时的 Figma」的第一现场。
+    // 前端在历史还原时把任务的凭证引用三字段（fp/slotId/slotName）随 config 带回（#19），
+    // 这里优先按引用找回「当时那个 token」；引用无命中时逐槽探测（首个 200 即用）。
+    const previewCredRes = await resolveExecutionFigmaTokenWithProbe({
+      requestConfig: config,
+      requestToken: figmaToken,
+      activeConfig: mergedAiConfig,
+      envToken: process.env.FIGMA_ACCESS_TOKEN,
+      fileKey: parsed.fileKey,
+      nodeId: parsed.nodeId || null,
+    });
+    this.logger.log(
+      `[figma-cred] figma-preview source=${previewCredRes.source} ` +
+        `reason=${previewCredRes.reason} ref=${previewCredRes.refSource || '-'} ` +
+        `probed=${previewCredRes.probes.length} :: ${previewCredRes.note}`,
+    );
+    const token = previewCredRes.token;
     if (!token) {
-      return { success: false, error: '缺少 Figma Token' };
+      return { success: false, error: previewCredRes.note || '缺少 Figma Token' };
     }
 
     try {

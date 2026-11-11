@@ -40,6 +40,15 @@ export class GenerateVue3Dto {
   @IsObject()
   docAnalysis?: Record<string, any>;
 
+  // 🆕 2026-11-11（步骤 C）：补充提示词 / 需求文档（高级选项，与 microcode/Lite 同口径）
+  @IsString()
+  @IsOptional()
+  extraPrompt?: string;
+
+  @IsString()
+  @IsOptional()
+  requirementDocText?: string;
+
   @IsOptional()
   @IsObject()
   config?: {

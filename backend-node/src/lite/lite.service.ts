@@ -21,6 +21,9 @@ import {
   DEFAULT_RASTER_SCALE,
 } from './utils/design-canvas';
 import { repairJson as repairJsonUtil } from './repair-json.util';
+// 🛡️ 2026-11-11 治本（装配层）：截图源 brief 的 theme 被像素纠正后，colors 可能仍是整套深色色板
+// ⇒ 在注入 prompt 前按生效 theme 确定性归一，消除「theme=light + background=#0B1221」自相矛盾。
+import { reconcileBriefTheme } from './utils/lite-theme-reconcile';
 // 🆕 2026-11-06 治本：Figma 404 的二义（文件不存在 / Token 无权访问）必须归因到可操作结论，
 // 不能把「激活 Token 换了账号」当成「文件被删」透给用户。判据见同名 spec。
 import {
@@ -45,7 +48,22 @@ import { MIN_BODY_FONT_PX, MIN_BODY_FONT_RATIO } from '../ai-engine/utils/font-s
 // 🛡️ 字号落盘下限守卫（与 microcode-engineer writeFiles 后处理链同一实现）
 //    历史缺口：该守卫原先只挂在 writeFiles 里，而 Lite 链路全库不调 writeFiles ⇒ Lite 零兜底。
 import { ensureMinFontSize, formatFontGuardLog } from '../ai-engine/utils/font-size-guard.js';
-import { recompileIndexCss } from '../ai-engine/utils/index-css-recompiler.js';
+import { compileIndexCssStrict } from '../ai-engine/utils/index-css-recompiler.js';
+// 🛡️ 2026-11-11：业务样式落盘前自愈（与写盘门禁 gateStandaloneLessWrite 同一条链）
+import { healLessFull } from '../ai-engine/validators/less-compile-gate.js';
+// 🆕 2026-11-11 Phase 2：Lite 单 SFC → 多子组件确定性后处理（语义命名 + 业务模块维度）。
+// 微码分支：<style lang="less"> 非 scoped，样式由 resources/styles 全局注入 ⇒ 子组件 template-only；
+// vue3 分支：<style scoped> 命中规则随块复制进子组件自己的 scoped 样式，父规则原样保留（叠加不移动）。
+// 两条分支共用同一收口；checkpoint 仍只存原始 vueCode，不引入第二份真值。
+import { applyLiteSubcomponentSplit } from '../ai-engine/utils/lite-subcomponent-splitter.js';
+// 🆕 2026-11-11：Lite 生成画像 / 截断检测的可归因埋点（纯观测，不改重试行为）。
+// 温度与 token 上限从 VisionAgent 实例读实际生效值，解决「同图同模型不同果」无法复盘。
+import {
+  missingSfcBlocks as collectMissingSfcBlocks,
+  detectLiteCodegenTruncation,
+  collectVisionAgentMeta,
+  formatLiteTelemetryLog,
+} from './lite-truncation-telemetry.js';
 import { repairScopedThirdPartySelectors } from '../ai-engine/utils/css-sanitizer.js';
 import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDeclarations } from '../ai-engine/utils/sfc-semantics.js';
 // 🆕 2026-09-04（方案 A/C）：组件语义命名工具——中文→语义映射 / 确定性唯一 componentId
@@ -435,6 +453,23 @@ export class LiteService {
           brief._themeSource = 'user-selected';
         }
 
+        // 🛡️ 2026-11-11 治本（装配层，产物零改写）：实锤 mv-lite-1794403659262-b1813771 ——
+        // 视觉模型把浅色稿判成 dark 并给出整套深色色板，而 sampleRootBrightness 只把 brief.theme
+        // 改成 light，colors / visualDetails 仍是深色 ⇒ brief 自相矛盾，codegen 照抄 hex 生成深色页。
+        // 这里按「最终生效的 theme」做确定性归一（阈值/亮度公式与 sampleRootBrightness 同源）。
+        // figma 源已有 sampleEdgeColor 的像素边缘真值，保持原流程不变（截图可能带 OS 边框）。
+        // 根治项 = 本归一；prompt 里的「冲突裁决」句是补丁层自防，防归一未覆盖的矛盾描述。
+        if (sourceType !== 'figma') {
+          const reconciled = reconcileBriefTheme(brief, brief?.theme);
+          brief = reconciled.brief;
+          if (reconciled.applied) {
+            this.logger.warn(
+              `主题色板与像素明暗冲突，已确定性归一：theme=${brief?.theme} fields=${reconciled.conflicts.length}`,
+              { theme: brief?.theme, conflicts: reconciled.conflicts },
+            );
+          }
+        }
+
         // 🔧 边缘底色真值（2026-09-01）：模型对浅蓝白渐变底色反复误读成中灰（#A8B5C0），
         // theme=light 锚点只保明暗不保色相，产物仍渲染成灰蓝。figma 源（exportImage 纯净
         // 节点、无 OS 截图边框）用最外 3% 环带像素中位数覆盖 brief.colors.background。
@@ -516,6 +551,7 @@ export class LiteService {
             : this.buildCodegenPrompt(brief, finalComponentName, dto, width, height),
           isMicrocode,
           sessionId,
+          userId,
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
           callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
@@ -648,6 +684,7 @@ export class LiteService {
         }
 
         await writeFile(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
+        this.logLiteSubcomponentSplit(packageDir, sessionId);
 
         await writeFile(
           join(outputPath, 'declare.json'),
@@ -743,6 +780,8 @@ ${businessStyles}
         const _fontGuardVue3Log = formatFontGuardLog(_fontGuardVue3, 'lite');
         this.logger.log(_fontGuardVue3Log.message, _fontGuardVue3Log.meta);
         await writeFile(join(packageDir, 'index.vue'), vueCode, 'utf-8');
+        // Phase 2：Vue3 Lite（<style scoped>）也拆，命中样式规则随块复制
+        this.logLiteSubcomponentSplit(packageDir, sessionId);
       }
 
       // 截图直接作为统一预览图
@@ -795,15 +834,14 @@ ${businessStyles}
       // mc-gen 线由 refiner 环节 recompileIndexCss 产出该文件，Lite 线此前从不编译 →
       // 预览端样式全丢（实锤 mc-lite-1791457057133-19acf57d / c-add-product-2d52f7ea
       // 「组件内容在但无任何样式」）。@import 路径已被 P1.9-③ 归一为 ../resources，可直编。
+      //
+      // 🔴 2026-11-11（mc-lite-1794382414032-bff01bf7 红卡根治）：此前这里 catch 后只 warn，
+      //   `cssOk === false` 连日志都没有 ⇒ 坏的 common.less 静默进预览，浏览器端现编 LESS
+      //   失败 → 用户看到「组件样式 (LESS) 渲染失败 … Unrecognised input」而任务显示「完整 100%」。
+      //   现改为：先真编译，失败先自动修复再编译，仍失败则**抛错终止发布**
+      //   （不发坏产物、不谎报成功）；产物留在 outputPath 供「续跑」自动修复或重生成。
       if (isMicrocode) {
-        try {
-          const cssOk = await recompileIndexCss(outputPath, this.logger as any);
-          if (cssOk) {
-            this.logger.log('🛡️ P1.10 Lite index.css 已编译产出（微码预览样式链路补齐）');
-          }
-        } catch (e) {
-          this.logger.warn('⚠️ P1.10 Lite index.css 编译失败（非阻断，前端预览有免剥兜底）', e as any);
-        }
+        await this.ensureLiteStylesCompilable(outputPath, sessionId);
       }
 
       // Lite 完整文件组进入与 Max 一致的 revision 状态链。候选先发布到可回滚的
@@ -2721,6 +2759,7 @@ ${userAddendum}
    - theme="dark"：根容器背景用深色，正文文字用浅色。
    - **半透明防误判**：卡片/面板背景可使用 rgba 或浅色透明层，但「主题归属」一律由根容器底色决定；禁止因单个卡片深色/半透明而把整个组件改成深色主题。
    - 若【结构化拆解】没有 theme 字段，则以 colors.background 的明度推断：浅色背景 → 浅色主题。
+   - **冲突裁决（P0，2026-11-11 补丁层自防）**：若 theme 与 colors / visualDetails 的明暗描述冲突，一律以 theme 为准；禁止使用与之矛盾的 background / surface / text / border 色值，也禁止依据「整体背景为深蓝色渐变」之类描述把根容器改成深色。根治项是装配层的主题色板归一，本条只防其未覆盖的矛盾描述。
 1. 只还原截图中可见的 DOM 层级、尺寸比例、间距、对齐、配色、字体、边框、圆角和阴影。
 2. 不生成接口请求、异步逻辑、路由、表单提交、权限、业务状态机、复杂事件或需求文档中不可见的业务能力。
 3. 允许使用少量本地常量表达截图中重复出现的可见内容；禁止臆造额外数据和交互。
@@ -2825,6 +2864,14 @@ ${userAddendum}
     const briefJson = JSON.stringify(brief || {}, null, 2);
     const classPrefix = `c-${componentName}-`;
     const fontFloorRule = this.buildFontFloorRule(brief);
+    // 🆕 2026-11-11（步骤 B）：补充提示词 + 需求文档文本（microcode Lite 此前漏接，
+    //   仅 buildCodegenPrompt 用了 userAddendum）。此处照搬其成熟写法，与 phase2 / vue3-Lite 同口径。
+    // 🔧 契约句与 utils/user-addendum.js 同步：交互/行为类显式要求必须落实，仅视觉样式冲突让位设计稿。
+    const epUser = String((dto as any).extraPrompt || '').trim().slice(0, 4000);
+    const rdtUser = String((dto as any).requirementDocText || '').trim().slice(0, 20000);
+    const userAddendum = epUser || rdtUser
+      ? `\n【用户补充需求（用户显式输入，必须遵守；视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准，但交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
+      : '';
     // 🛡️ 2026-09-30 治本：工作台演示主题面板（深色/浅色）→ 用户显式选择的主题必须覆盖 vision 推断
     const themeOverride = dto.backgroundBrightness
       ? `\n**演示面板主题（用户显式指定，P0 覆盖）**：当前使用${dto.backgroundBrightness === 'dark' ? '深色' : '浅色'}演示面板。组件根容器必须使用${dto.backgroundBrightness === 'dark' ? '深色底（如 #1a1a2e / #2d2d3f）+ 浅色正文' : '浅色底（如 #FFFFFF / #F5F8FC）+ 深色正文'}。此设置优先于【结构化拆解】中的 theme 字段与截图背景推断。`
@@ -2853,7 +2900,7 @@ ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} ×
   **禁止不做预算直接堆「看起来舒服」的固定尺寸**（实测：14px 竖排按钮 × 6 + 110px 卡片 × 4 必然超出 389px 内容区，底部两行被裁）。
 ` : ''}${fontFloorRule}【结构化拆解】
 ${briefJson}
-${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
+${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
 
 微码硬性规则：
 0. 根容器必须使用微码面板组件：
@@ -2891,6 +2938,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
    - theme="dark"：根容器背景用深色，正文用浅色。
    - **半透明防误判**：卡片背景可用 rgba 或浅色透明层，但「主题归属」由根容器底色决定；禁止因单个卡片深色/半透明把整个组件改成深色主题。
    - 无 theme 字段时以 colors.background 明度推断：浅色背景 → 浅色主题。
+   - **冲突裁决（P0，2026-11-11 补丁层自防）**：若 theme 与 colors / visualDetails 的明暗描述冲突，一律以 theme 为准；禁止使用与之矛盾的 background / surface / text / border 色值，也禁止依据「整体背景为深蓝色渐变」之类描述把根容器改成深色。根治项是装配层的主题色板归一，本条只防其未覆盖的矛盾描述。
 6. **图表自动映射**：如果截图中包含图表（折线图/柱状图/饼图/面积图等），使用 ECharts 实现：
    - 引入：\`import * as echarts from 'echarts'\`
    - 图表容器：\`<div ref="chartRef" class="${classPrefix}chart"></div>\`（样式用 CSS，禁止内联 style）
@@ -3051,15 +3099,9 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
    * validateLiteSfc（拒收门禁）与 callCodegenWithTruncationRetry（截断重试）共用同一口径，
    * 禁止在别处复制第二份 requiredBlocks。
    */
+  /** 🔴 实现下沉到 lite-truncation-telemetry.js#missingSfcBlocks（截断守卫与埋点同源） */
   private missingSfcBlocks(vueCode: string): string[] {
-    const requiredBlocks = [
-      ['<template', '</template>'],
-      ['<script setup', '</script>'],
-      ['<style', '</style>'],
-    ] as const;
-    return requiredBlocks
-      .filter(([openTag, closeTag]) => !vueCode.includes(openTag) || !vueCode.includes(closeTag))
-      .map(([, closeTag]) => closeTag);
+    return collectMissingSfcBlocks(vueCode);
   }
 
   private validateLiteSfc(vueCode: string): void {
@@ -3088,14 +3130,39 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     sessionId: string,
     callOpts: any,
     progressStage?: string,
-  }): Promise<{ vueCode: string; declareJson: any }> {
-    const { agent, imagePath, prompt, isMicrocode, sessionId, callOpts, progressStage = 'generating' } = params;
+    userId?: string,
+  }): Promise<{ vueCode: string; declareJson: any; genText?: string }> {
+    const { agent, imagePath, prompt, isMicrocode, sessionId, callOpts, progressStage = 'generating', userId } = params;
+    // 🆕 2026-11-11：每次 codegen 落「生成画像」+ 截断事件各一行结构化日志。
+    // 温度/token 上限读 agent 实例（归一化后的真实请求值），不读 dto ⇒ 同图不同果可归因。
+    const meta = collectVisionAgentMeta(agent, {
+      userId,
+      target: isMicrocode ? 'microcode' : 'vue3',
+      tier: 'lite',
+    });
+    const emitTelemetry = (
+      event: ReturnType<typeof detectLiteCodegenTruncation>,
+      attempt: number,
+      extra: Record<string, any> = {},
+    ) => {
+      this.logger.log(formatLiteTelemetryLog({ tag: 'lite-codegen', sessionId, meta, event, attempt, extra }));
+      if (event.truncated) {
+        // 真机计数源：grep -c '\[truncation-detected\]' server.log
+        this.logger.warn(formatLiteTelemetryLog({ tag: 'truncation-detected', sessionId, meta, event, attempt, extra }));
+      }
+    };
+
     let guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts);
-    const missing = this.missingSfcBlocks(guarded.vueCode || '');
-    if (missing.length > 0) {
-      // 日志计数行：真机可按「疑似输出截断」grep 审计重试命中率
+    const first = detectLiteCodegenTruncation({ vueCode: guarded.vueCode, genText: guarded.genText });
+    emitTelemetry(first, 1, { retryTriggered: first.retryTriggered });
+
+    // 🔴 重试口径与 2026-11-03 既有守卫严格一致：仅「缺闭合标签」触发重试。
+    //    stray-artifact 只观测、不新增模型调用；确定性修复由发布前 repairLessDirectory /
+    //    compileIndexCssStrict 那条链负责。
+    if (first.retryTriggered) {
+      // 日志计数行：真机可按「疑似输出截断」grep 审计重试命中率（保留原文案，不破坏既有取证）
       this.logger.warn(
-        `[${sessionId}] 检测到生成代码不完整（缺 ${missing.join(', ')}，疑似输出截断），自动重试一次`,
+        `[${sessionId}] 检测到生成代码不完整（缺 ${first.missingBlocks.join(', ')}，疑似输出截断），自动重试一次`,
       );
       this.progressService.sendProgress(sessionId, {
         type: 'progress',
@@ -3104,8 +3171,10 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         message: '检测到生成代码不完整（疑似输出截断），自动重试一次...',
       });
       guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts);
+      const second = detectLiteCodegenTruncation({ vueCode: guarded.vueCode, genText: guarded.genText });
+      emitTelemetry(second, 2, { retryTriggered: false, recovered: !second.truncated });
     }
-    return { vueCode: guarded.vueCode, declareJson: guarded.declareJson ?? null };
+    return { vueCode: guarded.vueCode, declareJson: guarded.declareJson ?? null, genText: guarded.genText };
   }
 
   /** Lite 微码只保留布局展示所需的最小声明，运行时字段由系统确定性补齐 */
@@ -3883,6 +3952,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
             : this.buildCodegenPrompt(brief, finalComponentName, dto, width, height),
           isMicrocode,
           sessionId,
+          userId: resumeTask?.userId,
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
           callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
@@ -3937,8 +4007,16 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         }
 
         writeFileSync(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
+        // 续跑从 checkpoint 的原始 vueCode 重新抽样式 → 再跑同一个确定性拆分器，
+        // 结果与主路径一致；checkpoint 不存 files map，避免两份真值。
+        this.logLiteSubcomponentSplit(packageDir, sessionId);
 
         await this.writeMicrocodeAssets(outputPath, declareJson, finalComponentName, sessionId, businessStyles);
+        // 🛡️ 2026-11-11（续跑自动修复）：续跑把 checkpoint 里的代码重新落盘后，同样要走
+        //   与主路径完全一致的样式终验 —— 先自动修复（healer + oracle 定点手术），
+        //   修不好才失败。这样「上次因样式语法坏掉的任务」点续跑即可自愈，
+        //   而不需要重新掷一次模型骰子。
+        await this.ensureLiteStylesCompilable(outputPath, sessionId);
       } else {
         // 🛡️ 字号落盘下限守卫（Lite 写入点④/④，续跑 vue3 分支）
         const _fontGuardVue3 = ensureMinFontSize({ 'package/index.vue': vueCode });
@@ -3946,6 +4024,8 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         const _fontGuardVue3Log = formatFontGuardLog(_fontGuardVue3, 'lite');
         this.logger.log(_fontGuardVue3Log.message, _fontGuardVue3Log.meta);
         writeFileSync(join(packageDir, 'index.vue'), vueCode, 'utf-8');
+        // 续跑 Vue3 分支与主路径同款确定性拆分（checkpoint 仍是原始 vueCode）
+        this.logLiteSubcomponentSplit(packageDir, sessionId);
       }
 
       const resumeGroupId = await this.resolvePrivateGroupId(dto.groupId, this.tasksService.getTask(sessionId)?.userId);
@@ -4074,6 +4154,68 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
   }
 
   /** 写入微码运行时文件（🛡️ P1.8：统一走共享骨架生成器，不再自造） */
+  /**
+   * 🛡️ 2026-11-11（红卡根治）：Lite 样式**终验**（单一收口点）。
+   *
+   * 链路：`compileIndexCssStrict` → ① 确定性自愈（healLessFull：横幅残片 / 混入标签 /
+   * 悬空声明 / 根级裸属性 / 值内嵌套声明 / 漏分号 / 括号配平）→ ② 真编译；
+   * 仍失败 → ③ 以 less 报错行号为 oracle 做定点手术（删残行 / 删坏声明 / 删坏规则块）；
+   * 仍失败 → **抛错**，任务如实失败，**不发布**坏产物。
+   *
+   * 为什么必须抛而不是 warn：预览端只在缺少可用 index.css 时才回退到浏览器现编 LESS，
+   * 现编失败就是用户看到的红卡；而任务卡片却显示「完整 100%」——谎报成功比失败更糟。
+   * 抛出后：产物仍在 outputPath（含已修复部分），用户点「续跑」会再走一遍自动修复。
+   */
+  private async ensureLiteStylesCompilable(outputPath: string, sessionId: string) {
+    const result = await compileIndexCssStrict(outputPath, this.logger as any);
+    if (result.reason === 'missing') {
+      // 非微码骨架 / 无样式入口：不阻断（与旧行为一致）
+      return result;
+    }
+    if (!result.ok) {
+      const e: any = result.error;
+      const where = e?.filename
+        ? `${String(e.filename).split('/custom-components/').pop()}:${e.line || '?'}`
+        : 'index.less';
+      const detail = `样式文件存在语法错误（${where}）：${String(e?.message || '').split('\n')[0]}`;
+      this.logger.error(
+        `❌ LESS 样式终验未通过：${detail}｜已自动修复 ${result.applied.length} 处`,
+        { sessionId, applied: result.applied } as any,
+      );
+      throw new Error(
+        `LESS 样式校验失败 · ${detail}` +
+          (result.applied.length ? `（已自动修复 ${result.applied.length} 处仍未修好，可重试或续跑）` : '（可重试或续跑）'),
+      );
+    }
+    if (result.applied.length) {
+      this.logger.log(
+        `✅ LESS 样式终验通过（自动修复 ${result.applied.length} 处）`,
+        { sessionId, applied: result.applied } as any,
+      );
+    }
+    return result;
+  }
+
+  /**
+   * 🆕 2026-11-11 Phase 2：Lite 子组件拆分（主路径微码/vue3 + 续跑微码/vue3 四处写盘点共用同一收口）。
+   * 拆分属于增强能力：任何异常都只告警、不阻断生成 —— 此时磁盘上仍是原单文件 index.vue。
+   */
+  private logLiteSubcomponentSplit(packageDir: string, sessionId: string): void {
+    try {
+      const r = applyLiteSubcomponentSplit(packageDir);
+      if (r.changed) {
+        this.logger.log(
+          `🧩 Lite 子组件拆分：${r.stats?.split ?? 0} 个业务模块 → package/components/（候选 ${r.stats?.candidates ?? 0}，跳过 ${r.stats?.skipped ?? 0}）`,
+          { sessionId } as any,
+        );
+      } else {
+        this.logger.log(`🧩 Lite 子组件拆分：未拆（${r.reason}）`, { sessionId } as any);
+      }
+    } catch (e) {
+      this.logger.warn('⚠️ Lite 子组件拆分跳过（不阻断生成，产物保持单文件）', e as any);
+    }
+  }
+
   private async writeMicrocodeAssets(
     outputPath: string,
     declareJson: any,
@@ -4098,6 +4240,17 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
 
     // 🛡️ P1.8 修复：如果有业务样式，用它们覆盖空的 common.less 骨架
     if (businessStyles && businessStyles.trim().length > 0) {
+      // 🔴 2026-11-11（红卡根治 · 生产端）：写盘前先跑**与写盘门禁同源**的自愈链，
+      //   把模型输出里的确定性坏点（横幅残片 `}====`、混入 `</style>`、悬空 `color:`、
+      //   根级裸属性、值内嵌套声明、尾部回答正文）在落盘前清掉。
+      //   此前 Lite 把 LLM 文本原样拼进 common.less ⇒ 坏点必然落盘。
+      //   ⚠️ 用**静态** import（不用 `await import()`）：jest CJS 下动态 import 会抛
+      //   `A dynamic import callback was invoked without --experimental-vm-modules`。
+      const healed = healLessFull(businessStyles, { sourceType: 'style' });
+      if (healed.changed) {
+        businessStyles = healed.source;
+        this.logger.log(`🧹 业务样式落盘前自愈：${healed.fixes.join('；')}`, { sessionId } as any);
+      }
       skeleton['resources/styles/common.less'] =
         `@import './themes/theme-vars.less';
 

@@ -1,10 +1,12 @@
 #!/bin/bash
-# 打包给同事用的 mv-figma 文件自动整理插件 zip（只挑必要文件，含 node_modules/ws+undici 免联网）
-# 用法: ./pack.sh   产出: mv-figma-plugin-YYYYMMDD.zip
+# 打包给同事用的 mvgo-figma-structure zip（只挑必要文件，含 node_modules/ws 免联网）
+# 默认零安装：插件直连 LLM 网关，不需要启动本地服务；
+# start-relay-* 两个双击启动器仅为「网关跨域被拦」时的可选兜底，mac / Win 各一个。
+# 用法: ./pack.sh   产出: mvgo-figma-structure-YYYYMMDD.zip
 set -e
 cd "$(dirname "$0")"
 
-OUT="mv-figma-plugin-$(date +%Y%m%d)"
+OUT="mvgo-figma-structure-$(date +%Y%m%d)"
 TMP="$(mktemp -d)"
 PKG="$TMP/$OUT"
 mkdir -p "$PKG/src/cursor_mcp_plugin" "$PKG/node_modules"
@@ -14,9 +16,14 @@ cp src/cursor_mcp_plugin/manifest.json "$PKG/src/cursor_mcp_plugin/"
 cp src/cursor_mcp_plugin/code.js        "$PKG/src/cursor_mcp_plugin/"
 cp src/cursor_mcp_plugin/ui.html        "$PKG/src/cursor_mcp_plugin/"
 
-# 2) 本地服务 + 依赖声明
+# 2) 可选本地代理 + 依赖声明
 cp socket-server.mjs "$PKG/"
 cp package.json     "$PKG/"
+
+# 2.5) 双平台双击启动器（默认零安装用不到，仅跨域兜底）
+cp start-relay-mac.command "$PKG/"
+cp start-relay-win.bat    "$PKG/"
+chmod +x "$PKG/start-relay-mac.command"
 
 # 3) 运行时依赖（socket-server 仅依赖 ws，已用 Node 内置 https 转发，无需 undici），免同事联网 npm install
 for dep in ws; do
@@ -28,7 +35,7 @@ for dep in ws; do
 done
 
 # 4) 文档（zip 内用 ASCII 名 README.md，避免 Windows 中文名乱码）
-cp FIGMA-AI-插件使用文档.md "$PKG/README.md" 2>/dev/null || true
+cp docs/mvgo-figma-structure-使用文档.md "$PKG/README.md" 2>/dev/null || true
 
 # 5) 打包
 ZIP="$(pwd)/$OUT.zip"

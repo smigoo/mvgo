@@ -254,7 +254,7 @@ import {
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
 // 🛡️ 2026-11-05 治本：内联注入的 CSS 里相对 `url()` 会按**文档 URL**解析（→ 404 → 背景图不显示），
 //   注入前必须按「该 CSS 文件自身虚拟路径」重写为绝对 URL。单一事实源见 css-asset-url.js。
-import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls, rewriteVueTemplateAssetUrls, rewriteVueExprAssetUrls } from '@/utils/css-asset-url'
+import { rewriteCssAssetUrls, rewriteVueStyleAssetUrls, rewriteVueTemplateAssetUrls, rewriteVueExprAssetUrls, rewriteVueInlineStyleAssetUrls } from '@/utils/css-asset-url'
 // 🛡️ 2026-10-25：`.js` 内 ESM 语法的判定（单一真相源，与 Vue3 路径共用）
 import { resolveJsModuleTypeOverride } from '@/utils/sfc-loader-esm-js'
 import { buildSnapshotFileUrl, hasPreviewEntry, resolvePreviewDescriptor } from '@/utils/preview-resolver'
@@ -1485,6 +1485,9 @@ async function loadProd() {
         src = rewriteVueTemplateAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
         // 🆕 67cd38d8 形态兜底：`:src="<expr> || '../resources/...'"` 表达式内字面量
         src = rewriteVueExprAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
+        // 🛡️ P1-F②（2026-11-11 · e3acdc25 实锤）：模板静态 style 属性内的相对 url()
+        //   （LLM 双 style 竞争形态 ⇒ 相对路径被文档 URL 解析到站点根 ⇒ 假 200 ⇒ 背景静默消失）
+        src = rewriteVueInlineStyleAssetUrls(src, new URL(`${base}/${rel}`, location.origin).href)
       }
       // 🛡️ 2026-09-16 治本（mc-max-...-dcc8b98d「找不到文件: less」+ ...-3912b7b3「一片蓝色什么都没有」同源实锤）：
       // 微码**子组件**（package/components/*.vue）带 <style lang="less">（含 less 变量/嵌套/@import，

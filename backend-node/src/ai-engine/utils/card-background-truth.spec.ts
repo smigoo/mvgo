@@ -107,3 +107,44 @@ describe('⑥-i v2 · 卡底背景图按 owner 精确挂载', () => {
     expect(twice.stats.mounted).toBe(0);
   });
 });
+
+/**
+ * 🛡️ E3-v2 双 bg 声明治本（2026-11-11 · bf81ff92 实锤）
+ *   原 mountBgOnInstance 只挡「静态 background-image 已存在」，不看动态 `:style` 是否已挂 ⇒
+ *   对已写 `:style="{ backgroundImage: 'url(' + bg1 + ')' }"` 的元素再追加静态 bg ⇒ E3-v2 FAIL。
+ */
+describe('E3-v2 · 动态绑定已存在时不得再追加静态 bg', () => {
+  const VUE_DYN = `<template>
+  <div class="sec" data-section-id="136:121">
+    <div class="card" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%' }"><span>51</span></div>
+    <div class="card" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '100% 100%' }"><span>2</span></div>
+    <div class="card" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%' }"><span>19</span></div>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/bg-125.png'
+import bg2 from '../../resources/images/bg-124.png'
+import bg3 from '../../resources/images/bg-126.png'
+</script>
+`;
+
+  it('阳性：三卡已有 :style 动态 bg ⇒ 一条静态都不追加（不产生双声明）', () => {
+    const r = injectCardBgImages([{ path: 'package/components/S.vue', content: VUE_DYN }], {
+      cardGroups: collectCardGroups(FIGMA as any),
+      bgByOwner: collectCardBgByOwner(MAPPING as any),
+    });
+    const c = r.contents[0].content;
+    expect(r.stats.mounted).toBe(0);
+    expect(r.changed).toBe(false);
+    expect(c).not.toContain('background-image:url(');
+  });
+
+  it('阴性（不误伤）：无任何 bg 声明的卡 ⇒ 照常注入静态 bg', () => {
+    const r = injectCardBgImages([{ path: 'package/components/S.vue', content: VUE }], {
+      cardGroups: collectCardGroups(FIGMA as any),
+      bgByOwner: collectCardBgByOwner(MAPPING as any),
+    });
+    expect(r.stats.mounted).toBe(3);
+    expect(r.contents[0].content).toContain("background-image:url('../../resources/images/bg-125.png')");
+  });
+});

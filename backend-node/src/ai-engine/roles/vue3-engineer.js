@@ -18,6 +18,8 @@ import { pushChunkSnapshot } from './microcode/chunk-snapshot-pusher.js';
 import * as microcodeHealer from './microcode/code-healer.js';
 // 🎯 M2.2（2026-09-16）：色值槽位用途自愈（双链路同源，与 microcode-engineer 同一实现）
 import * as microcodeValidator from './microcode/code-validator.js';
+// 🔴 2026-11-11 根因 G：vue3 运行时标识符中和（与 CODE-029 门禁、microcode 自动修复**同一事实源**）
+import { neutralizeFilesRuntimeIdents } from '../utils/runtime-idents.js';
 import { validateVueSfc } from '../utils/sfc-syntax-validation.js';
 import { backendRoot } from '../../config/backend-root.js';
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs';
@@ -2136,6 +2138,36 @@ export class Vue3Engineer extends MicrocodeEngineer {
       } catch (e) {
         reportPatchChainError(e, { logger: this.logger, pass: 'execute:2087' });
         this.logger.warn('COLOR-SLOT 自愈异常（非阻断，按原样继续）', {
+          error: e?.message || String(e),
+        });
+      }
+
+      // 🔴 2026-11-11 根因 G 治理（清单 §2.3 · 第四道缺口）：vue3 链路**从未执行**运行时标识符兜底。
+      //   事实：本文件只从 code-validator 引用了 `fixColorSlotPurpose`，而
+      //   `validateAndFixGeneratedFiles`（内含 "$mcComponentBuilder/runtimeBuilder 兜底"）是
+      //   microcode-engineer 的方法 ⇒ vue3 产物**一路裸奔**写盘 ⇒ `<script setup>` 顶层引用
+      //   未声明 `runtimeBuilder` ⇒ onMounted 抛 ReferenceError ⇒ 组件白屏（比「兜底写错」更彻底）。
+      //   落点必须在 writeFiles 之前 + L0-B 门禁（CODE-029）之前：先确定性中和，再让门禁兜底判死，
+      //   否则只能靠「BLOCK → 重试 → 求 LLM 自己删」，把确定性修复退化成概率修复。
+      try {
+        const _rt = neutralizeFilesRuntimeIdents(codeResult.files);
+        codeResult.files = _rt.files;
+        if (_rt.changed.length > 0) {
+          this.logger.warn('🛡️ RUNTIME-IDENT 兜底已写回 Vue3 产物（vue3 无平台注入）', {
+            count: _rt.changed.length,
+            files: _rt.changed.slice(0, 5).map((c) => `${c.filePath} → [${c.idents.join(', ')}]`),
+          });
+        }
+        if (_rt.unfixable.length > 0) {
+          // 无法注入（无 <script> 块）⇒ 不静默：交给 CODE-029 门禁判死并携带修复指导。
+          this.logger.error('🚨 RUNTIME-IDENT 无法自动中和（缺少 <script> 块）', {
+            count: _rt.unfixable.length,
+            files: _rt.unfixable.slice(0, 5),
+          });
+        }
+      } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'execute:runtime-idents' });
+        this.logger.warn('RUNTIME-IDENT 兜底异常（非阻断，交由 CODE-029 判死）', {
           error: e?.message || String(e),
         });
       }

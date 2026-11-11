@@ -1,5 +1,5 @@
 {
-  "name": "mv-figma文件自动整理插件",
+  "name": "mvgo-figma-structure",
   "id": "1485687494525374295",
   "api": "1.0.0",
   "main": "code.js",

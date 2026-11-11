@@ -157,3 +157,523 @@ describe('E3-v3 卡级 bg 强制（车辆 30a318a9 实锤：卡图挂祖先）',
     expect(r.fails.filter((f) => f.code === 'E3-v3')).toHaveLength(0);
   });
 });
+
+describe('E3-v4 bg 归属段对位（流量 mc-max-1794114542727 实锤：卡图挂祖先被拉伸 4 倍）', () => {
+  // mapping 形态取自真实落盘数据：88:34「bg-[m]」归属段 2:3660，
+  // 祖先链 [2:3660, 88:33, 2:9778]；产物却把图挂到祖先段 88:33。
+  const mappingReal = [
+    {
+      figmaNodeId: '88:34',
+      name: 'bg-[m]',
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+      resourceFile: '../resources/images/bg-_m-34.png',
+      ownerSectionId: '2:3660',
+      ancestorIds: ['2:3660', '88:33', '2:9778'],
+      targetDomSelector: '[data-section-id="2:3660"]',
+      figmaBox: { width: 91, height: 34 },
+    },
+  ];
+  const IMPORT_BG =
+    '\n<script setup>\nimport bg1 from "../../resources/images/bg-_m-34.png"\n</script>';
+
+  it('① 祖先段挂载（2026-11-11 v3 降级）：bg 挂祖先 88:33 ⇒ WARN 放行不 FAIL（拉伸归 G3/归属纠正归 S3；验收拒交付已证负价值：定向修复 0/2 成功且遮蔽可看产物）', () => {
+    const files = {
+      'package/index.vue':
+        '<template><div data-section-id="88:33" :style="{ backgroundImage: \'url(\' + bg1 + \')\', backgroundSize: \'100% 100%\' }"></div></template>' +
+        IMPORT_BG,
+    };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mappingReal });
+    expect(r.fails.filter((x) => x.code === 'E3-v4')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('祖先段挂载放行'))).toBe(true);
+  });
+
+  it('② 阴性：bg 消费在归属段 2:3660 自身 ⇒ 无 E3-v4', () => {
+    const files = {
+      'package/index.vue':
+        '<template><div data-section-id="88:33"><div data-section-id="2:3660" :style="{ backgroundImage: \'url(\' + bg1 + \')\' }"></div></div></template>' +
+        IMPORT_BG,
+    };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mappingReal });
+    expect(r.fails.filter((x) => x.code === 'E3-v4')).toHaveLength(0);
+  });
+
+  it('③ 边缘：资源未 import（落盘未消费）⇒ 不报 E3-v4；E2-v3 于 2026-11-11 降级为 WARN', () => {
+    const files = { 'package/index.vue': '<template><div data-section-id="88:33"></div></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mappingReal });
+    expect(r.fails.filter((x) => x.code === 'E3-v4')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(true);
+  });
+
+  it('④ guidance 附 E3-v4 归属修复规则（治「只缩样式糊过去」）', () => {
+    const g = formatAcceptanceGuidance([{ code: 'E3-v4', detail: 'x' }]);
+    expect(g).toContain('data-section-id');
+    expect(g).toContain('严禁把该背景挂到祖先容器');
+    expect(g).toContain('真值尺寸');
+  });
+});
+
+describe('E2-v3 落盘未消费（修复 Object.values 逐字符遍历 bug）', () => {
+  const mapping = [
+    {
+      figmaNodeId: '1',
+      name: 'bg',
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+      resourceFile: '../resources/images/a.png',
+      targetDomSelector: '[data-section-id="9:9"]',
+    },
+  ];
+
+  it('① 阳性：success 资源未被任何 .vue 引用 ⇒ E2-v3 WARN（2026-11-11 降级：卫生问题不拦交付）', () => {
+    const files = { 'package/index.vue': '<template><div /></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mapping });
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(true);
+    expect(r.fails.filter((f) => f.code === 'E2-v3')).toHaveLength(0);
+  });
+
+  it('② 阴性：资源已在子组件 import ⇒ 无 E2-v3（旧逐字符遍历必报，回归锁）', () => {
+    const files = {
+      'package/index.vue': '<template><div /></template>',
+      'package/components/A.vue':
+        '<template><div /></template>\n<script setup>\nimport a from "../../resources/images/a.png"\n</script>',
+    };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mapping });
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(false);
+  });
+
+  // 🛡️ E2-v3 语义分层（2026-11-11 晚 · 37f6f9fd 回归修正）：296709f 一刀切 WARN 漏放
+  //   了前景内容位图零消费（产品图已下载却零 <img>＝肉眼缺图）。
+  it('③ 语义分层·阳性：role=image 前景位图零消费 ⇒ FAIL（37f6f9fd 产品图形态）', () => {
+    const fgMapping = [
+      {
+        figmaNodeId: '36:1725',
+        name: '产品图',
+        previewAnalysisRole: 'image',
+        downloadStatus: 'success',
+        resourceFile: '../resources/images/img-1725.png',
+        ownerSectionId: '801:3',
+      },
+    ];
+    const files = { 'package/index.vue': '<template><div /></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: fgMapping });
+    const e2 = r.fails.filter((f) => f.code === 'E2-v3');
+    expect(e2).toHaveLength(1);
+    expect(e2[0].detail).toContain('前景');
+    // failFiles 可定位（供 A6 强制重生成消费）
+    expect(e2[0].files).toEqual(['package/resources/images/img-1725.png']);
+  });
+
+  it('④ 语义分层·role=icon 零消费 ⇒ 同样 FAIL（前景内容家族一致口径）', () => {
+    const fgMapping = [
+      {
+        figmaNodeId: '2:1',
+        name: '头部图标',
+        previewAnalysisRole: 'icon',
+        downloadStatus: 'success',
+        resourceFile: '../resources/images/icon-2-1.png',
+      },
+    ];
+    const files = { 'package/index.vue': '<template><div /></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: fgMapping });
+    expect(r.fails.filter((f) => f.code === 'E2-v3')).toHaveLength(1);
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(false);
+  });
+
+  it('⑤ 语义分层·阴性：role=bg 零消费保持 WARN（296709f 治误杀成果不回退）', () => {
+    const files = { 'package/index.vue': '<template><div /></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mapping });
+    expect(r.fails.filter((f) => f.code === 'E2-v3')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(true);
+  });
+
+  it('⑥ 语义分层·混合：image 零消费 FAIL + bg 零消费 WARN 同任务并存不互相吞', () => {
+    const mixed = [
+      {
+        figmaNodeId: 'a',
+        previewAnalysisRole: 'image',
+        downloadStatus: 'success',
+        resourceFile: '../resources/images/img-a.png',
+      },
+      {
+        figmaNodeId: 'b',
+        previewAnalysisRole: 'bg',
+        downloadStatus: 'success',
+        resourceFile: '../resources/images/bg-b.png',
+      },
+    ];
+    const files = { 'package/index.vue': '<template><div /></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mixed });
+    expect(r.fails.filter((f) => f.code === 'E2-v3')).toHaveLength(1);
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(true);
+  });
+
+  it('⑦ 阴性：无 role 的落盘未消费 ⇒ 维持 WARN（不猜前景，避免误杀回潮）', () => {
+    const noRole = [
+      {
+        figmaNodeId: 'c',
+        downloadStatus: 'success',
+        resourceFile: '../resources/images/x.png',
+      },
+    ];
+    const files = { 'package/index.vue': '<template><div /></template>' };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: noRole });
+    expect(r.fails.filter((f) => f.code === 'E2-v3')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('E2-v3'))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔴 P0-2（2026-11-11 交接文档）：C1 三漏口扩口 + L5 空声明 E5
+// ═══════════════════════════════════════════════════════════════════
+import { extractScriptStringLiterals } from './index.js';
+
+describe('P0-2 C1 扩口（漏口①script 常量 ②--占位 ③真值有文本产物空）', () => {
+  const fig = {
+    document: {
+      id: '0:0',
+      children: [
+        { id: 'n1', type: 'TEXT', characters: '爆闪灯' },
+        { id: 'n2', type: 'TEXT', characters: '设备详情' },
+        { id: 'n3', type: 'TEXT', children: [
+          { id: 'n3a', type: 'TEXT', characters: ' GD-Robot-04 ' },
+        ] },
+        { id: 'n4', name: '@echarts/柱状图', type: 'FRAME', children: [
+          { id: 'n4a', type: 'TEXT', characters: '车型分布' },
+        ] },
+      ],
+    },
+  };
+
+  it('① 漏口②：模板静态 `--`/待补充 占位 ⇒ C1 FAIL（旧符号豁免放行实锤补口）', () => {
+    const files = {
+      'package/index.vue': '<template><div>--</div><div>待补充</div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: fig });
+    const c1 = r.fails.find((f) => f.code === 'C1');
+    expect(c1).toBeTruthy();
+    expect(c1.detail).toContain('展示文本');
+  });
+
+  it('② 漏口①：script 常量数组占位（statsItems 形态）⇒ C1 FAIL 且附 file', () => {
+    const files = {
+      'package/components/StatsSection.vue':
+        '<template><div v-for="s in statsItems">{{ s.label }}</div></template>\n' +
+        "<script setup>\nconst statsItems = [{ label: '--' }, { label: '待补充' }]\n</script>",
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: fig });
+    const c1 = r.fails.find((f) => f.code === 'C1' && /script 常量/.test(f.detail));
+    expect(c1).toBeTruthy();
+    expect(c1.file).toBe('package/components/StatsSection.vue');
+  });
+
+  it('③ 漏口①阴性：script 内真值文案 + 英文标识符不误报', () => {
+    const files = {
+      'package/components/StatsSection.vue':
+        '<template><div>{{ a }}</div></template>\n' +
+        "<script setup>\n// 注释里的中文不该被抓：非真值词\nimport x from './a.vue'\nconst a = '爆闪灯'\n</script>",
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: fig });
+    expect(r.fails.filter((f) => f.code === 'C1' && /script 常量/.test(f.detail))).toHaveLength(0);
+  });
+
+  it('④ 漏口①：script 注释中的中文被剥除，不进臆造清单', () => {
+    const lits = extractScriptStringLiterals(
+      "// TODO 处理臆造词\n/* 块注释 臆造词 */\nconst a = '真值'\nconst url = 'http://x//y'\n",
+    );
+    expect(lits).toEqual(['真值', 'http://x//y']);
+  });
+
+  it('⑤ 漏口③：真值标签（≥2 个）产物零命中 ⇒ C1b FAIL；图表子树文案免检', () => {
+    const files = {
+      'package/index.vue': '<template><div>x</div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: fig });
+    const c1b = r.fails.find((f) => f.code === 'C1b');
+    expect(c1b).toBeTruthy();
+    expect(c1b.detail).toContain('爆闪灯');
+    expect(c1b.detail).not.toContain('车型分布'); // @echarts 子树免检
+  });
+
+  it('⑥ 漏口③阴性：标签齐全或仅缺 1 个 ⇒ 无 C1b（阈值 ≥2 防单点误杀）', () => {
+    const files = {
+      'package/index.vue': '<template><div>设备详情 爆闪灯</div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: fig });
+    expect(r.fails.filter((f) => f.code === 'C1b')).toHaveLength(0);
+  });
+
+  // 🛡️ A6 前置（2026-11-11 晚 · 4b27c0bd 实锤）：C1b fail 必须可定位文件，
+  //   否则 failFiles 不含真坏文件 ⇒ A6/R12 断点恢复把占位组件每轮复活。
+  it('⑦ C1b 附文件定位：缺席标签的祖先链命中产物承载段 ⇒ fail.files=carrier', () => {
+    const figSec = {
+      document: {
+        id: '0:0',
+        children: [
+          {
+            id: 'sec1',
+            name: '厂商分组',
+            type: 'FRAME',
+            children: [
+              { id: 'sub', type: 'FRAME', children: [{ id: 'l1', type: 'TEXT', characters: '大华股份' }] },
+              { id: 'l2', type: 'TEXT', characters: '宇视科技' },
+            ],
+          },
+        ],
+      },
+    };
+    const files = {
+      'package/index.vue': '<template><div>x</div></template>',
+      'package/components/VendorList.vue':
+        '<template><div data-section-id="sec1"><span>y</span></div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: figSec });
+    const c1b = r.fails.find((f) => f.code === 'C1b');
+    expect(c1b).toBeTruthy();
+    expect(c1b.files).toEqual(['package/components/VendorList.vue']);
+  });
+
+  it('⑧ C1b 定位阴性：产物无任何承载段（无 data-section-id）⇒ FAIL 但不带 files（放行语义不误扩）', () => {
+    const files = { 'package/index.vue': '<template><div>x</div></template>' };
+    const r = runAcceptanceChecks({ files, figmaNodeData: fig }); // fig 顶层无 section 框架
+    const c1b = r.fails.find((f) => f.code === 'C1b');
+    expect(c1b).toBeTruthy();
+    expect(c1b.files).toBeUndefined();
+  });
+
+  it('⑨ C1b 定位多段：标签分属两个承载段 ⇒ files 去重收集全部 carrier', () => {
+    const figMulti = {
+      document: {
+        id: '0:0',
+        children: [
+          { id: 'secA', name: 'A', type: 'FRAME', children: [{ id: 'la', type: 'TEXT', characters: '大华股份' }] },
+          { id: 'secB', name: 'B', type: 'FRAME', children: [{ id: 'lb', type: 'TEXT', characters: '宇视科技' }] },
+        ],
+      },
+    };
+    const files = {
+      'package/index.vue': '<template><div>x</div></template>',
+      'package/components/A.vue': '<template><div data-section-id="secA"></div></template>',
+      'package/components/B.vue': '<template><div data-section-id="secB"></div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: figMulti });
+    const c1b = r.fails.find((f) => f.code === 'C1b');
+    expect(c1b).toBeTruthy();
+    expect([...c1b.files].sort()).toEqual([
+      'package/components/A.vue',
+      'package/components/B.vue',
+    ]);
+  });
+});
+
+describe('P0-2 E5 style 空声明（2026-11-11 降级 FAIL→WARN：痕迹标记不拦交付）', () => {
+  it('① 阳性：style 块内孤立 ; ⇒ E5 WARN 附文件名', () => {
+    const files = {
+      'package/components/ContentSection2.vue':
+        '<template><div class="x">a</div></template>\n<style>\n.x {\n  color: red;\n  ;\n}\n</style>',
+    };
+    const r = runAcceptanceChecks({ files });
+    const e5 = r.warns.find((w) => w.includes('E5'));
+    expect(e5).toBeTruthy();
+    expect(e5).toContain('ContentSection2.vue');
+    expect(e5).toContain('空声明');
+  });
+
+  it('② 阴性：正常 style（无空声明）⇒ 无 E5 WARN', () => {
+    const files = {
+      'package/components/Ok.vue':
+        '<template><div class="y">a</div></template>\n<style>\n.y { color: blue; }\n</style>',
+    };
+    const r = runAcceptanceChecks({ files });
+    expect(r.warns.filter((w) => w.includes('E5'))).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔴 E3-v4 v3（2026-11-11 · bd907abf/0a501b7e/830ae7bd 三连拒实锤）：
+//   ①退化真值（figmaBox 宽/高≤0）弃权 ②祖先段挂载降级 WARN ③无关段/零消费仍 FAIL
+describe('E3-v4 v3 退化真值豁免与祖先挂载降级', () => {
+  const mkFiles = (consumeId: string) => ({
+    'package/index.vue':
+      '<template><div data-section-id="0:1" :style="{ backgroundImage: \'url(\' + bgx + \')\' }"><span>x</span></div></template>\n' +
+      "<script setup>\nimport bgx from '../../resources/images/bg-test.png'\n</script>",
+  });
+  const mkMapping = (ancestorIds: string[], box: any) => [
+    {
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+      resourceFile: 'resources/images/bg-test.png',
+      targetDomSelector: 'data-section-id="0:2"',
+      ancestorIds,
+      figmaBox: box,
+    },
+  ];
+
+  it('① 祖先段挂载（wantId 卡片级、bg 已挂祖先段容器）⇒ WARN 放行不 FAIL', () => {
+    const r = runAcceptanceChecks({
+      files: mkFiles('0:1'),
+      resourceDomMapping: mkMapping(['0:0', '0:1'], { width: 141, height: 74 }),
+    });
+    expect(r.fails.filter((f) => f.code === 'E3-v4')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('祖先段挂载放行'))).toBe(true);
+  });
+
+  it('② 退化真值（figmaBox 高度 0）⇒ 弃权 WARN，不进 FAIL', () => {
+    const r = runAcceptanceChecks({
+      files: mkFiles('0:1'),
+      resourceDomMapping: mkMapping(['0:0', '0:1'], { width: 390, height: 0 }),
+    });
+    expect(r.fails.filter((f) => f.code === 'E3-v4')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('退化真值弃权'))).toBe(true);
+  });
+
+  it('③ 阴性：挂到无关段（非祖先）⇒ 仍 FAIL（真错挂形态保留拦截）', () => {
+    const files = {
+      'package/index.vue':
+        '<template><div data-section-id="0:9" :style="{ backgroundImage: \'url(\' + bgx + \')\' }"><span>y</span></div></template>\n' +
+        "<script setup>\nimport bgx from '../../resources/images/bg-test.png'\n</script>",
+    };
+    const r = runAcceptanceChecks({
+      files,
+      resourceDomMapping: mkMapping(['0:0'], { width: 141, height: 74 }),
+    });
+    expect(r.fails.filter((f) => f.code === 'E3-v4')).toHaveLength(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔴 E3-v4 v4（2026-11-11 · mc-max-1794407888630-408d924a 实锤）：
+//   数据驱动消费（FG_CARD_BGS 常量 + 模板引用）是**独立合规形态**，与 wantId 是否为
+//   产物段级容器无关——折叠接管把兄弟卡背景组轮换注入 v-for item 时，wantId 恰是
+//   已建段级容器（锚卡 id 136:127），但 var 只经常量间接消费。真错形态仍 FAIL。
+describe('E3-v4 v4 数据驱动消费为独立合规形态', () => {
+  const mappingCard = [
+    {
+      figmaNodeId: '136:124',
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+      resourceFile: '../resources/images/bg-124.png',
+      ownerSectionId: '136:128',
+      ancestorIds: ['136:128', '2:8023', '136:121', '2:7952'],
+      targetDomSelector: '[data-section-id="136:128"]',
+      figmaBox: { x: 166, y: 984, width: 120, height: 74 },
+    },
+  ];
+  const ROTATED_FILES =
+    '<template><div data-section-id="136:127">' +
+    // 🔒 v4 判别点：wantId 136:128 是产物**已建段级容器**（v2 下本例 FAIL，v4 数据驱动放行）
+    '<div data-section-id="136:128"><span>锚卡容器已建但无字面 bg 引用</span></div>' +
+    '<div class="card" v-for="(item, i) in cards">{{ FG_CARD_BGS[i % FG_CARD_BGS.length] }}</div>' +
+    '</div></template>\n' +
+    "<script setup>\nimport bg2 from '../../resources/images/bg-124.png'\n" +
+    'const FG_CARD_BGS = [bg2]\nconst cards = [1, 2, 3]\n</script>';
+
+  it('① 408d924a 形态：wantId=已建段级容器且 var 数据驱动消费 ⇒ WARN 放行（v2 下本例 FAIL）', () => {
+    const r = runAcceptanceChecks({ files: { 'package/index.vue': ROTATED_FILES }, resourceDomMapping: mappingCard });
+    expect(r.fails.filter((f) => f.code === 'E3-v4')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('卡片级 owner 放行'))).toBe(true);
+  });
+
+  it('② 真错不变：import 后全产物零消费 ⇒ 仍 FAIL', () => {
+    const files =
+      '<template><div data-section-id="136:127"><span>无任何 bg 引用</span></div></template>\n' +
+      "<script setup>\nimport bg2 from '../../resources/images/bg-124.png'\n</script>";
+    const r = runAcceptanceChecks({ files: { 'package/index.vue': files }, resourceDomMapping: mappingCard });
+    expect(r.fails.filter((f) => f.code === 'E3-v4')).toHaveLength(1);
+  });
+
+  it('③ 真错不变：字面挂无关段（无数据驱动）⇒ 仍 FAIL', () => {
+    const files =
+      '<template><div data-section-id="88:33" :style="{ backgroundImage: \'url(\' + bg2 + \')\' }"></div></template>\n' +
+      "<script setup>\nimport bg2 from '../../resources/images/bg-124.png'\n</script>";
+    const r = runAcceptanceChecks({ files: { 'package/index.vue': files }, resourceDomMapping: mappingCard });
+    expect(r.fails.filter((f) => f.code === 'E3-v4')).toHaveLength(1);
+  });
+});
+
+/**
+ * G1-v2 carrier 三级解析（2026-11-11 深夜 · mc-max-1794410168821-0f6cb791 实锤）
+ * tab 并入祖先段生成（2:3566→83:30 slot-流量预测 ⇒ ContentForecast 接线完整），
+ * 旧解析按「第一个含段首文本的文件」随机命中数据列表/图例 ⇒ 误杀四轮全灭。
+ */
+describe('G1-v2 carrier 三级解析（0f6cb791 形态）', () => {
+  const tabFigma = {
+    document: {
+      id: '0:0',
+      name: 'cp-流量监测',
+      type: 'FRAME',
+      children: [
+        {
+          id: '2:9778',
+          name: 'cp-流量监测',
+          type: 'FRAME',
+          children: [
+            {
+              id: '83:30',
+              name: 'slot-流量预测',
+              type: 'FRAME',
+              children: [
+                {
+                  id: '2:3565',
+                  name: 'sub-header',
+                  type: 'GROUP',
+                  children: [
+                    {
+                      id: '2:3566',
+                      name: '@antd/tab',
+                      type: 'FRAME',
+                      children: [
+                        { id: 'tt1', type: 'TEXT', characters: '江阴靖江长江隧道' },
+                        { id: 'tt2', type: 'TEXT', characters: '江阴大桥' },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  it('① 阳性（0f6cb791 实锤）：语义祖先段文件接线完整、文本候选无绑定 ⇒ 不误杀', () => {
+    const files = {
+      // 数据列表：含 tab 文本但无绑定（旧解析首轮误判 carrier）
+      'package/components/DataList.vue':
+        '<template><div>江阴靖江长江隧道 34,620 / 江阴大桥 82,379</div></template>',
+      // 语义 carrier：祖先段 83:30 锚 + 完整 tab 接线
+      'package/components/Forecast.vue':
+        '<template><div data-section-id="83:30"><div :class="[currentTab===t.value?\'on\':\'\']" @click="handleTabChange(t.value)" v-for="t in tabs">{{t.label}}</div></div></template>\n' +
+        "<script setup>\nimport { ref } from 'vue'\nconst currentTab = ref('tunnel')\nconst handleTabChange = (v) => { currentTab.value = v }\n</script>",
+      // 图例文件：含文本无绑定
+      'package/components/VehicleDist.vue': '<template><div>江阴靖江长江隧道分布</div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: tabFigma });
+    expect(r.fails.filter((f) => f.code === 'G1-v2')).toHaveLength(0);
+  });
+
+  it('② 真错不变：全部候选（含语义祖先段）均无绑定 ⇒ FAIL 且 file=首个候选', () => {
+    const files = {
+      'package/components/DataList.vue': '<template><div>江阴靖江长江隧道</div></template>',
+      'package/components/Forecast.vue':
+        '<template><div data-section-id="83:30"><span>江阴靖江长江隧道 静态标题</span></div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: tabFigma });
+    const g1 = r.fails.filter((f) => f.code === 'G1-v2');
+    expect(g1).toHaveLength(1);
+    // file 按级1>级2>级3 取首个：级2 祖先段锚（Forecast.vue）优先于级3 文本命中
+    expect(g1[0].file).toBe('package/components/Forecast.vue');
+    expect(g1[0].detail).toContain('均无切换绑定');
+  });
+
+  it('③ 真错不变：tab 文本不在任何文件（无承载）⇒ FAIL', () => {
+    const files = {
+      'package/components/Other.vue': '<template><div>别的内容</div></template>',
+    };
+    const r = runAcceptanceChecks({ files, figmaNodeData: tabFigma });
+    const g1 = r.fails.filter((f) => f.code === 'G1-v2');
+    expect(g1).toHaveLength(1);
+    expect(g1[0].detail).toContain('无承载');
+  });
+});

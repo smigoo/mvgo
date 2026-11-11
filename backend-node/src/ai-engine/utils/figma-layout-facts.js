@@ -81,6 +81,66 @@ export function buildSelectorChildCounts(figmaNodeData, alignedSections = null) 
 }
 
 /**
+ * 🔴 P0-1（2026-11-11 交接文档 L4）：提取每个 CSS 选择器对应的 Figma `layoutMode` 真值。
+ *
+ * 与 `buildSelectorChildCounts` **同源对称**（同一 figmaNodeData、同一 alignedSections
+ * 对齐、同一类名提取口径）——判据单一来源，防两表口径漂移。
+ *
+ * 用途（resource-mounter 规则⑤ fallback）：
+ *   - 真值 HORIZONTAL/VERTICAL ⇒ 注入 display:flex 用**真值方向**（取代「内容多数横向」
+ *     的 row 兜底——418c3310 TabsSection 竖排实锤：兜底方向与真值相反）；
+ *   - 真值 NONE（Figma 显式非自动布局）⇒ **拒绝注入**（a2fcdff7 vendor-name span 被
+ *     误注 display:flex 文字重叠实锤——flex 专属属性可以是 LLM 垃圾，真值不是）。
+ *
+ * @param {Object} figmaNodeData Figma 节点树（figma-node-data.json 的 document 字段）
+ * @param {Array} alignedSections alignSectionClasses 返回的对齐结果（可选，{cls, sec}）
+ * @returns {Record<string, string>} { className: 'HORIZONTAL'|'VERTICAL'|'NONE' } 映射
+ */
+export function buildSelectorLayoutModes(figmaNodeData, alignedSections = null) {
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return {};
+
+  const result = {};
+  const nodeMap = new Map();
+  const traverse = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.id) nodeMap.set(node.id, node);
+    if (Array.isArray(node.children)) node.children.forEach(traverse);
+  };
+  // 兼容 document 包装（与消费方 indexFigmaNodes(p.figmaNodeData?.document || …) 同口径）
+  traverse(figmaNodeData?.document ?? figmaNodeData);
+
+  const modeOf = (node) => {
+    const mode = String(node?.layoutMode || '').toUpperCase();
+    return mode === 'HORIZONTAL' || mode === 'VERTICAL' || mode === 'NONE' ? mode : null;
+  };
+
+  if (Array.isArray(alignedSections)) {
+    for (const { cls, sec } of alignedSections) {
+      const sourceNodeIds = Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds : [];
+      for (const nodeId of sourceNodeIds) {
+        const node = nodeMap.get(String(nodeId));
+        const mode = modeOf(node);
+        if (node && mode) {
+          result[cls] = mode;
+          break; // 与 buildSelectorChildCounts 同口径：第一个可解析锚即定
+        }
+      }
+    }
+    return result;
+  }
+
+  for (const [, node] of nodeMap.entries()) {
+    const nodeName = String(node.name || '');
+    const classNameMatch = nodeName.match(/^(c-[a-z0-9-]+)-([a-z0-9-]+)$/i);
+    if (classNameMatch) {
+      const mode = modeOf(node);
+      if (mode) result[classNameMatch[1]] = mode;
+    }
+  }
+  return result;
+}
+
+/**
  * 从 Figma 节点树提取精确尺寸和间距。
  * 
  * 用途（2026-09-21 · c-device-monitor-bd796f8b 实锤）：

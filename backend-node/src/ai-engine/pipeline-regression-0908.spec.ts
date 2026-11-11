@@ -173,7 +173,7 @@ describe('P1 headerSlots figmaNodeId 传播（C-1 过滤前置）', () => {
     expect(merged.some((s: any) => s.figmaNodeId === 'n-stat')).toBe(false)
   })
 
-  test('P1-6 Loop0.A: 契约回写不得把 C-1 rejected 的 derived 加回（纠错 0 + derived 3 → derived 0）', async () => {
+  test('P1-6 Loop0.A: 契约回写按 834dbd2 冲突裁决保留非筛选控件 derive（statistic 3 → derived 3）', async () => {
     const applyHeaderSlotContractRewrite = await tryRequire<any>(
       './utils/header-slot-contract.js',
       'applyHeaderSlotContractRewrite',
@@ -193,9 +193,41 @@ describe('P1 headerSlots figmaNodeId 传播（C-1 过滤前置）', () => {
       contractSlots: vision,
       rejectedNodes,
     })
+    // 834dbd2（2026-11-10）修订冲突裁决：derive（header 容器确定性推导）与 rejected
+    //（标题同行几何猜测）同 key 冲突时，**非筛选控件**（statistic/label 等）derive 赢 ——
+    // header 允许多行布局，「不在标题同行」≠「不在 header」。旧断言（derived 0）是
+    // rejected 一律优先的旧口径，已由该提交翻转（同提交的 header-slot-contract.spec
+    // 用例①同步翻转）；此处对齐同一语义，另补 tab 防线阴性对照。
+    expect(out.headerSlots).toHaveLength(3)
+    expect(out.derivedKept).toBe(3)
+    expect(out.visionKept).toBe(0)
+    expect(out.deriveWinsOverRejected).toBe(3)
+  })
+
+  test('P1-6b 防线（834dbd2）：rejected 的 tab/segmented/switch 仍被拒（内容区 tabs 误判高危形态）', async () => {
+    const applyHeaderSlotContractRewrite = await tryRequire<any>(
+      './utils/header-slot-contract.js',
+      'applyHeaderSlotContractRewrite',
+    )
+    expect(typeof applyHeaderSlotContractRewrite).toBe('function')
+    const tabs = [
+      { slotType: 'header-right', elementType: 'tab', content: '全部', figmaNodeId: 't1' },
+      { slotType: 'header-right', elementType: 'segmented', content: '日/周/月', figmaNodeId: 't2' },
+    ]
+    const rejectedNodes = tabs.map((s) => ({
+      figmaNodeId: s.figmaNodeId,
+      slotCandidate: { figmaNodeId: s.figmaNodeId, content: s.content },
+    }))
+    const out = applyHeaderSlotContractRewrite({
+      headerSlots: [],
+      contractSlots: tabs,
+      rejectedNodes,
+    })
+    // 筛选控件保持 rejected 防线（mc-max-1788003430879 实锤：内容区 tabs 被 vision
+    // 误判 header-right）—— 冲突裁决只放行非筛选控件。
     expect(out.headerSlots).toEqual([])
     expect(out.derivedKept).toBe(0)
-    expect(out.visionKept).toBe(0)
+    expect(out.deriveWinsOverRejected).toBe(0)
   })
 
   test('P1-7 Loop0.B: Map 空 + declare 有 checkpoint → 用盘上的 componentId', async () => {

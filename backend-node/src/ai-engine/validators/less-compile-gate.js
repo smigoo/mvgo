@@ -23,6 +23,9 @@ export function collectLessCompileFiles(outputPath) {
     if (!existsSync(dir)) return
     for (const name of readdirSync(dir)) {
       if (['node_modules', '.cache', '.checkpoint', '.mc-gen'].includes(name)) continue
+      // 🛡️ 2026-11-11：跳过存量修复脚本留下的备份目录（`scripts/repair-less-artifacts.mjs`）
+      //   否则门禁会把备份也当产物编译/修复 ⇒ 备份失去「原始现场」价值。
+      if (name.startsWith('.less-heal-backup')) continue
       const fullPath = join(dir, name)
       const stat = statSync(fullPath)
       if (stat.isDirectory()) {
@@ -350,6 +353,308 @@ export function healLessSource(source = '', options = {}) {
     changed: a.changed || b.changed || c.changed,
     addedBraces: c.addedBraces || 0,
   }
+}
+
+/* ============================================================================
+ * 🛡️ 2026-11-11（mc-lite-1794382414032-bff01bf7 实锤）：**非声明残留行**确定性清理。
+ *
+ * 真机病灶（backend workspace 464 个含样式产物中 16 个不可编译，3.4%）：
+ *   a) 横幅残片 `}============== 左侧垂直 Tab ====================`（前缀 `}` 正常闭合，
+ *      其后 `=` 串是丢失 `//` 的横幅注释）—— less `Unrecognised input`；
+ *   b) `</style>` 混进独立 .less（模型把 SFC 结束标签也写进样式段）；
+ *   c) 根作用域**悬空声明**（只剩 `color:`，值被分块截断吃掉）—— 后接系统补缺横幅；
+ *   d) 根级裸属性 `color: @color-bg-container;`（选择器块外游离声明）；
+ *   e) 独立成行的 `undefined` / `null` 字面量（模板插值取空后落盘）。
+ *
+ * 🔴 为什么既有 healer 全瞎：`healLessSource` 只做「注释配平 + 漏分号 + 漏 `}`」，
+ *   `scanStandaloneLessDefects` 的 001-007 也只看括号平衡 / 粘连 / 根级**非空**裸属性
+ *   ⇒ 上述五种形态对它完全透明，`gateStandaloneLessWrite` 返回 `ok:true`（**假绿**），
+ *   坏文本一路落盘 → 预览红卡。
+ *
+ * 判据（全部结构性、零硬编码文案、单一定义供 scanner 复用）：
+ *   · 行首（可选 `}` 后）连续 `=` ≥3 ⇒ 横幅残片（CSS/LESS 无任何合法行以 `=` 起头）；
+ *   · 整行仅一个 HTML 结束/开始标签（style/template/script）⇒ 非样式残留；
+ *   · 整行仅 `undefined`/`null`/`NaN`（可带 `;`）⇒ 插值残留；
+ *   · `prop:` 后**值为空**，且「下一有意义行」确定是新语句（`}`/注释/`@`/选择器/新声明）
+ *     ⇒ 悬空声明；🔴 值续行形态（`grid-template-areas:` 后接 `"a b"`、`(`、数字/颜色/变量）
+ *     一律**不删**（防误伤合法多行值）。
+ *   · 深度 0 且行内无 `{` 的 `prop: value;` ⇒ 根级裸属性（与 007 同判据，本函数负责修）。
+ * ========================================================================== */
+const BANNER_RESIDUE_RE = /^\s*\}?\s*[=]{3,}/
+const STRAY_TAG_LINE_RE = /^\s*<\/?(?:style|template|script)\b[^>]*>\s*$/i
+const BARE_LITERAL_LINE_RE = /^\s*(?:undefined|null|NaN)\s*;?\s*$/
+const EMPTY_VALUE_DECL_RE = /^\s*([-a-zA-Z][\w-]*)\s*:\s*;?\s*$/
+
+/** 判定「值为空的声明行」是否确定悬空（需看下一个有意义行）。单一定义，healer 与 scanner 共用。 */
+function isEmptyValueDeclarationDangling(line, nextSignificant) {
+  if (!EMPTY_VALUE_DECL_RE.test(String(line || ''))) return false
+  const next = String(nextSignificant || '').trim()
+  if (!next) return true // 文件尾部 ⇒ 悬空
+  // 值续行形态（合法多行值）⇒ 不判悬空
+  if (/^["'`]/.test(next)) return false
+  if (/^[([]/.test(next)) return false
+  // 🔴 `.` 必须区分「`.5em` 数值续行」与「`.c-x` 类选择器新语句」：前者带数字，后者带字母。
+  //   把 `.c-x` 当成续行是实测踩过的坑（c-device-f0eedd20 悬空 `color:` 因此漏删）。
+  if (/^(?:\.\d|[\d#$])/.test(next)) return false
+  // 确定开始新语句 ⇒ 本行值缺失
+  return /^[}/*@a-zA-Z.&#>\-]/.test(next)
+}
+
+/**
+ * 根级裸属性（深度 0 且行内无 `{` 的游离声明）扫描。与 LESS-WRITE-007 **同一判据**。
+ * @returns {number[]} 命中的 0 基行号数组
+ */
+function collectRootLevelBareDeclarations(cleanedText = '') {
+  const hits = []
+  let depth = 0
+  String(cleanedText || '').split('\n').forEach((cl, index) => {
+    const depthAtLineStart = depth
+    for (const ch of cl) {
+      if (ch === '{') depth += 1
+      else if (ch === '}') depth -= 1
+    }
+    const t = cl.trim()
+    if (!t) return
+    if (depthAtLineStart !== 0 || cl.indexOf('{') !== -1) return
+    if (t.startsWith('@') || t.startsWith('&') || t.startsWith('/') || t.startsWith('*')) return
+    // 🔴 自定义属性（`--x: v;`）不参与「根级裸属性」清理：它虽是非法根级声明，但承载
+    //   整份主题色板；删掉能让编译通过却把主题变量全丢（视觉静默劣化）。真因是
+    //   「主题 mixin 丢了大括号」这类结构缺失，属语义决策 ⇒ 只报错（LESS-WRITE-007）不删。
+    if (/^--[\w-]+\s*:/.test(t)) return
+    if (!/^([-a-zA-Z][\w-]*)\s*:\s*(.+)$/.test(t)) return
+    hits.push(index)
+  })
+  return hits
+}
+
+/**
+ * 判定「声明值里被塞进了另一条声明」——如 `font-size: calc( color: line-height: 16px);`
+ * （LLM 把 Figma 文本样式拼进值位置）。判据：某个括号区间内出现 **≥2 个** `prop:` 形态。
+ * 🔴 为什么要求 ≥2：`filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#x')`
+ *   这类合法旧语法括号内只有 **1 个** 冒号 ⇒ 要求 2 个即可天然排除（阴性对照）。
+ * 与 scanner 的 LESS-WRITE-011 共用本函数（单一定义）。
+ */
+function hasNestedDeclarationInsideCall(line = '') {
+  for (const m of String(line || '').matchAll(/[(\[]([^)\]]*)[)\]]/g)) {
+    const hits = m[1].match(/[-a-zA-Z]+\s*:\s*(?=[\w#@$%.-])/g) || []
+    if (hits.length >= 2) return true
+  }
+  return false
+}
+
+/**
+ * 清理非声明残留行（横幅残片 / 混入标签 / 裸字面量 / 悬空声明 / 根级裸属性 / 值内嵌套声明）。
+ * 仅作用于样式上下文（独立 .less/.css 全文；Vue SFC 只处理 `<style>` 段）。
+ * 幂等：修后由 `scanStandaloneLessDefects` 复检，零命中即通过。
+ *
+ * @param {string} source
+ * @param {{sourceType?: 'auto'|'style'|'vue'}} [options]
+ * @returns {{source: string, removedLines: number, keptBraces: number, changed: boolean}}
+ */
+export function healStrayLessArtifacts(source = '', { sourceType = 'auto' } = {}) {
+  const src = String(source || '')
+  const looksLikeVueSfc = /<(?:template|script)\b/i.test(src)
+  const isVueSfc = sourceType === 'vue' || (sourceType === 'auto' && looksLikeVueSfc)
+  if (isVueSfc && !/<style\b/i.test(src)) {
+    return { source: src, removedLines: 0, keptBraces: 0, changed: false }
+  }
+
+  const lines = src.split('\n')
+  const out = []
+  let removedLines = 0
+  let keptBraces = 0
+  let inStyle = sourceType === 'style' || (!isVueSfc && !/<style\b/i.test(src))
+  // 🔴 独立 .less 全文恒为样式上下文：混入的 `</style>` 只是一行垃圾，**不能**让它把
+  //   后续内容判成「非样式」而保留下来（真机 `c-*` 产物里 `</style>` 后面就是正常规则）。
+  const isStandalone = sourceType === 'style' || (!isVueSfc && !/<style\b/i.test(src))
+  const exitStyle = (hitCloseTag) => { if (hitCloseTag && !isStandalone) inStyle = false }
+  // 根级裸属性：对「仅样式」上下文一次性算出靶行（跨行深度状态机，无法逐行独立判定）
+  const rootBare = new Set()
+  if (!isVueSfc) {
+    for (const idx of collectRootLevelBareDeclarations(stripCommentsAndStrings(src))) rootBare.add(idx)
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    const open = /<style\b/i.test(raw)
+    const close = /<\/style>/i.test(raw)
+    if (open) inStyle = true
+    if (!inStyle) {
+      out.push(raw)
+      exitStyle(close)
+      continue
+    }
+    // `<style>` 标签本身所在行原样保留（Vue 分支）
+    if (open) {
+      out.push(raw)
+      continue
+    }
+
+    // ① 横幅残片：`}====` 保留 `}`、把残串转块注释；纯 `====` 整行转块注释
+    if (BANNER_RESIDUE_RE.test(raw)) {
+      const m = /^(\s*)\}(\s*)([=]{3,}.*)$/.exec(raw)
+      if (m) {
+        out.push(`${m[1]}} /*${m[2]}${m[3].replace(/\*\//g, '*/')} */`)
+        keptBraces += 1
+      } else {
+        out.push(`${/^\s*/.exec(raw)[0]}/*${raw.trim().replace(/\*\//g, '*/')} */`)
+      }
+      removedLines += 1
+      exitStyle(close)
+      continue
+    }
+
+    // ② 混入的 HTML 标签行 / ③ 裸字面量行 ⇒ 直接丢弃
+    if (STRAY_TAG_LINE_RE.test(raw) || BARE_LITERAL_LINE_RE.test(raw)) {
+      removedLines += 1
+      exitStyle(close)
+      continue
+    }
+
+    // ⑥ 值内嵌套声明（`font-size: calc( color: line-height: 16px);`）⇒ 丢弃整条声明
+    //   （无法确定性还原哪个属性本该生效；删一条声明远优于整份样式编译失败）
+    if (hasNestedDeclarationInsideCall(raw)) {
+      let end = i
+      while (end < lines.length && !/;\s*$/.test(lines[end]) && end - i < 12) end++
+      i = end
+      removedLines += 1
+      exitStyle(close)
+      continue
+    }
+
+    // ④ 悬空声明（值为空）⇒ 丢弃
+    if (isEmptyValueDeclarationDangling(raw, nextSignificantLine(lines, i))) {
+      removedLines += 1
+      exitStyle(close)
+      continue
+    }
+
+    // ⑤ 根级裸属性 ⇒ 丢弃（浏览器本就不会应用根级游离声明）
+    if (rootBare.has(i)) {
+      removedLines += 1
+      exitStyle(close)
+      continue
+    }
+
+    out.push(raw)
+    exitStyle(close)
+  }
+
+  return { source: out.join('\n'), removedLines, keptBraces, changed: removedLines > 0 }
+}
+
+/**
+ * 🛡️ 2026-11-11：**文件尾部散文裁剪**。
+ *
+ * 真机病灶（`page-page-1785049023343-dc4245c3-2-7879` theme-vars.less:132+）：模型把
+ * 自己的「回答正文」直接追加进了样式文件 ——
+ *   ```
+ *   .theme-light();
+ *   已生成环境监测组件的样式文件，严格遵循以下规范：
+ *   **✅ 命名规范**
+ *   - 所有 class 使用 `.c-环境监测-` 前缀，与 index.vue 保持一致
+ *   ```
+ * ⇒ less 在根作用域遇到裸文本 ⇒ `Unrecognised input`。
+ *
+ * 判据（从文件末尾向上扫，只裁**连续**的散文行）：
+ *   行内无 `{}:;`、且（含中文 或 markdown 前缀 或 长英文句子）= 散文行；
+ *   遇到第一个「像代码」的行（含 `{}:;`、或以 `. # @ } & / *` 起头）立即停止
+ *   ⇒ `.theme-light();` 这类真实语句绝不会被裁掉（有 `;` 且以 `.` 起头）。
+ *
+ * @returns {{source: string, trimmedLines: number, changed: boolean}}
+ */
+function trimTrailingProse(source = '') {
+  const lines = String(source || '').split('\n')
+  const isProse = (t) => {
+    if (!t) return false
+    if (/[{}:;]/.test(t)) return false
+    // markdown 粗体/列表（`**✅ 命名规范**`、`- 说明`）先于「以 `*` 开头即代码」判断
+    if (/^\*\*[^*]+\*\*:?$/.test(t)) return true
+    if (/^(?:[-*+#>]\s|\d+[.)]\s)/.test(t)) return true
+    if (/^[.#@}&/*]/.test(t)) return false
+    if (/[\u4e00-\u9fa5]/.test(t)) return true
+    return /^[A-Za-z][A-Za-z ,.'"!?()\-]{12,}$/.test(t)
+  }
+  let end = lines.length - 1
+  let trimmed = 0
+  while (end >= 0) {
+    const t = lines[end].trim()
+    if (!t) { end--; continue } // 尾部空行不算散文，但也不阻断扫描
+    if (!isProse(t)) break
+    trimmed++
+    end--
+  }
+  if (trimmed === 0) return { source: String(source || ''), trimmedLines: 0, changed: false }
+  return { source: lines.slice(0, end + 1).join('\n'), trimmedLines: trimmed, changed: true }
+}
+
+/**
+ * 🔒 单一自愈链（2026-11-11）：写盘门禁与落盘后门禁**必须**调同一函数。
+ * 此前 `gateStandaloneLessWrite` 跑 8 个 healer，而 `healCriticalStandaloneLess`
+ * 只跑 2 个（healLessSource + healRootFixedSize）⇒ 同一份磁盘文件两条路径结论不同。
+ */
+export function healLessFull(source = '', { sourceType = 'style' } = {}) {
+  const fixes = []
+  let content = stripMarkdownFence(String(source || ''))
+  if (content !== String(source || '')) fixes.push('markdown-fence')
+
+  // 🆕 尾部散文（模型回答正文误入样式文件）先裁掉，避免被后续 healer 误判成选择器
+  const prose = trimTrailingProse(content)
+  if (prose.changed) {
+    content = prose.source
+    fixes.push(`trim-trailing-prose:${prose.trimmedLines}`)
+  }
+
+  const healed = healLessSource(content, { sourceType })
+  if (healed.changed) {
+    content = healed.source
+    fixes.push(`heal(braces:${healed.addedBraces || 0})`)
+  }
+
+  const parens = rebalanceOrphanCloseParens(content)
+  if (parens.changed) {
+    content = parens.source
+    fixes.push(`heal(parens:${parens.dropped.length})`)
+  }
+
+  const missingParens = healMissingCloseParens(content)
+  if (missingParens.changed) {
+    content = missingParens.source
+    fixes.push(`heal(missing-paren:${missingParens.added})`)
+  }
+
+  const pseudo = healMangledPseudoSelectors(content)
+  if (pseudo.changed) {
+    content = pseudo.source
+    fixes.push(`heal(pseudo:${pseudo.fixedPseudo},stray-semi:${pseudo.fixedStraySemi})`)
+  }
+
+  const deep = stripDeepSelectors(content)
+  if (deep.count > 0) {
+    content = deep.source
+    fixes.push(`strip-deep:${deep.count}`)
+  }
+
+  const nested = healNestedPropertyDeclarations(content)
+  if (nested.changed) {
+    content = nested.source
+    fixes.push(`heal(nested-prop:${nested.count})`)
+  }
+
+  // 🆕 2026-11-11：非声明残留行清理（放在结构/选择器纠正之后，终裁 scan 之前）
+  const stray = healStrayLessArtifacts(content, { sourceType })
+  if (stray.changed) {
+    content = stray.source
+    fixes.push(`heal(stray:${stray.removedLines},brace:${stray.keptBraces})`)
+  }
+
+  const rooted = healRootFixedSize(content, { sourceType })
+  if (rooted.changed) {
+    content = rooted.source
+    fixes.push('heal(root-fixed-size)')
+  }
+
+  return { source: content, fixes, changed: fixes.length > 0 }
 }
 
 /**
@@ -774,6 +1079,48 @@ export function scanStandaloneLessDefects(source = '') {
     })
   }
 
+  // ⑧ 🛡️ 2026-11-11（mc-lite-1794382414032-bff01bf7 / c-device-f0eedd20 实锤）：
+  //   **非声明残留行**。与 `healStrayLessArtifacts` **同一判据函数**（单一定义，绝不各写一份）：
+  //     · 横幅残片 `}====`（丢 `//`）—— less `Unrecognised input`
+  //     · 混入的 `<style>` / `</style>` 行 —— 同上
+  //     · 裸 `undefined` / `null` 行 —— 同上
+  //     · 悬空声明 `color:`（值为空且后接新语句）—— 同上
+  //   heal 已先跑 ⇒ 走到这里仍残留 ⇒ 判坏不落盘（此前 001-007 全瞎 ⇒ 假绿放行）。
+  const scanLines = text.split('\n')
+  scanLines.forEach((line, index) => {
+    if (BANNER_RESIDUE_RE.test(line)) {
+      defects.push({
+        id: 'LESS-WRITE-008',
+        line: index + 1,
+        message: `横幅注释残片（\`//\` 丢失后与 \`}\` 粘连），less 必报 Unrecognised input：${line.trim().slice(0, 80)}`,
+      })
+      return
+    }
+    if (STRAY_TAG_LINE_RE.test(line) || BARE_LITERAL_LINE_RE.test(line)) {
+      defects.push({
+        id: 'LESS-WRITE-009',
+        line: index + 1,
+        message: `非样式残留行（HTML 标签 / 裸 undefined 字面量），less 必报 Unrecognised input：${line.trim().slice(0, 80)}`,
+      })
+      return
+    }
+    if (hasNestedDeclarationInsideCall(line)) {
+      defects.push({
+        id: 'LESS-WRITE-011',
+        line: index + 1,
+        message: `声明值内被塞进另一条声明（括号内 ≥2 个 \`prop:\`），less 必报 Unrecognised input：${line.trim().slice(0, 80)}`,
+      })
+      return
+    }
+    if (isEmptyValueDeclarationDangling(line, nextSignificantLine(scanLines, index))) {
+      defects.push({
+        id: 'LESS-WRITE-010',
+        line: index + 1,
+        message: `声明值为空（输出被截断的残片，如 \`color:\`），less 必报 Unrecognised input：${line.trim().slice(0, 80)}`,
+      })
+    }
+  })
+
   return defects
 }
 
@@ -1016,65 +1363,11 @@ export function healNestedPropertyDeclarations(source = '') {
  * @returns {{content: string, fixes: string[], defects: Array, ok: boolean}}
  */
 export function gateStandaloneLessWrite(source = '', filePath = '') {
-  let content = String(source || '')
-  const fixes = []
-
-  const unfenced = stripMarkdownFence(content)
-  if (unfenced !== content) {
-    content = unfenced
-    fixes.push('markdown-fence')
-  }
-
-  const healed = healLessSource(content, { sourceType: 'style' })
-  if (healed.changed) {
-    content = healed.source
-    fixes.push(`heal(braces:${healed.addedBraces || 0})`)
-  }
-
-  // 🛡️ 2026-10-19（5e063d76 实锤）：孤立 `)` 确定性抹除（大括号判据看不见这类缺陷）。
-  //   放在 healLessSource 之后：补过 `}` 再数圆括号，避免块结构残缺时误判。
-  const parens = rebalanceOrphanCloseParens(content)
-  if (parens.changed) {
-    content = parens.source
-    fixes.push(`heal(parens:${parens.dropped.length})`)
-  }
-
-  // 🛡️ L1-b（195c8d0e 实锤）：缺失 `)` 确定性补全（补在 `;` / `}` 前，位置唯一）。
-  //   必须在 rebalanceOrphanCloseParens **之后**：先抹多余、再补缺失，两者互补。
-  //   此前缺 `)` 是全链唯一无自愈出口的缺陷 ⇒ 只能判坏跳过 ⇒ 兜底模板覆盖磁盘。
-  const missingParens = healMissingCloseParens(content)
-  if (missingParens.changed) {
-    content = missingParens.source
-    fixes.push(`heal(missing-paren:${missingParens.added})`)
-  }
-
-  // 🛡️ R20（2026-10-21 · 72ede0c9 实锤）：伪元素选择器损坏（`::`→`: :`）与 `{;` 孤立分号。
-  //   此前是全链**无自愈出口**的缺陷：`healLessSource` 只数 `{}`/分号、圆括号族只数 `()`，
-  //   对这份文件返回 changed:false（假绿），less 编译必败 ⇒ L0-B 重试 6 轮全败。
-  //   放在圆括号族之后：先让结构完整，再做选择器级纠正。
-  const pseudo = healMangledPseudoSelectors(content)
-  if (pseudo.changed) {
-    content = pseudo.source
-    fixes.push(`heal(pseudo:${pseudo.fixedPseudo},stray-semi:${pseudo.fixedStraySemi})`)
-  }
-
-  // 🛡️ 2026-10-19（c-a579d-6a579df0 实锤）：独立样式走全局 CSS 注入，`:deep(...)`
-  //   是 SFC scoped 专有语法 ⇒ 整条规则被浏览器丢弃（antd 接管样式全丢）。
-  //   确定性改写为裸后代选择器，保住规则本身。
-  const deep = stripDeepSelectors(content)
-  if (deep.count > 0) {
-    content = deep.source
-    fixes.push(`strip-deep:${deep.count}`)
-  }
-
-  // 🛡️ R8-3（2026-11-02 · 3a7d3fb3 实锤）：畸形「属性名拼接」声明抽取。
-  //   放在选择器级纠正之后、终裁 scan 之前：结构完整 + 选择器干净后再修声明，
-  //   残留形态由 LESS-WRITE-006 判死（同锚同形，绝不带病落盘）。
-  const nested = healNestedPropertyDeclarations(content)
-  if (nested.changed) {
-    content = nested.source
-    fixes.push(`heal(nested-prop:${nested.count})`)
-  }
+  // 🔒 2026-11-11：改为调用**单一自愈链** `healLessFull`（原先本函数内联 8 个 healer，
+  //   而落盘后门禁 healCriticalStandaloneLess 只跑 2 个 ⇒ 两处结论不一致）。
+  const full = healLessFull(source, { sourceType: 'style' })
+  const content = full.source
+  const fixes = full.fixes
 
   const defects = scanStandaloneLessDefects(content)
   return { content, fixes, defects, ok: defects.length === 0, filePath }
@@ -1360,17 +1653,14 @@ function healCriticalStandaloneLess(files, outputPath, diagnostics = []) {
       let content = stripMarkdownFence(
         typeof memContent === 'string' ? memContent : readFileSync(fullPath, 'utf-8'),
       )
-      const healed = healLessSource(content, { sourceType: 'style' })
-      if (healed.changed) content = healed.source
-      // 🛡️ 根容器固定像素宽高 → 100%（占满面板）；与写盘自愈同源，确保现有磁盘文件在编译前也修正
-      const rooted = healRootFixedSize(content, { sourceType: 'style' })
-      if (rooted.changed) content = rooted.source
-      if (!healed.changed && !rooted.changed) continue
+      // 🔒 2026-11-11：与写盘门禁 `gateStandaloneLessWrite` 共用**同一条**自愈链
+      //   （此前这里只跑 healLessSource + healRootFixedSize 两步，其余 6 个 healer
+      //   在落盘后门禁上缺失 ⇒ 同一文件两处结论不一致，磁盘坏点无法被救回）。
+      const full = healLessFull(content, { sourceType: 'style' })
+      if (!full.changed) continue
+      content = full.source
       safeWriteFile(fullPath, content)
       if (files && typeof files === 'object') files[lessFile] = content
-      const parts = []
-      if (healed.changed) parts.push(`补全 ${healed.addedBraces || 0} 个右大括号/块注释`)
-      if (rooted.changed) parts.push('根容器 width/height 固定像素 → 100%')
       diagnostics.push({
         id: 'LESS-AUTOHEAL-001',
         severity: 'INFO',
@@ -1378,7 +1668,7 @@ function healCriticalStandaloneLess(files, outputPath, diagnostics = []) {
         file: normalizePath(lessFile),
         line: 1,
         column: 1,
-        message: `自动修复 LESS（${parts.join('；')}），已写回磁盘。`,
+        message: `自动修复 LESS（${full.fixes.join('；')}），已写回磁盘。`,
         healApplied: true
       })
     } catch (err) {
@@ -1465,7 +1755,174 @@ function validateStandaloneLessUrls(files, outputPath, diagnostics = []) {
   }
 }
 
+/**
+ * 🛡️ 2026-11-11（bff01bf7 红卡根治）：**以 less 解析器为 oracle 的定点修复**。
+ *
+ * 为什么需要它：写盘门禁是同步的（`writeFiles` 全同步，less 只有异步 render），
+ * 所以落盘前只能做**形态枚举**式检查（001-010）；一旦出现枚举之外的损坏（模型输出
+ * 的新变体、未来新增后处理），枚举法必然漏。落盘后链路是异步的，可以**真编译**，
+ * 于是这里用 less 自己报出的 `filename:line:column` 作判据，对出错行做确定性手术，
+ * 每轮重编译、直到通或轮次耗尽 —— 不依赖「猜有哪些坏形态」。
+ *
+ * 手术优先级（每轮只动一处，保证可归因与幂等）：
+ *   ① 残留行（横幅 / 混入标签 / 裸字面量）⇒ 删行
+ *   ② 空值声明（`color:`）⇒ 删行
+ *   ③ 值的括号内嵌套声明（`calc( color: x: 1px)`）⇒ 删整条声明
+ *   ④ 选择器行报错 ⇒ 删整块（含匹配的 `}`）
+ *   ⑤ 其余 ⇒ 删该行
+ *
+ * 🔴 安全阀：累计删除行数 > 非空行数 25% ⇒ 立即中止并报 BLOCK
+ *   （宁可如实失败，也不要把整份样式删成空壳）。
+ *
+ * @returns {{content: string, action: string, snippet: string} | null} null = 无可手术位置
+ */
+function applyCompileErrorSurgery(content, errLine) {
+  const lines = String(content || '').split('\n')
+  if (!lines.length) return null
+  const idx = Math.min(Math.max(1, Number(errLine) || 1), lines.length) - 1
+  const line = lines[idx]
+  const t = line.trim()
+  const dropLine = (reason) => {
+    lines.splice(idx, 1)
+    return { content: lines.join('\n'), action: `drop-line(${reason})`, snippet: t.slice(0, 90) }
+  }
+
+  // ① 残留行
+  if (BANNER_RESIDUE_RE.test(line) || STRAY_TAG_LINE_RE.test(line) || BARE_LITERAL_LINE_RE.test(line)) {
+    return dropLine('residue')
+  }
+  // 🔴 安全阀：CSS 自定义属性（`--x: v;`）在 LESS 根作用域非法，但它承载整份主题色板。
+  //   删掉能让文件编译通过，却把主题变量全丢（视觉静默劣化，比红卡更难查）
+  //   ⇒ **拒绝手术**，交由调用方如实报 BLOCK。真因是「主题 mixin 被在根作用域调用」，
+  //   属语义决策（该包在哪个选择器里），不做机械猜测。
+  if (/^\s*--[\w-]+\s*:/.test(line)) return null
+  // ② 空值声明
+  if (EMPTY_VALUE_DECL_RE.test(line)) return dropLine('empty-value')
+
+  // ③ 值内嵌套声明（`font-size: calc( color: line-height: 16px);`）⇒ 删整条声明
+  if (/[(\[]/.test(line) && /[-a-zA-Z]+\s*:\s*[-a-zA-Z]+\s*:/.test(line)) {
+    // 声明可能跨行：向后找到以 `;` 收尾的那一行
+    let end = idx
+    while (end < lines.length && !/;\s*$/.test(lines[end]) && end - idx < 12) end++
+    const removed = lines.splice(idx, end - idx + 1)
+    return {
+      content: lines.join('\n'),
+      action: 'drop-declaration(nested-prop)',
+      snippet: removed.join(' ').trim().slice(0, 90),
+    }
+  }
+
+  // ④ 选择器行报错 ⇒ 删整块
+  if (t.includes('{') && !t.startsWith('}')) {
+    let depth = 0
+    let end = idx
+    for (; end < lines.length; end++) {
+      for (const ch of stripCommentsAndStrings(lines[end])) {
+        if (ch === '{') depth++
+        else if (ch === '}') depth--
+      }
+      if (depth <= 0) break
+    }
+    const removed = lines.splice(idx, end - idx + 1)
+    return {
+      content: lines.join('\n'),
+      action: 'drop-rule-block',
+      snippet: removed[0].trim().slice(0, 90),
+    }
+  }
+
+  // ⑤ 兜底：删行
+  return dropLine('fallback')
+}
+
+/**
+ * 对某个组件产物目录做「确定性自愈 + 真编译定点修复」，成功则写回磁盘。
+ * 供 index.css 重编译（Lite / Max 精修后）与发布前终验共用 —— 单一收口点。
+ *
+ * @param {string} outputPath 组件产物根目录（绝对路径）
+ * @param {{maxRounds?: number, logger?: any}} [options]
+ * @returns {Promise<{ok: boolean, skipped?: boolean, applied: string[], error: any, repairedFiles: string[]}>}
+ */
+export async function repairLessDirectory(outputPath, { maxRounds = 10, logger = null } = {}) {
+  const styleDir = join(outputPath, 'resources', 'styles')
+  const entry = join(styleDir, 'index.less')
+  const applied = []
+  const repairedFiles = new Set()
+  if (!existsSync(entry)) {
+    return { ok: true, skipped: true, applied, repairedFiles: [], error: null }
+  }
+
+  const renderEntry = async () => {
+    try {
+      await less.render(readFileSync(entry, 'utf-8'), {
+        filename: entry,
+        paths: [styleDir, outputPath],
+        javascriptEnabled: true,
+      })
+      return null
+    } catch (e) {
+      return e
+    }
+  }
+
+  // 阶段 1：对产物内全部 .less 跑单一自愈链（与写盘门禁同源），有变更即写回
+  for (const rel of Object.keys(collectLessCompileFiles(outputPath))) {
+    if (!rel.endsWith('.less')) continue
+    const abs = join(outputPath, rel)
+    try {
+      const full = healLessFull(readFileSync(abs, 'utf-8'), { sourceType: 'style' })
+      if (!full.changed) continue
+      safeWriteFile(abs, full.source)
+      repairedFiles.add(rel)
+      applied.push(`${rel}: ${full.fixes.join('；')}`)
+    } catch { /* 读不了就跳过，交给编译阶段如实报错 */ }
+  }
+
+  let error = await renderEntry()
+  if (!error) return { ok: true, applied, repairedFiles: [...repairedFiles], error: null }
+
+  // 阶段 2：oracle 定点手术
+  const totalNonEmpty = Object.keys(collectLessCompileFiles(outputPath))
+    .filter((f) => f.endsWith('.less'))
+    .reduce((n, f) => {
+      try { return n + readFileSync(join(outputPath, f), 'utf-8').split('\n').filter((l) => l.trim()).length }
+      catch { return n }
+    }, 0)
+  let removedLines = 0
+
+  for (let round = 1; round <= maxRounds && error; round++) {
+    const errFile = error?.filename ? normalizePath(error.filename) : normalizePath(entry)
+    const rel = normalizePath(relative(outputPath, errFile))
+    const abs = errFile.startsWith('/') ? errFile : join(outputPath, rel)
+    if (!existsSync(abs) || !abs.endsWith('.less')) {
+      break // 报错落在无法修复的位置（如 node_modules）⇒ 如实失败
+    }
+    const before = readFileSync(abs, 'utf-8')
+    const surgery = applyCompileErrorSurgery(before, error.line)
+    if (!surgery || surgery.content === before) break
+    removedLines += before.split('\n').length - surgery.content.split('\n').length
+    if (totalNonEmpty > 0 && removedLines > totalNonEmpty * 0.25) {
+      applied.push(`中止：累计删除 ${removedLines}/${totalNonEmpty} 行超过 25% 安全阀`)
+      break
+    }
+    safeWriteFile(abs, surgery.content)
+    repairedFiles.add(rel)
+    applied.push(`${rel}:${error.line} ${surgery.action} 「${surgery.snippet}」`)
+    logger?.warn?.(`🔧 LESS 真编译修复 [round ${round}] ${rel}:${error.line} ${surgery.action}`, {
+      snippet: surgery.snippet,
+    })
+    error = await renderEntry()
+  }
+
+  return { ok: !error, applied, repairedFiles: [...repairedFiles], error }
+}
+
 export class LessCompileGate {
+  /** 🆕 2026-11-11：真编译自愈（确定性 healer + oracle 定点手术），写回磁盘。 */
+  static async repairDirectory(outputPath, options = {}) {
+    return repairLessDirectory(outputPath, options)
+  }
+
   static async validateDirectory(outputPath) {
     return this.validate(collectLessCompileFiles(outputPath), { outputPath })
   }

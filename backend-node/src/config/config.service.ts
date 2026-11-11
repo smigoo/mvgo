@@ -12,7 +12,9 @@ import {
 import {
   FIGMA_CREDENTIAL_REF_FIELDS,
   buildFigmaCredentialRefForToken,
+  readFigmaCredentialRef,
   toFigmaCredentialRefFields,
+  type FigmaCredentialRef,
 } from './figma-credential-ref';
 
 /**
@@ -421,9 +423,18 @@ export class AiConfigService {
     // 逐点写必漏一处（漏了就是「某些任务重试还是连不上」，且极难复现）。
     // 取值用 merged.figmaToken（= 执行链路真正会用的那个，请求覆盖优先于 active 槽位），
     // 不按 active 槽位记账 —— 两者在「请求显式传 token」时会分叉。
-    const credentialRefFields = toFigmaCredentialRefFields(
-      buildFigmaCredentialRefForToken(merged.figmaToken, merged),
-    );
+    //
+    // 🟢 2026-11-11 诉求五 #18/#19：请求已显式携带引用三字段（历史还原场景，前端把
+    // 原任务的 fp/slotId/slotName 随 config 带回）时**沿用请求里的引用**，不按
+    // `merged.figmaToken` 重算 —— 此刻 config 里的 figmaToken 是「当前 active」（用户
+    // 可能已切槽），重算会把快照记到错的凭证上；执行层 `resolveExecutionFigmaToken`
+    // 读 requestConfig 引用与此同口径（引用优先），快照与执行不分叉。
+    const requestRef: FigmaCredentialRef | null = readFigmaCredentialRef(patch);
+    const credentialRefFields = requestRef
+      ? toFigmaCredentialRefFields(requestRef)
+      : toFigmaCredentialRefFields(
+          buildFigmaCredentialRefForToken(merged.figmaToken, merged),
+        );
     // 🆕 降维：快照必须存具备完整 legacy 字段的结构，否则任务重跑时
     // resolveTextConfig(快照) 读不到 legacy 字段会解析失败（幂等，旧结构透传）。
     return resolveBindingToLegacy({

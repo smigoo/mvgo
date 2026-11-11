@@ -62,6 +62,8 @@ export class Vue3Service {
       panelType,
       requirementDoc,
       docAnalysis,
+      extraPrompt,
+      requirementDocText,
     } = dto;
 
     const finalComponentName = componentName || sessionId;
@@ -118,6 +120,8 @@ export class Vue3Service {
       panelType,
       requirementDoc,
       docAnalysis,
+      extraPrompt,
+      requirementDocText,
     }).catch((error) => {
       this.logger.error(
         `Vue3 generation failed: ${error.message}`,
@@ -143,6 +147,9 @@ export class Vue3Service {
       panelType?: string;
       requirementDoc?: string;
       docAnalysis?: Record<string, any>;
+      // 🆕 2026-11-11（步骤 C）：补充提示词 / 需求文档透传至 vue3 生成图（engineer 已消费）
+      extraPrompt?: string;
+      requirementDocText?: string;
     },
   ) {
     // 声明变量以便在 finally 块中使用
@@ -166,6 +173,8 @@ export class Vue3Service {
         outputPath: path,
         config,
         panelType,
+        extraPrompt,
+        requirementDocText,
       } = params;
       outputPath = path;
       componentName = name;
@@ -231,6 +240,9 @@ export class Vue3Service {
         nodeId,
         outputPath,
         panelType: panelType || 'default-panel',
+        // 🆕 2026-11-11（步骤 C）：补充提示词 / 需求文档透传（vue3-engineer 已注入分块 prompt）
+        extraPrompt: extraPrompt || undefined,
+        requirementDocText: requirementDocText || undefined,
         figmaToken: effectiveFigmaToken,
         visionAIConfig: resolvedVisionCfg,
         textAIConfig: resolvedTextCfg,

@@ -238,4 +238,114 @@ describe('auditSectionAnchorScope', () => {
     expect(res.stats.promoted).toBe(2)
     expect(res.sections.map((s) => s.id)).toEqual(['2:8419', '2:8437'])
   })
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // R3（2026-11-11 · mc-max-1794359124563-05945a47「合作厂商弹窗」实锤）
+  // 真值 38:3134 660×868：段0 统计卡片区 38:3260 首卡 265×76（真值 8.8% 高），
+  // 父 796:3 下另有同构兄弟 38:3282；796:3 内还含段1/2/3 的锚点。
+  // 病灶：旧判据把 38:3260 上提成 796:3（604×787 整内容槽）⇒ 段高 76 → 787 ⇒
+  // 产物首段 flex 0.552（独占 55.2% 高度），三个列表被压到 11.3/14.9/18.6%。
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** 与真机同构：796:3 内含 3 个分组段锚点 + 2 张 265×76 并排统计卡 */
+  function buildStatsPopupFigma() {
+    const cards = [
+      node('38:3260', 'Group 2136638431', 0, 51483, 265, 76),
+      node('38:3282', 'Group 2136638435', 339, 51483, 265, 76),
+    ]
+    const slot = node('796:3', 'slot-icon', 0, 51483, 604, 787, [
+      node('38:3137', 'Group 2136638432', 0, 51592, 604, 161),
+      node('38:3162', 'Group 2136638433', 0, 51773, 604, 212),
+      node('38:3206', 'Group 2136638434', 0, 52005, 604, 265),
+      ...cards,
+    ])
+    return node('38:3134', 'cp-合作厂商弹窗', 0, 0, 660, 868, [slot])
+  }
+
+  it('R3①：段已在 body.children 声明两张卡 ⇒ 兄弟卡不算「漏网成员」，不上提（保持 76 高）', () => {
+    const figma = buildStatsPopupFigma()
+    const sections = [
+      {
+        id: '38:3260',
+        role: 'stats',
+        // vision 用「首卡 id」当整段锚点，并在 body.children 里声明了两张卡（真机形态）
+        body: {
+          layout: 'horizontal',
+          children: [
+            { id: '38:3260', role: 'stat-card', content: { elements: [{ figmaNode: '38:3263' }] } },
+            { id: '38:3282', role: 'stat-card', content: { elements: [{ figmaNode: '38:3285' }] } },
+          ],
+        },
+        styles: { flexGrow: 0.426, figmaHeightPx: 76 },
+      },
+      { id: '38:3137', styles: { figmaHeightPx: 161 } },
+      { id: '38:3162', styles: { figmaHeightPx: 212 } },
+      { id: '38:3206', styles: { figmaHeightPx: 265 } },
+    ]
+    const res = auditSectionAnchorScope(sections, figma)
+    expect(res.stats.promoted).toBe(0)
+    expect(res.stats.skippedReason).toBe('no-narrow-anchor')
+    expect(res.sections).toBe(sections) // 同一引用，逐字不动
+    // 段高必须仍是首卡真值 76（若被上提成 796:3 会变成 787）
+    expect(res.sections[0].styles.figmaHeightPx).toBe(76)
+  })
+
+  it('R3②：目标容器吞并其他业务段 ⇒ 撤销上提（对齐 R2 lca-covers-sibling-sections）', () => {
+    const figma = buildStatsPopupFigma()
+    // 段0 不声明任何内容（隔离根因①，单测根因②）：父 796:3 下 38:3260/38:3282 同构、
+    // 铺满 604 宽 ⇒ 旧判据必然 horizontal-row 上提；但 796:3 子树含段1/2/3 锚点 ⇒ 必撤。
+    const sections = [
+      { id: '38:3260', styles: { figmaHeightPx: 76 } },
+      { id: '38:3137', styles: { figmaHeightPx: 161 } },
+      { id: '38:3162', styles: { figmaHeightPx: 212 } },
+      { id: '38:3206', styles: { figmaHeightPx: 265 } },
+    ]
+    const res = auditSectionAnchorScope(sections, figma)
+    expect(res.stats.promoted).toBe(0)
+    expect(res.stats.vetoed).toBe(1)
+    expect(res.stats.skippedReason).toBe('vetoed-covers-sibling')
+    expect(res.stats.vetoes[0]).toMatchObject({
+      sectionId: '38:3260',
+      from: '38:3260',
+      to: '796:3',
+      reason: 'covers-sibling-sections',
+    })
+    expect(res.stats.vetoes[0].coveredAnchors.sort()).toEqual([
+      '38:3137',
+      '38:3162',
+      '38:3206',
+    ])
+    expect(res.sections).toBe(sections)
+    expect(res.sections[0].id).toBe('38:3260') // 锚点未被改写
+  })
+
+  it('R3③：其他段并入同一目标属正当合并 ⇒ 守卫不误撤（阳性①不回归）', () => {
+    const figma = buildDeviceMonitorFigma()
+    const sections = [
+      { id: '2:8419', title: '头部区域' },
+      { id: '89:38', title: 'switch' },
+      { id: '2:8438', title: '左侧功能标签栏' },
+      { id: '2:8439', title: '设备状态卡片网格' },
+    ]
+    const res = auditSectionAnchorScope(sections, figma)
+    // 2:8439 是 2:8437 的子树锚点，但它与 2:8438 并入**同一目标** ⇒ 不得触发 veto
+    expect(res.stats.vetoed).toBe(0)
+    expect(res.stats.promoted).toBe(2)
+    expect(res.stats.merged).toBe(1)
+    expect(res.sections.map((s) => s.id)).toEqual(['2:8419', '89:38', '2:8437'])
+  })
+
+  it('R3④：段声明的 items 也计入「已覆盖」（防误判漏网兄弟）', () => {
+    const figma = buildStatsPopupFigma()
+    // 不写 body.children，改在 body.items 声明两张卡 ⇒ 同样不得上提
+    const sections = [
+      { id: '38:3260', body: { layout: 'grid', items: [{ id: '38:3260' }, { id: '38:3282' }] } },
+      { id: '38:3137' },
+      { id: '38:3162' },
+      { id: '38:3206' },
+    ]
+    const res = auditSectionAnchorScope(sections, figma)
+    expect(res.stats.promoted).toBe(0)
+    expect(res.sections).toBe(sections)
+  })
 })

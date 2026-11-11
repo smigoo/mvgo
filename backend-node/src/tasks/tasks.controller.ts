@@ -241,6 +241,9 @@ export class TasksController {
       if (/快照文件不存在|代码快照不存在|文件不存在/.test(msg)) {
         throw new HttpException('快照文件不存在', HttpStatus.NOT_FOUND);
       }
+      if (msg.includes('结构无效，且没有可回退的有效版本')) {
+        throw new HttpException(msg, HttpStatus.UNPROCESSABLE_ENTITY);
+      }
       throw error;
     }
     const extension = path.toLowerCase().split('.').pop();

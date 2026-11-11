@@ -233,6 +233,18 @@ export interface Task {
   userId?: string;
   /** 质量门禁语义：passed=文本、运行时与视觉均通过；warned=可运行但仍需继续优化 */
   qualityGate?: 'passed' | 'warned';
+  /**
+   * 🛡️ P0-B（2026-11-11 · 本轮六样本实锤 3869b726/d30c05b4）：视觉保真分警告。
+   * C2 契约（docs/2026-11-05-VISUAL-002门禁 §7.5）下 VISUAL-002 以 WARN 进 runtimeGate、
+   * 不阻断交付——但用户需要知道「score<0.6 的产物已交付」。此处持久化像素保真分与档位，
+   * 供 TaskCenter 卡片「视觉待改进」标签。零阻断语义：只透传证据，不改 verdict/阈值。
+   * shape: { score: number|null, verdict: 'block'|'warn'|'pass'|'none' }
+   */
+  visualFidelityWarning?: {
+    score?: number | null;
+    verdict?: string;
+  } | null;
+
   /** 🔴 S5（2026-11-06）：素材续跑（upgrade-assets）完成时间戳——详情/列表「续跑完成」徽章依据 */
   assetUpgradedAt?: number;
   /** 素材续跑摘要（挂载/背景/无源样式落地计数，一行文案） */
@@ -2343,16 +2355,33 @@ export class TasksService {
     const hasHighCritique = critiques.some((item: any) => item?.severity === 'high');
     const hasWarnings = (result?.warnings?.length || 0) > 0;
     const QUALITY_GATE_THRESHOLD = parseInt(process.env.QUALITY_GATE_THRESHOLD || '75', 10);
+    // 🛡️ P0-B（2026-11-11）：C2 契约下 VISUAL-002(WARN) 不阻断交付，但必须计入 warned ——
+    // 「像素分 <0.6 却 passed」会掩盖视觉劣化。只影响标签，不影响任务终态（仍 completed）。
+    const visualFidelityWarned = Array.isArray(result?.runtimeGate?.issues)
+      && result.runtimeGate.issues.some((i: any) => i?.id === 'VISUAL-002');
     const qualityGate: 'passed' | 'warned' =
       runtimePass &&
       visualPass &&
       checkerPass &&
       !hasHighCritique &&
       qScore >= QUALITY_GATE_THRESHOLD &&
-      !hasWarnings
+      !hasWarnings &&
+      !visualFidelityWarned
         ? 'passed'
         : 'warned';
     task.qualityGate = qualityGate;
+    // 🛡️ P0-B：像素保真证据透传（score 可能为 null——未比对时），前端据此显示「视觉待改进」标签
+    task.visualFidelityWarning = (() => {
+      const fidelity = result?.visualFidelity;
+      const issue = Array.isArray(result?.runtimeGate?.issues)
+        ? result.runtimeGate.issues.find((i: any) => i?.id === 'VISUAL-002')
+        : null;
+      if (!fidelity && !issue) return null;
+      return {
+        score: typeof fidelity?.score === 'number' ? fidelity.score : null,
+        verdict: String(fidelity?.verdict || (issue ? 'block' : 'none')),
+      };
+    })();
     //  P0-3: 视觉分析降级标志（视觉超时→Figma 兜底 或 完全降级）持久化到任务，供「最近生成」卡片展示
     task.visualDegraded = result?._visualDegraded === true;
     task.visualLayoutSource = result?._visualLayoutSource || null;

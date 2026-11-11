@@ -172,3 +172,57 @@ export function rewriteVueExprAssetUrls(src, baseUrl) {
     },
   );
 }
+
+/**
+ * 🛡️ P1-F②（2026-11-11 · e3acdc25 实锤）：重写 `<template>` 内**静态 style 属性**中的
+ * 相对 `url(...)` / `background-image:url('...')` 为绝对 URL。
+ *
+ * 背景：LLM 会在同一元素上同时写 `:style="{backgroundImage: url(bg3)}"`（import 链，
+ * 被 loadVue3Runtime 重写为正确的 __raw 绝对 URL）和 `style="background-image:url('../../resources/images/bg-125.png')"`
+ * （**手拼相对路径**）。Vue3 运行时合并两份 style 时静态值对同名属性赢 ⇒ 相对路径按
+ * 文档 URL 解析到站点根 ⇒ vite SPA fallback 返回 **200 + index.html（假 200）** ⇒
+ * 背景静默消失（卡2/卡3 只有 :style 所以正常——三卡对比铁证）。
+ *
+ * 判据纪律（与既有四函数一致）：
+ * - 只重写静态 `style="..."` 属性内的相对引用；`:style="expr"` 是动态绑定不碰；
+ * - SELF_ANCHORED_RE 幂等：绝对/协议/data:/blob:/根相对原样；
+ * - `new URL(raw, baseUrl)` 决定结果，不猜扩展名不补目录。
+ */
+export function rewriteVueInlineStyleAssetUrls(src, baseUrl) {
+  if (!src || !baseUrl || !/<template\b/i.test(src)) return src;
+  let absBase;
+  try {
+    const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'http://localhost';
+    absBase = new URL(baseUrl, origin).href;
+  } catch {
+    return src;
+  }
+  return src.replace(
+    /(<template\b[^>]*>)([\s\S]*?)(<\/template>)/gi,
+    (_full, open, body, close) => {
+      const rewritten = body.replace(
+        /(\sstyle=)(["'])((?:(?!\2).)*)\2/g,
+        (full, attr, quote, styleText) => {
+          if (!styleText || !styleText.includes('url(')) return full;
+          const rewrittenStyle = styleText.replace(URL_FN_RE, (m, _q, quoted, bare) => {
+            const raw = quoted !== undefined ? quoted : bare;
+            if (!shouldRewrite(raw)) return m;
+            try {
+              // 🔴 e3acdc25 二次实锤：静态 style 属性用双引号包裹时，重写值内含双引号
+              //   `url("http://...")` 会**提前终止 HTML 属性**（outerHTML 变成
+              //   `style="background-image:url("` + 一堆散落属性）⇒ 背景反而彻底消失。
+              //   与模板静态 src 通道不同（那边值里没有引号形态），url() 重写值必须
+              //   改用**单引号**包裹——HTML 属性是双引号时属性值内允许单引号，CSS 层
+              //   url('...') 与 url("...") 语义等价。
+              return `url('${new URL(String(raw).trim(), absBase).href}')`;
+            } catch {
+              return m;
+            }
+          });
+          return rewrittenStyle === styleText ? full : `${attr}${quote}${rewrittenStyle}${quote}`;
+        },
+      );
+      return open + rewritten + close;
+    },
+  );
+}

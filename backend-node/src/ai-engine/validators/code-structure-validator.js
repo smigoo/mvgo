@@ -95,6 +95,13 @@ import { collectClassFacts } from '../utils/class-facts.js';
 import { checkClassNameContract } from '../utils/classname-contract.js';
 import { buildResourceFacts, checkResourceContract } from '../utils/resource-facts.js';
 import { checkSkeletonCompleteness } from '../utils/mc-skeleton.js';
+// 🔴 2026-11-11 根因 G：运行时标识符事实的**单一事实源**。
+//   与自动修复层（roles/microcode/code-validator.js）**同一个 import**：
+//   修复看什么、判死就看什么，禁止门禁另写一份谓词（双源必然漂移 → 空窗）。
+import {
+  RUNTIME_LOCAL_NAMES,
+  findUndeclaredRuntimeIdents,
+} from '../utils/runtime-idents.js';
 // 🛡️ LAYOUT-001（2026-09-30 §8.10 换证据源）：布局方向守卫 —— 事实源在 layout-direction-guard.js
 import { detectLayoutDirectionMismatch } from '../utils/layout-direction-guard.js';
 // 🛡️ T3（2026-10-19）：`v-for` 列表的 wrapper / item 方向守卫 —— 补 LAYOUT-001 的判据盲区
@@ -830,6 +837,47 @@ export class CodeStructureValidator {
     }
 
     const isVue3 = options?.target === 'vue3';
+
+    // ========== 🛡️ CODE-029: 运行时标识符未声明（仅 Vue3 · fail-closed BLOCK · 2026-11-11）==========
+    // 契约：vue3 产物**不得**引用微码运行时标识符（runtimeBuilder / componentProps /
+    //   businessProps / componentApi 等）而既无本地声明、也无合法来源。
+    // 事故（根因 G）：产物裸用 `runtimeBuilder.publishEvent(...)`，旧后处理因
+    //   ① 前置条件只看 `$mcComponentBuilder`、② 正则只认可选链形态 而**两道门同时漏**
+    //   ⇒ `<script setup>` 顶层引用未声明标识符 ⇒ onMounted 抛 ReferenceError ⇒ 组件白屏。
+    // 为什么判死而不是仅告警：这不是「样式不好」，是**运行时必然崩溃**，
+    //   放行只会让白屏直达用户（auto-fix 已尽力兜底；能走到这里说明兜底装配不完整）。
+    // 判据来源：utils/runtime-idents.js（与 code-validator 自动修复同一事实源）。
+    if (isVue3) {
+      const offenders = [];
+      for (const f of productFiles) {
+        if (!f || typeof f.content !== 'string') continue;
+        if (!String(f.path || '').endsWith('.vue')) continue;
+        const undeclared = findUndeclaredRuntimeIdents(f.content);
+        if (undeclared.length > 0) {
+          offenders.push({ file: f.path, idents: undeclared });
+        }
+      }
+      if (offenders.length > 0) {
+        issues.push({
+          id: 'CODE-029-UNDECLARED-RUNTIME-IDENT',
+          severity: 'BLOCK',
+          file: offenders[0].file,
+          message:
+            `vue3 产物引用了未声明的微码运行时标识符（${offenders.length} 个文件）：` +
+            offenders
+              .slice(0, 4)
+              .map((o) => `${o.file} → [${o.idents.join(', ')}]`)
+              .join('；') +
+            `。这些标识符由微码平台注入（${RUNTIME_LOCAL_NAMES.join(' / ')}），vue3 环境**不存在**，` +
+            `运行时必然 ReferenceError（组件白屏）`,
+          hint: {
+            suggestion:
+              'vue3 产物不得使用平台运行时 API：删除 runtimeBuilder.publishEvent / $mcComponentBuilder / componentProps 等引用；如确需事件通知，改用组件自身 emit 或直接留空。禁止把 index.vue 的微码写法复制到子组件',
+          },
+        });
+      }
+    }
+
     const rootBgExpectation = isVue3
       ? extractRootBackgroundExpectation(options)
       : { hasRootBackground: false, expectedValues: [] };

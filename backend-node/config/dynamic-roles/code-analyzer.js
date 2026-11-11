@@ -1,6 +1,6 @@
 /**
  * 代码分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-11-09T01:09:51.434Z
+ * 模板: llm-analyzer | 创建: 2026-11-11T14:37:29.279Z
  * 输入: code
  * 输出: analysis
  */

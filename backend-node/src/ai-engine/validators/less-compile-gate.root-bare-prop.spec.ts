@@ -76,9 +76,27 @@ describe('R4 · LESS-WRITE-007 根级裸属性（3c9509f8 实锤）', () => {
     expect(d.filter((x) => x.id === 'LESS-WRITE-007')).toHaveLength(0);
   });
 
-  it('④ 出口接线：gateStandaloneLessWrite 对病灶判 ok=false（判死跳过写盘保 last-good）', () => {
+  // 🔄 2026-11-11 决策变更（红卡根治）：此前 007 只判死（ok=false ⇒ 跳过写盘保 last-good）。
+  //   实测该策略的代价更大：跳过写盘 = 本次生成的**全部样式**被丢弃，用户看到的是旧样式
+  //   （新任务首次生成时 last-good 甚至不存在 ⇒ 空兜底模板）。而根级裸属性在浏览器里
+  //   本就不会生效 ⇒ **删掉它**既恢复可编译、又不损失任何实际生效的样式。
+  //   判死出口仍保留：见 ⑤（根级自定义属性承载主题色板，删除会静默丢主题 ⇒ 拒绝手术、如实判死）。
+  it('④ 出口接线：gateStandaloneLessWrite 直接清掉病灶行，保留同文件其余样式', () => {
     const r = gateStandaloneLessWrite(TRAFFIC_MONITOR_CSS, 'resources/styles/common.less');
+    expect(r.ok).toBe(true);
+    expect(r.content).not.toMatch(/^font-size:\s*calc\(\);\s*$/m);
+    // 真正的样式规则一条都不能少
+    expect(r.content).toContain('.c-traffic-monitor-header-section');
+    expect(r.content).toContain('color: @color-text-base;');
+  });
+
+  it('⑤ 判死出口仍在：根级自定义属性（删除会静默丢主题）必须 ok=false', () => {
+    const themeBroken = `--em-bg-color: #edf4fb;
+--em-text-primary: #333333;
+`;
+    const r = gateStandaloneLessWrite(themeBroken, 'resources/styles/themes/theme-vars.less');
     expect(r.ok).toBe(false);
-    expect(r.fixes.length === 0 || !r.fixes.some((f) => f.includes('WRITE-007'))).toBe(true); // 007 是判死不是 heal
+    expect(r.content).toContain('--em-bg-color');
+    expect(r.defects.filter((d: any) => d.id === 'LESS-WRITE-007').length).toBeGreaterThan(0);
   });
 });

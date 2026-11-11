@@ -54,7 +54,12 @@ const FILES = [
   //   `catch (_t09FinalErr)`（pass='execute:t09-final-ensure'，chunk 层注入被 execute
   //   后段覆写冲掉的确定性兜底，设备 1d9bcc28 实锤）；已接哨兵，基线同步 +1。
   { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 88 },
-  { rel: 'src/ai-engine/roles/vue3-engineer.js', expectCatches: 25 },
+  // 25→26（2026-11-11 归因）：根因 G 第四道缺口——vue3 链路此前**从不**执行运行时标识符兜底
+  //   （`validateAndFixGeneratedFiles` 只在 microcode-engineer 上），实测 `<script setup>` 顶层引用
+  //   未声明 `runtimeBuilder` ⇒ onMounted ReferenceError ⇒ 白屏。治理落点 writeFiles 之前新增
+  //   `catch (e)`（pass='execute:runtime-idents'），接 neutralizeFilesRuntimeIdents 异常；
+  //   已接 reportPatchChainError（哨兵齐备，非裸吞），基线同步 +1。
+  { rel: 'src/ai-engine/roles/vue3-engineer.js', expectCatches: 26 },
 ];
 
 function walk(node: any, cb: (n: any) => void) {

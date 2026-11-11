@@ -1,19 +1,22 @@
 # mvgo 生产部署注意事项
 
-> 最后更新：2026-10-08 09:40  
-> 适用环境：阿里云 ECS `47.98.216.206:65522`
+> 最后内容核验：2026-11-11（Node 构建路径/任务持久化）；生产进程与网关配置未在本次检查中登录 ECS 实测。
+> 适用环境：阿里云 ECS（连接参数与生产配置从本机部署配置读取，勿将凭据写入文档）
+>
+> **历史快照警告**：下文固定的 ECS IP、`/home/mvbt` 目录、Nginx volume 和路由仅为 2026-10 记录，不可直接作为当前生产操作参数。当前操作以 `docs/operations/部署指南.md` 为主，并先在目标机检查 `pm2 list`、`docker exec nginx nginx -T` 与真实挂载；SSH 账号/主机、路径从经授权的部署配置读取。
+> 使用文中示例前须从本机授权配置设置 `MVGO_ROOT`、`NODE22_BIN`、`MVGO_SSH_TARGET`、`MVGO_REMOTE_FRONTEND_DIR`、`MVGO_REMOTE_NODE_DIR`、`MVGO_REMOTE_JAVA_DIR`；本文件不保存这些值，也不提供密码。SSH here-doc 中的变量不会自动从本机传到远端，执行前须在远端安全设置对应路径变量；本文旧脚本均为历史模板，不是可直接运行的部署脚本。
 
 ---
 
 ## 一、架构概览
 
-### 1.1 三端服务
+### 1.1 三端服务（2026-10 环境快照，非当前部署证明）
 
-| 服务 | 端口 | 目录 | 启动方式 |
+| 服务 | 当时端口 | 当时目录 | 当时启动方式 |
 |------|------|------|----------|
-| **Node 后端** | 13030 | `/home/mvbt/mvgo/backend-node` | **PM2**（`pm2 reload/restart`，勿用 setsid） |
-| **Java 后端** | 8080 | `/home/mvbt/mvgo/backend-java` | `java -jar xxx.jar` |
-| **前端（静态）** | - | `/home/mvbt/nginx/www/mvgo/` | Nginx 直接服务 |
+| **Node 后端** | 13030 | `/home/mvbt/mvgo/backend-node` | PM2（当时观测） |
+| **Java 后端** | 8080 | `/home/mvbt/mvgo/backend-java` | `java -jar`（当时观测） |
+| **前端（静态）** | - | `/home/mvbt/nginx/www/mvgo/` | Nginx 静态服务（当时观测） |
 
 ### 1.2 Docker 容器
 
@@ -28,7 +31,7 @@
 
 **⚠️ 容器名注意**：Nginx 容器名是 `nginx`，不是 `mvgt-nginx`。
 
-### 1.3 Nginx Volume 映射（关键）
+### 1.3 Nginx Volume 映射（2026-10 历史快照；实际挂载须用现场 inspect/nginx -T 核实）
 
 ```bash
 /home/mvbt/nginx/nginx.conf  →  /etc/nginx/nginx.conf
@@ -60,19 +63,19 @@ docker exec nginx cat /etc/nginx/vhost/gzxj.conf | grep -A 5 "location /api"
 ### 2.1 前端部署
 
 ```bash
-# 1. 本地构建（Node 版本已更新为 22.22.2-5）
-cd /Users/smigoo/工作/mvgo/frontend
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+# 1. 本地构建（按 docs/operations/部署指南.md 的 Node 22.22.2-6；以当前工具链路径为准）
+cd "${MVGO_ROOT:?set authorized checkout root}/frontend"
+env -i PATH="${NODE22_BIN:?set Node 22.22.2-6 binary directory}:/usr/local/bin:/usr/bin:/bin" HOME="${HOME:?set home}" \
   npx vite build --mode production
 
 # 2. 打包
 tar -czf dist-frontend.tar.gz dist/
 
-# 3. 上传到 ECS
-scp -P 65522 dist-frontend.tar.gz root@47.98.216.206:/home/mvbt/mvgo/frontend/
+# 3. 上传到目标环境（MVGO_SSH_TARGET / MVGO_REMOTE_FRONTEND_DIR 从授权配置读取）
+scp dist-frontend.tar.gz "${MVGO_SSH_TARGET:?set authorized SSH target}:${MVGO_REMOTE_FRONTEND_DIR:?set verified remote frontend directory}/"
 
 # 4. ECS 上解压到正确位置
-ssh -p 65522 root@47.98.216.206
+ssh "${MVGO_SSH_TARGET:?set authorized SSH target}"
 cd /home/mvbt/mvgo/frontend
 tar -xzf dist-frontend.tar.gz
 cp -r dist/* /home/mvbt/nginx/www/mvgo/  # ← 关键：复制到 Nginx 实际读取的目录
@@ -86,19 +89,19 @@ stat /home/mvbt/nginx/www/mvgo/index.html  # 检查修改时间
 ### 2.2 Node 后端部署
 
 ```bash
-# 1. 本地构建（Node 版本已更新为 22.22.2-5）
-cd /Users/smigoo/工作/mvgo/backend-node
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+# 1. 本地构建（按 docs/operations/部署指南.md 的 Node 22.22.2-6；以当前工具链路径为准）
+cd "$MVGO_ROOT/backend-node"
+env -i PATH="$NODE22_BIN:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" \
   npm run build
 
 # 2. 打包
 tar -czf dist-node.tar.gz dist/
 
 # 3. 上传到 ECS
-scp -P 65522 dist-node.tar.gz root@47.98.216.206:/home/mvbt/mvgo/backend-node/
+scp dist-node.tar.gz "${MVGO_SSH_TARGET:?set authorized SSH target}:${MVGO_REMOTE_NODE_DIR:?set verified remote Node directory}/"
 
 # 4. ECS 上解压并重启
-ssh -p 65522 root@47.98.216.206
+ssh "${MVGO_SSH_TARGET:?set authorized SSH target}"
 cd /home/mvbt/mvgo/backend-node
 tar -xzf dist-node.tar.gz
 
@@ -115,14 +118,14 @@ pgrep -af 'dist/main.js'
 
 ```bash
 # 1. 本地构建
-cd /Users/smigoo/工作/mvgo/backend-java
+cd "$MVGO_ROOT/backend-java"
 mvn clean package -DskipTests
 
 # 2. 上传 jar
-scp -P 65522 target/*.jar root@47.98.216.206:/home/mvbt/mvgo/backend-java/
+scp target/*.jar "${MVGO_SSH_TARGET:?set authorized SSH target}:${MVGO_REMOTE_JAVA_DIR:?set verified remote Java directory}/"
 
 # 3. ECS 上重启
-ssh -p 65522 root@47.98.216.206
+ssh "${MVGO_SSH_TARGET:?set authorized SSH target}"
 cd /home/mvbt/mvgo/backend-java
 pkill -9 -f 'java.*backend-java'
 sleep 2
@@ -338,9 +341,11 @@ tail -50 /tmp/node.log
 
 ### 5.3 任务详情页显示"任务不存在"
 
-**原因**：Node 服务重启后，内存中的任务数据丢失（任务存储在 `Map` 中）。
+**先区分两类状态**：
+- 任务记录由 `TasksService` 同时保存在内存 `Map` 与 `backend-node/data/tasks.json`；启动时会从文件加载，定时持久化，正常重启不等同于任务记录必然丢失。
+- 等待队列、运行中槽位和执行函数注册表属于进程内状态；重启后不会原样保留。queued 任务有受限的恢复执行器；running/paused 任务及缺少可恢复输入的任务可能被标记失败或需人工续跑，**不能承诺所有任务自动续跑**。
 
-**解决**：新建任务即可，这是预期行为。
+若任务确实查不到：先核对服务实际加载的 `backend-node/data/tasks.json`、启动日志中的加载/恢复结果，以及当前 `sessionId`；不要仅因服务重启就建议用户新建任务。
 
 ### 5.4 点击链接跳转到错误 URL
 
@@ -367,7 +372,9 @@ tail -50 /tmp/node.log
 
 ---
 
-## 七、快速部署脚本
+## 七、历史快速部署脚本（仅供追溯，不作为当前发布命令）
+
+> 下方脚本来自早期部署记录，涉及固定目录、旧版包布局与手工复制步骤。当前发布必须使用 `docs/operations/部署指南.md` 的 staging 校验/回滚流程，并按本文件顶部说明提供授权目标变量；不得直接复制执行。
 
 ### 7.1 前端一键部署
 
@@ -377,19 +384,19 @@ tail -50 /tmp/node.log
 
 set -e
 
-echo "=== 构建前端（Node 22.22.2-5）==="
-cd /Users/smigoo/工作/mvgo/frontend
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+echo "=== 构建前端（Node 22.22.2-6；按统一部署指南核对）==="
+cd "${MVGO_ROOT:?set authorized checkout root}/frontend"
+env -i PATH="${NODE22_BIN:?set Node 22.22.2-6 binary directory}:/usr/local/bin:/usr/bin:/bin" HOME="${HOME:?set home}" \
   npx vite build --mode production
 
 echo "=== 打包 ==="
 tar -czf dist-frontend.tar.gz dist/
 
-echo "=== 上传 ==="
-scp -P 65522 dist-frontend.tar.gz root@47.98.216.206:/home/mvbt/mvgo/frontend/
+echo "=== 上传（目标从授权 SSH 配置读取）==="
+scp dist-frontend.tar.gz "${MVGO_SSH_TARGET:?set authorized SSH target}:${MVGO_REMOTE_FRONTEND_DIR:?set verified remote frontend directory}/"
 
 echo "=== 部署到正确位置 ==="
-ssh -p 65522 root@47.98.216.206 << 'EOF'
+ssh "${MVGO_SSH_TARGET:?set authorized SSH target}" << 'EOF'
 cd /home/mvbt/mvgo/frontend
 tar -xzf dist-frontend.tar.gz
 cp -r dist/* /home/mvbt/nginx/www/mvgo/
@@ -406,19 +413,19 @@ EOF
 
 set -e
 
-echo "=== 构建 Node（Node 22.22.2-5）==="
-cd /Users/smigoo/工作/mvgo/backend-node
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+echo "=== 构建 Node（Node 22.22.2-6；按统一部署指南核对）==="
+cd "$MVGO_ROOT/backend-node"
+env -i PATH="$NODE22_BIN:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" \
   npm run build
 
 echo "=== 打包 ==="
 tar -czf dist-node.tar.gz dist/
 
 echo "=== 上传 ==="
-scp -P 65522 dist-node.tar.gz root@47.98.216.206:/home/mvbt/mvgo/backend-node/
+scp dist-node.tar.gz "${MVGO_SSH_TARGET:?set authorized SSH target}:${MVGO_REMOTE_NODE_DIR:?set verified remote Node directory}/"
 
 echo "=== 解压并重启 ==="
-ssh -p 65522 root@47.98.216.206 << 'EOF'
+ssh "${MVGO_SSH_TARGET:?set authorized SSH target}" << 'EOF'
 cd /home/mvbt/mvgo/backend-node
 tar -xzf dist-node.tar.gz
 
@@ -438,7 +445,7 @@ EOF
 
 ## 八、联系方式
 
-- **ECS 登录**：`ssh -p 65522 root@47.98.216.206`（密码：`Microvideo@2026`）
+- **ECS 登录**：使用本机授权的 SSH 配置/凭据连接；主机、端口与账号从安全配置读取，不在仓库文档保存密码。
 - **生产地址**：https://go.microvideo.cn/mvgo/
 - **Portlet 入口**：https://go.microvideo.cn/portlet/
 

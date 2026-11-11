@@ -439,4 +439,52 @@ describe('引用无命中时逐槽探测择优（resolveExecutionFigmaTokenWithP
       expect(out.token).not.toBe(REDACTED)
     })
   })
+
+  describe('H. 预览链路（诉求五 #18）：requestToken 与 requestConfig 引用并存', () => {
+    /**
+     * figma-preview 的真实入参形态：前端同时传 `figmaToken`（当前 active，可能是用户
+     * 刚切过去的那个）与 `config.figmaCredentialFp`（历史还原带出的「当时」引用）。
+     * 要钉死：**引用优先于请求 token** —— 否则用户切过 token 后，预览这一步就会拿
+     * 错凭证 404，历史还原直接卡死在「确认预览图」。
+     */
+    it('请求 token 是当前的、config 引用指向当时的 ⇒ 引用赢（沿用当时的 token，零探测）', async () => {
+      const { prober, calls } = makeProber({ [TOKEN_A]: 200, [TOKEN_B]: 200 })
+      const out = await resolveExecutionFigmaTokenWithProbe({
+        requestToken: TOKEN_B, // 用户此刻 active 的
+        requestConfig: {
+          figmaToken: TOKEN_B,
+          figmaCredentialFp: maskSecretFingerprint(TOKEN_A),
+          figmaCredentialSlotId: 'slot-a',
+          figmaCredentialSlotName: '当时的 Token',
+        },
+        activeConfig: cfg('slot-b'),
+        fileKey: FILE_KEY,
+        nodeId: NODE_ID,
+        probe: prober,
+      })
+
+      expect(out.source).toBe('ref')
+      expect(out.token).toBe(TOKEN_A) // 当时那个，不是请求里的 TOKEN_B
+      expect(out.reason).toBe('matched')
+      expect(out.refSource).toBe('request')
+      expect(out.requestOverridden).toBe(true) // 明示「忽略了请求回传的当前 token」
+      expect(calls).toHaveLength(0)
+    })
+
+    it('阴性对照：无引用时 requestToken 照常生效（首轮预览零回归）', async () => {
+      const { prober, calls } = makeProber({ [TOKEN_B]: 200 })
+      const out = await resolveExecutionFigmaTokenWithProbe({
+        requestToken: TOKEN_B,
+        activeConfig: cfg('slot-b'),
+        fileKey: FILE_KEY,
+        nodeId: NODE_ID,
+        probe: prober,
+      })
+
+      expect(out.source).toBe('request')
+      expect(out.token).toBe(TOKEN_B)
+      expect(out.reason).toBe('no-ref')
+      expect(calls).toHaveLength(0)
+    })
+  })
 })

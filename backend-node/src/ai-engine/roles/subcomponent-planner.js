@@ -51,7 +51,13 @@ import {
   tableGeometryRecoveryAllowed,
 } from '../utils/vision-facts.js';
 // 🛡️ F18（2026-10-21）：行内列数/单项尺寸/间距的算术推导（纯几何）
-import { deriveRowMetrics, deriveGapFromBoxes, deriveGapSequence } from '../utils/row-metrics.js';
+import { deriveRowMetrics } from '../utils/row-metrics.js';
+// 🎯 2026-11-11 根因 D 治理 §1.4③：`layoutMetadata` 事实编译的**单一事实源**。
+//   原为本文件私有 `extractLayoutMetadata`（L902-972），已抽出到 `utils/layout-metadata.js`，
+//   目的是让「段构建后」才发生的过粗段展开（`utils/over-coarse-section-expander.js`）
+//   能调**同一个**函数补 `layoutMetadata` —— 一份判据、两个调用点。
+//   🔴 禁止任何模块另写第二份构造逻辑（判据漂移 = 同类问题在别的组件复发）。
+import { extractLayoutMetadata } from '../utils/layout-metadata.js';
 // 🛡️ #78 技术栈接管（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：S2 语义收编 + S3 表格契约。
 //   `@antd/table` 等数据驱动标记区域此前仍被拆成列容器叶子 ⇒ LLM 手写假表格（a-table 0 次）。
 //   治本：直接命中的数据驱动容器吸收 children 为单一 techstack 叶子 + 确定性 columns/
@@ -298,6 +304,12 @@ import { buildFigmaClosureIndex, buildFigmaTextIdSet, buildFigmaTextCharactersIn
 import {
   detectPlanCoverageGaps,
   healOversizedTextRowAnchors,
+  auditSectionCountRatio,
+  auditSectionCoverage,
+  liftSectionAnchorsByContentRange,
+  mergeCollidedSections,
+  mergeChildHeaderSections,
+  PlanningGateError,
 } from '../utils/section-plan-coverage.js';
 // 🛡️ P1-A（2026-10-25 · mc-max-1792934367321-ab7bb76c 实锤）：plan `body.children[].id` 一致性校验。
 //   vision 输出的 body child id 系统性错位（self / duplicate-sibling / not-a-descendant 三形态）⇒
@@ -878,98 +890,20 @@ function mergeLegendSections(sections) {
 }
 
 /**
- * 🎯 Phase 2 方案1: 从 Figma Auto Layout 提取布局元数据
+ * 🎯 layoutMetadata 事实编译 → **已抽为共享单一事实源** `utils/layout-metadata.js#extractLayoutMetadata`
+ * （2026-11-11 根因 D 治理 §1.4③）。
  *
- * 🛡️ 2026-09-30 复审 §8.8 ③-b（合并轮）：`direction` 改为**真值通道 + 三态**。
- *   旧实现只认**对象键**（`layout.layoutMode || layout.direction`），而本仓真实语料的布局事实是
- *   **字符串**（`layout: 'horizontal' | 'vertical' | 'grid' | null`；6630 个 section 实测
- *   `layout`/`body.layout` 对象 **0 例**）⇒ 对象键命中 0 ⇒ `direction` 在生产语料上
- *   **恒为 'column'**（横向 section 亦然）：live 口径实测 容器 864 + 叶子 1774 **100% 失真**。
- *   现在：
- *     · **字符串形态**（真实语料）：`horizontal`/`row` → `'row'`；`vertical`/`column` → `'column'`；
- *     · **对象形态**（既有测试与旧数据）：仍读 `layoutMode`/`direction` 键（`'HORIZONTAL'`/`'VERTICAL'`），**行为逐字不变**；
- *     · **无事实 / `grid` / 未知取值 → `null`**（「无事实不臆造」）。`grid` 的方向事实由
- *       `gridColumns` 通道承载，**不得**写成 `flex-direction: grid`（非法 CSS）。
+ * 为什么要抽出去：本函数原来只在本文件两处（`buildEffectiveSection` 的 L2020 / L2075）被调用，
+ *   即「段构建那一刻」注入 `layoutMetadata`。而「过粗段局部展开」
+ *   （`applyOverCoarseExpansion`，见 L3286）发生在段构建**之后** ⇒ 展开产出的子段必然没有
+ *   `layoutMetadata` ⇒ `applyFigmaHeightGrow` 的 `if (!meta) continue` 写不回比例、
+ *   prompt 的 gap/height/direction 三通道全部空转（mc-max-1794360981835-f596dd2d 实锤：
+ *   展开产物 `2:3439` / `1263:38` 有 `figmaHeightPx` 却 `layoutMetadata === null`）。
  *
- *   ⚠️ 本次**同批**已同步的下游口径（缺一即造出 `flex-direction: null` 文案）：
- *     · `microcode-engineer.js` 的「布局协调提示」已加 `if (meta.direction)` 三态护栏
- *       （该行原为**无条件强指令**，覆盖 1774/1774 叶子、其中 1116 条与真实 layout 相反）；
- *     · `generation-context-assembler.js:25` 本就 `|| null`；
- *     · `section-content-guard.js:775` 的 `||` 兜底从此**真正可达**（该字段不参与门禁判定）；
- *     · `subcomponent-planner.js:1030`（R2 豁免）OR 前项已覆盖 `horizontal|grid|row` ⇒ 冗余无害。
- *   验证口径见 docs 复审 §8.8.7（两态差分对跑 + prompt 快照 diff：预期 1116 行 column→row、225 行消失）。
+ * 🔴 纪律：本文件与 `over-coarse-section-expander.js` 必须调**同一个** `extractLayoutMetadata`。
+ *   禁止在展开器或任何下游再写第二份构造逻辑 —— 判据漂移正是「同类问题在别的组件复发」的成因。
+ *   键契约（direction 三态 / gap 兜底 / height / flexGrow / padding）见共享模块头注释。
  */
-function extractLayoutMetadata(section) {
-  // 保持与旧实现一致的「假值回退」语义：`section.layout` 为空串时仍回退 body.layout
-  const rawLayout = section?.layout || section?.body?.layout;
-  // 对象形态取键；字符串形态直接取值（本仓真实语料）。
-  const layoutMode = String(
-    (rawLayout && typeof rawLayout === 'object'
-      ? rawLayout.layoutMode || rawLayout.direction
-      : rawLayout) || '',
-  ).toUpperCase();
-  // 三态：'row' | 'column' | null（无事实不臆造）。
-  //   ⚠️ 用**前缀**匹配而非全等：真实语料里还有 `horizontal-2-columns` / `horizontal-3-items`
-  //   （live 口径 5 例），而本仓既有口径都是「含 horizontal 即横向」——
-  //   `subcomponent-planner.js:1029` 的 `/horizontal|grid|row/i`、`prompt-builder.js:1717` 的
-  //   `/2-?col/i` 皆然。此处对齐，避免同一份 `layout` 在两处判出不同方向。
-  const direction =
-    layoutMode === 'ROW' || layoutMode.startsWith('HORIZONTAL')
-      ? 'row'
-      : layoutMode === 'COLUMN' || layoutMode.startsWith('VERTICAL')
-        ? 'column'
-        : null;
-  // 非对象形态（字符串/缺失）时按空对象处理 —— 与原实现「取不到属性即走默认」等价
-  const layout = rawLayout && typeof rawLayout === 'object' ? rawLayout : {};
-
-  // 🛡️ L3-b（2026-10-21 · c-c8d-195c8d0e 实锤 33/20/20 全部丢失）：`itemSpacing` 只在
-  //   `section.layout` 是**对象**形态时存在；真实语料 layout 是字符串（'vertical'）⇒ 取不到
-  //   ⇒ `gap` 恒 0 ⇒ prompt 的 `if (meta.gap > 0)` 永不成立，整条「间距下发」通道空转。
-  //   兜底：按子项 bbox 沿主轴反推（相邻间隙须一致，否则不猜）。
-  const explicitGap = Number(
-    (layout.itemSpacing ?? layout.gap) || 0,
-  );
-  const childBoxes = (Array.isArray(section?.children) ? section.children : []).map(
-    (c) => c && c.absoluteBoundingBox,
-  );
-  const geometricGap =
-    explicitGap > 0
-      ? explicitGap
-      : deriveGapFromBoxes(childBoxes, direction, { mode: 'dominant' });
-  // 不等距（33/20/20 这类）时把完整序列一并下发，避免「只有一个众数」丢真值
-  const gapSequence = explicitGap > 0 ? [] : deriveGapSequence(childBoxes, direction);
-  const hasMixedGaps =
-    gapSequence.length > 1 && new Set(gapSequence).size > 1;
-
-  return {
-    direction,
-    alignItems:
-      layout.primaryAxisAlignItems || layout.alignItems || 'flex-start',
-    justifyContent:
-      layout.counterAxisAlignItems || layout.justifyContent || 'flex-start',
-    gap: geometricGap,
-    ...(hasMixedGaps ? { gapSequence } : {}),
-    // A（2026-08-29）：补区块像素高度，供「子区块高度按比例分配」规则使用。
-    // 约束 ai-generation-constraints.md 要求 `flex: <Figma高度px> 1 0`，但此前 layoutMetadata
-    // 完全没有 height 字段，导致 prompt 永远拿不到 px 数值、LLM 只能回退 height:100%（多区块溢出根因）。
-    height:
-      section?.absoluteBoundingBox?.height ||
-      section?.size?.height ||
-      section?.height ||
-      0,
-    // 🎯 2026-09-07（0907 审计 L1）：透传 vision 归一化 flexGrow 系数（平均值=1，
-    // 比例 = 设计稿高度比）。统一 flex 事实源：内容区块 grow 用系数，
-    // 禁止把像素高度写进 grow（root-container.md/chart-standards.md/constraints.md 已同步）。
-    // 缺失时为 0，由 planner 在全部 section 提取后按高度归一化兜底补齐。
-    flexGrow: Number(section?.styles?.flexGrow) || 0,
-    padding: {
-      top: layout.paddingTop || 0,
-      right: layout.paddingRight || 0,
-      bottom: layout.paddingBottom || 0,
-      left: layout.paddingLeft || 0,
-    },
-  };
-}
 
 /**
  * 🎯 Phase 2 方案1: Section 内部拆分策略
@@ -3291,6 +3225,73 @@ export class SubcomponentPlanner {
         });
       }
 
+      // 🛡️ V-6（2026-11-11 · 74722f0f 实锤）：段锚点几何范围按 body 内容真实归属容器上提。
+      //   流量监测设计图里三个区块形态一致（◆小标题 + 内容区），但 Figma 里**只有「当日总流量」
+      //   的标题被单独拆成节点** `2:3550`（33px），其内容（大卡 91px + 两个折线图各 127px）
+      //   住在同级兄弟 `88:33 slot-当日总流量`（556px）。蓝图段高只记 33px ⇒ 下游
+      //   applyFigmaHeightGrow 按 33 归一化（flexGrow 0.095，真值 0.638）⇒ LLM 把 556px
+      //   当无主区域，自拆 ChartChart/ChartChart2 平级组件、flex 自拟 0.055（图表白底盖住大卡）。
+      //   判据：段 body/header 内 figmaNode 的 LCA 上溯到「与锚点同级」的容器 ⇒ 用其高度。
+      //   位置必须在 applyFigmaHeightGrow 之前（后者优先读 styles.figmaHeightPx）。
+      const anchorLift = liftSectionAnchorsByContentRange({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = anchorLift.sections;
+      logger.info(
+        `🛡️ section-anchor-lift：evaluated=${anchorLift.stats.evaluated} lifted=${anchorLift.stats.lifted} skipped=${anchorLift.stats.skipped}`,
+      );
+      if (anchorLift.stats.lifted > 0) {
+        logger.warn('🛡️ section-anchor-lift：段锚点只覆盖了标题条，几何范围已上提到内容容器', {
+          sections: effectiveSections
+            .filter((s) => s.figmaAnchorId && String(s.figmaAnchorId) !== String(s.id))
+            .map((s) => ({ id: s.id, anchor: s.figmaAnchorId, h: s.styles?.figmaHeightPx })),
+        });
+      }
+
+      // 🛡️ V-7（2026-11-11 · 5d6a6a25 实锤）：同 id 段合并。
+      //   vision 输出 4 段，其中「当日总流量」（body 4 个 figmaNode，真实容器 88:33/556px）与
+      //   「流量趋势柱状图」（body 0 个 figmaNode 的幻影段）**复用了同一个 id 2:3550**
+      //   ⇒ flexGrow 归一化同 id 出现两次（2.457 / 0.146），LLM 拿两个同名段只能猜着分配，
+      //   当日总流量只拿到 flex 0.480（应 0.638）。
+      //   合并方向：保留有内容锚点的段，把幻影段的 body.children 并入（不丢描述）后移除。
+      const idMerge = mergeCollidedSections({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = idMerge.sections;
+      logger.info(
+        `🛡️ section-id-merge：evaluated=${idMerge.stats.evaluated} groups=${idMerge.stats.groups} merged=${idMerge.stats.merged} removed=${idMerge.stats.removed}`,
+      );
+      if (idMerge.stats.merged > 0) {
+        logger.warn('🛡️ section-id-merge：撞 id 段已合并（幻影段内容并入有锚点段）', {
+          detail: idMerge.stats.detail,
+        });
+      }
+
+      // 🛡️ V-8（2026-11-11 · bafe3fb7 实锤）：父子段合并 + header 上提。
+      //   `136:121 slot`(86px) 与它的**直接子节点** `136:122 sub-header`(24px, 同一 y) 被 vision
+      //   都当成独立段 ⇒ 产物 StatsSection 与 ContentSection 各渲染一份「◆今日累计」。
+      //   与 V-7 分工：V-7 合并「相同 id」（幻影段抄 id）；V-8 合并「父子关系」（子段只是父段的标题条）。
+      //   判据：直接父子 + 子高 ≤ 父高×0.4 + 子无段级 children ⇒ 子标题上提到父、内容并入后删子。
+      const headerMerge = mergeChildHeaderSections({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = headerMerge.sections;
+      logger.info(
+        `🛡️ section-header-merge：evaluated=${headerMerge.stats.evaluated} groups=${headerMerge.stats.groups} merged=${headerMerge.stats.merged}`,
+      );
+      if (headerMerge.stats.merged > 0) {
+        logger.warn('🛡️ section-header-merge：子段只是父段的标题条，已合并并把标题上提', {
+          detail: headerMerge.stats.detail,
+        });
+      }
+
+      // ① id 唯一化必须提前到 flexGrow 归一化之前（否则同 id 两段各自归一化，值分裂）。
+      //    :below 处（leafSections 之前）仍保留一次调用——幂等，用于兜底后续步骤新增的重复。
+      effectiveSections = uniqueSectionIds(effectiveSections);
+
       // 🛡️ 治本：flex 比例同样以 Figma 实测高度为事实源（vision 自报 flexGrow 只作兜底）。
       // ⚠️ 必须解包 `.document`（T-GROW 2026-11-05）：`opts.figmaNodeData` 存在
       //   `{document, fileKey, cachedAt}` 包裹形态，而 `indexFigmaNodes` 只沿 `children` 走
@@ -3513,6 +3514,81 @@ export class SubcomponentPlanner {
       ? `有效叶子 sections=${leafSections.length} ≥ ${minSections} 或存在高复杂度 section → 强制拆分`
       : `有效叶子 sections=${leafSections.length} < ${minSections} 且无高复杂度 section → 不强制拆分`;
 
+    // 🛡️ A1 段数比门禁（2026-11-11 · 方案 docs/2026-11-11-A1段数比门禁方案.md）：
+    //   今日 8 任务分布：>10 组件无一合格（417bde2c 34 个 failed / d30c05b4 30 个布局全错），
+    //   ≤8 个全部可用。爆炸链：vision 少段 → E1/复杂度拆分炸出 N 叶 → minFiles=N ⇒ 无闸门质疑。
+    //   判据：ratio = leafSections / max(figmaTop, visionSections)，>4 trim（保内容合并），
+    //   >8 blocked（同 L0-B 硬闸通道 fail-closed）。缺真值 fail-open（无 figmaNodeData 不拦截）。
+    //   figmaTop 复用 :2536-2541 既有口径（单一事实源）。
+    if (Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+      try {
+        const _docTop = opts.figmaNodeData?.document || opts.figmaNodeData;
+        const _figmaTopCount = Array.isArray(_docTop?.children?.[0]?.children)
+          ? _docTop.children[0].children.length
+          : Array.isArray(_docTop?.children)
+            ? _docTop.children.length
+            : 0;
+        const ratioAudit = auditSectionCountRatio({
+          leafSections: leafSections.length,
+          figmaTop: _figmaTopCount,
+          visionSections: rawSections.length,
+          sections: effectiveSections,
+        });
+        logger.info(
+          `🛡️ section-count-ratio：leaves=${leafSections.length} base=${ratioAudit.base} ratio=${ratioAudit.ratio.toFixed(2)} verdict=${ratioAudit.verdict}` +
+            (ratioAudit.trimmed.length ? ` trimmed=${ratioAudit.trimmed.length}` : ''),
+          ratioAudit.skippedReason ? { skippedReason: ratioAudit.skippedReason } : undefined,
+        );
+        if (ratioAudit.verdict === 'trim') {
+          // 裁剪后的树替换 effectiveSections（内容已并回宿主容器段，不丢）
+          effectiveSections = ratioAudit.sections;
+          logger.warn('🛡️ section-count-ratio：叶子段超限，已裁剪并合并内容进宿主容器段', {
+            trimmed: ratioAudit.trimmed.slice(0, 10),
+          });
+        } else if (ratioAudit.verdict === 'blocked') {
+          // 🛡️ A5（2026-11-11 · 68f9d3f2）：必须用专用类型抛出——调用方 catch 以 instanceof
+          // 判别「门禁判定」vs「规划器故障」，字符串 err.code 判别已被证实会被外层 catch 吞掉。
+          const err = new PlanningGateError(
+            `段数比门禁阻断：叶子段 ${leafSections.length} / 真值基准 ${ratioAudit.base} = ${ratioAudit.ratio.toFixed(1)}（>8）` +
+              `，规划结构爆炸（一段一组件退化）。top 叶子：${leafSections.slice(0, 10).map((s) => String(s?.id ?? '')).join('、')}`,
+          );
+          logger.error('🚫 section-count-ratio：段数比硬 BLOCK（规划结构爆炸，裁剪也救不回）', {
+            leaves: leafSections.length,
+            base: ratioAudit.base,
+            ratio: ratioAudit.ratio,
+          });
+          throw err;
+        }
+      } catch (ratioErr) {
+        // A5：门禁判定类错误原样上抛（本层 catch 只为审计自身容错，不吞门禁结论）
+        if (ratioErr instanceof PlanningGateError) throw ratioErr;
+        if (ratioErr?.code === 'SECTION_COUNT_RATIO_BLOCKED') throw ratioErr;
+        logger.warn('🛡️ section-count-ratio：审计异常（fail-open 跳过）', {
+          error: ratioErr?.message || String(ratioErr),
+        });
+      }
+    }
+
+    // 🛡️ section-coverage（2026-11-11 · 74722f0f）：段清单版面覆盖率审计——**纯观测，不参与决策**。
+    //   74722f0f 的 blueprint 只有 3 段合计 349px，而同父 425×807 下 556px 的 slot-当日总流量
+    //   未被任何段覆盖（覆盖率 0.432）；下游 flexGrow 只能按 349px 归一化 ⇒ 比例只覆盖 40%，
+    //   LLM 面对空白自拆组件、flex 自拟。本行把「人工比对 blueprint vs Figma 树」变成可 grep 的一行。
+    //   阈值 0.55 来自 68 任务离线回算（好样本 min 0.707 / 最坏 0.432）；A 档只观测，不改写不拦截。
+    try {
+      const covAudit = auditSectionCoverage({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      logger.info(
+        `🛡️ section-coverage：ratio=${covAudit.evaluated ? covAudit.ratio.toFixed(3) : 'n/a'} covered=${covAudit.coveredPx}/${covAudit.containerPx}px container=${covAudit.containerId ?? '-'} missing=${covAudit.missingHeight} verdict=${covAudit.verdict}` +
+          (covAudit.skippedReason ? ` skipped=${covAudit.skippedReason}` : ''),
+      );
+    } catch (covErr) {
+      logger.warn('🛡️ section-coverage：审计异常（fail-open 跳过）', {
+        error: covErr?.message || String(covErr),
+      });
+    }
+
     const plan = {
       effectiveSections,
       isForced,
@@ -3596,9 +3672,20 @@ function applyOverCoarseExpansion(sections, figmaNodeData) {
       sections: stats.sections,
       after: Array.isArray(out) ? out.length : null,
       expanded: stats.expanded,
+      exempted: stats.exempted,
       skippedReason: stats.skippedReason,
       details: stats.details.slice(0, 3),
     });
+    // 🛡️ 2026-11-11 根因 D：豁免必须**单独留痕**（否则「豁免生效」与「判据没跑」不可区分）。
+    //   `section-header-body-pattern` = 段标题条 + 段内容体（已是最小业务段）；
+    //   `section-has-declared-semantics` = 段已声明内部结构。
+    if (stats.exempted > 0) {
+      logger.info('🧱 段粒度审计·已跳过', {
+        reason: stats.exemptReasons[0],
+        count: stats.exempted,
+        sample: stats.exemptReasons.slice(0, 5),
+      });
+    }
     return out;
   } catch (e) {
     logger.warn('🧱 段粒度审计失败（fail-open 维持原样）', {
@@ -3611,6 +3698,8 @@ function applyOverCoarseExpansion(sections, figmaNodeData) {
 /**
  * 🛡️ V-4 顶层段锚点范围审计（纯逻辑在 utils/section-anchor-scope-auditor.js，可单测、不拖 langchain）。
  * 「重复集合中的成员不可能是整个业务段」⇒ 锚点上提到集合容器，同目标段合并。
+ * R3（2026-11-11）：上提目标吞并其他段 ⇒ 撤销（`covers-sibling-sections`，对齐 R2）；
+ * 且「段已声明的内容」不再被当漏网兄弟。
  * fail-open：任何异常都维持原段，绝不因审计本身让任务失败。
  */
 function applySectionAnchorScopeAudit(sections, figmaNodeData) {
@@ -3622,9 +3711,16 @@ function applySectionAnchorScopeAudit(sections, figmaNodeData) {
       anchoredSections: stats.anchoredSections,
       promoted: stats.promoted,
       merged: stats.merged,
+      vetoed: stats.vetoed,
       skippedReason: stats.skippedReason,
       promotions: stats.promotions.slice(0, 5),
+      vetoes: stats.vetoes.slice(0, 5),
     });
+    if (stats.vetoed > 0) {
+      logger.warn('🛡️ 段锚点上提被撤销（目标容器吞并其他业务段·对齐 R2 lca-covers-sibling-sections）', {
+        vetoes: stats.vetoes,
+      });
+    }
     return out;
   } catch (e) {
     logger.warn('🛡️ 顶层段锚点范围审计失败（fail-open 维持原样）', {

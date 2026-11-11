@@ -1115,7 +1115,7 @@ export class FigmaConnector {
    * 根据节点名称判断是否为bg/icon/img/image
    * 优化：找到资源节点后跳过其子节点（子节点通常是VECTOR等，不需要递归）
    */
-  extractResourceNodes(node, collected = [], isRoot = true) {
+  extractResourceNodes(node, collected = [], isRoot = true, ancestors = []) {
     if (!node) return collected;
 
     // 🛡️ 透明底兜底（M6-3a/3b）：根元素（组件根容器）的背景图不下载
@@ -1127,7 +1127,7 @@ export class FigmaConnector {
         // 不 push 根节点，但继续递归子节点（子节点可能是真正的业务资源）
         if (node.children && Array.isArray(node.children)) {
           for (const child of node.children) {
-            this.extractResourceNodes(child, collected, false);
+            this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
           }
         }
         return collected;
@@ -1160,7 +1160,7 @@ export class FigmaConnector {
       for (const k of kids) {
         if (this._isStackControlPart(k)) continue;
         descended++;
-        this.extractResourceNodes(k, collected, false);
+        this.extractResourceNodes(k, collected, false, [node, ...ancestors]);
       }
       if (descended > 0) {
         logger.info(
@@ -1174,7 +1174,7 @@ export class FigmaConnector {
     }
 
     //使用增强的 _identifyNodeType 判断（命名+视觉属性）
-    const nodeType = this._identifyNodeType(node.name, node);
+    const nodeType = this._identifyNodeType(node.name, node, ancestors);
 
     // 跳过面板 chrome 资源（header/title 装饰元素由 base-panel 提供）
     if (nodeType === 'chrome') {
@@ -1229,7 +1229,7 @@ export class FigmaConnector {
         //   吞掉子图（R19 实锤：分流 6+6 不变，2:7458 仍未下载）。此处内联尾递归语义。
         if (node.children && Array.isArray(node.children)) {
           for (const child of node.children) {
-            this.extractResourceNodes(child, collected, false);
+            this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
           }
         }
         return collected;
@@ -1244,12 +1244,32 @@ export class FigmaConnector {
     // 否则视为原子资源整体导出（不钻内部 Vector）。
     const kids = Array.isArray(node.children) ? node.children : [];
     const kidResourceCount = kids.filter((c) => {
-      const t = this._identifyNodeType(c.name, c);
+      const t = this._identifyNodeType(c.name, c, [node, ...ancestors]);
       return t !== 'unknown' && t !== 'chrome';
     }).length;
     const isResourceContainer =
       (node.type === 'FRAME' || node.type === 'GROUP') &&
       kidResourceCount >= 2;
+    // 🛡️ A 层补全④（2026-11-11 · R20 实锤 2:3523）：unknown 父壳（命名无资源语义，
+    //   如 Frame 2136637408）唯一子是真图（image fill）⇒ kidResourceCount=1 <2 ⇒
+    //   旧逻辑把父壳当原子资源 push+return，吞掉真图子。判定与容器壳同构：自身无
+    //   IMAGE fill 但子树有 ⇒ 父图照导 + 继续下钻收子图（真图永不丢）。
+    const isImageBearerShell =
+      !isResourceContainer &&
+      !this._selfHasImageFill(node) &&
+      this._hasDescendantImageFill(node);
+    if (isImageBearerShell) {
+      logger.info(
+        `🔀 无名父壳带真图子，下钻收集（父不入清单）: ${node.name}`,
+        { nodeId: node.id },
+      );
+      if (node.children && Array.isArray(node.children)) {
+        for (const child of node.children) {
+          this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
+        }
+      }
+      return collected;
+    }
     if (!isResourceContainer && !isOversizedPseudoIcon) {
       collected.push(node);
       // ✅ 原子资源节点：立即返回，跳过其内部 Vector 子节点
@@ -1278,7 +1298,7 @@ export class FigmaConnector {
         // ⚠️ 不可用面积比判定：嵌套的 tabs-list/bg 也完整覆盖其父容器（实测 areaRatio 1.000），
         //    按面积会误伤业务背景（2:7890 tabs-list 背景 / 2:7891 bg-tab-active）。
         //    因此这里必须用「根节点的直接子节点」这一结构信号。
-        if (isRoot && this._identifyNodeType(child.name, child) === 'bg') {
+        if (isRoot && this._identifyNodeType(child.name, child, [node]) === 'bg') {
           logger.info(
             `⏭️ 跳过根容器直接子背景图（透明底要求，挂载侧 skipMount 注定不用）: ${child.name}`,
             { nodeId: child.id },
@@ -1286,12 +1306,12 @@ export class FigmaConnector {
           // 仅跳过背景节点自身，仍下钻其子节点——避免背景层内裹着真实业务资源时被误删
           if (child.children && Array.isArray(child.children)) {
             for (const grandchild of child.children) {
-              this.extractResourceNodes(grandchild, collected, false);
+              this.extractResourceNodes(grandchild, collected, false, [child, node, ...ancestors]);
             }
           }
           continue;
         }
-        this.extractResourceNodes(child, collected, false);
+        this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
       }
     }
 
@@ -2545,14 +2565,93 @@ export class FigmaConnector {
   }
 
   /**
+   * 🛡️ 组合图标内层位图让位判据（2026-11-11 · c-vehicle-monitor-dd5791ba 实锤，根治①）
+   *
+   * 病灶：卡片图标在 Figma 里是组合容器（136:123 "icon" FRAME 48×52 = 橙色 Mask group
+   * + jimeng 原始底图 RECTANGLE）。容器按「命名资源整体导出」出 1 张组合图（橙色）；
+   * 但内部铺满的 IMAGE fill 原始位图（47.5×47.5 jimeng 灰白底图）又被
+   * 「IMAGE fill 优先」规则独立分类成 icon 入下载清单 ⇒ 与组合图竞争同一挂载位，
+   * LLM 绑定错位后 2/3 号卡图标渲染成灰白底图（用户看原文件实锤「icon 应整体下载」）。
+   *
+   * 判据（确定性，全真值）：node 带 IMAGE fill + 某祖先满足
+   *   ① GROUP/FRAME 类型 ② 包围盒完全包含 node（容差 2px）③ 铺满（宽高差 ≤ 8px）
+   *   ④ 自身分类 ∈ icon/bg/image（即该祖先会被整体导出、渲染已覆盖 node 视觉；
+   *      icon 遵守 96px 物理上限，与伪 icon 容器守卫同源语义）
+   * ⇒ node 是组合的图层而非独立资源，不入下载清单、不进映射（两侧同判据，无口径分裂）。
+   *
+   * 阳性实锤：2:8060（jimeng RECT，父 136:123 icon FRAME 铺满）⇒ 让位；
+   *           2:8062（父 2:8061 Mask group 分类 unknown）⇒ 沿祖先链上溯至 136:123 命中。
+   * 阴性保护：卡 bg 内 18×18 独立小 icon（不铺满 140×74 bg）⇒ 不让位，保持独立资源。
+   * @param {Object} node - 候选位图节点
+   * @param {Array} ancestors - 祖先链（就近在前，仅 GROUP/FRAME 参与判定）
+   * @returns {boolean} true = node 应让位
+   */
+  _isCoveredIconLayer(node, ancestors = []) {
+    if (!node || typeof node !== 'object' || !Array.isArray(ancestors)) {
+      return false;
+    }
+    const hasImageFill =
+      Array.isArray(node.fills) &&
+      node.fills.some((f) => f && f.type === 'IMAGE' && f.visible !== false);
+    if (!hasImageFill) return false;
+    const nb = node.absoluteBoundingBox;
+    if (!nb) return false;
+
+    const CONTAIN_TOL = 2;
+    const FILL_TOL = 8;
+    let walked = 0;
+    for (const anc of ancestors) {
+      if (!anc || typeof anc !== 'object' || walked >= 8) break;
+      walked += 1;
+      if (!['GROUP', 'FRAME'].includes(anc.type)) continue;
+      const pb = anc.absoluteBoundingBox;
+      if (!pb) continue;
+      const contained =
+        nb.x >= pb.x - CONTAIN_TOL &&
+        nb.y >= pb.y - CONTAIN_TOL &&
+        nb.x + nb.width <= pb.x + pb.width + CONTAIN_TOL &&
+        nb.y + nb.height <= pb.y + pb.height + CONTAIN_TOL;
+      // 走出覆盖视觉范围即止（祖先比 node 大得多 = node 是独立装饰，不是图层）
+      if (!contained) break;
+      const fillsParent =
+        pb.width - nb.width <= FILL_TOL && pb.height - nb.height <= FILL_TOL;
+      if (!fillsParent) continue;
+      const ancType = this._identifyNodeType(anc.name || '', anc, null);
+      if (['icon', 'bg', 'image'].includes(ancType)) {
+        if (ancType === 'icon' && Math.max(pb.width, pb.height) > 96) {
+          continue; // 伪 icon 大容器不会被整体导出，不能作为覆盖者
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * 识别节点类型（bg/icon/image/chrome）
    *  双识别策略 — 命名惯例 + 视觉属性推断
    *  增加 chrome 检测（面板 header/title 装饰资源）+ GROUP/FRAME 容器识别
    * @param {string} nodeName - 节点名称
    * @param {Object} node - Figma 节点（可选，用于视觉属性推断）
+   * @param {Array|Object} ancestors - 祖先链（就近在前）或直接父节点（可选，
+   *   用于组合图标内层位图让位判定）
    */
-  _identifyNodeType(nodeName, node = null) {
+  _identifyNodeType(nodeName, node = null, ancestors = null) {
     if (!nodeName) return 'unknown';
+
+    // 🛡️ 组合图标内层位图让位（根治① · dd5791ba 实锤）——必须先于命名规则：
+    //    实锤位图名「jimeng-…-超高客车图标」含「图标」会被第一优先级命名惯例抢先
+    //    判 icon，让位判定放在视觉推断层永远执行不到。
+    if (node && ancestors) {
+      const _chain = Array.isArray(ancestors) ? ancestors : [ancestors];
+      if (_chain.length > 0 && this._isCoveredIconLayer(node, _chain)) {
+        logger.info(
+          `🧩 组合图标内层位图让位（父容器已整体导出，不独立下载/进映射）: ${nodeName}`,
+          { nodeId: node.id },
+        );
+        return 'unknown';
+      }
+    }
 
     const nameLower = nodeName.toLowerCase();
 
@@ -2793,7 +2892,7 @@ export class FigmaConnector {
   _buildResourceDomMapping(nodeData, downloadedImages) {
     const mappings = [];
 
-    const traverse = (node, path = [], parentBox = null, parentId = null, idPath = []) => {
+    const traverse = (node, path = [], parentBox = null, parentId = null, idPath = [], ancestors = []) => {
       if (!node) return;
 
       // 🛡️ 技术栈标记子树跳过（与 extractResourceNodes 下载阶段保持一致）：
@@ -2807,12 +2906,12 @@ export class FigmaConnector {
         const kids = Array.isArray(node.children) ? node.children : [];
         for (const k of kids) {
           if (this._isStackControlPart(k)) continue;
-          traverse(k, [...path, node.name], node.absoluteBoundingBox, node.id, [...idPath, String(node.id)]);
+          traverse(k, [...path, node.name], node.absoluteBoundingBox, node.id, [...idPath, String(node.id)], [node, ...ancestors]);
         }
         return;
       }
 
-      const nodeType = this._identifyNodeType(node.name, node);
+      const nodeType = this._identifyNodeType(node.name, node, ancestors);
 
       // 跳过 chrome 资源和 unknown 节点
       if (nodeType !== 'unknown' && nodeType !== 'chrome') {
@@ -2987,7 +3086,7 @@ export class FigmaConnector {
 
       if (node.children) {
         node.children.forEach((child) =>
-          traverse(child, [...path, node.name], node.absoluteBoundingBox, node.id, [...idPath, String(node.id)]),
+          traverse(child, [...path, node.name], node.absoluteBoundingBox, node.id, [...idPath, String(node.id)], [node, ...ancestors]),
         );
       }
     };

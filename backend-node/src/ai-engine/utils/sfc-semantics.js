@@ -19,6 +19,7 @@
 // 加载逻辑收敛到 acorn-optional-loader.js（import.meta 隔离，jest CJS 可 mock；缺失降级 null）
 import { acornParser, acornWalker } from './acorn-optional-loader.js'
 import { extractSfcTemplate } from './sfc-template-extractor.js'
+import globalsPkg from 'globals'
 
 /**
  * <script> 内部「全局白名单」：这些标识符在 <script setup> 中无需 import 即可使用，
@@ -29,7 +30,37 @@ import { extractSfcTemplate } from './sfc-template-extractor.js'
  *   3. 宿主注入全局（微码运行时注入 globalThis 的 $ 前缀函数，如 $mcComponentBuilder）
  *   4. JS 语言内置 + 浏览器全局 + Node 环境
  */
+/**
+ * 宿主环境全局（**数据驱动，唯一事实源 = `globals` 包**）。
+ *
+ * 为什么不再手写：2026-11-11 6a16224a 实锤——手写浏览器白名单漏了 `getComputedStyle`
+ * （W3C 标准全局、echarts 容器测量标准写法）⇒ 合法产物被判「未声明自由变量」⇒ 整任务 failed。
+ * 浏览器全局有 1000+ 项且随规范演进，**枚举式手写必然漏列**，而漏列 = fail-closed 误杀。
+ *
+ * `globals`（eslint 同源数据，v17 含 browser 1196 项 / builtin / node）由社区随 WHATWG/W3C
+ * 规范维护 ⇒ 新增规范全局无需改本文件。禁止在下方向手写清单里继续追加浏览器全局。
+ *
+ * 兜底：包缺失（生产 `npm ci --omit=dev` 未装、或包损坏）⇒ 返回空数组，
+ * 由下方手写清单（Vue/微码/常用内建）承担最小可用集，保证不崩、不误杀常见写法。
+ */
+function envGlobals() {
+  try {
+    const g = globalsPkg && typeof globalsPkg === 'object' ? globalsPkg : {};
+    const list = [
+      ...Object.keys(g.browser || {}),
+      ...Object.keys(g.builtin || {}),
+      ...Object.keys(g.node || {}),
+    ];
+    return list.length > 0 ? list : [];
+  } catch {
+    return [];
+  }
+}
+
 const SCRIPT_GLOBALS = new Set([
+  // ① 规范内建全局（数据驱动：browser 1196 项 + JS builtin + node）——新增规范无需改代码
+  ...envGlobals(),
+  // ② 项目约定 + 兜底（手写）：Vue 宏/API、微码宿主注入、Vue 实例属性，以及 `globals` 包缺失时的最小内建集
   // ── Vue 编译器宏（script setup 无需 import）──
   'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'defineOptions',
   'defineModel', 'defineSlots', 'useSlots', 'useAttrs',
@@ -66,6 +97,13 @@ const SCRIPT_GLOBALS = new Set([
   'URL', 'URLSearchParams', 'FormData', 'Blob', 'File', 'FileReader', 'Image', 'Audio',
   'TextEncoder', 'TextDecoder', 'AbortController', 'AbortSignal', 'WebSocket', 'Worker', 'Event', 'CustomEvent',
   'alert', 'confirm', 'prompt',
+  // 🛡️ 2026-11-11（6a16224a 误杀实锤）：`getComputedStyle(echartsRef.value)` 是 echarts 容器
+  //   尺寸测量的标准写法，却因白名单漏列被判「未声明自由变量」⇒ 整任务 failed。
+  //   本段补齐 W3C/WHATWG 规范内建的常用浏览器全局（宁多列不漏列，注释见文件头）。
+  'getComputedStyle', 'matchMedia', 'devicePixelRatio', 'getSelection', 'scrollTo', 'scrollBy',
+  'DOMParser', 'XMLSerializer', 'Notification',
+  'Node', 'Element', 'HTMLElement', 'SVGElement', 'Document', 'Window', 'NodeList', 'HTMLCollection', 'DOMRect',
+  'Path2D', 'OffscreenCanvas', 'ImageData', 'CanvasRenderingContext2D',
   // ── Node 环境（组件代码理论不触碰，列此防误伤）──
   'require', 'module', 'exports', '__dirname', '__filename', 'process', 'Buffer',
 ])
@@ -416,6 +454,34 @@ export function findDuplicateImports(scriptBody) {
  * @param {boolean} [opts.skipFreeVariableCheck=false] 跳过「<script> 内部自由变量检测」（分块生成的子片段须传 true，避免误报跨片段声明的变量）
  * @returns {{ issues: string[] }}
  */
+/**
+ * 🛡️ 模板绑定里的连字符裸标识符（2026-11-11 · c-vehicle-monitor-4cf5135f 实锤）：
+ *   `:class="c-vehicle-monitor-cardClass"` —— 连字符不是合法 JS 标识符字符，
+ *   Vue 编译器把它解析为 `c - vehicle - monitor - cardClass` 减法链 → 运行时
+ *   ReferenceError（vehicle is not defined）→ 该组件子树整体渲染失败。
+ *   旧 extractTemplateRefs 的提取正则 `[a-zA-Z_$][\w$]*` 不含连字符 ⇒ 这类值
+ *   进不了 used 集合 ⇒ 门禁恰好放行它唯一必须拦的形态。
+ *   判定：指令绑定/插值的**整值**为连字符标识符，且拆分后的任一段未在 script 声明
+ *   （全部段都声明过 ⇒ 是合法减法运算，放行）。
+ * @returns {string[]} 非法连字符标识符列表（去重）
+ */
+export function findHyphenatedTemplateRefs(templateContent, declared = null) {
+  const tokens = new Set()
+  if (!templateContent || typeof templateContent !== 'string') return []
+  // 指令绑定整值形态：:attr="X-Y" / v-bind:attr="X-Y"（单双引号）
+  for (const m of templateContent.matchAll(/(?::|v-bind:)[a-zA-Z-]+\s*=\s*(["'])([a-zA-Z_$][\w$]*(?:-[a-zA-Z_$][\w$]*)+)\1/g)) {
+    tokens.add(m[2])
+  }
+  // 插值整值形态：{{ X-Y }}
+  for (const m of templateContent.matchAll(/\{\{\s*([a-zA-Z_$][\w$]*(?:-[a-zA-Z_$][\w$]*)+)\s*\}\}/g)) {
+    tokens.add(m[1])
+  }
+  if (!declared) return [...tokens]
+  return [...tokens].filter((t) =>
+    t.split('-').some((part) => part && !declared.has(part)),
+  )
+}
+
 export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
   const issues = []
   if (!content || typeof content !== 'string') return { issues }
@@ -477,6 +543,11 @@ export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
     const missing = [...used].filter(name => !declared.has(name) && !loopVars.has(name) && !implicitlyDeclared.has(name))
     if (missing.length > 0) {
       issues.push(`${filePath}: 模板引用了 script 中未声明的变量/组件（${missing.slice(0, 8).join('、')}）`)
+    }
+    // 3b. 🛡️ 连字符裸标识符（extractTemplateRefs 的提取正则认不出 ⇒ 独立判据）
+    const hyphenBad = findHyphenatedTemplateRefs(templateContent, declared)
+    if (hyphenBad.length > 0) {
+      issues.push(`${filePath}: 模板绑定表达式含连字符标识符（${hyphenBad.slice(0, 5).join('、')}）——连字符不是合法 JS 标识符字符，会被编译为减法表达式导致运行时 ReferenceError、组件子树整体渲染失败；请改用驼峰命名（如 cardClass）并保证 script 中有同名声明`)
     }
   }
 

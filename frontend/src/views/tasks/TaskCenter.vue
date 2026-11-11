@@ -215,6 +215,13 @@
             <span v-if="task.userApproved" class="task-status speed-pass" :title="`用户点击「跳过剩余阶段」极速通过，产物未经 AI 对抗性修正（跳过阶段：${(task.approval?.skippedStages || []).join('、')}）`">
               ⚡ 跳过剩余
             </span>
+            <!-- 🛡️ P0-B（2026-11-11）：像素保真警告标签——VISUAL-002 WARN 不阻断交付（C2 契约），
+                 但 score<0.6 的产物以 completed 姿态交付时用户必须可见。零阻断语义，只透传证据。 -->
+            <span
+              v-if="task.visualFidelityWarning && task.visualFidelityWarning.score !== null && task.visualFidelityWarning.score < 0.6"
+              class="task-status visual-warn"
+              :title="`像素保真分 ${task.visualFidelityWarning.score}（阈值<0.6 为 block 档），渲染产物与设计稿差异较大，建议对照设计稿人工检查或重新生成`"
+            >视觉待改进</span>
             <span class="task-time">{{ formatTime(task.startTime) }}</span>
             <span class="task-duration">{{ formatDuration(task.duration) }}</span>
             <span v-if="task.status === 'failed' && task.error" class="task-error-inline" :title="task.error">{{ task.error }}</span>
@@ -1839,6 +1846,12 @@ html[data-theme="dark"] .task-source-box {
 }
 /* 极速通过标记：橙色，区别于绿色「已完成」与人工审核标记 */
 .task-status.speed-pass {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+}
+/* 🛡️ P0-B 视觉保真警告标记：与 speed-pass 同警示色系，语义「已完成但视觉差异大」 */
+.task-status.visual-warn {
   background: var(--warning-bg);
   color: var(--warning);
   border: 1px solid var(--warning-border);

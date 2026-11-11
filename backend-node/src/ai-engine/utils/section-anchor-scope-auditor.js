@@ -35,6 +35,44 @@
  * internalSubcomponents，几何高度改用 C 的真实盒）。段数因此下降，下游
  * （flexGrow / 装配 / minFiles / 覆盖度）全部按修正后的段树计算，无第二套口径。
  *
+ * ── R3 加固（2026-11-11 · mc-max-1794359124563-05945a47「合作厂商弹窗」实锤）────────
+ * 🔴 病灶：**本模块把 R2 已明文拒绝的事又做了一遍**。
+ *   真值 `38:3134` 660×868，4 个业务段：
+ *     段0 统计卡片区  `38:3260`（首卡 265×76）真实高 **76px（8.8%）**；
+ *     段1/2/3 三个分组 604×161 / 212 / 265。
+ *   `entrance` 时 vision 段高本来是对的（`figmaHeightPx:76 flexGrow:0.426`），
+ *   本模块把它上提成 `796:3`（`slot-icon` 604×787 整内容槽）⇒ 段高 76 → **787（+935%）**，
+ *   `flexGrow` 0.426 → 2.209；下游 `applyFigmaHeightGrow` 忠实执行 ⇒
+ *   产物 `<StatsSection style="flex:0.552">` 独占 55.2% 高度，三个列表被压到 11.3/14.9/18.6%。
+ *
+ * 🔴 同一次运行里 **R2（`section-anchor-truth#auditSectionAnchors`）对同一候选
+ *   `candidateLca=796:3` 已经以 `lca-covers-sibling-sections` 正确拒修**：
+ *     `unrepairedDetail:[{sectionId:'38:3260',candidateLca:'796:3',reason:'lca-covers-sibling-sections',
+ *                         coveredAnchors:['38:3137','38:3162','38:3206']}]`
+ *   —— 判据不对称才是真因（不是「判据不够多」，是「同一条判据只有 R2 有」）。
+ *
+ * 根因①（漏认「段已声明的内容」为已覆盖）：
+ *   段0 的 `body.children` **已声明两张卡** `[38:3260, 38:3282]`（各 `role:'stat-card'`）——
+ *   vision 用「首卡 id」当整段锚点（与 `declaresCollection` 注释里「首行 id 表示整张表」同族）。
+ *   旧实现只把「锚点**子树**」算作已覆盖 ⇒ 兄弟卡 `38:3282`（同尺寸、非锚点子树内）
+ *   被误判为「未被任何段覆盖的成员」⇒ 判定 `horizontal-row` 上提。
+ *   ⇒ 修复：`coveredIds` 增认**段声明的内容节点 id**（`body.children` / `body.items` /
+ *   `headers` / `internalSubcomponents` / `declaredContent` / `refs` / `sourceNodeIds`）及其子树。
+ *     语义：「段声明了内容」= 该节点**已有归属**，不可能是「被漏掉的兄弟」。
+ *     ⇒ 本例 `uncovered` 由 1 → 0 ⇒ `all-peers-covered` ⇒ 不上提（锚点与几何保持 76）。
+ *
+ * 根因②（缺 R2 同款对称守卫）：
+ *   即使根因①单独漏网，也应有第二道闸：**上提目标不得吞并其他业务段**。
+ *   补 `covers-sibling-sections`：候选容器子树若包含**其他段**的锚点，且该段**不**并入同一
+ *   目标（即不是合法合并），则撤销本次上提（reason 同名对齐 R2，便于两条轨道对账）。
+ *   例外：其他段也上提到**同一目标** ⇒ 正当合并（V-4 设计意图：两个成员并进同一集合容器），不撤。
+ *   ⇒ 本例 `796:3` 子树含 `38:3137/3162/3206`（段1/2/3），三者目标都是自身 ⇒ 撤销。
+ *
+ * 两道判据互补：① 让「本段自己声明的成员」不再被当漏网兄弟；② 挡住「目标容器吞并别的段」。
+ * 均只读 Figma 结构化字段（id 对位 / 几何盒 / 段声明），**零命名、零尺寸枚举**。
+ * 与 V-4 原始收益不冲突：`2:8438`/`2:8439`（单卡 + 其 bg，未声明任何兄弟）仍照常上提
+ * —— 见 spec「阳性①②」「边界」用例原样通过。
+ *
  * ── 边界（fail-open，不猜） ─────────────────────────────────────────────────
  * 无 Figma 真值 / 段数 < 2 / 锚点无法解析 / 无几何盒 / 未命中判据 ⇒ 原样返回 + `skippedReason`。
  * 纯函数：不 import logger，日志由调用方按返回值打（计数行铁律：0 也打）。
@@ -154,16 +192,76 @@ function detectSetContainer(containerNode, anchorBox, coveredIds) {
 }
 
 /**
+ * 段**声明的内容**节点 id 集合（结构化字段，不含 `section.id` 自身 —— 它由锚点先行覆盖）。
+ *
+ * 「段声明了内容」= 该节点已有归属 ⇒ 不可能是「未被任何段覆盖的漏网兄弟」。
+ * 只认 Figma 形态 id（过 `FIGMA_ID_RE`），语义 id（`section-cards`）自然不入选。
+ *
+ * 采集面（与 `section-anchor-truth#collectSectionFigmaRefs` 同族，但**只增**两个来源）：
+ *   · 成员清单：`children` / `items` / `elements` / `internalSubcomponents` / `headers`
+ *     （顶层 或 `body` 内 或 `declaredContent` 内）的 `figmaNode` / `figmaNodeId` / `id`；
+ *   · 显式引用数组：`refs` / `sourceNodeIds` / `nodeIds`。
+ * 🔴 覆盖 `body.children` 是本次实锤的关键：段0 用它声明了两张统计卡（`38:3260`/`38:3282`）。
+ */
+function collectDeclaredRefIds(section) {
+  const out = new Set()
+  if (!section || typeof section !== 'object') return out
+  const pushId = (v) => {
+    if (typeof v !== 'string') return
+    const s = v.trim()
+    if (s && FIGMA_ID_RE.test(s)) out.add(s)
+  }
+  for (const key of ['refs', 'sourceNodeIds', 'nodeIds']) {
+    const arr = section[key]
+    if (Array.isArray(arr)) arr.forEach(pushId)
+  }
+  const shells = [section, section.body, section.declaredContent].filter(
+    (x) => x && typeof x === 'object',
+  )
+  for (const shell of shells) {
+    for (const key of ['children', 'items', 'elements', 'internalSubcomponents', 'headers']) {
+      const arr = shell[key]
+      if (!Array.isArray(arr)) continue
+      for (const it of arr) {
+        if (typeof it === 'string') {
+          pushId(it)
+          continue
+        }
+        if (!it || typeof it !== 'object') continue
+        for (const k of ['figmaNode', 'figmaNodeId', 'id']) pushId(it[k])
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * `ancestorId` 是否为 `id` 的祖先（含自身）。与 `section-anchor-truth#isAncestorOrSelf` 同口径，
+ * 但只吃 `indexFigmaNodes` 的 `parentId` 链（本模块不 import 那份未导出的内部函数）。
+ */
+function isAncestorId(index, ancestorId, id) {
+  let cur = index.get(String(id)) || null
+  let guard = 0
+  while (cur && guard++ < 128) {
+    if (String(cur.id) === String(ancestorId)) return true
+    cur = cur.parentId != null ? index.get(String(cur.parentId)) || null : null
+  }
+  return false
+}
+
+/**
  * 审计并（在满足窄判据时）把过窄的顶层段锚点上提到其集合容器。
  *
  * @param {Array<object>} sections 顶层 sections（planner effectiveSections）
  * @param {object} figmaRoot Figma 真值树（或 { document } 包裹）
  * @returns {{ sections: Array<object>, stats: {
  *   evaluated: number, sections: number, anchoredSections: number,
- *   promoted: number, merged: number, skippedReason: string,
- *   promotions: Array<{sectionId:string, from:string, to:string, reason:string, members:number}>
+ *   promoted: number, merged: number, vetoed: number, skippedReason: string,
+ *   promotions: Array<{sectionId:string, from:string, to:string, reason:string, members:number}>,
+ *   vetoes: Array<{sectionId:string, from:string, to:string, reason:string, coveredAnchors:string[]}>
  * }}}
  *   `sections` 为原数组（未动）或**新数组**（绝不原地改）。
+ *   `vetoes` 为「因目标容器吞并其他段而被撤销的上提」（R3，对齐 R2 `lca-covers-sibling-sections`）。
  */
 export function auditSectionAnchorScope(sections, figmaRoot) {
   const stats = {
@@ -172,8 +270,10 @@ export function auditSectionAnchorScope(sections, figmaRoot) {
     anchoredSections: 0,
     promoted: 0,
     merged: 0,
+    vetoed: 0,
     skippedReason: '',
     promotions: [],
+    vetoes: [],
   }
   if (!Array.isArray(sections) || sections.length < 2) {
     stats.skippedReason = 'insufficient-sections'
@@ -209,6 +309,8 @@ export function auditSectionAnchorScope(sections, figmaRoot) {
   }
 
   // ①-b 「已被覆盖」集合：任一段锚点**及其整棵子树**（段声明了子树 = 该子树内元素有归属）
+  //   ＋ **段声明的内容节点**及其子树（R3，见头部「根因①」）。
+  //   语义：「段声明了内容」⇒ 该节点已有归属 ⇒ 不可能是「被漏掉的同构兄弟」。
   const coveredIds = new Set()
   const markCovered = (node) => {
     if (!node || typeof node !== 'object') return
@@ -216,9 +318,12 @@ export function auditSectionAnchorScope(sections, figmaRoot) {
     for (const c of Array.isArray(node.children) ? node.children : []) markCovered(c)
   }
   for (const a of anchors) markCovered(index.get(a.key)?.rawNode)
+  for (const s of sections) {
+    for (const id of collectDeclaredRefIds(s)) markCovered(index.get(id)?.rawNode)
+  }
 
-  // ② 逐段向上找集合容器
-  let promotedAny = false
+  // ② 逐段向上找集合容器（**只取暂定目标**；「吞并其他段」的对称守卫在 ②-b 统一裁决，
+  //   避免 `stats.promoted` 先加后减、或合并已发生后无法回退）
   const targets = anchors.map((a, i) => {
     // 已声明成员清单（表格首行 id / 列表首项 id 作锚点）⇒ 它自己就是集合段，不得上提
     if (declaresCollection(sections[i])) {
@@ -233,17 +338,14 @@ export function auditSectionAnchorScope(sections, figmaRoot) {
       if (!parentRec) break
       const verdict = detectSetContainer(parentRec.rawNode, a.box, coveredIds)
       if (verdict.isSet) {
-        stats.promoted += 1
-        promotedAny = true
-        stats.promotions.push({
-          sectionId: String(sections[i]?.id ?? ''),
-          from: a.key,
-          to: String(cursorId),
-          reason: verdict.reason,
+        return {
+          ...a,
+          target: String(cursorId),
+          targetBox: getFigmaBox(parentRec.rawNode),
+          setReason: verdict.reason,
           members: verdict.members,
           uncovered: verdict.uncovered,
-        })
-        return { ...a, target: String(cursorId), targetBox: getFigmaBox(parentRec.rawNode) }
+        }
       }
       cursorId = parentRec.parentId || null
       hops += 1
@@ -251,8 +353,52 @@ export function auditSectionAnchorScope(sections, figmaRoot) {
     return { ...a, target: a.key, targetBox: a.box }
   })
 
-  if (!promotedAny) {
-    stats.skippedReason = 'no-narrow-anchor'
+  // ②-b 对称守卫（R3 · 对齐 R2 `lca-covers-sibling-sections`）：
+  //   目标容器子树若覆盖**其他段**的声明锚点 ⇒ 该上提把别段地盘划归本段 ⇒ 撤销。
+  //   例外：其他段也上提到**同一目标** ⇒ 正当合并（V-4 设计意图），不撤。
+  for (let i = 0; i < targets.length; i += 1) {
+    const t = targets[i]
+    if (t.target === t.key) continue
+    const covered = []
+    for (let j = 0; j < anchors.length; j += 1) {
+      if (j === i) continue
+      if (targets[j].target === t.target) continue // 并进同一目标 = 合法合并
+      if (isAncestorId(index, t.target, anchors[j].key)) covered.push(anchors[j].key)
+    }
+    if (covered.length === 0) continue
+    stats.vetoed += 1
+    stats.vetoes.push({
+      sectionId: String(sections[i]?.id ?? ''),
+      from: t.key,
+      to: t.target,
+      reason: 'covers-sibling-sections',
+      coveredAnchors: covered,
+    })
+    targets[i] = {
+      ...anchors[i],
+      target: anchors[i].key,
+      targetBox: anchors[i].box,
+      vetoed: 'covers-sibling-sections',
+    }
+  }
+
+  // ②-c 守卫后统计晋级（只认最终 target ≠ 原锚点的段）
+  for (let i = 0; i < targets.length; i += 1) {
+    const t = targets[i]
+    if (t.target === t.key) continue
+    stats.promoted += 1
+    stats.promotions.push({
+      sectionId: String(sections[i]?.id ?? ''),
+      from: t.key,
+      to: t.target,
+      reason: t.setReason || 'set-container',
+      members: t.members,
+      uncovered: t.uncovered,
+    })
+  }
+
+  if (stats.promoted === 0) {
+    stats.skippedReason = stats.vetoed > 0 ? 'vetoed-covers-sibling' : 'no-narrow-anchor'
     return { sections, stats }
   }
 
@@ -274,8 +420,7 @@ export function auditSectionAnchorScope(sections, figmaRoot) {
     out.push(rebuilt)
   }
 
-  // ④ 保持原数组不动的纪律：内容全同则原样返回
-  if (out.length === sections.length && !promotedAny) return { sections, stats }
+  // ④ 已在上方按最终 target 统计过 `promoted`（> 0 才会走到这里）⇒ 必有变化，返回新数组
   return { sections: out, stats }
 }
 

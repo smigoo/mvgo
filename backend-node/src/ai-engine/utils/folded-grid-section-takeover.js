@@ -1111,6 +1111,50 @@ function resolveDeclaredTableLca(sec, figmaIndex, parentOf) {
   return candidate || null;
 }
 
+/**
+ * 🔴 P0-3（2026-11-11 · docs/2026-11-11-组件生成断层归因与交接 实锤）：table 接管的
+ *   **结构签名否决**。病灶：vision `type=null` ⇒ T-CONTRACT 契约门 fail-open（:1126
+ *   对 canonical 空值放行）⇒ 纯几何判据把「图表卡」判成表格 ⇒ `kind=table` 确定性接管
+ *   （整文件不进 LLM chunk）⇒ 车型分布 `2:3438` 子树含 `246:30 @echarts` 52×52 +
+ *   `bg-[m]` 背景层被渲染成 `<a-table>`。既有 F1 图表段否决依赖 `analysisCharts`
+ *   （vision `charts[]`），type=null 时 charts[] 同样缺失 ⇒ 两道判据同时瞎。
+ *
+ *   本判据是**第三道独立防线**：直接扫段锚点子树的 Figma 节点**命名签名**——
+ *     ① 图表库标记：`@echarts/@chart/@chartjs/@plotly/@g2/@antv/@d3`（figma-connector.js:1137
+ *        技术栈标记约定，子树由运行时图表库渲染，静态 DOM 接管必然毁图）；
+ *     ② 背景位图层：`bg-*`/`bg[*`（figma-connector.js:2502 命名约定，接管会剥掉背景层）。
+ *   命中即拒（宁可放过，不可误接管——与 F1 同一取向），fail-open 回 LLM 生成路径。
+ *
+ * @param {Array<object>} anchorRawNodes 段锚点原始节点（含完整 children 子树）
+ * @returns {string|null} 命中的签名（`chart:@echarts/xx` / `bgLayer:bg-[m]`），未命中 null
+ */
+export function memberSubtreeBlockedSignature(anchorRawNodes) {
+  const CHART_MARKER_RX = /^@(echarts|chart|chartjs|plotly|g2|antv|d3)\b/i;
+  const BG_LAYER_RX = /^bg([-_[]|$)/i;
+  const MAX_DEPTH = 64;
+  let visited = 0;
+  // 先序遍历（文档序）：首个命中即返回，保证结果确定性（不依赖遍历容器实现）
+  const scan = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return null;
+    if (++visited > 500) return null;
+    const name = String(node.name || '');
+    if (CHART_MARKER_RX.test(name)) return `chart:${name}`;
+    if (BG_LAYER_RX.test(name)) return `bgLayer:${name}`;
+    const kids = Array.isArray(node.children) ? node.children : [];
+    for (const k of kids) {
+      const hit = scan(k, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  for (const root of anchorRawNodes || []) {
+    if (!root || typeof root !== 'object') continue;
+    const hit = scan(root, 0);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export function detectTableLeaf(sec, figmaIndex, parentOf, resourceMapping) {
   // 🛡️ T-CONTRACT 契约门（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：
   //   vision 已给出**形态语义**且不是 table ⇒ 表格判据不得接管。
@@ -1125,6 +1169,15 @@ export function detectTableLeaf(sec, figmaIndex, parentOf, resourceMapping) {
   const canonical = canonicalSectionType(sec);
   if (canonical && canonical !== 'table' && !GENERIC_SECTION_KINDS.has(canonical)) {
     return { ok: false, reason: `contractMismatch:${canonical}` };
+  }
+  // 🛡️ P0-3 结构签名否决（判据见 memberSubtreeBlockedSignature 注释）：契约门 fail-open
+  //   （type=null）时，子树里的 @图表库标记 / bg-* 背景层是「这不是静态表格」的确定性
+  //   反证，纯几何判据必须让位。放在 direct/promoted 之前——两条路径都不得越过本闸。
+  const blockedSig = memberSubtreeBlockedSignature(
+    collectAnchorNodes(sec, figmaIndex),
+  );
+  if (blockedSig) {
+    return { ok: false, reason: `memberSubtreeBlocked:${blockedSig}` };
   }
   const direct = detectTableLeafByAnchors(sec, figmaIndex, parentOf, resourceMapping);
   if (direct.ok) return direct;
@@ -4258,7 +4311,7 @@ function declaredUnconsumedCount(sec, kind) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：vision `charts[]` 段归属集合。
@@ -4341,6 +4394,12 @@ export function collectFoldedGridTakeover(p = {}) {
             tablePending.push({ sec, tr: tb });
             continue;
           } else {
+            // 🔴 P0-3 计数行铁律：结构签名否决计数（0 也必须出现），否则「判据失效」
+            //   与「真没问题」不可辨。否决时跳过 table 分支继续后续检测（fail-open）。
+            if (typeof tb?.reason === 'string' && tb.reason.startsWith('memberSubtreeBlocked:')) {
+              out.tableStructVeto += 1;
+              out.skipped.push(`table-struct-veto:${sec.id}:${tb.reason}`);
+            }
           // 🔴 同构列表（刀 20b）：位序在 grid/header/statrow/table 之后、text 之前。
           //   折叠列表是 planner 显式结构契约（collapsed/v-for + enriched items），
           //   先于「按 figma 子树猜」的 text/icon 检测消费；grid/statrow/table 在前
@@ -4640,6 +4699,8 @@ export function collectFoldedGridTakeover(p = {}) {
     tableTaken: out.tableHits,
     tableSuppressed: out.tableSuppressed,
     tableAnchorRepairs: out.tableAnchorRepairs,
+    // 🔴 P0-3（2026-11-11）：table 结构签名否决计数（@图表库标记 / bg-* 背景层）——0 也打。
+    tableStructVeto: out.tableStructVeto,
     footerTaken: out.footerHits,
     regionsTaken: out.regionHits,
     listDirectionOverrides: out.listDirectionOverrides,

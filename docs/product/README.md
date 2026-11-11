@@ -38,7 +38,7 @@ API 生成功能帮助用户快速生成 RESTful API 接口。
 
 管理员专属的组件生成管线监控看板：用户 / 模型归属根域名 / 组件类型 / 来源（截图·Figma）/ 成功失败 / 耗时 / 门禁拦截。
 
-- [PRD 与开发计划](./pipeline-monitoring/prd.md) - 需求冻结版（v1.0，2026-09-15，待开工）
+- [PRD 与开发计划](./pipeline-monitoring/prd.md) - 后端 `generation_metrics` 采集/聚合已接入；管理看板 UI 与生产验收状态待核
 
 ---
 
@@ -49,7 +49,7 @@ API 生成功能帮助用户快速生成 RESTful API 接口。
 | Agent Builder | 5 | 核心产品功能 |
 | API 生成 | 1 | API 生成设计 |
 | 模型配置 | 3 | Profile 功能设计 |
-| 管线监控 | 1 | 管理员监控看板（待开发） |
+| 管线监控 | 1 | 后端指标采集/聚合已实现；管理看板 UI 与生产验收状态待核 |
 
 ---
 
@@ -77,11 +77,11 @@ API 生成功能帮助用户快速生成 RESTful API 接口。
 
 ## 📚 相关文档
 
-- **用户研究**: [../ux-research/](../ux-research/)
+- **用户研究**: 当前无独立 `ux-research/` 目录；相关资料按产品专题归档。
 - **组件生成**: [../component-generation/](../component-generation/)
 - **系统架构**: [../architecture/系统架构文档.md](../architecture/系统架构文档.md)
 
 ---
 
-**最后更新**: 2026-09-15  
-**维护团队**: Product Team
+**最后核对**: 2026-11-11
+**说明**: 产品需求的实施状态以代码、自动化测试及单项验收记录为准。

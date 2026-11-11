@@ -77,7 +77,13 @@ function stripLegacyGradientRule(content) {
 
 /** 给模板中同 class 的第 i 个元素合并 background 声明 */
 function mountBgOnInstance(full, attrs, tag, bg) {
-  if (/background-image/.test(attrs)) return full;
+  // 🛡️ 2026-11-11（bf81ff92 实锤，E3-v2 双 bg 声明的产生处）：原判据只挡**静态**
+  //   `background-image` 已存在的情形，完全没看**动态**绑定。LLM 已写
+  //   `:style="{ backgroundImage: 'url(' + bg1 + ')' }"` 时，这里仍会追加
+  //   `style="background-image:url('../…/bg-125.png');…"` ⇒ 同元素双声明（静态成死代码，
+  //   且两者一旦不同源就变成"谁生效看合并顺序"的隐蔽 bug），下游 E3-v2 判 FAIL、
+  //   A6 复检拦截、任务 failed。动态已挂 ⇒ 视为已满足，直接跳过（幂等）。
+  if (/background-image/.test(attrs) || /backgroundImage/.test(attrs)) return full;
   const decl = `background-image:url('${bg}');background-size:100% 100%;background-repeat:no-repeat;`;
   const styleM = /\sstyle="([^"]*)"/.exec(attrs);
   if (styleM) {

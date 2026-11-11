@@ -1,6 +1,6 @@
 /**
  * 功能组件生成（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-11-09T01:09:51.438Z
+ * 模板: llm-analyzer | 创建: 2026-11-11T14:37:29.612Z
  * 输入: analysis, requirement
  * 输出: componentCode, notes
  */

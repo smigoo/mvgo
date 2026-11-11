@@ -86,6 +86,260 @@ function stripBgKeysFromTag(tag, varName) {
 }
 
 /**
+ * 🛡️ 兄弟卡背景组识别（2026-11-11 · 重点车辆监测 mc-max-1794407888630-408d924a 实锤）。
+ *
+ * 病灶：折叠接管把 N 张同构兄弟卡折叠为**一个** section（锚 = 单卡 id，如 136:127）+
+ * v-for 渲染。资源计划层的 owner/anchor 模型是「一节点一 owner」⇒ 兄弟卡背景里只有
+ * 恰好被选为锚的那张能解析（owner=136:127 ∈ 产物锚点），其余兄弟（owner=136:128/129）
+ * 的候选链 [136:128, 2:8023, 136:121, 2:7952] 与产物锚点集零交集 ⇒ 锚点 none ⇒
+ * fail-closed 丢弃；LLM 又把三张散挂到 icon img / value-wrap / 段根拉伸 ⇒ E3-v4 拒交付。
+ * `package/sections/StatsSection.vue` 骨架注释「背景图由系统注入」证明该确定性通道是
+ * 设计内意图但从未接线 —— 本函数补上识别半边，执行半边见 `mountCardBgGroups`。
+ *
+ * 判据（全走 mapping 真值，逐事实缺失即跳过，不猜）：
+ *   ① 同父分组：ancestorIds[1]（bg 节点的共同祖父容器）相同；
+ *   ② 瓦片折叠：|Δy| ≤ 2、高比 ∈ [0.85, 1/0.85]、x 轴不重叠（前缘 ≥ 前张后缘 − 2）；
+ *   ③ 锚点有据（排除「全员已锚定且锚互异」的独立建模；二选一）：
+ *     a) 任一成员已锚定 ⇒ 用首个已锚成员的锚（408d924a 混合锚点态形态）；
+ *     b) 全员未锚定但存在**全员公共产物祖先锚**（如折叠锚=父行 136:121，三张 bg 的
+ *       ancestorIds 都含它）——锚=该父行 section 本身（2ffdaae3 形态）；
+ *     c) 全员锚到同一祖先段（非各自 owner）⇒ 塌缩形态，同样轮换（2ffdaae3 真机
+ *       anchorStats.ancestor=3 实锤）。
+ *     ——全员未锚定且无公共产物祖先锚 ⇒ 落点无据，不猜。
+ * 输出 member 按 x 升序 = v-for item 序（折叠接管按 figma 子序铺 item，网格场景即 x 序）。
+ *
+ * 纯函数。@returns {Array<{anchorId:string, members:Array<{file,varName,x}>}>}
+ */
+function groupSiblingCardBgs(records) {
+  const groups = [];
+  if (!Array.isArray(records)) return groups;
+  const byParent = new Map();
+  for (const r of records) {
+    if (!r || !r.parentId) continue;
+    if (!byParent.has(r.parentId)) byParent.set(r.parentId, []);
+    byParent.get(r.parentId).push(r);
+  }
+  for (const [, arr] of byParent) {
+    if (!Array.isArray(arr) || arr.length < 2) continue;
+    const sorted = arr
+      .filter((r) => {
+        const b = r.figmaBox;
+        return b && Number(b.width) > 0 && Number(b.height) > 0;
+      })
+      .sort((a, b) => Number(a.figmaBox.x) - Number(b.figmaBox.x));
+    const tiles = [];
+    let cur = [];
+    for (const r of sorted) {
+      if (cur.length === 0) {
+        cur.push(r);
+        continue;
+      }
+      const pb = cur[cur.length - 1].figmaBox;
+      const b = r.figmaBox;
+      const sameY = Math.abs(Number(b.y) - Number(pb.y)) <= 2;
+      const hRatio = Number(b.height) / Number(pb.height);
+      const hOK = hRatio >= 0.85 && hRatio <= 1 / 0.85;
+      // 🛡️ x 判据（408d924a 真值修正）：卡片盒允许小比例重叠（真值实锤 11.5/120 ≈ 9.6%
+      //   ——阴影/圆角出血），要求「前缘推进」即可：新张前缘 ≥ 前张前缘 + 70% 宽。
+      //   同 x 铺叠的全幅背景（0% 推进）不满足 ⇒ 不成组（那些不是兄弟卡瓦片）。
+      const xOK = Number(b.x) >= Number(pb.x) + Number(pb.width) * 0.7;
+      if (sameY && hOK && xOK) cur.push(r);
+      else {
+        tiles.push(cur);
+        cur = [r];
+      }
+    }
+    if (cur.length > 0) tiles.push(cur);
+    for (const tile of tiles) {
+      if (tile.length < 2) continue;
+      const anchored = tile.filter((r) => r.anchorIsProduct);
+      // 🛡️ 判据③（2026-11-11 晚 · mc-max-1794409272887-2ffdaae3 实锤二次推广）：
+      //   「独立建模」的标志是**锚互异**（每张卡各有自己的 owner 级锚）⇒ 轮换无必要；
+      //   而全员锚到**同一个**祖先段（折叠锚=父行 136:121，anchorStats.ancestor=3 实锤）
+      //   意味着三张 bg 全部塌缩到同一个段根拉伸 —— 恰是需要轮换的病灶形态。
+      //   锚点来源优先级：
+      //   a) 任一成员已锚定 ⇒ 用首个已锚成员的锚（408d924a 混合锚点态形态）；
+      //   b) 全员未锚定 ⇒ 取全员公共产物祖先锚（ancestorIds 深→浅首条命中）。
+      //   仍拒绝：无任何锚定且无公共产物祖先锚（落点无据，不猜）。
+      const allAnchoredDistinct =
+        anchored.length === tile.length &&
+        new Set(tile.map((r) => String(r.anchorId))).size === tile.length;
+      let anchorId = null;
+      if (!allAnchoredDistinct) {
+        if (anchored.length > 0) {
+          anchorId = String(anchored[0].anchorId);
+        } else {
+          const first = tile[0].productAncestorAnchors || [];
+          for (const cand of first) {
+            if (tile.every((r) => (r.productAncestorAnchors || []).includes(cand))) {
+              anchorId = cand;
+              break;
+            }
+          }
+        }
+      }
+      if (!anchorId) continue;
+      // 同图多节点（sharedBy）会以同 varName 重复入组 ⇒ 按 varName 去重保首（x 序）
+      const seen = new Set();
+      const members = [];
+      for (const r of tile) {
+        if (!r.varName || seen.has(r.varName)) continue;
+        seen.add(r.varName);
+        members.push({ file: r.file, varName: r.varName, x: Number(r.figmaBox.x) });
+      }
+      if (members.length < 2) continue;
+      groups.push({ anchorId, members });
+    }
+  }
+  return groups;
+}
+
+/**
+ * 🛡️ 兄弟卡背景组执行器：把组内背景按 x 序轮换挂到锚点 section 的 v-for item 上。
+ *
+ * 落点选择（确定性）：含 `data-section-id="<anchorId>"` 且被 index.vue 实际 import 的
+ * 组件文件优先（`package/sections/` 确定性骨架是**死文件**——index.vue 只 import
+ * `./components/*`，绝不落入死文件）；仅当 index.vue 未引用时才允许 components/ 兜底。
+ *
+ * 步骤：① 剥错位消费（成员 var 出现在非 item 开标签的 bg 键——根拉伸/icon img/value-wrap
+ * 全剥，复用 stripBgKeysFromTag 单点判据）；② ensure import；③ v-for 补索引变量
+ * （已有索引则复用）；④ item 标签注入轮换 :style（item 已有 :style ⇒ 保守放弃，不合并
+ * 复杂表达式）；⑤ 注入 `const FG_CARD_BGS = [...]`（x 序真值）——该形态是 E3-v4 v2 已
+ * 祝福的数据驱动消费（v4 起为独立合规形态）；⑥ validateVueSfc 自检失败即放弃（不写回）。
+ * 幂等：目标文件已含 FG_CARD_BGS ⇒ 跳过。
+ */
+export function mountCardBgGroups(allFiles, plan, options = {}) {
+  const mounted = [];
+  const diagnostics = [];
+  const logger = options.logger || null;
+  const groups = Array.isArray(plan?.cardBgGroups) ? plan.cardBgGroups : [];
+  // 计数行恒打（判据可观测；0 也打）
+  logger?.info?.('🛡️ 兄弟卡背景组·已评估', { groups: groups.length });
+  if (!allFiles || typeof allFiles !== 'object' || groups.length === 0) {
+    return { mounted, diagnostics };
+  }
+  const lessGlobalVars = options.lessGlobalVars || extractLessGlobalVars(allFiles);
+  for (const grp of groups) {
+    const anchorSel = `data-section-id="${grp.anchorId}"`;
+    const indexSrc = typeof allFiles['package/index.vue'] === 'string' ? allFiles['package/index.vue'] : '';
+    const importedSet = new Set();
+    for (const im of indexSrc.matchAll(/import\s+\w+\s+from\s+['"](\.[^'"]+\.vue)['"]/g)) {
+      importedSet.add(im[1].replace(/^\.\//, 'package/'));
+    }
+    const cands = Object.keys(allFiles).filter(
+      (p) => typeof allFiles[p] === 'string' && allFiles[p].includes(anchorSel),
+    );
+    const targetFile =
+      cands.find((p) => importedSet.has(p)) ||
+      cands.find((p) => /^package\/components\/[^/]+\.vue$/.test(p)) ||
+      null;
+    if (!targetFile) {
+      diagnostics.push({ reason: 'card-bg-group-anchor-missing', anchor: grp.anchorId });
+      logger?.warn?.('🛡️ 兄弟卡背景组：锚点落点文件不存在（fail-closed 不硬挂）', {
+        anchor: grp.anchorId,
+      });
+      continue;
+    }
+    let content = allFiles[targetFile];
+    if (/\bFG_CARD_BGS\b/.test(content)) continue; // 幂等
+    // ① 剥错位消费（先于一切注入；item 标签自身的 bg 引用不在剥除范围——它本就是落点）
+    content = content.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
+      let out = tag;
+      for (const mm of grp.members) out = stripBgKeysFromTag(out, mm.varName);
+      return out;
+    });
+    // ② ensure import（mapping 仅用 resourceFile 字段；已在 ⇒ 原样返回）
+    for (const mm of grp.members) {
+      content = ensureResourceImportInVue(content, mm.varName, { resourceFile: mm.file }, targetFile);
+    }
+    // ③④ v-for 索引 + item 轮换 :style
+    const itemTag = findVForItemTag(content);
+    if (!itemTag) {
+      diagnostics.push({ reason: 'card-bg-group-no-vfor-item', file: targetFile });
+      logger?.warn?.('🛡️ 兄弟卡背景组：落点无 v-for item（fail-closed 不硬挂）', { file: targetFile });
+      continue;
+    }
+    if (/:style=/.test(itemTag)) {
+      diagnostics.push({ reason: 'card-bg-group-item-style-occupied', file: targetFile });
+      logger?.warn?.('🛡️ 兄弟卡背景组：v-for item 已有 :style（不合并复杂表达式，放弃）', {
+        file: targetFile,
+      });
+      continue;
+    }
+    const vfM = itemTag.match(/\bv-for="([^"]*)"/);
+    if (!vfM) {
+      diagnostics.push({ reason: 'card-bg-group-vfor-unreadable', file: targetFile });
+      continue;
+    }
+    const expr = vfM[1];
+    let idxName = '_fgBgI';
+    let newExpr = expr;
+    const indexed = expr.match(/\(([^)]*,[^)]*)\)\s+(?:in|of)\s+/);
+    if (indexed) {
+      const parts = indexed[1].split(',').map((s) => s.trim());
+      idxName = parts[parts.length - 1];
+    } else {
+      while (new RegExp(`\\b${idxName}\\b`).test(content)) idxName = `${idxName}I`;
+      newExpr = expr.replace(/^([\s\S]*?)\s+(in|of)\s+/, `($1, ${idxName}) $2 `);
+    }
+    const styleBinding =
+      `:style="{ backgroundImage: 'url(' + FG_CARD_BGS[${idxName} % FG_CARD_BGS.length] + ')', ` +
+      `backgroundSize: '100% 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }"`;
+    const newTag = itemTag
+      .replace(/\bv-for="[^"]*"/, `v-for="${newExpr}"`)
+      .replace(/>$/, ` ${styleBinding}>`);
+    if (newTag === itemTag || !/>$/.test(itemTag)) {
+      diagnostics.push({ reason: 'card-bg-group-tag-rewrite-failed', file: targetFile });
+      continue;
+    }
+    const at = content.indexOf(itemTag);
+    content = content.slice(0, at) + newTag + content.slice(at + itemTag.length);
+    // ⑤ FG_CARD_BGS 常量（x 序 = members 已按 x 升序）
+    const vars = grp.members.map((mm) => mm.varName);
+    const constLine =
+      `\n// 🛡️ 兄弟卡背景组 x 序真值（资源计划层确定性轮换挂载）\n` +
+      `const FG_CARD_BGS = [${vars.join(', ')}]`;
+    let lastImportEnd = -1;
+    for (const im of content.matchAll(/^import[^\n]+$/gm)) {
+      lastImportEnd = im.index + im[0].length;
+    }
+    if (lastImportEnd < 0) {
+      diagnostics.push({ reason: 'card-bg-group-no-import-section', file: targetFile });
+      continue;
+    }
+    content = content.slice(0, lastImportEnd) + constLine + content.slice(lastImportEnd);
+    // ⑥ SFC 自检（注入器自检防线同款；失败不写回）
+    const check = validateVueSfc(content, targetFile, { lessGlobalVars });
+    if (!check.valid) {
+      diagnostics.push({
+        reason: 'card-bg-group-sfc-invalid',
+        file: targetFile,
+        errors: (check.errors || []).slice(0, 2),
+      });
+      logger?.warn?.('🛡️ 兄弟卡背景组：注入后 SFC 自检失败，已放弃（不写回）', {
+        file: targetFile,
+        errors: (check.errors || []).slice(0, 2),
+      });
+      continue;
+    }
+    allFiles[targetFile] = content;
+    mounted.push({
+      var: vars.join(','),
+      file: targetFile,
+      role: 'bg',
+      mountTarget: 'v-for-item-rotation',
+      anchor: grp.anchorId,
+    });
+    logger?.info?.('🎯 [资源挂载] 兄弟卡背景组 → v-for item 轮换挂载', {
+      file: targetFile,
+      anchor: grp.anchorId,
+      vars,
+    });
+  }
+  return { mounted, diagnostics };
+}
+
+/**
  * 🛡️ 刀33 第3步（per-item 宿主存在性探测 · 2026-10-29 · mc-max-1793281736684-802b780c 实锤）：
  *   在**其它文件**里找「同时满足 ① 引用该资源变量、② 含 v-for item 模板」的文件。
  *
@@ -205,6 +459,8 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
   const byComponent = new Map();
   const skipped = [];
   const plan = { byFile, byComponent, skipped };
+  // 🛡️ 兄弟卡背景组影子记录（bg 专用，循环内填充，循环后折叠成组）
+  const bgRecords = [];
 
   if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) {
     return plan;
@@ -440,6 +696,23 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
       figmaBox: m.figmaBox || null,
       parentBox: m.parentBox || null,
     });
+    // 🛡️ 兄弟卡背景组影子记录（bg 专用；groupSiblingCardBgs 消费，见其头注释）
+    if (kind === 'bg') {
+      // 🛡️ 产物祖先锚链（ancestorIds 序 = 深→浅；折叠锚=父行形态用，见判据③ b）
+      const productAncestorAnchors = Array.isArray(m.ancestorIds)
+        ? m.ancestorIds.map(String).filter((id) => productAnchorIds && productAnchorIds.has(id))
+        : [];
+      bgRecords.push({
+        parentId:
+          Array.isArray(m.ancestorIds) && m.ancestorIds[1] != null ? String(m.ancestorIds[1]) : null,
+        figmaBox: m.figmaBox || null,
+        anchorId: _anchorId,
+        anchorIsProduct: !!(_anchorId && productAnchorIds && productAnchorIds.has(_anchorId)),
+        productAncestorAnchors,
+        file,
+        varName: g.varName,
+      });
+    }
     const comp = owner || 'index';
     if (!byComponent.has(comp)) byComponent.set(comp, []);
     byComponent.get(comp).push({
@@ -451,6 +724,9 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
       figmaNodeId: nid,
     });
   }
+
+  // 🛡️ 兄弟卡背景组折叠（识别半边；执行半边在 mountPlannedResources 末尾 mountCardBgGroups）
+  plan.cardBgGroups = groupSiblingCardBgs(bgRecords);
 
   return plan;
 }
@@ -1217,6 +1493,15 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       }
     }
   }
+  // 🛡️ 兄弟卡背景组（2026-11-11 · 408d924a 实锤）：主循环**之后**执行——主循环的
+  //   owner/anchor 模型对折叠接管的兄弟卡背景必然 fail-closed（只有锚卡一张能解析），
+  //   组内成员的错位 LLM 挂载（根拉伸/icon img）也在此统一剥除并轮换重挂。
+  const grpRes = mountCardBgGroups(allFiles, plan, {
+    logger: options.logger,
+    lessGlobalVars,
+  });
+  mounted.push(...grpRes.mounted);
+  diagnostics.push(...grpRes.diagnostics);
   return { mounted, diagnostics };
 }
 

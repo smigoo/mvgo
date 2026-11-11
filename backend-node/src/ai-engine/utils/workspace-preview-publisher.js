@@ -16,6 +16,12 @@ import { execFileSync } from 'child_process'
 import { dirname, join } from 'path'
 import { createLogger } from '../logger/index.js'
 import { renameWithCopyFallback } from './rename-with-copy-fallback.js'
+// 🛡️ 2026-11-11 治本（mc-lite-1794382414032-bff01bf7 实锤）：发布前的产物 LESS 终验/自愈。
+//   本模块是该功能的**唯一收口点**——lite / max / phase2 三条生成线最终都要经 publishQualityPreview
+//   同步到两处 workspace，而它们的 LESS 校验时机各不相同（lite 线此前**完全没有**；
+//   max 线校验的是内存 files map，补缺追加/字号守卫/写盘后的形态从未被复验）。
+//   静态 import 安全：less-compile-gate.js 刻意不依赖 config/backend-root.js（见其文件头 R0-8）。
+import { LessCompileGate } from '../validators/less-compile-gate.js'
 import {
   projectRoot,
   workspaceRoot,
@@ -724,6 +730,126 @@ export function writePreviewSourceMarker(targetPath, sessionId) {
   }
 }
 
+const LESS_ENTRY = 'resources/styles/index.less'
+const LESS_GATE_MARKER = '.less-gate.json'
+
+/** sessionId = outputPath 末段（temp-components/<groupId>/<sessionId>），单一来源 */
+function sessionIdFromOutputPath(outputPath) {
+  return String(outputPath || '').split(/[\\/]/).filter(Boolean).pop() || ''
+}
+
+/**
+ * 🛡️ 2026-11-11 治本（mc-lite-1794382414032-bff01bf7 实锤）：发布前对**磁盘产物**跑真实 LESS 编译终验。
+ *
+ * 事故现场：Lite 线产物 `index.vue` 的 `<style lang="less">` 里有一行悬空的 `color: `（分块输出被
+ * 截断的残片），结构门 `validateLiteSfc` 只查 `</template>/</style>` 标签闭合 ⇒ 放行 ⇒ 同步 workspace
+ * ⇒ 前端 `precompileVueLess` 用浏览器 less 现编 ⇒ `Unrecognised input` ⇒ 预览整页红卡，
+ * 而任务状态仍是「组件生成完成 / 完整 100%」。
+ *
+ * 为什么收口在这里而不是各条生成线：
+ *   · lite.service.ts 全文 0 处 LessCompileGate（样式由 lite-style-extractor 直拼落盘）；
+ *   · max 线虽有门禁，但校验的是**内存 files map**，补缺追加 / 字号守卫 / heal 写回都在其之后
+ *     ⇒「门禁通过」≠「磁盘可编译」（2026-11-06 以来 4 个坏产物全带 max 独有的 `[样式补缺]` 横幅）；
+ *   · 任何路径最终都要经本函数同步到两处 workspace ⇒ 在这里做一次磁盘级终验，天然全覆盖。
+ *
+ * 行为边界（保守，绝不阻断发布）：
+ *   · validateDirectory 内部会先 healLessSource（补 `}` / 补 `;`）并写回磁盘 ⇒ 源产物即被修复，
+ *     随后 buildStagingCopy 复制出去的自然也是修复版；
+ *   · 仍 BLOCK 时只告警 + 写 `.less-gate.json` 标记（供 UI/运维取证），不抛错、不改返回值；
+ *   · 任何异常一律吞掉——预览发布链路本身不能因为多一道校验而失败。
+ */
+async function selfHealLessBeforePublish(outputPath) {
+  const hasStyles = existsSync(join(outputPath, 'resources', 'styles'))
+  const hasEntry = existsSync(join(outputPath, LESS_ENTRY))
+  const hasVue = existsSync(join(outputPath, 'package', 'index.vue'))
+  // 既无样式目录也无入口 SFC（如纯 vue3 页面产物）⇒ 跳过，避免对无 LESS 的产物空跑
+  if (!hasEntry && !hasVue) return null
+
+  try {
+    // 🆕 2026-11-11：先跑**真编译自愈**（确定性 healer + 以 less 报错为 oracle 的定点手术）。
+    //   与 validateDirectory 的区别：后者只做「结构扫描 + 编译判定」，遇到枚举之外的
+    //   坏形态只能判 BLOCK；本函数会用 less 自己的报错行号逐轮定点修复并写回磁盘。
+    const repair = await LessCompileGate.repairDirectory(outputPath)
+    if (repair?.applied?.length) {
+      logger.warn('[publishQualityPreview] 发布前 LESS 真编译自愈已写回源产物', {
+        outputPath,
+        applied: repair.applied.length,
+        samples: repair.applied.slice(0, 3),
+      })
+    }
+
+    const result = await LessCompileGate.validateDirectory(outputPath)
+    const healed = (result.diagnostics || []).filter((d) => /AUTOHEAL/.test(String(d.id || '')))
+    const blocking = (result.diagnostics || [])
+      .filter((d) => d.severity === 'BLOCK')
+      .slice(0, 3)
+
+    if (healed.length > 0) {
+      logger.warn('[publishQualityPreview] 发布前 LESS 自愈已写回源产物', {
+        outputPath,
+        healed: healed.length,
+        samples: healed.slice(0, 3).map((d) => `${d.file}:${d.line} ${d.message}`),
+      })
+    }
+
+    if (!result.pass) {
+      const sessionId = sessionIdFromOutputPath(outputPath)
+      const first = blocking[0]
+      logger.warn(
+        '[publishQualityPreview] ⚠️ 产物 LESS 编译仍失败：该组件预览将报「组件样式 (LESS) 渲染失败」，已写入 .less-gate.json 标记',
+        {
+          outputPath,
+          blockCount: result.blockCount,
+          samples: blocking.map((d) => `${d.file}:${d.line}:${d.column} ${d.message}`),
+        },
+      )
+      // 🆕 真机计数行：运维可直接 `grep -c '\[less-gate-block\]' server.log` 统计不可修复产物命中率；
+      //    单行、无空格歧义，与 .less-gate.json 文件标记互为印证。
+      logger.warn(
+        `[less-gate-block] sessionId=${sessionId} blockCount=${result.blockCount} first=${first ? `${first.file}:${first.line}:${first.column}` : 'none'} marker=${LESS_GATE_MARKER}`,
+      )
+      try {
+        writeFileSync(
+          join(outputPath, LESS_GATE_MARKER),
+          JSON.stringify(
+            {
+              pass: false,
+              sessionId,
+              outputPath,
+              blockCount: result.blockCount,
+              autoRepairs: repair?.applied || [],
+              diagnostics: blocking,
+              checkedAt: new Date().toISOString(),
+              hint: '发布前 LESS 真编译自愈后仍失败（不可确定性修复）：预览会报「组件样式 (LESS) 渲染失败」。请重新生成，或人工修复 resources/styles 后重跑 npm run verify:less-gate 确认。',
+            },
+            null,
+            2,
+          ),
+          'utf-8',
+        )
+      } catch {
+        /* 标记写入失败不影响发布 */
+      }
+    } else if (hasStyles) {
+      // 通过时清掉历史标记，避免旧标记让后续排查误判
+      try {
+        const markerPath = join(outputPath, LESS_GATE_MARKER)
+        if (existsSync(markerPath)) unlinkSync(markerPath)
+      } catch {
+        /* 忽略 */
+      }
+    }
+
+    return result
+  } catch (error) {
+    logger.warn('[publishQualityPreview] 发布前 LESS 校验异常（已忽略，不影响发布）', {
+      outputPath,
+      error: error?.message || String(error),
+    })
+    return null
+  }
+}
+
 async function publishQualityPreview({
   outputPath,
   componentId,
@@ -733,6 +859,10 @@ async function publishQualityPreview({
   if (!outputPath) {
     throw new Error('质量预览暂存缺少 outputPath')
   }
+
+  // 🛡️ 2026-11-11：同步到 workspace **之前**对源产物做磁盘级 LESS 终验 + 自愈。
+  //   必须在 buildStagingCopy 之前——它复制的是磁盘内容，先修再复制才能让三处产物一致。
+  await selfHealLessBeforePublish(outputPath)
 
   // M1-1：优先使用 declare.json 中的规范 componentId（c-<englishId>）作为目录名，
   // 使 workspace 目录与 declare.json componentId 严格一致，通过 mc-check M1-1。
@@ -748,7 +878,7 @@ async function publishQualityPreview({
   // 撞名会把其他任务的 workspace 产物整体覆盖。以 backend workspace 目录为基准判定：
   // 同源（同 sessionId）沿用原名覆盖更新；异源追加 -2/-3。
   // sessionId = outputPath 末段（temp-components/<groupId>/<sessionId>）。
-  const sessionId = String(outputPath).split(/[\\/]/).filter(Boolean).pop() || ''
+  const sessionId = sessionIdFromOutputPath(outputPath)
   const backendProbe = join(
     workspaceRoot, // 🆕 S5：单一事实源（= backend-node/workspace）
     target === 'vue3'
@@ -828,6 +958,8 @@ function rollbackQualityPreviewTransaction({ componentId, groupId = 'default-gro
 export const __testing = {
   ensureStartupCleanupScan,
   collectCleanupDirs,
+  // 🛡️ 2026-11-11：暴露发布前 LESS 终验，供 spec 做阳性/阴性对照
+  selfHealLessBeforePublish,
   buildStagingCopy,
   promotePreparedTarget,
   rollbackPreparedTarget,

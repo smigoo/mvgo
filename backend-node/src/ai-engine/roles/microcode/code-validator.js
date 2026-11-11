@@ -14,6 +14,13 @@ import { resolveClassPrefixId } from '../../validators/code-structure-validator.
 import { detectRootContainerClass } from '../../validators/code-fix-rules.js';
 import { THEME_WRAPPER_TEMPLATES } from '../../utils/mc-skeleton.js';
 import { FG_TAKEOVER_CLASS_RX } from '../../utils/folded-grid-section-takeover.js';
+// 🔴 2026-11-11 根因 G：运行时标识符事实的**单一事实源**（谓词/正则兜底对象/注入器同源）。
+//   门禁侧 `validators/code-structure-validator.js`（CODE-029）复用同一模块——
+//   自动修复与判死必须看同一份事实，否则「修复漏检」与「门禁漏判」会互相掩盖。
+import {
+  hasRuntimeIdentifiers,
+  neutralizeSfcRuntimeIdents,
+} from '../../utils/runtime-idents.js';
 
 export function detectFileTruncation(files) {
     const issues = [];
@@ -2152,7 +2159,7 @@ export async function validateAndFixGeneratedFiles(
       }
     }
 
-    // 2. 检查并修复 package/index.vue
+      // 2. 检查并修复 package/index.vue
     const indexVuePath = 'package/index.vue';
     if (files[indexVuePath] || fixedFiles[indexVuePath]) {
       let content = fixedFiles[indexVuePath] ?? files[indexVuePath];
@@ -2162,20 +2169,35 @@ export async function validateAndFixGeneratedFiles(
       // 是微码运行时 API，vue3 预览环境未注入这些全局变量，引用会报 "Cannot read properties
       // of undefined (reading 'title')"（mv-max 1787566005737 实测）。Vue3Engineer 继承 buildCodePrompt
       // 而未重写，导致模型被指示用微码 API；此处统一在 post-fix 兜底跳过微码专属项，
-      // 并对存在 $mcComponentBuilder 引用的 vue3 产物做安全替换（避免渲染崩溃）。
+      // 并对存在运行时标识符引用的 vue3 产物做安全替换（避免渲染崩溃）。
+      //
+      // 🔴 2026-11-11 根因 G 治理（清单 §2.3）：旧实现有**两道门同时漏**，兜底形同虚设。
+      //   ① 触发条件 `content.includes('$mcComponentBuilder')` —— 产物只裸用 `runtimeBuilder`
+      //      而不出现 `$mcComponentBuilder` 时，整块兜底**根本不执行**；
+      //   ② 替换正则 `/runtimeBuilder\?\.\s*publishEvent/g` —— 只匹配**带可选链**的形态，
+      //      裸用 `runtimeBuilder.publishEvent(...)` 一个字符都不改；
+      //   ③ 兜底只覆盖 index.vue —— 子组件（package/components/*.vue）裸用直接白屏。
+      //   ⇒ 未声明的 `runtimeBuilder` 留进 `<script setup>` ⇒ onMounted 抛 ReferenceError ⇒ 白屏。
+      // 现改为：谓词/正则/兜底对象**全部来自 utils/runtime-idents.js 单一事实源**（禁第二份实现）。
       const isVue3 = options.componentType === 'vue3';
-      if (isVue3 && content.includes('$mcComponentBuilder')) {
-        content = content.replace(
-          /\$mcComponentBuilder\(\)/g,
-          '({ componentProps: {}, businessProps: {}, runtimeBuilder: null, componentApi: null })',
-        );
-        content = content.replace(
-          /runtimeBuilder\?\.\s*publishEvent/g,
-          '/* vue3 no-op */ null && null',
-        );
+      if (isVue3 && hasRuntimeIdentifiers(content)) {
+        const neutralized = neutralizeSfcRuntimeIdents(content, {
+          filePath: indexVuePath,
+        });
+        content = neutralized.content;
+        const undeclared = neutralized.undeclared;
+        if (!neutralized.injected && undeclared.length > 0) {
+          // 无法自动修复（无 <script> 块）→ 必须留痕，禁止静默放过（旧实现正是「跑不了就沉默」）。
+          fixes.push(
+            `🚨 CODE-029-UNDECLARED-RUNTIME-IDENT: ${indexVuePath} 引用未声明标识符 ` +
+              `[${undeclared.join(', ')}] 且无法注入兜底（缺少 <script> 块），产物将运行时崩溃`,
+          );
+        }
         modified = true;
         fixes.push(
-          'vue3 后处理：已替换 $mcComponentBuilder/runtimeBuilder 为安全兜底，避免运行时 undefined.title',
+          `vue3 后处理：已按运行时标识符事实（utils/runtime-idents.js）兜底 ` +
+            `$mcComponentBuilder/runtimeBuilder` +
+            (undeclared.length > 0 ? `，并注入 [${undeclared.join(', ')}] 安全声明` : ''),
         );
       }
 
@@ -2261,7 +2283,10 @@ export async function validateAndFixGeneratedFiles(
             '⚠️ 未在 onMounted 中正确触发 onload 事件（应使用 runtimeBuilder.publishEvent）',
           );
         }
-      } else {
+      } else if (!isVue3) {
+        // 🔴 2026-11-11 根因 G 连带修正：此处原为裸 `else`，而分支条件是
+        //   `if (!isVue3 && ...)` ⇒ **每个 vue3 产物都会落地一条「缺少 $mcComponentBuilder 调用」伪告警**
+        //   （与上方注释声明的「vue3 跳过微码专属告警」直接互斥）。vue3 本就不该有该调用。
         fixes.push('⚠️ package/index.vue 缺少 $mcComponentBuilder 调用');
       }
 
@@ -2437,6 +2462,42 @@ export async function validateAndFixGeneratedFiles(
         fixes.push(
           `子组件 ${filePath} 已移除 ${removedCount} 处 $mcComponentBuilder 相关调用（只有 index.vue 应该调用）`,
         );
+      }
+    }
+
+    // 2.6.1.b 🔴 2026-11-11 根因 G 第三道缺口：vue3 运行时标识符兜底原先**只覆盖 index.vue**。
+    //   子组件若裸用 `runtimeBuilder`（模型常把 index.vue 的写法复制到子组件），
+    //   `$mcComponentBuilder` 一旦缺席 2.6.1 就 `continue` 跳过 ⇒ 未声明标识符留进
+    //   `<script setup>` ⇒ onMounted 抛 ReferenceError ⇒ **整块子组件白屏**（父组件看不出来）。
+    //   修复：全部 vue3 `.vue` 产物过同一套事实（utils/runtime-idents.js），谓词/注入器与
+    //   index.vue 分支**同一实现**，杜绝双源漂移。
+    if (options.componentType === 'vue3') {
+      for (const [filePath, rawContent] of Object.entries(mergedFiles)) {
+        if (!filePath.endsWith('.vue')) continue;
+        const fileContent =
+          typeof fixedFiles[filePath] === 'string'
+            ? fixedFiles[filePath]
+            : rawContent;
+        if (!fileContent || typeof fileContent !== 'string') continue;
+        if (!hasRuntimeIdentifiers(fileContent)) continue;
+
+        let next = fileContent;
+        const neutralized = neutralizeSfcRuntimeIdents(next, { filePath });
+        next = neutralized.content;
+        const undeclared = neutralized.undeclared;
+
+        if (!neutralized.injected && undeclared.length > 0) {
+          fixes.push(
+            `🚨 CODE-029-UNDECLARED-RUNTIME-IDENT: ${filePath} 引用未声明标识符 ` +
+              `[${undeclared.join(', ')}] 且无法注入兜底（缺少 <script> 块），该子组件将运行时崩溃`,
+          );
+        } else if (next !== fileContent) {
+          fixes.push(
+            `vue3 后处理：${filePath} 已按运行时标识符事实兜底` +
+              (undeclared.length > 0 ? `，并注入 [${undeclared.join(', ')}] 安全声明` : ''),
+          );
+        }
+        if (next !== fileContent) fixedFiles[filePath] = next;
       }
     }
 

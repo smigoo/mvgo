@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { coerceLLMText } from '../../utils/model-config.js';
 import { robustJSONParse } from '../../utils/json-parser.js';
-import { stripLlmTailGarbageFromFiles } from '../../utils/llm-tail-garbage.js';
+import { stripLlmTailGarbageFromFiles, stripDsmlToolMarkersFromFiles } from '../../utils/llm-tail-garbage.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 
 const dataDir = join(process.cwd(), 'data');
@@ -35,6 +35,12 @@ export function parseCodeOutput(rawOutput, logger) {
   const log = safeLogger(logger);
   const result = parseCodeOutputInner(rawOutput, log);
   if (result && typeof result === 'object' && result.files) {
+    // 🛡️ D1（2026-11-11 · e3ea6ac8）：先剥离 DSML 工具标记（行内污染），
+    // 再做尾部垃圾剥离（结构闭合点之后）——顺序不能反，尾部判定基于干净内容。
+    const dsml = stripDsmlToolMarkersFromFiles(result.files, (msg) => log.info(msg));
+    if (dsml.cleanedFiles.length > 0) {
+      result.files = dsml.files;
+    }
     const { files, strippedFiles } = stripLlmTailGarbageFromFiles(
       result.files,
       (msg) => log.info(msg),

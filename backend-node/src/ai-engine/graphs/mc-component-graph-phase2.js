@@ -22,6 +22,7 @@ import {
 } from '../roles/visual-parser.js';
 // 🛡️ A4 高度比例（2026-11-03）：缓存命中路径补跑（与 visual-parser 主路径同一纯函数）
 import { applyFigmaElementHeightRatios } from '../utils/figma-height-ratio.js';
+import { PlanningGateError } from '../utils/section-plan-coverage.js';
 import { LayoutReviewer } from '../roles/layout-reviewer.js';
 import { StyleMapper } from '../roles/style-mapper.js';
 import { LayoutRefiner } from '../roles/layout-refiner.js';
@@ -166,8 +167,11 @@ import {
   detectChartSignal,
   injectChartSectionIfMissing,
 } from '../utils/chart-section.js';
+import { recheckDiskArtifactSemantics } from '../utils/verdict-recheck.js';
 
 const logger = createLogger({ name: 'mc-component-graph-phase2-v3' });
+
+
 
 /**
  *S9: 为文档 D2 组装 LLM 调用器（OpenAI 兼容 / Anthropic 双协议）
@@ -1782,6 +1786,9 @@ export function createPhase2Graph(config = {}) {
         generationInput: state.generationInput, // 🆕 Context Assembler 裁决事实
         layoutStructure: state.layoutStructure,
         visualElements: state.visualElements,
+        // 🛡️ A6（2026-11-11）：acceptance FAIL 命中文件——断点续跑不得恢复这些文件，
+        // 强制重新生成（否则重试轮假修：坏文件原样复活，guidance 空转）
+        _acceptanceFailFiles: state._acceptanceFailFiles || [],
         // 子组件规划结果（subcomponent-planner 产出）：engineer 据此生成强制子组件清单
         subComponentPlan: state.subComponentPlan,
         componentName: state.componentName,
@@ -1973,16 +1980,33 @@ export function createPhase2Graph(config = {}) {
             const acc = runAcceptanceChecks({
               files: accFiles,
               figmaNodeData: state.figmaNodeData,
+              resourceDomMapping: state.resourceDomMapping || state._resourceDomMapping || null,
             });
             logger.info(
               `🛡️ acceptance：FAIL=${acc.fails.length} checked=${acc.checked} retry=0/1`,
-              { fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`) },
+              {
+                fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`),
+                // 判据计数行（含 E3-v4 卡片级 owner 放行数）——warns 在验收层面无消费方，
+                // 必须在此落日志，否则「放行」这件事在真机上不可观测。
+                warns: (acc.warns || []).slice(0, 6),
+              },
             );
             if (acc.fails.length > 0) {
               const guidance = formatAcceptanceGuidance(acc.fails);
+              // 🛡️ A6（2026-11-11 · 68f9d3f2/95c3977c/5b978794 三实锤）：FAIL 文件集合落
+              // state——engineer 断点续跑恢复时**跳过这些文件**（此前重试轮把坏文件当
+              // 「已完成分块」恢复 ⇒ guidance 回灌了但坏内容原样复活 ⇒ effective=false
+              // 4 轮空转）。file 缺省的 FAIL（无承载/整组类）映射不到单文件，不剔除。
+              const failFiles = new Set();
+              for (const f of acc.fails) {
+                if (f.file) failFiles.add(f.file);
+                if (Array.isArray(f.files)) f.files.forEach((x) => failFiles.add(x));
+              }
+              state._acceptanceFailFiles = [...failFiles];
               logger.warn('🛡️ acceptance FAIL ⇒ 判分驱动定向重试（回灌修复轮，上限 1 轮）', {
                 failCount: acc.fails.length,
                 codes: acc.fails.map((f) => f.code),
+                failFiles: state._acceptanceFailFiles,
               });
               return {
                 _pendingRetry: true,
@@ -1995,18 +2019,43 @@ export function createPhase2Graph(config = {}) {
               };
             }
           } else {
-            // 复检（重试后）：Δ 与 effective 落日志，验收门读取
+            // 复检（重试后）：Δ 与 effective 落日志；🛡️ A6：复检仍 FAIL 且含可定位文件
+            // ⇒ 任务失败（不交付已判定坏的结构）。纯 detail 类 FAIL（无 file）保持放行，
+            // 避免「判据无法定位文件」的形态误杀整组。
             const acc = runAcceptanceChecks({
               files: accFiles,
               figmaNodeData: state.figmaNodeData,
+              resourceDomMapping: state.resourceDomMapping || state._resourceDomMapping || null,
             });
+            const recheckLocated = acc.fails.filter((f) => f.file || Array.isArray(f.files));
             logger.info(
               `🛡️ acceptance-retry：FAIL=${acc.fails.length} effective=${acc.fails.length === 0}`,
-              { fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`) },
+              {
+                fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`),
+                warns: (acc.warns || []).slice(0, 6),
+              },
             );
+            if (recheckLocated.length > 0) {
+              logger.error('🚫 acceptance 复检仍 FAIL（含可定位文件）⇒ 拒绝交付', {
+                codes: recheckLocated.map((f) => f.code),
+              });
+              throw new Error(
+                `acceptance 复检未通过（${recheckLocated.map((f) => f.code).join('、')}）：定向修复轮未能修复判定缺陷，拒绝交付坏结构`,
+              );
+            }
           }
         }
       } catch (accErr) {
+        // 🛡️ A6 补丁（2026-11-11 · a631045d 首验实锤）：复检拦截 throw 落在本 try 内，
+        // 被自家 fail-open catch 吞掉 ⇒ 「拒绝交付」日志打了、任务照样 completed（§19
+        // 家族第 7 例：门禁有结论、自家 catch 吞掉）。验收门错误必须**重抛穿透本层**，
+        // 只吞「检查器自身故障」（网络/解析类）。
+        if (
+          accErr instanceof PlanningGateError ||
+          (accErr instanceof Error && /acceptance 复检未通过/.test(accErr.message))
+        ) {
+          throw accErr;
+        }
         logger.warn('🛡️ acceptance 验收异常（fail-open，不阻断生成）', {
           error: accErr?.message || String(accErr),
         });
@@ -2015,10 +2064,11 @@ export function createPhase2Graph(config = {}) {
       // 🛡️ C 层通用语法自愈（2026-11-10 · R16 设备/环境双杀实锤「Invalid end tag」第 5
       //   种语法形态——逐形态打地鼠不可持续）：SFC 写盘门禁阻断的文件（错误位置行:列+
       //   类型齐全）直接组装成**单文件重生成指导**回灌 L0-B 重试，不再依赖自愈链覆盖
-      //   每一种语法形态。上限 1 轮（_sfcSyntaxRetried），重试后仍阻断才 fail-closed。
+      //   每一种语法形态。上限 2 轮（_sfcSyntaxRetried 计数，2026-11-11 从 1 轮提升——
+      //   R20 三单语法族 failed，单轮重生成再采样成功率不足），重试耗尽才 fail-closed。
       try {
         const sfcBlocked = result?.sfcBlockedDetail || result?.metrics?.sfcBlocked || result?._sfcBlockedFiles || [];
-        if (Array.isArray(sfcBlocked) && sfcBlocked.length > 0 && !state._sfcSyntaxRetried) {
+        if (Array.isArray(sfcBlocked) && sfcBlocked.length > 0 && (state._sfcSyntaxRetried || 0) < 2) {
           const lines = sfcBlocked.slice(0, 5).map(
             (f) => `- ${f.path}：${(f.errors || []).slice(0, 2).join('；')}`,
           );
@@ -2031,7 +2081,7 @@ export function createPhase2Graph(config = {}) {
           logger.warn('🛡️ SFC 语法阻断 ⇒ 通用单文件重生成重试（上限 1 轮）', {
             files: sfcBlocked.map((f) => f.path),
           });
-          state._sfcSyntaxRetried = true;
+          state._sfcSyntaxRetried = (state._sfcSyntaxRetried || 0) + 1;
           state._l0CodeRetryGuidance = (state._l0CodeRetryGuidance || '') + '\n' + syntaxGuidance;
           return {
             _pendingRetry: true,
@@ -2140,6 +2190,22 @@ export function createPhase2Graph(config = {}) {
           `🚫 放弃重试（${decision.policy.name}）：${decision.reason}`,
           { policy: decision.policy.id },
         );
+        // 🛡️ 判决复核（根治③ · 1d77a3c5 实锤）：语义类失败放弃前，对磁盘当前产物
+        //    复跑语义门禁——最后一轮写盘可能已合格，失败判决只描述内存里的坏草稿。
+        //    复核通过 ⇒ 沿用已交付产物继续；仍失败 ⇒ 维持放弃 fail-closed。
+        if (/语义不完整|未声明|语义校验|自由变量/.test(errMsg)) {
+          const recheck = await recheckDiskArtifactSemantics(state);
+          if (recheck.ok) {
+            logger.warn(
+              '✅ 判决复核：磁盘最终产物语义门禁通过，沿用已交付产物继续（不失败）',
+              { checked: recheck.checked },
+            );
+            return { generatedFiles: state.generatedFiles };
+          }
+          logger.warn('判决复核仍不通过，维持放弃', {
+            issues: (recheck.issues || []).slice(0, 3),
+          });
+        }
       }
       throw error;
     }
@@ -4475,6 +4541,10 @@ export function createPhase2Graph(config = {}) {
       upstreamIssues: state.upstreamIssues || null,
       //视觉比对输出
       visualComparisonReport: state.visualComparisonReport || null,
+      // 🛡️ P0-B（2026-11-11）：像素保真证据透传（C2 契约下 VISUAL-002 WARN 不阻断，
+      //   但 tasks.service#completeTask 需要它落 visualFidelityWarning 供前端「视觉待改进」标签）。
+      //   generate-runtime-verify 已写 state.visualFidelity（:6023），此处不透则下游恒 undefined。
+      visualFidelity: state.visualFidelity || null,
       qualityMode: state._qualityMode || 'standard',
       runtimeGate: state.runtimeGate || null,
       //  透出 Figma 覆盖率与告警，供前端/任务结果展示
@@ -4696,6 +4766,20 @@ export function createPhase2Graph(config = {}) {
       });
       return { subComponentPlan: finalPlan };
     } catch (error) {
+      // 🛡️ A5（2026-11-11 · 68f9d3f2 实锤）：门禁判定类错误（PlanningGateError）≠ 规划器故障。
+      // 判据判定「结构爆炸」时降级为不强拆 = 吞掉拦截 → 空规划自由裁量 → 空壳产物
+      // （该案视觉分 0.40 仍 completed）。门禁结论必须上抛让任务失败/重规划。
+      if (error instanceof PlanningGateError || error?.code === 'SECTION_COUNT_RATIO_BLOCKED') {
+        logger.error('🚫 段数比门禁阻断，不降级（规划结构爆炸须任务失败/重新规划）', {
+          error: error.message,
+        });
+        state.onProgress?.({
+          stage: '子组件规划',
+          message: `🚫 规划结构爆炸被门禁阻断: ${error.message}`,
+          status: 'error',
+        });
+        throw error;
+      }
       // 规划失败不能阻断后续流程，降级为"不强拆"，让 LLM 自由裁量
       logger.warn('子组件规划失败，降级为不强拆', { error: error.message });
       state.onProgress?.({
@@ -6102,8 +6186,9 @@ export function createPhase2Graph(config = {}) {
         // 🛡️ D2 重叠回灌闭环（2026-11-10 · R14 三单实锤）：RUNTIME-016（文本重叠）阻断时，
         //   先走一轮定向重试（重叠对样本 → guidance → 回 engineer 修复），重试后仍重叠才 fail。
         //   与 acceptance 闭环（engineer 节点）互补：此处是渲染期数据（runtime-verify 阶段），
-        //   engineer 的静态验收拿不到 overlaps。上限 1 轮（_d2OverlapRetried 跨轮保留）。
-        if (textOverlapBlocked && !state._d2OverlapRetried) {
+        //   engineer 的静态验收拿不到 overlaps。上限 2 轮（2026-11-11 从 1 轮提升——
+        //   R21 设备实锤：首轮回灌修复后仍 RUNTIME-016+VISUAL-002，单轮重采样不够）。
+        if (textOverlapBlocked && (state._d2OverlapRetried || 0) < 2) {
           const overlapIssue = (runtimeGate.issues || []).find((i) => i.id === 'RUNTIME-016');
           const pairs = overlapIssue?.evidence?.overlaps || [];
           const guidancePairs = (Array.isArray(pairs) ? pairs : [])
@@ -6118,11 +6203,11 @@ export function createPhase2Graph(config = {}) {
           logger.warn('🛡️ RUNTIME-016 首次命中 ⇒ D2 重叠回灌定向重试（上限 1 轮）', {
             pairs: (Array.isArray(pairs) ? pairs : []).slice(0, 5),
           });
-          state._d2OverlapRetried = true;
+          state._d2OverlapRetried = (state._d2OverlapRetried || 0) + 1;
           state._l0CodeRetryGuidance = (state._l0CodeRetryGuidance || '') + '\n' + d2Guidance;
           return {
             runtimeGate,
-            _d2OverlapRetried: true,
+            _d2OverlapRetried: state._d2OverlapRetried,
             _pendingRuntimeRetry: true,
             _l0CodeRetryGuidance: state._l0CodeRetryGuidance,
           };

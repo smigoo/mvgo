@@ -17,6 +17,8 @@
 
 import { FIX_PHASE } from './code-fix-pipeline.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
+// 🛡️ S4：tab 段识别用内联判定（禁止 import component-acceptance——会造成循环依赖：
+//   component-acceptance 反向 import 本文件的 DEGENERATE_FALLBACK_CLASS）。
 import { ensureSectionAssembly } from '../utils/section-coverage-guard.js';
 import { detectUnknownText } from '../utils/text-truth-guard.js';
 import { pruneDuplicateStyleDecls } from '../utils/style-dedup-guard.js';
@@ -31,6 +33,7 @@ import {
   injectNodeLevelColorTruth,
 } from '../utils/post-process.js';
 import { normalizeCssVarNames } from '../utils/css-var-contract.js';
+import { collectCardGroups, collectCardBgByOwner } from '../utils/card-background-truth.js';
 import { sizeFromScaleMode } from '../utils/background-size-inference.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 import {
@@ -1160,6 +1163,907 @@ export function healDegenerateSubComponentContent(files, figmaNodeData) {
   return out;
 }
 
+/**
+ * 🛡️ S3（2026-11-11 · docs/2026-11-11-S3S4判据驱动确定性兜底方案.md）：E3-v4 背景归属
+ * **确定性补挂**。90e4e5e7 实锤：硬约束配方进了 chunk prompt（:4970 逐字含 id+尺寸），
+ * LLM 仍选择性执行——建了区块但没写 data-section-id 属性、bg 仍挂祖先 ⇒ 复检拦截 failed。
+ * 指令类修复已到天花板 ⇒ 把 hardConstraints 的挂载配方由管线直接落地：
+ *   ① 归属容器不存在 ⇒ 注入带真值尺寸+backgroundImage 的 div（插到该资源变量已消费的
+ *      容器内部，保持视觉层级）；
+ *   ② 归属容器存在但未消费该 bg ⇒ 在其开标签补 backgroundImage 绑定（幂等合并）；
+ *   ③ bg 挂在非归属段 ⇒ 从错挂处移除（挪回归属，防双挂/拉伸）。
+ * 数据源：resourceDomMapping（targetDomSelector/figmaBox/ownerSectionId 真值）——与
+ * acceptance E3-v4 判据**独立实现**（改验分离：判据不改，补挂后复检自然 PASS）。
+ * 幂等：容器 bg 已含该资源名 ⇒ 跳过。计数行恒打（0 也打）。
+ *
+ * @param {Object<string,string>} files
+ * @param {Array|null} resourceDomMapping
+ * @returns {{files: Object<string,string>, stats: Object}}
+ */
+export function backstopMountBgOwnership(files, resourceDomMapping) {
+  const stats = {
+    scanned: 0,
+    missingContainerInjected: 0,
+    containerTagged: 0,
+    movedFromAncestor: 0,
+    skippedAlreadyMounted: 0,
+    noVarConsumer: 0,
+  };
+  const out = { ...files };
+  if (!files || typeof files !== 'object' || !Array.isArray(resourceDomMapping)) {
+    return { files: out, stats };
+  }
+  const entries = Object.entries(files).filter(
+    ([p, c]) => /\.vue$/i.test(p) && typeof c === 'string',
+  );
+  // varName → { file, importLine }（该资源 import 的落点；改验分离：判据侧同逻辑独立实现）
+  const varByFile = new Map();
+  for (const [p, code] of entries) {
+    for (const m of code.matchAll(
+      /import\s+(\w+)\s+from\s+['"][^'"]*\/images\/([\w.\u4e00-\u9fa5-]+\.png)['"]/g,
+    )) {
+      if (!varByFile.has(m[2])) varByFile.set(m[2], { file: p, varName: m[1] });
+    }
+  }
+  for (const r of resourceDomMapping) {
+    if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
+    stats.scanned += 1;
+    const fname = String(r.resourceFile || '').split('/').pop();
+    if (!fname) continue;
+    const wantId = String(r.ownerSectionId || '');
+    if (!wantId) continue;
+    let varInfo = varByFile.get(fname);
+    if (!varInfo) {
+      // 🛡️ S3-b（2026-11-11 · de2d9836 实锤 noVarConsumer=18/20）：无 import ⇒ **自动补
+      //   import + 注入容器**（原 fail-open 跳过会让 E2-v3/E3-v4 病根无解）。落点选择
+      //   （确定性）：①mapping.targetDomSelector 的 id 已存在于某文件 ⇒ 落该文件；
+      //   ②ownerSectionId 同上；③都无 ⇒ index.vue 兜底（根容器必有）。变量名唯一化。
+      const anchorId = String(
+        (r.targetDomSelector || '').match(/data-section-id="([^"]+)"/)?.[1] ||
+          wantId,
+      );
+      let targetFile = null;
+      for (const [p, c] of entries) {
+        if (typeof c === 'string' && c.includes(`data-section-id="${anchorId}"`)) {
+          targetFile = p;
+          break;
+        }
+      }
+      if (!targetFile) {
+        for (const [p, c] of entries) {
+          if (typeof c === 'string' && c.includes(`data-section-id="${wantId}"`)) {
+            targetFile = p;
+            break;
+          }
+        }
+      }
+      if (!targetFile) {
+        targetFile =
+          Object.keys(out).find((p) => /(^|\/)index\.vue$/.test(p)) || null;
+      }
+      if (!targetFile || typeof out[targetFile] !== 'string') {
+        stats.noVarConsumer += 1;
+        continue;
+      }
+      // 唯一变量名（防与既有 import 冲突）
+      const baseName =
+        'bg' +
+        (fname.replace(/\.png$/i, '').replace(/[^\w]/g, '').slice(-8) || 'X');
+      let newVar = baseName;
+      let suffix = 1;
+      while (new RegExp(`\\b${newVar}\\b`).test(out[targetFile])) {
+        newVar = `${baseName}${suffix++}`;
+      }
+      const importLine = `import ${newVar} from '../../resources/images/${fname}'`;
+      const hostCode = out[targetFile];
+      const insM = /(<script[^>]*>\n?)/.exec(hostCode);
+      if (!insM) {
+        stats.noVarConsumer += 1;
+        continue;
+      }
+      out[targetFile] = hostCode.replace(insM[1], `${insM[1]}${importLine}\n`);
+      varByFile.set(fname, { file: targetFile, varName: newVar });
+      stats.importInjected = (stats.importInjected || 0) + 1;
+      // 🛡️ S3-b：重新读取补 import 后的落点（下方主循环统一用 varInfo）
+      varInfo = varByFile.get(fname);
+      // 落到既有主循环（容器判定/注入）——不 continue
+    }
+    const hostSrc = out[varInfo?.file];
+    if (typeof hostSrc !== 'string') continue;
+
+    // ① 归属容器存在性：精确匹配 `data-section-id="wantId"` 的开标签
+    const tagRe = new RegExp(
+      `<([A-Za-z][\\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="${wantId.replace(
+        /[.*+?^${}()|[\\]\\\\]/g,
+        '\\$&',
+      )}"(?:"[^"]*"|'[^']*'|[^>"'])*?)>`,
+    );
+    const ownerTag = tagRe.exec(hostSrc);
+
+    if (ownerTag) {
+      const whole = ownerTag[0];
+      // 幂等：该容器已消费该资源（变量名出现在标签内）
+      if (whole.includes(varInfo.varName)) {
+        stats.skippedAlreadyMounted += 1;
+        continue;
+      }
+      // ② 存在但未消费 → 在**既有 style 属性内**追加 background 声明（无 style 属性才新建；
+      //    禁止第二个 style 属性——SFC/Vue 会忽略重复属性）。
+      if (/background(-image)?\s*[=:]/.test(whole)) {
+        stats.skippedAlreadyMounted += 1;
+        continue;
+      }
+      const withImport = `background-image:url('../../resources/images/${fname}');background-size:100% 100%;background-repeat:no-repeat;`;
+      let finalTag;
+      if (/(\sstyle=")/.test(whole)) {
+        // 已有静态 style：在其内追加（前插，保持用户声明可见性无所谓，CSS 同属性后者胜——
+        // 前插保证若 LLM 写了同名属性以其为准）
+        finalTag = whole.replace(
+          /(\sstyle=")/,
+          `$1${withImport}`,
+        );
+      } else {
+        // 无 style 属性：在标签名后新建
+        finalTag = whole.replace(
+          /<([A-Za-z][\w.-]*)/,
+          `$1 style="${withImport}"`,
+        );
+      }
+      out[varInfo.file] = hostSrc.replace(whole, finalTag);
+      stats.containerTagged += 1;
+      continue;
+    }
+
+    // ①' 归属容器不存在 → 注入 div（插到 varName 已消费的最深容器内部；找不到消费点
+    //    则插到根容器闭合前，fail-open）
+    const bgDecl = `background-image:url('${varInfo.varName}');background-size:100% 100%;background-repeat:no-repeat;`;
+    const injectDiv = `<div data-section-id="${wantId}" style="width:${Math.round(
+      r.figmaBox?.width || 0,
+    )}px;height:${Math.round(r.figmaBox?.height || 0)}px;${bgDecl}"></div>`;
+    const tplIdx = hostSrc.indexOf('<template>');
+    if (tplIdx < 0) continue;
+    const closeIdx = hostSrc.lastIndexOf('</template>');
+    if (closeIdx < 0) continue;
+    // 插入点：varName 在 template 中的最后一个引用所在行的行尾（容器内部近似解）
+    const tplBody = hostSrc.slice(tplIdx, closeIdx);
+    const useIdx = tplBody.lastIndexOf(varInfo.varName);
+    let insertAt = closeIdx;
+    if (useIdx >= 0) {
+      const lineEnd = tplBody.indexOf('\n', useIdx);
+      insertAt = lineEnd >= 0 ? tplIdx + lineEnd + 1 : closeIdx;
+    }
+    out[varInfo.file] =
+      hostSrc.slice(0, tplIdx + insertAt) +
+      injectDiv +
+      '\n' +
+      hostSrc.slice(tplIdx + insertAt);
+    stats.missingContainerInjected += 1;
+  }
+  // ③ 错挂清理：归属容器已补挂后，其它段开标签上同资源的 bg 声明移除（防双挂/拉伸）。
+  //   只处理「补挂/补绑定成功」的条目；无 var 消费的条目没有归属事实，不动。
+  for (const r of resourceDomMapping) {
+    if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
+    const fname = String(r.resourceFile || '').split('/').pop();
+    const wantId = String(r.ownerSectionId || '');
+    const varInfo = varByFile.get(fname);
+    if (!varInfo || !wantId) continue;
+    const hostSrc = out[varInfo.file];
+    if (typeof hostSrc !== 'string') continue;
+    for (const [p, code] of entries) {
+      if (typeof out[p] !== 'string') continue;
+      const cur = out[p];
+      // 找含 varName 且 data-section-id ≠ wantId 的开标签 → 剥其 backgroundImage 声明
+      const offenderRe = new RegExp(
+        `(<[A-Za-z][\\w.-]*(?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="(?!${wantId.replace(
+          /[.*+?^${}()|[\\]\\\\]/g,
+          '\\$&',
+        )}")[^>]*?)`,
+        'g',
+      );
+      let changed = false;
+      const nextCode = cur.replace(offenderRe, (open) => {
+        if (!open.includes(varInfo.varName)) return open;
+        const stripped = open.replace(
+          new RegExp(
+            `(\\s(?::?)style="[^"]*?)background(?:-image)?\\s*:\\s*url\\([^)]*${fname.replace(
+              /[.*+?^${}()|[\\]\\\\]/g,
+              '\\$&',
+            )}[^)]*\\);?`,
+          ),
+          '$1',
+        );
+        if (stripped !== open) {
+          changed = true;
+          stats.movedFromAncestor += 1;
+        }
+        return stripped;
+      });
+      if (changed) out[p] = nextCode;
+    }
+  }
+  return { files: out, stats };
+}
+
+/**
+ * 🛡️ S4（2026-11-11 · docs/2026-11-11-S3S4判据驱动确定性兜底方案.md）：G1-v2 tab 交互
+ * **确定性注入**。真值 tab 段承载文件无 @click ⇒ LLM 又没照做（90e4e5e7/1d7ac90d 双实锤）
+ * ⇒ 注入 Mc 前缀标准三件套（activeMcTab / handleMcTabSwitch / tab 项 class 绑定）。
+ * LLM 已有 tab 状态（/tabs|activeTab|tabIndex/）时只补容器 @click 接线到既有函数（不重复造状态）。
+ * 幂等：容器已有 @click ⇒ 跳过。计数行恒打。
+ *
+ * @param {Object<string,string>} files
+ * @param {object} figmaNodeData
+ * @param {Function} identifyTabSections (node) => [{id}]  真值 tab 段识别（与 G1-v2 同源判定）
+ * @returns {{files: Object<string,string>, stats: Object}}
+ */
+export function injectTabInteractivity(files, figmaNodeData, identifyTabSections) {
+  const stats = {
+    scanned: 0,
+    injected: 0,
+    wiredExisting: 0,
+    skippedHasClick: 0,
+    noCarrier: 0,
+    blockInjected: 0,
+    // 🛡️ S4-d：整块注入降级为最后手段的两个计数（既有 tab 状态被复用 / 因已有状态而跳过）
+    anchoredExisting: 0,
+    skippedExistingState: 0,
+    // 🛡️ S4-e（2026-11-11 · c-vehicle-monitor-4cf5135f 实锤）：tab 状态在**其他文件**（如
+    //   header 插槽里的 ContentSection.vue 完整 pill tab）⇒ 目标文件零状态被误判「零承载」，
+    //   整块注入成第二套无样式 tab（截图两行裸文字）。跨文件查到即跳过。
+    skippedTabStateElsewhere: 0,
+  };
+  const out = { ...files };
+  if (!files || typeof files !== 'object' || !figmaNodeData || typeof identifyTabSections !== 'function') {
+    return { files: out, stats };
+  }
+  const entries = Object.entries(files).filter(
+    ([p, c]) => /\.vue$/i.test(p) && typeof c === 'string',
+  );
+
+  // 🛡️ S4-b（2026-11-11 · d3877740 实锤）：tab 块整体缺失（产物零承载）时，按真值
+  //   **确定性注入完整 tab 块**（容器 + tab 列表 + 各项真值文本 + @click/active 状态）。
+  //   原逻辑 noCarrier 直接跳过 ⇒ 真缺失永远修不好（LLM 两轮都没生成 tab 列）。
+  //   数据源：figmaNodeData（容器 id、tab 列表子节点、各项 TEXT 真值）+ 兄弟段 id 定位落点。
+  const root = figmaNodeData.document || figmaNodeData;
+  const nodeById = new Map();
+  const parentOf = new Map();
+  {
+    const walk = (node, parent) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.id != null) {
+        nodeById.set(String(node.id), node);
+        parentOf.set(String(node.id), parent ? String(parent.id) : null);
+      }
+      for (const c of Array.isArray(node.children) ? node.children : []) walk(c, node);
+    };
+    walk(root, null);
+  }
+  // 内联 tab 业务角色判定（对齐 identifyNodeRole 的装饰豁免：bg/icon/image/背景）
+  const isTabRole = (node) => {
+    const nm = String(node?.name || '').toLowerCase();
+    if (!/\btab/.test(nm)) return false;
+    if (/^bg|^icon|^image|^img/.test(nm) || nm.includes('背景') || nm.includes('图标')) return false;
+    return true;
+  };
+  const hasTabAncestor = (id) => {
+    let cur = parentOf.get(String(id));
+    while (cur) {
+      const anc = nodeById.get(cur);
+      if (anc && isTabRole(anc)) return true;
+      cur = parentOf.get(cur);
+    }
+    return false;
+  };
+
+  for (const secId of identifyTabSections(figmaNodeData)) {
+    stats.scanned += 1;
+    const carrier = entries.find(([, c]) => c.includes(`data-section-id="${secId}"`));
+    if (!carrier) {
+      // S4-b：仅对**最外层 tab 容器**做整块注入（item 级交给最外层统一处理）
+      const node = nodeById.get(String(secId));
+      if (!node || hasTabAncestor(secId)) {
+        stats.noCarrier += 1;
+        continue;
+      }
+      // tab 项结构判据（2026-11-11 · ce3e3b27 实锤：`2:3566 @antd/tab` 的子节点名为
+      //   `btn-active`/`btn`，**不含 tabs** ⇒ 原「子节点 name 含 tabs 且 ≥2 子节点」判据认不出，
+      //   块注入永不触发）。改为纯结构、与命名无关：
+      //   ① 优先取「子节点里含 TEXT 后代数量 ≥2」的那个子容器（89:37 → 89:39 六项）；
+      //   ② 否则退化为「node 自己的直接子节点中带 TEXT 的项 ≥2」（2:3566 → btn-active/btn）。
+      const firstTextOf = (n) => {
+        let hit = '';
+        const pick = (nn) => {
+          if (hit || !nn || typeof nn !== 'object') return;
+          if (nn.type === 'TEXT' && typeof nn.characters === 'string' && nn.characters.trim()) {
+            hit = nn.characters.trim();
+            return;
+          }
+          for (const c of Array.isArray(nn.children) ? nn.children : []) pick(c);
+        };
+        pick(n);
+        return hit;
+      };
+      const countTextChildren = (n) =>
+        (Array.isArray(n?.children) ? n.children : []).filter((c) => firstTextOf(c)).length;
+      let tabList = null;
+      let tabItems = [];
+      const kids = Array.isArray(node.children) ? node.children : [];
+      let best = null;
+      for (const c of kids) {
+        const n = countTextChildren(c);
+        if (!best || n > best.n) best = { c, n };
+      }
+      if (best && best.n >= 2) {
+        tabList = best.c;
+        tabItems = best.c.children.map((it) => firstTextOf(it)).filter(Boolean);
+      } else {
+        tabItems = kids.map((c) => firstTextOf(c)).filter(Boolean);
+      }
+      if (tabItems.length < 2) {
+        stats.noCarrier += 1;
+        continue;
+      }
+      // 落点：①含兄弟段 id 的文件（内容区 2:8437 等）②index.vue
+      const siblingIds = (node.children || [])
+        .filter((c) => c !== tabList)
+        .map((c) => String(c.id))
+        .concat([String(parentOf.get(String(secId)) || '')]);
+      let targetFile = null;
+      for (const [p, c] of entries) {
+        if (siblingIds.some((sid) => sid && c.includes(`data-section-id="${sid}"`))) {
+          targetFile = p;
+          break;
+        }
+      }
+      if (!targetFile) {
+        targetFile = Object.keys(out).find((p) => /(^|\/)index\.vue$/.test(p)) || null;
+      }
+      if (!targetFile || typeof out[targetFile] !== 'string') {
+        stats.noCarrier += 1;
+        continue;
+      }
+      const src = out[targetFile];
+      // 🛡️ S4-d（2026-11-11 · a5df24e9 实锤）：整块注入**降级为最后手段**。
+      //   该任务产物 index.vue 里 LLM 已写好 `const tabs = ref([...])` + `activeTab` + 按 tab 分组的
+      //   数据映射，只是模板里没有 `data-section-id` 锚点 ⇒ 旧逻辑判「零承载」就整块注入，于是在
+      //   `</base-panel>` **之外**多出一份无样式的 tab 块（截图右侧两行游离竖排文字）。
+      //   规则：① 已有 tab 状态 ⇒ 只把真值锚点补到**既有 tab 列表元素**（v-for over tabs）上，
+      //   不造第二个 tab 列表；② 找不到列表元素 ⇒ 跳过（注入重复无样式块比不注入更糟）；
+      //   ③ 只有完全无 tab 状态时才注入，且块内带最小可用样式、只插在根容器内部。
+      const hasTabState = /\bconst\s+tabs\s*=|\bconst\s+tabList\s*=|\bactiveTab\s*=/.test(src);
+      // 🛡️ S4-e：目标文件零 tab 状态 ≠ 产物零 tab——先跨文件查（如 header 插槽
+      //   ContentSection.vue 已有完整 pill tab + activeTab 状态），查到即跳过整块注入。
+      if (!hasTabState) {
+        const elsewhere = entries.find(
+          ([p, c]) => p !== targetFile && /\bconst\s+tabs\s*=|\bconst\s+tabList\s*=|\bactiveTab\s*=/.test(c),
+        );
+        if (elsewhere) {
+          stats.skippedTabStateElsewhere += 1;
+          continue;
+        }
+      }
+      if (hasTabState) {
+        let anchored = false;
+        for (const tm of src.matchAll(/<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)>/g)) {
+          const tag = tm[0];
+          if (!/v-for\s*=\s*"[^"]*\bin\s+(tabs|tabList|tabItems|tabOptions)\b/.test(tag)) continue;
+          if (!/data-section-id=/.test(tag)) {
+            const itemVar = (tag.match(/v-for\s*=\s*"\s*\(?\s*([A-Za-z_$][\w$]*)/) || [])[1] || null;
+            const activeVar =
+              (src.match(/const\s+(\w*[Aa]ctive\w*)\s*=\s*ref/) || [])[1] || null;
+            let anchoredTag = tag.replace(/<([A-Za-z][\w.-]*)/, `<$1 data-section-id="${secId}"`);
+            // 全文件没有任何 @click 时补一条，接到**既有** active 状态上（不新建状态、不覆盖 LLM 语义）
+            if (!/@click/.test(src) && itemVar && activeVar) {
+              anchoredTag = anchoredTag.replace(
+                /<([A-Za-z][\w.-]*)/,
+                `<$1 @click="${activeVar} = ${itemVar}.value ?? ${itemVar}"`,
+              );
+            }
+            out[targetFile] = src.replace(tag, anchoredTag);
+            stats.anchoredExisting += 1;
+            anchored = true;
+          }
+          break;
+        }
+        if (!anchored) {
+          // 无 v-for 列表时，退化为「承载首个 tab 文本的元素」（只用于**补锚点/接线**，不参与判定）：
+          // 接线表达式基于文件里**既有**的 tabs 取值与 active 状态，不新建状态、不造假交互；
+          // 解析不出取值对 ⇒ 不加 @click（宁可让 G1-v2 如实报，也不塞一个假 toggle）。
+          const firstText = tabItems[0];
+          const at = firstText ? src.indexOf(firstText) : -1;
+          if (at > 0) {
+            const lastTag = [...src.slice(0, at).matchAll(/<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)>/g)].pop();
+            if (lastTag && !/data-section-id=/.test(lastTag[0])) {
+              const activeVar =
+                (src.match(/const\s+(\w*[Aa]ctive\w*)\s*=\s*ref/) || [])[1] || null;
+              const tabsLit = (src.match(/const\s+tabs\s*=\s*ref\(\s*\[([\s\S]*?)\]\s*\)/) || [])[1] || '';
+              const vals = [...tabsLit.matchAll(/value\s*:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+              let anchoredTag = lastTag[0].replace(/<([A-Za-z][\w.-]*)/, `<$1 data-section-id="${secId}"`);
+              if (!/@click/.test(src) && activeVar && vals.length >= 2) {
+                const [a, b] = vals;
+                anchoredTag = anchoredTag.replace(
+                  /<([A-Za-z][\w.-]*)/,
+                  `<$1 @click="${activeVar} = ${activeVar} === '${a}' ? '${b}' : '${a}'"`,
+                );
+              }
+              out[targetFile] = src.replace(lastTag[0], anchoredTag);
+              stats.anchoredExisting += 1;
+              anchored = true;
+            }
+          }
+        }
+        if (!anchored) stats.skippedExistingState += 1;
+        continue;
+      }
+      const listId = tabList?.id ? String(tabList.id) : `${secId}-list`;
+      // 🛡️ S4-d：注入块必须自带**最小可用样式**——此前是一串无样式的 div，落进 flex 容器后
+      //   被挤成竖排裸文字（a5df24e9 截图右侧那两行）。
+      const TAB_ITEM_STYLE = 'font-size:14px;line-height:1;white-space:nowrap;cursor:pointer;';
+      const TAB_ITEM_ACTIVE_STYLE = 'color:#3b82f6;font-weight:600;';
+      const itemsHtml = tabItems
+        .map(
+          (t, i) =>
+            `        <div class="mc-s4-tab${i === 0 ? ' mc-s4-tab--active' : ''}" style="${TAB_ITEM_STYLE}${
+              i === 0 ? TAB_ITEM_ACTIVE_STYLE : ''
+            }" :class="{ 'mc-s4-tab--active': mcActiveTab === ${i} }" :data-mc-tab-key="${i}" @click="mcActiveTab = ${i}">${t}</div>`,
+        )
+        .join('\n');
+      const block = `\n    <div class="mc-s4-tabblock" data-section-id="${secId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;padding:4px 0;">\n      <div class="mc-s4-tablist" data-section-id="${listId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;">\n${itemsHtml}\n      </div>\n    </div>`;
+      // 插入点：①兄弟段（内容区）开标签之前 ②根容器闭合前
+      let next = null;
+      for (const sid of siblingIds) {
+        if (!sid) continue;
+        const m = new RegExp(`(\\n[ \\t]*<[A-Za-z][\\w.-]*(?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="${sid}")`).exec(src);
+        if (m) {
+          next = src.slice(0, m.index) + block + src.slice(m.index);
+          break;
+        }
+      }
+      if (!next) {
+        // 🛡️ S4-d：插入点必须在**根内容容器内部**。旧逻辑直接插到 `</template>` 前，
+        //   当模板被 `<base-panel>` 之类的 wrapper 包着时，块会落到 wrapper **之外**
+        //   （a5df24e9：面板外多出一整块游离 tab）。优先插进管线约定的内容根容器，其次插在
+        //   最后一个闭合标签之前（即 wrapper 内部），两者都拿不到才退回 `</template>` 前。
+        const slotM = /<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?class="[^"]*-slot-con[^"]*"(?:"[^"]*"|'[^']*'|[^>"'])*?)>/.exec(
+          src,
+        );
+        if (slotM) {
+          const at = (slotM.index ?? 0) + slotM[0].length;
+          next = `${src.slice(0, at)}${block}${src.slice(at)}`;
+        }
+      }
+      if (!next) {
+        const tplClose = src.lastIndexOf('</template>');
+        if (tplClose < 0) {
+          stats.noCarrier += 1;
+          continue;
+        }
+        const closing = [...src.slice(0, tplClose).matchAll(/<\/([A-Za-z][\w.:-]*)>/g)].pop();
+        if (closing) {
+          const at = closing.index ?? tplClose;
+          next = `${src.slice(0, at)}${block}\n    ${src.slice(at)}`;
+        } else {
+          next = `${src.slice(0, tplClose)}${block}\n${src.slice(tplClose)}`;
+        }
+      }
+      // script 状态：mcTabs 数组 + mcActiveTab（复用 S4 的 ref 注入）
+      const arrLit = `[${tabItems.map((t) => `'${t.replace(/'/g, "\\'")}'`).join(', ')}]`;
+      const stateCode = `\n// 🛡️ S4-b tab 块确定性注入（真值缺失兜底）：\nconst mcTabs = ${arrLit}\nconst mcActiveTab = ref(0)\n`;
+      const insM = /(<script[^>]*>\n?)/.exec(next);
+      if (insM) {
+        const importM = /import\s*\{([^}]*)\}\s*from\s*['"]vue['"]/.exec(next);
+        if (importM && !/\bref\b/.test(importM[1])) {
+          next = next.replace(importM[0], importM[0].replace('{', '{ ref,'));
+        } else if (!importM) {
+          next = next.replace(insM[1], `${insM[1]}import { ref } from 'vue'\n`);
+        }
+        const ins2 = /(<script[^>]*>\n?)/.exec(next);
+        if (ins2) next = next.replace(ins2[1], `${ins2[1]}${stateCode}`);
+      }
+      out[targetFile] = next;
+      stats.blockInjected += 1;
+      continue;
+    }
+    const [p, src] = carrier;
+    // 定位该 tab 段容器开标签
+    const tagRe = new RegExp(
+      `<([A-Za-z][\\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="${String(
+        secId,
+      ).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}"(?:"[^"]*"|'[^']*'|[^>"'])*?)>`,
+    );
+    const m = tagRe.exec(src);
+    if (!m) continue;
+    const open = m[0];
+    if (/@click/.test(open)) {
+      stats.skippedHasClick += 1;
+      continue;
+    }
+    if (/tabs\s*=|activeTab|tabIndex/.test(src)) {
+      // LLM 已有 tab 状态：只补容器 @click 接线（调既有 handleTab*/switch* 函数；没有函数则挂 toggle）
+      const existingFn =
+        /handleTabChange|handleTabClick|switchTab|onTabClick/.exec(src)?.[0] || null;
+      let wired;
+      if (existingFn) {
+        wired = open.replace(/<([A-Za-z][\w.-]*)/, `<$1 @click="${existingFn}($event)"`);
+      } else {
+        // 有状态无函数：注入基于既有 activeTab ref 的切换函数
+        wired = open.replace(/<([A-Za-z][\w.-]*)/, `<$1 @click="handleMcTabSwitch"`);
+        const scriptIdx = src.indexOf('<script');
+        if (scriptIdx >= 0) {
+          const setupEnd = src.indexOf('onMounted', scriptIdx);
+          const fnCode = `\nfunction handleMcTabSwitch(e) {\n  const el = e?.currentTarget?.closest('[data-mc-tab-key]')\n  if (!el) return\n  // A7-S4: 接线到既有 activeTab 状态\n}\n`;
+          const insertAt = setupEnd >= 0 ? setupEnd : src.length;
+          out[p] = src.slice(0, insertAt) + fnCode + src.slice(insertAt);
+        }
+      }
+      out[p] = (out[p] === src ? src : out[p]).replace(open, wired);
+      stats.wiredExisting += 1;
+      continue;
+    }
+    // LLM 完全没写 tab 状态：注入完整三件套
+    const wiredOpen = open
+      .replace(
+        /<([A-Za-z][\w.-]*)/,
+        `<$1 @click="handleMcTabSwitch" :data-mc-tab-root="activeMcTab"`,
+      );
+    let next = src.replace(open, wiredOpen);
+    const scriptIdx = next.indexOf('<script');
+    if (scriptIdx < 0) continue;
+    const importM = /import\s*\{([^}]*)\}\s*from\s*['"]vue['"]/.exec(next);
+    if (importM && !/\bref\b/.test(importM[1])) {
+      next = next.replace(importM[0], importM[0].replace('{', '{ ref,'));
+    } else if (!importM) {
+      next = next.replace(
+        /(<script setup>\n?)/,
+        `$1import { ref } from 'vue'\n`,
+      );
+    }
+    const setupAnchor = /(<script setup>\s*(?:\n|$))/.exec(next);
+    if (setupAnchor) {
+      const stateCode = `\n// 🛡️ S4 tab 交互注入（G1-v2 确定性兜底）：\nconst activeMcTab = ref('')\nfunction handleMcTabSwitch(e) {\n  const root = e?.currentTarget\n  const item = e?.target?.closest('[data-mc-tab-key]') || (root?.getAttribute('data-mc-tab-key') ? root : null)\n  if (item) activeMcTab.value = item.getAttribute('data-mc-tab-key') || ''\n}\n`;
+      next = next.replace(setupAnchor[0], setupAnchor[0] + stateCode);
+    }
+    out[p] = next;
+    stats.injected += 1;
+  }
+  return { files: out, stats };
+}
+
+
+/**
+ * 🛡️ S3-c（2026-11-11 · a5df24e9 实锤）：卡底背景**就地纠正**——只改既有元素，不新建任何 DOM。
+ *
+ * 背景：产物把三张卡的真值背景全塞进第一张卡的子树里（card 挂 bg-125、card-icon 挂 bg-124、
+ * img 挂 bg-126），第三张卡的 bg-126 还被挂到区块根容器（`background-size:100% 100%` ⇒ 整块拉伸铺满）。
+ * E3-v4 判得对，但旧 S3 走「注入独立 div」的老路已实锤会破坏布局（5afb401f 错位方块）。
+ *
+ * 判据（全部来自既有单一事实源，零硬编码）：
+ *   · 卡组与 owner 序 = `collectCardGroups(figmaNodeData)`（几何：≥2 等高子项，按 x 排序）；
+ *   · owner→bg = `collectCardBgByOwner(resourceDomMapping)`（mapping `figmaPath` 以 `/bg` 结尾或文件名 `bg-*`）；
+ *   · 卡元素 = 该 section 承载文件里**出现次数恰等于 owner 数**的重复 class（DOM 序即 x 序）。
+ * 动作（幂等，失败即跳过不猜）：给第 i 个卡元素补 `data-section-id=<owner[i]>`，把对应资源的**import 变量**
+ *   以 `:style` 绑定挂到该卡上（先剥掉该卡上错挂的静态 background-image，避免 E3-v2 双声明），
+ *   并把同一资源在其它元素上的错挂声明清掉。
+ */
+export function correctCardBgOwnership(files, figmaNodeData, resourceDomMapping) {
+  const stats = { scanned: 0, groups: 0, anchored: 0, remounted: 0, cleared: 0, skipped: 0 };
+  const out = { ...files };
+  if (!files || typeof files !== 'object' || !figmaNodeData) return { files: out, stats };
+  const groups = collectCardGroups(figmaNodeData);
+  const bgByOwner = collectCardBgByOwner(Array.isArray(resourceDomMapping) ? resourceDomMapping : []);
+  if (groups.size === 0 || bgByOwner.size === 0) return { files: out, stats };
+  const esc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  for (const [sectionId, owners] of groups) {
+    stats.scanned += 1;
+    const wanted = (owners || []).map((o) => ({
+      owner: String(o),
+      file: bgByOwner.get(String(o)) || null,
+    }));
+    if (wanted.filter((w) => w.file).length < 2) {
+      stats.skipped += 1;
+      continue;
+    }
+    // 承载文件：① 含卡组自身锚点；② 否则按「某 class 重复次数恰等于 owner 数」反查
+    //   （图卡组常以几何分组 id 为 key，如 2:8023，而产物只给外层 section 锚点 136:121）
+    const vueEntries = Object.entries(out).filter(
+      ([p2, c]) => /\.vue$/i.test(p2) && typeof c === 'string',
+    );
+    let carrier = vueEntries.find(([, c]) => c.includes(`data-section-id="${sectionId}"`));
+    if (!carrier) {
+      for (const entry of vueEntries) {
+        const tplProbe = entry[1].slice(0, entry[1].indexOf('</template>'));
+        if (!tplProbe.includes('data-section-id=')) continue;
+        const probe = new Map();
+        for (const m of tplProbe.matchAll(/class="([^"]+)"/g)) {
+          for (const cls of m[1].split(/\s+/)) {
+            if (!cls || cls.length < 3) continue;
+            probe.set(cls, (probe.get(cls) || 0) + 1);
+          }
+        }
+        if ([...probe.values()].some((n2) => n2 === wanted.length)) {
+          carrier = entry;
+          break;
+        }
+      }
+    }
+    if (!carrier) {
+      stats.skipped += 1;
+      continue;
+    }
+    const [file, src] = carrier;
+    const tplEnd = src.indexOf('</template>');
+    if (tplEnd < 0) {
+      stats.skipped += 1;
+      continue;
+    }
+    const tpl = src.slice(0, tplEnd);
+
+    // 候选卡 class：出现次数恰等于 owner 数（≥2），按首次出现序取第一个
+    const counts = new Map();
+    for (const m of tpl.matchAll(/class="([^"]+)"/g)) {
+      const at = m.index ?? 0;
+      for (const cls of m[1].split(/\s+/)) {
+        if (!cls || cls.length < 3) continue;
+        const cur = counts.get(cls);
+        if (cur) cur.count += 1;
+        else counts.set(cls, { count: 1, first: at });
+      }
+    }
+    const cand = [...counts.entries()]
+      .filter(([, v]) => v.count === wanted.length)
+      .sort((a, b) => a[1].first - b[1].first)[0];
+    if (!cand) {
+      stats.skipped += 1;
+      continue;
+    }
+    const tagRe = new RegExp(
+      // 类名必须**整 token 匹配**：`(?![-\\w])` 排除 `…-card` 命中 `…-card-icon` 这类超集
+      `<([A-Za-z][\\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?class="[^"]*${esc(cand[0])}(?![-\\w])[^"]*"(?:"[^"]*"|'[^']*'|[^>"'])*?)>`,
+      'g',
+    );
+    const tags = [...tpl.matchAll(tagRe)].map((m) => m[0]);
+    if (tags.length !== wanted.length) {
+      stats.skipped += 1;
+      continue;
+    }
+    stats.groups += 1;
+
+    let next = src;
+    for (let i = 0; i < tags.length; i += 1) {
+      const want = wanted[i];
+      if (!want || !want.file) continue;
+      const fname = want.file.split('/').pop();
+      const im = new RegExp(`import\\s+(\\w+)\\s+from\\s+['"][^'"]*${esc(fname)}['"]`).exec(next);
+      if (!im) {
+        stats.skipped += 1;
+        continue;
+      }
+      const varName = im[1];
+      const tag = tags[i];
+      let newTag = tag;
+      if (!new RegExp(`\\b${esc(varName)}\\b`).test(tag)) {
+        // 先剥该卡上错挂的静态背景（避免 E3-v2 双声明），再挂动态绑定
+        newTag = newTag.replace(/\sstyle="([^"]*)"(?=[^>]*>)/, (whole, body) => {
+          const cleaned = body.replace(/background-image:url\([^)]*\);?/g, '');
+          return cleaned.trim() ? ` style="${cleaned}"` : '';
+        });
+        if (/:style="/.test(newTag)) {
+          stats.skipped += 1;
+          continue;
+        }
+        newTag = newTag.replace(
+          /<([A-Za-z][\w.-]*)/,
+          `<$1 :style="{ backgroundImage: 'url(' + ${varName} + ')', backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat' }"`,
+        );
+        stats.remounted += 1;
+      }
+      if (!new RegExp(`data-section-id="${esc(want.owner)}"`).test(newTag)) {
+        newTag = newTag.replace(/<([A-Za-z][\w.-]*)/, `<$1 data-section-id="${want.owner}"`);
+        stats.anchored += 1;
+      }
+      if (newTag !== tag) next = next.replace(tag, newTag);
+    }
+
+    // 清理：这些资源在其它元素上的错挂（只清非归属锚点的标签）
+    for (const want of wanted) {
+      if (!want || !want.file) continue;
+      const fname = esc(want.file.split('/').pop());
+      const im = new RegExp(`import\\s+(\\w+)\\s+from\\s+['"][^'"]*${fname}['"]`).exec(next);
+      if (!im) continue;
+      const varName = im[1];
+      next = next.replace(/<[A-Za-z][^>]*>/g, (t) => {
+        if (new RegExp(`data-section-id="${esc(want.owner)}"`).test(t)) return t;
+        let t2 = t;
+        if (/backgroundImage/.test(t) && new RegExp(`\\b${esc(varName)}\\b`).test(t)) {
+          t2 = t2.replace(/backgroundImage:\s*'url\('\s*\+\s*\w+\s*\+\s*'\)'\s*,\s*/g, '');
+          t2 = t2.replace(/,\s*backgroundImage:\s*'url\('\s*\+\s*\w+\s*\+\s*'\)'/g, '');
+        }
+        t2 = t2.replace(new RegExp(`background-image:url\\([^)]*${fname}[^)]*\\);?`, 'g'), '');
+        if (t2 !== t) stats.cleared += 1;
+        return t2;
+      });
+    }
+    out[file] = next;
+  }
+  return { files: out, stats };
+}
+
+/**
+ * 🔴 P0-1（2026-11-11 交接文档 L4）：段根 flex 真值双向注入。
+ *
+ * 判据（单一来源 = Figma `layoutMode` 结构化字段，零命名/子节点数启发式）：
+ *   - 段锚点真值 layoutMode=HORIZONTAL/VERTICAL ⇒ 段根类块缺 display ⇒ 补
+ *     `display:flex;flex-direction:row|column`（418c3310 TabsSection 两枚 tab 胶囊
+ *     竖排盖面板实锤：`.c-vehicle-monitor-tab{gap:10px;flex-shrink:0}` 缺 display:flex）；
+ *   - 真值 layoutMode=NONE 且子树无容器子（全 TEXT 或无子）⇒ 段根类块的
+ *     `display:flex/flex-direction` 移除（a2fcdff7 vendor-name 文字重叠同族：flex
+ *     误注到文本承载元素）。
+ *
+ * 作用面刻意收窄：只动「带 data-section-id 的段根元素在其**同文件** <style> 的类块」
+ * （S1 锚点注入之后才可见），不碰嵌套元素——嵌套 span 的元素级映射通道目前不存在，
+ * 属已知边界（登记于交接文档 P1）。
+ *
+ * @returns {{files: Object<string,string>, stats: object}} stats 各键恒打（计数行铁律）
+ */
+/**
+ * 🛡️ R5（2026-11-11 · c-vehicle-monitor-4cf5135f 实锤）：资源导入绑定字符串字面量剥离。
+ *   `iconSrc: 'icon5'`（icon5 为本文件 import 的 resources/images 绑定）⇒ 运行时 404。
+ *   只剥「值为图片导入绑定名」的字面量：images 命名空间干净，误剥风险≈0。
+ *   仅处理对象字面量值位（`:` 后），不动模板/注释外的普通赋值。
+ */
+export function healResourceBindingStringLiterals(files) {
+  const stats = { scanned: 0, filesHealed: 0, stripped: 0, samples: [] };
+  const out = { ...files };
+  if (!files || typeof files !== 'object') return { files: out, stats };
+  for (const [p, content] of Object.entries(out)) {
+    if (!/\.vue$/i.test(p) || typeof content !== 'string') continue;
+    stats.scanned += 1;
+    // 本文件 import 的图片绑定名（仅 resources/images 来源）
+    const imgBindings = new Set();
+    for (const m of content.matchAll(
+      /import\s+([A-Za-z_$][\w$]*)\s+from\s+['"][^'"]*resources\/images\/[^'"]*['"]/g,
+    )) {
+      imgBindings.add(m[1]);
+    }
+    if (imgBindings.size === 0) continue;
+    let fileStripped = 0;
+    const next = content.replace(
+      /(:\s*)(['"])([A-Za-z_$][\w$]*)\2(?=[,\s}\]])/g,
+      (whole, pre, q, name) => {
+        if (!imgBindings.has(name)) return whole;
+        fileStripped += 1;
+        stats.samples.push(`${p}: ${q}${name}${q} → ${name}`);
+        return `${pre}${name}`;
+      },
+    );
+    if (fileStripped > 0) {
+      out[p] = next;
+      stats.filesHealed += 1;
+      stats.stripped += fileStripped;
+    }
+  }
+  return { files: out, stats };
+}
+
+export function applySectionRootFlexTruth(files, sections, figmaNodeData) {
+  const stats = {
+    evaluated: Array.isArray(sections) ? sections.length : 0, truthResolved: 0, noTruth: 0, noDomAnchor: 0,
+    flexInjected: 0, flexRemoved: 0, alreadyConform: 0,
+  };
+  const out = { ...files };
+  if (!figmaNodeData || !Array.isArray(sections) || sections.length === 0) {
+    return { files: out, stats };
+  }
+  const nodeById = new Map();
+  const walkTruth = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (n.id != null) nodeById.set(String(n.id), n);
+    for (const c of Array.isArray(n.children) ? n.children : []) walkTruth(c);
+  };
+  walkTruth(figmaNodeData?.document || figmaNodeData);
+
+  for (const sec of sections) {
+    if (!sec) continue;
+    const ids = [
+      sec.id,
+      ...(Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : []),
+      sec.figmaNodeId,
+      sec.figmaNode,
+    ].filter((x) => x != null && x !== '');
+    let node = null;
+    for (const id of ids) {
+      node = nodeById.get(String(id)) || null;
+      if (node) break;
+    }
+    const mode = String(node?.layoutMode || '').toUpperCase();
+    if (!node || (mode !== 'HORIZONTAL' && mode !== 'VERTICAL' && mode !== 'NONE')) {
+      stats.noTruth += 1;
+      continue;
+    }
+    stats.truthResolved += 1;
+    const sid = String(sec.id ?? ids[0] ?? '');
+    if (!sid) continue;
+
+    // 移除分支的结构前提：真值非自动布局且子树无容器子（全 TEXT 或无子）
+    const truthKids = Array.isArray(node.children) ? node.children : [];
+    const textOnlyTruth =
+      mode === 'NONE' &&
+      (truthKids.length === 0 || truthKids.every((c) => String(c?.type || '').toUpperCase() === 'TEXT'));
+
+    let acted = false;
+    for (const p of Object.keys(out)) {
+      if (!/\.vue$/i.test(p) || typeof out[p] !== 'string') continue;
+      let content = out[p];
+      // ① 定位段根元素标签（data-section-id=sec.id），取首个 class
+      const anchorIdx = content.indexOf(`data-section-id="${sid}"`);
+      const anchorIdx2 = anchorIdx < 0 ? content.indexOf(`data-section-id='${sid}'`) : anchorIdx;
+      if (anchorIdx < 0 && anchorIdx2 < 0) continue;
+      const aIdx = anchorIdx >= 0 ? anchorIdx : anchorIdx2;
+      const tagStart = content.lastIndexOf('<', aIdx);
+      const tagEnd = content.indexOf('>', aIdx);
+      if (tagStart < 0 || tagEnd < 0) continue;
+      const tag = content.slice(tagStart, tagEnd + 1);
+      const clsMatch = tag.match(/\sclass=["']([^"']+)["']/);
+      if (!clsMatch) { stats.noDomAnchor += 1; continue; }
+      const rootCls = clsMatch[1].trim().split(/\s+/)[0];
+      if (!rootCls) { stats.noDomAnchor += 1; continue; }
+
+      // ② 同文件 <style> 里找 `.{rootCls}` 一级规则块
+      const styleMatch = content.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+      if (!styleMatch) continue;
+      const styleStart = styleMatch.index + styleMatch[0].indexOf(styleMatch[1]);
+      const body0 = styleMatch[1];
+      const ruleRe = new RegExp(`([^{}]*\\.${rootCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^{}]*)\\{`, 'g');
+      const m = ruleRe.exec(body0);
+      if (!m) continue;
+      const bodyStart = styleStart + m.index + m[0].length;
+      let depth = 1;
+      let i = bodyStart;
+      while (i < content.length && depth > 0) {
+        if (content[i] === '{') depth += 1;
+        else if (content[i] === '}') depth -= 1;
+        i += 1;
+      }
+      const bodyEnd = i - 1;
+      const body = content.slice(bodyStart, bodyEnd);
+
+      let newBody = body;
+      if ((mode === 'HORIZONTAL' || mode === 'VERTICAL') && !/display\s*:/i.test(body)) {
+        // 补缺失（方向 = 真值；不覆盖已有 flex-direction —— 若有方向但无 display，只补 display）
+        const dir = mode === 'VERTICAL' ? 'column' : 'row';
+        newBody = /flex-direction\s*:/.test(body)
+          ? `\n  display: flex;${body}`
+          : `\n  display: flex;\n  flex-direction: ${dir};${body}`;
+        stats.flexInjected += 1;
+        acted = true;
+      } else if (textOnlyTruth && /display\s*:\s*flex/i.test(body)) {
+        // 移除误注（真值 NONE + 文本承载）
+        newBody = body
+          .replace(/[ \t]*flex-direction\s*:[^;]*;\s*/g, '')
+          .replace(/[ \t]*display\s*:\s*flex\s*;\s*/g, '');
+        stats.flexRemoved += 1;
+        acted = true;
+      } else {
+        stats.alreadyConform += 1;
+      }
+      if (acted && newBody !== body) {
+        content = content.slice(0, bodyStart) + newBody + content.slice(bodyEnd);
+        out[p] = content;
+      }
+    }
+    if (!acted) {
+      // 有真值但产物里找不到段锚 DOM（子组件拆分形态等）——显式计数，不静默
+      if (!Object.values(out).some(
+        (c) => typeof c === 'string' && c.includes(`data-section-id="${sid}"`),
+      )) {
+        stats.noDomAnchor += 1;
+      }
+    }
+  }
+  return { files: out, stats };
+}
+
 export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
   if (!pipeline || !engineer) return pipeline;
   const {
@@ -1397,6 +2301,79 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
       fixFiles: (files) =>
         engineer._dedupeBgMultiRefs(files, resourceDomMapping),
     });
+
+  // ════════ S3（2026-11-11）：E3-v4 背景归属确定性补挂（docs/2026-11-11-S3S4判据驱动确定性兜底方案.md）════════
+  // 90e4e5e7 实锤：硬约束进 prompt 后 LLM 仍选择性执行（建区块不写锚属性）⇒ 管线按 mapping
+  // 真值直接补挂；acceptance E3-v4 判据不改（改验分离），补挂成功复检自然 PASS。
+  // ════════ S3-c（2026-11-11）：卡底背景**就地纠正**（不新建 DOM）════
+  // a5df24e9 实锤：三张卡的真值背景被 LLM 全塞进第一张卡子树（card/icon/img 各挂一张），
+  // 第三张的 bg 甚至挂到区块根容器（100% 100% ⇒ 整块拉伸）。E3-v4 判得对，但**判而不修**：
+  // 旧 S3 的「注入独立 div」路线已实锤破坏布局（5afb401f 错位方块）⇒ 本刀改为只改既有元素。
+  pipeline.register({
+    id: 'S3c-card-bg-ownership-correct',
+    name: 'E3-v4 卡底背景就地纠正（补锚点 + 归位 + 清错挂）',
+    phase: FIX_PHASE.RESOURCE,
+    enabled: () => process.env.S3C_CARD_BG !== 'false',
+    fixFiles: (files) => {
+      const r = correctCardBgOwnership(files, figmaNodeData, resourceDomMapping || []);
+      engineer.logger?.info?.(
+        `🛡️ S3-c 卡底背景就地纠正·已评估 ${JSON.stringify(r.stats)}`,
+      );
+      return r.files;
+    },
+  });
+
+  pipeline.register({
+    id: 'S3-bg-ownership-backstop',
+    name: 'E3-v4 背景归属确定性补挂',
+    phase: FIX_PHASE.RESOURCE,
+    // 🔴 2026-11-11 5afb401f 实锤：本规则注入的独立空 div 会变成错位方块破坏 card 布局，
+    //   且静态 style 用 url('bg1')（变量在静态 style 无效）⇒ 背景不显示。改为**默认关闭**
+    //   等文本锚点版重写（S3-c）。S4 非破坏性保留。
+    enabled: () => process.env.S3_BG_BACKSTOP === 'true',
+    fixFiles: (files) => {
+      const r = backstopMountBgOwnership(files, resourceDomMapping);
+      engineer.logger?.info?.(
+        `🛡️ S3 bg 归属补挂·已评估 ${JSON.stringify(r.stats)}`,
+      );
+      return r.files;
+    },
+  });
+
+  // ════════ S4（2026-11-11）：G1-v2 tab 交互确定性注入（同方案文档）════════
+  // 真值 tab 段承载无 @click ⇒ 注入 Mc 前缀标准三件套；LLM 已有状态则只接线。
+  pipeline.register({
+    id: 'S4-tab-interactivity-inject',
+    name: 'G1-v2 tab 交互确定性注入',
+    // 🛡️ 2026-11-11（ce3e3b27 实锤）：必须用 INTERACTION 而非 POLISH——S1
+    //   `inject-section-anchors` 同在 POLISH 且注册在后，阶段内按注册顺序执行 ⇒ 用 POLISH 时
+    //   S4 看不到 data-section-id 锚点（noCarrier=1、块注入永不触发），而 acceptance 在管线之后
+    //   看到锚点 ⇒ 永久报「承载于 X.vue 但无切换绑定」。
+    phase: FIX_PHASE.INTERACTION,
+    enabled: () => process.env.S4_TAB_INJECT !== 'false',
+    fixFiles: (files) => {
+      const tabIds = [];
+      if (figmaNodeData && typeof figmaNodeData === 'object') {
+        const stack = [figmaNodeData.document || figmaNodeData];
+        while (stack.length) {
+          const n = stack.pop();
+          if (!n || typeof n !== 'object') continue;
+          {
+            const nm = String(n.name || '').toLowerCase();
+            // 内联判定（同 isTabRole，禁 import component-acceptance 防循环依赖）
+            const deco = /^bg|^icon|^image|^img/.test(nm) || nm.includes('背景') || nm.includes('图标');
+            if (/\btab/.test(nm) && !deco) tabIds.push(String(n.id));
+          }
+          if (Array.isArray(n.children)) stack.push(...n.children);
+        }
+      }
+      const r = injectTabInteractivity(files, figmaNodeData, () => tabIds);
+      engineer.logger?.info?.(
+        `🛡️ S4 tab 交互注入·已评估 ${JSON.stringify(r.stats)}`,
+      );
+      return r.files;
+    },
+  });
   }
 
   // ════════ 阶段 5：样式（STYLE）════════
@@ -1755,6 +2732,46 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
             samples: r.healed.slice(0, 3),
           });
         }
+        return r.files;
+      },
+    });
+    // 🛡️ L4（P0-1 · 2026-11-11 交接文档）：段根 flex 真值双向注入——必须在 S1 之后
+    //   （依赖其注入的 data-section-id 定位段根）。判据单一来源 = Figma layoutMode，
+    //   双向：真值 H/V 补缺失（真值方向），真值 NONE+文本承载移除误注。
+    pipeline.register({
+      id: 'L4-section-root-flex-truth',
+      name: '段根 flex 真值双向注入（L4）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        const sections =
+          componentPlan?.effectiveSections ||
+          input?.generationInput?.componentPlan?.effectiveSections ||
+          [];
+        const r = applySectionRootFlexTruth(files, sections, figmaNodeData);
+        // 计数行铁律：恒打，区分「没跑/跑了没命中/命中多少」
+        engineer.logger?.info?.(
+          `🛡️ L4 段根 flex 真值·已评估 ${JSON.stringify(r.stats)}`,
+        );
+        return r.files;
+      },
+    });
+    // 🛡️ R5（2026-11-11 · c-vehicle-monitor-4cf5135f 实锤）：资源导入绑定被写成**字符串字面量**。
+    //   LLM 在 script 数据对象里写 `iconSrc: 'icon5'`（icon5 是本文件 import 的图片绑定）
+    //   ⇒ 运行时 img src=字面量"icon5" 资源 404。治本：值为图片导入绑定名的字符串字面量
+    //   ⇒ 剥引号还原为变量引用（资源变量绝不拼静态 style/JSON 规约的 script 侧延伸）。
+    pipeline.register({
+      id: 'R5-resource-binding-string-literal-heal',
+      name: '资源导入绑定字符串字面量剥离（R5）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        const r = healResourceBindingStringLiterals(files);
+        // 计数行铁律：恒打，区分「没跑/跑了没命中/命中多少」
+        engineer.logger?.info?.(
+          `🛡️ R5 资源字面量剥离·已评估 ${JSON.stringify({
+            ...r.stats,
+            samples: r.stats.samples.slice(0, 3),
+          })}`,
+        );
         return r.files;
       },
     });

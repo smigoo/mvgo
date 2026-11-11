@@ -146,15 +146,24 @@
                       </div>
                       <div class="task-theme-card__sub">
                         <span v-if="item.isBuiltin" class="task-theme-card__builtin">系统内置一体化 dark 主题</span>
-                        <a
-                          v-if="item.figmaUrl"
-                          :href="item.figmaUrl"
-                          target="_blank"
-                          rel="noopener"
-                          class="task-theme-card__figma"
-                          @click.stop
-                          title="打开该主题的设计稿"
-                        >设计稿 ↗</a>
+                        <template v-if="item.figmaUrl">
+                          <button
+                            type="button"
+                            class="source-action-btn"
+                            @click.stop="copyFigmaUrl(item.figmaUrl)"
+                            title="复制该主题的设计稿 URL"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                          </button>
+                          <a
+                            :href="item.figmaUrl"
+                            target="_blank"
+                            rel="noopener"
+                            class="task-theme-card__figma"
+                            @click.stop
+                            title="打开该主题的设计稿"
+                          >设计稿 ↗</a>
+                        </template>
                       </div>
                     </div>
                   </div>
@@ -2441,6 +2450,23 @@ async function copySourceUrl() {
     document.execCommand('copy')
     document.body.removeChild(ta)
     message.success('Figma URL 已复制')
+  }
+}
+
+async function copyFigmaUrl(url: string) {
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+    message.success('设计稿 URL 已复制')
+  } catch {
+    // fallback：clipboard API 在非安全上下文/权限受限时退化
+    const ta = document.createElement('textarea')
+    ta.value = url
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    message.success('设计稿 URL 已复制')
   }
 }
 

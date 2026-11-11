@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>mv-figma 文件自动整理插件</title>
+    <title>mvgo-figma-structure</title>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -11,6 +11,7 @@
         padding: 20px;
         color: #e0e0e0;
         background-color: #1e1e1e;
+        overflow-y: auto;
       }
       .container { display: flex; flex-direction: column; height: 100%; }
       h1 { font-size: 16px; font-weight: 600; margin: 0; color: #ffffff; }
@@ -50,8 +51,8 @@
   <body>
     <div class="container">
       <div class="header">
-        <h1>Figma 节点整理工具</h1>
-        <p class="subtitle">整理后让大模型更容易理解文件结构，提高生成质量</p>
+        <h1>mvgo-figma-structure</h1>
+        <p class="subtitle">整理 Figma 图层命名和分组，导出结构清单</p>
         <p class="version" id="plugin-version" style="margin:2px 0 0;font-size:11px;color:#7d8590">版本加载中…</p>
       </div>
 
@@ -70,45 +71,61 @@
           <input id="ai-api-key" type="password" placeholder="sk-..." />
           <label>模型名</label>
           <input id="ai-model" placeholder="如 qwen/qwen3.8-max" />
+          <!-- v20261111.62 A：整理模型收进下方「⚙️ 高级设置」折叠区（默认收起）。
+               DOM/id/事件/配置读写全部保留，保存设置 :353 与回填 :1959 不受影响。 -->
           <label>视觉模型名（可选，用于定层级/顺序；留空则纯文本改名）</label>
           <input id="ai-vision-model" placeholder="如 qwen/qwen-vl-max（留空=纯文本改名）" />
-          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+
+          <!-- v20261111.34：接口设置区恢复 .32 原样（平铺、原题与原文案）；界面仍只保留
+               「启用视觉布局分析」「关闭思考模式」两个开关。以下开关与命名规范一律不显示，
+               但 DOM + 默认值完整保留，保存配置 / ai-organize / 配置回填仍读取同一批 id，行为与 .32 完全一致。 -->
+          <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-use-vision" style="width:auto;margin:0;" /> 导出渲染图并用视觉模型定层级/顺序
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-use-layout-intent" style="width:auto;margin:0;" checked /> 启用视觉布局分析（默认开）
           </label>
-          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+          <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-set-export" style="width:auto;margin:0;" checked /> 设置资源导出属性（icon→SVG、img/bg→PNG@2x）
           </label>
-          <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
+          <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-group-modules" style="width:auto;margin:0;" checked /> 生成业务模块容器（零 token，默认开）
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-disable-thinking" style="width:auto;margin:0;" checked /> 关闭思考模式（推荐，避免返回为空）
           </label>
-          <label>命名规范参考（可选）</label>
-          <textarea id="ai-naming-ref" rows="3" placeholder="例：header / header-slot-right / section-title-xxx / section-xxx / graphic-xxx / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
+          <label class="hidden">命名规范参考（可选）</label>
+          <textarea id="ai-naming-ref" class="hidden" rows="3" placeholder="例：header / header-slot-right / section-title-xxx / section-xxx / graphic-xxx / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
           <button id="btn-save-ai" class="secondary" style="width:100%">保存设置（仅存本机）</button>
           <button id="btn-list-models" class="secondary" style="width:100%;margin-top:8px;">列出可用模型（探测哪些支持视觉）</button>
+          <button id="btn-probe-thinking" class="secondary" style="width:100%;margin-top:8px;">探测关思考（逐个方言实测，纯文本小请求）</button>
+          <div id="ai-think-status" style="font-size:12px;margin-top:4px;color:#bbb;line-height:1.6;"></div>
           <div id="ai-config-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
           <div id="ai-models-status" style="font-size:12px;margin-top:4px;color:#bbb;"></div>
-          <p class="hint" style="margin-bottom:0;">
-            默认纯文本模型即可；勾选「视觉模式」需网关上有可用视觉模型，保存时会自动探测接口与 Key。<br/>
-            连接本地服务后 AI 请求走代理，可避开浏览器跨域限制。「仅结构化整理」与「📐 生成结构方案」完全零 token。
-          </p>
         </div>
 
-        <div class="section">
-          <h2>本地服务（AI 代理，可选）</h2>
-          <p class="hint" style="margin-top:0;">
-            先在本机终端运行 <code>node socket-server.mjs</code> 启动本地服务，再点下面连接。连上后 AI 请求改走本地代理，可绕开浏览器跨域限制。
-          </p>
-          <button id="btn-connect" class="primary" style="width:100%">连接服务</button>
-          <label for="port">服务端口（WebSocket）</label>
-          <input type="number" id="port" placeholder="3055" value="3055" min="1024" max="65535" />
-          <div id="connection-status" class="status disconnected">未连接到本地服务（AI 将直连，可能受浏览器跨域限制）</div>
-        </div>
+        <!-- v20261111.62 A：直连是默认态，本来就不需要「连接」按钮。该按钮只是 CORS 兜底时
+             「切换到本地代理转发」的开关（llmFetch :1022/:1024），不是启用直连的开关。
+             主界面只留一行连接状态；按钮 / 端口 / 整理模型统一收进默认折叠的高级设置。
+             DOM + id + 事件监听 + 保存/回填配置零改动，展开后用法与 .61 完全一致。 -->
+        <div id="connection-status" class="status info">直连模式 · 无需启动终端（当前已生效）</div>
+
+        <details id="advanced-settings" style="margin:0 0 14px;border:1px solid #3a3a3a;border-radius:6px;padding:8px;background:#161616;">
+          <summary style="cursor:pointer;font-size:12px;color:#66b3ff;">⚙️ 高级设置（可选 · 整理模型 / 本地代理）<span style="font-size:11px;color:#888;"> · 默认收起</span></summary>
+          <div style="margin-top:8px;">
+            <label>整理模型（可选 · 填不思考的模型可彻底绕开思考，如 qwen-plus）</label>
+            <input id="ai-organize-model" placeholder="留空=沿用上面的模型名" />
+            <div style="margin-top:10px;border-top:1px solid #333;padding-top:8px;">
+              <strong style="font-size:12px;color:#bbb;">本地代理（仅跨域被拦时用）</strong>
+              <p class="hint" style="margin-top:4px;">
+                默认直连，<strong>无需启动终端</strong>。仅当网关报跨域错误时：mac 双击 <code>start-relay-mac.command</code>、Win 双击 <code>start-relay-win.bat</code>，再点下面连接。
+              </p>
+              <button id="btn-connect" class="secondary" style="width:100%">连接本地代理（可选）</button>
+              <label for="port">服务端口（WebSocket）</label>
+              <input type="number" id="port" placeholder="3055" value="3055" min="1024" max="65535" />
+            </div>
+          </div>
+        </details>
 
         <div class="section">
           <h2>一键整理（AI 全自动）</h2>
@@ -121,6 +138,7 @@
             <br/><button id="btn-capture-sel" class="secondary" style="margin-top:6px;font-size:12px;padding:4px 8px;">重新捕获选区</button>
           </div>
           <button id="btn-ai-organize" class="primary" style="width:100%">AI 全自动整理选中框架</button>
+          <button id="btn-undo-organize" class="secondary" style="width:100%;" disabled title="撤回最近一次插件整理；建议整理后不要先做其他修改">↩ 撤回上次整理</button>
 
           <!-- v20261110.23：#2/#3/#4 收进「零 token 工具」折叠区；进度条与结果留在区外（#1/#2 共用）。 -->
           <details id="zero-token-tools" style="margin-top:10px;border:1px solid #3a3a3a;border-radius:6px;padding:8px;background:#161616;">
@@ -187,19 +205,20 @@
         </div>
       </div>
 
-      <!-- 关于 -->
+      <!-- 关于（与整理同级的 tab；只写关于、使用步骤，署名放最后） -->
       <div id="content-about" class="tab-content">
         <div class="section">
           <h2>关于</h2>
-          <p class="hint" style="margin-top:0;font-size:13px;color:#bbb;line-height:1.8;">
-            <strong>Figma 节点整理工具</strong> · by smigoo<br/>
-            整理后让大模型更容易理解文件结构，提高生成质量。
+          <p class="hint">
+            把 Figma 里 Frame 2136、Rectangle 8 这类默认图层名改成看得懂的名字，按模块分组，标上导出设置，整理完导出一份结构清单（结构契约 → mvgo）。只改名字、分组和导出设置，样式不改；「仅结构化整理」这类零 token 工具不需要填 Key。
           </p>
           <h2>使用步骤</h2>
-          <ol style="font-size:12px;color:#bbb;line-height:1.8;">
-            <li>运行 <code>node socket-server.mjs</code> → 点「连接服务」（端口 3055）</li>
-            <li>填接口 / Key / 模型并保存 → 选中框架 → 「AI 全自动整理」</li>
+          <ol>
+            <li>在 Figma 里选中组件根节点，打开插件点「整理」；也可以用「仅结构化整理」。</li>
+            <li>默认不用启动终端，插件直连网关；只有网关报跨域时，mac 双击 start-relay-mac.command、Windows 双击 start-relay-win.bat，再展开「⚙️ 高级设置」连接本地代理。</li>
+            <li>整理完点「导出结构契约」，把结构清单贴给 mvgo 生成代码；导出设置随图层一起带出。</li>
           </ol>
+          <p class="hint" style="margin-top:14px;">by smigoo</p>
         </div>
       </div>
     </div>
@@ -224,12 +243,15 @@
         const statusMessage =
           message ||
           (isConnected
-            ? "已连接到本地服务（AI 代理已启用）"
-            : "未连接到本地服务（AI 将直连，可能受浏览器跨域限制）");
+            ? "已连接本地代理（AI 请求走本机转发）"
+            : "直连模式 · 无需启动终端（AI 请求直接发往网关）");
         connectionStatus.innerHTML = statusMessage;
-        connectionStatus.className = `status ${isConnected ? "connected" : "disconnected"}`;
-        connectButton.textContent = isConnected ? "断开连接" : "连接服务";
-        connectButton.className = isConnected ? "secondary" : "primary";
+        // v20261111.39：未连接是【正常默认态】，用中性蓝 info，不再显示成红色故障。
+        connectionStatus.className = `status ${isConnected ? "connected" : "info"}`;
+        connectButton.textContent = isConnected ? "断开代理，回到直连" : "连接本地代理（可选）";
+        // v20261111.41：代理按钮恒定 secondary。旧逻辑把「未连接」设回 primary（蓝色主按钮），
+        // 让已经处于直连态的用户误以为还要再点一次按钮才能回去。
+        connectButton.className = "secondary";
         portInput.disabled = isConnected;
       }
 
@@ -251,11 +273,11 @@
               const data = JSON.parse(event.data);
               if (data.type === "system" && data.message && data.message.result) {
                 state.connected = true;
-                updateConnectionStatus(true, `已连接本地服务（AI 代理已启用），频道: ${data.channel}`);
+                updateConnectionStatus(true, `已连接本地代理，频道: ${data.channel}`);
                 parent.postMessage({ pluginMessage: { type: "save-server-port", port: state.serverPort } }, "*");
                 parent.postMessage({ pluginMessage: { type: "notify", message: `已连接本地服务 (端口 ${port})` } }, "*");
               } else if (data.type === "error") {
-                updateConnectionStatus(false, `错误: ${data.message}`);
+                updateConnectionStatus(false, `本地代理报错 · 已回到直连模式: ${data.message}`);
                 state.socket.close();
               }
             } catch (e) {
@@ -265,22 +287,22 @@
           state.socket.onclose = () => {
             state.connected = false;
             state.socket = null;
-            updateConnectionStatus(false, "已断开连接");
+            updateConnectionStatus(false, "已断开本地代理 · 当前直连模式（无需启动终端）");
           };
           state.socket.onerror = () => {
-            updateConnectionStatus(false, "连接失败——请确认本地服务已启动");
+            updateConnectionStatus(false, "本地代理未启动 · 当前直连模式，不影响整理");
             state.connected = false;
             state.socket = null;
           };
         } catch (error) {
-          updateConnectionStatus(false, `连接失败: ${error.message || "未知错误"}`);
+          updateConnectionStatus(false, `连接本地代理失败 · 当前仍是直连模式: ${error.message || "未知错误"}`);
         }
       }
 
       function disconnectFromServer() {
         if (state.socket) { state.socket.close(); state.socket = null; }
         state.connected = false;
-        updateConnectionStatus(false, "已断开连接");
+        updateConnectionStatus(false, "已断开本地代理 · 当前直连模式（无需启动终端）");
       }
 
       function generateChannelName() {
@@ -321,6 +343,14 @@
       const aiConfigStatus = document.getElementById("ai-config-status");
 
       parent.postMessage({ pluginMessage: { type: "load-ai-config" } }, "*");
+      const undoOrganizeButton = document.getElementById("btn-undo-organize");
+      undoOrganizeButton.addEventListener("click", () => {
+        if (!undoOrganizeButton.disabled && confirm("撤回插件最近一次整理？请勿在整理后先做其他编辑。")) {
+          undoOrganizeButton.disabled = true;
+          parent.postMessage({ pluginMessage: { type: "undo-organize" } }, "*");
+        }
+      });
+      setTimeout(() => parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*"), 100);
       document.getElementById("btn-capture-sel").addEventListener("click", () => {
         parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
       });
@@ -330,6 +360,7 @@
         const apiKey = document.getElementById("ai-api-key").value.trim();
         const model = document.getElementById("ai-model").value.trim();
         const visionModel = document.getElementById("ai-vision-model").value.trim();
+        const organizeModel = document.getElementById("ai-organize-model").value.trim();
         const useVision = document.getElementById("ai-use-vision").checked;
         const useLayoutIntent = document.getElementById("ai-use-layout-intent").checked;
         const setExport = document.getElementById("ai-set-export").checked;
@@ -350,13 +381,13 @@
           const ok = !!(data.choices && data.choices[0] && data.choices[0].message);
           if (!ok) throw new Error("返回结构异常：" + JSON.stringify(data).slice(0, 200));
           parent.postMessage(
-            { pluginMessage: { type: "save-ai-config", baseUrl, apiKey, model, visionModel, useVision, useLayoutIntent, autoLayoutIntent: useLayoutIntent, setExport, groupModules, disableThinking, namingRef } },
+            { pluginMessage: { type: "save-ai-config", baseUrl, apiKey, model, visionModel, organizeModel, useVision, useLayoutIntent, autoLayoutIntent: useLayoutIntent, setExport, groupModules, disableThinking, namingRef } },
             "*"
           );
         } catch (e) {
           let hint = "";
           if (!state.connected && /fetch|network|Failed to/i.test(e.message)) {
-            hint = "（浏览器跨域/CORS 受限：建议先点「连接服务」连上本地代理，AI 请求将改走本地代理绕过跨域）";
+            hint = "（浏览器跨域/CORS 受限：mac 双击 start-relay-mac.command、Win 双击 start-relay-win.bat 启动本地代理后点「连接本地代理」；或换用支持跨域的 https 网关地址）";
           }
           aiConfigStatus.innerHTML =
             "<span style='color:#ff9999'>❌ 探测未通过，未保存：" + e.message + hint + "</span>";
@@ -396,6 +427,49 @@
         }
       });
 
+      // v20261110.56：逐个关思考方言实测（视觉模型同样适用 —— 视觉能力与「是否思考」本来就无关）
+      document.getElementById("btn-probe-thinking").addEventListener("click", async () => {
+        const baseUrl = document.getElementById("ai-base-url").value.trim();
+        const apiKey = document.getElementById("ai-api-key").value.trim();
+        const mainModel = document.getElementById("ai-model").value.trim();
+        const visionModel = document.getElementById("ai-vision-model").value.trim();
+        const statusEl = document.getElementById("ai-think-status");
+        if (!baseUrl || !apiKey || !mainModel) {
+          statusEl.innerHTML = "<span style='color:#ff9999'>❌ 请先填写接口地址 / API Key / 模型名</span>";
+          return;
+        }
+        const targets = [];
+        if (visionModel) targets.push({ label: "视觉模型", model: visionModel });
+        targets.push({ label: "整理模型/主模型", model: mainModel });
+        const rowHtml = (r) =>
+          (r.status === "off" ? "✅ " : r.status === "timeout" ? "⏱ " : r.status === "error" ? "⚠️ " : "❌ ") +
+          probeEsc(probeDialectLabel(r.dialect)) + " → " +
+          (r.status === "thinking" ? "思考 " + r.reasoning + " 字" : r.status === "empty" ? "没出正文" + (r.finish ? "（" + probeEsc(r.finish) + "）" : "") : r.status === "off" ? PROBE_STATUS_LABEL.off : probeEsc(r.note || PROBE_STATUS_LABEL[r.status] || r.status)) +
+          "，" + Math.round(r.ms / 1000) + "s";
+        const notes = [];
+        try {
+          for (let t = 0; t < targets.length; t++) {
+            const tg = targets[t];
+            const rows = [];
+            const render = (head) =>
+              (statusEl.innerHTML = (head || "⏳ 正在探测「" + probeEsc(tg.label) + "：" + probeEsc(tg.model) + "」…（每个方言一次 8-token 小请求）") +
+                (rows.length ? "<br>" + rows.map(rowHtml).join("<br>") : ""));
+            render();
+            const res = await probeThinkingDialects({ baseUrl: baseUrl, apiKey: apiKey, model: tg.model }, tg.model, function (r) { rows.push(r); render(); });
+            const good = res.filter(function (r) { return r.status === "off"; })[0];
+            if (good) {
+              _thinkingDialectCache.set(thinkingKey(tg.model, baseUrl), good.dialect);
+              notes.push("✅ 「" + tg.label + "：" + probeEsc(tg.model) + "」可以用 <b>" + probeEsc(probeDialectLabel(good.dialect)) + "</b> 关掉思考（第 " + res.length + " 个方言命中）。已记住它，本次会话的整理（含视觉请求）会优先用这个方言。");
+            } else {
+              notes.push("❌ 「" + tg.label + "：" + probeEsc(tg.model) + "」试完 " + res.length + " 个方言都没能让它停止思考 ⇒ 该模型在这个网关上恒定思考。<br>　视觉 + 不思考的正解是换一个**本来就不思考**的视觉模型（点上面的「列出可用模型」，挑带 👁 且名字里没有 thinking/reasoner 的）。");
+            }
+          }
+          statusEl.innerHTML = notes.join("<br>");
+        } catch (e) {
+          statusEl.innerHTML = "<span style='color:#ff9999'>❌ 探测失败：" + probeEsc(String((e && e.message) || e)) + "</span>";
+        }
+      });
+
       // v20261110.9：业务容器已改为纯几何，不再依赖视觉 layoutIntent，也不再强制联动勾选视觉模式。
       // v20261110.14：视觉布局分析依赖视觉模式，勾选时自动联动，避免「开关开了却静默不生效」。
       // 与「业务模块容器」无关 —— 后者是纯几何零 token，不因这个开关消耗 token。
@@ -408,6 +482,7 @@
         aiProgressBox.classList.remove("hidden");
         aiProgressBar.style.width = "5%";
         aiProgressMsg.textContent = "准备中...";
+        resetRunTiming();   // v20261110.53：开始计时
         document.getElementById("ai-analysis-box").classList.add("hidden");
         btnAi.disabled = true;
         parent.postMessage({ pluginMessage: {
@@ -524,6 +599,8 @@
         aiProgressBox.classList.remove("hidden");
         aiProgressBar.style.width = "10%";
         aiProgressMsg.textContent = "零 token 结构化整理中（不调用任何模型）...";
+        resetRunTiming();   // v20261110.53：开始计时
+        RUN_TIMING.applyT0 = Date.now();
         document.getElementById("ai-analysis-box").classList.add("hidden");
         btnAi.disabled = true;
         parent.postMessage({ pluginMessage: {
@@ -552,6 +629,33 @@
           navigator.clipboard.writeText(text).then(() => done("已复制 " + text.length + " 字"), fallback);
         } else { fallback(); }
       });
+
+      // v20261110.53：分阶段计时。用户反馈「还是很慢」但看不出慢在哪 —— 把一轮整理拆成
+      // 扫描 / 渲染 / AI（含真实请求次数）/ 应用 / Figma 后处理，结果面板与分析日志都打印，
+      // 下一轮直接读数字定位瓶颈，不用再猜。
+      const RUN_TIMING = { clickT: 0, reqCount: 0 };
+      function fmtDur(ms) {
+        if (ms == null || !isFinite(ms) || ms < 0) return "—";
+        if (ms < 1000) return ms + "ms";
+        if (ms < 60000) return (ms / 1000).toFixed(1) + "s";
+        return Math.floor(ms / 60000) + "m" + Math.round((ms % 60000) / 1000) + "s";
+      }
+      function resetRunTiming() {
+        RUN_TIMING.clickT = Date.now(); RUN_TIMING.reqCount = 0;
+        RUN_TIMING.scanMs = null; RUN_TIMING.renderMs = null;
+        RUN_TIMING.aiMs = null; RUN_TIMING.applyMs = null; RUN_TIMING.postMs = null;
+      }
+      function timingLine() {
+        if (!RUN_TIMING.clickT) return "";
+        const p = [];
+        if (RUN_TIMING.scanMs != null) p.push("扫描 " + fmtDur(RUN_TIMING.scanMs));
+        if (RUN_TIMING.renderMs != null) p.push("渲染 " + fmtDur(RUN_TIMING.renderMs));
+        if (RUN_TIMING.aiMs != null) p.push("AI " + fmtDur(RUN_TIMING.aiMs) + "（" + (RUN_TIMING.reqCount || 0) + " 次请求）");
+        if (RUN_TIMING.applyMs != null) p.push("应用 " + fmtDur(RUN_TIMING.applyMs) + (RUN_TIMING.postMs != null ? "（其中 Figma 后处理 " + fmtDur(RUN_TIMING.postMs) + "）" : ""));
+        else if (RUN_TIMING.postMs != null) p.push("Figma 后处理 " + fmtDur(RUN_TIMING.postMs));
+        if (!p.length) return "";
+        return "⏱ 总 " + fmtDur(Date.now() - RUN_TIMING.clickT) + " ＝ " + p.join(" + ");
+      }
 
       function showAiProgress(d) {
         aiProgressBar.style.width = (d.pct || 0) + "%";
@@ -617,6 +721,10 @@
           "几何候选 " + (msg.geoCandidates || 0),
           "几何行 " + (msg.geoRows || 0),
           "共享层 " + (msg.geoSpanKept || 0),
+          "竖栏保留 " + (msg.geoColumnsKept || 0),
+          "集合保护 " + (msg.geoProtectedSets || 0),
+          "尺寸不符 " + (msg.geoRowRejected || 0),
+          "循环命名 " + (msg.geoLoopNamed || 0),
           "几何失败 " + (msg.geoGroupFailed || 0),
           "透明Frame " + (msg.frameGroups || 0),
           "业务排除 " + (msg.moduleExcluded || 0),
@@ -647,6 +755,7 @@
           (msg.structurePlanText ? "<br/><span style='color:#66b3ff;font-size:11px;'>结构方案（执行前只读快照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #3a3a3a;border-radius:4px;color:#a9b6c4;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structurePlanText) + "</pre>" : "") +
           (msg.structureList ? "<br/><span style='color:#4ade80;font-size:11px;'>新建业务容器清单（方案 / 实际对照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #444;border-radius:4px;color:#c9d1d9;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structureList) + "</pre>" : "") +
           qualityHtml +
+          (timingLine() ? "<br/><span style='color:#ffd166;font-size:11px;'>" + esc(timingLine()) + "</span>" : "") +
           "<br/>回画布刷新查看结果。";
         // 同步写进分析日志，便于整段复制贴回定位（结果面板在小窗口里容易看漏）
         try {
@@ -656,7 +765,8 @@
             (msg.groupErrorMsg ? "\n建组异常：" + msg.groupErrorMsg : "") +
             (msg.structurePlanText ? "\n\n【结构方案（执行前快照）】\n" + msg.structurePlanText : "") +
             (msg.structureList ? "\n\n【新建业务容器清单（方案/实际对照）】\n" + msg.structureList : "") +
-            (msg.qualityText ? "\n\n【结构质量评分】\n" + msg.qualityText : "");
+            (msg.qualityText ? "\n\n【结构质量评分】\n" + msg.qualityText : "") +
+            (timingLine() ? "\n\n【分阶段耗时】\n" + timingLine() : "");
         } catch (e) {}
         // 注意：figma 只在插件主线程(code.js)存在，UI iframe 内必须用 parent.postMessage 让 code.js 调 figma.notify
         parent.postMessage({ pluginMessage: { type: "notify", message: "AI 整理完成：" + (parts.join("、") || "无改动") } }, "*");
@@ -724,50 +834,484 @@
         return null;
       }
 
-      async function llmRequest(cfg, messages, opts = {}) {
-        const payload = {
-          baseUrl: cfg.baseUrl,
-          apiKey: cfg.apiKey,
-          model: opts.modelOverride || cfg.model,
-          messages,
-          temperature: opts.temperature != null ? opts.temperature : 0.2,
-          ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
-          ...(opts.disableThinking ? { reasoning_effort: "none", thinking: { type: "disabled" } } : {}),
-          stream: opts.stream !== false,
-        };
-        if (state.connected && state.serverPort) {
-          const proxyUrl = "http://localhost:" + state.serverPort + "/llm-proxy";
-          const resp = await fetch(proxyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          if (!resp.ok) {
-            const raw = (await resp.text()).slice(0, 2000);
-            throw new Error("本地代理错误 " + resp.status + "：" + extractErrorText(raw));
-          }
-          return await readLLMResponse(resp);
-        }
-        const url = cfg.baseUrl.replace(/\/+$/, "") + "/chat/completions";
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.apiKey },
-          body: JSON.stringify(payload),
-        });
-        if (!resp.ok) {
-          const raw = (await resp.text()).slice(0, 2000);
-          throw new Error("AI 接口错误 " + resp.status + "：" + extractErrorText(raw));
-        }
-        return await readLLMResponse(resp);
+      // ===== v20261111.36 · 多模型「关思考」方言（对齐 mvgo backend-node/src/ai-engine/utils/model-config.js）=====
+      // 旧实现写死 reasoning_effort:"none" + thinking:{type:"disabled"}，对「始终思考」的 GLM 会 400：
+      //   「该模型始终思考，不支持关闭思考；请使用 low、high 或 max」。
+      // mvgo 三条结论：① 关思考参数按【模型族 / 网关】分流（静态路由，模型族分支恒优先）；
+      // ② 有序候选 + 失败顺延（同模型过不同网关方言不同）；
+      // ③ 400「不支持关闭思考」自动降级 thinking:{type:"low"}（config-test.service.ts:114 / :359）。
+      const THINKING_ALWAYS_RE = /不支持关闭思考|始终思考|always\s*think|请使用\s*low|low[、,]\s*high|thinking[^\n]{0,40}type[^\n]{0,10}low/i;
+      const THINKING_REJECT_RE = /不支持关闭思考|始终思考|always\s*think|thinking|reasoning_effort|enable_thinking|chat_template_kwargs|low[、,]\s*high|400\s*upstream/i;
+      const _thinkingDialectCache = new Map();   // "model|host" → 实测真正关掉思考的方言（仅当思考=0 才写入）
+      const _thinkingDialectFailed = new Set();  // "model|host|方言JSON" → 已失败，后续跳过
+      // v20261111.46：实测网关会静默忽略全部关思考参数（enable_thinking / thinking / reasoning_effort…），
+      // 模型始终思考，且思考长度随 max_tokens 一起膨胀（1234 预算→思考 3841 字；3702 预算→13203 字），
+      // ⇒ 换方言、加预算都拿不到正文，唯一有效的是「给足预算让思考自然结束」。
+      // 一旦发现某一轮的思考 > 0，就判定「该网关忽略关思考参数」（按 模型|网关 记忆），
+      // 之后不再逐方言试错（那会让每段请求数 ×8 且全部失败），改为单次请求 + 大预算。
+      const _thinkingParamsIgnored = new Set();
+      // v20261111.58：上游明确「始终思考，不支持关闭思考；请使用 low、high 或 max」的模型，按 model|网关 记忆。
+      // 这类模型发任何「关闭型」参数都必然被拒/被忽略，首选应直接给最低思考强度，而不是先白跑 6 次关闭参数。
+      const _thinkingAlwaysModels = new Set();
+      function thinkingAlways(model, baseUrl) {
+        return _thinkingAlwaysModels.has(thinkingKey(model, baseUrl));
+      }
+      // 静态识别：GLM 4.6 / 5.x 系（含 z-ai/glm-5.3-flash）是「始终思考」模型。
+      // 不依赖是否收到过 400 —— 静默忽略关思考参数（回 200）的网关同样适用。
+      function isAlwaysThinkingModel(model) {
+        return /glm-(4\.6|4\.7|5)/.test(String(model || "").toLowerCase());
+      }
+      function lowThinkingPreferred(model, baseUrl) {
+        return thinkingAlways(model, baseUrl) || isAlwaysThinkingModel(model);
+      }
+      // v20261111.47：提示词级软开关（Qwen3 等支持 /no_think）。参数被网关忽略时这是唯一还能关掉思考的杠杆。
+      const NO_THINK_MARKER = "/no_think";
+      function thinkingParamsIgnored(model, baseUrl) {
+        return _thinkingParamsIgnored.has(thinkingKey(model, baseUrl));
+      }
+      // 是否明确要求「不要思考」：UI 的「关闭思考模式」开关 + 整理专用模型
+      function wantsNoThink(cfg) {
+        return cfg && cfg.disableThinking !== false;
       }
 
-      // 流式/普通响应统一解析：SSE 时聚合 delta.content，普通 JSON 直接解析
+      // ===== v20261111.48 · 关思考策略对齐 mvgo =====
+      // 来源：mvgo/backend-node/src/ai-engine/utils/model-config.js（isReasoningModel / 输出上限表）
+      //      mvgo/backend-node/src/ai-engine/utils/ai-defaults.js（thinkingDefaultFor）
+      //      mvgo/backend-node/src/ai-engine/utils/ai-request-gateway.js（length+空内容熔断）
+      // ① /^deepseek-v4/ → thinking:{type:'disabled'}（mvgo 的模型名级兜底）
+      // ② isReasoningModel()（kimi-k*、*thinking*、*reasoner*、qwq*、o1/o3、*reasoning*）关不掉思考，
+      //    mvgo 的做法是把该 provider 标记 skip 直接弃用（不是硬试参数）——插件无法换 provider，只能显式提示换模型；
+      // ③ 非推理模型不注入任何思考参数（本来就不思考）；
+      // ④ 空正文 + finish=length 是【确定性故障】（同 provider 必复现）⇒ 立即熔断，不再逐方言重试；
+      // ⑤ 推理模型服务端硬性要求 temperature=1，传 0.2 会 400 invalid temperature。
+      const MODEL_MAX_OUTPUT_TOKENS = {
+        'qwen-vl-plus': 8192, 'qwen-vl-max': 8192,
+        'qwen-plus': 8192, 'qwen-turbo': 8192, 'qwen-long': 8192, 'qwen-max': 32768,
+        'qwen3-plus': 16384, 'qwen3-max': 32768, 'qwen3-turbo': 8192,
+        'deepseek-chat': 8192, 'deepseek-v3': 8192, 'deepseek-reasoner': 8192,
+        'gpt-4o': 16384, 'gpt-4o-mini': 16384,
+        'gpt-4.1': 32768, 'gpt-4.1-mini': 32768, 'gpt-4.1-nano': 32768,
+        'claude-3-5-sonnet': 8192, 'claude-3-7-sonnet': 32768, 'claude-sonnet-4': 32768,
+        'claude-sonnet-4-6': 32768, 'claude-opus-4': 32768, 'claude-opus-4-8': 32768,
+        'claude-haiku-4': 8192,
+        'kimi-k3': 16384,
+        'glm-4': 8192, 'glm-4-plus': 8192,
+      };
+      function getModelMaxOutputTokens(model, fallback) {
+        const m = String(model || "").trim().toLowerCase();
+        const fb = fallback || 16000;
+        if (!m) return fb;
+        if (MODEL_MAX_OUTPUT_TOKENS[m] != null) return MODEL_MAX_OUTPUT_TOKENS[m];
+        // 带前缀的模型名（qwen/qwen3-max）退化为「按最后一段匹配」
+        const tail = m.split("/").pop();
+        if (MODEL_MAX_OUTPUT_TOKENS[tail] != null) return MODEL_MAX_OUTPUT_TOKENS[tail];
+        return fb;
+      }
+      function isReasoningModel(model) {
+        const m = String(model || "").trim().toLowerCase();
+        if (!m) return false;
+        return (
+          /^kimi-k\d/.test(m) || /thinking/.test(m) || /reasoner/.test(m) ||
+          /^qwq/.test(m) || /^o1/.test(m) || /^o3/.test(m) || /reasoning/.test(m)
+        );
+      }
+      // mvgo：推理模型强制 temperature=1，否则服务端 400
+      function normalizeRequestTemperature(model, requestedTemp) {
+        return isReasoningModel(model) ? 1 : requestedTemp;
+      }
+      // mvgo：deepseek-v4 系可关；其余推理模型关不掉 ⇒ mvgo 直接弃用该 provider
+      function thinkingClosable(model) {
+        const m = String(model || "").trim().toLowerCase();
+        if (/^deepseek-v4/.test(m)) return true;
+        return !isReasoningModel(m);
+      }
+      function noThinkPreflightWarn(model) {
+        const m = String(model || "").trim().toLowerCase();
+        if (!m) return "";
+        if (/^deepseek-v4/.test(m)) {
+          return "模型 " + model + "：按 mvgo 规则默认注入 thinking:{type:'disabled'}（deepseek v4 系可关）。";
+        }
+        if (isReasoningModel(m)) {
+          return "⚠️ 模型 " + model + " 属推理模型（mvgo 对这类模型直接弃用：无法关闭思考，会烧光输出预算）。"
+            + "建议在「整理模型」里填一个非推理模型（如 qwen-plus），否则只能靠大预算等它想完。";
+        }
+        return "";
+      }
+
+      function thinkingHost(baseUrl) {
+        try { return new URL(String(baseUrl || "")).host.toLowerCase(); }
+        catch (e) { return String(baseUrl || "").toLowerCase(); }
+      }
+      function thinkingKey(model, baseUrl) {
+        return String(model || "").toLowerCase() + "|" + thinkingHost(baseUrl);
+      }
+      // v20261111.58 静态路由：模型名分支【整体优先】于网关子句。
+      // 旧版把 u.indexOf("microvideo")>=0 塞进 qwen 分支且排在 glm/kimi/gemini 之前，
+      // 导致同一网关下所有模型都被定成 enable_thinking:false（v20261110.56 已发现、一直未修）。
+      // 现在：① 上游实测始终思考 → 直接最低强度；② 模型名规则；③ 网关仅作未知模型的兜底。
+      function thinkingOffRoute(model, baseUrl) {
+        const m = String(model || "").toLowerCase().trim();
+        const u = String(baseUrl || "").toLowerCase().trim();
+        // ① 「始终思考」模型：不请求关闭，只请求最低强度（上游文案要求 low/high/max）。
+        if (lowThinkingPreferred(model, baseUrl)) return { reasoning_effort: "low" };
+        // ② 模型名级规则（恒优先，不再被网关域名遮蔽）
+        if (/^deepseek-v4/.test(m)) return { thinking: { type: "disabled" } }; // mvgo thinkingDefaultFor 同名规则
+        if (m.indexOf("deepseek") >= 0) return { thinking: { type: "disabled" } };
+        if (m.indexOf("qwen") >= 0) return { enable_thinking: false };
+        if (/^kimi/.test(m) || (u.indexOf("lkeap") >= 0 && m.indexOf("kimi") >= 0)) return { thinking: { type: "disabled" } };
+        if (m.indexOf("hunyuan") >= 0 || m.indexOf("hy4") >= 0) return { enable_thinking: false };
+        if (m.indexOf("gemini") >= 0) return { thinking: { level: "off" } };
+        if (m.indexOf("glm") >= 0) return { enable_thinking: false };
+        if (m.indexOf("doubao") >= 0) return { thinking: { type: "disabled" } };
+        // ③ 网关级兜底（仅在模型名没命中时生效）
+        if (u.indexOf("dashscope") >= 0 || u.indexOf("microvideo") >= 0) return { enable_thinking: false };
+        if (u.indexOf("generativelanguage") >= 0 || u.indexOf("googleapis") >= 0) return { thinking: { level: "off" } };
+        if (u.indexOf("bigmodel") >= 0 || u.indexOf("zhipu") >= 0) return { enable_thinking: false };
+        if (u.indexOf("volces") >= 0) return { thinking: { type: "disabled" } };
+        if (u.indexOf("vllm") >= 0 || u.indexOf("featherless") >= 0 || u.indexOf("openrouter") >= 0) return { chat_template_kwargs: { enable_thinking: false } };
+        return {};  // 未知模型不带任何思考参数，避免未知字段触发 400
+      }
+      // includeFailed=true 时连「已知失败」的方言也一并返回 —— 只给「关思考探测」用：
+      // 诊断要的是事实，不能因为之前的空正文失败就把某个方言从表里抹掉。
+      function thinkingOffCandidates(model, baseUrl, includeFailed) {
+        const k = thinkingKey(model, baseUrl);
+        const out = [], seen = new Set();
+        const push = function (p) {
+          const s = JSON.stringify(p);
+          if (seen.has(s)) return;
+          seen.add(s);
+          if (!includeFailed && _thinkingDialectFailed.has(k + "|" + s)) return;
+          out.push(p);
+        };
+        // v20261111.58：始终思考模型 → 最低强度排首位，关闭型参数留在后面（探测仍能看到全表事实）。
+        // 整理请求只要 low 能出正文就只发 1 次，不再逐个白跑必然被拒的关闭参数。
+        if (lowThinkingPreferred(model, baseUrl)) {
+          push({ reasoning_effort: "low" });
+          push({ thinking: { type: "low" } });
+        }
+        push(thinkingOffRoute(model, baseUrl));
+        push({ enable_thinking: false });
+        push({ thinking: { type: "disabled" } });
+        push({ chat_template_kwargs: { enable_thinking: false } });
+        push({ reasoning: { enabled: false } });
+        // v20261111.47：参数级被网关白名单拦住时，改用【提示词级软开关】。
+        // Qwen3 官方支持在消息里写 /no_think 关闭思考，它走的是 prompt，不受网关参数过滤影响。
+        push({ __prompt: NO_THINK_MARKER });
+        push({ __prompt: NO_THINK_MARKER, enable_thinking: false });
+        // 「始终思考」模型关不掉：降到最低思考强度（mvgo config-test 同款降级）。
+        // 不同网关把强度写在 thinking.type 或 reasoning_effort，两种都试、绝不混发。
+        push({ thinking: { type: "low" } });
+        push({ reasoning_effort: "low" });
+        push({});  // 最后兜底：完全不带思考参数
+        return out.length ? out : [{}];
+      }
+
+      // 提示词级关思考：把软开关追加到最后一条 user 消息（兼容字符串与多模态数组两种 content）
+      function withNoThink(messages, marker) {
+        const list = (Array.isArray(messages) ? messages : []).map((m) => Object.assign({}, m));
+        for (let i = list.length - 1; i >= 0; i--) {
+          if (list[i].role !== "user") continue;
+          const c = list[i].content;
+          if (typeof c === "string") list[i].content = c + "\n" + marker;
+          else if (Array.isArray(c)) {
+            const parts = c.map((p) => Object.assign({}, p));
+            const ti = parts.map((p, idx) => (p && p.type === "text" ? idx : -1)).filter((x) => x >= 0).pop();
+            if (ti >= 0) parts[ti].text = String(parts[ti].text || "") + "\n" + marker;
+            else parts.push({ type: "text", text: marker });
+            list[i].content = parts;
+          } else {
+            list[i].content = marker;
+          }
+          break;
+        }
+        return list;
+      }
+
+      async function llmFetch(cfg, payload, signal) {
+        RUN_TIMING.reqCount = (RUN_TIMING.reqCount || 0) + 1;   // v20261110.53：本轮真实请求次数
+        if (state.connected && state.serverPort) {
+          // 本地代理分支：payload 里的 baseUrl / apiKey 是给代理用的路由信息，代理会严格挑字段再转发上游。
+          return fetch("http://localhost:" + state.serverPort + "/llm-proxy", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload), signal: signal,
+          });
+        }
+        // v20261111.39 零安装直连：上游只接受标准 OpenAI 字段。
+        // 旧版把 baseUrl / apiKey 也原样塞进 body —— 严格网关会 400，且 Key 会出现在请求体里。
+        const upstream = Object.assign({}, payload);
+        delete upstream.baseUrl;
+        delete upstream.apiKey;
+        const url = cfg.baseUrl.replace(/\/+$/, "") + "/chat/completions";
+        return fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.apiKey },
+          body: JSON.stringify(upstream), signal: signal,
+        });
+      }
+
+      // v20261110.56【关思考探测】逐个「关思考方言」实测，回答「这个模型到底能不能不思考」。
+      // 背景：v45–v48 观察到网关会静默忽略关思考参数，于是插件在【第一次看到思考】后就放弃所有参数方言
+      // （ui.html 的 _thinkingParamsIgnored），只剩 /no_think 软开关 + 无参兜底。但这等于「只试过第一个方言」——
+      // 只要它能出正文（哪怕思考拉满），后面的方言（thinking:{type:disabled} / reasoning:{enabled:false} /
+      // chat_template_kwargs …）永远不会被测到。这个探测对指定模型把每个方言各发一次 8-token 小请求，
+      // 看有没有哪个方言真能让思考为 0；命中就写进 _thinkingDialectCache，之后整理（含视觉请求）优先用它。
+      // 探测只用纯文本：模型识别参数与模态无关，但省带宽、也不会重复上传渲染图。
+      const PROBE_TIMEOUT_MS = 12000;
+      const PROBE_MAX_TOKENS = 8;
+      const PROBE_STATUS_LABEL = { off: "思考 0 字（可用）", thinking: "思考未关掉", empty: "没出正文", timeout: "无响应（超时）", error: "报错" };
+      const probeEsc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      function probeDialectLabel(cand) {
+        const c = Object.assign({}, cand || {});
+        const marker = c.__prompt || "";
+        delete c.__prompt;
+        delete c.__last;
+        const txt = JSON.stringify(c).replace(/"([a-zA-Z_]+)":/g, "$1:");
+        return marker ? txt + " + 提示词 " + marker : txt;
+      }
+      async function probeOneDialect(cfg, model, cand, timeoutMs) {
+        const promptMarker = (cand && cand.__prompt) || "";
+        const params = Object.assign({}, cand || {});
+        delete params.__prompt;
+        delete params.__last;
+        const payload = Object.assign(
+          {
+            baseUrl: cfg.baseUrl,
+            apiKey: cfg.apiKey,
+            model: model,
+            messages: withNoThink([{ role: "user", content: "ping" }], promptMarker),
+            temperature: normalizeRequestTemperature(model, 0),
+            max_tokens: PROBE_MAX_TOKENS,
+            stream: true,
+          },
+          params
+        );
+        const t0 = Date.now();
+        const ctl = typeof AbortController === "function" ? new AbortController() : null;
+        let timer = null;
+        const race = new Promise(function (_, rej) {
+          timer = setTimeout(function () {
+            if (ctl) { try { ctl.abort(); } catch (e) {} }
+            rej(new Error("probe-timeout"));
+          }, timeoutMs);
+        });
+        race.catch(function () {});
+        try {
+          const resp = await Promise.race([llmFetch(cfg, payload, ctl ? ctl.signal : undefined), race]);
+          if (!resp.ok) {
+            const raw = (await resp.text().catch(function () { return ""; })).slice(0, 300);
+            return { dialect: cand, status: "error", ms: Date.now() - t0, note: "HTTP " + resp.status + " " + extractErrorText(raw) };
+          }
+          const data = await readLLMResponse(resp);
+          const meta = msgMeta(data);
+          const status = meta.reasoning.trim() ? "thinking" : (meta.content.trim() ? "off" : "empty");
+          return { dialect: cand, status: status, reasoning: meta.reasoning.length, content: meta.content.length, finish: meta.finish, ms: Date.now() - t0, note: "" };
+        } catch (e) {
+          const msg = String((e && e.message) || e);
+          const to = /probe-timeout|abort/i.test(msg);
+          return { dialect: cand, status: to ? "timeout" : "error", ms: Date.now() - t0, note: to ? "无响应（" + Math.round(timeoutMs / 1000) + "s）" : msg.slice(0, 160) };
+        } finally {
+          if (timer) { clearTimeout(timer); timer = null; }
+        }
+      }
+      // 返回逐方言结果数组；一旦命中「思考 0 字」就停（后面的方言不用再试）。
+      async function probeThinkingDialects(cfg, model, onStep) {
+        const list = thinkingOffCandidates(model, cfg.baseUrl, true);   // 诊断：连已知失败的方言也测，事实优先
+        const out = [];
+        for (let i = 0; i < list.length; i++) {
+          const r = await probeOneDialect(cfg, model, list[i], PROBE_TIMEOUT_MS);
+          out.push(r);
+          if (typeof onStep === "function") { try { onStep(r, i, list.length); } catch (e) {} }
+          if (r.status === "off") break;
+        }
+        return out;
+      }
+
+      async function llmRequest(cfg, messages, opts = {}) {
+        const model = opts.modelOverride || cfg.model;
+        const off = opts.disableThinking === true;
+        const key = thinkingKey(model, cfg.baseUrl);
+        // v20261111.46：已知该网关忽略关思考参数 ⇒ 不再逐方言试错，单次请求 + 大预算让思考自然结束。
+        // v20261111.47：但这之前先试【提示词级软开关 /no_think】—— 它不受网关参数白名单影响，
+        // 若能生效就能真正不思考（快且省 token）；失败再退回「无参 + 大预算」。
+        const paramsIgnored = off && _thinkingParamsIgnored.has(key);
+        // v20261110.56：缓存里存的方言是【实测思考为 0】的那个，它必须优先于「网关忽略参数」的悲观结论 ——
+        // 旧版只在没记过 paramsIgnored 时才看缓存，于是「换了个真能关思考的方言」也会被无视。
+        const cached = off ? _thinkingDialectCache.get(key) : null;
+        // v20261110.53【关键提速】：参数级关思考被忽略后，只剩「软开关 /no_think + 无参兜底」两条路。
+        // 旧版把这两个候选取死为 [{__prompt},{}]，绕过了 _thinkingDialectFailed 去重 —— 于是【每个分段】
+        // 都要先白跑一次已经证明无效的 /no_think（思考照样烧满预算，几十秒白等），排到无参候选才成功
+        // ⇒ 每段 2 次请求，请求数直接翻倍。这里改成：软开关一旦失败过（空正文 + 同一预算）就跳过它，
+        // 每个分段只发 1 次请求（无参 + 大预算），语义与旧版第二次尝试完全一致。
+        const noThinkCand = { __prompt: NO_THINK_MARKER };
+        const noThinkDead = _thinkingDialectFailed.has(key + "|" + JSON.stringify(noThinkCand));
+        const fallbackCands = paramsIgnored ? (noThinkDead ? [{}] : [noThinkCand, {}]) : [{}];
+        // v20261111.58：始终思考模型即便在「网关忽略参数」的悲观分支里，也要把 low 放首位。
+        // 只对该类模型生效，其余模型的候选形状与 v.56 完全一致（不改通用降级行为）。
+        const lowFirst = (off && paramsIgnored && !cached && lowThinkingPreferred(model, cfg.baseUrl))
+          ? [{ reasoning_effort: "low" }, { thinking: { type: "low" } }]
+          : [];
+        const candidates = off
+          ? (cached
+              ? [cached].concat(fallbackCands)
+              : (lowFirst.length
+                  ? lowFirst.concat(fallbackCands)
+                  : (paramsIgnored ? fallbackCands : thinkingOffCandidates(model, cfg.baseUrl))))
+          : [{}];
+        const base = {
+          baseUrl: cfg.baseUrl,
+          apiKey: cfg.apiKey,
+          model: model,
+          messages,
+          // v20261111.48（对齐 mvgo）：推理模型服务端硬性要求 temperature=1
+          temperature: normalizeRequestTemperature(model, opts.temperature != null ? opts.temperature : 0.2),
+          ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
+          stream: opts.stream !== false,
+        };
+        // v20261111.49：「关思考」模式下思考很可能关不掉，那就必须给足思考空间。
+        // 旧版只在「最后一个候选」上抬预算，结果排在前面的 /no_think 候选以 1054 预算起跑，
+        // 思考到 3890 字被 length 截断，随后被 mvgo 式熔断直接掐掉 —— 本来给足预算就能出正文。
+        if (off && base.max_tokens) {
+          const cap = getModelMaxOutputTokens(model, 16000);
+          base.max_tokens = Math.min(cap, Math.max(Number(base.max_tokens) || 0, THINKING_BUDGET_FLOOR));
+        }
+        const attempts = [];
+        let lastErr = null;
+        for (let i = 0; i < candidates.length; i++) {
+          const cand = candidates[i] || {};
+          // __prompt 是提示词级软开关，不进请求体（只在这里拆出来）
+          const promptMarker = cand.__prompt || "";
+          const params = Object.assign({}, cand);
+          delete params.__prompt;
+          delete params.__last;
+          const payload = Object.assign({}, base, params);
+          if (promptMarker) payload.messages = withNoThink(base.messages, promptMarker);
+          if (paramsIgnored && i === candidates.length - 1 && payload.max_tokens) {
+            // v20261111.48/49：最后一个候选再升到 THINKING_BIG_BUDGET，并受模型真实输出上限约束
+            const cap = getModelMaxOutputTokens(model, 16000);
+            payload.max_tokens = Math.min(cap, Math.max(Number(payload.max_tokens) || 0, THINKING_BIG_BUDGET));
+          }
+          const dialectLabel = Object.assign({}, params, promptMarker ? { prompt: promptMarker } : {});
+          // v20261111.51：每次尝试都套一层硬超时。两条腿走路 ——
+          // ① AbortController 真正掐断底层 fetch（浏览器都有）；② Promise.race 兜底计时，
+          // 保证即使运行环境没有 AbortController 也一定在 attemptTimeoutMs 内失败，
+          // 不会退回「永久挂起」（仿真里正是因为缺 AbortController 才测出这个漏洞）。
+          const attemptCtl = typeof AbortController === "function" ? new AbortController() : null;
+          // v54：重跑段可以带更短的截止时间（opts.timeoutMs），默认仍用 LLM_TIMEOUT_MS
+          const attemptTimeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : LLM_TIMEOUT_MS;
+          const timeoutErr = function () {
+            return new Error("请求超时（" + Math.round(attemptTimeoutMs / 1000) + "s 无响应）：网关接受了请求但未在时限内回包（网关/代理无响应或链路被挂起）。");
+          };
+          let attemptTimer = null;
+          const timeoutRace = new Promise(function (_, rej) {
+            attemptTimer = setTimeout(function () {
+              if (attemptCtl) { try { attemptCtl.abort(); } catch (e) {} }
+              rej(timeoutErr());
+            }, attemptTimeoutMs);
+          });
+          timeoutRace.catch(function () {});   // 请求先成功时计时器会被清掉；这里吞掉潜在的未处理拒绝
+          const clearAttemptTimer = function () { if (attemptTimer) { clearTimeout(attemptTimer); attemptTimer = null; } };
+          let resp;
+          try {
+            const pending = llmFetch(cfg, payload, attemptCtl ? attemptCtl.signal : undefined);
+            pending.catch(function () {});     // 超时之后仍在飞的请求不再冒泡成未捕获异常
+            resp = await Promise.race([pending, timeoutRace]);
+          } catch (e) {
+            clearAttemptTimer();
+            const aborted = e && (e.name === "AbortError" || /abort/i.test(String((e && e.message) || "")));
+            if (aborted) throw timeoutErr();
+            throw e;
+          }
+          if (resp.ok) {
+            let data;
+            try {
+              data = await readLLMResponse(resp);
+            } catch (readErr) {
+              // v20261111.54：超时若发生在「流已经建立、正在读 body」阶段，抛出来的是浏览器原生的
+              // AbortError（文案 "The user aborted a request."），旧版没有拦它 ⇒ 用户看到的是这句
+              // 莫名其妙的英文，也无法判断是超时。这里统一成同一条超时文案。
+              const aborted = readErr && (readErr.name === "AbortError" || /abort/i.test(String((readErr && readErr.message) || "")));
+              if (aborted) throw timeoutErr();
+              throw readErr;
+            } finally { clearAttemptTimer(); }
+            const firstMeta = msgMeta(data);
+            let meta = firstMeta;
+            attempts.push({ dialect: dialectLabel, max_tokens: payload.max_tokens, content: firstMeta.content.length, reasoning: firstMeta.reasoning.length, finish: firstMeta.finish });
+            // 只要出现思考内容，就说明该网关没把参数当回事（无论这次正文有没有拿到）
+            if (off && firstMeta.reasoning.trim() && !paramsIgnored) _thinkingParamsIgnored.add(key);
+            // v20261111.49：不再做「就地加预算重试」——它与候选级升级（8000 → 12000）重复，
+            // 实测会把同一段放大到 4 次请求（8000/24000/12000/24000）。现在预算升级只由候选承担。
+            // 「思考烧光预算」自愈（mvgo config-test.service.ts:428）：正文仍为空 ⇒ 该方言没真正关掉思考。
+            // v20261111.45 关键修复：最后一个候选（无参兜底）也必须按失败处理 —— 旧版在这里把空正文
+            // 当成功并写入 _thinkingDialectCache，导致后续每个分段都只返回思考内容且永不重试。
+            if (off && !meta.content.trim()) {
+              _thinkingDialectFailed.add(key + "|" + JSON.stringify(cand));
+              // v20261111.48（对齐 mvgo ai-request-gateway）：空正文 + finish=length 是【确定性故障】，
+              // 同一 provider 对同类请求必复现 ⇒ 立即熔断，不再逐个试其余方言/继续空等。
+              // reasoning_tokens>0 = 推理烧光输出预算；=0 或未上报 = 网关不认这些参数（mvgo 记为 minimax 系）。
+              const budgetBurn = meta.finish === "length";
+              const escalated = Number(payload.max_tokens) >= THINKING_BIG_BUDGET;
+              // v20261111.49：mvgo 能在熔断后换 provider，插件不能 ⇒ 不能一见 length 就掐。
+              // 只要还有【预算更大】的候选没试，就先让它把预算升上去再判死刑；
+              // 只有「已经给到 THINKING_BIG_BUDGET 仍然 length+空」才算确定性烧预算。
+              if (budgetBurn) _thinkingParamsIgnored.add(key);
+              if (i < candidates.length - 1 && !(budgetBurn && escalated)) continue;
+              try {
+                data.__diag = {
+                  attempts, empty: true,
+                  paramsIgnored: paramsIgnored || meta.reasoning.trim().length > 0,
+                  budgetBurn: budgetBurn, reasoningTokens: meta.reasoningTokens,
+                };
+              } catch (e) {}
+              return data;
+            }
+            // v20261111.46：只有「思考真的为 0」才算关掉了思考，才允许缓存成首选方言。
+            // 正文拿到但思考 > 0 时若也缓存，后续更大分段会被锁死在这个无效方言上（实测 6 段里 5 段阵亡）。
+            if (off && meta.reasoning.length === 0) {
+              _thinkingDialectCache.set(key, cand);
+              // 已有实测生效方言（权威结论）→ 清掉本次试错留下的失败标记，
+              // 避免一次网络抖动把该模型的首选方言在整个插件会话里永久毒化。
+              for (const fk of Array.from(_thinkingDialectFailed)) {
+                if (fk.indexOf(key + "|") === 0) _thinkingDialectFailed.delete(fk);
+              }
+            } else if (off) {
+              // 思考没关掉但拿到了正文：该方言不算失败，但也别当成功缓存
+              _thinkingDialectFailed.delete(key + "|" + JSON.stringify(cand));
+            }
+            try { data.__diag = { attempts, empty: false, paramsIgnored: paramsIgnored || meta.reasoning.length > 0 }; } catch (e) {}
+            return data;
+          }
+          clearAttemptTimer();
+          const raw = (await resp.text().catch(function () { return ""; })).slice(0, 2000);
+          const err = new Error(
+            (state.connected && state.serverPort ? "本地代理错误 " : "AI 接口错误 ") + resp.status + "：" + extractErrorText(raw)
+          );
+          lastErr = err;
+          // 只对联想到「思考参数」的 4xx/5xx 顺延；Key 错误 / 额度 / 限流等原样抛出，不做无效重试。
+          if (!off || i >= candidates.length - 1 || !THINKING_REJECT_RE.test(raw)) break;
+          _thinkingDialectFailed.add(key + "|" + JSON.stringify(params));
+          // 上游明确「始终思考」→ 记住该 model|网关，下一段起首选直接 low；本轮也直接跳到 low。
+          if (THINKING_ALWAYS_RE.test(raw)) {
+            _thinkingAlwaysModels.add(key);
+            _thinkingParamsIgnored.delete(key);   // 这是显式 400 拒绝，不是「静默忽略」，别误记
+            // v20261111.58：两种强度字段都算 low（旧版只认 thinking.type，找不到 reasoning_effort:low）
+            const lowIdx = candidates.findIndex(function (c) {
+              return (c.thinking && c.thinking.type === "low") || c.reasoning_effort === "low";
+            });
+            if (lowIdx > i) i = lowIdx - 1;
+          }
+        }
+        throw lastErr || new Error("AI 请求失败（未获得响应）");
+      }
+
+      // 流式/普通响应统一解析：SSE 时聚合 delta.content，普通 JSON 直接解析。
+      // v20261111.45：额外收集 finish_reason 与 usage —— 「正文为空」到底是「被 max_tokens 截断」
+      // 还是「模型什么都没说」必须靠它判断，否则只能靠猜。
       async function readLLMResponse(resp) {
         const ct = resp.headers.get("content-type") || "";
         const buf = await resp.arrayBuffer();
         const text = new TextDecoder("utf-8").decode(buf);
         if (/text\/event-stream/i.test(ct) || /^\s*data:\s*\{/.test(text)) {
-          let content = "", reasoning = "";
+          let content = "", reasoning = "", finish = "", usage = null;
           const blocks = text.split(/\r?\n\r?\n/);
           for (const block of blocks) {
             for (const line of block.split(/\r?\n/)) {
@@ -777,24 +1321,110 @@
               if (!json || json === "[DONE]") continue;
               try {
                 const obj = JSON.parse(json);
+                if (obj.usage) usage = obj.usage;
                 const choice = obj.choices && obj.choices[0];
+                if (choice && choice.finish_reason) finish = String(choice.finish_reason);
                 const delta = choice && (choice.delta || choice.message);
                 if (delta && typeof delta.content === "string") content += delta.content;
-                // DeepSeek 等把思考内容放在 reasoning_content（独立于 content），用于诊断思考是否真的关掉
-                if (delta && typeof delta.reasoning_content === "string") reasoning += delta.reasoning_content;
+                // 思考内容的字段名各家不同：DeepSeek/Qwen/GLM 用 reasoning_content，OpenRouter 用 reasoning，
+                // Anthropic 系经代理转发可能用 thinking。统一收集，否则会把「仍在思考」误判成「已关掉」
+                // （v56 关思考探测就是靠这个字段下结论，漏读会给出假的「可以关」）。
+                if (delta) {
+                  if (typeof delta.reasoning_content === "string") reasoning += delta.reasoning_content;
+                  else if (typeof delta.reasoning === "string") reasoning += delta.reasoning;
+                  else if (typeof delta.thinking === "string") reasoning += delta.thinking;
+                }
               } catch (e) { /* 跳过非 JSON 行 */ }
             }
           }
-          return { choices: [{ message: { content, reasoning_content: reasoning } }] };
+          return { choices: [{ message: { content, reasoning_content: reasoning }, finish_reason: finish }], usage };
         }
         return JSON.parse(text);
+      }
+
+      // 统一取出正文 / 思考 / 结束原因 / 思考 token 数
+      function msgMeta(data) {
+        const ch = (data && data.choices && data.choices[0]) || {};
+        const msg = ch.message || {};
+        const det = data && data.usage && (data.usage.completion_tokens_details || data.usage.completion_tokens_detail);
+        return {
+          content: String(msg.content || ""),
+          reasoning: String(
+            (typeof msg.reasoning_content === "string" && msg.reasoning_content) ||
+            (typeof msg.reasoning === "string" && msg.reasoning) ||
+            (typeof msg.thinking === "string" && msg.thinking) || ""
+          ),
+          finish: String(ch.finish_reason || ""),
+          reasoningTokens: det && Number.isFinite(Number(det.reasoning_tokens)) ? Number(det.reasoning_tokens) : null,
+        };
+      }
+      const THINKING_BIG_BUDGET = 12000;
+      // v20261111.49：关思考模式下每段的预算下限。实测同一网关：预算 1054 时思考 3108 字能 stop 出正文，
+      // 3890 字就 length 空正文 —— 只差一点预算。给足空间比换方言有效得多。
+      const THINKING_BUDGET_FLOOR = 8000;
+      // v20261111.50：分片并发路数。此前分片严格串行（for+await），8 段 × 每段 15~60s ⇒ 整理动辄几分钟。
+      // 改为波次流水线：每波并发 3 路，8 段只需 3 波。llmRequest 的方言缓存/忽略标记都在同步段读写，并发安全。
+      const SHARD_CONCURRENCY = 3;
+      // v20261111.51：单次 LLM 请求的硬超时。旧版 llmRequest 完全没有超时 ⇒ 网关「收下不回包」时
+      // 浏览器 fetch 永久挂起、进度条停在原地（实测卡 5 分钟以上）；本地代理侧也要等满 300s 才报 504。
+      // 现在每次尝试 150s 必失败；失败按「该段请求失败」记录并继续处理其余分段，不再拖死整轮整理。
+      const LLM_TIMEOUT_MS = 150000;
+      // v54：失败段「重跑」用更短的截止时间 —— 第一次都超时了，别再用 150s 赌第二次。
+      const LLM_RETRY_TIMEOUT_MS = 60000;
+      // v20261111.51：视觉模式每个分段都要重复上传同一张 base64 渲染图，实测该网关上 3 路并发多模态
+      // 会长时间不回包（第一波仅 9 节点却卡 5 分钟）⇒ 视觉默认串行；纯文本请求轻，仍用 SHARD_CONCURRENCY。
+      const SHARD_CONCURRENCY_VISION = 1;
+      // v20261111.54：视觉并发上限。首波（1 段）全部成功且都不慢 ⇒ 后续升到 2 路；
+      // 只要有一波出现失败/超时，立刻退回 1 路。想强制串行就把这里改成 1。
+      const VISION_CONCURRENCY_MAX = 2;
+      // v20261111.52：视觉链路自动降级阈值 —— 首波视觉请求平均耗时超过此值，
+      // 就认定「这条网关带图很慢」，剩下分段自动转纯文本（同一模型，只是不再上传渲染图）。
+      const VISION_SLOW_MS = 25000;
+      // v20261111.51：波次进行中每秒刷新一次「已等待 Ns」，把「模型正在思考」与「真的卡死」区分开
+      // （实测容易把 15s 的思考误判成卡死）。返回一个停止函数，波次一结束立刻调用。
+      // v20261111.52：视觉首波体检的判定（抽成纯函数便于仿真：无 DOM/无网络）
+      function shouldDegradeVision(waveResults, slowMs) {
+        const failed = waveResults.filter(function (r) { return r.err; }).length;
+        const okOnes = waveResults.filter(function (r) { return !r.err; });
+        const avgMs = okOnes.length ? okOnes.reduce(function (n, r) { return n + r.shardMs; }, 0) / okOnes.length : 0;
+        return { degrade: failed > 0 || (okOnes.length > 0 && avgMs > slowMs), failed: failed, avgMs: avgMs };
+      }
+      function startWaveTicker(pct, baseMsg) {
+        // v54：无 setInterval 的环境（自动化仿真沙箱、极老引擎）直接降级为不刷新，
+        // 别让「进度条计时」把整轮整理搞崩。
+        if (typeof setInterval !== "function" || typeof clearInterval !== "function") return function () {};
+        const t0 = Date.now();
+        const id = setInterval(function () {
+          try { showAiProgress({ pct: pct, msg: baseMsg + "，已等待 " + Math.round((Date.now() - t0) / 1000) + "s …" }); } catch (e) {}
+        }, 1000);
+        return function () { try { clearInterval(id); } catch (e) {} };
+      }
+      // 把每段实际用的关思考方言 / 预算 / 思考字数格式化进分析日志（不含 Key）
+      function diagLineOf(idx, total, data, ms) {
+        const d = data && data.__diag;
+        if (!d || !Array.isArray(d.attempts) || !d.attempts.length) return "";
+        const last = d.attempts[d.attempts.length - 1];
+        const tried = d.attempts.map(function (a) {
+          return JSON.stringify(a.dialect) + (a.max_tokens ? "@" + a.max_tokens : "")
+            + "→正文" + a.content + "/思考" + a.reasoning + (a.finish ? "/" + a.finish : "");
+        }).join("  |  ");
+        return "第 " + idx + "/" + total + " 段" + (ms ? "（" + (ms / 1000).toFixed(1) + "s）" : "") + "：末次方言 " + JSON.stringify(last.dialect)
+          + (d.paramsIgnored ? "（网关忽略关思考参数：思考始终开启）" : "")
+          + (d.budgetBurn ? "（mvgo 判定：finish=length 确定性烧预算" + (d.reasoningTokens != null ? "，reasoning_tokens=" + d.reasoningTokens : "") + "）" : "")
+          + (d.empty ? "（正文为空，已试完所有候选）" : "") + "\n    " + tried;
+      }
+      // 汇总成一段可复制的诊断块
+      function diagBlock(parts) {
+        const list = (parts || []).filter(Boolean);
+        return list.length
+          ? "\n\n【关思考诊断】（方言@预算 → 正文/思考字数/finish）\n" + list.join("\n")
+          : "";
       }
 
       // 将扁平节点树按「顶层分区」切分为多段：scanTree 是 DFS，同区兄弟节点在数组里连续，
       // 按顶层祖先分组能保持每个分区的语义完整（如 rank-card-1..5 不会被拆散）。
       // 单个分区超过 maxPerShard 时再按数量硬拆，确保每段都落在网关上游超时预算内。
-      function shardNodes(nodes, rootId, maxPerShard) {
-        maxPerShard = maxPerShard || 100;
+      function shardNodes(nodes, rootId, maxPerShard) {        maxPerShard = maxPerShard || 100;
         const byId = new Map();
         for (const n of nodes) byId.set(n.id, n);
         const topKey = (n) => {
@@ -819,6 +1449,20 @@
         return shards;
       }
 
+      // v20261111.46：已确认「网关忽略关思考参数」时，把尚未处理的分片重切成更小粒度。
+      // 依据实测：思考长度随输入规模增长（大段思考 3.7 万字仍未结束），小分片才能在预算内思考完并输出正文。
+      function reshardIfThinkingIgnored(shards, doneIndex, rootId, model, cfg) {
+        if (!Array.isArray(shards) || shards.__shrunk) return shards;
+        if (cfg.disableThinking === false) return shards;
+        if (!thinkingParamsIgnored(model, cfg.baseUrl)) return shards;
+        const rest = [];
+        for (let i = doneIndex + 1; i < shards.length; i++) rest.push(...shards[i]);
+        if (!rest.length) return shards;
+        const next = shards.slice(0, doneIndex + 1).concat(shardNodes(rest, rootId, 40));
+        next.__shrunk = true;
+        return next;
+      }
+
       // 精简节点：保留 y/i 供视觉模型判断上下关系（确定性排序另由 code.js 用真实坐标完成），
       // 去掉 x/p/root 等冗余字段，保留语义字段 + path 上下文。
       function trimNode(n) {
@@ -830,6 +1474,48 @@
         if (typeof n.fs === "number") o.fs = n.fs;
         if (n.path) o.path = n.path;
         return o;
+      }
+
+      // v20261111.55：同一节点被多个分段改名时，旧行为是「谁最后改谁赢」——结果依赖分段顺序，
+      // 不可复现（实测组件根被 5 个分段改成了 2 个不同名字，最终叫什么全看最后一段）。
+      // 改为**多数票**：同一 nodeId 的多次 rename 里选出现次数最多的名字；票数相同时取最早出现的那次。
+      // 同名重复也算重复（只保留第一次），避免同一个名字被写多遍。
+      function resolveRenameConflicts(ops) {
+        const byNode = new Map();
+        for (let i = 0; i < ops.length; i++) {
+          const op = ops[i];
+          if (op && op.action === "rename" && op.nodeId) {
+            if (!byNode.has(op.nodeId)) byNode.set(op.nodeId, []);
+            byNode.get(op.nodeId).push(i);
+          }
+        }
+        const drop = new Set();
+        let conflicts = 0;
+        byNode.forEach(function (idxList) {
+          if (idxList.length < 2) return;
+          const votes = new Map();   // 名字 -> { count, first }
+          for (const i of idxList) {
+            const nm = String(ops[i].name == null ? "" : ops[i].name);
+            if (!votes.has(nm)) votes.set(nm, { count: 0, first: i });
+            votes.get(nm).count++;
+          }
+          if (votes.size === 1) {                       // 同名重复：只保留第一次
+            for (let k = 1; k < idxList.length; k++) drop.add(idxList[k]);
+            return;
+          }
+          conflicts++;
+          let win = null;
+          votes.forEach(function (v, nm) {
+            if (!win || v.count > win.count || (v.count === win.count && v.first < win.first)) {
+              win = { name: nm, count: v.count, first: v.first };
+            }
+          });
+          for (const i of idxList) { if (i !== win.first) drop.add(i); }
+        });
+        if (!drop.size) return { ops: ops, conflicts: 0 };
+        const out = [];
+        for (let i = 0; i < ops.length; i++) { if (!drop.has(i)) out.push(ops[i]); }
+        return { ops: out, conflicts: conflicts };
       }
 
       // 统计一段里仍残留的默认名节点（Figma 默认名 = 类型名 + 数字，如 "Frame 12"/"Rectangle 3"）。
@@ -858,7 +1544,8 @@
         // 勾选「按视觉模块生成业务容器」时自动启用 layoutIntent 输出，不必再手动勾布局分析开关。
         // v20261110.9：结构建组已与 LLM 解耦；只有显式开「视觉布局分析」才让模型输出 layoutIntent。
         const useLayoutIntent = !!opts.useLayoutIntent && !!useVision;
-        const model = useVision && cfg.visionModel ? cfg.visionModel : cfg.model;
+        // v20261111.47：纯文本整理优先用「整理模型」（可填不思考的模型，彻底绕开思考）；视觉模式仍用视觉模型
+        const model = useVision && cfg.visionModel ? cfg.visionModel : (cfg.organizeModel || cfg.model);
         const namingRef = cfg.namingRef ? ("\n命名规范参考（用户给定，优先遵循）：" + cfg.namingRef) : "";
         // 隐藏节点（visible===false）确定性删除：由 code.js 收集后传入，不依赖 AI 判断，确保「清理所有隐藏节点」
         const hiddenDeleteOps = (report.hiddenNodeIds || []).map((id) => ({ action: "delete", nodeId: id }));
@@ -866,12 +1553,13 @@
         // 命名体系说明（约定 > 配置：模型只打前缀语义名，bg/img/icon 文件夹由 code.js 按前缀确定性合并）
         const NAMING_BLOCK = [
           "【命名体系】固定前缀（不得改写）：@<技术栈>/<类型>（@echarts/bar、@antd/button）、bg / bg-*、icon-*、img-*、header / header-*、slot-con。其余按语义命名：组件根 cp-<语义>（仅最外层唯一业务组件；【本次选区根节点即组件根，必须命名 cp-<语义>】）；异构分区 section-<语义>（与 section-title-* 成套，不可迭代）；静态图形容器 graphic-<语义>（零散矢量拼成，按图片实现）；列表 list-、卡片 card-、表单 form-；同构循环子项 item-<语义>-N（只在带 -N 序号时使用，v-for/map）。重复子结构一律 item-*-N / card-* / list-*，绝不用 cp-；不带序号的 item- 不存在。",
-          "【组件骨架·根级必守】组件根的直接子节点固定三段式：① 标题区 → header（标题文本 + header-slot-* 插槽）；② 背景/装饰层 → bg；③ 其余内容区域 → 统一由插件建的【唯一】slot-con Group 收纳，模块容器命名 section-xxx / card-xxx / list-xxx；【插件会在 Figma 里真建 slot-con Group】把第③类（含视觉分析的多个内容模块）统一收进去，结构契约也会归一化为一个 slot-con 容器，下游按单个内容区生成；【全组件只有这一个 header 和这一个 slot-con】：各模块自己的小标题一律命名 section-title-<语义>，严禁命名 header-* / slot-con-*（会被误判成根级标题或第二个槽）。你只需保证命名清晰，绝不输出 group/reorder。header 内插槽按位置命名 header-title / header-slot-left / header-slot-center / header-slot-right（右侧通常放按钮、tab、图例、时间筛选），下游会按这些名字预留 <slot>。只做命名，不要输出 group/reorder，插件会按几何确定性收纳。",
+          "【组件骨架·根级必守】组件根的直接子节点固定三段式：① 标题区 → header（标题文本 + header-slot-* 插槽）；② 背景/装饰层 → bg；③ 其余内容区域 → 统一由插件建的【唯一】slot-con Group 收纳，模块容器命名 section-xxx / card-xxx / list-xxx；【插件会在 Figma 里真建 slot-con Group】把第③类（含视觉分析的多个内容模块）统一收进去，结构契约也会归一化为一个 slot-con 容器，下游按单个内容区生成；【全组件只有这一个 header 和这一个 slot-con】：各模块自己的小标题一律命名 section-title-<语义>，严禁命名 header-* / slot-con-*（会被误判成根级标题或第二个槽）。你只需保证命名清晰，绝不输出 group/reorder。header 内插槽按位置命名 header-title / header-slot-left / header-slot-center / header-slot-right（右侧通常放按钮、tab、图例、时间筛选），下游会按这些名字预留 <slot>。【根级 header·.61 硬规则】组件最顶部、横跨整宽（≥80% 组件宽）、高度很薄（≤15% 组件高）且带短标题文字的标题条就是面板主标题，必须命名 header 并留在组件根直属；严禁改名 section-title-*，也不要 reparent 进 slot-con（插件会按 y 几何判定并自动提升）。只做命名，不要输出 group/reorder，插件会按几何确定性收纳。",
           "【子模块】每个 section-title-* 都是模块锚点：插件按视觉顺序把「标题 + 其下方图表」切进独立 section-<语义> Group，结构契约同步输出 slot-con → section-* → section-title-* 三层；段前/跨段的全屏底图保持直属 slot-con。",
           "【循环组件·重点】item- 是【循环专用】前缀，只用于带 -N 序号的同构子项；异构分区一律 section-*，静态图形一律 graphic-*。list-*/cards-* 等列表容器内的重复子项，一律命名 item-<语义>-1..N（或 card-<语义>-1..N），并保证同组子项结构完全一致；严禁给每个子项起不同语义名（会误导下游生成 N 份重复代码）。Group 只表达包含、不表达可迭代，因此「相同前缀 + 递增序号 + 同构子树」是让大模型识别 v-for/map 的必需信号；插件会在结构契约里把同构项折叠为 [循环 ×N] 并只展开首项。",
           "背景：插件自动把同级背景/装饰层合并为语义文件夹 bg-<父容器语义>（如 bg-card-traffic-flow），该文件夹整体导出 PNG@2x、内部节点不单独导出；背景图/装饰层命名 bg-<角色>（bg-card/bg-glow/bg-ring/bg-panel…）；纯装饰发光环/光晕/纹理归入 bg-，不算 icon。",
-          "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」。【假图表·重点】由零散 VECTOR 弧线 / 刻度 / 光晕拼成、没有坐标轴与数据系列的静态仪表盘、环形进度、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 graphic-<语义>（如 graphic-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（legend/axis…）；模块小标题用 section-title-<语义>，同类多实例加序号。",
-          "【核心规则·约定>配置】1) 严禁输出 group：背景/静态图/图标文件夹由插件按几何与前缀确定性收纳，你只需给节点打语义名；2) 只给「有意义层级节点」和「同级背景/图标/静态图」打语义名，TEXT 节点不改名；3) 环形仪表/图表/图标内部最小装饰元素（arc/tick/dot/line/vector/union/subtract/boolean）【只命名最外层容器】，内部一律不逐个命名、保留默认名；插件会把这些矢量按容器确定性合并成 img-/bg- 资源文件夹并整体导出，你不需要输出 group、也不要给内部矢量打 bg-/img- 前缀；TEXT 数值与标签必须保留为独立 TEXT 节点，绝不并入图片（下游要生成动态数据）；3.1) 但【与 TEXT 同级、独立表达语义的小图标】（趋势箭头/状态箭头/方向标等）不属于「内部最小装饰」，必须命名为 icon-<语义>（如 icon-arrow-up），严禁跳过；只有图表/环形仪表【容器内部】的 arc/tick 才跳过；4) 严禁输出 reorder：背景合并与从上到下排序由插件按真实 y 坐标确定性完成，模型只做命名与必要归位（reparent）、删冗余副本（delete）。",
+          "静态图 img-（非背景的内容图片，同级多个会收进 img-<语义> 文件夹整体导出 PNG@2x）；真图标 icon-（明确语义的小图标：建筑/报警/箭头/状态点…，纯装饰不算，收进 icon-<语义> 文件夹整体导出 SVG）；【真图表】必须命名 @echarts/<类型>（@echarts/gauge、@echarts/line、@echarts/bar…），一律以 @ 开头，严禁输出 echarts- 前缀；判据是「带坐标轴 / 图例 / 多组数据系列、适合用图表库重建」；【.64 硬约束】@echarts/* / @antd/* 只允许命名【有子节点的图表容器】，绝不给背景 VECTOR / 色块 / 图标等叶子节点写 @ 前缀（会把背景误当图表重建，插件会按几何降级为 bg-*/img-*）。【假图表】由零散 VECTOR 弧线 / 光晕拼成、没有坐标轴、曲线路径与数据系列的静态仪表盘、装饰图形都不是图表，绝不命名 echarts- / chart- / gauge-，最外层容器改用 graphic-<语义>（如 graphic-disposal-rate-gauge），插件会自动把内部矢量合并成 img-<语义> 文件夹整体导出；【真折线/面积图·.60 例外】图层树里 VECTOR 带 vp:[命令数,C段数,是否闭合] 且 C段数≥3、w/h≥6 的宽扁曲线，再配上 ≥3 条等距水平网格线与 y/x 双轴数字刻度，就是【真图表】→ 最外层命名 @echarts/line，绝不写 img-*/graphic-*/chart-*/gauge-*；刻度 TEXT 不是静态仪表的装饰，必须保留为独立节点；【真柱状图·.64 例外】图层树里 ≥6 个等宽（w 6–40）窄高矩形柱体（GROUP/RECTANGLE/VECTOR）、x 等距且底边对齐，再配上 ≥3 条等距水平网格线与 y/x 双轴数字刻度，就是【真图表】→ 最内层容器命名 @echarts/bar，绝不写 img-*/graphic-*/chart-*；内部柱体容器改 series-bar、网格改 axis-grid，刻度 TEXT 保留为独立节点，插件会清掉 PNG@2x（零 token 整理同样按几何补升级）；【真环形图·.59 例外】图层树里 ELLIPSE 带 arc:[innerRadius,起角,止角] 且 innerRadius>0 的多段同心弧（甜甜圈/饼图），只要再配上中心独立 TEXT 数值或同级色块图例，就是【真图表】→ 最外层命名 @echarts/pie，绝不写 graphic-*/echarts-*/chart-*/gauge-*；纯装饰发光环（单段/无数值/无图例）仍归 bg- 或 graphic-；【图例·.59】与图表同级或子级的「色块 + 文字 + 数值」行，容器命名 legend-<语义>、循环行 legend-item-N、色块 legend-swatch-N，不要命名 list-*/item-*（会被下游当独立列表重复渲染一份）；建议用 antd 等组件库实现的命名 @antd/<类型>（如 @antd/button）；其余小写英文语义名（axis/series…）；模块小标题用 section-title-<语义>，同类多实例加序号。",
+          "【动态计数徽标·.35 重点】小尺寸（宽高均 ≤26）「纯色底 + 纯数字 TEXT」的红点/角标是 tab 或列表项的未读、待办计数，【不是图标】：绝不命名 icon-* / bg-* / img-*，也不要输出 rename（插件会零 token 归一化为 badge-count-NN，并在结构契约行尾标注 [tab:xxx] 归属）；其纯数字 TEXT 必须保留为独立节点，严禁并入图片资源。其余【含文字的小标签】（如「警署」）同样不是图标，也不要命名 icon-*。",
+          "【核心规则·约定>配置】1) 严禁输出 group：背景/静态图/图标文件夹由插件按几何与前缀确定性收纳，你只需给节点打语义名；2) 只给「有意义层级节点」和「同级背景/图标/静态图」打语义名，TEXT 节点不改名；3) 环形仪表/图表/图标内部最小装饰元素（arc/tick/dot/line/vector/union/subtract/boolean）【只命名最外层容器】，内部一律不逐个命名、保留默认名；插件会把这些矢量按容器确定性合并成 img-/bg- 资源文件夹并整体导出（【.59/.60/.64 例外】@echarts/* 真图表内部一律不导出位图：环形弧段改 series-arcs、折线曲线改 series-line、柱体改 series-bar、网格改 axis-grid，插件会清掉 PNG@2x），你不需要输出 group、也不要给内部矢量打 bg-/img- 前缀；TEXT 数值与标签必须保留为独立 TEXT 节点，绝不并入图片（下游要生成动态数据）；3.1) 但【与 TEXT 同级、独立表达语义的小图标】（趋势箭头/状态箭头/方向标等）不属于「内部最小装饰」，必须命名为 icon-<语义>（如 icon-arrow-up），严禁跳过；只有图表/环形仪表【容器内部】的 arc/tick 才跳过；4) 严禁输出 reorder：背景合并与从上到下排序由插件按真实 y 坐标确定性完成，模型只做命名与必要归位（reparent）、删冗余副本（delete）。",
         ].join("\n");
 
         if (useVision) {
@@ -886,77 +1574,181 @@
             "【红线】layoutIntent 只是描述，不要输出任何排序/成组/移动/插入序号；插件会用真实 y 坐标排序并按几何合并背景。视觉判断与几何冲突时以几何为准，因此只填你有把握的节点，无把握就留空数组。",
           ].join("\n") : "";
           const sysPrompt = [
-            "你是 Figma 设计稿整理助手，可以看渲染图。用户给你：① 一张渲染图（设计稿外观）；② 某一段图层树 JSON（字段 id 节点id, t 类型, n 名称, w/h 宽高, c 文本内容, f 填充类型, y 纵坐标, path 祖先名称链）。",
+            "你是 Figma 设计稿整理助手，可以看渲染图。用户给你：① 一张渲染图（设计稿外观）；② 某一段图层树 JSON（字段 id 节点id, t 类型, n 名称, w/h 宽高, c 文本内容, f 填充类型, y 纵坐标, path 祖先名称链, arc ELLIPSE 环形参数 [innerRadius,起角,止角], sk/sw 描边数与描边宽, vp VECTOR 路径特征 [命令数,曲线C段数,是否闭合]）。",
             useLayoutIntent
               ? '请对照渲染图的视觉结构，给本段节点产出【语义命名 + 必要归位 + 布局意图】方案，严格输出 JSON：{"ops":[{"action":"rename"|"reparent"|"delete","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}],"layoutIntent":{"modules":[],"decorations":[]}}'
               : '请对照渲染图的视觉结构，给本段节点产出【语义命名 + 必要归位】方案，严格输出 JSON：{"ops":[{"action":"rename"|"reparent"|"delete","nodeId":"<id>","name?":"<新名>","parentId?":"<目标父id>"}]}',
-            "对照渲染图识别：默认名容器（Frame/Group/INSTANCE + 数字）描绘小图标→icon-<语义slug>（如 icon-building/icon-alarm）；主背景/装饰层→bg 或 bg-<角色>；内容图片→img-<角色>；【严格区分图表】只有带坐标轴/图例/多组数据系列、适合用图表库重建的才是真图表→只命名最外层容器为 @echarts/<类型>（必须 @ 开头，严禁 echarts-gauge 这种写法）；由零散矢量弧线/刻度/光晕拼成的静态仪表盘、环形进度、装饰图形【不是图表】→最外层命名 graphic-<语义>（如 graphic-disposal-rate-gauge），绝不写 echarts-/chart-/gauge-；内部 arc/tick/dot/vector 等最小元素一律不逐个命名，由插件自动合并成资源文件夹；TEXT 节点不改名。",
+            "对照渲染图识别：默认名容器（Frame/Group/INSTANCE + 数字）描绘小图标→icon-<语义slug>（如 icon-building/icon-alarm）；主背景/装饰层→bg 或 bg-<角色>；内容图片→img-<角色>；【严格区分图表·.60】带坐标轴/图例/多组数据系列、适合用图表库重建的才是真图表→只命名最外层容器为 @echarts/<类型>（必须 @ 开头，严禁 echarts-gauge 这种写法）；【.64 硬约束】@ 前缀只给【有子节点的图表容器】，背景/装饰/色块等叶子节点一律命名 bg-*/img-*/icon-*，绝不把渲染图里看到的图表名配到背景节点上；【柱状图·.64】≥6 根等宽等距、底边对齐的窄柱（w 6–40）+ ≥3 条等距水平网格 + y/x 双轴数字刻度 → 命名 @echarts/bar，不是静态图片；【环形/饼图看 arc 字段】多个 ELLIPSE 带 arc:[innerRadius>0,起角,止角] 且起止角不同 = 多段数据系列，配合中心数值 TEXT 或同级色块图例→命名 @echarts/pie，不是静态仪表；【折线/面积图看 vp 字段】宽扁 VECTOR（w/h≥6）带 vp C段数≥3，配合 ≥3 条等距水平网格线与 y/x 双轴数字刻度→命名 @echarts/line，不是静态图片；只有零散 VECTOR 弧线/光晕拼成的、单段或无数值的静态仪表盘/装饰图形【不是图表】→最外层命名 graphic-<语义>（如 graphic-disposal-rate-gauge），绝不写 echarts-/chart-/gauge-；【图例】与图表同级或子级的色块+文字+数值行→容器 legend-<语义>、行 legend-item-N、色块 legend-swatch-N，不要命名 list-*/item-*；内部 arc/tick/dot/vector 等最小元素一律不逐个命名，由插件自动合并（真图表弧段除外）；【面板主标题·.61】渲染图里最顶部贯穿整宽的薄标题条（如「交通态势」）是根级 header，不是模块小标题：命名 header、留在组件根直属，绝不写 section-title-*，也不 reparent 进内容区；TEXT 节点不改名。",
             namingRef,
             NAMING_BLOCK,
             INTENT_BLOCK,
             "只输出 JSON 不要解释；本段只是完整图层树的一段，只针对本段给出的节点产出方案，不要推测段外节点。",
           ].join("\n");
-          const shards = shardNodes(report.nodes, report.rootId, 100);
+          // v20261111.52：勾了视觉不等于每段都必须带图。首波体检不通过（失败/超时/过慢）
+          // 就把剩余分段切成纯文本：模型不变，只是不再上传渲染图。
+          const sysPromptNoImage = sysPrompt + "\n【无图模式】本次没有提供渲染图：上文所有「对照渲染图」的要求一律降级为「按图层树推断」——只用名称、类型、宽高、y 坐标、path 祖先链与可见文本判断层级和模块，不要假设看不到的视觉细节；拿不准的节点宁可不输出 rename，也不要编一个语义名。";
+          let visionOn = true;              // 当前波是否还带渲染图
+          let visionConc = SHARD_CONCURRENCY_VISION;   // v54：视觉并发度（自适应 1 → 2）
+          let autoDownNote = "";            // 自动降级的说明（写进分析日志）
+          const retryShards = [];           // 失败的分片：用纯文本重跑（v52 首波降级 + v54 任意失败段）
+          let retriedCount = 0;             // v54：已自动重跑的失败段数
+          let shards = shardNodes(report.nodes, report.rootId, 100);
           let allOps = [];
           const rawParts = [];
+          const diagParts = [];   // v20261111.45：每段关思考方言 / 预算 / 思考字数，随分析日志输出
+          const preflightWarn = noThinkPreflightWarn(model);   // v20261111.48：mvgo 式的模型可用性预检
+          if (preflightWarn) diagParts.push(preflightWarn);
+          if (!cfg.visionModel) diagParts.push("视觉模型未填：正在用「整理模型/主模型 " + model + "」直接看渲染图（同一个模型）。若它不支持图片会直接报错，首波体检后会自动降级为纯文本。");
+          let emptyStreak = 0;    // v20261111.47：连续无正文段数（熔断，避免继续空等）
           const intentModules = [];      // P0-b：跨分片汇总的布局意图
           const intentDecorations = [];
-          for (let s = 0; s < shards.length; s++) {
-            const shard = shards[s];
-            if (typeof showAiProgress === "function")
-              showAiProgress({ pct: 25 + Math.round((s / shards.length) * 65), msg: `视觉分析（第 ${s + 1}/${shards.length} 段，本段 ${shard.length} 节点）...` });
-            const userContent = [
-              { type: "image_url", image_url: { url: "data:image/png;base64," + opts.imageData } },
-              { type: "text", text: JSON.stringify({ root: { id: report.rootId, name: report.rootName }, segment: { index: s + 1, total: shards.length }, nodes: shard.map(trimNode) }) },
-            ];
-            const data = await llmRequest(cfg, [
-              { role: "system", content: sysPrompt },
-              { role: "user", content: userContent },
-            ], { temperature: 0.2, max_tokens: Math.min(6000, 1024 + shard.length * 30), modelOverride: model, disableThinking: cfg.disableThinking !== false });
-            const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
-            const content = ((msg.content) || "").trim();
-            if (!content) {
-              if (msg.reasoning_content) rawParts.push(`【第 ${s + 1}/${shards.length} 段】只返回思考内容（思考未真正关闭；请确认 socket-server 已重启 / 网关支持关闭参数）`);
-              else rawParts.push(`【第 ${s + 1}/${shards.length} 段】返回为空`);
-              continue;
+          // v20261111.50：波次并发。结果仍按段序处理；已发出的请求不浪费，
+          // 熔断（连续 2 段空正文）在波与波之间生效——只停止发射新波。
+          let s = 0;
+          const segErrors = [];
+          let errStreak = 0;
+          let stopRun = false;
+          while (s < shards.length) {
+            const waveStart = s;
+            // v54：并发度看「这一波是不是带图」——降级成纯文本后就该用文本的 3 路，
+            // 旧版降级后仍按视觉的 1 路跑，白白把剩下的分段又串行了一遍。
+            const waveSize = visionOn ? visionConc : SHARD_CONCURRENCY;
+            const wave = shards.slice(waveStart, waveStart + waveSize);
+            const waveEnd = waveStart + wave.length;
+            let stopTicker = null;
+            if (typeof showAiProgress === "function") {
+              const wavePct = 25 + Math.round((waveStart / Math.max(shards.length, 1)) * 65);
+              const waveMsg = `视觉分析（第 ${waveStart + 1}-${waveEnd}/${shards.length} 段并发，本波 ${wave.reduce(function (n, x) { return n + x.length; }, 0)} 节点）`;
+              showAiProgress({ pct: wavePct, msg: waveMsg + "..." });
+              stopTicker = startWaveTicker(wavePct, waveMsg);
             }
-            const plan = extractJson(content);
-            if (plan) {
-              // 红线：reorder 一律丢弃（排序由 code.js 按真实 y 完成），避免与确定性后处理打架
-              const valid = (plan.ops || []).filter((o) =>
-                (o.action === "rename" && o.nodeId && o.name) ||
-                (o.action === "reparent" && o.nodeId && o.parentId) ||
-                (o.action === "delete" && o.nodeId)
-              );
-              // P0-b：收集布局意图，只保留结构合法的条目，nodeIds 限定在本段内（防幻觉越界）
-              if (useLayoutIntent && plan.layoutIntent && typeof plan.layoutIntent === "object") {
-                const inShard = new Set(shard.map((n) => n.id));
-                for (const m of (plan.layoutIntent.modules || [])) {
-                  if (!m || !Array.isArray(m.nodeIds)) continue;
-                  const ids = m.nodeIds.filter((id) => inShard.has(id));
-                  if (ids.length) intentModules.push({ order: m.order, name: m.name || "", nodeIds: ids });
-                }
-                for (const d of (plan.layoutIntent.decorations || [])) {
-                  if (d && d.nodeId && inShard.has(d.nodeId) && (d.role === "decoration" || d.role === "content"))
-                    intentDecorations.push({ nodeId: d.nodeId, role: d.role, shared: !!d.shared, spans: d.spans || [] });
-                }
+            const waveResults = await Promise.all(wave.map(function (shard, k) {
+              const treeJson = JSON.stringify({ root: { id: report.rootId, name: report.rootName }, segment: { index: waveStart + k + 1, total: shards.length }, nodes: shard.map(trimNode) });
+              // v20261111.52：visionOn=false 时不再带图，消息体退化为纯文本（网关侧少一次图片上传 + 多模态 prefill）
+              // v54：重跑的分片一律不带图（首次带图都失败/超时了，再用图重试只会再等一遍）
+              const withImage = visionOn && !shard.__textOnly;
+              const userContent = withImage
+                ? [{ type: "image_url", image_url: { url: "data:image/png;base64," + opts.imageData } }, { type: "text", text: treeJson }]
+                : treeJson;
+              const t0 = Date.now();
+              return llmRequest(cfg, [
+                { role: "system", content: withImage ? sysPrompt : sysPromptNoImage },
+                { role: "user", content: userContent },
+              ], { temperature: 0.2, max_tokens: Math.min(6000, 1024 + shard.length * 30), modelOverride: model, disableThinking: cfg.disableThinking !== false, timeoutMs: shard.__retried ? LLM_RETRY_TIMEOUT_MS : 0 })
+                .then(function (data) { return { data: data, shardMs: Date.now() - t0 }; })
+                .catch(function (e) { return { err: e, shardMs: Date.now() - t0 }; });
+            }));
+            if (stopTicker) { stopTicker(); stopTicker = null; }
+            // v20261111.52：首波体检 —— 带图链路失败或过慢 ⇒ 剩下的分段自动改纯文本（同一模型）
+            if (visionOn && waveStart === 0) {
+              const verdict = shouldDegradeVision(waveResults, VISION_SLOW_MS);
+              const failedK = [];
+              waveResults.forEach(function (r, k) { if (r.err) failedK.push(k); });
+              const avgMs = verdict.avgMs;
+              if (verdict.degrade) {
+                visionOn = false;
+                // v54：统一走「标记 + 排队」，否则下面结果循环里的 v54 重跑逻辑会把同一片再排一次（重复请求）
+                failedK.forEach(function (k) {
+                  const sh = wave[k];
+                  if (!sh.__retried) { sh.__retried = true; sh.__textOnly = true; retryShards.push(sh); retriedCount++; }
+                });
+                autoDownNote = "⚡ 视觉链路自动降级：首波" + (failedK.length ? "有 " + failedK.length + " 段请求失败" : "平均 " + Math.round(avgMs / 1000) + "s/段（阈值 " + Math.round(VISION_SLOW_MS / 1000) + "s）") + " ⇒ 后续 " + Math.max(shards.length - waveEnd, 0) + " 段不再上传渲染图，改用纯文本推理（仍是同一个模型 " + model + "）" + (retryShards.length ? "；首波失败的 " + retryShards.length + " 段已重新排队、用纯文本重跑" : "");
+                diagParts.push(autoDownNote);
+                errStreak = 0;
               }
-              if (valid.length === 0 && !(useLayoutIntent && (intentModules.length || intentDecorations.length))) {
-                const def = countDefaultNames(shard);
-                rawParts.push(`【第 ${s + 1}/${shards.length} 段】⚠️ 未产出有效操作` + (def ? `，但该段仍有 ${def} 个默认名节点未处理（模型可能漏处理，请检查）` : "（该段节点已规范，正常）"));
+            }
+            // v20261111.54：并发自适应 —— 视觉链路本轮「全成功且都不慢」才升到 2 路；
+            // 任何失败/超时立即退回串行（多模态并发正是 v50 那次卡死的来源，必须能自动收手）。
+            if (visionOn && visionConc < VISION_CONCURRENCY_MAX) {
+              const slowOrBad = waveResults.some(function (r) { return r.err || r.shardMs > VISION_SLOW_MS; });
+              if (!slowOrBad) visionConc = VISION_CONCURRENCY_MAX;
+            }
+            // 按段序处理本波结果（诊断/日志保持有序；空正文按段序累计）
+            for (let k = 0; k < wave.length; k++) {
+              const shard = wave[k];
+              const seg = waveStart + k + 1;
+              const r = waveResults[k];
+              if (r.err) {
+                // v20261111.51：单段请求失败（超时/网络）不再整轮抛出 —— 其余分段与确定性后处理照常进行，
+                // 失败段只进诊断；连续 3 段失败才停发新波（判为网关/Key 级故障）。
+                const em = String((r.err && r.err.message) || r.err);
+                segErrors.push("第 " + seg + " 段：" + em);
+                errStreak++;
+                rawParts.push(`【第 ${seg}/${shards.length} 段】❌ 请求失败：${em}`);
+                diagParts.push(`第 ${seg}/${shards.length} 段 · 失败 ${Math.round(r.shardMs / 1000)}s · ${em}`);
+                if (visionOn && visionConc > SHARD_CONCURRENCY_VISION) visionConc = SHARD_CONCURRENCY_VISION;   // v54：失败即退回串行
+                if (!shard.__retried) { shard.__retried = true; shard.__textOnly = true; retryShards.push(shard); retriedCount++; }   // v54
+                if (errStreak >= 3) { stopRun = true; break; }
+                continue;
+              }
+              errStreak = 0;
+              const data = r.data;
+              const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+              const content = ((msg.content) || "").trim();
+              diagParts.push(diagLineOf(seg, shards.length, data, r.shardMs));
+              if (!content) {
+                emptyStreak++;
+                if (msg.reasoning_content) rawParts.push(`【第 ${seg}/${shards.length} 段】只返回思考内容（思考未真正关闭；详见下方「关思考诊断」）`);
+                else rawParts.push(`【第 ${seg}/${shards.length} 段】返回为空`);
+                continue;
+              }
+              emptyStreak = 0;
+              const plan = extractJson(content);
+              if (plan) {
+                // 红线：reorder 一律丢弃（排序由 code.js 按真实 y 完成），避免与确定性后处理打架
+                const valid = (plan.ops || []).filter((o) =>
+                  (o.action === "rename" && o.nodeId && o.name) ||
+                  (o.action === "reparent" && o.nodeId && o.parentId) ||
+                  (o.action === "delete" && o.nodeId)
+                );
+                // P0-b：收集布局意图，只保留结构合法的条目，nodeIds 限定在本段内（防幻觉越界）
+                if (useLayoutIntent && plan.layoutIntent && typeof plan.layoutIntent === "object") {
+                  const inShard = new Set(shard.map((n) => n.id));
+                  for (const m of (plan.layoutIntent.modules || [])) {
+                    if (!m || !Array.isArray(m.nodeIds)) continue;
+                    const ids = m.nodeIds.filter((id) => inShard.has(id));
+                    if (ids.length) intentModules.push({ order: m.order, name: m.name || "", nodeIds: ids });
+                  }
+                  for (const d of (plan.layoutIntent.decorations || [])) {
+                    if (d && d.nodeId && inShard.has(d.nodeId) && (d.role === "decoration" || d.role === "content"))
+                      intentDecorations.push({ nodeId: d.nodeId, role: d.role, shared: !!d.shared, spans: d.spans || [] });
+                  }
+                }
+                if (valid.length === 0 && !(useLayoutIntent && (intentModules.length || intentDecorations.length))) {
+                  const def = countDefaultNames(shard);
+                  rawParts.push(`【第 ${seg}/${shards.length} 段】⚠️ 未产出有效操作` + (def ? `，但该段仍有 ${def} 个默认名节点未处理（模型可能漏处理，请检查）` : "（该段节点已规范，正常）"));
+                } else {
+                  allOps = allOps.concat(valid);
+                  rawParts.push(`【第 ${seg}/${shards.length} 段视觉 AI 返回】\n` + content);
+                }
               } else {
-                allOps = allOps.concat(valid);
-                rawParts.push(`【第 ${s + 1}/${shards.length} 段视觉 AI 返回】\n` + content);
+                rawParts.push(`【第 ${seg}/${shards.length} 段】未解析出 JSON: ${content.slice(0, 120)}`);
               }
-            } else {
-              rawParts.push(`【第 ${s + 1}/${shards.length} 段】未解析出 JSON: ${content.slice(0, 120)}`);
             }
+            if (autoDownNote) { rawParts.push(autoDownNote); autoDownNote = ""; }
+            if (emptyStreak >= 2) {
+              rawParts.push(`⚠️ 已连续 ${emptyStreak} 段拿不到正文，提前结束后续分段（避免继续空等；建议填「整理模型」为非思考模型，或关闭视觉模式）`);
+              break;
+            }
+            // 依据本波学到的网关行为，把未发射的分片重切（思考关不掉 ⇒ 40/段）
+            if (stopRun) break;
+            shards = reshardIfThinkingIgnored(shards, waveEnd - 1, report.rootId, model, cfg);
+            if (retryShards.length) {   // v20261111.52：首波失败的分片用纯文本重跑（段号重复属正常，按 nodeId 应用，重复 rename 幂等）
+              shards = shards.slice(0, waveEnd).concat(retryShards, shards.slice(waveEnd));
+              retryShards.length = 0;
+            }
+            s = waveEnd;
           }
+          if (retriedCount) rawParts.push("🔁 有 " + retriedCount + " 个失败分段已自动用纯文本重跑一次（段号重复属正常：按 nodeId 应用，rename 幂等）");
+          if (segErrors.length) rawParts.push("⚠️ 有 " + segErrors.length + " 个分段请求失败（已跳过，其余分段照常整理）：\n" + segErrors.join("\n"));
           const hasIntent = useLayoutIntent && (intentModules.length || intentDecorations.length);
-          if (!allOps.length && !hiddenDeleteOps.length && !hasIntent) throw new Error("视觉整理未产出任何有效操作。" + (rawParts.length ? "\n" + rawParts.join("\n") : ""));
+          if (!allOps.length && !hiddenDeleteOps.length && !hasIntent) throw new Error("视觉整理未产出任何有效操作。" + (rawParts.length ? "\n" + rawParts.join("\n") : "") + diagBlock(diagParts));
+          const rc = resolveRenameConflicts(allOps);
+          allOps = rc.ops;
+          if (rc.conflicts) rawParts.push("🔀 有 " + rc.conflicts + " 个节点被多个分段改成了不同名字：已按多数票取一个（不再「谁最后改谁赢」，同一份稿子结果可复现）");
           const plan = { ops: hiddenDeleteOps.concat(allOps) };
           if (hasIntent) plan.layoutIntent = { modules: intentModules, decorations: intentDecorations };
-          return { plan, rawContent: rawParts.join("\n\n") || "视觉整理完成" };
+          return { plan, rawContent: (rawParts.join("\n\n") || "视觉整理完成") + diagBlock(diagParts) };
         }
 
         const sysPrompt = [
@@ -969,50 +1761,112 @@
           "判定规则：结合 path 与子树文本推断语义（中文译英文 slug）；TEXT 节点不改名；无把握的跳过宁缺勿滥；只输出 JSON 不要解释。背景合并与从上到下排序由插件按真实几何确定性完成，你不需要（也不应该）输出排序/成组操作；装饰微件保留默认名不影响合并。本次请求只是完整图层树的一段（分段发送），只针对本段给出的节点产出方案，不要推测段外节点。",
         ].join("\n");
 
-        const shards = shardNodes(report.nodes, report.rootId, 100);
+        let shards = shardNodes(report.nodes, report.rootId, 100);
         let allOps = [];
         const rawParts = [];
-        for (let s = 0; s < shards.length; s++) {
-          const shard = shards[s];
-          if (typeof showAiProgress === "function")
-            showAiProgress({ pct: 25 + Math.round((s / shards.length) * 65), msg: `AI 分析中（第 ${s + 1}/${shards.length} 段，本段 ${shard.length} 节点）...` });
-          const userContent = JSON.stringify({
-            root: { id: report.rootId, name: report.rootName },
-            segment: { index: s + 1, total: shards.length },
-            nodes: shard.map(trimNode),
-          });
-          const data = await llmRequest(cfg, [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userContent },
-          ], { temperature: 0.2, max_tokens: Math.min(6000, 1024 + shard.length * 30), disableThinking: cfg.disableThinking !== false });
-          const content = ((data.choices && data.choices[0] && data.choices[0].message.content) || "").trim();
-          if (!content) {
-            rawParts.push(`【第 ${s + 1}/${shards.length} 段】AI 返回为空`);
-            continue;
-          }
-            const plan = extractJson(content);
-          if (plan) {
-            const ops = (plan.ops || []).filter((o) =>
-              (o.action === "rename" && o.nodeId && o.name) ||
-              (o.action === "delete" && o.nodeId) ||
-              (o.action === "reparent" && o.nodeId && o.parentId)
-            );
-            if (ops.length === 0) {
-              const def = countDefaultNames(shard);
-              rawParts.push(`【第 ${s + 1}/${shards.length} 段】⚠️ 未产出有效操作` + (def ? `，但该段仍有 ${def} 个默认名节点未处理（模型可能漏处理，请检查）` : "（该段节点已规范，正常）"));
-            } else {
-              allOps = allOps.concat(ops);
-              rawParts.push(`【第 ${s + 1}/${shards.length} 段 AI 返回】\n` + content);
+        const diagParts = [];   // v20261111.45：每段关思考方言 / 预算 / 思考字数，随分析日志输出
+        const preflightWarn = noThinkPreflightWarn(model);   // v20261111.48：mvgo 式的模型可用性预检
+        if (preflightWarn) diagParts.push(preflightWarn);
+        let emptyStreak = 0;    // v20261111.47：连续无正文段数（熔断）
+        // v20261111.50：波次并发（同视觉模式；结果按段序处理，熔断波间生效）
+        let s = 0;
+        const segErrors = [];
+        const retryShards = [];   // v54：失败段用纯文本重跑一次（文本路径本来就是纯文本）
+        let retriedCount = 0;
+        let errStreak = 0;
+        let stopRun = false;
+        while (s < shards.length) {
+          const waveStart = s;
+          const wave = shards.slice(waveStart, waveStart + SHARD_CONCURRENCY);
+          const waveEnd = waveStart + wave.length;
+          let stopTicker = null;
+          if (typeof showAiProgress === "function") {
+              const wavePct = 25 + Math.round((waveStart / Math.max(shards.length, 1)) * 65);
+              const waveMsg = `AI 分析中（第 ${waveStart + 1}-${waveEnd}/${shards.length} 段并发，本波 ${wave.reduce(function (n, x) { return n + x.length; }, 0)} 节点）`;
+              showAiProgress({ pct: wavePct, msg: waveMsg + "..." });
+              stopTicker = startWaveTicker(wavePct, waveMsg);
             }
-          } else {
-            rawParts.push(`【第 ${s + 1}/${shards.length} 段】未解析出 JSON: ${content.slice(0, 120)}`);
+          const waveResults = await Promise.all(wave.map(function (shard, k) {
+            const userContent = JSON.stringify({
+              root: { id: report.rootId, name: report.rootName },
+              segment: { index: waveStart + k + 1, total: shards.length },
+              nodes: shard.map(trimNode),
+            });
+            const t0 = Date.now();
+            return llmRequest(cfg, [
+              { role: "system", content: sysPrompt },
+              { role: "user", content: userContent },
+            ], { temperature: 0.2, max_tokens: Math.min(6000, 1024 + shard.length * 30), disableThinking: cfg.disableThinking !== false, timeoutMs: shard.__retried ? LLM_RETRY_TIMEOUT_MS : 0 })
+              .then(function (data) { return { data: data, shardMs: Date.now() - t0 }; })
+              .catch(function (e) { return { err: e, shardMs: Date.now() - t0 }; });
+          }));
+          if (stopTicker) { stopTicker(); stopTicker = null; }
+          for (let k = 0; k < wave.length; k++) {
+            const shard = wave[k];
+            const seg = waveStart + k + 1;
+            const r = waveResults[k];
+            if (r.err) {
+              // v20261111.51：同上（视觉路径）—— 单段失败只记诊断，不整轮抛出。
+              const em = String((r.err && r.err.message) || r.err);
+              segErrors.push("第 " + seg + " 段：" + em);
+              errStreak++;
+              rawParts.push(`【第 ${seg}/${shards.length} 段】❌ 请求失败：${em}`);
+              diagParts.push(`第 ${seg}/${shards.length} 段 · 失败 ${Math.round(r.shardMs / 1000)}s · ${em}`);
+              if (!shard.__retried) { shard.__retried = true; retryShards.push(shard); retriedCount++; }   // v54：重跑一次
+              if (errStreak >= 3) { stopRun = true; break; }
+              continue;
+            }
+            errStreak = 0;
+            const data = r.data;
+            const content = ((data.choices && data.choices[0] && data.choices[0].message.content) || "").trim();
+            diagParts.push(diagLineOf(seg, shards.length, data, r.shardMs));
+            if (!content) {
+              emptyStreak++;
+              rawParts.push(`【第 ${seg}/${shards.length} 段】AI 返回为空（详见下方「关思考诊断」）`);
+              continue;
+            }
+            emptyStreak = 0;
+            const plan = extractJson(content);
+            if (plan) {
+              const ops = (plan.ops || []).filter((o) =>
+                (o.action === "rename" && o.nodeId && o.name) ||
+                (o.action === "delete" && o.nodeId) ||
+                (o.action === "reparent" && o.nodeId && o.parentId)
+              );
+              if (ops.length === 0) {
+                const def = countDefaultNames(shard);
+                rawParts.push(`【第 ${seg}/${shards.length} 段】⚠️ 未产出有效操作` + (def ? `，但该段仍有 ${def} 个默认名节点未处理（模型可能漏处理，请检查）` : "（该段节点已规范，正常）"));
+              } else {
+                allOps = allOps.concat(ops);
+                rawParts.push(`【第 ${seg}/${shards.length} 段 AI 返回】\n` + content);
+              }
+            } else {
+              rawParts.push(`【第 ${seg}/${shards.length} 段】未解析出 JSON: ${content.slice(0, 120)}`);
+            }
           }
+          if (emptyStreak >= 2) {
+            rawParts.push(`⚠️ 已连续 ${emptyStreak} 段拿不到正文，提前结束后续分段（避免继续空等；建议在「整理模型」里填一个不思考的模型）`);
+            break;
+          }
+          if (stopRun) break;
+          shards = reshardIfThinkingIgnored(shards, waveEnd - 1, report.rootId, model, cfg);
+          if (retryShards.length) {   // v54：失败段重新排队（每段最多重跑一次）
+            shards = shards.slice(0, waveEnd).concat(retryShards, shards.slice(waveEnd));
+            retryShards.length = 0;
+          }
+          s = waveEnd;
         }
+        if (retriedCount) rawParts.push("🔁 有 " + retriedCount + " 个失败分段已自动重跑一次（段号重复属正常：按 nodeId 应用，rename 幂等）");
+        if (segErrors.length) rawParts.push("⚠️ 有 " + segErrors.length + " 个分段请求失败（已跳过，其余分段照常整理）：\n" + segErrors.join("\n"));
+        if (segErrors.length && !allOps.length) throw new Error("全部 " + shards.length + " 个分段都请求失败，未产出任何操作：\n" + segErrors.join("\n"));
+        const rc = resolveRenameConflicts(allOps);
+        allOps = rc.ops;
+        if (rc.conflicts) rawParts.push("🔀 有 " + rc.conflicts + " 个节点被多个分段改成了不同名字：已按多数票取一个（不再「谁最后改谁赢」，同一份稿子结果可复现）");
         const byId = new Map();
         for (const op of allOps) byId.set(op.nodeId, op);
         for (const op of hiddenDeleteOps) byId.set(op.nodeId, op); // 隐藏节点删除优先（覆盖同名条目）
         const ops = Array.from(byId.values());
-        return { plan: { ops }, rawContent: rawParts.join("\n\n") };
+        return { plan: { ops }, rawContent: rawParts.join("\n\n") + diagBlock(diagParts) };
       }
 
       // 统一的插件消息入口
@@ -1021,6 +1875,17 @@
         if (!message) return;
 
         switch (message.type) {
+          case "organize-undo-state":
+            undoOrganizeButton.disabled = !message.available;
+            undoOrganizeButton.title = message.available
+              ? "撤回最近一次插件整理；整理后请勿先做其他编辑"
+              : "当前没有可撤回的插件整理";
+            break;
+          case "organize-undo-result":
+            undoOrganizeButton.disabled = !message.ok;
+            if (message.ok) aiResult.textContent = "已撤回最近一次插件整理（Figma 撤销）";
+            else aiResult.textContent = "撤回失败：" + (message.error || "未知错误");
+            break;
           case "selection-state": {
             const nameEl = document.getElementById("sel-name");
             const box = document.getElementById("sel-state");
@@ -1085,6 +1950,9 @@
             break;
           }
           case "ai-organize-result":
+            // v20261110.53：应用阶段 = 发出 apply-ai-ops → Figma 回报结果（其中 postMs 是 code.js 自身后处理）
+            if (RUN_TIMING.applyT0) RUN_TIMING.applyMs = Date.now() - RUN_TIMING.applyT0;
+            RUN_TIMING.postMs = message.postMs != null ? message.postMs : null;
             showAiResult(message);
             break;
           case "ai-config-saved":
@@ -1098,6 +1966,7 @@
               document.getElementById("ai-api-key").value = message.cfg.apiKey || "";
               document.getElementById("ai-model").value = message.cfg.model || "";
               document.getElementById("ai-vision-model").value = message.cfg.visionModel || "";
+              document.getElementById("ai-organize-model").value = message.cfg.organizeModel || "";
               document.getElementById("ai-use-vision").checked = !!message.cfg.useVision;
               // v20261110.14：用新键 autoLayoutIntent 绕开旧配置里已存下的 useLayoutIntent:false
               // （与 v20261110.8 的 autoModuleGroups 同理）；旧配置无此键 ⇒ 默认开启。
@@ -1111,6 +1980,11 @@
             break;
           case "ai-scan-done": {
             const useVision = message.useVision;
+            // v20261110.53：Figma 侧的扫描/渲染耗时接进总计时（UI 侧只测得到 AI + 应用）
+            if (!RUN_TIMING.clickT) resetRunTiming();
+            RUN_TIMING.scanMs = message.scanMs != null ? message.scanMs : null;
+            RUN_TIMING.renderMs = message.renderMs != null ? message.renderMs : null;
+            RUN_TIMING.aiT0 = Date.now();
             const modelName = useVision && message.cfg.visionModel ? message.cfg.visionModel : message.cfg.model;
             showAiProgress({ pct: 20, msg: "AI 分析中（" + modelName + "），共 " + message.report.total + " 节点" + (useVision ? "，含渲染图（视觉定层级/顺序）" : "，已分段发送…") });
             // 分析中即显示日志框（占位），避免误以为没有日志
@@ -1132,6 +2006,7 @@
               imageData: message.imageData,
             })
               .then((result) => {
+                RUN_TIMING.aiMs = RUN_TIMING.aiT0 ? Date.now() - RUN_TIMING.aiT0 : null;   // v20261110.53
                 const plan = result.plan;
                 // 分析日志：AI 原始返回 + 解析出的操作方案，面板内可查看
                 const analysisEl = document.getElementById("ai-analysis");
@@ -1166,6 +2041,7 @@
                   return;
                 }
                 showAiProgress({ pct: 30, msg: "AI 完成，共 " + ops.length + " 条操作，开始执行（含确定性布局整理）..." });
+                RUN_TIMING.applyT0 = Date.now();   // v20261110.53
                 parent.postMessage({ pluginMessage: applyMsg }, "*");
               })
               .catch((e) => showAiResult({ ok: false, error: e.message }));
@@ -1177,9 +2053,53 @@
       // UI 就绪后主动去向 code.js 要一次选区（保证响应被收到，避免早期广播被丢）
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
-      // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.28";
-      try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
+      // 插件版本标签：仅展示版本与本次最后更新时间。
+      // v20261111.40：文案改写——副标题一句话说清，关于页展开「为什么 / 做什么 / 产出 / 收益」。
+      // v20261111.41：修复断开态按钮变蓝色主按钮的误导；断开/失败文案统一标明「当前直连」。
+      // v20261111.42：关于页去 AI 化精简为「关于 + 使用步骤」两节，署名移到最后。
+      // v20261111.43：几何护栏——竖栏不并入行、同规格集合 / list-·grid- 跳过行聚类、
+      //   同行成员面积差异超 1:4 不建行容器；结果面板新增「竖栏保留 / 集合保护 / 尺寸不符」计数。
+      // v20261111.44：修复 AI 路径结果消息漏传三项护栏计数；竖栏须为有子节点的容器（叶子矩形不算）。
+      // v20261111.45：关思考链路修复——末次候选不再被当成成功缓存（否则后续分段永不重试）；
+      //   正文空时同一方言加预算重试；每段方言/预算/思考字数进分析日志（含 finish_reason / 思考 tokens）。
+      // v20261111.46：按实测网关行为重写策略——网关静默忽略全部关思考参数，且思考长度随预算/输入膨胀
+      //   （1234 预算→思考 3841 字；3702→13203；10722→37082，全部 finish=length）。故：
+      //   ① 只有思考=0 才缓存方言（正文拿到但思考>0 不缓存，避免锁死后续大分段）；
+      //   ② 一旦发现思考>0 即认定「参数被忽略」，之后单次请求 + 预算提到 12000，不再逐方言试错；
+      //   ③ 思考已过大的段直接跳过加预算重试（重试只会让它想更久）；④ 剩余分片重切为 40 节点/段。
+      // v20261111.47：实现「不要思考」的其余三条路——
+      //   ① 提示词级软开关 /no_think（Qwen3 官方支持，走 prompt 不受网关参数白名单限制）；
+      //   ② 新增「整理模型」输入框：填一个不思考的模型即可彻底绕开思考（纯文本整理优先用它）；
+      //   ③ 连续 2 段拿不到正文即熔断，不再空等；每段耗时写进【关思考诊断】。
+      // v20261111.48：关思考策略整体对齐 mvgo（model-config.js / ai-defaults.js / ai-request-gateway.js）——
+      //   ① 静态路由改为「/^deepseek-v4/ 名级兜底优先」，与 mvgo thinkingDefaultFor 同序；
+      //   ② 移植 isReasoningModel() + thinkingClosable()：mvgo 对关不掉思考的推理模型直接弃用，
+      //      插件无法换 provider，改为在【关思考诊断】里显式提示换非推理模型；
+      //   ③ 空正文 + finish=length = 确定性故障 ⇒ 立即熔断，不再逐个试方言（对齐 mvgo）；
+      //   ④ 推理模型强制 temperature=1（否则服务端 400 invalid temperature）；
+      //   ⑤ 移植 mvgo MODEL_MAX_OUTPUT_TOKENS 输出上限表，大预算不再超过模型真实上限。
+      // v20261111.49：① 关思考模式下【每个候选】预算下限 8000（旧版只抬最后一个候选，导致排在前面的
+      //   /no_think 候选以 1054 预算起跑、思考到 3890 字被 length 截断，本来给足预算就能出正文）；
+      //   ② 修正 mvgo 熔断的过度矫正：mvgo 能换 provider，插件不能 ⇒ 只有「已给到 12000 仍 length+空」
+      //   才判确定性烧预算；还有更大预算的候选时先继续；③ 去掉与候选升级重复的就地重试（请求数 4→2）；
+      //   ④ 新增【确定性循环命名】：同规格集合里仍是默认名的成员按视觉顺序改名 item-<slug>-1..N，
+      //   使结构契约在 AI 零产出的情况下仍能折叠出 [循环 ×N，首项即模板]（v-for 信号不再只依赖模型）。
+      // v20261111.57：段内覆盖型纯色底块沉底，修 AI 命名态下「底色块盖住文字」的 z-order 回归（53:31607）。
+      // v20261111.58：关思考路线重排 —— 模型名分支优先于网关子句（修 microvideo 遮蔽）；
+      //   上游 400「始终思考」按 model|网关 记忆 + GLM 4.6/5.x 按名字静态识别，
+      //   首选直接发 reasoning_effort:"low"（网关静默忽略参数时同样生效）；文档补「按模型族怎么办」表。
+      // v20261111.59：真环形图/图例识别（53:34075）。命名 prompt 引入 arc 几何判据与
+      //   @echarts/pie + legend-* 规则；code.js 侧同步补 scanTree 几何字段、确定性升级与契约关联标注。
+      // v20261111.60：真折线/面积图识别（5:35420）。prompt 引入 vp 路径特征判据并去掉
+      //   「刻度=假图表」一刀切；code.js 侧补零 token 几何升级与 @echarts/* 位图化硬门禁。
+      // v20261111.61：面板主标题按 y 几何提升根级 header。
+      // v20261111.62：整理模型与本地代理收进默认折叠的高级设置。
+      // v20261111.63：契约层虚拟 unwrap / 装饰叶子压行。
+      // v20261111.64：柱状图几何判据 + @ 前缀只能给有 children 的容器（53:34075 背景误命名）；
+      //   code.js 侧新增 demoteLeafCharts / promoteBarCharts 两条确定性后处理。
+      const PLUGIN_VERSION = "20261110.64";
+      const PLUGIN_UPDATED = "2026-11-11 23:58";
+      try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（最后更新于 " + PLUGIN_UPDATED + "）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
       window.addEventListener("beforeunload", () => {

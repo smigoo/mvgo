@@ -260,6 +260,11 @@
                           <span v-else class="task-hist-badge is-single">单主题（设计主题 · 1 + 默认一体化主题）</span>
                         </span>
                         <span class="task-hist-node">{{ t.themeCount > 1 ? t.themeSummary : (t.nodeId ? `node ${t.nodeId}` : '整个文件') }}</span>
+                        <!-- 🟢 诉求五 #20：该任务配套的 Figma token（掩码指纹，中间打星号）。
+                             切过 token 的用户凭前缀即可辨认「当时用的是哪个」；无引用老任务不渲染。 -->
+                        <span v-if="historyCredentialText(t)" class="task-hist-token" :title="`生成时使用的 Figma Token（${historyCredentialText(t)}）——重新生成将沿用该 Token`">
+                          {{ historyCredentialText(t) }}
+                        </span>
                       </span>
                       <span class="task-hist-time">{{ historyTimeText(t) }}</span>
                     </div>
@@ -450,6 +455,10 @@
                                 <span v-else class="task-hist-badge is-single">单主题（设计主题 · 1 + 默认一体化主题）</span>
                               </span>
                               <span class="task-hist-node">{{ t.themeCount > 1 ? t.themeSummary : (t.nodeId ? `node ${t.nodeId}` : '整个文件') }}</span>
+                              <!-- 🟢 诉求五 #20：配套 token 掩码展示（与主框历史下拉同口径） -->
+                              <span v-if="historyCredentialText(t)" class="task-hist-token" :title="`生成时使用的 Figma Token（${historyCredentialText(t)}）——重新生成将沿用该 Token`">
+                                {{ historyCredentialText(t) }}
+                              </span>
                             </span>
                             <span class="task-hist-time">{{ historyTimeText(t) }}</span>
                           </div>
@@ -1163,7 +1172,7 @@
               <div class="adv-label-row">
                 <label>补充提示词</label>
                 <span class="adv-opt-tag">选填 · {{ advExtraPrompt.length }}/4000</span>
-                <span v-if="advDocPromptLocked" class="adv-lock-tag">仅微码 + Max 生效</span>
+                <span v-if="advDocPromptLocked" class="adv-lock-tag">{{ advLockHint }}</span>
               </div>
               <textarea
                 v-model="advExtraPrompt"
@@ -1178,7 +1187,7 @@
               <div class="adv-label-row">
                 <label>需求文档</label>
                 <span class="adv-opt-tag">选填 · .md / .txt / .html · ≤1MB</span>
-                <span v-if="advDocPromptLocked" class="adv-lock-tag">仅微码 + Max 生效</span>
+                <span v-if="advDocPromptLocked" class="adv-lock-tag">{{ advLockHint }}</span>
               </div>
               <input
                 ref="advDocInput"
@@ -1366,6 +1375,51 @@ const sourceMode = ref(
   ['screenshot', 'figma'].includes(savedSourceMode) ? savedSourceMode : 'screenshot'
 )
 const figmaUrl = ref('')
+// ═══ 历史任务凭证引用（2026-11-11 诉求五 #19）═══
+// 场景：用户切过 Figma token 后点历史记录还原 —— 预览确认与重新生成都必须用
+// 「任务当时那个 token」，否则当时的文件 404，用户看到的是「文件不存在」
+// （Figma 对无权限文件也返回 404）。后端按引用三字段（fp/slotId/slotName）找回，
+// 前端职责只是：① 历史还原时把三字段带出；② 按 URL 匹配附到预览/生成请求。
+// 🔴 绑定键 = fileKey+nodeId（URL 归一后仍可能因 node-id 格式差异 2:7952/2-7952
+//   对不上，按解析结果匹配才稳）；用户手动改链接超出覆盖集合 ⇒ 引用自动失效
+//   （新目标本来就没有「当时」可言，回落当前凭证是正确语义）。
+const historyCredentialRef = ref<{
+  fileKey: string
+  nodeId: string
+  fp: string
+  slotId: string
+  slotName: string
+} | null>(null)
+/** 当前 URL 是否命中历史凭证引用的覆盖集合（fileKey 相同 + nodeId 相同/引用无节点） */
+function matchesHistoryCredential(urlRaw: string): boolean {
+  const ref = historyCredentialRef.value
+  if (!ref?.fp) return false
+  const parsed = parseFigmaUrlLite(normalizeFigmaUrl(urlRaw))
+  if (!parsed) return false
+  return parsed.fileKey === ref.fileKey && (!ref.nodeId || parsed.nodeId === ref.nodeId)
+}
+/** 构造带历史凭证引用的 config（未命中时原样返回 —— 零行为变化） */
+function withHistoryCredential(config: Record<string, any>): Record<string, any> {
+  const ref = historyCredentialRef.value
+  if (!ref?.fp) return config
+  return {
+    ...config,
+    figmaCredentialFp: ref.fp,
+    figmaCredentialSlotId: ref.slotId || undefined,
+    figmaCredentialSlotName: ref.slotName || undefined,
+  }
+}
+/**
+ * 历史条目的配套 token 展示文本（诉求五 #20）：
+ * 「槽位名 · 前缀****后缀」——指纹本身即掩码形态（maskSecretFingerprint：`前6****后4`），
+ * 无明文泄漏；无引用的老任务显示空（不渲染）。
+ */
+function historyCredentialText(t: any): string {
+  const fp = String(t?.figmaCredentialFp || '').trim()
+  if (!fp) return ''
+  const name = String(t?.figmaCredentialSlotName || '').trim()
+  return name ? `${name} · ${fp}` : fp
+}
 // ── Figma 预览图显式状态机 ──
 type PreviewStatus = 'idle' | 'invalid' | 'pending' | 'loading' | 'ready' | 'error' | 'confirmed'
 type PreviewErrorType =
@@ -1790,7 +1844,12 @@ async function previewNThemeRow(index: number) {
   }
   row.preview = { status: 'loading' }
   try {
-    const r = await fetchFigmaPreview({ figmaUrl: url })
+    // 🟢 诉求五 #19：主题行 URL 命中历史引用覆盖集合时随 config 带回（与主框同口径）
+    const hit = matchesHistoryCredential(url)
+    const r = await fetchFigmaPreview({
+      figmaUrl: url,
+      ...(hit ? { config: withHistoryCredential(configStore.config || {}) } : {})
+    })
     const d = r?.data ?? r
     if (!d?.imageUrl) {
       row.preview = { status: 'error', error: d?.message || '未取到预览图（请检查节点是否存在 / 是否有访问权限）' }
@@ -1866,13 +1925,29 @@ const advDocInput = ref<HTMLInputElement | null>(null)
  */
 const advDocHint = ref<{ sessionId: string; len: number; loading: boolean } | null>(null)
 /**
- * 🔴 2026-11-06：补充提示词 / 需求文档**仅微码 + Max 管线消费**（ Lite 微码分支的
- *   buildMicrocodeCodegenPrompt 不含这两字段，填了也不生效）；组件 ID 两档都生效，不锁。
- *   用户拍板：Lite 档位下置灰（2026-11-06），vue3 类型同理（整块本就不下发）。
+ * 🔴 2026-11-11：高级选项（补充提示词 / 需求文档）生效管线，与后端实际消费能力对齐。
+ *   后端消费矩阵：
+ *     - microcode + Max（phase2.service）✅ 已消费
+ *     - vue3 + Lite（lite.service buildCodegenPrompt）✅ 已消费
+ *     - microcode + Lite（buildMicrocodeCodegenPrompt）❌ → 步骤 B 接入
+ *     - vue3 + Max（vue3.service）❌ → 步骤 C 接入
+ *   组件 ID（userComponentId）仍仅微码生效（vue3 目录锚定 sessionId，架构解耦，强开会动解析链路）。
  */
-const advDocPromptLocked = computed(
-  () => compType.value !== 'microcode' || genTier.value !== 'max'
-)
+const advDocSupported = computed(() => {
+  const ct = compType.value
+  const gt = genTier.value
+  if (ct === 'microcode' && gt === 'max') return true
+  if (ct === 'vue3' && gt === 'lite') return true
+  if (ct === 'microcode' && gt === 'lite') return true // 步骤 B：microcode Lite 已接入 userAddendum
+  if (ct === 'vue3' && gt === 'max') return true // 步骤 C：vue3 Max 已透传至 vue3-engineer
+  return false
+})
+const advDocPromptLocked = computed(() => !advDocSupported.value)
+/** 锁定态下展示的生效范围提示（当前补充提示词 / 需求文档已覆盖全部生成类型） */
+const advLockHint = computed(() => {
+  if (advDocSupported.value) return ''
+  return '当前生成类型暂不支持'
+})
 // 折叠条收起时的已填摘要（锁定态的两字段不再进摘要，避免「提示词」chip 误导为会生效）
 const advSummaryChips = computed(() => {
   const chips: string[] = []
@@ -2578,7 +2653,9 @@ async function loadFigmaPreview() {
       {
         figmaUrl: requestUrl,
         figmaToken: rawCfg?.figmaToken,
-        config: rawCfg
+        // 🟢 诉求五 #19：历史还原的目标 URL 且任务带凭证引用 ⇒ 随 config 带回，
+        //   后端 figma-preview 按引用找回「当时那个 token」（用户切过 token 也能连上）
+        config: matchesHistoryCredential(requestUrl) ? withHistoryCredential(rawCfg) : rawCfg
       },
       { signal: controller.signal }
     )
@@ -3411,12 +3488,14 @@ async function goSingle(aiConfig) {
     //   declare.json themeConfig.list[].panelType 留痕。单稿/未就绪时仍用全局开关。
     const primaryPanel = nThemeRows.value[0]?.panelType
     p.panelType = nThemeEnabled.value && primaryPanel ? primaryPanel : panelType.value
-    // 高级选项三字段（仅微码生效）。🔴 2026-11-06：补充提示词 / 需求文档仅 Max 管线
-    //   消费（Lite 微码 prompt 不含），锁定态不下发——防止「Max 时填了、切回 Lite 提交」
-    //   把不生效的字段带进任务记录误导排查。组件 ID 两档都生效，照常下发。
+    // 🔴 2026-11-11：组件 ID 仅微码生效（vue3 目录锚定 sessionId，架构解耦，强开会动解析链路）
     if (advUserId.value.trim()) p.userComponentId = advUserId.value.trim()
-    if (!advDocPromptLocked.value && advExtraPrompt.value.trim()) p.extraPrompt = advExtraPrompt.value.trim()
-    if (!advDocPromptLocked.value && advDocText.value.trim()) p.requirementDocText = advDocText.value
+  }
+  // 🔴 2026-11-11：补充提示词 / 需求文档按后端实际消费管线下发（advDocSupported 已对齐消费矩阵）。
+  //   锁定态（microcode Lite / vue3 Max 尚未接入）不下发，避免把不生效字段带进任务记录误导排查。
+  if (advDocSupported.value) {
+    if (advExtraPrompt.value.trim()) p.extraPrompt = advExtraPrompt.value.trim()
+    if (advDocText.value.trim()) p.requirementDocText = advDocText.value
   }
   if (requirementDoc.value.trim().length >= 20) {
     p.requirementDoc = requirementDoc.value
@@ -3437,6 +3516,13 @@ async function goSingle(aiConfig) {
     p.previewToken = figmaPreview.value.previewToken
     p.previewWidth = figmaPreview.value.width
     p.previewHeight = figmaPreview.value.height
+    // 🟢 诉求五 #19：目标命中历史引用 ⇒ 凭证引用三字段随 config 下发。
+    //   后端 resolveExecutionFigmaToken 的优先级里「任务引用 > 请求 token」，新任务
+    //   createTask 时 configSnapshot 会带上引用（创建期记账），此后每次重试/续跑
+    //   都沿用当时的 token —— 历史还原语义从「这一次」延伸到「这一个任务系列」。
+    if (matchesHistoryCredential(currentUrl)) {
+      p.config = withHistoryCredential(p.config || {})
+    }
 
 
     // 🆕🆕 2026-10-12 N 主题：下发多套主题设计稿。
@@ -3492,6 +3578,11 @@ async function goBatch(aiConfig) {
     }
     if (compType.value === 'microcode') {
       item.panelType = panelType.value
+    }
+    // 🔴 2026-11-11：批量模式同样按 advDocSupported 透传补充提示词 / 需求文档
+    if (advDocSupported.value) {
+      if (advExtraPrompt.value.trim()) item.extraPrompt = advExtraPrompt.value.trim()
+      if (advDocText.value.trim()) item.requirementDocText = advDocText.value
     }
     if (requirementDoc.value.trim().length >= 20) {
       item.requirementDoc = requirementDoc.value
@@ -3817,6 +3908,24 @@ const N_THEME_PANEL_SET = new Set(['default-panel', 'model-panels', 'aio-panel']
 function restoreHistoryTask(t: any) {
   figmaUrl.value = t.url
   sourceMode.value = 'figma'
+  // 🟢 2026-11-11 诉求五 #19：带出任务凭证引用 —— 后续「预览确认 + 重新生成」
+  //   按当时的 Figma token 执行（切过 token 也能连上当时的文件）。
+  //   绑定键 = fileKey+nodeId：还原后用户改链接超出覆盖集合 ⇒ matches 自然失配，
+  //   请求不再附带（新目标回落当前凭证是正确语义，见 historyCredentialRef 注释）。
+  {
+    const parsed = parseFigmaUrlLite(normalizeFigmaUrl(String(t.url || '')))
+    const fp = String(t?.figmaCredentialFp || '')
+    historyCredentialRef.value =
+      parsed && fp
+        ? {
+            fileKey: parsed.fileKey,
+            nodeId: parsed.nodeId,
+            fp,
+            slotId: String(t?.figmaCredentialSlotId || ''),
+            slotName: String(t?.figmaCredentialSlotName || ''),
+          }
+        : null
+  }
   // 🔴 2026-10-29：还原**类型 + 档位**。历史条目现在带 kindClass（微码/Vue3/页面）；
   //   不同一条目只是链接不同，类型不同才是不同产物 —— 点 Vue3 那条若仍留在「微码」，
   //   生成出的东西与历史任务不是同一类。档位优先用任务真值，缺失时按 kind 兜底。
@@ -3915,6 +4024,13 @@ async function fetchRecent() {
       themeNodes: Array.isArray(t.themeNodes) ? t.themeNodes : null,
       //  P0-3: 视觉分析降级标志（视觉超时→Figma 兜底 或 完全降级）
       visualDegraded: t.visualDegraded === true || !!t.result?._visualDegraded,
+      // 🟢 2026-11-11 诉求五 #19：任务凭证引用三字段透传（历史还原用）。
+      //   后端 createTask 已持久化；历史还原时带出，让「预览确认 + 重新生成」
+      //   都按任务当时的 Figma token 执行（用户切过 token 也能连上当时的文件）。
+      //   只透传不展示：这是执行凭证的指纹（非明文），UI 无需呈现。
+      figmaCredentialFp: t.figmaCredentialFp || '',
+      figmaCredentialSlotId: t.figmaCredentialSlotId || '',
+      figmaCredentialSlotName: t.figmaCredentialSlotName || '',
       // 🔴 2026-10-29：档位/类型字段透传（历史下拉「微码 Max / Lite / Vue3 / 页面」徽章数据源）
       generationTier: t.generationTier || '',
       sourceType: t.sourceType || '',
@@ -3931,6 +4047,8 @@ async function fetchRecent() {
       visualDegradeReason: t.visualDegradeReason || t.result?._visualDegradeReason || '',
       // 🛡️ 2026-09-30: 低覆盖率「降级放行」质量提示（非阻断）→ 「内容可能不完整 + 归因到视觉模型」提示条
       visualQualityWarning: t.visualQualityWarning || t.result?._visualQualityWarning || null,
+      // 🛡️ P0-B（2026-11-11）：像素保真警告（VISUAL-002 WARN 不阻断但需可见）→ 「视觉待改进」标签
+      visualFidelityWarning: t.visualFidelityWarning || (t.result?.visualFidelity ? { score: t.result.visualFidelity.score ?? null, verdict: t.result.visualFidelity.verdict || 'none' } : null),
       // 🛡️ 脚本子段降级清单（lifecycle/charts 段失败但已降级兜底）→ 「不完整，可二次生成」标签
       degradedScriptParts: Array.isArray(t.degradedScriptParts) ? t.degradedScriptParts : (Array.isArray(t.result?.degradedScriptParts) ? t.result.degradedScriptParts : []),
       // 🛡️ #10 静默失败降级：合并 gateSkippedFiles（写盘门禁跳过）+degradedFiles（子组件编译剔除）→ 缺失关键文件提示
@@ -6096,6 +6214,27 @@ html[data-theme='dark'] .spinner--lg {
   font-size: 11px;
   font-family: var(--mono, monospace);
   color: var(--txt-3, #909399);
+}
+/* 🟢 诉求五 #20：任务配套 Figma token（掩码指纹）——比 node 行更弱化，
+   等宽字体放大星号可辨性，flex 布局里不与 node 行抢行（独立一行） */
+.task-hist-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-size: 11px;
+  font-family: var(--mono, monospace);
+  color: var(--txt-3, #909399);
+  opacity: 0.85;
+  letter-spacing: 0.2px;
+}
+.task-hist-token::before {
+  content: '🔑';
+  font-size: 10px;
+  opacity: 0.8;
 }
 .task-hist-time {
   flex-shrink: 0;

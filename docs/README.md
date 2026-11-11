@@ -8,15 +8,13 @@
 |------|------|
 | `CHANGELOG.md` | 🆕 **发布更新日志**：按批次记录前后端待部署变更、上线前置与验收清单 |
 | `DEPLOYMENT-NOTES.md` | 生产环境实况速查（三端服务、Docker、nginx 卷映射） |
-| `architecture/` | 系统架构、双运行时职责边界、数据库设计 |
-| `operations/` | 部署指南、生成正确性根治方案 |
-| `component-generation/` | ⭐ 组件生成规范、管线设计、优化方案 |
+| `architecture/` | 系统架构与数据库设计 |
+| `operations/` | 统一部署指南 |
+| `component-generation/` | 组件生成规范入口；专题实施与验收记录在根目录日期文档中 |
 | `product/` | 产品设计、PRD、Agent Builder、API 生成 |
-| `ux-research/` | 用户研究、UX 建议、设计交接 |
-| `quality/` | 质量门禁、实时预览、原型验证 |
-| `deployment/` | 前端部署、Nginx 配置 |
-| `prototypes/` | HTML 原型文件 |
-| `../过时文档/` | 历史文档归档（已迁出 docs/，位于项目根 `过时文档/`） |
+| `adr/` | 组件生成管线的稳定架构决策 |
+| `assets/` | 专题文档引用的截图与验收对比证据 |
+| 根目录日期文档 | 专题问题分析、实施状态与历史验收记录；按文档内状态区分现行/历史 |
 
 ## 推荐阅读顺序
 
@@ -28,18 +26,16 @@
 
 ### 开发者 / 运维视角
 
-1. `architecture/系统架构文档.md` — 技术栈、双运行时、路由、数据流
-2. `architecture/Node-Java-职责边界.md` — Java/Node 详细职责与代理矩阵
+1. `architecture/系统架构文档.md` — 技术栈、模块概览；生产拓扑以目标环境现场核验为准
+2. `operations/部署指南.md` — 统一部署操作流程
 3. `CHANGELOG.md` — 本批次改了什么、要部署什么、上线前置
-4. `operations/部署指南.md` — 生产 ECS + Docker Compose 部署步骤
-5. `deployment/` — 前端部署与配置
+4. `DEPLOYMENT-NOTES.md` — 历史生产实测速查；执行前请对照统一部署指南
 
 ### AI 引擎开发者
 
-1. `component-generation/rules-and-optimization.md` ⭐⭐⭐⭐⭐ — 组件生成完整规范
-2. `component-generation/pipeline-nodes.md` — 管线节点文档
-3. `quality/` — 质量门禁与预览机制
-4. `operations/生成正确性根治方案.md` — 生成质量优化
+1. `component-generation/rules-and-optimization.md` — 组件生成规范（部分条款较旧，结合当前代码阅读）
+2. `2026-11-02-写盘前pass执行顺序总纲.md` — 写盘前 pass 与门禁顺序
+3. `2026-11-04-管线统一根治方案-v3-图表布局内容一体化.md` — 管线治理总方案；实施状态以文内更新和当前代码为准
 
 ## 配套文档速查
 
@@ -47,21 +43,18 @@
 |------|------|---------|
 | Agent Builder 产品说明 | `product/agent-builder/prd.md` | 产品经理 / 开发者 |
 | 管线监控 PRD（管理员看板） | `product/pipeline-monitoring/prd.md` | 产品经理 / 后端开发者 |
-| 系统架构文档 | `architecture/系统架构文档.md` | 开发者 / 架构师 |
-| 双运行时职责边界 | `architecture/Node-Java-职责边界.md` | 后端开发者 |
+| 系统架构概览 | `architecture/系统架构文档.md` | 开发者 / 架构师 |
 | 部署指南 | `operations/部署指南.md` | 运维 / 部署人员 |
 | 发布更新日志 🆕 | `CHANGELOG.md` | 运维 / 开发者 / 测试 |
 | 生产环境实况 | `DEPLOYMENT-NOTES.md` | 运维 |
-| 组件生成规范 ⭐ | `component-generation/rules-and-optimization.md` | AI 引擎开发者 |
-| Agent Builder PRD | `product/agent-builder/prd.md` | 产品经理 / 开发者 |
-| 质量门禁 | `quality/` | QA / 开发者 |
-| 前端部署 | `deployment/mvgo-frontend-deploy.md` | 前端开发 / 运维 |
+| 组件生成规范 | `component-generation/rules-and-optimization.md` | AI 引擎开发者 |
+| 质量门禁与专题验收 | 根目录日期专题记录；按各文档状态读取 | QA / 开发者 |
 
 ## Polyrepo 架构要点
 
 - **4 仓库独立**：frontend、backend-node、backend-java、docs
 - **API 契约**：当前前后端以实际接口约定为准
-- **Nginx 路由分发**：仅 `/api/progress`（SSE）直连 Node，其余 `/api` 经 Java（原生 CRUD 或代理 AI 管线）
+- **路由提示**：开发态 Vite 对 Java/Node 有显式路径分流；生产 `/api` 归属需以目标 ECS `docker exec nginx nginx -T` 实测为准。`/api/progress` 为 Node SSE 接口。
 
 ## 维护规则
 
@@ -70,7 +63,7 @@
 - **每次发布/待部署批次结束，在根目录 `CHANGELOG.md` 追加一节**（批次表 + 变更清单 + 上线前置 + 验收清单），不要把它塞进子目录
 - 文档中的代码路径使用项目根目录作为相对路径基准
 - 文档移动后同步更新相对链接和 README 索引
-- 每个专区目录包含独立的 README.md 导航文档
+- 修改目录结构、移动文档或改名后，同步更新现有索引与交叉引用；目前并非每个目录都有独立 README。
 
 ## 文档生命周期
 
@@ -80,9 +73,9 @@
 | 系统架构 | 永久 | 按需更新 |
 | 产品设计 | 1 年 | 产品上线后归档 |
 | 用户研究 | 6 个月 | 完成后归档 |
-| 周报汇报 | 3 个月 | 归档到 `../过时文档/` |
+| 阶段性汇报 / 历史专题 | 按需复核 | 先确认无现行引用及独有证据，再移至仓库外归档；保留源路径指针与映射 |
 
 ---
 
-**最后更新**: 2026-11-02  
-**变更记录**: 新增根目录 `CHANGELOG.md`（发布更新日志）并登记索引
+**最后核对**: 2026-11-11
+**变更记录**: 修正失效导航，标明专题文档与历史归档的维护方式

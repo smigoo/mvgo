@@ -227,3 +227,52 @@ export function stripLlmTailGarbageFromFiles(files, log) {
   }
   return { files: out, strippedFiles };
 }
+
+/**
+ * 🛡️ D1：DSML 工具标记行内剥离（2026-11-11 · e3ea6ac8 实锤）。
+ *
+ * 病灶：LLM（deepseek 通道）把自身的工具调用语法写进产物代码——
+ *   `</｜｜DSML｜｜ parameter>`、`<parameter name="new_string">`、
+ *   `｜｜DSML｜｜`（全角竖线变体）等标记行混在 script 内部
+ *   ⇒ SFC 编译 "Unterminated regular expression" ⇒ 整轮生成报废
+ *   （4 轮重试同死法：污染在采样里，重试不换采样就重复污染）。
+ *
+ * 与 stripLlmTailGarbage 的区别：那是「结构闭合点之后的尾部垃圾」；
+ * 本函数治「混在代码中间的标记行」——按行剥离含 DSML/工具标记 token 的行。
+ * 判据（确定性，宁滥勿缺——这些 token 不可能合法出现在 SFC/CSS 里）：
+ *   ① /｜｜DSML｜｜/（全角竖线包裹，含任意 DSML 变体）
+ *   ② /<parameter\s+name=/ 与 /<\/parameter>/
+ *   ③ /^<antThinking|^<antfunctional（同类工具标记家族）
+ * 行级剥离而非整文件拒绝：标记行周边的真代码保留，最大化 salvage。
+ *
+ * @param {Record<string, string>} files
+ * @param {(msg: string) => void} [log]
+ * @returns {{files: Record<string,string>, cleanedFiles: Array<{path:string, lines:number}>}}
+ */
+const DSML_MARKER_RE =
+  /｜｜DSML｜｜|<parameter\s+name=|<\/parameter>|^<antThinking|^<antfunctional/;
+
+export function stripDsmlToolMarkersFromFiles(files, log) {
+  const out = { ...files };
+  const cleanedFiles = [];
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !content) continue;
+    if (!/\.(?:vue|less|css|js|json)$/i.test(path)) continue;
+    const lines = content.split('\n');
+    const kept = [];
+    let removed = 0;
+    for (const line of lines) {
+      if (DSML_MARKER_RE.test(line)) {
+        removed += 1;
+        continue;
+      }
+      kept.push(line);
+    }
+    if (removed > 0) {
+      out[path] = kept.join('\n');
+      cleanedFiles.push({ path, lines: removed });
+      log?.(`🧹 D1 DSML 工具标记剥离: ${path}（-${removed} 行）`);
+    }
+  }
+  return { files: out, cleanedFiles };
+}

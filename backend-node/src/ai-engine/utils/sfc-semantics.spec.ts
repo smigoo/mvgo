@@ -74,3 +74,50 @@ const props = defineProps({
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// 🛡️ 连字符裸标识符（2026-11-11 · c-vehicle-monitor-4cf5135f 实锤）：
+//   `:class="c-vehicle-monitor-cardClass"` 旧提取正则认不出 ⇒ 门禁放行 ⇒
+//   Vue 编译为减法链 ⇒ ReferenceError ⇒ 卡片子树全灭。
+import { validateVueScriptSemantics, findHyphenatedTemplateRefs } from './sfc-semantics.js';
+
+describe('连字符裸标识符判据（模板绑定整值）', () => {
+  const SFC_BAD =
+    '<template><div :class="c-vehicle-monitor-cardClass">x</div></template>\n<script setup>\nconst props = defineProps({})\n</script>';
+  const SFC_OK_ARITH =
+    '<template><div :style="{ width: a - b }">x</div></template>\n<script setup>\nconst a = 1\nconst b = 2\n</script>';
+  const SFC_OK_PLAIN =
+    '<template><div :class="cardClass">x</div></template>\n<script setup>\nconst cardClass = "x"\n</script>';
+
+  it('阳性：指令绑定连字符标识符且段未声明 ⇒ 报 issue 并给出驼峰化指导', () => {
+    const r = validateVueScriptSemantics(SFC_BAD, 'package/components/StatCardItem.vue');
+    const hit = r.issues.find((s) => s.includes('连字符标识符'));
+    expect(hit).toBeTruthy();
+    expect(hit).toContain('c-vehicle-monitor-cardClass');
+    expect(hit).toContain('驼峰');
+  });
+
+  it('阴性①：连字符但各段均已声明（合法减法运算）⇒ 不报', () => {
+    const r = validateVueScriptSemantics(SFC_OK_ARITH, 'a.vue');
+    expect(r.issues.filter((s) => s.includes('连字符'))).toHaveLength(0);
+  });
+
+  it('阴性②：普通合法标识符绑定 ⇒ 不报', () => {
+    const r = validateVueScriptSemantics(SFC_OK_PLAIN, 'a.vue');
+    expect(r.issues.filter((s) => s.includes('连字符'))).toHaveLength(0);
+  });
+
+  it('插值形态 {{ X-Y }} 同样拦截', () => {
+    const tpl = '<template><div>{{ c-vehicle-monitor-cardClass }}</div></template>';
+    const r = validateVueScriptSemantics(
+      tpl + '\n<script setup>\nconst props = defineProps({})\n</script>',
+      'a.vue',
+    );
+    expect(r.issues.some((s) => s.includes('连字符'))).toBe(true);
+  });
+
+  it('findHyphenatedTemplateRefs 无 declared 时返回全部整值 token', () => {
+    expect(findHyphenatedTemplateRefs('<div :data-x="a-b">')).toEqual(['a-b']);
+    expect(findHyphenatedTemplateRefs('<div :data-x="ab">')).toEqual([]);
+  });
+});

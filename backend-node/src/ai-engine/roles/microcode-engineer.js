@@ -109,6 +109,7 @@ import {
 } from '../utils/figma-section-heights.js';
 import {
   buildSelectorChildCounts,
+  buildSelectorLayoutModes,
 } from '../utils/figma-layout-facts.js';
 import {
   collectLeafSections,
@@ -965,8 +966,24 @@ export class MicrocodeEngineer extends BaseAgent {
         if (_es(metaPath)) {
           const meta = JSON.parse(_rfs(metaPath, 'utf-8'));
           if (meta && meta.files && typeof meta.files === 'object') {
+            // 🛡️ A6（2026-11-11 · 68f9d3f2/95c3977c/5b978794 三实锤）：acceptance FAIL
+            // 判据命中的文件**不得从续跑白名单恢复**——此前重试轮把坏文件当「已完成
+            // 分块」原样复活，guidance 回灌形同虚设（effective=false 4 轮空转）。
+            // 文件集合由 graph 层 acceptance 检查写入（input._acceptanceFailFiles）。
+            const acceptanceFailFiles = new Set(
+              Array.isArray(input._acceptanceFailFiles) ? input._acceptanceFailFiles : [],
+            );
+            if (acceptanceFailFiles.size > 0) {
+              this.logger.warn('🛡️ A6 断点续跑：acceptance FAIL 文件不恢复（强制重新生成）', {
+                skipFiles: [...acceptanceFailFiles],
+              });
+            }
             let restoredCount = 0;
             for (const [relPath, entryRaw] of Object.entries(meta.files)) {
+              if (acceptanceFailFiles.has(relPath)) {
+                this.logger.warn(`🛡️ A6：跳过恢复 FAIL 文件（交由重新生成）: ${relPath}`);
+                continue;
+              }
               // 🛡️ P1-5：兼容旧单值格式（string）与新段数组格式，统一归一化后按 index 升序读取
               const segs = normalizeFileSegments(entryRaw).filter(
                 (s) => s.file,
@@ -1823,11 +1840,19 @@ export class MicrocodeEngineer extends BaseAgent {
 
         // 🆕 判断当前 chunk 是否需要重新生成
         let shouldRegenerate = false;
+        // 🛡️ A6b（2026-11-11 晚 · mc-max-1794410424120-4b27c0bd 实锤）：acceptance FAIL
+        //   定位文件同样**不得走 R12「已完成分块」磁盘恢复**——A6 只挡了续跑白名单恢复
+        //   （本方法第一段），R12 是第二条恢复通路；坏文件 chunk 在 meta.completed 里
+        //   ⇒ 每轮原样复活（占位组件四轮修不掉）。与 A6 同一文件集合（fail 条目的
+        //   file/files 由 graph 层归集写入 _acceptanceFailFiles）。
+        const _a6FailFiles = Array.isArray(input._acceptanceFailFiles)
+          ? input._acceptanceFailFiles
+          : [];
         if (isL0BRetry) {
           // 如果有明确的目标文件列表，检查当前 chunk 是否包含目标文件
           if (retryTargetFiles.length > 0) {
-            shouldRegenerate = (chunk.files || []).some((f) =>
-              retryTargetFiles.includes(f),
+            shouldRegenerate = (chunk.files || []).some(
+              (f) => retryTargetFiles.includes(f) || _a6FailFiles.includes(f),
             );
           } else {
             // 全局重试：重新生成所有代码分块（declare.json 除外）
@@ -1836,6 +1861,10 @@ export class MicrocodeEngineer extends BaseAgent {
             );
             shouldRegenerate = isCodeChunk;
           }
+        } else if (_a6FailFiles.length > 0) {
+          // 非 L0B 重试轮（acceptance FAIL 回灌）：仅含 FAIL 定位文件的 chunk 强制重生成，
+          // 其余 chunk 照旧断点恢复（不扩大重生成面，避免修复轮成本爆炸）。
+          shouldRegenerate = (chunk.files || []).some((f) => _a6FailFiles.includes(f));
         }
 
         if (_es(_chunkMetaPath) && !shouldRegenerate) {
@@ -7813,6 +7842,23 @@ export class MicrocodeEngineer extends BaseAgent {
     const isRevision = hasCritiques || hasPreviousCritiques;
     const action = isRevision ? '修订' : '生成';
 
+    // 🛡️ 重试换采样（2026-11-11 · e3ea6ac8 实锤：4 轮重试同死法——DSML 标记污染
+    //   在 temperature=0 的确定性采样下每轮复现同样输出。修订轮按 critique 轮次
+    //   阶梯抬温，打破同分布采样；首轮/修订完成后恢复构造值，不影响其它任务。）
+    if (isRevision && typeof this.temperature === 'number') {
+      const retryRound = Math.min(previousCritiques?.length || 1, 3);
+      const bumped = Math.min(0.2 * retryRound, 0.6);
+      if (bumped > this.temperature) {
+        this.logger.info(`🎯 重试换采样：temperature ${this.temperature} → ${bumped}（修订轮 ${retryRound}）`, {
+          componentName,
+        });
+        this.temperature = bumped;
+      }
+    } else if (!isRevision && this.temperature > 0) {
+      // 首次生成：恢复基线温度（上一任务可能抬高过实例状态）
+      this.temperature = 0;
+    }
+
     this.logger.info(`开始执行代码${action}`, {
       componentName,
       stage,
@@ -7882,6 +7928,9 @@ export class MicrocodeEngineer extends BaseAgent {
         docAnalysis, //S8: 传递需求文档分析产物
         isRevision, //  标记修订模式（部分修订判断依据）
         outputPath, //  部分修订时从磁盘保留未变更文件
+        // 🛡️ A6（2026-11-11）：acceptance FAIL 文件清单——generateCode 断点续跑据此跳过
+        // 恢复这些文件（否则重试轮假修：坏文件从续跑白名单原样复活）
+        _acceptanceFailFiles: params._acceptanceFailFiles || [],
         targetFiles, //  仅重做目标文件
         reviseTarget, //  修订目标类别
         ctx, //  1-1 接入：生成上下文值对象（档位/类型/资源映射）
@@ -9224,6 +9273,12 @@ export default declareInfo
           figmaNodeData,
           alignedSections,
         );
+        // 🛡️ P0-1（2026-11-11 交接文档 L4）：layoutMode 真值表——与 selectorChildCounts
+        //   同源对称（figma-layout-facts.js 单一来源），供规则⑤ fallback 双向闸。
+        const selectorLayoutModes = buildSelectorLayoutModes(
+          figmaNodeData,
+          alignedSections,
+        );
         
         registerBuiltinFixRules(fixPipeline, this, {
           componentName,
@@ -9253,6 +9308,8 @@ export default declareInfo
           ),
           // 🛡️ 2026-09-21 治本修复：子元素数量映射（flex 注入判断依据）
           selectorChildCounts,
+          // 🛡️ P0-1（2026-11-11）：layoutMode 真值映射（flex 注入双向闸依据）
+          selectorLayoutModes,
           // 🛡️ R1-2：布局事实（fix-section-heights 规则②豁免依据，退役命名枚举）
           rootLayoutFacts,
           input: { subComponentPlan: subPlan, generationInput },

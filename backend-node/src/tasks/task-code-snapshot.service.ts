@@ -13,6 +13,7 @@ import { createHash, randomUUID } from 'crypto';
 import { dirname, isAbsolute, posix, resolve, sep } from 'path';
 import { tempComponentsDir, customComponentsDir } from '../config/backend-root';
 import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
+import { validateVueSfc } from '../ai-engine/utils/sfc-syntax-validation.js';
 
 export type TaskCodeSnapshotStatus = 'candidate' | 'validating' | 'last-good' | 'rejected' | 'partial';
 
@@ -297,6 +298,16 @@ export class TaskCodeSnapshotService {
       if (!existsSync(absolutePath)) return false;
       const content = readFileSync(absolutePath, 'utf-8');
       if (!/<template[\s>]/.test(content)) return false;
+      // 🔴 2026-11-11（真机 mc-lite-1794398124528-997fd90f）：必须传**绝对路径**。
+      // 传相对路径 'package/index.vue' 会走 validateVueSfc 的「内存阶段」分支，把相对
+      // @import 剥掉，连带剥掉 theme-vars.less 的变量定义 ⇒ 报 `variable @fontSize is
+      // undefined` 假阳性 ⇒ 本 revision 被判不可渲染 ⇒ resolvePreviewRevision 返回 null
+      // ⇒ readPreviewFile/readFile 抛「结构无效，且没有可回退的有效版本」⇒ 前端「查看代码」
+      // 显示 Request failed with status code 422（curl 实测复现）。
+      // revision 目录已落盘且 resources/styles 齐全，绝对路径模式会完整编译真实 @import
+      // 依赖链：这不是放宽判据，反而比剥 import 的内存模式更严格。
+      const sfcValidation = validateVueSfc(content, absolutePath);
+      if (!sfcValidation.valid) return false;
       return this.isVueImportClosureComplete(revisionDir, manifest, 'package/index.vue');
     } catch {
       return false;
@@ -329,16 +340,16 @@ export class TaskCodeSnapshotService {
   }
 
   /**
-   * 解析预览应使用的 revision：若请求 revision 不完整（无 <template>），且存在
-   * 可渲染的 last-good，则回退到 last-good，避免不完整候选导致预览 404。
+   * 解析预览应使用的 revision：请求版本不可渲染时回退到可渲染的 last-good；
+   * 若不存在可用版本则返回 null，调用方必须给出明确错误，不得继续读取畸形 SFC。
    */
-  private resolvePreviewRevision(sessionId: string, revision: string): string {
+  private resolvePreviewRevision(sessionId: string, revision: string): string | null {
     if (this.isRenderableRevision(sessionId, revision)) return revision;
     const lastGood = this.getLastGoodManifest(sessionId);
     if (lastGood && this.isRenderableRevision(sessionId, lastGood.revision)) {
       return lastGood.revision;
     }
-    return revision;
+    return null;
   }
 
   /**
@@ -398,6 +409,9 @@ export class TaskCodeSnapshotService {
 
   readPreviewFile(sessionId: string, revision: string, rawPath: string): Buffer {
     const effective = this.resolvePreviewRevision(sessionId, revision);
+    if (!effective) {
+      throw new Error('该代码快照结构无效，且没有可回退的有效版本');
+    }
     const manifest = this.getManifest(sessionId, effective);
     if (!['candidate', 'validating', 'last-good', 'partial'].includes(manifest.status)) {
       throw new Error('该代码快照未通过预览状态校验');
@@ -405,10 +419,29 @@ export class TaskCodeSnapshotService {
     return this.readFileContentOrFallback(sessionId, effective, rawPath);
   }
 
+  /**
+   * 🛡️ 2026-11-11 治本：查看代码 = 纯文本读取，与「预览可渲染」判据解耦。
+   *
+   * 病灶：readFile 与 readPreviewFile 共用 resolvePreviewRevision（后者要求
+   * validateVueSfc 完整编译 LESS @import 链 + Vue import 闭包）。max 历史产物的
+   * resources/styles/index.less 常带生成期语法损坏（裸属性、回答正文混入 CSS），
+   * 于是「点开看源码」也被判「结构无效，且没有可回退的有效版本」→ 前端 422。
+   * 31 个真机 max 会话复现，其中 18 个在旧判据下本可读。
+   *
+   * 解耦后：
+   *  - readPreviewFile（controller 的 preview=1，预览 runtime 唯一取源）保持严格判据
+   *    与 manifest.status 校验，坏产物仍不进预览，安全性不变；
+   *  - readFile 只校验 manifest 合法 + 文件在清单内 + 路径不越界 + 文件类型 + 完整性
+   *    （均由 getManifest / readFileContentOrFallback 内部承担），不做语法判定；
+   *  - 不再静默回退到 last-good：查看哪个 revision 就读哪个 revision 的文本，
+   *    消除「选 A 版本却显示 B 版本代码」的语义错位。
+   *
+   * 不修产物、不加白名单、不降低预览判据。历史 .less 语法损坏属生成期写盘门禁/
+   * 自愈链的独立根治项，本次不碰。
+   */
   readFile(sessionId: string, revision: string, rawPath: string): Buffer {
-    const effective = this.resolvePreviewRevision(sessionId, revision);
-    const manifest = this.getManifest(sessionId, effective);
-    return this.readFileContentOrFallback(sessionId, effective, rawPath);
+    this.getManifest(sessionId, revision);
+    return this.readFileContentOrFallback(sessionId, revision, rawPath);
   }
 
   /**

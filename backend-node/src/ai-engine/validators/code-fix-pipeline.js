@@ -28,6 +28,14 @@ export const FIX_PHASE = {
   STYLE: 'style',
   /** 精修：插槽保障、头部结构等 */
   POLISH: 'polish',
+  /**
+   * 交互：tab 交互注入等**必须在所有结构/锚点注入之后**的规则（2026-11-11 · ce3e3b27 实锤）。
+   * 背景：S4（tab 交互注入）与 S1（inject-section-anchors）同处 POLISH，而阶段内按**注册顺序**
+   * 执行 —— S1 注册在后 ⇒ S4 拿到的是「尚未注入 data-section-id」的文件集 ⇒ noCarrier=1 永不生效，
+   * 而下游 acceptance 在管线之后看到 S1 补好的锚点 ⇒ 报「承载于 X.vue 但无切换绑定」。
+   * 两者看的不是同一份文件 = 该模块头部自述的「模式A 修复时机错位」。独立尾部阶段把依赖显式化。
+   */
+  INTERACTION: 'interaction',
 };
 
 const PHASE_ORDER = [
@@ -37,6 +45,8 @@ const PHASE_ORDER = [
   FIX_PHASE.RESOURCE,
   FIX_PHASE.STYLE,
   FIX_PHASE.POLISH,
+  // 交互永远最后：依赖 POLISH（尤其 inject-section-anchors）产出的 data-section-id 锚点
+  FIX_PHASE.INTERACTION,
 ];
 
 /**

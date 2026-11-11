@@ -3120,12 +3120,26 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
       if (isMixinBlock) {
         return whole;
       }
-      
-      // 🛡️ 2026-09-21 治本修复（c-device-monitor-bd796f8b 实锤）：
-      //   原逻辑只看 CSS 属性名就强制补 display:flex，不判断元素类型和子元素数量。
-      //   导致叶子节点（img/span/单图标 wrapper）被注入 flex → 浏览器忽略无效属性。
-      //   治本：从 Figma 节点树提取每个 CSS 选择器对应的子元素数量，
-      //   子元素 ≤1 不加 flex（叶子节点或单元素容器），≥2 才注入 flex。
+
+      // 🛡️ P0-1（2026-11-11 交接文档 L4）：layoutMode 真值双向闸（取代「子节点数」单启发式）。
+      //   truth=HORIZONTAL/VERTICAL ⇒ 注入用真值方向，且不受 childCount≤1 启发式拦（真值优先）；
+      //   truth=NONE ⇒ Figma 显式声明非自动布局 ⇒ 拒绝注入（flex 专属属性可以是 LLM 垃圾，
+      //   a2fcdff7 vendor-name span 被 `{'--',''}` 篇幅注入 display:flex 文字重叠实锤）；
+      //   无 truth ⇒ 维持既有 childCount 启发式（54c256c7 兜底不回退）。
+      const layoutModes = ctx?.selectorLayoutModes || null;
+      let truthMode = null;
+      if (layoutModes) {
+        for (const m of String(head).matchAll(/\.([A-Za-z][\w-]*)/g)) {
+          if (layoutModes[m[1]] !== undefined) {
+            truthMode = layoutModes[m[1]];
+            break;
+          }
+        }
+      }
+      if (truthMode === 'NONE') {
+        return whole;
+      }
+
       const childCounts = ctx?.selectorChildCounts || null;
       let childCount = null;
       if (childCounts) {
@@ -3136,21 +3150,29 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
           }
         }
       }
-      
+
       const hasFlexGrow = /(?:^|[^@\w-])flex\s*:\s*\d+(?:\.\d+)?\s+1\s+0\b/.test(body);
       const hasFlexOnly =
         /(?:^|[^@\w-])(?:flex-direction|align-items|justify-content|align-content|gap|flex-wrap)\s*:/.test(
           body,
         );
-      
-      // 子元素 ≤1 不加 flex（叶子节点或单元素容器）
-      if (childCount !== null && childCount <= 1) {
+
+      // 子元素 ≤1 不加 flex（叶子节点或单元素容器）；truth 自动布局时真值优先于该启发式
+      if (
+        truthMode !== 'HORIZONTAL' &&
+        truthMode !== 'VERTICAL' &&
+        childCount !== null &&
+        childCount <= 1
+      ) {
         return whole;
       }
-      
+
       if ((hasFlexGrow || hasFlexOnly) && !/display\s*:/i.test(body)) {
         if (/flex-direction\s*:/.test(body)) {
           newBody = `\n  display: flex;${body}`;
+        } else if (truthMode === 'HORIZONTAL' || truthMode === 'VERTICAL') {
+          // 真值方向优先于「内容多数横向」兜底（418c3310 TabsSection 竖排实锤）
+          newBody = `\n  display: flex;\n  flex-direction: ${truthMode === 'VERTICAL' ? 'column' : 'row'};${body}`;
         } else {
           newBody = `\n  display: flex;\n  flex-direction: row;${body}`;
         }

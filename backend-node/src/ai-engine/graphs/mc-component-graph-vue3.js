@@ -25,6 +25,7 @@ import { LayoutRefiner } from '../roles/layout-refiner.js';
 import { StyleRefiner } from '../roles/style-refiner.js';
 import { LayoutStyleRefiner } from '../roles/layout-style-refiner.js';
 import { postRefineResourceImportGuard } from '../utils/resource-import-guard.js';
+import { PlanningGateError } from '../utils/section-plan-coverage.js';
 // P2 收编：saveCheckpoint 原在本文件重复实现一份，与 phase2 graph 逐字节相同 → 统一到 utils
 import { saveCheckpoint as saveCheckpointShared } from '../utils/save-checkpoint.js';
 import { Vue3Engineer } from '../roles/vue3-engineer.js';
@@ -2431,6 +2432,19 @@ export function createPhase2Graph(config = {}) {
       });
       return { subComponentPlan: finalPlan };
     } catch (error) {
+      // 🛡️ A5（2026-11-11 · 68f9d3f2 实锤，与 mc-component-graph-phase2 同步修）：门禁判定类
+      // 错误不得降级——降级 = 吞掉拦截 → 空规划自由裁量 → 空壳产物。
+      if (error instanceof PlanningGateError || error?.code === 'SECTION_COUNT_RATIO_BLOCKED') {
+        logger.error('🚫 段数比门禁阻断，不降级（规划结构爆炸须任务失败/重新规划）', {
+          error: error.message,
+        });
+        state.onProgress?.({
+          stage: '子组件规划',
+          message: `🚫 规划结构爆炸被门禁阻断: ${error.message}`,
+          status: 'error',
+        });
+        throw error;
+      }
       // 规划失败不能阻断后续流程，降级为"不强拆"，让 LLM 自由裁量
       logger.warn('子组件规划失败，降级为不强拆', { error: error.message });
       state.onProgress?.({
