@@ -388,5 +388,5 @@ wss.on("connection", (ws) => {
 
 server.listen(PORT, () => {
   console.log(`WebSocket relay listening on ws://localhost:${PORT}`);
-  console.log("Open the mv-figma 文件自动整理 plugin in Figma and join a channel.");
+  console.log("Open the Figma节点整理辅助工具 plugin in Figma and join a channel.");
 });

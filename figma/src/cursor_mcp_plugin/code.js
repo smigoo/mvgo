@@ -1,4 +1,4 @@
-// mv-figma 文件自动整理插件
+// Figma节点整理辅助工具
 // 仅保留「AI 自动扫描图层 + 批量规范重命名」所需逻辑，去除通用 MCP 命令库与统计上报。
 
 const state = { serverPort: 3055 };
@@ -2476,7 +2476,8 @@ function qualityDiffText(before, after) {
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
-const SCHEMA_VERSION = "20261110.36";
+// v20261111.37：插件改名为「Figma节点整理辅助工具」，契约内容不变，仅随包升版便于核对重导入。
+const SCHEMA_VERSION = "20261110.37";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",

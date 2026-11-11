@@ -1,5 +1,5 @@
 #!/bin/bash
-# 打包给同事用的 mv-figma 文件自动整理插件 zip（只挑必要文件，含 node_modules/ws+undici 免联网）
+# 打包给同事用的 Figma节点整理辅助工具 zip（只挑必要文件，含 node_modules/ws 免联网）
 # 用法: ./pack.sh   产出: mv-figma-plugin-YYYYMMDD.zip
 set -e
 cd "$(dirname "$0")"

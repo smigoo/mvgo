@@ -1,4 +1,4 @@
-# mv-figma 文件自动整理插件 · 使用文档
+# Figma节点整理辅助工具 · 使用文档
 
 > 适用对象：自己测试 / 打包发给同事使用
 > 核心能力：在 Figma 里**选中一个框架 → 点一下 → AI 自动按规范批量重命名、整理图层**，全程不离开 Figma。
@@ -55,7 +55,9 @@ mv-figma-plugin/
    ```
    src/cursor_mcp_plugin/manifest.json
    ```
-4. 导入成功后，在「开发」子菜单里就能看到 **「mv-figma文件自动整理插件」**。
+4. 导入成功后，在「开发」子菜单里就能看到 **「Figma节点整理辅助工具」**。
+
+> 插件名由 `manifest.json` 的 `name` 决定。若菜单里仍显示旧名「mv-figma文件自动整理插件」，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.37），Figma 会缓存旧清单；插件 UI 底部版本号应为 `v20261110.37`。
 
 > 插件清单已声明可在普通编辑模式和 **Dev Mode（开发模式 inspect 面板）** 下运行。Dev Mode 下它会出现在右侧 inspect 面板里。
 
@@ -77,7 +79,7 @@ node socket-server.mjs
 看到终端输出即成功：
 ```
 WebSocket relay listening on ws://localhost:3055
-Open the mv-figma 文件自动整理 plugin in Figma and join a channel.
+Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 ```
 
 > 保持这个终端窗口开着（Ctrl+C 停止）。每次用插件前都要先启动它。
@@ -86,7 +88,7 @@ Open the mv-figma 文件自动整理 plugin in Figma and join a channel.
 
 ## 五、在插件里连接 + 配置 AI
 
-1. Figma 里 **运行插件**（开发菜单 → mv-figma文件自动整理插件）。
+1. Figma 里 **运行插件**（开发菜单 → Figma节点整理辅助工具）。
 2. 默认在 **「整理」** Tab。
 3. **连接服务**：端口填 `3055` → 点「连接服务」→ 状态变绿「已连接本地服务（AI 代理已启用）」。
 4. **AI 设置**（OpenAI 兼容接口），填三项：
