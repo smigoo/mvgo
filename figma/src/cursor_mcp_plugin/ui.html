@@ -1268,10 +1268,11 @@
       // UI 就绪后主动去向 code.js 要一次选区（保证响应被收到，避免早期广播被丢）
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
-      // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      // v20261111.37：插件显示名统一为「Figma节点整理辅助工具」（manifest / title / h1 / 关于页）。
-      const PLUGIN_VERSION = "20261110.37";
-      try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
+      // 插件版本标签：仅展示版本与本次最后更新时间。
+      // v20261111.38：版本尾注移除重导入提示，括号内改为「最后更新于 …」。
+      const PLUGIN_VERSION = "20261110.38";
+      const PLUGIN_UPDATED = "2026-11-11 13:07";
+      try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（最后更新于 " + PLUGIN_UPDATED + "）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
       window.addEventListener("beforeunload", () => {

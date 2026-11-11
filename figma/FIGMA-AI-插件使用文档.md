@@ -57,7 +57,7 @@ mv-figma-plugin/
    ```
 4. 导入成功后，在「开发」子菜单里就能看到 **「Figma节点整理辅助工具」**。
 
-> 插件名由 `manifest.json` 的 `name` 决定。若菜单里仍显示旧名「mv-figma文件自动整理插件」，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.37），Figma 会缓存旧清单；插件 UI 底部版本号应为 `v20261110.37`。
+> 插件名由 `manifest.json` 的 `name` 决定。若菜单里仍显示旧名「mv-figma文件自动整理插件」，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.38），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.38（最后更新于 2026-11-11 13:07）`。
 
 > 插件清单已声明可在普通编辑模式和 **Dev Mode（开发模式 inspect 面板）** 下运行。Dev Mode 下它会出现在右侧 inspect 面板里。
 
