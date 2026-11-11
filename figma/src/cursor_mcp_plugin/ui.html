@@ -724,41 +724,131 @@
         return null;
       }
 
-      async function llmRequest(cfg, messages, opts = {}) {
-        const payload = {
-          baseUrl: cfg.baseUrl,
-          apiKey: cfg.apiKey,
-          model: opts.modelOverride || cfg.model,
-          messages,
-          temperature: opts.temperature != null ? opts.temperature : 0.2,
-          ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
-          ...(opts.disableThinking ? { reasoning_effort: "none", thinking: { type: "disabled" } } : {}),
-          stream: opts.stream !== false,
+      // ===== v20261111.36 · 多模型「关思考」方言（对齐 mvgo backend-node/src/ai-engine/utils/model-config.js）=====
+      // 旧实现写死 reasoning_effort:"none" + thinking:{type:"disabled"}，对「始终思考」的 GLM 会 400：
+      //   「该模型始终思考，不支持关闭思考；请使用 low、high 或 max」。
+      // mvgo 三条结论：① 关思考参数按【模型族 / 网关】分流（静态路由，模型族分支恒优先）；
+      // ② 有序候选 + 失败顺延（同模型过不同网关方言不同）；
+      // ③ 400「不支持关闭思考」自动降级 thinking:{type:"low"}（config-test.service.ts:114 / :359）。
+      const THINKING_ALWAYS_RE = /不支持关闭思考|始终思考|always\s*think|请使用\s*low|low[、,]\s*high|thinking[^\n]{0,40}type[^\n]{0,10}low/i;
+      const THINKING_REJECT_RE = /不支持关闭思考|始终思考|always\s*think|thinking|reasoning_effort|enable_thinking|chat_template_kwargs|low[、,]\s*high|400\s*upstream/i;
+      const _thinkingDialectCache = new Map();   // "model|host" → 实测生效方言
+      const _thinkingDialectFailed = new Set();  // "model|host|方言JSON" → 已失败，后续跳过
+
+      function thinkingHost(baseUrl) {
+        try { return new URL(String(baseUrl || "")).host.toLowerCase(); }
+        catch (e) { return String(baseUrl || "").toLowerCase(); }
+      }
+      function thinkingKey(model, baseUrl) {
+        return String(model || "").toLowerCase() + "|" + thinkingHost(baseUrl);
+      }
+      // 静态路由：与 mvgo _staticThinkingOffRoute 同序（deepseek 优先于 microvideo 网关子句）。
+      function thinkingOffRoute(model, baseUrl) {
+        const m = String(model || "").toLowerCase().trim();
+        const u = String(baseUrl || "").toLowerCase().trim();
+        if (m.indexOf("deepseek") >= 0) return { thinking: { type: "disabled" } };
+        if (m.indexOf("qwen") >= 0 || u.indexOf("dashscope") >= 0 || u.indexOf("microvideo") >= 0) return { enable_thinking: false };
+        if (/^kimi/.test(m) || (u.indexOf("lkeap") >= 0 && m.indexOf("kimi") >= 0)) return { thinking: { type: "disabled" } };
+        if (m.indexOf("hunyuan") >= 0 || m.indexOf("hy4") >= 0) return { enable_thinking: false };
+        if (m.indexOf("gemini") >= 0 || u.indexOf("generativelanguage") >= 0 || u.indexOf("googleapis") >= 0) return { thinking: { level: "off" } };
+        if (m.indexOf("glm") >= 0 || u.indexOf("bigmodel") >= 0 || u.indexOf("zhipu") >= 0) return { enable_thinking: false };
+        if (m.indexOf("doubao") >= 0 || u.indexOf("volces") >= 0) return { thinking: { type: "disabled" } };
+        if (u.indexOf("vllm") >= 0 || u.indexOf("featherless") >= 0 || u.indexOf("openrouter") >= 0) return { chat_template_kwargs: { enable_thinking: false } };
+        return {};  // 未知模型不带任何思考参数，避免未知字段触发 400
+      }
+      function thinkingOffCandidates(model, baseUrl) {
+        const k = thinkingKey(model, baseUrl);
+        const out = [], seen = new Set();
+        const push = function (p) {
+          const s = JSON.stringify(p);
+          if (seen.has(s)) return;
+          seen.add(s);
+          if (_thinkingDialectFailed.has(k + "|" + s)) return;
+          out.push(p);
         };
+        push(thinkingOffRoute(model, baseUrl));
+        push({ enable_thinking: false });
+        push({ thinking: { type: "disabled" } });
+        push({ chat_template_kwargs: { enable_thinking: false } });
+        push({ reasoning: { enabled: false } });
+        // 「始终思考」模型关不掉：降到最低思考强度（mvgo config-test 同款降级）。
+        // 不同网关把强度写在 thinking.type 或 reasoning_effort，两种都试、绝不混发。
+        push({ thinking: { type: "low" } });
+        push({ reasoning_effort: "low" });
+        push({});  // 最后兜底：完全不带思考参数
+        return out.length ? out : [{}];
+      }
+
+      async function llmFetch(cfg, payload) {
         if (state.connected && state.serverPort) {
-          const proxyUrl = "http://localhost:" + state.serverPort + "/llm-proxy";
-          const resp = await fetch(proxyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+          return fetch("http://localhost:" + state.serverPort + "/llm-proxy", {
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          if (!resp.ok) {
-            const raw = (await resp.text()).slice(0, 2000);
-            throw new Error("本地代理错误 " + resp.status + "：" + extractErrorText(raw));
-          }
-          return await readLLMResponse(resp);
         }
         const url = cfg.baseUrl.replace(/\/+$/, "") + "/chat/completions";
-        const resp = await fetch(url, {
+        return fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.apiKey },
           body: JSON.stringify(payload),
         });
-        if (!resp.ok) {
-          const raw = (await resp.text()).slice(0, 2000);
-          throw new Error("AI 接口错误 " + resp.status + "：" + extractErrorText(raw));
+      }
+
+      async function llmRequest(cfg, messages, opts = {}) {
+        const model = opts.modelOverride || cfg.model;
+        const off = opts.disableThinking === true;
+        const key = thinkingKey(model, cfg.baseUrl);
+        const cached = off ? _thinkingDialectCache.get(key) : null;
+        const candidates = off ? (cached ? [cached] : thinkingOffCandidates(model, cfg.baseUrl)) : [{}];
+        const base = {
+          baseUrl: cfg.baseUrl,
+          apiKey: cfg.apiKey,
+          model: model,
+          messages,
+          temperature: opts.temperature != null ? opts.temperature : 0.2,
+          ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
+          stream: opts.stream !== false,
+        };
+        let lastErr = null;
+        for (let i = 0; i < candidates.length; i++) {
+          const params = candidates[i];
+          const payload = Object.assign({}, base, params);
+          const resp = await llmFetch(cfg, payload);
+          if (resp.ok) {
+            const data = await readLLMResponse(resp);
+            const msg = (data && data.choices && data.choices[0] && data.choices[0].message) || {};
+            // 「思考烧光预算」自愈（mvgo config-test.service.ts:428）：正文空 + 有 reasoning_content
+            // ⇒ 思考没真正关掉，顺延下一方言重试，而不是把空内容交给上层报「AI 返回为空」。
+            if (off && !String(msg.content || "").trim() && String(msg.reasoning_content || "").trim()
+                && i < candidates.length - 1) {
+              _thinkingDialectFailed.add(key + "|" + JSON.stringify(params));
+              continue;
+            }
+            if (off) {
+              _thinkingDialectCache.set(key, params);
+              // 已有实测生效方言（权威结论）→ 清掉本次试错留下的失败标记，
+              // 避免一次网络抖动把该模型的首选方言在整个插件会话里永久毒化。
+              for (const fk of Array.from(_thinkingDialectFailed)) {
+                if (fk.indexOf(key + "|") === 0) _thinkingDialectFailed.delete(fk);
+              }
+            }
+            return data;
+          }
+          const raw = (await resp.text().catch(function () { return ""; })).slice(0, 2000);
+          const err = new Error(
+            (state.connected && state.serverPort ? "本地代理错误 " : "AI 接口错误 ") + resp.status + "：" + extractErrorText(raw)
+          );
+          lastErr = err;
+          // 只对联想到「思考参数」的 4xx/5xx 顺延；Key 错误 / 额度 / 限流等原样抛出，不做无效重试。
+          if (!off || i >= candidates.length - 1 || !THINKING_REJECT_RE.test(raw)) break;
+          _thinkingDialectFailed.add(key + "|" + JSON.stringify(params));
+          // 上游明确「始终思考」→ 直接跳到 low，跳过其余关闭方言（省掉多次必然失败的试错）。
+          if (THINKING_ALWAYS_RE.test(raw)) {
+            const lowIdx = candidates.findIndex(function (c) { return c.thinking && c.thinking.type === "low"; });
+            if (lowIdx > i) i = lowIdx - 1;
+          }
         }
-        return await readLLMResponse(resp);
+        throw lastErr || new Error("AI 请求失败（未获得响应）");
       }
 
       // 流式/普通响应统一解析：SSE 时聚合 delta.content，普通 JSON 直接解析
@@ -1179,7 +1269,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.35";
+      const PLUGIN_VERSION = "20261110.36";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存

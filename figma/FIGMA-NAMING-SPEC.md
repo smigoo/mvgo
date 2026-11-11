@@ -1,4 +1,4 @@
-# Figma 节点命名规范 / 结构契约（v20261110.35）
+# Figma 节点命名规范 / 结构契约（v20261110.36）
 
 > **用途**：mv-figma 插件 → 「结构契约 → mvgo」→ mvgo 生成管线（vue3 / microcode）。
 > **定位**：插件输出的是「节点名 + 缩进层级」的纯文本树，不含几何、颜色、资源二进制。本文件定义每个名字**应该生成什么代码**，供管线解析、校验、注入 prompt。
@@ -271,6 +271,7 @@ Figma @技术栈 锚点契约  >  用户补充需求段（本规范 / 契约文�
 | **.32** | **root 背景层 z-order 归一化**：所有 root 直属 `bg-*` 装饰（含局部卡片底 / 分隔线）恒排在 `slot-con` 之前、全屏毛玻璃恒 `index 0`、`header` 在最上层；修复 .31 因深色卡片底盖住 `section-02-info` 文字的视觉回归。命名体系不变，仅约束绘制顺序。教训：节点 `absoluteBoundingBox` 全部不变 ≠ 视觉等价，必须显式校验 z-order |
 | .33 / .34 | UI 收敛（只显示两个开关）与接口设置恢复平铺，契约语义不变 |
 | **.35** | **三项确定性治本**：① **P0 Auto Layout 护栏** —— `organizeLayout` / `sortSlotConChildren` 两处 y 降序 `appendChild` 在 `layoutMode !== NONE` 的 FRAME 上跳过；教训：**普通 Group 的 children 是 z-order，Auto Layout FRAME 的 children 是视觉坐标**，在列表 FRAME 上重排会把 6 行整体倒序（2:8858 实测 51.7036% 视觉回归）。② **P1 紧凑面板切带** —— 早退阈值 `kids0.length < 4` → `< 2`，并在 `detectBands < 2` 时按【自带容器边界】兜底切出 `section-NN-*`；只改名不建组，53:31607 的 6 带场景不受影响。③ **P2 tab 徽标归一化** —— `normalizeTabBadges` 零 token 把「纯色底 + 纯数字」判为 `badge-count-NN`、写 `mvTabBadge`、契约行尾标 `[tab:xxx]`；`badge-` 进语义白名单，历史 `icon-*` 合并组改名 `badge-group-*`。硬约束：不 reparent / 不建组 / 不动 z-order |
+| **.36** | **契约语义不变，仅 AI 请求层**：对齐 mvgo `model-config.js` / `config-test.service.ts`，把写死的 `reasoning_effort:"none" + thinking:{type:"disabled"}` 换成按模型族/网关的关思考方言路由；上游 400「始终思考，不支持关闭思考」自动降级 `thinking:{type:"low"}` / `reasoning_effort:"low"`，生效方言按 `模型|网关` 缓存；本地代理白名单透传全部方言字段。命名、契约头、结构切分均未改动 |
 
 ---
 

@@ -116,7 +116,16 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "请求体不是合法 JSON" }));
       return;
     }
-    const { baseUrl, apiKey, model, messages, temperature = 0.2, max_tokens, reasoning_effort, thinking } = cfg;
+    const { baseUrl, apiKey, model, messages, temperature = 0.2, max_tokens } = cfg;
+    // v20261111.36：透传全部「关思考」方言参数（对齐 mvgo model-config.js 的 4 种形态）。
+    // 旧版只透传 reasoning_effort / thinking，会把 enable_thinking / reasoning /
+    // chat_template_kwargs 静默丢掉 ⇒ 插件端按模型族分流后代理层丢参数，思考仍关不掉。
+    // 白名单透传，不允许任意字段注入上游。
+    const THINKING_PARAM_KEYS = ["reasoning_effort", "thinking", "enable_thinking", "reasoning", "chat_template_kwargs"];
+    const thinkingParams = {};
+    for (const k of THINKING_PARAM_KEYS) {
+      if (cfg[k] !== undefined && cfg[k] !== null) thinkingParams[k] = cfg[k];
+    }
     if (!baseUrl || !apiKey || !model || !Array.isArray(messages)) {
       res.writeHead(400, { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "缺少 baseUrl / apiKey / model / messages" }));
@@ -129,9 +138,9 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const target = new URL(baseUrl.replace(/\/+$/, "") + "/chat/completions");
-      const payload = JSON.stringify({ model, temperature, ...(max_tokens ? { max_tokens } : {}), ...(reasoning_effort ? { reasoning_effort } : {}), ...(thinking ? { thinking } : {}), messages });
+      const payload = JSON.stringify({ model, temperature, ...(max_tokens ? { max_tokens } : {}), ...thinkingParams, messages });
       // 分析日志（请求摘要，绝不打印 apiKey）
-      console.log(`[llm-proxy] 请求: model=${model} messages=${messages.length} body=${payload.length}字节 (key 已隐藏)${reasoning_effort ? " | reasoning_effort=" + reasoning_effort : ""}${thinking ? " | thinking=" + JSON.stringify(thinking) : ""}`);
+      console.log(`[llm-proxy] 请求: model=${model} messages=${messages.length} body=${payload.length}字节 (key 已隐藏) | thinkingParams=${JSON.stringify(thinkingParams)}`);
 
       // 错误归类提示（连接层）
       const classify = (err) => {
