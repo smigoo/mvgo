@@ -238,6 +238,7 @@ figma.ui.onmessage = async (msg) => {
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
           slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
+          blurBackdropPinned: 0, bgProtected: 0, imgContentNamed: 0, sortPinned: 0,
           sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
           sectionContainersRenamed: 0, sectionGroupFailed: 0,
         };
@@ -371,6 +372,7 @@ figma.ui.onmessage = async (msg) => {
           slotConOutside: 0, slotConFailed: 0,
           subHeadersDemoted: 0, subSlotConsDemoted: 0,
           slotSorted: 0, slotSortPinned: 0, slotConEmptyRemoved: 0,
+          blurBackdropPinned: 0, bgProtected: 0, imgContentNamed: 0, sortPinned: 0,
           sectionGroupsCreated: 0, sectionGroupsMerged: 0, sectionGroupsPinned: 0,
           sectionContainersRenamed: 0, sectionGroupFailed: 0,
         };
@@ -1310,21 +1312,99 @@ function rectsOverlap(a, b) {
   return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
 }
 
+// ---- v20261111.29 Step 0：绝对坐标基座 -------------------------------------------
+// 根因：figma.group() 之后 node.x/y 会按新父级重算（见 664-668），跨父级比较天然不可比；
+// 之前所有分组/装饰判据只用相对 x/y，导致图片被当成「同父级的大图形」误判为背景。
+// 优先级：absoluteBoundingBox（Plugin API 只读绝对包围盒）→ absoluteTransform（平移 tx/ty）
+// → 相对 x/y（纯对象测试桩 / 旧数据兼容）。全程只用本地 Plugin API，不引入 REST、不联网。
+const NEAR_FULLSCREEN_RATIO = 0.9; // 宽【且】高都 ≥90% 才算整块底图（旧版 0.8 用 OR，384/420 就误判）
+function absRect(n) {
+  if (!n) return null;
+  try {
+    const b = n.absoluteBoundingBox;
+    if (b && Number.isFinite(b.x) && Number.isFinite(b.y)
+        && Number.isFinite(b.width) && Number.isFinite(b.height)) {
+      return { x: b.x, y: b.y, w: b.width, h: b.height,
+               right: b.x + b.width, bottom: b.y + b.height };
+    }
+  } catch (e) {}
+  try {
+    const t = n.absoluteTransform; // [[a,b,tx],[c,d,ty]]
+    if (t && t.length >= 2 && t[0] && t[1]
+        && Number.isFinite(t[0][2]) && Number.isFinite(t[1][2])
+        && Number.isFinite(n.width) && Number.isFinite(n.height)) {
+      return { x: t[0][2], y: t[1][2], w: n.width, h: n.height,
+               right: t[0][2] + n.width, bottom: t[1][2] + n.height };
+    }
+  } catch (e) {}
+  const x = Number(n.x) || 0, y = Number(n.y) || 0;
+  const w = Number(n.width) || 0, h = Number(n.height) || 0;
+  return { x: x, y: y, w: w, h: h, right: x + w, bottom: y + h };
+}
+// 找当前组件根（最顶层非 PAGE 容器），用于把绝对坐标统一到同一原点。
+function componentRootOf(n) {
+  let p = n, hops = 0;
+  while (p && p.parent && p.parent.type !== "PAGE" && hops++ < 40) p = p.parent;
+  return p || n;
+}
+function relRect(n, base) {
+  const r = absRect(n);
+  if (!r) return null;
+  const b = base || absRect(componentRootOf(n));
+  if (!b) return null;
+  return { x: r.x - b.x, y: r.y - b.y, w: r.w, h: r.h,
+           right: r.right - b.x, bottom: r.bottom - b.y,
+           cx: r.x - b.x + r.w / 2, cy: r.y - b.y + r.h / 2 };
+}
+function hasAbsGeometry(n) { return !!(n && (n.absoluteBoundingBox || n.absoluteTransform)); }
+// 近全屏判据（统一入口）：必须宽【且】高都达标，杜绝「宽 91% 就被当整页背景」。
+function isNearFullscreen(n, base) {
+  const r = relRect(n, base);
+  if (!r || !base || base.w <= 0 || base.h <= 0) return false;
+  return r.w >= base.w * NEAR_FULLSCREEN_RATIO && r.h >= base.h * NEAR_FULLSCREEN_RATIO;
+}
+// 整块毛玻璃底图：带 BLUR 效果 + 近全屏。它必须保持原 z-index，绝不与内容节点同组。
+function isBlurBackdrop(n, base) {
+  if (!isNearFullscreen(n, base)) return false;
+  try {
+    const fx = n.effects || [];
+    for (const e of fx) if (e && e.visible !== false && /BLUR/i.test(String(e.type || ""))) return true;
+  } catch (e2) {}
+  return false;
+}
+
 // 几何判据：语义前缀白名单 + 含 TEXT 后代 = 内容，绝不收纳（防误伤业务容器）。
+// v20261111.29 Step 1：装饰四分流。ctx.abs 为真（真实 Figma 节点有绝对坐标）时走新判据；
+// 纯对象测试桩 / 旧数据 ctx.abs 为假时严格保持旧行为，保证回归探针与历史整理结果不回归。
 function isDecoration(n, parent, ctx) {
   if (!n || n.type === "TEXT") return false;
   const nm = n.name || "";
   if (folderRole(n)) return false;            // 插件自建的文件夹：跳过，避免嵌套
-  if (/^bg-/.test(nm)) return true;                         // 模型已明确标注的装饰：正信号
+  const c = ctx || {};
+  const abs = !!c.abs, base = c.base;
+
+  // ① 非近全屏的 IMAGE 填充一律是【内容图】，不是背景装饰。
+  //    旧版 fillHas(/IMAGE|GRADIENT/) 把 384×218 监控截图判成装饰 → 收进 bg-* → 被毛玻璃盖住。
+  if (abs && fillHas(n, /IMAGE/) && !isNearFullscreen(n, base)) return false;
+
+  // ② bg- 前缀不再是无条件正信号：非近全屏时交给几何判定，
+  //    避免「局部卡片底 / 分隔线」被打上 bg- 后重跑又被硬收进根级 bg 文件夹。
+  if (/^bg-/.test(nm)) {
+    if (!abs || isNearFullscreen(n, base)) return true;
+  }
   if (SEMANTIC_PREFIX.test(nm)) return false;
   if (hasTextDescendant(n)) return false;
   const t = n.type;
   if (t === "VECTOR" || t === "BOOLEAN_OPERATION" || t === "LINE" || t === "STAR" || t === "POLYGON") return true;
   const pw = parent.width || 0, ph = parent.height || 0;
   if (GRAPHIC_TYPES[t]) {
-    if (pw > 0 && ph > 0 && ((n.width || 0) >= pw * 0.8 || (n.height || 0) >= ph * 0.8)) return true;
-    if (fillHas(n, /IMAGE|GRADIENT/) && childCount(n) <= 2) return true;
-    if (childCount(n) === 0 && ctx.total > 0 && ctx.index <= ctx.total * 0.3) return true;
+    // ③ 近全屏判据从「0.8 且用 OR」改为「0.9 且必须宽高同时达标」；
+    //    旧版 384/420=91% 单靠宽度就触发，是图片被误判的第二条路径。
+    if (abs) {
+      if (isNearFullscreen(n, base)) return true;
+    } else if (pw > 0 && ph > 0 && ((n.width || 0) >= pw * 0.8 || (n.height || 0) >= ph * 0.8)) return true;
+    if (fillHas(n, /GRADIENT/) && childCount(n) <= 2) return true; // IMAGE 已由 ① 单独处理
+    if (childCount(n) === 0 && c.total > 0 && c.index <= c.total * 0.3) return true;
     if ((t === "FRAME" || t === "GROUP" || t === "INSTANCE") && isPureGraphicGroup(n)) return true;
   }
   return false;
@@ -1351,14 +1431,38 @@ function organizeLayout(parent, summary, intentCtx) {
   if (kids.length < 2) return;
   const ctx = intentCtx || { intentMap: new Map(), moduleOrder: new Map(), sharedIds: new Set(), useLayoutIntent: false };
 
+  // v20261111.29 Step 0：真实 Figma 节点统一到 root 绝对坐标系；纯对象测试桩回退旧行为。
+  const abs = kids.some(hasAbsGeometry);
+  const base = abs ? absRect(componentRootOf(parent)) : null;
+  const geoCtx = { abs: abs, base: base };
+
+  // v20261111.29 Step 1：整块毛玻璃底图 pin 住 —— 保持原 z-index、不进任何资源文件夹、
+  // 不参与排序。它与内容节点同组会重排 z-order，是上一轮 26.18% 视觉回归的直接来源。
+  const backdrop = abs ? kids.filter(n => isBlurBackdrop(n, base)) : [];
+  const backdropSet = new Set(backdrop);
+  const workKids = kids.filter(n => !backdropSet.has(n));
+  if (workKids.length < 2) return;
+  if (backdrop.length) {
+    summary.blurBackdropPinned = (Number(summary.blurBackdropPinned) || 0) + backdrop.length;
+    for (const n of backdrop) {
+      try {
+        const nm = String(n.name || "");
+        if (!/^(bg|img|icon)-/.test(nm) && !folderRole(n)) {
+          n.name = "bg-" + nm.replace(/[^A-Za-z0-9_-]/g, "-").replace(/-+/g, "-").slice(0, 40);
+          summary.prefixFixed++;
+        }
+      } catch (e) {}
+    }
+  }
+
   const decor = [], content = [];
-  kids.forEach((n, i) => {
+  workKids.forEach((n, i) => {
     const intent = ctx.useLayoutIntent ? ctx.intentMap.get(n.id) : null;
     // 跨模块共享装饰（光柱/光环）：留在共同父级，不按模块切分
     if (ctx.useLayoutIntent && (ctx.sharedIds.has(n.id) || (intent && intent.shared))) {
       summary.intentShared++; content.push(n); return;
     }
-    const geo = isDecoration(n, parent, { index: i, total: kids.length });
+    const geo = isDecoration(n, parent, Object.assign({ index: i, total: workKids.length }, geoCtx));
     let take = geo;
     if (ctx.useLayoutIntent && intent && intent.role) {
       if (intent.role === "decoration") {
@@ -1380,22 +1484,25 @@ function organizeLayout(parent, summary, intentCtx) {
   // 前景装饰判据（修正版）：只有「几何上压在某个 content 之上且与它重叠」的装饰才保留原位。
   // 旧版用 min(content indexes) 作阈值，只要容器底层存在一个 content，几乎所有装饰都会被误判成前景，
   // toMerge 只剩 0~1 个 → 达不到建组条件 → 背景大面积不合并（用户截图里的直接根因）。
-  const contentIdx = content.map((n) => kids.indexOf(n));
+  const contentIdx = content.map((n) => workKids.indexOf(n));
   const isForegroundDecor = (n) => {
-    const ni = kids.indexOf(n);
+    const ni = workKids.indexOf(n);
     for (let k = 0; k < content.length; k++) {
       if (contentIdx[k] < ni && rectsOverlap(n, content[k])) return true;
     }
     return false;
   };
   const toMerge = [], keepInPlace = [];
+  // v20261111.29 Step 1：去掉 bg- 前缀的「强制收纳豁免」。
+  // 旧逻辑只要名字带 bg- 就跳过 isForegroundDecor 保护，局部卡片底、分隔线、内容图
+  // 会被一起拖进根级 bg 文件夹，与毛玻璃底图重排 z-order。现在所有装饰一视同仁。
   for (const n of decor) {
-    // bg- 前缀是模型给出的明确背景信号：优先强制收纳（用户要求「背景全部合成」）。
-    if (/^bg-/.test(n.name || "")) {
-      if (isForegroundDecor(n)) summary.forcedBg++;
-      toMerge.push(n);
-    } else if (isForegroundDecor(n)) keepInPlace.push(n);
-    else toMerge.push(n);
+    const bgNamed = /^bg-/.test(n.name || "");
+    if (bgNamed) summary.forcedBg++; // 保留旧计数语义：统计本轮命中的 bg- 前缀节点数
+    if (isForegroundDecor(n)) {
+      keepInPlace.push(n);
+      if (bgNamed) summary.bgProtected = (Number(summary.bgProtected) || 0) + 1;
+    } else toMerge.push(n);
   }
   summary.foregroundKept += keepInPlace.length;
 
@@ -1406,6 +1513,19 @@ function organizeLayout(parent, summary, intentCtx) {
       if (!/^(bg|img|icon)-/.test(nm) && !SEMANTIC_PREFIX.test(nm) && n.type !== "TEXT") {
         n.name = "bg-" + nm.replace(/[^A-Za-z0-9_-]/g, "-").replace(/-+/g, "-").slice(0, 40);
         summary.prefixFixed++;
+      }
+    } catch (e) {}
+  }
+
+  // v20261111.29 Step 1：非近全屏 IMAGE 内容图补 img- 前缀，由 applyAssetExports 挂 PNG@2x。
+  // 同时保证重跑幂等：SEMANTIC_PREFIX 命中 img- 后 isDecoration 会直接判为内容，不会再被收纳。
+  for (const n of content) {
+    if (!abs || !fillHas(n, /IMAGE/) || isNearFullscreen(n, base)) continue;
+    try {
+      const nm = String(n.name || "");
+      if (!/^(bg|img|icon)-/.test(nm) && !SEMANTIC_PREFIX.test(nm) && n.type !== "TEXT") {
+        n.name = "img-" + nm.replace(/[^A-Za-z0-9_-]/g, "-").replace(/-+/g, "-").slice(0, 40);
+        summary.imgContentNamed = (Number(summary.imgContentNamed) || 0) + 1;
       }
     } catch (e) {}
   }
@@ -1421,7 +1541,7 @@ function organizeLayout(parent, summary, intentCtx) {
       }
       summary.decorMerged += toMerge.length;
       // 保持 bg 位于被收纳装饰中最靠下的原位置，不强行沉到 index 0（保护与更底层节点的关系）
-      const minIdx = Math.min.apply(null, toMerge.map(n => kids.indexOf(n)));
+      const minIdx = Math.min.apply(null, toMerge.map(n => workKids.indexOf(n)));
       try { parent.insertChild(Math.max(0, Math.min(minIdx, parent.children.length - 1)), bgGroup); } catch (e) {}
     } else {
       // 建组失败：不再静默只改第一个名字，给全部待收纳节点补 bg- 前缀，保证命名一致 + 能挂上导出预设。
@@ -1439,7 +1559,16 @@ function organizeLayout(parent, summary, intentCtx) {
   for (let i = 0; i < content.length; i++)
     for (let j = i + 1; j < content.length; j++)
       if (rectsOverlap(content[i], content[j])) { pinned.add(content[i]); pinned.add(content[j]); }
-  const movable = content.filter(n => !pinned.has(n));
+  // v20261111.29 Step 1：排序收敛 —— 三类节点一律不参与 appendChild 重排：
+  // 毛玻璃底图、非全屏 IMAGE 内容图、已进资源文件夹的节点。
+  // 它们相对底图的 z-order 已经正确，跨带重排会再次把内容压到底图下面。
+  const sortPinned = new Set(backdropSet);
+  for (const n of content) {
+    if (abs && fillHas(n, /IMAGE/) && !isNearFullscreen(n, base)) sortPinned.add(n);
+  }
+  for (const n of toMerge) sortPinned.add(n);
+  summary.sortPinned = (Number(summary.sortPinned) || 0) + sortPinned.size;
+  const movable = content.filter(n => !pinned.has(n) && !sortPinned.has(n));
   summary.skippedOverlap += pinned.size;
   const ordered = movable.slice().sort((a, b) => (b.y || 0) - (a.y || 0)); // y 降序 → 图层面板从上到下 = 视觉从上到下
   // 视觉给的 order 与 y 序不一致时只记录，仍以真实 y 为准
@@ -1863,7 +1992,7 @@ function qualityDiffText(before, after) {
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
-const SCHEMA_VERSION = "20261110.28";
+const SCHEMA_VERSION = "20261110.29";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
