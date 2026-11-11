@@ -1178,7 +1178,7 @@
       parent.postMessage({ pluginMessage: { type: "request-selection" } }, "*");
 
       // 插件版本标签：用于确认 Figma 加载的是哪版代码（重导入后核对此号）
-      const PLUGIN_VERSION = "20261110.29";
+      const PLUGIN_VERSION = "20261110.30";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（若与此不符=旧代码未重导入）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存

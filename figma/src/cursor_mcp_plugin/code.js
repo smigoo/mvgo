@@ -1222,6 +1222,18 @@ function organizeGraphicContainers(root, summary) {
 function isLooseGraphic(n) {
   if (!n || n.type === "TEXT") return false;
   if (folderRole(n) || isGraphicContainer(n)) return false;
+  // v20261111.30 Step 1 补齐：mergeLooseGraphicRuns 在主流程里【先于】organizeLayout 执行。
+  // 旧判据只排除 FRAME/GROUP/INSTANCE 的语义名，RECTANGLE 叶子（如 image 473992 / img-* 截图）
+  // 不看名字就被当成「零散图形」，整段被 createFolder 收进 bg-* 文件夹；之后 organizeLayout
+  // 因祖先链已有文件夹直接 return，.29 的装饰四分流判据永远作用不到这些节点。
+  // 这就是 53:31607 重跑后监控截图仍与毛玻璃底图同组、视觉仍损坏 26.18% 的直接原因。
+  const nm = String(n.name || "");
+  if (SEMANTIC_PREFIX.test(nm)) return false;   // img-/icon-/section-/graphic-/@... 一律是内容
+  if (fillHas(n, /IMAGE/)) return false;        // 任意命名的 IMAGE 填充 = 内容图，不是装饰碎片
+  if (hasAbsGeometry(n)) {                      // 真实 Figma 节点才做绝对几何判据
+    const base = absRect(componentRootOf(n));
+    if (isBlurBackdrop(n, base)) return false;  // 整块毛玻璃底图必须保持 root 最底层，不与内容同组
+  }
   if (hasTextDescendant(n)) return false;
   if (!GRAPHIC_TYPES[n.type]) return false;
   // 带语义名的容器（axis-x / legend / icon-item-xxx 这类）交给 groupChildrenByCategory 收纳，
@@ -1585,6 +1597,13 @@ function organizeLayout(parent, summary, intentCtx) {
   // 前缀补收放在最后：避免排序阶段的 appendChild 把已入组的 img-/icon- 节点从组里拉出来。
   // 不再依赖 toMerge.length —— 即使本容器没有装饰层，也照常收纳 img-/icon- 资源。
   groupChildrenByCategory(parent, summary);
+  // v20261111.30 Step 1 补齐：上面 bg 装饰文件夹的 insertChild(minIdx) 可能把毛玻璃底图
+  // 从 index 0 挤到后面，导致它反过来模糊局部卡片底/分隔线。毛玻璃必须恒在最底层。
+  for (const n of backdrop) {
+    try {
+      if (n.parent === parent && parent.children.indexOf(n) > 0) parent.insertChild(0, n);
+    } catch (e) {}
+  }
 }
 
 // groupChildrenByCategory：降级为「img-/icon- 前缀补收」。
@@ -1992,7 +2011,7 @@ function qualityDiffText(before, after) {
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
-const SCHEMA_VERSION = "20261110.29";
+const SCHEMA_VERSION = "20261110.30";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
