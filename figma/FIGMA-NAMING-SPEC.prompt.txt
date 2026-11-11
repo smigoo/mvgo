@@ -1,4 +1,4 @@
-# Figma 结构契约 · 命名解读规范 v20261110.41
+# Figma 结构契约 · 命名解读规范 v20261110.42
 # 用途：拼进代码生成 prompt（extraPrompt / 系统提示），让模型正确解读「结构契约 → mvgo」输出的节点名。
 # 契约是「节点名 + 缩进层级」纯文本树：缩进 = 父子包含，同级顺序 = 视觉从上到下（已按 y/x 排序，与 Figma 图层面板无关）。
 # 契约头 # @meta 给机器摘要：version / sections / loops / slots / nodes / truncated / omitted / ids / quality；truncated=true 或「[省略 N 行]」表示树不完整，勿推断缺失模块。

@@ -2481,7 +2481,8 @@ function qualityDiffText(before, after) {
 // v20261111.39：默认零安装直连、本地代理可选；契约语义不变，仅随包升版。
 // v20261111.40：仅改写 UI/文档说明文案，契约语义不变，仅随包升版。
 // v20261111.41：修复断开态代理按钮变主按钮的误导；契约语义不变，仅随包升版。
-const SCHEMA_VERSION = "20261110.41";
+// v20261111.42：UI/文档说明文案去 AI 化精简；契约语义不变，仅随包升版。
+const SCHEMA_VERSION = "20261110.42";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",

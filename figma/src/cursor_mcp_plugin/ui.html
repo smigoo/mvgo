@@ -52,7 +52,7 @@
     <div class="container">
       <div class="header">
         <h1>Figma节点整理辅助工具</h1>
-        <p class="subtitle">把杂乱图层改名分组，让 AI 一眼看懂、代码写得更准</p>
+        <p class="subtitle">整理 Figma 图层命名和分组，导出结构清单</p>
         <p class="version" id="plugin-version" style="margin:2px 0 0;font-size:11px;color:#7d8590">版本加载中…</p>
       </div>
 
@@ -192,50 +192,18 @@
       <div id="content-about" class="tab-content">
         <div class="section">
           <h2>关于</h2>
-          <p style="margin-top:0;font-size:13px;color:#bbb;line-height:1.8;">
-            <strong>Figma节点整理辅助工具</strong> · by smigoo<br/>
-            把杂乱图层改名分组，让 AI 一眼看懂、代码写得更准。
-          </p>
-
-          <h2>为什么要整理</h2>
-          <p style="font-size:12px;color:#bbb;line-height:1.8;margin:0;">
-            Figma 里图层常常叫 <code>Frame 2136</code>、<code>Rectangle 8</code>，顺序也和画面上的上下不一致。<br/>
-            AI 只看这些名字，猜不出哪块是标题、哪几行属于同一个列表、哪张图要单独导出，写出来的代码就容易错位、重复、写死假数据。
-          </p>
-
-          <h2>具体做四件事</h2>
-          <ol style="font-size:12px;color:#bbb;line-height:1.8;margin:0;padding-left:20px;">
-            <li><strong>改名</strong>：按用途起统一的名字，例如 <code>header</code> 顶部栏、<code>img-01</code> 图片、<code>icon-close</code> 关闭图标、<code>badge-count-01</code> 小红点数字。</li>
-            <li><strong>分组</strong>：把同一块的图层装进一个组，例如顶部栏、监控画面、信息区、按钮区各成一段，编号 <code>section-01</code>、<code>section-02</code> …</li>
-            <li><strong>排顺序</strong>：按画面从上到下、从左到右排好，AI 才知道谁先谁后；原本是自动布局的列表不会被打乱。</li>
-            <li><strong>标资源</strong>：给图片、图标、背景加导出设置，AI 直接知道哪些要当资源文件，不用猜。</li>
-          </ol>
-          <p class="hint" style="font-size:11px;line-height:1.6;">只动名字、分组和导出设置，不改颜色、字号、间距等样式。</p>
-
-          <h2>整理完拿到什么</h2>
-          <ul style="font-size:12px;color:#bbb;line-height:1.8;margin:0;padding-left:20px;">
-            <li><strong>画布</strong>：改名分组后的图层树，模块划分一眼看清。</li>
-            <li><strong>结构清单</strong>：一段纯文本，写清层级、名字和重复项；点「结构契约 → mvgo」复制，直接粘给大模型当需求。</li>
-          </ul>
-
-          <h2>大模型少猜什么</h2>
-          <ul style="font-size:12px;color:#bbb;line-height:1.8;margin:0;padding-left:20px;">
-            <li>相同的 6 行列表 → 写一个循环，而不是复制 6 遍</li>
-            <li>标题 / 数字 / 按钮 → 绑定真实数据，而不是写死假文字</li>
-            <li>图片 / 图标 / 底色 → 导出成资源，而不是用 div 硬画</li>
-            <li>模块上下关系 → 布局顺序正确，少返工</li>
-          </ul>
-
-          <h2>不填 Key 也能用</h2>
-          <p style="font-size:12px;color:#bbb;line-height:1.8;margin:0;">
-            「仅结构化整理」「生成结构方案」「结构契约 → mvgo」都不调用 AI，零 token、纯本地运行；只有「AI 全自动整理」会用大模型给节点起更贴切的名字，才需要接口和 Key。
+          <p style="margin-top:0;font-size:12px;color:#bbb;line-height:1.8;">
+            把设计稿里默认的图层名（<code>Frame 2136</code>、<code>Rectangle 8</code> 之类）改成看得懂的名字，按模块分好组，再给图片、图标标上导出设置。整理完可以导出一份结构清单，贴给 AI 当生成代码的参考。只动名字、分组和导出设置，颜色字号间距这些样式不改。
           </p>
 
           <h2>使用步骤</h2>
           <ol style="font-size:12px;color:#bbb;line-height:1.8;">
-            <li>直接运行插件，<strong>无需启动终端</strong>：填接口 / Key / 模型 → 保存 → 选中框架 → 「AI 全自动整理」</li>
-            <li>仅网关跨域被拦时，双击 <code>start-relay-mac.command</code>（mac）/ <code>start-relay-win.bat</code>（Win）再「连接本地代理」</li>
+            <li>选中画布上的框架，填好接口 / Key / 模型并保存。用「仅结构化整理」「结构方案」「结构契约 → mvgo」这几个不调模型的工具时，可以不填。</li>
+            <li>点「AI 全自动整理」，或者直接导出结构清单。默认不用启动终端。</li>
+            <li>只有网关报跨域时，才双击 <code>start-relay-mac.command</code>（mac）/ <code>start-relay-win.bat</code>（Win）启动本地代理，再点「连接本地代理」。</li>
           </ol>
+
+          <p class="hint" style="margin-top:14px;">by smigoo</p>
         </div>
       </div>
     </div>
@@ -1316,8 +1284,9 @@
       // 插件版本标签：仅展示版本与本次最后更新时间。
       // v20261111.40：文案改写——副标题一句话说清，关于页展开「为什么 / 做什么 / 产出 / 收益」。
       // v20261111.41：修复断开态按钮变蓝色主按钮的误导；断开/失败文案统一标明「当前直连」。
-      const PLUGIN_VERSION = "20261110.41";
-      const PLUGIN_UPDATED = "2026-11-11 13:45";
+      // v20261111.42：关于页去 AI 化精简为「关于 + 使用步骤」两节，署名移到最后。
+      const PLUGIN_VERSION = "20261110.42";
+      const PLUGIN_UPDATED = "2026-11-11 13:49";
       try { const v = document.getElementById("plugin-version"); if (v) v.textContent = "v" + PLUGIN_VERSION + "（最后更新于 " + PLUGIN_UPDATED + "）"; } catch (e) {}
 
       // 关闭插件时清除缓存：断开本地服务连接，并通知 code.js 清空选区缓存
