@@ -64,7 +64,9 @@ mvgo-figma-structure/
    ```
 4. 导入成功后，在「开发」子菜单里就能看到 **「mvgo-figma-structure」**。
 
-> 插件名由 `manifest.json` 的 `name` 决定，菜单里应显示 `mvgo-figma-structure`。若仍是旧名，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.63），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.63（最后更新于 2026-11-11 23:19）`。
+> 插件名由 `manifest.json` 的 `name` 决定，菜单里应显示 `mvgo-figma-structure`。若仍是旧名，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.64），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.64（最后更新于 2026-11-11 23:58）`。
+>
+> **v20261110.64 起新增柱状图确定性识别与 `@` 前缀叶子护栏**：≥6 根等宽等距窄柱 + 等距网格 + 双轴刻度自动升 `@echarts/bar`；被 AI 误命名成 `@echarts/bar` 的全屏背景叶子按几何降级回 `bg-panel` 并恢复 `PNG@2x`（见 §8.4）。
 >
 > **v20261110.63 起结构契约自动折叠空壳层**：单子默认名容器不再占契约行、纯装饰矢量组压成 `[icon:N 矢量 · 整体导出]`；Figma 图层面板不变，只是返喂 mvgo 的清单更浅（见 §8.3）。
 >
@@ -205,6 +207,11 @@ Open the mvgo-figma-structure plugin in Figma and join a channel.
         - **修法**：`buildStructureContract` 的 `walkNode` 输出时虚拟跳过空壳 —— 五道判据同时满足（唯一可见子节点 / 默认名 / 容器无危险属性 / 与唯一子节点同 bbox ±2px / 非语义名容器），最多连跳 4 层；纯装饰叶子组（`bg-*/icon-*/img-*` 或默认名、子树全是纯图形叶子、无 TEXT、无语义子容器）压成一行 `  [icon:N 矢量 · 整体导出]`。**纯文本归一化，不写 Figma、不改图层树、可逆**；`raw` 镜像模式与 `opts.virtualUnwrap:false` 保持原样供对照。
         - **unframe 是否一样**：契约不看 `node.type`，FRAME / GROUP / INSTANCE / BOOLEAN_OPERATION 走同一套判据（这正是 A 相对真 ungroup 的优势）。但 FRAME 常带 `layoutMode / clipsContent / fills / exportSettings / rotation`，被③「无危险属性」挡掉；4 棵真实树实测可命中全在 GROUP（53:34075 safe=14、5:35420 safe=0、53:31607 原始稿 safe=0、v42 safe=1）。**「能处理 FRAME」≠「会拆 FRAME」**，图层面板里 FRAME 仍然在。
         - **效果**：53:34075 契约 `167 → 74` 行、最大深度 `11 → 7`；当前 `.62` 树 `162 → 78`、`10 → 6`；`loops / slots / sections` 与 `[data:]` / `[chart:]` / 循环折叠标注数量全部不变。**生效**：Remove 旧插件 → Import `.63` 包后重新导出一次结构契约即可，不必重跑整理。
+      - **v20261110.64：柱状图确定性识别 + `@echarts/*` 叶子降级护栏（53:34075，按 A 落地）**。
+        - **症状**：① 全屏背景 VECTOR（`53:34076`，21:36 还是 `bg-panel-traffic` + `PNG@2x`）被视觉 AI rename 成 `@echarts/bar`，随后进 `slot-con`、丢导出，契约里输出裸行 `- @echarts/bar`（无 `[chart:]`）；② `section-03-block-03` 里 12 根柱体被合并进 `img-area` 并挂 `PNG@2x`，柱状图没被识别。
+        - **根因**：① 旧链路对 `@` 前缀无条件放行（`normalizeChartName` 的 `/^@/` 早退、`organizeGraphicContainers` 只收有 children 的容器、`isBgLike` 只认 `bg-` 名字、`applyAssetExports` 的叶子不挂导出），误命名一路失守；② `.59` 只做 pie（同心弧）、`.60` 只做 line（宽扁贝塞尔曲线），**bar 从来没有确定性判据**，实测 `graphic-area` 的 `lineCurves=0 / evenGrid=true / axisNumbers=18` ⇒ 整树 `findLineChartTargets=0`。
+        - **修法**：① `demoteLeafCharts` 挂在两条主流程的 **AI ops 之后 / `organizeGraphicContainers` 之前**，把 `@echarts/*` / `@antd/*` 且**无 children** 的叶子按几何降级：全屏(≥90% W&H) + 有 fills → `bg-panel`，提回组件根 idx0 并恢复 `PNG@2x`；否则 → `img-<原名>`；改名 + `mvLeafChartDemoted` 双幂等。② `collectBarPillars` / `countBarPillars` / `isBarChartCandidate` / `findBarChartTargets` / `promoteBarCharts` 与 `.60` 对称：**≥6 根等宽(±2)、同底(±3)、x 等距(±1.8) 的窄柱（w 6–40、h≥8、w/h≤0.6）+ ≥3 条等距网格 + ≥4 个数字刻度**，取最内层容器升 `@echarts/bar`；内部 `img-*/bg-*` → `series-bar` / `axis-grid`，`clearExportsDeep` 清 `PNG@2x`，TEXT 刻度保留，`mvBarChart` 幂等，插在 `promoteLineCharts` 之后 / `applyAssetExports` 之前。③ 契约头 + 命名/视觉 prompt 补 bar 判据与「`@` 前缀只能给有 children 的容器」。
+        - **防误伤**：静态仪表盘、环形图、折线图均不升 bar；重复整理幂等（子树已有 `@echarts/*` 直接跳过）。**生效**：Remove 旧插件 → Import `.64` 包 → **直接重跑一次整理**（不必撤销），背景恢复 `bg` 三段式、`section-03-block-03` 出现 `@echarts/bar [chart:bar]`。
    - **命名规范参考**（可选文本框）：粘贴你的命名规范示例（如 `header-xxx` / `slot-con` / `slot-xxx` / `icon-xxx`），AI 改名/成组时会严格对齐。留空用内置默认规范。
    - **「列出可用模型」按钮**（可选）：点一下会查询网关 `/v1/models` 并列出所有模型，对**疑似支持视觉**的模型打 `👁` 标记（启发式，按模型名含 `vl`/`vision`/`gpt-4o`/`deepseek-v4.1-flash` 等判断），方便你确认该填哪个「视觉模型名」。无需保存设置即可用。
 5. 点 **「保存设置（仅存本机）」** → 插件会发一次**真实探测请求**（用「模型名」那个文本模型）校验接口/Key/模型名：
@@ -309,18 +316,20 @@ Open the mvgo-figma-structure plugin in Figma and join a channel.
 
 判定原则：结合父级路径与子树文本推断语义；只改有语义价值的容器；图表柱体内部的最小装饰（小 Vector/Frame）跳过；文本节点不改名；拿不准的宁可跳过。
 
-### 8.1 图表 vs 静态图形（v20261110.60）
+### 8.1 图表 vs 静态图形（v20261110.64）
 
 | 判据 | 结果 | 命名 |
 | --- | --- | --- |
 | 有坐标轴 / 图例 / 多组数据系列 | 真图表 | `@echarts/bar`、`@echarts/line` |
 | **多个 ELLIPSE 带 `arc:[innerRadius>0,起角,止角]` 且起止角不同 + 中心数值 TEXT 或同级色块图例** | **真环形/饼图** | **`@echarts/pie`**，弧段容器 `series-arcs`（不导出） |
 | **宽扁 VECTOR（`w/h≥6`）带 `vp:[…,C段数≥3,…]` + ≥3 条等距水平网格 + ≥4 个数字刻度** | **真折线/面积图** | **`@echarts/line`**，`series-line`（曲线）/ `axis-grid`（网格）均不导出 |
+| **≥6 根等宽（w 6–40）窄高柱体、x 等距且底边对齐 + ≥3 条等距水平网格 + ≥4 个数字刻度** | **真柱状图（.64）** | **`@echarts/bar`**，`series-bar`（柱体）/ `axis-grid`（网格）均不导出 |
 | 零散 VECTOR 弧线 / 光晕，单段或无数值、无等距网格 | 静态仪表 / 装饰 | `graphic-<语义>` 或 `bg-*`（内部合并为 `img-*` 并导出） |
 | 与图表同级或子级的「色块 + 文字 + 数值」行 | 图例 | `legend-<语义>` → `legend-item-N` → `legend-swatch-N` |
 
 > **刻度不是「假图表」的证据**：y/x 轴数字 TEXT 必须保留为独立节点，下游要绑定动态数据。`@echarts/*` 容器内部**一律不导出位图**（硬门禁，AI / 视觉 / 零 token 三种路径都生效）。
 > 图例**不要用** `list-*/item-*`：下游会把图例当成独立列表再渲染一份，且与图表数据脱钩。结构契约里 `@echarts/*` 行尾 `[chart:pie legend:legend-xxx]`、`legend-*` 行尾 `[legend→ @echarts/pie]` 会写明关联。
+> **`@echarts/*` / `@antd/*` 只命名有子节点的容器**：背景 VECTOR、色块、图标等叶子出现 `@` 前缀一律是误命名，按背景 / 静态资源实现，不要按图表库重建（见 §8.4）。
 
 
 ### 8.2 面板主标题 / 根级 header 的几何判定（v20261110.61）
@@ -354,6 +363,19 @@ Open the mvgo-figma-structure plugin in Figma and join a channel.
 装饰叶子组压行：`bg-/icon-/img-/graphic-` 或默认名，子树全是纯图形叶子（≥2）、无 TEXT、无语义子容器 ⇒ 输出 `- <名字>  [icon:N 矢量 · 整体导出]`，不再逐行展开 VECTOR。**含 TEXT 的组绝不压行**（动态数值必须留在契约里），`@echarts/*` 图表容器也不压。
 
 > 这只是**返喂 mvgo 的文本视图**：Figma 图层面板、节点 id、导出设置、样式一个都不动。要真减图层请走 B（真 ungroup，仅安全 GROUP + undo 快照），两者不冲突。
+
+### 8.4 `@` 前缀叶子护栏与柱状图识别（v20261110.64）
+
+两条确定性后处理都挂在**两条主流程**（纯文本整理 / AI·视觉 ops）上，零 token 生效、不依赖模型命名：
+
+| 步骤 | 位置 | 判据 | 动作 |
+| --- | --- | --- | --- |
+| ① `demoteLeafCharts` | AI ops 之后 / `organizeGraphicContainers` 之前 | 名字 `^@(echarts\|antd)/` 且**无 children** | 全屏(≥90% W&H) + 有 fills → `bg-panel`，提回组件根 idx0、恢复 `PNG@2x`；否则 → `img-<原名>` |
+| ② `promoteBarCharts` | `promoteLineCharts` 之后 / `applyAssetExports` 之前 | ≥6 根等宽(±2)、同底(±3)、x 等距(±1.8) 的窄柱 + `hasEvenGrid` + ≥4 个数字刻度 + 子树无 `@echarts/*` | 最内层容器 → `@echarts/bar`；内部 `img-*/bg-*` → `series-bar` / `axis-grid`；清全部位图导出；TEXT 保留 |
+
+幂等：改名后不再命中 `^@`，另有 `mvLeafChartDemoted` / `mvBarChart` 标记；`isBarChartCandidate` 对子树已有 `@echarts/*` 的父级直接跳过，重复整理不会把 `slot-con` 整块升级。53:34075 实测：`graphic-area`（内层、18 个刻度）命中，`img-area`（0 个刻度）与 `section-03-block-03`（有命中的子容器）都不升级。
+
+> 契约头已声明「`@` 前缀只能是有 children 的容器」：即使 Figma 里还留着历史误命名、只导契约不重跑整理，下游也会把该叶子当背景 / 静态资源，而不是重建一张 bar 图。
 
 ---
 
@@ -412,6 +434,7 @@ Open the mvgo-figma-structure plugin in Figma and join a channel.
 
 - **「环形图 / 图例没被识别出来，变成了 `graphic-*` 和 `list-*`」**：见 §8.1。v20261110.59 起按 ELLIPSE 的 `arcData.innerRadius` 几何判定，与是否勾视觉分析无关（零 token 整理同样生效）。若当前 Figma 里仍是 `.58` 及更早的结果，需 **Remove 旧插件 → Import `.59` 包 → 直接重跑一次整理**（不必撤销）。
 - **「折线 / 面积图没被识别，变成 `img-line` 并挂了 `PNG@2x`」**：见 §8.1。v20261110.60 起按 VECTOR 路径特征 `vp` + 等距网格 + 双轴数字刻度做三条件确定性判定（零 token 整理同样生效），并把 `@echarts/*` 内部位图导出列为硬门禁。**开视觉只能改善语义命名，不能根治**：视觉 ops 不含导出指令、零 token 契约也不经过视觉。若当前 Figma 里仍是 `.59` 及更早的结果，需 **Remove 旧插件 → Import `.60` 包 → 直接重跑一次整理**（不必撤销）。
+- **「背景变成了 `@echarts/bar`，柱状图没识别（`section-03-block-03`）」**：见 §8.1 / §8.4。**v20261110.64 起**两条确定性后处理一起生效：`demoteLeafCharts` 按几何把误命名的 `@` 前缀叶子降级回 `bg-panel`/`img-*` 并恢复导出，`promoteBarCharts` 按柱体几何把最内层容器升为 `@echarts/bar`。零 token 整理同样生效，与是否勾视觉分析无关。若当前 Figma 里仍是 `.63` 及更早的结果，需 **Remove 旧插件 → Import `.64` 包 → 直接重跑一次整理**（不必撤销）。
 - **「列出可用模型」查不到 / 报 404**：部分网关不开 `/v1/models` 端点，属正常；那就手动填已知视觉模型名（如 `deepseek-v4.1-flash` 本身即多模态，可直接填进「视觉模型名」）。
 - **视觉模式报「AI 返回无法解析为 JSON（长度 30xx / 被截断）」**：这是旧版**整棵树一次性发给视觉模型**、要求一次性返回全部 `ops` 的巨型 JSON 撞上网关 `max_tokens` 输出上限被截断所致（不是模型问题）。✅ 新版已**按顶层分区切片（每片 ≤100 节点）**，每张切片带完整渲染图单独请求、各自返回小 JSON，彻底规避截断；若仍报「无法解析」，多为模型返回了非 JSON 散文（见上一条排查思考模式 / 模型是否真多模态）。
 

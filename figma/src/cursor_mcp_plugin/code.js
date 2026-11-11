@@ -270,6 +270,8 @@ figma.ui.onmessage = async (msg) => {
           legendNormalized: 0, legendSwatchFixed: 0,
           lineChartPromoted: 0, lineChartExportCleared: 0, lineChartFailed: 0,
           chartSeriesFolders: 0, chartExportsBlocked: 0, chartSubtreeGuarded: 0,
+          barChartPromoted: 0, barChartFailed: 0,
+          leafChartDemoted: 0, leafChartBgRestored: 0, leafChartExportRestored: 0, leafChartFailed: 0,
           graphicFolders: 0, graphicMerged: 0,           graphicOutside: 0, graphicFailed: 0,
           graphicRunFolders: 0, graphicRunMerged: 0, graphicRunFailed: 0,
           slotConCreated: 0, slotConReused: 0, slotConMerged: 0, slotConModules: 0,
@@ -305,6 +307,9 @@ figma.ui.onmessage = async (msg) => {
         // v20261111.35 P2：badge 必须先于 organizeLayout（内部 groupChildrenByCategory）归一化，
         // 否则 4 个纯数字徽标会被按 icon-* 前缀并成一张静态图标并挂 SVG 导出。
         try { normalizeTabBadges(root, summary); } catch (e14) { summary.badgeErrors = (Number(summary.badgeErrors) || 0) + 1; }
+        // v20261111.64：@echarts/* / @antd/* 误命名到叶子（典型是背景 VECTOR）时按几何降级，
+        // 必须在 organizeGraphicContainers / createSlotConGroup 之前，否则背景会被收进 slot-con 且丢导出。
+        try { demoteLeafCharts(root, summary); } catch (e21) { summary.leafChartFailed = (Number(summary.leafChartFailed) || 0) + 1; }
         try { organizeGraphicContainers(root, summary); } catch (e7) { summary.graphicFailed++; }
         // v20261111.59：真环形图按几何补升级 + 同级图例归一化（必须在 applyAssetExports 之前，
         // 否则内部弧段仍会被挂 PNG@2x 固化成位图）。
@@ -333,6 +338,8 @@ figma.ui.onmessage = async (msg) => {
         // v20261111.60：结构分组全部完成后再升级真折线图（必须在 applyAssetExports 之前，
         // 既拿到已合并的 img-* 文件夹作为输入，又不会被 groupBySpatialBands 再切一次带）。
         try { promoteLineCharts(root || containers[0] || null, summary); } catch (e17) { summary.lineChartFailed++; }
+        // v20261111.64：与折线图并列补柱状图的确定性升级，同样必须在 applyAssetExports 之前。
+        try { promoteBarCharts(root || containers[0] || null, summary); } catch (e22) { summary.barChartFailed = (Number(summary.barChartFailed) || 0) + 1; }
         try { normalizeChartLegend(root || containers[0] || null, summary); } catch (e18) {}
         if (setExport) { try { applyAssetExports(root, summary); } catch (e4) {} }
         let total = 0;
@@ -444,6 +451,8 @@ figma.ui.onmessage = async (msg) => {
           legendNormalized: 0, legendSwatchFixed: 0,
           lineChartPromoted: 0, lineChartExportCleared: 0, lineChartFailed: 0,
           chartSeriesFolders: 0, chartExportsBlocked: 0, chartSubtreeGuarded: 0,
+          barChartPromoted: 0, barChartFailed: 0,
+          leafChartDemoted: 0, leafChartBgRestored: 0, leafChartExportRestored: 0, leafChartFailed: 0,
           graphicFolders: 0, graphicMerged: 0,           graphicOutside: 0, graphicFailed: 0,
           graphicRunFolders: 0, graphicRunMerged: 0, graphicRunFailed: 0,
           slotConCreated: 0, slotConReused: 0, slotConMerged: 0, slotConModules: 0,
@@ -555,6 +564,8 @@ figma.ui.onmessage = async (msg) => {
           // 放在 ops 执行之后、通用 organizeLayout 之前；无 rootId 的兜底路径用 containers[0]。
           // v20261111.35 P2：同上，两条主流程都必须先归一化 badge。
           try { normalizeTabBadges(root || containers[0] || null, summary); } catch (e14) { summary.badgeErrors = (Number(summary.badgeErrors) || 0) + 1; }
+          // v20261111.64：同上，AI / 视觉命名态也要先按几何降级 @ 前缀叶子，再走容器治理。
+          try { demoteLeafCharts(root || containers[0] || null, summary); } catch (e21) { summary.leafChartFailed = (Number(summary.leafChartFailed) || 0) + 1; }
           try { organizeGraphicContainers(root || containers[0] || null, summary); } catch (e7) { summary.graphicFailed++; }
           // v20261111.59：同上，AI 命名态也要按几何补升级真环形图并归一化同级图例。
           try { promoteArcCharts(root || containers[0] || null, summary); } catch (e15) { summary.arcChartFailed++; }
@@ -583,6 +594,8 @@ figma.ui.onmessage = async (msg) => {
           try { sortSlotConChildren(root || containers[0] || null, summary); } catch (e11) {}
           // v20261111.60：同上，AI / 视觉命名态也要按路径几何补升级真折线图，并补跑图例归一。
           try { promoteLineCharts(root || containers[0] || null, summary); } catch (e17) { summary.lineChartFailed++; }
+          // v20261111.64：同上，AI / 视觉命名态也按柱体几何补升级，并补跑图例归一。
+          try { promoteBarCharts(root || containers[0] || null, summary); } catch (e22) { summary.barChartFailed = (Number(summary.barChartFailed) || 0) + 1; }
           try { normalizeChartLegend(root || containers[0] || null, summary); } catch (e18) {}
           // 收尾：给所有资源文件夹挂导出预设（icon→SVG / img·bg→PNG@2x），并清掉内部子节点的导出项。
           // v20261111.60：applyAssetExports 内部对 @echarts/* 子树有硬门禁，不会把真图表位图化。
@@ -1758,6 +1771,179 @@ function promoteLineCharts(root, summary) {
       clearExportsDeep(ctn, summary, 0);
     } catch (e) {
       summary.lineChartFailed = (Number(summary.lineChartFailed) || 0) + 1;
+    }
+  }
+}
+
+// ---- @echarts/* 叶子误命名降级护栏（v20261111.64）-----------------------------
+// 53:34075 实测：视觉 AI 把 @echarts/bar rename 配给了全屏背景 VECTOR（id 53:34076，
+// 原 bg-panel-traffic + PNG@2x）。旧链路对 @ 前缀无条件放行：normalizeChartName 早退、
+// organizeGraphicContainers 只收有 children 的容器、isBgLike 只认名字 ⇒ 背景被收进
+// slot-con 又丢了导出，契约里输出裸行 `- @echarts/bar`，下游会把背景当柱状图重建。
+// 这里在【AI ops 之后 / organizeGraphicContainers 之前】做确定性降级：
+//  ① 全屏(≥90% W&H) + 有 fills → bg-panel，提回组件根最底层并恢复 PNG@2x；
+//  ② 其余 → img-<原名>，按普通静态资源整体导出；
+//  ③ mvLeafChartDemoted 标记 + 改名后不再命中 @ 前缀 ⇒ 重复整理幂等。
+const LEAF_CHART_NAME_RE = /^@(?:echarts|antd)\//i;
+function demoteLeafCharts(root, summary) {
+  if (!root) return;
+  const rb = nodeBox(root);
+  const seen = new Set(), targets = [];
+  const walk = (n, d) => {
+    if (!n || d > 40 || seen.has(n.id)) return;
+    seen.add(n.id);
+    const kids = ("children" in n) && Array.isArray(n.children) ? n.children.length : 0;
+    if (n !== root && !kids && LEAF_CHART_NAME_RE.test(String(n.name || ""))) targets.push(n);
+    if ("children" in n && d < 40) for (const c of (n.children || [])) walk(c, d + 1);
+  };
+  walk(root, 0);
+  for (const n of targets) {
+    try {
+      if (String(n.getPluginData("mvLeafChartDemoted") || "") === "1") continue;
+      const from = String(n.name || "");
+      const b = nodeBox(n);
+      const full = rb.w > 0 && rb.h > 0 && b.w / rb.w >= 0.9 && b.h / rb.h >= 0.9;
+      let hasFills = false;
+      try { hasFills = Array.isArray(n.fills) && n.fills.length > 0; } catch (e) {}
+      const asBg = full && hasFills;
+      const slug = from.replace(/^@/, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "chart";
+      n.name = asBg ? "bg-panel" : "img-" + slug;
+      n.setPluginData("mvLeafChartDemoted", "1");
+      n.setPluginData("mvLeafChartFrom", from);
+      if (summary) summary.leafChartDemoted = (Number(summary.leafChartDemoted) || 0) + 1;
+      if (asBg) {
+        // 背景必须直属组件根且沉在 z 序最底；Figma 原生 reparent 保持绝对位置，视觉零改动。
+        try {
+          if (root && typeof root.insertChild === "function" && (n.parent !== root || root.children[0] !== n)) {
+            root.insertChild(0, n);
+          }
+        } catch (e) {}
+        try {
+          if (setExportPreset(n, "bg") && summary) {
+            summary.leafChartExportRestored = (Number(summary.leafChartExportRestored) || 0) + 1;
+          }
+        } catch (e) {}
+        if (summary) summary.leafChartBgRestored = (Number(summary.leafChartBgRestored) || 0) + 1;
+      }
+    } catch (e) {
+      if (summary) summary.leafChartFailed = (Number(summary.leafChartFailed) || 0) + 1;
+    }
+  }
+}
+
+// ---- 真柱状图补升级（v20261111.64）-------------------------------------------
+// 53:34075 实测：柱体是 12 个等宽（w=12）窄高 GROUP，x 间距恒 28、底边对齐；
+// 配 6 条等距水平网格（y 差 18）与 y/x 双轴数字刻度（graphic-area 直属 18 个）。
+// .59 只认同心弧、.60 只认宽扁贝塞尔曲线，bar 从来没有确定性判据 ⇒ 柱子被 img-area
+// 挂 PNG@2x 固化成图片、数字写死。这里补第三套几何判据，零 token 生效，与 .60 对称。
+function collectBarPillars(container) {
+  const out = [];
+  const walk = (x, d) => {
+    if (!x || d > 8 || out.length >= 48) return;
+    try { if (x.visible === false || x.type === "TEXT") return; } catch (e) {}
+    const t = String(x.type || "");
+    const b = nodeBox(x);
+    // 窄高矩形柱：w 6..40、h≥8、w/h≤0.6。命中即不再下钻，避免外层 Group 与
+    // 内部「柱子 / 柱体」VECTOR 被重复计数；网格线 w≥60、h≤2 天然不命中。
+    if (/^(?:RECTANGLE|VECTOR|GROUP|FRAME|INSTANCE|BOOLEAN_OPERATION)$/.test(t)
+        && b.w >= 6 && b.w <= 40 && b.h >= 8 && b.w / Math.max(b.h, 0.5) <= 0.6) {
+      out.push({ x: b.x, w: b.w, bottom: b.y + b.h });
+      return;
+    }
+    if ("children" in x && d < 8) for (const c of (x.children || [])) walk(c, d + 1);
+  };
+  walk(container, 0);
+  return out;
+}
+// 取「等宽(±2) + 同底(±3) + x 等距(最大/最小 ≤1.8)」的最长连续段；≥6 根才算柱图。
+function countBarPillars(container) {
+  const all = collectBarPillars(container);
+  if (all.length < 6) return 0;
+  let best = 0;
+  for (const seed of all) {
+    const grp = all.filter(a => Math.abs(a.w - seed.w) <= 2 && Math.abs(a.bottom - seed.bottom) <= 3)
+      .sort((a, b) => a.x - b.x);
+    if (grp.length < 6) continue;
+    let run = 1, prevGap = null;
+    for (let j = 1; j < grp.length; j++) {
+      const g = grp[j].x - grp[j - 1].x, w = grp[j].w;
+      const even = prevGap === null
+        || Math.max(g, prevGap) / Math.max(Math.min(g, prevGap), 0.5) <= 1.8;
+      if (g >= w + 1 && g <= w * 8 && even) { run++; prevGap = g; }
+      else { run = 1; prevGap = null; }
+      if (run > best) best = run;
+    }
+  }
+  return best;
+}
+// 与 isLineChartCandidate 对称：≥6 根等宽等距柱 + ≥3 条等距网格 + ≥4 个数字刻度，
+// 且自身/子树都不是已升级的 @echarts/*（重跑整理幂等，不会把父级整块升级）。
+function isBarChartCandidate(container) {
+  if (!container || !("children" in container)) return false;
+  const nm = String(container.name || "");
+  if (/^@echarts\//i.test(nm)) return false;
+  if (/^(?:header|bg)(?:-|$)/i.test(nm)) return false;
+  let hasChartChild = false;
+  const scan = (x, d) => {
+    if (!x || d > 10 || hasChartChild) return;
+    if (x !== container && /^@echarts\//i.test(String(x.name || ""))) { hasChartChild = true; return; }
+    if ("children" in x && d < 10) for (const c of (x.children || [])) scan(c, d + 1);
+  };
+  scan(container, 0);
+  if (hasChartChild) return false;
+  return countBarPillars(container) >= 6 && hasEvenGrid(container) && countAxisNumbers(container) >= 4;
+}
+function findBarChartTargets(root) {
+  const out = [], seen = new Set();
+  const walk = (n, d) => {
+    if (!n || d > 40 || seen.has(n.id)) return;
+    seen.add(n.id);
+    if ("children" in n && n.type !== "PAGE") {
+      let childHit = false;
+      for (const c of (n.children || [])) {
+        if (c && "children" in c && isBarChartCandidate(c)) { childHit = true; break; }
+      }
+      if (isBarChartCandidate(n) && !childHit) out.push(n);
+    }
+    if ("children" in n && d < 40) for (const c of n.children) walk(c, d + 1);
+  };
+  walk(root, 0);
+  return out;
+}
+function promoteBarCharts(root, summary) {
+  if (!root) return;
+  const targets = findBarChartTargets(root);
+  for (const ctn of targets) {
+    try {
+      const from = String(ctn.name || "");
+      ctn.name = "@echarts/bar";
+      try { ctn.setPluginData("mvBarChart", "1"); } catch (e) {}
+      try { ctn.setPluginData("mvBarChartFrom", from); } catch (e) {}
+      try { ctn.setPluginData("mvGraphicContainer", "1"); } catch (e) {}
+      if (summary) summary.barChartPromoted = (Number(summary.barChartPromoted) || 0) + 1;
+      const seen = new Set();
+      const walk = (x, d) => {
+        if (!x || d > 12 || seen.has(x.id)) return;
+        seen.add(x.id);
+        if (x !== ctn && "children" in x) {
+          const nm = String(x.name || "");
+          let role = "";
+          try { role = String(x.getPluginData("mvAssetFolder") || ""); } catch (e) {}
+          const isChartFolder = /^(bg|img)$/.test(role) || /^(?:bg|img)(?:-|$)/.test(nm);
+          if (isChartFolder) {
+            const hasBars = countBarPillars(x) >= 3;
+            try { x.name = hasBars ? "series-bar" : "axis-grid"; } catch (e) {}
+            try { x.setPluginData("mvAssetFolder", ""); } catch (e) {}
+            try { x.setPluginData("mvChartSeries", "1"); } catch (e) {}
+            clearExportsDeep(x, summary, 0);
+          }
+        }
+        if ("children" in x && d < 12) for (const c of (x.children || [])) walk(c, d + 1);
+      };
+      walk(ctn, 0);
+      clearExportsDeep(ctn, summary, 0);
+    } catch (e) {
+      if (summary) summary.barChartFailed = (Number(summary.barChartFailed) || 0) + 1;
     }
   }
 }
@@ -3225,7 +3411,16 @@ function qualityDiffText(before, after) {
 //   ④ 硬门禁：organizeGraphicContainers / applyAssetExports 对 @echarts/* 内部
 //      禁止生成 img-* 与位图导出，修 AI/视觉直接命名图表仍被位图化的落盘 bug；
 //   ⑤ describeChartBinding 改为同级+子级+祖先链查找，契约头部补折线声明（5:35420）。
-const SCHEMA_VERSION = "20261110.63";
+// v20261111.61：面板主标题按 y 几何提升根级 header（promoteRootHeader）。
+// v20261111.62：整理模型与本地代理收进默认折叠的高级设置（UI-only）。
+// v20261111.63：契约层虚拟 unwrap / 装饰叶子压行（单子节点深链）。
+// v20261111.64：① demoteLeafCharts —— @echarts/*|@antd/* 误命名到叶子时按几何降级
+//     （全屏+有 fills → bg-panel 提回根并恢复 PNG@2x，否则 img-*），两条主流程都在容器治理之前；
+//   ② 新增 collectBarPillars / countBarPillars / isBarChartCandidate / findBarChartTargets /
+//      promoteBarCharts —— ≥6 根等宽等距同底柱体 + 等距网格 + ≥4 数字刻度才升 @echarts/bar，
+//      内部 img-*/bg-* → series-bar / axis-grid，清 PNG@2x，TEXT 保留，mvBarChart 幂等；
+//   ③ 契约头 + prompt 补 bar 判据与「@ 前缀只能是有 children 的容器」（53:34075）。
+const SCHEMA_VERSION = "20261110.64";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",
@@ -3257,6 +3452,12 @@ const CONTRACT_HEADER = [
   "# 折线/面积图由宽扁多段贝塞尔曲线 + 等距水平网格 + 双轴数字刻度组成，用 @echarts/line 重建；",
   "#   series-line / axis-grid 是它的曲线与网格容器；@echarts/* 内部一律不导出位图，",
   "#   刻度 TEXT 保持独立节点，数值绑定 props / 接口字段，不要当静态图片或独立列表。",
+  // v20261111.64：柱状图与 @ 前缀叶子护栏（53:34075 背景误命名 + bar 未识别）。
+  "# 柱状图由 ≥6 根等宽等距、底边对齐的窄柱 + 等距水平网格 + 双轴数字刻度组成，用 @echarts/bar 重建；",
+  "#   series-bar / axis-grid 是柱体与网格容器；与折线/饼图一样，@echarts/* 内部一律不导出位图，",
+  "#   刻度 TEXT 保持独立节点，数值绑定 props / 接口字段，不要把柱子写成静态 PNG。",
+  "# @echarts/* / @antd/* 只能命名【有子节点的容器】：叶子图层（背景 VECTOR / 色块 / 图标）出现 @ 前缀",
+  "#   一律是误命名，按背景或静态资源实现，严禁用图表库重建；插件整理时会按几何降级为 bg-*/img-*。",
   // v20261111.35 P2：badge 是动态计数，不是静态资源。
   "# badge-count-NN 是 tab / 列表项上的【动态计数徽标】：绑定接口计数（行尾 [tab:xxx] 指明归属 tab），",
   "#   严禁按图片导出、严禁把字面数字写死；它不属于 icon-*/img-*/bg-* 静态资源；",

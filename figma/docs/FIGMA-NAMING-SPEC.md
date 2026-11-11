@@ -17,7 +17,7 @@
 | `section-<语义>` / **`section-NN-<语义>`**（.31） | 异构分区 → `<section>` / 独立子组件，**不可迭代**；`NN` 是视觉从上到下序号 | 用 `v-for` 遍历；按序号臆造缺失分区 |
 | `section-title-<语义>` | 模块小标题（静态文案 `[data:label]`） | 提升成根级 header |
 | `graphic-<语义>` | 静态图形 → `<img>`，内部矢量已合并导出 | 用 echarts / chart 库重建 |
-| `@echarts/<type>` | 真图表 → ECharts option，`type` 决定 series.type | 写成 `echarts-` / `chart-` / `gauge-` |
+| `@echarts/<type>` | 真图表 → ECharts option，`type` 决定 series.type | 写成 `echarts-` / `chart-` / `gauge-`；给背景 / 色块等【叶子】写 `@` 前缀（.64 误命名护栏会降级为 `bg-*`/`img-*`） |
 | `@antd/<type>` | 组件库控件 → 对应组件 | 手写等价 HTML |
 | `icon-*` | 小图标，SVG 整体导出 | 并入背景位图 |
 | `img-*` | 内容图片，PNG@2x 整体导出 | 并入背景位图 |
@@ -143,6 +143,7 @@ cp-event-analysis                          ← 组件根（唯一）
 | 三个异构模块（类型分布 / 等级分析 / 影响分析） | `section-type-distribution` 等 3 个 | `item-type-distribution` 等 | 模型误判为可迭代，生成 v-for 或 N 份重复代码 |
 | 零散矢量拼成的环形进度盘 | `graphic-disposal-rate-gauge` | `@echarts/gauge` / `echarts-gauge` / `chart-gauge` | 用图表库重建静态图形，视觉失真 |
 | 带坐标轴 / 图例 / 多组系列的柱图 | `@echarts/bar` | `graphic-bar` | 把真图表压成图片，丢失交互与数据 |
+| ≥6 根等宽等距、底边对齐的窄柱 + 等距网格 + 双轴数字刻度（.64） | `@echarts/bar`，柱体容器 `series-bar` / 网格 `axis-grid` 不导出 | `img-area` 挂 `PNG@2x` | 柱子被位图化、刻度数字写死 |
 | 列表里 4 个同构卡片 | `item-alarm-card-1..4` → `[循环 ×4]` | 每张卡起不同语义名 | 生成 4 份重复代码 |
 | 每个模块的小标题 | `section-title-level-analysis` | `header-level-analysis` | 被当成第二个根级标题，从 `slot-con` 中排除 |
 | 局部模块的容器 | `item-xxx` / `card-xxx`（带或不带序号均可） | `slot-con-xxx` | 被当成第二个根槽复用 |
