@@ -35,7 +35,7 @@ for dep in ws; do
 done
 
 # 4) 文档（zip 内用 ASCII 名 README.md，避免 Windows 中文名乱码）
-cp FIGMA-AI-插件使用文档.md "$PKG/README.md" 2>/dev/null || true
+cp docs/FIGMA-AI-插件使用文档.md "$PKG/README.md" 2>/dev/null || true
 
 # 5) 打包
 ZIP="$(pwd)/$OUT.zip"

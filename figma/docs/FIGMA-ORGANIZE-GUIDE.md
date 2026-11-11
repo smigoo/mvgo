@@ -8,7 +8,7 @@
 
 1. **启动 socket**（用户终端或后台）:
    ```bash
-   cd cursor-talk-to-figma-mcp && ./start.sh   # 监听 ws://localhost:3055
+   cd mvgo/figma && ./start.sh                # 监听 ws://localhost:3055
    ```
 2. **Figma 插件**: 画布右键 → Plugins → Development → 运行 cursor-talk-to-figma 插件 → Join 任意 channel（名字随意）
 3. 连通验证:
@@ -105,6 +105,6 @@ node figma-auto-organize.mjs [ch|auto] apply <ops.json>       # 执行清单
 8. **scan_tree 大文件一次 ~2s**，优先用 Scan 而非逐节点 get_node_info。
 9. socket 由用户终端常驻跑（AI 后台进程可能被回收）；插件重连后 channel 会变，用 `auto` 自动发现。
 
-## 六、MCP 方式（可选）
+## 六、关于 MCP 驱动（已移除）
 
-本仓库同时是 MCP server（`node dist/server.cjs`），可在支持 MCP 的客户端（Cursor 的 mcp.json 等）配置 `talk-to-figma`。但 MCP 工具列表为原版固定集（不含 scan_tree 等新命令），**推荐直接用终端 CLI 流程**（上述 Step 1-4），能力更全。
+本仓库原上游附带的 MCP server（`src/talk_to_figma_mcp`）**已移除**，团队不再通过 Cursor/Claude MCP 直接驱动 Figma。当前只走「Figma 插件 + `./start.sh` Node 中继（ws://localhost:3055）+ `tools/*.mjs` 终端 CLI」这条链路。所有操作请使用上文「终端 CLI 流程」（Step 1-4），能力最全。
