@@ -1,10 +1,10 @@
-# Figma节点整理辅助工具 · 网页版使用注意
+# mvgo-figma-structure · 网页版使用注意
 
 适用：Figma 网页端（figma.com）。前提是管理员已把本插件**发布到公司 Figma 团队/组织**。
 
 ## 同事怎么装
 1. 打开 figma.com，进入公司团队文件。
-2. 菜单 **插件 → 搜索「Figma节点整理辅助工具」→ 运行/安装**。
+2. 菜单 **插件 → 搜索「mvgo-figma-structure」→ 运行/安装**。
 3. 填 **AI 接口地址(Base URL) / Key / 模型名** → 保存设置。
 
 ## 网页版必读限制

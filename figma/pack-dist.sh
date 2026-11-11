@@ -37,7 +37,7 @@ copy_relay () {
 # ---- 公共：完整使用文档（zip 内用 ASCII 名 README.md，避免 Windows 中文名乱码） ----
 copy_readme () {
   local pkg="$1"
-  cp docs/FIGMA-AI-插件使用文档.md "$pkg/README.md" 2>/dev/null || true
+  cp docs/mvgo-figma-structure-使用文档.md "$pkg/README.md" 2>/dev/null || true
 }
 
 # 统一打包：先在 $TMP 生成 zip，再 cp 到唯一 DIST 目录（纯新建，不覆盖/不删除）
@@ -49,27 +49,27 @@ zipit () {
 }
 
 # ============ 1) 客户端 · macOS ============
-PKG_MAC="$TMP/mv-figma-plugin-client-mac-$DATE"
+PKG_MAC="$TMP/mvgo-figma-structure-client-mac-$DATE"
 mkdir -p "$PKG_MAC"
 copy_plugin "$PKG_MAC"
 copy_relay  "$PKG_MAC"
 copy_readme "$PKG_MAC"
 cp start-relay-mac.command "$PKG_MAC/" && chmod +x "$PKG_MAC/start-relay-mac.command"
 cp docs/QUICKSTART-MAC.md "$PKG_MAC/"
-zipit "$PKG_MAC" "mv-figma-plugin-client-mac-$DATE.zip"
+zipit "$PKG_MAC" "mvgo-figma-structure-client-mac-$DATE.zip"
 
 # ============ 2) 客户端 · Windows ============
-PKG_WIN="$TMP/mv-figma-plugin-client-win-$DATE"
+PKG_WIN="$TMP/mvgo-figma-structure-client-win-$DATE"
 mkdir -p "$PKG_WIN"
 copy_plugin "$PKG_WIN"
 copy_relay  "$PKG_WIN"
 copy_readme "$PKG_WIN"
 cp start-relay-win.bat "$PKG_WIN/"
 cp docs/QUICKSTART-WIN.md "$PKG_WIN/"
-zipit "$PKG_WIN" "mv-figma-plugin-client-win-$DATE.zip"
+zipit "$PKG_WIN" "mvgo-figma-structure-client-win-$DATE.zip"
 
 # ============ 3) 网页版（团队发布） ============
-PKG_WEB="$TMP/mv-figma-plugin-web-$DATE"
+PKG_WEB="$TMP/mvgo-figma-structure-web-$DATE"
 mkdir -p "$PKG_WEB"
 copy_plugin "$PKG_WEB"
 copy_relay  "$PKG_WEB"          # 备用：网页 CORS 兜底（不稳定）
@@ -78,7 +78,7 @@ cp start-relay-win.bat     "$PKG_WEB/"
 copy_readme "$PKG_WEB"
 cp docs/QUICKSTART-WEB.md  "$PKG_WEB/"
 cp docs/PUBLISH-TEAM.md   "$PKG_WEB/"
-zipit "$PKG_WEB" "mv-figma-plugin-web-$DATE.zip"
+zipit "$PKG_WEB" "mvgo-figma-structure-web-$DATE.zip"
 
 rm -rf "$TMP" 2>/dev/null || true
 
@@ -87,4 +87,4 @@ echo "========== 分发包清单 ($DIST) =========="
 ls -lh "$DIST"
 echo ""
 echo "每个 zip 内容预览（以 mac 为例）:"
-unzip -l "$DIST/mv-figma-plugin-client-mac-$DATE.zip"
+unzip -l "$DIST/mvgo-figma-structure-client-mac-$DATE.zip"

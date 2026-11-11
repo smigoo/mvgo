@@ -1,12 +1,12 @@
-# Figma节点整理辅助工具 · Windows 极简上手
+# mvgo-figma-structure · Windows 极简上手
 
 适用：Figma 桌面端（Windows）。零安装，默认不需 Node / 终端。
 
-1. 解压 `mv-figma-plugin-client-win-<日期>.zip`。
+1. 解压 `mvgo-figma-structure-client-win-<日期>.zip`。
 2. 打开 **Figma 桌面端**（不是浏览器里的网页版）。
 3. 顶部菜单 **插件 → 开发 → 导入插件 / Import plugin from manifest…**，
    选解压目录里的 `src/cursor_mcp_plugin/manifest.json`。
-4. 运行插件（开发菜单 → Figma节点整理辅助工具）。
+4. 运行插件（开发菜单 → mvgo-figma-structure）。
 5. 填 **AI 接口地址(Base URL) / Key / 模型名** → 点「保存设置（仅存本机）」。
    - 仅用「零 token 工具」（结构化整理 / 结构方案 / 结构契约）连 Key 都不用填。
 6. 画布选中要整理的框架 → 「当前选区」变绿 → 点「AI 全自动整理选中框架」。

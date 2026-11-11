@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Node 版 WebSocket relay —— 等价改写自 Bun 版 src/socket.ts
- * 协议完全一致，供 cursor-talk-to-figma-mcp 的 Figma 插件与 MCP server 通信
+ * 协议完全一致，供 mvgo-figma-structure 插件与可选本地中继通信
  * 用法: node socket-server.mjs  (默认端口 3055)
  */
 import http from "node:http";
@@ -201,7 +201,7 @@ const server = http.createServer(async (req, res) => {
           "content-type": "application/json",
           // 下面三项模拟 curl 默认请求头，规避个别网关/代理对头的敏感度
           "content-length": Buffer.byteLength(payload),
-          "user-agent": "mv-figma-plugin/1.0",
+          "user-agent": "mvgo-figma-structure/1.0",
           accept: "application/json",
           authorization: "Bearer " + apiKey,
         });
@@ -427,5 +427,5 @@ wss.on("connection", (ws) => {
 
 server.listen(PORT, () => {
   console.log(`WebSocket relay listening on ws://localhost:${PORT}`);
-  console.log("Open the Figma节点整理辅助工具 plugin in Figma and join a channel.");
+  console.log("Open the mvgo-figma-structure plugin in Figma and join a channel.");
 });

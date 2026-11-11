@@ -12,7 +12,7 @@ Figma 网页端没有"导入本地 manifest"入口，只能运行**已上架**�
    - `networkAccess.allowedDomains: ["*"]`（已设置，允许连任意 LLM 网关）
    - `editorType: ["figma","figjam","dev"]`（已设置）
 4. 提交发布，等待 Figma 审核通过（内部团队插件通常秒过）。
-5. 团队成员在 **Figma 网页端** → 插件菜单 → 搜「Figma节点整理辅助工具」→ 安装/运行。
+5. 团队成员在 **Figma 网页端** → 插件菜单 → 搜「mvgo-figma-structure」→ 安装/运行。
 6. 后续更新：重新发布新版本，团队成员会收到更新提示。
 
 ## 发布后须知（转告同事）

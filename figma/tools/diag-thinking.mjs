@@ -117,7 +117,7 @@ function request(payload) {
     const headers = {
       "content-type": "application/json",
       "content-length": Buffer.byteLength(body),
-      "user-agent": "mv-figma-plugin-diag/1.0",
+      "user-agent": "mvgo-figma-structure-diag/1.0",
       accept: noStream ? "application/json" : "text/event-stream",
       authorization: "Bearer " + apiKey,
     };

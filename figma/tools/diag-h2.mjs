@@ -68,7 +68,7 @@ const req = session.request({
   ":path": target.pathname + target.search,
   "content-type": "application/json",
   "content-length": Buffer.byteLength(payload),
-  "user-agent": "mv-figma-plugin/1.0",
+  "user-agent": "mvgo-figma-structure/1.0",
   accept: "application/json",
   authorization: "Bearer " + apiKey,
 });

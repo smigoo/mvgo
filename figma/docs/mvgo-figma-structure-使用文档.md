@@ -1,4 +1,4 @@
-# Figma节点整理辅助工具 · 使用文档
+# mvgo-figma-structure · 使用文档
 
 > 适用对象：自己测试 / 打包发给同事使用
 > 核心能力：在 Figma 里**选中一个框架 → 点一下 → 按规范批量改名、分组、排顺序**，全程不离开 Figma。
@@ -26,7 +26,7 @@
 打包脚本 `pack-dist.sh` 会自动产出下面这份结构（直接 `./pack-dist.sh` 即可，无需手动挑；旧版单包脚本 `pack.sh` 仍保留）：
 
 ```
-mv-figma-plugin/
+mvgo-figma-structure/
 ├── src/cursor_mcp_plugin/
 │   ├── manifest.json          # 插件清单（Figma 导入用）
 │   ├── code.js                # 插件主逻辑（扫描 / 执行）
@@ -62,9 +62,9 @@ mv-figma-plugin/
    ```
    src/cursor_mcp_plugin/manifest.json
    ```
-4. 导入成功后，在「开发」子菜单里就能看到 **「Figma节点整理辅助工具」**。
+4. 导入成功后，在「开发」子菜单里就能看到 **「mvgo-figma-structure」**。
 
-> 插件名由 `manifest.json` 的 `name` 决定。若菜单里仍显示旧名「mv-figma文件自动整理插件」，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.63），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.63（最后更新于 2026-11-11 23:19）`。
+> 插件名由 `manifest.json` 的 `name` 决定，菜单里应显示 `mvgo-figma-structure`。若仍是旧名，先 **Remove 旧插件 → 重新 Import** 本包（v20261110.63），Figma 会缓存旧清单；插件 UI 底部应显示 `v20261110.63（最后更新于 2026-11-11 23:19）`。
 >
 > **v20261110.63 起结构契约自动折叠空壳层**：单子默认名容器不再占契约行、纯装饰矢量组压成 `[icon:N 矢量 · 整体导出]`；Figma 图层面板不变，只是返喂 mvgo 的清单更浅（见 §8.3）。
 >
@@ -89,7 +89,7 @@ mv-figma-plugin/
 看到下面输出即成功：
 ```
 WebSocket relay listening on ws://localhost:3055
-Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
+Open the mvgo-figma-structure plugin in Figma and join a channel.
 ```
 
 > 保持窗口开着（Ctrl+C 停止），回插件**展开「⚙️ 高级设置」**点「连接本地代理（可选）」，状态变绿后 AI 请求改走本机转发。端口被占：mac `PORT=3060 node socket-server.mjs`，Windows `set PORT=3060 && node socket-server.mjs`，插件里填对应端口。
@@ -100,7 +100,7 @@ Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 
 ## 五、在插件里连接 + 配置 AI
 
-1. Figma 里 **运行插件**（开发菜单 → Figma节点整理辅助工具）。
+1. Figma 里 **运行插件**（开发菜单 → mvgo-figma-structure）。
 2. 默认在 **「整理」** Tab。
 3. **（默认可跳过）连接本地代理**：初始状态是蓝色「直连模式 · 无需启动终端」，AI 请求由插件 UI 直接发往网关。**这个「连接本地代理」按钮不是启用直连用的**，它是「切换到本机转发」的开关（连上后 `llmFetch` 改走 `http://localhost:3055/llm-proxy`），所以 v20261110.62 起与「服务端口」「整理模型」一起收进默认折叠的 **「⚙️ 高级设置」**。仅当网关跨域被拦，才按 §四 启动代理后展开高级设置点它，状态变绿「已连接本地代理」。
 4. **AI 设置**（OpenAI 兼容接口），填三项：
@@ -453,7 +453,7 @@ Open the Figma节点整理辅助工具 plugin in Figma and join a channel.
 
 ```bash
 cd <本仓库根目录>
-./pack-dist.sh     # 自动产出 mv-figma-plugin-*-<日期>.zip（客户端 mac/win + 网页 三包）
+./pack-dist.sh     # 自动产出 mvgo-figma-structure-*-<日期>.zip（客户端 mac/win + 网页 三包）
 ```
 
 `pack-dist.sh` 只挑上面「Zip 包里应该有什么」列出的必要文件（含 `node_modules/ws` 与两个 `start-relay-*` 启动器），不会把 `node_modules` 全量、`.git`、构建产物等带进去。文档在包内命名为 `README.md`（ASCII，避免 Windows 资源管理器中文名乱码）；`start-relay-win.bat` 内容也全 ASCII，避免中文 bat 编码乱码。
