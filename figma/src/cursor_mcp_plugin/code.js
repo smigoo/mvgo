@@ -244,6 +244,7 @@ figma.ui.onmessage = async (msg) => {
           bandErrors: 0, bandsDetected: 0, bandsPinned: 0, bandGroupsCreated: 0,
           bandContainersRenamed: 0, bandHeaderCreated: 0, bandFoldersDissolved: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
+          rootBackdropMoved: 0, rootBackdropOrdered: 0,
         };
         const intentCtx = { intentMap: new Map(), moduleOrder: new Map(), sharedIds: new Set(), useLayoutIntent: false };
         let planPreview = null;
@@ -383,6 +384,7 @@ figma.ui.onmessage = async (msg) => {
           bandErrors: 0, bandsDetected: 0, bandsPinned: 0, bandGroupsCreated: 0,
           bandContainersRenamed: 0, bandHeaderCreated: 0, bandFoldersDissolved: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
+          rootBackdropMoved: 0, rootBackdropOrdered: 0,
         };
         const ACT_CN = { rename: "改名", reparent: "归父", reorder: "排序", group: "成组", delete: "删除" };
         for (let i = 0; i < ops.length; i++) {
@@ -2077,6 +2079,43 @@ function markBandGroup(n) {
   try { n.setPluginData(BAND_GROUP_KEY, "1"); } catch (e) {}
   try { n.setPluginData(SECTION_GROUP_KEY, "1"); } catch (e) {}
 }
+// v20261111.32：root 直属层 z-order 归一化。
+// 根因：createSlotConGroup 把 slot-con 插到 contents 的 minIdx，而 bg 装饰节点散布在
+// contents 中间；organizeLayout 的 y 降序排序后，局部卡片底 / 分隔线会落到 slot-con
+// 之后（更上层），不透明深色底直接盖住 section-02-info 的 TEXT —— 节点 bbox 全部不变，
+// 但视觉丢失。契约顺序：全屏毛玻璃 → 其余 bg 装饰 → 其它直属 → slot-con → header。
+function normalizeRootBackdropOrder(root, base, summary) {
+  if (!root || !("children" in root)) return;
+  const s = summary || {};
+  const kids = Array.prototype.slice.call(root.children || []);
+  // 至少「slot-con + 1 个背景」即可纠正；不能要求 3 个，否则简单组件会漏修。
+  if (kids.length < 2) return;
+  const slot = kids.filter(isSlotContainer)[0];
+  if (!slot) return;
+  const header = kids.filter(isHeaderLike)[0];
+  const isBackdrop = (n) =>
+    /^bg-/i.test(String((n && n.name) || "")) ||
+    (!!base && isBlurBackdrop(n, base));
+  const backs = kids.filter(n => n !== slot && n !== header && isBackdrop(n));
+  if (!backs.length) return;
+  const blur = backs.filter(n => !!base && isBlurBackdrop(n, base));
+  const plain = backs.filter(n => blur.indexOf(n) < 0);
+  const rest = kids.filter(n => n !== slot && n !== header && backs.indexOf(n) < 0);
+  const ordered = blur.concat(plain, rest, [slot], header ? [header] : []);
+  let moved = 0;
+  for (let i = 0; i < ordered.length; i++) {
+    const n = ordered[i];
+    if (!n) continue;
+    try {
+      if (root.children.indexOf(n) !== i) {
+        root.insertChild(Math.max(0, Math.min(i, root.children.length)), n);
+        moved++;
+      }
+    } catch (e) {}
+  }
+  s.rootBackdropMoved = (Number(s.rootBackdropMoved) || 0) + moved;
+  s.rootBackdropOrdered = backs.length;
+}
 // 主入口：createSlotConGroup 之后、sortSlotConChildren 之前调用。
 function groupBySpatialBands(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
@@ -2086,6 +2125,9 @@ function groupBySpatialBands(root, summary) {
   const slot = Array.prototype.slice.call(root.children || []).filter(isSlotContainer)[0];
   if (!slot) return null;
   const kids0 = Array.prototype.slice.call(slot.children || []);
+  // v20261111.32：背景层归一化必须在幂等 return 之前 —— 对历史 .31 结果直接重跑时，
+  // 槽内已全是 section Group，若不先纠正 z-order，深色卡片底会继续盖住信息卡文字。
+  normalizeRootBackdropOrder(root, base, s);
   // 纯对象测试桩 / 无绝对几何 / 内容过少：严格跳过，保证历史探针与旧整理结果零回归。
   if (kids0.length < 4 || !kids0.some(hasAbsGeometry)) return null;
   // 幂等：槽内直接子级全是已建带 Group → 不重复建组、不重复排序。
@@ -2151,12 +2193,9 @@ function groupBySpatialBands(root, summary) {
   }
   s.bandGroupsCreated = (Number(s.bandGroupsCreated) || 0) + created;
   s.bandContainersRenamed = (Number(s.bandContainersRenamed) || 0) + renamed;
-  // 毛玻璃底图恒在最底层：header 提升到 root 末尾不影响它，但显式兜底防后续步骤挤位。
-  for (const n of Array.prototype.slice.call(root.children || [])) {
-    if (isBlurBackdrop(n, base) && root.children.indexOf(n) > 0) {
-      try { root.insertChild(0, n); } catch (e) {}
-    }
-  }
+  // v20261111.32：背景层整体归一化（毛玻璃恒 idx0 + 局部卡片底/分隔线全部在 slot-con 之下）。
+  // 只重排、不增删节点，原有节点绝对 bbox 零变化，视觉恢复与 .30 等价。
+  normalizeRootBackdropOrder(root, base, s);
   return slot;
 }
 
@@ -2236,7 +2275,7 @@ function qualityDiffText(before, after) {
 // 只输出「节点名 + 缩进层级」：不写文件、不缓存、不带几何/颜色/资源二进制。
 // 骨架三段式：cp- 根 / header + bg + slot-con / header-slot-*；同构序号子项折叠为 [循环 ×N]。
 // v20261110.28：契约格式版本，UI 未传版本时的兜底（单一来源仍是 ui.html 的 PLUGIN_VERSION）。
-const SCHEMA_VERSION = "20261110.31";
+const SCHEMA_VERSION = "20261110.32";
 
 const CONTRACT_HEADER = [
   "# Figma 整理后结构契约（组件骨架）",

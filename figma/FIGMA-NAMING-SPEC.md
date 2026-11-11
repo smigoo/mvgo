@@ -267,6 +267,7 @@ Figma @技术栈 锚点契约  >  用户补充需求段（本规范 / 契约文�
 | .29 | Step 0 绝对坐标基座（`absRect`）；Step 1 装饰四分流、毛玻璃 pin 住、图片不进 `bg-*` | 
 | .30 | 补齐 `mergeLooseGraphicRuns` 不得抢收内容图 / 毛玻璃；毛玻璃恒在最底层 |
 | **.31** | **Step 2 空间带切分**：`section-NN-<语义>` 序号体系、真建根级 `header`、跨带资源文件夹解包、`@meta sections` 计入真建分区、契约头声明空壳勿臆造；命名规范同步升版 |
+| **.32** | **root 背景层 z-order 归一化**：所有 root 直属 `bg-*` 装饰（含局部卡片底 / 分隔线）恒排在 `slot-con` 之前、全屏毛玻璃恒 `index 0`、`header` 在最上层；修复 .31 因深色卡片底盖住 `section-02-info` 文字的视觉回归。命名体系不变，仅约束绘制顺序。教训：节点 `absoluteBoundingBox` 全部不变 ≠ 视觉等价，必须显式校验 z-order |
 
 ---
 
