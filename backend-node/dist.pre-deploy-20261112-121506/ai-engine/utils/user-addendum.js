@@ -1,0 +1,76 @@
+import { isStructureContract, buildStructureContractSection } from './structure-contract.js';
+
+/**
+ * 🔍 高级选项 P0（2026-11-02 抽出）：用户补充需求 prompt 段构建（纯函数，单一来源）。
+ *
+ * 消费方：microcode-engineer.js#appendGlobalGuidance —— 每个分块 codegen prompt 携带。
+ * 从 microcode-engineer.js 原样平移（2026-10-09 引入），逐字未改；
+ * 抽出动机 = engineer 整体不可被 jest 加载（base-agent ESM 转换冲突），
+ * 纯函数落 utils 才能挂行为断言 spec（user-addendum.spec.ts）。
+ *
+ * 两项都可选；超长防御截断（extraPrompt ≤4000 字 / 文档文本 ≤20000 字——DTO 层已限，
+ * 此处兜底防历史调用方绕过）。空内容返回空串（零开销）。
+ * 优先级契约：Figma @技术栈 锚点契约 > 本段 > 平台默认规范；与设计稿视觉冲突时以设计稿为准。
+ *
+ * 🔧 v20261110.28 P0-1/P0-3：requirementDocText 若是 Figma 结构契约（带契约头），
+ * 改走 utils/structure-contract.js 的独立段落（硬约束：结构不让位设计稿、禁止臆造交互），
+ * 不再标成「需求文档（要点必须落实）」——后者会诱导模型把命名树当成业务需求展开。
+ */
+export function buildUserAddendumSection(extraPrompt, requirementDocText) {
+  const ep = String(extraPrompt || '').trim().slice(0, 4000);
+  const rd = String(requirementDocText || '').trim().slice(0, 20000);
+  if (!ep && !rd) return '';
+  let block = '\n\n# 📎 用户补充需求（高级选项，用户显式输入，必须遵守）\n\n';
+  // 🔧 2026-11-02 契约句改写（tab 切换事故 mc-max-1793601934772-3c973404）：
+  //  旧句「与设计稿视觉冲突时以设计稿为准」被模型泛化成「一切以设计稿为准」——
+  //  设计稿平铺三张统计卡、无 tab，用户「上面使用 tab 切换」被判冲突而省略
+  // （declare 层落了 tabConfig 但 vue 层照稿画静态卡，交互从未渲染）。
+  //  新契约拆两层：视觉样式仍让位设计稿；交互/行为类显式要求必须落实。
+  block += '> 优先级：Figma @技术栈 锚点契约 > 本段 > 平台默认规范。\n\n';
+  block += '> 视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准；但本段的交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；交互态未在设计稿出现时，沿用设计稿的配色与形态风格实现。\n\n';
+  if (ep) block += `## 补充提示词\n\n${ep}\n\n`;
+  if (rd) {
+    // v20261110.28：契约与需求文档分流，避免「要点必须落实」诱导模型把命名树当业务需求展开。
+    block += isStructureContract(rd)
+      ? buildStructureContractSection(rd)
+      : `## 需求文档（用户上传，要点必须落实）\n\n${rd}\n\n`;
+  }
+  return block;
+}
+
+/**
+ * 🔍 奇偶交替样式提示段（2026-11-12 · 视觉分析阶段确定性检测产物）。
+ *
+ * 消费方：vue3-engineer.js / microcode-engineer.js（分块 prompt 注入）+
+ *   lite.service.ts buildCodegenPrompt / buildMicrocodeCodegenPrompt。
+ * 输入 = detectOddEvenPatterns(figmaRoot) 产出的 oddEvenHints 数组
+ * （Figma 填充真值，非空才进 prompt）。空数组 → 返回 ''（零开销、零影响其他流程）。
+ *
+ * 优先级契约（与 buildUserAddendumSection 对齐）：
+ *   Figma @技术栈 锚点契约 > 本段 > 平台默认规范；视觉样式冲突以设计稿为准。
+ * 关键防错：明确区分 zebra（严格 nth-child 交替）与 active（单点激活态），
+ *   禁止把「1 异 N 同」误泛化成斑马纹（臆造斑马纹根因第三层）。
+ */
+export function buildOddEvenHintSection(oddEvenHints) {
+  const hints = Array.isArray(oddEvenHints) ? oddEvenHints : [];
+  if (!hints.length) return '';
+  let block = '\n\n# 🔁 奇偶交替样式提示（Figma 填充真值，视觉分析确定性检测）\n\n';
+  block +=
+    '> 优先级：Figma @技术栈 锚点契约 > 本段 > 平台默认规范；视觉样式（颜色/尺寸/布局）与设计稿冲突时以设计稿为准。\n\n';
+  for (const h of hints) {
+    if (h.kind === 'zebra') {
+      block +=
+        `- 区域「${h.scope}」（共 ${h.size} 项）：底色第 1/3/5…项为 ${h.fillA}、` +
+        `第 2/4/6…项为 ${h.fillB}，呈**严格奇偶交替** → 必须用 ` +
+        '`:nth-child(odd)` / `:nth-child(even)` 交替样式实现；' +
+        '禁止把「仅首项异色的单点激活态」误泛化成斑马纹。\n';
+    } else if (h.kind === 'active') {
+      block +=
+        `- 区域「${h.scope}」（共 ${h.size} 项）：仅 **1 项**底色为 ${h.activeHex}` +
+        `（其余 ${h.baseHex || '同色'}）→ 这是**单点选中/激活态**，**不是**斑马纹，` +
+        '禁止用 nth-child 交替；仅对该项单独高亮即可。\n';
+    }
+  }
+  block += '\n';
+  return block;
+}

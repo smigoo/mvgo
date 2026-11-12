@@ -1188,6 +1188,10 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     movedFromAncestor: 0,
     skippedAlreadyMounted: 0,
     noVarConsumer: 0,
+    // 2026-11-12 新增（真机计数行可观测性：S3 默认启用后必须能看出「为什么没动」）
+    importInjected: 0,
+    skippedDataDriven: 0,
+    skippedNonObjectStyle: 0,
   };
   const out = { ...files };
   if (!files || typeof files !== 'object' || !Array.isArray(resourceDomMapping)) {
@@ -1205,6 +1209,32 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
       if (!varByFile.has(m[2])) varByFile.set(m[2], { file: p, varName: m[1] });
     }
   }
+  // 🛡️ 改验分离·自实现 E3-v4 v4「数据驱动消费」等价判定（与判据侧同语义、独立实现；
+  //   语义：varName 在 <script> 中被某个 `const 容器 = …` 引用，且**容器名**在 <template> 可达）。
+  //   用途：判据把该形态列为**独立合规形态**并放行（component-acceptance/index.js:646）⇒
+  //   修侧必须同样跳过，否则补挂出第二份背景块（S3 由「默认关闭」恢复启用后的首要风险）。
+  const isDataDrivenConsumedLocal = (code, varName) => {
+    const tplM = String(code).match(/<template>([\s\S]*?)<\/template>/i);
+    const srcM = String(code).match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!tplM || !srcM) return false;
+    const tpl = tplM[1];
+    const src = srcM[1];
+    const escape = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const decls = [];
+    for (const m of src.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=/g)) {
+      decls.push({ name: m[1], idx: m.index ?? 0 });
+    }
+    if (decls.length === 0) return false;
+    const tokRe = new RegExp(`\\b${escape(varName)}\\b`, 'g');
+    for (const hit of src.matchAll(tokRe)) {
+      const at = hit.index ?? 0;
+      let owner = null;
+      for (const d of decls) if (d.idx < at) owner = d;
+      if (!owner) continue;
+      if (new RegExp(`\\b${escape(owner.name)}\\b`).test(tpl)) return true;
+    }
+    return false;
+  };
   for (const r of resourceDomMapping) {
     if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
     stats.scanned += 1;
@@ -1271,6 +1301,13 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     const hostSrc = out[varInfo?.file];
     if (typeof hostSrc !== 'string') continue;
 
+    // 🛡️ 统一前置闸（2026-11-12 · S3 恢复默认启用后的首要风险闸）：已处**数据驱动消费态**
+    //   ⇒ 跳过注入/补绑（防造第二份背景块）。
+    if (isDataDrivenConsumedLocal(hostSrc, varInfo.varName)) {
+      stats.skippedDataDriven += 1;
+      continue;
+    }
+
     // ① 归属容器存在性：精确匹配 `data-section-id="wantId"` 的开标签
     const tagRe = new RegExp(
       `<([A-Za-z][\\w.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="${wantId.replace(
@@ -1287,26 +1324,28 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
         stats.skippedAlreadyMounted += 1;
         continue;
       }
-      // ② 存在但未消费 → 在**既有 style 属性内**追加 background 声明（无 style 属性才新建；
-      //    禁止第二个 style 属性——SFC/Vue 会忽略重复属性）。
+      // ② 存在但未消费 → 挂 **Vue 动态绑定** `:style="{ backgroundImage: 'url(' + var + ')' }"`。
+      //   🔴 2026-11-12 治本（5afb401f 缺陷①）：静态 style 是纯字符串，**变量名不解析**
+      //   ⇒ 原写法 `background-image:url('bg1')` 是字面量路径，浏览器 404 ⇒ 背景恒不显示。
+      //   （幂等态样本 `:style="{ backgroundImage: 'url(' + bg1 + ')' }"` 即既定正确形态。）
       if (/background(-image)?\s*[=:]/.test(whole)) {
         stats.skippedAlreadyMounted += 1;
         continue;
       }
-      const withImport = `background-image:url('../../resources/images/${fname}');background-size:100% 100%;background-repeat:no-repeat;`;
+      const dynDecl = `backgroundImage: 'url(' + ${varInfo.varName} + ')', backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat'`;
       let finalTag;
-      if (/(\sstyle=")/.test(whole)) {
-        // 已有静态 style：在其内追加（前插，保持用户声明可见性无所谓，CSS 同属性后者胜——
-        // 前插保证若 LLM 写了同名属性以其为准）
-        finalTag = whole.replace(
-          /(\sstyle=")/,
-          `$1${withImport}`,
-        );
+      if (/(\s:style="\{)/.test(whole)) {
+        // 已有动态对象绑定：并入对象首部（同属性后者胜 ⇒ 前插使 LLM 自身声明优先）
+        finalTag = whole.replace(/(\s:style="\{\s*)/, `$1${dynDecl}, `);
+      } else if (/(\s:style=")/.test(whole)) {
+        // 已有动态**非对象**绑定（如 :style="styleObj"）：形态不确定，不硬改（防破坏既有样式）
+        stats.skippedNonObjectStyle += 1;
+        continue;
       } else {
-        // 无 style 属性：在标签名后新建
+        // 无 :style（含仅有静态 style）⇒ 在标签名后新建动态绑定（与静态 style 可共存）
         finalTag = whole.replace(
           /<([A-Za-z][\w.-]*)/,
-          `$1 style="${withImport}"`,
+          `$1 :style="{ ${dynDecl} }"`,
         );
       }
       out[varInfo.file] = hostSrc.replace(whole, finalTag);
@@ -1314,33 +1353,60 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
       continue;
     }
 
-    // ①' 归属容器不存在 → 注入 div（插到 varName 已消费的最深容器内部；找不到消费点
-    //    则插到根容器闭合前，fail-open）
-    const bgDecl = `background-image:url('${varInfo.varName}');background-size:100% 100%;background-repeat:no-repeat;`;
+    // ①' 归属容器不存在 → 注入承载 div（尺寸走静态 style，背景走动态绑定）
+    //   🔴 2026-11-12 治本（5afb401f 缺陷①② ＋ 本轮新发现缺陷③）：
+    //   ① 背景必须 `:style` 动态绑定——静态 style 里变量名是字面量、不解析 ⇒ 恒 404 不显示；
+    //   ② 插入点必须是「varName 消费元素的**开标签之内**」（注入 div 成为其子元素）——原
+    //      「引用所在行行尾」常落在父级/兄弟位置 ⇒ 注入 div 变错位方块破坏布局（5afb401f 实锤）；
+    //   ③ 原 `hostSrc.slice(0, tplIdx + insertAt)` 与 insertAt 的**绝对坐标重复叠加 tplIdx**
+    //      （仅当 `<template>` 位于文件首、tplIdx===0 时才凑巧正确）⇒ 现统一用绝对坐标。
+    const dynDecl = `backgroundImage: 'url(' + ${varInfo.varName} + ')', backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat'`;
     const injectDiv = `<div data-section-id="${wantId}" style="width:${Math.round(
       r.figmaBox?.width || 0,
-    )}px;height:${Math.round(r.figmaBox?.height || 0)}px;${bgDecl}"></div>`;
+    )}px;height:${Math.round(r.figmaBox?.height || 0)}px;" :style="{ ${dynDecl} }"></div>`;
     const tplIdx = hostSrc.indexOf('<template>');
     if (tplIdx < 0) continue;
     const closeIdx = hostSrc.lastIndexOf('</template>');
     if (closeIdx < 0) continue;
-    // 插入点：varName 在 template 中的最后一个引用所在行的行尾（容器内部近似解）
-    const tplBody = hostSrc.slice(tplIdx, closeIdx);
+    // ⚠️ tplBody 只取 **template 内容**（不含 `<template>` 自身标签）：原写法
+    //   `slice(tplIdx, closeIdx)` 把开标签也括进来 ⇒ 兜底的 `indexOf('<')` 命中 `<template>`
+    //   的尖括号 ⇒ 插入点落在 `<template>` 之后 = **根容器之外**，又是一个错位方块（本节实测）。
+    const gt0 = hostSrc.indexOf('>', tplIdx);
+    const bodyStart = gt0 >= 0 ? gt0 + 1 : tplIdx;
+    const tplBody = hostSrc.slice(bodyStart, closeIdx);
+    // 插入点（绝对坐标）：varName 消费元素的开标签之后 ⇒ 注入 div 落在其内部（层级归属由此确定）
     const useIdx = tplBody.lastIndexOf(varInfo.varName);
-    let insertAt = closeIdx;
+    let atAbs = -1;
     if (useIdx >= 0) {
-      const lineEnd = tplBody.indexOf('\n', useIdx);
-      insertAt = lineEnd >= 0 ? tplIdx + lineEnd + 1 : closeIdx;
+      const gt = tplBody.indexOf('>', useIdx);
+      if (gt >= 0) atAbs = bodyStart + gt + 1;
+    }
+    if (atAbs < 0) {
+      // 兜底：根内容容器开标签之后（无消费点可依时的近似解）
+      const lt = tplBody.indexOf('<');
+      const gt = lt >= 0 ? tplBody.indexOf('>', lt) : -1;
+      atAbs = gt >= 0 ? bodyStart + gt + 1 : closeIdx;
     }
     out[varInfo.file] =
-      hostSrc.slice(0, tplIdx + insertAt) +
-      injectDiv +
-      '\n' +
-      hostSrc.slice(tplIdx + insertAt);
+      hostSrc.slice(0, atAbs) + '\n' + injectDiv + hostSrc.slice(atAbs);
     stats.missingContainerInjected += 1;
   }
   // ③ 错挂清理：归属容器已补挂后，其它段开标签上同资源的 bg 声明移除（防双挂/拉伸）。
   //   只处理「补挂/补绑定成功」的条目；无 var 消费的条目没有归属事实，不动。
+  //   ⚠️ 2026-11-12 修（缺陷⑦）：同一 fname 可被**多个归属段共用**（真机：bg-3475.png 被
+  //   2:3474 / 2:3524 两条 mapping 共用，同变量 bgbg3475）。原实现只豁免「当前 wantId」，
+  //   ⇒ 兄弟归属段的注入 div 会被当「祖先错挂」互相剥离 ⇒ 两侧 backgroundImage 全丢。
+  //   改为按变量名收集**全部**合法归属段 id，在负向前瞻中一并豁免。
+  const legitIdsByVar = new Map(); // varName -> Set<sectionId>
+  for (const r of resourceDomMapping) {
+    if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
+    const f = String(r.resourceFile || '').split('/').pop();
+    const v = varByFile.get(f);
+    const sid = String(r.ownerSectionId || '');
+    if (!v || !sid) continue;
+    if (!legitIdsByVar.has(v.varName)) legitIdsByVar.set(v.varName, new Set());
+    legitIdsByVar.get(v.varName).add(sid);
+  }
   for (const r of resourceDomMapping) {
     if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
     const fname = String(r.resourceFile || '').split('/').pop();
@@ -1353,26 +1419,52 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
       if (typeof out[p] !== 'string') continue;
       const cur = out[p];
       // 找含 varName 且 data-section-id ≠ wantId 的开标签 → 剥其 backgroundImage 声明
+      //   ⚠️ 2026-11-12 修：原尾部 `[^>]*?)` 是**惰性**且其后无锚点 ⇒ 正则最短匹配，只取到
+      //   `data-section-id="` 就收尾，`open.includes(varName)` 恒为假 ⇒ ③错挂清理**从未生效过**
+      //   （潜伏死码）。改贪心 `[^>]*`（`[^>]` 不跨 `>`，仍精确停在开标签末尾）。
+      const exclIds = [...(legitIdsByVar.get(varInfo.varName) || new Set([wantId]))].map((s) =>
+        s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      );
       const offenderRe = new RegExp(
-        `(<[A-Za-z][\\w.-]*(?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="(?!${wantId.replace(
-          /[.*+?^${}()|[\\]\\\\]/g,
-          '\\$&',
-        )}")[^>]*?)`,
+        `(<[A-Za-z][\\w.-]*(?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="(?!${exclIds.join(
+          '|',
+        )}")[^>]*)`,
         'g',
+      );
+      // ⚠️ 2026-11-12 修（缺陷⑥）：原用 `open.includes(varName)` 纯子串匹配 ⇒ 短变量名会命中
+      //   长变量名内部（`bg3` ⊂ `bgbg3475`，真机实测）⇒ 误剥无关元素的背景。改词边界。
+      const varWordRe = new RegExp(
+        `\\b${varInfo.varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
       );
       let changed = false;
       const nextCode = cur.replace(offenderRe, (open) => {
-        if (!open.includes(varInfo.varName)) return open;
-        const stripped = open.replace(
+        if (!varWordRe.test(open)) return open;
+        const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escFname = escRe(fname);
+        const escVar = escRe(varInfo.varName);
+        let stripped = open;
+        // 形态 A：静态 CSS 写法 `background-image: url('../../resources/images/x.png')`
+        stripped = stripped.replace(
           new RegExp(
-            `(\\s(?::?)style="[^"]*?)background(?:-image)?\\s*:\\s*url\\([^)]*${fname.replace(
-              /[.*+?^${}()|[\\]\\\\]/g,
-              '\\$&',
-            )}[^)]*\\);?`,
+            `(\\s(?::?)style="[^"]*?)background(?:-image)?\\s*:\\s*url\\([^)]*${escFname}[^)]*\\);?`,
+          ),
+          '$1',
+        );
+        // 形态 B（2026-11-12 新增）：Vue 对象绑定 `backgroundImage: 'url(' + var + ')'` /
+        //   ``backgroundImage: `url(${var})` ``。旧正则只认带连字符的 `background-image`
+        //   ⇒ 动态形态的**祖先错挂永远清不掉**（双挂残留 ⇒ 视觉仍被拉伸铺满）。
+        stripped = stripped.replace(
+          new RegExp(
+            `(\\s(?::?)style="[^"]*?)backgroundImage\\s*:\\s*(?:'url\\('\\s*\\+\\s*${escVar}\\s*\\+\\s*'\\)'|\`url\\(\\$\\{${escVar}\\}\\)\`)\\s*,?`,
+            'g',
           ),
           '$1',
         );
         if (stripped !== open) {
+          // 剥空后的属性残留清理（` :style="{ }"` 之类空壳属性）
+          stripped = stripped
+            .replace(/\s:style="\{\s*,?\s*\}"/g, '')
+            .replace(/\sstyle="\{\s*,?\s*\}"/g, '');
           changed = true;
           stats.movedFromAncestor += 1;
         }
@@ -2327,10 +2419,17 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     id: 'S3-bg-ownership-backstop',
     name: 'E3-v4 背景归属确定性补挂',
     phase: FIX_PHASE.RESOURCE,
-    // 🔴 2026-11-11 5afb401f 实锤：本规则注入的独立空 div 会变成错位方块破坏 card 布局，
-    //   且静态 style 用 url('bg1')（变量在静态 style 无效）⇒ 背景不显示。改为**默认关闭**
-    //   等文本锚点版重写（S3-c）。S4 非破坏性保留。
-    enabled: () => process.env.S3_BG_BACKSTOP === 'true',
+    // 🛡️ 2026-11-12 治本：5afb401f 两缺陷已一并修好，**恢复默认启用**——
+    //   ① 背景改 `:style` 动态绑定 ⇒ 变量真解析（原静态 style 里 url('bg1') 是字面量 ⇒ 恒 404）；
+    //   ② 插入点改「varName 消费元素开标签之内」⇒ 注入 div 成为其子元素（原插「引用所在行行尾」
+    //      落在父级/兄弟位置 ⇒ 错位方块破坏布局）；另修 ③ 插入坐标重复叠加 tplIdx。
+    //   定位依据：E3-v4「归属容器 X 未建且该背景无任何消费形态（含数据驱动）」形态在产物侧
+    //   **无任何其它确定性兜底**——S3-c（correctCardBgOwnership）只改既有元素、不新建 DOM，
+    //   且要求同构卡组 ≥2（单个 bg 直接 skip）⇒ 不启用本规则时该形态只能靠 LLM 单轮照抄
+    //   hardConstraints，实测 effective=false ⇒ E3-v4 反复 FAIL 且复检不过（拒绝交付坏结构）。
+    //   风险闸：已处「数据驱动消费态」（判据 E3-v4 v4 放行形态）时本规则主动跳过，防造重复背景块。
+    //   回滚开关：S3_BG_BACKSTOP=false。
+    enabled: () => process.env.S3_BG_BACKSTOP !== 'false',
     fixFiles: (files) => {
       const r = backstopMountBgOwnership(files, resourceDomMapping);
       engineer.logger?.info?.(

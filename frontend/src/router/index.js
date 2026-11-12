@@ -24,7 +24,7 @@ const routes = [
   ...basicRoutes,
   ...devRoute,
   // meeting 开发工作台：dev / production 均注册（已移除环境门控，随本页一并上生产）。
-  // 入口在页脚「实验室」下拉（AppFooter.vue 中 devOnly: true，仅 dev 可见、生产已隐藏），
+  // 入口在页脚「实验室」下拉（AppFooter.vue 中 devOnly: false，全环境可见），
   // 亦可直连 /meeting
   ...meetingRoute,
   ...fixedMcRoutes,

@@ -107,6 +107,17 @@ interface TaskMetadata {
   taskType?: string;
   /** 父任务 sessionId（页面生成下的子组件任务用） */
   parentId?: string;
+  /**
+   * 🆕 2026-11-12 精修续跑溯源：本任务若是「以现有代码继续精修」发起的，
+   * 记录它所续跑的**原始生成任务** sessionId（如 mc-max-1793601836580-ae77ba7d）。
+   * 与 parentId 区分：parentId 是 page→component 的父子生关系；refineOf 是
+   * 「精修续跑」对「首次生成」的溯源关系，二者语义独立、互不污染 childIds。
+   * 用途：精修任务详情页展示「🔧 精修续跑 · 源自 mc-max-xxx」并允许一键跳回源任务，
+   * 解决「点精修后新开了一个任务，却分不清它改的是哪次生成」的困惑。
+   */
+  refineOf?: string;
+  /** 🆕 2026-11-12 精修续跑溯源：本精修任务的精修类型（layout|style|both），供「再精修一次」复用 */
+  refineType?: 'layout' | 'style' | 'both';
   /** 创建者 userId（数据隔离用） */
   userId?: string;
   
@@ -227,6 +238,10 @@ export interface Task {
   taskType?: string;
   /** 父任务 sessionId */
   parentId?: string;
+  /** 🆕 2026-11-12 精修续跑溯源：本任务续跑的原始生成任务 sessionId（详见 TaskMetadata.refineOf 注释） */
+  refineOf?: string;
+  /** 🆕 2026-11-12 精修续跑溯源：本精修任务的精修类型（layout|style|both） */
+  refineType?: 'layout' | 'style' | 'both';
   /** 子任务 sessionId 列表（仅 page 类型有值） */
   childIds?: string[];
   /** 创建者 userId（数据隔离用） */
@@ -280,6 +295,21 @@ export interface Task {
   degradedFiles?: string[];
   /** 🛡️ #10 静默失败降级：Vue SFC 写盘门禁跳过的文件清单（已生成但未落盘），供前端展示缺失提示 */
   gateSkippedFiles?: string[];
+  /**
+   * 🛡️ C 降级交付（2026-11-12 · mc-max-1794458950336-47b996c3 实锤）：
+   * acceptance 判据照旧 FAIL（结构性/内容性缺失），但产物**能打开、能进编辑器**
+   * ⇒ 不再拒绝交付，改为「交付 + 待补清单」。本组字段即「缺了什么」的证据。
+   * qualityGate 同时置 warned（禁止被记成 passed）。
+   */
+  acceptanceDeliveredWithWarnings?: boolean;
+  /** 触发降级的判据码（如 ['C1b']） */
+  acceptanceWarningCodes?: string[];
+  /** 待补文本（真值原文，来自 C1b.missingLabels） */
+  acceptanceMissingTexts?: string[];
+  /** 一次性列出待补内容的可读文案（前端直接展示） */
+  acceptanceWarningText?: string | null;
+  /** 明细：每条判据的 code + detail */
+  acceptanceWarnings?: Array<{ code: string; detail: string }>;
   /** 人工审核记录：创建者将失败任务人工判定为成功后写入；action 表示最新动作 */
   humanReview?: HumanReviewRecord;
   /** 用户极速通过（运行中跳过剩余阶段）标记 */
@@ -1400,6 +1430,8 @@ export class TasksService {
       panelKey: metadata.panelKey || 'default-panel',
       taskType: metadata.taskType || 'component',
       parentId: metadata.parentId,
+      refineOf: metadata.refineOf,
+      refineType: metadata.refineType,
       childIds: [],
       userId: metadata.userId,
     };
@@ -1435,6 +1467,45 @@ export class TasksService {
     return Array.from(this.tasks.values())
       .filter((task) => task.componentId === componentId)
       .sort((a, b) => b.startTime - a.startTime)[0];
+  }
+
+  /**
+   * 磁盘反查任务的实际产物目录（精修/下载/预览共用的唯一真值来源）。
+   * 🔴 治本：运行中后端的内存任务记录 `outputPath` 可能为空/过期（不持久化或重启后丢失），
+   * 但磁盘 temp 目录（含 package/index.vue + .checkpoint）仍在——此时只信内存 outputPath 会误报
+   * 「任务产物不存在」。本方法与 packageTaskCode 的候选顺序一致，从磁盘反查真实产物目录。
+   * 优先返回「既有 package/index.vue 又含 .checkpoint」的目录（精修需 figma 分析缓存），
+   * 否则返回仅含 package/index.vue 的目录（无缓存则由调用方给出明确提示）。
+   */
+  resolveTaskOutputDir(task: Task): string | null {
+    if (!task) return null;
+    const candidates: string[] = [];
+    const isVue3 = task.target === 'vue3';
+    if (isVue3 && task.groupId) {
+      candidates.push(
+        join(vue3ComponentsDir, task.groupId, task.componentId),
+        join(resolveFrontendWorkspace(), 'vue3-components', task.groupId, task.componentId),
+      );
+    } else {
+      candidates.push(
+        join(customComponentsDir, task.componentId),
+        join(resolveFrontendWorkspace(), 'custom-components', task.componentId),
+      );
+    }
+    if (task.outputPath) candidates.push(task.outputPath);
+    for (const baseTemp of this.getTempRoots()) {
+      const tempDir = this.findTempComponentDirSync(baseTemp, task.groupId || 'default-group', task.componentId);
+      if (tempDir) candidates.push(tempDir);
+    }
+
+    const hasPackage = (p: string) => existsSync(join(p, 'package', 'index.vue'));
+    const hasCheckpoint = (p: string) => existsSync(join(p, '.checkpoint'));
+    // 优先：产物 + 分析缓存俱在（精修最理想）
+    const best = candidates.find((c) => existsSync(c) && hasPackage(c) && hasCheckpoint(c));
+    if (best) return best;
+    // 次选：仅有产物（无缓存，仍可尝试，由调用方提示）
+    const withProduct = candidates.find((c) => existsSync(c) && hasPackage(c));
+    return withProduct || null;
   }
 
   /**
@@ -1724,6 +1795,13 @@ export class TasksService {
         // 🆕 返回 fileKey/nodeId，供前端「重试」重建 Figma URL
         fileKey: task.fileKey,
         nodeId: task.nodeId,
+        // 🛡️ 2026-11-12 凭证引用回传（P1）：重试场景前端把这三字段随 generate body
+        //   带回 ⇒ createTask 建账即 pin 原任务那个 token（readTaskFigmaCredentialRef
+        //   认顶层），不再被「当时 active 槽位」顶掉 ⇒ 404 死循环从源头消除。
+        //   值本身是非机密：fp 是脱敏指纹（figd_x****yyyy）、slotId/Name 是槽位标识。
+        figmaCredentialFp: task.figmaCredentialFp,
+        figmaCredentialSlotId: task.figmaCredentialSlotId,
+        figmaCredentialSlotName: task.figmaCredentialSlotName,
         // 🔴 2026-10-20：多主题整套设计稿（getTaskStatus 是**白名单式构造**，
         //   不写会被静默剥离 ⇒ 任务详情页生成期拿不到 themeNodes，多主题卡/徽章恒空。
         //   与 getAllTasks 的 `...task` spread 对齐（同型坑：字段不经显式声明到不了前端）。
@@ -1732,6 +1810,8 @@ export class TasksService {
         panelKey: task.panelKey,
         taskType: task.taskType,
         parentId: task.parentId,
+        refineOf: task.refineOf,
+        refineType: task.refineType,
         childIds: task.childIds,
         // 🆕 档位和来源（任务详情页展示用，与 getAllTasks 对齐）
         generationTier: task.generationTier,
@@ -2354,6 +2434,12 @@ export class TasksService {
     const critiques = Array.isArray(checkResult?.critiques) ? checkResult.critiques : [];
     const hasHighCritique = critiques.some((item: any) => item?.severity === 'high');
     const hasWarnings = (result?.warnings?.length || 0) > 0;
+    // 🛡️ C 降级交付（2026-11-12 · 47b996c3 实锤）：acceptance 有可降级判据未修好 ⇒ 产物交付
+    //   但**必须**记成 warned，禁止被上方 qScore/阈值组合「凑成 passed」骗成全绿
+    //   （否则「已交付，但有 3 处真值文本待补」在任务列表里看不出来）。
+    const hasAcceptanceWarnings =
+      result?._acceptanceDeliveredWithWarnings === true ||
+      (Array.isArray(result?._acceptanceWarnings) && result._acceptanceWarnings.length > 0);
     const QUALITY_GATE_THRESHOLD = parseInt(process.env.QUALITY_GATE_THRESHOLD || '75', 10);
     // 🛡️ P0-B（2026-11-11）：C2 契约下 VISUAL-002(WARN) 不阻断交付，但必须计入 warned ——
     // 「像素分 <0.6 却 passed」会掩盖视觉劣化。只影响标签，不影响任务终态（仍 completed）。
@@ -2366,6 +2452,7 @@ export class TasksService {
       !hasHighCritique &&
       qScore >= QUALITY_GATE_THRESHOLD &&
       !hasWarnings &&
+      !hasAcceptanceWarnings &&
       !visualFidelityWarned
         ? 'passed'
         : 'warned';
@@ -2398,6 +2485,20 @@ export class TasksService {
     task.degradedFiles = Array.isArray(result?.degradedFiles) ? result.degradedFiles : [];
     // 🛡️ #10 静默失败降级：gateSkippedFiles 持久化（Vue SFC 写盘门禁跳过的文件），供前端缺失提示
     task.gateSkippedFiles = Array.isArray(result?.gateSkippedFiles) ? result.gateSkippedFiles : [];
+    // 🛡️ C 降级交付（2026-11-12 · 47b996c3 实锤）：产物已交付但有可降级判据未修好 ⇒
+    //   把「缺了什么」完整落库（码 + 待补文本原文 + 可读文案 + 明细），供任务卡片/详情展示。
+    //   旧任务无这些字段 ⇒ 全为空数组/null，前端按 falsy 不渲染 ⇒ 零回归。
+    task.acceptanceDeliveredWithWarnings = result?._acceptanceDeliveredWithWarnings === true;
+    task.acceptanceWarningCodes = Array.isArray(result?._acceptanceWarningCodes)
+      ? result._acceptanceWarningCodes
+      : [];
+    task.acceptanceMissingTexts = Array.isArray(result?._acceptanceMissingTexts)
+      ? result._acceptanceMissingTexts
+      : [];
+    task.acceptanceWarningText = result?._acceptanceWarningText || null;
+    task.acceptanceWarnings = Array.isArray(result?._acceptanceWarnings)
+      ? result._acceptanceWarnings
+      : [];
     task.result = result;
 
     // 终态收口：等 qualityGate / completionModels / 降级清单全部就绪后再落终态，
@@ -3187,6 +3288,15 @@ export class TasksService {
       // 保留原错误信息供前端展示
       originalError: task.error,
       originalDuration: task.duration,
+      // 🆕 2026-11-12 凭证引用随 meta 回传：前端「重新发起生成」把它随请求带回后，
+      // createTask 建账（readTaskFigmaCredentialRef 认顶层）与执行期
+      // （readFigmaCredentialRef(requestConfig)）都会命中**原任务那个 token**，
+      // 重试不再被当前 active 槽位顶掉成 404（mc-max-1794425208588-385b1671 实锤：
+      // 原任务 pin 主 Token 可读，全量重发的新任务按当前 active（另一账号）建账 ⇒ 404）。
+      // 字段名刻意不含 token/secret（figma-credential-ref.ts 约束①），落盘不会被抹。
+      figmaCredentialFp: task.figmaCredentialFp,
+      figmaCredentialSlotId: task.figmaCredentialSlotId,
+      figmaCredentialSlotName: task.figmaCredentialSlotName,
     };
   }
 

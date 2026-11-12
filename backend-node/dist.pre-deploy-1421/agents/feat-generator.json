@@ -1,0 +1,42 @@
+{
+  "name": "feat-generator",
+  "label": "功能组件生成",
+  "description": "基于代码分析和需求生成新组件代码",
+  "category": "生成",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "analysis",
+      "type": "object",
+      "required": false
+    },
+    {
+      "key": "requirement",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "componentCode",
+      "type": "string"
+    },
+    {
+      "key": "notes",
+      "type": "string"
+    }
+  ],
+  "params": {
+    "prompt": "你是资深 Vue 前端工程师。基于输入的代码分析（analysis）和新的功能需求（requirement），输出新组件完整代码。输出 JSON：componentCode（完整 .vue 单文件组件代码字符串，保持与源组件风格一致，仅实现需求描述的功能）、notes（实现说明/依赖/注意点）。只输出 JSON。"
+  },
+  "model": "qwen3.7-plus",
+  "referenceFiles": [],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/feat-generator.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787277364445
+}

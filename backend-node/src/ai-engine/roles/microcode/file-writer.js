@@ -34,9 +34,20 @@ import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.j
 //   的同一份解析（禁造第三份）。只改 .less 源：.css 由下游 `recompileIndexCss` 自动重生成。
 import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
 import { stripSectionContractBleed } from '../../utils/section-contract-bleed-guard.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl, injectChartRebuildGuard } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
+// 🛡️ 产物终验（2026-11-12 · 8fa6d6f3 实锤）：表达式级最后闸，拦「写盘出口自愈链
+//    注坏 :style 后、磁盘残留坏版」到达前端（详见 final-vue-expression-gate.js docblock）。
+import { runFinalVueExpressionGate } from './final-vue-expression-gate.js';
+// 🛡️ 根治②（2026-11-12 · 8fa6d6f3 实锤）：`:style` 对象后 CSS 残留归一器 ——
+//    bg 挂载链把目标标签原静态 style 值残留拼进 `:style` 引号内（`:style="{...};display:flex;..."`）
+//    ⇒ 前端表达式解析炸。写前确定性归位（残留 CSS 并入静态 style），比门禁拦截更优（内容可救）。
+import { healStyleBindingResidue } from './style-binding-residue-healer.js';
+// 🛡️ 根治⑨（2026-11-12 · 9abc87d3 实锤）：echarts 挂载点缺失自愈——script 有
+//    `echarts.init(X.value)` 但 template 漏 `<div ref="X">` ⇒ 图表永不渲染 ⇒
+//    do-not-invent 硬闸 BLOCK ⇒ 整单 failed。写前确定性注入挂载 div（判据同口径）。
+import { healChartMountPoints } from './chart-mount-healer.js';
 // 🛡️ L2-a（195c8d0e 实锤）：写盘门禁判坏且磁盘无 last-good 时，回退到分块缓存中的合格版本
 import { pickCachedChunkLastGood } from './cached-chunk-last-good.js';
 // 🛡️ F3 刀 3（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：图表 min-height 被
@@ -1382,6 +1393,35 @@ export function writeFiles(files, outputPath, options = {}) {
             );
           }
         }
+        // 🛡️ G13（2026-11-12 · mc-lite-1794462096859-e6a099a0 真机实锤）：图表容器重建自愈注入。
+        //   病灶：产物把图表挂在自身根模板、用 `<base-panel>` 外壳；base-panel 内部是
+        //   `<component :is="panelComponent" :key="currentPanel">`，面板类型一变（深色主题
+        //   自动联动 default-panel → aio-panel）⇒ unmount+mount ⇒ slot 子树 DOM 整体重建，
+        //   而产物根组件实例由宿主直接渲染、**不被 unmount** ⇒ `let chart` 仍指向已脱离文档
+        //   的旧实例（onUnmounted 不触发、不 dispose），新容器又被 init 首行
+        //   `if (!ref.value || chart) return` 永久早退 ⇒ 图表永久空白（实测新元素
+        //   `_echarts_instance_=null`、无 canvas）。真机双向复现（light→dark、dark→light 均炸）。
+        //   与 G12a 同属「写盘出口的确定性图表处置」：G12a 管「死实现剥离」，G13 管
+        //   「活实现自愈」。注入内容为**纯附加 watch**（旧实例判定失效→dispose 置空；
+        //   新容器出现→回调产物自身 init 函数），不改产物任何既有语句；判据确定性 +
+        //   幂等标记 + fail-open（任一判据不满足即原样返回，绝不改坏已合格产物）。
+        try {
+          const chartGuard = injectChartRebuildGuard(sanitizedContent);
+          if (chartGuard.changed) {
+            sanitizedContent = chartGuard.content;
+            if (logger) {
+              logger.warn(
+                `🛡️ G13 图表容器重建自愈已注入: ${relativePath}（${chartGuard.injected.join('；')}）`,
+              );
+            }
+          }
+        } catch (chartGuardErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ G13 图表容器重建自愈跳过: ${relativePath}（${chartGuardErr?.message || chartGuardErr}）`,
+            );
+          }
+        }
         // 🛡️ E 步扩展：SFC 内嵌 style 的 theme 变量引用自愈（mixin 闭包变量 @fontSize 等
         // 顶层不可见 → SFC style 编译失败 → P1-4 隔离 → 「刷新后 tabs 消失只剩 chart」，
         // 实锤 mc-max-1788176720155-9560d082 HeaderTabs/EnvironmentTabs）
@@ -1554,6 +1594,48 @@ export function writeFiles(files, outputPath, options = {}) {
           if (logger) {
             logger.warn(
               `🛡️ 脚本括号自愈跳过: ${relativePath}（${braceErr?.message || braceErr}）`,
+            );
+          }
+        }
+        // 🛡️ 根治②（2026-11-12 · 8fa6d6f3 实锤）：`:style` 对象后 CSS 残留归一。
+        //   写盘出口注入链产出的 `:style="{...};display:flex;..."`（对象字面量后拼 CSS 声明）
+        //   会让 compileTemplate 报 `Unexpected token, expected ","` ⇒ 前端组件加载失败。
+        //   与上方自闭合斜杠/脚本括号自愈同款纪律：机械可修缺陷在校验前还原。
+        try {
+          const _residueHealed = healStyleBindingResidue(sanitizedContent);
+          if (_residueHealed.healed) {
+            sanitizedContent = _residueHealed.content;
+            if (logger) {
+              logger.warn(
+                `🛡️ :style 绑定残留归一: ${relativePath}（${_residueHealed.fixes.length} 处，残留 CSS 已归位静态 style）`,
+              );
+            }
+          }
+        } catch (residueErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ :style 绑定残留归一跳过: ${relativePath}（${residueErr?.message || residueErr}）`,
+            );
+          }
+        }
+        // 🛡️ 根治⑨（2026-11-12 · mc-max-1794478507437-9abc87d3 实锤）：echarts 挂载点缺失自愈。
+        //   script 调 `echarts.init(X.value)` 但 template 无 `ref="X"` ⇒ chartRef 恒 null、
+        //   图表永不渲染 ⇒ DO-NOT-INVENT-CHART-MOUNT-MISSING（BLOCK）⇒ 重试耗尽 failed。
+        //   与上方自愈链同款纪律：机械可修缺陷在校验前确定性还原（幂等、无命中零改动）。
+        try {
+          const _mountHealed = healChartMountPoints(sanitizedContent);
+          if (_mountHealed.healed) {
+            sanitizedContent = _mountHealed.content;
+            if (logger) {
+              logger.warn(
+                `🛡️ echarts 挂载点缺失自愈: ${relativePath}（注入 ref=${_mountHealed.fixes.map((f) => f.refName).join(',')} 挂载 div）`,
+              );
+            }
+          }
+        } catch (mountErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ echarts 挂载点自愈跳过: ${relativePath}（${mountErr?.message || mountErr}）`,
             );
           }
         }
@@ -2378,6 +2460,80 @@ export function writeFiles(files, outputPath, options = {}) {
         }
       }
 
+      // 🛡️ 根治⑫（2026-11-12 · mc-1794490786159-c6e73f7a 实锤）：写盘出口单点终验。
+      //   病灶：R5 冻结救回把快照换回 sanitizedContent 后，R24/S7/G13 等刀**继续**在
+      //   其上注入改写（resource mountTarget 回退、img 注入等），这些改写不再经过
+      //   任何语法门禁直达 writeFileSync ⇒ 磁盘 3494B 第三坏版（CSS 文本注入 :style
+      //   对象）带 completed 交付，预览「组件加载失败」。此前门禁验的内容与写盘的
+      //   内容在「救回+后置改写」时序下不等。
+      //   治本：writeFileSync 前最后一刻再验一次（出口单点，一次防住全部刀序组合）；
+      //   坏则快照救回（快照也须验），快照亦坏拒绝落盘（fail-closed，磁盘保留旧版）。
+      if (relativePath.endsWith('.vue')) {
+        // ⚠️ lessGlobalVars 声明于上方 .vue 门禁分支内（块级 const），此处必须现算（同 :2409 R2 覆写点）
+        const _exitLessVars = extractLessGlobalVars(files);
+        let _exitOk = false;
+        let _exitErrs = null;
+        try {
+          const _exitChk = validateVueSfc(sanitizedContent, relativePath, {
+            lessGlobalVars: _exitLessVars,
+          });
+          _exitOk = _exitChk.valid;
+          _exitErrs = _exitChk.errors;
+        } catch (_exitErr) {
+          _exitErrs = [String(_exitErr?.message || _exitErr)];
+        }
+        if (!_exitOk) {
+          const _exitSnap = _fgFinalSnapshotOf(options.fgTakeoverFiles, relativePath);
+          let _snapOk = false;
+          let _snapErrs = null;
+          if (typeof _exitSnap === 'string' && _exitSnap) {
+            try {
+              const _snapChk = validateVueSfc(_exitSnap, relativePath, {
+                lessGlobalVars: _exitLessVars,
+              });
+              _snapOk = _snapChk.valid;
+              _snapErrs = _snapChk.errors;
+            } catch (_snapErr) {
+              _snapErrs = [String(_snapErr?.message || _snapErr)];
+            }
+          }
+          if (_snapOk) {
+            const _badBytes2 =
+              typeof sanitizedContent === 'string' ? sanitizedContent.length : 0;
+            sanitizedContent = _exitSnap;
+            currentStep = 'final_exit_gate_snapshot_restore';
+            if (logger) {
+              logger.warn(
+                '🛡️ 根治⑫ 写盘出口终验拦截 → 终裁快照救回（后置改写改坏被拦在 writeFileSync 前）',
+                {
+                  path: relativePath,
+                  badBytes: _badBytes2,
+                  restoredBytes: _exitSnap.length,
+                  gateErrors: (_exitErrs || []).slice(0, 1),
+                },
+              );
+            }
+          } else {
+            if (logger) {
+              logger.error(
+                `🚫 根治⑫ 写盘出口终验阻断（坏文件不落盘，快照${_exitSnap ? '亦坏' : '缺失'}）: ${relativePath}`,
+                {
+                  gateErrors: (_exitErrs || []).slice(0, 2),
+                  snapshotErrors: (_snapErrs || []).slice(0, 1),
+                },
+              );
+            }
+            skippedFiles.push(relativePath);
+            sfcBlocked.push({
+              path: relativePath,
+              errors: _exitErrs,
+              reason: 'final-exit-gate-blocked',
+            });
+            continue;
+          }
+        }
+      }
+
       // 🛡️ P1-Slice1（增量补丁式更新）：写前 diff —— 内容未变化则跳过写盘。
       // 避免「每次生成都整包重写」：旧行为无条件 writeFileSync 会重置 mtime、
       // 抹掉「本轮真正变化了哪些文件」这一信息，使下游（候选快照 / 预览 / 断点续跑 /
@@ -2435,6 +2591,32 @@ export function writeFiles(files, outputPath, options = {}) {
           size: sanitizedContent.length,
           sanitized: sanitizedContent.length !== content.length,
         });
+      }
+    }
+
+    // 🛡️ 产物终验（2026-11-12 · mc-1794463362140-8fa6d6f3 实锤）：表达式级最后闸。
+    //   单文件门禁只拦「本轮新写」；写盘出口自愈链（刀 49/55/56、S6、bg 挂载注入等）
+    //   在多轮 writeFiles 之间反复改写并多次落盘，坏 `:style`（如对象字面量后被拼
+    //   CSS 残留）可能早轮落盘成功、后续轮才被拦 ⇒ 磁盘残留坏版直达前端。
+    //   此处以磁盘事实为准对全部 .vue 终检：坏文件先试 code-chunks 缓存回退，
+    //   无合法候选则移除（与写盘门禁「坏文件不落盘」同语义）。永不 throw。
+    try {
+      const _gateSeen = new Set(writtenFiles);
+      for (const _k of Object.keys(files || {})) _gateSeen.add(_k);
+      const _gateRes = runFinalVueExpressionGate(
+        outputPath,
+        [..._gateSeen].filter((p) => typeof p === 'string' && p.endsWith('.vue')),
+        { logger },
+      );
+      if (_gateRes.bad.length > 0 && logger) {
+        logger.warn('🛡️ 产物终验完成（表达式级）', {
+          checked: _gateRes.checked,
+          bad: _gateRes.bad.map((b) => ({ path: b.path, action: b.action })),
+        });
+      }
+    } catch (_gateErr) {
+      if (logger) {
+        logger.warn(`🛡️ 产物终验跳过（${_gateErr?.message || _gateErr}）`);
       }
     }
 
@@ -2925,12 +3107,27 @@ export default declareInfo
 
 /**
  * M4-3：生成 component.js（组件导出入口，导出 ./package/index.vue）。
+ * 🛡️ 2026-11-12（mc-max-1794417052536-b7fabcbc 实锤）：必须 import 预编译样式——
+ *   本模板曾被 buildMcPlatformFiles（engineer「一体化规范版优先级更高」）覆盖到
+ *   standardFiles 的 import index.css 版之上 ⇒ CSS 零消费 ⇒ 组件样式全裸奔
+ *   （kv 表格 4 列网格塌成纵列）。与 phase2.service.ts copyToWorkspace 的
+ *   styleImport 三态口径一致（css 优先 → less 回落 → 无样式注释）；
+ *   import 是运行时解析，此处写 css 路径时 index.css 尚未编译落盘属正常时序。
+ * @param {Object} [opts] { hasCss?: boolean, hasLess?: boolean }（缺省按 css 优先；
+ *   file-writer 落盘时机早于 LESS 编译，默认 css；调用方明确知道无 css 时传 hasCss:false）
  * @returns {string} component.js 完整内容
  */
-export function buildComponentJsFile() {
+export function buildComponentJsFile(opts = {}) {
+  const hasCss = opts.hasCss !== false;
+  const hasLess = opts.hasLess !== false;
+  const styleImport = hasCss
+    ? "import './resources/styles/index.css'"
+    : hasLess
+      ? "import './resources/styles/index.less'"
+      : '// No CSS/LESS file found';
   return `// 组件导出（系统生成，勿手改）
 import component from './package/index.vue';
-
+${styleImport}
 export default component;
 `;
 }

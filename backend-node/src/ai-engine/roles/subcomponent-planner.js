@@ -51,7 +51,12 @@ import {
   tableGeometryRecoveryAllowed,
 } from '../utils/vision-facts.js';
 // 🛡️ F18（2026-10-21）：行内列数/单项尺寸/间距的算术推导（纯几何）
-import { deriveRowMetrics } from '../utils/row-metrics.js';
+import {
+  deriveRowMetrics,
+  deriveGridColumnsFromNode,
+  deriveGridColumnsFromBands,
+  SIBLING_ROW_TOLERANCE,
+} from '../utils/row-metrics.js';
 // 🎯 2026-11-11 根因 D 治理 §1.4③：`layoutMetadata` 事实编译的**单一事实源**。
 //   原为本文件私有 `extractLayoutMetadata`（L902-972），已抽出到 `utils/layout-metadata.js`，
 //   目的是让「段构建后」才发生的过粗段展开（`utils/over-coarse-section-expander.js`）
@@ -461,6 +466,91 @@ function sectionChildrenOf(sec) {
 }
 
 /**
+ * 段 → 几何网格列数（P2-1 判据，2026-11-12 · mc-max-1794456716158-7f427bd3 实锤立项）。
+ *
+ * 病灶：优质组（12 元素）/普通组（15 元素）触发 R2 元素密度拆分，
+ *   而 4 列网格里 x 间距 146 > 50 ⇒ R2 的列聚类把 4 列拆成 4 个"单元素列"，
+ *   `every(col => count>=2)` 不成立 ⇒ 落到「轮流分配 idx % 2」，
+ *   即视觉序第 1/3/5 元素给 Group1、第 2/4/6 给 Group2 —— 把 4 列网格**交错劈成两半**
+ *   （实测 elementNames = 大华股份/西门子/ABB中国… 正是第 1、3 列）。
+ *
+ * 判据（形状适配 + 单一几何判据，不复制阈值）：
+ *   ① 子元素需带 bbox（无几何 ⇒ null，调用方不得臆造）；
+ *   ② 按 y 聚行带，容差复用 `SIBLING_ROW_TOLERANCE.y`（与 D3 / C 层同源）；
+ *   ③ 只保留 ≥2 项的带，交给 `deriveGridColumnsFromBands`（判据全在 `deriveRowMetrics`）。
+ *
+ * 🔴 2026-11-12 真机修订（mc-max-1794459006953-e85319b7 实锤）：判据**不能只依赖
+ *   section 元素几何**。实测 layoutStructure 经 visual-parser → section-tree 装配后，
+ *   `body.children` 里的元素只剩语义字段（id/name/type），figmaBox 已被裁掉
+ *   ⇒ kids 分支恒 null ⇒ R2 仍按 `idx % 2` 把 4 列网格交错劈半（本次产物只剩
+ *   QualityGroupA/B 两个半张网，战略组/普通组直接消失，预览下半页全空白）。
+ *   故：kids 几何不足时**回退 Figma 节点树**（`ctx.figmaIndex` → rawNode），
+ *   用 `deriveGridColumnsFromNode` 数——与 section 侧同一几何判据，来源唯一（Figma 真值）。
+ *
+ * @param {object} sec 段
+ * @param {Map} [figmaIndex] `indexFigmaNodes(figmaNodeData)` 产物（id → {rawNode,...}）
+ * @returns {{count:number, itemWidth:number, gap:number, rows:number, agreement:number}|null}
+ */
+function deriveSectionGridColumns(sec, figmaIndex = null) {
+  const fromFigma = () => {
+    if (!figmaIndex || typeof figmaIndex.get !== 'function' || !sec?.id) return null;
+    const rec = figmaIndex.get(String(sec.id));
+    const raw = rec?.rawNode || rec;
+    if (!raw || typeof raw !== 'object') return null;
+    return deriveGridColumnsFromNode(raw);
+  };
+
+  const kids = sectionChildrenOf(sec);
+  if (!Array.isArray(kids) || kids.length < 3) return fromFigma();
+  const boxOf = (b) => {
+    if (!b) return null;
+    const x = Number(b.x);
+    const y = Number(b.y);
+    const width = Number(b.width ?? b.w);
+    const height = Number(b.height ?? b.h);
+    if (![x, y, width, height].every(Number.isFinite)) return null;
+    if (width <= 0 || height <= 0) return null;
+    return { x, y, width, height };
+  };
+  const list = kids
+    .map((k) => ({ b: boxOf(k?.figmaBox || k?.absoluteBoundingBox || k) }))
+    .filter((o) => o.b)
+    .sort((a, b) => a.b.y - b.b.y || a.b.x - b.b.x);
+  if (list.length < 3) return fromFigma();
+
+  const bands = [];
+  for (const o of list) {
+    const last = bands[bands.length - 1];
+    if (last && Math.abs(o.b.y - last.y) <= SIBLING_ROW_TOLERANCE.y) {
+      last.boxes.push(o.b);
+      continue;
+    }
+    bands.push({ y: o.b.y, boxes: [o.b] });
+  }
+  // 两类候选**合并**后一起交给 deriveGridColumnsFromBands（不合格的带由
+  // `deriveRowMetrics` 自行淘汰，此处不复制任何阈值）：
+  //   ① 直接子元素按 y 聚出的带；
+  //   ② 行带嵌套形态下钻一层（直接子元素是「行 Frame」，宽度各异 564/272/418）。
+  // 只取①会漏判：实测 38:3162 的①只有 [背景604×212 + icon] 这一带 2 项，
+  // 不等宽 ⇒ deriveRowMetrics 淘汰 ⇒ 结果 null（P2-1 空转）。
+  const bandCand = bands.filter((b) => b.boxes.length >= 2).map((b) => ({ boxes: b.boxes }));
+  const nestedCand = kids
+      .map((k) =>
+        Array.isArray(k?.children)
+          ? k.children
+              .map((c) => boxOf(c?.figmaBox || c?.absoluteBoundingBox || c))
+              .filter(Boolean)
+          : [],
+      )
+      .filter((boxes) => boxes.length >= 2)
+      .map((boxes) => ({ boxes }));
+  const full = [...bandCand, ...nestedCand];
+  if (full.length === 0) return fromFigma();
+  const res = deriveGridColumnsFromBands(full);
+  return res || fromFigma();
+}
+
+/**
  * 统计 section 内元素数量（递归，深度受限防止畸形数据爆栈）。
  */
 function countElements(sec, depth = 0) {
@@ -667,7 +757,7 @@ function calculateSplitScore(section) {
  * 滚动条、分隔线等由宿主 CSS/列表自身呈现，不应交给 LLM 物化成独立业务组件。
  * 混合段一律保留；判据只看结构角色，不看 section 名称或 id。
  */
-function isPureDecorationSection(sec) {
+function isBodyAllDecoration(sec) {
   const children = sectionChildrenOf(sec);
   if (!Array.isArray(children) || children.length === 0) return false;
   const stack = [...children];
@@ -686,6 +776,36 @@ function isPureDecorationSection(sec) {
     if (type !== 'decoration' && role !== 'decoration' && role !== '装饰') return false;
   }
   return leaves > 0;
+}
+
+/**
+ * 段级 header 是否声明了**可渲染文本**（vision 显式事实，零语义猜测）。
+ * 来源仅两处：`header.title` 与 `header.controls[].{value|label|text|name}`。
+ * 缺失/空串 ⇒ false（不产事实）。
+ */
+function declaresHeaderText(sec) {
+  const texts = [sec?.header?.title];
+  const controls = Array.isArray(sec?.header?.controls) ? sec.header.controls : [];
+  for (const c of controls) texts.push(c?.value, c?.label, c?.text, c?.name);
+  return texts.some((t) => String(t ?? '').trim().length > 0);
+}
+
+/**
+ * 纯装饰伪 section：body 全为装饰叶 **且** 段级 header 未声明任何文本。
+ *
+ * 🔴 判据补齐（2026-11-12 · mc-max-1794458950336-47b996c3 实锤）：
+ *   本函数声明口径是「没有任何业务文本或内容叶」，但旧实现**只扫 `body.children` 叶子**
+ *   ⇒ vision 在**段级 header** 上声明的 title/controls 文本完全不在扫描域内，等于漏判。
+ *   真机语料 `565:2`「头部区域」：body 唯一子树是 `48:5890 标题img区域`（标题线 470×2 +
+ *   图标 20×20，两叶全 `role=装饰`）⇒ 旧判据判纯装饰、整段移除；而该段
+ *   `header.title='部署节点概览'`、`header.controls=['全国','关闭按钮']` 全是 TEXT 级业务事实
+ *   ⇒ 三条文本凭空消失 ⇒ 下游 C1b 缺文本、定向修复轮无从修复 ⇒ 拒绝交付。
+ *   补齐后：段级声明了非空 header 文本 ⇒ 不是纯装饰段（有标题就必须有宿主渲染它）。
+ *   判据只看 vision 声明，不看段名/id/元素数，零硬编码。
+ */
+function isPureDecorationSection(sec) {
+  if (!isBodyAllDecoration(sec)) return false;
+  return !declaresHeaderText(sec);
 }
 
 /**
@@ -914,7 +1034,7 @@ function mergeLegendSections(sections) {
  * R3: 嵌套深度 >3 → 深层节点提升为子组件
  * R4: 交互复杂度 >3 → 每个交互区域独立子组件
  */
-function splitSectionInternally(section, sectionIndex) {
+function splitSectionInternally(section, sectionIndex, figmaIndex = null) {
   const scoreResult = calculateSplitScore(section);
 
   if (!scoreResult.shouldSplit) {
@@ -942,6 +1062,18 @@ function splitSectionInternally(section, sectionIndex) {
       `section-${sectionIndex}: 图表隔离 → ${charts.length} 个图表子组件`,
     );
     return subcomponents;
+  }
+
+  // 🛡️ P2-1（2026-11-12 · mc-max-1794456716158-7f427bd3 实锤）：**网格段禁用 R2**。
+  //   网格本身就是一个 v-for 整体；把它拆成两个子组件必然按元素交错打散（见
+  //   `deriveSectionGridColumns` 注释里的实测成员清单）。判据 ≥2 列即网格，直接跳过。
+  //   fail-open：几何不足（null）时行为不变，不新增拒绝面。
+  const sectionGrid = deriveSectionGridColumns(section, figmaIndex);
+  if (sectionGrid && sectionGrid.count >= 2) {
+    logger.info(
+      `section-${sectionIndex}: R2 跳过 —— 几何网格段（${sectionGrid.count} 列 × ${sectionGrid.rows} 行带，元素 ${reasons.elementCount} 个）应由单个子组件 v-for 渲染，不拆内部子组件`,
+    );
+    return [];
   }
 
   // R2: 元素密度拆分（图表 <2 且元素 >10）
@@ -1303,8 +1435,9 @@ function findFigmaNodeIdBySectionName(sec) {
  */
 function inferGridColumnsFromGroupChildren(sec, figmaIndex) {
   if (!figmaIndex || typeof figmaIndex.get !== 'function') return NaN;
-  const existing = Number(sec?.gridColumns ?? sec?.body?.gridColumns ?? NaN);
-  if (Number.isFinite(existing) && existing > 1) return NaN;
+  // 🛡️ 2026-11-12（cc633474 实锤）：**不再因「已有 gridColumns」早退**。
+  //   本单视觉分析给 3、几何真值 4 ⇒ 旧早退让错值永久胜出（模型输出压住确定性事实）。
+  //   现在本函数只回答「几何能不能算出列数」，与既有值无关；优先级由调用方决定。
 
   const ids = [];
   const push = (v) => {
@@ -1340,16 +1473,13 @@ function inferGridColumnsFromGroupChildren(sec, figmaIndex) {
     if (/^(bg|background|icon|vector|decorator|divider)$/i.test(name)) return false;
     return true;
   });
-  // 🛡️ F18（2026-10-21 · c-c8d-195c8d0e 实锤）：**等宽单行列表**先做算术推导。
-  //   病灶：一行 4 个 chip（`4 × 126 + 3 × 20 = 564`）用 x 聚类会得到「4 列各 1 项」，
-  //   旧判据 `minSize < 2` 直接 NaN ⇒ 列数永久缺失 ⇒ 模型自己拍 `calc(25% - 20px)`。
-  //   判据：同行 + 同高 + 同宽 + 间距一致（全由 `deriveRowMetrics` 单一来源判定）。
-  const rowMetrics = deriveRowMetrics(
-    kids.map((c) => c.absoluteBoundingBox),
-    { minCount: 3 },
-  );
-  if (rowMetrics) return rowMetrics.count;
+  // 🛡️ 判据单一来源（2026-11-12）：`row-metrics#deriveGridColumnsFromNode`
+  //   · 形态A 单行等宽卡列表（原 `deriveRowMetrics(minCount:3)` 分支，已并入，勿再复制）
+  //   · 形态B 行带嵌套（`Frame2136639905: [126×4]` ⇒ 4 列；本单三段的真实形态）
+  const geo = deriveGridColumnsFromNode(groupRec.rawNode);
+  if (geo && geo.count >= 2) return geo.count;
 
+  // 最后兜底（非事实源）：绝对定位散卡 —— 既非单行等宽、也无行带 ⇒ 只能 x 聚类。
   const cols = clusterItemsByColumnX(kids);
   if (!cols || cols.length < 2) return NaN;
   const sizes = cols.map((c) => c.items.length);
@@ -2020,7 +2150,7 @@ export function buildEffectiveSection(sec, idx, ctx) {
         `🛡️ R2 豁免：section ${sec.id} 是 ${sec.parallelSiblingCount} 张同构并列卡之一，整卡作为最小组件单元（卡内富内容不拆分）`,
       );
     } else {
-      internalSubcomponents = splitSectionInternally(sec, idx);
+      internalSubcomponents = splitSectionInternally(sec, idx, ctx.figmaIndex);
       ctx.allInternalSubcomponents.push(
         ...internalSubcomponents.map((sub) => ({
           ...sub,
@@ -2057,16 +2187,33 @@ export function buildEffectiveSection(sec, idx, ctx) {
   //   用正则抽 `\d+` 后接 column/col/item 的数字，零硬编码、兼容任意列数。
   const layoutColMatch = rawLayout.match(/(\d+)\s*[-_\s]*(?:col|column|item|grid)/);
   const layoutColumns = layoutColMatch ? Number(layoutColMatch[1]) : NaN;
-  // 缺口 1：GROUP 无 GRID 时按子节点 x 聚类补列数（已有明确值则不覆盖）
-  const clusteredColumns = inferGridColumnsFromGroupChildren(sec, ctx?.figmaIndex);
+  // 🛡️ 列数优先级（2026-11-12 · cc633474 实锤）＝ **几何事实 > 模型输出 > 字符串解析**。
+  //   旧序把视觉分析的 gridColumns 放在几何之前，而本单视觉给 3、行带真值 4
+  //   ⇒ 确定性几何被压住，产物与 D-GRID 判据同步错。几何是唯一可复算的事实源，必须优先。
+  const geometricColumns = inferGridColumnsFromGroupChildren(sec, ctx?.figmaIndex);
   const effectiveColumns =
-    Number.isFinite(gridColumns) && gridColumns > 1
-      ? gridColumns
-      : Number.isFinite(layoutColumns) && layoutColumns > 1
-        ? layoutColumns
-        : Number.isFinite(clusteredColumns) && clusteredColumns > 1
-          ? clusteredColumns
+    Number.isFinite(geometricColumns) && geometricColumns > 1
+      ? geometricColumns
+      : Number.isFinite(gridColumns) && gridColumns > 1
+        ? gridColumns
+        : Number.isFinite(layoutColumns) && layoutColumns > 1
+          ? layoutColumns
           : NaN;
+  if (
+    Number.isFinite(geometricColumns) &&
+    geometricColumns > 1 &&
+    Number.isFinite(gridColumns) &&
+    gridColumns > 1 &&
+    Number(geometricColumns) !== Number(gridColumns)
+  ) {
+    // 阳性对照计数行：几何与 vision 冲突时**必须可追溯**（无此行时「几何生效」与「根本没跑」不可区分）
+    logger.info('🛡️ 列数真值覆盖（几何 > 视觉分析）', {
+      sectionId: String(sec.id),
+      name: sec.name,
+      visionColumns: gridColumns,
+      geometricColumns,
+    });
+  }
   const hasGridColumns = Number.isFinite(effectiveColumns) && effectiveColumns > 1;
   // 布局字符串被解析出列数时，归一为 'grid'（下游据此生成 repeat(N,1fr)）；
   // 否则保留原布局语义（horizontal/vertical/...）。
@@ -2479,6 +2626,14 @@ export class SubcomponentPlanner {
     logger.info('🛡️ vision-decoration-filter·已评估', {
       evaluated: rawSections.length,
       removed: rawSections.length - businessSections.length,
+      // 🔴 判据补齐留痕（2026-11-12）：本应判「body 全装饰」、但因**段级 header 声明了文本**
+      //   而被保留的段数。0 也打 —— 恒 0 说明该补丁未命中任何语料（可能判据没生效），
+      //   暴涨说明误伤（把真纯装饰段拉回成业务段），两者都要在真机日志里可见。
+      headerTextKept: rawSections.filter((sec) => isBodyAllDecoration(sec) && declaresHeaderText(sec)).length,
+      headerTextKeptIds: rawSections
+        .filter((sec) => isBodyAllDecoration(sec) && declaresHeaderText(sec))
+        .slice(0, 6)
+        .map((sec) => String(sec?.id ?? '')),
     });
     // 🛡️ 2026-11-06（f91aa545 实锤「插槽又去了内容部分」）：**承载插槽内容的宿主段不得被过滤**。
     //   旧实现把 `preservedHeaderSlotContent` 只当**计数**用（filter 条件里没有它）：
@@ -3031,10 +3186,24 @@ export class SubcomponentPlanner {
     // 🔍 L1 文档同构折叠（2026-11-03）：docAnalysis.uiElements「同 api+同控件」组作为
     //   第二折叠证据（几何分组为空时的 fallback，方案 docs/2026-11-03-折叠器文档同构判据.md）。
     const docGroups = buildDocHomogeneityGroups(opts.docAnalysis);
+    // 🛡️ B 层（2026-11-12 · mc-1794428749650-cc633474 实锤）：并列分组守恒计数行。
+    //   折叠器的 ③ 组（内容同构跨段合并）会把「各段自带互不相同标题」的并列分组判成
+    //   同一列表被切碎 ⇒ 合并后只剩首段标题。守卫已在折叠器内生效（sectionOwnTitle 判据），
+    //   此处只做**可辩驳观测**：守恒命中数 + 被保护的标题，落真机日志；
+    //   零命中时不打日志（与「未接线」区分靠折叠后段数对比行，见下方）。
+    const conserveGroups = [];
     sections = collapseSectionsDeep(sections, {
       figmaRoot: opts.figmaNodeData,
       docGroups,
+      onConserveGroup: (info) => conserveGroups.push(info),
     });
+    if (conserveGroups.length > 0) {
+      logger.info(
+        `🛡️ 并列分组守恒: conserved=${conserveGroups.length}, groups=[${conserveGroups
+          .map((g) => `${g.ids.join('+')}=>${g.titles.join('/')}`)
+          .join(' | ')}]`,
+      );
+    }
     // 🔍 真机判据计数行：L1 生效可辩驳验证（groups>0 即文档声明组进了折叠器）
     if (docGroups.length > 0) {
       let docFolded = 0;
@@ -3114,9 +3283,13 @@ export class SubcomponentPlanner {
     }
 
     const allInternalSubcomponents = [];
-    // 🔴 R23：仅 E1 路径才需要 figma 索引（vision 路径不参与归并后方向复算），避免无谓遍历
+    // 🔴 R23：figma 索引原本只在 E1 路径构建（vision 路径不参与归并后方向复算）。
+    //   2026-11-12 修订（mc-max-1794459006953-e85319b7 实锤）：R2 网格判据
+    //   （`deriveSectionGridColumns` 的 Figma 兜底）在 **vision 路径同样需要** ——
+    //   layoutStructure 经装配后元素几何可能已被裁剪，此时唯一真值源就是 Figma 节点树。
+    //   索引是一次 O(n) 遍历（实测 174 节点），成本远低于「4 列网格被劈半」的代价。
     const figmaIndexForRefine =
-      e1Derived && opts.figmaNodeData && typeof opts.figmaNodeData === 'object'
+      opts.figmaNodeData && typeof opts.figmaNodeData === 'object'
         ? indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData)
         : null;
     let effectiveSections = sections.map((sec, idx) =>
@@ -3528,36 +3701,91 @@ export class SubcomponentPlanner {
           : Array.isArray(_docTop?.children)
             ? _docTop.children.length
             : 0;
+        // 🛡️ 2026-11-12：真值基准改用 vision 段树递归叶子数（量纲对齐 leaf=递归叶）。
+        //   rawSections 为扁平时递归叶==顶层数 ⇒ base 回退旧口径（baseIsTopLevel=true，保守 blocked）。
+        const _truthLeaf = collectLeafSections(rawSections).length;
+        // 🔴 治本·层2（2026-11-13 · 181 任务真实语料标定）：**真值层段数**作为 base 首选口径。
+        //   与分子（规划产出树叶子数）**同源同层**：分母 = 设计稿真值层的叶子数
+        //   （deriveSectionsFromFigmaTree 全树推导，与 V-5 局部展开同一口径）。
+        //   🔴 旧口径的病灶：分母取的是「展开**前**」的量纲（vision 递归叶 / Figma 顶层块），
+        //     分子却是「展开**后**」的量纲 ⇒ V-5 把 1 个粗段换成 N 个真值段时比值必然暴涨。
+        //     生产实锤 mc-max-1794459907233-547bfb75：vision 递归叶=1 / 真值层=15 / 规划叶子=15
+        //     ⇒ 旧口径 ratio=15（误杀打死任务）vs 新口径 ratio=1.00（正常：段数 == 真值段数）。
+        //   ⚠️ deriveSectionsFromFigmaTree 对全树可能抛错 ⇒ 失败即回退旧口径（不阻断）。
+        let _truthLayer = 0;
+        try {
+          const _derived = deriveSectionsFromFigmaTree({ document: _docTop });
+          _truthLayer = collectLeafSections(_derived?.sections || []).length;
+        } catch {
+          _truthLayer = 0;
+        }
         const ratioAudit = auditSectionCountRatio({
           leafSections: leafSections.length,
           figmaTop: _figmaTopCount,
           visionSections: rawSections.length,
+          truthLeafSections: _truthLeaf,
+          truthLayerSections: _truthLayer,
           sections: effectiveSections,
         });
+        // 🛡️ 2026-11-13 观测留痕：叶子中「Figma 树派生段」数量（带 _expandedFrom 标记，
+        //   由 V-5 局部展开 over-coarse-section-expander.js:470 打上）。
+        //   这是**分子分母同源**（base 口径对齐）的关键中间量：展开把 1 个 vision 段换成 N 个
+        //   派生段，分母仍停在展开前的 1 ⇒ ratio 虚高。
+        const _derivedLeafCount = collectLeafSections(effectiveSections).filter(
+          (s) => s && s._expandedFrom !== undefined && s._expandedFrom !== null && String(s._expandedFrom) !== '',
+        ).length;
         logger.info(
-          `🛡️ section-count-ratio：leaves=${leafSections.length} base=${ratioAudit.base} ratio=${ratioAudit.ratio.toFixed(2)} verdict=${ratioAudit.verdict}` +
-            (ratioAudit.trimmed.length ? ` trimmed=${ratioAudit.trimmed.length}` : ''),
+          `🛡️ section-count-ratio：leaves=${leafSections.length} base=${ratioAudit.base}(${ratioAudit.baseSource}) ratio=${ratioAudit.ratio.toFixed(2)} verdict=${ratioAudit.verdict}` +
+            (ratioAudit.trimmed.length ? ` trimmed=${ratioAudit.trimmed.length}` : '') +
+            (ratioAudit.underGenerated ? ` ⚠️欠生成(figmaTop=${_figmaTopCount})` : '') +
+            ` 计量=${ratioAudit.measuredLeafCount}/${ratioAudit.measuredLeafCount + ratioAudit.unmeasuredLeafCount}` +
+            ` fig派=${_derivedLeafCount}` +
+            ` frag=${ratioAudit.fragmentRatio.toFixed(2)}/avgEc=${ratioAudit.avgElementCount.toFixed(1)}` +
+            (ratioAudit.featuresUnmeasured ? ' ⚠️全段未计量(Figma派生段·非vision来源·不判过拆)' : '') +
+            (ratioAudit.softBlocked ? ' ⚠️软阻断(超硬阈值·已裁剪不阻断·交acceptance裁决)' : ''),
           ratioAudit.skippedReason ? { skippedReason: ratioAudit.skippedReason } : undefined,
         );
-        if (ratioAudit.verdict === 'trim') {
+        if (ratioAudit.underGenerated) {
+          // 🛡️ 2026-11-12：欠生成观测（figmaTop 归位为下限）。不阻断——交下游 acceptance 抓，
+          // 门禁只防过拆。仅留痕，避免掩盖真因（c6f78432 形态：设计 18+ 段只生成 2 段）。
+          logger.warn('🛡️ section-count-ratio：疑似欠生成（leaf 明显 < figmaTop 业务段下限），交下游 acceptance 复核', {
+            leaves: leafSections.length,
+            figmaTop: _figmaTopCount,
+            truthLeaf: _truthLeaf,
+            truthLayer: _truthLayer,
+          });
+        }
+        if (ratioAudit.verdict === 'trim' || ratioAudit.softBlocked) {
           // 裁剪后的树替换 effectiveSections（内容已并回宿主容器段，不丢）
-          effectiveSections = ratioAudit.sections;
+          // 🔴 防御（2026-11-13）：sections 为空 ⇒ **不得**替换（否则 effectiveSections 被清空
+          //   ⇒ 空规划 ⇒ 空壳产物，正是 A5 当初引入硬阻断要防的病灶）。
+          //   实际调用点恒传 sections: effectiveSections（非空），此处仅兜底。
+          if (Array.isArray(ratioAudit.sections) && ratioAudit.sections.length > 0) {
+            effectiveSections = ratioAudit.sections;
+          }
           logger.warn('🛡️ section-count-ratio：叶子段超限，已裁剪并合并内容进宿主容器段', {
             trimmed: ratioAudit.trimmed.slice(0, 10),
+            softBlocked: !!ratioAudit.softBlocked,
+            applied: Array.isArray(ratioAudit.sections) && ratioAudit.sections.length > 0,
           });
-        } else if (ratioAudit.verdict === 'blocked') {
-          // 🛡️ A5（2026-11-11 · 68f9d3f2）：必须用专用类型抛出——调用方 catch 以 instanceof
-          // 判别「门禁判定」vs「规划器故障」，字符串 err.code 判别已被证实会被外层 catch 吞掉。
-          const err = new PlanningGateError(
-            `段数比门禁阻断：叶子段 ${leafSections.length} / 真值基准 ${ratioAudit.base} = ${ratioAudit.ratio.toFixed(1)}（>8）` +
-              `，规划结构爆炸（一段一组件退化）。top 叶子：${leafSections.slice(0, 10).map((s) => String(s?.id ?? '')).join('、')}`,
-          );
-          logger.error('🚫 section-count-ratio：段数比硬 BLOCK（规划结构爆炸，裁剪也救不回）', {
+        }
+        // 🛡️ 2026-11-13 放宽 + 补丁：**门禁不再中断任务**（硬阻断已取消）。
+        //   旧行为：抛 PlanningGateError ⇒ 整任务失败（生产实锤：ratio=15 的正常任务被打死）。
+        //   新行为：超硬阈值 ⇒ 裁剪 + 强告警（见上），内容不丢、任务继续，
+        //             最终质量裁决交下游 acceptance（C1/C2/D1 内容真值判据）。
+        //   ⚠️ 保留 `verdict === 'blocked'` 分支仅作**防御**（audit 当前已不返回 blocked）：
+        //     一旦将来判据再出 bug，也不得以抛异常打死任务 —— 一律降级为告警 + 保持原树。
+        if (ratioAudit.verdict === 'blocked') {
+          logger.error('🚫 section-count-ratio：判据返回 blocked（当前实现已取消硬阻断，此处仅防御），降级为告警不中断任务', {
             leaves: leafSections.length,
             base: ratioAudit.base,
+            baseSource: ratioAudit.baseSource,
             ratio: ratioAudit.ratio,
+            measuredLeafCount: ratioAudit.measuredLeafCount,
+            unmeasuredLeafCount: ratioAudit.unmeasuredLeafCount,
+            fragmentRatio: ratioAudit.fragmentRatio,
+            avgElementCount: ratioAudit.avgElementCount,
           });
-          throw err;
         }
       } catch (ratioErr) {
         // A5：门禁判定类错误原样上抛（本层 catch 只为审计自身容错，不吞门禁结论）

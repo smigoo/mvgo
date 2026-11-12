@@ -1,0 +1,2743 @@
+/**
+ * 后处理纯函数模块
+ * 用于 TDD 测试，不依赖 MicrocodeEngineer 类的复杂依赖链
+ */
+
+import {
+  inferBackgroundStyle,
+  buildBackgroundResourceIndex,
+  buildBgVarToResource,
+  resolveBackgroundResourceRef,
+} from './background-size-inference.js';
+import { removeClassBlocks } from './style-class-consolidator.js';
+// 🛡️ R19（2026-10-21）：文本 run 真值单一来源。下方 `extractPerCharTextTruth` 与
+//   `injectNodeLevelColorTruth` 一律委托本模块，**禁止再写第二套逐字符求值**。
+import { extractTextRuns, normalizeColor } from './text-runs.js';
+
+const COMPACT_CHART_RE = /(?:donut|ring|pie|gauge|radar|mini|small|compact|spark|仪表|环形|环图|小图)/i;
+
+/**
+ * 按图表 class / 上下文语义推导兜底高度。
+ * - 主图（折线/柱状/面积/趋势大图）：160px
+ * - 紧凑图（环形/仪表/卡片内嵌小图）：100px
+ *
+ * 🛡️ #577（2026-09-08）收敛后处理误伤：此前所有图表统一注入 160px，
+ * 会把环形图/仪表盘/卡片内嵌小图撑裂。现在按 class / chartType / chartRole 分级。
+ * 注意：这里只是缺失 min-height 时的兜底；真实比例优先由 Figma section flexGrow 决定。
+ */
+export function inferChartMinHeight(className = '', styles = '', options = {}) {
+  const haystack = `${className} ${styles} ${options.chartType || ''} ${options.chartRole || ''}`;
+  if (COMPACT_CHART_RE.test(haystack)) return 100;
+  return 160;
+}
+
+/**
+ * 🛡️ 刀C（P3，2026-11-05 · `c-env-monitor-c324a730` 实锤）：图表 min-height 真值解析。
+ *
+ * 病灶：兜底 160px 是纯类名分级（零真值），图表段 89:41 真值 145px、图表盒真值 113px
+ * ⇒ 下限 160 > 容器 145 必溢出；体系里没有任何环节知道真值（`chart-container-guard`
+ * F3 恢复的也是 160）。
+ *
+ * 真值链（判据单一来源，调用方 microcode-engineer T2 注入点消费）：
+ *   ① 图表盒真值 `chartBoxH` —— 段 `internalGeometry`（P-4 采集的锚点子树顶层元素盒）
+ *      中**非文本条目里 h 最大者**（图表容器无直接 characters，且在图表段内通常是
+ *      最高的大块；tabs 等兄弟条目 h 显著更小）。
+ *   ② 段真值 `sectionH` —— `styles.figmaHeightPx` 优先，退 `figmaBox/absoluteBoundingBox.height`
+ *      （与 `resource-mount-plan.sectionBoxById` 同口径）。仅当图表是段唯一子项
+ *      （`isOnlyChild = internalGeometry.length === 1`）时才允许**直接取用**；
+ *      否则只作 **clamp 上限**（终值 ≤ 段真值）。
+ *
+ * 无任何真值 ⇒ 全部返回 0（fail-open，调用方保持旧兜底 160/100 不劣化）。
+ * 🔴 不引入任何新高度常量；160/100 仍是既有兜底。
+ *
+ * @param {Array} sections effectiveSections（planner 产物，含 styles.figmaHeightPx / internalGeometry）
+ * @param {string|number} chartSectionId vision `charts[].section`（Figma node id，如 "89:41"）
+ * @returns {{chartBoxH:number, sectionH:number, isOnlyChild:boolean}}
+ */
+export function resolveChartMinHeightTruth(sections, chartSectionId) {
+  const out = { chartBoxH: 0, sectionH: 0, isOnlyChild: false };
+  const want = chartSectionId != null ? String(chartSectionId) : '';
+  if (!want || !Array.isArray(sections)) return out;
+  const walk = (sec) => {
+    if (!sec || typeof sec !== 'object') return null;
+    if (sec.id != null && String(sec.id) === want) return sec;
+    for (const c of sec.children || []) {
+      const hit = walk(c);
+      if (hit) return hit;
+    }
+    for (const c of ((sec.body && sec.body.children) || [])) {
+      const hit = walk(c);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  let sec = null;
+  for (const s of sections) {
+    sec = walk(s);
+    if (sec) break;
+  }
+  if (!sec) return out;
+
+  // 段真值（clamp 上限）
+  const px = Number(sec.styles?.figmaHeightPx);
+  if (Number.isFinite(px) && px > 0) {
+    out.sectionH = px;
+  } else {
+    const box = sec.figmaBox || sec.absoluteBoundingBox;
+    const h = Number(box?.height);
+    if (Number.isFinite(h) && h > 0) out.sectionH = h;
+  }
+
+  // ① 图表盒真值：internalGeometry 非文本条目 h 最大者
+  const geo = Array.isArray(sec.internalGeometry) ? sec.internalGeometry : [];
+  out.isOnlyChild = geo.length === 1;
+  let best = null;
+  let tie = false;
+  for (const g of geo) {
+    if (!g || g.text) continue; // 文本条目不是图表容器
+    const h = Number(g.h);
+    if (!Number.isFinite(h) || h <= 0) continue;
+    if (best == null || h > best) {
+      best = h;
+      tie = false;
+    } else if (h === best) {
+      tie = true;
+    }
+  }
+  if (best != null && !tie) {
+    // 🛡️ 比例校验（真机 tasks.json 2:8069 实锤）：小图标段 geo 最大 h 仅 18px
+    //   （段真值 145 的 0.12），若当图表盒会把 min-height 压到 18 致图表塌缩。
+    //   判据：最大非文本盒须 ≥ 段真值 1/3 才可信（图表容器通常占段主体；
+    //   89:44 实测 113/145=0.78 ✓）。无段真值时无法校验，保留原值（clamp 亦不会发生）。
+    const hPx = out.sectionH;
+    if (!(hPx > 0) || best >= hPx / 3) {
+      out.chartBoxH = Math.round(best);
+    }
+  }
+
+  return out;
+}
+
+/**
+ * 🛡️ min-height 保护判据（2026-09-15 单一事实源）：
+ * `min-height: 0` / `0px` / `auto` **不算**保护 —— LLM 按 chart-standards 示例惯写
+ * `min-width: 0; min-height: 0`，旧守卫 `/min-height/` 把它当「已保护」→ 跳过注入，
+ * 且后置块级联反杀兜底值（实锤 mc-1789446004258-677a6725 图表不显示）。
+ *
+ * ⚠️ 必须用「取值后归一比较」而非 `min-height\s*:\s*(?!0...)` 这类 lookahead 正则：
+ * 后者可被 `\s*` 回溯绕过（`\s*` 退成 0 字宽后 lookahead 停在空格上即通过）→ 仍判成已保护。
+ */
+const CHART_MH_UNPROTECTED_VALUES = new Set([
+  '0',
+  '0px',
+  'auto',
+  'initial',
+  'unset',
+  'none',
+]);
+
+export function isChartMinHeightProtected(body) {
+  if (!body || typeof body !== 'string') return false;
+  const m = /min-height\s*:\s*([^;}]+)/i.exec(body);
+  if (!m) return false;
+  const v = m[1]
+    .trim()
+    .toLowerCase()
+    .replace(/\s*!important\s*$/, '');
+  return !CHART_MH_UNPROTECTED_VALUES.has(v);
+}
+
+/**
+ * 🛡️ B-1（2026-09-29 治本）：块内**显式绝对高度** = 已知真值 ⇒ 不需要兜底 min-height。
+ *
+ * 根因（`c-traffic-monitor-447d01cc` 实锤）：装配器已按 Figma 真值写好
+ *   `.c-traffic-monitor-chart { height: 52px; flex-shrink: 0; }`
+ * 而旧判据只看 `min-height` 是否存在非零值 → 追加 `min-height: 160px`。
+ * CSS 中 **min-height 优先于 height** ⇒ 实际渲染 160px（真值 3.07 倍）→ 该 section
+ * 内容超高 → 溢出压住下一段（「流量预测」被盖）。真值取证：Figma 节点
+ * `246:30 @echarts` = w 52.06 / h 52.55。
+ *
+ * ⚠️ 相对高度（`height: 100%` / `auto`）**不算真值** —— 父容器塌陷时仍需 min-height 保护，
+ * 故只认绝对长度单位（px/rem/em/vh/vw/pt）。
+ */
+export function hasChartTruthHeight(body) {
+  if (!body || typeof body !== 'string') return false;
+  // 用「取值后数值比较」而非纯正则存在性：`height: 0` 同样是塌陷值，不算真值
+  const m = /(?:^|[;{])\s*height\s*:\s*([\d.]+)\s*(px|rem|em|vh|vw|pt)\s*(?:!important)?\s*(?:;|$)/i.exec(
+    body,
+  );
+  if (!m) return false;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) && n > 0;
+}
+
+// ⚠️ 交替顺序必须长值优先（0px 先于 0），否则 `min-height: 0px` 只吃掉 `0` 残留 `px`
+export const CHART_MH_ZERO_DECL_RE =
+  /(^|;)\s*min-height\s*:\s*(?:0px|0|auto|initial|unset|none)\s*;?/i;
+
+/**
+ * 剥掉指定 class 的所有块内 `min-height: 0/0px/auto` 声明（防止后置块级联反杀）。
+ * 用于共享表（common.less）与 SFC 双端收口。
+ */
+export function stripZeroMinHeightForClass(content, chartCls) {
+  if (!content || typeof content !== 'string') return content;
+  if (!content.includes(`.${chartCls}`)) return content;
+  return content.replace(
+    new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)\\}`, 'g'),
+    (m, head, body) => {
+      const nb = body.replace(CHART_MH_ZERO_DECL_RE, (mm, sep) =>
+        sep === ';' ? ';' : '',
+      );
+      return nb === body ? m : `${head}${nb}}`;
+    },
+  );
+}
+
+/**
+ * 给指定 class 的**全部**样式块注入分级 min-height（缺失或值为 0 时）。
+ * - 已有非零 min-height → 原样保留（尊重 Figma 真实尺寸）
+ * - 已有**显式绝对 height** → 不注入（B-1：min-height 会压过 height，覆盖真值）
+ * - 值为 0/0px/auto → 视为未保护，剥掉 0 再补兜底值
+ * - global 扫描：同一 class 出现多个块时全部收口，避免后置块反杀
+ * @returns {{ code: string, injectedCount: number }}
+ */
+export function injectChartMinHeightIntoClass(code, chartCls, minHeight) {
+  if (!code || typeof code !== 'string' || !chartCls) {
+    return { code, injectedCount: 0 };
+  }
+  let injectedCount = 0;
+  const out = code.replace(
+    new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)`, 'g'),
+    (m, head, body) => {
+      if (isChartMinHeightProtected(body)) return m;
+      // 🛡️ B-1：显式绝对高度 = 已按 Figma 真值定高，注入 min-height 只会压过真值
+      if (hasChartTruthHeight(body)) return m;
+      injectedCount += 1;
+      const nb = body.replace(CHART_MH_ZERO_DECL_RE, (mm, sep) =>
+        sep === ';' ? ';' : '',
+      );
+      // 块内已有标记注释（如历史空块残留 `{/* 🎯 防挤压... */}`）→ 不重复追加，减噪
+      const marker = nb.includes('防挤压')
+        ? ''
+        : ' /* 🎯 防挤压：echarts 容器最小高度（主图160/紧凑图100） */';
+      return `${head}${nb.replace(/\s*$/, '')}\n  min-height: ${minHeight}px;${marker}\n`;
+    },
+  );
+  return { code: out, injectedCount };
+}
+
+/**
+ * class 规则块完全缺失时，在 <style> 段 @import 之后创建规则块并注入 min-height。
+ * （实锤环境监测 ChartSection：.chart-container 在 style 段无任何规则 → 容器塌陷）
+ *
+ * 🛡️ B-1b（2026-09-29 治本）：本函数原名承诺「若缺失才建」，但旧实现**从未检查是否缺失**。
+ * `caller` 用 `injectedCount === 0` 当作「块不存在」的代理条件，而该条件在
+ * 「**块已存在且已受保护**」时同样成立 ⇒ 对每个已定高的图表容器重复注入一个兜底块。
+ * 实锤 `c-traffic-monitor-447d01cc`：`.c-traffic-monitor-chart-container` 被定义**两次**
+ * （L131 `min-height: 160px` ← 兜底块；L202 `min-height: 52px` + `height: 100%` ← 真块）。
+ * 同特异性下 CSS 胜负只取决于**源序**，兜底值随时可能反杀真值。
+ * 现补上真正的「缺失检查」：已有该 class 的规则块 → 原样返回，不新建。
+ */
+export function createChartClassBlockIfAbsent(code, chartCls, minHeight) {
+  if (!code || typeof code !== 'string' || !chartCls) return code;
+  const esc = String(chartCls).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`\\.${esc}\\s*\\{`).test(code)) return code; // B-1b：块已存在 → 不新建
+  return code.replace(
+    /(<style[^>]*>[\s\S]*?)(@import[^;]+;)/,
+    (m2, pre, imp) =>
+      `${pre}${imp}\n\n.${chartCls} {\n  min-height: ${minHeight}px; /* 🎯 防挤压：echarts 容器最小高度（主图160/紧凑图100） */\n}\n`,
+  );
+}
+
+/**
+ * T03: 图表容器 min-height 注入
+ * 检测图表容器（echarts/chart-），如果没有 min-height 则注入分级兜底高度。
+ *
+ * 🛡️ L3 / P0-4（2026-09-07）口径三合一 + #577 分级（2026-09-08）：
+ * 主图 160px / 紧凑图（环形/仪表/小图）100px；已有**非零** min-height 尊重不覆盖。
+ */
+export function injectChartMinHeight(code, options = {}) {
+  if (!code || typeof code !== 'string') return code;
+
+  // 检测是否包含图表相关元素（动态前缀匹配：.c-xxx-yyy 或 .chart-）
+  const hasChart = /echarts|chart-|\.c-[\w-]+-[\w-]*chart[\w-]*/i.test(code);
+  if (!hasChart) return code;
+
+  const chartContainerRegex =
+    /(\.c-[\w-]+-[\w-]*chart[\w-]*|\.chart-[\w-]+)\s*\{([^}]*)\}/gi;
+
+  // 🛡️ R4-a 非容器后缀黑名单（2026-09-15，c-traffic-monitor 实锤）：
+  // 这些是图表「标题/图例/图标/section 根」等非 echarts 挂载容器，此前 `chart[\w-]*`
+  // 全量匹配 → 误注入 min-height:160px，把 chart-title/chart-legend/chart-bridge 等
+  // 撑到 160px 撑裂布局（真机「样式几乎看不到」根因之一）。
+  // 容器词（container/body/wrapper/root/box/area/canvas/panel/wrap/holder/main）、
+  // 数字编号（chart1/chart2）、chart 结尾（.forecast-chart）均不在黑名单 → 照常注入。
+  const CHART_NON_CONTAINER_RE =
+    /-(?:title|legend|icon|text|header|bridge|section|forecast|tunnel|item|dot|label|name|value|stat)(?:-|$)/i;
+
+  // 收集候选 class（去重）后统一走单一事实源注入
+  const seen = new Map();
+  const candidates = [];
+  let m;
+  while ((m = chartContainerRegex.exec(code)) !== null) {
+    // ⚠️ 捕获组 1 带前导点号（正则以 \. 开头），下游 injectChartMinHeightIntoClass
+    // 会自行拼 `\.`，必须先剥点，否则拼成 `\..c-xxx` 永不匹配（2026-09-15 回归实锤）。
+    const className = m[1].replace(/^\./, '');
+    if (CHART_NON_CONTAINER_RE.test(className)) continue;
+    if (seen.has(className)) continue;
+    seen.set(className, m[2] || '');
+    candidates.push(className);
+  }
+
+  for (const className of candidates) {
+    const height = inferChartMinHeight(className, seen.get(className) || '', options);
+    const { code: patched, injectedCount } = injectChartMinHeightIntoClass(
+      code,
+      className,
+      height,
+    );
+    if (injectedCount > 0) code = patched;
+  }
+
+  return code;
+}
+
+/**
+ * T04: 背景图去重
+ * 如果同一背景图在代码中出现多次，只保留第一次
+ */
+export function deduplicateBackgroundImages(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  // 提取所有背景图引用
+  const bgImages = code.match(/url\(['"]?[^'")\s]+['"]?\)/g) || [];
+  if (bgImages.length === 0) return code;
+
+  // 统计每个图片引用次数
+  const imageCount = {};
+  bgImages.forEach((img) => {
+    imageCount[img] = (imageCount[img] || 0) + 1;
+  });
+
+  // 找出重复的图片
+  const duplicates = Object.entries(imageCount).filter(
+    ([_, count]) => count > 1,
+  );
+  if (duplicates.length === 0) return code;
+
+  // 对重复的图片，只保留第一次出现
+  duplicates.forEach(([img, _]) => {
+    let firstFound = false;
+    code = code.replace(
+      new RegExp(
+        `background[^;}\\n]*${img.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^;}\\n]*;?`,
+        'g',
+      ),
+      (match) => {
+        if (!firstFound) {
+          firstFound = true;
+          return match;
+        }
+        return '';
+      },
+    );
+  });
+
+  return code;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🗑️ T05: bg-size 修正 —— **已删除**（2026-09-29 删减法）
+//
+// 原实现：正则 `/background-?[Ss]ize:\s*['"]?(\d+)px\s+(\d+)px['"]?/g` **无条件**把
+// `.vue` inline 与 `.less` 里的 `backgroundSize: 'Xpx Ypx'` 全改成 `'cover'`。
+//
+// 删除理由（全语料取证，2026-09-29）：
+//   1. **方向相反**。`inferBackgroundStyle`（utils/background-size-inference.js）**设计上**就给
+//      「局部背景层」（`bgRole: sub-state`，如卡片内标题背景条、卡片下半背景）输出
+//      `${fw}px ${fh}px` + 相对 parentBox 的偏移；T05 在链尾把这些 px 真值改成 `cover`
+//      ⇒ 局部背景被撑满整个宿主元素。**两个子系统互逆，链尾者必胜**。
+//   2. **命中面 14/14 全是真值**。扫 506 个组件 / 2768 个 `.vue|.less`，T05 命中 **14 处**，
+//      其中 `191px 80px`（卡片 `bg-[m]`）、`130px 9px`（卡片标题背景条）**全部等于**
+//      `inferBackgroundStyle` 对 `resource-dom-mapping.json` 的推断值，**B 类（无真值来源）为 0**
+//      ⇒ 当前语料下 T05 **100% 有害、0% 收益**。
+//   3. **实证指纹**：`mc-max-1790688321049-447d01cc` 的 `CardGrid.vue` 卡片根
+//      离线跑 `injectBgStyleBinding` 得 `backgroundSize: '130px 9px'`、产物却是 `'cover'`，
+//      且 `backgroundPosition: '0px 16px'` 一字不差 ⇒ 唯一差异就是 T05。
+//      视觉后果：Figma 里 `129.5×9` 的标题背景条被 `cover` 撑满整卡 + 偏移叠加 ⇒ 压住标题行。
+//   4. **该事实已有确定性所有者**：资源背景的四件套由 `injectBgStyleBinding` /
+//      `inferBackgroundStyle` 装配（唯一答案）；LLM 自写的 px 无真值，把它猜成 `cover`
+//      属于「无条件改写无真值来源的值」，与 `autoFixRedundantFlex` 同族的越权纠偏器。
+//
+// ⇒ 与「每接管一个事实就删/收缩对应 fallback 与纠偏器」一致：**整体删除，不收缩**。
+//    若日后出现「无真值的 px 需要纠正」的场景，正确做法是让确定性写入口接管该事实，
+//    而不是再引入一个全文无条件改写器。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 🛡️ S6（2026-09-16 · c-env-monitor-5ed7a5f8 实锤）：背景 `:style` 补全自愈。
+ *
+ * 根因：LLM 手写的背景 `:style` 常**只有 `backgroundImage`**，缺 `backgroundSize`/`backgroundRepeat`/
+ * `backgroundPosition` → 背景图按**原尺寸平铺重复**、位置错（用户报「背景重复了 + 位置大小不对」）。
+ * 对照：系统注入的背景 `:style` 是完整的（`backgroundSize: '100% 100%', backgroundPosition: '0px 0px',
+ * backgroundRepeat: 'no-repeat'`）。
+ *
+ * ⚠️ 与已删除的 T05 的分工（2026-09-29）：T05 曾把**已有**的 `Xpx Ypx` 无条件改成 `cover`
+ * （已删，见上方墓碑）；本函数只补**缺失**的 size/repeat/position，**绝不覆盖已有值** ——
+ * 因此它不会破坏 `inferBackgroundStyle` 输出的局部背景几何真值。
+ * 逐字符扫描跳过字符串/模板字符串（`` `url(${bg1})` `` 里的 `${}` 不误判为对象边界）。
+ *
+ * @param {string} content .vue 文件内容
+ * @param {Array|object|null} mapping resourceDomMapping 真值（用于按资源取几何/scaleMode；
+ *        缺省或未命中 → 回落 `inferBackgroundStyle({})` 中性默认，与旧行为一致）
+ * @param {object|null} stats 可选计数位（`bgStyleTruthUsed` / `bgStyleNeutralFallback`）
+ * @returns {string} 补全后的内容（无改动时原样返回，引用相等）
+ */
+export function ensureBackgroundStyleComplete(content, mapping = null, stats = null) {
+  if (typeof content !== 'string' || !content) return content;
+  if (!/backgroundImage\s*:/.test(content)) return content;
+
+  // 🛡️ F3′：真值索引只在首次需要时构建（绝大多数文件无 backgroundImage，零开销）
+  //   三个解析函数下沉到 `background-size-inference.js`（唯一事实源，与
+  //   `layout-style-refiner#_applyRedLineFixes` 的 scaleMode 白名单共用同一口径）。
+  const resIndex = buildBackgroundResourceIndex(mapping);
+  const varToRes = resIndex.size > 0 ? buildBgVarToResource(content) : null;
+
+  const edits = [];
+  const bgRe = /backgroundImage\s*:/g;
+  let m;
+  while ((m = bgRe.exec(content)) !== null) {
+    const valStart = m.index + m[0].length;
+    // ① 找 backgroundImage 值结束（下一个 , 或 }），跳过字符串/模板字符串
+    let valEnd = -1;
+    let inStr = null;
+    for (let i = valStart; i < content.length; i++) {
+      const ch = content[i];
+      if (inStr) {
+        if (ch === inStr && content[i - 1] !== '\\') inStr = null;
+      } else if (ch === "'" || ch === '"' || ch === '`') {
+        inStr = ch;
+      } else if (ch === ',' || ch === '}') {
+        valEnd = i;
+        break;
+      }
+    }
+    if (valEnd < 0) continue;
+    // ② 找所属对象开 `{`（向前，跨 `}`/`=` 即停）
+    let open = -1;
+    for (let j = m.index; j >= 0; j--) {
+      if (content[j] === '{') { open = j; break; }
+      if (content[j] === '}' || content[j] === '=') break;
+    }
+    if (open < 0) continue;
+    // ③ 找匹配的 `}`（平衡括号，跳过字符串/模板字符串）
+    let close = -1;
+    let depth = 0;
+    inStr = null;
+    for (let j = open; j < content.length; j++) {
+      const ch = content[j];
+      if (inStr) {
+        if (ch === inStr && content[j - 1] !== '\\') inStr = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) { close = j; break; } }
+    }
+    if (close < 0) continue;
+    // ④ 检查「整个对象」内是否已有 size/repeat/position（不是只到 backgroundImage 值的逗号）
+    const objSlice = content.slice(open, close);
+    // 🛡️ §七 B7（2026-09-28）：此处补的是**缺失属性**（size/repeat/position），用的是
+    //   `inferBackgroundStyle({})` 的**中性默认**（'100% 100%' / 'no-repeat' / '0px 0px'），
+    //   而非按组件臆造的**值** —— 属「属性补全」而非「值臆造」（与已删的 §七 B3 合成几何区分）。
+    //
+    // 🛡️ F3′（2026-11-05 · 刀53 三链治本）：中性默认**只在没有几何真值时**才成立。
+    //   真机 `bg-_m-36.png`（191×81 / parent 192×114）真值是 `191px 80px` @ `1px 31px`，
+    //   被中性默认铺成 `100% 100%` + `0px 0px` ⇒ 小底图拉满整卡（e23b0b40 / 300fe0f7 实锤，
+    //   产物里 `backgroundPosition: '0px 0px'` 即该路径指纹）。现按 `backgroundImage`
+    //   引用的资源（`url(${bg4})` → 文件内 `import` → `bg-_m-36.png`）取真值 mapping；
+    //   解析不出才回落中性默认（旧行为，零回归）。
+    let truthMapping = null;
+    if (varToRes) {
+      const res = resolveBackgroundResourceRef(content.slice(valStart, valEnd), varToRes);
+      if (res) truthMapping = resIndex.get(res) || null;
+    }
+    const inferred = inferBackgroundStyle(truthMapping || {});
+    const patches = [];
+    if (!/backgroundSize\s*:/.test(objSlice)) patches.push(`backgroundSize: '${inferred.size}'`);
+    if (!/backgroundRepeat\s*:/.test(objSlice)) patches.push(`backgroundRepeat: '${inferred.repeat}'`);
+    if (!/backgroundPosition\s*:/.test(objSlice)) patches.push(`backgroundPosition: '${inferred.position}'`);
+    if (patches.length === 0) continue;
+    // 计数只统计「真的补了」的发生次数（已完整的元素不计入分母）
+    if (stats && typeof stats === 'object') {
+      if (truthMapping) stats.bgStyleTruthUsed = (stats.bgStyleTruthUsed || 0) + 1;
+      else stats.bgStyleNeutralFallback = (stats.bgStyleNeutralFallback || 0) + 1;
+    }
+    edits.push({ at: valEnd, text: ', ' + patches.join(', ') });
+  }
+
+  if (edits.length === 0) return content;
+  // 从后往前插入（避免位置偏移）
+  edits.sort((a, b) => b.at - a.at);
+  let out = content;
+  for (const e of edits) {
+    out = out.slice(0, e.at) + e.text + out.slice(e.at);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T06: 容器尺寸校验 + 确定性自动修正（治标 Pass 2）
+// 两阶段：
+//   阶段① 自动修正：子容器 width 和 height **同时**等于根容器 → BBox fallback →
+//           改为 auto（让 flex 布局自然收缩，而非错误固定整组件尺寸）。
+//           三重保险防误伤根容器：
+//             a. class 名不含根容器特征（root/container/panel/wrapper/content/main/page）
+//             b. 块内是 flex/grid 布局（布局容器尺寸应由内容决定，固定尺寸有害）
+//             c. width 和 height 都恰好等于根容器（±1px 四舍五入容差）
+//   阶段② 告警：修正后仍存在的 size >= 根容器 的越界声明（如非 flex 块的越界）。
+// ─────────────────────────────────────────────────────────────────────────────
+export function validateContainerSize(code, rootWidth, rootHeight) {
+  if (!code || typeof code !== 'string')
+    return { code, warnings: [], fixed: 0 };
+  if (!rootWidth || !rootHeight) return { code, warnings: [], fixed: 0 };
+
+  const warnings = [];
+  let fixed = 0;
+  let result = code;
+
+  // ── 阶段① 确定性自动修正（BBox fallback → auto）──
+  const blockRegex = /\.([\w-]+)\s*\{([^{}]*)\}/g;
+  let m;
+  while ((m = blockRegex.exec(result)) !== null) {
+    const className = m[1];
+    const body = m[2];
+    // 保险 a：跳过根容器特征 class
+    if (/root|container|panel|wrapper|content|main|page/i.test(className))
+      continue;
+    // 保险 b：必须 flex/grid 布局容器
+    if (!/display:\s*(flex|grid)/.test(body)) continue;
+    // 保险 c：width 和 height 都恰好等于根容器
+    const wm = body.match(/(?<![\w-])width:\s*(\d+)px/);
+    const hm = body.match(/(?<![\w-])height:\s*(\d+)px/);
+    if (!wm || !hm) continue;
+    const w = parseInt(wm[1], 10);
+    const h = parseInt(hm[1], 10);
+    if (Math.abs(w - rootWidth) <= 1 && Math.abs(h - rootHeight) <= 1) {
+      const fixedBody = body
+        .replace(/(?<![\w-])width:\s*\d+px/, 'width: auto')
+        .replace(/(?<![\w-])height:\s*\d+px/, 'height: auto');
+      result = result.replace(m[0], `.${className} {${fixedBody}}`);
+      fixed++;
+      warnings.push(
+        `✅ 已修正 BBox fallback：.${className} 的 width/height ${rootWidth}×${rootHeight} → auto（子容器误继承根节点尺寸）`,
+      );
+    }
+  }
+
+  // ── 阶段② 告警（修正后剩余的越界）──
+  const seen = new Set();
+  const sizeRegex = /(?<![\w-])(width|height):\s*['"]?(\d+)px['"]?/gi;
+  let match;
+  while ((match = sizeRegex.exec(result)) !== null) {
+    const prop = match[1].toLowerCase();
+    const size = parseInt(match[2], 10);
+    const rootSize = prop === 'width' ? rootWidth : rootHeight;
+    const key = `${match.index}:${size}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // 阈值用 1.0（不含误差）：子容器 == 根容器是 BBox fallback 到根节点的典型特征
+    if (size >= rootSize && size > 20) {
+      warnings.push(
+        `⚠️ 子容器 ${prop} (${size}px) ${size === rootSize ? '等于' : '超过'}根容器 ${rootSize}px，可能是 BBox fallback 到根节点导致`,
+      );
+    }
+  }
+
+  // ── 阶段③ min-width clamp（P1-2，2026-08-30）──
+  // 固定 min-width 超过根容器宽度且无滚动意图（overflow 未设 auto/scroll）→ clamp 到根宽度。
+  // 实锤（mc-max-1788003760938）：双卡并排 min-width 240×2 + gap 16 = 496 > 可用 388 溢出。
+  {
+    const blockRe = /\.([\w-]+)\s*\{([^{}]*)\}/g;
+    let bm;
+    while ((bm = blockRe.exec(result)) !== null) {
+      const className = bm[1];
+      const body = bm[2];
+      const mw = body.match(/(?<![\w-])min-width:\s*(\d+)px/);
+      if (!mw) continue;
+      const mwVal = parseInt(mw[1], 10);
+      if (mwVal <= rootWidth) continue;
+      // 有滚动意图（overflow auto/scroll）→ 不 clamp，保留横向滚动
+      if (/overflow(?:-x)?\s*:\s*(auto|scroll)/.test(body)) continue;
+      const clamped = Math.round(rootWidth);
+      const fixedBody = body.replace(
+        /(?<![\w-])min-width:\s*\d+px/,
+        `min-width: ${clamped}px`,
+      );
+      result = result.replace(bm[0], `.${className} {${fixedBody}}`);
+      fixed++;
+      warnings.push(
+        `✅ 已 clamp 越界 min-width：.${className} 的 min-width ${mwVal}px → ${clamped}px（超过根容器宽度 ${rootWidth}px 且无滚动意图）`,
+      );
+    }
+  }
+
+  // ── 阶段④ align-items:center 越界 height → auto（P1-1 补充，2026-08-30）──
+  // align-items:center 会把内容垂直居中到固定 height 的中点；若 height 接近/超过根容器高度
+  // （套用了根尺寸或更大），内容会被顶出可视区（mc-max-1788003760938 header-stats 425px → 文字居中 y≈212，
+  // 而 base-panel header 仅 38px，完全不可见）。无滚动意图时降级 height:auto，让内容按自然高度排布。
+  {
+    const blockRe = /\.([\w-]+)\s*\{([^{}]*)\}/g;
+    let bm;
+    while ((bm = blockRe.exec(result)) !== null) {
+      const className = bm[1];
+      const body = bm[2];
+      // 跳过根容器特征 class（根容器自身 height 可等于根高度）
+      if (/root|container|panel|wrapper|content|main|page/i.test(className))
+        continue;
+      if (!/display:\s*flex/.test(body)) continue;
+      if (!/align-items:\s*center/.test(body)) continue;
+      const hm = body.match(/(?<![\w-])height:\s*(\d+)px/);
+      if (!hm) continue;
+      const h = parseInt(hm[1], 10);
+      // 越界判定：height 接近/超过根容器高度（≥80% 根高，避免精确相等边界漏判）
+      if (h < rootHeight * 0.8) continue;
+      // 有滚动意图（overflow auto/scroll）→ 保留固定高度
+      if (/overflow(?:-y)?\s*:\s*(auto|scroll)/.test(body)) continue;
+      const fixedBody = body.replace(
+        /(?<![\w-])height:\s*\d+px/,
+        'height: auto',
+      );
+      result = result.replace(bm[0], `.${className} {${fixedBody}}`);
+      fixed++;
+      warnings.push(
+        `✅ 已降级越界 height：.${className} 的 height ${h}px → auto（≥根高度 ${rootHeight}px 且 align-items:center 会把内容居中顶出可视区）`,
+      );
+    }
+  }
+
+  if (warnings.length > 0) {
+    console.warn(
+      `[T06 容器尺寸校验] 发现 ${warnings.length} 个异常（其中 ${fixed} 个已自动修正）:`,
+    );
+    warnings.forEach((w) => console.warn(`  ${w}`));
+  }
+
+  return { code: result, warnings, fixed };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T07: 资源引用校验（治标 Pass 3）
+// 检查同一个背景图是否被多个容器复用。
+// 如果 bg-xxx.png 在 tabs-container 和 chart-section 都出现，说明资源分发错误。
+// ─────────────────────────────────────────────────────────────────────────────
+export function validateResourceUsage(code) {
+  if (!code || typeof code !== 'string') return { code, warnings: [] };
+
+  // 提取所有 url(xxx.png) 引用，按文件名统计出现次数
+  const usageMap = {};
+  const urlRegex = /url\(\s*['"]?([^'")\s]+)['"]?\s*\)/g;
+  let match;
+  while ((match = urlRegex.exec(code)) !== null) {
+    const url = match[1];
+    const fileName = url.split('/').pop(); // 取文件名
+    if (!usageMap[fileName]) {
+      usageMap[fileName] = { count: 0, contexts: [] };
+    }
+    usageMap[fileName].count++;
+    // 提取上下文（前后 100 字符）
+    const start = Math.max(0, match.index - 50);
+    const end = Math.min(code.length, match.index + match[0].length + 50);
+    usageMap[fileName].contexts.push(
+      code.slice(start, end).replace(/\s+/g, ' ').trim(),
+    );
+  }
+
+  const warnings = [];
+  for (const [fileName, info] of Object.entries(usageMap)) {
+    if (info.count > 1) {
+      warnings.push(
+        `⚠️ 资源 ${fileName} 被引用 ${info.count} 次，可能是资源分发错误（应只用于一个容器）`,
+      );
+    }
+  }
+
+  if (warnings.length > 0) {
+    console.warn(`[T07 资源引用校验] 发现 ${warnings.length} 个异常:`);
+    warnings.forEach((w) => console.warn(`  ${w}`));
+  }
+
+  return { code, warnings };
+}
+
+/**
+ * 🎯 Phase 2 方案7: 自动修复子组件尺寸约束
+ * 为子组件根元素自动注入 width: 100%; height: 100%;
+ * 移除子组件根元素的 margin 属性
+ *
+ * @param {string} vueContent - 子组件 .vue 文件内容
+ * @returns {string} 修复后的内容
+ */
+export function autoFixSubComponentSize(vueContent) {
+  if (!vueContent || typeof vueContent !== 'string') return vueContent;
+
+  // 提取 <style> 块
+  const styleMatch = vueContent.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  if (!styleMatch) return vueContent;
+
+  let styleContent = styleMatch[1];
+
+  // 提取根元素 class（通常是第一个 class）
+  const templateMatch = vueContent.match(
+    /<template>[\s\S]*?class=["']([^"']+)["']/i,
+  );
+  if (!templateMatch) return vueContent;
+
+  const rootClass = templateMatch[1].split(/\s+/)[0];
+  if (!rootClass) return vueContent;
+
+  // 查找根 class 的样式块
+  const rootClassEscaped = rootClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rootClassRegex = new RegExp(
+    `(\\.${rootClassEscaped}\\s*\\{)([^}]*)(\\})`,
+    'i',
+  );
+
+  const rootClassMatch = styleContent.match(rootClassRegex);
+  if (!rootClassMatch) return vueContent;
+
+  let rootStyles = rootClassMatch[2];
+  let modified = false;
+
+  // 1. 移除 margin 属性
+  if (/margin\s*:/i.test(rootStyles)) {
+    rootStyles = rootStyles.replace(/\s*margin[^;]*;/gi, '');
+    modified = true;
+  }
+
+  // 2. 注入 width: 100%; height: 100%; 如果不存在
+  if (!/width\s*:/i.test(rootStyles)) {
+    rootStyles = '  width: 100%;\n' + rootStyles;
+    modified = true;
+  }
+  if (!/height\s*:/i.test(rootStyles)) {
+    rootStyles = '  height: 100%;\n' + rootStyles;
+    modified = true;
+  }
+
+  if (!modified) return vueContent;
+
+  // 重新组装根 class 样式
+  const newRootClass = `${rootClassMatch[1]}\n${rootStyles.trim()}\n${rootClassMatch[3]}`;
+  styleContent = styleContent.replace(rootClassRegex, newRootClass);
+
+  // 替换原有 <style> 块
+  return vueContent.replace(
+    /<style[^>]*>[\s\S]*?<\/style>/i,
+    `<style${styleMatch[0].match(/<style([^>]*)>/i)[1]}>${styleContent}</style>`,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P3': 伪造 series 阈值线检测与改写
+// 检测 LLM 伪造的阈值线 series（name 含"阈值/平均/预警" + data 恒值），
+// 改写为 echarts 原生 markLine。
+// ─────────────────────────────────────────────────────────────────────────────
+export function rewriteFakeThresholdSeries(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  // 阈值类名称关键词
+  const THRESHOLD_KEYWORDS = [
+    '阈值',
+    '平均',
+    '预警',
+    '警戒',
+    '临界',
+    '标准线',
+    '目标线',
+  ];
+
+  // 提取 series 数组内容（匹配最外层 series: [...] 结构）
+  const seriesArrayMatch = code.match(
+    /series\s*:\s*\[([\s\S]*?)\]\s*(?=,\s*\w|\}\s*[,;]?\s*$)/m,
+  );
+  if (!seriesArrayMatch) return code;
+
+  const seriesContent = seriesArrayMatch[1];
+
+  // 提取每个 series 对象（简化版正则，处理 name/type/data 结构）
+  const seriesObjects = [];
+  const seriesRegex =
+    /\{\s*name\s*:\s*['"]([^'"]+)['"][\s\S]*?type\s*:\s*['"]([^'"]+)['"][\s\S]*?data\s*:\s*\[([\s\S]*?)\][\s\S]*?\}/g;
+  let match;
+
+  while ((match = seriesRegex.exec(seriesContent)) !== null) {
+    const name = match[1];
+    const dataStr = match[3];
+
+    // 解析 data 数组
+    const dataValues = dataStr
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && !isNaN(Number(s)))
+      .map(Number);
+
+    // 检测是否为恒值数组（所有值相同）
+    const isConstant =
+      dataValues.length > 0 && dataValues.every((v) => v === dataValues[0]);
+
+    // 检测名称是否包含阈值关键词
+    const isThresholdName = THRESHOLD_KEYWORDS.some((kw) => name.includes(kw));
+
+    seriesObjects.push({
+      fullMatch: match[0],
+      name,
+      dataValues,
+      isFakeThreshold: isThresholdName && isConstant && dataValues.length > 0,
+    });
+  }
+
+  // 找出伪造的阈值 series
+  const fakeThresholds = seriesObjects.filter((s) => s.isFakeThreshold);
+  if (fakeThresholds.length === 0) return code;
+
+  // 找出第一个真实 series（用于注入 markLine）
+  const firstRealSeries = seriesObjects.find((s) => !s.isFakeThreshold);
+  if (!firstRealSeries) return code;
+
+  let result = code;
+
+  // 移除伪造的 series
+  for (const fake of fakeThresholds) {
+    result = result.replace(fake.fullMatch, '');
+    // 清理多余逗号
+    result = result.replace(/,\s*,/g, ',');
+    result = result.replace(/\[\s*,/g, '[');
+    result = result.replace(/,\s*\]/g, ']');
+  }
+
+  // 如果第一个真实 series 已有 markLine，不重复注入
+  if (firstRealSeries.fullMatch.includes('markLine')) {
+    return result;
+  }
+
+  // 构造 markLine data
+  const markLineData = fakeThresholds
+    .map((t) => {
+      const value = t.dataValues[0];
+      return `{ yAxis: ${value}, name: '${t.name}' }`;
+    })
+    .join(', ');
+
+  const markLineInjection = `markLine: { data: [${markLineData}] }`;
+
+  // 在第一个真实 series 的闭合 } 前注入 markLine
+  const injectPoint = result.indexOf(firstRealSeries.fullMatch);
+  if (injectPoint === -1) return result;
+
+  const seriesEnd = injectPoint + firstRealSeries.fullMatch.length;
+  const beforeSeries = result.slice(0, seriesEnd - 1);
+  const afterSeries = result.slice(seriesEnd - 1);
+
+  result =
+    beforeSeries + ',\n      ' + markLineInjection + '\n    ' + afterSeries;
+
+  console.info(
+    `[P3' 伪造阈值线改写] 已将 ${fakeThresholds.length} 个伪造 series 改写为 markLine`,
+  );
+
+  return result;
+}
+
+/**
+ * 🛡️ T1' header 装饰元素确定性剥离（2026-09-17 · mc-1789634453886-e0cdf905 实锤）
+ *
+ * 现象：微码 header 插槽组件（HeaderSection.vue，挂在 <template #header-right>）里
+ *   LLM 生成 Figma 设计中不存在的装饰元素：divider（分隔线）、decorator/dot/
+ *   gradient-line（装饰圆点/渐变线）、spacer（占位）、以及脑补的内联 <svg> 图标
+ *   （c-device-monitor-header-icon）。prompt 铁律「禁止臆造装饰元素」未能约束。
+ *
+ * 根因：Figma header 子树里确实有装饰 VECTOR（2:8420/8421/8425），LLM「忠实还原」
+ *   了它们；但微码契约是「标题栏装饰由 base-panel 外壳渲染，组件只输出业务控件」。
+ *
+ * 治本（确定性后处理，不依赖 LLM 遵守 prompt）：
+ *   对 header 插槽组件的模板做白名单剥离——只保留：
+ *     ① 含业务文本的元素（Figma header 子树 TEXT 真实文本：统计标签/数值等）
+ *     ② 资源 <img>（真实下载的 icon/bg 资源）
+ *     ③ 布局容器（.xxx-stats / .xxx-stat-group 等包裹业务内容的容器）
+ *   剥离：
+ *     ① 纯装饰类名元素（divider/decorator/dot/gradient-line/spacer/deco 类）
+ *     ② 脑补的内联 <svg>（资源未映射时 LLM 手画的图标）
+ *
+ * 保守原则（宁可漏删、不可误删）：
+ *   - 只对「header 插槽组件」生效（调用方传入 isHeaderSlotFile 标记）；
+ *   - 找不到业务文本清单时（Figma header 缺失），只剥装饰类名 + 内联 svg，
+ *     绝不动其他元素；
+ *   - 剥离后若模板为空（连一个业务元素都没有），整体不剥离（防误删全空）。
+ *
+ * @param {string} code .vue 文件内容
+ * @param {{ headerTexts?: string[], isHeaderSlotFile?: boolean }} options
+ * @returns {string} 处理后的 code
+ */
+export function stripHeaderChromeDecorations(code, options = {}) {
+  if (!code || typeof code !== 'string') return code;
+  if (!options.isHeaderSlotFile) return code;
+
+  const DECOR_CLASS_RE =
+    /(divider|decorator|deco|gradient-line|gradient-bar|-gradient\b|-dot\b|spacer|ornament)/i;
+  const headerTextSet = new Set(
+    (options.headerTexts || [])
+      .map((t) => (t == null ? '' : String(t).trim()))
+      .filter(Boolean),
+  );
+  let removed = 0;
+
+  // ── 0) 定位 <template> 段（script/style 里的字符串不做 DOM 剥离）──
+  const tplMatch = code.match(/<template>[\s\S]*<\/template>/);
+  const tplStart = tplMatch ? code.indexOf(tplMatch[0]) : -1;
+  if (tplStart === -1) return code; // 无模板段（异常兜底）：原样返回
+  const tplEnd = tplStart + tplMatch[0].length;
+  const tpl = tplMatch[0];
+
+  // ── 1) 栈式标签树解析（自闭合 + 配对标签，容忍游离闭合标签）──
+  const svgOpenRe = /^<svg\b[^>]*>/i;
+  const tokens = [];
+  let pos = 0;
+  const pushText = (text) => {
+    if (text) tokens.push({ kind: 'text', raw: text });
+  };
+  while (pos < tpl.length) {
+    const lt = tpl.indexOf('<', pos);
+    if (lt === -1) {
+      pushText(tpl.slice(pos));
+      break;
+    }
+    pushText(tpl.slice(pos, lt));
+    if (tpl.startsWith('<!--', lt)) {
+      const end = tpl.indexOf('-->', lt);
+      const stop = end === -1 ? tpl.length : end + 3;
+      tokens.push({ kind: 'comment', raw: tpl.slice(lt, stop) });
+      pos = stop;
+      continue;
+    }
+    if (svgOpenRe.test(tpl.slice(lt))) {
+      const close = tpl.toLowerCase().indexOf('</svg>', lt);
+      const stop = close === -1 ? tpl.length : close + 6;
+      tokens.push({ kind: 'svgblock', raw: tpl.slice(lt, stop) });
+      pos = stop;
+      continue;
+    }
+    const tagM = tpl.slice(lt).match(/^<(\/?[a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/);
+    if (!tagM) {
+      pushText(tpl.slice(lt, lt + 1));
+      pos = lt + 1;
+      continue;
+    }
+    const tagRaw = tagM[0];
+    let tagName = tagM[1];
+    let closing = false;
+    if (tagName[0] === '/') {
+      closing = true;
+      tagName = tagName.slice(1);
+    }
+    const attrs = tagM[2] || '';
+    if (/\/>$/.test(tagRaw)) {
+      tokens.push({ kind: 'selfclose', tag: tagName, attrs, raw: tagRaw });
+    } else if (closing) {
+      tokens.push({ kind: 'close', tag: tagName, raw: tagRaw });
+    } else {
+      tokens.push({ kind: 'open', tag: tagName, attrs, raw: tagRaw });
+    }
+    pos = lt + tagRaw.length;
+  }
+
+  // ── 2) 建树（open 压栈；close 弹到匹配项；游离 close 保留为文本级节点）──
+  const root = { kind: 'root', tag: null, children: [] };
+  const stack = [root];
+  for (const tk of tokens) {
+    const top = stack[stack.length - 1];
+    if (tk.kind === 'open') {
+      const node = {
+        kind: 'elem', tag: tk.tag, attrs: tk.attrs, raw: tk.raw,
+        children: [], dead: false,
+      };
+      top.children.push(node);
+      stack.push(node);
+    } else if (tk.kind === 'close') {
+      let idx = -1;
+      for (let i = stack.length - 1; i >= 1; i -= 1) {
+        if (stack[i].tag === tk.tag) { idx = i; break; }
+      }
+      if (idx === -1) {
+        top.children.push({ kind: 'stray', raw: tk.raw });
+      } else {
+        stack[idx].closeRaw = tk.raw;
+        stack.length = idx; // 弹栈到匹配层（中间未闭合层用默认 </tag> 补齐）
+      }
+    } else {
+      top.children.push(tk);
+    }
+  }
+
+  const classOf = (node) => {
+    const m = (node.attrs || '').match(/\sclass="([^"]*)"/);
+    return m ? m[1] : '';
+  };
+  const isDecor = (node) =>
+    node.kind === 'elem' && DECOR_CLASS_RE.test(classOf(node));
+  // 节点子树是否含业务文本（header 真实文本）
+  const hasBusiness = (node) => {
+    if (node.kind === 'text') {
+      return headerTextSet.size > 0
+        && [...headerTextSet].some((t) => node.raw.includes(t));
+    }
+    if (node.kind === 'elem' || node.kind === 'root') {
+      return (node.children || []).some((c) => hasBusiness(c));
+    }
+    return false;
+  };
+  const hasImg = (node) => {
+    if (node.kind === 'selfclose') return node.tag === 'img';
+    if (node.kind === 'elem' || node.kind === 'root') {
+      return (node.children || []).some((c) => hasImg(c));
+    }
+    return false;
+  };
+  // 🛡️ P-04A 白名单结构特征（2026-09-17 · 020992ba 实锤「类名打地鼠」）：
+  //   装饰元素无论叫什么名（status-dot → header-dot → header-indicator → …），
+  //   结构上永远是「无业务锚点的空 div」。把删除判据从「类名像装饰」反转为
+  //   「子树无任何业务锚点」——业务锚点 = 真实业务文本（Figma header 真值）、
+  //   资源 <img>、动态插值 {{ }}、指令绑定（v-/:/@）。装饰 div 不含这些。
+  //   与 DECOR_CLASS_RE（类名快路径）互补：类名命中直接剥（现状），
+  //   类名不命中但子树全空 → 也剥（本新增）。改名永远逃不掉。
+  const hasBusinessAnchor = (node) => {
+    if (node.kind === 'text') {
+      const raw = node.raw || '';
+      // 动态插值是业务锚点（{{ item.label }} 等）
+      if (/\{\{[\s\S]*?\}\}/.test(raw)) return true;
+      // Figma header 真实文本是业务锚点
+      return headerTextSet.size > 0
+        && [...headerTextSet].some((t) => raw.includes(t));
+    }
+    if (node.kind === 'selfclose') {
+      // img 是否装饰由尺寸决定（isHollow 的 isDecorImg 职责），此处不锚定；
+      // 非 img 自闭合元素带指令/绑定（如 <Comp v-if>）是业务锚点
+      if (node.tag === 'img') return false;
+      return /(\s(v-|:|@)[\w:-]+=|v-html)/.test(node.attrs || '');
+    }
+    if (node.kind === 'elem') {
+      // 带指令/绑定的容器是业务锚点
+      if (/(\s(v-|:|@)[\w:-]+=|v-html)/.test(node.attrs || '')) return true;
+      return (node.children || []).some((c) => hasBusinessAnchor(c));
+    }
+    if (node.kind === 'root') {
+      return (node.children || []).some((c) => hasBusinessAnchor(c));
+    }
+    return false;
+  };
+  // 空子树判定：全部子节点均为空白文本/注释（P-04A 结构路径专用）。
+  //   img 特判：inline style 含 ≤24px 装饰尺寸（width:8px/16px 等）→ 视为装饰图，
+  //   不阻止父容器判 hollow（装饰点 2:8421=8×8、功能图标 2:8856=16×16 实锤）；
+  //   大尺寸 img 保守视为业务图（阻止剥离）。
+  const DECOR_IMG_MAX_PX = 24;
+  const isDecorImg = (node) => {
+    if (node.kind !== 'selfclose' || node.tag !== 'img') return false;
+    const styleM = (node.attrs || '').match(/\sstyle="([^"]*)"/);
+    const w = styleM ? Number((styleM[1].match(/width:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    const h = styleM ? Number((styleM[1].match(/height:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    if (!Number.isFinite(w) && !Number.isFinite(h)) return false; // 无尺寸信息 → 保守不判装饰
+    return (Number.isFinite(w) ? w : h) <= DECOR_IMG_MAX_PX;
+  };
+  const isHollow = (node) => {
+    if (node.dead) return true; // 自底向上：子先标 dead 后父判定，dead 子视为已空
+    if (node.kind === 'text') return !(node.raw || '').trim();
+    if (node.kind === 'comment') return true;
+    if (node.kind === 'selfclose') return isDecorImg(node);
+    if (node.kind === 'elem') return (node.children || []).every(isHollow);
+    return false;
+  };
+
+  // ── 3) 标记删除（自底向上，避免先删子导致父判定失真）──
+  //   两条删除路径：
+  //   ① 类名快路径（DECOR_CLASS_RE）——类名像装饰且无业务锚点
+  //   ② P-04A 结构路径——类名任意，但子树完全无业务锚点（纯空壳装饰 div）
+  //     仅当 header 真值文本清单可用时启用（防 Figma 缺失时误删一切）。
+  const markDecor = (node) => {
+    for (const c of node.children || []) markDecor(c);
+    // P-04A 结构路径（自闭合分支）：自闭合空 div（<div class="x" />）在标签树里
+    // 是 selfclose 节点，无子树可言——无绑定/非 img 即空壳装饰。
+    if (node.kind === 'selfclose') {
+      if (node.tag === 'img' || hasBusinessAnchor(node)) return;
+      if (headerTextSet.size > 0) {
+        node.dead = true;
+        removed += 1;
+      }
+      return;
+    }
+    if (node.kind !== 'elem') return;
+    // 保护：含业务文本/插值/指令绑定不剥（防误删）——两条路径共用
+    if (hasBusinessAnchor(node)) return;
+    if (isDecor(node)) {
+      node.dead = true;
+      removed += 1;
+      return;
+    }
+    // P-04A 结构路径：无类名装饰特征，但子树全空（无业务文本/无大图/无绑定）
+    // 仅当 header 真值文本清单可用时启用（防 Figma 缺失时误删一切）。
+    if (headerTextSet.size > 0 && isHollow(node)) {
+      node.dead = true;
+      removed += 1;
+    }
+  };
+  markDecor(root);
+
+  // ── 3b) P-14 首锚点前 chrome 区剥离（2026-10-14 · cd63d1c5 实锤）──
+  //   实锤：HeaderSection 生成「标题-线（470×2 装饰线，无 inline 尺寸）+ Group_11
+  //   （20×20 菱形 icon）」挂在标题区——标题 TEXT 已被程序化剥离，但装饰图形存活：
+  //   ① markDecor 的 selfclose 分支 img 一律 return（免剥）；② 标题-线 img 无 inline
+  //   尺寸 ⇒ isDecorImg 保守 false ⇒ 父容器 isHollow false ⇒ 整棵子树漏剥。
+  //   微码契约（prompt-loader）：面板标题区装饰由 base-panel 外壳渲染，组件只渲染
+  //   header 业务控件 ⇒ 位于**首个业务锚点之前**的兄弟子树（标题区装饰）应剥。
+  //   判据（保守 fail-open）：
+  //   - 仅 header 插槽文件 + header 真值文本清单非空（同 P-04A 启用条件）；
+  //   - 只处理「含业务锚点容器」的直接子序列：首锚点之前的无锚点兄弟 → 剥；
+  //   - img 特判：inline 尺寸 >24px 的大图保守保留（可能是业务 logo/图标）；
+  //     无尺寸或 ≤24px 的 img 才可随前导区剥（标题-线/菱形 icon 命中）；
+  //   - × 关闭等业务控件位于业务文本（全国/统计）之后 ⇒ 天然不受影响。
+  const isLargeImg = (node) => {
+    if (node.kind !== 'selfclose' || node.tag !== 'img') return false;
+    const styleM = (node.attrs || '').match(/\sstyle="([^"]*)"/);
+    const w = styleM ? Number((styleM[1].match(/width:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    const h = styleM ? Number((styleM[1].match(/height:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    const size = Number.isFinite(w) ? w : Number.isFinite(h) ? h : NaN;
+    return Number.isFinite(size) && size > DECOR_IMG_MAX_PX;
+  };
+  // 子树含 inline 大图（>24px）⇒ 保守保留（可能是业务 logo/功能图标）
+  const hasLargeImg = (node) => {
+    if (isLargeImg(node)) return true;
+    return (node.children || []).some((c) => hasLargeImg(c));
+  };
+  const stripLeadingChrome = (node) => {
+    if (!hasBusinessAnchor(node)) return;
+    let seenAnchor = false;
+    for (const c of node.children || []) {
+      if (seenAnchor) break;
+      if (c.kind === 'text' || c.kind === 'comment') continue;
+      if (hasBusinessAnchor(c)) {
+        seenAnchor = true;
+        continue;
+      }
+      if (c.dead) continue;
+      if (c.kind === 'selfclose') {
+        // img 单独节点：仅 ≤24px inline 小装饰图可剥；无尺寸 img 不单独剥
+        // （可能是 CSS 类尺寸的业务图标），留给父容器级判定
+        if (c.tag === 'img') {
+          if (!isDecorImg(c)) continue;
+        }
+        c.dead = true;
+        removed += 1;
+        continue;
+      }
+      if (c.kind === 'elem') {
+        if (hasLargeImg(c)) continue; // 整棵子树只挂大图 ⇒ 保守保留
+        c.dead = true;
+        removed += 1;
+      }
+    }
+    // 🔒 递归下钻：首版只处理模板根的直接子序列，但产物模板恒有
+    //   `<template> → 根 div → 业务内容` 两层，根 div 自身即锚点容器
+    //   ⇒ 必须对每个含锚点容器递归执行同样的「首锚点前」扫描（2026-10-14
+    //   离线复现 NO CHANGE 实锤）
+    for (const c of node.children || []) {
+      if (c.kind === 'elem' && !c.dead) stripLeadingChrome(c);
+    }
+  };
+  if (headerTextSet.size > 0) {
+    for (const c of root.children || []) {
+      if (c.kind === 'elem') stripLeadingChrome(c);
+    }
+  }
+
+  // ── 4) 剥脑补内联 svg：模板无 <img> 时全剥；有 <img> 时保留（保守）──
+  if (!hasImg(root)) {
+    const isHollowChild = (c) =>
+      c.dead ||
+      (c.kind === 'text' && !c.raw.trim()) ||
+      (c.kind === 'comment' && c.dead);
+    const stripSvgs = (node) => {
+      for (const c of node.children || []) stripSvgs(c);
+      if (node.kind === 'svgblock') { node.dead = true; removed += 1; }
+      // svg 剥掉后空壳 icon wrapper：<div class="xxx-icon">子全 dead/空白</div> 一并标记
+      if (node.kind === 'elem' && !node.dead &&
+          /-icon\b/i.test(classOf(node)) &&
+          node.children.length > 0 &&
+          node.children.every(isHollowChild)) {
+        node.dead = true;
+        removed += 1;
+      }
+    };
+    stripSvgs(root);
+  }
+
+  // ── 5) 序列化（dead 节点整棵子树丢弃）──
+  const serialize = (node) => {
+    let out = '';
+    for (const c of node.children || []) {
+      if (c.dead) continue;
+      switch (c.kind) {
+        case 'elem':
+          out += c.raw + serialize(c) + (c.closeRaw || '</' + c.tag + '>');
+          break;
+        case 'text':
+        case 'comment':
+        case 'stray':
+        case 'selfclose':
+        case 'svgblock':
+          out += c.raw;
+          break;
+        default:
+          break;
+      }
+    }
+    return out;
+  };
+  let newTpl = serialize(root);
+
+  // 剥离后清理悬挂空行（删除节点留下的连续空行，压缩为最多一空行）
+  newTpl = newTpl.replace(/\n[ \t]*\n[ \t]*\n/g, '\n\n');
+
+  // 防误删全空：若模板内已无任何业务内容，回退不剥离
+  const anyBizLeft = /<img\b/i.test(newTpl)
+    || (headerTextSet.size > 0 && [...headerTextSet].some((t) => newTpl.includes(t)))
+    || /[\u4e00-\u9fa5]/.test(newTpl.replace(/<!--[\s\S]*?-->/g, ''));
+  if (!anyBizLeft && removed > 0) {
+    return code;
+  }
+
+  // ── 6) 连带清理已剥离类名的 <style> 规则（模板中已不存在该类 → 死 CSS）──
+  const tplClasses = new Set();
+  for (const m of newTpl.matchAll(/class="([^"]*)"/g)) {
+    for (const c of m[1].split(/\s+/)) if (c) tplClasses.add(c);
+  }
+  const allClasses = new Set();
+  for (const m of code.matchAll(/class="([^"]*)"/g)) {
+    for (const c of m[1].split(/\s+/)) if (c) allClasses.add(c);
+  }
+  const deadClasses = [...allClasses].filter(
+    (c) => !tplClasses.has(c) && (DECOR_CLASS_RE.test(c) || /-icon\b/i.test(c)),
+  );
+  let rest = code.slice(tplEnd);
+  if (deadClasses.length > 0) {
+    // 🛡️ 刀 27（mc-max-1793242612233-74cadb8a 实锤）：旧实现用正则
+    //   `(^|\n)[^{}@]*?(.dead)[^{}]*?\{[^}]*\}` 删死规则——`[^}]*\}` 在**嵌套
+    //   Less 规则**（.deco { … .deco-img { … } }）上只吃到大括号内层第一个 `}`，
+    //   外层 `}` 残留 ⇒ style 9开10闭 ⇒ 写盘门禁 Unrecognised input ⇒
+    //   HeaderSection 被跳过 ⇒ CODE-023 悬空标签 ⇒ L0-B fail-closed 整单失败。
+    //   改走 removeClassBlocks（style-class-consolidator 括号配平单一实现，
+    //   与刀 53h 孤儿规则剔除同源），只处理 <style> 段，script 不碰。
+    const styleM = rest.match(/<style\b[^>]*>[\s\S]*<\/style>/);
+    if (styleM) {
+      const cleaned = removeClassBlocks(
+        styleM[0],
+        deadClasses.map((c) => '.' + c),
+      );
+      rest = rest.replace(styleM[0], cleaned);
+    }
+  }
+
+  const out = code.slice(0, tplStart) + newTpl + rest;
+  if (removed > 0) {
+    console.info('[T1\' header 装饰剥离] 已剥离 ' + removed + ' 个装饰元素');
+  }
+  return out;
+}
+
+/**
+ * 🛡️ P-04B header 插槽根容器方向确定化（2026-09-17 · c-device-monitor-cd3625c0 实锤）
+ *
+ * 现象：HeaderSection.vue 根类 `.c-xxx-header { width:100%; gap:8px; flex:1 1 0 }`
+ *   **无 display:flex** → block 流，icon img / stats 容器全部独占一行竖排；
+ *   gap 完全失效。而 Figma 真值里 header 统计区全是 HORIZONTAL Auto Layout。
+ *
+ * 根因：容器方向事实（rootLayoutFacts）只覆盖 body 侧 index.vue 装配；
+ *   header 插槽子组件内部布局无确定性来源，LLM 漏写 display:flex 无门禁兜底。
+ *
+ * 治本（确定性后处理）：对 header 插槽组件的**模板根元素**内联
+ *   `display:flex;flex-direction:row;align-items:center;`
+ *   —— 与 slot-con 确定化（P5）同思路：布局骨架不依赖 LLM 样式。
+ *   仅当根元素**未自带** display 声明时注入（已有布局声明则尊重，防双写冲突）。
+ *   同步在其 <style>/<common.less> 的同名根类规则上补齐（若类规则存在且缺 display）。
+ *
+ * 判定依据（无硬编码）：调用方传 isHeaderSlotFile（header 插槽文件）即注入 row——
+ *   header-right 槽在微码契约里语义就是「标题栏右侧横向控件行」，方向由契约决定，
+ *   不按组件名特判。
+ *
+ * @param {string} code .vue 文件内容
+ * @param {{ isHeaderSlotFile?: boolean }} options
+ * @returns {string} 处理后的 code
+ */
+export function ensureHeaderSlotRowLayout(code, options = {}) {
+  if (!code || typeof code !== 'string') return code;
+  if (!options.isHeaderSlotFile) return code;
+
+  const ROW_STYLE = 'display:flex;flex-direction:row;align-items:center;';
+
+  // ── 1) 定位模板第一个开标签（根元素）──
+  const tplMatch = code.match(/<template>\s*<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/);
+  if (!tplMatch) return code;
+  const rootTag = tplMatch[1];
+  const rootAttrs = tplMatch[2] || '';
+  const rootOpenStart = code.indexOf(tplMatch[0]);
+
+  // ── 2) 根元素已有 display 声明（inline style）→ 尊重，不注入 ──
+  const styleM = rootAttrs.match(/\sstyle="([^"]*)"/);
+  if (styleM && /display\s*:/.test(styleM[1])) return code;
+
+  // ── 3) 注入 inline style 到根元素开标签 ──
+  //   已有 style 属性 → 合并进去（row 声明追加在尾部，后者优先级高）；
+  //   无 style → 在开标签末尾追加新属性（保持既有属性顺序）。
+  let out;
+  const rootOpenEnd = rootOpenStart + tplMatch[0].length; // 含 '>'
+  if (styleM) {
+    const merged = rootAttrs.replace(
+      /\sstyle="([^"]*)"/,
+      (m, s) => ` style="${s}${s.endsWith(';') ? '' : ';'}${ROW_STYLE}"`,
+    );
+    const newOpen = tplMatch[0].replace(rootAttrs, merged);
+    out = code.slice(0, rootOpenStart) + newOpen + code.slice(rootOpenEnd);
+  } else {
+    const insertAt = rootOpenEnd - 1; // '>' 前
+    out = code.slice(0, insertAt)
+      + ` style="${ROW_STYLE}"`
+      + code.slice(insertAt);
+  }
+
+  console.info('[P-04B header 根容器方向确定化] 已注入 row 布局到根元素 <' + rootTag + '>');
+  return out;
+}
+
+/**
+ * 🛡️ P-01 背景空壳节点剥离 + 声明上移（2026-09-17 · a4f899c1 实锤系统性复发）
+ *
+ * 现象：LLM 对「有背景的元素」系统性拆成 宿主 > 背景空壳 div > 内容 三层——
+ *   `<div class="c-x-card-bg"></div>`（样式仅 background 系、border-radius、opacity 等纯视觉声明）。
+ *   用户铁律：背景必须挂在承载内容的元素上，禁止 -bg 空壳 DOM。跨组件类型复发
+ *   （ChartSection/ContentSection/TabsSection/ContentDefault/card 全中），prompt 约束无效。
+ *
+ * 治本（确定性后处理，按结构特征识别，不按组件名）：
+ *   匹配「class 以 -bg/background 词尾 + 空元素（无子无文本无绑定）」的 div：
+ *   ① 收集其 CSS 规则中的**纯背景类声明**（background 系、border-radius、box-shadow、opacity）
+ *   ② 上移合并到其**父元素**（父 class 规则追加，父已有同名属性则丢弃——父优先）
+ *   ③ 删除空壳 div 与其死 CSS 规则
+ *
+ * 🛡️ P-01b 修复（2026-09-17 · 36c3a630 实锤 tab 背景消失）三处根因：
+ *   1. 父类提取只认静态 class="..."——动态 :class="['c-x-item', {...}]" 数组语法提取出
+ *      垃圾 token → 父规则匹配不到 → 合并静默落空，但壳照样删（fail-open）→ 渐变背景
+ *      + 激活态变体全部丢失。修：动态数组提取首个字符串字面量。
+ *   2. 嵌套变体块内的 .shell 规则（`.item--active { .shell { 渐变 } }`）无人接管——
+ *      删壳后激活态背景丢失。修：嵌套规则内的视觉声明上提到外层变体块直属。
+ *   3. 绝对定位装饰层（position:absolute + 缩窄 width + 渐变 + border）不是「容器背景
+ *      空壳」而是独立装饰——合并到父会失真、删除会丢视觉。修：识别后保留壳。
+ *
+ * 保守原则（fail-closed）：
+ *   - 空壳无任何可收集声明 → 只删节点；
+ *   - 父 inline 有 backgroundImage（资源图）时不与 class 渐变强行并层（避免覆盖资源图），
+ *     渐变声明丢弃——资源图背景是视觉真值优先（此场景删壳是有意的：资源图已是真值）；
+ *   - 合并落空 && 壳有视觉声明 && 父无资源图背景 → **保留壳**（宁可残留不丢背景）。
+ *
+ * @param {string} code .vue 文件内容
+ * @returns {string} 处理后的 code
+ */
+export function collapseBackgroundShellDivs(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  // ── 0) P-07 wrapper unwrap（36c3a630 实锤）：非空壳 -bg 定位残尸优先处理 ──
+  //   P-06 把 container bg 挂到组件根后，内层 -bg wrapper（有子内容）成为冗余层；
+  //   且 style-dedup-guard「先剥后换」时序缺陷（剥 .vue 声明时共享表齐全，随后
+  //   共享表条目被 fallback 重写降级）会把 wrapper 剥成仅剩纯定位声明 → block
+  //   竖排溢出。治本：子内容上提一层、删壳、删死规则。独立扫描（非空壳不在
+  //   SHELL_RE 命中集内），直到无匹配（幂等）。
+  let out0 = code;
+  let unwrapped = 0;
+  for (let guard = 0; guard < 8; guard++) {
+    const bgWrapperRe = /<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*>(?![\s\S]*?<\/div>\s*<\/div>\s*$)/g;
+    let m;
+    let progressed = false;
+    while ((m = bgWrapperRe.exec(out0)) !== null) {
+      const r = tryUnwrapPositionalBgWrapper(out0, { cls: m[1], full: m[0] });
+      if (r !== null) {
+        out0 = r;
+        unwrapped += 1;
+        progressed = true;
+        break; // 文本已变，重扫
+      }
+    }
+    if (!progressed) break;
+  }
+
+  // ── 1) 找模板里的空壳 div（class 含 -bg/background 词尾，空元素无绑定）──
+  // 🛡️ P-06/D（2026-09-17）：空壳判定容忍 `>\s*</div>` 内部空白（换行/缩进逃逸），
+  // 此前只匹配紧邻 `></div>`，LLM 在空壳 div 内写换行空白即逃逸 → 渐变空壳残留。
+  const SHELL_RE = /<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*>\s*<\/div>|<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*\/>/g;
+  const shells = [...out0.matchAll(SHELL_RE)]
+    .map((m) => ({ full: m[0], cls: m[1] || m[2] }))
+    .filter((s) => !/\{\{|\sv-|:|@/.test(s.full));
+
+  const VISUAL_RE = /^(background(?:-[a-z]+)?|border-radius|box-shadow|opacity|backdrop-filter)\s*:/i;
+  let out = out0;
+  let collapsed = unwrapped;
+  let keptDecorative = 0;
+
+  if (shells.length === 0) {
+    if (unwrapped > 0) {
+      console.info('[P-01/P-07] 已 unwrap ' + unwrapped + ' 个定位残尸 -bg wrapper');
+    }
+    return out;
+  }
+
+  for (const shell of shells) {
+    let styleSeg = out.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+
+    // ── 1a) P-07 wrapper unwrap（36c3a630 实锤）：非空壳 -bg 定位残尸 ──
+    //   P-06 把 container bg 挂到组件根后，内层 -bg wrapper 成为冗余层；且
+    //   style-dedup-guard「先剥后换」时序缺陷（剥 .vue 声明时共享表齐全，
+    //   随后共享表条目被 fallback 重写降级）会把 wrapper 剥成仅剩纯定位声明
+    //   → block 布局竖排溢出。治本：子内容上提一层、删壳、删死规则。
+    //   判据（确定性）：class 含 -bg 词尾 + 有子内容 + 规则体全部声明 ∈ 纯定位
+    //   白名单（position/top/left/right/bottom/transform/z-index/box-sizing）。
+    const unwrap = tryUnwrapPositionalBgWrapper(out, shell);
+    if (unwrap !== null) {
+      out = unwrap;
+      collapsed += 1;
+      continue;
+    }
+
+    // ── 1b) 装饰层识别（P-01b 根因 3）→ 转伪元素（P-01c 铁律收口）──
+    //   顶层规则含 absolute/fixed 定位 → 独立装饰条（Figma 矢量 bg 常为缩窄渐变条+描边）。
+    //   直接合并到父会宽度失真；但保留 DOM 壳违反「禁止 -bg 空壳」铁律。
+    //   治本：DOM 删壳 + 样式转 `&::before`（content:'' + 原声明）挂在宿主 class 下——
+    //   DOM 零空壳、视觉 1:1（绝对定位几何不变）、嵌套变体（.item--active）天然可覆盖。
+    const topDecls = collectTopLevelShellDecls(styleSeg ? styleSeg[1] : '', shell.cls);
+    if (/\bposition\s*:\s*(absolute|fixed)\b/i.test(topDecls)) {
+      // 🛡️ §七 C2（2026-09-28）：宿主已有**资源背景图**（`hostHasBackground`）→ 该装饰层是其
+      //   近似表示，直接删壳（资源图为唯一背景），**不得**转 `::before`——否则资源图 + `::before`
+      //   渐变 = 两层背景（正是 #3/§六#2 要治的病）。与下方「父有资源图则删壳」分支同义。
+      //   ✅ 同时消解 §七 C3：B5 `stripRedundantInnerBgWhenHostHasBg` 只认 `.H-bg` 规则名，
+      //   抓不到转成 `.H::before` 的形态；故守卫必须落在**转换之前**（B5 无需扩匹配面）。
+      const shellIdx0 = out.indexOf(shell.full);
+      // 🛡️ 2026-09-28：**先剥 HTML 注释**再找宿主开标签。此前直接用
+      //   `before0.match(/<div\b[^>]*>(?=[^<]*$)/)`：lookahead 要求「开标签之后到壳之前不含 `<`」，
+      //   而 LLM 常在内层壳前写注释（实测 mc-max-1790583585496-9331b2e8/ContentActive.vue：
+      //   宿主与 `-bg` 壳之间是 `<!-- 背景层：渐变底（Figma: Rectangle …）-->`）⇒ 注释里的 `<`
+      //   令匹配失败 ⇒ parentOpen 为 null ⇒ `hostHasResBg=false` ⇒ **不删壳** ⇒
+      //   宿主资源背景图被内层 absolute 渐变壳盖住（浅底 + 白字 ⇒ 文字隐形）。
+      const before0 = (shellIdx0 >= 0 ? out.slice(0, shellIdx0) : '').replace(
+        /<!--[\s\S]*?-->/g,
+        '',
+      );
+      const parentOpen0M = before0.match(/<div\b[^>]*>(?=[^<]*$)/);
+      const parentCls0 = parentOpen0M ? extractFirstClassName(parentOpen0M[0]) : '';
+      const hostHasResBg =
+        !!parentOpen0M &&
+        hostHasBackground(parentOpen0M[0], parentCls0 || '', styleSeg ? styleSeg[1] : '');
+      if (hostHasResBg) {
+        out = out.replace(shell.full, '');
+        out = removeTopLevelShellRule(out, shell.cls);
+        collapsed += 1;
+        continue;
+      }
+      const pseudo = convertShellToPseudoElement(out, shell);
+      if (pseudo !== null) {
+        out = pseudo;
+        collapsed += 1; // 计入合并（DOM 壳已消除）
+        continue;
+      }
+      keptDecorative += 1;
+      continue; // 转换失败（找不到宿主规则）→ 保留壳兜底
+    }
+
+    // ── 2) 收集纯视觉声明（仅顶层规则；嵌套变体块由 4b 单独上提）──
+    //   🛡️ P-01d（6a0903b5 实锤 LESS-COMPILE-001）：壳规则含**嵌套伪元素/子块**
+    //   （&::before/&::after/子选择器——LLM 自建装饰元素的正常形态）时，整块删除
+    //   会把装饰渐变一起删掉且嵌套块拼接易产生 `}.;` 畸形选择器 → LESS 编译失败。
+    //   fail-closed：此类壳整体保留（装饰 DOM + 嵌套样式是一体的，不是背景空壳）。
+    const hasNestedPseudo =
+      styleSeg &&
+      new RegExp(
+        '(?:^|\\n)[ \\t]*\\.' + shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^{}]*\\{',
+      ).test(styleSeg[1]);
+    if (hasNestedPseudo) {
+      keptDecorative += 1;
+      continue;
+    }
+    const visualDecls = topDecls
+      .split(';')
+      .map((d) => d.trim())
+      .filter((d) => d && VISUAL_RE.test(d));
+
+    // ── 3) 定位父开标签（空壳之前最近的未闭合 div 开标签）──
+    const shellIdx = out.indexOf(shell.full);
+    if (shellIdx === -1) continue;
+    // 🛡️ 2026-09-28：与上方 C2 同因同修 —— 先剥 HTML 注释，否则壳前注释里的 `<` 会让
+    //   「宿主开标签」查找失败 ⇒ 宿主判为空 ⇒ 背景图/合并判据整条失活。
+    const before = out.slice(0, shellIdx).replace(/<!--[\s\S]*?-->/g, '');
+    const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
+    if (!parentOpenM) continue;
+    const parentOpen = parentOpenM[0];
+    // 🛡️ P-01b 根因 1（36c3a630 实锤）：父标签可能是动态 :class 数组语法
+    //   `:class="['c-x-item', { 'c-x-item--active': on }]"`——静态提取只拿到垃圾 token。
+    //   修：先试静态 class，再试动态数组首个字符串字面量。
+    const firstCls = extractFirstClassName(parentOpen);
+    // 🛡️ §七 C1（2026-09-28）：与 #3 `stripRedundantInnerBgWhenHostHasBg` 共用**同一判据函数**
+    //   `hostHasBackground`（① 标签内联 backgroundImage 或 ② 宿主 CSS 规则里的资源图 url()）。
+    //   原实现只认父标签内联（`background(?:Image|-image)?\s*[=:]`）→ 同一宿主「有没有背景」
+    //   两套口径（§七 C1：B1 认内联、B5 认 CSS url），此处收口为单一口径。
+    const parentHasInlineBg = hostHasBackground(
+      parentOpen,
+      firstCls || '',
+      styleSeg ? styleSeg[1] : '',
+    );
+
+    // ── 4) 合并声明到父 class 规则（父已有同名属性 → 空壳声明丢弃）──
+    let merged = false;
+    if (firstCls && visualDecls.length > 0 && styleSeg) {
+      const added = mergeIntoParentRule(out, firstCls, visualDecls);
+      if (added !== null) {
+        out = added;
+        merged = true;
+      }
+    }
+
+    // ── 4b) 嵌套变体块内的 .shell 规则上提（P-01b 根因 2）──
+    //   `.item--active { .shell { 渐变 } }` → 渐变上提到变体块直属（壳删除后归属宿主变体）
+    if (styleSeg) {
+      const hoisted = hoistNestedShellDecls(out, shell.cls, VISUAL_RE);
+      if (hoisted !== null) {
+        out = hoisted;
+        merged = true;
+      }
+    }
+
+    // ── 5) fail-closed 判定 + 删空壳节点 + 死 CSS 规则 ──
+    //   🛡️ P-01b 收口：合并落空 && 壳有视觉声明 && 父无资源图背景 → 保留壳。
+    //   此前无条件删壳正是 tab 背景消失的直接原因（删了壳、渐变没人接）。
+    //   父 inline 有资源图背景时删壳是有意的（资源图优先，渐变空壳冗余）。
+    if (!merged && visualDecls.length > 0 && !parentHasInlineBg) {
+      continue; // fail-closed：保留壳，视觉不丢
+    }
+    out = out.replace(shell.full, '');
+    out = removeTopLevelShellRule(out, shell.cls);
+    collapsed += 1;
+  }
+
+  // ── 6) P-10 死规则迁移（80648377 实锤时序缺陷）：必须在剥壳/unwrap **之后**跑 ──
+  //   剥壳前 DOM 还在 → domRe 判「非死规则」跳过；剥壳后组合选择器（`.item:not(.active)
+  //   .x-bg { 渐变 }`）才真正变死。迁移：.x-bg 段 → 宿主 ::before（含 content+几何补全），
+  //   无宿主可挂的纯死规则删除。
+  {
+    const migrated = migrateOrphanBgRulesToPseudo(out);
+    if (migrated !== null) out = migrated;
+  }
+
+  if (collapsed > 0 || keptDecorative > 0) {
+    console.info(
+      '[P-01/P-07] 已合并 ' + collapsed + ' 个 -bg 空壳/wrapper（含 unwrap ' + unwrapped + '）；保留 ' + keptDecorative + ' 个装饰层兜底',
+    );
+  }
+  return out;
+}
+
+/**
+ * 🛡️ P-09 双状态卡切换交互确定性装配（2026-09-17 · 36c3a630 实锤缺失）。
+ *
+ * 现象：visual.json interactions 明确记录「隧道设备/南北接线设备切换卡片 tab-switch，
+ * 左侧蓝色高亮表示选中」，但 ContentActive/ContentDefault 是两个独立子组件、无共享
+ * 状态载体——分块生成各自为政，谁都无法独自实现跨组件切换 → 交互静默丢失。
+ *
+ * 治本（确定性装配，事实源 = resourceDomMapping 的状态对）：
+ *   触发条件：mapping 中存在同容器下 mountTarget=active + mountTarget=default 的
+ *   bgRole=container 资源对（即「双状态卡」结构事实）。
+ *   动作（index.vue + 子组件标签）：
+ *     1. index script 注入 `const switchSelected = ref('active')`；
+ *     2. 两个子组件标签加 `@click="switchSelected = 'active'/'default'"` 与
+ *        `:class="{ 'is-selected': switchSelected === 'active'/'default' }"`；
+ *     3. 根 slot 容器注入 `:style="{ '--state-bg': switchSelected === 'active' ? 'url(' + bgA + ')' : 'url(' + bgB + ')' }"`
+ *        + import 两张 bg（交互需要视觉反馈，CSS 变量驱动选中卡背景）；
+ *     4. common.less 注入 `.is-selected` 语义规则（边框高亮，非背景——背景已由
+ *        P-06 挂根）与未选中卡降透明度。
+ *   幂等：已含 switchSelected 则原样返回。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地更新 index.vue / common.less）
+ * @param {Array} resourceDomMapping 资源映射
+ * @returns {{applied: boolean, details: Object|null}}
+ */
+/**
+ * 🛡️ A1 类名契约（2026-09-26 · c-device-monitor-5b611fcd 实锤）：从模板**确定性**解析
+ * 组件 class 前缀，供 P-09 注入的模板类与样式类共用同一前缀。
+ *
+ * 病灶（P-09 自打架）：模板侧写死裸类名 `state-switch`，样式侧同样注入 `.state-switch`；
+ *  后置 CODE-003（common.less 类名缺组件前缀）把样式侧 autoFix 成 `.c-x-state-switch`，
+ *  模板未同步 → 基类规则零命中（min-height/transition/cursor 全灭），
+ *  `:not(.state-switch--active)` 也因参数未前缀而语义错位。
+ *  这是「同一事实（状态卡类名）两处各自命名」的典型，必须由**单一前缀事实源**驱动两侧。
+ *
+ * 解析优先级（全部确定性，无启发式猜测）：
+ *   ① 确定性模板保证根 slot 容器为 `class="c-<语义>-slot-con"` → 直接取其前缀；
+ *   ② 兜底：全模板 `c-*` 类名的**按 '-' 段对齐的最长公共前缀**（并剔除「本身就是某类名
+ *      末段」的尾巴），LLM 模板只要类名族一致即可命中；
+ *   ③ 都取不到 → 返回 null（**保持旧行为**，不改写类名，零回归）。
+ *
+ * @param {string} template index.vue 全文
+ * @returns {string|null} 形如 `c-device-monitor` 的前缀；无法确定时 null
+ */
+export function resolveComponentClassPrefix(template = '') {
+  const tpl = typeof template === 'string' ? template : '';
+  if (!tpl) return null;
+
+  // ① 确定性模板根 slot 容器
+  const slot = tpl.match(/class="(c-[a-z0-9-]*?)-slot-con\b/);
+  if (slot) return slot[1];
+
+  // ② 全模板 c-* 类名（静态 class + :class 字符串字面量）的最长公共前缀
+  const tokens = new Set();
+  const collect = (literal) => {
+    for (const tok of String(literal || '').split(/\s+/)) {
+      if (/^c-[a-z0-9-]+$/.test(tok)) tokens.add(tok);
+    }
+  };
+  for (const m of tpl.matchAll(/class="([^"]*)"/g)) collect(m[1]);
+  for (const m of tpl.matchAll(/'([^']*)'/g)) collect(m[1]);
+  const list = [...tokens].sort();
+  if (list.length < 2) return null;
+
+  const segLists = list.map((t) => t.split('-'));
+  const first = segLists[0];
+  let n = 0;
+  outer: for (let i = 0; i < first.length; i++) {
+    for (const segs of segLists) {
+      if (segs[i] !== first[i]) break outer;
+    }
+    n = i + 1;
+  }
+  // 剔除「落在某个类名末尾」的公共段（否则 c-x-a / c-x-b 会把尾段 a、b 之外的共享段也算进来）
+  const lastSegs = new Set(segLists.map((segs) => segs[segs.length - 1]));
+  while (n > 0 && lastSegs.has(first[n - 1])) n--;
+  if (n < 2) return null; // 至少 `c-<语义>`
+  return first.slice(0, n).join('-');
+}
+
+export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
+  const idxPath = Object.keys(files).find((p) => p === 'package/index.vue');
+  if (!idxPath) return { applied: false, details: null };
+  let idx = files[idxPath];
+  if (typeof idx !== 'string') return { applied: false, details: null };
+  if (/switchSelected/.test(idx)) return { applied: false, details: null }; // 幂等
+
+  // 状态对识别：同 bgRole=container 的 active/default 资源对
+  const bgOf = (target) =>
+    (resourceDomMapping || []).find(
+      (m) =>
+        m &&
+        m.mountTarget === target &&
+        m.bgRole === 'container' &&
+        (m.previewAnalysisRole === 'bg' || m.kind === 'bg') &&
+        m.resourceFile &&
+        m.assignedVarName,
+    );
+  const act = bgOf('active');
+  const def = bgOf('default');
+  if (!act || !def) return { applied: false, details: null };
+
+  // 子组件标签定位（index.vue 模板内 ContentActive/ContentDefault 风格标签）
+  // 事实源：owner 由调用方 planner 命名约定（Content + 首字母大写 target）——
+  // 与 P-06 核心一刀的 ownerComp 推导一致。
+  const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+  const tagReOf = (t) => new RegExp('<(' + 'Content' + cap(t) + ')\\b([^>]*?)(/?)>', 'g');
+  let patched = false;
+  let out = idx;
+
+  // 🛡️ A1 类名契约（2026-09-26）：模板类与样式类共用同一前缀事实源，
+  //   否则 CODE-003 autoFix 只前缀样式侧 → 两侧失配（5b611fcd 实锤，见 resolveComponentClassPrefix 注释）。
+  const classPrefix = resolveComponentClassPrefix(idx);
+  const baseCls = classPrefix ? `${classPrefix}-state-switch` : 'state-switch';
+
+  const wireTag = (tagName, existing, selfClose, target) => {
+    if (/@click|:class/.test(existing)) return null; // LLM 已有交互 → 不覆盖
+    // 🛡️ CODE-024 契约（42c19564 实锤）：修饰符必须 BEM 形态（基类--mod）。
+    //   状态卡标签挂的是子组件（无基类 class），用静态 class 基类 + --target 变体：
+    //   `class="<base> <base>--active"` 按选中态切换。
+    const modCls = `${baseCls}--${target}`;
+    const attrs =
+      ` @click="switchSelected = '${target}'"` +
+      ` :class="switchSelected === '${target}' ? '${baseCls} ${modCls}' : '${baseCls}'"`;
+    if (selfClose) {
+      return `<${tagName}${existing}${attrs} />`;
+    }
+    return `<${tagName}${existing}${attrs}>`;
+  };
+
+  for (const target of ['active', 'default']) {
+    const re = tagReOf(target);
+    out = out.replace(re, (full, tagName, attrs, selfClose) => {
+      const r = wireTag(tagName, attrs, selfClose === '/', target);
+      if (r) patched = true;
+      return r || full;
+    });
+  }
+  if (!patched) return { applied: false, details: null };
+
+  // script 注入：ref + bg imports
+  const scriptInject =
+    `\n// 🛡️ P-09 状态切换交互（确定性装配）\n` +
+    `import ${act.assignedVarName} from '../resources/images/${String(act.resourceFile).split('/').pop()}'\n` +
+    `import ${def.assignedVarName} from '../resources/images/${String(def.resourceFile).split('/').pop()}'\n` +
+    `const switchSelected = ref('active')\n`;
+  if (/<script setup>/.test(out)) {
+    out = out.replace('<script setup>', '<script setup>' + scriptInject);
+  } else {
+    return { applied: false, details: null };
+  }
+
+  // 根 slot 容器注入 CSS 变量（选中态背景跟随）。
+  // 🛡️ Vue 3 语义陷阱：同一标签同时有静态 style 与 :style 时静态 style 会被
+  //   :style 整体覆盖（不是合并）→ 容器原有 display:flex 等布局丢失。必须把
+  //   静态 style 合并进 :style 对象（string 形式追加 '--state-bg' 三元绑定）。
+  const slotRe = /(<div\b[^>]*class="[^"]*slot-con[^"]*"[^>]*>)/;
+  const slotM = out.match(slotRe);
+  if (slotM && !/--state-bg/.test(slotM[1])) {
+    const tag = slotM[1];
+    const staticStyleM = tag.match(/\sstyle="([^"]*)"/);
+    let newTag;
+    if (staticStyleM && !/:style=/.test(tag)) {
+      // 静态 style → 合并进新 :style（保留原布局声明）
+      const stat = staticStyleM[1].trim().replace(/;$/, '');
+      const mergedDecls = stat
+        .split(';')
+        .map((d) => d.trim())
+        .filter(Boolean)
+        .map((d) => {
+          const [k, ...v] = d.split(':');
+          const kk = k.trim().replace(/-([a-z])/g, (_x, c) => c.toUpperCase());
+          return `'${kk}': '${v.join(':').trim()}'`;
+        })
+        .join(', ');
+      newTag = tag.replace(
+        /\sstyle="[^"]*"/,
+        ` :style="{ ${mergedDecls}${mergedDecls ? ', ' : ''}'--state-bg': switchSelected === 'active' ? 'url(' + ${act.assignedVarName} + ')' : 'url(' + ${def.assignedVarName} + ')' }"`,
+      );
+    } else {
+      const styleBind = ` :style="{ '--state-bg': switchSelected === 'active' ? 'url(' + ${act.assignedVarName} + ')' : 'url(' + ${def.assignedVarName} + ')' }"`;
+      newTag = tag.replace(/>$/, styleBind + '>');
+    }
+    if (newTag && newTag !== tag) {
+      out = out.replace(slotRe, newTag);
+    }
+  }
+
+  files[idxPath] = out;
+
+  // common.less 注入 state-switch BEM 语义规则（若文件表含 common.less 且无该规则）
+  // 🛡️ CODE-024 契约：修饰符 --mod 形态 + 样式源有对应规则（两条件都满足）。
+  const commonPath = Object.keys(files).find(
+    (p) => /resources\/styles\/common\.less$/.test(p),
+  );
+  if (commonPath && !/state-switch--active/.test(files[commonPath])) {
+    files[commonPath] =
+      String(files[commonPath]) +
+      `\n\n/* 🛡️ P-09 状态切换交互（确定性装配） */\n` +
+      // 🛡️ 批5（2026-09-28 · device-monitor 实锤）：**删除「整项 opacity」状态暗示**。
+      //   设计稿里「未选中态」是**背景更淡**（由各状态自带的背景资源/渐变表达），
+      //   文字与图标**不透明**；旧实现注入
+      //   `.state-switch:not(--active):not(--default){opacity:0.55}` 会把**整个未选中项**
+      //   （含文字/图标）一并淡化 → 用户反馈「默认项整体被加了透明度（设计上没有）」。
+      //   确定性装配器不得臆造设计里不存在的视觉。改为：保留 `--active/--default` 规则
+      //   （CODE-024 C3 要求模板用到的修饰符类在样式源有对应规则）但只写**无害声明**。
+      `.${baseCls} {\n  cursor: pointer;\n}\n` +
+      `.${baseCls}--active,\n.${baseCls}--default {\n  opacity: 1;\n}\n`;
+  }
+
+  return {
+    applied: true,
+    details: { active: act.assignedVarName, default: def.assignedVarName },
+  };
+}
+
+/**
+ * 🛡️ P-11 per-character 分段着色（2026-09-18 · device-monitor 实锤）
+ * ============================================================================
+ * 背景：Figma 用 `characterStyleOverrides` + `styleOverrideTable` 表达「同一个
+ * TEXT 节点内按字符分段着色」。实测 `(2/484)`：
+ *   节点默认 fill = 纯白 rgb(255,255,255)（被覆盖完全架空，无一字符实际渲染为白）
+ *   overrides = [69,71,69,69,69,69,69]
+ *   table: 69→蓝 rgb(25,144,255)(size16) / 71→红 rgb(224,52,52)(size18,w600)
+ *   逐字符：`(`蓝 · `2`红 · `/484)`蓝
+ * 而 `(0/484)` 的「0」是青绿 rgb(8,163,165) → 该位置是**状态色语义**：
+ *   异常数 > 0 → 红；= 0 → 青绿。
+ *
+ * 旧链路三重丢失（这也是「device-count 文字一直是白色」的真根因）：
+ *   ① pruneRedundantFields 白名单裁剪删掉这两个字段 → 缓存无数据；
+ *   ② LLM 只看到节点默认白 fill → 输出白字；
+ *   ③ 管线无分段渲染能力 → 即使拿到数据也渲染不出。
+ * （① 已在 figma-connector.js 修复；本函数解决 ②③）
+ *
+ * 治本（确定性装配，事实源 = 修复后能拿到的 per-char 真值）：
+ *   - 产物里这类文本常是**动态绑定**（如 `{{ device.count }}`），无法静态替换字面量，
+ *     故装配「运行时分段着色」：注入确定性 helper（颜色真值写死自 Figma）+ 模板改为
+ *     v-for 分段渲染。
+ *   - 多样本聚合推断状态色：`(2/484)` 非 0 → 异常色；`(0/484)` 为 0 → 正常色。
+ *   - 严格 fail-closed：无真值 / 结构不匹配 / 已装配过 → 零改动。
+ *
+ * 🛡️ R19 分工（2026-10-21，**不是两套重复实现**）：
+ *   · 静态字面量形态（模板里就写着 `(2/484)`）→ `injectNodeLevelColorTruth`（P-12d）
+ *     按 run 边界直接拆 span，颜色/字号/字重随段写死；
+ *   · 运行时动态形态（模板里是 `{{ item.value }}`，值域随数据变）→ **本函数**，
+ *     因为静态拆段不可能，只能装配 helper 把"状态色语义"落到运行时。
+ *   两者判定域互斥（有无字面量），故不合并；但**颜色真值同源**（`utils/text-runs.js`）。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地更新 .vue）
+ * @param {Array} perCharTruth extractPerCharTextTruth() 产出的分段真值
+ * @returns {{applied: boolean, details: Object|null}}
+ */
+export function injectPerCharTextSegments(files, perCharTruth = []) {
+  if (!files || !Array.isArray(perCharTruth) || perCharTruth.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  // ── 1. 聚合状态色：只处理「(异常数/总数)」这类可语义化的计数文本 ──
+  //    从多个样本（(2/484) 红、(0/484) 青绿）推断该位置的状态色映射。
+  const COUNT_RE = /^(\D*?)(\d+)(\/[\s\S]*)$/;
+  let baseColor = null;
+  let abnormalColor = null; // 数值 > 0
+  let normalColor = null; // 数值 = 0
+  let sampleChars = null;
+  // 字号/字重同属 per-char 真值的一部分（实测异常数 18/600、其余 16/500），一并装配保真
+  let baseSize = null;
+  let baseWeight = null;
+  let numSize = null;
+  let numWeight = null;
+
+  for (const item of perCharTruth) {
+    const chars = String(item && item.characters ? item.characters : '');
+    const m = chars.match(COUNT_RE);
+    if (!m || !Array.isArray(item.segments)) continue;
+    const num = Number(m[2]);
+    for (const seg of item.segments) {
+      if (!seg || !seg.color) continue;
+      const isNumSeg = seg.text && seg.text.includes(m[2]);
+      if (isNumSeg) {
+        if (num > 0) abnormalColor = seg.color;
+        else normalColor = seg.color;
+        numSize = numSize || seg.fontSize || null;
+        numWeight = numWeight || seg.fontWeight || null;
+      } else {
+        baseColor = baseColor || seg.color;
+        baseSize = baseSize || seg.fontSize || null;
+        baseWeight = baseWeight || seg.fontWeight || null;
+      }
+    }
+    sampleChars = chars;
+  }
+  if (!baseColor || !abnormalColor) {
+    return { applied: false, details: null }; // fail-closed
+  }
+  const normal = normalColor || abnormalColor;
+
+  // ── 2. 定位目标绑定 ──
+  //  ① 形如 `{{ xxx.count }}` 的动态文本（原路径，事实源=绑定名后缀）
+  //  ② 🛡️ 数据驱动计数文本（2026-09-26 · c-device-monitor-8d304bf9 实锤）：
+  //     `v-for` 数组项里的 `{{ item.value }}`，其字面值是 `(2/484)` 这类计数文本。
+  //     原实现只认 `.count` → 本形态**匹配不到 → 整体 fail-closed（applied=false）**，
+  //     而 Figma per-char 真值、三色常量都能拿到（实测 base=rgb(25,144,255) /
+  //     abnormal=rgb(224,52,52) / normal=rgb(8,163,165)），纯属"载体形态没认"。
+  //     判据（确定性，不靠猜）：**同文件 script 里存在匹配计数形态的字符串字面量**
+  //     （如 `value: '(2/484)'`）→ 收集其属性名 → 只替换 `{{ 任意表达式.<该属性名> }}`。
+  const HELPER = 'formatDeviceCountSegments';
+  const changed = [];
+
+  for (const [fp, code] of Object.entries(files)) {
+    if (!fp.endsWith('.vue') || typeof code !== 'string') continue;
+    if (code.includes(HELPER)) continue; // 幂等
+    // 只处理含计数语义绑定的文件
+    const bindRe = /\{\{\s*([A-Za-z_$][\w$.]*)\.count\s*\}\}/;
+    const countBind = code.match(bindRe);
+    let expr = null;
+    let targetRe = null;
+    if (countBind) {
+      // ① 原路径：{{ x.count }}
+      expr = countBind[1] + '.count';
+      targetRe = bindRe;
+    } else {
+      // ② 数据驱动：从 `prop: '(2/484)'` 形态的字面量收集「计数属性名」，
+      //    再只替换 `{{ 任意表达式.<该属性名> }}`。
+      //    🛡️ 收窄（全语料误伤审计救回一次 · 2026-09-26）：字面量必须**就是本次 per-char 真值
+      //    文本之一**，而不是"任意计数形态"—— 否则同文件里别的计数形态文本（如 `extraLabel: '1/4'`）
+      //    也会被套上**本组真值色**，属于拿错误真值染色。真值里没有的文本一律不动（fail-closed）。
+      const truthTexts = new Set(
+        perCharTruth
+          .map((i) => String((i && i.characters) || ''))
+          .filter((s) => s && COUNT_RE.test(s)),
+      );
+      if (truthTexts.size === 0) continue;
+      const countProps = new Set();
+      for (const m of code.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*['"`]([^'"`\n]*)['"`]/g)) {
+        if (truthTexts.has(m[2])) countProps.add(m[1]);
+      }
+      for (const prop of countProps) {
+        const re = new RegExp(`\\{\\{\\s*([A-Za-z_$][\\w$.]*)\\.${prop}\\s*\\}\\}`);
+        const hit = code.match(re);
+        if (hit) {
+          expr = `${hit[1]}.${prop}`;
+          targetRe = re;
+          break;
+        }
+      }
+    }
+    if (!expr || !targetRe) continue;
+
+    // 模板替换：{{ device.count }} → 分段 v-for 渲染
+    const replacement =
+      `<span v-for="(seg, segIdx) in ${HELPER}(${expr})" :key="segIdx"` +
+      ` :style="{ color: seg.color, fontSize: seg.fontSize ? seg.fontSize + 'px' : undefined,` +
+      ` fontWeight: seg.fontWeight || undefined }">{{ seg.text }}</span>`;
+    let out = code.replace(targetRe, replacement);
+
+    // script 注入 helper（颜色真值写死自 Figma per-character）
+    const helperSrc =
+      `\n// 🛡️ P-11 分段着色（确定性装配 · 真值来自 Figma per-character）\n` +
+      `const COUNT_SEG_BASE = '${baseColor}'\n` +
+      `const COUNT_SEG_ABNORMAL = '${abnormalColor}'\n` +
+      `const COUNT_SEG_NORMAL = '${normal}'\n` +
+      `const COUNT_SEG_BASE_SIZE = ${baseSize == null ? 'null' : String(baseSize)}\n` +
+      `const COUNT_SEG_BASE_WEIGHT = ${baseWeight == null ? 'null' : String(baseWeight)}\n` +
+      `const COUNT_SEG_NUM_SIZE = ${numSize == null ? 'null' : String(numSize)}\n` +
+      `const COUNT_SEG_NUM_WEIGHT = ${numWeight == null ? 'null' : String(numWeight)}\n` +
+      `function ${HELPER}(raw) {\n` +
+      `  const s = String(raw == null ? '' : raw)\n` +
+      `  const m = s.match(/^(\\D*?)(\\d+)(\\/[\\s\\S]*)$/)\n` +
+      `  if (!m) return [{ text: s, color: COUNT_SEG_BASE }]\n` +
+      `  const n = Number(m[2])\n` +
+      `  return [\n` +
+      `    { text: m[1], color: COUNT_SEG_BASE, fontSize: COUNT_SEG_BASE_SIZE, fontWeight: COUNT_SEG_BASE_WEIGHT },\n` +
+      `    { text: m[2], color: n > 0 ? COUNT_SEG_ABNORMAL : COUNT_SEG_NORMAL, fontSize: COUNT_SEG_NUM_SIZE, fontWeight: COUNT_SEG_NUM_WEIGHT },\n` +
+      `    { text: m[3], color: COUNT_SEG_BASE, fontSize: COUNT_SEG_BASE_SIZE, fontWeight: COUNT_SEG_BASE_WEIGHT },\n` +
+      `  ].filter((x) => x.text)\n` +
+      `}\n`;
+
+    if (/<script setup>/.test(out)) {
+      out = out.replace('<script setup>', '<script setup>' + helperSrc);
+    } else {
+      continue; // 无 script setup → 无法注入 helper，跳过（fail-closed）
+    }
+
+    if (out !== code) {
+      files[fp] = out;
+      changed.push(fp);
+    }
+  }
+
+  if (changed.length === 0) return { applied: false, details: null };
+  return {
+    applied: true,
+    details: { files: changed, baseColor, abnormalColor, normalColor: normal, sample: sampleChars },
+  };
+}
+
+/**
+ * P-11 辅助：从（已修复裁剪的）Figma 节点树提取 per-character 分段着色真值。
+ * 只收集确实存在多段异色的 TEXT 节点（单色节点不产出，避免噪音）。
+ *
+ * @param {Object} figmaNodeData prune 后的 Figma 节点树（含 characterStyleOverrides）
+ * @returns {Array<{nodeId:string, characters:string, segments:Array<{text:string,color:string,fontSize:number|null,fontWeight:number|null}>}>}
+ */
+export function extractPerCharTextTruth(figmaNodeData) {
+  const out = [];
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return out;
+
+  // 🛡️ R19（2026-10-21）：逐字符求值已收敛到 `utils/text-runs.js#runsOfTextNode`
+  //   （唯一实现）。本函数只做「多段筛选 + 旧字段形态投影」，不再自建一套 rgba/逐字符循环。
+  //   输入契约（节点树本体 / `{ document }` wrapper）同样由 text-runs 兼容——
+  //   历史上这里曾因 wrapper 顶层无 `type` 而静默得 0 条（两次实锤）。
+  const { byNode } = extractTextRuns(figmaNodeData);
+  for (const [nodeId, runs] of byNode) {
+    // 合并后仍多段（确实异样式）才纳入 —— 与旧实现判据一致
+    if (!Array.isArray(runs) || runs.length < 2) continue;
+    out.push({
+      nodeId,
+      characters: runs.map((r) => r.text).join(''),
+      segments: runs.map((r) => ({
+        text: r.text,
+        color: r.color,
+        fontSize: r.fontSize,
+        fontWeight: r.fontWeight,
+      })),
+    });
+  }
+  return out;
+}
+
+/**
+ * 🛡️ 2026-09-28（c-device-monitor-18de33dd 实锤）：**宿主已挂资源背景图 → 抑制其内层 `-bg`
+ * 元素的 background**（同一视觉两层背景：宿主 PNG + 内层真值渐变）。
+ *
+ * 判据（精确、幂等）：模板里某元素带内联 `backgroundImage` 绑定且类为 `H`（如
+ * `c-device-monitor-default`），而样式里存在规则 `.H-bg { … background: … }` → 从该规则
+ * 移除 `background` / `background-image` 声明（保留 border-radius / grid 等其余声明）。
+ * 资源图（精确像素）是权威表示，真值渐变只是其近似 → 二选一，保留资源图。
+ *
+ * @param {string} code .vue 全文
+ * @returns {string} 处理后的 code（无改动则原样返回）
+ */
+/**
+ * 🛡️ 事实优先级表（docs/确定性收回清单-2026-09-16.md §六 #2）**单一判据**：
+ *   宿主「已有背景」= ① 标签上内联绑定 `backgroundImage`，或 ② 宿主自身 CSS 规则里声明了
+ *   **资源图 `url(...)`**。
+ *   ⚠️ 只认 `url(...)`（资源图）—— 优先级是「**资源图**（精确像素）> 真值渐变（近似）」，
+ *   普通 CSS 渐变/纯色不算「权威背景」，不得据此抑制内层（防误伤独有背景）。
+ */
+export function hostHasBackground(tagAttrs, hostClass, styleText) {
+  if (/(?::style|style)\s*=\s*"[^"]*backgroundImage[^"]*"/i.test(String(tagAttrs || ''))) return true;
+  if (!hostClass || !styleText) return false;
+  const esc = String(hostClass).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\\.${esc}\\s*\\{([^{}]*)\\}`, 'g');
+  let m;
+  while ((m = re.exec(String(styleText))) !== null) {
+    const bm = m[1].match(/(?:^|[^-\w])background(?:-image)?\s*:\s*([^;}]+)/i);
+    if (bm && /url\(/i.test(bm[1])) return true;
+  }
+  return false;
+}
+
+export function stripRedundantInnerBgWhenHostHasBg(code) {
+  if (typeof code !== 'string' || !code) return code;
+  const tplSeg = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!tplSeg) return code;
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  const styleText = styleSeg ? styleSeg[1] : '';
+  const hostCls = new Set();
+  const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  let m;
+  while ((m = tagRe.exec(tplSeg[1])) !== null) {
+    const attrs = m[2] || '';
+    const cm = attrs.match(/class="([^"]*)"/);
+    if (!cm) continue;
+    for (const c of cm[1].split(/\s+/)) {
+      if (!/^c-[A-Za-z][\w-]*$/.test(c)) continue;
+      if (hostHasBackground(attrs, c, styleText)) hostCls.add(c);
+    }
+  }
+  if (!hostCls.size) return code;
+  let out = code;
+  let changed = false;
+  for (const h of hostCls) {
+    const esc = `${h}-bg`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(\\.${esc}\\s*\\{)([^{}]*)(\\})`, 'g');
+    out = out.replace(re, (full, head, body, tail) => {
+      if (!/(?:^|[^-\w])background(?:-image)?\s*:/.test(body)) return full;
+      const nb = body
+        .replace(/\s*background-image\s*:[^;}]*;?/gi, '')
+        .replace(/\s*background\s*:[^;}]*;?/gi, '');
+      if (nb === body) return full;
+      changed = true;
+      return head + nb + tail;
+    });
+  }
+  return changed ? out : code;
+}
+
+/**
+ * 🛡️ P-10 死规则迁移（b58918b5 实锤）：模板无 -bg 壳 + 样式有 .x-bg 渐变规则。
+ * LLM 组合选择器形态（`.item:not(.active) .x-bg { 渐变 }`）里的 .x-bg 段在模板
+ * 剥壳后成死选择器 → 渐变丢失。改写：模板全无该 class 的 DOM 元素时，组合选择器
+ * 中的 `.x-bg` 段替换为 `::before`（挂宿主伪元素），规则其余部分保持。
+ * @param {string} code .vue 全文
+ * @returns {string|null} 有迁移返回新 code，否则 null
+ */
+function migrateOrphanBgRulesToPseudo(code) {
+  const tplSeg = code.match(/<template>([\s\S]*?)<\/template>/);
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!tplSeg || !styleSeg) return null;
+
+  // 收集样式里引用的 -bg class（任意选择器形态）
+  const bgClsSet = new Set();
+  for (const m of styleSeg[1].matchAll(/\.([A-Za-z][\w-]*(?:-bg|background))\b/g)) {
+    bgClsSet.add(m[1]);
+  }
+  if (bgClsSet.size === 0) return null;
+
+  let changed = false;
+  let text = styleSeg[1];
+  for (const cls of bgClsSet) {
+    // 模板是否还有该 class 的 DOM？
+    const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const domRe = new RegExp('\\bclass="[^"]*\\b' + clsEsc + '\\b[^"]*"');
+    if (domRe.test(tplSeg[1])) continue; // DOM 还在 → 不是死规则
+    // 死规则：`.x-bg` 段改写为宿主 `::before`。
+    // ① 前接后代组合符（` .x-bg`）→ 去空格直接挂宿主（`:not(.active) ::before`
+    //    会变成后代伪元素，作用于所有子孙，错）；
+    // ② 选择器以 .x-bg 开头 → 该规则无宿主可挂，整块删除（纯死规则）。
+    const segLead = new RegExp('(\\s)\\.' + clsEsc + '\\b(?![\\w-])', 'g');
+    const segHead = new RegExp('(?:^|\\n)[ \\t]*\\.' + clsEsc + '\\b[^{]*\\{[^{}]*\\}', 'g');
+    if (segHead.test(text)) {
+      text = text.replace(segHead, '\n/* [P-10] 无宿主死规则已删 */');
+      changed = true;
+    }
+    if (segLead.test(text)) {
+      text = text.replace(segLead, '::before');
+      changed = true;
+      // 伪元素渲染前提：content + 绝对定位几何——遍历所有 .x::before 规则逐一补全。
+      const hostHeadRe = new RegExp('(\\.[A-Za-z][\\w-]*(?::[^{]+)?)::before\\s*\\{', 'g');
+      text = text.replace(hostHeadRe, (full) => full); // reset lastIndex
+      let hm;
+      const patches = [];
+      hostHeadRe.lastIndex = 0;
+      while ((hm = hostHeadRe.exec(text)) !== null) {
+        const ruleOpen = hm.index + hm[0].length;
+        const bodyEnd = text.indexOf('}', ruleOpen);
+        if (bodyEnd < 0) continue;
+        const body = text.slice(ruleOpen, bodyEnd);
+        const adds = [];
+        if (!/content\s*:/.test(body)) adds.push(`content: ''`);
+        // 🛡️ 零硬编码（2026-09-28 · §七 B3/C5）：原为合成几何常量
+        //   `top:0; left:6px; width:34px; height:100%`（源自某具体组件的实测值）→ 换组件必错位。
+        //   死规则迁移时 post-process **不持 Figma 几何** → 不臆造常量，改用**宿主盒子**
+        //   （`inset:0` 形态 = 铺满宿主）——宿主是此处唯一可依据的几何事实，且宿主
+        //   `position:relative` 同段已补全。语义：背景层铺满其宿主（`.x` 内的 `-bg` 层
+        //   本就是宿主全尺寸背景层的近似表示）。
+        if (!/position\s*:/.test(body)) adds.push(`position: absolute; top: 0; left: 0; right: 0; bottom: 0`);
+        if (adds.length > 0) patches.push({ at: ruleOpen, text: '\n  ' + adds.join(';\n  ') + ';\n' });
+      }
+      for (const p of patches.reverse()) {
+        text = text.slice(0, p.at) + p.text + text.slice(p.at);
+      }
+      // 🛡️ 宿主 `position: relative` 补全（2026-09-27 · bd4f69db「一片蓝」实锤）：
+      //   本段给伪元素补了 `position:absolute; top/left/right/bottom:0`（几何补全），
+      //   因此**必须**保证宿主是定位上下文，否则伪元素相对**更外层的已定位祖先**定位 →
+      //   实测祖先链（tab-item → tabs → antd-tab-con → con-con → slot-con → .pannel-content）
+      //   **全是 static** → 逃逸到预览根 → 每个伪元素各铺满整屏，多个叠加即「一片蓝」
+      //   （设计里那只是 34×40 的小矩形）。
+      //   旧实现的两个缺陷（都导致静默失效）：
+      //     ① 只取**第一个** `::before` 的宿主类 → 文件里有多条（如 tab-item 与
+      //        tab-item--active）时漏补；
+      //     ② 宿主规则正则要求 `^`/`\n` **行首** → 产物常见 `}.cls {`（闭合标签后紧跟）→ 匹配不到。
+      //   治本：收集**全部** `::before` 宿主类（去重）逐个补；规则匹配允许前面是 `}`/空白；幂等。
+      const hostClsRe = /\n?[ \t.]*\.[A-Za-z][\w-]*(?::[^{]+)?::before\s*\{/g;
+      const hostClasses = new Set();
+      for (const hm2 of text.matchAll(hostClsRe)) {
+        const cls = /\.([A-Za-z][\w-]*)/.exec(hm2[0]);
+        if (cls) hostClasses.add(cls[1]);
+      }
+      for (const hc of hostClasses) {
+        const esc = hc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const ruleRe = new RegExp('(^|[}\\s])\\.' + esc + '\\s*\\{([^{}]*)\\}');
+        const mm = text.match(ruleRe);
+        if (!mm || /position\s*:/i.test(mm[2])) continue;
+        text = text.replace(ruleRe, (full) =>
+          full.replace(/\{([^{}]*)\}$/, '{position: relative;$1}'),
+        );
+      }
+    }
+  }
+  if (!changed) return null;
+  const styleStart = code.indexOf(styleSeg[0]) + styleSeg[0].indexOf(styleSeg[1]);
+  return code.slice(0, styleStart) + text + code.slice(styleStart + styleSeg[1].length);
+}
+
+/**
+ * 🛡️ P-07：定位残尸 -bg wrapper unwrap（36c3a630 实锤）。
+ * P-06 背景上移组件根后，内层 `-bg` wrapper（有子内容、非空壳）成冗余层——
+ * 尤其被 style-dedup-guard 剥得只剩 {position:relative} 时会变 block 竖排溢出。
+ * 动作：wrapper 的子节点上提到 wrapper 父层、删 wrapper 标签对、删死 CSS 规则。
+ * 判据：class 含 -bg 词尾 + 规则体全部声明 ∈ 纯定位白名单（无 display/尺寸/间距）。
+ * @returns {string|null} 已 unwrap 返回新 code；不满足判据返回 null
+ */
+function tryUnwrapPositionalBgWrapper(code, shell) {
+  // 非空壳：SHELL_RE 只匹配空壳，此函数在 shells 循环里复用 cls——需要独立找有内容的标签对
+  const clsEsc = shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const openRe = new RegExp('<div\\s+class="' + clsEsc + '"\\s*>', 'g');
+  const openM = openRe.exec(code);
+  if (!openM) return null;
+  // 规则体纯定位判定
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+  const topDecls = collectTopLevelShellDecls(styleSeg[1], shell.cls);
+  if (!topDecls.trim()) return null; // 无规则（或仅嵌套）→ 不处理
+  // 规则体判据：纯定位 OR 纯背景系（两者都是「背景已上移根」后的残尸形态——
+  // P-06 清洗删 :style 后留背景系残尸，style-dedup 剥布局后留纯定位残尸）。
+  const POSITIONAL_ONLY = /^(position|top|left|right|bottom|transform|translate|z-index|box-sizing|inset)\s*:/i;
+  const BG_ONLY = /^(background(?:-[a-z]+)?|backgroundSize|backgroundPosition|backgroundRepeat)\s*:/i;
+  const decls = topDecls
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => d);
+  const allPositional = decls.every((d) => POSITIONAL_ONLY.test(d));
+  const allBg = decls.every((d) => BG_ONLY.test(d) || /^background(size|position|repeat)/i.test(d));
+  if (!decls.every((d) => POSITIONAL_ONLY.test(d) || BG_ONLY.test(d) || /^background(size|position|repeat)/i.test(d))) {
+    if (!allPositional && !allBg) return null;
+  }
+  // 找 wrapper 开闭标签对（括号配平 div 嵌套）
+  const openIdx = openM.index;
+  let depth = 1;
+  let i = openIdx + openM[0].length;
+  let closeIdx = -1;
+  const tagRe = /<\/?div\b[^>]*>/g;
+  tagRe.lastIndex = i;
+  let m;
+  while ((m = tagRe.exec(code)) !== null) {
+    if (m[0].startsWith('</')) { depth--; if (depth === 0) { closeIdx = m.index; break; } }
+    else if (!m[0].endsWith('/>')) depth++;
+  }
+  if (closeIdx < 0) return null;
+  const closeEnd = closeIdx + '</div>'.length;
+  const inner = code.slice(openIdx + openM[0].length, closeIdx);
+  if (!inner.trim()) return null; // 空壳归 SHELL_RE 主路径，不在此处理
+  // 子内容上提（保留内部缩进结构）+ 删标签对 + 删死规则
+  let out = code.slice(0, openIdx) + inner + code.slice(closeEnd);
+  out = removeTopLevelShellRule(out, shell.cls);
+  return out;
+}
+
+/**
+ * 🛡️ P-01c：绝对定位装饰壳 → 宿主 ::before 伪元素（铁律收口）。
+ * 动作：① 模板删壳；② 顶层 .shell 规则整体改写为 `宿主::before { content:''; 原声明 }`
+ * 插到宿主顶层规则之后；③ 嵌套变体块内的 .shell 子块改写为 `&::before { ... }`
+ * （保持激活态覆盖能力）。宿主规则找不到 → 返回 null（调用方保留壳兜底）。
+ * @param {string} code .vue 全文
+ * @param {{full: string, cls: string}} shell 空壳信息
+ * @returns {string|null}
+ */
+export function convertShellToPseudoElement(code, shell) {
+  const shellIdx = code.indexOf(shell.full);
+  if (shellIdx < 0) return null;
+  // 🛡️ 2026-09-28：同上（先剥 HTML 注释，避免壳前注释里的 `<` 破坏宿主开标签匹配）。
+  const before = code.slice(0, shellIdx).replace(/<!--[\s\S]*?-->/g, '');
+  const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
+  if (!parentOpenM) return null;
+  const firstCls = extractFirstClassName(parentOpenM[0]);
+  if (!firstCls) return null;
+
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+
+  const clsEsc = shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const firstClsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const styleStart = code.indexOf(styleSeg[0]) + styleSeg[0].indexOf(styleSeg[1]);
+  let text = styleSeg[1];
+
+  // ── 扫描 .shell 全部规则出现点，按花括号深度分「顶层 / 嵌套」两组 ──
+  // 🛡️ 深度判定用「选择器起始处的前缀」配平（选择器首字符所在位置的括号深度），
+  //   不能用 match.index（其前缀含被 `(?:^|\n|\})` 消费的 `}`，会把顶层判成嵌套）。
+  const selScanRe = new RegExp('(?:^|\\n|\\})[ \\t]*\\.' + clsEsc + '\\s*\\{', 'g');
+  const occurrences = [];
+  let nm;
+  while ((nm = selScanRe.exec(text)) !== null) {
+    // 选择器 '.' 的绝对位置 = nm.index + 前导空白长度
+    const lead = nm[0].indexOf('.');
+    const selAt = nm.index + (lead < 0 ? 0 : lead);
+    const prefix = text.slice(0, selAt);
+    const depth = (prefix.match(/\{/g) || []).length - (prefix.match(/\}/g) || []).length;
+    const openIdx = text.indexOf('{', nm.index);
+    let d = 1;
+    let closeIdx = -1;
+    for (let i = openIdx + 1; i < text.length; i++) {
+      if (text[i] === '{') d++;
+      else if (text[i] === '}') { d--; if (d === 0) { closeIdx = i; break; } }
+    }
+    if (closeIdx < 0) break;
+    occurrences.push({
+      depth,
+      headStart: nm.index,
+      fullStart: text.lastIndexOf('\n', nm.index) === -1 ? nm.index : text.lastIndexOf('\n', nm.index),
+      end: closeIdx + 1,
+      decls: text.slice(openIdx + 1, closeIdx).trim(),
+    });
+  }
+  const topOcc = occurrences.filter((o) => o.depth === 0);
+  const nestedOcc = occurrences.filter((o) => o.depth > 0);
+  if (topOcc.length === 0) return null; // 无顶层规则 → 无从建伪元素
+
+  // ── 宿主顶层规则闭合位置（伪元素块插到它后面）──
+  const hostRuleRe = new RegExp('(?:^|\\n|\\})\\s*(\\.' + firstClsEsc + ')\\s*\\{');
+  const hostHeadIdx = text.search(hostRuleRe);
+  if (hostHeadIdx < 0) return null;
+  const hostOpenIdx = text.indexOf('{', hostHeadIdx);
+  let hd = 0;
+  let hostCloseIdx = -1;
+  for (let i = hostOpenIdx; i < text.length; i++) {
+    if (text[i] === '{') hd++;
+    else if (text[i] === '}') {
+      hd--;
+      if (hd === 0) { hostCloseIdx = i; break; }
+    }
+  }
+  if (hostCloseIdx < 0) return null;
+
+  // ── 一次性收集全部编辑，从后往前应用（偏移安全）──
+  const edits = [];
+  for (const o of topOcc) {
+    edits.push({ start: o.fullStart, end: o.end, text: '\n' });
+  }
+  for (const o of nestedOcc) {
+    const pseudoDecls = o.decls.replace(/\s+/g, ' ');
+    edits.push({
+      start: o.headStart,
+      end: o.end,
+      text: '&::before {\n      content: \'\';\n      ' + pseudoDecls + '\n    }',
+    });
+  }
+  const topDecls = topOcc.map((o) => o.decls.replace(/\s+/g, ' ')).join(' ');
+  edits.push({
+    start: hostCloseIdx + 1,
+    end: hostCloseIdx + 1,
+    text: '\n\n  .' + firstCls + '::before {\n    content: \'\';\n    ' + topDecls + '\n  }',
+  });
+  // 🛡️ 宿主必须成为定位上下文（2026-09-27 · bd4f69db「一片蓝」实锤）：
+  //   本函数给伪元素补的是**绝对定位几何**（`top/left/right/bottom:0` 等），若宿主不是定位上下文
+  //   （`position: static`），伪元素会相对**更外层的已定位祖先**定位。实测该组件祖先链
+  //   （tab-item → tabs → antd-tab-con → con-con → slot-con → `.pannel-content`）**全部 static**
+  //   → 伪元素逃逸到预览根 → 每个伪元素各铺满整屏，多层叠加即视觉「一片蓝」
+  //   （设计里那只是 34×40 的小矩形，相对各自 tab 项定位）。
+  //   故这里**必须**保证宿主规则含 position —— 旧实现完全没补，是本轮"一片蓝"的确切渲染层根因。
+  if (!/position\s*:/i.test(text.slice(hostOpenIdx + 1, hostCloseIdx))) {
+    edits.push({ start: hostOpenIdx + 1, end: hostOpenIdx + 1, text: '\n  position: relative;' })
+  }
+  edits.sort((a, b) => b.start - a.start);
+  for (const e of edits) {
+    text = text.slice(0, e.start) + e.text + text.slice(e.end);
+  }
+
+  let out = code.slice(0, styleStart) + text + code.slice(styleStart + styleSeg[1].length);
+  // ④ 模板删壳
+  out = out.replace(shell.full, '');
+  return out;
+}
+
+/** 收集 class 在样式内容里的**顶层**规则声明体（多段拼接）。嵌套块由 hoistNestedShellDecls 处理。 */
+function collectTopLevelShellDecls(styleContent, cls) {
+  if (!styleContent) return '';
+  const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ruleRe = new RegExp('(?:^|\\n|\\})\\s*\\.' + clsEsc + '\\s*\\{([^{}]*)\\}', 'g');
+  let decls = '';
+  for (const m of styleContent.match(ruleRe) || []) {
+    decls += (m.match(/\{([^{}]*)\}/) || [])[1] || '';
+    decls += ';';
+  }
+  return decls;
+}
+
+/** 删除 class 的顶层独立规则块（嵌套块由 hoist 阶段接管，此处不动） */
+function removeTopLevelShellRule(code, cls) {
+  const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return code.replace(
+    new RegExp('(?:^|\\n)[ \\t]*\\.' + clsEsc + '\\s*\\{[^{}]*\\}[ \\t]*(?=\\n|$)', 'g'),
+    '\n',
+  );
+}
+
+/**
+ * 🛡️ P-01b：从父开标签提取首个 class 名。
+ * 支持：静态 class="a b" / 动态 :class="['a', { 'a--on': x }]"（取首个字符串字面量）。
+ * 提取失败返回 null（调用方 fail-closed 保留壳）。
+ */
+function extractFirstClassName(parentOpen) {
+  const isValid = (s) => /^[A-Za-z_][\w-]*$/.test(s);
+  // 静态 class（用前置空白锚定，避免误匹配 :class / v-bind:class）
+  const staticM = parentOpen.match(/(?:^|\s)class="([^"]*)"/);
+  if (staticM) {
+    const first = staticM[1].trim().split(/\s+/)[0];
+    if (isValid(first)) return first;
+  }
+  // 动态数组语法：:class="[ 'a', { ... } ]" / :class="['a', ...]"
+  const dynM = parentOpen.match(/:class="\[?\s*'([^']+)'/);
+  if (dynM) {
+    const first = dynM[1].trim().split(/\s+/)[0];
+    if (isValid(first)) return first;
+  }
+  return null;
+}
+
+/**
+ * 把视觉声明合并进父 class 的顶层规则（P-01b 重写注入点）。
+ * 🛡️ 父规则可能含嵌套子块（&--active { ... }）——在规则头 `{` 之后直接插入，
+ * 不再重排整个块体（旧实现 `[^}]*` 会在嵌套块处截断错乱）。
+ * @returns {string|null} 成功返回新 code；父规则不存在返回 null；
+ *   父已有全部同名属性返回 code 原引用（视作已合并，壳可删）
+ */
+function mergeIntoParentRule(code, firstCls, visualDecls) {
+  const firstClsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headRe = new RegExp('(?:^|\\n|\\})\\s*(\\.' + firstClsEsc + ')\\s*\\{');
+  const headM = code.match(headRe);
+  if (!headM) return null;
+  // 父规则直属声明体（到嵌套 `{` 或闭合 `}` 为止）——用于同名属性过滤
+  const afterHead = code.slice(headM.index + headM[0].length);
+  const directBody = afterHead.split(/[{}]/)[0] || '';
+  const additions = visualDecls.filter((d) => {
+    const prop = d.split(':')[0].trim().toLowerCase();
+    return !new RegExp('(^|;)\\s*' + prop + '\\s*:', 'i').test(directBody);
+  });
+  if (additions.length === 0) return code; // 父已全覆盖 → 壳冗余可删
+  const insertAt = headM.index + headM[0].length;
+  return (
+    code.slice(0, insertAt) +
+    '\n  ' + additions.join(';\n  ') + ';\n' +
+    code.slice(insertAt)
+  );
+}
+
+/**
+ * 🛡️ P-01b 根因 2：嵌套变体块内的 .shell 规则上提。
+ * 形态：`.item--active { ... .c-x-bg { background: 渐变 } ... }`（含 LESS `&--active` 块）。
+ * 动作：删除内层 .shell 子块，把其中的视觉声明追加到**外层变体块**直属。
+ * @returns {string|null} 有改动返回新 code，否则 null
+ */
+function hoistNestedShellDecls(code, cls, VISUAL_RE) {
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+  const styleStart = code.indexOf(styleSeg[0]) + styleSeg[0].indexOf(styleSeg[1]);
+  const styleText = styleSeg[1];
+  const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const innerRe = new RegExp('\\.' + clsEsc + '\\s*\\{([^{}]*)\\}', 'g');
+  const edits = [];
+  let m;
+  while ((m = innerRe.exec(styleText)) !== null) {
+    const before = styleText.slice(0, m.index);
+    const depth =
+      (before.match(/\{/g) || []).length - (before.match(/\}/g) || []).length;
+    if (depth > 0) {
+      const visual = m[1]
+        .split(';')
+        .map((d) => d.trim())
+        .filter((d) => d && VISUAL_RE.test(d));
+      if (visual.length > 0) {
+        edits.push({ at: m.index, full: m[0], visual });
+      }
+    }
+  }
+  if (edits.length === 0) return null;
+  let text = styleText;
+  for (const e of edits.reverse()) {
+    // 删内层子块
+    text = text.slice(0, e.at) + text.slice(e.at + e.full.length);
+    // 声明追加到外层块体（删除点之前最近的 '{' 之后）
+    const outerOpen = text.slice(0, e.at).lastIndexOf('{');
+    if (outerOpen < 0) continue;
+    text =
+      text.slice(0, outerOpen + 1) +
+      '\n  ' + e.visual.join(';\n  ') + ';\n' +
+      text.slice(outerOpen + 1);
+  }
+  return code.slice(0, styleStart) + text + code.slice(styleStart + styleText.length);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🛡️ P-12 防御性治理规则（2026-09-18）
+// 背景：c-env-monitor-a27a33f7 TabSwitcher 布局错乱 + c-device-monitor-7de62721 颜色错误
+// 根因：LLM 产出结构性错误（动态 class 无样式、容器缺 flex、资源绑定层级错误、颜色真值提取失败）
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ⚠️ P-12a `validateDynamicClassStyles` 已于 2026-09-30 **删除**（评审 §8.2 削源 / 确定性收回清单 §七 Bug1 收口）
+//   它是 `/* TODO: 补充样式 */` 占位规则的**唯一生产者**，全语料制造 **1464** 条永远填不满的债
+//   （113 在带 data-section-id 的 section 根 / **1351 在内层**，内层 92.3% 结构上不可填）。
+//   删除理由（删减法三连）：
+//     ① 产出的空规则**零声明、对渲染零影响**（scoped 下「无规则」与「空规则」等价）；
+//     ② 其消费端 `code-validator` 2.6.2 读 `nodeLayoutFacts`（A 类布局事实），与 2.11
+//        LAYOUT-FACTS-INJECT **同一事实源、同一输出** ⇒ 布局注入本应统一归 2.11，此处属功能重叠；
+//     ③ 空块还会给 `class-dialect-normalizer#onlyEmptyStubs` 制造「新名已存在（空块）」的歧义分支。
+//   现状：布局注入统一归 2.11；存量/缓存产物的残留占位由 `code-validator` 2.6.2（已收缩为「只清 TODO 占位」）清扫。
+//   先例：P-12b `ensureFlexLayoutForSiblings` 于 2026-09-28 同法删除（§七 B16/C4）。
+
+/**
+ * 🛡️ P-12c 资源绑定层级校验
+ * 问题：背景图绑定到错误的父容器（如 tab 激活图绑定到 tabs-list 容器）
+ * 形态：`.tabs-list { background-image: url(${bgTabActive}) }` 但 bgTabActive 是单个 tab 的背景
+ * 动作：检测 backgroundImage 绑定位置，与 resourceDomMapping 对比，层级不匹配时尝试修复
+ * @param {string} code Vue SFC 代码
+ * @param {Array} resourceDomMapping Figma 资源映射（可选）
+ * @returns {string} 修复后的代码
+ */
+export function validateResourceBindingLevel(code, resourceDomMapping = []) {
+  if (!code || typeof code !== 'string') return code;
+  if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) return code;
+
+  // 提取 style 段（保留原始标签属性如 lang="less" scoped）
+  const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
+  if (!styleMatch) return code;
+  const styleOpenTag = styleMatch[1];
+  let styleContent = styleMatch[2];
+
+  // 提取模板段
+  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!templateMatch) return code;
+  const template = templateMatch[1];
+
+  let changed = false;
+
+  // 对每个资源映射，检查绑定位置是否正确
+  for (const mapping of resourceDomMapping) {
+    const varName = mapping.assignedVarName;
+    const mountTarget = mapping.mountTarget;
+    const bgRole = mapping.bgRole;
+
+    if (!varName || !mountTarget) continue;
+
+    // 在 style 中查找使用该变量的 backgroundImage 绑定
+    const bgBindingRe = new RegExp(`(\\.)([\\w-]+)(\\s*\\{[^}]*backgroundImage\\s*:\\s*url\\(\\$\\{)${varName}(\\}\\)[^}]*\\})`, 'g');
+    const styleMatches = [...styleContent.matchAll(bgBindingRe)];
+
+    if (styleMatches.length === 0) continue;
+
+    for (const match of styleMatches) {
+      const currentClass = match[2];
+
+      // 检查当前 class 是否与 mountTarget 匹配
+      // mountTarget 可能是中文名（如「标签页」）或英文名（如 tab-item）
+      // 需要检查 currentClass 是否包含 mountTarget 的关键词
+      const mountKeywords = mountTarget.toLowerCase().split(/[-_\s]+/);
+      const currentClassLower = currentClass.toLowerCase();
+
+      // 判断是否匹配：currentClass 应该包含 mountTarget 的至少一个关键词
+      const isMatch = mountKeywords.some((kw) => currentClassLower.includes(kw));
+
+      if (!isMatch) {
+        // 层级不匹配：尝试在模板中找到正确的容器并移动绑定
+        // 简单策略：在模板中查找包含 mountTarget 关键词的 class
+        const templateClassRe = new RegExp(`class="([^"]*${mountKeywords.join('|')}[^"]*)"`, 'i');
+        const templateMatch = template.match(templateClassRe);
+
+        if (templateMatch) {
+          const correctClass = templateMatch[1].split(/\s+/)[0]; // 取第一个 class
+
+          // 将绑定从错误的 class 移动到正确的 class
+          // 1. 从当前 class 中删除 backgroundImage 绑定
+          const oldRule = match[0];
+          const newOldRule = oldRule.replace(/backgroundImage\s*:\s*url\(\$\{[^}]+\}\)\s*;?/, '');
+          styleContent = styleContent.replace(oldRule, newOldRule);
+
+          // 2. 在正确的 class 中添加 backgroundImage 绑定
+          const correctClassEsc = correctClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const correctRuleRe = new RegExp(`(\\.${correctClassEsc}\\s*\\{)([^}]*)(\\})`);
+          const correctRuleMatch = styleContent.match(correctRuleRe);
+
+          if (correctRuleMatch) {
+            const existingDecls = correctRuleMatch[2];
+            // 检查是否已经有 backgroundImage
+            if (!/backgroundImage\s*:/.test(existingDecls)) {
+              const newDecls = existingDecls.trim() + `\n  background-image: url(\${${varName}});`;
+              const newCorrectRule = correctRuleMatch[1] + newDecls + '\n' + correctRuleMatch[3];
+              styleContent = styleContent.replace(correctRuleMatch[0], newCorrectRule);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!changed) return code;
+
+  return code.slice(0, styleMatch.index) +
+    styleOpenTag + styleContent + '</style>' +
+    code.slice(styleMatch.index + styleMatch[0].length);
+}
+
+/**
+ * 🛡️ P-12d 节点级颜色真值提取（多 TEXT 节点场景）
+ * 问题：两个独立 TEXT 节点（如 `摄像机` + `(2/484)`），后者内部 per-char 分段
+ *       LLM 取默认 fill（白色）而非覆盖色（红色/青色）
+ * 形态：Figma 节点树中多个 TEXT 节点，部分带 characterStyleOverrides
+ * 动作：提取每个 TEXT 节点的颜色真值（默认 fill + per-char 覆盖色）
+ * @param {Object} figmaNodeData Figma 节点树（prune 后）
+ * @returns {Array} 颜色真值列表 [{ nodeId, text, defaultColor, perCharColors }]
+ */
+export function extractNodeLevelColorTruth(figmaNodeData) {
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return [];
+
+  // 🛡️ R19（2026-10-21）：逐字符求值收敛到 `utils/text-runs.js`（唯一实现）。
+  //   旧实现是第三份 per-char walker（index 维度），与 P-11 的段维度各写一遍，
+  //   下游还只能拿 index 无法拿"段" ⇒ 本轮统一为 run。
+  //   输出契约保持向后兼容：
+  //     · `perCharColors` 非空 ⇔ 该节点**确实多段异样式**（P-12d 的准入判据不变，
+  //       避免把全量单色 TEXT 都拉进注入器）；
+  //     · 新增 `runs`（段边界 + 每段 色/字号/字重），供注入器逐段绑定。
+  const { byNode } = extractTextRuns(figmaNodeData);
+  const results = [];
+  for (const [nodeId, runs] of byNode) {
+    if (!Array.isArray(runs) || runs.length === 0) continue;
+    const text = runs.map((r) => r.text).join('');
+    const defaultColor = runs[0].color || null;
+    const perCharColors = [];
+    if (runs.length > 1) {
+      let idx = 0;
+      for (const r of runs) {
+        perCharColors.push({ index: idx, color: r.color });
+        idx += [...r.text].length;
+      }
+    }
+    results.push({ nodeId, text, defaultColor, perCharColors, runs });
+  }
+  return results;
+}
+
+/**
+ * 🛡️ P-12d 节点级颜色真值注入（多 TEXT 节点场景）
+ * 问题：两个独立 TEXT 节点（如 `摄像机` + `(2/484)`），后者内部 per-char 分段
+ *       LLM 取默认 fill（白色）而非覆盖色（红色/青色）
+ * 动作：将提取的颜色真值注入到 Vue 组件中，生成对应的样式规则，并在模板中找到包含该文本的元素，为其添加对应的 class 绑定
+ * @param {Object<string,string>} files 产物文件表（原地更新 .vue）
+ * @param {Array} colorTruth extractNodeLevelColorTruth() 产出的颜色真值
+ * @returns {{applied: boolean, details: Object|null}}
+ */
+export function injectNodeLevelColorTruth(files, colorTruth = []) {
+  if (!files || !Array.isArray(colorTruth) || colorTruth.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  // 只处理有 per-char 分段的节点
+  const nodesWithPerChar = colorTruth.filter((n) => n.perCharColors && n.perCharColors.length > 0);
+  if (nodesWithPerChar.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  const changed = [];
+
+  for (const [fp, code] of Object.entries(files)) {
+    if (!fp.endsWith('.vue') || typeof code !== 'string') continue;
+    
+    // 提取模板段（保留原始标签属性）
+    const templateMatch = code.match(/(<template[^>]*>)([\s\S]*?)(<\/template>)/);
+    if (!templateMatch) continue;
+    const templateOpenTag = templateMatch[1];
+    let template = templateMatch[2];
+
+    // 提取 style 段（保留原始标签属性如 lang="less" scoped）
+    const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
+    if (!styleMatch) continue;
+    const styleOpenTag = styleMatch[1];
+    let styleContent = styleMatch[2];
+
+    let fileChanged = false;
+
+    // 对每个有 per-char 分段的节点，生成对应的样式规则并绑定 class
+    for (const node of nodesWithPerChar) {
+      // 检查模板中是否包含该节点的文本
+      if (!template.includes(node.text)) continue;
+
+      // 段真值（R19）：有 runs 用 runs；旧输入只有 perCharColors 时退回"按色去重"
+      const runs = Array.isArray(node.runs) && node.runs.length > 1 ? node.runs : null;
+
+      // 生成颜色样式规则：每个**实际出现的段色**一个 class（不再生成无人引用的死 class）
+      const colorClasses = [];
+      const colorMap = new Map(); // color -> className
+      const colorSeeds = runs
+        ? runs.map((r) => ({ color: r.color }))
+        : node.perCharColors.map((pc) => ({ color: normalizeColor(pc.color) || pc.color }));
+
+      for (const pc of colorSeeds) {
+        if (!pc.color) continue;
+        const colorKey = String(pc.color).replace(/[^a-zA-Z0-9]/g, '');
+        const className = `color-${colorKey}`;
+        if (!colorMap.has(pc.color)) {
+          colorMap.set(pc.color, className);
+          colorClasses.push({ className, color: pc.color });
+        }
+      }
+
+      // 注入样式规则
+      for (const { className, color } of colorClasses) {
+        const ruleRe = new RegExp('\\.' + className + '\\s*\\{');
+        if (!ruleRe.test(styleContent)) {
+          styleContent += `\n.${className} {\n  color: ${color};\n}`;
+          fileChanged = true;
+        }
+      }
+
+      // ── 绑定：**逐段拆元素**（R19 治本）──────────────────────────────
+      // 旧实现「只为主颜色添加 class」⇒ 一眼看是保守，实质是**分段必然丢失**，
+      // 且把"主色"取成 `colorClasses[0]`（= 第一个出现的段色，不是 base、也不看占比）。
+      // 现在：模板里该文本以**整行字面量**出现时，按 run 边界拆成逐段 span；
+      // 动态绑定形态（`{{ xx }}`）无法静态拆 → 保留首色兜底并记 `partial`，交 prompt/判据。
+      if (colorClasses.length > 0) {
+        const primaryColorClass = colorClasses[0].className;
+        const escText = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        if (runs) {
+          const joined = runs.map((r) => r.text).join('');
+          const segRe = new RegExp(`(<[^>]+>)([^<]*${escText(joined)}[^<]*)(<\\/[^>]+>)`, 'g');
+          template = template.replace(segRe, (match, openTag, content, closeTag) => {
+            // 只处理「内容恰好就是该文本」（允许空白差异），防误伤更大段文本
+            if (content.replace(/\s+/g, '') !== joined.replace(/\s+/g, '')) return match;
+            const inner = runs
+              .map((r) => {
+                const cls = colorMap.get(r.color) || primaryColorClass;
+                const st = [
+                  r.fontSize ? `font-size:${r.fontSize}px` : '',
+                  r.fontWeight ? `font-weight:${r.fontWeight}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(';');
+                return `<span class="${cls}"${st ? ` style="${st}"` : ''}>${r.text}</span>`;
+              })
+              .join('');
+            return `${openTag}${inner}${closeTag}`;
+          });
+          if (template !== templateMatch[1]) fileChanged = true;
+          continue; // 已按段处理，不再走单色兜底
+        }
+
+        // 无 run 边界（旧形态）⇒ 保守单色绑定（保持历史行为）
+        const textRe = new RegExp(`(<[^>]+>)([^<]*${escText(node.text)}[^<]*)(<\\/[^>]+>)`, 'g');
+        template = template.replace(textRe, (match, openTag, content, closeTag) => {
+          // 检查是否已经有 class 属性
+          const classMatch = openTag.match(/class="([^"]*)"/);
+          if (classMatch) {
+            // 已有 class，追加新的 class
+            const existingClasses = classMatch[1];
+            if (!existingClasses.includes(primaryColorClass)) {
+              const newClassAttr = `class="${existingClasses} ${primaryColorClass}"`;
+              return openTag.replace(/class="[^"]*"/, newClassAttr) + content + closeTag;
+            }
+          } else {
+            // 没有 class，添加 class 属性
+            const newOpenTag = openTag.replace(/^(<[a-zA-Z-]+)/, `$1 class="${primaryColorClass}"`);
+            return newOpenTag + content + closeTag;
+          }
+          return match;
+        });
+
+        if (template !== templateMatch[1]) {
+          fileChanged = true;
+        }
+      }
+    }
+
+    if (fileChanged) {
+      // 更新模板段和 style 段（保留原始标签属性）
+      let newCode = code.slice(0, templateMatch.index) +
+        templateOpenTag + template + '</template>' +
+        code.slice(templateMatch.index + templateMatch[0].length);
+      
+      // 重新提取 style 段（因为模板段修改后索引可能变化）
+      const newStyleMatch = newCode.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
+      if (newStyleMatch) {
+        newCode = newCode.slice(0, newStyleMatch.index) +
+          newStyleMatch[1] + styleContent + '</style>' +
+          newCode.slice(newStyleMatch.index + newStyleMatch[0].length);
+      }
+      
+      files[fp] = newCode;
+      changed.push(fp);
+    }
+  }
+
+  if (changed.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  return {
+    applied: true,
+    details: {
+      files: changed,
+      nodeCount: nodesWithPerChar.length,
+    },
+  };
+}

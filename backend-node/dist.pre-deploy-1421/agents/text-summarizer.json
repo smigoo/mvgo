@@ -1,0 +1,37 @@
+{
+  "name": "text-summarizer",
+  "label": "文本总结",
+  "description": "对抓取/输入的长文本输出结构化总结",
+  "category": "分析",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "text",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "summary",
+      "type": "string"
+    },
+    {
+      "key": "keyPoints",
+      "type": "array"
+    }
+  ],
+  "params": {
+    "prompt": "你是专业文档分析师。对输入文本输出 JSON：summary（150字以内中文摘要）、keyPoints（3-5 个要点数组）。只输出 JSON。"
+  },
+  "model": "qwen3.7-plus",
+  "referenceFiles": [],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/text-summarizer.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787222365386
+}

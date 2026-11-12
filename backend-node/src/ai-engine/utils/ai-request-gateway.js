@@ -182,9 +182,17 @@ class RequestScheduler {
       }
 
       const onAbort = () => {
-        const error = signal?.reason instanceof Error
+        let error = signal?.reason instanceof Error
           ? signal.reason
           : new Error(`模型请求排队已取消 [${meta.context || 'unknown'}]`)
+        // 🛡️ DOMException(AbortError).code 是原型只读 getter，严格模式赋值抛 TypeError
+        // （2026-11-12 生产实锤），只读时安全包装保留原语义。
+        if (!isWritableCode(error)) {
+          const wrapped = new Error(error.message || '模型请求排队已取消')
+          wrapped.name = error.name
+          wrapped.cause = error
+          error = wrapped
+        }
         error.code = error.code || 'MODEL_REQUEST_QUEUE_ABORTED'
         rejectQueued(error)
       }
@@ -279,6 +287,24 @@ export function extractModelInfo(response) {
 function isAbortLikeError(error) {
   const message = String(error?.message || '')
   return error?.name === 'AbortError' || /aborted|canceled|cancelled/i.test(message)
+}
+
+/**
+ * 🛡️ 判断 error.code 是否可写（DOMException 的 code 是原型只读 getter，
+ * 严格模式下赋值抛 TypeError；普通 Error 实例无自有 code 时可写）。
+ */
+function isWritableCode(error) {
+  if (!(error instanceof Error)) return true
+  const desc = Object.getOwnPropertyDescriptor(error, 'code')
+  if (desc) return Boolean(desc.writable || desc.set)
+  // 无自有属性：检查原型链末端的属性描述符
+  let proto = Object.getPrototypeOf(error)
+  while (proto && proto !== Object.prototype) {
+    const pd = Object.getOwnPropertyDescriptor(proto, 'code')
+    if (pd) return Boolean(pd.writable || pd.set)
+    proto = Object.getPrototypeOf(proto)
+  }
+  return true // 原型链无 code 定义 → 普通赋值会创建自有属性，可写
 }
 
 /**
@@ -518,6 +544,17 @@ function normalizeError(error, { context, timeoutMs, managedSignal }) {
   }
 
   if (managedSignal?.isParentAborted() || isAbortLikeError(error)) {
+    if (error instanceof Error && !isWritableCode(error)) {
+      // 🛡️ AbortController.abort() 无 reason 时 reason 是 DOMException(name='AbortError')，
+      // 其 .code 是原型只读 getter（ESM 严格模式赋值必抛 TypeError
+      // "Cannot set property code of  which has only a getter"，2026-11-12 生产实锤：
+      // mv-lite-1794449903941-65f05402 整任务因此失败）。改为安全包装保留原错误。
+      const wrapped = new Error(error.message || '请求已取消')
+      wrapped.name = error.name
+      wrapped.code = 'MODEL_REQUEST_ABORTED'
+      wrapped.cause = error
+      return wrapped
+    }
     const abortError = error instanceof Error ? error : new Error(String(error || '请求已取消'))
     abortError.code = abortError.code || 'MODEL_REQUEST_ABORTED'
     return abortError
@@ -719,7 +756,25 @@ export async function executeModelRequest(options = {}) {
               cooldownWaits: breakerCooldownWaits - 1,
               suggestions,
             })
-            logger.error(`⛔ [${context}] ${msg}`, {
+            // 🛡️ 2026-11-12 用户指令：模型报什么错不做处理、直接转给用户看。
+            // 熔断 fail-fast 文案本身只是「平台放弃了」的结论，会把 provider 的最后一次真实报错
+            // （403/429/余额不足/模型不存在/内容策略…）整段吞掉 —— 用户既看不到原因也无法自救。
+            // 故把 lastError（本任务该 provider 的原始报错）附在建议之后，保留原文不做改写。
+            // ⚠️ 只附「provider 原始报错」：自身包装的超时/取消类错误（code 见下）不算 provider 报错，
+            //    附上去会变成「上游模型报错：LLM invoke timeout…」这种自指文案，故排除。
+            const SELF_WRAPPED_CODES = new Set([
+              'MODEL_REQUEST_TIMEOUT',
+              'MODEL_REQUEST_ABORTED',
+              'MODEL_REQUEST_QUEUE_TIMEOUT',
+              'MODEL_REQUEST_QUEUE_ABORTED',
+              'MODEL_BREAKER_EXHAUSTED',
+            ])
+            const upstreamRaw =
+              lastError?.message && !SELF_WRAPPED_CODES.has(lastError?.code)
+                ? String(lastError.message)
+                : ''
+            const fullMsg = upstreamRaw ? `${msg}\n上游模型报错：${upstreamRaw}` : msg
+            logger.error(`⛔ [${context}] ${fullMsg}`, {
               providerId: ctx.providerId,
               model: ctx.model,
               cooldownWaits: breakerCooldownWaits,
@@ -733,10 +788,10 @@ export async function executeModelRequest(options = {}) {
               kind: 'thinking-off-failed',
               model: ctx.model,
               providerId: ctx.providerId,
-              message: `⛔ ${msg}`,
+              message: `⛔ ${fullMsg}`,
             })
             requestScheduler.stats.totalFailed += 1
-            const exhaustErr = new Error(msg)
+            const exhaustErr = new Error(fullMsg)
             exhaustErr.code = 'MODEL_BREAKER_EXHAUSTED'
             throw exhaustErr
           }

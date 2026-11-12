@@ -10,6 +10,8 @@ import { SelfHealingService } from './self-healing.service';
  * - GET /api/task-stats/model-compare   → 模型 × 代理效果对比聚合（支持时间窗）
  * - GET /api/task-stats/failure-analysis → 任务失败原因分析（自愈提示）
  * 鉴权：SessionGuard + assertAdmin（仅管理员）。
+ *   例外：failure-analysis 为「任务所有者 或 管理员」（见 assertFailureAnalysisAccess，
+ *   前端任务详情页对任一失败任务通用调用，不能只认 admin）。
  */
 @Controller('task-stats')
 @UseGuards(SessionGuard)
@@ -135,13 +137,18 @@ export class TaskStatsController {
    * 任务失败原因分析（自愈提示）
    * GET /api/task-stats/failure-analysis?sessionId=xxx
    * 返回失败分类、原因说明、修复建议、可执行动作
+   *
+   * 🔴 鉴权：**任务所有者 或 管理员**（本控制器内唯一放宽的端点，2026-11-12 R13）。
+   * 前端 TaskDetail 对任一失败任务通用调用本接口，若沿用「仅 admin」则普通用户
+   * 打开自己的失败任务必 403、且永久拿不到后端自愈建议（详见 assertFailureAnalysisAccess）。
    */
   @Get('failure-analysis')
   async failureAnalysis(
     @CurrentUser() userId: string,
     @Query('sessionId') sessionId?: string,
   ) {
-    await this.taskStatsService.assertAdmin(userId);
+    // 先鉴权再判参数（与改动前顺序一致：无 sessionId 的非法调用同样先过访问控制）
+    await this.taskStatsService.assertFailureAnalysisAccess(userId, sessionId || '');
     if (!sessionId) {
       return { success: false, message: '缺少 sessionId 参数' };
     }

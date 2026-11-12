@@ -192,6 +192,27 @@ function normalizeAnchorKey(ids) {
 }
 
 /**
+ * 🛡️ C0.3-B / G14c 共用底层（2026-11-12 抽出）：**两组声明文本是否互不重叠**。
+ *
+ * 只做「文本」这一件事，**不带任何锚点前提** —— 锚点前提由调用方各自叠加：
+ *   · `haveDisjointDeclaredContent`（C0.3-B）= 锚点集完全相同 ∧ 本文本判据；
+ *   · `section-tree.js#dedupeDuplicateSections`（G14c）= 交集 id 两侧都不是自身身份 ∧ 本文本判据。
+ * 🔴 禁止任何消费方在本地复制一份文本收集/比较逻辑（治理门禁：单一来源）。
+ *
+ * @param {object} a
+ * @param {object} b
+ * @returns {boolean} true = 双方各有非空声明文本且交集为空
+ */
+export function haveDisjointDeclaredText(a, b) {
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+  const textsA = collectDeclaredTexts(a)
+  const textsB = collectDeclaredTexts(b)
+  if (textsA.size === 0 || textsB.size === 0) return false
+  for (const text of textsA) if (textsB.has(text)) return false
+  return true
+}
+
+/**
  * 🛡️ C0.3-B（2026-11-04）：**共享锚点 ≠ 同一区域**。
  *
  * 背景：`section-tree.js#dedupeDuplicateSections` 的 R1-1 判据只按 `sourceNodeIds`
@@ -199,12 +220,10 @@ function normalizeAnchorKey(ids) {
  * 因为拿不到子节点 id 而把多个语义段全部锚到根节点时（真机 mc-max-1793755487753-104f5a31：
  * 设备头部信息 / 设备属性 / 产品描述 三段同锚 `36:1693`），该收敛会丢掉真实分区。
  *
- * 本判据给出「不得折叠」的**语义证据**，作用域刻意收窄到同时满足三条：
- *   1. 双方锚点集**完全相同**（同锚点才是本形态；有交集但不相同的维持原行为）；
- *   2. 双方各自声明了文本（`collectDeclaredTexts` 非空）—— 空壳段之间不适用，
- *      仍交给 `elementCount` 收敛 / 下游 ancestor-shell 去重；
- *   3. 两组声明文本**互不重叠**（交集为空）—— 有重叠说明是同一区域的重复解释，
- *      照旧折叠。
+ * 作用域刻意收窄到同时满足两条：
+ *   1. 双方锚点集**完全相同**（同锚点才是本形态；有交集但不相同的交给 G14c 裁决）；
+ *   2. 两组声明文本**互不重叠**（底层判据 `haveDisjointDeclaredText`；有重叠说明是同一
+ *      区域的重复解释，照旧折叠；空壳段不适用，仍走 `elementCount` 收敛）。
  *
  * @param {object} a
  * @param {object} b
@@ -215,11 +234,7 @@ export function haveDisjointDeclaredContent(a, b) {
   const keyA = normalizeAnchorKey(a.sourceNodeIds)
   const keyB = normalizeAnchorKey(b.sourceNodeIds)
   if (!keyA || keyA !== keyB) return false
-  const textsA = collectDeclaredTexts(a)
-  const textsB = collectDeclaredTexts(b)
-  if (textsA.size === 0 || textsB.size === 0) return false
-  for (const text of textsA) if (textsB.has(text)) return false
-  return true
+  return haveDisjointDeclaredText(a, b)
 }
 
 /**

@@ -23,7 +23,7 @@ import { collectFigmaNodes, applyFigmaElementHeightRatios } from '../utils/figma
 import { collectFigmaTextTruth, findClosestTruth } from '../utils/text-truth-guard.js'
 // 🛡️ 6-B（2026-09-15）：seriesColors 臆造色真值修正（VLM 红蓝对比先验 vs Figma 蓝系真值）
 import { collectFigmaChartColors, resolveSeriesColors } from '../utils/figma-color-truth.js'
-import { injectRepeatedCardTruth, injectTransparentContainerTruth } from '../utils/layout-truth-healer.js'
+import { injectRepeatedCardTruth, injectTransparentContainerTruth, injectIsomorphicSectionTruth, injectOddEvenHints } from '../utils/layout-truth-healer.js'
 // 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
 // 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
 import { fillToRgba, fillsToCss } from '../utils/section-tree.js'
@@ -140,6 +140,9 @@ import {
 // 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
 import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
 export { rebuildSlotConContainers, collectContainerHints }
+// 🛡️ 根治⑩（2026-11-12 · f3085ec6 实锤）：vision section 消毒（纯函数，无 import.meta）——
+//   剔除背景板/装饰 section（R1）+ 标题条锚点纠偏到正下方内容块（R2），布局引擎侧治本。
+import { sanitizeVisionSections } from '../utils/vision-section-sanitizer.js'
 // 🛡️ 2026-09-15（mc-max-1789446564243-f64ecbed 实锤）：幻觉 section 剔除（纯函数，无 import.meta）。
 // Vision 会凭空产出「设计里不存在」的 section（如 badge-indicator，子节点 id 89:37 在 Figma 树中 0 命中），
 // 下游 planner 按 sections 出子组件清单 → 多生成一个 .vue（角标画两遍 + 多占一行挤走图表）。
@@ -790,6 +793,10 @@ ${analysisTask}`
         ...requestOptions,
         requestTimeoutMs: computeVisionDynamicTimeout(requestOptions.requestTimeoutMs ?? VISION_ANALYSIS_TIMEOUT_MS),
         requestMaxRetries: Math.max(requestOptions.requestMaxRetries ?? VISION_ANALYSIS_MAX_RETRIES, VISION_ANALYSIS_MAX_RETRIES),
+        // 🔴 显式声明输出类型 = preview-analysis 结构化 JSON（顶层 sections/charts/interactions，与
+        //    本文件 hasContent 判据同源）。这是 `_isSelfHealApplicable` 允许自愈的唯一前提之一；
+        //    不声明会被视为 'text' ⇒ 损坏 JSON 不再抬温自愈（自愈判据禁止靠猜，2026-11-12 根治）。
+        outputKind: 'json',
       }
       logger.info('🛡️ Vision 分析请求策略', {
         requestTimeoutMs: visionRequestOptions.requestTimeoutMs,
@@ -1567,6 +1574,15 @@ ${analysisTask}`
         logger.info('重复卡填充真值已注入', { kind: repeatedCardTruth.kind, size: repeatedCardTruth.size, activeHex: repeatedCardTruth.activeHex })
       }
 
+      // 🔁 2026-11-12：奇偶交替样式确定性检测（视觉分析阶段提示，下游 4 管线接收消化）。
+      // 复用 detectOddEvenPatterns（Figma fill 真值，非 vision 猜测），parsed.oddEvenHints
+      // 随 layoutStructure 进 prompt（graph 透传 input.oddEvenHints → engineer 拼段）。
+      // 无 figmaData / 无重复组 → 空数组，永不改变既有流程。
+      const oddEvenHints = figmaData ? injectOddEvenHints(parsed, figmaData) : null
+      if (oddEvenHints && oddEvenHints.length) {
+        logger.info('奇偶交替样式真值已注入', { count: oddEvenHints.length, scopes: oddEvenHints.map((h) => h.scope) })
+      }
+
       // 🛡️ 透明容器真值注入（2026-10-20 · 5ef650ff 实锤）：fills=[] 的透明容器若被
       //   产物刷上背景色 ⇒ 盖住宿主底色（浅发白/深发灰）。真值随 layoutStructure 进
       //   prompt/写盘前审计（TRANSPARENT-CONTAINER-BG）。
@@ -1574,6 +1590,16 @@ ${analysisTask}`
       if (transparentContainerTruth) {
         logger.info('透明容器真值已注入', { total: transparentContainerTruth.total })
       }
+
+      // 🧬 刀 66-P0（2026-11-12 · adbd1b3d）：同构段 Figma 真值（结构签名/配色）注入。
+      //   L0 只产**事实**，不产裁决：分组仍由 L1 唯一判据 collectIsomorphicSectionGroups
+      //   用本地结构签名 + 真值交叉校验完成；视觉声明 isomorphicSectionGroups 只作候选。
+      //   🔴 计数行恒打（0 命中也打）⇒「无同构事实」与「没跑注入」在真机日志里可区分。
+      const isoSectionTruth = figmaData ? injectIsomorphicSectionTruth(parsed, figmaData) : null
+      const _isoTC = isoSectionTruth?.counts || {}
+      logger.info(
+        `🧬 VISION-ISO sections=${_isoTC.sections || 0} figmaResolved=${_isoTC.figmaResolved || 0} withTheme=${_isoTC.withTheme || 0} declared=${_isoTC.declaredGroups || 0}`,
+      )
 
       logger.info('解析后处理完成', { layoutFixed, bgFixed, gridBgFixed, chromeStripped, chromeSectionsRemoved: chromeSectionsRemoved.length, bgSized, figmaTextCleaned, resourcesFiltered, figmaDimOverridden, figmaElemRatioApplied })
     } catch (error) {
@@ -1828,6 +1854,27 @@ ${analysisTask}`
           // `{layoutStructure:{layout,sections}}` 形态，`parsed.layout` 可能是外壳本身（无顶层
           // sections），盲目重建会把它清空 ⇒ 必须先验 `Array.isArray(cur.sections)`。
           const rebuiltSlots = []
+          // 🛡️ 根治⑩ R1/R2（f3085ec6 实锤）：先消毒（剔背景板 section + 标题条锚纠偏），
+          //   再做容器层级重建 —— 锚对了，rebuild/reclaim 与下游 flex 才有正确输入。
+          const sanitizeMeta = { removed: [], reanchored: [] }
+          const sanitizeSlot = (obj, label) => {
+            const cur = obj?.layout
+            if (!cur || !Array.isArray(cur.sections)) return
+            const before = cur.sections.length
+            obj.layout = sanitizeVisionSections(cur, figmaData, sanitizeMeta)
+            const after = (obj.layout?.sections || []).length
+            if (before !== after || sanitizeMeta.reanchored.length > 0) {
+              rebuiltSlots.push({ label: `sanitize:${label}`, before, after })
+            }
+          }
+          sanitizeSlot(parsed, 'layout')
+          sanitizeSlot(parsed.layoutStructure, 'layoutStructure.layout')
+          // 计数行铁律：零命中也要可见（否则「无病灶」与「判据不生效」离线不可辨）
+          logger.info('🛡️ 根治⑩ vision section 消毒', {
+            removed: sanitizeMeta.removed.join(',') || '无',
+            reanchored:
+              sanitizeMeta.reanchored.map((r) => `${r.from}→${r.to}`).join(', ') || '无',
+          })
           const rebuildSlot = (obj, label) => {
             const cur = obj?.layout
             if (!cur || !Array.isArray(cur.sections)) return

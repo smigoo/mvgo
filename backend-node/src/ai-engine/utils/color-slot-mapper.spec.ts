@@ -10,6 +10,13 @@ import {
   formatCrossThemeColorFacts,
   auditSemanticGuessSlots,
   realignThemeVarsSlotValues,
+  // 🆕 刀 25（2026-11-12 · c4c5dabc 实锤）
+  slotNameToCssVarKey,
+  parseThemeVarsMixins,
+  parseCssVarsThemeKeys,
+  injectCssVarsThemeEntries,
+  injectDeclareCssVarConfig,
+  applyColorSlotMappingToScripts,
 } from './color-slot-mapper.js'
 
 /**
@@ -724,6 +731,218 @@ describe('RC1 · 半透明色参与跨稿映射（a0f93b25 实锤）', () => {
     // 幂等：再跑一次 0 替换
     const r2 = applyColorSlotMapping({ outputPath: dir, mapping, fsMod, pathMod })
     expect(r2.replacedCount).toBe(0)
+    await rm(dir, { recursive: true, force: true })
+  })
+})
+
+/**
+ * 🆕 刀 25（2026-11-12 · mc-max-1794463650286-c4c5dabc 实锤）：
+ *   JS 数据常量 / 内联 style 的颜色 → CSS 变量引用（治「深色主题建好了但切不动」）。
+ *
+ * 病灶三层：
+ *   ① v3.0 folded-grid 确定性装配把色值内嵌进 JS 常量 + 内联 style，
+ *      绕开「common.less 是业务色唯一真值源」契约；
+ *   ② applyColorSlotMapping 射程只有 common.less ⇒ 本产物 replacedCount=0；
+ *   ③ 内联 style 特异性 (1,0,0,0) > 主题覆盖层 `.theme_2 .cls` (0,2,0) ⇒ 盖不住。
+ *
+ * 治本：业务槽位同步进 css-vars.js（各主题对象 + common 兜底）+ declare.json
+ *      （M3-8 双向声明），再把 .vue 颜色字面量换成 var(--camelKey)
+ *      ⇒ 内联 style 也随主题切（var() 取值由 documentElement 变量决定）。
+ */
+describe('刀 25：JS/内联 style 色值 → CSS 变量（主题接线）', () => {
+  const CSS_VARS = `// 组件 CSS 变量默认值（系统生成，勿手改）
+const common = {
+  fontSize: $mcCssBuilder.getCssSize(12),
+  colorTextBase: '#546881',
+  colorPrimary: '#a6ceff',
+};
+
+const dark = {
+  colorTextBase: '#ffffff',
+  colorPrimary: '#44E4FF',
+};
+
+const light = {
+  colorTextBase: '#546881',
+  colorPrimary: '#a6ceff',
+};
+
+const theme_2 = {
+  colorTextBase: '#98c2f6',
+  colorPrimary: '#00264c',
+};
+
+export { common, dark, light, theme_2 };
+export default { common, dark, light, theme_2 };
+`
+  const THEME_VARS = `.common() {
+  @fontSize: var(--fontSize);
+}
+
+.theme-light() {
+  @color-text-base: #546881;
+  @color-primary: #a6ceff;
+  @color-card-bg-active: #a6ceff;
+  @color-custom-1: #333333;
+}
+
+.theme-theme_2() {
+  @color-text-base: #98c2f6;
+  @color-primary: #00264c;
+  @color-card-bg-active: rgba(0, 144, 255, 0.33);
+  @color-custom-1: #ffffff;
+}
+
+.theme-dark() {
+  @color-text-base: #ffffff;
+  @color-primary: #44E4FF;
+}
+`
+
+  /** 建最小产物目录（css-vars.js + theme-vars.less + declare.json + ListSection.vue） */
+  const makeProduct = async (vueContent: string) => {
+    const dir = await mkdtemp(join(tmpdir(), 'mc-dao25-'))
+    await mkdir(join(dir, 'resources/styles/themes'), { recursive: true })
+    await mkdir(join(dir, 'resources/config'), { recursive: true })
+    await mkdir(join(dir, 'package/components'), { recursive: true })
+    await writeFile(join(dir, 'resources/config/css-vars.js'), CSS_VARS)
+    await writeFile(join(dir, 'resources/styles/themes/theme-vars.less'), THEME_VARS)
+    await writeFile(join(dir, 'resources/styles/common.less'), '.c-x-card { width: 100%; }')
+    await writeFile(
+      join(dir, 'declare.json'),
+      JSON.stringify({ componentId: 'c-x', cssVariableConfig: [{ name: 'colorTextBase', key: 'colorTextBase', type: 'color' }] }, null, 2),
+    )
+    await writeFile(join(dir, 'package/components/ListSection.vue'), vueContent)
+    return dir
+  }
+
+  it('slotNameToCssVarKey：kebab 槽位名 → css-vars 的 camel 键', () => {
+    expect(slotNameToCssVarKey('color-custom-2')).toBe('colorCustom2')
+    expect(slotNameToCssVarKey('@color-text-base')).toBe('colorTextBase')
+    expect(slotNameToCssVarKey('color-primary-bg-hover')).toBe('colorPrimaryBgHover')
+    expect(slotNameToCssVarKey('')).toBe('')
+  })
+
+  it('parseThemeVarsMixins：只取 theme-* mixin，.common() 不进（其 @fontSize 是 var() 形态）', () => {
+    const m = parseThemeVarsMixins(THEME_VARS)
+    expect(Object.keys(m).sort()).toEqual(['dark', 'light', 'theme_2'])
+    expect(m.light['color-text-base']).toBe('#546881')
+    expect(m.light['color-custom-1']).toBe('#333333')
+    expect(m.light['fontSize']).toBeUndefined()
+  })
+
+  it('parseCssVarsThemeKeys：解析各主题对象键集（值里的 $mcCssBuilder 不算键）', () => {
+    const t = parseCssVarsThemeKeys(CSS_VARS)
+    expect(t.common.has('fontSize')).toBe(true)
+    expect(t.common.has('colorTextBase')).toBe(true)
+    expect(t.common.has('$mcCssBuilder')).toBe(false)
+    expect(t.theme_2.has('colorPrimary')).toBe(true)
+  })
+
+  it('injectCssVarsThemeEntries：注入主题对象 + 幂等（已存在则跳过）', () => {
+    const r1 = injectCssVarsThemeEntries(CSS_VARS, 'theme_2', [{ key: 'colorCustom1', value: '#ffffff' }])
+    expect(r1.changed).toBe(true)
+    expect(r1.injected).toEqual(['colorCustom1'])
+    expect(r1.content).toContain("colorCustom1: '#ffffff',")
+    const r2 = injectCssVarsThemeEntries(r1.content, 'theme_2', [{ key: 'colorCustom1', value: '#ffffff' }])
+    expect(r2.changed).toBe(false)
+    expect(r2.injected).toEqual([])
+  })
+
+  it('injectDeclareCssVarConfig：补 cssVariableConfig 声明 + 幂等', () => {
+    const src = JSON.stringify({ cssVariableConfig: [{ name: 'a', key: 'colorTextBase', type: 'color' }] }, null, 2)
+    const r1 = injectDeclareCssVarConfig(src, ['colorCustom1'])
+    expect(r1.changed).toBe(true)
+    expect(r1.injected).toEqual(['colorCustom1'])
+    expect(r1.data.cssVariableConfig.map((i) => i.key)).toContain('colorCustom1')
+    const r2 = injectDeclareCssVarConfig(r1.content, ['colorCustom1'])
+    expect(r2.changed).toBe(false)
+    expect(r2.injected).toEqual([])
+  })
+
+  it('applyColorSlotMappingToScripts：字面量 → var(--camel)；白名单外不动；幂等', async () => {
+    const dir = await makeProduct(`<template>
+  <div :style="{ color: '#a6ceff', backgroundColor: '#123456' }" />
+</template>
+<script setup>
+const FG_LIST_ITEMS = [{ texts: [{ t: 'x', c: '#a6ceff' }] }]
+</script>
+`)
+    const mapping = {
+      replacements: new Map([['#a6ceff', 'color-card-bg-active']]),
+      customSlots: {},
+    }
+    const cssVarKeys = new Set(['colorCardBgActive'])
+    const r1 = applyColorSlotMappingToScripts({ outputPath: dir, mapping, cssVarKeys, fsMod, pathMod })
+    expect(r1.replacedCount).toBe(2)
+    const vue = fsMod.readFileSync(join(dir, 'package/components/ListSection.vue'), 'utf-8')
+    expect(vue).toContain("var(--colorCardBgActive)")
+    expect(vue).toContain('#123456') // 白名单外 ⇒ 原样保留
+    // 幂等
+    const r2 = applyColorSlotMappingToScripts({ outputPath: dir, mapping, cssVarKeys, fsMod, pathMod })
+    expect(r2.replacedCount).toBe(0)
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('applyColorSlotMappingToScripts：已有 var() 的 fallback 不被替换（防循环引用）', async () => {
+    const dir = await makeProduct(`<template>
+  <div style="color: var(--colorTextBase, #a6ceff)" />
+</template>
+`)
+    const mapping = { replacements: new Map([['#a6ceff', 'color-card-bg-active']]), customSlots: {} }
+    const r = applyColorSlotMappingToScripts({
+      outputPath: dir,
+      mapping,
+      cssVarKeys: new Set(['colorCardBgActive']),
+      fsMod,
+      pathMod,
+    })
+    expect(r.replacedCount).toBe(0)
+    const vue = fsMod.readFileSync(join(dir, 'package/components/ListSection.vue'), 'utf-8')
+    expect(vue).toContain('var(--colorTextBase, #a6ceff)')
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('端到端：css-vars.js 补业务槽位 + declare.json 声明 + SFC 替换（浅色零差异 / 深色跟随）', async () => {
+    const dir = await makeProduct(`<template>
+  <div :style="{ color: '#546881', backgroundColor: '#a6ceff' }" />
+</template>
+`)
+    const mapping = {
+      // #546881 → color-text-base（canonical）；#a6ceff → color-card-bg-active
+      replacements: new Map([
+        ['#546881', 'color-text-base'],
+        ['#a6ceff', 'color-card-bg-active'],
+      ]),
+      customSlots: {},
+    }
+    const r = applyColorSlotMapping({ outputPath: dir, mapping, fsMod, pathMod })
+    expect(r.scriptReplacedCount).toBe(2)
+
+    // css-vars.js：主题对象补齐业务槽位（只补缺，不覆盖既有键）
+    const cssVars = fsMod.readFileSync(join(dir, 'resources/config/css-vars.js'), 'utf-8')
+    const themes = parseCssVarsThemeKeys(cssVars)
+    expect(themes.light.has('colorCardBgActive')).toBe(true)
+    expect(themes.theme_2.has('colorCardBgActive')).toBe(true)
+    expect(themes.theme_2.has('colorTextBase')).toBe(true)
+    // 既有键不被覆盖（框架契约）
+    expect(cssVars).toContain("colorTextBase: '#98c2f6',") // theme_2 原值保留
+    expect(cssVars).toContain("colorPrimary: '#a6ceff',") // light 原值保留
+
+    // declare.json：M3-8 双向一致（非框架键必须声明）
+    const declareData = JSON.parse(fsMod.readFileSync(join(dir, 'declare.json'), 'utf-8'))
+    const declared = new Set(declareData.cssVariableConfig.map((i) => i.key))
+    expect(declared.has('colorCardBgActive')).toBe(true)
+
+    // SFC：颜色字面量已换成 var()
+    const vue = fsMod.readFileSync(join(dir, 'package/components/ListSection.vue'), 'utf-8')
+    expect(vue).toContain('var(--colorTextBase)')
+    expect(vue).toContain('var(--colorCardBgActive)')
+    expect(vue).not.toContain('#a6ceff')
+
+    // 幂等：再跑一次不动
+    const r2 = applyColorSlotMapping({ outputPath: dir, mapping, fsMod, pathMod })
+    expect(r2.scriptReplacedCount).toBe(0)
     await rm(dir, { recursive: true, force: true })
   })
 })

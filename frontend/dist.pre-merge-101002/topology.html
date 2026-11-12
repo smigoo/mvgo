@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>感智晓界工坊 · 全站能力拓扑图 · 交互版</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0e1a;color:#e4e4e7;min-height:100vh;overflow:auto}
+.bg{position:fixed;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.02) 1px,transparent 0);background-size:32px 32px;pointer-events:none;z-index:0}
+
+.canvas-wrap{position:relative;z-index:1;overflow:auto;padding:24px 40px 60px}
+h1{font-size:24px;font-weight:600;color:#f4f4f5;text-align:center;margin-bottom:4px;letter-spacing:-.5px}
+.sub{text-align:center;color:#71717a;font-size:12px;margin-bottom:20px}
+
+.legend-bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:18px}
+.legend-bar .lg{display:flex;align-items:center;gap:5px;font-size:11px;color:#9ca3af;cursor:pointer;padding:4px 10px;border-radius:6px;border:1px solid transparent;transition:all .2s;user-select:none}
+.legend-bar .lg:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.08)}
+.legend-bar .lg.inactive{opacity:0.25;filter:grayscale(1)}
+.legend-bar .lg i{width:24px;height:3px;border-radius:2px;display:block}
+.legend-bar .lg i.dash{background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 9px)}
+
+.zoom-controls{position:fixed;top:90px;right:24px;display:flex;flex-direction:column;gap:6px;z-index:100}
+.zoom-btn{width:36px;height:36px;background:rgba(20,25,40,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#9ca3af;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.zoom-btn:hover{background:rgba(40,50,80,0.95);color:#e4e4e7;border-color:rgba(255,255,255,0.2)}
+.zoom-level{font-size:11px;color:#9ca3af;text-align:center;padding:4px;background:rgba(20,25,40,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:8px}
+
+.detail-panel{position:fixed;right:-440px;top:0;width:400px;height:100vh;background:rgba(14,18,30,0.98);border-left:1px solid rgba(255,255,255,0.08);box-shadow:-8px 0 40px rgba(0,0,0,0.5);transition:right .3s cubic-bezier(.4,0,.2,1);z-index:200;display:flex;flex-direction:column}
+.detail-panel.open{right:0}
+.panel-head{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;position:relative}
+.panel-head h3{font-size:18px;font-weight:600;color:#f4f4f5;display:flex;align-items:center;gap:8px}
+.panel-head .node-sub{font-size:12px;color:#71717a;margin-top:4px}
+.panel-head .node-status{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin-top:6px}
+.panel-head .node-status.stub{background:rgba(239,68,68,0.15);color:#fca5a5}
+.panel-head .node-status.active{background:rgba(16,185,129,0.15);color:#6ee7b7}
+.panel-close{position:absolute;top:16px;right:16px;width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.05);border:none;color:#71717a;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.panel-close:hover{background:rgba(255,255,255,0.1);color:#e4e4e7}
+.panel-body{flex:1;overflow-y:auto;padding:16px 20px}
+.panel-body::-webkit-scrollbar{width:4px}
+.panel-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+.section-title{font-size:11px;font-weight:600;color:#71717a;letter-spacing:1.5px;text-transform:uppercase;margin:16px 0 8px;display:flex;align-items:center;gap:6px}
+.section-title:first-child{margin-top:0}
+.section-title::before{content:'';width:3px;height:12px;border-radius:2px}
+.section-title.interactions::before{background:#10b981}
+.section-title.connections::before{background:#3b82f6}
+.section-title.desc::before{background:#f59e0b}
+
+.interaction-table{width:100%;font-size:12px;border-collapse:collapse}
+.interaction-table th{text-align:left;padding:6px 8px;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);color:#71717a;font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.interaction-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);color:#c4c4c7;vertical-align:top}
+.interaction-table tr:hover td{background:rgba(255,255,255,0.02)}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;white-space:nowrap}
+.tag-click{background:rgba(59,130,246,0.15);color:#93bbfd}
+.tag-input{background:rgba(139,92,246,0.15);color:#c4b5fd}
+.tag-switch{background:rgba(245,158,11,0.15);color:#fcd34d}
+.tag-modal{background:rgba(236,72,153,0.15);color:#f9a8d4}
+.tag-route{background:rgba(16,185,129,0.15);color:#6ee7b7}
+.tag-event{background:rgba(249,115,22,0.15);color:#fdba74}
+.tag-drag{background:rgba(168,85,247,0.15);color:#d8b4fe}
+.tag-key{background:rgba(20,184,166,0.15);color:#5eead4}
+.bind-text{font-family:'SF Mono','Fira Code',monospace;font-size:11px;color:#9ca3af;word-break:break-all}
+
+.conn-list{display:flex;flex-direction:column;gap:4px}
+.conn-item{display:flex;align-items:center;gap:8px;padding:5px 8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:12px;color:#c4c4c7}
+.conn-item .conn-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.conn-item .conn-label{color:#71717a;font-size:10px;margin-left:auto}
+.conn-item:hover{background:rgba(255,255,255,0.04)}
+
+.desc-text{font-size:12px;color:#9ca3af;line-height:1.6;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;border-left:3px solid #f59e0b}
+
+.svg-canvas{display:block;margin:0 auto;transform-origin:top left;transition:transform .15s;    width: 100%;height: 100%;
+}
+
+/* 节点：平时半透明，悬停全亮，非相关极暗 */
+.node-group{cursor:pointer;opacity:.6;transition:opacity .25s,filter .25s}
+.node-group:hover{opacity:1}
+.node-group:hover .node-rect{filter:brightness(1.2)}
+.node-group.dimmed{opacity:.1!important}
+.node-group.highlighted{opacity:1!important}
+.node-group.highlighted .node-rect{filter:brightness(1.3);stroke-width:3}
+.node-group.selected{opacity:1!important}
+.node-group.selected .node-rect{stroke-width:3;filter:brightness(1.25)}
+
+/* 连线：平时更淡，高亮时清晰 */
+.conn-line{opacity:.6;transition:opacity .25s}
+.conn-line.dimmed{opacity:.05!important}
+.conn-line.highlighted{opacity:1!important;stroke-width:2.5!important}
+.conn-line.type-filtered{opacity:0!important;pointer-events:none}
+
+/* 标签：平时可见，高亮时变亮 */
+.edge-label{font-size:9px;fill:#9ca3af;pointer-events:none;opacity:.7;transition:opacity .25s}
+.edge-label.dimmed{opacity:.05!important}
+.edge-label.highlighted{fill:#fff;font-weight:600;opacity:1!important}
+.edge-label.type-filtered{opacity:0}
+
+.layer-bg{rx:16;ry:16}
+.layer-title{font-size:11px;font-weight:600;letter-spacing:2px;fill:#4b5563}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoom-in" title="放大 (Ctrl + 滚轮上)">+</button>
+  <button class="zoom-btn" id="zoom-out" title="缩小 (Ctrl + 滚轮下)">−</button>
+  <div class="zoom-level" id="zoom-level">100%</div>
+  <button class="zoom-btn" id="zoom-reset" title="重置视图" style="font-size:12px">↺</button>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <div class="panel-head">
+    <h3 id="panel-title">节点详情</h3>
+    <div class="node-sub" id="panel-sub"></div>
+    <div id="panel-status"></div>
+    <button class="panel-close" id="panel-close">×</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</div>
+
+<div class="canvas-wrap" id="canvas-wrap">
+  <h1>感智晓界工坊 · 全站能力关系拓扑</h1>
+  <p class="sub">点击图例筛选连线 · 点击节点查看交互点 · Ctrl+滚轮缩放 · 拖拽平移</p>
+
+  <div class="legend-bar" id="legend-bar">
+    <div class="lg" data-type="call"><i style="background:#3b82f6"></i>数据调用</div>
+    <div class="lg" data-type="dep"><i class="dash" style="color:#10b981"></i>依赖关系</div>
+    <div class="lg" data-type="mgr"><i class="dash" style="color:#f59e0b"></i>管理控制</div>
+    <div class="lg" data-type="pipeline"><i style="background:#ef4444"></i>生成管线</div>
+    <div class="lg" data-type="feedback"><i class="dash" style="color:#8b5cf6"></i>反馈回路</div>
+    <div class="lg" data-type="stub"><i class="dash" style="color:#ef4444;background:none;border:1px dashed #ef4444;width:22px;height:10px"></i>仅UI（未实装）</div>
+  </div>
+
+  <svg id="topo" class="svg-canvas"></svg>
+</div>
+
+<script>
+// ────────────────────────────────────────────────────────────
+// DATA
+// ────────────────────────────────────────────────────────────
+const NODES = [
+  {id:'login',label:'登录注册',layer:0,color:'#6b7280',x:0,y:0,moduleId:'mod-login'},
+  {id:'workspace',label:'AI 工作台',layer:0,color:'#f59e0b',x:0,y:0,moduleId:'mod-header'},
+  {id:'intro',label:'使用介绍',layer:0,color:'#6b7280',x:0,y:0,moduleId:'mod-intro'},
+
+  {id:'comp-gen',label:'组件生成',sub:'Vue3 / 微码 双 target',layer:1,color:'#3b82f6',x:0,y:0,moduleId:'mod-gen-component'},
+  {id:'page-gen',label:'页面生成',sub:'待开发',layer:1,color:'#3b82f6',x:0,y:0,moduleId:'mod-gen-page'},
+
+  {id:'doc-analysis',label:'文档分析',layer:2,color:'#10b981',x:0,y:0,moduleId:'mod-doc-upload'},
+  {id:'doc-binding',label:'文档对接',layer:2,color:'#10b981',x:0,y:0,moduleId:'mod-doc-compare'},
+  {id:'auto-fix',label:'自动修复',layer:2,color:'#8b5cf6',x:0,y:0},
+  {id:'grounding',label:'Grounding',layer:2,color:'#f59e0b',x:0,y:0},
+  {id:'ai-compare',label:'AI 比对',layer:2,color:'#ef4444',x:0,y:0,moduleId:'mod-analysis-drawer'},
+  {id:'api-binding',label:'API 对接',sub:'AI 智能分析绑定',layer:2,color:'#ec4899',x:0,y:0,moduleId:'mod-binding-wizard'},
+
+  {id:'screen',label:'大屏编辑器',layer:3,color:'#ef4444',x:0,y:0,moduleId:'mod-screen'},
+  {id:'workflow',label:'工作流编辑器',layer:3,color:'#ef4444',x:0,y:0,moduleId:'mod-workflow-editor'},
+  {id:'human-review',label:'人工审核',sub:'通过 / 退回',layer:3,color:'#f97316',x:0,y:0,moduleId:'mod-task-detail'},
+
+  {id:'task-center',label:'任务中心',layer:4,color:'#f59e0b',x:0,y:0,moduleId:'mod-task-center'},
+  {id:'comp-lib',label:'组件库管理',layer:4,color:'#f59e0b',x:0,y:0,moduleId:'mod-comp-lib'},
+  {id:'api-mgr',label:'API 管理',layer:4,color:'#ec4899',x:0,y:0},
+  {id:'playground',label:'Playground',layer:4,color:'#06b6d4',x:0,y:0,moduleId:'mod-demo'},
+  {id:'token-monitor',label:'Token 监控',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI',moduleId:'mod-token-dash'},
+  {id:'api-docs',label:'API 文档',layer:4,color:'#ec4899',x:0,y:0,moduleId:'mod-api-docs'},
+  {id:'debug',label:'调试器',layer:4,color:'#6b7280',x:0,y:0,moduleId:'mod-debug'},
+  {id:'admin',label:'后台管理',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI',moduleId:'mod-admin'},
+  {id:'group',label:'群组',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI'},
+  {id:'ai-workspace',label:'文档智能助手',sub:'辅助产品文档开发',layer:4,color:'#8b5cf6',x:0,y:0,stub:'仅UI',moduleId:'mod-ai-chat'},
+  {id:'git-push',label:'Git 推送',sub:'凭证配置',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI'},
+  {id:'qs-auth',label:'QS 权限系统',sub:'开发中',layer:4,color:'#6366f1',x:0,y:0,stub:'开发中',moduleId:'mod-qs-auth'},
+
+  {id:'preview',label:'预览引擎',layer:5,color:'#6b7280',x:0,y:0,moduleId:'mod-preview'},
+  {id:'sse',label:'SSE 推送',layer:5,color:'#6b7280',x:0,y:0},
+  {id:'workspace-sync',label:'工作区同步',layer:5,color:'#6b7280',x:0,y:0},
+  {id:'jaeger',label:'Jaeger 追踪',layer:5,color:'#14b8a6',x:0,y:0,moduleId:'mod-jaeger'},
+  {id:'figma',label:'Figma API',layer:5,color:'#a855f7',x:0,y:0},
+  {id:'apifox',label:'Apifox API',layer:5,color:'#ec4899',x:0,y:0},
+];
+
+const EDGES = [
+  {from:'login',to:'workspace',type:'call',label:'认证'},
+  {from:'workspace',to:'comp-gen',type:'call',label:'路由'},
+  {from:'workspace',to:'page-gen',type:'call',label:'路由'},
+  {from:'workspace',to:'task-center',type:'call'},
+  {from:'workspace',to:'comp-lib',type:'call'},
+  {from:'workspace',to:'api-mgr',type:'call'},
+  {from:'workspace',to:'playground',type:'call',label:'路由'},
+  {from:'workspace',to:'token-monitor',type:'call',label:'路由'},
+  {from:'workspace',to:'api-docs',type:'call',label:'路由'},
+  {from:'workspace',to:'ai-workspace',type:'call',label:'路由'},
+  {from:'workspace',to:'group',type:'call',label:'路由'},
+  {from:'workspace',to:'git-push',type:'call',label:'路由'},
+  {from:'comp-gen',to:'doc-analysis',type:'pipeline',label:'init 并行'},
+  {from:'comp-gen',to:'doc-binding',type:'pipeline',label:'路径B'},
+  {from:'comp-gen',to:'auto-fix',type:'pipeline',label:'engineer 后'},
+  {from:'comp-gen',to:'grounding',type:'pipeline',label:'adversarial'},
+  {from:'comp-gen',to:'ai-compare',type:'pipeline',label:'finish 后'},
+  {from:'page-gen',to:'comp-gen',type:'call',label:'批量调用'},
+  {from:'ai-compare',to:'auto-fix',type:'feedback',label:'评分不达标→修复'},
+  {from:'grounding',to:'comp-gen',type:'feedback',label:'issue 回传'},
+  {from:'doc-analysis',to:'doc-binding',type:'dep',label:'分析产物'},
+  {from:'api-binding',to:'api-mgr',type:'dep',label:'Apifox 目录'},
+  {from:'comp-gen',to:'api-binding',type:'dep',label:'AI 分析绑定'},
+  {from:'task-center',to:'comp-gen',type:'mgr',label:'暂停/恢复/终止'},
+  {from:'task-center',to:'page-gen',type:'mgr',label:'暂停/恢复/终止'},
+  {from:'comp-lib',to:'comp-gen',type:'dep',label:'组件记录'},
+  {from:'comp-lib',to:'ai-compare',type:'mgr',label:'触发分析'},
+  {from:'comp-gen',to:'sse',type:'dep',label:'实时进度'},
+  {from:'page-gen',to:'sse',type:'dep',label:'实时进度'},
+  {from:'comp-gen',to:'workspace-sync',type:'dep',label:'文件同步'},
+  {from:'comp-gen',to:'preview',type:'dep',label:'截图渲染'},
+  {from:'ai-compare',to:'preview',type:'dep',label:'截图对比'},
+  {from:'comp-gen',to:'jaeger',type:'dep',label:'链路追踪'},
+  {from:'screen',to:'comp-lib',type:'dep',label:'加载组件'},
+  {from:'workflow',to:'comp-gen',type:'dep',label:'编排节点'},
+  {from:'doc-binding',to:'doc-analysis',type:'dep',label:'复用分析结果'},
+  {from:'human-review',to:'comp-gen',type:'feedback',label:'审核结果'},
+  {from:'task-center',to:'human-review',type:'call',label:'触发审核'},
+  {from:'preview',to:'human-review',type:'dep',label:'预览截图'},
+  {from:'comp-lib',to:'preview',type:'dep',label:'组件预览'},
+  {from:'playground',to:'preview',type:'call',label:'实时预览'},
+  {from:'token-monitor',to:'jaeger',type:'dep',label:'链路追踪'},
+  {from:'api-docs',to:'api-binding',type:'call',label:'查看文档'},
+  {from:'api-docs',to:'api-mgr',type:'mgr',label:'文档管理'},
+  {from:'debug',to:'preview',type:'call',label:'调试预览'},
+  {from:'admin',to:'task-center',type:'mgr',label:'任务管理'},
+  {from:'figma',to:'doc-analysis',type:'dep',label:'设计稿'},
+  {from:'figma',to:'preview',type:'dep',label:'截图对比'},
+  {from:'apifox',to:'api-binding',type:'dep',label:'接口定义'},
+  {from:'group',to:'task-center',type:'mgr',label:'协作管理'},
+  {from:'git-push',to:'workspace-sync',type:'dep',label:'代码推送'},
+  {from:'ai-workspace',to:'doc-analysis',type:'call',label:'文档协作'},
+  {from:'workspace',to:'qs-auth',type:'call',label:'路由'},
+  {from:'qs-auth',to:'admin',type:'mgr',label:'权限管理'},
+];
+
+// ── 交互点数据（嵌入自交互点清单）──────────────────────
+const INTERACTIONS = {
+  'mod-login': [
+    {name:'用户名输入',type:'input',bind:'v-model="loginForm.username"'},
+    {name:'密码输入',type:'input',bind:'v-model="loginForm.password"'},
+    {name:'登录提交',type:'click',bind:'POST /api/auth/login → 跳转'},
+    {name:'切换到注册',type:'click',bind:"switchMode('register')"},
+    {name:'切换修改密码',type:'click',bind:"switchMode('changePassword')"},
+    {name:'主题切换',type:'click',bind:'toggleTheme()'},
+  ],
+  'mod-header': [
+    {name:'组件生成',type:'route',bind:'/generator/component'},
+    {name:'页面生成',type:'route',bind:'/generator/page'},
+    {name:'接口生成',type:'route',bind:'/generator/api'},
+    {name:'任务中心',type:'route',bind:'/tasks'},
+    {name:'AI WorkSpace',type:'route',bind:'/ai-workspace/chat'},
+    {name:'设置按钮',type:'click',bind:"emit('openConfig')"},
+    {name:'主题切换',type:'click',bind:'toggleTheme()'},
+    {name:'退出登录',type:'click',bind:'POST /api/auth/logout'},
+  ],
+  'mod-gen-component': [
+    {name:'微码/普通组件 pill',type:'switch',bind:"componentType = 'microcode' / 'vue3'"},
+    {name:'面板类型下拉',type:'input',bind:'v-model="selectedPanelType" (仅微码)'},
+    {name:'Figma URL 输入',type:'input',bind:'v-model="figmaUrl" 实时解析 fileKey/nodeId'},
+    {name:'URL 历史下拉',type:'event',bind:'focus 展开 / 点击回填'},
+    {name:'需求文档上传',type:'input',bind:'DocUploadPanel v-model:document'},
+    {name:'开始生成',type:'click',bind:'handleComponentGenerate()'},
+    {name:'终止任务',type:'click',bind:'cancelTask()'},
+    {name:'下载 ZIP',type:'click',bind:'handleDownload()'},
+    {name:'进入 Playground',type:'route',bind:"router.push('/demo/{id}')"},
+    {name:'对接接口',type:'click',bind:'打开 ApiBindingWizard'},
+  ],
+  'mod-gen-page': [
+    {name:'微码/普通页面 pill',type:'switch',bind:"pageType = 'microcode' / 'normal'"},
+    {name:'串行/并行模式',type:'switch',bind:"pageExecMode = 'serial' / 'parallel'"},
+    {name:'并发度 ±',type:'click',bind:'1~10 调整'},
+    {name:'分析页面',type:'click',bind:'handlePageAnalyze()'},
+    {name:'开始生成',type:'click',bind:'handlePageGenerate()'},
+    {name:'终止任务',type:'click',bind:'cancelPageTask()'},
+  ],
+  'mod-doc-upload': [
+    {name:'折叠/展开',type:'click',bind:'toggle 面板'},
+    {name:'上传按钮',type:'click',bind:'触发文件选择'},
+    {name:'清除按钮',type:'click',bind:'清空文档'},
+    {name:'分析按钮',type:'click',bind:'POST /api/phase2/analyze-doc'},
+    {name:'拖拽上传',type:'drag',bind:'@drop 读取文件'},
+  ],
+  'mod-doc-compare': [
+    {name:'预分析文档',type:'click',bind:'POST /api/phase2/analyze-doc'},
+    {name:'开始纠偏生成',type:'click',bind:'POST /api/phase2/regenerate-with-doc'},
+    {name:'确认覆盖',type:'click',bind:"emit('overwritten')"},
+    {name:'丢弃新版',type:'click',bind:"emit('discarded')"},
+  ],
+  'mod-binding-wizard': [
+    {name:'关闭按钮',type:'click',bind:"emit('update:open', false)"},
+    {name:'生成 API 目录',type:'click',bind:'POST /api/apifox/generate-full'},
+    {name:'目录卡片选中',type:'click',bind:'selectedCatalogId = id'},
+    {name:'AI 分析模式',type:'switch',bind:"mode = 'auto'(组件代码) / 'doc'(需求文档)"},
+    {name:'AI 智能匹配 API',type:'click',bind:'AI 分析组件/文档 → 自动匹配最佳 API → 生成绑定方案'},
+    {name:'数据槽卡片选中',type:'click',bind:'selectedSlotId = id'},
+    {name:'跳过 / 桩函数',type:'click',bind:'设置槽状态'},
+    {name:'API 函数卡片绑定',type:'click',bind:'绑定到选中槽'},
+    {name:'确认对接',type:'click',bind:'POST /api/vue3/bind-apis'},
+    {name:'撤回对接',type:'click',bind:'popconfirm 后撤回'},
+  ],
+  'mod-task-center': [
+    {name:'刷新按钮',type:'click',bind:'loadTasks()'},
+    {name:'统计卡片点击',type:'click',bind:'快速筛选'},
+    {name:'任务卡片点击',type:'click',bind:'跳转详情'},
+    {name:'暂停/恢复/取消',type:'click',bind:'控制任务状态'},
+    {name:'人工审核',type:'click',bind:'打开审核对话框'},
+    {name:'撤回审核',type:'click',bind:'revokeHumanReview()'},
+    {name:'删除按钮',type:'click',bind:'Modal.confirm 后删除'},
+    {name:'下载链接',type:'click',bind:'下载产物'},
+    {name:'状态/类型筛选',type:'input',bind:'v-model + @change'},
+    {name:'搜索框',type:'input',bind:'v-model + @input'},
+  ],
+  'mod-task-detail': [
+    {name:'返回列表',type:'click',bind:"router.push('/tasks')"},
+    {name:'暂停/恢复/取消',type:'click',bind:'控制任务状态'},
+    {name:'下载产物',type:'click',bind:'下载 ZIP'},
+    {name:'打开 Playground',type:'click',bind:'新窗口打开'},
+    {name:'AI 分析抽屉',type:'click',bind:'打开 Drawer'},
+    {name:'接口对接向导',type:'click',bind:'打开 ApiBindingWizard'},
+    {name:'人工审核',type:'click',bind:'submitHumanReview() 选 passed/warned'},
+    {name:'撤回审核',type:'click',bind:'revokeHumanReview()'},
+    {name:'重新生成',type:'click',bind:'跳转生成页'},
+  ],
+  'mod-demo': [
+    {name:'文件树节点',type:'click',bind:'打开文件'},
+    {name:'编辑器保存 💾',type:'click',bind:'saveFile()'},
+    {name:'撤销修改',type:'click',bind:'confirm 后恢复'},
+    {name:'AI 对话输入',type:'input',bind:'v-model="aiInput"'},
+    {name:'发送 AI',type:'click',bind:'sendAIMessage()'},
+    {name:'停止 AI',type:'click',bind:'AbortController'},
+    {name:'代码编辑器',type:'input',bind:'Monaco v-model'},
+    {name:'预览分辨率',type:'input',bind:'v-model="previewResolution"'},
+    {name:'推送到 GitLab',type:'click',bind:'打开 Modal'},
+    {name:'下载组件',type:'click',bind:'downloadComponent()'},
+    {name:'粘贴截图',type:'event',bind:'@paste 附件上传'},
+    {name:'Ctrl+S / Ctrl+Enter',type:'key',bind:'快捷键'},
+  ],
+  'mod-comp-lib': [
+    {name:'全选/取消',type:'click',bind:'selectAll()'},
+    {name:'批量删除',type:'click',bind:'batchDelete()'},
+    {name:'打开 Playground',type:'click',bind:"router.push('/demo/{id}')"},
+    {name:'下载组件',type:'click',bind:'下载 ZIP'},
+    {name:'编辑/删除组件',type:'click',bind:'跳转详情 / confirm 后删除'},
+    {name:'搜索框',type:'input',bind:'v-model="searchQuery"'},
+  ],
+  'mod-screen': [
+    {name:'配置/组件库 Tab',type:'switch',bind:'切换左面板'},
+    {name:'预设卡片',type:'click',bind:'应用模板'},
+    {name:'添加列/Zone',type:'click',bind:'新增列/Zone'},
+    {name:'缩放控制',type:'click',bind:'调整画布缩放'},
+    {name:'撤销/重做',type:'click',bind:'历史操作'},
+    {name:'AI 生成响应式',type:'click',bind:'启动分析'},
+    {name:'导出/导入 JSON',type:'click',bind:'配置持久化'},
+    {name:'拖拽调整',type:'drag',bind:'调整列宽/面板宽'},
+    {name:'组件拖放',type:'drag',bind:'放置创建 Zone'},
+    {name:'Ctrl+Z/Y',type:'key',bind:'快捷键'},
+  ],
+  'mod-workflow-editor': [
+    {name:'新建工作流',type:'click',bind:'创建新工作流'},
+    {name:'加载管线拓扑',type:'click',bind:'加载预设拓扑'},
+    {name:'运行对话框',type:'click',bind:'弹出运行配置'},
+    {name:'保存/另存为',type:'click',bind:'保存工作流'},
+    {name:'节点连接',type:'event',bind:'@node-click / @connect'},
+    {name:'删除节点/边',type:'click',bind:'删除选中元素'},
+    {name:'执行运行',type:'click',bind:'执行工作流'},
+  ],
+  'mod-ai-chat': [
+    {name:'新建会话',type:'click',bind:'弹出对话框'},
+    {name:'会话列表',type:'click',bind:'选中并进入对话'},
+    {name:'对话输入框',type:'input',bind:'v-model + @pressEnter'},
+    {name:'发送按钮',type:'click',bind:'发送消息'},
+    {name:'保存到 Git',type:'click',bind:'推送到 Git 仓库'},
+  ],
+  'mod-preview': [
+    {name:'重新加载',type:'click',bind:'重载组件'},
+    {name:'AI 修复',type:'click',bind:'调用 AI 修复'},
+    {name:'面板类型选择',type:'input',bind:'v-model="globalPanelType"'},
+  ],
+  'mod-analysis-drawer': [
+    {name:'关闭抽屉',type:'click',bind:"emit('update:visible', false)"},
+  ],
+  'mod-token-dash': [
+    {name:'表格行下钻',type:'click',bind:'下钻到用户/模型'},
+    {name:'时间粒度切换',type:'switch',bind:'按天/周/月'},
+    {name:'群组下拉',type:'input',bind:'筛选群组'},
+  ],
+  'mod-api-docs': [
+    {name:'复制代码块',type:'click',bind:'复制到剪贴板'},
+    {name:'Tab 切换',type:'switch',bind:'curl/js/python/postman'},
+    {name:'侧边锚点链接',type:'route',bind:'跳转到对应章节'},
+  ],
+  'mod-jaeger': [
+    {name:'重置按钮',type:'click',bind:'重置查询表单'},
+    {name:'查询表单提交',type:'event',bind:'@finish="handleSubmit"'},
+  ],
+  'mod-debug': [
+    {name:'选择组件',type:'input',bind:'v-model="selectedComponentId"'},
+    {name:'刷新按钮',type:'click',bind:'重新加载组件'},
+    {name:'下载产物',type:'click',bind:'下载 ZIP'},
+    {name:'打开 Playground',type:'click',bind:'跳转预览页'},
+  ],
+  'mod-admin': [
+    {name:'新建/编辑/删除',type:'click',bind:'CRUD 操作'},
+    {name:'搜索框',type:'input',bind:'v-model 筛选'},
+    {name:'分页切换',type:'click',bind:'翻页'},
+  ],
+  'mod-intro': [
+    {name:'Tab 切换',type:'switch',bind:'步骤 1/2/3'},
+    {name:'开始按钮',type:'click',bind:'跳转生成页'},
+  ],
+  'mod-api-mgr': [
+    {name:'新建 API',type:'click',bind:'创建接口'},
+    {name:'编辑/删除',type:'click',bind:'修改/删除接口'},
+    {name:'搜索框',type:'input',bind:'v-model 筛选'},
+    {name:'查看详情',type:'click',bind:'查看接口定义'},
+  ],
+};
+
+// ────────────────────────────────────────────────────────────
+// LAYOUT
+// ────────────────────────────────────────────────────────────
+const LAYER_NAMES = ['入口层','生成层','能力层','编排层','业务层','基础层'];
+const LAYER_COLORS = ['#6b7280','#3b82f6','#10b981','#ef4444','#f59e0b','#6b7280'];
+
+const NW = 116, NH = 56, PAD_TOP = 60, GAP_Y = 96, GAP_X = 12;
+const ROW_GAP = 14; // 同层多行之间的额外间距
+
+// 按层分组
+const layers = {};
+NODES.forEach(n => {
+  if(!layers[n.layer]) layers[n.layer] = [];
+  layers[n.layer].push(n);
+});
+
+// 计算画布宽度（最宽层的宽度）
+let maxLayerWidth = 0;
+Object.keys(layers).forEach(l => {
+  const count = layers[l].length;
+  const w = count * NW + (count - 1) * GAP_X;
+  if(w > maxLayerWidth) maxLayerWidth = w;
+});
+const CANVAS_W = Math.max(maxLayerWidth + 120, 1000);
+
+// 阈值：超过这个宽度就拆成两行
+const SPLIT_THRESHOLD = 800;
+
+// 计算每层的行数和每行节点
+const layerRows = {}; // layerIdx -> [[node,...], [node,...]]
+const layerRowCount = {}; // layerIdx -> number of rows
+Object.keys(layers).forEach(l => {
+  const layerNodes = layers[l];
+  const totalW = layerNodes.length * NW + (layerNodes.length - 1) * GAP_X;
+  if(totalW > SPLIT_THRESHOLD && layerNodes.length > 1) {
+    // 拆成两行：前半 + 后半
+    const mid = Math.ceil(layerNodes.length / 2);
+    layerRows[l] = [layerNodes.slice(0, mid), layerNodes.slice(mid)];
+    layerRowCount[l] = 2;
+  } else {
+    layerRows[l] = [layerNodes];
+    layerRowCount[l] = 1;
+  }
+});
+
+// 计算画布高度（考虑多行）
+let totalCanvasH = 0;
+Object.keys(layers).forEach(l => {
+  const rows = layerRowCount[l];
+  totalCanvasH += NH + GAP_Y + (rows - 1) * ROW_GAP;
+});
+const CANVAS_H = PAD_TOP + totalCanvasH + 40;
+
+// 计算节点位置（按行分配 y）
+let currentY = PAD_TOP;
+Object.keys(layers).forEach(l => {
+  const rows = layerRows[l];
+  const rowCount = rows.length;
+  rows.forEach((rowNodes, rowIdx) => {
+    const rowWidth = rowNodes.length * NW + (rowNodes.length - 1) * GAP_X;
+    const startX = (CANVAS_W - rowWidth) / 2;
+    rowNodes.forEach((n, i) => {
+      n.x = startX + i * (NW + GAP_X);
+      n.y = currentY + rowIdx * (NH + ROW_GAP) + 20;
+      n._rowIdx = rowIdx;
+    });
+  });
+  currentY += NH + GAP_Y + (rowCount - 1) * ROW_GAP;
+});
+
+// 记录每层的 y 范围和行数（用于层背景绘制）
+const layerBounds = {};
+let _y = PAD_TOP;
+Object.keys(layers).forEach(l => {
+  const rows = layerRowCount[l];
+  layerBounds[l] = { y: _y, h: NH + 40 + (rows - 1) * (NH + ROW_GAP) };
+  _y += NH + GAP_Y + (rows - 1) * ROW_GAP;
+});
+
+// ────────────────────────────────────────────────────────────
+// SVG RENDERING
+// ────────────────────────────────────────────────────────────
+const svg = document.getElementById('topo');
+svg.setAttribute('width', CANVAS_W);
+svg.setAttribute('height', CANVAS_H);
+svg.setAttribute('viewBox', `0 0 ${CANVAS_W} ${CANVAS_H}`);
+
+let svgContent = '';
+
+// Defs (箭头标记)
+svgContent += `<defs>
+  <marker id="arr-call" viewBox="0 0 10 6" refX="9" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 3 L0 6 Z" fill="#3b82f6"/></marker>
+  <marker id="arr-dep" viewBox="0 0 10 6" refX="9" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 3 L0 6 Z" fill="#10b981"/></marker>
+  <marker id="arr-mgr" viewBox="0 0 10 6" refX="9" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 3 L0 6 Z" fill="#f59e0b"/></marker>
+  <marker id="arr-pipeline" viewBox="0 0 10 6" refX="9" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 3 L0 6 Z" fill="#ef4444"/></marker>
+  <marker id="arr-feedback" viewBox="0 0 10 6" refX="9" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 3 L0 6 Z" fill="#8b5cf6"/></marker>
+</defs>`;
+
+// 层背景（支持多行高度）
+Object.keys(layers).forEach((l, idx) => {
+  const b = layerBounds[l];
+  svgContent += `<rect class="layer-bg" x="10" y="${b.y}" width="${CANVAS_W - 20}" height="${b.h}" fill="${LAYER_COLORS[idx]}08" stroke="${LAYER_COLORS[idx]}22" stroke-width="1"/>`;
+  svgContent += `<text class="layer-title" x="24" y="${b.y + 14}" fill="${LAYER_COLORS[idx]}99">${LAYER_NAMES[idx]}</text>`;
+});
+
+// 连线
+const nodeMap = {};
+NODES.forEach(n => nodeMap[n.id] = n);
+
+EDGES.forEach((e, idx) => {
+  const from = nodeMap[e.from];
+  const to = nodeMap[e.to];
+  if(!from || !to) return;
+  
+  const x1 = from.x + NW / 2;
+  const y1 = from.y + NH;
+  const x2 = to.x + NW / 2;
+  const y2 = to.y;
+  
+  // 判断方向和样式
+  const isDown = to.layer > from.layer;
+  const isUp = to.layer < from.layer;
+  const isSame = to.layer === from.layer;
+  
+  let path, dasharray = '', color = '#6b7280', marker = '';
+  
+  if(isDown) {
+    // 向下
+    const cy1 = y1 + 30;
+    const cy2 = y2 - 30;
+    path = `M${x1} ${y1} C${x1} ${cy1}, ${x2} ${cy2}, ${x2} ${y2}`;
+  } else if(isUp) {
+    // 向上（反馈）
+    const cy1 = y1 - 30;
+    const cy2 = y2 + 30;
+    path = `M${x1} ${y1} C${x1} ${cy1}, ${x2} ${cy2}, ${x2} ${y2}`;
+    dasharray = 'stroke-dasharray="6 3"';
+  } else {
+    // 同层
+    const midX = (x1 + x2) / 2;
+    const midY = y1 + 20;
+    path = `M${x1} ${y1 + NH/2} Q${midX} ${midY + 20}, ${x2} ${y2 + NH/2}`;
+  }
+  
+  switch(e.type) {
+    case 'call': color = '#3b82f6'; marker = 'url(#arr-call)'; break;
+    case 'dep': color = '#10b981'; marker = 'url(#arr-dep)'; dasharray = 'stroke-dasharray="6 3"'; break;
+    case 'mgr': color = '#f59e0b'; marker = 'url(#arr-mgr)'; dasharray = 'stroke-dasharray="6 3"'; break;
+    case 'pipeline': color = '#ef4444'; marker = 'url(#arr-pipeline)'; break;
+    case 'feedback': color = '#8b5cf6'; marker = 'url(#arr-feedback)'; dasharray = 'stroke-dasharray="6 3"'; break;
+  }
+  
+  svgContent += `<path class="conn-line type-${e.type}" data-edge-idx="${idx}" d="${path}" stroke="${color}" stroke-width="1.5" fill="none" ${dasharray} marker-end="${marker}"/>`;
+  
+  // 边标签
+  if(e.label) {
+    const labelX = (x1 + x2) / 2;
+    const labelY = isSame ? y1 + 40 : (y1 + y2) / 2;
+    svgContent += `<text class="edge-label type-${e.type}" data-edge-idx="${idx}" x="${labelX}" y="${labelY}" text-anchor="middle">${e.label}</text>`;
+  }
+});
+
+// 节点
+NODES.forEach((n, idx) => {
+  const isStub = !!n.stub;
+  const strokeStyle = isStub ? 'stroke-dasharray="4 2"' : '';
+  const strokeColor = isStub ? '#ef4444' : n.color;
+  
+  svgContent += `<g class="node-group" data-node-idx="${idx}" data-module-id="${n.moduleId || ''}">
+    <rect class="node-rect" x="${n.x}" y="${n.y}" width="${NW}" height="${NH}" rx="10" ry="10" fill="#1a1f2e" stroke="${strokeColor}" stroke-width="1.5" ${strokeStyle}/>`;
+  
+  if(isStub) {
+    svgContent += `<circle cx="${n.x + NW - 10}" cy="${n.y + 10}" r="4" fill="#ef4444" opacity="0.8"/>`;
+  }
+  
+  svgContent += `<text x="${n.x + NW/2}" y="${n.y + (n.sub ? 22 : 30)}" text-anchor="middle" fill="#e4e4e7" font-size="13" font-weight="500">${n.label}</text>`;
+  
+  if(n.sub) {
+    svgContent += `<text x="${n.x + NW/2}" y="${n.y + 40}" text-anchor="middle" fill="#71717a" font-size="10">${n.sub}</text>`;
+  }
+  
+  svgContent += `</g>`;
+});
+
+svg.innerHTML = svgContent;
+
+// ────────────────────────────────────────────────────────────
+// HOVER — 悬停显示关系
+// ────────────────────────────────────────────────────────────
+function getConnectedIds(nodeId) {
+  const ids = new Set([nodeId]);
+  EDGES.forEach(e => {
+    if(e.from === nodeId) ids.add(e.to);
+    if(e.to === nodeId) ids.add(e.from);
+  });
+  return ids;
+}
+function getConnectedEdgeIdx(nodeId) {
+  const idxs = new Set();
+  EDGES.forEach((e, i) => {
+    if(e.from === nodeId || e.to === nodeId) idxs.add(i);
+  });
+  return idxs;
+}
+
+const allNodeGroups = document.querySelectorAll('.node-group');
+const allConnLines = document.querySelectorAll('.conn-line');
+const allEdgeLabels = document.querySelectorAll('.edge-label');
+let clickLocked = false; // 点击后面板锁定状态
+
+allNodeGroups.forEach(g => {
+  g.addEventListener('mouseenter', () => {
+    const idx = parseInt(g.dataset.nodeIdx);
+    const node = NODES[idx];
+    const connIds = getConnectedIds(node.id);
+    const connEdges = getConnectedEdgeIdx(node.id);
+
+    // 节点：不相关变暗，相关高亮
+    allNodeGroups.forEach(ng => {
+      const nIdx = parseInt(ng.dataset.nodeIdx);
+      const nNode = NODES[nIdx];
+      if(connIds.has(nNode.id)) {
+        ng.classList.add('highlighted');
+        ng.classList.remove('dimmed');
+      } else {
+        ng.classList.add('dimmed');
+        ng.classList.remove('highlighted');
+      }
+    });
+
+    // 连线：相关高亮，不相关变暗
+    allConnLines.forEach(line => {
+      const eIdx = parseInt(line.dataset.edgeIdx);
+      if(connEdges.has(eIdx)) {
+        line.classList.add('highlighted');
+        line.classList.remove('dimmed');
+      } else {
+        line.classList.add('dimmed');
+        line.classList.remove('highlighted');
+      }
+    });
+    allEdgeLabels.forEach(label => {
+      const eIdx = parseInt(label.dataset.edgeIdx);
+      if(connEdges.has(eIdx)) {
+        label.classList.add('highlighted');
+      } else {
+        label.classList.remove('highlighted');
+      }
+    });
+  });
+
+  g.addEventListener('mouseleave', () => {
+    if(clickLocked) return; // 点击锁定后不清除
+    allNodeGroups.forEach(ng => { ng.classList.remove('highlighted','dimmed'); });
+    allConnLines.forEach(line => { line.classList.remove('highlighted','dimmed'); });
+    allEdgeLabels.forEach(label => { label.classList.remove('highlighted'); });
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// INTERACTIONS
+// ────────────────────────────────────────────────────────────
+const legendItems = document.querySelectorAll('.legend-bar .lg');
+const activeFilters = new Set(['call','dep','mgr','pipeline','feedback']);
+
+// 图例筛选
+legendItems.forEach(lg => {
+  lg.addEventListener('click', () => {
+    const type = lg.dataset.type;
+    if(type === 'stub') return; // stub 是视觉标记，不可筛选
+    
+    if(activeFilters.has(type)) {
+      activeFilters.delete(type);
+      lg.classList.add('inactive');
+    } else {
+      activeFilters.add(type);
+      lg.classList.remove('inactive');
+    }
+    
+    // 更新连线显隐
+    document.querySelectorAll('.conn-line').forEach(line => {
+      const edgeType = line.classList[1].replace('type-', '');
+      if(activeFilters.has(edgeType)) {
+        line.classList.remove('type-filtered');
+      } else {
+        line.classList.add('type-filtered');
+      }
+    });
+    
+    // 更新标签显隐
+    document.querySelectorAll('.edge-label').forEach(label => {
+      const edgeType = label.classList[1].replace('type-', '');
+      if(activeFilters.has(edgeType)) {
+        label.classList.remove('type-filtered');
+      } else {
+        label.classList.add('type-filtered');
+      }
+    });
+  });
+});
+
+// 缩放控制
+let zoomLevel = 1;
+const svgCanvas = document.getElementById('topo');
+const zoomLevelEl = document.getElementById('zoom-level');
+
+function updateZoom() {
+  svgCanvas.style.transform = `scale(${zoomLevel})`;
+  zoomLevelEl.textContent = Math.round(zoomLevel * 100) + '%';
+}
+
+document.getElementById('zoom-in').addEventListener('click', () => {
+  zoomLevel = Math.min(zoomLevel + 0.1, 2);
+  updateZoom();
+});
+
+document.getElementById('zoom-out').addEventListener('click', () => {
+  zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
+  updateZoom();
+});
+
+document.getElementById('zoom-reset').addEventListener('click', () => {
+  zoomLevel = 1;
+  updateZoom();
+});
+
+// Ctrl + 滚轮缩放
+document.getElementById('canvas-wrap').addEventListener('wheel', (e) => {
+  if(e.ctrlKey) {
+    e.preventDefault();
+    if(e.deltaY < 0) {
+      zoomLevel = Math.min(zoomLevel + 0.05, 2);
+    } else {
+      zoomLevel = Math.max(zoomLevel - 0.05, 0.5);
+    }
+    updateZoom();
+  }
+}, {passive: false});
+
+// 节点点击 → 详情面板
+const panel = document.getElementById('detail-panel');
+const panelTitle = document.getElementById('panel-title');
+const panelSub = document.getElementById('panel-sub');
+const panelStatus = document.getElementById('panel-status');
+const panelBody = document.getElementById('panel-body');
+let selectedNodeIdx = -1;
+
+document.querySelectorAll('.node-group').forEach(g => {
+  g.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const idx = parseInt(g.dataset.nodeIdx);
+    const node = NODES[idx];
+    const moduleId = g.dataset.moduleId;
+    
+    // 点击锁定，保持高亮状态
+    clickLocked = true;
+    
+    // 清除之前的选中状态
+    allNodeGroups.forEach(ng => ng.classList.remove('selected','highlighted','dimmed'));
+    allConnLines.forEach(l => l.classList.remove('highlighted','dimmed'));
+    allEdgeLabels.forEach(l => l.classList.remove('highlighted'));
+    
+    g.classList.add('selected');
+    
+    // 获取关联节点和连线
+    const connIds = getConnectedIds(node.id);
+    const connEdges = getConnectedEdgeIdx(node.id);
+    
+    // 高亮相关连线和节点
+    document.querySelectorAll('.conn-line').forEach(line => line.classList.remove('highlighted'));
+    EDGES.forEach((edge, edgeIdx) => {
+      if(edge.from === node.id || edge.to === node.id) {
+        document.querySelectorAll(`[data-edge-idx="${edgeIdx}"]`).forEach(el => el.classList.add('highlighted'));
+      }
+    });
+    
+    // 暗淡不相关节点
+    allNodeGroups.forEach(ng => {
+      const nIdx = parseInt(ng.dataset.nodeIdx);
+      const nNode = NODES[nIdx];
+      if(!connIds.has(nNode.id)) {
+        ng.classList.add('dimmed');
+      } else if(nNode.id !== node.id) {
+        ng.classList.add('highlighted');
+      }
+    });
+    
+    // 暗淡不相关连线
+    allConnLines.forEach(line => {
+      const eIdx = parseInt(line.dataset.edgeIdx);
+      if(!connEdges.has(eIdx)) {
+        line.classList.add('dimmed');
+      }
+    });
+    
+    // 填充面板
+    panelTitle.textContent = node.label;
+    panelSub.textContent = node.sub || '';
+    panelStatus.innerHTML = node.stub 
+      ? `<span class="node-status stub">⚠ ${node.stub}</span>`
+      : `<span class="node-status active">✓ 已实装</span>`;
+    
+    let bodyHtml = '';
+    
+    // 描述
+    if(moduleId && INTERACTIONS[moduleId]) {
+      const interactions = INTERACTIONS[moduleId];
+      bodyHtml += `<div class="section-title desc">模块描述</div>`;
+      bodyHtml += `<div class="desc-text">${node.label} — 共 ${interactions.length} 个交互点</div>`;
+      
+      // 交互点表格
+      bodyHtml += `<div class="section-title interactions">交互点清单</div>`;
+      bodyHtml += `<table class="interaction-table"><thead><tr><th>操作</th><th>类型</th><th>绑定</th></tr></thead><tbody>`;
+      interactions.forEach(item => {
+        const typeClass = 'tag-' + item.type;
+        bodyHtml += `<tr><td>${item.name}</td><td><span class="tag ${typeClass}">${item.type}</span></td><td class="bind-text">${item.bind}</td></tr>`;
+      });
+      bodyHtml += `</tbody></table>`;
+    }
+    
+    // 关联连线
+    const relatedEdges = EDGES.filter(e => e.from === node.id || e.to === node.id);
+    if(relatedEdges.length > 0) {
+      bodyHtml += `<div class="section-title connections">关联连线 (${relatedEdges.length})</div>`;
+      bodyHtml += `<div class="conn-list">`;
+      relatedEdges.forEach(edge => {
+        const isFrom = edge.from === node.id;
+        const otherNode = nodeMap[isFrom ? edge.to : edge.from];
+        const direction = isFrom ? '→' : '←';
+        const colorMap = {call:'#3b82f6',dep:'#10b981',mgr:'#f59e0b',pipeline:'#ef4444',feedback:'#8b5cf6'};
+        const color = colorMap[edge.type] || '#6b7280';
+        bodyHtml += `<div class="conn-item">
+          <span class="conn-dot" style="background:${color}"></span>
+          <span>${direction} ${otherNode.label}</span>
+          <span class="conn-label">${edge.label || edge.type}</span>
+        </div>`;
+      });
+      bodyHtml += `</div>`;
+    }
+    
+    panelBody.innerHTML = bodyHtml;
+    panel.classList.add('open');
+    selectedNodeIdx = idx;
+  });
+});
+
+// 关闭面板
+document.getElementById('panel-close').addEventListener('click', () => {
+  panel.classList.remove('open');
+  clickLocked = false;
+  allNodeGroups.forEach(n => n.classList.remove('selected','highlighted','dimmed'));
+  allConnLines.forEach(line => line.classList.remove('highlighted','dimmed'));
+  allEdgeLabels.forEach(label => label.classList.remove('highlighted'));
+  selectedNodeIdx = -1;
+});
+
+// 点击空白处关闭
+svg.addEventListener('click', (e) => {
+  if(e.target === svg || e.target.tagName === 'rect' && e.target.classList.contains('layer-bg')) {
+    panel.classList.remove('open');
+    clickLocked = false;
+    allNodeGroups.forEach(n => n.classList.remove('selected','highlighted','dimmed'));
+    allConnLines.forEach(line => line.classList.remove('highlighted','dimmed'));
+    allEdgeLabels.forEach(label => label.classList.remove('highlighted'));
+    selectedNodeIdx = -1;
+  }
+});
+</script>
+</body>
+</html>

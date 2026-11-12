@@ -406,6 +406,52 @@ export function detectHeaderRowLeaf(sec, figmaIndex, resourceMapping) {
  *
  * @returns {{ok:true, ...truth} | {ok:false, reason:string}}
  */
+/**
+ * 锚点是否与**兄弟**文本构成同一行复合卡（icon 在左、文本在右）。
+ *
+ * 🔴 2026-11-12（mc-max-1794460832686-7b016640 实锤 · 产物统计段只剩一个图标）：
+ *   `detectIconLeaf` 的既有判据是「锚点子树 0 个 TEXT ⇒ 纯 icon 叶」，但 Figma 里
+ *   统计卡的 label/value 常常**不是**锚点的后代，而是与锚点**平级**的兄弟 TEXT：
+ *   真值 `796:3 slot-icon` 下，`38:3260`(Group：背景矩形 + 187:262 icon) 与
+ *   `38:3262`「33」、`38:3263`「合作厂商」、`38:3284`「66」、`38:3285`「在线设备」
+ *   同为直接子节点 ⇒ 锚点子树确实 0 TEXT ⇒ 整段被接管成**单个 `<img>`**，
+ *   兄弟文本被彻底丢弃，产物肉眼只剩一个图标（用户截图实证）。
+ *   下游 C1b 也救不回：「合作厂商」被 index.vue 的「战略合作厂商」子串误命中、
+ *   「33/66」是纯数字不在中文标签判据内 ⇒ 门禁全绿放行。
+ *
+ * 判据（纯几何，零语义猜测）：同父直接子节点里存在 TEXT，同时满足
+ *   ① 在锚点**右侧**（文本左缘 ≥ 锚点右缘 − 4px 容差）；
+ *   ② 与锚点**同一行**（y 区间交集 ≥ min(锚点高, 文本高) × 0.5）。
+ * 两者同时成立 ⇒ 该「icon 叶」实为「icon + 文本」复合卡，**拒绝接管**（fail-open
+ * 交给正常 LLM/布局治愈路径建模），绝不用单图替换掉整段内容。
+ *
+ * 只看直接父一层：真值形态如此，且向上多跨层会把「图标旁边恰好有别的段的文本」
+ * 误判成同一张卡（宁可少接管，不可误接管）。
+ */
+function hasSiblingRowText(anchorNode, figmaIndex) {
+  if (!(figmaIndex instanceof Map)) return false;
+  const ab = bboxOf(anchorNode);
+  if (!ab) return false;
+  const parentId = figmaIndex.get(String(anchorNode.id))?.parentId;
+  if (!parentId) return false;
+  const parent = figmaIndex.get(String(parentId))?.rawNode || null;
+  const kids = Array.isArray(parent?.children) ? parent.children : [];
+  const aRight = ab.x + ab.w;
+  const aBottom = ab.y + ab.h;
+  for (const k of kids) {
+    if (!k || String(k.id) === String(anchorNode.id)) continue;
+    if (k.type !== 'TEXT' || typeof k.characters !== 'string') continue;
+    if (k.characters.trim().length === 0) continue;
+    const kb = bboxOf(k);
+    if (!kb) continue;
+    if (kb.x < aRight - 4) continue; // ① 必须在图标右侧
+    const overlap = Math.min(aBottom, kb.y + kb.h) - Math.max(ab.y, kb.y);
+    if (overlap < Math.min(Math.max(ab.h, 1), Math.max(kb.h, 1)) * 0.5) continue; // ② 同一行
+    return true;
+  }
+  return false;
+}
+
 export function detectIconLeaf(sec, figmaIndex, resourceMapping) {
   // 🔴 R3：超界段（refs 落在锚点子树之外）禁单元素接管 —— 只看锚点子树必然裁没整段内容
   if (isScopeIncomplete(sec, figmaIndex)) return { ok: false, reason: 'scopeIncomplete' };
@@ -425,6 +471,11 @@ export function detectIconLeaf(sec, figmaIndex, resourceMapping) {
   };
   for (const n of nodes) walk(n);
   if (textCount > 0) return { ok: false, reason: `hasText(${textCount})` };
+  // 🔴 兄弟行文本守卫（2026-11-12）：子树 0 TEXT 但同父同行的右侧有 TEXT ⇒
+  //   锚点只是复合卡里的图标位，整段接管会把 label/value 一起抹掉。
+  if (nodes.some((n) => hasSiblingRowText(n, figmaIndex))) {
+    return { ok: false, reason: 'siblingRowText' };
+  }
 
   const mapping = toArray(resourceMapping);
   for (const n of nodes) {
@@ -2409,6 +2460,135 @@ function findSubtreeIconNodeId(node) {
 import { canonicalListItem } from './section-semantics.js';
 import { resolveListMemberDirection } from './section-list-direction.js';
 
+/**
+ * 🔴 A 段级附属文本（2026-11-12 · mc-max-1794458950336-47b996c3 实锤）
+ *
+ * ## 病灶
+ * 同构列表接管（刀 20b）只物化 `items`（v-for），而**直属于段、不在任何 item 子树内**的
+ * TEXT 无处安放 —— 真机 `565:3 slot-con` 段尾 `共 6 个节点` / `接入设备 10810` 两条真值
+ * 文本在产物里**一个字都没有**（`C1b FAIL=1 checked=110`），且修复轮因「承载段结构里没有
+ * 这两个位置」两轮改不动（`0/2 → 1/2 → 2/2`，FAIL 内容逐字相同）。
+ *
+ * ## 判据（结构 + 几何，全部可辩驳；零语义猜测、零兜底样式）
+ *   ① 段锚节点可取（`sec.id` / `sourceNodeIds` 首个 ∈ figmaIndex）；
+ *   ② **每个 item 锚必须可取** —— 任一不可取 ⇒ 归属不可证 ⇒ 整体 fail-open
+ *      （否则会把该 item 子树里的文本误判成段级 ⇒ 同一串文本渲染两次）；
+ *   ③ 段子树内非空 TEXT、且节点 id ∉ 任一 item 子树 TEXT 集 ⇒ 段级候选；
+ *   ④ 位置由**几何**裁决（不按名称/顺序猜）：
+ *      候选盒中心 y < 全部 item 盒最小 y ⇒ `head`；
+ *      候选盒中心 y > 全部 item 盒最大底 ⇒ `tail`；
+ *      其余（夹在 items 之间）⇒ `undecidable` ⇒ 整体 fail-open（位置不可证，宁可交 LLM）。
+ *
+ * ## 为什么 `undecidable` 要整体放弃而不是「放尾部」
+ * 夹在 items 中间的文本按尾部渲染会**打乱纵向顺序**（视觉错位），与「丢文本」同属交付坏结构；
+ * 判据不可证时 fail-open 是既有纪律（与 detectTextLeaf 的 `textRunsNotLinear` 同一裁决方式）。
+ *
+ * @param {object} sec plan 叶子
+ * @param {Array} itemAnchors item 锚 id 列表（含内容轨 `body.items[0]` 的锚）
+ * @param {Map} figmaIndex
+ * @returns {{ok:true, head:Array, tail:Array, undecidable:Array} | {ok:false, reason:string, ...}}
+ */
+export function collectSatelliteTexts(sec, itemAnchors, figmaIndex, direction) {
+  // 🔴 主轴向：`head`/`tail` 沿**列表自身主轴**裁决（column ⇒ y，row ⇒ x）。
+  //   若恒定按 y 判，横向列表的「左侧标题」会被误判成 undecidable 而整体 fail-open。
+  const dir = String(direction || 'column') === 'row' ? 'row' : 'column';
+  const axisStart = (b) => (dir === 'row' ? b.x : b.y);
+  const axisEnd = (b) => (dir === 'row' ? b.x + b.w : b.y + b.h);
+  const axisCenter = (b) => (dir === 'row' ? b.x + b.w / 2 : b.y + b.h / 2);
+  const fail = (reason, extra) => ({
+    ok: false,
+    reason,
+    head: [],
+    tail: [],
+    undecidable: [],
+    ...(extra || {}),
+  });
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return fail('noFigmaIndex');
+  const secNode =
+    figmaIndex.get(String(sec?.id ?? ''))?.rawNode ||
+    toArray(sec?.sourceNodeIds)
+      .map((s) => figmaIndex.get(String(s))?.rawNode)
+      .find(Boolean) ||
+    null;
+  if (!secNode) return fail('noSectionNode');
+  const anchors = toArray(itemAnchors).filter((a) => a != null && a !== '');
+  if (anchors.length === 0) return fail('noItemAnchor');
+  const itemTextIds = new Set();
+  const itemBoxes = [];
+  for (const anchor of anchors) {
+    const raw = figmaIndex.get(String(anchor))?.rawNode || null;
+    if (!raw) return fail('itemAnchorMissing');
+    const box = bboxOf(raw);
+    if (!box) return fail('itemBoxMissing');
+    itemBoxes.push(box);
+    for (const t of collectTexts(raw)) itemTextIds.add(String(t.id));
+  }
+  const cands = [];
+  const seen = new Set();
+  const walk = (n) => {
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    if (n.visible === false) return;
+    if (typeof n.characters === 'string' && n.characters.trim().length > 0) {
+      if (!itemTextIds.has(String(n.id))) {
+        const box = bboxOf(n);
+        if (box) cands.push({ node: n, box });
+      }
+      return;
+    }
+    for (const c of Array.isArray(n.children) ? n.children : []) walk(c);
+  };
+  walk(secNode);
+  if (cands.length === 0) return { ok: true, head: [], tail: [], undecidable: [] };
+  const minStart = Math.min(...itemBoxes.map(axisStart));
+  const maxEnd = Math.max(...itemBoxes.map(axisEnd));
+  const toEntry = ({ node, box }) => {
+    const st = node?.style && typeof node.style === 'object' ? node.style : {};
+    const fsNum = Number(st.fontSize);
+    const lhNum = Number(st.lineHeightPx);
+    return {
+      t: String(node.characters).replace(/\s+/g, ' ').trim(),
+      c: firstSolidFillRgba(node),
+      fs: Number.isFinite(fsNum) && fsNum > 0 ? fsNum : null,
+      fw: st.fontWeight == null ? null : String(st.fontWeight),
+      lh: Number.isFinite(lhNum) && lhNum > 0 ? Math.round(lhNum) : null,
+      box,
+      nodeId: String(node.id ?? ''),
+      gap: null,
+    };
+  };
+  const byAxis = (a, b) => axisStart(a.box) - axisStart(b.box) || axisCenter(a.box) - axisCenter(b.box);
+  const head = [];
+  const tail = [];
+  const undecidable = [];
+  for (const c of cands) {
+    const ac = axisCenter(c.box);
+    if (ac < minStart) head.push(toEntry(c));
+    else if (ac > maxEnd) tail.push(toEntry(c));
+    else undecidable.push(toEntry(c));
+  }
+  if (undecidable.length > 0) {
+    return fail(`undecidable:${undecidable.length}`, { undecidable });
+  }
+  head.sort(byAxis);
+  tail.sort(byAxis);
+  // 🔴 真实间距：`gap` = 本条目起点 − 上一个已知元素的终点（主轴方向）。
+  //   head 链起点取**段盒起点**（= 段首内距），tail 链起点取**item 链终点**。
+  //   纯几何派生，缺盒即 null（不猜，不填兜底间距）。
+  const secBox = bboxOf(secNode);
+  let prevEnd = secBox ? axisStart(secBox) : null;
+  for (const e of head) {
+    e.gap = prevEnd == null ? null : Math.max(0, Math.round(axisStart(e.box) - prevEnd));
+    prevEnd = axisEnd(e.box);
+  }
+  prevEnd = maxEnd;
+  for (const e of tail) {
+    e.gap = Math.max(0, Math.round(axisStart(e.box) - prevEnd));
+    prevEnd = axisEnd(e.box);
+  }
+  return { ok: true, head, tail, undecidable: [] };
+}
+
 export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   const fail = (reason) => ({ ok: false, reason });
   if (!sec || typeof sec !== 'object') return fail('noSection');
@@ -3202,6 +3382,19 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
   //   文本可观测性——textsFilled/textsEmpty 恒计（调用方计数行落日志，0 也打）。
   //   textsAllEmpty=true = 本段所有行的行文本断供（文本全在 stats 或采集缺失），
   //   接管仍成立（卡几何/背景真值在），但显式标记供审计与 G3 消费，不再静默。
+  // 🔴 A（2026-11-12 · mc-max-1794458950336-47b996c3 实锤）：**段级附属文本**归属。
+  //   同构列表只物化 items ⇒ 直属于段、不在任何 item 子树内的 TEXT（真机段尾
+  //   `共 6 个节点` / `接入设备 10810`）结构性缺席，C1b 判定真值缺席且修复轮无 carrier
+  //   可修（两轮 FAIL 逐字相同）。此处按「结构归属 + 几何位置」取回，交渲染层物化为
+  //   v-for **之外**的独立节点（不进 items、不进循环）。
+  const itemAnchors = items.flatMap((it) => {
+    const a = it?.figmaNodeId ?? it?.figmaNode ?? it?.id;
+    const inner = it?.body?.items?.[0];
+    const b = inner?.figmaNodeId ?? inner?.figmaNode ?? inner?.id;
+    return [a, b].filter((x) => x != null && x !== '');
+  });
+  const satellite = collectSatelliteTexts(sec, itemAnchors, figmaIndex, direction);
+  const satelliteCount = satellite.ok ? satellite.head.length + satellite.tail.length : 0;
   const textsFilled = norm.filter((n) => n.texts.length > 0).length;
   const textsEmpty = norm.length - textsFilled;
   return {
@@ -3226,6 +3419,16 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     innerLayout,
     textsFilled,
     textsEmpty,
+    // 🔴 A（2026-11-12 · mc-max-1794458950336-47b996c3）：段级附属文本裁决结果。
+    //   `ok:true` 且 count>0 ⇒ 渲染层必须在 `v-for` **之外**物化 head/tail；
+    //   `ok:false` ⇒ 整体 fail-open 交 LLM（reason 进计数行，禁止静默丢）。
+    satellite: {
+      ok: !!satellite.ok,
+      reason: satellite.ok ? null : String(satellite.reason || 'unknown'),
+      head: satellite.head,
+      tail: satellite.tail,
+      count: satelliteCount,
+    },
     // 🔴 G11b：mapping 文本归位计数（调用方聚合进计数行）
     iconFromMapping: iconTextMatched,
     iconTextUnmatched,
@@ -3462,6 +3665,33 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       ? `const FG_LIST_WIDTHS = ${inlineJson(tr.cardWidths)};`
       : 'const FG_LIST_WIDTHS = null;';
     const isRow = tr.direction === 'row';
+    // 🔴 A（2026-11-12 · mc-max-1794458950336-47b996c3）：段级附属文本（`562:3` 段尾的
+    //   `共 6 个节点` / `接入设备 10810`）。它们直属于段、不在任何 item 子树内，
+    //   同构接管只物化 items ⇒ 结构性缺席（C1b 真值缺席且修复轮无 carrier 可修）。
+    //   此处物化为 `v-for` **之外**的独立节点：不进 items、不进循环、不参与同构校验。
+    //   颜色/字号/字重/行高/间距全部 Figma 真值内联；缺事实不写（绝不兜底）。
+    const satHead = tr.satellite?.ok && Array.isArray(tr.satellite.head) ? tr.satellite.head : [];
+    const satTail = tr.satellite?.ok && Array.isArray(tr.satellite.tail) ? tr.satellite.tail : [];
+    const satLit = (arr, name) =>
+      `const ${name} = [${
+        arr.length
+          ? arr
+              .map(
+                (e) =>
+                  `{ t: ${jsonStr(e.t)}, c: ${e.c ? jsonStr(e.c) : 'null'}, fs: ${e.fs ?? 'null'}, fw: ${e.fw ? jsonStr(e.fw) : 'null'}, lh: ${e.lh ?? 'null'}, gap: ${e.gap ?? 'null'} }`,
+              )
+              .join(', ')
+          : ''
+      }];`;
+    // 间距沿**列表主轴**施加（column ⇒ marginTop，row ⇒ marginLeft），与 `FG_LIST_GAPS` 同向。
+    // 数组为空 ⇒ 该行**整行不输出**（产物零噪音；不留空 v-for 残壳）。
+    const satAxisMargin = isRow ? 'marginLeft' : 'marginTop';
+    const satBlock = (name, arr, pad) =>
+      arr.length === 0
+        ? []
+        : [
+            `${pad}<span v-for="(g, __s) in ${name}" :key="__s" :style="{ color: g.c || undefined, fontSize: g.fs ? g.fs + 'px' : undefined, fontWeight: g.fw || undefined, lineHeight: g.lh ? g.lh + 'px' : 1.2, whiteSpace: 'nowrap', flex: 'none', ${satAxisMargin}: g.gap != null ? g.gap + 'px' : undefined }">{{ g.t }}</span>`,
+          ];
     const itemWidth = isRow
       ? "width: FG_LIST_WIDTHS ? FG_LIST_WIDTHS[__i] + 'px' : undefined,"
       : '';
@@ -3507,6 +3737,8 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     const lines = [
       '<template>',
       `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:flex;flex-direction:${isRow ? 'row' : 'column'};min-height:0;overflow-${isRow ? 'x' : 'y'}:auto;">`,
+      // 🔴 A：段级附属文本（head）在 `v-for` **之前**作为独立节点渲染（不属于任何一项）。
+      ...satBlock('FG_LIST_HEAD', satHead, '    '),
       // 🔴 卡底走 `backgroundColor` **长写**（非 `background` 简写）：简写会重置
       //   逐项背景四件套 ⇒ 图条尺寸/定位全丢；长写与图片属性零重叠。
       `    <div v-for="(it, __i) in FG_LIST_ITEMS" :key="__i" class="${cls}-item" style="display:flex;flex-direction:row;align-items:center;flex:none;box-sizing:border-box;${itemStatic}" :style="{${itemWidth}${tr.cardH ? ` height: '${tr.cardH}px',` : ''} ${itemGap} backgroundColor: it.fill || undefined${itemBindBg} }">`,
@@ -3518,6 +3750,8 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       `      </div>`,
       ...(innerStacked ? [] : statsBlock('      ')),
       `    </div>`,
+      // 🔴 A：段级附属文本（tail）在 `v-for` **之后**作为独立节点渲染（不属于任何一项）。
+      ...satBlock('FG_LIST_TAIL', satTail, '    '),
       `  </div>`,
       '</template>',
       '',
@@ -3528,6 +3762,9 @@ export function renderFoldedGridLeafVue(tr, semantic) {
       `];`,
       gapsLit,
       widthsLit,
+      // 🔴 A：段级附属文本真值（空数组 ⇒ 模板 `v-if` 不渲染，零空壳）。
+      satLit(satHead, 'FG_LIST_HEAD'),
+      satLit(satTail, 'FG_LIST_TAIL'),
       '</script>',
       '',
       '<style lang="less" scoped>',
@@ -4311,7 +4548,7 @@ function declaredUnconsumedCount(sec, kind) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：vision `charts[]` 段归属集合。
@@ -4501,6 +4738,19 @@ export function collectFoldedGridTakeover(p = {}) {
       out.listTextsFilled += Number(tr.textsFilled || 0);
       out.listTextsEmpty += Number(tr.textsEmpty || 0);
       if (tr.textsAllEmpty) out.listTextsAllEmptySections += 1;
+      // 🔴 A（2026-11-12）：段级附属文本可见化 —— 恒打（0 也打）。
+      //   `listSatelliteTexts=0` 且真机段有段级文本 ⇒ 判据未取到（假绿）；`listSatelliteFail>0`
+      //   且含 undecidable ⇒ 几何裁决不确定，已 fail-open 交 LLM（不静默丢）。
+      if (tr.satellite?.ok) {
+        const sc = Number(tr.satellite.count || 0);
+        out.listSatelliteTexts += sc;
+        if (sc > 0) out.listSatelliteSections += 1;
+      } else {
+        out.listSatelliteFail += 1;
+        if (out.listSatelliteFailSamples.length < 8) {
+          out.listSatelliteFailSamples.push(`${String(sec.id)}=${String(tr.satellite?.reason || 'unknown')}`);
+        }
+      }
       // 🔴 G11b：mapping 文本归位计数恒打（iconFromMapping>0 而产物 icon 仍 null ⇒ 模板/数据未消费）
       out.iconFromMapping += Number(tr.iconFromMapping || 0);
       out.iconTextUnmatched += Number(tr.iconTextUnmatched || 0);
@@ -4708,6 +4958,11 @@ export function collectFoldedGridTakeover(p = {}) {
     listTextsFilled: out.listTextsFilled,
     listTextsEmpty: out.listTextsEmpty,
     listTextsAllEmptySections: out.listTextsAllEmptySections,
+    // 🔴 A（2026-11-12）：段级附属文本（非 item 直属）物化计数——0 也打。
+    listSatelliteTexts: out.listSatelliteTexts,
+    listSatelliteSections: out.listSatelliteSections,
+    listSatelliteFail: out.listSatelliteFail,
+    listSatelliteFailSamples: out.listSatelliteFailSamples,
     // 🔴 2026-11-03：列表卡盒几何真值（负间距总闸 + geoReady 覆盖 + 步③ 异宽拦宽度）——0 也打。
     listGeoNegGapClamped: out.listGeoNegGapClamped,
     listGeoGeoNotReady: out.listGeoGeoNotReady,

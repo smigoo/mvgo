@@ -80,4 +80,31 @@ describe('Lite 日志桥接接线契约', () => {
     expect(SRC).toContain('private loggerBridgePromise?: Promise<void>;')
     expect(SRC).toContain('if (!this.loggerBridgePromise) {')
   })
+
+  /**
+   * 核心判据⑤（2026-11-12 真机实锤）：
+   *   `this.logger.info(...)` —— Nest `Logger` **没有 `info` 方法**，底座是 `new Logger(...)`，
+   *   调用直接抛 `TypeError: this.logger.info is not a function`；抛点在 `buildCodegenPrompt`
+   *   ⇒ 视觉分析跑完、代码生成前整条 Lite 生成 100% 失败（sessionId mv-lite-1794419178746-607b0849）。
+   *   为什么以前没被拦住：字段声明是 `private logger: any` ⇒ tsc 放行。
+   *   判据 = ① 方法白名单（只允许 Nest Logger 真实存在的方法）+ ② 字段类型钉成 `Logger`。
+   *   阳性对照：把任一处 `.log(` 改回 `.info(` 或把类型改回 `any`，本用例必红。
+   */
+  it('核心判据⑤：只调用 Nest Logger 真实存在的方法（禁止 .info），字段类型禁止 any', () => {
+    // ① 方法白名单：Nest Logger 实际暴露的方法（v10/v11 同口径）
+    const ALLOWED = new Set(['log', 'warn', 'error', 'debug', 'verbose', 'fatal'])
+    const calls = SRC.match(/this\.logger\.[a-zA-Z]+/g) || []
+    expect(calls.length).toBeGreaterThan(0) // 阴性对照：正则失效时本条必须先红，否则「零命中」会假绿
+    const illegal = Array.from(
+      new Set(calls.map((c) => c.split('.').pop() as string).filter((m) => !ALLOWED.has(m))),
+    )
+    expect(illegal).toEqual([])
+
+    // ② 类型钉死：any 会把「方法不存在」留到运行时
+    expect(SRC).toContain('private logger: Logger = this.baseLogger;')
+    expect(count(SRC, 'private logger: any')).toBe(0)
+
+    // ③ 底座确实是 Nest Logger（不是自带 `.info` 的 createLogger 实例）
+    expect(SRC).toContain('private readonly baseLogger = new Logger(LiteService.name);')
+  })
 })

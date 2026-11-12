@@ -231,4 +231,21 @@ export class GeneratePhase2Dto {
     textBaseURL?: string;
     textModel?: string;
   };
+
+  // 🛡️ 2026-11-12 凭证引用三字段（P1，可选）：重试场景由前端从原任务记录带回，
+  //   phase2 建账时写入任务记录顶层 ⇒ readTaskFigmaCredentialRef 命中 ⇒ 执行期
+  //   按指纹找回「原任务那个 token」，不被当前 active 槽位顶掉（404 死循环根治）。
+  //   值均为非机密形态：fp=脱敏指纹（figd_x****yyyy）、slotId/slotName=槽位标识；
+  //   不传 ⇒ 行为与改前逐字一致（按当时 active 建账）。
+  @IsString()
+  @IsOptional()
+  figmaCredentialFp?: string;
+
+  @IsString()
+  @IsOptional()
+  figmaCredentialSlotId?: string;
+
+  @IsString()
+  @IsOptional()
+  figmaCredentialSlotName?: string;
 }

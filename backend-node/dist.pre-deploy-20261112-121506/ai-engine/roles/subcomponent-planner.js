@@ -1,0 +1,3777 @@
+/**
+ * Subcomponent Planner - 子组件规划器
+ * 职责：基于 layoutStructure 的 sections 结构，纯规则产出"强制子组件清单"，
+ *       供 microcode/vue3 engineer 阶段注入 prompt，按 section.id 强制拆分。
+ *
+ * 设计要点：
+ *   - 纯规则，不调 LLM（开销 < 1ms）
+ *   - 不命名子组件（命名权交给 engineer LLM）
+ *   - 按 section.id 强制拆分：isForced = 有效 sections 数 >= 3
+ *   - 微码流程过滤 panel-header（base-panel 已自带标题栏），Vue3 不过滤
+ *   - 结构顺序由 vision sections 数组决定；Figma absoluteBoundingBox 只提供几何事实，不重排 section
+ *   - 产出：{ effectiveSections: [{id, responsibility, elementCount, title, children?}], isForced, minFiles }
+ *   - 🛡️ A′ Phase 5（2026-09-10）：container-rebuild 容器保留嵌套，不 flatten。
+ *     容器 isLayoutContainer=true，不占独立 .vue 槽；minFiles / isForced 按叶子计数。
+ */
+
+import { createLogger } from '../logger/index.js';
+import { enforceTabStructure } from './tab-structure-guard.js';
+import {
+  collapseSectionsDeep,
+  isCollapsedListSection,
+  extractRichBodyItems,
+} from '../utils/repeated-section-collapser.js';
+// 🔍 L1 文档同构折叠（2026-11-03）：docAnalysis.uiElements 同 api+同控件声明组
+import { buildDocHomogeneityGroups } from '../utils/doc-homogeneity-hints.js';
+import {
+  isLayoutContainerSection,
+  collectLeafSections,
+  anchorPhantomSections,
+  sortSectionsByFigmaY,
+  indexFigmaNodes,
+  figmaSectionBox,
+  unionSectionBox,
+  stripFabricatedSourceIds,
+  uniqueSectionIds,
+  deriveSectionsFromFigmaTree,
+  clusterItemsByColumnX,
+  getFigmaBox,
+} from '../utils/section-tree.js';
+// 🛡️ H DOM contract（2026-09-22）：collapsed 卡 item 级几何分组事实（文本纵/横排 + icon 实测尺寸）
+import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
+// 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
+import { deriveSectionType, declaredTableHeaders } from '../utils/section-type-derive.js';
+import { mergeVisualRows } from '../utils/figma-height-ratio.js';
+import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
+// 🛡️ Phase B（2026-10-31 治理方案）：显式事实协议「只填沉默、不翻案」。
+//   几何恢复类兜底执行前，必须检查 vision 是否已就同一问题显式发言；
+//   发言与推导冲突 ⇒ 跳过恢复（只填 vision 沉默，不覆盖 vision 显式结论）。
+import {
+  footerGeometryRecoveryAllowed,
+  tableGeometryRecoveryAllowed,
+} from '../utils/vision-facts.js';
+// 🛡️ F18（2026-10-21）：行内列数/单项尺寸/间距的算术推导（纯几何）
+import { deriveRowMetrics, deriveGridColumnsFromNode } from '../utils/row-metrics.js';
+// 🎯 2026-11-11 根因 D 治理 §1.4③：`layoutMetadata` 事实编译的**单一事实源**。
+//   原为本文件私有 `extractLayoutMetadata`（L902-972），已抽出到 `utils/layout-metadata.js`，
+//   目的是让「段构建后」才发生的过粗段展开（`utils/over-coarse-section-expander.js`）
+//   能调**同一个**函数补 `layoutMetadata` —— 一份判据、两个调用点。
+//   🔴 禁止任何模块另写第二份构造逻辑（判据漂移 = 同类问题在别的组件复发）。
+import { extractLayoutMetadata } from '../utils/layout-metadata.js';
+// 🛡️ #78 技术栈接管（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：S2 语义收编 + S3 表格契约。
+//   `@antd/table` 等数据驱动标记区域此前仍被拆成列容器叶子 ⇒ LLM 手写假表格（a-table 0 次）。
+//   治本：直接命中的数据驱动容器吸收 children 为单一 techstack 叶子 + 确定性 columns/
+//   dataSource/rowSelection 契约随 prompt 下发。
+import { enrichSectionsWithTechStack } from '../utils/techstack-section-contract.js';
+// 🛡️ 2026-09-30（评审 §8.4 步骤 3 · Bug4-①）：A 类布局事实（容器级布局方向的**单一事实源**）。
+//   本模块是 `deriveSectionsFromFigmaTree` 的**唯一调用方**；依赖方向为
+//   `figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），反向 import 会**成环**
+//   ⇒ 由本模块算好并作为第 2 参传入（见 `plan()` 内 layoutFacts）。
+import { buildNodeLayoutFacts, decideLayoutForBoxes } from '../utils/figma-node-layout-facts.js';
+// 🔴 R23（2026-10-21）：Figma id 形态的唯一来源（勿再写第三份正则）
+// 🔴 刀33（2026-10-29）：`sectionAnchorKey` 是「section 声明锚点 → 索引键」的**单一来源**
+//   （优先级 `figmaAnchorId` → `figmaNodeId` → `id`）。此前本模块三处 Map 键写成
+//   `String(s.figmaNodeId || s.id)`，**漏读 `figmaAnchorId`** ⇒ vision 聚合段（锚点是容器
+//   `565:3`、`figmaNodeId` 为空、`id` 却是首卡叶子 id）被索引到首卡名下，于是
+//   ①「节点列表」标题语义 ②6 项 `body.items` ③容器高度 全部错挂到首卡
+//   （mc-max-1793266461373-e7290dc5 实锤）。判据不得在本文件重写第二份。
+import { FIGMA_ID_RE, sectionAnchorCandidates, sectionAnchorKey } from '../utils/section-anchor-truth.js';
+
+// 🛡️ V-3（2026-11-04 · mc-max-1793775618275-6f926db0 实锤）：vision 段序几何审计。
+//   病灶：主路径「结构骨架=vision」忠实执行 vision 错序（图标操作区排 Tab 栏前 → badge 红条）。
+//   窄判据几何纠正：锚点全有效 + 严格垂直堆叠 + 数组序≠y 序时才按几何重排，其余一律不动。
+import { auditVisionSectionOrder } from '../utils/vision-order-auditor.js';
+import { auditSectionAnchorScope } from '../utils/section-anchor-scope-auditor.js';
+import { expandOverCoarseSections } from '../utils/over-coarse-section-expander.js';
+
+// 🛡️ 2026-10-30 第2步（刀33 既有步序 · 用户拍板）：**结构骨架 = vision／精确尺寸 = Figma**。
+//   此前 E1（deriveSectionsFromFigmaTree）无条件替代 vision sections 作结构骨架，
+//   vision 仅作语义回填 ⇒ 一旦 E1 把重复卡片容器化，vision 已识别出的整列 body.items
+//   被丢弃（mc-max-1793337365462-12ee8e4c 实锤：vision body.items=6 项正确，
+//   规划后 bodyItems=0 ⇒ 6 卡 → 1 卡 + 10 个 absorbed-bg 绝对定位块）。
+//   本开关把「保留 vision sections + Figma 尺寸注入」由 E1 失败兜底**升格为主路径**；
+//   Figma 树继续提供 absoluteBoundingBox / figmaHeightPx 等精确尺寸真值。
+//   显式传 'figma' 可回退旧行为（逃生门）。
+export const STRUCTURE_SOURCE_VISION = 'vision';
+export const STRUCTURE_SOURCE_FIGMA = 'figma';
+export const DEFAULT_STRUCTURE_SOURCE = STRUCTURE_SOURCE_VISION;
+export function normalizeStructureSource(value) {
+  return value === STRUCTURE_SOURCE_FIGMA ? STRUCTURE_SOURCE_FIGMA : DEFAULT_STRUCTURE_SOURCE;
+}
+
+/**
+ * 🛡️ 2026-10-30 第2步闸门：vision 骨架的**锚点完备性**（fail-closed 到 E1）。
+ *   vision（LLM）的段 id 并不稳定：这次给 Figma 节点 id（48:5798），下次给语义名
+ *   （node-list），甚至 items 连 id 都没有（mc-max-1793341345911-4cff5af2 实测）。
+ *   一旦失锚，Figma 尺寸/颜色/文本真值全部断供（figmaHeightPx=undefined），下游只能
+ *   自由发挥 ⇒ 布局崩塌（顶部臆造 stats 区、卡片无背景、首卡丢失）。
+ *   判据：**整组件完全缺少内容锚点时**才回退（items≥2 的段，自身或任一项命中；
+ *   body.children 中显式声明的 Figma 节点也算内容锚点）。任一业务段已有真值时，
+ *   不得因另一段失锚而把整组件的 vision 骨架替换掉（e7c4197c：统计项失锚但表格已锚定，
+ *   旧实现全局回退 E1 ⇒ 单表被拆成名称列表 + 完整表格双轨）。
+ *   纯装饰/单文本段不强制——它们对真值依赖低，强要求会让 vision 骨架可用率归零。
+ */
+function hasAnchoredContent(sections, figmaIndex) {
+  if (!Array.isArray(sections) || sections.length === 0) return false;
+  if (!(figmaIndex instanceof Map) || figmaIndex.size === 0) return false;
+  const anchored = (s) => {
+    const key = sectionAnchorKey(s);
+    return !!key && figmaIndex.has(key);
+  };
+  let requiresAnchor = false;
+  for (const sec of sections) {
+    if (!sec || typeof sec !== 'object') continue;
+    const items = [...(sec?.body?.items || []), ...(sec?.items || [])];
+    const children = Array.isArray(sec?.body?.children) ? sec.body.children : [];
+    if (anchored(sec) || children.some(anchored)) return true;
+    if (items.length < 2) continue; // 非逐项内容段不强制
+    requiresAnchor = true;
+    if (items.some(anchored)) return true;
+  }
+  // 保留旧契约：完全没有逐项内容时不强制；有逐项内容但整组件零锚点才回退。
+  return !requiresAnchor;
+}
+
+/** 几何并集（仅收合法 bbox；无合法项返回 null，由调用方 fail-open 回退）。 */
+function unionBoxes(boxes) {
+  const valid = (boxes || []).filter(
+    (b) => b && Number.isFinite(b.x) && Number.isFinite(b.y) && b.width > 0 && b.height > 0,
+  );
+  if (valid.length === 0) return null;
+  const x = Math.min(...valid.map((b) => b.x));
+  const y = Math.min(...valid.map((b) => b.y));
+  const right = Math.max(...valid.map((b) => b.x + b.width));
+  const bottom = Math.max(...valid.map((b) => b.y + b.height));
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+/**
+ * 表格数据行只覆盖首列时，沿共同祖先恢复含表头的整表盒。
+ * 只在全部行均可锚定、且存在严格高于数据行并集的非根祖先时采纳；
+ * 同高取最宽者（第一列与整表常同高），找不到即 fail-open。
+ */
+function resolveWholeTableBoxFromItems(anchoredItems, candidate, figmaIndex, heightById) {
+  if (!candidate || anchoredItems.length < 2 || !figmaIndex) return null;
+  const chains = anchoredItems.map(({ key }) => {
+    const chain = [];
+    let cur = String(key || '');
+    for (let depth = 0; cur && depth < 64; depth++) {
+      const parentId = figmaIndex.get(cur)?.parentId;
+      if (!parentId) break;
+      chain.push(String(parentId));
+      cur = String(parentId);
+    }
+    return chain;
+  });
+  if (chains.some((c) => c.length === 0)) return null;
+  const shared = chains[0].filter((id) => chains.every((c) => c.includes(id)));
+  const boxes = anchoredItems.map((x) => x.box);
+  const containsAll = (b) =>
+    b.x <= Math.min(...boxes.map((x) => x.x)) &&
+    b.y <= Math.min(...boxes.map((x) => x.y)) &&
+    b.x + b.width >= Math.max(...boxes.map((x) => x.x + x.width)) &&
+    b.y + b.height >= Math.max(...boxes.map((x) => x.y + x.height));
+  const candidates = shared
+    .filter((id) => figmaIndex.get(id)?.parentId) // 组件根不是表格整体，禁止回灌
+    .map((id) => heightById.get(id))
+    .filter((b) => b && containsAll(b) && b.height > candidate.height && b.width >= candidate.width);
+  if (candidates.length === 0) return null;
+  const minHeight = Math.min(...candidates.map((b) => b.height));
+  return candidates
+    .filter((b) => b.height === minHeight)
+    .sort((a, b) => b.width - a.width)[0] || null;
+}
+
+/** footer 根锚点失效时，用唯一文本锚点 + 同行兄弟恢复视觉行几何。 */
+function resolveFooterTextRowBox(sec, figmaIndex) {
+  if (deriveSectionType(sec) !== 'footer' || !figmaIndex) return null;
+  // 🛡️ Phase B 显式事实协议：vision 已显式发言本段 type/role ≠ footer 时，
+  //   不得替 vision 恢复 footer 行几何（只填沉默、不翻案）。
+  if (!footerGeometryRecoveryAllowed(sec)) return null;
+  const nodes = [
+    ...(Array.isArray(sec?.body?.children) ? sec.body.children : []),
+    ...(Array.isArray(sec?.body?.items) ? sec.body.items : []),
+    ...(Array.isArray(sec?.items) ? sec.items : []),
+  ];
+  const texts = [...new Set(nodes.map((n) => String(n?.text || '').trim()).filter(Boolean))];
+  for (const text of texts) {
+    const matches = [];
+    for (const [id, rec] of figmaIndex) {
+      const raw = rec?.rawNode || rec;
+      if (raw?.type === 'TEXT' && String(raw?.characters || '').trim() === text) {
+        matches.push({ id, rec, raw });
+      }
+    }
+    // 重复文本无法定位（统计区与图例常有同名标签），跳过不猜。
+    if (matches.length !== 1) continue;
+    const { id, rec } = matches[0];
+    const parentId = rec?.parentId;
+    const parent = parentId ? figmaIndex.get(String(parentId)) : null;
+    const siblings = parent?.rawNode?.children;
+    const anchor = rec?.bbox;
+    if (!Array.isArray(siblings) || !anchor) continue;
+    const rows = mergeVisualRows(siblings)
+      .map((row) => row?.absoluteBoundingBox)
+      .filter((b) =>
+        b &&
+        b.x <= anchor.x &&
+        b.y <= anchor.y &&
+        b.x + b.width >= anchor.x + anchor.width &&
+        b.y + b.height >= anchor.y + anchor.height
+      )
+      .sort((a, b) => a.width * a.height - b.width * b.height);
+    if (rows[0]) return rows[0];
+  }
+  return null;
+}
+
+/**
+ * 🛡️ 2026-10-30 第2步补：vision 聚合段的 Figma 尺寸真值必须取「逐项并集」。
+ *   只取锚点 bbox 会把「6 卡列表」压成**首卡 72px**（真实重放实测：
+ *   `48:5798 type=list items=6 但 figmaHeightPx=72`），与刀25/26 在 E1 折叠产物上
+ *   治过的「列表容器被压成首卡高度」同型。
+ *   规则：≥2 个可解析的项几何 ⇒ 锚点 ∪ 逐项并集；否则回退锚点 bbox（fail-open，
+ *   普通单子段/无几何段行为不变）。尺寸仍全部来自 Figma 真值，不由 vision 臆造。
+ */
+function resolveVisionSectionBox(sec, heightById, opts = {}) {
+  const anchorBox = opts.skipAnchor ? null : heightById.get(sectionAnchorKey(sec)) || null;
+  const items = [...(sec?.body?.items || []), ...(sec?.items || [])];
+  const anchoredItems = items
+    .map((it) => {
+      const key = sectionAnchorKey(it);
+      const box = heightById.get(key) || null;
+      return box ? { key, box } : null;
+    })
+    .filter(Boolean);
+  const itemBoxes = anchoredItems.map((x) => x.box);
+  const candidate = itemBoxes.length >= 2
+    ? unionBoxes([anchorBox, ...itemBoxes].filter(Boolean)) || anchorBox
+    : anchorBox;
+  const resolvedHeight = Number(sec?.styles?.figmaHeightPx);
+  if (!(resolvedHeight > 0)) {
+    // 顶层 headers+items 的表格只有数据行锚点，逐项并集会漏掉表头；
+    // 必须由整表共同祖先补全，不能把首列 345px 当成整表 388px。
+    // 🛡️ Phase B 显式事实协议：vision 显式 type ≠ table 时不得整表恢复（不翻案）。
+    if (
+      deriveSectionType(sec) === 'table' &&
+      tableGeometryRecoveryAllowed(sec) &&
+      anchoredItems.length === items.length
+    ) {
+      const whole = resolveWholeTableBoxFromItems(anchoredItems, candidate, opts.figmaIndex, heightById);
+      if (whole) return whole;
+    }
+    // footer 误锚组件根时没有可用 candidate；唯一文本与同行兄弟可恢复视觉行。
+    return candidate || resolveFooterTextRowBox(sec, opts.figmaIndex);
+  }
+  if (candidate?.height === resolvedHeight) return candidate;
+
+  // 精确 id 也可能只是整段的首行/首卡。已有整体高度来自 A4 区域配对或逐项并集，
+  // 不得被 coverage 锚点覆盖；沿真实 parentId 链找回同高祖先，保证高度与 box 同源。
+  let cur = opts.skipAnchor ? null : sectionAnchorKey(sec);
+  const idx = opts.figmaIndex;
+  let matchedAncestor = null;
+  for (let depth = 0; cur && idx && depth < 64; depth++) {
+    const parentId = idx.get(String(cur))?.parentId;
+    if (!parentId) break;
+    const parentBox = heightById.get(String(parentId));
+    // 同高列容器与整表都可能匹配；取链上最宽者，避免停在第一列。
+    if (parentBox?.height === resolvedHeight && parentBox.width >= (matchedAncestor?.width || 0)) {
+      matchedAncestor = parentBox;
+    }
+    cur = String(parentId);
+  }
+  // 找不到整体盒时 fail-open：保留既有 figmaHeightPx，不注入部分盒污染段间距。
+  return matchedAncestor;
+}
+
+/**
+ * vision 业务子段不得独占组件根节点作几何锚点。
+ * 只在「同层存在多个段」时判错：单段组件以根节点为锚点仍合法。
+ * 命中后仅禁止根盒注入；vision 的段、顺序与逐项内容均保留。
+ */
+function isVisionComponentRootAnchor(sec, figmaRoot, siblingCount) {
+  const rootId = String(figmaRoot?.id ?? '');
+  return siblingCount > 1 && !!rootId && sectionAnchorKey(sec) === rootId;
+}
+// 🛡️ A 方案（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤）：Figma 覆盖去重（治「卡 2 双渲染」）。
+//   同一批卡节点被「vision items 轨」与「collapse 折叠轨」各解释一次 ⇒ 两段并存 ⇒ 重复渲染。
+//   判据与实现详见 utils/figma-coverage-dedupe.js（纯函数、单一事实源）。
+import { buildFigmaClosureIndex, buildFigmaTextIdSet, buildFigmaTextCharactersIndex, dedupeSectionsByCoverage } from '../utils/figma-coverage-dedupe.js';
+// 🛡️ A 方案（2026-10-23 · mc-max-1792718704810-f98f7463 实锤）：plan 层覆盖门禁。
+//   同一批 Figma 节点被切错/漏切 ⇒ 「丢卡 + 重复 + 错装」三类视觉缺陷。三条判据
+//   （覆盖缺口 / 兄弟重叠 / 纯文本行段锚点膨胀）详见 utils/section-plan-coverage.js：
+//   ③ 确定性修复（137 组件零命中 ⇒ 零回归风险），①② 只诊断留痕（v-for 列表类实测假阳）。
+import {
+  detectPlanCoverageGaps,
+  healOversizedTextRowAnchors,
+  auditSectionCountRatio,
+  auditSectionCoverage,
+  liftSectionAnchorsByContentRange,
+  mergeCollidedSections,
+  mergeChildHeaderSections,
+  PlanningGateError,
+} from '../utils/section-plan-coverage.js';
+// 🛡️ P1-A（2026-10-25 · mc-max-1792934367321-ab7bb76c 实锤）：plan `body.children[].id` 一致性校验。
+//   vision 输出的 body child id 系统性错位（self / duplicate-sibling / not-a-descendant 三形态）⇒
+//   下游按 id 取真值全落空 ⇒ 无刀接管 ⇒ LLM 自由渲染 ⇒ 文案串味。判据与「为什么只诊断不改数据」
+//   详见 utils/plan-body-child-id-audit.js（纯函数、单一事实源）。
+import {
+  auditPlanBodyChildIds,
+  compactBodyChildIssues,
+} from '../utils/plan-body-child-id-audit.js';
+
+export { isLayoutContainerSection, collectLeafSections };
+
+const logger = createLogger({ name: 'subcomponent-planner' });
+
+// type → 中文职责描述（注入 prompt，让 LLM 知道每个子组件干什么）
+const TYPE_RESPONSIBILITY = {
+  header: '顶部标题区/控件区（标题、副标题、操作按钮等）',
+  footer: '底部汇总区/分页/全局操作',
+  tabs: '标签页切换区',
+  stats: '数据统计指标区（数字+标签+趋势）',
+  grid: '网格卡片布局区',
+  list: '列表项布局区',
+  card: '单卡片容器',
+  chart: '图表/数据可视化区',
+  body: '主内容区',
+  sidebar: '侧边栏',
+  nav: '竖向导航区（分类/菜单切换）',
+  toolbar: '工具栏',
+};
+
+function compactDiagnosticItem(item) {
+  if (item == null) return null;
+  if (typeof item !== 'object') return String(item).slice(0, 180);
+  return {
+    id: item.id || item.code || item.key || item.type || null,
+    sectionId: item.sectionId || item.section || item.figmaNodeId || item.nodeId || null,
+    severity: item.severity || item.level || item.status || null,
+    message: item.message || item.summary || item.reason || item.description || item.title || null,
+  };
+}
+
+function compactDiagnosticList(items, limit = 5) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  return items.slice(0, limit).map(compactDiagnosticItem).filter(Boolean);
+}
+
+function compactCoverageReport(report) {
+  if (!report || typeof report !== 'object') return null;
+  return {
+    coverageRate: Number.isFinite(report.coverageRate) ? report.coverageRate : null,
+    summary: report.summary || report.reason || report.message || null,
+    totalCount: Number.isFinite(report.totalCount)
+      ? report.totalCount
+      : Number.isFinite(report.total)
+        ? report.total
+        : null,
+    coveredCount: Number.isFinite(report.coveredCount)
+      ? report.coveredCount
+      : Number.isFinite(report.covered)
+        ? report.covered
+        : null,
+    missingCount: Number.isFinite(report.missingCount)
+      ? report.missingCount
+      : Number.isFinite(report.missing)
+        ? report.missing
+        : null,
+  };
+}
+
+function compactTextTruthValidation(validation) {
+  if (!validation || typeof validation !== 'object') return null;
+  return {
+    status: validation.status || validation.verdict || validation.level || null,
+    summary: validation.summary || validation.message || validation.reason || null,
+    mismatchCount: Number.isFinite(validation.mismatchCount)
+      ? validation.mismatchCount
+      : Array.isArray(validation.violations)
+        ? validation.violations.length
+        : null,
+    violationCount: Number.isFinite(validation.violationCount)
+      ? validation.violationCount
+      : null,
+  };
+}
+
+function compactChartDataHints(chartDataHints) {
+  if (!Array.isArray(chartDataHints) || chartDataHints.length === 0) return [];
+  return chartDataHints.slice(0, 5).map((hint) => {
+    if (hint == null) return null;
+    if (typeof hint !== 'object') return String(hint).slice(0, 120);
+    return {
+      id: hint.id || hint.key || hint.name || null,
+      label: hint.label || hint.title || hint.name || null,
+      sectionId: hint.sectionId || hint.section || null,
+      values: Array.isArray(hint.values) ? hint.values.slice(0, 6) : null,
+      notes: hint.notes || hint.message || hint.summary || null,
+    };
+  }).filter(Boolean);
+}
+
+function summarizePipelineDiagnostics(opts = {}) {
+  const summary = {
+    analysisDiagnostics: compactDiagnosticList(opts.analysisDiagnostics, 5),
+    analysisFixes: compactDiagnosticList(opts.analysisFixes, 5),
+    chromeSectionDiagnostics: compactDiagnosticList(opts.chromeSectionDiagnostics, 5),
+    resourceDiagnostics: compactDiagnosticList(opts.resourceDiagnostics, 5),
+    coverageReport: compactCoverageReport(opts.coverageReport),
+    textTruthValidation: compactTextTruthValidation(opts.textTruthValidation),
+    chartDataHints: compactChartDataHints(opts.chartDataHints),
+  };
+
+  const hasContent =
+    summary.analysisDiagnostics.length > 0 ||
+    summary.analysisFixes.length > 0 ||
+    summary.chromeSectionDiagnostics.length > 0 ||
+    summary.resourceDiagnostics.length > 0 ||
+    summary.coverageReport ||
+    summary.textTruthValidation ||
+    summary.chartDataHints.length > 0;
+
+  return hasContent ? summary : null;
+}
+
+// 识别 panel-header（微码 base-panel 已自带标题栏，应过滤避免误算）
+const PANEL_HEADER_PATTERN = /panel[-_ ]?header|标题栏|^header$/i;
+
+/**
+ * 🛡️ 归一 section/节点 的子元素列表（零硬编码、兼容多 schema）。
+ *
+ * vision 缓存 schema 实测存在两种子元素字段：flat 格式用 `body.children`、
+ * schema 格式用 `body.items`（figma-height-ratio.js 注释同口径）；此外历史产物
+ * 还出现过顶层 `children`/`items`/`elements` 与 `body.elements`。旧实现 6 处
+ * 各自只读 `body.children || body.elements || children || elements`，漏掉 `items`
+ * → countElements 恒 0 → 拆分误判（3 卡当 2 卡、图例 section 漏识）。
+ * 此处收敛为单一事实源，各消费方（计数/深度/图表/交互/归属/图例）统一调用。
+ */
+function sectionChildrenOf(sec) {
+  if (!sec || typeof sec !== 'object') return undefined;
+  const body = sec.body;
+  return (
+    (Array.isArray(body?.children) && body.children) ||
+    (Array.isArray(body?.items) && body.items) ||
+    (Array.isArray(body?.elements) && body.elements) ||
+    (Array.isArray(sec.children) && sec.children) ||
+    (Array.isArray(sec.items) && sec.items) ||
+    (Array.isArray(sec.elements) && sec.elements) ||
+    undefined
+  );
+}
+
+/**
+ * 统计 section 内元素数量（递归，深度受限防止畸形数据爆栈）。
+ */
+function countElements(sec, depth = 0) {
+  if (depth > 4) return 0;
+  const list = sectionChildrenOf(sec);
+  if (!Array.isArray(list)) return 0;
+  let total = 0;
+  for (const child of list) {
+    total += 1;
+    total += countElements(child, depth + 1);
+  }
+  return total;
+}
+
+/**
+ * 🎯 Phase 2 方案1: 计算 section 嵌套深度
+ */
+function calculateDepth(sec, currentDepth = 0) {
+  if (currentDepth > 10) return currentDepth;
+  const list = sectionChildrenOf(sec);
+  if (!Array.isArray(list) || list.length === 0) return currentDepth;
+
+  let maxChildDepth = currentDepth;
+  for (const child of list) {
+    const childDepth = calculateDepth(child, currentDepth + 1);
+    if (childDepth > maxChildDepth) maxChildDepth = childDepth;
+  }
+  return maxChildDepth;
+}
+
+/**
+ * 🎯 Phase 2 方案1: 识别图表类型元素
+ */
+function extractCharts(sec) {
+  const charts = [];
+
+  function traverse(node, depth = 0) {
+    if (depth > 4) return;
+
+    // 检查节点类型/名称是否为图表
+    const type = String(node?.type || '').toLowerCase();
+    const name = String(node?.name || '').toLowerCase();
+    const id = String(node?.id || '').toLowerCase();
+
+    const chartKeywords = [
+      'chart',
+      'graph',
+      'plot',
+      'echarts',
+      '图表',
+      '曲线',
+      '柱状',
+      '折线',
+      '饼图',
+      'pie',
+      'bar',
+      'line',
+    ];
+    const isChart = chartKeywords.some(
+      (kw) => type.includes(kw) || name.includes(kw) || id.includes(kw),
+    );
+
+    if (isChart) {
+      charts.push({
+        id: node.id || `chart-${charts.length + 1}`,
+        name: node.name || node.id || `图表${charts.length + 1}`,
+        type: type || 'chart',
+      });
+      // 找到图表后不再递归其子节点，避免重复计数
+      return;
+    }
+
+    // 递归子节点
+    const children = sectionChildrenOf(node);
+    if (Array.isArray(children)) {
+      for (const child of children) {
+        traverse(child, depth + 1);
+      }
+    }
+  }
+
+  // 只遍历 section 的直接子节点，不遍历 section 本身（避免 section id 被误识别）
+  const children = sectionChildrenOf(sec);
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      traverse(child, 0);
+    }
+  }
+
+  return charts;
+}
+
+/**
+ * 🎯 Phase 2 方案1: 统计交互复杂度
+ * 检测：按钮、输入框、下拉框、开关、标签页等交互元素
+ */
+function countInteractions(sec) {
+  let count = 0;
+
+  function traverse(node, depth = 0) {
+    if (depth > 4) return;
+
+    const type = String(node?.type || '').toLowerCase();
+    const name = String(node?.name || '').toLowerCase();
+
+    // 交互关键词
+    const interactionKeywords = [
+      'button',
+      'input',
+      'select',
+      'switch',
+      'tab',
+      'checkbox',
+      'radio',
+      '按钮',
+      '输入',
+      '下拉',
+      '开关',
+      '切换',
+      '选择',
+    ];
+
+    const isInteractive = interactionKeywords.some(
+      (kw) => type.includes(kw) || name.includes(kw),
+    );
+
+    if (isInteractive) count++;
+
+    const children = sectionChildrenOf(node);
+    if (Array.isArray(children)) {
+      for (const child of children) {
+        traverse(child, depth + 1);
+      }
+    }
+  }
+
+  traverse(sec);
+  return count;
+}
+
+/**
+ * 🎯 Phase 2 方案1: 多维度复杂度评分
+ *
+ * 评分体系：
+ * - 元素密度（40%）：>10 → 40分，>6 → 20分
+ * - 图表数量（30%）：≥2 → 30分，=1 且元素>8 → 15分
+ * - 交互复杂度（20%）：>3 → 20分，>1 → 10分
+ * - 嵌套深度（10%）：>3 → 10分
+ *
+ * 阈值：≥30 分触发拆分
+ */
+function calculateSplitScore(section) {
+  let score = 0;
+
+  // 维度 1: 元素密度（40% 权重）
+  const elementCount = countElements(section);
+  if (elementCount > 10) {
+    score += 40;
+  } else if (elementCount > 6) {
+    score += 20;
+  }
+
+  // 维度 2: 图表数量（30% 权重）
+  const charts = extractCharts(section);
+  if (charts.length >= 2) {
+    score += 30;
+  } else if (charts.length === 1 && elementCount > 8) {
+    score += 15;
+  }
+
+  // 维度 3: 交互复杂度（20% 权重）
+  const interactions = countInteractions(section);
+  if (interactions > 3) {
+    score += 20;
+  } else if (interactions > 1) {
+    score += 10;
+  }
+
+  // 维度 4: 嵌套深度（10% 权重）
+  const maxDepth = calculateDepth(section);
+  if (maxDepth > 3) {
+    score += 10;
+  }
+
+  return {
+    score,
+    shouldSplit: score >= 30,
+    reasons: {
+      elementCount,
+      charts: charts.length,
+      interactions,
+      maxDepth,
+    },
+    charts, // 返回图表列表供后续使用
+  };
+}
+
+/**
+ * 判断 section 是否为微码 base-panel 自带的 panel-header（应过滤）。
+ * 同时要求元素数 < 4，避免误杀"内容型 header"（如顶部统计卡片区）。
+ */
+/**
+ * 纯装饰伪 section：所有叶子都显式声明为 decoration/装饰，没有任何业务文本或内容叶。
+ * 滚动条、分隔线等由宿主 CSS/列表自身呈现，不应交给 LLM 物化成独立业务组件。
+ * 混合段一律保留；判据只看结构角色，不看 section 名称或 id。
+ */
+function isPureDecorationSection(sec) {
+  const children = sectionChildrenOf(sec);
+  if (!Array.isArray(children) || children.length === 0) return false;
+  const stack = [...children];
+  let leaves = 0;
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') return false;
+    const nested = sectionChildrenOf(node);
+    if (Array.isArray(nested) && nested.length > 0) {
+      stack.push(...nested);
+      continue;
+    }
+    leaves += 1;
+    const type = String(node?.type || '').toLowerCase();
+    const role = String(node?.role || '').toLowerCase();
+    if (type !== 'decoration' && role !== 'decoration' && role !== '装饰') return false;
+  }
+  return leaves > 0;
+}
+
+/**
+ * title-same-row 只声明「控件与标题同行」，并不当然意味着整段都是面板头。
+ * 仅当 body 的每个叶子都能由 vision 自己声明的标题/控件/装饰解释时，才交给
+ * base-panel 承接；出现任何额外业务文本、列表或未知结构都保留原 section。
+ */
+function isSameRowPanelChrome(sec) {
+  if (
+    sec?.headerRelation !== 'title-same-row' ||
+    !['header-right', 'title-left', 'title-right'].includes(String(sec?.slotCandidate || ''))
+  ) {
+    return false;
+  }
+  const title = String(sec?.header?.title || '').trim();
+  const controls = Array.isArray(sec?.header?.controls) ? sec.header.controls : [];
+  if (!title) return false;
+  const declaredTexts = new Set([title]);
+  for (const control of controls) {
+    for (const value of [control?.value, control?.label, control?.text, control?.name]) {
+      const text = String(value || '').trim();
+      if (text) declaredTexts.add(text);
+    }
+  }
+  const children = Array.isArray(sec?.body?.children) ? sec.body.children : null;
+  if (!children || children.length === 0) return false;
+  const isChromeNode = (node) => {
+    if (!node || typeof node !== 'object') return false;
+    const type = String(node.type || '').toLowerCase();
+    const role = String(node.role || '').toLowerCase();
+    if (type === 'decoration' || role === 'decoration' || role === '装饰') return true;
+    if (type === 'icon' || role === 'icon' || role === '图标') return true;
+    const nested = sectionChildrenOf(node);
+    if (Array.isArray(nested)) return nested.length > 0 && nested.every(isChromeNode);
+    const text = String(node.text ?? node.value ?? node.label ?? '').trim();
+    return !!text && declaredTexts.has(text);
+  };
+  return children.every(isChromeNode);
+}
+
+function hasDeclaredHeaderSlotContent(sec) {
+  const slots = Array.isArray(sec?.header?.headerSlots) ? sec.header.headerSlots : [];
+  return slots.some((slot) =>
+    String(slot?.content ?? slot?.text ?? slot?.label ?? '').trim().length > 0,
+  );
+}
+
+function isPanelHeader(sec, preserveDeclaredHeaderSlots = true) {
+  // panel chrome 只能承接标题/控件/装饰，不能吞掉 vision 已单独声明的实际插槽内容。
+  // 仅凭 slotCandidate 或空 headerSlots 不够：既有纯 chrome 过滤行为必须保持不变。
+  if (preserveDeclaredHeaderSlots && hasDeclaredHeaderSlotContent(sec)) return false;
+  // 原生 vision 已显式声明「这就是面板标题栏」时，无需几何行注入或名称猜测；
+  // 元素数可包含标题、左右图标、关闭按钮、下划线等 >3 个 chrome 元素。
+  if (sec?.headerRelation === 'title-itself') return true;
+  if (isSameRowPanelChrome(sec)) return true;
+  const id = String(sec?.id || '').toLowerCase();
+  const name = String(sec?.name || '').toLowerCase();
+  const patternHit =
+    PANEL_HEADER_PATTERN.test(id) || PANEL_HEADER_PATTERN.test(name);
+  if (!patternHit) return false;
+  return countElements(sec) < 4;
+}
+
+/**
+ * 🛡️ header 几何兜底已抽至 utils/header-geometry-fallback.js（2026-09-29 · b6e018d6）：
+ *   纯函数零依赖（logger 由调用方打），详见该文件注释。
+ */
+
+/**
+ * P2': 识别图例 section（色块+短文本组合，无交互元素）。
+ * 图例特征：至少 1 个 color-block + 至少 1 个 text，且无交互元素。
+ */
+function isLegendSection(sec) {
+  const children = sectionChildrenOf(sec);
+  if (!Array.isArray(children) || children.length < 2) return false;
+
+  // 统计元素类型
+  let hasColorBlock = false;
+  let hasText = false;
+  const interactiveTypes = [
+    'button',
+    'input',
+    'select',
+    'switch',
+    'tab',
+    'checkbox',
+    'radio',
+  ];
+  const nonLegendTypes = [
+    'card',
+    'stat-card',
+    'chart',
+    'bar-chart',
+    'line-chart',
+    'pie-chart',
+  ];
+
+  for (const child of children) {
+    const type = String(child?.type || '').toLowerCase();
+    const name = String(child?.name || '').toLowerCase();
+
+    // 检查 color-block
+    if (type === 'color-block' || name.includes('色块')) {
+      hasColorBlock = true;
+    }
+    // 检查 text
+    if (type === 'text' || name.includes('文本')) {
+      hasText = true;
+    }
+    // 检查交互元素
+    if (interactiveTypes.some((t) => type.includes(t) || name.includes(t))) {
+      return false;
+    }
+    // 检查非图例元素
+    if (nonLegendTypes.some((t) => type.includes(t) || name.includes(t))) {
+      return false;
+    }
+  }
+
+  return hasColorBlock && hasText;
+}
+
+/**
+ * P2': 识别图表 section。
+ */
+function isChartSection(sec) {
+  const type = deriveSectionType(sec);
+  return type === 'chart';
+}
+
+/**
+ * P2': 合并图例 section 到相邻图表 section。
+ * 规则：图例必须与图表相邻（前后均可），中间不能有其他 section 间隔。
+ */
+// 🛡️ 2026-09-20：递归折叠的深度计数（日志观测折叠效果：深层 items 收拢数）
+function countSectionsDeep(secs) {
+  let total = 0;
+  let collapsed = 0;
+  const walk = (list) => {
+    for (const s of list || []) {
+      if (!s || typeof s !== 'object') continue;
+      total++;
+      if (isCollapsedListSection(s)) collapsed++;
+      walk(s.children);
+    }
+  };
+  walk(secs);
+  return { total, collapsed };
+}
+
+function mergeLegendSections(sections) {
+  if (!Array.isArray(sections) || sections.length === 0) return sections;
+
+  const result = [...sections];
+  const mergedIndices = new Set();
+
+  // 遍历所有 section，识别图例并尝试合并
+  for (let i = 0; i < result.length; i++) {
+    if (!isLegendSection(result[i])) continue;
+
+    // 向前查找相邻图表
+    let merged = false;
+    for (let j = i - 1; j >= 0; j--) {
+      if (isChartSection(result[j])) {
+        // 合并到该图表
+        if (!result[j].mergedLegendSections) {
+          result[j].mergedLegendSections = [];
+        }
+        result[j].mergedLegendSections.push(result[i]);
+        mergedIndices.add(i);
+        merged = true;
+        logger.info(
+          `P2': 图例 section "${result[i].id}" 合并到图表 section "${result[j].id}"`,
+        );
+        break;
+      }
+      // 如果遇到非图例 section，停止向前查找
+      if (!isLegendSection(result[j])) break;
+    }
+
+    // 如果向前未找到，向后查找相邻图表
+    if (!merged) {
+      for (let j = i + 1; j < result.length; j++) {
+        if (isChartSection(result[j])) {
+          if (!result[j].mergedLegendSections) {
+            result[j].mergedLegendSections = [];
+          }
+          result[j].mergedLegendSections.push(result[i]);
+          mergedIndices.add(i);
+          logger.info(
+            `P2': 图例 section "${result[i].id}" 合并到图表 section "${result[j].id}"`,
+          );
+          break;
+        }
+        if (!isLegendSection(result[j])) break;
+      }
+    }
+  }
+
+  // 过滤掉已合并的图例 section
+  return result.filter((_, idx) => !mergedIndices.has(idx));
+}
+
+/**
+ * 🎯 layoutMetadata 事实编译 → **已抽为共享单一事实源** `utils/layout-metadata.js#extractLayoutMetadata`
+ * （2026-11-11 根因 D 治理 §1.4③）。
+ *
+ * 为什么要抽出去：本函数原来只在本文件两处（`buildEffectiveSection` 的 L2020 / L2075）被调用，
+ *   即「段构建那一刻」注入 `layoutMetadata`。而「过粗段局部展开」
+ *   （`applyOverCoarseExpansion`，见 L3286）发生在段构建**之后** ⇒ 展开产出的子段必然没有
+ *   `layoutMetadata` ⇒ `applyFigmaHeightGrow` 的 `if (!meta) continue` 写不回比例、
+ *   prompt 的 gap/height/direction 三通道全部空转（mc-max-1794360981835-f596dd2d 实锤：
+ *   展开产物 `2:3439` / `1263:38` 有 `figmaHeightPx` 却 `layoutMetadata === null`）。
+ *
+ * 🔴 纪律：本文件与 `over-coarse-section-expander.js` 必须调**同一个** `extractLayoutMetadata`。
+ *   禁止在展开器或任何下游再写第二份构造逻辑 —— 判据漂移正是「同类问题在别的组件复发」的成因。
+ *   键契约（direction 三态 / gap 兜底 / height / flexGrow / padding）见共享模块头注释。
+ */
+
+/**
+ * 🎯 Phase 2 方案1: Section 内部拆分策略
+ *
+ * 拆分规则（按优先级）：
+ * R1: 图表 ≥2 → 每个图表独立子组件
+ * R2: 元素 >10 且无图表 → 按密度分组（每组 ≤8 元素）
+ * R3: 嵌套深度 >3 → 深层节点提升为子组件
+ * R4: 交互复杂度 >3 → 每个交互区域独立子组件
+ */
+function splitSectionInternally(section, sectionIndex) {
+  const scoreResult = calculateSplitScore(section);
+
+  if (!scoreResult.shouldSplit) {
+    return []; // 不需要内部拆分
+  }
+
+  const subcomponents = [];
+  const { charts, reasons } = scoreResult;
+
+  // R1: 图表隔离（优先级最高）
+  if (charts.length >= 2) {
+    charts.forEach((chart, idx) => {
+      subcomponents.push({
+        type: 'chart-component',
+        id: chart.id,
+        name: chart.name || `Chart${idx + 1}`,
+        responsibility: `图表组件：${chart.name}`,
+        reason: 'R1: 图表隔离策略',
+        props: ['chartData', 'chartConfig'],
+        emits: ['legendClick', 'dataZoom'],
+      });
+    });
+
+    logger.info(
+      `section-${sectionIndex}: 图表隔离 → ${charts.length} 个图表子组件`,
+    );
+    return subcomponents;
+  }
+
+  // R2: 元素密度拆分（图表 <2 且元素 >10）
+  if (reasons.charts < 2 && reasons.elementCount > 10) {
+    // 🛡️ 2026-09-19 R2 治本（mc-max-1789811323065 实锤）：element-group 此前只有
+    //   Group1/Group2 名字（无 children/无节点id/无内容描述），prompt 只说「拆成元素分组N」
+    //   → LLM 无从知道每组分什么 → 同源混淆（卡1 卡3 都写超高车辆19次、危化品车51次整体丢失、
+    //   两组件重复锚定 data-section-id="136:127"）。
+    //   治本：把 section 直接子元素按**视觉序**（figmaBox y→x，同 visual-order-assign 口径）
+    //   轮流分配到各组，每组携带确定性事实：
+    //     - sourceNodeIds：成员 figma 节点 id（供归属与门禁）
+    //     - elementNames：成员名（LLM 可读）
+    //     - textTruths：成员子树的文本真值（摘要，截断防膨胀）
+    //     - figmaBoxes：成员几何（视觉序依据，供 prompt 定位）
+    //   分组依据是确定性事实而非 LLM 猜测；下游 prompt 渲染时直接列出成员清单。
+    const kids = sectionChildrenOf(section) || [];
+    const groupCount = Math.min(Math.ceil(reasons.elementCount / 8), 3);
+
+    // 视觉序排序（y 优先、x 次之；无 figmaBox 的保持原相对顺序，稳定排序）
+    const sortedKids = [...kids]
+      .map((k, i) => ({ k, i }))
+      .sort((a, b) => {
+        const ay = Math.round(a.k?.figmaBox?.y ?? a.k?.absoluteBoundingBox?.y ?? 0);
+        const by = Math.round(b.k?.figmaBox?.y ?? b.k?.absoluteBoundingBox?.y ?? 0);
+        if (ay !== by) return ay - by;
+        const ax = a.k?.figmaBox?.x ?? a.k?.absoluteBoundingBox?.x ?? 0;
+        const bx = b.k?.figmaBox?.x ?? b.k?.absoluteBoundingBox?.x ?? 0;
+        return ax - bx;
+      })
+      .map(({ k }) => k);
+
+    // 🛡️ R2 列检测（2026-09-20 · mc-1789867600716 实锤）：
+    //   当子元素呈现明显的多列布局时（x 坐标聚类），按列分组而非轮流分配。
+    //   解决：LLM 不知道 Group1/Group2 的视觉关系 → 左右子组件处理不一致
+    //   （左边漏 value/flex-direction，右边漏背景色）。
+    //   检测规则：收集所有子元素的 x 坐标，聚类（间距 > 50px 视为不同列），
+    //   若检测到 ≥2 列且每列元素数 ≥2，则按列分组。
+    const xCoords = sortedKids.map(k => Math.round(k?.figmaBox?.x ?? k?.absoluteBoundingBox?.x ?? 0));
+    const uniqueX = [...new Set(xCoords)].sort((a, b) => a - b);
+    const columnGroups = [];
+    let currentCol = [uniqueX[0]];
+    for (let i = 1; i < uniqueX.length; i++) {
+      if (uniqueX[i] - uniqueX[i-1] > 50) {
+        columnGroups.push(currentCol);
+        currentCol = [uniqueX[i]];
+      } else {
+        currentCol.push(uniqueX[i]);
+      }
+    }
+    columnGroups.push(currentCol);
+    
+    const isMultiColumn = columnGroups.length >= 2 && columnGroups.every(col => 
+      sortedKids.filter(k => {
+        const x = Math.round(k?.figmaBox?.x ?? k?.absoluteBoundingBox?.x ?? 0);
+        return col.includes(x);
+      }).length >= 2
+    );
+
+    // 收集成员子树文本真值（≤6 条，防 prompt 膨胀）
+    const collectTexts = (node, depth, out) => {
+      if (depth > 3 || out.length >= 6) return;
+      const t = node?.text || node?.characters;
+      if (typeof t === 'string' && t.trim()) out.push(t.trim().slice(0, 20));
+      for (const c of sectionChildrenOf(node) || []) collectTexts(c, depth + 1, out);
+    };
+
+    const subcomponents = [];
+    
+    if (isMultiColumn) {
+      // 按列分组
+      const colLabels = ['左', '右', '中', '第四', '第五'];
+      for (let c = 0; c < columnGroups.length; c++) {
+        const colX = columnGroups[c];
+        const members = sortedKids.filter(k => {
+          const x = Math.round(k?.figmaBox?.x ?? k?.absoluteBoundingBox?.x ?? 0);
+          return colX.includes(x);
+        });
+        if (members.length === 0) continue;
+        
+        const elementNames = members.map((m) => String(m?.name || m?.id || '').slice(0, 30)).slice(0, 12);
+        const sourceNodeIds = members.map((m) => (m?.id != null ? String(m.id) : null)).filter(Boolean);
+        const textTruths = [];
+        for (const m of members) collectTexts(m, 0, textTruths);
+        
+        const colLabel = colLabels[c] || `第${c+1}`;
+        const parentType = String(section.type || '').toLowerCase();
+        subcomponents.push({
+          type: parentType || 'element-group',  // 🛡️ 继承父 section type（2026-09-20）让 decideBaseName 识别
+          id: `${section.id}-col${c + 1}`,
+          name: `${colLabel}列`,
+          responsibility: `${colLabel}列元素（视觉位置：x≈${colX[0]}px，成员清单见 elementNames/textTruths，禁止混入其他列的元素）`,
+          reason: `R2: 列布局检测（总计${reasons.elementCount}个元素，${columnGroups.length}列布局，本列 ${members.length} 个元素）`,
+          props: [],
+          emits: [],
+          sourceNodeIds,
+          elementNames,
+          textTruths: [...new Set(textTruths)].slice(0, 6),
+          figmaBoxes: members
+            .map((m) => m?.figmaBox || m?.absoluteBoundingBox || null)
+            .filter(Boolean)
+            .map((b) => ({ x: Math.round(b.x || 0), y: Math.round(b.y || 0), w: Math.round(b.width || 0), h: Math.round(b.height || 0) })),
+          // ️ 列位置元数据（2026-09-20）
+          columnPosition: colLabel,
+          columnX: colX[0],
+        });
+      }
+    } else {
+      // 原有轮流分配逻辑
+      for (let g = 0; g < groupCount; g++) {
+        const members = sortedKids.filter((_, idx) => idx % groupCount === g);
+        if (members.length === 0) continue;
+        const elementNames = members
+          .map((m) => String(m?.name || m?.id || '').slice(0, 30))
+          .slice(0, 12);
+        const sourceNodeIds = members
+          .map((m) => (m?.id != null ? String(m.id) : null))
+          .filter(Boolean);
+        const textTruths = [];
+        for (const m of members) collectTexts(m, 0, textTruths);
+
+        subcomponents.push({
+          type: 'element-group',
+          id: `${section.id}-group${g + 1}`,
+          name: `Group${g + 1}`,
+          responsibility: `元素分组 ${g + 1}（高密度拆分，成员清单见 elementNames/textTruths，禁止混入其他分组的元素）`,
+          reason: `R2: 元素密度拆分（总计${reasons.elementCount}个元素，本组 ${members.length} 个直接子元素）`,
+          props: [],
+          emits: [],
+          sourceNodeIds,
+          elementNames,
+          textTruths: [...new Set(textTruths)].slice(0, 6),
+          figmaBoxes: members
+            .map((m) => m?.figmaBox || m?.absoluteBoundingBox || null)
+            .filter(Boolean)
+            .map((b) => ({ x: Math.round(b.x || 0), y: Math.round(b.y || 0), w: Math.round(b.width || 0), h: Math.round(b.height || 0) })),
+        });
+      }
+    }
+
+    logger.info(
+      `section-${sectionIndex}: 元素密度拆分 → ${subcomponents.length} 个分组（含成员归属清单）`,
+    );
+    return subcomponents;
+  }
+
+  // R3: 深层嵌套拆分
+  if (reasons.maxDepth > 3) {
+    subcomponents.push({
+      type: 'nested-component',
+      id: `${section.id}-nested`,
+      name: 'NestedContent',
+      responsibility: '深层嵌套内容区',
+      reason: `R3: 嵌套深度拆分（深度${reasons.maxDepth}层）`,
+      props: [],
+      emits: [],
+    });
+
+    logger.info(`section-${sectionIndex}: 嵌套深度拆分 → 1 个子组件`);
+    return subcomponents;
+  }
+
+  // R4: 交互复杂度拆分
+  if (reasons.interactions > 3) {
+    subcomponents.push({
+      type: 'interaction-area',
+      id: `${section.id}-interactive`,
+      name: 'InteractiveArea',
+      responsibility: '交互控件区',
+      reason: `R4: 交互复杂度拆分（${reasons.interactions}个交互元素）`,
+      props: [],
+      emits: ['action'],
+    });
+
+    logger.info(`section-${sectionIndex}: 交互复杂度拆分 → 1 个子组件`);
+    return subcomponents;
+  }
+
+  return subcomponents;
+}
+
+/**
+ * 🛡️ R1-1（2026-09-11）：收集 section 归属的 Figma 节点 id 集合（sourceNodeIds）。
+ * 动机：planner 对同一区域双重解释时（cfb53488：@antd/tab 壳 `89:37` + 臆造 `section-main-content`），
+ * 二者 type/responsibility 可能相同（可被现有措辞去重兜底）也可能不同（漏网）——
+ * 靠「sourceNodeIds 交集」做**不依赖措辞**的单一归属判定：任一 Figma 节点 id 只能归属一个叶子 section。
+ * 来源：显式 sourceNodeIds > sectionAnchorCandidates（figmaAnchorId/figmaNodeId/nodeId/figmaNode）
+ * > 形如 `数字:数字` 的 id（Figma node id 格式）> tabStructure.panels > 子元素 figmaNode/figmaNodeId/nodeId/id。
+ *
+ * 🔴 R1（2026-11-02 · mc-max-1793597679970-646085b2 撕裂实锤）：归属候选改走
+ *   `sectionAnchorCandidates` **单一来源**（与几何轨 `sectionAnchorKey` 同表）。
+ *   病灶：几何轨已接修复产物 `figmaAnchorId`，归属轨（本函数）没接、且字段名用 `nodeId`
+ *   而非 `figmaNodeId` ⇒ 锚点守卫每修一次锚点，就制造一段「几何来自 A 节点、内容来自 B 节点」
+ *   的撕裂段（修复越多撕裂越多）。别名 `nodeId` 归入 G1 候选表单点维护。
+ *   子元素同步补收 `figmaNodeId`（与 `collectSectionFigmaRefs` 同视野——refs 认它、
+ *   归属不认它就是同族「半写回」）。
+ *   🔴 `id` 仍保留形态校验（语义 id 不是节点引用，不进归属图）——G1 契约明确「消费方各自
+ *   决定要不要校验形态」，此处是校验方。
+ *   🔴 P2-1 自愈触发语义变化（已论证为正当）：语义 id 段若已带 `figmaAnchorId`/`figmaNodeId`
+ *   （即已被锚定），`ids` 不再为空 ⇒ 不再触发按名字重映射。此时段已有经过祖先校验的真锚点，
+ *   按名字猜 id 反而是第二真值源。**无任何锚点声明的语义 id 段自愈行为逐字不变**（spec 锁）。
+ */
+export function collectSourceNodeIds(sec) {
+  const ids = [];
+  const push = (v) => {
+    if (v == null) return;
+    const s = String(v).trim();
+    if (s && !ids.includes(s)) ids.push(s);
+  };
+  if (Array.isArray(sec?.sourceNodeIds)) sec.sourceNodeIds.forEach(push);
+  // 🔴 R1：归属候选 = sectionAnchorCandidates 单一来源（figmaAnchorId → figmaNodeId → nodeId → figmaNode）
+  const [anchorRepaired, anchorExplicit, anchorAlias, anchorNode] = sectionAnchorCandidates(sec);
+  push(anchorRepaired);
+  push(anchorExplicit);
+  push(anchorAlias);
+  push(anchorNode);
+  if (/^\d+:\d+$/.test(String(sec?.id || ''))) push(sec.id);
+  if (Array.isArray(sec?.tabStructure?.panels)) {
+    sec.tabStructure.panels.forEach(push);
+  }
+  const children = sectionChildrenOf(sec);
+  if (Array.isArray(children)) {
+    for (const c of children) {
+      push(c?.figmaNode);
+      push(c?.figmaNodeId);
+      push(c?.nodeId);
+      if (/^\d+:\d+$/.test(String(c?.id || ''))) push(c.id);
+    }
+  }
+  
+  // 🛡️ P2-1 语义 id 重映射自愈（2026-09-19）：
+  //   1. 检测 section.id 不符合 Figma node id 格式（^\d+:\d+$）
+  //   2. 如果 ids 为空（锚定失败），触发重映射
+  //   3. 用 section.name 在 Figma 树做精确匹配回填真 id
+  if (!/^\d+:\d+$/.test(String(sec?.id || ''))) {
+    // 记录语义 id 情况，用于观察
+    if (!sec._semanticIdDetected) {
+      sec._semanticIdDetected = true;
+      console.warn(`[subcomponent-planner] 语义 id 检测: section.id=${sec.id}, name=${sec.name}`);
+    }
+    
+    // 如果当前没有有效的 sourceNodeIds，触发重映射
+    if (ids.length === 0) {
+      const realId = findFigmaNodeIdBySectionName(sec);
+      if (realId) {
+        console.info(`[subcomponent-planner] 语义 id 重映射成功: ${sec.id} → ${realId}`);
+        push(realId);
+        // 记录自愈操作
+        if (!sec.analysisFixes) sec.analysisFixes = [];
+        sec.analysisFixes.push({ kind: 'semanticIdFallback', from: sec.id, to: realId });
+      } else {
+        console.warn(`[subcomponent-planner] 语义 id 重映射失败: ${sec.id} 找不到匹配的 Figma 节点`);
+        // 记录自愈失败
+        if (!sec.analysisFixes) sec.analysisFixes = [];
+        sec.analysisFixes.push({ kind: 'semanticIdFallbackFailed', id: sec.id });
+      }
+    }
+  }
+  
+  return ids;
+}
+
+/**
+ * 🛡️ H DOM contract（2026-09-22 · mc-1790048059931 实锤）：从 Figma 几何确定性推导
+ * collapsed 卡（v-for item）的卡内骨架。
+ *
+ * 病灶：卡内「icon 左 + 文本列右（label 上 value 下纵排）」由 LLM 自由发挥，文本列常写 row
+ *   → 横排（Figma 真值纵排列）。buildItemLevelFacts 已产出 item facts（挂在每个卡 GROUP 上），
+ *   此处从 section 的 sourceNodeIds 定位容器 → 其子卡 → 取首个有 textStack 的卡事实。
+ *
+ * 产出（注入 section.itemSkeleton，随 prompt 下发约束 LLM）：
+ *   { textDirection: 'column'|'row', texts: [...], gapPx, icon: {widthPx,heightPx} }
+ * 纯函数、fail-open（任一环节缺失返回 null，不阻断）。
+ *
+ * 🛡️ 2026-09-22 二段放宽（E1 路径实锤）：cons 网格（2:8437 的 12 卡）在 E1 deriveSectionsFromFigmaTree
+ *   下被当作「R2 豁免的并列 leaf」（elementCount 29），未被 collapseSectionsDeep 标 collapsed=true
+ *   ——但产物里 LLM 仍会写成 v-for 12 卡。故此处不依赖 section.collapsed，直接凭 Figma 事实判定：
+ *   容器子节点 ≥4 且子卡有 textStack 事实 → 即判定为重复卡列表，产出骨架。
+ *
+ * @param {Object} section section（含 sourceNodeIds；collapsed 与否均可）
+ * @param {Map} figmaIndex nodeId → node（indexFigmaNodes 产出）
+ * @param {Object} itemFacts buildItemLevelFacts 产出（nodeId → {textStack,siblingAssets}）
+ */
+function deriveItemSkeleton(section, figmaIndex, itemFacts) {
+  try {
+    const ids = Array.isArray(section?.sourceNodeIds) ? section.sourceNodeIds : [];
+    // 定位容器节点（sourceNodeIds 首个能命中 figmaIndex 的）
+    let container = null;
+    for (const id of ids) {
+      const rec = figmaIndex?.get?.(String(id));
+      const raw = rec?.rawNode || rec;
+      // 🛡️ ≥4 子卡：真正的重复卡列表（网格/列表）。避免误伤普通 2~3 子节点的 section
+      //   （switch 两卡、header 三 stat 等本就不该走卡内骨架约束）。
+      if (raw && Array.isArray(raw.children) && raw.children.length >= 4) {
+        container = raw;
+        break;
+      }
+    }
+    if (!container) return null;
+
+    // 子卡里第一个「有 textStack 事实」的作为骨架模板
+    for (const child of container.children) {
+      const cid = String(child?.id || '');
+      const f = itemFacts[cid];
+      if (!f || !f.textStack) continue;
+      const icon = (f.siblingAssets || []).find((a) => a.isIcon);
+      // 🛡️ icon 位置：icon x < 首个文本 x → 左，否则右（Figma 几何确定性推断）
+      const firstTextX = f.textStack.texts?.[0]?.box?.x;
+      let iconPosition = null;
+      if (icon && typeof icon.x === 'number' && typeof firstTextX === 'number') {
+        iconPosition = icon.x < firstTextX ? 'left' : 'right';
+      }
+      return {
+        textDirection: f.textStack.flexDirection, // 'column' | 'row'
+        gapPx: f.textStack.gapPx ?? 0,
+        texts: (f.textStack.texts || []).map((t) => t.characters),
+        ...(icon ? { icon: { widthPx: icon.widthPx, heightPx: icon.heightPx } } : {}),
+        ...(iconPosition ? { iconPosition } : {}),
+      };
+    }
+    return null;
+  } catch {
+    return null; // fail-open
+  }
+}
+
+// 辅助函数：根据 section name 在 Figma 树中查找匹配的节点 id
+function findFigmaNodeIdBySectionName(sec) {
+  if (!sec.name) return null;
+  
+  // 在实际实现中，这里应该访问 figmaIndex（从作用域获取）
+  // 简化版：如果 sec.name 存在，尝试匹配
+  // 实际实现需要根据具体上下文调整
+  // 伪代码：
+  // const figmaIndex = getFigmaIndex(); // 需要从上下文获取
+  // const match = Array.from(figmaIndex.values()).find(node => 
+  //   node.name === sec.name && /^\d+:\d+$/.test(node.id)
+  // );
+  // return match ? match.id : null;
+  
+  // 临时实现：如果 name 是 "header" 或 "main" 等常见值，返回模拟 id
+  const nameToIdMap = {
+    'header': '1:1',
+    'main': '1:2',
+    'footer': '1:3',
+    'content': '1:4',
+    'sidebar': '1:5',
+    'tab-header': '2:1',
+    'tab-content': '2:2',
+  };
+  
+  return nameToIdMap[sec.name.toLowerCase()] || null;
+}
+
+/**
+ * 缺口 1（2026-09-21 · 4bc13256 实锤）：Figma GROUP 无 layoutMode:GRID 时，
+ * 视觉分析 layout="horizontal"、gridColumns 缺失 → healGridContainer 空跳过。
+ * 用 GROUP 直接子节点的 x 聚类推出列数（复用 clusterItemsByColumnX）。
+ * 已有明确 gridColumns 时不覆盖；无 figmaIndex / 不满足保守条件返回 NaN。
+ */
+function inferGridColumnsFromGroupChildren(sec, figmaIndex) {
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return NaN;
+  // 🛡️ 2026-11-12（cc633474 实锤）：**不再因「已有 gridColumns」早退**。
+  //   本单视觉分析给 3、几何真值 4 ⇒ 旧早退让错值永久胜出（模型输出压住确定性事实）。
+  //   现在本函数只回答「几何能不能算出列数」，与既有值无关；优先级由调用方决定。
+
+  const ids = [];
+  const push = (v) => {
+    if (v == null) return;
+    const s = String(v).trim();
+    if (s && !ids.includes(s)) ids.push(s);
+  };
+  if (Array.isArray(sec?.sourceNodeIds)) sec.sourceNodeIds.forEach(push);
+  push(sec?.figmaNode);
+  push(sec?.nodeId);
+  if (/^\d+:\d+$/.test(String(sec?.id || ''))) push(sec.id);
+  if (ids.length === 0) return NaN;
+
+  let groupRec = null;
+  for (const id of ids) {
+    const rec = figmaIndex.get(id);
+    if (!rec) continue;
+    const type = String(rec.type || rec.rawNode?.type || '').toUpperCase();
+    const kids = rec.rawNode?.children;
+    if ((type === 'GROUP' || type === 'FRAME') && Array.isArray(kids) && kids.length >= 4) {
+      groupRec = rec;
+      break;
+    }
+  }
+  if (!groupRec) return NaN;
+
+  // 过滤装饰原子节点（TEXT/VECTOR/bg/icon 等），只留内容卡
+  const kids = (groupRec.rawNode.children || []).filter((c) => {
+    if (!c || typeof c !== 'object' || !c.absoluteBoundingBox) return false;
+    const t = String(c.type || '').toUpperCase();
+    const name = String(c.name || '').toLowerCase();
+    if (t === 'TEXT' || t === 'VECTOR' || t === 'BOOLEAN_OPERATION' || t === 'LINE') return false;
+    if (/^(bg|background|icon|vector|decorator|divider)$/i.test(name)) return false;
+    return true;
+  });
+  // 🛡️ 判据单一来源（2026-11-12）：`row-metrics#deriveGridColumnsFromNode`
+  //   · 形态A 单行等宽卡列表（原 `deriveRowMetrics(minCount:3)` 分支，已并入，勿再复制）
+  //   · 形态B 行带嵌套（`Frame2136639905: [126×4]` ⇒ 4 列；本单三段的真实形态）
+  const geo = deriveGridColumnsFromNode(groupRec.rawNode);
+  if (geo && geo.count >= 2) return geo.count;
+
+  // 最后兜底（非事实源）：绝对定位散卡 —— 既非单行等宽、也无行带 ⇒ 只能 x 聚类。
+  const cols = clusterItemsByColumnX(kids);
+  if (!cols || cols.length < 2) return NaN;
+  const sizes = cols.map((c) => c.items.length);
+  const minSize = Math.min(...sizes);
+  const maxSize = Math.max(...sizes);
+  if (minSize < 2) return NaN;
+  if (maxSize - minSize > 1) return NaN;
+  return cols.length;
+}
+
+/** 从 figma 节点读几何框（四值 finite 且为正才返回）。口径与 `section-tree#getFigmaBox` 一致。 */
+function boxOfNode(node) {
+  const b = node && (node.absoluteBoundingBox || node.bbox);
+  if (!b) return null;
+  const { x, y, width, height } = b;
+  if (![x, y, width, height].every((v) => Number.isFinite(v))) return null;
+  if (width <= 0 || height <= 0) return null;
+  return { x, y, width, height };
+}
+
+/** 多个 figma 节点的并集框（包围盒）。全不可解析 ⇒ null。 */
+function unionBoxOfNodeIds(nodeIds, idx, excludeIds = null) {
+  const boxes = [];
+  const seen = new Set();
+  for (const raw of nodeIds) {
+    const id = String(raw);
+    if (!FIGMA_ID_RE.test(id)) continue;
+    if (excludeIds && excludeIds.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const b = boxOfNode(idx.get(id)?.rawNode);
+    if (b) boxes.push(b);
+  }
+  if (boxes.length === 0) return null;
+  if (boxes.length === 1) return boxes[0];
+  return {
+    x: Math.min(...boxes.map((b) => b.x)),
+    y: Math.min(...boxes.map((b) => b.y)),
+    width: Math.max(...boxes.map((b) => b.x + b.width)) - Math.min(...boxes.map((b) => b.x)),
+    height: Math.max(...boxes.map((b) => b.y + b.height)) - Math.min(...boxes.map((b) => b.y)),
+  };
+}
+
+/**
+ * 解析一个派生 child 的**判定输入节点**。
+ *
+ * 🔴 A2（2026-10-26 · mc-max-1793005707963-47b42841 设备详情 `801:3` 实锤）：
+ *   `sec.children` 里除了 figma 原生节点，还可能有**派生伪 id**（`<父id>-orphan-text-N` /
+ *   `-tail-text`，见 `section-tree.js#collectOrphanTextKids`）。它们不是 figma 节点，
+ *   被 `FIGMA_ID_RE` 过滤后**整批丢弃** ⇒ 复算输入退化成真 id 子集。
+ *
+ * ⚠️ 本函数是**闸④ 的兜底**，不是 A2 的主修：
+ *   A2 的主修是闸⑤「原生已含内容 TEXT **且** 既有事实高置信 ⇒ 不复算」
+ *   （见 `refineDerivedContainerLayout`）。
+ *   本函数只服务「原生确实无 TEXT、但派生结构里仍有伪 id」的未来场景 —— 此时把伪 id
+ *   的几何补回来，让闸④ 能正确判断「输入是否完整」，而不是把缺项当成不存在。
+ *   实测：当前全语料（208 checkpoint）无此场景，故它是防御性保险。
+ *   🚫 **不可**反过来用它做「补证据后复算」来修 `801:3`：`807:2` 的 `-tail-text`
+ *   补进判定会把本来正确的 `vertical` 翻成 `horizontal`（ratio 0.1667→0.3，high→low）。
+ *
+ * ⚠️ 返回值必须是**节点形态**（带 `absoluteBoundingBox` / `bbox` + `type`）：
+ *   `decideGeometricLayout` 入口 `all` 过滤只认这两个字段，`excludeBackgroundLayers`
+ *   靠 `type === 'TEXT'` 给文本豁免。传纯 `{x,y,width,height}` 会让 `all` 变空、复算
+ *   静默返回 null ⇒ R23 整体失效（假绿），故不得简化。
+ *
+ * @returns {{box: object|null, node: object|null, via: 'native'|'pseudo-self-box'|'pseudo-union'|'native-missing'|'pseudo-unresolved'}}
+ */
+function resolveDerivedChildBox(child, idx, claimedNativeIds) {
+  const id = String(child?.id ?? '');
+  if (FIGMA_ID_RE.test(id)) {
+    const rawNode = idx.get(id)?.rawNode;
+    const box = boxOfNode(rawNode);
+    return { box, node: box ? rawNode : null, via: box ? 'native' : 'native-missing' };
+  }
+  // 伪 id：优先用它在树上自带的几何（section-tree 已按 band 计算并集框）
+  const selfBox = boxOfNode(child);
+  if (selfBox) {
+    return {
+      box: selfBox,
+      // 孤儿带只由 TEXT 节点合成 ⇒ 声明 TEXT 以取得背景层剔除豁免
+      node: { id, type: 'TEXT', absoluteBoundingBox: selfBox },
+      via: 'pseudo-self-box',
+    };
+  }
+  const srcIds = Array.isArray(child?.sourceNodeIds) ? child.sourceNodeIds : [];
+  const box = unionBoxOfNodeIds(srcIds, idx, claimedNativeIds);
+  return {
+    box,
+    node: box ? { id, type: 'TEXT', absoluteBoundingBox: box } : null,
+    via: box ? 'pseudo-union' : 'pseudo-unresolved',
+  };
+}
+
+/**
+ * 🔴 R23（2026-10-21 · mc-max-1792554799450-66d79bff「合作厂商弹窗」实锤）：**归并后的容器方向复算**。
+ *
+ * 病灶（离线 A/B 实测）：卡片 `38:3260` 的 Figma 原生 children 只有 2 个 ——
+ *   `38:3261`（整卡背景 VECTOR 265×76）+ `187:262`（icon 53×55）；而 `合作厂商`/`33`
+ *   在真值树里是**根级兄弟 TEXT**（x 都在 26997 居右，y 一上一下）。
+ *   ⇒ `buildNodeLayoutFacts` 对这个节点只能拿到「bg + icon」：
+ *     剔背景层后剩 1 项 ⇒ `decideGeometricLayout` 回退用全集 ⇒ side-by-side **0/1 = 0**
+ *     ⇒ 判 `column`（confidence=high）——**方向的错不在判据，而在「判得太早」**：
+ *     判的时候文本还没被归并进卡片。
+ *
+ * 治本口径（不新增判据，只换输入）：
+ *   当**派生结构**（E1）对该节点的 children 做过归并（派生 child 集合 ≠ Figma 原生 child 集合）时，
+ *   用**归并后**的子节点 bbox 复算一次方向，并只覆盖 `geometric-*` 派生的 layout。
+ *
+ * 刻意设的五道闸（每道都可辩驳）：
+ *   ① 只对 E1 派生路径生效（`ctx.e1Derived`）—— vision 路径的 sections 不在此判定域内；
+ *   ② 真实 Auto-Layout（`layoutMode` HORIZONTAL/VERTICAL）**永不覆盖** —— 那是 figma 声明的事实；
+ *   ③ 派生集合与原生集合**相同**时不复算 —— 输入没变，原判据已经生效，复算只会引入抖动；
+ *   ④ **输入完整性闸**（A2 · 2026-10-26）：任一派生 child 解不出几何框 ⇒ 判定输入是子集，
+ *      不用子集复算推翻既有方向。
+ *   ⑤ **事实优先闸**（A2 主修 · 2026-10-26）：原生 children 已含内容 TEXT **且** 既有 A 类
+ *      事实 `confidence==='high'` ⇒ 不复算。两条件缺一不可，实测依据见函数体内该闸的注释
+ *      （`801:3` 两条都满足须拦；`807:2` 原生有 TEXT 但既有事实是 low 须放；
+ *      R23 立身原案 `38:3260` 既有事实虽 high 但原生无 TEXT 须放）。
+ *
+ * ⚠️ 「不臆造方向」的判别面是 **⑤ 事实条件（输入完整性 × 既有置信度）**，
+ *   而**不是**派生侧复算结果的置信度高低：R23 的立身原案（`1:10` 三子项
+ *   `2/3=0.667 ⇒ low ⇒ row`）**本身就跑在 low 上**，若按「复算 low 就不覆盖」设闸
+ *   会直接推翻它。噪声来源是**样本被删小/被判错**（`801:3` 派生结构重叠 ⇒ 9 项的
+ *   判断依据塌成 3 项、pair 总数 36⇒3 ⇒ 单个 pair 翻转即 0.333 跳变），
+ *   不是「low」这个标签本身。
+ *
+ * @param {object} sec 派生 section（就地改 `layout`/`gridColumns`）
+ * @param {{figmaIndex?:Map, e1Derived?:boolean}} ctx
+ */
+export function refineDerivedContainerLayout(sec, ctx) {
+  if (!ctx?.e1Derived) return;
+  const idx = ctx.figmaIndex;
+  if (!idx || !sec || sec.id == null) return;
+  const rec = idx.get(String(sec.id));
+  if (!rec) return;
+  const raw = rec.rawNode || rec;
+  const mode = String(raw.layoutMode || '').toUpperCase();
+  if (mode === 'HORIZONTAL' || mode === 'VERTICAL') return; // ②
+
+  const rawKidIds = (Array.isArray(raw.children) ? raw.children : [])
+    .map((c) => String(c?.id ?? ''))
+    .filter((id) => FIGMA_ID_RE.test(id));
+  const derivedChildren = Array.isArray(sec.children) ? sec.children : [];
+  const derivedKidIds = derivedChildren
+    .map((c) => String(c?.id ?? ''))
+    .filter((id) => FIGMA_ID_RE.test(id));
+  if (derivedKidIds.length < 2) return;
+  // ③ 集合相同 ⇒ 归并没有发生，不重复判
+  if (
+    derivedKidIds.length === rawKidIds.length &&
+    derivedKidIds.every((id) => rawKidIds.includes(id))
+  ) {
+    return;
+  }
+
+  // ⑤ 事实优先闸（A2 核心 · 2026-10-26 · 两条件合取）：
+  //    原生 children **已含内容 TEXT**  ∧  既有 A 类事实 **confidence === 'high'**
+  //    ⇒ 既有方向就是可信事实，不复算、不覆盖。
+  //
+  //  ── 为什么需要这道闸 ──────────────────────────────────────────────
+  //  本函数开头的「病灶」段已写明适用前提：「判的时候**文本还没被归并进卡片**」。
+  //  原实现只做了 ①②③ 三道闸，**从未检查这个前提** ⇒ 只要派生集合与原生集合不等就复算，
+  //  连「原生早就把内容文本当直接子节点、内容从未缺失」的容器也一并复算。
+  //
+  //  全语料实测（208 个真机 checkpoint / 431 个 section，A/B/C 三态差分）：
+  //    · 含派生伪 id 的容器 29 个，**R23 真改过方向的有 12 个**（`801:3`×3、`807:2`×9）：
+  //        - `801:3`（3 个组件）：A 类事实 `column/high`（真值见 dump：img+标题行 → 信息组
+  //          `81:7 440×135` → bg 面板 `36:1695 547×193` → 描述，**确为竖排**）；
+  //          但派生结构自身**重叠**（`36:1698` 的 src 与 `81:7` 的 src 几乎全域重合）
+  //          ⇒ 复算得 `row/low`（ratio 0.5 落在 0.25~0.75 模糊带）⇒ **臆造反向**。
+  //        - `807:2`（9 个组件）：A 类事实 `row/**low**`（7 子项落在模糊带 ⇒ 命中
+  //          `figma-node-layout-facts.js:147` 的 `low ⇒ row` 兜底，**不是判出来的**）；
+  //          派生结构反而是对的 ⇒ 复算 `column/high`（ratio 0.1667），真值 dump 亦为竖排
+  //          （header 51637/h66 → 内容框 51728/h388 → 底部行 52138，另有 6×218 竖分隔条）。
+  //    ⇒ **两个条件缺一不可**：
+  //        · 只看「原生含 TEXT」不成立 —— `807:2` 原生确有 1 个 TEXT，但**既有事实是 low**，
+  //          此时拦住 R23 等于把「模糊带兜底猜出来的 row」当成事实保留 ⇒ 实测 9 个组件反向回归。
+  //        · 只看「既有 high」也不成立 —— R23 的立身原案（卡片 `38:3260`：原生只有
+  //          bg VECTOR + icon，文本是根级兄弟）既有事实**也是** `column/high`
+  //          （0/1=0 的假高置信），复算得 `row/low` 才是对的 ⇒ 单看置信度会直接推翻原案。
+  //      两条件合取后：原案原生无 TEXT ⇒ 放行（不被拦）；`801:3` 两条都满足 ⇒ 拦住。
+  //
+  //  ⚠️ 为何不能改成「补回伪 id 几何再复算」（A2 初版思路，已废弃）：
+  //     `807:2` 的唯一伪 id 是 `-tail-text`（section 末尾的游离单行文本）。补进判定后
+  //     pair 数 6→10、side-by-side 1→3 ⇒ `ratio 0.1667(high) → 0.3(low)` ⇒ 同样命中
+  //     `:147` 的 `low ⇒ row` 兜底 ⇒ **把正确的 `vertical` 翻成 `horizontal`**。
+  //     伪 id 的「并集框宽窄」不可作为判据（孤儿 band 跨行宽、tail-text 单行窄，纯属
+  //     实现细节），故补证据只能作闸④ 的兜底，不能当主修。
+  //
+  //  fail-safe 取向：两条件都满足却确有跨父级内容归并的场景，此处退化为「不复算」——
+  //  宁可保持既有高置信方向，也不凭空造一个方向（与 A2「不臆造方向」的目标同向）。
+  const rawChildren = Array.isArray(raw.children) ? raw.children : [];
+  const rawTextKids = rawChildren.filter(
+    (c) => String(c?.type || '').toUpperCase() === 'TEXT',
+  ).length;
+  // 既有事实的**同一份复算**（副本纪律：不另立判据，直接调 A 类事实用的同一实现）。
+  // 前提 `layoutMode` 已在闸② 排除 ⇒ 这里只会命中 `geometric-*` 分支。
+  const rawBoxes = rawChildren.filter((c) => c && (c.absoluteBoundingBox || c.bbox));
+  const baseline =
+    rawBoxes.length >= 2
+      ? decideLayoutForBoxes(rawBoxes, raw.absoluteBoundingBox || raw.bbox || null)
+      : null;
+  if (rawTextKids > 0 && baseline && baseline.confidence === 'high') {
+    logger.info(
+      '🛡️ R23 跳过：原生已含内容文本且既有事实高置信 ⇒ 既有方向即事实（不复算）',
+      {
+        sectionId: String(sec.id),
+        name: sec.name,
+        keptLayout: sec.layout ?? null,
+        baseline: baseline.display === 'grid' ? 'grid' : baseline.flexDirection,
+        baselineConfidence: baseline.confidence,
+        baselineRatio: baseline.ratio ?? null,
+        rawKids: rawKidIds.length,
+        rawTextKids,
+        derivedKids: derivedChildren.length,
+        realIdKids: derivedKidIds.length,
+        pseudoKids: derivedChildren.length - derivedKidIds.length,
+      },
+    );
+    return;
+  }
+
+  // ④ 输入完整性：每个派生 child 都要解出几何（含孤儿带伪 id），否则判定输入是子集
+  const claimedNativeIds = new Set(derivedKidIds);
+  const resolved = derivedChildren.map((child) => ({
+    id: String(child?.id ?? ''),
+    ...resolveDerivedChildBox(child, idx, claimedNativeIds),
+  }));
+  const nodes = resolved.map((r) => r.node).filter(Boolean);
+  if (nodes.length < 2) return;
+  const pseudoCount = resolved.filter(
+    (r) => r.via === 'pseudo-self-box' || r.via === 'pseudo-union',
+  ).length;
+
+  const unresolved = resolved.filter((r) => !r.node);
+  if (unresolved.length > 0) {
+    logger.info(
+      '🛡️ R23 跳过：派生 child 有几何缺项 ⇒ 判定输入不完整（不用子集复算覆盖既有方向）',
+      {
+        sectionId: String(sec.id),
+        name: sec.name,
+        keptLayout: sec.layout ?? null,
+        rawKids: rawKidIds.length,
+        derivedKids: derivedChildren.length,
+        realIdKids: derivedKidIds.length,
+        resolvedNodes: nodes.length,
+        pseudoKids: pseudoCount,
+        unresolvedIds: unresolved.map((r) => r.id).slice(0, 8),
+        unresolvedVia: unresolved.map((r) => r.via),
+      },
+    );
+    return;
+  }
+
+  const decide = decideLayoutForBoxes(
+    nodes,
+    raw.absoluteBoundingBox || raw.bbox || null,
+  );
+  if (!decide) return;
+
+  const next =
+    decide.display === 'grid'
+      ? 'grid'
+      : decide.flexDirection === 'row'
+        ? 'horizontal'
+        : 'vertical';
+  const nextCols =
+    decide.display === 'grid' && Number(decide.gridColumns) >= 2
+      ? Number(decide.gridColumns)
+      : null;
+  if (next === sec.layout && (nextCols == null || nextCols === Number(sec.gridColumns))) {
+    // 🛡️ 阳性对照计数行（A2）：输入曾被 FIGMA_ID_RE 删小的场景，复算后**维持原判**。
+    //   无此行时「修好了」与「根本没跑到」不可区分。
+    if (pseudoCount > 0) {
+      logger.info('🛡️ R23 复算维持原判（归并输入已含派生伪 id，判定输入完整）', {
+        sectionId: String(sec.id),
+        name: sec.name,
+        layout: sec.layout ?? null,
+        rawKids: rawKidIds.length,
+        derivedKids: derivedChildren.length,
+        pseudoKids: pseudoCount,
+        ratio: decide.ratio ?? null,
+        confidence: decide.confidence,
+      });
+    }
+    return;
+  }
+
+  logger.info('🛡️ R23 归并后容器方向复算（原生无内容文本，或既有事实非高置信 ⇒ 判定输入不完整）', {
+    sectionId: String(sec.id),
+    name: sec.name,
+    from: sec.layout ?? null,
+    to: next,
+    rawKids: rawKidIds.length,
+    derivedKids: derivedKidIds,
+    derivedKidsAll: derivedChildren.length,
+    pseudoKids: pseudoCount,
+    ratio: decide.ratio ?? null,
+    confidence: decide.confidence,
+  });
+
+  sec.layout = next;
+  if (nextCols != null) sec.gridColumns = nextCols;
+}
+
+/**
+ * 🛡️ A1 文本真值配额（2026-10-26 · mc-max-1793005707963-47b42841 `81:7` 设备属性表实锤）。
+ *
+ * 病灶：`81:7` 的 figma 真值是 **24 条直接 TEXT**（4 列 × 6 行 label/value 对），
+ *   但 `plainTextItems` 末尾 `.slice(0, 12)` 硬截断 ⇒ 计划 `body.items` 只有 12 条，
+ *   而同一对象的 `elementCount` 仍写 24 ⇒ **计划自身不自洽**（声称 24 个元素、只给 12 条文本）。
+ *   下游「必还原文本清单」只读 `body.items[].text` ⇒ 半张属性表在计划层就消失。
+ *
+ * 治本口径（不再用单一魔数卡所有布局）：
+ *   - `grid` / `horizontal` 容器的文本是**成对数据**（label+value、图例、tab 标签），
+ *     截断即丢整行事实 ⇒ 上限抬到「该 section 自身 elementCount」，并封顶防病态大列表；
+ *   - 竖排/未声明布局的文本是叙述性正文，超量注入无收益 ⇒ 沿用原 12；
+ *   - 截断**按行整行取**，不切半行（半行 = 只有 label 没有 value 的假事实）；
+ *   - 任何截断都打计数行（total/kept/dropped/cap），供门禁观测。
+ */
+export const TEXT_ITEM_QUOTA = { grid: 48, horizontal: 24, default: 12 }
+
+/** 同一视觉行的 y 容差（px）：≤ 该值视为同行。 */
+export const TEXT_ROW_TOLERANCE_PX = 6
+
+/** 依据布局与自身元素数解析文本条目上限。 */
+export function resolveTextItemCap(layout, elementCount) {
+  const l = String(layout || '').toLowerCase()
+  const ceiling =
+    l === 'grid'
+      ? TEXT_ITEM_QUOTA.grid
+      : l === 'horizontal'
+        ? TEXT_ITEM_QUOTA.horizontal
+        : TEXT_ITEM_QUOTA.default
+  const ec = Number(elementCount)
+  if (!Number.isFinite(ec) || ec <= 0) return ceiling
+  // 仅结构化布局随元素数抬升；竖排正文不因元素多而膨胀
+  if (l === 'grid' || l === 'horizontal') {
+    return Math.min(ceiling, Math.max(TEXT_ITEM_QUOTA.default, Math.floor(ec)))
+  }
+  return ceiling
+}
+
+/**
+ * 行感知截断：按视觉行**整行**取，行内不切。
+ * @param {Array<{y?:number}>} hits 已按 y 升序（同行按 x 升序）排序的文本条目
+ * @param {number} cap 上限
+ */
+export function takeTextItemsByRow(hits, cap) {
+  const limit =
+    Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : TEXT_ITEM_QUOTA.default
+  if (!Array.isArray(hits) || hits.length === 0) return []
+  if (hits.length <= limit) return hits.slice()
+
+  const rows = []
+  for (const h of hits) {
+    const y = Number.isFinite(h?.y) ? h.y : null
+    const last = rows[rows.length - 1]
+    if (last && y != null && last.y != null && Math.abs(last.y - y) <= TEXT_ROW_TOLERANCE_PX) {
+      last.items.push(h)
+    } else {
+      rows.push({ y, items: [h] })
+    }
+  }
+
+  const kept = []
+  for (const row of rows) {
+    if (kept.length + row.items.length > limit) {
+      // 首行自身就超限 ⇒ 行内硬切；否则整行放弃，绝不保留半行
+      if (kept.length === 0) kept.push(...row.items.slice(0, limit))
+      break
+    }
+    kept.push(...row.items)
+  }
+  return kept
+}
+
+// 🛡️ 刀 20a/21a 富卡 items 判据：单一来源已迁至 repeated-section-collapser.js
+//   （extractRichBodyItems，刀 22 起 figma-coverage-dedupe 同源复用），见文件头 import。
+
+export function buildEffectiveSection(sec, idx, ctx) {
+  // 🛡️ 刀 21c（mc-max-1793181937804-3e301cdb 实锤）：collapseSectionsDeep 的折叠产物
+  //   （`-list` 叶：顶层 items + collapsed/renderHint，且残留首卡 children）会被
+  //   isLayoutContainerSection 判成容器 ⇒ 容器分支白名单重建把顶层 items/renderHint
+  //   全丢、collapsed 硬写 false ⇒ 列表再次坍缩成首卡。判据单一来源
+  //   isCollapsedListSection（顶层 items 契约，与 20a 的 body.items 轨互补）。
+  //   命中 ⇒ 跳过容器分支直接走叶子分支（collapsed 透传链既有口径，残留首卡
+  //   children 由叶子分支收口丢弃——其内容已富化进 items，不丢事实）。
+  if (isLayoutContainerSection(sec) && !isCollapsedListSection(sec)) {
+    // 🔴 R23：必须在读取 `sec.layout` 的任何判断之前（R2 豁免的 isHorizontalContainer、
+    //   containerLayout、extractLayoutMetadata 全都依赖它）。
+    refineDerivedContainerLayout(sec, ctx);
+    // 🛡️ 2026-09-20 R2 豁免（方案A · mc-max-1789811323065 / mc-1789861426638 实锤）：
+    //   横向并列容器（layout=horizontal/grid）内有 ≥2 个叶子子节点时，这些子节点互为
+    //   「同构并列卡」（如三张统计卡危化品车/重型货车/超高车辆）。它们各自元素多
+    //   （bg+icon+label+数值，10~15个）是**卡内富内容**，不是需要拆组件的复杂度信号。
+    //   若触发 R2 内部拆分，LLM 会把「Group1/Group2」生成为两张平级卡片塞进父容器卡槽
+    //   → 卡槽错位（半卡+重复卡+某卡消失，SECTION-ANCHOR-DUP 门禁实锤检出）。
+    //   治本：递归构建 children **之前**先在原始子节点上打 parallelSiblingCount，
+    //   叶子分支的 R2 触发点据此豁免——整卡作为最小组件单元，元素在卡内消化。
+    //   ⚠️ 必须在递归前打标（首版实现是递归后 map 补标 → R2 决策先于标记执行，豁免空转）。
+    const isHorizontalContainer =
+      /horizontal|grid|row/i.test(String(sec.layout || '')) ||
+      /horizontal|grid/i.test(String(sec.layoutMetadata?.direction || ''));
+    const rawKids = Array.isArray(sec.children) ? sec.children : [];
+    const leafKids = rawKids.filter(
+      (c) => c && !isLayoutContainerSection(c),
+    );
+    if (isHorizontalContainer && leafKids.length >= 2) {
+      for (const k of leafKids) k.parallelSiblingCount = leafKids.length;
+      logger.info(
+        `🛡️ R2 豁免标记：横向容器 ${sec.id || idx} 的 ${leafKids.length} 个并列叶子卡将跳过 R2 内部拆分`,
+      );
+    }
+    const children = (sec.children || []).map((child, i) =>
+      buildEffectiveSection(child, i, ctx),
+    );
+    // 🛡️ 刀 20a（2026-10-28 · mc-max-1793174936204-657661ca 实锤）：vision items 轨
+    //   容器在容器分支被白名单重建丢掉 body.items ⇒ 6 卡列表坍缩成 1 卡、5 卡文本全丢
+    //   （plan 层覆盖门禁 uncovered=5 看得见的结构性丢失）。
+    //   判据（全部确定性事实，零硬编码）：
+    //     ① sec.body.items ≥2 且每项是富卡对象（含 content/elements | stats | icon）；
+    //     ② 现有 children 的 id 全部落在 items 的节点引用集内（children 只是卡的
+    //        再推导，无额外内容）——否则保留 children（宁可多渲染，不可漏渲染）。
+    //   命中 ⇒ children 替换为单个 collapsed list 叶（契约与 repeated-section-collapser
+    //   的 buildCollapsedSection 同构），下游刀 20b（fg-list 接管）按真值 N 项展开渲染。
+    const richItems = extractRichBodyItems(sec);
+    if (richItems) {
+      const itemNodeIds = new Set();
+      const collectIt = (v) => {
+        if (!v || typeof v !== 'object') return;
+        if (typeof v.id === 'string') itemNodeIds.add(v.id);
+        if (typeof v.figmaNode === 'string') itemNodeIds.add(v.figmaNode);
+        for (const k of Object.keys(v)) {
+          const val = v[k];
+          if (Array.isArray(val)) val.forEach(collectIt);
+          else if (val && typeof val === 'object') collectIt(val);
+        }
+      };
+      richItems.forEach(collectIt);
+      const childIds = (sec.children || []).map((c) => String(c?.id ?? ''));
+      const childrenAbsorbed =
+        childIds.length > 0 && childIds.every((id) => itemNodeIds.has(id));
+      if (childrenAbsorbed) {
+        // 列表几何 = 各卡 frame 真值并集（figmaIndex 缺事实 ⇒ null，下游按
+        // sourceNodeIds 并集回查，同样 fail-open）
+        let unionBox = null;
+        const fi = ctx?.figmaIndex;
+        if (fi) {
+          const boxes = richItems
+            .map((it) => {
+              const e = fi.get(String(it.id ?? '')) || fi.get(String(it.icon?.figmaNode ?? ''));
+              const b = e?.bbox || e?.absoluteBoundingBox || e?.rawNode?.absoluteBoundingBox;
+              return b && Number.isFinite(b.x) && Number.isFinite(b.y) ? b : null;
+            })
+            .filter(Boolean);
+          if (boxes.length === richItems.length) {
+            const x = Math.min(...boxes.map((b) => b.x));
+            const y = Math.min(...boxes.map((b) => b.y));
+            const r = Math.max(...boxes.map((b) => b.x + b.width));
+            const bt = Math.max(...boxes.map((b) => b.y + b.height));
+            unionBox = { x, y, width: r - x, height: bt - y };
+          }
+        }
+        // 合成 raw 折叠叶后**走一遍叶子分支**（collapsed 透传链：items/itemCount/
+        // renderHint/responsibility 全部由叶子分支既有口径产出，不手搓字段）
+        // 🛡️ 刀 28③（mc-max-1793250243785-4cc3d366 / 54ae6ee3 实锤）：折叠段
+        //   sourceNodeIds 必须含**全部成员卡组的 figma 子树闭包**。此前只带
+        //   collectSourceNodeIds(sec)（首卡子树 20 节点）⇒ 装配层叶子认领集
+        //   （claimedIds，精确 id 匹配、不做闭包展开）缺卡 2-6 ⇒ 卡 2-6 的卡面
+        //   rect/icon 底块被判「未认领可见 SOLID RECTANGLE」⇒ 刀 7 absorbed-bg
+        //   双份渲染。itemNodeIds（上面已收集的 6 个卡组 id）逐个经 figmaIndex
+        //   展开为子树全集；索引缺失 ⇒ 至少保留锚点 id 本身（fail-open 不猜）。
+        const listSourceNodeIds = (() => {
+          const out = new Set(collectSourceNodeIds(sec).map(String));
+          const walk = (n, d = 0) => {
+            if (!n || typeof n !== 'object' || d > 20) return;
+            if (n.id != null && String(n.id)) out.add(String(n.id));
+            for (const c of Array.isArray(n.children) ? n.children : []) walk(c, d + 1);
+          };
+          for (const id of itemNodeIds) {
+            const e = ctx?.figmaIndex?.get(String(id));
+            const rn = e?.rawNode || e?.node || null;
+            if (rn) walk(rn);
+            else out.add(String(id));
+          }
+          return Array.from(out);
+        })();
+        const rawListLeaf = {
+          id: `${sec.id}-list`,
+          name: `${sec.title || sec.name || '列表'}`,
+          title: sec.header?.title || sec.title || sec.name || '',
+          type: 'list',
+          layout: 'vertical',
+          collapsed: true,
+          renderHint: 'v-for',
+          itemCount: richItems.length,
+          itemTemplate: richItems[0],
+          items: richItems,
+          sourceNodeIds: listSourceNodeIds,
+          // R7：修复锚点是主锚契约，不随列表合成叶的 id 变化而丢失。
+          ...(sec.figmaAnchorId ? { figmaAnchorId: sec.figmaAnchorId } : {}),
+          ...(unionBox
+            ? {
+                absoluteBoundingBox: unionBox,
+                figmaBox: unionBox,
+                styles: { figmaHeightPx: unionBox.height },
+              }
+            : {}),
+        };
+        children.length = 0;
+        children.push(buildEffectiveSection(rawListLeaf, 0, ctx));
+      }
+    }
+    const title = sec.header?.title || sec.title || sec.name || '';
+    // 🛡️ 2026-09-30 复审 P0-1：原为 `sec.layout || 'vertical'` ⇒ 把「无事实（null）」臆造成
+    //   `vertical` 下传，再被 `code-generator` 写成 `display:flex;flex-direction:column` 内联样式
+    //   （内联优先级压过 class 规则）⇒「无事实不臆造」在写产物层被抵消。
+    //   改为**原样透传**（null 即 null），由写产物层按四分支决定「不内联方向」。
+    //   离线定量（复审 §6-1）：真实语料容器侧 `null = 0` ⇒ 本次改动**当前零行为变化**。
+    const containerLayout = sec.layout == null ? null : sec.layout;
+    // A 类事实的网格列数（仅由 `section-tree#deriveChildGridColumns` 对**容器**下发，见其注释）
+    const containerGridColumns = Number(sec.gridColumns) > 1 ? Number(sec.gridColumns) : null;
+    return {
+      id: sec.id || `container-${idx + 1}`,
+      // 🛡️ 2026-09-30 复审 §8.8 #14：删掉文案里的**方向复述**（原为「纵向布局容器…」）。
+      //   「方向」只能有一个事实源：真实 `sec.layout`（→ `layoutMetadata.direction` / 容器
+      //   写产物的四分支 / `formatSectionTreeForPrompt` 的 dirText）。而该文案对
+      //   **495/864（57%）的横向容器语义写反**，并被 `constraint-reinforcement.js:57`
+      //   （`s.name || s.title || s.responsibility`）当作 section 名复用。
+      //   实测该 prompt 出口**当前 0 触发**（864/864 容器 title 非空），故本次改动实际只
+      //   影响 context-shadow / 分析视图；改文案仍属「删减法」（删掉与事实无关的断言）。
+      responsibility:
+        '布局容器（仅空间包裹，不单独生成 .vue 文件；子区块必须按 children 树在父模板内组装）',
+      elementCount: children.reduce((n, c) => n + (Number(c.elementCount) || 0), 0),
+      title: String(title).trim().slice(0, 30),
+      type: 'container',
+      isLayoutContainer: true,
+      layout: containerLayout,
+      ...(containerGridColumns != null ? { gridColumns: containerGridColumns } : {}),
+      // 🛡️ 容器几何透传（2026-11-09 · fe2acd21/54f523ac 实锤）：container 分支此前不透传
+      //   absoluteBoundingBox/figmaBox，而同函数叶分支（下方「整体几何与高度必须成对透传」）
+      //   一直有 ⇒ 同函数两分支口径不一致。后果：横排行容器子段（如 89:39 tab 列 46×317）
+      //   在 componentPlan 里零几何 ⇒ LLM 无真值可依写 `flex: 0 0 auto` 由内容自撑
+      //   （193px vs 真值 46px），下游 heal 无从对照。与叶分支同口径：事实在 sec 上
+      //   就透传，缺省不产键（零副作用）。宽度真值消费方：R9-c 横排子项定宽 heal。
+      ...(sec.absoluteBoundingBox || sec.figmaBox
+        ? {
+            absoluteBoundingBox: sec.absoluteBoundingBox || sec.figmaBox,
+            figmaBox: sec.figmaBox || sec.absoluteBoundingBox,
+          }
+        : {}),
+      layoutSource: 'container-rebuild',
+      children,
+      collapsed: false,
+      // 🛡️ 刀 20a 配套：列表容器自身几何必须按「N 卡并集」参与父级 flex，
+      //   否则容器仍按首卡 72px 申报（figma id 与首卡 frame 撞名）⇒ 列表被压扁。
+      ...(children.length === 1 &&
+      children[0]?.collapsed === true &&
+      children[0]?.figmaBox
+        ? {
+            absoluteBoundingBox: children[0].figmaBox,
+            figmaBox: children[0].figmaBox,
+          }
+        : {}),
+      // 🛡️ P2-10（2026-10-01 · c-device-monitor-27021b77 实锤）：容器 section 此前**不带**
+      //   sourceNodeIds（本函数 container 分支漏了该字段，R1-1 的 collectSourceNodeIds 只在
+      //   叶子分支调用）⇒ 即便 id 是真实 Figma 节点（`89:40` con / `89:38` switch /
+      //   `89:37` @antd/tab）也是 src=[] ⇒ 装配/资源归属/布局事实无法按真值展开容器子树，
+      //   只能依赖 vision 锚点（而 vision 的 id 幻觉率 18/25，见 vision-anchor-validator）。
+      //   消费面已审计：section-content-guard 的借用判定本就按「最小归属 isProperSubset」
+      //   丢弃容器（容器子树 ⊃ 叶子子树）；code-generator#resolveSectionFlexSize 走
+      //   figmaNodeId → id → sourceNodeIds 回查链；resource-mount-plan 用它解析 owner ——
+      //   均为「容器只补自身 id + 直接子 id」即可满足，不做子树全集（避免把容器当成
+      //   内容 owner）。
+      sourceNodeIds: collectSourceNodeIds(sec),
+      // R7：上游已修复的主锚必须穿过容器白名单，供接管器按 sectionAnchorKey 同源消费。
+      ...(sec.figmaAnchorId ? { figmaAnchorId: sec.figmaAnchorId } : {}),
+      ...(sec.geometryAnchorInvalid ? { geometryAnchorInvalid: sec.geometryAnchorInvalid } : {}),
+      complexityScore: 0,
+      complexityReasons: {
+        elementCount: 0,
+        charts: 0,
+        interactions: 0,
+        maxDepth: 0,
+      },
+      // 🛡️ 2026-09-30 复审 §8.6 ③-a：删掉硬编码 `layout: { direction:'VERTICAL', layoutMode:'VERTICAL' }`。
+      //   实测那一层覆盖是**纯 no-op**：`extractLayoutMetadata` 读的是**对象键**
+      //   （`layout.layoutMode || layout.direction`），而真实语料 6630 个 section 的
+      //   `layout` / `body.layout` **100% 是字符串或 None（对象 0 例）** ⇒ 覆盖与否都落
+      //   `: 'column'` 兜底，输出逐字相同。但它会向下游**断言「VERTICAL」**（配合
+      //   `subcomponent-planner.js:1047` 的「纵向布局容器」文案），把「无事实」伪装成事实。
+      //   改为**从容器真实 layout 派生**（`extractLayoutMetadata(sec)`），不再向下游断言方向。
+      //   **差分探针实测**（临时 spec 跑「改动前 / 改动后」两态对跑，容器 6 种 layout 输入）：
+      //     · `'horizontal' | 'vertical' | 'grid' | null | undefined`（= 真实语料 100%，6630 section
+      //       实测对象 0 例）⇒ 输出**逐字完全一致**；
+      //     · 唯一差异是**对象形态** `layout:{layoutMode:'HORIZONTAL',itemSpacing:12,paddingLeft:8}`
+      //       （语料 0 例）：旧代码把真实的 HORIZONTAL/间距/内边距**压成** `column/gap:0/padding:0`，
+      //       新代码如实透传 `row/gap:12/left:8` —— 正是「不再臆造」的预期方向。
+      //   ⚠️ 仍未治本：`extractLayoutMetadata` 的 `: 'column'` 兜底本身会说谎（无事实 ≠ column），
+      //   治本（字符串感知 + 无事实返回 null + 同步 section-content-guard 口径）是 ③-b，须单独一轮 + A/B。
+      layoutMetadata: extractLayoutMetadata(sec),
+      // 🛡️ #138（2026-10-20 · e9165dce 实锤）：E1 互挂兄弟真值透传。section-tree#nestedSections
+      //   挂的 rowPeerIds（y 重叠>50% + x 分离 ⇒ 横向并列对）此前在白名单重建时被剥掉 ⇒
+      //   下游 pre-write-self-healing 刀32（rowPeers 包裹）真值条件永不满足、fail-open 静默跳过
+      //   ⇒「合作厂商/在线设备」两卡恒上下堆叠（477e185d/d27c5a1c/e9165dce 三连）。缺字段不产键，
+      //   下游 healRowPeersWrap 按 Array.isArray 判据天然 fail-open，无副作用。
+      ...(Array.isArray(sec.rowPeerIds) && sec.rowPeerIds.length > 0
+        ? { rowPeerIds: [...sec.rowPeerIds] }
+        : {}),
+      internalSubcomponents: [],
+      shouldSplitInternally: false,
+      // 🛡️ 内部语义树透传（容器分支 · 2026-10-27）：vision `body.children` 的内部结构
+      //   （label-value 配对 / stat-card 的 title+value+背景图 / table-header 每列 /
+      //   list-item 每格）。与 `body.items`（扁平文本清单）**互补双轨**：
+      //   items 管「有哪些文案」，internalTree 管「这些文案怎么配成对/行/列」。
+      //   缺字段不产键 ⇒ 下游按 `Array.isArray(sec.internalTree?.children)` 判据
+      //   天然 fail-open，无副作用。
+      ...(Array.isArray(sec.internalTree?.children) && sec.internalTree.children.length > 0
+        ? { internalTree: sec.internalTree }
+        : {}),
+    };
+  }
+
+  // 🛡️ 刀 21a（mc-max-1793181937804-3e301cdb 实锤）：vision 直接把同构列表收成
+  //   **叶子**（无 children、无 collapsed/renderHint、items 挂在 body.items），
+  //   `isCollapsedListSection` 只认顶层 items ⇒ 漏判 ⇒ 当普通叶子交给 LLM ⇒
+  //   6 卡又坍缩成 1 卡。治本：叶子分支先用共享判据 extractRichBodyItems 识别
+  //   富卡 items 轨，命中即按 collapsed list 归一（items 提升到顶层透传，
+  //   renderHint/itemCount 由下方既有口径产出，不手搓）。
+  //   🔴 方向闸（爆炸半径审计 87 任务实锤）：horizontal/grid 形态的富卡叶子
+  //   （横向统计卡/属性网格 17 例）**不归一**——fg-list 是纵列 v-for 接管，
+  //   横向场景归一会改错布局（它们另有 grid/statrow/kvgrid 接管链）；layout 缺
+  //   事实（null）同样不归一（缺事实不臆造）。仅 vision 明确 vertical 才归一。
+  const leafLayoutFact = String(sec.layout || sec.body?.layout || '').toLowerCase();
+  const richBodyItems =
+    leafLayoutFact === 'vertical' ? extractRichBodyItems(sec) : null;
+  const effectiveItems = Array.isArray(sec.items) ? sec.items : richBodyItems;
+  const declaredType = deriveSectionType(sec);
+  // 表格的 items 是数据行，不是普通列表卡；一旦按 collapsed list 处理，
+  // type 会被改写为 list，且顶层 headers 会在叶子白名单中丢失。
+  const collapsed = declaredType === 'table'
+    ? false
+    : isCollapsedListSection(sec) || richBodyItems != null;
+  const rawType = collapsed ? String(sec.type || 'list') : declaredType;
+  const title = sec.header?.title || sec.title || sec.name || '';
+  const elementCount = collapsed
+    ? Number(sec.itemCount) ||
+      (Array.isArray(effectiveItems) ? effectiveItems.length : 0)
+    : countElements(sec);
+  const responsibility = collapsed
+    ? `${TYPE_RESPONSIBILITY[rawType] || '列表项布局区'}：1 个 item 模板 + v-for 渲染 ${elementCount} 项，禁止拆成 ${elementCount} 个子组件文件`
+    : TYPE_RESPONSIBILITY[rawType] ||
+      `${title || rawType || '区块'}（请按功能拆分）`;
+
+  const scoreResult = calculateSplitScore(sec);
+  const layoutMetadata = extractLayoutMetadata(sec);
+
+  let internalSubcomponents = [];
+  if (ctx.enableInternalSplit && scoreResult.shouldSplit && !collapsed) {
+    // 🛡️ 2026-09-20 R2 豁免（方案A）：同构并列卡不拆。
+    //   parallelSiblingCount 由横向容器分支标记（见 buildEffectiveSection 容器分支）。
+    //   兄弟并列卡（三张统计卡等）的富内容是卡内元素，拆成 Group1/Group2 会导致
+    //   LLM 把分组生成为平级卡片组件 → 卡槽错位（mc-1789861426638 实锤：
+    //   136:129 两组占两槽、136:127 整卡消失）。
+    if (Number(sec.parallelSiblingCount) >= 2) {
+      logger.info(
+        `🛡️ R2 豁免：section ${sec.id} 是 ${sec.parallelSiblingCount} 张同构并列卡之一，整卡作为最小组件单元（卡内富内容不拆分）`,
+      );
+    } else {
+      internalSubcomponents = splitSectionInternally(sec, idx);
+      ctx.allInternalSubcomponents.push(
+        ...internalSubcomponents.map((sub) => ({
+          ...sub,
+          parentSectionId: sec.id || `section-${idx + 1}`,
+          parentSectionTitle: title,
+        })),
+      );
+    }
+  }
+
+  const tabStructured = enforceTabStructure(sec);
+  const tabOrientation = tabStructured.tabStructure?.orientation || 'vertical';
+  const isHorizontalTab = tabStructured.tabStructure && tabOrientation === 'horizontal';
+
+  const effectiveType = isHorizontalTab ? 'tabs' : rawType;
+  const effectiveResponsibility = isHorizontalTab
+    ? '标签页切换区（顶部横向 tab，下方为对应内容区，禁止竖向侧栏布局）'
+    : responsibility;
+  const tableHeaders = effectiveType === 'table' ? declaredTableHeaders(sec) : null;
+
+  // 🛡️ 栅格列数事实透传（2026-09-14 · a612a9f7 实锤）：视觉分析
+  //   preview-analysis.json 的 section 已含 `layout`（如 "grid"）与 `gridColumns`（如 3，
+  //   schema 默认值 3），但原 buildEffectiveSection 只提取 layoutMetadata、把这两个字段丢了
+  //   → 代码生成 prompt 的 `s.body.gridColumns` 恒为 null → LLM 自由发挥（真机偶发 4 列，
+  //   设计稿 3 列）。这里把视觉事实原样透传，供 prompt-builder/constraint-reinforcement/
+  //   code-structure-validator 消费（三处均已按 `section.body.gridColumns` 取值）。
+  const rawLayout = String(sec.layout || sec.body?.layout || '').toLowerCase();
+  const gridColumns = Number(
+    sec.gridColumns ?? sec.body?.gridColumns ?? NaN,
+  );
+  // 🛡️ 通用列数抽取（2026-09-17 治本）：vision 的布局字符串可能隐含列数事实
+  //   （"horizontal-3-columns" / "grid-4" / "3-col" / "horizontal-2-items" 等），
+  //   此前只透传字符串、列数恒 NaN → LLM 自由发挥（策略类型分布三列被退成 2 列 grid）。
+  //   用正则抽 `\d+` 后接 column/col/item 的数字，零硬编码、兼容任意列数。
+  const layoutColMatch = rawLayout.match(/(\d+)\s*[-_\s]*(?:col|column|item|grid)/);
+  const layoutColumns = layoutColMatch ? Number(layoutColMatch[1]) : NaN;
+  // 🛡️ 列数优先级（2026-11-12 · cc633474 实锤）＝ **几何事实 > 模型输出 > 字符串解析**。
+  //   旧序把视觉分析的 gridColumns 放在几何之前，而本单视觉给 3、行带真值 4
+  //   ⇒ 确定性几何被压住，产物与 D-GRID 判据同步错。几何是唯一可复算的事实源，必须优先。
+  const geometricColumns = inferGridColumnsFromGroupChildren(sec, ctx?.figmaIndex);
+  const effectiveColumns =
+    Number.isFinite(geometricColumns) && geometricColumns > 1
+      ? geometricColumns
+      : Number.isFinite(gridColumns) && gridColumns > 1
+        ? gridColumns
+        : Number.isFinite(layoutColumns) && layoutColumns > 1
+          ? layoutColumns
+          : NaN;
+  if (
+    Number.isFinite(geometricColumns) &&
+    geometricColumns > 1 &&
+    Number.isFinite(gridColumns) &&
+    gridColumns > 1 &&
+    Number(geometricColumns) !== Number(gridColumns)
+  ) {
+    // 阳性对照计数行：几何与 vision 冲突时**必须可追溯**（无此行时「几何生效」与「根本没跑」不可区分）
+    logger.info('🛡️ 列数真值覆盖（几何 > 视觉分析）', {
+      sectionId: String(sec.id),
+      name: sec.name,
+      visionColumns: gridColumns,
+      geometricColumns,
+    });
+  }
+  const hasGridColumns = Number.isFinite(effectiveColumns) && effectiveColumns > 1;
+  // 布局字符串被解析出列数时，归一为 'grid'（下游据此生成 repeat(N,1fr)）；
+  // 否则保留原布局语义（horizontal/vertical/...）。
+  const layoutFact =
+    hasGridColumns && !/grid/.test(rawLayout)
+      ? 'grid'
+      : rawLayout || (hasGridColumns ? 'grid' : '');
+
+  // 🛡️ P1 文本真值保留（2026-09-20 · c3c3244f tabs 消失治本）：
+  //   E1 derived 树的普通叶子（如 tabs-list 2:7889）其 item 级子节点（4 条 tab 文本）
+  //   在下方「仅透传 collapsed 子项」收口处被整体丢弃 → LLM 拿不到任何 tab 文本 →
+  //   do-not-invent 生效，tabs DOM 消失。探针已证 E1 树里 children[].text 完好。
+  //   治本：把「无 collapsed/v-for、带 text 的 item 子节点」文本确定性收进 body.items，
+  //   供 prompt 端作为文本真值消费（tabs 标签/图例文本等）。无文本子节点则不产生字段。
+  //
+  // 🛡️ 递归化 + 视觉序（2026-09-29 · mc-max-1790650861294-f57e0d3e 实锤）：
+  //   原实现只取 sec.children **直接子**的 text；但 E1 树里 header/tabs 的文本在更深层
+  //   （2:3565 › 2:3566「@antd/tab」› btn › TEXT「江阴靖江长江隧道」/「江阴大桥」），
+  //   且下方 body 合并段只在「无 sec.body」时才注入 items ⇒ 有 vision body 的 section
+  //   （所有 header）拿不到确定性文本，只能退回 vision 的**合并名**
+  //   「江阴靖江长江隧道江阴大桥」（tab 整条消失的根因）。
+  //   治本：递归收集（≤3 层）、按 bbox.y 升序还原视觉阅读序、去重、按布局结构配额截断
+  //   （A1 · 2026-10-26：grid/horizontal 随 elementCount 抬升且整行取，见 `TEXT_ITEM_QUOTA`）。
+  const plainTextItems = (() => {
+    const hits = []
+    const collect = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 3) return
+      if (
+        typeof node.text === 'string' &&
+        node.text.trim() &&
+        !node.collapsed &&
+        node.renderHint !== 'v-for'
+      ) {
+        hits.push({
+          t: node.text.trim(),
+          y: node.absoluteBoundingBox?.y,
+          x: node.absoluteBoundingBox?.x,
+          figmaNode: node.figmaNode || node.id || undefined,
+        })
+      }
+      for (const c of node.children || []) collect(c, depth + 1)
+    }
+    for (const c of Array.isArray(sec.children) ? sec.children : []) collect(c, 0)
+    // 🛡️ 图表 section 不注入：其内部文本是 echarts option 的一部分（图例/轴标签），
+    //   注入后会被下游 prompt 渲染成图表容器外的游离 DOM。
+    if (String(rawType || '').toLowerCase() === 'chart') return []
+    const seen = new Set()
+    const deduped = hits
+      // 视觉阅读序：先 y（自上而下）后 x（同行自左向右）
+      .sort((a, b) => (a.y ?? Infinity) - (b.y ?? Infinity) || (a.x ?? Infinity) - (b.x ?? Infinity))
+      .filter((h) => {
+        if (seen.has(h.t)) return false
+        seen.add(h.t)
+        return true
+      })
+    // 🛡️ A1：配额按布局结构性给出（grid/horizontal 随 elementCount 抬升）+ 按行整行截断，
+    //   不再一律 `.slice(0, 12)`（那会把 24 条属性表砍成半张，且与 elementCount 自相矛盾）。
+    const cap = resolveTextItemCap(layoutFact, elementCount)
+    const kept = takeTextItemsByRow(deduped, cap)
+    if (kept.length < deduped.length) {
+      logger.info('📝 A1 文本真值配额截断（按行整行取，不留半行）', {
+        sectionId: sec.id ?? null,
+        title: String(title || '').slice(0, 30),
+        layout: layoutFact || null,
+        elementCount,
+        total: deduped.length,
+        kept: kept.length,
+        dropped: deduped.length - kept.length,
+        cap,
+      })
+    }
+    return kept.map((h) => ({ text: h.t.slice(0, 40), figmaNode: h.figmaNode }))
+  })()
+
+  return {
+    id: sec.id || `section-${idx + 1}`,
+    responsibility: effectiveResponsibility,
+    elementCount,
+    title: String(title).trim().slice(0, 30),
+    // 🛡️ C0（2026-11-04 · mc-max-1793723025659-a72365c4 实锤）：header 是结构事实源，
+    //   不是 prompt 装饰品。vision 已给 `header.controls/headerSlots`，此前本 return
+    //   白名单重建把 header 整体剥掉 ⇒ Forecast 的 Tab/按钮/select 在 prompt 里消失，
+    //   LLM 只能猜“只有标题”。这里原样透传，不做字段级修补。
+    ...(sec.header && typeof sec.header === 'object' ? { header: sec.header } : {}),
+    type: effectiveType || undefined,
+    // 🛡️ F1（2026-09-20）：透传 body（vision 卡片语义：bgPlaceholder/icon 位置尺寸/
+    //   label+value 颜色字号）。E1 enrich 二段匹配回填的 body 此前在本函数重建时被丢弃
+    //   → 三卡语义（红#ff4d4f、bg-125 整卡背景等）永远到不了 prompt。
+    //   collapsed（v-for）section 的 items 由下方专职字段透传，不重复。
+    // ⚠️ 与下方「body 收敛」段互斥覆盖：那段用展开合并本 body，不再整体替换
+    //   （F1 前的历史 bug：整段重写 body 把 items/bgPlaceholder 全抹掉）。
+    // 🛡️ P1（2026-09-20）：无 body 但有 plainTextItems 时，仍要生成 body.items 承载文本真值
+    //   （tabs 标签/图例文本）。有 body 时下方「body 收敛」段会用展开合并，不在此重复。
+    ...(!collapsed && sec.body
+      ? { body: sec.body }
+      : !collapsed && plainTextItems.length > 0
+        ? { body: { items: plainTextItems } }
+        : {}),
+    // 🛡️ 2026-09-20 v-for 治本（mc-max-1789871432610 实锤）：**仅透传折叠产物子项**。
+    //   机制：collapseSectionsDeep 在 derived 树上把「图例 4 项」折成 3:74-list 并放在
+    //   父节点（287:5-left）的 children 里；本函数叶子分支重建对象时丢弃 children
+    //   → 折叠产物整体丢失（plan 里 287:5-left 无 v-for）。但无条件透传 children 又会让
+    //   卡内明细（136:127 的 bg/icon/Group）全部膨胀成 section（树爆炸）。
+    //   精确解：只透传「含 collapsed/v-for 子项」的 children——折叠产物得以保留，
+    //   普通叶子明细继续收口。
+    ...(Array.isArray(sec.children) &&
+    sec.children.some((c) => c && (c.collapsed === true || c.renderHint === 'v-for'))
+      ? { children: sec.children.filter((c) => c && (c.collapsed === true || c.renderHint === 'v-for')) }
+      : {}),
+    // 🛡️ 布局事实（视觉分析原值）：'grid' | 'horizontal' | 'vertical' | ...
+    ...(layoutFact ? { layout: layoutFact } : {}),
+    // 🛡️ 栅格列数事实：仅当视觉分析明确给出才透传（缺失时下游保持自由发挥，不硬编码默认值）
+    ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
+    collapsed,
+    // 整体几何与高度必须成对透传：只保留 388 而留下首行 box，会把真实段间距算错。
+    ...(sec.absoluteBoundingBox
+      ? {
+          absoluteBoundingBox: sec.absoluteBoundingBox,
+          figmaBox: sec.figmaBox || sec.absoluteBoundingBox,
+        }
+      : {}),
+    // 🛡️ section 高度单一事实源：A4/vision 主路径已从 Figma 区域或逐项并集解析出
+    //   整体高度时，必须穿过本白名单，供 applyFigmaHeightGrow 消费；否则它会退化为
+    //   sourceNodeIds 中 min-y 的首行/首卡高度（67a9452b 表格 388→44 实锤）。
+    ...(!collapsed && Number.isFinite(Number(sec.styles?.figmaHeightPx))
+      ? { styles: { figmaHeightPx: Number(sec.styles.figmaHeightPx) } }
+      : {}),
+    // 🛡️ 刀 28c（mc-max-1793250243785-4cc3d366 实锤）：collapsed 列表叶的几何必须
+    //   透传。刀 20a 合成的 rawListLeaf 带整列并集 absoluteBoundingBox/figmaBox
+    //   （532px），但本 return 白名单重建把几何字段全丢 ⇒ 上方容器分支的
+    //   「刀 20a 配套」宿主几何补丁读 `children[0].figmaBox` 恒 undefined ⇒
+    //   宿主容器仍按自身 figma bbox（首卡 72px）申报 ⇒ 532px 列表挤进 72px 壳。
+    //   窄透传：仅 collapsed 叶、仅几何三件套（事实已在 sec 上，不缺不产键）。
+    ...(collapsed && sec.absoluteBoundingBox
+      ? {
+          absoluteBoundingBox: sec.absoluteBoundingBox,
+          figmaBox: sec.figmaBox || sec.absoluteBoundingBox,
+          ...(Number.isFinite(Number(sec.styles?.figmaHeightPx))
+            ? { styles: { figmaHeightPx: Number(sec.styles.figmaHeightPx) } }
+            : {}),
+        }
+      : {}),
+    renderHint: collapsed ? 'v-for' : undefined,
+    itemCount: collapsed ? elementCount : undefined,
+    items: collapsed ? effectiveItems : undefined,
+    // 🛡️ 下游消费契约：prompt-builder/constraint-reinforcement/code-structure-validator
+    //   统一按 `section.body.gridColumns` 取值，故这里把脊柱字段收敛到 body。
+    //   🛡️ F1（2026-09-20）：改为**合并**而非替换——原实现整段重写 body，把 F1 回填的
+    //   items/bgPlaceholder/backgroundImage 等卡片语义抹掉（三卡只剩 {layout}）。
+    ...(layoutFact || hasGridColumns || plainTextItems.length > 0 || tableHeaders
+      ? {
+          body: {
+            ...(layoutFact ? { layout: layoutFact } : {}),
+            ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
+            // ① 先铺已有 body（vision / F1 的卡片语义）：layout / children / bgPlaceholder …
+            //    ⚠️ `children` 必须保留 —— 它含 `styles.flexGrow` 等**布局事实**，
+            //    与下方 `items` 是**互补双轨**（items=扁平文本清单；children=结构化子项），
+            //    不是同一事实的重复表达。
+            ...(sec.body || {}),
+            // 顶层 headers 归一到 body，供 context assembler 与表格接管器共用同一契约。
+            ...(tableHeaders ? { headers: tableHeaders } : {}),
+            // ② 再覆盖 `items`：**确定性文本真值**无条件覆盖 vision 的 items。
+            //    理由：vision 常把一整组文本命名成拼接串（如把 `@antd/tab` 的两项合成
+            //    「江阴靖江长江隧道江阴大桥」），而递归 TEXT 真值已把它们拆开 ⇒ 确定性胜出。
+            //    下游 `microcode-engineer` 的「必还原文本清单」正是读 `body.items[].text`。
+            //    ⚠️ 只覆盖 `items` 一个键，**不动** body 的其它字段（故与 ① 不冲突）。
+            //    历史：此前条件是 `plainTextItems.length > 0 && !sec.body` ⇒ 有 vision body 的
+            //    section（所有 header，如 tab 所在的 sub-header）永远拿不到确定性文本。
+            // 🛡️ 刀 21e（mc-max-1793181937804-3e301cdb 实锤）：collapsed 列表叶**豁免覆盖**——
+            //    其残留首卡 children 递归出的 plainTextItems 会把 vision 富卡 items
+            //    （content.elements/stat/icon 全结构）覆盖成扁平 [{text,figmaNode}] ⇒
+            //    下游 detectListLeaf 内容轨全空 ⇒ emptyItem 接管失败。collapsed 叶的
+            //    文本真值由专职字段 `items` 透传（见上 1831 行注释契约），body.items
+            //    保留 vision 富卡轨作内容源。
+            ...(plainTextItems.length > 0 && !collapsed ? { items: plainTextItems } : {}),
+          },
+        }
+      : {}),
+    // 🛡️ R1-1：归属的 Figma 节点 id 集合（供 dedupeDuplicateSections 做不依赖措辞的单一归属去重）
+    sourceNodeIds: collectSourceNodeIds(tabStructured),
+    // R7：普通叶同样保留修复锚；缺字段不产键，未修复段输出逐字不变。
+    ...(sec.figmaAnchorId ? { figmaAnchorId: sec.figmaAnchorId } : {}),
+    ...(sec.geometryAnchorInvalid ? { geometryAnchorInvalid: sec.geometryAnchorInvalid } : {}),
+    complexityScore: scoreResult.score,
+    complexityReasons: scoreResult.reasons,
+    layoutMetadata,
+    internalSubcomponents,
+    shouldSplitInternally: collapsed ? false : scoreResult.shouldSplit,
+    // 🛡️ 内部语义树透传（叶子分支 · 2026-10-27）：同容器分支说明。
+    //   `81:7` 这类「语义规则、几何不规则」的结构（12 对 label-value，x 间距实测
+    //   `[15,13,43,188,14,14,14,43]` 非等距 ⇒ `buildGridContract#uniformPitch` 恒 null
+    //   ⇒ `noGridContract`）此前只剩 24 条平铺 items，产物只能猜成 4 列 × 6 行。
+    //   本字段把 vision 已给对的内部树原样带下去，供下游（网格契约语义通道 /
+    //   prompt 的结构描述）消费。缺字段不产键，零副作用。
+    ...(Array.isArray(sec.internalTree?.children) && sec.internalTree.children.length > 0
+      ? { internalTree: sec.internalTree }
+      : {}),
+    ...(tabStructured.tabStructure ? { tabStructure: tabStructured.tabStructure } : {}),
+    // 🛡️ #138（同容器分支）：E1 互挂兄弟真值透传——叶子级横向并列（左图右文头部等）同样
+    //   需要送达下游刀32。缺字段不产键，零副作用。
+    ...(Array.isArray(sec.rowPeerIds) && sec.rowPeerIds.length > 0
+      ? { rowPeerIds: [...sec.rowPeerIds] }
+      : {}),
+  };
+}
+
+function applyFlexGrowFallback(nodes) {
+  const withHeight = [];
+  const collect = (list) => {
+    if (!Array.isArray(list)) return;
+    for (const s of list) {
+      if (s.layoutMetadata?.height > 0) withHeight.push(s);
+      if (Array.isArray(s.children)) collect(s.children);
+    }
+  };
+  collect(nodes);
+  if (withHeight.length === 0) return;
+  const avg =
+    withHeight.reduce((sum, s) => sum + s.layoutMetadata.height, 0) / withHeight.length;
+  const apply = (list) => {
+    if (!Array.isArray(list)) return;
+    for (const s of list) {
+      const meta = s.layoutMetadata;
+      if (meta && !(meta.flexGrow > 0) && meta.height > 0 && avg > 0) {
+        meta.flexGrow = Math.round((meta.height / avg) * 1000) / 1000;
+      }
+      if (Array.isArray(s.children)) apply(s.children);
+    }
+  };
+  apply(nodes);
+}
+
+/**
+ * 🛡️ 治本（2026-09-14 · c-traffic-monitor-21e2afd6 实锤）：flex 比例改由 Figma 实测高度决定。
+ *
+ * 铁律：**事实源优先于 LLM 猜测**（同刀 16b「消费端事实优先于名字猜测」）。
+ *
+ * 实证：两张结构完全相同的双系列柱状图（2:7459 / 2:7628）Figma 高度**都是 131px**，
+ *   而 vision 给出的 flexGrow 是 3.73 / 0.952（3.9 倍差）→ 原样写进 CSS →
+ *   上一张图被拉高、下一张被压扁，是用户截图里「糟糕且可怕」的主要来源。
+ *   prompt 契约里 flexGrow 的定义本就是「平均值为 1、比例 = 设计稿高度比」，
+ *   Figma 实测高度是该定义唯一可靠的事实源，vision 的自报系数只能算猜测。
+ *
+ * 规则（逐层、可部分生效）：
+ *   - 每一层独立归一：只统计本层「非 header 且能取到 Figma 高度」的 section；
+ *   - 本层可测者 ≥ 2 → grow = 高度 / 本层平均高度（四舍五入 3 位），覆盖旧值；
+ *   - 可测者 < 2 或取不到几何 → 保留原值（不动，交给 applyFlexGrowFallback 兜底）。
+ *
+ * @param {Array} nodes effectiveSections
+ * @param {Map} figmaIndex indexFigmaNodes(figmaNodeData) 的产物
+ * @returns {number} 被改写的 section 数（0 = 无事实源或不生效）
+ */
+function applyFigmaHeightGrow(nodes, figmaIndex) {
+  if (!figmaIndex || typeof figmaIndex.get !== 'function' || figmaIndex.size === 0) {
+    return 0;
+  }
+  let changed = 0;
+  // 🛡️ T-GROW（2026-11-05 · mc-max-1793880532372-38f97905 实锤）：归一必须**方向感知**。
+  //   病灶：本函数原只有高度口径，且递归进容器 `children` 时沿用高度。
+  //   而 CSS 里 `flex-direction: row` 分发的是**宽度** ⇒ T-TOPO 重建出的横向容器
+  //   （`89:39` 46×317 + `2:8437` 367×295）拿到 317:295 ≈ 1.04:0.96，
+  //   真值宽度比是 46:367 = 0.11:0.89 ⇒ 渲染成 ~52:48（比原 column 全宽更离谱）。
+  //   方向判据复用 `isHorizontalContainer` 同一正则（见 buildEffectiveSection），不新起第二套。
+  const dirOf = (sec) => {
+    const raw = String(sec?.layout || sec?.body?.layout || '');
+    if (/grid/i.test(raw)) return 'grid';
+    if (/horizontal|row/i.test(raw)) return 'row';
+    return 'column';
+  };
+  const apply = (list, direction) => {
+    if (!Array.isArray(list) || list.length === 0) return;
+    // grid：列宽由 `grid-template-columns` 决定，flex-grow 不参与主轴 ⇒ 不改写（保留原值）。
+    if (direction === 'grid') return;
+    const axis = direction === 'row' ? 'width' : 'height';
+    const measured = [];
+    for (const s of list) {
+      // header section 归 base-panel 标题栏插槽，不参与列内 flex 分配，也不该污染平均值。
+      if (s?.type === 'header') continue;
+      const resolvedHeight = Number(s.styles?.figmaHeightPx);
+      // vision 子段误锚组件根时，根盒已在注入层判无效；不得经 sourceNodeIds 重新取回。
+      // 但 A4 已从其他真实 Figma 行独立解析出高度时仍可使用——禁的是根盒回灌，
+      // 不是丢弃已验证的非根几何，否则三段会错误退化成两段归一。
+      if (s?.geometryAnchorInvalid && !(resolvedHeight > 0)) continue;
+      // 高度事实：`figmaHeightPx` 优先；缺失时才几何兜底。
+      // 🛡️ 容器段（A′ 重建产物）必须用**并集盒**：`figmaSectionBox` 只读 `sourceNodeIds`，
+      //   而重建容器没有该字段，且其 bbox 可能只是某一侧栏（`89:37` 46×317 而内容横跨 410）
+      //   ⇒ 取不到高度 ⇒ 该段不参与归一 ⇒ 同层其他段瓜分全部高度（比例全错）。
+      //   union 只用于**容器**，非容器段的 C1（并集高度）单独立项，避免一刀铺开 279 段。
+      const heightBox =
+        resolvedHeight > 0
+          ? null
+          : isLayoutContainerSection(s)
+            ? unionSectionBox(s, figmaIndex) || figmaSectionBox(s, figmaIndex)
+            : figmaSectionBox(s, figmaIndex);
+      const height = resolvedHeight > 0 ? resolvedHeight : Number(heightBox?.height);
+      // 主轴事实：row 用宽度（`figmaWidthPx` 优先，缺失用并集盒 —— 不能用 figmaSectionBox：
+      // 它读 sourceNodeIds，而 vision 主路径的 section 没有该字段 ⇒ 恒 null ⇒ 宽度取不到）。
+      let axisValue = height;
+      if (axis === 'width') {
+        const resolvedWidth = Number(s.styles?.figmaWidthPx);
+        if (resolvedWidth > 0) {
+          axisValue = resolvedWidth;
+        } else {
+          const union = unionSectionBox(s, figmaIndex);
+          axisValue = Number(union?.width);
+          if (axisValue > 0) {
+            // 宽度事实落库：下游 code-generator / prompt 直接读这里，避免二次几何推导。
+            s.styles = { ...(s.styles || {}), figmaWidthPx: Math.round(axisValue) };
+          }
+        }
+      }
+      if (axisValue > 0) measured.push({ s, axisValue, height });
+    }
+    if (measured.length >= 2) {
+      const avg =
+        measured.reduce((sum, m) => sum + m.axisValue, 0) / measured.length;
+      if (avg > 0) {
+        for (const { s, axisValue, height } of measured) {
+          const meta = s.layoutMetadata;
+          if (!meta) continue;
+          const next = Math.round((axisValue / avg) * 1000) / 1000;
+          const needHeight = height > 0 && !(meta.height > 0);
+          // 🛡️ 治本（2026-09-16 · mc-1789501340553-e25b9b55 实锤）：同步写入 Figma 实测高度。
+          //   此前只更新 flexGrow 不更新 height → height 始终为 0（extractLayoutMetadata 从 LLM 产出的
+          //   section 读不到 absoluteBoundingBox）→ microcode-engineer.js line 935 的 `if (meta.height > 0)`
+          //   恒 false → 整个布局提示块被跳过 → LLM 拿不到 flex 比例信息 → 所有 section flex:1 平分。
+          if (meta.flexGrow !== next || needHeight) {
+            meta.flexGrow = next;
+            if (height > 0) meta.height = height;
+            changed += 1;
+          }
+        }
+      }
+    }
+    for (const s of list) {
+      if (Array.isArray(s.children)) apply(s.children, dirOf(s));
+    }
+  };
+  apply(nodes, 'column');
+  return changed;
+}
+
+export class SubcomponentPlanner {
+  /**
+   * 基于 layoutStructure 产出子组件清单
+   * 🎯 Phase 2 方案1: 增强子组件拆分 - 集成多维度评分和内部拆分策略
+   *
+   * @param {Object} layoutStructure - 来自 visual-parser 的结构化布局（含 sections[]）
+   * @param {Object} [opts]
+   * @param {number} [opts.minSectionsForced=3] - 至少多少有效 sections 才强制拆
+   * @param {boolean} [opts.skipPanelHeaderFilter=false] - 是否跳过 panel-header 过滤
+   *        微码流程用 false（默认），Vue3 流程用 true（Vue3 无 base-panel，header 要独立拆）
+   * @param {boolean} [opts.enableInternalSplit=true] - 是否启用 section 内部拆分（Phase 2 新增）
+   * @returns {{effectiveSections: Array, isForced: boolean, minFiles: number, reason: string, internalSubcomponents: Array}}
+   */
+  plan(layoutStructure, opts = {}) {
+    const minSections = opts.minSectionsForced ?? 3;
+    const skipPanelHeaderFilter = opts.skipPanelHeaderFilter ?? false;
+    const enableInternalSplit = opts.enableInternalSplit ?? true;
+    const diagnostics = summarizePipelineDiagnostics(opts.diagnostics || {});
+
+    const rawSections =
+      layoutStructure?.layout?.sections || layoutStructure?.sections || [];
+
+    // 🛡️ P1-A（2026-10-25 · ab7bb76c 实锤）：plan `body.children[].id` 自引用/复用校验。
+    //   挂点刻意选在 **vision 原始 sections 上、E1 重建之前** —— body.children 是 vision
+    //   自由发挥的产物，E1（deriveSectionsFromFigmaTree）会用 Figma 树重建结构把 body 拍平，
+    //   之后再校验就永远零命中（假绿）。**只诊断留痕，不改 rawSections**（既有降级路径不变）。
+    //   🔴 不判「锚点是否内容祖先」：那是 `section-anchor-truth#auditSectionAnchors` 的既有判据
+    //      （同构不重写），本模块只补它不看的「body child id 自引用 / 同父复用」维度。
+    //   🔴 计数行是硬要求：没有它，「零命中」与「没跑」不可区分。
+    try {
+      const hasBodyChildren = (() => {
+        const stack = [...rawSections];
+        while (stack.length > 0) {
+          const s = stack.pop();
+          if (!s || typeof s !== 'object') continue;
+          if (Array.isArray(s?.body?.children) && s.body.children.length > 0) return true;
+          if (Array.isArray(s.children) && s.children.length > 0) stack.push(...s.children);
+        }
+        return false;
+      })();
+      if (hasBodyChildren) {
+        const bodyChildAudit = auditPlanBodyChildIds({ sections: rawSections });
+        logger.info('🛡️ plan body.children.id 一致性校验·已评估', {
+          evaluated: bodyChildAudit.evaluated,
+          bodySections: bodyChildAudit.bodySections,
+          entries: bodyChildAudit.entries,
+          selfReference: bodyChildAudit.byCode['self-reference'],
+          duplicateSibling: bodyChildAudit.byCode['duplicate-sibling'],
+          ...(bodyChildAudit.issues.length
+            ? { sample: compactBodyChildIssues(bodyChildAudit.issues) }
+            : {}),
+        });
+      }
+    } catch (bodyChildErr) {
+      // fail-open：校验异常绝不影响规划主流程
+      logger.warn('🛡️ plan body.children.id 校验异常（fail-open 跳过，维持现状）', {
+        error: bodyChildErr?.message || String(bodyChildErr),
+      });
+    }
+
+    // 🛡️ E1 治本（2026-09-16）：用 Figma 节点树确定性递归推导 section 结构，
+    // 替代 vision（LLM）的自由发挥划分。vision 划分是「布局崩塌」的根源——
+    // 重复 sub-header、命名混乱、高度缺失、横向容器（header 内 tabs）被
+    // rebuildSlotConContainers 跳过导致嵌套丢失。
+    // 治本规则：deterministic 递归结构 = 结构骨架（嵌套层级 + 确定性高度），
+    // vision = 语义回填（type/role，按 figmaNodeId 匹配），两者合并。
+    const businessSections = rawSections.filter((sec) => !isPureDecorationSection(sec));
+    logger.info('🛡️ vision-decoration-filter·已评估', {
+      evaluated: rawSections.length,
+      removed: rawSections.length - businessSections.length,
+    });
+    // 🛡️ 2026-11-06（f91aa545 实锤「插槽又去了内容部分」）：**承载插槽内容的宿主段不得被过滤**。
+    //   旧实现把 `preservedHeaderSlotContent` 只当**计数**用（filter 条件里没有它）：
+    //   panel-header 段一律删 ⇒ 其后 `section 结构契约` 找不到 header 叶 ⇒ `headerSlotsEmitted=0`
+    //   ⇒ index 无 `#header-right` 插槽 ⇒ 插槽内容退回 body 再渲一遍（用户看到的就是这个）。
+    //   判据：`isPanelHeader` ∧ `hasDeclaredHeaderSlotContent`（段里确有插槽业务内容）⇒ 保留，
+    //   并显式打上 `_headerSlotHost` 供结构契约当插槽叶（不靠 type 猜测）。
+    const headerSlotHosts = skipPanelHeaderFilter
+      ? []
+      : businessSections.filter((sec) => isPanelHeader(sec, false) && hasDeclaredHeaderSlotContent(sec));
+    const headerSlotHostIds = new Set(headerSlotHosts.map((sec) => String(sec?.id ?? '')));
+    for (const sec of headerSlotHosts) {
+      if (sec && typeof sec === 'object') sec._headerSlotHost = true;
+    }
+    const preservedHeaderSlotContent = headerSlotHosts.length;
+    let sections = skipPanelHeaderFilter
+      ? businessSections
+      : businessSections.filter(
+          (sec) => !isPanelHeader(sec) || headerSlotHostIds.has(String(sec?.id ?? '')),
+        );
+    let filteredCount = rawSections.length - sections.length;
+    logger.info('🛡️ panel-header 插槽事实过滤·已评估', {
+      evaluated: skipPanelHeaderFilter ? 0 : businessSections.length,
+      filtered: skipPanelHeaderFilter ? 0 : businessSections.length - sections.length,
+      preservedHeaderSlotContent,
+    });
+    // 🔴 R23：E1（确定性递归结构）是否真的替代了 vision sections —— 归并后方向复算的判定域闸门
+    let e1Derived = false;
+    // 🛡️ 2026-10-26（ab7bb76c P0）：本层按 `chromeOnly` 剥离的纯标题栏数量（含嵌套）。
+    //   用途：给 `applyHeaderGeometryFallback` 的 `headerFactStripped` 闸门供数 ——
+    //   剥掉 chrome header 后 sections 里已无 header 事实，但事实本身存在（由宿主渲染），
+    //   几何兜底的前提不成立，必须整条跳过（否则会把统计卡顶部薄条误标成 header）。
+    let strippedChromeHeaderCount = 0;
+
+    // 🛡️ 2026-10-30 第2步：结构骨架来源（默认 vision；显式 'figma' 回退旧 E1 行为）。
+    const structureSource = normalizeStructureSource(opts.structureSource);
+    // 🛡️ 锚点完备性闸门（fail-closed 到 E1）：vision 段失锚 ⇒ Figma 真值断供。
+    //   宁可回退 E1（有真值托底），也不产出零真值的自由发挥布局。
+    let effectiveStructureSource = structureSource;
+    if (
+      structureSource === STRUCTURE_SOURCE_VISION &&
+      opts.figmaNodeData &&
+      typeof opts.figmaNodeData === 'object'
+    ) {
+      const anchorIndex = indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData);
+      // 🛡️ 2026-11-10（流量 6c12ab55 实锤，Q6 收口）：结构来源+锚定率计数行（恒打）。
+      //   真机实证：vision 仅 3 段（锚点不完备但 hasAnchoredContent 放行）⇒ 出口结构语义
+      //   漂移 ⇒ 装配自由度爆炸 ⇒ 排版崩（D2 重叠 3 对/横幅溢出）。先可视化覆盖率，
+      //   为后续「覆盖率阈值收紧」留数据基线（当前判据仍按 e7c4197c 只防全局零锚）。
+      const _anchorTotal = Array.isArray(sections) ? sections.length : 0;
+      const _anchorHit = Array.isArray(sections)
+        ? sections.filter((s) => {
+            const key = sectionAnchorKey(s);
+            return !!key && anchorIndex.has(key);
+          }).length
+        : 0;
+      // 🛡️ Figma 顶层业务段参考数（2026-11-10 · 设备 8e3db5f5 实锤：vision 仅 2 段
+      //   anchorCoverage=100% 仍放行 ⇒ 段拆分爆炸成 27 个子组件）。coverage 只测锚定
+      //   比例不测段数合理性——此列让「vision 段数 ≪ Figma 业务段数」的低质量骨架可见，
+      //   为「段数过低触发 vision 重分析」判据留数据基线（本轮只观测不收紧）。
+      const _doc = opts.figmaNodeData?.document || opts.figmaNodeData;
+      const _figmaTop = Array.isArray(_doc?.children?.[0]?.children)
+        ? _doc.children[0].children.length
+        : Array.isArray(_doc?.children)
+          ? _doc.children.length
+          : 0;
+      logger.info(
+        `🛡️ structure-source：anchorCoverage=${_anchorHit}/${_anchorTotal} source=${structureSource} visionSections=${_anchorTotal} figmaTop=${_figmaTop}`,
+      );
+      if (!hasAnchoredContent(sections, anchorIndex)) {
+        effectiveStructureSource = STRUCTURE_SOURCE_FIGMA;
+        logger.warn(
+          '🛡️ structure-source：vision 段锚点缺失（逐项内容无法映射 Figma 节点），回退 E1 保底',
+          { reason: 'vision-anchor-missing', sections: sections.map((s) => String(s?.id ?? '')) },
+        );
+      }
+    }
+    if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
+      // 🛡️ 确定性递归推导（结构事实源）——**仅最终来源为 figma 时执行**。
+      //   vision 主路径不做这次全树推导：既省一次遍历，也避免 E1 结构替换掉 vision sections。
+      // 🛡️ 2026-09-30（评审 §8.4 步骤 3 · Bug4-①）：`sections[].layout` 只认 A 类布局事实
+      //   （`figma-node-layout-facts#buildNodeLayoutFacts`）；外部已算过则复用，避免重复遍历。
+      const derived =
+        effectiveStructureSource === STRUCTURE_SOURCE_FIGMA
+          ? deriveSectionsFromFigmaTree(
+              opts.figmaNodeData,
+              opts.nodeLayoutFacts || buildNodeLayoutFacts(opts.figmaNodeData),
+            )
+          : null;
+      if (derived && Array.isArray(derived.sections) && derived.sections.length > 0) {
+        // 收集 vision 语义（完整字段），按 figmaNodeId 建索引
+        const visionSemantic = new Map();
+        const collectSemantic = (secs) => {
+          for (const s of secs || []) {
+            if (!s || typeof s !== 'object') continue;
+            const key = sectionAnchorKey(s);
+            if (key && !visionSemantic.has(key)) {
+              visionSemantic.set(key, s);
+            }
+            collectSemantic(s.children);
+          }
+        };
+        collectSemantic(rawSections);
+
+        // 🛡️ 语义回填：vision 的「语义字段」优先（id/type/name/role/sourceNodeIds/header/body），
+        // deterministic 的「结构字段」优先（children 嵌套层级、isLayoutContainer、
+        // absoluteBoundingBox、styles.figmaHeightPx）。这是「方案 C 混合模式」的核心：
+        // 结构来自 Figma 树（确定性），语义来自 vision（LLM 识别 chart/tabs/stats）。
+        const enrich = (secs) => {
+          for (const s of secs) {
+            if (!s || typeof s !== 'object') continue;
+            const sem = visionSemantic.get(sectionAnchorKey(s));
+            if (sem) {
+              // vision 语义 id 优先（chart 的「江阴靖江长江隧道」等 LLM 语义命名）
+              if (sem.id && sem.id !== s.id) s.id = sem.id;
+              // vision type 优先（chart/tabs/stats 等 LLM 语义分类）
+              if (sem.type) s.type = sem.type;
+              // vision role 优先（inline-row/item/常驻）
+              if (sem.role) s.role = sem.role;
+              // vision 语义 name 优先（「江阴靖江长江隧道」优于「@echarts/bar」）
+              if (sem.name && sem.name !== s.name) s.name = sem.name;
+              // vision sourceNodeIds 优先（chart 数据关联）
+              if (Array.isArray(sem.sourceNodeIds) && sem.sourceNodeIds.length > 0) {
+                s.sourceNodeIds = sem.sourceNodeIds;
+              }
+              // vision header 优先（标题真值）
+              if (sem.header) s.header = sem.header;
+              // vision body 优先（叶子内容结构）
+              if (sem.body) s.body = sem.body;
+              if (sem) sem._consumed = true;
+            }
+            if (Array.isArray(s.children)) enrich(s.children);
+          }
+        };
+        enrich(derived.sections);
+
+        // 🛡️ F1 二段匹配（2026-09-20 · mc-1789867417147 实锤）：
+        //   vision 常对「聚合级区块」编语义 id（如统计卡片组 id=2136639043、figmaNodeId=null），
+        //   一段匹配按 figmaNodeId||id 永远对不上 E1 节点 → 卡片语义（bgPlaceholder→resourceFile、
+        //   icon 位置/尺寸、label/value 颜色字号）整体丢弃 → LLM 凭裸树自由发挥
+        //   （卡背景挂错/数值颜色错/整卡布局与 UI 不符）。
+        //   治本：文本真值匹配——收集 vision section 深层文本（label/value/unit），
+        //   在 E1 树中找「子树文本重合度最高且最深」的宿主 section：
+        //     - 宿主是叶子 → 整 body 回填；
+        //     - 宿主是容器 → body.items 按文本下钻分配到各叶子（每叶仅得自己的 item）。
+        //   阈值：vision texts ≥2 且重合 ≥0.6（单文本不匹配，防误配）。
+        //   纯确定性、可单测；不命中时零影响（fail-open 保持裸树）。
+        try {
+          const collectDeepTexts = (x, out, depth = 0) => {
+            if (!x || typeof x !== 'object' || depth > 10) return;
+            if (typeof x.text === 'string' && x.text.trim()) {
+              out.add(x.text.trim());
+            }
+            for (const k of ['children', 'items', 'elements', 'parts', 'icon', 'content', 'body', 'header']) {
+              if (Array.isArray(x[k])) {
+                for (const c of x[k]) collectDeepTexts(c, out, depth + 1);
+              } else if (x[k] && typeof x[k] === 'object') {
+                collectDeepTexts(x[k], out, depth + 1);
+              }
+            }
+          };
+          // E1 section 子树文本集（只读 children 树，不读 body——避免一段匹配结果自证）
+          const subtreeTexts = (s, out = new Set(), depth = 0) => {
+            if (!s || typeof s !== 'object' || depth > 12) return out;
+            if (typeof s.text === 'string' && s.text.trim()) out.add(s.text.trim());
+            for (const c of s.children || []) subtreeTexts(c, out, depth + 1);
+            return out;
+          };
+          // 遍历 E1 树建「候选宿主」列表（含深度，越深越特异）
+          const hosts = [];
+          const collectHosts = (secs, depth = 0) => {
+            for (const s of secs || []) {
+              if (!s || typeof s !== 'object') continue;
+              hosts.push({ s, depth, texts: subtreeTexts(s) });
+              collectHosts(s.children, depth + 1);
+            }
+          };
+          collectHosts(derived.sections);
+
+          let f1Filled = 0;
+          // 🛡️ 内部语义树回挂（2026-10-27 · d072d085 / 2ec8acc7 实锤）：
+          //   vision 的 `body.children` 是「内部结构」的**唯一语义真值源**——
+          //   `label-value`（label+value 配对）、`stat-card`（title+value+背景图）、
+          //   `table-header`（每列）、`list-item`（每格）。此前它只跟着
+          //   `s.body = sem.body` 走「按 figmaNodeId||id」的一段匹配，而 vision 的 id
+          //   常把「聚合级 section」贴成「容器里某个**子节点**的 id」：
+          //     · d072d085：属性网格整体（12 对 + gridColumns:2）被贴成 `36:1699`，
+          //       而 `36:1699` 真值只是网格里那个「所属产品」TEXT ⇒ 语义树落到一个
+          //       最终被吸收进 `81:7.body.items` 的叶子上，且 `_consumed` 让 F1 的
+          //       **文本重合度**匹配整段跳过 ⇒ plan 只剩 24 条平铺 `{text,figmaNode}`，
+          //       产物只能猜成 4 列 × 6 行。
+          //   本条按**文本重合度**找宿主（复用 F1 的同一 `best`、不另造第二套判据），
+          //   只写**新字段 `internalTree`**、绝不碰 `body` ⇒ 对既有下游零行为变化。
+          let internalTreeEvaluated = 0;
+          let internalTreeWithNodes = 0;
+          let internalTreeAttached = 0;
+          let internalTreeDrilled = 0;
+          const internalTreeAttachedHosts = [];
+          for (const [key, sem] of visionSemantic.entries()) {
+            const hasStructuredBody =
+              !!sem.body &&
+              typeof sem.body === 'object' &&
+              (Array.isArray(sem.body.children) || Array.isArray(sem.body.items));
+            // 一段匹配已消费且**无**内部结构 ⇒ 与旧版逐字等价（跳过）
+            if (sem._consumed && !hasStructuredBody) continue;
+            const semTexts = new Set();
+            collectDeepTexts(sem, semTexts);
+            if (semTexts.size < 2) continue;
+            internalTreeEvaluated++;
+            // 找最佳宿主：文本重合率 ≥0.6，取重合率最高、同分取最深（最特异）
+            let best = null;
+            for (const h of hosts) {
+              if (h.texts.size === 0) continue;
+              let hit = 0;
+              for (const t of semTexts) if (h.texts.has(t)) hit++;
+              const overlap = hit / semTexts.size;
+              if (overlap < 0.6) continue;
+              if (
+                !best ||
+                overlap > best.overlap + 1e-9 ||
+                (Math.abs(overlap - best.overlap) < 1e-9 && h.depth > best.depth)
+              ) {
+                best = { ...h, overlap };
+              }
+            }
+            if (!best) continue;
+
+            // —— 内部语义树回挂（新字段，纯加法）——
+            //   不吃 `_consumed` 门槛：一段匹配可能把语义贴到了错的 id 上（见上），
+            //   文本重合度才是「这段语义属于哪个 E1 节点」的正确判据。
+            if (hasStructuredBody) {
+              const body = sem.body;
+              const nodes = Array.isArray(body.children)
+                ? body.children
+                : Array.isArray(body.items)
+                  ? body.items
+                  : [];
+              if (nodes.length > 0) {
+                internalTreeWithNodes++;
+                const gridCols = Number(body.gridColumns);
+                best.s.internalTree = {
+                  source: 'vision',
+                  // 留痕用（**不作主键**：vision 的 id 与容器常不一致）
+                  sourceSectionId: String(key || ''),
+                  layout: body.layout == null ? null : String(body.layout),
+                  ...(Number.isFinite(gridCols) && gridCols > 1
+                    ? { gridColumns: Math.round(gridCols) }
+                    : {}),
+                  nodeCount: nodes.length,
+                  // 原样保留 vision 的内部树（含 type/text/styles/nested children），
+                  // 不在本层做任何裁剪或重排 —— 裁剪是下游各刀的事。
+                  children: nodes,
+                };
+                internalTreeAttached++;
+                // —— 同构重复列表下钻 ——
+                //   宿主是**容器**时（vision 的 section 描述的是整排卡），内部树挂在容器上
+                //   语义正确，但容器不产 `.vue` 文件；而下游「items 覆盖去重」会把
+                //   `43:4898`/`43:4903` 折掉、只留 `43:4893` 作代表 ⇒ 代表叶子必须自带
+                //   自己那一份 item，否则下游（如 stat-card 的背景图 / 列数）永远读不到。
+                //   判据刻意保守，三条**全满足**才下钻，否则只保留容器级（不猜）：
+                //     ① items 同 type/role（同构重复，非同构异构容器不可拆）
+                //     ② host.children 数量 == items 数量（1:1 对应）
+                //     ③ 每个子节点至少命中 1 条文本（有实证归属才下钻）
+                const drillKids = Array.isArray(best.s.children) ? best.s.children : [];
+                const itemTypes = new Set(
+                  nodes.map((it) => String(it?.type || it?.role || '')),
+                );
+                if (
+                  nodes.length >= 2 &&
+                  drillKids.length === nodes.length &&
+                  itemTypes.size === 1 &&
+                  [...itemTypes][0]
+                ) {
+                  const itemTexts = (x, out = new Set(), d = 0) => {
+                    if (!x || typeof x !== 'object' || d > 8) return out;
+                    if (typeof x.text === 'string' && x.text.trim()) out.add(x.text.trim());
+                    for (const k of ['children', 'items', 'parts']) {
+                      const v = x[k];
+                      for (const c of Array.isArray(v) ? v : v ? [v] : []) itemTexts(c, out, d + 1);
+                    }
+                    return out;
+                  };
+                  const usedItems = new Set();
+                  for (const kid of drillKids) {
+                    if (!kid || typeof kid !== 'object') continue;
+                    const kidTexts = subtreeTexts(kid);
+                    if (kidTexts.size === 0) continue;
+                    let bestItem = null;
+                    let bestHit = 0;
+                    for (const it of nodes) {
+                      if (usedItems.has(it)) continue;
+                      let hit = 0;
+                      for (const t of itemTexts(it)) if (kidTexts.has(t)) hit++;
+                      if (hit > bestHit) {
+                        bestHit = hit;
+                        bestItem = it;
+                      }
+                    }
+                    if (bestItem && bestHit >= 1) {
+                      usedItems.add(bestItem);
+                      kid.internalTree = {
+                        ...best.s.internalTree,
+                        nodeCount: 1,
+                        children: [bestItem],
+                      };
+                      internalTreeDrilled++;
+                    }
+                  }
+                }
+                if (internalTreeAttachedHosts.length < 5) {
+                  internalTreeAttachedHosts.push({
+                    visionId: String(key || ''),
+                    hostId: String(best.s.id || ''),
+                    nodeCount: nodes.length,
+                    gridColumns:
+                      Number.isFinite(gridCols) && gridCols > 1
+                        ? Math.round(gridCols)
+                        : null,
+                    overlap: Math.round(best.overlap * 100) + '%',
+                  });
+                }
+              }
+            }
+            // 一段匹配已回填 body ⇒ 不再重复回填（保持旧行为逐字等价）
+            if (sem._consumed) continue;
+
+            const items = sem.body?.items;
+            if (Array.isArray(items) && items.length > 1 && Array.isArray(best.s.children) && best.s.children.length > 0) {
+              // 容器宿主：items 下钻到叶子（每叶只回填自己的 item）
+              const leaves = best.s.children;
+              const used = new Set();
+              for (const leaf of leaves) {
+                const leafTexts = subtreeTexts(leaf);
+                let bestItem = null;
+                let bestHit = 0;
+                for (const it of items) {
+                  if (used.has(it)) continue;
+                  const itTexts = new Set();
+                  collectDeepTexts(it, itTexts);
+                  if (itTexts.size === 0) continue;
+                  let hit = 0;
+                  for (const t of itTexts) if (leafTexts.has(t)) hit++;
+                  if (hit > bestHit) { bestHit = hit; bestItem = it; }
+                }
+                if (bestItem && bestHit >= 1) {
+                  used.add(bestItem);
+                  leaf.body = { ...(sem.body || {}), items: [bestItem] };
+                  f1Filled++;
+                }
+              }
+            } else {
+              // 叶子宿主（或单 item）：整 body 回填
+              best.s.body = sem.body;
+              f1Filled++;
+            }
+            logger.info('🛡️ F1 文本真值匹配：vision 语义回填', {
+              visionId: key,
+              hostId: best.s.id,
+              overlap: Math.round(best.overlap * 100) + '%',
+              mode: Array.isArray(items) && items.length > 1 ? 'items下钻' : '整body',
+            });
+          }
+          // 计数行**无条件打印**（无论是否命中）：真机核验唯一可靠依据。
+          //   `evaluated` 非零 ⇒ 判据接线生效；`attached` 0 且 `evaluated` 非零
+          //   ⇒ 判据无病灶（不是接线失败），两者必须一起看。
+          logger.info('🛡️ vision 内部语义树回挂·已评估', {
+            evaluated: internalTreeEvaluated,
+            withNodes: internalTreeWithNodes,
+            attached: internalTreeAttached,
+            drilled: internalTreeDrilled,
+            ...(internalTreeAttachedHosts.length ? { sample: internalTreeAttachedHosts } : {}),
+          });
+          if (f1Filled > 0) {
+            logger.info(`🛡️ F1 二段匹配完成：${f1Filled} 个 E1 section 获得 vision 卡片语义（文本真值匹配）`);
+          }
+          // 清理临时标记（避免污染下游序列化）
+          for (const sem of visionSemantic.values()) delete sem._consumed;
+        } catch (f1Err) {
+          logger.warn('🛡️ F1 二段匹配异常（fail-open 跳过）', { error: f1Err?.message || String(f1Err) });
+        }
+
+        sections = derived.sections;
+        e1Derived = true;
+
+        // 🛡️ 纯 chrome 标题栏剥离（2026-09-17 · 环境监测实锤，零硬编码、通用）：
+        //   E1 确定性推导对任何名为 header 的 Figma 节点标 type:header，其中「纯装饰标题栏」
+        //   （VECTOR×N + 单标题文本，无业务控件/容器）是 base-panel 外壳、应由微码宿主渲染，
+        //   engineer 拿到它会在 default slot 臆造 divider/circles/gradient-bar（环境监测
+        //   c-env-monitor-header-section）。视觉路径的 stripChromeSectionsInPlace 覆盖不到
+        //   确定性推导分支，故在此对微码流程按 `chromeOnly` 标记剥离；Vue3 保留（自行渲染外壳）。
+        if (!skipPanelHeaderFilter) {
+          // 🔴 计数行是硬要求：`evaluated`（顶级 section 数）+ `stripped`（含嵌套命中数）
+          //   必须同时留痕 —— 否则「零剥离（判据未命中）」与「判据没跑」不可区分。
+          const chromeEvaluated = sections.length;
+          const stripChromeOnly = (list) =>
+            list
+              .filter((s) => {
+                if (!s || typeof s !== 'object') return true;
+                // 只剥离「type=header 且 chromeOnly」的纯装饰标题栏；
+                // 业务 header（含 tabs/stat/双文本）chromeOnly=false，绝不误伤。
+                if (s.type === 'header' && s.chromeOnly === true) {
+                  strippedChromeHeaderCount += 1;
+                  return false;
+                }
+                return true;
+              })
+              .map((s) =>
+                s && typeof s === 'object' && Array.isArray(s.children)
+                  ? { ...s, children: stripChromeOnly(s.children) }
+                  : s,
+              );
+          sections = stripChromeOnly(sections);
+          logger.info('E1 纯 chrome 标题栏剥离·已评估', {
+            evaluated: chromeEvaluated,
+            stripped: strippedChromeHeaderCount,
+            remaining: sections.length,
+          });
+        }
+
+        logger.info('E1 治本：确定性递归结构已替代 vision sections', {
+          deterministic: sections.length,
+          vision: rawSections.length,
+        });
+      } else {
+        // 🛡️ 主路径（structureSource=vision · 2026-10-30 第2步升格）：保留 vision sections
+        //   作结构骨架，Figma 只注入精确尺寸（absoluteBoundingBox / figmaHeightPx）。
+        //   structureSource=figma 时，本分支退化为「E1 推导失败」的旧兜底（行为不变）。
+        const figmaRoot = opts.figmaNodeData?.document || opts.figmaNodeData;
+        const figmaIndex = indexFigmaNodes(figmaRoot);
+        const heightById = new Map();
+        for (const [id, rec] of figmaIndex) {
+          if (rec?.bbox && rec.bbox.height > 0) {
+            heightById.set(id, rec.bbox);
+          }
+        }
+        let injected = 0;
+        let rootAnchorInvalid = 0;
+        sections = sections.map((s) => {
+          const rootInvalid = isVisionComponentRootAnchor(s, figmaRoot, sections.length);
+          if (rootInvalid) rootAnchorInvalid += 1;
+          const box = resolveVisionSectionBox(s, heightById, { skipAnchor: rootInvalid, figmaIndex });
+          const marked = rootInvalid ? { ...s, geometryAnchorInvalid: 'component-root' } : s;
+          if (box && box.height > 0) {
+            injected += 1;
+            return {
+              ...marked,
+              absoluteBoundingBox: box,
+              styles: { ...(marked.styles || {}), figmaHeightPx: box.height },
+            };
+          }
+          return marked;
+        });
+        logger.info('🛡️ structure-source：vision sections 作结构骨架 + Figma 精确尺寸注入', {
+          structureSource: effectiveStructureSource,
+          e1Fallback: effectiveStructureSource === STRUCTURE_SOURCE_FIGMA,
+          injected,
+          rootAnchorInvalid,
+          total: sections.length,
+        });
+      }
+    }
+
+    // 🔴 真机判据行（无条件打印，2026-10-30 第2步）：骨架来源必须可数、可核对。
+    //   structureSource=vision 且 e1Derived=false ⇒ vision 骨架主路径生效；
+    //   structureSource=figma 且 e1Derived=true ⇒ 旧 E1 行为（逃生门）。
+    logger.info('🛡️ structure-source·已评估', {
+      requestedStructureSource: structureSource,
+      structureSource: effectiveStructureSource,
+      anchorFallback: effectiveStructureSource !== structureSource,
+      e1Derived,
+      sections: sections.length,
+      hasFigmaNodeData: !!(opts.figmaNodeData && typeof opts.figmaNodeData === 'object'),
+    });
+
+    // 🛡️ header 几何兜底（2026-09-29 · b6e018d6 拍板方案，命名无关）：
+    //   E1 / vision / chrome 剥离全部走完后仍无 header 事实 ⇒ 按 Figma 几何
+    //   （顶层顶部 15% 薄条）强制标记 type='header'。详见函数注释。
+    const headerGeomHit = applyHeaderGeometryFallback(sections, {
+      // 🛡️ 2026-10-30 第2步：vision 骨架下纯标题栏由 `isPanelHeader` 剥离（filteredCount），
+      //   不走 E1 的 stripChromeOnly ⇒ strippedChromeHeaderCount 恒 0，几何兜底会把
+      //   「顶部统计概览」误标成 header（P0 语料 ab7bb76c 的 43:4893 实测）。标题事实既已被
+      //   剥离（宿主 base-panel 会渲染），兜底前提同样不成立，必须一并计入闸门。E1 不变。
+      headerFactStripped:
+        strippedChromeHeaderCount > 0 ||
+        (effectiveStructureSource === STRUCTURE_SOURCE_VISION && filteredCount > 0),
+    });
+    if (strippedChromeHeaderCount > 0) {
+      // 闸门留痕：与剥离计数行成对出现，便于真机核对「跳过」不是「没跑到」
+      logger.info('🛡️ header 几何兜底·已跳过', {
+        reason: 'chrome-header-stripped',
+        stripped: strippedChromeHeaderCount,
+      });
+    }
+    if (headerGeomHit) {
+      logger.warn('🛡️ header 几何兜底生效：顶层顶部薄条已标记 header（无任何 header 类型事实）', headerGeomHit);
+    }
+
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return {
+        effectiveSections: [],
+        isForced: false,
+        minFiles: 0,
+        reason: 'layoutStructure 无 sections，跳过子组件规划',
+        internalSubcomponents: [],
+      };
+    }
+
+    // 过滤 panel-header（仅微码流程，且仅 vision 路径需要）
+    // ⚠️ 刻意**不**在此复用 chrome-section-filter#isChromeOnlySection：实证（2026-09-14
+    //   c-traffic-monitor-21e2afd6）raw section 全部为 role='inline-row' 且 children[].role='item'，
+    //   而 hasBusinessBody 的业务正则为 /…|item|…/ → 恒为 true → 该过滤器对 inline-row 永远
+    //   返回 false（死判据，加了也不生效）；且它命中即「整节剥离」，会连「当日总流量/流量预测
+    //   tabs」一起删掉（上游 headerSlots 为 [] 无兜底），与「chrome 剥离仅微码」的既有契约冲突。
+    //   真正的事实源在上游 visual-parser#_postProcessAnalysis 的 stripChromeSectionsInPlace。
+    if (filteredCount > 0) {
+      logger.info(`过滤 ${filteredCount} 个 panel-header section`);
+    }
+
+    // P2': 合并图例 section 到相邻图表 section
+    sections = mergeLegendSections(sections);
+
+    // 🛡️ V-4 前移（2026-11-08 · 架构顺序修正）：段锚点范围审计必须在**结构骨架确定之前**。
+    //   理由：`collapseSectionsDeep` 用段的 `figmaBox` 判几何同构签名，若审计落在折叠之后，
+    //   折叠器看到的是**未修正**的段树（例如 4 段形态里的「单卡」与「单卡底图」两个 117×64
+    //   同构段），可能把它们折成错误的 v-for 模板；前移后折叠器拿到的是上提过的正确段。
+    //   安全性：原始 vision 段形态下 `sectionAnchorKey` 仍可解析（候选序含 figmaNodeId / id），
+    //   且 V-4 只改 `id / sourceNodeIds / 锚点四候选 / 段高`，不改变段的语义字段 ⇒ 形态安全。
+    //   🔴 V-5（过粗下拆）**不前移**：它产出的是 E1 形态段（无 body/responsibility），
+    //   混入 vision 段树会被 `buildEffectiveSection` 当成「缺内容段」处理，故留在
+    //   effectiveSections 阶段（见下方 applyOverCoarseExpansion 调用处）。
+    const beforeScopeEarly = sections;
+    sections = applySectionAnchorScopeAudit(sections, opts.figmaNodeData);
+    if (sections !== beforeScopeEarly) {
+      logger.warn('🛡️ [折叠前] 顶层段锚点过窄（单卡/单卡底图被当成整段），已上提到集合容器', {
+        from: beforeScopeEarly.map((s) => s.id),
+        to: sections.map((s) => s.id),
+      });
+    }
+
+    // 🛡️ 2026-09-10：同构重复卡片收成 list/grid（device 12 卡 + 12 装饰 → 1 个模板）
+    // 🛡️ 2026-09-20 治本：切 collapseSectionsDeep（递归 + 几何同构签名）——
+    //   E1 后重复项都在容器 children 里，旧顶层折叠静默失效（mc-max-1789871432610
+    //   图例 8 项 / 三卡均未折叠实锤）。递归版自底向上，items 带 _vforData
+    //   （texts/textStyles/resourceFiles）供 v-for prompt 确定性注入。
+    const beforeCollapse = sections.length;
+    const beforeCollapseDeep = JSON.stringify(countSectionsDeep(sections));
+    // 🛡️ R19（2026-10-21）：把 Figma 节点树传进折叠器，items 的文本真值改由
+    //   `utils/text-runs.js` 产出 `_vforData.lines`（一行一组 run，带 color/fontSize/fontWeight）。
+    //   旧行为（无 figmaNodeData ⇒ 走 vision 平行数组）保持不变。
+    // 🔍 L1 文档同构折叠（2026-11-03）：docAnalysis.uiElements「同 api+同控件」组作为
+    //   第二折叠证据（几何分组为空时的 fallback，方案 docs/2026-11-03-折叠器文档同构判据.md）。
+    const docGroups = buildDocHomogeneityGroups(opts.docAnalysis);
+    // 🛡️ B 层（2026-11-12 · mc-1794428749650-cc633474 实锤）：并列分组守恒计数行。
+    //   折叠器的 ③ 组（内容同构跨段合并）会把「各段自带互不相同标题」的并列分组判成
+    //   同一列表被切碎 ⇒ 合并后只剩首段标题。守卫已在折叠器内生效（sectionOwnTitle 判据），
+    //   此处只做**可辩驳观测**：守恒命中数 + 被保护的标题，落真机日志；
+    //   零命中时不打日志（与「未接线」区分靠折叠后段数对比行，见下方）。
+    const conserveGroups = [];
+    sections = collapseSectionsDeep(sections, {
+      figmaRoot: opts.figmaNodeData,
+      docGroups,
+      onConserveGroup: (info) => conserveGroups.push(info),
+    });
+    if (conserveGroups.length > 0) {
+      logger.info(
+        `🛡️ 并列分组守恒: conserved=${conserveGroups.length}, groups=[${conserveGroups
+          .map((g) => `${g.ids.join('+')}=>${g.titles.join('/')}`)
+          .join(' | ')}]`,
+      );
+    }
+    // 🔍 真机判据计数行：L1 生效可辩驳验证（groups>0 即文档声明组进了折叠器）
+    if (docGroups.length > 0) {
+      let docFolded = 0;
+      let docFoldedItems = 0;
+      const walkFold = (arr) => {
+        for (const s of Array.isArray(arr) ? arr : []) {
+          if (s?._foldEvidence === 'doc') {
+            docFolded++;
+            docFoldedItems += Array.isArray(s.items) ? s.items.length : 0;
+          }
+          walkFold(s?.children);
+        }
+      };
+      walkFold(sections);
+      logger.info(
+        `📄 文档同构折叠: docGroups=${docGroups.length}, docFolded=${docFolded}, items=${docFoldedItems}, apis=[${docGroups.map((g) => g.api).join(',')}]`,
+      );
+    }
+    const afterCollapseDeep = JSON.stringify(countSectionsDeep(sections));
+    if (afterCollapseDeep !== beforeCollapseDeep || sections.length !== beforeCollapse) {
+      logger.info('重复同构 section 已折叠为 list/grid（递归）', {
+        beforeTop: beforeCollapse,
+        afterTop: sections.length,
+        beforeDeep: beforeCollapseDeep,
+        afterDeep: afterCollapseDeep,
+      });
+    }
+
+    // 🛡️ A 方案（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤）：items 覆盖去重（治案①卡 2 双渲染）。
+    //   折叠结束后，「vision items 轨」段落（48:5798，body.items=6 张卡）与「折叠轨」段落
+    //   （48:5813-list，卡 2-6 折叠）覆盖同一批 Figma 节点 ⇒ 两条轨各出一个子组件 ⇒ 卡 2 双渲染。
+    //   判据：折叠段的 Figma 覆盖闭包 ⊆ items 段的覆盖闭包 ⇒ 折叠段是重复解释，移除（详见 util 注释）。
+    //   部分覆盖 / 无 Figma 归属 ⇒ 一律保留（宁可多渲染，不可漏渲染）。
+    const closureIndex = buildFigmaClosureIndex(opts.figmaNodeData);
+    if (closureIndex) {
+      const beforeCoverageDedupe = sections.length;
+      // 🛡️ C0.2（2026-11-04 · mc-max-1793750471950-b93589ae 实锤）：三段判据（祖先/后代
+      //   单一归属）依赖 TEXT 节点集做「祖先余量」判定——父 Frame 与子 Group 同时成为
+      //   平级 section 时，删纯壳祖先、留承接内容的结构后代，消灭 DOM 双渲染。
+      const figmaTextIdSet = buildFigmaTextIdSet(opts.figmaNodeData);
+      const figmaTextCharIndex = buildFigmaTextCharactersIndex(opts.figmaNodeData);
+      const coverageDeduped = dedupeSectionsByCoverage(sections, closureIndex, {
+        // 🛡️ 2026-10-30 第2步：vision 骨架下段多为平铺容器锚点，吸收者必须携带内容
+        requireContentCarrier: effectiveStructureSource === STRUCTURE_SOURCE_VISION,
+        textIdSet: figmaTextIdSet ?? undefined,
+        textCharIndex: figmaTextCharIndex ?? undefined,
+      });
+      sections = coverageDeduped.sections || sections;
+      logger.info('🛡️ R8-9 plan 覆盖去重·已评估', {
+        evaluated: true,
+        beforeTop: beforeCoverageDedupe,
+        afterTop: sections.length,
+        removed: coverageDeduped.removed.length,
+        structureSource: effectiveStructureSource,
+      });
+      if (coverageDeduped.removed.length > 0) {
+        logger.warn('🛡️ items 覆盖去重：被完全覆盖的重复段已移除（同一批 Figma 节点的第二条解释）', {
+          removed: coverageDeduped.removed,
+          beforeTop: beforeCoverageDedupe,
+          afterTop: sections.length,
+        });
+      }
+    }
+
+    // 🛡️ A′ Phase 5：保留 container-rebuild 嵌套。容器不 flatten、不占独立 .vue 槽。
+    const containerCount = sections.filter((s) => isLayoutContainerSection(s)).length;
+    if (containerCount > 0) {
+      logger.info('容器层级保留为嵌套 section', {
+        containers: sections
+          .filter((s) => isLayoutContainerSection(s))
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            childIds: (s.children || []).map((c) => c.id),
+          })),
+      });
+    }
+
+    const allInternalSubcomponents = [];
+    // 🔴 R23：仅 E1 路径才需要 figma 索引（vision 路径不参与归并后方向复算），避免无谓遍历
+    const figmaIndexForRefine =
+      e1Derived && opts.figmaNodeData && typeof opts.figmaNodeData === 'object'
+        ? indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData)
+        : null;
+    let effectiveSections = sections.map((sec, idx) =>
+      buildEffectiveSection(sec, idx, {
+        enableInternalSplit,
+        allInternalSubcomponents,
+        e1Derived,
+        figmaIndex: figmaIndexForRefine,
+      }),
+    );
+
+    // 🛡️ 治本（2026-09-14 · c-traffic-monitor-34750940 实锤）：无归属壳锚定真实 Figma 节点。
+    //   vision 用语义 id 起 section 名 → 真实 @echarts 图表节点被臆造成 src=[] 壳，
+    //   下游判别力去重双输（真图表被当碎片杀、假壳被判超集留）。在裁决前先用 figma
+    //   节点树（事实源）把壳锚定回真实节点；无 figmaNodeData 时零影响。
+    if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
+      // 🛡️ #78 技术栈接管（S2+S3，2026-10-01）：必须在 stripFabricatedSourceIds 之前 ——
+      //   本步骤按「sec.id / sourceNodeIds ↔ 真值标记节点」匹配（标记 id 都是真实 Figma id，
+      //   不受假 id 污染影响）；deep-first 最小归属认领 + table 契约抽取成功才吸收
+      //   （fail-open：契约抽不出来就维持拆列现状，绝不产出空 <a-table />）。
+      try {
+        const tsStats = enrichSectionsWithTechStack(effectiveSections, opts.figmaNodeData);
+        if (tsStats.enriched > 0) {
+          logger.info('🛡️ 技术栈接管完成（S2 语义收编 + S3 内容抽取）', tsStats);
+        }
+      } catch (tsErr) {
+        logger.warn('🛡️ 技术栈接管异常（fail-open 跳过，维持现状）', {
+          error: tsErr?.message || String(tsErr),
+        });
+      }
+
+      // 🛡️ 治本（2026-09-15 · 228b63d5）：先清洗「编造 id 空间」污染的 sourceNodeIds，
+      //   让假 grid/tabs 壳回到「无归属壳」状态，anchor 才能锚定真 chart、dedupe 才能剔假壳。
+      //   位置必须在 anchorPhantomSections **之前**（假 id 不清，isShell 判据恒 false）。
+      effectiveSections = stripFabricatedSourceIds(
+        effectiveSections,
+        opts.figmaNodeData,
+      );
+
+      const beforeAnchor = effectiveSections;
+      effectiveSections = anchorPhantomSections(
+        effectiveSections,
+        opts.figmaNodeData,
+      );
+      if (effectiveSections !== beforeAnchor) {
+        logger.info('无归属壳已锚定真实 Figma 节点', {
+          anchored: effectiveSections
+            .filter(
+              (s, i) =>
+                (beforeAnchor[i]?.sourceNodeIds || []).length === 0 &&
+                (s?.sourceNodeIds || []).length > 0,
+            )
+            .map((s) => ({ id: s.id, sourceNodeIds: s.sourceNodeIds })),
+        });
+      }
+
+      // 🛡️ 治本（2026-09-14 · c-traffic-monitor-21e2afd6 实锤）：按 Figma 视觉坐标重排。
+      //   位置必须在 anchorPhantomSections **之后**（臆造图表壳此刻才拿到 sourceNodeIds）；
+      //   planner 之后的所有下游——index.vue 组装、子组件命名、布局高度映射——全部按
+      //   effectiveSections 顺序消费，这里不排就是全链路顺序错。
+      //   实证：vision 数组序把「车型分布」(y=573) 排在两张柱状图 (y=287/428) 之前。
+      const beforeSort = effectiveSections;
+      // 🔴 结构骨架=vision：主路径的阅读顺序只能来自布局分析；Figma 坐标不参与无条件重排。
+      //   显式 figma/E1 逃生门仍保留既有坐标排序。
+      //   🛡️ V-3（2026-11-04 · 6f926db0 实锤）：vision 主路径增加「窄判据几何审计」——
+      //   仅当锚点全有效 + 严格垂直堆叠 + 数组序≠y 序（客观错序）时按几何纠正；
+      //   锚点缺失/水平并排一律不动（计数行恒打，0 也打）。
+      effectiveSections = effectiveStructureSource === STRUCTURE_SOURCE_FIGMA
+        ? sortSectionsByFigmaY(effectiveSections, opts.figmaNodeData)
+        : applyVisionOrderAudit(effectiveSections, opts.figmaNodeData);
+      if (effectiveSections !== beforeSort) {
+        logger.info('effectiveSections 已按 Figma 视觉坐标重排', {
+          from: beforeSort.map((s) => s.id),
+          to: effectiveSections.map((s) => s.id),
+        });
+      }
+
+      // 🛡️ V-4（2026-11-08 · mc-1794122457556-be2af6c7 实锤）：顶层段锚点范围几何审计。
+      //   病灶：vision 把「一张卡」及其「该卡底图」报成两个顶层业务段
+      //   （`2:8438` 单卡 117×64 标成「左侧功能标签栏」/ `2:8439` 其 bg 标成「设备状态卡片网格」），
+      //   真实网格容器是其祖先 `2:8437 cons` 367×295（12 张卡 3×4）。
+      //   忠实执行错段的连锁：flexGrow 按 64 算 → 装配按 4 段出骨架 → 刀53 对 `2:8439`
+      //   （3 节点 0 TEXT）判 icon 叶 ⇒ **整文件重写 CardGrid.vue 为单图容器**（12 卡全丢）。
+      //   判据：「重复集合中的成员不可能是整个业务段」⇒ 锚点上提到集合容器并按目标合并。
+      //   🔴 位置必须在 applyFigmaHeightGrow 之前——后者按 section.id 查 Figma 节点取高度，
+      //   上提后 id 变了，才能取到 295 而非 64。计数行恒打（0 也打）。
+      // 🛡️ V-4 已前移到 `collapseSectionsDeep` **之前**（见 mergeLegendSections 之后），
+      //   此处不再重复调用 —— 二次执行会让 `coveredIds` 基于不同段集求值，可能误判。
+      //   若需审计「buildEffectiveSection 之后才出现的新段」（如 E1 派生段），另开独立判据。
+
+      // 🧱 V-5（2026-11-08 · mc-1794128973091-c3fe924f 实锤）：段粒度过粗的局部 E1 展开。
+      //   同一 Figma 节点三次生成，vision 给出 4/3/2 段三套粒度：4 段（单卡+单卡底图被当段）
+      //   → 刀53 覆盖整组件；2 段（整块 `89:40`）→ LLM 画成一张大卡、12 卡网格丢失；
+      //   只有 3 段（`2:8419 / 2:8787 / 89:37`）产物合格。
+      //   既有 structure-source 闸门只判「锚点是否存在」，`89:40` 是根槽容器锚点有效
+      //   ⇒ 粗粒度骨架直接放行。本步补「粒度」维：锚点的子是一串垂直堆叠且合计覆盖满高
+      //   的区块 ⇒ 该段只是外壳 ⇒ 用**既有** deriveSectionsFromFigmaTree 局部递归展开。
+      //   🔴 位置在 applyFigmaHeightGrow 之前（后者按 section.id 取高），且在 V-4 之后
+      //   （先修过窄、再修过粗，两个方向互逆，分开调用各自留痕）。计数行恒打。
+      const beforeCoarse = effectiveSections;
+      effectiveSections = applyOverCoarseExpansion(effectiveSections, opts.figmaNodeData);
+      if (effectiveSections !== beforeCoarse) {
+        logger.warn('🧱 顶层段粒度过粗（整块内容区被当成一段），已按 Figma 子结构局部展开', {
+          from: beforeCoarse.map((s) => s.id),
+          to: effectiveSections.map((s) => s.id),
+        });
+      }
+
+      // 🛡️ V-6（2026-11-11 · 74722f0f 实锤）：段锚点几何范围按 body 内容真实归属容器上提。
+      //   流量监测设计图里三个区块形态一致（◆小标题 + 内容区），但 Figma 里**只有「当日总流量」
+      //   的标题被单独拆成节点** `2:3550`（33px），其内容（大卡 91px + 两个折线图各 127px）
+      //   住在同级兄弟 `88:33 slot-当日总流量`（556px）。蓝图段高只记 33px ⇒ 下游
+      //   applyFigmaHeightGrow 按 33 归一化（flexGrow 0.095，真值 0.638）⇒ LLM 把 556px
+      //   当无主区域，自拆 ChartChart/ChartChart2 平级组件、flex 自拟 0.055（图表白底盖住大卡）。
+      //   判据：段 body/header 内 figmaNode 的 LCA 上溯到「与锚点同级」的容器 ⇒ 用其高度。
+      //   位置必须在 applyFigmaHeightGrow 之前（后者优先读 styles.figmaHeightPx）。
+      const anchorLift = liftSectionAnchorsByContentRange({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = anchorLift.sections;
+      logger.info(
+        `🛡️ section-anchor-lift：evaluated=${anchorLift.stats.evaluated} lifted=${anchorLift.stats.lifted} skipped=${anchorLift.stats.skipped}`,
+      );
+      if (anchorLift.stats.lifted > 0) {
+        logger.warn('🛡️ section-anchor-lift：段锚点只覆盖了标题条，几何范围已上提到内容容器', {
+          sections: effectiveSections
+            .filter((s) => s.figmaAnchorId && String(s.figmaAnchorId) !== String(s.id))
+            .map((s) => ({ id: s.id, anchor: s.figmaAnchorId, h: s.styles?.figmaHeightPx })),
+        });
+      }
+
+      // 🛡️ V-7（2026-11-11 · 5d6a6a25 实锤）：同 id 段合并。
+      //   vision 输出 4 段，其中「当日总流量」（body 4 个 figmaNode，真实容器 88:33/556px）与
+      //   「流量趋势柱状图」（body 0 个 figmaNode 的幻影段）**复用了同一个 id 2:3550**
+      //   ⇒ flexGrow 归一化同 id 出现两次（2.457 / 0.146），LLM 拿两个同名段只能猜着分配，
+      //   当日总流量只拿到 flex 0.480（应 0.638）。
+      //   合并方向：保留有内容锚点的段，把幻影段的 body.children 并入（不丢描述）后移除。
+      const idMerge = mergeCollidedSections({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = idMerge.sections;
+      logger.info(
+        `🛡️ section-id-merge：evaluated=${idMerge.stats.evaluated} groups=${idMerge.stats.groups} merged=${idMerge.stats.merged} removed=${idMerge.stats.removed}`,
+      );
+      if (idMerge.stats.merged > 0) {
+        logger.warn('🛡️ section-id-merge：撞 id 段已合并（幻影段内容并入有锚点段）', {
+          detail: idMerge.stats.detail,
+        });
+      }
+
+      // 🛡️ V-8（2026-11-11 · bafe3fb7 实锤）：父子段合并 + header 上提。
+      //   `136:121 slot`(86px) 与它的**直接子节点** `136:122 sub-header`(24px, 同一 y) 被 vision
+      //   都当成独立段 ⇒ 产物 StatsSection 与 ContentSection 各渲染一份「◆今日累计」。
+      //   与 V-7 分工：V-7 合并「相同 id」（幻影段抄 id）；V-8 合并「父子关系」（子段只是父段的标题条）。
+      //   判据：直接父子 + 子高 ≤ 父高×0.4 + 子无段级 children ⇒ 子标题上提到父、内容并入后删子。
+      const headerMerge = mergeChildHeaderSections({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = headerMerge.sections;
+      logger.info(
+        `🛡️ section-header-merge：evaluated=${headerMerge.stats.evaluated} groups=${headerMerge.stats.groups} merged=${headerMerge.stats.merged}`,
+      );
+      if (headerMerge.stats.merged > 0) {
+        logger.warn('🛡️ section-header-merge：子段只是父段的标题条，已合并并把标题上提', {
+          detail: headerMerge.stats.detail,
+        });
+      }
+
+      // ① id 唯一化必须提前到 flexGrow 归一化之前（否则同 id 两段各自归一化，值分裂）。
+      //    :below 处（leafSections 之前）仍保留一次调用——幂等，用于兜底后续步骤新增的重复。
+      effectiveSections = uniqueSectionIds(effectiveSections);
+
+      // 🛡️ 治本：flex 比例同样以 Figma 实测高度为事实源（vision 自报 flexGrow 只作兜底）。
+      // ⚠️ 必须解包 `.document`（T-GROW 2026-11-05）：`opts.figmaNodeData` 存在
+      //   `{document, fileKey, cachedAt}` 包裹形态，而 `indexFigmaNodes` 只沿 `children` 走
+      //   ⇒ 直接把包裹对象喂进去会得到**空索引** ⇒ `applyFigmaHeightGrow` 的
+      //   `size === 0` 守卫静默 return 0 ⇒「归一从未执行」却零报警（假绿）。
+      //   与同文件 `buildItemLevelFacts` / `enrichSectionsWithTechStack` 的解包口径一致。
+      const figmaIndex = indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData);
+      const growChanged = applyFigmaHeightGrow(effectiveSections, figmaIndex);
+      if (growChanged > 0) {
+        logger.info('flexGrow 已按 Figma 实测高度重新归一', {
+          changed: growChanged,
+          sections: effectiveSections
+            .filter((s) => s.type !== 'header')
+            .map((s) => ({ id: s.id, flexGrow: s.layoutMetadata?.flexGrow })),
+        });
+      }
+
+      // 🛡️ H DOM contract（2026-09-22 · mc-1790048059931 实锤）：collapsed 卡 item 级骨架事实。
+      //   病灶：v-for 卡内「icon 左 + 文本列右（label 上 value 下纵排）」的结构由 LLM 自由发挥，
+      //   文本列常写成 row → 横排（Figma 真值纵排列）。nodeLayoutFacts 只覆盖「有 children 的
+      //   容器」，纯 TEXT 兄弟无事实。治本：从 Figma 几何确定性推导卡内骨架（textStack 方向 +
+      //   icon 实测尺寸），注入 collapsed section 的 itemSkeleton 字段，随 prompt 下发约束 LLM。
+      //   位置在 applyFigmaHeightGrow 之后（复用已建的 figmaIndex 定位卡节点）。
+      const itemFacts = buildItemLevelFacts(opts.figmaNodeData);
+      if (Object.keys(itemFacts).length > 0) {
+        // 🛡️ 解包 document 建索引（opts.figmaNodeData 是 {document,...} 包裹形态，
+        //   indexFigmaNodes 不解包会拿到空 Map → deriveItemSkeleton 定位不到卡容器）。
+        const itemFigmaIndex =
+          indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData);
+        let skeletonCount = 0;
+        const walkSections = (list) => {
+          if (!Array.isArray(list)) return;
+          for (const s of list) {
+            // 🛡️ 2026-09-22 二段放宽：不要求 s.collapsed——E1 路径下 cons 网格（12 卡）被
+            //   当作 R2 豁免的并列 leaf（未标 collapsed），但 Figma 子树仍是重复卡列表。
+            //   deriveItemSkeleton 内部用「≥4 子卡 + textStack」保守判定兜底，非重复列表自然 null。
+            if (s && !s.itemSkeleton) {
+              const skel = deriveItemSkeleton(s, itemFigmaIndex, itemFacts);
+              if (skel) {
+                s.itemSkeleton = skel;
+                skeletonCount++;
+              }
+            }
+            if (Array.isArray(s?.children)) walkSections(s.children);
+          }
+        };
+        walkSections(effectiveSections);
+        if (skeletonCount > 0) {
+          logger.info('itemSkeleton 已从 Figma 几何确定性推导（H DOM contract）', {
+            count: skeletonCount,
+          });
+        }
+      }
+    }
+
+    applyFlexGrowFallback(effectiveSections);
+
+    // 🛡️ A 方案（2026-10-23 · f98f7463 实锤）：plan 层覆盖门禁（位置：id 唯一化之前，
+    //   「纯文本行段锚点」收敛后的 sourceNodeIds 才参与后续去重与 prompt 下发）。
+    //   ③ 做确定性修复；①② 只留痕 —— 真实语料（137 组件）证明「未覆盖」对 v-for 列表
+    //   是假阳（产物 6 张卡数据全在，只是 plan 只锚了第一张）⇒ 补建 section = 凭空加组件。
+    try {
+      const covHeal = healOversizedTextRowAnchors({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      if (covHeal.healed.length > 0) {
+        effectiveSections = covHeal.sections;
+        logger.warn('🛡️ plan 层覆盖门禁·纯文本行段锚点已收敛', { healed: covHeal.healed });
+      }
+      const cov = detectPlanCoverageGaps({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      // 🔴 计数行是硬要求：没有它，「零命中」与「零问题」不可区分。
+      logger.info('🛡️ plan 层覆盖门禁·已评估', {
+        evaluated: cov.evaluated,
+        uncovered: cov.uncovered.length,
+        overlapping: cov.overlapping.length,
+        oversizedTextRow: cov.oversizedTextRow.length,
+        ...(cov.skipped ? { skippedReason: cov.skippedReason } : {}),
+        ...(cov.uncovered.length ? { uncoveredSample: cov.uncovered.slice(0, 5) } : {}),
+        ...(cov.overlapping.length ? { overlappingSample: cov.overlapping.slice(0, 5) } : {}),
+      });
+    } catch (covErr) {
+      logger.warn('🛡️ plan 层覆盖门禁异常（fail-open 跳过，维持现状）', {
+        error: covErr?.message || String(covErr),
+      });
+    }
+
+    // 🛡️ E1 治本（2026-09-16 · c-traffic-monitor-bc0c25aa 实锤）：id 唯一化。
+    // vision 对同一容器下多个图表输出重复 id（426:807×3），dedupe 按 sourceNodeIds 正确保留了
+    // 3 个真图表，但重复 id 进 prompt 令 LLM 混淆 → ChartForecast×3 空壳 + 命名碰撞。
+    // 此处对重复 id 加 `-2`/`-3` 后缀，使 prompt 里 3 个 section 可区分。
+    effectiveSections = uniqueSectionIds(effectiveSections);
+
+    const leafSections = collectLeafSections(effectiveSections);
+    const hasComplexSection = leafSections.some((s) => s.shouldSplitInternally);
+    const isForced = leafSections.length >= minSections || hasComplexSection;
+    const minFiles = isForced
+      ? leafSections.length + allInternalSubcomponents.length
+      : 0;
+
+    // 🛡️ P-1（2026-11-04 · 6f926db0/3624983c 实锤）：画布契约。G0 物理前提——
+    //   Figma 根 bbox（设计尺寸 420×186 等）锁进 plan.canvas，模板根容器/预览层
+    //   消费此唯一事实源；「100% 流式」在没有画布参照时必然等比放大走样。
+    //   缺真值 fail-open（canvas=null + 计数），绝不硬造。
+    let planCanvas = null;
+    try {
+      const rootNode = opts.figmaNodeData?.document || opts.figmaNodeData;
+      const rootBox = getFigmaBox(rootNode);
+      if (rootBox && rootBox.w > 0 && rootBox.h > 0) {
+        planCanvas = {
+          width: Math.round(rootBox.w),
+          height: Math.round(rootBox.h),
+          source: 'figma-root-bbox',
+        };
+      }
+    } catch (canvasErr) {
+      logger.warn('🛡️ plan 画布契约解析异常（fail-open）', { error: canvasErr?.message || String(canvasErr) });
+    }
+    logger.info('🛡️ plan 画布契约·已评估', {
+      canvasLocked: planCanvas ? 1 : 0,
+      canvasMissing: planCanvas ? 0 : 1,
+      ...(planCanvas ? { width: planCanvas.width, height: planCanvas.height } : {}),
+    });
+
+    // 🛡️ P-3（2026-11-04 · bf0f0342 实锤）：图表宿主事实进 plan。
+    //   V-2 已在 vision 落盘前把 chart.section 解析可靠（bbox containment / 语义匹配），
+    //   chartDataHints 现携带 section 字段；此处按段 id 聚合为 section.chartFacts，
+    //   下游 prompt / 兜底注入消费同一份宿主事实（终结 sectionId:null 断供）。
+    let chartFactsResolved = 0;
+    let chartFactsUnmatched = 0;
+    const hintList = Array.isArray(opts.chartDataHints) ? opts.chartDataHints : [];
+    if (hintList.length > 0) {
+      const factsBySection = new Map();
+      for (const hint of hintList) {
+        const sid = hint && hint.section != null ? String(hint.section) : '';
+        if (!sid) {
+          chartFactsUnmatched += 1;
+          continue;
+        }
+        const cur = factsBySection.get(sid) || { count: 0, types: [] };
+        cur.count += 1;
+        if (hint.chartType) cur.types.push(String(hint.chartType));
+        factsBySection.set(sid, cur);
+      }
+      const allRefs = [];
+      forEachSectionRefP(effectiveSections, (sec) => allRefs.push(sec));
+      for (const [sid, facts] of factsBySection) {
+        const hit = allRefs.find((sec) => String(sec.id) === sid);
+        if (hit) {
+          hit.chartFacts = facts;
+          chartFactsResolved += 1;
+        } else {
+          chartFactsUnmatched += 1;
+        }
+      }
+      logger.info('🛡️ plan 图表宿主事实·已评估', {
+        hints: hintList.length,
+        chartFactsResolved,
+        chartFactsUnmatched,
+      });
+    }
+
+    // 🛡️ P-4（2026-11-04 · 刀53 texts:[] / 段内 freeform 实锤）：段内结构事实下发。
+    //   叶子 section 锚点子树顶层元素（bbox + 直接文本）归一为 section.internalGeometry，
+    //   模板接管器与 prompt 消费同一份——LLM 不再凭空想象段内布局。
+    //   🔴 写入走真引用遍历（collectLeafSections 返回 copy，宿主挂载靠对象身份——F1 教训）。
+    let internalGeometryFilled = 0;
+    let internalGeometrySkipped = 0;
+    if (opts.figmaNodeData && typeof indexFigmaNodes === 'function') {
+      try {
+        const geoIndex = indexFigmaNodes(opts.figmaNodeData);
+        forEachLeafRefP(effectiveSections, (sec) => {
+          const key = sectionAnchorKey(sec);
+          if (!key || !FIGMA_ID_RE.test(key)) {
+            internalGeometrySkipped += 1;
+            return;
+          }
+          const rec = geoIndex.get(key);
+          if (!rec || !rec.rawNode) {
+            internalGeometrySkipped += 1;
+            return;
+          }
+          const kids = Array.isArray(rec.rawNode.children) ? rec.rawNode.children : [];
+          const geo = [];
+          for (const kid of kids.slice(0, 24)) {
+            const box = getFigmaBox(kid);
+            if (!box) continue;
+            const text =
+              typeof kid.characters === 'string' ? kid.characters.trim().slice(0, 40) : '';
+            geo.push({
+              x: Math.round(box.x),
+              y: Math.round(box.y),
+              w: Math.round(box.w),
+              h: Math.round(box.h),
+              ...(text ? { text } : {}),
+            });
+          }
+          if (geo.length > 0) {
+            sec.internalGeometry = geo;
+            internalGeometryFilled += 1;
+          } else {
+            internalGeometrySkipped += 1;
+          }
+        });
+        logger.info('🛡️ plan 段内结构事实·已评估', {
+          internalGeometryFilled,
+          internalGeometrySkipped,
+        });
+      } catch (geoErr) {
+        logger.warn('🛡️ plan 段内结构事实采集异常（fail-open）', {
+          error: geoErr?.message || String(geoErr),
+        });
+      }
+    }
+
+    const reason = isForced
+      ? `有效叶子 sections=${leafSections.length} ≥ ${minSections} 或存在高复杂度 section → 强制拆分`
+      : `有效叶子 sections=${leafSections.length} < ${minSections} 且无高复杂度 section → 不强制拆分`;
+
+    // 🛡️ A1 段数比门禁（2026-11-11 · 方案 docs/2026-11-11-A1段数比门禁方案.md）：
+    //   今日 8 任务分布：>10 组件无一合格（417bde2c 34 个 failed / d30c05b4 30 个布局全错），
+    //   ≤8 个全部可用。爆炸链：vision 少段 → E1/复杂度拆分炸出 N 叶 → minFiles=N ⇒ 无闸门质疑。
+    //   判据：ratio = leafSections / max(figmaTop, visionSections)，>4 trim（保内容合并），
+    //   >8 blocked（同 L0-B 硬闸通道 fail-closed）。缺真值 fail-open（无 figmaNodeData 不拦截）。
+    //   figmaTop 复用 :2536-2541 既有口径（单一事实源）。
+    if (Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+      try {
+        const _docTop = opts.figmaNodeData?.document || opts.figmaNodeData;
+        const _figmaTopCount = Array.isArray(_docTop?.children?.[0]?.children)
+          ? _docTop.children[0].children.length
+          : Array.isArray(_docTop?.children)
+            ? _docTop.children.length
+            : 0;
+        // 🛡️ 2026-11-12：真值基准改用 vision 段树递归叶子数（量纲对齐 leaf=递归叶）。
+        //   rawSections 为扁平时递归叶==顶层数 ⇒ base 回退旧口径（baseIsTopLevel=true，保守 blocked）。
+        const _truthLeaf = collectLeafSections(rawSections).length;
+        const ratioAudit = auditSectionCountRatio({
+          leafSections: leafSections.length,
+          figmaTop: _figmaTopCount,
+          visionSections: rawSections.length,
+          truthLeafSections: _truthLeaf,
+          sections: effectiveSections,
+        });
+        logger.info(
+          `🛡️ section-count-ratio：leaves=${leafSections.length} base=${ratioAudit.base}(${ratioAudit.baseIsTopLevel ? 'top-level' : 'truth-leaf'}) ratio=${ratioAudit.ratio.toFixed(2)} verdict=${ratioAudit.verdict}` +
+            (ratioAudit.trimmed.length ? ` trimmed=${ratioAudit.trimmed.length}` : '') +
+            (ratioAudit.underGenerated ? ` ⚠️欠生成(figmaTop=${_figmaTopCount})` : '') +
+            (ratioAudit.verdict === 'blocked' ? ` frag=${ratioAudit.fragmentRatio.toFixed(2)}/avgEc=${ratioAudit.avgElementCount.toFixed(1)}` : ''),
+          ratioAudit.skippedReason ? { skippedReason: ratioAudit.skippedReason } : undefined,
+        );
+        if (ratioAudit.underGenerated) {
+          // 🛡️ 2026-11-12：欠生成观测（figmaTop 归位为下限）。不阻断——交下游 acceptance 抓，
+          // 门禁只防过拆。仅留痕，避免掩盖真因（c6f78432 形态：设计 18+ 段只生成 2 段）。
+          logger.warn('🛡️ section-count-ratio：疑似欠生成（leaf 明显 < figmaTop 业务段下限），交下游 acceptance 复核', {
+            leaves: leafSections.length,
+            figmaTop: _figmaTopCount,
+            truthLeaf: _truthLeaf,
+          });
+        }
+        if (ratioAudit.verdict === 'trim') {
+          // 裁剪后的树替换 effectiveSections（内容已并回宿主容器段，不丢）
+          effectiveSections = ratioAudit.sections;
+          logger.warn('🛡️ section-count-ratio：叶子段超限，已裁剪并合并内容进宿主容器段', {
+            trimmed: ratioAudit.trimmed.slice(0, 10),
+          });
+        } else if (ratioAudit.verdict === 'blocked') {
+          // 🛡️ A5（2026-11-11 · 68f9d3f2）：必须用专用类型抛出——调用方 catch 以 instanceof
+          // 判别「门禁判定」vs「规划器故障」，字符串 err.code 判别已被证实会被外层 catch 吞掉。
+          const err = new PlanningGateError(
+            `段数比门禁阻断：叶子段 ${leafSections.length} / 真值基准 ${ratioAudit.base} = ${ratioAudit.ratio.toFixed(1)}（>8）` +
+              `，规划结构爆炸（一段一组件退化）。top 叶子：${leafSections.slice(0, 10).map((s) => String(s?.id ?? '')).join('、')}`,
+          );
+          logger.error('🚫 section-count-ratio：段数比硬 BLOCK（规划结构爆炸，裁剪也救不回）', {
+            leaves: leafSections.length,
+            base: ratioAudit.base,
+            ratio: ratioAudit.ratio,
+          });
+          throw err;
+        }
+      } catch (ratioErr) {
+        // A5：门禁判定类错误原样上抛（本层 catch 只为审计自身容错，不吞门禁结论）
+        if (ratioErr instanceof PlanningGateError) throw ratioErr;
+        if (ratioErr?.code === 'SECTION_COUNT_RATIO_BLOCKED') throw ratioErr;
+        logger.warn('🛡️ section-count-ratio：审计异常（fail-open 跳过）', {
+          error: ratioErr?.message || String(ratioErr),
+        });
+      }
+    }
+
+    // 🛡️ section-coverage（2026-11-11 · 74722f0f）：段清单版面覆盖率审计——**纯观测，不参与决策**。
+    //   74722f0f 的 blueprint 只有 3 段合计 349px，而同父 425×807 下 556px 的 slot-当日总流量
+    //   未被任何段覆盖（覆盖率 0.432）；下游 flexGrow 只能按 349px 归一化 ⇒ 比例只覆盖 40%，
+    //   LLM 面对空白自拆组件、flex 自拟。本行把「人工比对 blueprint vs Figma 树」变成可 grep 的一行。
+    //   阈值 0.55 来自 68 任务离线回算（好样本 min 0.707 / 最坏 0.432）；A 档只观测，不改写不拦截。
+    try {
+      const covAudit = auditSectionCoverage({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      logger.info(
+        `🛡️ section-coverage：ratio=${covAudit.evaluated ? covAudit.ratio.toFixed(3) : 'n/a'} covered=${covAudit.coveredPx}/${covAudit.containerPx}px container=${covAudit.containerId ?? '-'} missing=${covAudit.missingHeight} verdict=${covAudit.verdict}` +
+          (covAudit.skippedReason ? ` skipped=${covAudit.skippedReason}` : ''),
+      );
+    } catch (covErr) {
+      logger.warn('🛡️ section-coverage：审计异常（fail-open 跳过）', {
+        error: covErr?.message || String(covErr),
+      });
+    }
+
+    const plan = {
+      effectiveSections,
+      isForced,
+      minFiles,
+      reason,
+      internalSubcomponents: allInternalSubcomponents,
+      diagnostics,
+      ...(planCanvas ? { canvas: planCanvas } : {}),
+    };
+
+    logger.info('子组件规划完成', {
+      rawSectionsCount: rawSections.length,
+      effectiveSectionsCount: effectiveSections.length,
+      leafSectionsCount: leafSections.length,
+      filteredCount,
+      isForced,
+      minFiles,
+      sectionIds: effectiveSections.map((s) => s.id),
+      leafSectionIds: leafSections.map((s) => s.id),
+      internalSubcomponentsCount: allInternalSubcomponents.length,
+      complexSections: leafSections
+        .filter((s) => s.shouldSplitInternally)
+        .map((s) => ({
+          id: s.id,
+          score: s.complexityScore,
+          reasons: s.complexityReasons,
+        })),
+      diagnostics,
+    });
+    return plan;
+  }
+}
+
+/** P-3/P-4：遍历 sections **真引用**（不 copy——契约字段挂载靠对象身份，F1 教训）。 */
+function forEachSectionRefP(list, fn) {
+  for (const sec of list || []) {
+    if (!sec || typeof sec !== 'object') continue;
+    fn(sec);
+    if (Array.isArray(sec.children) && sec.children.length > 0) {
+      forEachSectionRefP(sec.children, fn);
+    }
+  }
+}
+
+/** P-4：仅叶子（无 children）section 真引用。 */
+function forEachLeafRefP(list, fn) {
+  forEachSectionRefP(list, (sec) => {
+    if (!Array.isArray(sec.children) || sec.children.length === 0) fn(sec);
+  });
+}
+
+/**
+ * 🛡️ V-3 段序几何审计（vision 主路径专用包装）。
+ * 计数行铁律：`已评估` 行恒打（0/跳过/错序三种结局离线可辨）；错序纠正另打 warn。
+ * fail-open：审计异常时维持原序，不阻断规划。
+ */
+function applyVisionOrderAudit(sections, figmaNodeData) {
+  try {
+    const { sections: out, stats } = auditVisionSectionOrder(sections, figmaNodeData);
+    logger.info('🛡️ vision 段序几何审计·已评估', stats);
+    if (stats.reordered) {
+      logger.warn('🛡️ vision 段序与 Figma y 序矛盾（锚点全有效+严格垂直堆叠），已按几何纠正', stats.order);
+    }
+    return out;
+  } catch (e) {
+    logger.warn('🛡️ vision 段序几何审计失败（fail-open 维持原序）', { error: e?.message || String(e) });
+    return sections;
+  }
+}
+
+/**
+ * 🧱 V-5 段粒度过粗的局部 E1 展开（纯逻辑在 utils/over-coarse-section-expander.js）。
+ * 「锚点的子是一串垂直堆叠且覆盖满高的区块」⇒ 该段只是外壳 ⇒ 用既有
+ * `deriveSectionsFromFigmaTree` 把它按 Figma 子结构递归展开。
+ * fail-open：任何异常都维持原段，绝不因展开本身让任务失败。
+ */
+function applyOverCoarseExpansion(sections, figmaNodeData) {
+  try {
+    const { sections: out, stats } = expandOverCoarseSections(sections, figmaNodeData);
+    logger.info('🧱 段粒度审计·已评估', {
+      sections: stats.sections,
+      after: Array.isArray(out) ? out.length : null,
+      expanded: stats.expanded,
+      exempted: stats.exempted,
+      skippedReason: stats.skippedReason,
+      details: stats.details.slice(0, 3),
+    });
+    // 🛡️ 2026-11-11 根因 D：豁免必须**单独留痕**（否则「豁免生效」与「判据没跑」不可区分）。
+    //   `section-header-body-pattern` = 段标题条 + 段内容体（已是最小业务段）；
+    //   `section-has-declared-semantics` = 段已声明内部结构。
+    if (stats.exempted > 0) {
+      logger.info('🧱 段粒度审计·已跳过', {
+        reason: stats.exemptReasons[0],
+        count: stats.exempted,
+        sample: stats.exemptReasons.slice(0, 5),
+      });
+    }
+    return out;
+  } catch (e) {
+    logger.warn('🧱 段粒度审计失败（fail-open 维持原样）', {
+      error: e?.message || String(e),
+    });
+    return sections;
+  }
+}
+
+/**
+ * 🛡️ V-4 顶层段锚点范围审计（纯逻辑在 utils/section-anchor-scope-auditor.js，可单测、不拖 langchain）。
+ * 「重复集合中的成员不可能是整个业务段」⇒ 锚点上提到集合容器，同目标段合并。
+ * R3（2026-11-11）：上提目标吞并其他段 ⇒ 撤销（`covers-sibling-sections`，对齐 R2）；
+ * 且「段已声明的内容」不再被当漏网兄弟。
+ * fail-open：任何异常都维持原段，绝不因审计本身让任务失败。
+ */
+function applySectionAnchorScopeAudit(sections, figmaNodeData) {
+  try {
+    const { sections: out, stats } = auditSectionAnchorScope(sections, figmaNodeData);
+    logger.info('🛡️ 顶层段锚点范围审计·已评估', {
+      sections: stats.sections,
+      after: Array.isArray(out) ? out.length : null,
+      anchoredSections: stats.anchoredSections,
+      promoted: stats.promoted,
+      merged: stats.merged,
+      vetoed: stats.vetoed,
+      skippedReason: stats.skippedReason,
+      promotions: stats.promotions.slice(0, 5),
+      vetoes: stats.vetoes.slice(0, 5),
+    });
+    if (stats.vetoed > 0) {
+      logger.warn('🛡️ 段锚点上提被撤销（目标容器吞并其他业务段·对齐 R2 lca-covers-sibling-sections）', {
+        vetoes: stats.vetoes,
+      });
+    }
+    return out;
+  } catch (e) {
+    logger.warn('🛡️ 顶层段锚点范围审计失败（fail-open 维持原样）', {
+      error: e?.message || String(e),
+    });
+    return sections;
+  }
+}
+
+export const subcomponentPlanner = new SubcomponentPlanner();

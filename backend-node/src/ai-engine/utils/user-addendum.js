@@ -37,3 +37,40 @@ export function buildUserAddendumSection(extraPrompt, requirementDocText) {
   }
   return block;
 }
+
+/**
+ * 🔍 奇偶交替样式提示段（2026-11-12 · 视觉分析阶段确定性检测产物）。
+ *
+ * 消费方：vue3-engineer.js / microcode-engineer.js（分块 prompt 注入）+
+ *   lite.service.ts buildCodegenPrompt / buildMicrocodeCodegenPrompt。
+ * 输入 = detectOddEvenPatterns(figmaRoot) 产出的 oddEvenHints 数组
+ * （Figma 填充真值，非空才进 prompt）。空数组 → 返回 ''（零开销、零影响其他流程）。
+ *
+ * 优先级契约（与 buildUserAddendumSection 对齐）：
+ *   Figma @技术栈 锚点契约 > 本段 > 平台默认规范；视觉样式冲突以设计稿为准。
+ * 关键防错：明确区分 zebra（严格 nth-child 交替）与 active（单点激活态），
+ *   禁止把「1 异 N 同」误泛化成斑马纹（臆造斑马纹根因第三层）。
+ */
+export function buildOddEvenHintSection(oddEvenHints) {
+  const hints = Array.isArray(oddEvenHints) ? oddEvenHints : [];
+  if (!hints.length) return '';
+  let block = '\n\n# 🔁 奇偶交替样式提示（Figma 填充真值，视觉分析确定性检测）\n\n';
+  block +=
+    '> 优先级：Figma @技术栈 锚点契约 > 本段 > 平台默认规范；视觉样式（颜色/尺寸/布局）与设计稿冲突时以设计稿为准。\n\n';
+  for (const h of hints) {
+    if (h.kind === 'zebra') {
+      block +=
+        `- 区域「${h.scope}」（共 ${h.size} 项）：底色第 1/3/5…项为 ${h.fillA}、` +
+        `第 2/4/6…项为 ${h.fillB}，呈**严格奇偶交替** → 必须用 ` +
+        '`:nth-child(odd)` / `:nth-child(even)` 交替样式实现；' +
+        '禁止把「仅首项异色的单点激活态」误泛化成斑马纹。\n';
+    } else if (h.kind === 'active') {
+      block +=
+        `- 区域「${h.scope}」（共 ${h.size} 项）：仅 **1 项**底色为 ${h.activeHex}` +
+        `（其余 ${h.baseHex || '同色'}）→ 这是**单点选中/激活态**，**不是**斑马纹，` +
+        '禁止用 nth-child 交替；仅对该项单独高亮即可。\n';
+    }
+  }
+  block += '\n';
+  return block;
+}

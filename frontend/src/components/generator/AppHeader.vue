@@ -291,9 +291,12 @@ const mainTabsConfig: MainTab[] = [
   // { path: '/generator/page',      label: '页面',    feature: 'generator.page' },
   { path: '/generator/api', label: '接口开发', feature: 'generator.api' },
   { path: '/tasks', label: '任务中心', feature: 'tasks' },
-  // 大屏布局：2026-09-30 从页脚**移入头部主导航**（它是生成页，属主入口；
-  // 页脚的定位是「低频入口」，见 AppFooter.vue 顶部注释）
-  { path: '/screen', label: '大屏布局', feature: 'screen' },
+  // 大屏布局：2026-09-30 从页脚**移入头部主导航**（它是生成页，属主入口）；
+  // 2026-11-12 按要求从导航移除（用户裁决）。
+  // 🔴 只隐藏**入口**，路由与页面保留：basic-routes.js 的 /screen → views/screen-layout/index.vue，
+  // 功能开关 'screen' 仍为开启态、ROUTE_FEATURE_MAP 映射也保留 ⇒ 直连 URL 仍可访问。
+  // 恢复入口：取消下面一行的注释即可（不涉及 feature 开关改动）。
+  // { path: '/screen', label: '大屏布局', feature: 'screen' },
   // 「页面开发」「工作流编排」已移至页脚 AppFooter
   // 「实验室」下拉（components-test / project-lab / meeting）已于 2026-11-05
   // 移至页脚 AppFooter（低频入口定位），沿用 devOnly 约定。

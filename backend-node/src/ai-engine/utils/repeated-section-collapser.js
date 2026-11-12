@@ -235,6 +235,36 @@ function sameContentDirection(a, b, figmaRoot) {
   return (rowAligned || colAligned) && sizeSimilar;
 }
 
+/** 段自带标题（header.title）；无则空串。只读既有结构化字段，不做任何猜测。 */
+function sectionOwnTitle(sec) {
+  const t = sec?.header?.title;
+  return typeof t === 'string' ? t.trim() : '';
+}
+
+/**
+ * 🛡️ A 层（2026-11-12 · mc-1794428749650-cc633474 实锤）：并列分组守卫。
+ *
+ *   事故：三张分组卡（161/212/265 高，标题「战略合作厂商 / 优质厂商 / 普通厂商」，
+ *   各自带 icon 与独立底框 bgColor）被 ③ 组跨段条目级拍平成 1 段 33 条，
+ *   边界取首段 ⇒ 另两组标题、底框、行数语义整体消失，产物渲染成「一个组标题 +
+ *   33 条平铺 5 列」。
+ *
+ *   判据（零新语义，只读既有字段）：
+ *     ① 组内**每段**都有 header.title；
+ *     ② 各段标题**两两不同** ⇒ 并列分组，不是「同一列表被切碎的碎段」。
+ *   同时成立 ⇒ 本组禁止跨段合并（段内折叠、①② 几何组路径逐字不动）。
+ *
+ *   ⚠️ 不命中（照旧折叠）的形态逐条枚举：
+ *     · 无 header.title 的 vision 碎段（刀72-B e0deef47 原场景：条目被切碎、段无标题）；
+ *     · 标题全相同的重复实例卡（例如 12 张都叫「设备监测」）；⚠️ 此处标题相同即视为重复实例。
+ *     · 部分段有标题、部分没有 ⇒ fail-open，不新增拒绝面（保持既有行为）。
+ */
+function hasDistinctOwnTitles(idxs, sections) {
+  const titles = idxs.map((i) => sectionOwnTitle(sections[i]));
+  if (titles.some((t) => !t)) return false;
+  return new Set(titles).size === titles.length;
+}
+
 /** ③ 内容同构分组：仅收未被①②有效组吸收的段。 */
 function groupByContentIsomorphism(sections, opts, claimed) {
   const figmaRoot = opts.figmaRoot || null;
@@ -253,6 +283,17 @@ function groupByContentIsomorphism(sections, opts, claimed) {
   const out = [];
   for (const [sig, idxs] of bySig) {
     if (idxs.length < 2) continue; // 内容签名强证据 ⇒ 数量≥2 即可（minRepeat=3 仅服务①②）
+    // 🛡️ A 层守卫：并列分组（各段自带互不相同标题）禁止跨段合并
+    if (hasDistinctOwnTitles(idxs, sections)) {
+      if (typeof opts.onConserveGroup === 'function') {
+        opts.onConserveGroup({
+          sig,
+          ids: idxs.map((i) => sections[i]?.id),
+          titles: idxs.map((i) => sectionOwnTitle(sections[i])),
+        });
+      }
+      continue;
+    }
     const first = sections[idxs[0]];
     if (!idxs.every((i) => sameContentDirection(first, sections[i], figmaRoot))) continue;
     out.push({ sig: `${CONTENT_GROUP_PREFIX}${sig}`, idxs, absorb: null });

@@ -1,11 +1,14 @@
-import { Controller, Get, Post, Param, Body, Query, Session, UseGuards, Res, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Query, Session, UseGuards, Res, HttpException, HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
+import { join } from 'path';
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync } from 'fs';
 import { TasksService } from './tasks.service';
 import { TaskCodeSnapshotService } from './task-code-snapshot.service';
 import { SnapshotQualityService } from './snapshot-quality.service';
 import { TaskQueueService } from '../queue/task-queue.service';
 import { SessionGuard } from '../auth/session.guard';
 import { CurrentUser, OptionalUser } from '../auth/current-user.decorator';
+import { dataDir } from '../config/backend-root.js';
 
 @Controller('tasks')
 export class TasksController {
@@ -166,6 +169,83 @@ export class TasksController {
       lastGood: this.taskCodeSnapshotService.getLastGoodManifest(sessionId),
       // 🛡️ 半成品抢救：失败任务也暴露 partial 快照，供前端预览与 PG 手动补全（而非 404 无产物）。
       partial: this.taskCodeSnapshotService.getPartialManifest(sessionId),
+    };
+  }
+
+  /**
+   * 🆕 2026-11-12 精修续跑溯源：GET /api/tasks/:sessionId/refine-diff
+   * 返回某次精修「基线 → 候选」的具体文件改动，供前端「精修改动明细」面板展示「这次精修改了什么」。
+   * - :sessionId 为精修任务 sessionId（mc-refine-max-* / vue3-refine-max-*）；
+   * - ?source= 为源生成任务 sessionId（精修快照实际存储位置），前端直传最稳；
+   *   不传时后端尝试从精修任务的 refineOf 反查。
+   * - 通过 manifest.refineSessionId 精确配对本次精修的 baseline/candidate；
+   *   未命中（老精修无 refineSessionId 标记）则回退到该 source 最新一对 refine-baseline/candidate。
+   *
+   * 🆓 2026-09-14：预览页独立打开时无 token，此接口免认证（仅读快照，无副作用）
+   */
+  @Get(':sessionId/refine-diff')
+  getRefineDiff(
+    @Param('sessionId') rawId: string,
+    @Query('source') source: string,
+    @OptionalUser() userId: string | undefined,
+  ) {
+    let snapshotSession: string | null = source || null;
+    if (!snapshotSession) {
+      try {
+        const st = this.tasksService.getTaskStatus(
+          this.resolveSnapshotSessionId(rawId, userId),
+          userId,
+        ) as any;
+        snapshotSession = st?.success ? st?.task?.refineOf : null;
+      } catch {
+        snapshotSession = null;
+      }
+    }
+    if (!snapshotSession) {
+      return { success: true, isRefine: false, available: false };
+    }
+
+    const revisions = this.taskCodeSnapshotService.listRevisions(snapshotSession);
+    const findTaggedPair = () => ({
+      baseline: revisions.find(
+        (r) => r.stage === 'refine-baseline' && r.refineSessionId === rawId,
+      ),
+      candidate: revisions.find(
+        (r) => r.stage === 'refine-candidate' && r.refineSessionId === rawId,
+      ),
+    });
+    let { baseline, candidate } = findTaggedPair();
+    if (!baseline || !candidate) {
+      // 回退：取该 source 最新的 refine-baseline / refine-candidate（兼容无 refineSessionId 的老精修）
+      const baselines = revisions
+        .filter((r) => r.stage === 'refine-baseline')
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      const candidates = revisions
+        .filter((r) => r.stage === 'refine-candidate')
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      baseline = baselines[0];
+      candidate = candidates[0];
+    }
+    if (!baseline || !candidate) {
+      return { success: true, isRefine: true, available: false, sourceSessionId: snapshotSession };
+    }
+
+    const changes = this.taskCodeSnapshotService.computeRefineDiff(
+      snapshotSession,
+      baseline.revision,
+      candidate.revision,
+    );
+    return {
+      success: true,
+      isRefine: true,
+      available: true,
+      sourceSessionId: snapshotSession,
+      refineSessionId: rawId,
+      baselineRevision: baseline.revision,
+      candidateRevision: candidate.revision,
+      baselineCreatedAt: baseline.createdAt,
+      candidateCreatedAt: candidate.createdAt,
+      changes,
     };
   }
 
@@ -810,5 +890,97 @@ export class TasksController {
   getReviewableTasks(@CurrentUser() userId: string) {
     const tasks = this.tasksService.getReviewableTasks(userId);
     return { success: true, tasks, count: tasks.length };
+  }
+
+  // ══ Figma 节点数据磁盘缓存（用户自主管理）═════════════════════════════
+  // 🛡️ 2026-11-12（9abc87d3 实锤驱动）：节点缓存 TTL 默认 24h（figma-connector.js），
+  //    设计稿改动后缓存内仍是旧树 ⇒ 管线吃旧结构、用户困惑「我改了为什么没生效」。
+  //    原有清理方式只有「删 data/figma-node-cache/ 文件」（需登服务器）——
+  //    把删除能力交给用户自己决定：前端投递面板一键清缓存，整理 Figma 后重跑前使用。
+  //    缓存是优化不是依赖：删除后下次生成自动真网络回源并回写新缓存，无副作用。
+
+  /** 节点缓存目录（与 figma-connector#_nodeCacheDir 默认值同源） */
+  private _figmaNodeCacheDir() {
+    return join(dataDir, 'figma-node-cache');
+  }
+
+  /** nodeId 归一（缓存文件名用 '-'，JSON 内容用 ':'，两种形态等价匹配） */
+  private _normNodeId(n: string) {
+    return String(n || '').replace(/:/g, '-');
+  }
+
+  /** 扫描缓存条目（可选 fileKey/nodeId 过滤；nodeId 两种形态等价） */
+  private _listFigmaNodeCache(fileKey?: string, nodeId?: string) {
+    const dir = this._figmaNodeCacheDir();
+    if (!existsSync(dir)) return [];
+    const entries: Array<Record<string, unknown>> = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.json')) continue;
+      const p = join(dir, name);
+      let meta: { fileKey?: string; nodeId?: string; savedAt?: number } = {};
+      try {
+        meta = JSON.parse(readFileSync(p, 'utf8'));
+      } catch {
+        // 畸形条目仍列出（文件名即信息），savedAt 缺省
+      }
+      if (fileKey && meta.fileKey !== fileKey) continue;
+      if (nodeId && this._normNodeId(String(meta.nodeId ?? '')) !== this._normNodeId(nodeId)) continue;
+      let sizeBytes = 0;
+      try {
+        sizeBytes = statSync(p).size;
+      } catch {
+        /* 忽略 */
+      }
+      entries.push({
+        name,
+        fileKey: meta.fileKey || null,
+        nodeId: meta.nodeId || null,
+        savedAt: meta.savedAt || null,
+        ageMinutes: meta.savedAt ? Math.round((Date.now() - meta.savedAt) / 60000) : null,
+        sizeBytes,
+      });
+    }
+    entries.sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0));
+    return entries;
+  }
+
+  /**
+   * GET /api/tasks/figma-node-cache
+   * 列出 Figma 节点数据缓存条目（?fileKey=&nodeId= 可选过滤），供用户删除前确认。
+   */
+  @Get('figma-node-cache')
+  @UseGuards(SessionGuard)
+  listFigmaNodeCache(@Query('fileKey') fileKey?: string, @Query('nodeId') nodeId?: string) {
+    const entries = this._listFigmaNodeCache(fileKey || undefined, nodeId || undefined);
+    return { success: true, entries, count: entries.length };
+  }
+
+  /**
+   * DELETE /api/tasks/figma-node-cache?fileKey=&nodeId=
+   * 删除 Figma 节点数据缓存（不带参数=全清）。下次生成将真网络回源拉新树。
+   */
+  @Delete('figma-node-cache')
+  @UseGuards(SessionGuard)
+  deleteFigmaNodeCache(@Query('fileKey') fileKey?: string, @Query('nodeId') nodeId?: string) {
+    const entries = this._listFigmaNodeCache(fileKey || undefined, nodeId || undefined);
+    const dir = this._figmaNodeCacheDir();
+    const deleted: string[] = [];
+    const failed: Array<{ name: string; error: string }> = [];
+    for (const e of entries) {
+      const name = String(e.name);
+      try {
+        unlinkSync(join(dir, name));
+        deleted.push(name);
+      } catch (err: any) {
+        failed.push({ name, error: err?.message || String(err) });
+      }
+    }
+    return {
+      success: failed.length === 0,
+      deleted,
+      deletedCount: deleted.length,
+      failed,
+      scope: fileKey ? (nodeId ? `${fileKey}/${nodeId}` : fileKey) : 'all',
+    };
   }
 }

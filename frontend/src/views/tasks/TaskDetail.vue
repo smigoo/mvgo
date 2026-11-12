@@ -38,6 +38,8 @@
         <button class="btn-action btn-feedback" title="把任务号、日志、模型、Figma 链接或截图反馈给管理员" @click="openFeedback">
           💬 反馈
         </button>
+        <!-- 🗑 2026-11-12 收敛精修入口：「精修续跑」徽标已下线，精修统一走「视觉优化精修」 -->
+
         <McSpecCheckButton
           v-if="!pageTaskFlag && taskTarget === 'microcode' && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
           :component-id="task.componentId || sessionId"
@@ -55,6 +57,79 @@
         >
           🚀 推送到 GitLab
         </button>
+        <!-- 🗑 2026-11-12 收敛精修入口：普通精修按钮（「以现有代码继续精修」/「再精修一次」）已下线，
+             精修一律从「视觉优化精修」进入（先比对差异再落地，避免盲改）。
+             handleRefineComponent 保留，供视觉精修确认后复用其跳转/透传逻辑。 -->
+        <!-- 🆕 视觉优化精修：渲染现状 → 对比设计图 → 列出视觉差异 → 确认后落地 -->
+        <button
+          v-if="!pageTaskFlag && task && (task.status === 'completed' || task.status === 'failed' || (task.fileCount && task.fileCount > 0)) && task.generationTier !== 'lite'"
+          class="btn-action btn-refine btn-vision-refine"
+          :disabled="visionAnalyzing"
+          :title="'渲染当前组件并与设计图比对，列出视觉差异，确认后落地优化'"
+          @click="handleVisionRefine()"
+        >
+          {{ visionAnalyzing ? '视觉分析中...' : '视觉优化' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 🆕 2026-11-12 精修续跑溯源：本任务若是精修发起的，明确展示它续跑的是哪一次原始生成，
+         并支持一键跳回源任务，解决「点精修后新开了一个任务，却分不清改的是哪次生成」的困惑 -->
+    <div class="refine-source-banner" v-if="task && task.refineOf">
+      <span class="refine-source-kind">视觉优化</span>
+      <span class="refine-source-label">源自</span>
+      <button class="refine-source-link" @click="goToSourceTask(task.refineOf)">
+        {{ task.refineOf }}
+      </button>
+      <span class="refine-source-hint">（点击跳回源任务 · 视觉优化结果已同步覆盖该组件）</span>
+    </div>
+
+    <!-- 🆕 2026-11-12 精修续跑溯源：精修改动明细，直观告知用户「这次精修具体改了哪些内容」 -->
+    <div class="refine-diff-panel" v-if="task && task.refineOf">
+      <div class="refine-diff-head" @click="refineDiffCollapsed = !refineDiffCollapsed">
+        <span class="refine-diff-title">视觉优化改动明细</span>
+        <template v-if="refineDiffLoading">
+          <span class="refine-diff-loading">加载中…</span>
+        </template>
+        <template v-else-if="refineDiff && refineDiff.available">
+          <span class="refine-diff-summary">{{ refineChangeSummary() }}</span>
+          <span class="refine-diff-collapse">{{ refineDiffCollapsed ? '▸' : '▾' }}</span>
+        </template>
+        <template v-else-if="refineDiff && !refineDiff.available">
+          <span class="refine-diff-hint">（本次视觉优化未产生可展示的差异）</span>
+        </template>
+      </div>
+
+      <div
+        v-show="!refineDiffCollapsed && refineDiff && refineDiff.available"
+        class="refine-diff-body"
+      >
+        <div v-for="ch in (refineDiff?.changes ?? [])" :key="ch.path" class="refine-change">
+          <div class="refine-change-head" @click="toggleChange(ch.path)">
+            <span class="change-type" :class="'ct-' + ch.type">{{ refineTypeLabel(ch.type) }}</span>
+            <span class="change-path">{{ ch.path }}</span>
+            <span class="change-meta">
+              <template v-if="ch.type === 'modified'">基线 {{ ch.baselineLines }} 行 → 候选 {{ ch.candidateLines }} 行</template>
+              <template v-else-if="ch.type === 'added'">+{{ ch.candidateLines }} 行</template>
+              <template v-else>−{{ ch.baselineLines }} 行</template>
+            </span>
+            <span class="change-arrow">{{ expandedChanges.has(ch.path) ? '▾' : '▸' }}</span>
+          </div>
+          <div v-show="expandedChanges.has(ch.path)" class="refine-diff-code">
+            <div
+              v-for="(ln, idx) in ch.diff"
+              :key="idx"
+              class="diff-line"
+              :class="'dl-' + ln.type"
+            >
+              <span class="diff-sign">{{ ln.type === 'add' ? '+' : ln.type === 'del' ? '−' : ' ' }}</span>
+              <span class="diff-no">{{
+                ln.type === 'del' ? ln.oldLine : ln.type === 'add' ? ln.newLine : ln.oldLine
+              }}</span>
+              <span class="diff-text">{{ ln.text }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -581,7 +656,7 @@
                       <div class="fsc-title">生成失败</div>
                       <div class="fsc-message">{{ failureSummary }}</div>
                       <button
-                        v-if="pageTaskFlag"
+                        v-if="pageTaskFlag && !isRefineTask"
                         class="fsc-retry-btn"
                         :disabled="retrying"
                         @click="handlePageRetry"
@@ -783,7 +858,7 @@
                       人工审核
                     </button> -->
                     <button
-                      v-if="task.status === 'failed' || task.status === 'cancelled'"
+                      v-if="(task.status === 'failed' || task.status === 'cancelled') && !isRefineTask"
                       class="btn-retry"
                       :disabled="retryBusy"
                       @click="handleRetry(false)"
@@ -1533,7 +1608,7 @@
                             下载草稿代码
                           </button>
                           <button
-                            v-if="!pageTaskFlag"
+                            v-if="!pageTaskFlag && !isRefineTask"
                             class="fgc-btn-secondary"
                             :class="{ 'fgc-btn-recommended-secondary': failureDiagnosis.recommendation === 'retry' }"
                             :disabled="retrying"
@@ -1547,7 +1622,7 @@
                             <span class="fgc-rec-badge fgc-rec-inline" v-if="failureDiagnosis.recommendation === 'retry'">推荐</span>
                           </button>
                           <button
-                            v-if="!pageTaskFlag"
+                            v-if="!pageTaskFlag && !isRefineTask"
                             class="fgc-btn-secondary fgc-btn-resume"
                             :disabled="retrying"
                             title="复用已缓存的 Figma 分析结果，跳过 Figma 拉取与视觉分析，直接重新生成代码"
@@ -1559,7 +1634,7 @@
                             {{ retrying ? '续跑中...' : '续跑（复用缓存）' }}
                           </button>
                           <button
-                            v-if="pageTaskFlag"
+                            v-if="pageTaskFlag && !isRefineTask"
                             class="fgc-btn-secondary fgc-btn-recommended-secondary"
                             :disabled="retrying"
                             @click="handlePageRetry"
@@ -1608,7 +1683,7 @@
               <!-- /canvas -->
 
               <!-- ═══ 画布外操作区（等待/排队状态保留在底部）══ -->
-              <div class="canvas-actions" v-if="isWaiting">
+              <div class="canvas-actions" v-if="isWaiting && !isRefineTask">
                 <span class="waiting-text">{{ waitingLabel }}</span>
                 <RippleButton
                   class="btn-delivery btn-delivery-primary"
@@ -1742,6 +1817,80 @@
       :submitting="poolPushing"
       @ok="onPublishOk"
     />
+
+    <!-- ══ 视觉优化精修·分析中遮罩（渲染+比对耗时 20s~5min，必须给出明确反馈） ═══ -->
+    <div v-if="visionAnalyzing" class="vr-loading-mask">
+      <div class="vr-loading-card">
+        <div class="vr-loading-spinner"></div>
+        <div class="vr-loading-title">视觉分析中</div>
+        <div class="vr-loading-step">{{ visionStepText }}</div>
+        <div class="vr-loading-bar"><i></i></div>
+        <div class="vr-loading-elapsed">
+          已耗时 <b>{{ visionElapsed }}s</b>
+          <span class="vr-loading-eta">（通常 20~60 秒，最长约 5 分钟）</span>
+        </div>
+        <div class="vr-loading-hint">正在渲染当前组件并与设计图逐项比对，请勿关闭或刷新页面</div>
+      </div>
+    </div>
+
+    <!-- ══ 视觉优化精修·差异清单弹窗 ═══ -->
+    <div v-if="showVisionModal" class="vision-refine-modal-mask" @click.self="showVisionModal = false">
+      <div class="vision-refine-modal">
+        <div class="vr-modal-head">
+          <span class="vr-modal-title">视觉优化 · 差异清单</span>
+          <button class="vr-modal-close" @click="showVisionModal = false">✕</button>
+        </div>
+        <div class="vr-modal-body">
+          <template v-if="visionAnalysis">
+            <div class="vr-similarity">
+              设计相似度：<b>{{ visionSimilarityText(visionAnalysis) }}</b>
+              <span :class="['vr-pass-tag', visionAnalysis.pass ? 'ok' : 'warn']">{{ visionAnalysis.pass ? '已达标' : '未达标' }}</span>
+              <span v-if="visionAnalysis.degraded" class="vr-pass-tag warn">视觉模型降级</span>
+            </div>
+            <div class="vr-images">
+              <div class="vr-img-box">
+                <div class="vr-img-label">设计图（参照）</div>
+                <img v-if="visionImageUrls.design" :src="visionImageUrls.design" alt="设计图" />
+                <div v-else class="vr-img-empty">设计图未能加载</div>
+              </div>
+              <div class="vr-img-box">
+                <div class="vr-img-label">当前渲染（现状）</div>
+                <img v-if="visionImageUrls.rendered" :src="visionImageUrls.rendered" alt="现状渲染" />
+                <div v-else class="vr-img-empty">现状渲染图未能加载</div>
+              </div>
+            </div>
+            <div class="vr-issues">
+              <div class="vr-issues-title">将优化以下 {{ visionAnalysis.issues.length }} 处差异：</div>
+              <ul>
+                <li v-for="it in visionAnalysis.issues" :key="it.index" :class="['vr-issue', 'sev-' + it.severity]">
+                  <span class="vr-sev">{{ it.severity }}</span>
+                  <span class="vr-cat" v-if="it.category">{{ it.category }}</span>
+                  <span class="vr-desc">{{ it.description }}</span>
+                </li>
+              </ul>
+              <p v-if="!visionAnalysis.issues.length" class="vr-noissue">未检测到明显视觉差异。</p>
+            </div>
+          </template>
+          <div v-else class="vr-need-ref">
+            <div class="vr-need-ref-title">未能自动获取设计参照图</div>
+            <p>该产物没有设计预览图（mc-preview.png / source-*.png），Figma 取图也未成功。</p>
+            <p>请在下方上传一张该组件的设计图，我会据此渲染现状并逐项比对。</p>
+          </div>
+          <div class="vr-upload">
+            <label>{{ visionAnalysis ? '覆盖参照图（可选）：' : '上传设计图：' }}</label>
+            <input type="file" accept="image/*" @change="onVisionOverrideUpload" />
+            <span class="vr-upload-hint" v-if="visionOverrideImage">已上传，重新比对中/已完成</span>
+          </div>
+        </div>
+        <div class="vr-modal-foot">
+          <span class="vr-foot-hint">确认后将创建一条视觉优化任务并自动跳转，可在新任务页实时查看改写进度与门禁结果</span>
+          <button class="btn-cancel-op" :disabled="visionSubmitting" @click="showVisionModal = false">取消</button>
+          <button class="btn-action btn-vision-refine" :disabled="!visionAnalysis || refining || visionAnalyzing || visionSubmitting" @click="confirmVisionRefine">
+            {{ visionSubmitting ? '正在创建视觉优化任务…' : '确认优化' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1769,6 +1918,10 @@ import {
   revokeHumanReview,
   cancelQueuedTask,
   startQueuedTask,
+  refineComponent,
+  visionAnalyzeRefine,
+  fetchVisionRefineImage,
+  getRefineDiff,
   createProgressStream,
   getTaskTokenUsage,
   type TaskCodeSnapshotManifest,
@@ -4981,6 +5134,8 @@ async function loadTask() {
       taskMissingRetries.value = 0
       await loadWorkspaceDimensions(found)
       await loadCodeSnapshot()
+      // 🆕 2026-11-12 精修续跑溯源：精修任务详情加载其「基线 → 候选」具体改动明细
+      if (found.refineOf) await loadRefineDiff()
       
       // 失败任务：加载后端失败分析（优先使用后端精确分析，降级到前端本地诊断）
       if (found.status === 'failed') {
@@ -5171,6 +5326,307 @@ async function handleContinueGeneration() {
   }
 }
 
+const refining = ref(false)
+
+// 🆕 2026-11-12 精修续跑溯源：精修改动明细（基线 → 候选的具体文件 diff）
+const refineDiff = ref<any>(null)
+const refineDiffLoading = ref(false)
+const refineDiffCollapsed = ref(false)
+const expandedChanges = ref<Set<string>>(new Set())
+
+// 🆕 视觉优化精修：分析阶段状态 + 差异清单弹窗
+const visionAnalyzing = ref(false)
+const visionAnalysis = ref<any>(null)
+const showVisionModal = ref(false)
+const visionOverrideImage = ref('')
+// 🆕 分析进度反馈：秒表 + 步骤提示（后端顺序：解析参照图 → 渲染截图 → 视觉模型比对）
+const visionElapsed = ref(0)
+const visionStep = ref(0)
+const visionSubmitting = ref(false)
+// 🆕 对比图渲染源：优先后端内嵌 data URL（<img> 无法带 Token 头，URL 端点在生产会 401/被 dotfiles 拦）
+const visionImageUrls = ref<{ design: string; rendered: string }>({ design: '', rendered: '' })
+let visionTimer: any = null
+const VISION_STEPS = ['① 准备产物与设计参照图', '② 渲染当前组件截图', '③ 视觉模型逐项比对差异']
+const visionStepText = computed(() => VISION_STEPS[Math.min(visionStep.value, VISION_STEPS.length - 1)])
+
+const isRefineTask = computed(() => !!sessionId.value && sessionId.value.includes('-refine-'))
+
+const refineChangeCounts = computed(() => {
+  const c: any[] = refineDiff.value?.changes || []
+  return {
+    modified: c.filter((x: any) => x.type === 'modified').length,
+    added: c.filter((x: any) => x.type === 'added').length,
+    removed: c.filter((x: any) => x.type === 'removed').length,
+    total: c.length,
+  }
+})
+
+function refineChangeSummary(): string {
+  const k = refineChangeCounts.value
+  if (!k.total) return '无文件改动'
+  const parts: string[] = []
+  if (k.modified) parts.push(`修改 ${k.modified}`)
+  if (k.added) parts.push(`新增 ${k.added}`)
+  if (k.removed) parts.push(`删除 ${k.removed}`)
+  return `共 ${k.total} 个文件改动（${parts.join(' · ')}）`
+}
+
+function refineTypeLabel(t: string): string {
+  return t === 'modified' ? '修改' : t === 'added' ? '新增' : '删除'
+}
+
+function toggleChange(path: string) {
+  const s = new Set(expandedChanges.value)
+  if (s.has(path)) s.delete(path)
+  else s.add(path)
+  expandedChanges.value = s
+}
+
+async function loadRefineDiff() {
+  if (!task.value || !task.value.refineOf) {
+    refineDiff.value = { available: false, changes: [] }
+    return
+  }
+  try {
+    refineDiffLoading.value = true
+    const resp = await getRefineDiff(task.value.sessionId, task.value.refineOf)
+    // 🔧 2026-11-12 修：后端全局信封拦截器把扁平响应包成 {success,code,message,data,...}，
+    // 业务字段（available/changes）收进 resp.data；success/message 提到信封顶层。
+    // 故从信封 data 取业务载荷；兼容（理论上不存在的）未包信封情况用 resp 兜底。
+    // 注意：必须用安全默认对象而非 null，否则 v-for 在父级 v-show 隐藏下仍会读取
+    // refineDiff.changes → null.changes 崩溃（v-for 优先级高于 v-show）。
+    refineDiff.value =
+      resp?.success && resp?.data ? resp.data : { available: false, changes: [] }
+  } catch {
+    refineDiff.value = { available: false, changes: [] }
+  } finally {
+    refineDiffLoading.value = false
+  }
+}
+
+async function handleRefineComponent(
+  refineTypeOverride?: 'layout' | 'style' | 'both',
+  visionGuidance?: string,
+) {
+  if (!task.value) return
+  try {
+    refining.value = true
+    // 🆕 2026-11-12 精修续跑溯源：从精修任务再次发起时，沿用上次精修类型（若有），
+    // 实现「再精修一次」复用同一范围；从源任务发起则默认全面精修。
+    const refineType = refineTypeOverride || task.value.refineType || 'both'
+    const resp = await refineComponent({
+      componentId: task.value.componentId || task.value.sessionId,
+      refineType,
+      target: task.value.target === 'vue3' ? 'vue3' : 'microcode',
+      generationTier: task.value.generationTier === 'lite' ? 'lite' : 'max',
+      // 🆕 视觉优化精修：把比对产出的差异引导文本透传给 refiner
+      visionRefine: !!visionGuidance,
+      visualDiffGuidance: visionGuidance,
+    })
+    if (resp?.success) {
+      // 🔴 精修是「另一条独立任务」(mc-refine-max-*/vue3-refine-max-*)，原任务页面的 SSE 监听的是
+      // 原任务，精修完成时收不到事件 → 预览不会自动刷。因此成功后直接跳转到精修任务页，
+      // 该页自带 SSE 进度与「终态后 previewKey++ 强制预览刷新」，用户能直接看到精修过程与结果。
+      // 🆕 2026-11-12 精修续跑溯源：跳转后精修任务页顶部会显示「源自 <本次任务号>」，一眼可知续跑关系。
+      // 🔧 2026-11-12 修：后端信封拦截器把 sessionId 收进 resp.data.sessionId（信封顶层无此字段）。
+      // 兼容未包信封情形再回退 resp.sessionId。
+      const refineSessionId = resp.data?.sessionId || resp.sessionId
+      const sourceSessionId = task.value.sessionId
+      message.success(`已在「${sourceSessionId}」基础上发起视觉优化，新任务：${refineSessionId}`)
+      if (refineSessionId) {
+        router.push('/tasks/' + refineSessionId)
+        return
+      }
+      await loadTask()
+    } else {
+      message.error(resp?.message || '视觉优化启动失败')
+    }
+  } catch (error: any) {
+    // 优先取后端响应体的真实错误信息（如「任务产物不存在…」「缺少分析缓存…」），
+    // 否则回退到 axios 默认文案。避免只看到「Request failed with status code 400」。
+    const serverMsg = error?.response?.data?.message || error?.message || '未知错误'
+    message.error('视觉优化失败: ' + serverMsg)
+  } finally {
+    refining.value = false
+  }
+}
+
+/**
+ * 🆕 视觉优化精修·分析阶段：渲染现状 → 对比设计图 → 列出视觉差异供确认（不修改代码）。
+ * 失败给出明确原因（无参照图 / 渲染失败 / 视觉模型未配置）。
+ * 🔧 2026-11-12：分析实测 17s（最长 300s），必须给全屏进度反馈，否则用户以为点了没反应。
+ */
+async function handleVisionRefine() {
+  if (!task.value) return
+  if (visionAnalyzing.value) return
+  startVisionProgress()
+  try {
+    const resp = await visionAnalyzeRefine({
+      componentId: task.value.componentId || task.value.sessionId,
+      refineType: 'both',
+      target: task.value.target === 'vue3' ? 'vue3' : 'microcode',
+      generationTier: task.value.generationTier === 'lite' ? 'lite' : 'max',
+      overrideImage: visionOverrideImage.value || undefined,
+    })
+    // resp 为后端信封 {success,code,message,data,...}；业务载荷在 resp.data（可能再嵌套一层 data）
+    const env = resp || {}
+    const body = env.data || {}
+    const analysis = body.data || body
+    if (analysis?.analysisId) {
+      visionAnalysis.value = analysis
+      showVisionModal.value = true
+      // 对比图与弹窗并行加载，不阻塞弹窗出现
+      void prepareVisionImages(analysis)
+      if (!analysis.issues?.length) {
+        message.info('未检测到明显视觉差异，可上传参照图后重新比对')
+      }
+    } else {
+      const code = body?.error || env?.error
+      message.error(resolveVisionError(body, env), 6)
+      // 无参照图时打开弹窗（即使没有对比图），让用户能直接上传设计图重试 —— 否则闭环断在这里
+      if (code === 'NO_REFERENCE') {
+        visionAnalysis.value = null
+        showVisionModal.value = true
+      }
+    }
+  } catch (error: any) {
+    const serverMsg = error?.response?.data?.message || error?.message || '未知错误'
+    message.error('视觉分析失败: ' + serverMsg, 6)
+  } finally {
+    stopVisionProgress()
+  }
+}
+
+/**
+ * 🔴 相似度单位修正：后端 overallSimilarity 契约就是 0-100 整数（visual-comparator.js clamp 到 0-100），
+ * 原先前端再 *100 导致 5 分显示成 500%。优先用后端新给的 similarityPercent。
+ */
+function visionSimilarityText(a: any): string {
+  if (!a) return '—'
+  const p = a.similarityPercent
+  if (typeof p === 'number' && !isNaN(p)) return p.toFixed(1) + '%'
+  const v = a.similarity
+  if (typeof v !== 'number' || isNaN(v)) return '—'
+  // 兼容老后端：>1 视为百分数，<=1 视为比例
+  return (v > 1 ? v : v * 100).toFixed(1) + '%'
+}
+
+/** 释放上一轮的 blob URL，避免内存泄漏 */
+function revokeVisionImages() {
+  for (const u of [visionImageUrls.value.design, visionImageUrls.value.rendered]) {
+    if (u && u.startsWith('blob:')) URL.revokeObjectURL(u)
+  }
+  visionImageUrls.value = { design: '', rendered: '' }
+}
+
+/**
+ * 对比图加载：优先用后端内嵌 data URL（零鉴权依赖）；
+ * 缺失时回退到带 Token 的 blob 请求（老后端兜底）。
+ */
+async function prepareVisionImages(a: any) {
+  revokeVisionImages()
+  visionImageUrls.value.design = a?.designImageDataUrl || ''
+  visionImageUrls.value.rendered = a?.renderedImageDataUrl || ''
+  const aid = a?.analysisId
+  if (!aid) return
+  const load = async (kind: 'design' | 'rendered') => {
+    if (visionImageUrls.value[kind]) return
+    try {
+      const blob = await fetchVisionRefineImage(aid, kind)
+      if (blob && blob.size > 0 && !String(blob.type).includes('json')) {
+        visionImageUrls.value[kind] = URL.createObjectURL(blob)
+      }
+    } catch {
+      /* 保留空态占位，界面已有「未能加载」提示 */
+    }
+  }
+  await Promise.all([load('design'), load('rendered')])
+}
+
+/** 后端错误码 → 用户能照做的提示 */
+function resolveVisionError(body: any, env: any): string {
+  const code = body?.error || env?.error
+  const map: Record<string, string> = {
+    NO_REFERENCE: '找不到设计参照图：该产物无 mc-preview.png / source-*.png，且 Figma 取图失败。请在弹窗后先上传一张设计图再比对。',
+    RENDER_FAILED: '组件渲染截图失败，请检查产物是否完整（package/index.vue）。',
+    NO_VISION_KEY: '未配置视觉模型：请在「设置 → 模型配置」补充 vision 模型后再试。',
+    COMPARE_FAILED: '视觉模型比对失败，可稍后重试。',
+  }
+  return map[code] || body?.message || env?.message || '视觉分析失败'
+}
+
+/** 启动分析进度秒表；步骤按后端真实顺序推进（参照图 → 渲染 → 比对），仅作提示不伪造百分比 */
+function startVisionProgress() {
+  visionAnalyzing.value = true
+  visionElapsed.value = 0
+  visionStep.value = 0
+  stopVisionProgressTimer()
+  visionTimer = setInterval(() => {
+    visionElapsed.value += 1
+    const s = visionElapsed.value
+    visionStep.value = s < 3 ? 0 : s < 13 ? 1 : 2
+  }, 1000)
+}
+
+function stopVisionProgressTimer() {
+  if (visionTimer) {
+    clearInterval(visionTimer)
+    visionTimer = null
+  }
+}
+
+function stopVisionProgress() {
+  stopVisionProgressTimer()
+  visionAnalyzing.value = false
+}
+
+// 离开页面时清掉秒表与对比图 blob，避免定时器/内存泄漏
+onUnmounted(() => {
+  stopVisionProgressTimer()
+  revokeVisionImages()
+})
+
+/** 确认优化：把差异清单 guidance 交给 refiner 落地（复用 handleRefineComponent 的跳转逻辑） */
+async function confirmVisionRefine() {
+  const a = visionAnalysis.value
+  if (!a?.guidance) {
+    message.warn('无有效差异指引，无法优化')
+    return
+  }
+  if (visionSubmitting.value) return
+  visionSubmitting.value = true
+  // 🔧 2026-11-12：创建任务有 2~10s 网络等待，给常驻 loading 而非「点了没反应」
+  const hide = message.loading('正在创建视觉优化任务…', 0)
+  try {
+    await handleRefineComponent('both', a.guidance)
+  } finally {
+    hide()
+    visionSubmitting.value = false
+    showVisionModal.value = false
+  }
+}
+
+/** 上传参照图覆盖：读取为 base64 后重新分析 */
+function onVisionOverrideUpload(e: any) {
+  const file = e?.target?.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    visionOverrideImage.value = reader.result as string
+    handleVisionRefine()
+  }
+  reader.readAsDataURL(file)
+}
+
+/**
+ * 🆕 2026-11-12 精修续跑溯源：从精修任务跳回它所续跑的原始生成任务。
+ * task.refineOf 在精修发起时由后端记录（phase2.service.ts refineComponent）。
+ */
+function goToSourceTask(sourceSessionId: string) {
+  if (!sourceSessionId) return
+  router.push('/tasks/' + sourceSessionId)
+}
+
 async function handleCancelQueue() {
   if (!task.value) return
   try {
@@ -5259,6 +5715,11 @@ async function handleRetryWithModel(model: string) {
       groupId: t.groupId,
       config: { ...(rawCfg || {}), textModel: model, visionModel: model }, // 覆盖模型配置
       reuseCache: true, // 复用 Figma 缓存，只换模型
+      // 🛡️ 2026-11-12 凭证引用回传（P1，与 handleRetry 同族）：换模型重跑同样是「复现那次生成」，
+      //   不带回就会按当前 active 槽位建账 ⇒ 原任务那个 token 对不上时 Figma 以 404 伪装成文件不存在。
+      figmaCredentialFp: (t as any).figmaCredentialFp,
+      figmaCredentialSlotId: (t as any).figmaCredentialSlotId,
+      figmaCredentialSlotName: (t as any).figmaCredentialSlotName,
     }
 
     const response =
@@ -5336,6 +5797,12 @@ async function handleRetry(reuseCache = false) {
         groupId: t.groupId,
         config: rawCfg || {},
         reuseCache, // 🆕 续跑复用缓存：true=复用 figma/visual 缓存，false=全新重新生成
+        // 🛡️ 2026-11-12 凭证引用回传（P1）：把原任务用的 Figma 凭证指纹/槽位带回，
+        //   后端建账即 pin 原 token——重试不再被「当前 active 槽位」顶掉导致 404。
+        //   值为脱敏指纹+槽位标识，非机密；老任务无这三字段时 undefined 会被 axios 丢弃。
+        figmaCredentialFp: (t as any).figmaCredentialFp,
+        figmaCredentialSlotId: (t as any).figmaCredentialSlotId,
+        figmaCredentialSlotName: (t as any).figmaCredentialSlotName,
       }
 
       const response =
@@ -5780,7 +6247,212 @@ watch(bindingWizardOpen, (open) => {
 
 .btn-action:hover,
 .btn-refresh:hover {
+  /* 🔴 必须是 background-color 而非 background 简写：
+     background 简写会把 gradient 按钮的 background-image 重置为 none，
+     浅色主题下 --bg-hover(#f8fafc) 又近白，白字按钮 hover 即「消失」。 */
+  background-color: var(--bg-hover);
+}
+
+.btn-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 「以现有代码继续精修」：中性按钮。浅色主题 --bg-hover 近白，与白色 header 无对比度，
+   hover 时看起来按钮不见了 ⇒ 改用 --bg-active + 蓝色描边，两套主题都有明确反馈。
+   :not 排除渐变按钮与「再精修一次」（橙色）避免串色。 */
+.btn-action.btn-refine:not(.btn-vision-refine):not(.btn-refine-again):hover {
+  background-color: var(--bg-active);
+  border-color: var(--c-blue-300);
+  color: var(--text-primary);
+}
+
+.btn-action.btn-refine:not(.btn-vision-refine):not(.btn-refine-again):active {
+  background-color: var(--c-blue-100);
+  color: var(--text-primary);
+  border-color: var(--c-blue-400);
+}
+
+/* 🗑 2026-11-12 收敛精修入口：面包屑「精修续跑」徽标已下线，样式一并移除 */
+
+/* 🆕 2026-11-12 精修续跑溯源：精修任务详情页顶部的「源自 xxx」溯源条 */
+.refine-source-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  background: rgba(250, 173, 20, 0.08);
+  border-bottom: 1px solid rgba(250, 173, 20, 0.3);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+/* 溯源条内的类型文字：纯文字，不做徽标底色/描边（用户 2026-11-12：徽标不要，只要文字） */
+.refine-source-kind {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.refine-source-label {
+  font-weight: 500;
+}
+.refine-source-link {
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.refine-source-link:hover {
   background: var(--bg-hover);
+  border-color: #d48806;
+  color: #d48806;
+}
+.refine-source-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* 🆕 2026-11-12 精修续跑溯源：精修改动明细面板 */
+.refine-diff-panel {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-card);
+  font-size: 13px;
+}
+.refine-diff-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  cursor: pointer;
+  user-select: none;
+}
+.refine-diff-head:hover {
+  background: var(--bg-hover);
+}
+.refine-diff-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.refine-diff-summary {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.refine-diff-loading,
+.refine-diff-hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.refine-diff-collapse {
+  margin-left: auto;
+  color: var(--text-tertiary);
+}
+.refine-diff-body {
+  padding: 4px 24px 14px;
+  max-height: 46vh;
+  overflow: auto;
+}
+.refine-change {
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.refine-change-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-subtle);
+  cursor: pointer;
+}
+.refine-change-head:hover {
+  background: var(--bg-hover);
+}
+.change-type {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ct-modified {
+  background: rgba(24, 144, 255, 0.14);
+  color: #1677ff;
+  border: 1px solid rgba(24, 144, 255, 0.4);
+}
+.ct-added {
+  background: rgba(82, 196, 26, 0.16);
+  color: #389e0d;
+  border: 1px solid rgba(82, 196, 26, 0.45);
+}
+.ct-removed {
+  background: rgba(255, 77, 79, 0.14);
+  color: #cf1322;
+  border: 1px solid rgba(255, 77, 79, 0.4);
+}
+.change-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.change-meta {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.change-arrow {
+  color: var(--text-tertiary);
+}
+.refine-diff-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--bg-code, #1e1e1e);
+  max-height: 320px;
+  overflow: auto;
+}
+.diff-line {
+  display: flex;
+  white-space: pre;
+  padding: 0 8px;
+}
+.diff-sign {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  opacity: 0.7;
+}
+.diff-no {
+  flex-shrink: 0;
+  width: 42px;
+  text-align: right;
+  padding-right: 10px;
+  color: #8b949e;
+  opacity: 0.7;
+  user-select: none;
+}
+.diff-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.dl-add {
+  background: rgba(46, 160, 67, 0.16);
+  color: #7ee787;
+}
+.dl-del {
+  background: rgba(248, 81, 73, 0.16);
+  color: #ffa198;
+}
+.dl-ctx {
+  color: #c9d1d9;
 }
 
 .btn-pause {
@@ -9803,5 +10475,329 @@ input[type='radio']:checked + .radio-label {
 
 .fgc-meta-btn svg {
   flex-shrink: 0;
+}
+
+/* ── 视觉优化精修·分析中遮罩（渲染+比对 20s~5min，必须有明确反馈） ── */
+.vr-loading-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+.vr-loading-card {
+  width: min(400px, 88vw);
+  padding: 28px 26px 22px;
+  border-radius: 14px;
+  background: var(--bg-card, #fff);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+  text-align: center;
+}
+.vr-loading-spinner {
+  width: 38px;
+  height: 38px;
+  margin: 0 auto 16px;
+  border: 3px solid rgba(139, 92, 246, 0.2);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: vr-spin 0.8s linear infinite;
+}
+@keyframes vr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.vr-loading-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  margin-bottom: 6px;
+}
+.vr-loading-step {
+  font-size: 13px;
+  color: #8b5cf6;
+  margin-bottom: 14px;
+  min-height: 18px;
+}
+.vr-loading-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(139, 92, 246, 0.16);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.vr-loading-bar i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa);
+  animation: vr-slide 1.4s ease-in-out infinite;
+}
+@keyframes vr-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+.vr-loading-elapsed {
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
+}
+.vr-loading-elapsed b {
+  color: #8b5cf6;
+  font-variant-numeric: tabular-nums;
+}
+.vr-loading-eta {
+  opacity: 0.75;
+}
+.vr-loading-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+/* ── 视觉优化精修·差异清单弹窗 ── */
+.vision-refine-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.vision-refine-modal {
+  width: min(960px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.vr-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-default, #e2e8f0);
+}
+.vr-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+}
+.vr-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-secondary, #64748b);
+}
+.vr-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+.vr-similarity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+}
+.vr-pass-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.vr-pass-tag.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.vr-pass-tag.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+.vr-images {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.vr-img-box {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-default, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+.vr-img-label {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  border-bottom: 1px solid var(--border-default, #e2e8f0);
+}
+.vr-img-box img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+.vr-img-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  font-size: 12px;
+  color: var(--text-tertiary, #94a3b8);
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 8px;
+}
+.vr-issues-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary, #1e293b);
+}
+.vr-issues ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vr-issue {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-subtle, #f1f5f9);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vr-sev {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.vr-issue.sev-BLOCK .vr-sev,
+.vr-issue.sev-block .vr-sev {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.vr-issue.sev-high .vr-sev {
+  background: #ffedd5;
+  color: #c2410c;
+}
+.vr-issue.sev-medium .vr-sev,
+.vr-issue.sev-warn .vr-sev {
+  background: #fef3c7;
+  color: #92400e;
+}
+.vr-issue.sev-low .vr-sev,
+.vr-issue.sev-info .vr-sev {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.vr-cat {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+.vr-desc {
+  color: var(--text-primary, #1e293b);
+}
+.vr-noissue {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+}
+.vr-need-ref {
+  padding: 20px;
+  margin-bottom: 14px;
+  border: 1px dashed var(--border-default, #e2e8f0);
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.06);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary, #64748b);
+}
+.vr-need-ref-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  margin-bottom: 6px;
+}
+.vr-need-ref p {
+  margin: 0 0 4px;
+}
+.vr-upload {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+}
+.vr-upload-hint {
+  color: #0369a1;
+}
+.vr-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default, #e2e8f0);
+}
+.vr-foot-hint {
+  margin-right: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary, #64748b);
+}
+/* 🔴 双类提权（.btn-action.btn-vision-refine = 0,3,0）压过 .btn-action:hover，
+   确保 hover/active/disabled 全程保住渐变与白字；渐变色经对比度核算（白字 ≥4.9:1），
+   浅色/深色主题下均清晰可见 */
+.btn-action.btn-vision-refine {
+  background: linear-gradient(135deg, #5b5ce8, #8050e8);
+  color: #fff;
+  border: 1px solid transparent;
+}
+.btn-action.btn-vision-refine:hover {
+  /* 同色系加深：变亮会让白字对比度跌破 4.5:1 */
+  background: linear-gradient(135deg, #4f50dd, #7040df);
+  color: #fff;
+  border-color: transparent;
+}
+.btn-action.btn-vision-refine:active {
+  background: linear-gradient(135deg, #4344cf, #5f34cd);
+  color: #fff;
+  border-color: transparent;
+}
+.btn-action.btn-vision-refine:disabled {
+  background: linear-gradient(135deg, #5b5ce8, #8050e8);
+  color: #fff;
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: transparent;
+}
+.btn-action.btn-vision-refine:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.55);
+  outline-offset: 2px;
 }
 </style>

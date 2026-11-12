@@ -330,8 +330,9 @@ export function renderFigmaFetch(def) {
       } catch (e) { /* ignore */ }
     }
     if (!fk || !nid) return { fetchResult: { ok: false, error: '缺少 fileKey/nodeId' }, fileKey: null, nodeId: null }
-    const token = figmaToken || process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN || ''
-    if (!token) return { fetchResult: { ok: false, error: '缺少 Figma token（参数 figmaToken 或环境变量）' }, fileKey: fk, nodeId: nid }
+    // 🔴 2026-11-12 用户指令（零兜底）：删除 env 兜底（原会静默套用服务端部署级 token，属跨用户串号），仅认调用方显式传入的 figmaToken
+    const token = figmaToken || ''
+    if (!token) return { fetchResult: { ok: false, error: '缺少 Figma token（请在参数 figmaToken 中显式传入）' }, fileKey: fk, nodeId: nid }
     try {
       const url = 'https://api.figma.com/v1/files/' + encodeURIComponent(fk) + '/nodes?ids=' + encodeURIComponent(nid)
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })
@@ -702,7 +703,7 @@ export const TOOL_TEMPLATES = {
     resources: resources({
       inputs: [{ key: 'fileKey', type: 'string', required: false, desc: 'Figma 文件 key' }, { key: 'nodeId', type: 'string', required: false, desc: '节点 id' }, { key: 'figmaUrl', type: 'string', required: false, desc: '链接（无 fileKey/nodeId 时自动解析）' }],
       outputs: [{ key: 'figmaNodeData', type: 'object' }, { key: 'fetchResult', type: 'object' }],
-      params: [{ key: 'figmaToken', label: 'Figma Token', type: 'string', required: false, desc: '不填则用环境变量 FIGMA_ACCESS_TOKEN' }],
+      params: [{ key: 'figmaToken', label: 'Figma Token', type: 'string', required: true, desc: '需显式传入（不再回退环境变量）' }],
     }),
   },
   'screenshot': {

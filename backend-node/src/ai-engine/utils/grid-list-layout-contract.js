@@ -379,7 +379,7 @@ export function resolveElementDecls(sources, classes, inlineStyle = '') {
 }
 
 /** 取静态 `class="a b"` 的属性值（排除 `:class` / `v-bind:class`） */
-function classAttrOf(attrs) {
+export function classAttrOf(attrs) {
   const m = /(?:^|\s)class\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(String(attrs || ''))
   if (!m) return []
   return String(m[1] ?? m[2] ?? '')
@@ -388,12 +388,12 @@ function classAttrOf(attrs) {
 }
 
 /** 取静态 `style="…"`（排除 `:style`） */
-function inlineStyleOf(attrs) {
+export function inlineStyleOf(attrs) {
   const m = /(?:^|\s)style\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(String(attrs || ''))
   return m ? String(m[1] ?? m[2] ?? '') : ''
 }
 
-function sectionIdOf(attrs) {
+export function sectionIdOf(attrs) {
   const m = /\bdata-section-id\s*=\s*(?:"([^"]+)"|'([^']+)')/.exec(String(attrs || ''))
   return m ? String(m[1] ?? m[2] ?? '') : ''
 }
@@ -421,7 +421,7 @@ function buildClassUsage(files) {
 }
 
 /** 全文件模板标签的原始 attrs 串（轻量：只取 `<template>` 段） */
-function matchAllTags(content) {
+export function matchAllTags(content) {
   const text = String(content || '')
   const open = text.indexOf('<template>')
   const close = text.lastIndexOf('</template>')
@@ -483,6 +483,109 @@ export function parseRepeatTrack(tpl) {
  * 轨道是否「流式」（无 px 定值）：1fr / minmax() / auto / 百分比皆属流式。
  * 与 `judgeGridContract` 的 `parsePx(track) === null` 同口径，此处仅做可读封装。
  */
+/**
+ * 轨道模板 → 顶层轨道列表（括号内空格不切分）。
+ * `repeat(2, minmax(0, 1fr)) 1fr` ⇒ `['repeat(2, minmax(0, 1fr))', '1fr']`
+ */
+function splitTopLevelTracks(text) {
+  const out = []
+  let depth = 0
+  let cur = ''
+  for (const ch of String(text || '')) {
+    if (ch === '(') depth += 1
+    else if (ch === ')') depth = Math.max(0, depth - 1)
+    if (/\s/.test(ch) && depth === 0) {
+      if (cur.trim()) out.push(cur.trim())
+      cur = ''
+      continue
+    }
+    cur += ch
+  }
+  if (cur.trim()) out.push(cur.trim())
+  return out
+}
+
+/**
+ * `grid-template-columns` → 静态可数出的列数；数不出返回 null。
+ * 支持 `repeat(K, …)`、显式轨道列表（`1fr 1fr 1fr 1fr` ⇒ 4）、两者混写相加；
+ * `repeat(auto-fill|auto-fit, …)` 列数由容器宽决定 ⇒ null。
+ */
+export function countTrackColumns(tpl) {
+  const parts = splitTopLevelTracks(tpl)
+  if (parts.length === 0) return null
+  let total = 0
+  for (const part of parts) {
+    if (/^repeat\(\s*(?:auto-fill|auto-fit)\s*,/i.test(part)) return null
+    const rep = /^repeat\(\s*(\d+)\s*,/i.exec(part)
+    if (rep) {
+      total += Number(rep[1])
+      continue
+    }
+    total += 1
+  }
+  return total >= 2 ? total : null
+}
+
+/**
+ * 从 `calc(…)` 里读出等分除数 K（子项宽度 = 容器宽 / K）。
+ * 只认「分子是可流式的容器宽表达式」的形态：
+ *   `calc((100% - (3 - 1) * 20px) / 3)`  ⇒ 3
+ *   `calc(100% / 4 - 15px)`              ⇒ 4
+ *   `calc(100% - 20px / 2)`              ⇒ null（是把长度折半，不是列等分）
+ */
+export function columnsFromCalcWidth(raw) {
+  const text = String(raw || '')
+  if (!/calc\s*\(/i.test(text)) return null
+  const re = /\/\s*(\d+(?:\.\d+)?)/g
+  let m
+  let last = null
+  while ((m = re.exec(text)) !== null) last = m
+  if (!last) return null
+  const left = text.slice(0, last.index).trimEnd()
+  // `/` 左边以长度字面量结尾 ⇒ 分子是长度而非容器宽 ⇒ 不是列等分
+  if (/(?:px|rem|em|vw|vh)$/i.test(left) && !/\)$/.test(left)) return null
+  const k = Math.round(Number(last[1]))
+  return Number.isFinite(k) && k >= 2 && k <= 12 ? k : null
+}
+
+/**
+ * 🛡️ 「该元素实际声明了几列」——**唯一实现**（2026-11-12 · cc6334 实锤）。
+ *
+ * 消费方：D-GRID 验收判据（fail-closed，必须能证明列数正确）、`judgeGridContract` 的
+ * 列数分支（精确比对）、自愈幂等判断 —— 三处共用，禁各自写正则。
+ *
+ * 只认**静态可判定**的声明；数不出返回 null（绝不因「用了 flex」就放行 —— 那正是放水）。
+ *
+ *   grid + `repeat(K, …)`           → K   （form = repeat）
+ *   grid + 显式轨道 `a b c d`       → 4   （form = tracks）
+ *   flex + 子项 `calc(… / K)`       → K   （form = flex-calc，等分 K 份）
+ *   其它（含 `repeat(auto-fill,…)`、`flex:1` 均分、未声明 display） ⇒ null
+ *
+ * @param {object} wrap 容器元素生效声明（`resolveElementDecls` 产物）
+ * @param {object} item 子项元素生效声明（flex 等分形态必需）
+ * @returns {{cols:number, form:'repeat'|'tracks'|'flex-calc'}|null}
+ */
+export function declaredColumns(wrap = {}, item = {}) {
+  const display = String(wrap.display || '').trim().toLowerCase()
+  const tpl = String(wrap['grid-template-columns'] || '').trim()
+  // grid：轨道模板本身就是列数的充分声明
+  if (display === 'grid' && tpl) {
+    const n = countTrackColumns(tpl)
+    if (!n) return null
+    return { cols: n, form: /repeat\(/i.test(tpl) ? 'repeat' : 'tracks' }
+  }
+  // flex 行：列数只能从子项的等分算式里读
+  const dir = String(wrap['flex-direction'] || 'row').trim().toLowerCase()
+  if ((display === 'flex' || display === 'inline-flex') && dir.startsWith('row')) {
+    for (const raw of [item['flex-basis'], item.width, item.flex]) {
+      const k = columnsFromCalcWidth(raw)
+      if (k) return { cols: k, form: 'flex-calc' }
+    }
+    return null
+  }
+  return null
+}
+
 export function isFluidTrack(tpl) {
   const t = parseRepeatTrack(tpl)
   return t ? parsePx(t.track) === null : false
@@ -552,12 +655,17 @@ export function judgeGridContract(contract, wrap = {}, item = {}) {
         })
       }
     } else if (tpl.trim()) {
-      out.push({
-        code: 'grid-cols',
-        prop: 'grid-template-columns',
-        actual: tpl.trim(),
-        want: `repeat(${wantCols}, ${wantW}px)`,
-      })
+      // 🛡️ 2026-11-12：显式轨道列表（`1fr 1fr 1fr 1fr`）列数**数得出且相等**时不报 grid-cols
+      //   （旧逻辑把一切非 repeat 形态直接判违规 ⇒ 合规产物被误报，修复轮改成 repeat 属白改）。
+      const nTracks = countTrackColumns(tpl)
+      if (nTracks !== wantCols) {
+        out.push({
+          code: 'grid-cols',
+          prop: 'grid-template-columns',
+          actual: nTracks ? `${nTracks} 列（${tpl.trim()}）` : tpl.trim(),
+          want: `repeat(${wantCols}, ${wantW}px)`,
+        })
+      }
     } else {
       out.push({
         code: 'grid-cols',

@@ -18,6 +18,282 @@
 //    同类风险：本模块输入一律显式取字段，不做深 spread。
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// 🆕 刀 25（2026-11-12 · mc-max-1794463650286-c4c5dabc 实锤）——
+//   JS 数据驱动的颜色字面量 → CSS 变量引用
+//   （治「深浅两套主题建好了，但深色没接上 UI」）
+//
+// 病灶（c4c5dabc 实锤，三层叠加）：
+//   ① v3.0 folded-grid **确定性装配**路径把色值内嵌进 **JS 数据常量 + 内联 style**
+//      （FG_LIST_ITEMS[].texts[].c / .fill、index.vue 的 absorbed-bg 渐变），
+//      绕开了「common.less 是业务色唯一真值源」这条既有契约；
+//   ② 本模块的 `applyColorSlotMapping` 射程**只有 common.less**（docstring 明写
+//      「.vue style 规范上不写业务颜色（在 common.less），暂不扫」）
+//      ⇒ 对本产物 replacedCount=0（真机日志实测），槽位表建了却 0 引用；
+//   ③ 内联 style 特异性 (1,0,0,0) > 主题覆盖层 `.theme_2 .cls` (0,2,0)
+//      ⇒ 即便 CSS 侧接线成功也盖不住内联。
+//
+// 治本（**复用现成主题注入机制**，不新增主题体系）：
+//   宿主/预览器 `applyPreviewCssVars(cssVars, theme)` 切主题时把
+//   `--${camelKey}` 重注入 documentElement（合并 `{...common, ...cssVars[theme]}`
+//   ⇒ common 天然兜底，主题轨缺值不崩）。
+//   ⇒ 只要把产物里的颜色字面量换成 `var(--camelKey)`，
+//     **内联 style 照样跟随主题**（var() 的取值由变量决定，与特异性无关）。
+//
+// 浅色零差异（可证，非经验判断）：
+//   `buildColorSlotMapping` 的槽位值本身就是**主稿实测色**
+//     · canonical 通道：槽位主稿值 ≡ 原字面值（精确匹配命中）
+//     · custom   通道：slotValues[primary.key] = mainKey（主稿实测色）
+//   ⇒ 替换后浅色主题解析值 ≡ 原字面值（仅书写格式差异，视觉等价）。
+//
+// 契约（M3-7/M3-8 双向一致）：css-vars.js 新增的非框架键必须在 declare.json 的
+//   cssVariableConfig 声明 ⇒ 本刀同步补写两侧。
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * kebab 槽位名 → css-vars.js 的 camelCase 键名。
+ *
+ * 同一批语义槽位在两处命名不同（事实源在 style-tokens.js 的 styleTokens）：
+ *   theme-vars.less（Less 变量）：@color-text-base / @color-custom-2
+ *   css-vars.js    （CSS 变量）：  colorTextBase  / colorCustom2
+ * 前端 `applyPreviewCssVars` 按 `--${key}` 注入 ⇒ JS 侧只能引用 camel 形态。
+ *
+ * @param {string} slotName 槽位名（可带 @ 前缀）
+ * @returns {string} camelCase 键名
+ */
+export function slotNameToCssVarKey(slotName) {
+  return String(slotName || '')
+    .replace(/^@/, '')
+    .replace(/[-_]+([a-zA-Z0-9])/g, (_m, c) => c.toUpperCase())
+}
+
+/**
+ * 解析 css-vars.js 的主题对象 → { 主题名: Set(键名) }。
+ *
+ * 只认顶层 `const <name> = { ... \n};` 块（css-vars.js 由 buildCssVarsFile
+ * 确定性生成，形态固定）。块内键按行首匹配 ⇒ `$mcCssBuilder.getCssSize()`
+ * 这类**值**里的标识符不会被误当成键。
+ *
+ * @param {string} cssVarsContent css-vars.js 全文
+ * @returns {Object<string, Set<string>>} 主题名 → 键集合
+ */
+export function parseCssVarsThemeKeys(cssVarsContent) {
+  const themes = {}
+  const text = String(cssVarsContent || '')
+  const blockRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*\{([\s\S]*?)\n\};/g
+  let bm
+  while ((bm = blockRe.exec(text)) !== null) {
+    const keys = new Set()
+    const keyRe = /^[ \t]*([A-Za-z_$][\w$]*)\s*:/gm
+    let km
+    while ((km = keyRe.exec(bm[2])) !== null) keys.add(km[1])
+    themes[bm[1]] = keys
+  }
+  return themes
+}
+
+/**
+ * 解析 theme-vars.less 的 `theme-*` mixin → { 主题名: { 槽位名: 值 } }。
+ *
+ * ⚠️ 只认 `theme-` 前缀的 mixin（`.common()` 是基础槽位，其 @fontSize 等是
+ *   `var(--fontSize)` 形态，**不能**同步进 css-vars.js —— 会覆盖掉
+ *   `$mcCssBuilder.getCssSize()` 规范写法，见 buildCssVarsFile 注释）。
+ *
+ * @param {string} tvContent theme-vars.less 全文
+ * @returns {Object<string, Object<string,string>>}
+ */
+export function parseThemeVarsMixins(tvContent) {
+  const out = {}
+  const text = String(tvContent || '')
+  const mixinRe = /\.([a-zA-Z0-9_-]+)\s*\(\s*\)\s*\{([^}]*)\}/g
+  let mm
+  while ((mm = mixinRe.exec(text)) !== null) {
+    const name = mm[1]
+    if (!name.startsWith('theme-')) continue
+    const key = name.slice('theme-'.length)
+    if (!key || key === 'vars') continue
+    const slots = {}
+    const vr = /@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/g
+    let vm
+    while ((vm = vr.exec(mm[2])) !== null) slots[vm[1]] = vm[2].trim()
+    out[key] = slots
+  }
+  return out
+}
+
+/**
+ * 把键值对注入 css-vars.js 的某个主题对象（幂等：已存在则跳过）。
+ *
+ * @param {string} cssVarsContent css-vars.js 全文
+ * @param {string} themeKey 主题对象名（common / light / dark / theme_2 …）
+ * @param {Array<{key:string,value:string}>} entries 待注入的键值对
+ * @returns {{content:string, changed:boolean, injected:string[]}}
+ */
+export function injectCssVarsThemeEntries(cssVarsContent, themeKey, entries) {
+  let content = String(cssVarsContent || '')
+  const injected = []
+  for (const { key, value } of entries || []) {
+    if (!key || value === undefined || value === null) continue
+    const re = new RegExp(`(const\\s+${themeKey}\\s*=\\s*\\{)([\\s\\S]*?)(\\n\\};)`)
+    const m = content.match(re)
+    if (!m) continue // 该主题对象不存在：跳过（不制造半成品）
+    if (new RegExp(`^[ \\t]*${key}\\s*:`, 'm').test(m[2])) continue // 幂等
+    content = content.replace(
+      re,
+      (all, head, body, tail) => `${head}${body}\n  ${key}: '${value}',${tail}`,
+    )
+    injected.push(key)
+  }
+  return { content, changed: injected.length > 0, injected }
+}
+
+/**
+ * 把 CSS 变量键补进 declare.json 的 cssVariableConfig（M3-8 双向一致）。
+ *
+ * @param {string} declareJsonContent declare.json 全文
+ * @param {string[]} keys 待声明的 CSS 变量键
+ * @returns {{content:string, changed:boolean, injected:string[], data:Object}}
+ */
+export function injectDeclareCssVarConfig(declareJsonContent, keys) {
+  const text = String(declareJsonContent || '')
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch (_e) {
+    return { content: text, changed: false, injected: [], data: null }
+  }
+  if (!Array.isArray(data.cssVariableConfig)) data.cssVariableConfig = []
+  const declared = new Set(data.cssVariableConfig.map((it) => it && it.key).filter(Boolean))
+  const injected = []
+  for (const key of keys || []) {
+    if (!key || declared.has(key)) continue
+    data.cssVariableConfig.push({ name: key, key, type: 'color' })
+    declared.add(key)
+    injected.push(key)
+  }
+  if (injected.length === 0) return { content: text, changed: false, injected, data }
+  // ⚠️ 缩进 2 空格 —— 与 buildDeclareJsFile / normalizeDeclareJson 的
+  //   JSON.stringify(d, null, 2) 形态一致（产物实测），避免整体格式漂移。
+  return { content: `${JSON.stringify(data, null, 2)}\n`, changed: true, injected, data }
+}
+
+/**
+ * 🆕 刀 25 主刀：把产物 .vue 里的颜色字面量换成 `var(--camelKey)`。
+ *
+ * 作用域：**全部 .vue**（template 内联 style / script 数据常量 / style 段）——
+ *   var() 在任何位置都随 documentElement 上的 CSS 变量走，故一并覆盖。
+ *
+ * 安全阀（缺一不可）：
+ *   ① 白名单：camelKey 必须**确实存在于 css-vars.js 的某个主题对象**，
+ *      否则 var() 无值 ⇒ 颜色丢失 ⇒ 不替换；
+ *   ② 保护既有 var(...)：避免 `var(--x, #ffffff)` 的 fallback 被替换成
+ *      `var(--x, var(--x))` 之类循环引用；
+ *   ③ 识别不到的颜色令牌一律原样保留（不造假绿）。
+ *
+ * 幂等：已是 `var(--xxx)` 的不再替换；重跑 replacedCount=0。
+ *
+ * @param {Object} opts
+ * @param {string} opts.outputPath 组件产物目录
+ * @param {Map<string,string>} opts.mapping 主稿颜色键 → 槽位名（kebab）
+ * @param {Set<string>} opts.cssVarKeys css-vars.js 里真实存在的 camel 键集合
+ * @param {import('fs')} opts.fsMod
+ * @param {Object} opts.pathMod
+ * @returns {{replacedFiles:string[], replacedCount:number, skipped:string[], details:Array}}
+ */
+export function applyColorSlotMappingToScripts({ outputPath, mapping, cssVarKeys, fsMod, pathMod }) {
+  const result = { replacedFiles: [], replacedCount: 0, skipped: [], details: [] }
+  if (!outputPath || !mapping || !(mapping.replacements instanceof Map)) return result
+  if (!cssVarKeys || typeof cssVarKeys.has !== 'function' || cssVarKeys.size === 0) return result
+  const { readFileSync, writeFileSync, existsSync, readdirSync, statSync } = fsMod
+  const { join } = pathMod
+
+  // 递归收集 .vue（排除缓存/快照目录）
+  const vueFiles = []
+  const SKIP_DIRS = new Set(['node_modules', '.mc-gen', '.checkpoint', '.git', 'dist'])
+  const walk = (dir) => {
+    let entries = []
+    try {
+      entries = readdirSync(dir)
+    } catch (_e) {
+      return
+    }
+    for (const name of entries) {
+      if (SKIP_DIRS.has(name)) continue
+      const full = join(dir, name)
+      let st
+      try {
+        st = statSync(full)
+      } catch (_e) {
+        continue
+      }
+      if (st.isDirectory()) walk(full)
+      else if (/\.vue$/.test(name)) vueFiles.push(full)
+    }
+  }
+  walk(outputPath)
+
+  // 颜色键 → CSS 变量名（白名单过滤后）
+  const keyToVar = new Map()
+  for (const [colorKey, slotName] of mapping.replacements) {
+    const camel = slotNameToCssVarKey(slotName)
+    if (!camel) continue
+    if (!cssVarKeys.has(camel)) {
+      result.skipped.push(`${colorKey}→${slotName}(${camel} 不在 css-vars.js)`)
+      continue
+    }
+    keyToVar.set(colorKey, camel)
+  }
+  if (keyToVar.size === 0) return result
+
+  const VAR_SEGMENT_RX = /var\(\s*--[A-Za-z0-9_-]+\s*(?:,[^()]*)?\)/g
+  for (const file of vueFiles) {
+    if (!existsSync(file)) continue
+    let content
+    try {
+      content = readFileSync(file, 'utf-8')
+    } catch (_e) {
+      continue
+    }
+    if (!content) continue
+
+    // ② 保护既有 var(...)：占位 → 替换 → 还原
+    const parked = []
+    let guarded = content.replace(VAR_SEGMENT_RX, (m) => {
+      parked.push(m)
+      return `___MC_VAR_${parked.length - 1}___`
+    })
+
+    let fileReplaced = 0
+    const fileDetails = []
+    guarded = guarded.replace(COLOR_TOKEN_RX, (token) => {
+      const key = canonicalizeColorToken(token)
+      if (!key) return token
+      const camel = keyToVar.get(key)
+      if (!camel) return token
+      fileReplaced++
+      fileDetails.push({ from: token, key, varName: camel })
+      return `var(--${camel})`
+    })
+
+    // 还原占位
+    guarded = guarded.replace(/___MC_VAR_(\d+)___/g, (_m, idx) => parked[Number(idx)] ?? '')
+
+    if (fileReplaced > 0 && guarded !== content) {
+      try {
+        writeFileSync(file, guarded, 'utf-8')
+        result.replacedFiles.push(file)
+        result.replacedCount += fileReplaced
+        for (const d of fileDetails) {
+          result.details.push({ file: String(file).split('/').slice(-2).join('/'), ...d })
+        }
+      } catch (_e) {
+        /* 写盘失败不阻断（fail-open） */
+      }
+    }
+  }
+  return result
+}
+
 /**
  * 🔍 语义推断槽位审计（2026-10-19，c-aiot-dpjh-bsjd-c27cb2eb 实锤）
  *
@@ -629,26 +905,139 @@ export function applyColorSlotMapping({ outputPath, mapping, fsMod, pathMod }) {
 
   // 2) common.less 色值字面量 → less 变量引用
   const commonPath = join(outputPath, 'resources', 'styles', 'common.less')
-  if (!existsSync(commonPath)) return result
-  let common = readFileSync(commonPath, 'utf-8')
-  let replacedCount = 0
-  // 🔴 2026-10-26 治本（RC1-b · a0f93b25 实锤 `replacedCount:0`）：
-  //   旧实现只拼 `#rrggbb` 的精确 hex 正则 ⇒ `rgba(226, 208, 132, 0.2)` 这类半透明字面量
-  //   **全线逃逸**（该稿产物 common.less 三块面板色全是 rgba，命中 0）。
-  //   正解：先**切分颜色令牌**，再逐个规范化为映射表口径的颜色键查表 ——
-  //   这样 hex 大小写 / 3 位 hex / `rgb()` / `rgba()` 空格差异都走同一条判定，
-  //   且「识别不到就不替换」（`canonicalizeColorToken` 返回 null 即原样保留，不造假绿）。
-  common = common.replace(COLOR_TOKEN_RX, (token) => {
-    const key = canonicalizeColorToken(token)
-    if (!key) return token
-    const varName = mapping.replacements.get(key)
-    if (!varName) return token
-    replacedCount++
-    return `@${varName}`
-  })
-  if (replacedCount > 0) {
-    writeFileSync(commonPath, common, 'utf-8')
-    result.replacedCount = replacedCount
+  if (existsSync(commonPath)) {
+    let common = readFileSync(commonPath, 'utf-8')
+    let replacedCount = 0
+    // 🔴 2026-10-26 治本（RC1-b · a0f93b25 实锤 `replacedCount:0`）：
+    //   旧实现只拼 `#rrggbb` 的精确 hex 正则 ⇒ `rgba(226, 208, 132, 0.2)` 这类半透明字面量
+    //   **全线逃逸**（该稿产物 common.less 三块面板色全是 rgba，命中 0）。
+    //   正解：先**切分颜色令牌**，再逐个规范化为映射表口径的颜色键查表 ——
+    //   这样 hex 大小写 / 3 位 hex / `rgb()` / `rgba()` 空格差异都走同一条判定，
+    //   且「识别不到就不替换」（`canonicalizeColorToken` 返回 null 即原样保留，不造假绿）。
+    common = common.replace(COLOR_TOKEN_RX, (token) => {
+      const key = canonicalizeColorToken(token)
+      if (!key) return token
+      const varName = mapping.replacements.get(key)
+      if (!varName) return token
+      replacedCount++
+      return `@${varName}`
+    })
+    if (replacedCount > 0) {
+      writeFileSync(commonPath, common, 'utf-8')
+      result.replacedCount = replacedCount
+    }
+  }
+
+  // 🆕 刀 25（2026-11-12 · c4c5dabc 实锤）：业务槽位 → css-vars.js + declare.json + SFC
+  //   ⇒ 让「JS 数据常量 / 内联 style 里的颜色」也能跟随主题（否则主题建好了也切不动）。
+  //   ⚠️ 条件是「产物有 css-vars.js + theme-vars.less」（内部 existsSync 判定），
+  //   **不是** customSlots 非空 —— 本刀做的是**全槽位**同步（canonical 业务槽位
+  //   在 JS 侧同样无变量可用，只补 custom 槽位不够）。
+  try {
+    syncThemeSlotsToCssVarsAndScripts({
+      outputPath,
+      mapping,
+      fsMod,
+      pathMod,
+      result,
+    })
+  } catch (e) {
+    // fail-open：补写失败不阻断生成（保留字面量，至少能看）
+    result.cssVarsError = e?.message || String(e)
   }
   return result
+}
+
+/**
+ * 🆕 刀 25 内部实现：custom 槽位三处同步 + SFC 颜色字面量替换。
+ *
+ * ① css-vars.js：把 custom 槽位写进**各主题对象**（有该稿真值的写），
+ *    并写进 `common`（主稿值）—— 前端 `applyPreviewCssVars` 合并
+ *    `{...common, ...cssVars[theme]}` ⇒ common 天然兜底，
+ *    内置 dark 占位轨缺值时也不崩（回落主稿值，不臆造）。
+ * ② declare.json：cssVariableConfig 追加同键（M3-7/M3-8 双向一致，否则 mc-check 判死）。
+ * ③ .vue：颜色字面量 → `var(--camelKey)`（白名单 = ① 之后 css-vars.js 的实际键）。
+ */
+function syncThemeSlotsToCssVarsAndScripts({ outputPath, mapping, fsMod, pathMod, result }) {
+  const { readFileSync, writeFileSync, existsSync } = fsMod
+  const { join } = pathMod
+
+  const cssVarsPath = join(outputPath, 'resources', 'config', 'css-vars.js')
+  const themeVarsPath = join(outputPath, 'resources', 'styles', 'themes', 'theme-vars.less')
+  if (!existsSync(cssVarsPath) || !existsSync(themeVarsPath)) return
+  let cssVars = readFileSync(cssVarsPath, 'utf-8')
+  const mixins = parseThemeVarsMixins(readFileSync(themeVarsPath, 'utf-8'))
+
+  // 现有键集合（用于「只补缺」判定）
+  const existingThemes = parseCssVarsThemeKeys(cssVars)
+  const existing = new Set()
+  for (const keys of Object.values(existingThemes)) {
+    for (const k of keys) existing.add(k)
+  }
+
+  // 组装：主题 → [{key, value}]；common 取默认主题（light；无则取首个非 dark 主题）
+  const perThemeEntries = new Map()
+  const addedKeys = new Set()
+  const themeKeys = Object.keys(mixins)
+  const defaultTheme = themeKeys.includes('light')
+    ? 'light'
+    : themeKeys.find((k) => k !== 'dark') || themeKeys[0]
+  for (const tk of themeKeys) {
+    const slots = mixins[tk] || {}
+    const entries = []
+    for (const [slotName, value] of Object.entries(slots)) {
+      if (!value || value.includes('var(')) continue // var() 形态不能同步（会变成二次变量）
+      const camel = slotNameToCssVarKey(slotName)
+      if (!camel) continue
+      if (existing.has(camel)) continue // 只补缺，不覆盖既有契约键
+      entries.push({ key: camel, value })
+      addedKeys.add(camel)
+    }
+    if (entries.length > 0) perThemeEntries.set(tk, entries)
+  }
+  const commonEntries = perThemeEntries.get(defaultTheme) || []
+
+  // 先写各主题对象（含 common），再解析白名单
+  const injCommon = injectCssVarsThemeEntries(cssVars, 'common', commonEntries)
+  cssVars = injCommon.content
+  let cssVarsChanged = injCommon.changed
+  result.cssVarKeysInjected = [...(result.cssVarKeysInjected || []), ...injCommon.injected]
+  for (const [tk, entries] of perThemeEntries) {
+    const inj = injectCssVarsThemeEntries(cssVars, tk, entries)
+    cssVars = inj.content
+    cssVarsChanged = cssVarsChanged || inj.changed
+    result.cssVarKeysInjected = [...(result.cssVarKeysInjected || []), ...inj.injected]
+  }
+  if (cssVarsChanged) {
+    writeFileSync(cssVarsPath, cssVars, 'utf-8')
+  }
+
+  // ② declare.json 同步声明（M3-8）
+  const declarePath = join(outputPath, 'declare.json')
+  if (existsSync(declarePath) && addedKeys.size > 0) {
+    const declareContent = readFileSync(declarePath, 'utf-8')
+    const inj = injectDeclareCssVarConfig(declareContent, [...addedKeys])
+    if (inj.changed) {
+      writeFileSync(declarePath, inj.content, 'utf-8')
+      result.declaredCssVarKeys = inj.injected
+    }
+  }
+
+  // ③ .vue 颜色字面量 → var(--camelKey)（白名单 = css-vars.js 实际存在的键）
+  const parsedThemeKeys = parseCssVarsThemeKeys(cssVars)
+  const cssVarKeys = new Set()
+  for (const keys of Object.values(parsedThemeKeys)) {
+    for (const k of keys) cssVarKeys.add(k)
+  }
+  const applied = applyColorSlotMappingToScripts({
+    outputPath,
+    mapping,
+    cssVarKeys,
+    fsMod,
+    pathMod,
+  })
+  result.scriptReplacedFiles = applied.replacedFiles
+  result.scriptReplacedCount = applied.replacedCount
+  result.scriptSkipped = applied.skipped
+  result.scriptDetails = applied.details
 }

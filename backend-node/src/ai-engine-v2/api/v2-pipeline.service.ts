@@ -501,8 +501,8 @@ export class V2PipelineService implements OnModuleInit {
     if (direct) return direct;
 
     // 🛡️ 2026-09-16 彻底去全局配置：不再读全局 ai-config.json 的 figmaToken。
-    // 仅保留部署级环境变量兜底（FIGMA_ACCESS_TOKEN / FIGMA_TOKEN）。
-    return process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN;
+    // 🔴 2026-11-12 用户指令（零兜底）：同步删除未文档化的旧别名 FIGMA_TOKEN 兜底，仅认部署级 FIGMA_ACCESS_TOKEN。
+    return process.env.FIGMA_ACCESS_TOKEN;
   }
 
   /** 暂无分组概念时按用户 uid 落到私人组（与 Lite/Phase2/Vue3 一致）；供控制器解析一次后透传 */

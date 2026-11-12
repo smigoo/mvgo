@@ -257,6 +257,8 @@
   - 支持嵌套布局描述
   - `repeatedFill`: **新增字段**（可选，重复卡必填），该项卡片的底色 hex（如 `#a6ceff`）。N 张重复卡必须逐一标注——「恰好 1 张异色 = 激活态」「≥4 张严格 ABAB 交替 = 斑马纹」「全同 = 无高亮」，漏标会被 Figma 真值交叉核对判缺
 - `repeatedCardTruth`: **系统注入字段**（生成端只读，vision 不需要输出），重复卡填充分布的 Figma 确定性真值：`{kind: 'active'|'uniform'|'zebra', size, activeHex?}`。下游代码生成以此为准：active → `:first-child, :hover` 激活态；uniform → 无高亮；zebra → 才允许 `nth-child(odd/even)`
+- `isomorphicSectionGroups`: **候选声明字段**（可选，vision 可输出）。当多个 section 结构同构（同样的「标题行 + 多列重复条目」，仅标题/条目数/配色不同）时显式列出：`[{groupId, sectionIds:[...], representativeId, structure:{columns, entryShape, headerShape}, diffDimensions:["theme","items"]}]`。⚠️ **只是候选**：系统仍用 Figma 几何/结构签名做本地校验，声明单独存在**不会**触发「单模板收敛」——防止误合并两个其实不同的段；面板内条目请用 `body.items` 逐项列出（分组容器不要额外包一层 `children`），否则下游会把容器当叶子条目。
+- `isoSectionTruth`: **系统注入字段**（生成端只读，vision 不需要输出）。L0 从 Figma 节点树确定性算出的每段事实：`{source:'figma-node-tree', sections:[{id, figmaNodeId, columns, entryCount, theme:{bg,accent,zeroColor}, frameNames}], declaredGroups, counts}`。配色取自段子树 TEXT 填充（非零数值文本色 → `accent`、零值文本色 → `zeroColor`）与浅色卡片底 → `bg`；取不到一律留空（fail-open，绝不臆造颜色）。下游同构收敛以此为配色真值。
 - `figmaNode`: **新增字段**（可选），对应的Figma节点ID
 - `styles`: **新增字段**（可选），元素的样式信息（fontSize、color、fontWeight等）
 - `placeholder`: **新增字段**（可选），资源占位符名称

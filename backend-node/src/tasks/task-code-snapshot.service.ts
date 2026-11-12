@@ -7,10 +7,11 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'fs';
 import { createHash, randomUUID } from 'crypto';
-import { dirname, isAbsolute, posix, resolve, sep } from 'path';
+import { dirname, isAbsolute, join, posix, resolve, sep } from 'path';
 import { tempComponentsDir, customComponentsDir } from '../config/backend-root';
 import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
 import { validateVueSfc } from '../ai-engine/utils/sfc-syntax-validation.js';
@@ -54,6 +55,33 @@ export interface TaskCodeSnapshotManifest {
   parentRevision?: string;
   /** 写回来源，例如 playground。 */
   editSource?: string;
+  /** 🆕 2026-11-12 精修续跑溯源：本快照所属「精修任务」的 sessionId。
+   *  仅精修快照（stage=refine-baseline / refine-candidate）会写入，用于把精修任务与其
+   *  基线/候选快照精确配对，从而在前端展示「本次精修具体改了哪些文件」。非精修快照为 undefined。 */
+  refineSessionId?: string;
+}
+
+/** 🆕 2026-11-12 精修续跑溯源：单个文件的精修差异（供前端「精修改动明细」面板渲染）。 */
+export interface RefineDiffLine {
+  type: 'add' | 'del' | 'ctx';
+  /** 内容行（不含换行）；ctx/del 取基线行，add 取候选行 */
+  text: string;
+  /** 基线行号（del/ctx 有值） */
+  oldLine?: number;
+  /** 候选行号（add/ctx 有值） */
+  newLine?: number;
+}
+
+export interface RefineChange {
+  path: string;
+  /** modified=内容有差异；added=候选新增；removed=候选删除 */
+  type: 'modified' | 'added' | 'removed';
+  baselineLines: number;
+  candidateLines: number;
+  baselineSize: number;
+  candidateSize: number;
+  /** 行级统一 diff；added/removed 时为整文件增删，modified 时为差异片段（含上下文） */
+  diff: RefineDiffLine[];
 }
 
 export interface CreateTaskCodeSnapshotInput {
@@ -63,6 +91,8 @@ export interface CreateTaskCodeSnapshotInput {
   target: 'microcode' | 'vue3';
   stage?: string;
   files: Record<string, string | Buffer>;
+  /** 🆕 2026-11-12 精修续跑溯源：精修任务 sessionId，写入 manifest.refineSessionId。 */
+  refineSessionId?: string;
 }
 
 interface SnapshotPointer {
@@ -92,6 +122,80 @@ function countLines(content: string | Buffer): number {
   }
   if (!text.endsWith('\n')) lines++;
   return lines;
+}
+
+/**
+ * 🆕 2026-11-12 精修续跑溯源：基于 LCS 的行级统一 diff（unified diff，含上下文）。
+ * 用于「精修改动明细」面板展示每个文件的具体增删内容。
+ * - aText/bText 为基线/候选文件全文；
+ * - context 为差异片段前后保留的上下文行数（默认 3）；
+ * - 返回 { type: add|del|ctx, text, oldLine?, newLine? } 序列，前端直接按 type 着色即可。
+ * 复杂度 O(n*m)，组件文件均很小（<1000 行），无性能风险。
+ */
+function unifiedLineDiff(aText: string, bText: string, context = 3): RefineDiffLine[] {
+  const a = aText.split('\n');
+  const b = bText.split('\n');
+  const n = a.length;
+  const m = b.length;
+
+  // LCS 长度 DP（仅长度，回溯时再判定）
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  type Op = { type: 'eq' | 'del' | 'add'; text: string; oldLine?: number; newLine?: number };
+  const ops: Op[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ type: 'eq', text: a[i], oldLine: i + 1, newLine: j + 1 });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      ops.push({ type: 'del', text: a[i], oldLine: i + 1 });
+      i++;
+    } else {
+      ops.push({ type: 'add', text: b[j], newLine: j + 1 });
+      j++;
+    }
+  }
+  while (i < n) {
+    ops.push({ type: 'del', text: a[i], oldLine: i + 1 });
+    i++;
+  }
+  while (j < m) {
+    ops.push({ type: 'add', text: b[j], newLine: j + 1 });
+    j++;
+  }
+
+  // 把 ops 转成统一 diff：保留 change 前后各 context 行上下文
+  const out: RefineDiffLine[] = [];
+  let ctxBuf: Op[] = [];
+  let sawChange = false;
+  const flushCtx = (max: number) => {
+    const take = ctxBuf.slice(-max);
+    for (const c of take) out.push({ type: 'ctx', text: c.text, oldLine: c.oldLine, newLine: c.newLine });
+    ctxBuf = [];
+  };
+  for (const op of ops) {
+    if (op.type === 'eq') {
+      ctxBuf.push(op);
+    } else {
+      if (!sawChange) {
+        flushCtx(context); // change 前的上下文
+        sawChange = true;
+      } else {
+        flushCtx(context); // 两个 change 之间的上下文
+      }
+      out.push({ type: op.type, text: op.text, oldLine: op.oldLine, newLine: op.newLine });
+    }
+  }
+  if (sawChange) flushCtx(context); // 末尾上下文
+  return out;
 }
 
 /**
@@ -217,6 +321,7 @@ export class TaskCodeSnapshotService {
         status: 'candidate',
         createdAt: new Date().toISOString(),
         stage: input.stage,
+        refineSessionId: input.refineSessionId,
         files,
         validation: {
           semantics: 'pending',
@@ -524,6 +629,170 @@ export class TaskCodeSnapshotService {
         .toString('utf-8');
     }
     return result;
+  }
+
+  /**
+   * 🆕 精修事务（治本·回滚保护）：把组件产物目录（outputPath）当前内容冻结为一个 candidate revision。
+   * 仅冻结代码类文件（.vue/.less/.css/.js/.ts/.json/.html/.md），跳过图片与二进制资源，
+   * 因为精修只改代码、资源保持不变；回滚时只覆盖代码，保留资源不被破坏。
+   * 用于「精修前基线」与「精修后候选」两次冻结。复用既有 createCandidate 的清洗 / 大小限制 / 指针逻辑。
+   */
+  freezeOutputPath(
+    outputPath: string,
+    meta: {
+      sessionId: string;
+      componentId: string;
+      groupId?: string;
+      target: 'microcode' | 'vue3';
+      stage?: string;
+      /** 🆕 2026-11-12 精修续跑溯源：精修任务 sessionId，写入 manifest 以便精确配对基线/候选。 */
+      refineSessionId?: string;
+    },
+  ): TaskCodeSnapshotManifest {
+    this.assertSafeId(meta.sessionId, 'sessionId');
+    this.assertSafeId(meta.componentId, 'componentId');
+    if (meta.groupId) this.assertSafeId(meta.groupId, 'groupId');
+
+    const CODE_EXT_RE = /\.(vue|less|css|js|ts|json|html|md|svg)$/i;
+    const SKIP_DIRS = new Set(['.checkpoint', '.mc-gen', '.cache', 'node_modules']);
+    const files: Record<string, string> = {};
+
+    const walk = (dir: string, base: string) => {
+      if (!existsSync(dir)) return;
+      let entries: string[] = [];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const name of entries) {
+        const full = join(dir, name);
+        const rel = base ? `${base}/${name}` : name;
+        let st: any;
+        try {
+          st = statSync(full);
+        } catch {
+          continue;
+        }
+        if (st.isDirectory()) {
+          if (SKIP_DIRS.has(name)) continue;
+          walk(full, rel);
+        } else if (CODE_EXT_RE.test(name)) {
+          try {
+            files[rel] = readFileSync(full, 'utf-8');
+          } catch {
+            // 读取失败（符号链接/权限）跳过，不让它中断冻结
+          }
+        }
+      }
+    };
+    walk(outputPath, '');
+
+    if (Object.keys(files).length === 0) {
+      throw new Error('产物目录无可冻结的代码文件');
+    }
+
+    return this.createCandidate({
+      sessionId: meta.sessionId,
+      componentId: meta.componentId,
+      groupId: meta.groupId,
+      target: meta.target,
+      stage: meta.stage || 'refine',
+      refineSessionId: meta.refineSessionId,
+      files,
+    });
+  }
+
+  /**
+   * 🆕 精修事务（治本·回滚保护）：把指定 baseline revision 的代码文件写回 outputPath，覆盖精修产生的改动。
+   * 只回写该 revision 中存在的代码文件（冻结时已跳过图片），资源文件原样保留。
+   * 用于「精修后质量门禁未通过 / LESS 编译失败」时，将组件恢复到精修前状态 —— 保证「再跑一次精修不会更糟」。
+   */
+  restoreOutputPath(sessionId: string, revision: string, outputPath: string): void {
+    this.assertSafeId(sessionId, 'sessionId');
+    const files = this.exportRevisionFiles(sessionId, revision);
+    for (const [relPath, content] of Object.entries(files)) {
+      const dest = this.resolveInside(outputPath, relPath);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, content, 'utf-8');
+    }
+  }
+
+  /**
+   * 🆕 2026-11-12 精修续跑溯源：计算某次精修「基线快照 → 候选快照」的文件级差异，
+   * 供前端「精修改动明细」面板展示「这次精修具体改了哪些内容」。
+   * - baselineRev / candidateRev 为同一 source session 下的两个 revision；
+   * - 返回按 modified→added→removed、同型按路径排序的差异列表，每个文件含行级统一 diff。
+   *   超大文件（>800 行差异）的 diff 截断，避免响应体过大（列表仍展示，点开可见截断提示）。
+   */
+  computeRefineDiff(
+    sessionId: string,
+    baselineRev: string,
+    candidateRev: string,
+  ): RefineChange[] {
+    this.assertSafeId(sessionId, 'sessionId');
+    const base = this.getManifest(sessionId, baselineRev);
+    const cand = this.getManifest(sessionId, candidateRev);
+    const bMap = new Map(base.files.map((f) => [f.path, f]));
+    const cMap = new Map(cand.files.map((f) => [f.path, f]));
+    const MAX_DIFF_LINES = 800;
+
+    const readText = (rev: string, path: string): string => {
+      const buf = this.readFile(sessionId, rev, path);
+      return Buffer.isBuffer(buf) ? buf.toString('utf-8') : String(buf);
+    };
+
+    const changes: RefineChange[] = [];
+    for (const cf of cand.files) {
+      const bf = bMap.get(cf.path);
+      if (!bf) {
+        const content = readText(candidateRev, cf.path);
+        const diff = unifiedLineDiff('', content).slice(0, MAX_DIFF_LINES);
+        changes.push({
+          path: cf.path,
+          type: 'added',
+          baselineLines: 0,
+          candidateLines: cf.lines ?? 0,
+          baselineSize: 0,
+          candidateSize: cf.size,
+          diff,
+        });
+        continue;
+      }
+      if (bf.hash !== cf.hash) {
+        const bContent = readText(baselineRev, cf.path);
+        const cContent = readText(candidateRev, cf.path);
+        const diff = unifiedLineDiff(bContent, cContent).slice(0, MAX_DIFF_LINES);
+        changes.push({
+          path: cf.path,
+          type: 'modified',
+          baselineLines: bf.lines ?? 0,
+          candidateLines: cf.lines ?? 0,
+          baselineSize: bf.size,
+          candidateSize: cf.size,
+          diff,
+        });
+      }
+    }
+    for (const bf of base.files) {
+      if (!cMap.has(bf.path)) {
+        const content = readText(baselineRev, bf.path);
+        const diff = unifiedLineDiff(content, '').slice(0, MAX_DIFF_LINES);
+        changes.push({
+          path: bf.path,
+          type: 'removed',
+          baselineLines: bf.lines ?? 0,
+          candidateLines: 0,
+          baselineSize: bf.size,
+          candidateSize: 0,
+          diff,
+        });
+      }
+    }
+
+    const order: Record<RefineChange['type'], number> = { modified: 0, added: 1, removed: 2 };
+    changes.sort((x, y) => order[x.type] - order[y.type] || x.path.localeCompare(y.path));
+    return changes;
   }
 
   /**

@@ -1,0 +1,346 @@
+{
+  "name": "p2-variant-test",
+  "label": "Phase2 变体测试(删截图+比对)",
+  "description": "Figma 驱动的微码组件生成完整管线，含 L0-A 预览校验、L0-B 代码结构校验、L1 精修反馈、L2 智能路由（4路分发）",
+  "isOriginal": false,
+  "entryNode": "init",
+  "nodes": [
+    {
+      "id": "init",
+      "label": "初始化",
+      "type": "start",
+      "handler": "",
+      "position": {
+        "x": 50,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "figma-connector",
+      "label": "Figma 数据获取",
+      "type": "agent",
+      "handler": "figma-connector",
+      "position": {
+        "x": 270,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "visual-parser",
+      "label": "视觉分析",
+      "type": "agent",
+      "handler": "visual-parser",
+      "position": {
+        "x": 490,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "preview-validator",
+      "label": "L0-A 预览校验",
+      "type": "gate",
+      "handler": "preview-validator",
+      "position": {
+        "x": 710,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "parallel-analysis",
+      "label": "并行分析\n(布局审查+样式映射)",
+      "type": "agent",
+      "handler": "layout-reviewer",
+      "position": {
+        "x": 930,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "microcode-engineer",
+      "label": "代码生成",
+      "type": "agent",
+      "handler": "microcode-engineer",
+      "position": {
+        "x": 1150,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "code-structure-validator",
+      "label": "L0-B 代码校验",
+      "type": "gate",
+      "handler": "code-structure-validator",
+      "position": {
+        "x": 1370,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "parallel-refine",
+      "label": "串行精修\n(布局→样式)",
+      "type": "agent",
+      "handler": "layout-refiner",
+      "position": {
+        "x": 1590,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "refine-feedback",
+      "label": "L1 精修反馈",
+      "type": "agent",
+      "handler": "",
+      "position": {
+        "x": 1810,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "adversarial-checker",
+      "label": "对抗检查",
+      "type": "agent",
+      "handler": "adversarial-checker",
+      "position": {
+        "x": 2030,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "parallel-quality-check",
+      "label": "质量聚合",
+      "type": "agent",
+      "handler": "",
+      "position": {
+        "x": 2360,
+        "y": 320
+      },
+      "config": {}
+    },
+    {
+      "id": "revision-decision",
+      "label": "L2 智能路由",
+      "type": "condition",
+      "handler": "",
+      "position": {
+        "x": 2470,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "complete",
+      "label": "完成",
+      "type": "end",
+      "handler": "",
+      "position": {
+        "x": 2690,
+        "y": 80
+      },
+      "config": {}
+    },
+    {
+      "id": "style-refiner",
+      "label": "样式精修\n(L2路由)",
+      "type": "agent",
+      "handler": "style-refiner",
+      "position": {
+        "x": 2030,
+        "y": 560
+      },
+      "config": {}
+    },
+    {
+      "id": "layout-refiner-legacy",
+      "label": "布局精修\n(兼容模式)",
+      "type": "agent",
+      "handler": "layout-refiner",
+      "position": {
+        "x": 1590,
+        "y": 560
+      },
+      "config": {}
+    },
+    {
+      "id": "style-refiner-legacy",
+      "label": "样式精修\n(兼容模式)",
+      "type": "agent",
+      "handler": "style-refiner",
+      "position": {
+        "x": 1810,
+        "y": 560
+      },
+      "config": {}
+    },
+    {
+      "id": "docAnalyzer",
+      "label": "文档分析\n(S9)",
+      "type": "agent",
+      "handler": "",
+      "position": {
+        "x": 930,
+        "y": 560
+      },
+      "config": {}
+    },
+    {
+      "id": "subcomponent-planner",
+      "label": "子组件规划",
+      "type": "agent",
+      "handler": "",
+      "position": {
+        "x": 1040,
+        "y": 560
+      },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-0",
+      "source": "init",
+      "target": "figma-connector"
+    },
+    {
+      "id": "e-1",
+      "source": "figma-connector",
+      "target": "visual-parser"
+    },
+    {
+      "id": "e-2",
+      "source": "parallel-analysis",
+      "target": "microcode-engineer"
+    },
+    {
+      "id": "e-3",
+      "source": "microcode-engineer",
+      "target": "code-structure-validator"
+    },
+    {
+      "id": "e-4",
+      "source": "refine-feedback",
+      "target": "adversarial-checker"
+    },
+    {
+      "id": "e-5",
+      "source": "adversarial-checker",
+      "target": "parallel-quality-check"
+    },
+    {
+      "id": "e-9",
+      "source": "style-refiner",
+      "target": "adversarial-checker"
+    },
+    {
+      "id": "e-10",
+      "source": "visual-parser",
+      "target": "preview-validator",
+      "condition": "l0_enabled",
+      "label": "L0校验"
+    },
+    {
+      "id": "e-11",
+      "source": "visual-parser",
+      "target": "parallel-analysis",
+      "condition": "l0_disabled",
+      "label": "跳过L0"
+    },
+    {
+      "id": "e-12",
+      "source": "preview-validator",
+      "target": "parallel-analysis",
+      "condition": "pass",
+      "label": "通过"
+    },
+    {
+      "id": "e-13",
+      "source": "preview-validator",
+      "target": "visual-parser",
+      "condition": "retry",
+      "label": "重试"
+    },
+    {
+      "id": "e-14",
+      "source": "code-structure-validator",
+      "target": "parallel-refine",
+      "condition": "pass",
+      "label": "通过→精修"
+    },
+    {
+      "id": "e-15",
+      "source": "code-structure-validator",
+      "target": "microcode-engineer",
+      "condition": "retry",
+      "label": "重试"
+    },
+    {
+      "id": "e-16",
+      "source": "code-structure-validator",
+      "target": "layout-refiner-legacy",
+      "condition": "minimal",
+      "label": "兼容模式"
+    },
+    {
+      "id": "e-17",
+      "source": "parallel-refine",
+      "target": "refine-feedback",
+      "condition": "l1_enabled",
+      "label": "L1反馈"
+    },
+    {
+      "id": "e-18",
+      "source": "parallel-refine",
+      "target": "adversarial-checker",
+      "condition": "l1_disabled",
+      "label": "跳过L1"
+    },
+    {
+      "id": "e-19",
+      "source": "revision-decision",
+      "target": "complete",
+      "condition": "pass",
+      "label": "完成"
+    },
+    {
+      "id": "e-20",
+      "source": "revision-decision",
+      "target": "microcode-engineer",
+      "condition": "full",
+      "label": "全量修订"
+    },
+    {
+      "id": "e-21",
+      "source": "revision-decision",
+      "target": "style-refiner",
+      "condition": "stylistic",
+      "label": "样式修订"
+    },
+    {
+      "id": "e-22",
+      "source": "revision-decision",
+      "target": "parallel-refine",
+      "condition": "layout",
+      "label": "布局修订"
+    },
+    {
+      "id": "e-23",
+      "source": "layout-refiner-legacy",
+      "target": "style-refiner-legacy"
+    },
+    {
+      "id": "e-24",
+      "source": "style-refiner-legacy",
+      "target": "adversarial-checker"
+    }
+  ],
+  "engine": "phase2"
+}

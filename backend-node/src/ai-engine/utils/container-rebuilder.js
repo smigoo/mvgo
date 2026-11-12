@@ -106,15 +106,95 @@ export function rebuildSlotConContainers(layout, figmaData) {
     members.forEach((m) => consumed.add(m.id))
   }
 
-  if (rebuilt.length === 0) return { ...layout, sections: sections.slice() }
+  // 🛡️ v3 半提升回收（2026-11-12 · mc-1794474674611-37ed205e 实锤）：
+  //   vision 把某 section 的**部分**直接子提升为顶层 section（88:33 当日总流量的
+  //   1744:127/128 两组柱状图被提走，88:32/2:3660 留作 header/内容）⇒ 上一轮
+  //   all-or-nothing 判据（kids.every(in sections)）对此放弃 ⇒ 柱状图被拆成独立
+  //   组件挂页面底部。兜底回收判据（双条件，缺一不可）：
+  //   ① **树父子关系**：候选必须是该 section 在 Figma 树上的直接子（父子唯一 ⇒ 无抢占冲突；
+  //     仅靠 bbox 包含不安全——slot 框常有重叠死区，如 2:3438 车型分布框几乎全落
+  //     88:33 框内，但树上是 1744:125 的子，绝不能被 88:33 抢走）；
+  //   ② **bbox 完整包含**（容差 2px）：防误收无关平级段。
+  //   回收后按方向（inferFlexDirection 单一裁决）重排 children，并在顶层结果中移除。
+  // 🔴 形状铁律：getFigmaBox 返回 {x,y,w,h}，figma 原生 absoluteBoundingBox 是 {width,height}
+  //   —— 两种形状都要兼容（旧坑复刻：T-TOPO 注释里「先 map 压形状导致恒 vertical」同类）。
+  const normBox = (b) =>
+    b ? { x: b.x || 0, y: b.y || 0, w: b.width ?? b.w ?? 0, h: b.height ?? b.h ?? 0 } : null
+  const isBoxContained = (inner, outer, tol = 2) => {
+    const a = normBox(inner)
+    const o = normBox(outer)
+    if (!a || !o || (!o.w && !o.h)) return false
+    return (
+      a.x >= o.x - tol &&
+      a.y >= o.y - tol &&
+      a.x + a.w <= o.x + o.w + tol &&
+      a.y + a.h <= o.y + o.h + tol
+    )
+  }
+  const sectionById = new Map()
+  const seenSecObjs = new Set()
+  const visitSec = (s) => {
+    if (!s || typeof s !== 'object' || seenSecObjs.has(s)) return
+    seenSecObjs.add(s)
+    const sid = String(s.id)
+    // 🔴 首见优先：children 树上的对象先注册；body.children 是镜像克隆（不同对象，
+    //   粒度也不同——88:33.body.children 挂的是统计卡内部块），不得覆盖树对象，
+    //   否则回收会写进克隆、树对象原地不动（实测踩坑）。
+    if (!sectionById.has(sid)) sectionById.set(sid, s)
+    for (const c of s.children || []) visitSec(c)
+    for (const c of s.body?.children || []) visitSec(c)
+  }
+  for (const s of sections) visitSec(s)
+  for (const rb of rebuilt) visitSec(rb.container)
 
-  // 组装：容器 section 插入第一个 member 的原位置，移除被消费的 member
+  const reclaimedIds = new Set()
+  for (const [pid, record] of byId.entries()) {
+    const parentSec = sectionById.get(String(pid))
+    if (!parentSec) continue
+    const raw = record.rawNode || record
+    const parentBox = getBBox(raw)
+    if (!parentBox || !(parentBox.height ?? parentBox.h)) continue
+    if (!Array.isArray(parentSec.children)) parentSec.children = []
+    let changed = false
+    for (const kid of raw.children || []) {
+      const kidId = String(kid.id)
+      if (kidId === String(pid)) continue
+      if (!secIds.has(kidId)) continue // 只回收「被提升为顶层 section」的直接子
+      if (parentSec.children.some((c) => String(c.id) === kidId)) continue
+      if (reclaimedIds.has(kidId)) continue
+      const kidRec = byId.get(kidId)
+      const kidBox = getBBox(kidRec?.rawNode || kidRec)
+      if (!isBoxContained(kidBox, parentBox)) continue
+      const secObj = sections.find((s) => String(s.id) === kidId)
+      if (!secObj) continue
+      parentSec.children.push(secObj)
+      reclaimedIds.add(kidId)
+      changed = true
+    }
+    if (changed) {
+      const kidRecords = parentSec.children.map((c) => byId.get(String(c.id))?.rawNode || c)
+      const axis = inferFlexDirection(kidRecords) === 'horizontal' ? 'x' : 'y'
+      parentSec.children.sort((a, b) => {
+        const ba = getBBox(byId.get(String(a.id))?.rawNode || byId.get(String(a.id))) || {}
+        const bb = getBBox(byId.get(String(b.id))?.rawNode || byId.get(String(b.id))) || {}
+        return (ba[axis] || 0) - (bb[axis] || 0)
+      })
+      parentSec.reclaimedChildren = parentSec.children
+        .filter((c) => reclaimedIds.has(String(c.id)))
+        .map((c) => String(c.id))
+    }
+  }
+
+  if (rebuilt.length === 0 && reclaimedIds.size === 0) return { ...layout, sections: sections.slice() }
+
+  // 组装：容器 section 插入第一个 member 的原位置，移除被消费的 member 与被回收的 member
   const consumedMemberIds = new Set()
   rebuilt.forEach((r) => r.memberIds.forEach((id) => consumedMemberIds.add(id)))
 
   const result = []
   for (let i = 0; i < sections.length; i++) {
     const sec = sections[i]
+    if (reclaimedIds.has(String(sec.id))) continue // 已被父 section 回收，不再顶层平级
     if (consumedMemberIds.has(sec.id)) {
       // 在该 member 原位置插入其所属容器（仅一次）
       const rb = rebuilt.find((r) => r.memberIds.includes(sec.id))

@@ -28,6 +28,7 @@ import {
 } from './flex-sibling-guard.js';
 // 🛡️ S6（2026-09-16）：背景 :style 补全自愈（backgroundImage 缺 size/repeat/position → 补默认值）
 import { ensureBackgroundStyleComplete } from './post-process.js';
+import { bindSectionItemIcons } from './section-item-icon-bind.js';
 import { collectMissingVueImports } from './vue-import-closure.js';
 import { scanProductStyleIssues } from './style-conflict-detector.js';
 // 🛡️ D1（2026-09-20）：per-card 样式确定性改写（bg 图/数值色/icon 按 vision 真值）
@@ -102,6 +103,10 @@ import {
   normalizeStatGroupLayout,
   ensureSlotConBackground,
   healZebraStripeMisread,
+  enforceGridColumnTruth,
+  enforceSiblingRowDirection,
+  enforceCompositeRowTruth,
+  enforceContainerMainAxisTruth,
 } from './layout-truth-healer.js';
 import { reportPatchChainError } from './patch-chain-observer.js';
 // 🛡️ 资源相对路径深度归一（复用 Playground 同一实现，单一事实源）
@@ -353,6 +358,12 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   //    变量抛 ReferenceError "figmaRoot is not defined" 被 fail-open 吞掉 ⇒ 三刀上线后
   //    零生效（d27c5a1c 实锤：server.log 三轮异常日志、meta 无 structuralTruthDetails）。
   const { resourceDomMapping, outputPath, injectFn, effectiveSections, figmaRoot } = ctx;
+  // 🛡️ 2026-11-12：段内 items 级图标补位（③-b）的全保真段源。归一化口（componentPlan）
+  //   没有 body.items[].icon.resource，只有 planner 原形有；缺失时回退 effectiveSections
+  //   （仍是纯附加，不改变其他 pass 的段源口径）。
+  const fullSections = Array.isArray(ctx.fullSections) && ctx.fullSections.length > 0
+    ? ctx.fullSections
+    : effectiveSections;
   const { logger } = deps;
   let result = { ...files };
   const summary = {
@@ -387,6 +398,17 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     panelChromeMisplaced: 0,
     // 🛡️ 悬空引用占位兜底计数（2026-11-10）：0 也必打（验收计数行纪律）。
     danglingImportPatched: 0,
+    // 🛡️ 段内 items 级多图标补位计数（2026-11-12）：0 也必打（验收计数行纪律）。
+    itemIconBound: 0,
+    // 🛡️ C 层（2026-11-12 · c-cc6334 实锤）：plan.gridColumns 落地计数。0 也必打。
+    gridColumnTruthFixed: 0,
+    gridColumnTruthResolved: 0,
+    gridColumnTruthNoVfor: 0,
+    gridColumnTruthScanned: 0,
+    // 🛡️ C 层之二（并排段 row 方向）计数：0 也必打。
+    siblingRowWrapped: 0,
+    siblingRowScanned: 0,
+    siblingRowSkipped: 0,
     // 🛡️ 模板内嵌 SFC 块自愈计数（2026-11-10）：0 也必打（验收计数行纪律）。
     embeddedSfcHealed: 0,
     // 🛡️ A0（2026-11-04 · c-b04f22-b04f223c 实锤）：刀 42-B **零命中留痕**。
@@ -537,6 +559,29 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         });
       }
     }
+  }
+
+  // ③-b 🛡️ 段内 items 级多图标补位（2026-11-12 · mc-max-1794426617609-e35971ca 实锤）
+  //   病灶：stats 段真值 body.items **每项各带 icon.resource**（icon-262 合作厂商 / icon-263
+  //   在线设备，md5 与像素内容都不同），产物数据两项却都填同一个变量 ⇒ 第二张前景图零消费
+  //   ⇒ E2-v3「已落盘但产物零消费」硬拒；两轮修复轮都改不掉（LLM 每次重写同一份 fallback）。
+  //   判据与实现见 utils/section-item-icon-bind.js 头注释（≥2 个不同 icon 资源 +
+  //   data-section-id 唯一命中 + label 文本锚定 + assignedVarName 同源）。只换 icon 值并补
+  //   import，模板/样式/字段一律不动；幂等，已是正确变量 ⇒ 零改动。
+  //   位置：必须在 ③（CODE-022 未挂载 import 剪枝）**之后** —— 否则刚注入的 import 会被当
+  //   「模板未引用」剪掉（变量只在 script 数据里出现，`isResourceVarMounted` 认不出）。
+  try {
+    const itemIconRes = bindSectionItemIcons(result, fullSections, resourceDomMapping);
+    if (itemIconRes.applied.length > 0) {
+      summary.itemIconBound = itemIconRes.applied.reduce((a, x) => a + x.changes.length, 0);
+      logger?.info?.('🛡️ 段内 items 图标补位（真值 label 锚定）', {
+        sections: itemIconRes.applied.map((x) => x.sectionId),
+        changes: itemIconRes.applied.flatMap((x) => x.changes),
+        skipped: itemIconRes.skipped,
+      });
+    }
+  } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:item-icon-bind', counter: summary });
   }
 
   // ④ .value 误用自愈（CODE-027）：静态 import 图片变量写 X.value → 去掉 .value。
@@ -795,6 +840,127 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   } catch (err) {
     reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:632', counter: summary });
     logger?.warn?.('🛡️ 刀 31 容器底色纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-i2 C 层（2026-11-12 · mc-1794428749650-cc633474 实锤立项）：
+  //   plan.gridColumns 是硬约束，但此前只存在于 prompt 文本 ⇒ LLM 写成 flex row 即漂移
+  //   （实测 4 列真值渲成 5 列）。本刀按 plan 真值把列数**确定性写进** v-for 容器 style：
+  //   `repeat(K, itemW px)` + gap（由段宽/项宽反算），已在同列数上则幂等跳过。
+  try {
+    const gc = enforceGridColumnTruth(result, {
+      effectiveSections,
+      fullSections,
+    });
+    for (const [p, c] of Object.entries(gc.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    summary.gridColumnTruthScanned = gc.stats.scanned;
+    summary.gridColumnTruthResolved = gc.stats.resolved;
+    summary.gridColumnTruthNoVfor = gc.stats.noVfor;
+    if (gc.changes.length > 0) {
+      summary.gridColumnTruthFixed = gc.stats.fixed;
+      for (const ch of gc.changes) {
+        logger?.warn?.('🛡️ C 层修复：gridColumns 真值落地（列数确定性写入网格容器）', {
+          file: ch.file,
+          count: ch.count,
+          grids: ch.grids,
+        });
+      }
+    }
+  } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:grid-columns', counter: summary });
+    logger?.warn?.('🛡️ C 层网格列数落地异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-i3 C 层之二：并排段主轴方向（两段 y 相同、x 相邻 ⇒ 宿主必须 row）。
+  //   事故同源（c-cc6334）：规划层只记段内 direction=column，兄弟 row 关系丢失
+  //   ⇒ 两张统计卡竖排、各占 24% 高。本刀按几何真值把相邻并排段包进 row 容器。
+  try {
+    const sr = enforceSiblingRowDirection(result, { effectiveSections, fullSections });
+    for (const [p, c] of Object.entries(sr.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    summary.siblingRowScanned = sr.stats.rows;
+    summary.siblingRowSkipped = sr.stats.skipped;
+    if (sr.changes.length > 0) {
+      summary.siblingRowWrapped = sr.stats.wrapped;
+      for (const ch of sr.changes) {
+        logger?.warn?.('🛡️ C 层之二修复：并排段包进 row 容器（主轴方向真值）', {
+          file: ch.file,
+          count: ch.count,
+          gaps: ch.gaps,
+        });
+      }
+    }
+  } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:sibling-row', counter: summary });
+    logger?.warn?.('🛡️ C 层之二并排方向落地异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-i3.5 刀 55 / P2-2（2026-11-12 · mc-max-1794456716158-7f427bd3 实锤立项）：
+  //   统计卡「图标 + 数值 + 标签」复合卡，LLM 稳定漏写 `display:flex`（实测三处全缺）
+  //   ⇒ <img>/<span> 退化块级、数值与标签纵向堆叠且溢出重叠（两张卡挤成一张）。
+  //   本刀按 Figma 几何真值（图标与文本 y 区间重叠、图标在左）把复合卡容器**确定性写成
+  //   row**，数值/标签兄弟再包 column（卡内两级方向）。无 figmaRoot 或无该事实 ⇒ fail-open。
+  try {
+    const cr = enforceCompositeRowTruth(result, { figmaRoot: ctx?.figmaRoot });
+    for (const [p, c] of Object.entries(cr.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    summary.compositeRowScanned = cr.stats.scanned;
+    summary.compositeRowTruth = cr.stats.rowTruth;
+    summary.compositeRowSkipped = cr.stats.skipped;
+    if (cr.changes.length > 0) {
+      summary.compositeRowFixed = cr.stats.fixed;
+      for (const ch of cr.changes) {
+        logger?.warn?.('🛡️ 刀 55 修复：复合卡「图标 + 文本」横排真值落地', {
+          file: ch.file,
+          containers: ch.count,
+        });
+      }
+    }
+  } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:composite-row', counter: summary });
+    logger?.warn?.('🛡️ 刀 55 复合卡横排落地异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-i3.6 刀 56 / P2-3（2026-11-12 · mc-max-1794462282698-2c855ae0 实锤立项）：
+  //   分组容器上同时存在两条矛盾主轴声明 —— inline `flex-direction:row`（LLM 写的）
+  //   与 scoped class `{ flex-direction: column }`（按 Figma 生成）。inline 优先 ⇒
+  //   图标/标题/多个行容器被挤成一行、文本互相压字 ⇒ RUNTIME-016 + VISUAL-002 阻断。
+  //   既有刀链没有一条看「同一元素的主轴是否与 Figma 真值一致」⇒ 整类错法无人管。
+  //   本刀以 Figma 直接子元素几何的 y 带数判真值主轴，不符即把 inline 写成真值
+  //   （inline 必胜、确定性生效）；映射不到唯一 Figma 节点 / 声明都缺 ⇒ fail-open。
+  try {
+    const ax = enforceContainerMainAxisTruth(result, { figmaRoot: ctx?.figmaRoot });
+    for (const [p, c] of Object.entries(ax.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    summary.mainAxisScanned = ax.stats.scanned;
+    summary.mainAxisConflicts = ax.stats.conflicts;
+    summary.mainAxisMismatch = ax.stats.mismatch;
+    summary.mainAxisSkipped = ax.stats.skipped;
+    if (ax.changes.length > 0) {
+      summary.mainAxisFixed = ax.stats.fixed;
+      for (const ch of ax.changes) {
+        logger?.warn?.('🛡️ 刀 56 修复：容器主轴按 Figma 几何真值归一', {
+          file: ch.file,
+          count: ch.count,
+          axes: ch.axes,
+        });
+      }
+    }
+  } catch (err) {
+    reportPatchChainError(err, { logger: logger, pass: 'runPreWriteSelfHealing:main-axis', counter: summary });
+    logger?.warn?.('🛡️ 刀 56 容器主轴归一异常（fail-open）', {
       error: err?.message || String(err),
     });
   }

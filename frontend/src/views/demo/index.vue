@@ -942,10 +942,23 @@ async function handlePreviewAiFix() {
   }, 1000)
   
   try {
+    // 🔴 2026-11-12 修「AI 修复报 API Key 未配置」：2026-09-29 拔除部署级 env 兜底后，
+    // 本链路漏接用户级模型配置。正常 AI 对话（见下方 ai-chat）已从 configStore 取
+    // textApiKey 组装 llmConfig，AI 修复须对齐，否则后端 resolveTextConfig 拿不到
+    // apiKey ⇒ 抛「API Key 未配置」（即便用户在「设置-模型配置」已配文本模型）。
+    const configStore = useConfigStore()
+    const globalConfig = configStore.config || {}
+    const llmConfig = {
+      apiKey: globalConfig.textApiKey || globalConfig.aiApiKey || undefined,
+      baseURL: globalConfig.textBaseURL || globalConfig.aiBaseURL || undefined,
+      model: globalConfig.textModel || globalConfig.aiModel || undefined,
+    }
+
     const response = await http.post('/api/demo/ai-fix-render-error', {
       componentId: componentId.value,
       errorMessage: previewError.value,
       info: previewDiagnostic.value,
+      llmConfig,
     })
 
     if (!response?.success || !response?.data?.fixId) {
@@ -2647,7 +2660,14 @@ const previewUrl = computed(() => {
   const files = componentFiles.value
   const snapshotOnly = files.length > 0 && files.every((f) => f.snapshotOnly)
   const useWorkspaceSource = files.length > 0 && !snapshotOnly
-  return import.meta.env.BASE_URL + buildResolvedPreviewUrl(descriptor, {
+  // 🔴 2026-11-12 修「生产预览打开是整站而非组件」根因：
+  //   buildPreviewUrl(preview-resolver.ts) 内部已用 import.meta.env.BASE_URL 拼好
+  //   前缀（生产 = /mvgo/），此处再叠加一次 import.meta.env.BASE_URL 会拼成
+  //   /mvgo//mvgo/preview/... ⇒ 相对解析成 go.microvideo.cn/mvgo/mvgo/preview/...
+  //   ⇒ vue-router 摘掉一个 /mvgo/ 后剩 /mvgo/preview/...，匹配不到 /preview/:componentId
+  //   ⇒ 回退首页（整站）。dev 下 BASE_URL='/' 时 // 坍缩不暴露，仅生产复现。
+  //   直接返回 buildPreviewUrl 结果即可（与 RightPanel/TaskDetail 同口径）。
+  return buildResolvedPreviewUrl(descriptor, {
     width: previewContainerWidth.value,
     height: previewContainerHeight.value,
     cacheKey: previewCacheKey.value,
@@ -2656,7 +2676,7 @@ const previewUrl = computed(() => {
     //   src ⇒ 切主题必重载 ⇒「闪两次」（postMessage 注入一次 + 重载恢复再注入一次）。
     //   重载后的主题恢复由 mvgo-preview-mounted 握手补发（onPreviewMountedHandshake
     //   会补发 formState.themeType），已实测工作；无需 URL 通道。
-  }).replace(/^\//, '')
+  })
 })
 
 // iframe 加载完成后，推送当前 cssVars 和主题到预览页（postMessage 桥接实时联动）

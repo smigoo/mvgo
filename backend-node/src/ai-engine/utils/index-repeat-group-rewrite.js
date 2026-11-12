@@ -138,13 +138,38 @@ function scream(name) {
     .replace(/[^A-Z0-9_]/g, '_');
 }
 
-/** 把成员数据序列化为 index 里的常量字面量（2 空格缩进，逐成员一行，便于 diff）。 */
+/** 把成员数据序列化为 index 里的常量字面量（2 空格缩进，逐成员一行，便于 diff）。
+ *  `icon` 支持两种形态：`m.iconVar`（已是 import 变量名 ⇒ 输出裸标识符）优先；
+ *  否则回退旧口径（原样字符串字面量，逐字节与改前一致）。 */
 function membersLiteral(constName, members) {
   const rows = members.map((m) => {
     const items = JSON.stringify(Array.isArray(m.items) ? m.items : []);
-    return `  { id: ${JSON.stringify(String(m.id))}, title: ${JSON.stringify(String(m.title || ''))}, icon: ${JSON.stringify(String(m.icon || ''))}, items: ${items}, style: ${JSON.stringify(String(m.style || ''))} }`;
+    // 🧬 刀 66-P1：配色真值随段数据下发（仅 L0 有真值时附加 ⇒ 旧形态产物不变）
+    const theme = m.theme && typeof m.theme === 'object'
+      ? `, theme: ${JSON.stringify(m.theme)}`
+      : '';
+    const iconExpr = m.iconVar ? String(m.iconVar) : JSON.stringify(String(m.icon || ''));
+    return `  { id: ${JSON.stringify(String(m.id))}, title: ${JSON.stringify(String(m.title || ''))}, icon: ${iconExpr}, items: ${items}, style: ${JSON.stringify(String(m.style || ''))}${theme} }`;
   });
   return `const ${constName} = [\n${rows.join(',\n')}\n]`;
+}
+
+/** 资源路径是否为「可 import 的包内相对路径」（Figma 资源映射给的就是这种形态）。
+ *  判据零语义：以 `./` / `../` 开头，或以图片扩展名结尾，且不含协议头。 */
+export function isImportableResourcePath(p) {
+  const s = String(p || '').trim();
+  if (!s) return false;
+  if (/^[a-z]+:\/\//i.test(s) || s.startsWith('data:')) return false;
+  if (/[\\'"`\s]/.test(s)) return false;
+  return /^\.{1,2}\//.test(s) || /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(s);
+}
+
+/** 在 index 原文里找「已 import 同一路径」的变量名（复用，避免重复 import 触发 lint/重复声明）。 */
+function findExistingImport(content, path) {
+  const esc = String(path).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = new RegExp(`^[ \\t]*import\\s+([A-Za-z_$][\\w$]*)\\s+from\\s+['"]${esc}['"]`, 'm');
+  const m = rx.exec(String(content || ''));
+  return m ? m[1] : '';
 }
 
 /**
@@ -187,14 +212,18 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
     id: p.member.id,
     title: p.member.title,
     icon: p.member.icon,
+    // 系统分配的资源变量名（assignedVarName），见 ③c
+    ...(p.member.iconVar ? { iconVar: p.member.iconVar } : {}),
     items: p.member.items,
     style: p.span.style || p.member.style || '',
+    // 🧬 刀 66-P1：Figma 配色真值（accent/bg/zeroColor）随段数据进入 v-for
+    ...(p.member.theme && typeof p.member.theme === 'object' ? { theme: p.member.theme } : {}),
   }));
 
   // ③b 属性守恒（P0 评审修正）：逐成员比对残留属性。可表达 ⇒ 下发；不可表达 ⇒ 整组不改写。
   const RESERVED = new Set([
     'v-for', 'key', ':key', 'style', ':style',
-    'title', ':title', 'icon', ':icon', 'items', ':items',
+    'title', ':title', 'icon', ':icon', 'items', ':items', 'theme', ':theme',
     'data-section-id', ':data-section-id',
   ]);
   const attrByMember = perMember.map((p) =>
@@ -231,8 +260,47 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
     }
   }
 
+  // ③c icon 资源确定性落地（真机实锤 mc-max-1794426617609-e35971ca）：
+  //   同构收敛把三个兄弟段收成一个 v-for 后，段头 icon 的**宿主组件**（兄弟段薄包装）被删，
+  //   资源只剩一条「归属该段」的映射，产物里 `icon: ""` ⇒ 三张真值图标零消费 ⇒ E2-v3。
+  //   这里把成员 icon 路径确定性地提升为 `import` 变量，`:icon="isoItem.icon"` 才真正可用。
+  //   纯确定性、零 LLM：路径非包内相对路径（http/data）时不转 import，原样保留字符串。
+  const iconImports = [];
+  {
+    const taken = new Set();
+    for (const m of dataMembers) {
+      const p = String(m.icon || '').trim();
+      const preferred = String(m.iconVar || '').trim();
+      m.iconVar = '';
+      if (!p || !isImportableResourcePath(p)) continue;
+      const reused = findExistingImport(content, p);
+      if (reused) {
+        m.iconVar = reused;
+        continue;
+      }
+      // 优先系统分配名（assignedVarName：icon4/icon5/icon6…），与 prompt 下发的资源清单同源；
+      // 与已有标识符冲突时才退化自造。这样 LLM 侧已 import 的名字能被复用而不重名。
+      let v = '';
+      if (preferred && !new RegExp(`\\b${preferred}\\b`).test(content) && !taken.has(preferred)) {
+        v = preferred;
+      } else {
+        v = pickConstName(`${content}${[...taken].join(' ')}`, `isoIcon${iconImports.length + 1}`);
+      }
+      let guard = 0;
+      while (taken.has(v) && guard < 100) {
+        guard += 1;
+        v = `${v}${guard}`;
+      }
+      taken.add(v);
+      m.iconVar = v;
+      iconImports.push({ varName: v, path: p });
+    }
+  }
+
   // ④ 合成替换片段（`:icon` 只在确有图标时下发 —— 否则会以 fallthrough 属性落到 DOM 上）
   const hasIcon = dataMembers.some((m) => String(m.icon || '').trim());
+  // 只在整组都有配色真值时下发 :theme（缺一即不下发 ⇒ 模板拿不到 undefined prop）
+  const hasTheme = dataMembers.every((m) => m.theme && typeof m.theme === 'object');
   const indent = ' '.repeat(8);
   const loopTag = [
     `<${repName}`,
@@ -241,6 +309,7 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
     `${indent}:title="isoItem.title"`,
     ...(hasIcon ? [`${indent}:icon="isoItem.icon"`] : []),
     `${indent}:items="isoItem.items"`,
+    ...(hasTheme ? [`${indent}:theme="isoItem.theme"`] : []),
     `${indent}:style="isoItem.style"`,
     ...(dynamicSectionId ? [`${indent}:data-section-id="isoItem.id"`] : []),
     ...staticAttrs.map((a) => `${indent}${a}`),
@@ -250,18 +319,33 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
   const end = perMember[perMember.length - 1].span.end;
   let next = `${content.slice(0, start)}${loopTag}${content.slice(end)}`;
 
+  // ⑤a 注入 icon import（紧跟 `<script ...>` 开标签之后 —— ESM 语义要求 import 在语句前，
+  //    且注入点必须早于 ⑤ 的数据常量声明）
+  if (iconImports.length > 0) {
+    const scriptOpen = /<script[^>]*>\r?\n?/.exec(next);
+    if (!scriptOpen) return { ok: false, content, reason: 'no-script-block' };
+    const at = scriptOpen.index + scriptOpen[0].length;
+    const block = iconImports.map((i) => `import ${i.varName} from '${i.path}'\n`).join('');
+    next = `${next.slice(0, at)}${block}${next.slice(at)}`;
+  }
+
   // ⑤ 注入数据常量（`</script>` 之前最后一个安全位置）
   const scriptClose = next.lastIndexOf('</script>');
   if (scriptClose < 0) return { ok: false, content, reason: 'no-script-block' };
   const decl = `\n${membersLiteral(constName, dataMembers)}\n`;
   next = `${next.slice(0, scriptClose)}${decl}${next.slice(scriptClose)}`;
 
-  // ⑥ 改写后自校验：代表标签恰好 1 个 + v-for 真的在
+  // ⑥ 改写后自校验：代表标签恰好 1 个 + v-for 真的在 + icon import 全落地
   const after = findComponentTagSpans(next, repName);
   if (after.length !== 1 || !next.includes(`in ${constName}`)) {
     return { ok: false, content, reason: 'post-check-failed' };
   }
-  return { ok: true, content: next, removedTags: perMember.length - 1 };
+  for (const i of iconImports) {
+    if (!next.includes(`import ${i.varName} from '${i.path}'`)) {
+      return { ok: false, content, reason: `icon-import-missing:${i.varName}` };
+    }
+  }
+  return { ok: true, content: next, removedTags: perMember.length - 1, iconImports: iconImports.length };
 }
 
 /**
@@ -283,6 +367,7 @@ export function rewriteIndexRepeatGroups(indexContent, plans) {
       repName: plan.repName,
       members: plan.members.map((m) => String(m.id)),
       removedTags: res.removedTags,
+      iconImports: res.iconImports || 0,
       // 保留 compName 供落盘前「包装文件与 import 原子清理」使用（同一份 plan，不另建表）
       memberPlans: plan.members.map((m) => ({ id: String(m.id), compName: m.compName || plan.repName })),
     });

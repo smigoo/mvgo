@@ -279,6 +279,68 @@ export function validateVueSfc(source = '', filePath = '', options = {}) {
 }
 
 /**
+ * 🛡️ 表达式级终检（2026-11-12 · mc-1794463362140-8fa6d6f3 实锤）：
+ * 只查「模板表达式 + script + SFC parse」，**不跑 compileStyle/less**。
+ *
+ * 为什么需要它（与 validateVueSfc 的分工）：
+ *   validateVueSfc 已含 compileTemplate，但它只挂在 writeFiles 的**单文件写前门禁**上。
+ *   写盘出口自愈链（刀 49/55/56、S6、资源 import 终验兜底等）在多轮 writeFiles 之间
+ *   反复改写内存并多次落盘，某轮注入坏 `:style`（如对象字面量后被拼 CSS 残留
+ *   `:style="{...};display:flex;..."`）后，后续轮被门禁拦下 ⇒ 磁盘停留在**上一轮
+ *   已落盘的坏版**上（门禁只拦新写，不回滚旧写）。终检以**磁盘事实**为准做最后
+ *   一道闸（见 final-vue-expression-gate.js）。
+ *
+ * 不跑 style 的原因：绝对路径模式下 compileStyle 会完整编译 less import 链，
+ *   对尚未写盘的 resources/styles 产生假阳性；样式正确性由既有 less 门禁负责。
+ *
+ * @param {string} source .vue 全文
+ * @param {string} filePath 文件路径（仅用于报错展示）
+ * @returns {{valid: boolean, errors: string[]}}
+ */
+export function validateVueSfcExpressions(source = '', filePath = '') {
+  const errors = []
+  const sourceText = String(source || '')
+  let descriptor
+  try {
+    const parsed = parseSfc(sourceText, { filename: filePath || 'component.vue' })
+    descriptor = parsed.descriptor
+    for (const error of parsed.errors || []) {
+      errors.push(formatCompilerError(error, filePath, 'SFC'))
+    }
+  } catch (error) {
+    errors.push(formatCompilerError(error, filePath, 'SFC'))
+    return { valid: false, errors }
+  }
+  if (!descriptor) return { valid: errors.length === 0, errors }
+
+  for (const block of extractScriptBlocks(sourceText)) {
+    validateScriptBlock(block, sourceText, filePath, errors)
+  }
+  if (descriptor.scriptSetup) {
+    try {
+      compileScript(descriptor, { id: 'final-gate' })
+    } catch (error) {
+      errors.push(formatCompilerError(error, filePath, 'script'))
+    }
+  }
+  if (descriptor.template) {
+    try {
+      const result = compileTemplate({
+        source: descriptor.template.content,
+        filename: filePath || 'component.vue',
+        id: 'final-gate',
+      })
+      for (const error of result.errors || []) {
+        errors.push(formatCompilerError(error, filePath, 'template'))
+      }
+    } catch (error) {
+      errors.push(formatCompilerError(error, filePath, 'template'))
+    }
+  }
+  return { valid: errors.length === 0, errors }
+}
+
+/**
  * 🛡️ 2026-09-29 新增 · 检出 SFC 模板里的**重名插槽定义**（同一父元素下同名 slot 出现 2+ 次）。
  *
  * 为什么单独抽出：宿主面板契约（`base-panel` 的 4 个固定槽名，每槽只有一个 `<slot name>`）

@@ -41,6 +41,8 @@ import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
 import { resolveBackgroundBrightness } from '../utils/style-tokens.js';
+// 🧬 刀 66-P0：同构段 Figma 真值（vue3 缓存命中路径补跑，与 phase2 同源）
+import { injectIsomorphicSectionTruth } from '../utils/layout-truth-healer.js';
 import { AdversarialChecker } from '../roles/adversarial-checker.js';
 import { VisualComparator } from '../roles/visual-comparator.js';
 import { isFeatureEnabled } from '../config/v3-mode-features.js';
@@ -458,7 +460,28 @@ export function createPhase2Graph(config = {}) {
         // 🛡️ 缓存命中也要做事实校验（2026-09-15）：uiCache 里存的是**加工后**结构，
         // 后处理规则变更（如新增幻觉 section 剔除）对缓存任务永不生效 —— 补跑幂等事实校验。
         // 事实源是实时 Figma 树（state.figmaNodeData），不是缓存里那份。
-        return applyHallucinationDrop(cachedResult, state.figmaNodeData);
+        // 🧬 刀 66-P0（2026-11-12）：vue3 缓存命中路径补跑同构段 Figma 真值。
+        //   与 phase2 缓存补跑**同一纯函数、同一事实源**（实时 state.figmaNodeData），
+        //   保证 vue3/mc 两图在同构事实层零漂移；幂等、纯附加、fail-open。
+        const _validatedCachedResult = applyHallucinationDrop(cachedResult, state.figmaNodeData);
+        try {
+          if (state.figmaNodeData) {
+            const _isoT = injectIsomorphicSectionTruth(
+              _validatedCachedResult.layoutStructure,
+              state.figmaNodeData,
+            );
+            const _c = _isoT?.counts || {};
+            logger.info(
+              `🧬 VISION-ISO cache(vue3) sections=${_c.sections || 0} figmaResolved=${_c.figmaResolved || 0} withTheme=${_c.withTheme || 0} declared=${_c.declaredGroups || 0}`,
+              { _uiCacheHit: true },
+            );
+          }
+        } catch (_isoCacheErr) {
+          logger.error('🚫 VISION-ISO 缓存补跑失败(vue3，fail-open)', {
+            error: _isoCacheErr?.message || String(_isoCacheErr),
+          });
+        }
+        return _validatedCachedResult;
       }
 
       // 视觉任务：使用 visionAIConfig（Qwen/DashScope）
@@ -876,6 +899,8 @@ export function createPhase2Graph(config = {}) {
         userComponentId: state.userComponentId || null,
         extraPrompt: state.extraPrompt || null,
         requirementDocText: state.requirementDocText || null,
+        // 🔁 2026-11-12：奇偶交替样式真值（视觉分析确定性检测）透传进 engineer input。
+        oddEvenHints: state.layoutStructure?.oddEvenHints || null,
       });
 
       state.onProgress?.({

@@ -56,6 +56,10 @@ import { healLessFull } from '../ai-engine/validators/less-compile-gate.js';
 // vue3 分支：<style scoped> 命中规则随块复制进子组件自己的 scoped 样式，父规则原样保留（叠加不移动）。
 // 两条分支共用同一收口；checkpoint 仍只存原始 vueCode，不引入第二份真值。
 import { applyLiteSubcomponentSplit } from '../ai-engine/utils/lite-subcomponent-splitter.js';
+// 🧬 刀 66-P3（2026-11-12 四象限同步）：Lite 两分支共用的同构区块规则块（唯一来源）
+import { buildLiteIsoPromptBlock, formatLiteIsoLog } from '../ai-engine/utils/iso-lite-prompt.js';
+import { buildOddEvenHintSection } from '../ai-engine/utils/user-addendum.js';
+import { detectOddEvenPatterns } from '../ai-engine/utils/layout-truth-healer.js';
 // 🆕 2026-11-11：Lite 生成画像 / 截断检测的可归因埋点（纯观测，不改重试行为）。
 // 温度与 token 上限从 VisionAgent 实例读实际生效值，解决「同图同模型不同果」无法复盘。
 import {
@@ -63,6 +67,10 @@ import {
   detectLiteCodegenTruncation,
   collectVisionAgentMeta,
   formatLiteTelemetryLog,
+  pickLessTruncatedAttempt,
+  // 🆕 2026-11-12：codegen 温度与视觉温度解耦 —— 基线常量 + 修复轮阶梯抬温判据（唯一来源）
+  LITE_CODEGEN_BASE_TEMPERATURE,
+  stepUpCodegenTemperature,
 } from './lite-truncation-telemetry.js';
 import { repairScopedThirdPartySelectors } from '../ai-engine/utils/css-sanitizer.js';
 import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDeclarations } from '../ai-engine/utils/sfc-semantics.js';
@@ -163,7 +171,15 @@ export class LiteService {
    *   sessionId 由 `startGeneration` 的 `Logger.runInSessionContext` 提供。
    *   代理层数恒为 1，并发天然隔离。
    */
-  private logger: any = this.baseLogger;
+  /**
+   * 🔴 类型必须是 Nest `Logger`（**禁止 `any`**）。
+   *   底座是 `new Logger(...)`，只有 log/warn/error/debug/verbose/fatal，**没有 `info`**；
+   *   写成 `any` 时 tsc 不会拦，`.info(...)` 会一路跑到运行时抛
+   *   `logger.info is not a function`（Nest Logger 无 info），且抛点在 buildCodegenPrompt 里
+   *   ⇒ 整个 Lite 生成在视觉分析之后 100% 失败（mv-lite-1794419178746-607b0849 实锤）。
+   *   钉成 Logger 后，同类笔误在编译期即报错（`logger.info` 不存在）。
+   */
+  private logger: Logger = this.baseLogger;
   /** 桥接安装的幂等闸（Promise 化：并发首调只装一次，不会装出两层） */
   private loggerBridgePromise?: Promise<void>;
   private readonly resumeOperations = new Map<
@@ -318,6 +334,8 @@ export class LiteService {
         logicalHeight?: number | null;
         figmaTexts?: string[] | null;
       };
+      // 🔁 2026-11-12：figma 源时额外取节点树，供奇偶交替样式确定性检测（仅 figma 源；截图/html 源恒 null → no-op）。
+      let figmaNodeData: any = null;
       if (sourceType === 'figma' && dto.figmaUrl) {
         imageResult = await this.fetchFigmaImage(dto, sessionId, userId);
         // 持久化 Figma 源信息，供后续素材升级使用
@@ -329,6 +347,25 @@ export class LiteService {
             parsed.fileKey,
             parsed.nodeId,
           );
+          // 🔁 2026-11-12：奇偶交替样式检测需要 Figma 节点树真值（非 vision 猜测）。
+          // 轻量 fetch 节点树（不 export 图片，省 Figma 限流额度），仅 figma 源触发；
+          // 取失败不影响主流程（视觉分析仍走截图，奇偶提示自然 no-op）。
+          try {
+            const tokenRes = await resolveExecutionFigmaTokenWithProbe({
+              task: this.tasksService.getTask(sessionId),
+              requestConfig: dto.config,
+              envToken: process.env.FIGMA_ACCESS_TOKEN,
+              fileKey: parsed.fileKey,
+              nodeId: parsed.nodeId,
+            });
+            if (tokenRes?.token) {
+              const fc = new FigmaClient({ token: tokenRes.token });
+              figmaNodeData = await fc.fetchNodeData(parsed.fileKey, parsed.nodeId);
+            }
+          } catch (e) {
+            this.logger?.warn?.(`[lite] 奇偶检测 figma 节点树获取失败（非阻断）：${e?.message || e}`);
+            figmaNodeData = null;
+          }
         }
       } else if (sourceType === 'html' && dto.htmlContent) {
         imageResult = await this.renderHtmlPreview(dto, sessionId);
@@ -424,9 +461,14 @@ export class LiteService {
           ),
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
-          { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
+          // 🔴 outputKind='brief'：本调用输出是 brief（layout/regions/colors/theme），
+          //    不声明则 vision-agent 走默认 JSON 口径（查 sections/charts/interactions）
+          //    ⇒ 完整 brief 恒判「损坏」→ 每轮白烧一次高温自愈重试（2026-11-12 生产实锤）。
+          { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId), outputKind: 'brief' },
         );
         brief = this.parseBrief(analysisText);
+        // 🔁 2026-11-12：奇偶交替样式确定性检测（仅 figma 源有节点树真值；截图/html 源 figmaNodeData 为 null → 跳过）。
+        brief.oddEvenHints = figmaNodeData ? detectOddEvenPatterns(figmaNodeData) : [];
         // 🔧 像素级主题兜底（2026-09-01）：模型视觉对颜色的提取不稳定（浅色截图曾被误判成中灰
         // #A5ADB5 → 深色主题）。用截图像素直接采样根背景明暗作为 theme 的确定性 ground truth：
         // 像素采样有效且与模型结论矛盾时，以像素为准覆盖 brief.theme，供 codegen prompt 与
@@ -552,9 +594,14 @@ export class LiteService {
           isMicrocode,
           sessionId,
           userId,
+          // 🎛️ 2026-11-12：codegen 采样温度与视觉温度解耦（默认 0，不跟随 visionTemperature）
+          codegenTemperature: this.resolveCodegenTemperature(dto),
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
-          callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
+          // 🔴 outputKind='sfc'：codegen 输出是 SFC 不是 JSON —— 不声明则 vision-agent
+          //    的完整性自愈按 JSON 口径判「损坏」，每轮 codegen 白烧一次高温重试
+          //    （2026-11-12 生产实锤 mv-lite-1794450313160-4d463e6d，13 次尝试全灭放大因子）。
+          callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId), outputKind: 'sfc' },
         });
         vueCode = guarded.vueCode;
         declareJson = guarded.declareJson ?? null;
@@ -683,6 +730,14 @@ export class LiteService {
           this.logger.log(_fontGuardLog.message, _fontGuardLog.meta);
         }
 
+        // 🛡️ G13（2026-11-12 · 真机实锤）：图表容器重建自愈——与 max 链路同源注入器。
+        //   位置硬要求：在「样式提取/字号守卫」之后、「落盘」之前（改的是 <script setup>，
+        //   与样式链无交集；落盘后再改则磁盘与内存两份真值会分叉）。
+        vueFinal = await this.injectChartRebuildGuardSafely(
+          vueFinal,
+          'lite/microcode:main',
+        );
+
         await writeFile(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
         this.logLiteSubcomponentSplit(packageDir, sessionId);
 
@@ -779,6 +834,11 @@ ${businessStyles}
         vueCode = _fontGuardVue3.files['package/index.vue'];
         const _fontGuardVue3Log = formatFontGuardLog(_fontGuardVue3, 'lite');
         this.logger.log(_fontGuardVue3Log.message, _fontGuardVue3Log.meta);
+        // 🛡️ G13（2026-11-12）：图表容器重建自愈（vue3 分支，与 max 链路同源注入器）
+        vueCode = await this.injectChartRebuildGuardSafely(
+          vueCode,
+          'lite/vue3:main',
+        );
         await writeFile(join(packageDir, 'index.vue'), vueCode, 'utf-8');
         // Phase 2：Vue3 Lite（<style scoped>）也拆，命中样式规则随块复制
         this.logLiteSubcomponentSplit(packageDir, sessionId);
@@ -2624,18 +2684,35 @@ ${scaleNote}${textTruthNote}
     isMicrocode: boolean,
     sessionId: string,
     callOpts: any,
+    tempOpts: { baseTemperature?: number; retryRound?: number } = {},
   ): Promise<{ genText: string; vueCode: string; declareJson: any }> {
     const { scanBareFormControls, summarizeBareFormControls } = await import(
       '../ai-engine/utils/bare-form-control-guard.js',
     );
-    const call = (p: string) =>
-      agent.analyzeImage(imagePath, p, callOpts);
+    // 🎛️ 每轮采样温度：首轮 = 基线（不抬温）；修正轮 = 基线上阶梯抬温（0.2/0.4/0.6，上限 0.6）。
+    //    判据唯一来源 `stepUpCodegenTemperature`；白名单未配时基线为 0（与视觉温度解耦）。
+    const baseTemperature = Number.isFinite(Number(tempOpts.baseTemperature))
+      ? Number(tempOpts.baseTemperature)
+      : LITE_CODEGEN_BASE_TEMPERATURE;
+    const retryRound = Number.isFinite(Number(tempOpts.retryRound))
+      ? Math.max(0, Math.floor(Number(tempOpts.retryRound)))
+      : 0;
+    // 🔴 温度切换必须包住「真实请求」，且 finally 还原（Anthropic 分支会重建客户端）：
+    //    否则抬温只改字段不生效（白烧），或新客户端泄漏到后续请求。
+    const call = async (p: string, round: number) => {
+      const restore = this.applyCodegenTemperature(agent, stepUpCodegenTemperature(baseTemperature, round));
+      try {
+        return await agent.analyzeImage(imagePath, p, callOpts);
+      } finally {
+        restore();
+      }
+    };
     const parse = (t: string) =>
       isMicrocode
         ? this.extractMicrocodeOutput(t)
         : { vueCode: this.extractVueCode(t), declareJson: null as any };
 
-    const genText = await call(basePrompt);
+    const genText = await call(basePrompt, retryRound);
     const first = parse(genText);
     if (!first.vueCode || first.vueCode.trim().length < 30) {
       return { genText, ...first };
@@ -2664,7 +2741,8 @@ ${scaleNote}${textTruthNote}
 - 裸 <label> → 表单行结构整体改为 \`<a-form>\` 包裹 + 每行 \`<a-form-item>\`，标签文本放 a-form-item 的 \`label\` 属性或 \`#label\` 插槽（必填星号写在插槽内），禁止任何裸 <label> 标签。
 重新输出完整组件代码${isMicrocode ? '与 declare.json' : ''}。`;
     try {
-      const retryText = await call(fixPrompt);
+      // 🎛️ 修正轮 = 修复轮 ⇒ 阶梯抬温（round+1），与截断重试同一判据（上限 0.6）
+      const retryText = await call(fixPrompt, retryRound + 1);
       const retry = parse(retryText);
       if (retry.vueCode && retry.vueCode.trim().length >= 30) {
         const retryHits = scanBareFormControls(retry.vueCode);
@@ -2742,6 +2820,10 @@ ${typoSize}
     const userAddendum = epUser || rdtUser
       ? `\n【用户补充需求（用户显式输入，必须遵守；视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准，但交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
       : '';
+    // 🧬 刀 66-P3：vue3/lite 注入同构区块规则块（与 mc/lite 同一来源，不强制收敛）
+    const isoBlock = buildLiteIsoPromptBlock(brief);
+    // 计数行用 `.log`（Nest Logger 无 `.info`；Proxy bridge 也是拦 'log' 才镜像到 SSE 面板）
+    this.logger.log(formatLiteIsoLog('vue3/lite', isoBlock));
     return `你是一名 Vue3 布局还原工程师。请基于截图和结构化拆解，生成一个只负责静态布局还原的单文件组件。
 
 【组件名】${componentName}
@@ -2751,8 +2833,9 @@ ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} ×
 **高度预算分解铁律（P0-4）**：写 CSS 前必须先做高度预算分解：可用高度 H = ${designHeight}px - 根容器 padding×2；逐区块分配后，grid 行高 = (主内容区高度 - (行数-1)×gap) ÷ 行数，卡片内元素必须适配行高（图标 ≤ 行高×0.45）；竖排文字按钮（writing-mode:vertical-rl）必须加 \`white-space: nowrap\` 防中间断列，按钮高度按**最长标签**预算（最长字数 ×(字号+letterSpacing) + padding×2 ≤ 按钮高），任一字数排不下就统一缩字号——禁止断列导致阅读顺序乱（实锤：供配电→电供/配），且 N 个按钮总高 + (N-1)×gap + 徽标预留 ≤ sidebar 分配高度，超出**优先缩字号**、按钮高随字号同比缩小，任何压缩后仍须满足 按钮高 ≥ 最长字数 ×(字号+letterSpacing) + padding×2（禁止只压按钮高不缩字号导致文字被裁），禁止末尾按钮被面板底部裁切；角标/计数徽标用负偏移挂在按钮外侧时，必须为所在栏预留空间（padding-top ≥ 外溢高度）+ 父链 overflow:visible + 徽标 z-index 高于相邻区块，禁止被上一区块裁切；徽标还必须完全落在面板水平边界内（left ≥ 0），栏宽不足时缩徽标字号或改为栏内右上角内嵌，禁止溢出面板边界。禁止不做预算直接堆固定尺寸。**宽度预算同理（P0-4）**：grid 列宽 = (可用宽 - (列数-1)×gap) ÷ 列数，卡片内文字必须适配列宽（设备名称 字数×字号 ≤ 列宽 - 卡片padding×2 - 图标宽，超出就缩字号，禁止横向裁切/省略）；顶部统计条必须**单行**放下（所有标签+数值总宽 ≤ 可用宽，超出就缩字号/间距，禁止换行）；根容器及任何区块的 scrollWidth/scrollHeight 不得大于 clientWidth/clientHeight（底部行文字被裁半即不合格，预算超 H 优先压缩 grid 行高）。
 ` : ''}${fontFloorRule}【结构化拆解】
 ${briefJson}
+${isoBlock.block}
 ${extra ? `【布局补充】\n${extra}\n` : ''}
-${userAddendum}
+${userAddendum}${buildOddEvenHintSection(brief.oddEvenHints)}
 硬性边界：
 0. **主题锚点铁律（P0-4）**：组件整体明暗风格由【结构化拆解】中的 theme 字段决定，不凭截图局部观感自行切换：
    - theme="light"：根容器背景必须用浅色（白/浅灰/浅蓝系，如 #FFFFFF / #F5F8FC），正文文字用深色（#1F2329 / #333333 系），禁止把根容器渲染成深色底。
@@ -2876,6 +2959,10 @@ ${userAddendum}
     const themeOverride = dto.backgroundBrightness
       ? `\n**演示面板主题（用户显式指定，P0 覆盖）**：当前使用${dto.backgroundBrightness === 'dark' ? '深色' : '浅色'}演示面板。组件根容器必须使用${dto.backgroundBrightness === 'dark' ? '深色底（如 #1a1a2e / #2d2d3f）+ 浅色正文' : '浅色底（如 #FFFFFF / #F5F8FC）+ 深色正文'}。此设置优先于【结构化拆解】中的 theme 字段与截图背景推断。`
       : '';
+    // 🧬 刀 66-P3：mc/lite 注入同构区块规则块（与 vue3/lite 同一来源，不强制收敛）
+    const isoBlock = buildLiteIsoPromptBlock(brief);
+    // 计数行用 `.log`（Nest Logger 无 `.info`；Proxy bridge 也是拦 'log' 才镜像到 SSE 面板）
+    this.logger.log(formatLiteIsoLog('mc/lite', isoBlock));
     // 🛡️ 2026-09-30 治本：用户在前端「面板」切换器选的 panelType 必须如实落到产物里
     // 之前 prompt 里两处硬编码 `panelKey="default-panel"`，LLM 直接照抄不替换，
     // 导致选了 aio-panel 的组件产物仍是 default-panel（mc-max-1790692481760-8afc00c5 实锤）。
@@ -2900,7 +2987,8 @@ ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} ×
   **禁止不做预算直接堆「看起来舒服」的固定尺寸**（实测：14px 竖排按钮 × 6 + 110px 卡片 × 4 必然超出 389px 内容区，底部两行被裁）。
 ` : ''}${fontFloorRule}【结构化拆解】
 ${briefJson}
-${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
+${isoBlock.block}
+${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOddEvenHintSection(brief.oddEvenHints)}
 
 微码硬性规则：
 0. 根容器必须使用微码面板组件：
@@ -3116,6 +3204,35 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
   }
 
   /**
+   * 🎛️ codegen 采样温度基线（2026-11-12：与视觉温度解耦）。
+   *
+   * 仅认显式配置 `dto.config.codegenTemperature`；**未配置时恒为 0，绝不回退读
+   * `visionTemperature` / `unifiedTemperature`** —— 视觉温度只服务「看图」（brief），
+   * 代码生成必须有自己的确定性旋钮（与 mc/max 的 vision/text 分离同构）。旧实现里
+   * codegen 复用视觉温度，且修正式 `(t || 0.2) + 0.3` 会把任何配置值顶到 0.5~0.6 ⇒
+   * 「调温度」在旧代码里根本落不了地（0/0.2 → 0.5，0.5 → 0.6）。
+   */
+  private resolveCodegenTemperature(dto: any): number {
+    const raw = dto?.config?.codegenTemperature;
+    if (raw !== undefined && raw !== null && raw !== '') {
+      const n = Number(raw);
+      if (Number.isFinite(n)) return Math.max(0, Math.min(2, n));
+    }
+    return LITE_CODEGEN_BASE_TEMPERATURE;
+  }
+
+  /**
+   * 🔧 把 agent 采样温度切到目标值，并保证对**下一次请求**真实生效（含 Anthropic 分支重建）。
+   * 返回还原闭包 —— **调用方必须在 finally 中调用**，否则重建出的客户端 / 新温度会泄漏到
+   * 后续请求。目标温度与当前一致时短路，避免无谓的 Anthropic 客户端重建。
+   */
+  private applyCodegenTemperature(agent: any, temperature: number): () => void {
+    if (typeof agent?.setRequestTemperature !== 'function') return () => {};
+    if (typeof agent?.temperature === 'number' && agent.temperature === temperature) return () => {};
+    return agent.setRequestTemperature(temperature);
+  }
+
+  /**
    * 🛡️ 截断守卫（2026-11-03，真机实证 mv-lite-1793686730643-ae7d4a85）：
    * LLM 输出被截断（文件在字符串中间硬切断、缺 </script>，典型 max_tokens 到顶/流中断）时，
    * 原先直接落到 validateLiteSfc 抛「生成失败」给用户。治本=在进入 sanitize/validate 链**之前**
@@ -3131,11 +3248,18 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
     callOpts: any,
     progressStage?: string,
     userId?: string,
+    /** codegen 采样温度基线（与视觉温度解耦，默认 0）；仅修复轮在该基线上阶梯抬温 */
+    codegenTemperature?: number,
   }): Promise<{ vueCode: string; declareJson: any; genText?: string }> {
     const { agent, imagePath, prompt, isMicrocode, sessionId, callOpts, progressStage = 'generating', userId } = params;
+    // 🎛️ codegen 温度基线：与视觉温度解耦（默认 0，不跟随 visionTemperature）。
+    const baseTemperature = Number.isFinite(Number(params.codegenTemperature))
+      ? Number(params.codegenTemperature)
+      : LITE_CODEGEN_BASE_TEMPERATURE;
     // 🆕 2026-11-11：每次 codegen 落「生成画像」+ 截断事件各一行结构化日志。
     // 温度/token 上限读 agent 实例（归一化后的真实请求值），不读 dto ⇒ 同图不同果可归因。
-    const meta = collectVisionAgentMeta(agent, {
+    // 🔴 2026-11-12：改为**每轮重采**（旧实现入口一次性采集 ⇒ 修复轮抬温后日志仍报首轮温度，谎报）。
+    const snapshotMeta = () => collectVisionAgentMeta(agent, {
       userId,
       target: isMicrocode ? 'microcode' : 'vue3',
       tier: 'lite',
@@ -3145,6 +3269,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
       attempt: number,
       extra: Record<string, any> = {},
     ) => {
+      const meta = snapshotMeta();
       this.logger.log(formatLiteTelemetryLog({ tag: 'lite-codegen', sessionId, meta, event, attempt, extra }));
       if (event.truncated) {
         // 真机计数源：grep -c '\[truncation-detected\]' server.log
@@ -3152,7 +3277,12 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
       }
     };
 
-    let guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts);
+    // 首轮：温度恒取基线（首轮强制基线，不抬温）
+    let guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts, {
+      baseTemperature,
+      retryRound: 0,
+    });
+
     const first = detectLiteCodegenTruncation({ vueCode: guarded.vueCode, genText: guarded.genText });
     emitTelemetry(first, 1, { retryTriggered: first.retryTriggered });
 
@@ -3170,9 +3300,26 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
         status: 'running',
         message: '检测到生成代码不完整（疑似输出截断），自动重试一次...',
       });
-      guarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts);
-      const second = detectLiteCodegenTruncation({ vueCode: guarded.vueCode, genText: guarded.genText });
-      emitTelemetry(second, 2, { retryTriggered: false, recovered: !second.truncated });
+      // 🎛️ 修复轮阶梯抬温：首轮已用基线（确定性采样），若原样重试会在确定采样下复现同一缺陷
+      //    ⇒ 重试轮按轮次抬温（0.2/0.4/0.6，上限 0.6），破同分布采样。判据唯一来源
+      //    `stepUpCodegenTemperature`（照抄 microcode-engineer.js:8006-8019 范式）。
+      const retryGuarded = await this.callCodegenWithControlGuard(agent, imagePath, prompt, isMicrocode, sessionId, callOpts, {
+        baseTemperature,
+        retryRound: 1,
+      });
+      const second = detectLiteCodegenTruncation({ vueCode: retryGuarded.vueCode, genText: retryGuarded.genText });
+      const adopted = pickLessTruncatedAttempt(second, first);
+      emitTelemetry(second, 2, { retryTriggered: false, recovered: !second.truncated, adopted });
+      // 🔴 择优保留，**不盲覆盖**（判据单一来源：pickLessTruncatedAttempt，与 control-guard 的
+      //    「改善才采纳」同口径）：重试更差时保留首轮产物。旧实现 `guarded = await ...` 无条件
+      //    覆盖 ⇒ 重试可能把更完整的产物换成更差的（2026-11-12 生产实锤同一类劣化）。
+      if (adopted) {
+        guarded = retryGuarded;
+      } else {
+        this.logger.warn(
+          `[${sessionId}] 截断重试未改善（缺 ${second.missingBlocks.length} 处 >= ${first.missingBlocks.length} 处，codeLen ${second.codeLength} vs ${first.codeLength}），保留首轮产物`,
+        );
+      }
     }
     return { vueCode: guarded.vueCode, declareJson: guarded.declareJson ?? null, genText: guarded.genText };
   }
@@ -3489,7 +3636,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
       const figmaTokenRes = await resolveExecutionFigmaTokenWithProbe({
         task: sessionId ? this.tasksService.getTask(sessionId) : null,
         requestConfig: dto.config,
-        envToken: process.env.FIGMA_ACCESS_TOKEN || this.resolveGlobalFigmaToken(),
+        envToken: process.env.FIGMA_ACCESS_TOKEN,
         fileKey: firstTheme?.fileKey,
         nodeId: firstTheme?.nodeId,
       });
@@ -3590,24 +3737,6 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
       //    否则用户以为拿到的是 N 套设计稿真值，实际一半是 LLM 编的。
       this.logger?.error?.(`[lite] N 主题真值注入失败（阻断发布）：${err?.message}`);
       throw err;
-    }
-  }
-
-  /**
-   * 取**部署级全局** ai-config.json 里的 Figma token（兜底口径，非用户级）。
-   *
-   * 原 `resolveFigmaToken(dto)` 的 `dto.config` 分支已由 `resolveExecutionFigmaToken()`
-   * 的 `requestConfig` 承担（且新增了「脱敏占位视为未传」），此处只保留 json 兜底，
-   * 避免同一份「取 token」逻辑存在两个入口。
-   */
-  private resolveGlobalFigmaToken(): string | undefined {
-    try {
-      const cfg = JSON.parse(
-        readFileSync(join(process.cwd(), 'data', 'ai-config.json'), 'utf8'),
-      );
-      return cfg?.figma?.token || cfg?.figmaToken;
-    } catch {
-      return undefined;
     }
   }
 
@@ -3953,9 +4082,12 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
           isMicrocode,
           sessionId,
           userId: resumeTask?.userId,
+          // 🎛️ 2026-11-12：断点续跑与主路径同口径 —— codegen 温度解耦（默认 0）
+          codegenTemperature: this.resolveCodegenTemperature(dto),
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
-          callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
+          // 🔴 outputKind='sfc'：断点续跑路径与主路径同口径（见 :592 注释）
+          callOpts: { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId), outputKind: 'sfc' },
         });
         vueCode = guarded.vueCode;
         declareJson = guarded.declareJson ?? null;
@@ -4006,6 +4138,13 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
           this.logger.log(_fontGuardLog.message, _fontGuardLog.meta);
         }
 
+        // 🛡️ G13（2026-11-12）：图表容器重建自愈（续跑 microcode 分支；checkpoint 里
+        //   的旧产物同样可能缺该守卫 ⇒ 点「续跑」也应自愈，而不是让用户重新掷骰子）
+        vueFinal = await this.injectChartRebuildGuardSafely(
+          vueFinal,
+          'lite/microcode:resume',
+        );
+
         writeFileSync(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
         // 续跑从 checkpoint 的原始 vueCode 重新抽样式 → 再跑同一个确定性拆分器，
         // 结果与主路径一致；checkpoint 不存 files map，避免两份真值。
@@ -4023,6 +4162,11 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
         vueCode = _fontGuardVue3.files['package/index.vue'];
         const _fontGuardVue3Log = formatFontGuardLog(_fontGuardVue3, 'lite');
         this.logger.log(_fontGuardVue3Log.message, _fontGuardVue3Log.meta);
+        // 🛡️ G13（2026-11-12）：图表容器重建自愈（续跑 vue3 分支）
+        vueCode = await this.injectChartRebuildGuardSafely(
+          vueCode,
+          'lite/vue3:resume',
+        );
         writeFileSync(join(packageDir, 'index.vue'), vueCode, 'utf-8');
         // 续跑 Vue3 分支与主路径同款确定性拆分（checkpoint 仍是原始 vueCode）
         this.logLiteSubcomponentSplit(packageDir, sessionId);
@@ -4213,6 +4357,57 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}
       }
     } catch (e) {
       this.logger.warn('⚠️ Lite 子组件拆分跳过（不阻断生成，产物保持单文件）', e as any);
+    }
+  }
+
+  /**
+   * 🛡️ G13（2026-11-12 · mc-lite-1794462096859-e6a099a0 真机实锤）：图表容器重建自愈注入。
+   *
+   * **病灶（真机双向复现）**：产物把图表挂在自身根模板里、用 `<base-panel>` 作外壳；
+   * base-panel 内部是 `<component :is="panelComponent" :key="currentPanel.value">`，
+   * 面板类型一变（`preview/index.vue` 主题联动 default-panel → aio-panel）⇒ 面板组件
+   * unmount+mount ⇒ **slot 子树 DOM 整体销毁重建**，而产物根组件实例由宿主直接渲染、
+   * **不会被 unmount** ⇒ `let chart` 仍指向已脱离文档的旧 div（`onUnmounted` 不触发、
+   * 从不 dispose），新容器又被产物 init 首行 `if (!ref.value || chart) return` 永久早退
+   * ⇒ 图表永久空白。实测：新元素 `_echarts_instance_=null`、无 canvas；
+   * 容器尺寸**自始非零**（rAF1 w=221 h=202）⇒ 排除尺寸竞态，100% 是实例早退。
+   *
+   * **本接线（与 max 路径同源，单一事实源）**：调
+   * `microcode/code-healer.injectChartRebuildGuard`——判据确定性（`<script setup>` +
+   * 静态模板 ref + `echarts.init` 赋值对可解析 + 初始化入口可唯一定位）、幂等标记、
+   * fail-open（任一判据不满足即原样返回）。注入内容为**纯附加 watch**，不改产物既有语句。
+   *
+   * Lite 链路不走 `microcode/file-writer`（全库不调 writeFiles），故必须在 Lite 自己的
+   * 落盘点单独接线——否则「max 已修、Lite 仍炸」，正是本次实锤产物的处境（`mc-lite-*`）。
+   *
+   * @param tag 落点标识（日志定位用，如 `lite/microcode`）
+   */
+  private async injectChartRebuildGuardSafely(
+    vueCode: string,
+    tag: string,
+  ): Promise<string> {
+    if (typeof vueCode !== 'string' || !vueCode.includes('echarts.init(')) {
+      return vueCode;
+    }
+    try {
+      const { injectChartRebuildGuard } = await import(
+        '../ai-engine/roles/microcode/code-healer.js'
+      );
+      const guarded = injectChartRebuildGuard(vueCode);
+      if (guarded.changed) {
+        this.logger.log(
+          `🛡️ G13 图表容器重建自愈已注入（${tag}）：${guarded.injected.join('；')}`,
+          { sessionId: tag } as any,
+        );
+        return guarded.content;
+      }
+      return vueCode;
+    } catch (e) {
+      // 注入器自身异常 ⇒ 不阻断生成（沿用原产物，交由下游门禁/预览暴露）
+      this.logger.warn(
+        `🛡️ G13 图表容器重建自愈跳过（${tag}，非阻断）: ${(e as Error)?.message || e}`,
+      );
+      return vueCode;
     }
   }
 

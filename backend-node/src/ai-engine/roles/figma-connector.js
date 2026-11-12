@@ -407,7 +407,20 @@ export class FigmaConnector {
             `🔴 ${tag} 遭遇 429 限流，已触发全局冷却 (第 ${attempt}/${maxRetries} 次)`,
           );
           if (attempt < maxRetries) continue; // 回到循环顶部重新 acquire（会自动等待冷却结束）
-          lastError = error;
+          // 🛡️ 2026-11-12 治本（生产 7/7 实锤）：重试耗尽后仍 429，改抛「带来源标记」的友好错误，
+          // 不再抛裸 axios error。原因：裸 error 的 message 仅为
+          // "Request failed with status code 429"，与模型侧 429（同样走 axios）完全同形；
+          // 上层 error-humanizer 只凭子串 `429` 就把 Figma 限流译成「模型额度已用尽」，
+          // 用户被误导去换模型。生产 tasks.json 中 error 含「模型额度已用尽」的 7 单
+          // 100% 含 figma 节点、底层真错均为本函数抛出的 429，无一例来自模型侧。
+          // 保留 figStatus（仓库既有约定，dual-truth-figma.js 已在读）与 cause 供日志/追溯。
+          const rateErr = new Error(
+            `Figma 设计稿数据接口触发限流 (HTTP 429)，与模型额度无关，请稍后重试`,
+          );
+          rateErr.figStatus = 429;
+          rateErr.isFigmaRateLimit = true;
+          rateErr.cause = error;
+          lastError = rateErr;
           break;
         }
 
@@ -590,7 +603,12 @@ export class FigmaConnector {
       return nodeData.document;
     } catch (error) {
       // 保留原有 401/403 友好提示
-      const figStatus = error?.response?.status;
+      // 🛡️ 2026-11-12：取值补 `?? error?.figStatus ?? error?.statusCode`。
+      //    本 catch 的上游是 _figmaApiGet —— 它在 429 重试耗尽后抛的是**带 figStatus=429 的
+      //    Error（无 .response）**，不是裸 axios error。若只读 error.response.status，429 会被
+      //    误判为「无 HTTP 状态码」的网络层失败（把限流说成跨境链路抖动），且 figStatus 丢失后
+      //    上层 error-humanizer 也拿不到 429 标记。此处与 execute() catch 口径保持一致。
+      const figStatus = error?.response?.status ?? error?.figStatus ?? error?.statusCode;
       const figBody = error?.response?.data;
       const figMsg = figBody?.message || figBody?.err || error?.message;
       logger.error('Figma节点数据获取失败', {

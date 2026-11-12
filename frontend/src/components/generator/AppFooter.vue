@@ -4,7 +4,8 @@
 
     <!-- 低频入口放页脚：架构介绍（原在头部次导航）、页面开发、工作流编排（原在头部主导航）
          均受各自功能开关控制，关闭时置灰并给出提示。
-         注：「大屏布局」曾在页脚，2026-09-30 已移回头部主导航（生产级生成页，属主入口）。 -->
+         注：「大屏布局」2026-09-30 移回头部主导航，2026-11-12 又按要求从头部导航移除，
+         目前页脚与头部均无该入口；页面与路由保留（直连 /screen 仍可访问）。 -->
     <nav class="af-links">
       <template v-if="introEnabled">
         <router-link to="/generator/intro" class="af-link" active-class="active">
@@ -27,9 +28,11 @@
       </template>
       <span v-else class="af-link af-link-disabled" @click="showDisabledHint('工作流编排')"> 工作流编排 </span>
 
-      <!-- 实验室：一级入口 + 下拉展开；会议工作台、项目管线实验室入口暂时隐藏，
-           页面与路由均保留，待功能验收后再恢复。components-test 仅 dev 显示，
-           避免生产进入不可用页面。条目全空时整组下拉隐藏，避免生产露出空菜单。 -->
+      <!-- 实验室：一级入口 + 下拉展开（2026-11-12 恢复 go-dev 形态：会议工作台重新
+           开放全环境入口；components-test / project-lab 沿用 devOnly 约定仅 dev 可见 ——
+           它们依赖的 /api/v2/pipeline、/api/v3/project 在生产由门禁拦为 404，
+           暴露入口只会让用户点进报错页）。
+           条目全空时整组下拉隐藏，避免生产露出空菜单。 -->
       <div
         v-if="labLinks.length"
         ref="labRootRef"
@@ -97,17 +100,21 @@ const featureStore = useFeatureFlagsStore()
 const introEnabled = computed(() => featureStore.isEnabled('generator.intro'))
 const pageSkeletonEnabled = computed(() => featureStore.isEnabled('generator.pageSkeleton'))
 const workflowEnabled = computed(() => featureStore.isEnabled('generator.workflow'))
-// 「大屏布局」已于 2026-09-30 移入头部主导航 AppHeader，不再在页脚重复出现
+// 「大屏布局」2026-09-30 移入头部主导航、2026-11-12 又从头部导航移除，现两处均无入口；
+// 页面与路由保留（直连 /screen 仍可访问）
 
-// 实验室链接组：门控在条目级；会议工作台、项目管线实验室入口暂时隐藏，
-// /meeting 与 /project-lab 路由及页面均保留，待功能验收后恢复。
+// 实验室链接组：门控在条目级（2026-11-12 从 go-dev 移植回 main，补齐合并时遗漏的移植项）。
+// meeting 为纯前端 mock 页（dev-data + mock/**，无后端依赖）⇒ 全环境可见；
+// components-test / project-lab 仅 dev（生产接口由 DevOnlyGuard / isV3ProjectExposed 拦为 404）。
 // 条目全空时整组下拉隐藏，避免生产露出空菜单。
 const isDev = import.meta.env.DEV
 const labOpen = ref(false)
 const labRootRef = ref<HTMLElement | null>(null)
 const labLinks = computed(() =>
   [
+    { path: '/meeting', label: '会议工作台', devOnly: false },
     { path: '/generator/components-test', label: '组件生成测试', devOnly: true },
+    { path: '/project-lab', label: '项目管线实验室', devOnly: true },
   ].filter((link) => !link.devOnly || isDev),
 )
 

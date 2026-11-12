@@ -1,6 +1,6 @@
 /**
  * Figma取数（Agent Builder 自动生成，请勿手改）
- * 模板: figma-fetch | 创建: 2026-11-11T14:37:29.701Z
+ * 模板: figma-fetch | 创建: 2026-11-12T07:02:23.279Z
  * 输入: (无)
  * 输出: (无)
  */
@@ -52,8 +52,9 @@ export class DynamicAgent extends BaseAgent {
       } catch (e) { /* ignore */ }
     }
     if (!fk || !nid) return { fetchResult: { ok: false, error: '缺少 fileKey/nodeId' }, fileKey: null, nodeId: null }
-    const token = figmaToken || process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN || ''
-    if (!token) return { fetchResult: { ok: false, error: '缺少 Figma token（参数 figmaToken 或环境变量）' }, fileKey: fk, nodeId: nid }
+    // 🔴 2026-11-12 用户指令（零兜底）：删除 env 兜底（原会静默套用服务端部署级 token，属跨用户串号），仅认调用方显式传入的 figmaToken
+    const token = figmaToken || ''
+    if (!token) return { fetchResult: { ok: false, error: '缺少 Figma token（请在参数 figmaToken 中显式传入）' }, fileKey: fk, nodeId: nid }
     try {
       const url = 'https://api.figma.com/v1/files/' + encodeURIComponent(fk) + '/nodes?ids=' + encodeURIComponent(nid)
       const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } })

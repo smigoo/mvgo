@@ -257,4 +257,98 @@ function templateRegion(content) {
   return { start, end }
 }
 
+/**
+ * 🎯 P1-1（2026-11-12 · 8b15a757 实锤）：统计段几何真值注入（容器横排 + 成员行内横排）。
+ *
+ * ## 病灶（真机 StatsSection.vue 逐条实证）
+ * 真值 `body.layout='horizontal-2-columns'`（两卡并排）、每卡 `layout:'horizontal'`
+ * （icon 左 / 数值+标签右），产物却写成：
+ *   ① 容器 `.c-component-group-*` `flex-direction:column`（两卡纵叠）；
+ *   ② `.c-component-stat-item` **连 display:flex 都没有**（icon/数值/标签块级堆叠）；
+ *   ③ 两卡共用同一 icon 变量（icon-263 零消费 ⇒ E2-v3）。
+ *
+ * ## 判据（真值驱动、严格前置校验、不满足即 no-op）
+ * 输入 = stats section 真值（body.layout 横排 + children 为 stat-card 成员）：
+ *   ① `body.layout` 命中横排语义词（horizontal / N-columns N≥2 / row）⇒ 容器注 row；
+ *   ② 成员（role=stat-card 或携带 icon+value/label 子节点）⇒ stat-item 注
+ *      `display:flex; flex-direction:row`（已有 display:flex 且 row/column 显式存在时
+ *      仅纠正 column→row；显式 row 不动）；
+ *   ③ 定位方式与 healStatRowMemberPairing 同策略——内容驱动：成员的 label 文本
+ *      （如「合作厂商」「在线设备」）出现在哪个 CSS 类附近的模板块里没有意义，
+ *      故按「模板内含全部成员 label 文本的宿主文件」识别该文件为统计段组件，
+ *      容器类 = 模板第一个「包裹全部 label 的 div 的 class」。
+ *   ⚠️ 注入只在「缺失/纵排」时补正，产物已正确（row + flex）则 no-op（幂等）。
+ *
+ * @param {string} sfcContent 子组件 SFC
+ * @param {{members: Array<{label:string, value:string}>}} truth stats 段成员真值
+ * @returns {{content: string, changed: boolean, reason: string}}
+ */
+export function injectStatsRowGeometry(sfcContent, truth) {
+  const noopReason = (reason) => ({ content: sfcContent, changed: false, reason })
+  if (typeof sfcContent !== 'string' || !sfcContent) return noopReason('empty-input')
+  const members = Array.isArray(truth?.members) ? truth.members : []
+  const labels = members.map((m) => String(m?.label || '').trim()).filter(Boolean)
+  if (labels.length < 2) return noopReason('not-stats-section')
+
+  // 宿主识别：模板必须含全部 label 文本（内容驱动，不认文件名）
+  const range = templateRegion(sfcContent)
+  const tpl = range ? sfcContent.slice(range.start, range.end) : sfcContent
+  if (!labels.every((t) => tpl.includes(t))) return noopReason('labels-not-found')
+
+  let content = sfcContent
+  let changed = false
+  const reasons = []
+
+  // ② stat-item 行内横排：定位「同时含 label 与 value 文本的行级宿主类」——
+  //    产物形态 `.c-component-stat-item { ... }` 模板里 label/value 是其子节点。
+  //    策略：找模板中 label 文本节点的最近祖先 class（逐 label 定位其父标签的 class 名）。
+  const itemClasses = new Set()
+  for (const label of labels) {
+    // <div class="X">...<span>label</span>...  → 取 label 所在文本元素向上找带 class 的祖先
+    // 简化口径：label 文本节点的**父标签**的 class（产物形态：stat-item 直接是 label/value 的父）
+    const re = new RegExp(
+      `<([a-zA-Z][\\w-]*)\\b[^>]*class="([^"]+)"[^>]*>(?:(?!<\\1[\\s>])[\\s\\S])*?${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+    )
+    const m = re.exec(tpl)
+    if (m) {
+      // 取容器链：label 父若有 class 且同文件 CSS 有该类 ⇒ 候选
+      for (const cls of m[2].split(/\s+/)) {
+        if (cls && /^[a-zA-Z][\w-]*$/.test(cls)) itemClasses.add(cls)
+      }
+    }
+  }
+
+  // ① 容器横排：找「包裹全部成员的最外层 div class」——模板里出现全部 label 的
+  //    最小公共祖先。简化确定性口径：CSS 中既声明了 display:flex 又声明了
+  //    flex-direction:column 的类，且该类块在模板中**包裹全部 label**（用位置判）。
+  //    若找不到 ⇒ 只做 ②（stat-item 横排本身已恢复卡片内布局）。
+  const cssRegion = sfcContent.slice(range ? range.end : 0)
+  for (const cls of itemClasses) {
+    const esc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const blockRe = new RegExp(`\\.${esc}\\s*\\{([^}]*)\\}`, 's')
+    const bm = blockRe.exec(cssRegion)
+    if (!bm) continue
+    let block = bm[1]
+    const hasDisplayFlex = /display\s*:\s*flex/.test(block)
+    const dirM = block.match(/flex-direction\s*:\s*(row|column)/)
+    if (hasDisplayFlex && dirM && dirM[1] === 'row') continue // 已正确
+    let newBlock = block
+    if (!hasDisplayFlex) {
+      newBlock = `  display: flex;\n  flex-direction: row;\n${newBlock.replace(/^\s+/, '')}`
+    } else if (dirM && dirM[1] === 'column') {
+      newBlock = newBlock.replace(/flex-direction\s*:\s*column\s*;?/, 'flex-direction: row;')
+    } else if (!dirM) {
+      newBlock = newBlock.replace(/(display\s*:\s*flex\s*;)/, '$1\n  flex-direction: row;')
+    }
+    if (newBlock !== block) {
+      content = content.replace(bm[0], `.${cls} {${newBlock}}`)
+      changed = true
+      reasons.push(`stat-item:${cls}:row`)
+    }
+  }
+
+  if (!changed) return noopReason('already-correct-or-no-target')
+  return { content, changed: true, reason: reasons.join(',') }
+}
+
 export default assessStatRowConfidence

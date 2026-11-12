@@ -121,3 +121,40 @@ describe('连字符裸标识符判据（模板绑定整值）', () => {
     expect(findHyphenatedTemplateRefs('<div :data-x="ab">')).toEqual([]);
   });
 });
+
+// 🔴 回归锚 2026-11-12（mc-refine-max-1794459143011-2b586ef5 实锤）：
+//   精修轮把子组件 ListSection.vue 的 <script setup> 连同 FG_LIST_ITEMS 数据块整段删掉
+//   （42 行→20 行），旧守卫 `templateContent && scriptBody` 在 scriptBody='' 时直接跳过
+//   模板引用检查 ⇒ 门禁放行、列表渲染为空、组件主体整块消失。
+//   修法：完整 SFC（含 <template>）但没有 <script> 时，模板硬引用一律判未声明。
+describe('子组件删掉整个 <script> 段（模板引用无处声明）', () => {
+  const SFC_TEMPLATE_ONLY =
+    '<template><div><div v-for="(it, i) in FG_LIST_ITEMS" :key="i">{{ it.t }}</div></div></template>\n';
+  const SFC_WITH_SCRIPT =
+    '<template><div><div v-for="(it, i) in FG_LIST_ITEMS" :key="i">{{ it.t }}</div></div></template>\n<script setup>\nconst FG_LIST_ITEMS = [{ t: "a" }]\n</script>\n';
+  const SFC_STATIC_ONLY = '<template><div>纯静态文本</div></template>\n';
+  const SFC_BUILTIN_ONLY =
+    '<template><Transition><div v-if="true">x</div></Transition></template>\n';
+
+  it('阳性：模板引用 FG_LIST_ITEMS 但无 <script> 段 ⇒ 报缺失并点名标识符', () => {
+    const r = validateVueScriptSemantics(SFC_TEMPLATE_ONLY, 'package/components/ListSection.vue');
+    const hit = r.issues.find((s) => s.includes('<script setup>'));
+    expect(hit).toBeTruthy();
+    expect(hit).toContain('FG_LIST_ITEMS');
+  });
+
+  it('阴性①：补回 <script setup> 并声明 ⇒ 不报', () => {
+    const r = validateVueScriptSemantics(SFC_WITH_SCRIPT, 'package/components/ListSection.vue');
+    expect(r.issues).toHaveLength(0);
+  });
+
+  it('阴性②：纯静态模板无 script（无硬引用）⇒ 不报', () => {
+    const r = validateVueScriptSemantics(SFC_STATIC_ONLY, 'package/components/ListSection.vue');
+    expect(r.issues).toHaveLength(0);
+  });
+
+  it('阴性③：无 script 但只用 Vue 内置组件 ⇒ 不误报', () => {
+    const r = validateVueScriptSemantics(SFC_BUILTIN_ONLY, 'a.vue');
+    expect(r.issues).toHaveLength(0);
+  });
+});

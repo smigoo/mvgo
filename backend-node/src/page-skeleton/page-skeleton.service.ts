@@ -613,6 +613,10 @@ export class PageSkeletonService {
     const prompt = this.buildAnalysisPrompt(w, h);
     let raw: string;
     try {
+      // 🔴 刻意不声明 outputKind：本 prompt 的 JSON 结构是 `{layout, components}`，**不含**
+      //    sections/charts/interactions ⇒ 声明 'json' 会被 vision-agent 的结构判据恒判「损坏」，
+      //    每轮白烧一次抬温重试并覆盖首轮结果（2026-11-12 逐调用点枚举出的白烧点之一）。
+      //    本步的真实判据就在下游：`extractJson` + `json.layout` 断言（不通过即 400，fail-visible）。
       raw = await agent.analyzeImage(imagePath, prompt, {});
     } catch (e: any) {
       throw new BadRequestException('vision 分析失败: ' + (e.message || String(e)));
@@ -1190,12 +1194,13 @@ ${rows}
   }
 
   // ============================================================
-  // 内部：figna URL → 渲染图（fast-follow，受 FIGMA_TOKEN 约束）
+  // 内部：figma URL → 渲染图（fast-follow，受 FIGMA_ACCESS_TOKEN 约束）
   // ============================================================
 
   private async renderFigmaImage(figmaUrl: string): Promise<{ buffer: Buffer; width: number; height: number }> {
-    // 🛡️ 2026-09-16 彻底去全局配置：不再读全局 ai-config.json 的 figmaToken，仅保留部署级环境变量。
-    const figmaToken = process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN;
+    // 🛡️ 2026-09-16 彻底去全局配置：不再读全局 ai-config.json 的 figmaToken。
+    // 🔴 2026-11-12 用户指令（零兜底）：同步删除未文档化的旧别名 FIGMA_TOKEN 兜底，仅认部署级 FIGMA_ACCESS_TOKEN。
+    const figmaToken = process.env.FIGMA_ACCESS_TOKEN;
     if (!figmaToken) {
       throw new BadRequestException(
         '未配置 Figma Token，请在「设置 → 模型配置」中配置 Figma Token，或设置环境变量 FIGMA_ACCESS_TOKEN',

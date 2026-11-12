@@ -1,0 +1,1669 @@
+/**
+ * Screenshot Renderer - 渲染截图节点
+ * 职责：将生成的组件代码用 Puppeteer 无头浏览器渲染为 PNG 截图
+ *
+ * 两种渲染路径（按优先级）：
+ * 1. 预览页路径：通过前端 /preview/:componentId 打开真实 Vue 运行时页面截图
+ *    → 适用于 v-for / {{ }} / props / computed 等动态内容，对比最准确
+ * 2. 静态抽取路径（降级回退）：直接提取 .vue 的 <template> + <style> 做静态渲染
+ *    → 仅限纯静态组件，动态内容会显示为原始模板语法
+ *
+ * 设计要点：
+ * - sessionId 路径隔离：每个组件截图存到独立目录，防止并行串图
+ * - 复用 browser 实例：全局单例，每次 newPage() 创建独立页签
+ * - 超时降级：渲染失败不阻塞主流程，返回 null 让视觉比对跳过
+ * - Vue3 + 微码双类型支持
+ */
+
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, cpSync } from 'fs'
+import { join, dirname, basename, extname } from 'path'
+import { createLogger } from '../logger/index.js'
+import { customComponentsDir, vue3ComponentsDir, projectRoot } from '../../config/backend-root.js'
+import { getFrontendCandidates } from '../../config/runtime-env.js'
+// 🛡️ 2026-09-03 修复：原为顶层 require(...) → ESM 加载即抛
+// "require is not defined in ES module scope"（dist 原样复制 .js，Node ESM ModuleJob 直接加载）。
+// workspace-preview-publisher.js 已 module.exports named export resolveWorkspaceComponentId。
+import { resolveWorkspaceComponentId } from '../utils/workspace-preview-publisher.js'
+import { compareRenderedVsDesign, FIDELITY_VERDICTS } from '../utils/render-fidelity-gate.js'
+// 🛡️ 2026-11-05 C3：console 噪声判据收敛为纯函数模块（单一事实源、零重依赖、可单测）
+import { isBenignConsoleError, isFatalConsoleError } from '../utils/console-noise-classifier.js'
+
+const logger = createLogger({ name: 'screenshot-renderer' })
+const RUNTIME_SELF_HEAL_WARNING_CODE = 'RUNTIME_SELF_HEAL_MISSING_ASSET'
+
+const RUNTIME_BLOCK_IDS = new Set([
+  'RUNTIME-001',
+  'RUNTIME-002',
+  'RUNTIME-003',
+  'RUNTIME-004',
+  'RUNTIME-005',
+  'RUNTIME-006',
+  'RUNTIME-009',
+  'RUNTIME-011',
+  'RUNTIME-012',
+  'RUNTIME-013',
+  'RUNTIME-014',
+  'RUNTIME-015',
+  'RUNTIME-016',
+])
+
+const RUNTIME_INCREMENTAL_IDS = new Set([
+  'RUNTIME-007',
+  'RUNTIME-008',
+  'RUNTIME-010',
+])
+
+// 🔴 2026-11-05 C3′ → **C2**（docs/2026-11-05-VISUAL-002门禁ReferenceError根因与G1G2真机验签.md §3.4 / §7.5）
+//   背景：`finalizePreviewResult` 曾引用 `previewState`（定义在 renderViaPreviewPage `:760`）
+//   与 `issues`（`:613`），两者都不在该函数（renderScreenshot `:1229`）的闭包链上 ⇒
+//   `compareRenderedVsDesign` 成功后必抛 ReferenceError，被 catch 吞掉 ⇒
+//   `visualFidelityDerivative` 恒 0，且 **VISUAL-002 自 08-02（commit 8cc3b11）起从未进入 runtimeGate**。
+//
+//   C3′（2026-11-05 15:0x）：修引用错配 + 只观测，开关 false，3 样本验证零行为变化。
+//   **C2（2026-11-05 15:1x，用户裁决「继续c2」）：开关置 true，VISUAL-002 以 `WARN` 进入 runtimeGate。**
+//
+//   真机依据（3 样本）：score `0.4014 / 0.5303 / 0.5459`，**3/3 `verdict=block`**，
+//   且 `renderBroken=0`、`issueCount=0` ⇒ 真实视觉差异，非渲染失败。
+//   故 **不能沿用 `severity:'BLOCK'`**：那会掉进 `classifyRuntimeGate` 的 fallback
+//   （`:265` issueIds.length>0 ⇒ `:270` unknownBlocking=filter(severity==='BLOCK') ⇒ `:272` `action:'fail'`）
+//   ⇒ 按实测分布会 **100% 拒收**。C2 因此把 VISUAL-002 一律降为 `WARN`：
+//   `classifyRuntimeGate` 走 `:278` `action:'incremental_fix'`（不 fail、任务仍 completed）。
+//
+//   ⚠️ 已知边界（勿误读）：`incremental_fix` 在 `mc-component-graph-phase2.js:5880` 只做
+//   `logger.warn` 后 `return`，**不设 `state.needsRevision`、不触发重试** ⇒ C2 当前是
+//   「留痕 + 不阻断」，**不会驱动 LLM 自动修**。要真正回流需另立 C2-B（见文档 §7.7）。
+const VISUAL_002_EMIT_ENABLED = true
+
+// 🛡️ 2026-11-05 C3：CONSOLE_NOISE_PATTERNS / isThirdPartyWarning /
+//   isBenignConsoleError / isFatalConsoleError 及三组常量已收敛到
+//   utils/console-noise-classifier.js（纯函数、零依赖，便于 jest 单测）。
+//   本文件只 import 消费，不再维护第二套正则口径。
+
+// 全局 Puppeteer browser 单例（复用，避免每次启动开销）
+let _browserInstance = null
+let _browserLaunchPromise = null
+
+// 前端预览页候选地址统一由 runtime-env.getFrontendCandidates() 提供，
+// 不再在此硬编码域名或读取僵尸别名（FRONTEND_URL/APP_BASE_URL/...）。
+
+function normalizeAssetPathname(pathname = '') {
+  if (!pathname) return ''
+  return pathname.replace(/^\/+/, '').replace(/^api\/preview\//, '')
+}
+
+export function buildRequestPathPattern(path = '') {
+  const source = String(path)
+    .split(/(\{[^}]+\})/g)
+    .map(segment => /^\{[^}]+\}$/.test(segment)
+      ? '[^/]+'
+      : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('')
+  return new RegExp(`^${source}$`)
+}
+
+function extractMissingAssetEntries(runtimeGate) {
+  const responses = runtimeGate?.issues
+    ?.filter(issue => issue?.id === 'RUNTIME-007')
+    ?.flatMap(issue => issue?.evidence?.responses || []) || []
+
+  const seen = new Set()
+  const entries = []
+  for (const response of responses) {
+    const url = response?.url || ''
+    if (!url) continue
+    let pathname = ''
+    try {
+      pathname = new URL(url).pathname || ''
+    } catch {
+      pathname = url
+    }
+    const normalizedPath = normalizeAssetPathname(pathname)
+    if (!normalizedPath || seen.has(normalizedPath)) continue
+    seen.add(normalizedPath)
+    entries.push({
+      url,
+      normalizedPath,
+      fileName: basename(normalizedPath),
+    })
+  }
+  return entries
+}
+
+function buildPreviewRelativeCandidates(target, normalizedPath, fileName) {
+  const candidates = []
+  if (normalizedPath) candidates.push(normalizedPath)
+  if (fileName) {
+    candidates.push(join('resources', 'images', fileName))
+  }
+  return [...new Set(candidates)]
+}
+
+function buildOutputRelativeCandidates(target, normalizedPath, fileName) {
+  const candidates = []
+  if (fileName) {
+    candidates.push(join('resources', 'images', fileName))
+  }
+  if (normalizedPath) {
+    const cleaned = normalizedPath.replace(/^([^/]+\/){2}/, '')
+    if (cleaned && cleaned !== normalizedPath) candidates.push(cleaned)
+  }
+  return [...new Set(candidates)]
+}
+
+function resolveExistingFile(basePath, relativeCandidates = []) {
+  for (const relativePath of relativeCandidates) {
+    const absolutePath = join(basePath, relativePath)
+    if (existsSync(absolutePath)) return absolutePath
+  }
+  return null
+}
+
+function copyIfMissing(sourceFile, destinationFile) {
+  mkdirSync(dirname(destinationFile), { recursive: true })
+  if (existsSync(destinationFile)) return false
+  cpSync(sourceFile, destinationFile, { force: false })
+  return true
+}
+
+function summarizeRuntimeGate(runtimeGate) {
+  return runtimeGate?.issues?.map(issue => `[${issue.id}] ${issue.message}`).join('; ') || '未知运行时错误'
+}
+
+// isBenignConsoleError / isFatalConsoleError 由 utils/console-noise-classifier.js 提供。
+
+export function buildRuntimeRevisionGuidance(runtimeGate) {
+  const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []
+  const guidance = {
+    target: 'layout',
+    reviseTarget: 'layout',
+    scope: 'incremental-runtime',
+    summary: summarizeRuntimeGate(runtimeGate),
+    rules: [
+      '只修复当前运行时问题，保持其他结构和样式不变。',
+      '优先基于真实预览报错证据修改，不要无依据重写整个组件。',
+    ],
+    focusAreas: [],
+    evidence: issues.map(issue => ({
+      id: issue?.id,
+      category: issue?.category,
+      message: issue?.message,
+      evidence: issue?.evidence,
+    })),
+  }
+
+  const issueIds = new Set(issues.map(issue => issue?.id).filter(Boolean))
+  if (issueIds.has('RUNTIME-008')) {
+    guidance.target = 'engineer'
+    guidance.reviseTarget = 'full'
+    guidance.scope = 'runtime-request-fix'
+    guidance.focusAreas.push('修正模板、脚本或资源引用中的错误请求地址与调用方式')
+    guidance.rules.push('网络请求失败优先检查脚本、接口地址、资源路径和条件渲染，不要只改样式。')
+  }
+
+  if (issueIds.has('RUNTIME-010')) {
+    const fatalConsoleErrors = issues
+      .filter(issue => issue?.id === 'RUNTIME-010')
+      .flatMap(issue => issue?.evidence?.errors || [])
+      .filter(isFatalConsoleError)
+    if (fatalConsoleErrors.length > 0) {
+      guidance.target = 'engineer'
+      guidance.reviseTarget = 'full'
+      guidance.scope = 'runtime-script-fix'
+      guidance.focusAreas.push('修正运行时脚本异常、未定义变量、空值访问和组件初始化逻辑')
+      guidance.rules.push('console.error 来自组件脚本或运行时代码时，必须修脚本/模板逻辑，不要仅做 CSS 级修改。')
+      guidance.evidence.push({
+        id: 'RUNTIME-010-FATAL',
+        category: 'console',
+        message: '检测到核心运行时脚本异常',
+        evidence: fatalConsoleErrors,
+      })
+    } else {
+      guidance.focusAreas.push('清理非核心 console.error，核对资源引用与宿主副作用')
+    }
+  }
+
+  if (issueIds.has('RUNTIME-007')) {
+    guidance.focusAreas.push('核对资源路径、图片引用和预览态依赖文件是否齐全')
+  }
+
+  if (guidance.focusAreas.length === 0) {
+    guidance.focusAreas.push('按运行时问题证据做最小范围修复')
+  }
+
+  return guidance
+}
+
+function hasOnlyMissingAssetIssues(runtimeGate) {
+  const issueIds = new Set((runtimeGate?.issues || []).map(issue => issue?.id))
+  return issueIds.has('RUNTIME-007') && [...issueIds].every((id) => id === 'RUNTIME-007' || id === 'RUNTIME-010')
+}
+
+// 🛡️ P0 升级（2026-09-02，mv-max-1788359428498-ee0cbe69）+ 扩展（2026-09-10，立项统一治理运行时 JS 错误）：
+// 确定性运行时缺失判定（产物自身缺陷、重试/降级无法自愈）抽到无 import.meta 的纯函数模块，
+// 便于 jest 单测且可复用。详见 docs/runtime-js-error-governance-2026-09-10.md。
+import { hasDeterministicRuntimeMissing } from '../utils/runtime-error-classifier.js'
+// 保持对外导出不变：graph 层（phase2/vue3）仍从本模块 import 该函数。
+export { hasDeterministicRuntimeMissing }
+
+export function classifyRuntimeGate(runtimeGate) {
+  const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []
+  const issueIds = issues.map(issue => issue?.id).filter(Boolean)
+
+  if (runtimeGate?.status === 'WARN' && runtimeGate?.warning) {
+    return {
+      action: 'complete_with_warning',
+      reason: runtimeGate.warning.message,
+      blockingIssues: [],
+      incrementalIssues: [],
+    }
+  }
+
+  const blockingIssues = issues.filter(issue => RUNTIME_BLOCK_IDS.has(issue?.id))
+  if (blockingIssues.length > 0) {
+    return {
+      action: 'fail',
+      reason: blockingIssues.map(issue => `[${issue.id}] ${issue.message}`).join('; '),
+      blockingIssues,
+      incrementalIssues: [],
+    }
+  }
+
+  const incrementalIssues = issues.filter(issue => RUNTIME_INCREMENTAL_IDS.has(issue?.id))
+  if (incrementalIssues.length > 0) {
+    const hasConsoleOnly = incrementalIssues.every(issue => issue?.id === 'RUNTIME-010')
+    const fatalConsoleErrors = incrementalIssues
+      .filter(issue => issue?.id === 'RUNTIME-010')
+      .flatMap(issue => issue?.evidence?.errors || [])
+      .filter(isFatalConsoleError)
+    const benignConsoleOnly = hasConsoleOnly && fatalConsoleErrors.length === 0
+    return {
+      action: benignConsoleOnly ? 'complete_with_warning' : 'incremental_fix',
+      reason: incrementalIssues.map(issue => `[${issue.id}] ${issue.message}`).join('; '),
+      blockingIssues: [],
+      incrementalIssues,
+      revisionGuidance: benignConsoleOnly ? null : buildRuntimeRevisionGuidance(runtimeGate),
+    }
+  }
+
+  if (issueIds.length > 0) {
+    // 🛡️ 修复（2026-09-08）：fallback 不再一刀切 fail，而是按 issue.severity 分级
+    // 旧逻辑：所有未列入白名单的 issue 都当硬阻断 → 未知 issue ID 直接导致任务失败
+    // 新逻辑：检查每个 issue 的 severity 字段，BLOCK 才阻断，其余降级为 incremental
+    const unknownBlocking = issues.filter(issue => issue?.severity === 'BLOCK')
+    const unknownNonBlocking = issues.filter(issue => issue?.severity !== 'BLOCK')
+
+    if (unknownBlocking.length > 0) {
+      // 有明确标记为 BLOCK 的未知 issue，仍然 fail
+      return {
+        action: 'fail',
+        reason: summarizeRuntimeGate(runtimeGate),
+        blockingIssues: unknownBlocking,
+        incrementalIssues: unknownNonBlocking,
+      }
+    }
+
+    // 所有未知 issue 都不是 BLOCK 级别，降级为 incremental（允许后续修复）
+    return {
+      action: 'incremental_fix',
+      reason: summarizeRuntimeGate(runtimeGate),
+      blockingIssues: [],
+      incrementalIssues: issues,
+      revisionGuidance: buildRuntimeRevisionGuidance(runtimeGate),
+    }
+  }
+
+  return {
+    action: runtimeGate?.status === 'PASS' ? 'pass' : 'fail',
+    reason: runtimeGate?.status === 'PASS' ? 'PASS' : summarizeRuntimeGate(runtimeGate),
+    blockingIssues: [],
+    incrementalIssues: [],
+  }
+}
+
+async function selfHealMissingAssetsOnce({ outputPath, runtimeGate, componentId, groupId, target, onProgress }) {
+  const missingEntries = extractMissingAssetEntries(runtimeGate)
+  if (missingEntries.length === 0) {
+    return { attempted: false, healed: false, warning: null, healedAssets: [], missingAssets: [] }
+  }
+
+  const workspaceRoot = target === 'vue3'
+    ? join(vue3ComponentsDir, groupId || 'default-group', componentId)
+    : join(customComponentsDir, componentId)
+  const frontendWorkspaceRoot = process.env.FRONTEND_WORKSPACE?.trim()
+    ? (process.env.FRONTEND_WORKSPACE.startsWith('/')
+      ? process.env.FRONTEND_WORKSPACE
+      : join(projectRoot, 'frontend', 'workspace', process.env.FRONTEND_WORKSPACE))
+    : join(projectRoot, 'frontend', 'workspace')
+  const frontendTargetRoot = target === 'vue3'
+    ? join(frontendWorkspaceRoot, 'vue3-components', groupId || 'default-group', componentId)
+    : join(frontendWorkspaceRoot, 'custom-components', componentId)
+
+  const healedAssets = []
+  const unresolvedAssets = []
+
+  for (const entry of missingEntries) {
+    const previewCandidates = buildPreviewRelativeCandidates(target, entry.normalizedPath, entry.fileName)
+    const outputCandidates = buildOutputRelativeCandidates(target, entry.normalizedPath, entry.fileName)
+    const sourceFile = resolveExistingFile(outputPath, outputCandidates)
+
+    if (!sourceFile) {
+      unresolvedAssets.push({ ...entry, reason: 'source-missing', sourceCandidates: outputCandidates })
+      continue
+    }
+
+    const destinations = [workspaceRoot, frontendTargetRoot]
+    let copiedAny = false
+    for (const root of destinations) {
+      const existingPreviewTarget = resolveExistingFile(root, previewCandidates)
+      if (existingPreviewTarget) continue
+      const preferredRelativePath = previewCandidates[0] || join('resources', 'images', `${basename(entry.fileName, extname(entry.fileName)) || 'asset'}${extname(entry.fileName) || ''}`)
+      const destinationFile = join(root, preferredRelativePath)
+      try {
+        copiedAny = copyIfMissing(sourceFile, destinationFile) || copiedAny
+      } catch (error) {
+        unresolvedAssets.push({ ...entry, reason: `copy-failed:${error.message}`, destinationFile })
+      }
+    }
+
+    if (copiedAny) {
+      healedAssets.push({ ...entry, sourceFile })
+    } else if (!unresolvedAssets.some(asset => asset.url === entry.url)) {
+      unresolvedAssets.push({ ...entry, reason: 'already-missing-after-copy', sourceFile })
+    }
+  }
+
+  if (healedAssets.length > 0) {
+    onProgress?.({
+      stage: '运行时质量门禁',
+      message: `检测到缺图，已自动补齐 ${healedAssets.length} 个资源后重试一次`,
+      status: 'warning',
+    })
+  }
+
+  const warning = unresolvedAssets.length > 0
+    ? {
+        code: RUNTIME_SELF_HEAL_WARNING_CODE,
+        type: 'runtime-missing-assets',
+        message: `真实预览缺图自愈后仍有 ${unresolvedAssets.length} 个资源缺失，已降级为告警，不阻断任务完成`,
+        details: unresolvedAssets,
+      }
+    : null
+
+  return {
+    attempted: true,
+    healed: healedAssets.length > 0,
+    warning,
+    healedAssets,
+    missingAssets: unresolvedAssets,
+  }
+}
+
+/**
+ * 获取前端预览页基准 URL（优先环境变量，否则逐一尝试）
+ * @returns {Promise<string|null>}
+ */
+async function detectFrontendUrl() {
+  const candidates = getFrontendCandidates()
+  for (const url of candidates) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 3000)
+
+      const resp = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+
+      // 用 GET 探测：部分网关/CDN 对 HEAD 返回 405（如 go.microvideo.cn），
+      // 只要服务可达（status < 500）即视为可用，具体路径错误会在渲染阶段暴露。
+      if (resp.status >= 200 && resp.status < 500) {
+        logger.info(`检测到前端预览页可用: ${url}`)
+        return url
+      }
+    } catch {
+      // 不可达，尝试下一个
+    }
+  }
+  logger.warn('未检测到可用的前端预览页，将回退到静态抽取', { candidates })
+  return null
+}
+
+/**
+ * WP3 渲染探针（2026-10-08，治 RC4 门禁盲区）——页内只读 DOM 事实探测。
+ *
+ * 设计约束：
+ * - 【自包含函数】本函数体由 Puppeteer page.evaluate 序列化到浏览器执行，
+ *   内部不得引用任何外部作用域标识符（helper 全部内联定义）。
+ * - 【只输出事实】五项探测全部只读、不判定对错：输出 DOM 事实（选择器短描 + 数值），
+ *   供人工/后续管线评审，绝不 addBlock、不进 runtimeGate.issues。
+ * - 【与盘读版正交】graph 钩子 scanOrphanResources 判源码引用层（import 了但未引用）；
+ *   本探针判运行时 DOM 层（引用了但没渲染出来）。HTTP 加载失败已由 RUNTIME-007/008 覆盖，
+ *   本探针不做源码引用判定、不做网络判定——避免同一属性双源双判。
+ *
+ * 五项探测（对应方案文档 WP3）：
+ *   1. emptyImg      img[src=""] 空源占位（治 feb1f87a 图标消失）
+ *   2. lowContrast   文字对有效背景对比度 < 阈值（治 7106503f，阈值走 config）
+ *   3. clipped       内容溢出且被 overflow hidden/auto/scroll 祖先裁切（治 11afe1c9 tab 裁切）
+ *   4. collapsedText 有文本但可见尺寸 < 4px 的塌缩槽（治 header-right 8px 类问题）
+ *   5. chartNoEcharts 图表命名容器有占位面积但无 canvas/svg/echarts 实例（治 N2 兜底面）
+ *
+ * @param {{contrastMin:number}} options
+ * @returns {object} 探测结果（各项数组，含上限控制，总输出 < ~8KB）
+ */
+function collectRenderProbesInPage(options) {
+  const contrastMin = (options && options.contrastMin) || 3.0
+  const out = {
+    probedAt: Date.now(),
+    stageRect: null,
+    // 🛡️ L1（2026-11-10）：段锚几何事实（渲染后真实 bbox）。此处**只采不判**——
+    //   与 Figma 真值的比对放在有 figmaNodeData 的 graph 层（本函数在页面上下文，拿不到真值）。
+    sectionAnchors: [],
+    emptyImg: [],
+    lowContrast: [],
+    clipped: [],
+    collapsedText: [],
+    chartNoEcharts: [],
+  }
+  // stage 必须在函数内部查询（page.evaluate 序列化后无外部作用域）
+  const stageEl = document.querySelector('.mc-preview-stage')
+  if (!stageEl) return { skipped: 'no-stage' }
+  try {
+    const sRect = stageEl.getBoundingClientRect()
+    out.stageRect = { w: Math.round(sRect.width), h: Math.round(sRect.height) }
+  } catch (_) { /* 事实缺失不阻断 */ }
+  // 🛡️ L1：采集每个 data-section-id 的真实 bbox（只读事实，不做判定）
+  try {
+    out.sectionAnchors = Array.from(document.querySelectorAll('[data-section-id]')).map((el) => {
+      const r = el.getBoundingClientRect()
+      return {
+        sid: el.getAttribute('data-section-id') || '',
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+      }
+    })
+  } catch (_) { /* 事实缺失不阻断 */ }
+
+  const desc = (el) => {
+    let cls = ''
+    try { cls = (typeof el.className === 'string' ? el.className : '').trim() } catch (_) {}
+    return (el.tagName || '').toLowerCase() + (cls ? '.' + cls.split(/\s+/).slice(0, 3).join('.') : '')
+  }
+  const hasDirectText = (el) => {
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3 && node.textContent && node.textContent.trim()) return true
+    }
+    return false
+  }
+  const parseRgb = (s) => {
+    if (!s) return null
+    const m = s.match(/rgba?\(([^)]+)\)/)
+    if (!m) return null
+    const parts = m[1].split(',').map((v) => parseFloat(v))
+    if (parts.length < 3 || parts.some((v) => Number.isNaN(v))) return null
+    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
+  }
+  const chan = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+  const lum = (c) => 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
+  const ratioOf = (c1, c2) => {
+    const l1 = lum(c1); const l2 = lum(c2)
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+  }
+
+  // 1. img 空源（DOM 属性事实，与加载成败无关；加载失败走 RUNTIME-007/008）
+  for (const img of stageEl.querySelectorAll('img')) {
+    if (out.emptyImg.length >= 20) break
+    const src = (img.getAttribute('src') || '').trim()
+    if (!src || src === '#') {
+      out.emptyImg.push({ el: desc(img), alt: img.getAttribute('alt') || '' })
+    }
+  }
+
+  let scanned = 0
+  const SCAN_CAP = 800
+  const all = stageEl.querySelectorAll('*')
+
+  // 2. 文字对比度：只算完全不透明文字 vs 最近不透明纯色背景；
+  //    任一祖先（含自身）背景为图片/渐变（background-image 非 none）则跳过（无法可靠判定）。
+  for (const el of all) {
+    if (++scanned > SCAN_CAP || out.lowContrast.length >= 20) break
+    if (!hasDirectText(el)) continue
+    let cs
+    try { cs = getComputedStyle(el) } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.1) continue
+    const fg = parseRgb(cs.color)
+    if (!fg || fg.a < 0.9) continue
+    let bg = null
+    let node = el
+    let bgUncertain = false
+    while (node && node !== stageEl.parentElement) {
+      let ncs
+      try { ncs = getComputedStyle(node) } catch (_) { node = node.parentElement; continue }
+      if (ncs.backgroundImage && ncs.backgroundImage !== 'none') { bgUncertain = true; break }
+      const bc = parseRgb(ncs.backgroundColor)
+      if (bc && bc.a >= 0.9) { bg = bc; break }
+      node = node.parentElement
+    }
+    if (bgUncertain || !bg) continue
+    const ratio = ratioOf(fg, bg)
+    if (ratio < contrastMin) {
+      out.lowContrast.push({
+        el: desc(el),
+        text: (el.textContent || '').trim().slice(0, 24),
+        ratio: Math.round(ratio * 100) / 100,
+        fg: cs.color,
+        bg: 'rgb(' + bg.r + ',' + bg.g + ',' + bg.b + ')',
+      })
+    }
+  }
+
+  // 3. 溢出被裁：scroll > client + 2px 且存在 overflow hidden/clip/auto/scroll 祖先；
+  //    若元素自身就是裁切容器（如 tab 横排溢出容器），by 记自身——否则会漏记最常见场景。
+  scanned = 0
+  for (const el of all) {
+    if (++scanned > SCAN_CAP || out.clipped.length >= 20) break
+    if (el === stageEl) continue
+    let cs
+    try { cs = getComputedStyle(el) } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue
+    const sw = el.scrollWidth; const cw = el.clientWidth
+    const sh = el.scrollHeight; const ch = el.clientHeight
+    if (sw <= cw + 2 && sh <= ch + 2) continue
+    const OV_RX = /(^|\s)(hidden|clip|auto|scroll)(\s|$)/
+    let by = null
+    const selfOv = String(cs.overflow) + ' ' + String(cs.overflowX) + ' ' + String(cs.overflowY)
+    if (OV_RX.test(selfOv)) {
+      by = desc(el) + '(self)'
+    } else {
+      let anc = el.parentElement
+      while (anc && anc !== stageEl.parentElement) {
+        let acs
+        try { acs = getComputedStyle(anc) } catch (_) { anc = anc.parentElement; continue }
+        const ov = String(acs.overflow) + ' ' + String(acs.overflowX) + ' ' + String(acs.overflowY)
+        if (OV_RX.test(ov)) { by = desc(anc); break }
+        anc = anc.parentElement
+      }
+    }
+    if (!by) continue
+    out.clipped.push({
+      el: desc(el),
+      by,
+      sw, cw, sh, ch,
+      text: (el.textContent || '').trim().slice(0, 24),
+    })
+  }
+
+  // 4. 塌缩文本槽：有直接文本但可见宽或高 < 4px（只记直接文本元素，避免父子重复）
+  scanned = 0
+  for (const el of all) {
+    if (++scanned > SCAN_CAP || out.collapsedText.length >= 20) break
+    if (el === stageEl) continue
+    if (!hasDirectText(el)) continue
+    let cs
+    try { cs = getComputedStyle(el) } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.1) continue
+    const rect = el.getBoundingClientRect()
+    if (rect.width >= 4 && rect.height >= 4) continue
+    out.collapsedText.push({
+      el: desc(el),
+      w: Math.round(rect.width * 10) / 10,
+      h: Math.round(rect.height * 10) / 10,
+      text: (el.textContent || '').trim().slice(0, 24),
+    })
+  }
+
+  // 5. 图表占位无 echarts：chart 命名容器有面积但无 canvas/svg/实例属性
+  for (const el of stageEl.querySelectorAll('[class*="chart"], [id*="chart"], [class*="echart"]')) {
+    if (out.chartNoEcharts.length >= 10) break
+    let rect
+    try { rect = el.getBoundingClientRect() } catch (_) { continue }
+    if (rect.width * rect.height < 1000) continue
+    if (el.querySelector('canvas, svg')) continue
+    if (el.hasAttribute('_echarts_instance_')) continue
+    out.chartNoEcharts.push({ el: desc(el), w: Math.round(rect.width), h: Math.round(rect.height) })
+  }
+
+  return out
+}
+
+/**
+ * 通过前端预览页渲染截图（真实 Vue 运行时）
+ * @returns {Promise<string|null>} 截图路径
+ */
+async function renderViaPreviewPage({
+  componentId,
+  sessionId,
+  groupId,
+  target,
+  screenshotPath,
+  viewportWidth,
+  viewportHeight,
+  onProgress,
+  requestMocks = [],
+  // 🆕 2026-10-10 双主题（R10）：预览主题（'light' | 'dark'）。
+  //   预览页已支持 ?theme= 并据其切换 .dark/.light 父选择器 + 重注入 CSS 变量
+  //   （见 frontend/src/views/preview/index.vue R12），故截图侧只需带参数。
+  //   缺省不传 ⇒ 走预览页 declare.json 默认主题（**与改动前完全一致，零回归**）。
+  theme,
+}) {
+  const issues = []
+  const addBlock = (id, category, message, evidence = {}) => {
+    issues.push({ id, severity: 'BLOCK', category, message, evidence })
+  }
+  const frontendUrl = await detectFrontendUrl()
+  if (!frontendUrl) {
+    addBlock('RUNTIME-001', 'navigation', '真实预览页不可达', { candidates: getFrontendCandidates() })
+    return { renderedImage: null, runtimeGate: { status: 'BLOCK', issues, isStaticFallback: false }, renderProbes: null }
+  }
+
+  // 保留基准 URL 的子路径（如 /mvgo）：用相对路径拼接，避免绝对路径覆盖掉子路径导致 404
+  const previewUrl = new URL(`preview/${componentId}`, frontendUrl.replace(/\/?$/, '/'))
+  // 🛡️ P0-2（2026-09-09）：传真实 sessionId 给 frontend preview 页做 latest snapshot 反查，
+  // 避免 ensureLatestSnapshot 用 componentId fallback → API 404（RUNTIME-007）。
+  if (sessionId) previewUrl.searchParams.set('sessionId', sessionId)
+  if (target === 'vue3') previewUrl.searchParams.set('type', 'vue3')
+  if (groupId) previewUrl.searchParams.set('groupId', groupId)
+  // 🆕 R10：显式指定预览主题（双主题评测时渲染两次，各带 light/dark）
+  if (theme === 'light' || theme === 'dark') previewUrl.searchParams.set('theme', theme)
+
+  logger.info(`通过预览页渲染截图: ${previewUrl.href}`)
+  onProgress?.({
+    stage: '运行时质量门禁',
+    message: '正在加载真实组件预览...',
+    status: 'running',
+  })
+
+  const browser = await getBrowser()
+  
+  // 🛡️ 2026-09-04 使用独立 BrowserContext 隔离每个截图任务
+  // 避免 cookie/localStorage/DOM 状态污染导致截图串图
+  // Puppeteer 22+ 已移除 createIncognitoBrowserContext()，改用 createBrowserContext()
+  const context = await browser.createBrowserContext()
+  const page = await context.newPage()
+  
+  const responseErrors = []
+  const responseErrorUrls = new Set()
+  const requestFailures = []
+  const pageErrors = []
+  const consoleErrors = []
+  const ignoredShellRequestPatterns = [
+    /\/api\/auth\/current(?:\?|$)/,
+    /\/api\/tasks(?:\?|$)/,
+  ]
+  // 🛡️ 2026-11-05 C3：渲染期过滤与分类期 benign 共用模块级 CONSOLE_NOISE_PATTERNS
+  //   + isThirdPartyWarning，不再维护函数内第二套正则（此前只有 Permissions policy 一条）。
+  const isIgnoredShellRequest = url => ignoredShellRequestPatterns.some(pattern => pattern.test(url))
+  const isIgnoredConsoleError = entry => isBenignConsoleError(entry)
+
+  if (requestMocks.length > 0) {
+    await page.setRequestInterception(true)
+    page.on('request', request => {
+      const url = new URL(request.url())
+      const method = request.method().toUpperCase()
+      const mock = requestMocks.find(item => {
+        const mockPath = String(item?.path || '')
+        const pathname = url.pathname.startsWith('/api/') ? url.pathname.slice(4) : url.pathname
+        const pathPattern = buildRequestPathPattern(mockPath)
+        return String(item?.method || 'GET').toUpperCase() === method && pathPattern.test(pathname)
+      })
+      if (!mock) {
+        request.continue()
+        return
+      }
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mock.response || { code: 200, data: {} }),
+      })
+    })
+  }
+
+  page.on('response', response => {
+    const status = response.status()
+    const url = response.url()
+    if (status >= 400 && !/favicon\.ico(?:\?|$)/.test(url) && !isIgnoredShellRequest(url)) {
+      responseErrors.push({ status, url, resourceType: response.request().resourceType() })
+      responseErrorUrls.add(url)
+    }
+  })
+  page.on('requestfailed', request => {
+    const url = request.url()
+    if (isIgnoredShellRequest(url)) return
+    requestFailures.push({ url, error: request.failure()?.errorText || 'request failed' })
+  })
+  page.on('pageerror', error => {
+    pageErrors.push({ message: error.message, stack: error.stack || '' })
+  })
+  page.on('console', message => {
+    if (message.type() === 'error') {
+      const text = message.text()
+      const location = message.location()
+      const locationUrl = location?.url || ''
+      const consoleEntry = { text, location }
+      if (isIgnoredShellRequest(locationUrl) || isIgnoredConsoleError(consoleEntry)) return
+      // 浏览器对资源 404 会同时记 response>=400 和 console.error("Failed to load resource")。
+      // 这类错误本质上已经由 RUNTIME-007 覆盖，若继续记到 RUNTIME-010 会重复阻断同一问题。
+      const isDuplicatedHttpConsole =
+        /Failed to load resource: the server responded with a status of \d+/i.test(text) &&
+        !!locationUrl &&
+        responseErrorUrls.has(locationUrl)
+      if (isDuplicatedHttpConsole) return
+      consoleErrors.push({ text, location })
+    }
+  })
+
+  try {
+    await page.setViewport({
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor: 2,
+    })
+
+    // Vue3 组件需要更长的导航时间（页面加载 + 资源解析）
+    const navTimeoutMs = target === 'vue3' ? 60000 : 20000
+
+    const navigationResponse = await page.goto(previewUrl.href, {
+      waitUntil: 'domcontentloaded',
+      timeout: navTimeoutMs,
+    })
+    const navigationStatus = navigationResponse?.status() || 0
+    if (!navigationResponse || navigationStatus < 200 || navigationStatus >= 400) {
+      addBlock('RUNTIME-002', 'navigation', `真实预览导航失败（HTTP ${navigationStatus || '无响应'}）`, {
+        url: previewUrl.href,
+        status: navigationStatus,
+      })
+    }
+
+    // Vue3 组件需要更长的加载时间（浏览器内 SFC 编译、LESS 预编译等）
+    const timeoutMs = target === 'vue3' ? 60000 : 20000
+
+    try {
+      await page.waitForFunction(
+        () => {
+          const stage = document.querySelector('.mc-preview-stage')
+          const status = stage?.getAttribute('data-preview-status')
+          return status === 'ready' || status === 'load-error' || status === 'render-error'
+        },
+        { timeout: timeoutMs },
+      )
+    } catch (error) {
+      addBlock('RUNTIME-003', 'timeout', '真实预览未在时限内进入 ready 或 error 状态', {
+        timeoutMs,
+        error: error.message,
+      })
+    }
+
+    const previewState = await page.evaluate(() => {
+      const stage = document.querySelector('.mc-preview-stage')
+      const status = stage?.getAttribute('data-preview-status') || 'missing'
+      const errorType = stage?.getAttribute('data-preview-error-type') || ''
+      const loadError = document.querySelector('.mc-preview-error-card')?.textContent?.trim() || ''
+      const renderError = document.querySelector('.error-boundary')?.textContent?.trim() || ''
+      const children = stage
+        ? [...stage.children].filter(element => !element.matches('.mc-panel-switcher, .mc-preview-tip, .mc-preview-error-card, .error-boundary'))
+        : []
+      const visibleChildren = children.map(element => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return {
+          tag: element.tagName,
+          className: element.className || '',
+          width: rect.width,
+          height: rect.height,
+          display: style.display,
+          visibility: style.visibility,
+          opacity: style.opacity,
+        }
+      }).filter(item => item.width > 1 && item.height > 1 && item.display !== 'none' && item.visibility !== 'hidden' && Number(item.opacity) > 0)
+      const stageRect = stage?.getBoundingClientRect()
+      // 🛡️ RUNTIME-016 文本重叠采集（2026-11-10 · 流量 6c12ab55 实锤）：
+      //   stage 内自有文本节点 bbox 两两相交（交比=交面积/较小面积，>0.15 记一对）。
+      //   与 mvgo-component-acceptance skill 的 D2 同源判据（改验分离：门禁在管线内，
+      //   skill 判分器独立复检）。只扫 stage（防宿主 chrome 误报，skill 首跑教训）。
+      const TEXTISH = new Set(['SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'DIV', 'LABEL', 'A'])
+      const textNodes = []
+      if (stage) {
+        for (const el of stage.querySelectorAll('*')) {
+          if (!TEXTISH.has(el.tagName)) continue
+          const own = [...el.childNodes].filter(
+            (n) => n.nodeType === 3 && n.textContent.trim(),
+          ).length
+          if (!own) continue
+          const r = el.getBoundingClientRect()
+          if (r.width < 4 || r.height < 4) continue
+          textNodes.push({
+            text: (el.textContent || '').trim().slice(0, 24),
+            x: r.x, y: r.y, w: r.width, h: r.height,
+          })
+        }
+      }
+      const textOverlaps = []
+      for (let i = 0; i < textNodes.length; i += 1) {
+        for (let j = i + 1; j < textNodes.length; j += 1) {
+          const a = textNodes[i]
+          const b = textNodes[j]
+          const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
+          const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
+          const inter = ix * iy
+          if (inter <= 0) continue
+          const ratio = inter / Math.max(1, Math.min(a.w * a.h, b.w * b.h))
+          if (ratio > 0.15) textOverlaps.push({ a: a.text, b: b.text, ratio: +ratio.toFixed(2) })
+        }
+      }
+      return {
+        status,
+        errorType,
+        loadError,
+        renderError,
+        stage: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
+        visibleChildren,
+        textOverlaps: textOverlaps.slice(0, 12),
+      }
+    })
+
+    if (previewState.status !== 'ready') {
+      addBlock('RUNTIME-004', 'preview-status', `真实预览状态为 ${previewState.status}`, previewState)
+    }
+    if (!previewState.stage || previewState.stage.width <= 1 || previewState.stage.height <= 1) {
+      addBlock('RUNTIME-005', 'layout', '预览根容器尺寸为空', { stage: previewState.stage })
+    }
+    if (previewState.status === 'ready' && previewState.visibleChildren.length === 0) {
+      addBlock('RUNTIME-006', 'blank-render', '组件已标记 ready，但没有可见根节点', previewState)
+    }
+    // 🛡️ RUNTIME-016 文本重叠门禁（2026-11-10 · 流量 6c12ab55 实锤，用户验收最痛点）：
+    //   stage 内自有文本节点 bbox 两两相交（交比>0.15）即 BLOCK——「客车 22350 叠在
+    //   隧道/大桥标签上」类排版坍缩此前渲染成功即放行。evidence 带重叠对样本。
+    if (
+      previewState.status === 'ready' &&
+      Array.isArray(previewState.textOverlaps) &&
+      previewState.textOverlaps.length > 0
+    ) {
+      addBlock('RUNTIME-016', 'text-overlap', `真实预览存在 ${previewState.textOverlaps.length} 对文本节点重叠`, {
+        overlaps: previewState.textOverlaps,
+      })
+    }
+
+    if (responseErrors.length > 0) {
+      addBlock('RUNTIME-007', 'http', '组件预览存在 HTTP 资源加载错误', { responses: responseErrors.slice(0, 20) })
+    }
+    if (requestFailures.length > 0) {
+      addBlock('RUNTIME-008', 'request', '组件预览存在网络请求失败', { requests: requestFailures.slice(0, 20) })
+    }
+    if (pageErrors.length > 0) {
+      addBlock('RUNTIME-009', 'pageerror', '组件预览触发未捕获的页面异常', { errors: pageErrors.slice(0, 20) })
+    }
+    if (consoleErrors.length > 0) {
+      addBlock('RUNTIME-010', 'console', '组件预览输出 console.error', { errors: consoleErrors.slice(0, 20) })
+    }
+
+    await page.evaluate(() => {
+      const switcher = document.querySelector('.mc-panel-switcher')
+      if (switcher) switcher.setAttribute('style', 'display: none !important')
+    })
+    // 🛡️ 2026-09-28：截图前**必须等所有 `<img>` 加载完成**。
+    //   事故 mc-max-1790583585496-9331b2e8（设备监测）：`data-preview-status=ready` 只表示
+    //   运行时挂载完成，**不代表 PNG 已解码** ⇒ 截图早于图片渲染 ⇒ **图标/背景在截图里缺失**，
+    //   而实时打开同一预览却完全正常（headless 探针实测 15/15 图加载成功、无 4xx）。
+    //   判据：`document.images` 全部 `complete`；**有界超时 5s**（不阻塞正常收尾，超时仅告警继续）。
+    try {
+      await page.waitForFunction(
+        () => Array.from(document.images).every((img) => img.complete),
+        { timeout: 5000 },
+      )
+    } catch (e) {
+      logger.warn('截图前等待图片加载超时（继续截图）', { error: e?.message || String(e) })
+    }
+    // 面板切换器隐藏后留一点重排时间
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // ── WP3 渲染探针（2026-10-08）：只读 DOM 事实探测，只留痕不阻断 ──
+    // 放在图片等待/重排之后，保证布局事实已定；环境开关 RENDER_PROBES_ENABLED=false 可整体关闭，
+    // 阈值 RENDER_PROBE_CONTRAST_MIN（默认 3.0）。探针失败绝不影响截图与门禁流程。
+    let renderProbes = null
+    if (process.env.RENDER_PROBES_ENABLED !== 'false') {
+      try {
+        const contrastMin = Number(process.env.RENDER_PROBE_CONTRAST_MIN || '3.0')
+        renderProbes = await page.evaluate(collectRenderProbesInPage, { contrastMin })
+      } catch (probeError) {
+        logger.warn('渲染探针执行失败（非阻断）', { error: probeError?.message || String(probeError) })
+        renderProbes = { error: probeError?.message || String(probeError) }
+      }
+    }
+
+    const stageElement = await page.$('.mc-preview-stage')
+    if (stageElement) {
+      await stageElement.screenshot({ path: screenshotPath, omitBackground: false })
+    } else {
+      await page.screenshot({ path: screenshotPath, fullPage: false, omitBackground: false })
+    }
+
+    logger.info('预览页截图完成', { componentId, screenshotPath, issueCount: issues.length })
+    return {
+      renderedImage: screenshotPath,
+      runtimeGate: {
+        status: issues.length > 0 ? 'BLOCK' : 'PASS',
+        issues,
+        isStaticFallback: false,
+        previewUrl: previewUrl.href,
+      },
+      renderProbes,
+    }
+  } catch (error) {
+    addBlock('RUNTIME-011', 'renderer', `真实预览截图失败: ${error.message}`, { stack: error.stack || '' })
+    logger.warn('预览页截图失败', { error: error.message })
+    return { renderedImage: null, runtimeGate: { status: 'BLOCK', issues, isStaticFallback: false } }
+  } finally {
+    // 🛡️ 2026-09-04 同时关闭 page 和 context，确保状态完全清理
+    try {
+      await page.close()
+    } catch (closeError) {
+      logger.warn('关闭 page 失败', { error: closeError.message })
+    }
+    try {
+      await context.close()
+    } catch (closeError) {
+      logger.warn('关闭 context 失败', { error: closeError.message })
+    }
+  }
+}
+
+/**
+ * 获取或创建 Puppeteer browser 单例
+ */
+async function getBrowser() {
+  if (_browserInstance && _browserInstance.connected) {
+    return _browserInstance
+  }
+
+  if (_browserLaunchPromise) {
+    return _browserLaunchPromise
+  }
+
+  _browserLaunchPromise = (async () => {
+    try {
+      const puppeteer = await import('puppeteer')
+      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || [
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome',
+        '/snap/bin/chromium',
+      ].find(p => { try { return existsSync(p) } catch { return false } })
+      const browser = await puppeteer.default.launch({
+        headless: 'new',
+        executablePath,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--font-render-hinting=none',
+        ],
+      })
+
+      // 监听断开事件，清理单例
+      browser.on('disconnected', () => {
+        logger.warn('Puppeteer browser 已断开，下次将重新启动')
+        _browserInstance = null
+        _browserLaunchPromise = null
+      })
+
+      _browserInstance = browser
+      logger.info('Puppeteer browser 已启动（单例）')
+      return browser
+    } catch (error) {
+      _browserLaunchPromise = null
+      throw error
+    }
+  })()
+
+  return _browserLaunchPromise
+}
+
+/**
+ * 尝试将 Less 编译为 CSS（失败则降级返回原始内容）
+ * @param {string} code
+ * @param {string} basePath - 用于解析 @import 的基准目录
+ * @returns {Promise<string>}
+ */
+async function compileLessIfNeeded(code, basePath) {
+  if (!code || (!code.includes('@import') && !code.includes('&'))) {
+    return code
+  }
+  try {
+    const less = await import('less')
+    const result = await less.default.render(code, {
+      paths: [basePath],
+      javascriptEnabled: true,
+    })
+    return result.css
+  } catch (error) {
+    logger.warn('Less 编译失败，降级使用原始样式', { basePath, error: error.message })
+    return code
+  }
+}
+
+/**
+ * 为 Vue3 组件生成容器 HTML
+ */
+async function buildVue3ContainerHTML(componentDir, componentName) {
+  const vuePath = join(componentDir, 'package', 'index.vue')
+  if (!existsSync(vuePath)) {
+    logger.warn(`无法读取 Vue3 组件文件: ${vuePath} 不存在`)
+    return null
+  }
+
+  let vueContent = ''
+  try {
+    vueContent = readFileSync(vuePath, 'utf-8')
+  } catch (e) {
+    logger.warn(`无法读取 Vue3 组件文件: ${vuePath}`, { error: e.message })
+    return null
+  }
+
+  // 提取最外层 <template> 和 <style>（Vue SFC 内层 <template #slot> 是未闭合的插槽片段，
+  // 用 lookahead 确保匹配到 <script>/<style> 之前最外层的 </template>）
+  const templateMatch = vueContent.match(/<template>([\s\S]*?)<\/template>\s*(?=<script|<style|$)/)
+  const styleMatch = vueContent.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+
+  const template = templateMatch ? templateMatch[1].trim() : ''
+  let styleCode = styleMatch ? styleMatch[1].trim() : ''
+
+  // 若样式是 Less，尝试编译为 CSS
+  if (styleCode && styleMatch && styleMatch[0].includes('lang="less"')) {
+    styleCode = await compileLessIfNeeded(styleCode, dirname(vuePath))
+  }
+
+  // 构建 Vue3 SFC 静态渲染页面
+  // 对于视觉比对来说，template + style 的静态渲染已足够（不需要 script 交互逻辑）
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { display: inline-block; background: transparent; }
+    #app { display: inline-block; }
+    ${styleCode}
+  </style>
+</head>
+<body>
+  <div id="app">${template}</div>
+</body>
+</html>`
+}
+
+/**
+ * 为微码组件生成容器 HTML
+ *
+ * 说明：
+ * - 微码 component.js 通常是 `import component from './package/index.vue'`，浏览器无法直接执行。
+ * - 视觉比对只需要静态外观，因此直接读取 package/index.vue 的 <template> + <style> 做静态渲染。
+ * - 同时注入 resources/styles 下的 Less/CSS 作为兜底样式，并尝试编译 Less。
+ */
+async function analyzeScreenshotPixels(screenshotPath) {
+  try {
+    const sharp = (await import('sharp')).default
+    const { data, info } = await sharp(screenshotPath)
+      .removeAlpha()
+      .resize({ width: 160, height: 160, fit: 'inside', withoutEnlargement: true })
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    const pixelCount = info.width * info.height
+    if (!pixelCount) return { blank: true, reason: 'empty-image', variance: 0, nonWhiteRatio: 0 }
+
+    let sum = 0
+    let sumSquares = 0
+    let nonWhitePixels = 0
+    for (let offset = 0; offset < data.length; offset += info.channels) {
+      const r = data[offset]
+      const g = data[offset + 1]
+      const b = data[offset + 2]
+      const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      sum += luminance
+      sumSquares += luminance * luminance
+      if (r < 248 || g < 248 || b < 248) nonWhitePixels += 1
+    }
+
+    const mean = sum / pixelCount
+    const variance = Math.max(0, sumSquares / pixelCount - mean * mean)
+    const nonWhiteRatio = nonWhitePixels / pixelCount
+    return {
+      blank: variance < 2 && nonWhiteRatio < 0.005,
+      variance: Number(variance.toFixed(2)),
+      nonWhiteRatio: Number(nonWhiteRatio.toFixed(4)),
+      width: info.width,
+      height: info.height,
+    }
+  } catch (error) {
+    return { blank: false, analysisError: error.message }
+  }
+}
+
+async function buildMicrocodeContainerHTML(componentDir, componentName) {
+  const declarePath = join(componentDir, 'declare.json')
+  const vuePath = join(componentDir, 'package', 'index.vue')
+  const stylesDir = join(componentDir, 'resources', 'styles')
+
+  let declare = null
+  try {
+    declare = JSON.parse(readFileSync(declarePath, 'utf-8'))
+  } catch (e) {
+    logger.warn(`无法读取 declare.json: ${declarePath}`, { error: e.message })
+    return null
+  }
+
+  // 读取 Vue SFC 模板和样式
+  let vueContent = ''
+  try {
+    vueContent = readFileSync(vuePath, 'utf-8')
+  } catch (e) {
+    logger.warn(`无法读取微码 Vue 文件: ${vuePath}`, { error: e.message })
+    return null
+  }
+
+  // 提取最外层 <template> 和 <style>
+  const templateMatch = vueContent.match(/<template>([\s\S]*?)<\/template>\s*(?=<script|<style|$)/)
+  const styleMatch = vueContent.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+  const template = templateMatch ? templateMatch[1].trim() : ''
+  let vueStyle = styleMatch ? styleMatch[1].trim() : ''
+
+  // 若样式是 Less，尝试编译为 CSS
+  if (vueStyle && styleMatch && styleMatch[0].includes('lang="less"')) {
+    vueStyle = await compileLessIfNeeded(vueStyle, dirname(vuePath))
+  }
+
+  // 读取 resources/styles 下所有样式文件兜底，并尝试编译 Less
+  let stylesContent = ''
+  try {
+    if (existsSync(stylesDir)) {
+      const styleFiles = readdirSync(stylesDir).filter(f => f.endsWith('.less') || f.endsWith('.css'))
+      for (const f of styleFiles) {
+        // common.less 是 index.less 引入的 partial，单独编译会因变量未定义而失败；
+        // index.less 已通过 Vue SFC 的 @import 编译，此处无需重复兜底。
+        if (f === 'common.less' || f === 'index.less') continue
+        const raw = readFileSync(join(stylesDir, f), 'utf-8')
+        const compiled = f.endsWith('.less')
+          ? await compileLessIfNeeded(raw, stylesDir)
+          : raw
+        stylesContent += `\n/* ${f} */\n` + compiled
+      }
+    }
+  } catch (e) {
+    logger.warn(`无法读取样式目录: ${stylesDir}`, { error: e.message })
+  }
+
+  const rootClass = `c-${declare.componentName || componentName}-root`
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { display: inline-block; background: transparent; }
+    #mc-root { display: inline-block; }
+    ${vueStyle}
+    ${stylesContent}
+  </style>
+</head>
+<body>
+  <div id="mc-root" class="${rootClass}">${template}</div>
+</body>
+</html>`
+}
+
+/**
+ * 渲染截图
+ * @param {Object} params
+ * @param {string} params.outputPath - 组件输出目录
+ * @param {string} params.sessionId - 生成会话 ID（用于路径隔离）
+ * @param {string} params.componentName - 组件名称
+ * @param {string} params.target - 组件类型: 'microcode' | 'vue3'
+ * @param {string} params.groupId - Vue3 组件所属群组
+ * @param {string} params.previewImage - Figma 原始预览图路径（用于获取尺寸）
+ * @param {Object} params.onProgress - 进度回调
+ * @param {boolean} params.hardGate - true 时禁止静态降级，真实预览失败直接 BLOCK
+ * @param {Array} params.requestMocks - 仅在确定性发布门禁中拦截的业务 API 响应
+ * @returns {Promise<{ renderedImage: string|null, isStaticFallback: boolean, runtimeGate: Object }>}
+ */
+export async function renderScreenshot(params) {
+  const {
+    outputPath,
+    sessionId = 'unknown',
+    componentName = 'unknown',
+    target = 'microcode',
+    groupId = 'default-group',
+    previewImage = null,
+    onProgress = null,
+    hardGate = false,
+    allowMissingAssetSelfHeal = false,
+    requestMocks = [],
+    // 🆕 2026-10-10 双主题（R10）：本次渲染使用的主题（'light' | 'dark'）。
+    //   双主题评测会对同一组件渲染两次，各传一个主题 —— **截图文件名按主题分文件**
+    //   （`<sessionId>-rendered-light.png` / `-dark.png`），否则第二次会覆盖第一次，
+    //   导致两个主题拿到同一张图、比对结果虚高。
+    //   不传 ⇒ 文件名保持 `<sessionId>-rendered.png`（**与改动前完全一致，零回归**）。
+    theme,
+  } = params
+
+  // M1-1：workspace 目录名以 declare.json componentId 为准，截图预览也必须用同一 ID，
+  // 否则 preview 页按旧 sessionId 查找目录会 404。
+  const resolvedComponentId = outputPath
+    ? resolveWorkspaceComponentId(outputPath, sessionId)
+    : sessionId
+  if (resolvedComponentId !== sessionId) {
+    logger.info('[renderScreenshot] componentId 按 declare.json 归一', {
+      sessionId,
+      resolvedComponentId,
+    })
+  }
+
+  logger.info('开始渲染截图', { sessionId, componentName, target, outputPath, resolvedComponentId })
+
+  onProgress?.({
+    stage: '视觉比对',
+    message: '正在渲染组件截图...',
+    status: 'running',
+  })
+
+  // 截图目录：sessionId 隔离（保持原 sessionId 命名，仅预览 ID 用 resolvedComponentId）
+  const screenshotDir = join(outputPath, '.mc-gen', 'screenshots')
+  const htmlPath = join(screenshotDir, `${sessionId}-preview.html`)
+  // 🆕 R10：双主题按主题分文件名（见 params.theme 注释）；单主题仍是 `-rendered.png`
+  const screenshotPath = join(
+    screenshotDir,
+    theme === 'light' || theme === 'dark'
+      ? `${sessionId}-rendered-${theme}.png`
+      : `${sessionId}-rendered.png`
+  )
+
+  try {
+    // 创建截图目录
+    mkdirSync(screenshotDir, { recursive: true })
+
+    // ── 计算 viewport 尺寸（基于 Figma 预览图）──
+    let viewportWidth = 800
+    let viewportHeight = 600
+    if (previewImage && existsSync(previewImage)) {
+      try {
+        const sharp = (await import('sharp')).default
+        const metadata = await sharp(readFileSync(previewImage)).metadata()
+        viewportWidth = Math.min(metadata.width || 800, 1200)
+        viewportHeight = Math.min(metadata.height || 600, 1600)
+      } catch (e) {
+        logger.warn('无法读取预览图尺寸，使用默认 viewport', { error: e.message })
+      }
+    }
+
+  // ── 1️⃣ 优先：通过前端预览页渲染（真实 Vue 运行时）──
+  let previewResult = await renderViaPreviewPage({
+    componentId: resolvedComponentId,
+    sessionId,
+    groupId,
+    target,
+    screenshotPath,
+    viewportWidth,
+    viewportHeight,
+    onProgress,
+    requestMocks,
+    theme, // 🆕 R10：双主题各渲一次
+  })
+
+    const finalizePreviewResult = async (result) => {
+      // 🔴 G2（2026-11-05，A 档只报不改）：像素比对**输入链路**四态留痕。
+      //   `visualFidelityDerivative:evaluated=0` 只能说明「本次未做比对」，无法区分
+      //   「无 previewImage 参数 / 路径不存在 / 截图全白 / 无渲染图早退」，故单列计数行。
+      //   只加日志：不改判据、不改 visualFidelityDerivative 赋值、不改 severity/id/阈值。
+      const vfInput = {
+        preview: previewImage ? 1 : 0,
+        exists: previewImage && existsSync(previewImage) ? 1 : 0,
+        blank: 0,
+        compared: 0,
+        earlyReturn: 0,
+      }
+      const logVisualFidelityInput = () => logger.info(
+        `visualFidelityInput:preview=${vfInput.preview},exists=${vfInput.exists},` +
+          `blank=${vfInput.blank},compared=${vfInput.compared},earlyReturn=${vfInput.earlyReturn}`,
+      )
+      // 🔴 C3′（2026-11-05）：比对分数观测。`score=-` = 本次未做比对（与 score=0 可区分）；
+      //   `emitted` = VISUAL-002 是否允许进入 runtimeGate（C3′ 阶段恒 0）。
+      //   每次 finalizePreviewResult 恰好一行，**含早退路径**（早退打 `score=-,verdict=none`）。
+      const vfScore = { score: null, verdict: 'none', renderBroken: 0 }
+      const logVisualFidelityScore = () => logger.info(
+        `visualFidelityScore:score=${vfScore.score === null ? '-' : vfScore.score},` +
+          `verdict=${vfScore.verdict},renderBroken=${vfScore.renderBroken},` +
+          `emitted=${VISUAL_002_EMIT_ENABLED ? 1 : 0}`,
+      )
+      if (!result?.renderedImage) {
+        vfInput.earlyReturn = 1
+        logVisualFidelityScore()
+        logVisualFidelityInput()
+        return result
+      }
+      const pixelEvidence = await analyzeScreenshotPixels(result.renderedImage)
+      vfInput.blank = pixelEvidence.blank ? 1 : 0
+      if (pixelEvidence.blank) {
+        result.runtimeGate.status = 'BLOCK'
+        result.runtimeGate.issues.push({
+          id: 'RUNTIME-012',
+          severity: 'BLOCK',
+          category: 'blank-render',
+          message: '真实预览截图像素近似全白或无有效内容',
+          evidence: pixelEvidence,
+        })
+      }
+
+      // 7-A：渲染产物 vs 设计稿 · 像素级比对门禁
+      // 🛡️ 2026-11-05 C3（docs/2026-11-05-四任务样式各异根因修复方案.md §3.3）：
+      //   VISUAL-002 证据有效性留痕，续接 2026-11-03-微码builder裸import运行时404.md:116
+      //   「不沿用未渲染状态下 VISUAL-002 作布局根因」。只报不改：不改 severity / id / 阈值。
+      let visualFidelityDerivative = { evaluated: 0, derivative: 0, independent: 0 }
+      if (!pixelEvidence.blank && previewImage && existsSync(previewImage)) {
+        try {
+          const fidelity = await compareRenderedVsDesign({
+            renderedPath: result.renderedImage,
+            designPath: previewImage,
+          })
+          vfInput.compared = 1
+          result.visualFidelity = fidelity
+          // 🔴 C3′（2026-11-05）：此处原为
+          //   `previewState.status !== 'ready' && issues.some((i) => i?.id === 'RUNTIME-004')`
+          //   但 `previewState`(`:760`) 与 `issues`(`:613`) 都定义在 `renderViaPreviewPage`，
+          //   而本函数在 `renderScreenshot`（`:1229`）内 ⇒ 闭包不可达 ⇒ 必抛
+          //   `ReferenceError: previewState is not defined`，被下方 catch 吞掉 ⇒
+          //   `evaluated` 恒 0，且 VISUAL-002 自 08-02 起从未生效。
+          //   等价替代（不新增判据）：RUNTIME-004 正是 `previewState.status !== 'ready'`
+          //   的产物（`:793-794`），且 `result.runtimeGate.issues` 是 renderViaPreviewPage
+          //   的返回值（`:858-867`），与旧写法同一份事实源。
+          const gateIssues = Array.isArray(result?.runtimeGate?.issues) ? result.runtimeGate.issues : []
+          const renderBroken = gateIssues.some((i) => i?.id === 'RUNTIME-004')
+          vfScore.score = typeof fidelity.score === 'number' ? fidelity.score : null
+          vfScore.verdict = String(fidelity.verdict || 'none')
+          vfScore.renderBroken = renderBroken ? 1 : 0
+          const derivative = renderBroken ? 'runtime-render-error' : null
+          const fidelityEvidence = derivative
+            ? { ...fidelity, insufficientEvidence: derivative }
+            : fidelity
+          visualFidelityDerivative = {
+            evaluated: 1,
+            derivative: renderBroken ? 1 : 0,
+            independent: renderBroken ? 0 : 1,
+          }
+          // 🔴 C2：push 段由 VISUAL_002_EMIT_ENABLED 控制（现已置 true）。
+          //   **两档一律 severity:'WARN'**：真机 3/3 verdict=block 且 renderBroken=0，
+          //   若沿用 BLOCK 会经 classifyRuntimeGate fallback(:270) ⇒ action:'fail' ⇒ 100% 拒收。
+          //   降 WARN 后走 :278 incremental_fix（不 fail、任务仍 completed）。
+          //   message 文案保持原样：进 BLOCK 分支的就是 score < 0.6，措辞仍准确。
+          if (VISUAL_002_EMIT_ENABLED && fidelity.verdict === FIDELITY_VERDICTS.BLOCK) {
+            result.runtimeGate.issues.push({
+              id: 'VISUAL-002',
+              severity: 'WARN',
+              category: 'render-fidelity',
+              message: `渲染产物与设计稿像素差异过大（score=${fidelity.score}，阈值<${0.6}）`,
+              evidence: fidelityEvidence,
+            })
+          } else if (VISUAL_002_EMIT_ENABLED && fidelity.verdict === FIDELITY_VERDICTS.WARN) {
+            result.runtimeGate.issues.push({
+              id: 'VISUAL-002',
+              severity: 'WARN',
+              category: 'render-fidelity',
+              message: `渲染产物与设计稿存在像素差异（score=${fidelity.score}，阈值 0.6~0.85）`,
+              evidence: fidelityEvidence,
+            })
+          }
+        } catch (e) {
+          logger.warn('渲染比对门禁执行失败，跳过', { error: e.message })
+        }
+      }
+      // 🔴 全 0 也打（未进入比对时的正常态）。注意：C3′ 修掉引用错配后，
+      //   「比对成功却 evaluated=0」已不可能发生 —— 若再现，即为新的回归。
+      logger.info(
+        `visualFidelityDerivative:evaluated=${visualFidelityDerivative.evaluated},` +
+          `derivative=${visualFidelityDerivative.derivative},` +
+          `independent=${visualFidelityDerivative.independent}`,
+      )
+      logVisualFidelityScore()
+      // 🔴 G2：全 0 也打，每次 finalizePreviewResult 恰好一行（含早退路径）。
+      logVisualFidelityInput()
+
+      return result
+    }
+
+      if (allowMissingAssetSelfHeal && previewResult.runtimeGate?.status === 'BLOCK' && hasOnlyMissingAssetIssues(previewResult.runtimeGate)) {
+        const healResult = await selfHealMissingAssetsOnce({
+          outputPath,
+          runtimeGate: previewResult.runtimeGate,
+          componentId: resolvedComponentId,
+          groupId,
+          target,
+          onProgress,
+        })
+
+        if (healResult.attempted && healResult.healed) {
+          logger.warn('检测到缺图，执行一次自愈重试', {
+            sessionId,
+            componentName,
+            target,
+            healedAssets: healResult.healedAssets.map(item => item.fileName),
+          })
+          previewResult = await renderViaPreviewPage({
+            componentId: resolvedComponentId,
+            sessionId,
+            groupId,
+            target,
+            screenshotPath,
+            viewportWidth,
+            viewportHeight,
+            onProgress,
+            theme, // 🆕 R10：自愈重试须保持同一主题，否则重试渲的是另一个主题
+          })
+        }
+
+      if (previewResult.runtimeGate?.status === 'BLOCK' && hasOnlyMissingAssetIssues(previewResult.runtimeGate)) {
+        const warning = healResult.warning || {
+          code: RUNTIME_SELF_HEAL_WARNING_CODE,
+          type: 'runtime-missing-assets',
+          message: '真实预览缺图自愈后仍存在资源缺失，已降级为告警，不阻断任务完成',
+          details: extractMissingAssetEntries(previewResult.runtimeGate),
+        }
+        previewResult.runtimeGate = {
+          ...previewResult.runtimeGate,
+          status: 'WARN',
+          warning,
+          warningCode: warning.code,
+        }
+        onProgress?.({
+          stage: '运行时质量门禁',
+          message: '缺图自愈后仍有资源缺失，已记录告警并继续完成任务',
+          status: 'warning',
+        })
+      }
+    }
+
+    previewResult = await finalizePreviewResult(previewResult)
+
+    if (previewResult.renderedImage) {
+      return {
+        renderedImage: previewResult.renderedImage,
+        isStaticFallback: false,
+        runtimeGate: previewResult.runtimeGate,
+        renderProbes: previewResult.renderProbes || null,
+      }
+    }
+
+    if (hardGate) {
+      return {
+        renderedImage: null,
+        isStaticFallback: false,
+        runtimeGate: previewResult.runtimeGate,
+        renderProbes: previewResult.renderProbes || null,
+      }
+    }
+
+    logger.info('预览页路径不可用，回退到静态抽取', { sessionId })
+
+    // ── 2️⃣ 降级：静态 HTML 抽取（原逻辑）──
+    const html = target === 'vue3'
+      ? await buildVue3ContainerHTML(outputPath, componentName)
+      : await buildMicrocodeContainerHTML(outputPath, componentName)
+
+    if (!html) {
+      logger.warn('无法构建容器 HTML，跳过截图', { sessionId, target })
+      onProgress?.({
+        stage: '视觉比对',
+        message: '截图跳过（无法构建容器）',
+        status: 'warning',
+      })
+      return {
+        renderedImage: null,
+        isStaticFallback: false,
+        runtimeGate: {
+          status: 'BLOCK',
+          issues: [{
+            id: 'RUNTIME-014',
+            severity: 'BLOCK',
+            category: 'renderer',
+            message: '无法构建组件截图容器',
+            evidence: { outputPath, target },
+          }],
+          isStaticFallback: false,
+        },
+      }
+    }
+
+    writeFileSync(htmlPath, html, 'utf-8')
+
+    // 启动 Puppeteer 渲染静态 HTML
+    const browser = await getBrowser()
+    const page = await browser.newPage()
+
+    try {
+      await page.setViewport({
+        width: viewportWidth,
+        height: viewportHeight,
+        deviceScaleFactor: 2,
+      })
+
+      // 加载 HTML 文件
+      await page.goto(`file://${htmlPath}`, {
+        waitUntil: 'networkidle0',
+        timeout: 3000,
+      })
+
+      await new Promise(r => setTimeout(r, 500))
+
+      // 截图
+      await page.screenshot({
+        path: screenshotPath,
+        fullPage: false,
+        omitBackground: false,
+      })
+
+      logger.info('静态抽取截图完成', { sessionId, screenshotPath, viewport: { width: viewportWidth, height: viewportHeight } })
+
+      onProgress?.({
+        stage: '视觉比对',
+        message: '组件截图完成（静态抽取）',
+        status: 'completed',
+      })
+
+      return {
+        renderedImage: screenshotPath,
+        isStaticFallback: true,
+        runtimeGate: {
+          status: 'BLOCK',
+          issues: [{
+            id: 'RUNTIME-013',
+            severity: 'BLOCK',
+            category: 'static-fallback',
+            message: '仅完成静态抽取，不能证明组件可在真实 Vue 运行时加载',
+            evidence: { screenshotPath },
+          }],
+          isStaticFallback: true,
+        },
+      }
+    } finally {
+      await page.close()
+    }
+  } catch (error) {
+    logger.warn('截图渲染失败，降级跳过视觉比对', {
+      sessionId,
+      error: error.message,
+    })
+
+    onProgress?.({
+      stage: '视觉比对',
+      message: `截图失败（${error.message}），跳过视觉比对`,
+      status: 'warning',
+    })
+
+    return {
+      renderedImage: null,
+      isStaticFallback: false,
+      runtimeGate: {
+        status: 'BLOCK',
+        issues: [{
+          id: 'RUNTIME-015',
+          severity: 'BLOCK',
+          category: 'renderer',
+          message: `截图渲染失败: ${error.message}`,
+          evidence: { stack: error.stack || '' },
+        }],
+        isStaticFallback: false,
+      },
+    }
+  }
+}
+
+/**
+ *  预热 Puppeteer browser（非阻塞）
+ * 在 init 节点调用，提前启动 browser 实例，避免 screenshot-renderer 首次启动延迟
+ * @returns {Promise<void>}
+ */
+export async function warmupBrowser() {
+  if (_browserInstance || _browserLaunchPromise) {
+    logger.info('Puppeteer browser 已在运行或预热中，跳过')
+    return
+  }
+  
+  logger.info('🔥 P1-4: 开始预热 Puppeteer browser...')
+  const startTime = Date.now()
+  
+  try {
+    await getBrowser()
+    const elapsed = Date.now() - startTime
+    logger.info(`✅ P1-4: Puppeteer browser 预热完成 (${elapsed}ms)`)
+  } catch (error) {
+    logger.warn('⚠️ P1-4: Puppeteer 预热失败（非阻塞）', { error: error.message })
+  }
+}
+
+export function evaluateRuntimeGate(runtimeGate) {
+  return classifyRuntimeGate(runtimeGate)
+}
+
+/**
+ * 关闭 Puppeteer browser 单例（进程退出时调用）
+ */
+export async function closeBrowser() {
+  if (_browserInstance) {
+    try {
+      await _browserInstance.close()
+    } catch (e) {
+      // 静默
+    }
+    _browserInstance = null
+    _browserLaunchPromise = null
+  }
+}
+
+// 进程退出时清理
+process.on('exit', () => {
+  if (_browserInstance) {
+    try {
+      _browserInstance.close()
+    } catch (e) {
+      // 静默
+    }
+  }
+})

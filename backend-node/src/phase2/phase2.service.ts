@@ -1,13 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { TasksService } from '../tasks/tasks.service';
 import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
+import { SnapshotQualityService } from '../tasks/snapshot-quality.service';
 import { ProgressService } from '../progress/progress.service';
 import { ComponentService } from '../component/component.service';
 import { TokenTrackerService } from '../token-usage/token-tracker.service';
 import { GeneratePhase2Dto } from './dto/generate-phase2.dto';
 import { DocAnalyzerService } from './doc/doc-analyzer.service';
 import { UiCacheService } from './ui-cache.service';
-import { join, extname } from 'path';
+import { join, extname, dirname } from 'path';
 import { writeFile, mkdir, cp, readFile, readdir } from 'fs/promises';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { customComponentsDir, vue3ComponentsDir, tempComponentsDir, workspaceRoot, backendRoot } from '../config/backend-root';
@@ -17,7 +18,7 @@ import { resolveExecutionFigmaTokenWithProbe } from '../config/figma-execution-t
 import { stripRedactedPlaceholders } from '../common/utils/redact';
 import { UserAiConfigService } from '../config/user-ai-config.service';
 import { QuotaService } from '../quota/quota.service';
-import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from 'fs';
 const { ZipArchive } = require('archiver');
 import { createReadStream } from 'fs';
 import { InjectModel } from '@nestjs/mongoose';
@@ -174,6 +175,7 @@ export class Phase2Service {
     private readonly uiCacheService: UiCacheService,
     private readonly quotaService: QuotaService,
     private readonly userAiConfigService: UserAiConfigService,
+    private readonly snapshotQualityService: SnapshotQualityService,
     @InjectModel(GroupMember.name)
     private groupMemberModel: Model<GroupMemberDocument>,
   ) {
@@ -236,6 +238,10 @@ export class Phase2Service {
       themeNodes,            // 🆕🆕 2026-10-12 N 主题：主题设计稿数组（themeNodes[0] 即主稿）
       primaryRole,           // 🆕 2026-10-10 双主题：主副角色（'first' 默认 / 'second'）
       businessTextRules,     // 🛡️ 2026-10-19 业务术语规则（可选，默认关闭：不传 ⇒ 零回归）
+      // 🛡️ 2026-11-12 凭证引用（P1）：重试场景前端从原任务带回，见 DTO 注释
+      figmaCredentialFp,
+      figmaCredentialSlotId,
+      figmaCredentialSlotName,
     } = dto;
 
     // 🐛 防御：phase2 是 Figma 完整生成管线，必须携带有效 fileKey/nodeId。
@@ -318,6 +324,12 @@ export class Phase2Service {
       extraPrompt,
       requirementDocText,
       userComponentId,
+      // 🛡️ 2026-11-12 凭证引用（P1）：写在**顶层**——readTaskFigmaCredentialRef 先认
+      //   顶层（source='pipeline'）再认 configSnapshot（source='create'），两处都落保
+      //   险。重试场景由此 pin 原任务的 token，不再被当前 active 槽位顶掉。
+      ...(figmaCredentialFp ? { figmaCredentialFp } : {}),
+      ...(figmaCredentialSlotId ? { figmaCredentialSlotId } : {}),
+      ...(figmaCredentialSlotName ? { figmaCredentialSlotName } : {}),
     });
     this.sendSseLog(sessionId, 'info', `任务已创建: ${finalComponentName}`);
 
@@ -743,7 +755,9 @@ export class Phase2Service {
             : '缺少 Figma Token：当前请求未传入，请在配置面板配置 Figma Token',
         );
       }
-      const effectiveFigmaToken = this.resolveFigmaToken(figmaTokenRes.token);
+      // 🛡️ 2026-11-12 404 降级：let 化 —— 降级探测选中可读槽位后回写，后续
+      // ensurePreviewImage 等消费者拿到的必须是「实际成功」的那个 token。
+      let effectiveFigmaToken = this.resolveFigmaToken(figmaTokenRes.token);
       // 真机判据：每次生成必须有一行 [figma-cred]，可直接判定「有没有沿用任务当时的凭证」
       this.logger.log(
         `[figma-cred] session=${sessionId} source=${figmaTokenRes.source} ` +
@@ -758,7 +772,9 @@ export class Phase2Service {
         this.tasksService.updateTask(sessionId, figmaTokenRes.refFields as any);
       }
 
-      genResult = await runGeneration({
+      // 🛡️ 2026-11-12 404 降级：参数化为局部函数，失败后可换 token 重跑一次（见下方 catch）。
+      const runGenerationWith = (figmaToken: string) =>
+        runGeneration({
         componentName,
         // 🔧 componentId 传递给 L0-B CODE-003 做 class 前缀检查（此前缺失导致空 componentId 全报违规）
         componentId: String(componentName || '').replace(/^c-/, ''),
@@ -767,7 +783,7 @@ export class Phase2Service {
         outputPath,
         panelType: panelType || 'default-panel',
         target, // 🆕 生成目标：vue3 | microcode
-        figmaToken: effectiveFigmaToken,
+        figmaToken,
         // 🔧 复用 535/536 行已解析的 visionCfg/textCfg，避免重复调用 resolveVisionConfig/resolveTextConfig
         // 触发 pool.setProviders（每次打 2 条「供应商池已更新」日志，且重复覆盖池配置）。
         visionAIConfig: visionCfg,
@@ -952,6 +968,52 @@ export class Phase2Service {
           return task?.status || 'running';
         },
       });
+
+      // 🛡️ 2026-11-12 404 驱动的逐槽探测降级（「引用命中但读不到」象限的根治）。
+      //
+      // 背景（mc-max-1794425208588-385b1671 实锤）：历史任务重试 → checkpoint 未命中 →
+      // 前端以当前配置全量重发 → 新任务按**当时 active 槽位**建账 pin（该 token 对目标
+      // 文件无权限）→ 执行期引用恒命中 ⇒ 探测层红线①零探测 ⇒ Figma 404 任务失败；
+      // 且错误凭证已 pin 死，再点重试也是同一死循环。
+      //
+      // 治理性质：探测择优（#15）的象限补全，不是补丁——同一判据族
+      // 「**已证明能读到这个文件**的凭证才允许执行」的完整化。常态链路（非 404）零改动、
+      // 零额外请求；只有已经付出一次 404 失败的任务才多付 1~N 次探测 + 一次重跑。
+      try {
+        genResult = await runGenerationWith(effectiveFigmaToken);
+      } catch (genErr: any) {
+        // 只有「确定性的凭证读不到」（404）才值得降级；用户取消、网络抖动等一律原样抛。
+        if (genErr?.figStatus !== 404 || controller.signal.aborted) {
+          throw genErr;
+        }
+        const fallbackRes = await resolveExecutionFigmaTokenWithProbe({
+          task: figmaCredTask,
+          requestConfig: config,
+          activeConfig: mergedAiConfig,
+          fileKey,
+          nodeId,
+          forceProbe: true,
+        });
+        this.logger.warn(
+          `[figma-cred-fallback] session=${sessionId} reason=${fallbackRes.reason} ` +
+            `probed=${fallbackRes.probes.length} :: ${fallbackRes.note}`,
+        );
+        // 无替代凭证（探测全不通）或选中的就是刚失败的那个 ⇒ 抛原 404；
+        // probe-failed（所有槽位都读不到）时把逐槽结论附加到原错误，用户不用再猜。
+        if (!fallbackRes.token || fallbackRes.token === figmaTokenRes.token) {
+          if (fallbackRes.reason === 'probe-failed' && fallbackRes.note) {
+            throw new Error(`${genErr.message}（逐槽探测补充：${fallbackRes.note}）`);
+          }
+          throw genErr;
+        }
+        effectiveFigmaToken = this.resolveFigmaToken(fallbackRes.token);
+        this.logger.log(
+          `[figma-cred-fallback] session=${sessionId} 已切换到可读槽位「${
+            fallbackRes.ref?.slotId ?? fallbackRes.ref?.slotName ?? 'probe'
+          }」重跑一次（不修改你的凭证配置）`,
+        );
+        genResult = await runGenerationWith(effectiveFigmaToken);
+      }
 
       await this.ensurePreviewImage(
         outputPath,
@@ -1552,15 +1614,38 @@ export class Phase2Service {
    */
   async refineComponent(
     sessionId: string,
-    params: { componentId: string; refineType?: string; userId?: string },
+    params: {
+      componentId: string;
+      refineType?: 'layout' | 'style' | 'both';
+      userId?: string;
+      target?: 'microcode' | 'vue3';
+      generationTier?: 'max' | 'lite';
+      visionRefine?: boolean;
+      visualDiffGuidance?: string;
+      overrideImage?: string;
+    },
   ): Promise<void> {
-    const { componentId, refineType = 'both', userId } = params;
+    const {
+      componentId,
+      refineType = 'both',
+      userId,
+      target: reqTarget,
+      generationTier: reqTier,
+    } = params;
 
     // 1. 预检：任务记录 + 产物入口
-    const task = this.tasksService.getTask(componentId);
-    const outputPath = task?.outputPath;
+    // 🐛 修复：getTask 按 sessionId 索引，而前端传入的是原始 componentId（≠ sessionId），
+    // 直接用 getTask 必查不到 → outputPath 为 undefined → 误报「任务产物不存在」→ 400。
+    // 改用 getTaskByComponentId：兼容「componentId 即 sessionId」与「按组件 ID 反查最近任务」两种情形。
+    const task = this.tasksService.getTaskByComponentId(componentId);
+    if (!task) {
+      throw new Error('未找到对应任务（componentId 无法解析为任何已记录任务）');
+    }
+    // 🔴 治本：内存任务记录的 outputPath 可能为空/过期，但磁盘产物仍在（下载走同一套反查能成功）。
+    // 因此从磁盘反查真实产物目录，而非盲信 task.outputPath。
+    const outputPath = this.tasksService.resolveTaskOutputDir(task) || task.outputPath || null;
     if (!outputPath || !existsSync(join(outputPath, 'package', 'index.vue'))) {
-      throw new Error('任务产物不存在，无法精修（需先完成一次生成）');
+      throw new Error('任务产物不存在，无法精修（需先完成一次生成，或该任务确实未产出代码）');
     }
 
     // 2. 预检：checkpoint（figma/visual/analysis 缓存）
@@ -1576,7 +1661,22 @@ export class Phase2Service {
       throw new Error('缺少分析缓存（checkpoint），无法精修。请重新生成一次以建立缓存');
     }
 
-    const target = task.target || 'microcode';
+    // 🛡️ 归属校验：防越权精修他人组件（系统级调用无 userId 时放行）
+    if (task.userId && userId && task.userId !== userId) {
+      throw new HttpException('无权精修该组件（归属不匹配）', HttpStatus.FORBIDDEN);
+    }
+
+    const target = reqTarget || task.target || 'microcode';
+    const generationTier = reqTier || task.generationTier || 'max';
+    // 🛡️ Lite 走完全独立链路（lite-state.json checkpoint / 独立 refiner），本端点仅服务 max 生成组件。
+    // 四象限同步说明：接口契约已就位（target/tier 透传），但 Lite 的 AI 精修 refiner 接入为下一阶段专项，
+    // 避免误改独立链路；Lite 组件已有的「重新校验 + 回滚」能力仍走既有 snapshot 接口，不受影响。
+    if (generationTier === 'lite') {
+      throw new HttpException(
+        'Lite 组件精修请在其独立链路入口触发（本端点仅服务 max 生成组件）',
+        HttpStatus.NOT_IMPLEMENTED,
+      );
+    }
     const groupId = task.groupId || 'default-group';
     const componentName = task.componentName || componentId;
     const generatedFiles = this.scanComponentFiles(outputPath);
@@ -1597,8 +1697,13 @@ export class Phase2Service {
       panelKey: task.panelKey || 'default-panel',
       taskType: 'component',
       userId,
-      generationTier: 'max',
+      generationTier,
       sourceType: task.sourceType || 'figma',
+      // 🆕 2026-11-12 精修续跑溯源：记录本精修任务所续跑的原始生成任务 sessionId，
+      // 供精修任务详情页展示「源自 xxx」并支持一键跳回（解决「分不清改的是哪次生成」）。
+      refineOf: task.sessionId || componentId,
+      // 🆕 2026-11-12 精修续跑溯源：记录精修类型，供精修详情页「再精修一次」复用同一类型续跑。
+      refineType,
     });
 
     const { Logger: CustomLogger } = await import('../ai-engine/logger/logger.js');
@@ -1606,6 +1711,7 @@ export class Phase2Service {
     this.sendSseLog(sessionId, 'info', `人工精修已开始（${refineType === 'both' ? '布局 + 样式' : refineType}）`);
 
     // 4. 异步执行精修（runInSessionContext 包裹，避免并发任务日志串台）
+    const snapshotSessionId = task.sessionId || componentId;
     CustomLogger.runInSessionContext(sessionId, this.progressService, () => {
       this.executeRefine(sessionId, {
         componentName,
@@ -1622,6 +1728,11 @@ export class Phase2Service {
         // 🔴 诉求五 #16-①：快照是脱敏落盘的（`figmaToken`/`figmaTokens[].token` 为占位串），
         // 精修再把它当 config 合并进 `buildMergedAiConfig` 就等于拿假 token 取值。
         config: stripRedactedPlaceholders(task.configSnapshot || {}),
+        componentId,
+        snapshotSessionId,
+        generationTier,
+        // 🆕 视觉优化精修：把比对产出的差异引导文本透传给 refiner（两 refiner 已有 visualDiffGuidance 插槽）
+        visualDiffGuidance: params.visualDiffGuidance,
       }).catch((error: any) => {
         this.logger.error(`精修失败: ${sessionId}: ${error.message}`, error.stack);
         this.progressService.sendError(sessionId, { message: error.message, stack: error.stack });
@@ -1645,8 +1756,34 @@ export class Phase2Service {
       styleMappings: any;
       generatedFiles: string[];
       config: any;
+      componentId: string;
+      snapshotSessionId: string;
+      generationTier: string;
+      visualDiffGuidance?: string;
     },
   ): Promise<void> {
+    // 🛡️ 精修事务①：冻结精修前基线快照（供 FAIL 时回滚，保证「再跑一次不会更糟」）
+    const freezeMeta = {
+      sessionId: params.snapshotSessionId,
+      componentId: params.componentId,
+      groupId: params.groupId,
+      target: params.target as 'microcode' | 'vue3',
+      // 🆕 2026-11-12 精修续跑溯源：把精修任务 sessionId 写入快照 manifest.refineSessionId，
+      // 使「精修任务 ↔ 其基线/候选快照」可精确配对，前端据此展示本次精修的具体改动。
+      refineSessionId: sessionId,
+    };
+    let baselineRev: string | null = null;
+    try {
+      const baselineManifest = this.taskCodeSnapshotService.freezeOutputPath(params.outputPath, {
+        ...freezeMeta,
+        stage: 'refine-baseline',
+      });
+      baselineRev = baselineManifest.revision;
+      this.sendSseLog(sessionId, 'info', `已冻结精修前基线快照 ${baselineRev}`);
+    } catch (e: any) {
+      this.sendSseLog(sessionId, 'warn', `基线快照冻结失败（本次精修不可回滚）：${e?.message || e}`);
+    }
+
     const mergedAiConfig = await this.buildMergedAiConfig(params.config, params.userId);
     const { resolveTextConfig } = await import('../ai-engine/utils/ai-defaults.js');
     const textCfg = resolveTextConfig(mergedAiConfig);
@@ -1677,6 +1814,7 @@ export class Phase2Service {
         target: params.target,
         onProgress,
         _reviseTarget: reviseTarget, // 🎯 P4：收窄精修范围，避免顺手改动无关内容
+        visualDiffGuidance: params.visualDiffGuidance, // 🆕 视觉优化精修：注入比对差异引导
       });
       this.sendSseLog(
         sessionId,
@@ -1704,6 +1842,7 @@ export class Phase2Service {
         target: params.target,
         onProgress,
         _reviseTarget: reviseTarget, // 🎯 P4：收窄精修范围，避免顺手改动无关内容
+        visualDiffGuidance: params.visualDiffGuidance, // 🆕 视觉优化精修：注入比对差异引导
       });
       this.sendSseLog(
         sessionId,
@@ -1714,12 +1853,57 @@ export class Phase2Service {
       );
     }
 
-    // 收尾：最终 LESS 编译门禁通过后才允许同步 workspace 与广播完成。
-    // 精修同样可能改坏最终磁盘产物，因此必须 fail-closed，失败交由外层 catch 发送任务错误。
-    await this.precompileCss(params.outputPath);
-    // 🐛 说明：executeRefine 的 params 含 outputPath/componentName/target/groupId（原组件信息），
-    // 精修是「覆盖原组件」——copyToWorkspace 用 componentName 同步到原组件目录。
-    // 真正的 bug 是 refineComponent 里 createTask 的 componentId 误用 sessionId（已修复为原组件 ID）。
+    // 🛡️ 精修事务②：LESS 预编译 → 冻结 candidate → 双门禁校验 → PASS 晋升+同步 / FAIL 回滚
+    try {
+      await this.precompileCss(params.outputPath);
+    } catch (cssErr: any) {
+      await this.rollbackRefine(sessionId, params, baselineRev);
+      this.progressService.sendError(sessionId, {
+        message: `LESS 预编译失败，已回滚至精修前基线：${cssErr?.message || cssErr}`,
+      });
+      return;
+    }
+
+    let candidateRev: string | null = null;
+    let quality: any = null;
+    try {
+      const candManifest = this.taskCodeSnapshotService.freezeOutputPath(params.outputPath, {
+        ...freezeMeta,
+        stage: 'refine-candidate',
+      });
+      candidateRev = candManifest.revision;
+      quality = await this.snapshotQualityService.validateRevision(
+        params.snapshotSessionId,
+        candidateRev,
+        { persist: true },
+      );
+    } catch (validateErr: any) {
+      await this.rollbackRefine(sessionId, params, baselineRev);
+      this.progressService.sendError(sessionId, {
+        message: `精修后质量校验异常，已回滚至精修前基线：${validateErr?.message || validateErr}`,
+      });
+      return;
+    }
+
+    if (!quality.pass) {
+      const blockCount = (quality.issues || []).filter((i: any) => i.severity === 'BLOCK').length;
+      await this.rollbackRefine(sessionId, params, baselineRev);
+      this.progressService.sendError(sessionId, {
+        message: `精修后质量门禁未通过（${blockCount} 个 BLOCK 问题），已回滚至精修前基线，未同步 workspace`,
+        stack: JSON.stringify((quality.issues || []).slice(0, 12)),
+      });
+      return;
+    }
+
+    // ✅ PASS：晋升 candidate 为 last-good，并同步到 workspace
+    try {
+      if (candidateRev) {
+        this.taskCodeSnapshotService.rollbackToRevision(params.snapshotSessionId, candidateRev);
+      }
+    } catch (promoteErr: any) {
+      this.sendSseLog(sessionId, 'warn', `晋升 last-good 失败（不影响产物）：${promoteErr?.message || promoteErr}`);
+    }
+    this.sendSseLog(sessionId, 'info', `✅ 精修质量门禁通过（${quality.issues?.length || 0} 项诊断），同步 workspace`);
     await this.copyToWorkspace(params.outputPath, params.componentName, params.target, params.groupId);
 
     this.progressService.sendComplete(sessionId, {
@@ -1729,6 +1913,281 @@ export class Phase2Service {
       target: params.target,
       _completionModels: { visionModel: null, textModel: textCfg?.model || null },
     });
+  }
+
+  /**
+   * 🆕 视觉优化精修·分析阶段：渲染现状 → 对比设计图 → 产出结构化视觉差异。
+   * 不修改任何代码，仅返回差异清单 + 两张对比图，供用户在「落地」前确认。
+   * 参照图优先级：用户上传 overrideImage > 本地 source-*.png > Figma API 自动取图。
+   */
+  async visionRefineAnalyze(
+    sessionId: string,
+    params: {
+      componentId: string;
+      refineType?: 'layout' | 'style' | 'both';
+      target?: 'microcode' | 'vue3';
+      generationTier?: 'max' | 'lite';
+      overrideImage?: string;
+      userId?: string;
+    },
+  ): Promise<any> {
+    const { componentId, refineType = 'both', target: reqTarget, generationTier: reqTier, overrideImage, userId } = params;
+    const task = this.tasksService.getTaskByComponentId(componentId);
+    if (!task) throw new Error('未找到对应任务（componentId 无法解析为任何已记录任务）');
+    const outputPath = this.tasksService.resolveTaskOutputDir(task) || task.outputPath || null;
+    if (!outputPath || !existsSync(join(outputPath, 'package', 'index.vue'))) {
+      throw new Error('任务产物不存在，无法视觉精修（需先完成一次生成）');
+    }
+    const { loadCheckpoint } = await import('../ai-engine/utils/checkpoint-loader.js');
+    const cp = loadCheckpoint(outputPath);
+    if (!cp?.uiCache?.figmaNodeData) {
+      throw new Error('缺少分析缓存（checkpoint），无法视觉精修。请重新生成一次以建立缓存');
+    }
+    const target = reqTarget || task.target || 'microcode';
+    const generationTier = reqTier || task.generationTier || 'max';
+    if (generationTier === 'lite') {
+      throw new HttpException(
+        'Lite 组件视觉精修请在其独立链路入口触发（本端点仅服务 max 生成组件）',
+        HttpStatus.NOT_IMPLEMENTED,
+      );
+    }
+    const groupId = task.groupId || 'default-group';
+    const componentName = task.componentName || componentId;
+
+    // 1. 参照图（设计基准）
+    const refImage = await this.resolveReferenceImage(outputPath, task, overrideImage, userId);
+    if (!refImage) {
+      return {
+        success: false,
+        error: 'NO_REFERENCE',
+        message: '无法获取参照图：本地无设计原图、Figma 取图失败，且未上传目标图',
+      };
+    }
+
+    // 2. 发布 + 渲染现状
+    const publisher = await loadPreviewPublisher();
+    await publisher.publishQualityPreview({ outputPath, componentId: task.componentId || componentId, groupId, target });
+    const { renderScreenshot } = await import('../ai-engine/roles/screenshot-renderer.js');
+    const shot = await renderScreenshot({
+      outputPath,
+      sessionId,
+      componentName,
+      groupId,
+      target,
+      previewImage: refImage,
+      hardGate: true,
+      allowMissingAssetSelfHeal: true,
+      onProgress: () => {},
+    });
+    if (!shot?.renderedImage || shot.isStaticFallback) {
+      return {
+        success: false,
+        error: 'RENDER_FAILED',
+        message: '组件渲染截图失败（可能资源缺失或渲染器异常）',
+        fallback: shot?.isStaticFallback || false,
+      };
+    }
+
+    // 3. 视觉比对
+    const { VisualComparator } = await import('../ai-engine/roles/visual-comparator.js');
+    const { resolveVisionConfig } = await import('../ai-engine/utils/ai-defaults.js');
+    let visionConfig: any = null;
+    try {
+      // 🛡️ 2026-11-12 根治：改用用户级配置 getMergedAiConfig(userId)，与生成链路同源。
+      // 旧实现读 data/ai-config.json 已废弃（该文件 2026-09-16 起不再存在）⇒ 实跑必 NO_VISION_KEY。
+      const mergedAiConfig = await this.aiConfigService.getMergedAiConfig(userId);
+      visionConfig = resolveVisionConfig(mergedAiConfig);
+    } catch (e: any) {
+      this.logger.warn(`视觉配置解析失败: ${e?.message || e}`);
+    }
+    if (!visionConfig?.apiKey) {
+      return { success: false, error: 'NO_VISION_KEY', message: '未配置视觉模型（用户级模型配置缺少 vision apiKey，请在「设置-模型配置」添加视觉模型）' };
+    }
+    let report: any;
+    try {
+      const cmp = new VisualComparator(visionConfig);
+      report = await Promise.race([
+        cmp.compare(refImage, shot.renderedImage, {}),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('vision 比对超时 300s')), 300_000)),
+      ]);
+    } catch (e: any) {
+      return { success: false, error: 'COMPARE_FAILED', message: `视觉比对失败：${e?.message || e}` };
+    }
+
+    // 4. 格式化差异 → guidance + issues，并落盘分析图供前端展示
+    const { guidance, issues } = this.formatVisualDiff(report);
+    const analysisDir = join(backendRoot, 'data', 'vision-refine');
+    mkdirSync(analysisDir, { recursive: true });
+    writeFileSync(
+      join(analysisDir, `${sessionId}.json`),
+      JSON.stringify({
+        componentId,
+        designPath: refImage,
+        renderedPath: shot.renderedImage,
+        createdAt: new Date().toISOString(),
+      }),
+    );
+
+    // 🔴 前端 <img> 无法携带 Token 头（SessionGuard 只认 header），且 rendered 图落在 .mc-gen 点目录，
+    // 走 URL 端点在生产会被 401 / dotfiles 拦。故直接内嵌 data URL，前端零鉴权依赖渲染。
+    const designDataUrl = this.fileToDataUrl(refImage);
+    const renderedDataUrl = this.fileToDataUrl(shot.renderedImage);
+
+    return {
+      success: true,
+      data: {
+        analysisId: sessionId,
+        refineType,
+        target,
+        generationTier,
+        issues,
+        guidance,
+        // 🔴 overallSimilarity 契约是 0-100 整数（visual-comparator.js:242 clamp），前端不得再乘 100
+        similarity: report.overallSimilarity ?? null,
+        similarityPercent:
+          typeof report.overallSimilarity === 'number' ? Math.max(0, Math.min(100, report.overallSimilarity)) : null,
+        pass: report.pass ?? null,
+        degraded: report.degraded ?? false,
+        designImageDataUrl: designDataUrl,
+        renderedImageDataUrl: renderedDataUrl,
+        designImageUrl: `/api/phase2/refine/vision-image/${sessionId}/design`,
+        renderedImageUrl: `/api/phase2/refine/vision-image/${sessionId}/rendered`,
+      },
+    };
+  }
+
+  /** 本地图片 → data URL（前端 <img> 直用，绕过 Token 头与 dotfiles 限制）；过大或缺失返回 null */
+  private fileToDataUrl(p: string): string | null {
+    try {
+      if (!p || !existsSync(p)) return null;
+      const stat = statSync(p);
+      if (!stat.isFile() || stat.size === 0 || stat.size > 8 * 1024 * 1024) return null;
+      const ext = extname(p).toLowerCase();
+      const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png';
+      return `data:${mime};base64,${readFileSync(p).toString('base64')}`;
+    } catch (e: any) {
+      this.logger.warn(`图片转 dataURL 失败: ${e?.message || e}`);
+      return null;
+    }
+  }
+
+  /** 解析视觉精修参照图：上传图 > 生成期设计预览(mc-preview.png) > 本地 source-*.png > Figma API。返回绝对路径或 null */
+  private async resolveReferenceImage(outputPath: string, task: any, overrideImage?: string, userId?: string): Promise<string | null> {
+    // 1. 用户上传（base64 / data-url）
+    if (overrideImage) {
+      try {
+        const isJpeg = overrideImage.includes('image/jpeg');
+        const ext = isJpeg ? '.jpg' : '.png';
+        const base64 = overrideImage.includes('base64,') ? overrideImage.split('base64,')[1] : overrideImage;
+        const buf = Buffer.from(base64, 'base64');
+        const p = join(outputPath, '.mc-gen', 'vision-refine-upload.png'.replace('.png', ext));
+        mkdirSync(dirname(p), { recursive: true });
+        writeFileSync(p, buf);
+        return p;
+      } catch (e: any) {
+        this.logger.warn(`上传参照图解析失败: ${e?.message || e}`);
+      }
+    }
+    // 2. 生成期落盘的设计预览图（Figma 设计基准，最可靠的本地来源；生成链路 ensurePreviewImage 已下载）
+    try {
+      for (const rel of [
+        ['resources', 'images', 'mc-preview.png'],
+        ['resources', 'images', 'design-preview.png'],
+      ]) {
+        const p = join(outputPath, ...rel);
+        if (existsSync(p)) return p;
+      }
+    } catch {
+      /* ignore */
+    }
+    // 3. 本地 source-*.png（生成期落盘的设计原图）
+    try {
+      const files = readdirSync(outputPath).filter((f) => /^source-.*\.(png|jpe?g|webp)$/i.test(f));
+      if (files.length) return join(outputPath, files[0]);
+    } catch {
+      /* ignore */
+    }
+    // 4. Figma API 自动取图（用 probe 解析用户级 Token，逐槽探测取可读凭证——与预览链路同源）
+    const fileKey = task.fileKey;
+    const nodeId = task.nodeId;
+    if (fileKey && nodeId) {
+      try {
+        let mergedAiConfig: any = null;
+        if (userId) {
+          try {
+            mergedAiConfig = await this.aiConfigService.getMergedAiConfig(userId);
+          } catch {
+            /* 读用户级失败不阻断，下面 probe 仍有 env 兜底 */
+          }
+        }
+        const credRes = await resolveExecutionFigmaTokenWithProbe({
+          requestConfig: undefined,
+          requestToken: undefined,
+          activeConfig: mergedAiConfig,
+          envToken: process.env.FIGMA_ACCESS_TOKEN,
+          fileKey,
+          nodeId,
+        });
+        const token = credRes?.token;
+        if (!token) {
+          this.logger.warn(`Figma 取图跳过（无可用 Token）：${credRes?.note || credRes?.reason || 'unknown'}`);
+        } else {
+          const figmaModule = await import('../ai-engine/roles/figma-connector.js');
+          const { FigmaConnector } = figmaModule;
+          const connector = new FigmaConnector({ figmaToken: token });
+          const refPath = join(outputPath, '.mc-gen', 'vision-refine-figma.png');
+          mkdirSync(dirname(refPath), { recursive: true });
+          await connector.downloadPreviewImage(fileKey, nodeId, refPath);
+          if (existsSync(refPath)) return refPath;
+        }
+      } catch (e: any) {
+        this.logger.warn(`Figma 取图失败: ${e?.message || e}`);
+      }
+    }
+    return null;
+  }
+
+  /** 把 VisualComparator 报告格式化为：给 refiner 的 guidance 文本 + 给前端的 issues 列表 */
+  private formatVisualDiff(report: any): { guidance: string; issues: any[] } {
+    const raw = Array.isArray(report?.issues) ? report.issues : [];
+    const issues = raw.map((i: any, idx: number) => ({
+      index: idx + 1,
+      severity: i.severity || 'info',
+      category: i.category || i.type || '',
+      description: i.description || i.issue || i.message || '',
+    }));
+    if (!issues.length) {
+      return { guidance: '', issues: [] };
+    }
+    const lines = issues.map((i) => `${i.index}. 【${i.severity}】${i.category ? i.category + '：' : ''}${i.description}`).join('\n');
+    const guidance = [
+      '# 🔍 视觉比对发现的偏差（请优先逐项修复）',
+      '以下是当前渲染结果与设计图（Figma）的逐项差异，请按编号顺序修复每一处：',
+      lines,
+      '要求：',
+      '- 以「设计图（参照图）」为权威目标，消除上述每一项视觉偏差；',
+      '- 只改动能直接消除偏差的代码，不要顺手重构无关结构；',
+      '- 若某条在当前技术约束下确实无法修复，跳过并在回复中说明原因，不要编造。',
+    ].join('\n');
+    return { guidance, issues };
+  }
+
+  /** 精修事务③：把组件恢复到精修前基线（仅回写代码文件，资源不变） */
+  private async rollbackRefine(
+    sessionId: string,
+    params: { outputPath: string; snapshotSessionId: string },
+    baselineRev: string | null,
+  ): Promise<void> {
+    if (!baselineRev) {
+      this.sendSseLog(sessionId, 'warn', '无基线快照，无法回滚；outputPath 可能残留精修后代码');
+      return;
+    }
+    try {
+      this.taskCodeSnapshotService.restoreOutputPath(params.snapshotSessionId, baselineRev, params.outputPath);
+      this.sendSseLog(sessionId, 'info', `已回滚至精修前基线 ${baselineRev}`);
+    } catch (err: any) {
+      this.sendSseLog(sessionId, 'error', `回滚失败：${err?.message || err}（outputPath 可能残留坏代码，需手动恢复）`);
+    }
   }
 
   /** 扫描产物目录下的 .vue / .less 文件（相对路径），作为 refiner 的 generatedFiles 输入 */
@@ -2076,6 +2535,26 @@ export class Phase2Service {
       const backendProbe = target === 'vue3'
         ? join(vue3ComponentsDir, groupId, resolvedComponentId)
         : join(customComponentsDir, resolvedComponentId);
+      // 🛡️ src==dest 短路（2026-11-12 实锤 · 2026-11-12 修正）：
+      //   精修链路 resolveTaskOutputDir 反查优先命中 backend workspace 发布目录
+      //   （package+.checkpoint 俱在）⇒ outputPath == backendProbe。此前整单 return 会
+      //   一并跳过 frontend workspace 的复制，导致 Vite(:2610) 预览永远看不到精修结果
+      //   （仅 backend 预览 :13030 可见）。修正：仅跳过 backend 自身的复制（产物已在
+      //   原位，refiner 已就地改写），仍必须把内容同步到 frontend workspace。判据：
+      //   realpath 归一后相等才短路（防符号链接/相对路径假不等）。
+      let skipBackendCopy = false;
+      {
+        let realSrc = '';
+        let realDest = '';
+        try { realSrc = realpathSync(outputPath); } catch { realSrc = outputPath; }
+        try { realDest = realpathSync(backendProbe); } catch { realDest = backendProbe; }
+        if (realSrc === realDest) {
+          skipBackendCopy = true;
+          this.logger.log(
+            `[copyToWorkspace] 产物已在 backend workspace 原位（精修场景），仅同步 frontend: ${realSrc}`,
+          );
+        }
+      }
       const uniqueComponentId = publisher.resolveUniqueComponentId(
         backendProbe,
         resolvedComponentId,
@@ -2114,7 +2593,9 @@ export class Phase2Service {
         ? join(resolveFrontendWorkspace(), compDir, groupId, resolvedComponentId)
         : join(resolveFrontendWorkspace(), compDir, resolvedComponentId);
 
-      for (const targetPath of [backendPath, frontendPath]) {
+      // 🛡️ 精修场景 outputPath==backend workspace 时跳过 backend 复制（已在原位），
+      // 但仍需复制 frontend workspace；其余场景双目标都复制。
+      for (const targetPath of (skipBackendCopy ? [frontendPath] : [backendPath, frontendPath])) {
         if (!existsSync(targetPath)) {
           await mkdir(targetPath, { recursive: true });
         }

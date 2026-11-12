@@ -494,6 +494,14 @@ export default defineConfig(({ command, mode }) => {
       host: '0.0.0.0',
       port: config.devPort,
       open: false,
+      // 远端手机/外网访问用的 Host 白名单。
+      // 背景：Vite 默认只放行 localhost 与 IP 字面量形式的 Host，走隧道时域名形式的
+      // Host 会被拦成 "Blocked request. This host is not allowed"，看着像服务挂了。
+      // - .ts.net            → Tailscale MagicDNS 主机名（局域网/穿透首选，IP 访问本就不受限）
+      // - .trycloudflare.com → cloudflared quick tunnel 临时域名
+      // - .ngrok-free.app / .ngrok.app → ngrok 免费版域名
+      // 只放行这几个域，不用 `true` 全放开，避免 Host 头伪造带来的 DNS rebinding 风险。
+      allowedHosts: ['.ts.net', '.trycloudflare.com', '.ngrok-free.app', '.ngrok.app'],
       // 忽略 workspace 目录的文件变化：Playground 实时编辑会经 /__raw 写回 frontend/workspace，
       // 这些文件不属 Vite 模块图，不应触发 HMR/整页刷新。
       watch: {

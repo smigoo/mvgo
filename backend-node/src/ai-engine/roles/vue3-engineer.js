@@ -60,7 +60,21 @@ import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource
 import { buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 // 🛡️ E1 治本（2026-09-16）：语义化样式事实 + 中英文挂载桥接（与微码同源）
-import { buildSectionStyleFacts, semanticClassKeywords } from '../utils/section-tree.js';
+import { buildSectionStyleFacts, semanticClassKeywords, assignSectionComponentNames } from '../utils/section-tree.js';
+// 🧬 刀 66-P2（2026-11-12 四象限同步）：与 mc/max 用同一判据、同一渲染器、同一 index 改写
+import {
+  collectIsomorphicSectionGroups,
+  validateIsoTemplateProps,
+  renderIsoWrapperSfc,
+  // 🔍 ISO-PROBE 专用：探针必须与判据同函数派生（自带一套判断＝假绿）
+  isoBodyEntries,
+  assessIsoEligibility,
+  isoSectionContent,
+  isoSectionLayout,
+  buildIsoResourceByNode,
+  buildIsoSectionIconMap,
+} from '../utils/isomorphic-section-group.js';
+import { rewriteIndexRepeatGroups, pruneRepeatMemberArtifacts } from '../utils/index-repeat-group-rewrite.js';
 // 🛡️ 刀 53 家族（2026-10-23 vue3 接线）：与 microcode 共用同一判据族与同一终裁出口。
 //   ⚠️ vue3 子组件名由 LLM 自由命名（plan 派生的 tag 对不上）⇒ 必须走 `matchFgTakeoverTargets`
 //   两级匹配，不可照搬 microcode 的「tag 即文件名」（会恒零命中 = 假绿）。
@@ -99,7 +113,7 @@ import {
   buildVue3StyleMiddle,
 } from './microcode/vue3-prompt.js';
 // 🔍 P0-3（2026-11-10）：用户补充需求 / Figma 结构契约注入，与 microcode-engineer.js#appendGlobalGuidance 对称。
-import { buildUserAddendumSection } from '../utils/user-addendum.js';
+import { buildUserAddendumSection, buildOddEvenHintSection } from '../utils/user-addendum.js';
 import {
   wrapBareConstWithRef as _wrapBareConstWithRef,
   sanitizeVue3FileContent,
@@ -417,6 +431,15 @@ export class Vue3Engineer extends MicrocodeEngineer {
         );
       }
 
+      // 🔁 2026-11-12：奇偶交替样式提示（视觉分析确定性检测产物 input.oddEvenHints）。
+      const _oddEvenHint = buildOddEvenHintSection(input.oddEvenHints);
+      if (_oddEvenHint) {
+        p += _oddEvenHint;
+        this.logger.info(
+          `🔁 奇偶交替样式提示已注入分块 prompt (target=vue3, hints=${Array.isArray(input.oddEvenHints) ? input.oddEvenHints.length : 0})`,
+        );
+      }
+
       // 默认技术栈规则（无论是否有 @xxx 标记都生效）
       p += '\n\n##默认技术栈规则（强制）\n\n';
       p +=
@@ -531,6 +554,10 @@ export class Vue3Engineer extends MicrocodeEngineer {
         : input;
       const prompt = appendGuidance(
         this.buildCodePrompt(effInput, {
+          // 🧬 刀 66-P2：把 chunk 原样展开进 chunkSpec。此前只传 {middle} ⇒
+          //   chunk.isoContract 在 vue3 恒丢，共享模板契约无法下发（mc 侧由
+          //   buildChunkMiddle(chunk) 直接拿全 chunk，本就通）。
+          ...chunk,
           middle: middleBuilder.call(this, chunk),
         }),
       );
@@ -831,10 +858,116 @@ export class Vue3Engineer extends MicrocodeEngineer {
         });
       }
 
+      // 🧬 刀 66-P2（2026-11-12 · 四象限同步）：vue3/max 同构段收敛评估。
+      //   与 mc/max **同一判据** collectIsomorphicSectionGroups、**同一 L0 真值**、
+      //   **同一共享契约文本**、**同一 index 改写器**；与刀 53 互斥（已接管段不入组）。
+      //   fail-open：任何映射缺失 ⇒ 整组放弃走既有逐段 LLM 路径（零损失）。
+      const _isoLS = input?.layoutStructure || {};
+      const _isoTruth =
+        _isoLS.isoSectionTruth || _isoLS.layout?.isoSectionTruth || input?.isoSectionTruth || null;
+      const _isoDeclared =
+        _isoTruth?.declaredGroups ||
+        _isoLS.isomorphicSectionGroups ||
+        _isoLS.layout?.isomorphicSectionGroups ||
+        [];
+      let _isoEvaluated = 0;
+      let _isoGroupsRaw = [];
+      let _isoStats = { declared: 0, verified: 0, rejected: 0, withTruth: 0, reasons: [] };
+      try {
+        const _isoRes = collectIsomorphicSectionGroups(effectiveSections, {
+          flattenOneLevel: true,
+          truth: _isoTruth,
+          declaredGroups: _isoDeclared,
+          // 🧬 刀 66-P0：成员图标按 Figma 节点取（planner 会给多段塞同一个 resourceFile）
+          resourceByNode: buildIsoResourceByNode(input?.resourceDomMapping || []),
+          // 🧬 2026-11-12：段头 icon 未进 header.controls 时按「资源归属段」取（四象限同步）
+          sectionIconByOwner: buildIsoSectionIconMap(input?.resourceDomMapping || []),
+        });
+        _isoEvaluated = _isoRes.evaluated;
+        _isoGroupsRaw = _isoRes.groups;
+        _isoStats = _isoRes.stats || _isoStats;
+      } catch (_isoEvalErr) {
+        reportPatchChainError(_isoEvalErr, { logger: this.logger, pass: 'generateCode:iso-eval-vue3' });
+      }
+      // 🔍 ISO-PROBE（2026-11-12 · 与 mc/max 同款）：判据入参指纹。刀 66 出现 0 命中时必须能区分
+      //   ①真没同构段 ②入参形态与落盘 checkpoint 不一致 ③判据否决（哪一条）。
+      //   与判据同函数派生，不参与决策；0 命中也恒打。
+      try {
+        const _probeSegs = (effectiveSections || []).map((s) => {
+          const content = isoSectionContent(s);
+          const bodyKeys = content ? Object.keys(content).join('+') : '-';
+          const entries = isoBodyEntries(s, { flattenOneLevel: true }).length;
+          const v = assessIsoEligibility(s, { flattenOneLevel: true });
+          const lay = isoSectionLayout(s, { flattenOneLevel: true });
+          return `${String(s?.id)}~${v?.eligible ? 'ok' : String(v?.reason || '?')}~${bodyKeys}~e${entries}~${lay.direction || '-'}/${lay.columns ?? '-'}`;
+        });
+        this.logger.info(
+          `🧬 ISO-PROBE quadrant=vue3/max n=${(effectiveSections || []).length} truth=${_isoTruth ? 'yes' : 'no'} segs=[${_probeSegs.join(' | ')}]`,
+        );
+      } catch (_isoProbeErr) {
+        reportPatchChainError(_isoProbeErr, { logger: this.logger, pass: 'generateCode:iso-probe-vue3' });
+      }
+      const _isoPlan = { repGroupSize: new Map(), repLayout: new Map(), repHasTheme: new Map(), wrapperBySubPath: new Map(), indexGroups: [] };
+      try {
+        const _fgTakenIds = new Set();
+        for (const tr of _fgTakeover.map.values()) _fgTakenIds.add(String(tr.sectionId));
+        const _nameMap = assignSectionComponentNames(effectiveSections);
+        for (const g of _isoGroupsRaw) {
+          if (g.sectionIds.some((id) => _fgTakenIds.has(id))) continue;
+          const repName = _nameMap.get(g.representativeId);
+          const repSubPath = repName ? `package/components/${repName}.vue` : null;
+          if (!repSubPath || !subComps.includes(repSubPath)) continue;
+          const membersBySub = new Map();
+          let groupOk = true;
+          const indexMembers = [{ ...g.members.find((m) => m.id === g.representativeId), compName: repName }];
+          for (const m of g.members) {
+            if (m.id === g.representativeId) continue;
+            const nm = _nameMap.get(m.id);
+            const sp = nm ? `package/components/${nm}.vue` : null;
+            if (!sp || !subComps.includes(sp)) { groupOk = false; break; }
+            membersBySub.set(sp, m);
+            indexMembers.push({ ...m, compName: nm });
+          }
+          if (!groupOk || membersBySub.size === 0) continue;
+          _isoPlan.repGroupSize.set(repSubPath, g.members.length);
+          _isoPlan.repLayout.set(repSubPath, {
+            direction: g.direction || '',
+            columns: Number.isInteger(g.columns) ? g.columns : null,
+          });
+          _isoPlan.repHasTheme.set(
+            repSubPath,
+            g.members.every((m) => m.theme && typeof m.theme === 'object'),
+          );
+          if (indexMembers.every((m) => m.compName)) {
+            _isoPlan.indexGroups.push({ repName, members: indexMembers });
+          }
+          for (const [sp, m] of membersBySub) {
+            _isoPlan.wrapperBySubPath.set(sp, {
+              templateSubPath: repSubPath,
+              templateName: repName,
+              member: m,
+            });
+          }
+        }
+      } catch (_isoPlanErr) {
+        reportPatchChainError(_isoPlanErr, { logger: this.logger, pass: 'generateCode:iso-plan-vue3' });
+        _isoPlan.repGroupSize.clear();
+        _isoPlan.wrapperBySubPath.clear();
+        _isoPlan.repLayout.clear();
+        _isoPlan.repHasTheme.clear();
+        _isoPlan.indexGroups.length = 0;
+      }
+      // 🔴 计数行恒打（0 命中也打）：四象限各自可归因，不靠任务状态单证
+      this.logger.info(
+        `🧬 ISO-CONVERGE quadrant=vue3/max evaluated=${_isoEvaluated} declared=${_isoStats.declared} verified=${_isoStats.verified} rejected=${_isoStats.rejected} withTruth=${_isoStats.withTruth} groupsRaw=${_isoGroupsRaw.length} groups=${_isoPlan.repGroupSize.size} wrapped=${_isoPlan.wrapperBySubPath.size}`,
+      );
+
       let idx = 2;
       for (const subPath of subComps) {
         // 🛡️ 刀 53：名命中的子组件不进 LLM chunk（文件在下方整体写入）
         if (_fgByName.has(subPath)) continue;
+        // 🧬 刀 66-P2：同构兄弟段不进 LLM chunk —— 池后由系统确定性渲染薄包装
+        if (_isoPlan.wrapperBySubPath.has(subPath)) continue;
         // 🧩 SubcomponentContract：vue3 子组件同样按 usage 关键词裁剪事实（省 60%+ tokens，fail-open 保真）
         const subTagName = subPath
           .split('/')
@@ -855,6 +988,14 @@ export class Vue3Engineer extends MicrocodeEngineer {
           index: idx++,
           total: 1 + subComps.length,
           scopedInput,
+          // 🧬 刀 66-P2：代表段携带参数化模板契约（与 mc/max 同一共享文本）
+          isoContract: _isoPlan.repGroupSize.has(subPath)
+            ? {
+                groupSize: _isoPlan.repGroupSize.get(subPath),
+                hasTheme: _isoPlan.repHasTheme.get(subPath) === true,
+                ...(_isoPlan.repLayout.get(subPath) || {}),
+              }
+            : undefined,
           contextFiles: usage
             ? [
                 {
@@ -949,6 +1090,82 @@ export class Vue3Engineer extends MicrocodeEngineer {
             error: dedupErr?.message || String(dedupErr),
           });
         }
+      }
+
+      // 🧬 刀 66-P2 池后阶段（与 mc/max 同构）：
+      //   代表模板契约校验 → 兄弟段确定性薄包装 → index.vue 段级 v-for 收编。
+      //   位置在刀 53 之后：刀 13 的 pruneTakeoverCoveredLeaves 可能改写 index.vue，
+      //   必须以定稿后的 index 为准。任一环节失败 ⇒ fail-open 回退独立 LLM 生成。
+      let _isoWrapped = 0;
+      let _isoFallback = 0;
+      if (_isoPlan.wrapperBySubPath.size > 0) {
+        for (const [subPath, w] of _isoPlan.wrapperBySubPath) {
+          const tag = subPath.split('/').pop().replace(/\.vue$/, '');
+          try {
+            const tpl = allFiles[w.templateSubPath];
+            const verdict = validateIsoTemplateProps(tpl, {
+              requireTheme: !!(w.member?.theme && typeof w.member.theme === 'object'),
+            });
+            if (!verdict.ok) throw new Error(`代表模板契约违约: ${verdict.reasons.join(',')}`);
+            let wrapperSfc = renderIsoWrapperSfc({
+              wrapperName: tag,
+              templateName: w.templateName,
+              member: w.member,
+            });
+            if (!wrapperSfc) throw new Error('wrapper 渲染为空');
+            wrapperSfc = this._ensureSubComponentStyleAttrs(wrapperSfc);
+            wrapperSfc = this._ensureSubComponentStyleImport(wrapperSfc);
+            allFiles[subPath] = wrapperSfc;
+            _isoWrapped += 1;
+            this.logger.info(`🧬 刀66 同构薄包装已写入(vue3): ${subPath} → ${w.templateSubPath}`, {
+              sectionId: w.member.id,
+              title: w.member.title,
+              items: (w.member.items || []).length,
+            });
+          } catch (_isoWErr) {
+            reportPatchChainError(_isoWErr, { logger: this.logger, pass: 'generateCode:iso-wrapper-vue3' });
+            _isoFallback += 1;
+            this.logger.warn('🧬 刀66 包装写入失败(vue3)，兄弟段回退独立 LLM chunk', {
+              subPath,
+              error: _isoWErr?.message || String(_isoWErr),
+            });
+            const usage = this._extractUsageSnippet(tag, allFiles['package/index.vue'] || '');
+            const fbChunk = {
+              title: '子组件 ' + subPath,
+              files: [subPath],
+              index: idx++,
+              total: 1 + subComps.length,
+              contextFiles: usage
+                ? [{ path: `package/index.vue（${tag} 使用处摘要）`, content: usage }]
+                : [{ path: 'package/index.vue', content: allFiles['package/index.vue'] || '' }],
+            };
+            const fbRes = await runChunk(fbChunk, this._buildVue3ChunkMiddle);
+            Object.assign(allFiles, (fbRes && fbRes.files) || {});
+          }
+        }
+        this.logger.info(`🧬 同构段收敛完成(vue3): wrapped=${_isoWrapped} fallback=${_isoFallback}`);
+      }
+      // 🔴 只有「全部薄包装都成功」才改 index：否则独立产物会变成死文件（与 mc 同纪律）。
+      let _isoIndexApplied = 0;
+      if (_isoPlan.indexGroups.length > 0 && _isoFallback === 0) {
+        try {
+          const _idxPath = 'package/index.vue';
+          const _before = allFiles[_idxPath];
+          if (typeof _before === 'string' && _before.trim()) {
+            const _rw = rewriteIndexRepeatGroups(_before, _isoPlan.indexGroups);
+            _isoIndexApplied = _rw.applied.length;
+            if (_isoIndexApplied > 0) {
+              const _pr = pruneRepeatMemberArtifacts(_rw.content, _rw.applied, allFiles);
+              allFiles[_idxPath] = _pr.content;
+            }
+          }
+        } catch (_isoIdxErr) {
+          reportPatchChainError(_isoIdxErr, { logger: this.logger, pass: 'generateCode:iso-index-vue3' });
+        }
+        // 计数行恒打（0 也打）：「改写未命中」与「没尝试改写」可区分
+        this.logger.info(
+          `🧬 刀66-C index 段级 v-for(vue3): groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied}`,
+        );
       }
 
       // 诊断落盘
@@ -1083,6 +1300,41 @@ export class Vue3Engineer extends MicrocodeEngineer {
             phase: FIX_PHASE.STYLE,
             applyTo: /\.vue$/i,
             fix: (content) => this._injectEchartsAxisTicks(content),
+          },
+          // 🛡️ G13（2026-11-12 · mc-lite-1794462096859-e6a099a0 真机实锤）：图表容器重建自愈。
+          //   病灶：宿主（base-panel 内部 `<component :is="panelComponent" :key="currentPanel">`）
+          //   切换面板类型 ⇒ unmount+mount ⇒ slot 子树 DOM 整体销毁重建，而组件实例存活
+          //   ⇒ 旧 echarts 实例仍挂已脱离文档的旧 div（onUnmounted 不触发、不 dispose），
+          //   新容器又被产物 init 首行 `if (!ref.value || chart) return` 永久早退
+          //   ⇒ 图表永久空白（实测新元素 `_echarts_instance_=null`、无 canvas）。
+          //   与微码链路**同一事实源**（microcode/code-healer.injectChartRebuildGuard）：
+          //   注入纯附加 watch（旧实例判定失效→dispose 置空；新容器出现→回调产物自身 init），
+          //   不改产物既有语句；判据确定性 + 幂等标记 + fail-open。注入后按 N2 同款防线
+          //   再跑一次 validateVueSfc，失败即回滚——拒绝把合格产物改坏。
+          {
+            id: 'inject-chart-rebuild-guard',
+            name: '宿主重建图表容器自愈（G13）',
+            phase: FIX_PHASE.STYLE,
+            applyTo: /\.vue$/i,
+            fix: (content, ctx) => {
+              const guarded = microcodeHealer.injectChartRebuildGuard(content);
+              if (!guarded.changed) return content;
+              const guardChk = validateVueSfc(guarded.content, ctx?.path || 'index.vue');
+              if (!guardChk.valid) {
+                this.logger.warn(
+                  `⚠️ [vue3] G13 图表容器重建自愈注入后 SFC 自检失败，已回滚（拒绝把合格产物改坏）: ${(guardChk.errors || [])
+                    .slice(0, 2)
+                    .join(' | ')}`,
+                );
+                return content;
+              }
+              this.logger.warn(
+                `🛡️ [vue3] G13 图表容器重建自愈已注入: ${ctx?.path || ''}（${guarded.injected.join('；')}${
+                  guarded.skipped ? `；部分跳过=${guarded.skipped}` : ''
+                }）`,
+              );
+              return guarded.content;
+            },
           },
           // 🆕 N4 中性化：根容器尺寸中性锚定（接管原 execute 段内联实现，见上方注释）
           {
@@ -2107,6 +2359,9 @@ export class Vue3Engineer extends MicrocodeEngineer {
             //   D1 per-card 改写（该链历史上从未传过 effectiveSections ⇒ D1 一直 no-op），
             //   属未验证行为变化，不夹带。D1 是否在 vue3 链启用需单独一轮 A/B 后决定。
             percentHeightTruth: (subPlan && subPlan.effectiveSections) || [],
+            // 🛡️ 2026-11-12：段内 items 级图标补位（自愈链 ③-b）的全保真段源（四象限同步）。
+            //   归一化口会剥离 items[].icon，只有 planner 原形带 icon.resource。
+            fullSections: (subPlan && subPlan.effectiveSections) || [],
             // figma 原始树（更权威真值源；口径与 indexFigmaNodes 一致）。
             figmaRoot: input.figmaNodeData || null,
           },

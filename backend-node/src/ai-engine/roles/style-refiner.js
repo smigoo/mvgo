@@ -853,6 +853,47 @@ ${partialInstruction}
       }
     }
 
+    // 🆕 第三重兜底（2026-11-12 治本）：识别 <<<PATCH path ... >>>PATCH 格式
+    //   当 PATCH 模式因 L0-B 守卫回退、且分隔符/代码围栏均不匹配时，从每个 PATCH 块
+    //   提取 +++ NEW 部分作为文件最终内容写盘。最终由 executeRefine 的 validateRevision
+    //   质量门禁裁决（坏改动自动回滚基线，不会污染组件）。
+    if (modifiedFiles.length === 0) {
+      try {
+        const patches = extractPatches(content)
+        for (const p of patches) {
+          if (!p.new) continue
+          if (allowedFiles && allowedFiles.size > 0 && !allowedFiles.has(p.filePath)) continue
+          const fullPath = join(outputPath, p.filePath)
+          try {
+            mkdirSync(dirname(fullPath), { recursive: true })
+            const sanitized = this._sanitizeFileContent(p.new)
+            const integrity = checkFileIntegrity(sanitized, p.filePath)
+            if (!integrity.complete) {
+              logger.warn(`⚠️ <<<PATCH 兜底校验失败，跳过不完整文件: ${p.filePath}`, { reason: integrity.reason })
+              continue
+            }
+            if (p.filePath.endsWith('.vue')) {
+              const syntaxResult = validateVueSfc(sanitized, p.filePath)
+              if (!syntaxResult.valid) {
+                logger.warn(`跳过不可编译 Vue 文件: ${p.filePath}`, { errors: syntaxResult.errors })
+                continue
+              }
+            }
+            writeFileSync(fullPath, sanitized, 'utf-8')
+            modifiedFiles.push(p.filePath)
+            logger.info(`<<<PATCH 兜底写入文件: ${p.filePath}`)
+          } catch (e) {
+            logger.warn(`<<<PATCH 兜底写入失败: ${p.filePath}`, { error: e.message })
+          }
+        }
+        if (modifiedFiles.length > 0) {
+          logger.info(`<<<PATCH 兜底成功写入 ${modifiedFiles.length} 个文件`, { files: modifiedFiles })
+        }
+      } catch (e) {
+        logger.warn('<<<PATCH 兜底解析异常', { error: e.message })
+      }
+    }
+
     //最终兜底：所有解析都失败时，落盘原始输出便于排查
     if (modifiedFiles.length === 0) {
       try {

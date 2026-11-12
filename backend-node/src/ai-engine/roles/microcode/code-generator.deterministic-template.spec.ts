@@ -44,7 +44,7 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize, evaluateColumnCanvasConvergence } from './code-generator.js'
+import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize, evaluateColumnCanvasConvergence, pickSameSectionInteractiveTakeovers, applySectionTakeovers, hasInteractionSemantics, extractSectionIds } from './code-generator.js'
 import { stripSurplusBlockClosers } from './file-writer.js'
 import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
@@ -1012,6 +1012,217 @@ const switchSelected = ref('active')
   })
 })
 
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ #19（2026-11-12 · mc-max-1794456460380-1efe65a2 实锤）：同段交互接管
+//
+// 病灶（真机双向铁证）：LLM 亲笔产出的交互段组件 `TabSwitchBar.vue` 自带
+// 静态 `data-section-id="2:7954"` + 真实 `@click`/`v-model`/`watch`；但
+// `applyDeterministicIndexTemplate` 用 `effectiveSections` 派生的骨架**整体覆盖**
+// `<template>`，段组件改用 `assignSectionComponentNames` 命名的 `HeaderSection`
+// （静态 fg-grid、零 `@click`）⇒ 框架不再引用 LLM 交互组件 ⇒ 被当孤儿 prune ⇒
+// 产物零 `@click`（用户可见「依旧没有交互」）。
+//
+// 治本：覆盖前做「同段（`data-section-id` **相等**）且 LLM 有交互 / 骨架无交互」的
+// **受控标签互换**（只换标签名，属性/顺序/层级不动 ⇒ 几何锚点仍由骨架保持），
+// 并把 LLM 组件内容经 `takeoverFiles` 透出，供调用方跳过其 LLM 重生成。
+// ══════════════════════════════════════════════════════════════════════════
+describe('#19 · 同段交互接管（装配层覆盖丢弃 tabs／生成后无交互）', () => {
+  const SEC_HEADER = '2:7954'
+  const SEC_BODY = '136:122'
+
+  // 骨架侧计划：header 叶（2:7954）+ body 叶（136:122）——与真机 sectionRoots 同构
+  const plan = () => ({
+    isForced: true,
+    effectiveSections: [
+      { id: SEC_HEADER, type: 'header', responsibility: '顶部标题区' },
+      { id: SEC_BODY, type: 'body', responsibility: '主内容区' },
+    ],
+  })
+
+  const mkInput = (p: any) => ({
+    componentName: 'vehicle-monitor',
+    panelType: 'default-panel',
+    subComponentPlan: p,
+  })
+
+  // LLM 整文件产物：header 插槽里挂着**亲笔交互组件** TabSwitchBar（真机同款形态）
+  const llmIndexVue = () => `<template>
+  <base-panel panelKey="default-panel">
+    <template #header-right>
+      <TabSwitchBar />
+    </template>
+    <div class="c-vehicle-monitor-slot-con">
+      <slot />
+    </div>
+  </base-panel>
+</template>
+
+<script setup>
+import TabSwitchBar from './components/TabSwitchBar.vue'
+const activeKey = ref('all')
+function handleTabClick(k) { activeKey.value = k }
+</script>`
+
+  // 判据 a/c 齐备的 LLM 交互段组件：静态 data-section-id=2:7954 + @click
+  const TAB_VUE = `<template>
+  <div class="c-vehicle-monitor-tab" data-section-id="2:7954">
+    <button v-for="t in tabs" :key="t.key" @click="handleTabClick(t.key)">{{ t.label }}</button>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+const tabs = ref([{ key: 'all', label: '全部' }])
+const activeKey = ref('all')
+function handleTabClick(k) { activeKey.value = k }
+</script>`
+
+  const withTab = (content: string) => ({
+    componentContents: { 'package/components/TabSwitchBar.vue': content },
+  })
+
+  it('阳：同段 + LLM 有交互 + 骨架静态 → 骨架标签换成 LLM 组件并透出其内容', () => {
+    const src = llmIndexVue()
+    const r: any = applyDeterministicIndexTemplate(src, mkInput(plan()), withTab(TAB_VUE))
+    expect(r.applied).toBe(true)
+
+    // ① 决策：仅 header 段（2:7954）被接管，方向 = 骨架静态组件 → LLM 交互组件
+    expect(r.takeovers).toEqual([
+      { sectionId: SEC_HEADER, from: 'HeaderSection', to: 'TabSwitchBar' },
+    ])
+    // ② 保产物：LLM 组件内容逐字透出（调用方据此 `continue` 跳过重生成）
+    expect(r.takeoverFiles['package/components/TabSwitchBar.vue']).toBe(TAB_VUE)
+
+    // ⚠️ 取根 <template> 块必须走 findRootTemplateBlock：非贪婪正则会先配到
+    // 具名插槽 `<template #header-right>…</template>` 的闭合处而截断（本用例即有插槽）。
+    const blk = findRootTemplateBlock(r.content)
+    const tpl = blk ? r.content.slice(blk.start, blk.end) : ''
+    // ③ 交互回归：插槽/层级不动，只换标签名
+    expect(tpl).toContain('<template #header-right>')
+    expect(tpl).toContain('<TabSwitchBar />')
+    expect(tpl).not.toContain('<HeaderSection')
+    // ④ 非同段（body 136:122）仍是骨架静态段组件
+    expect(tpl).toContain('<MainSection')
+    // ⑤ 无悬空标签：接管组件的 import 必须仍在（prune 不得误删）
+    expect(r.content).toContain("import TabSwitchBar from './components/TabSwitchBar.vue'")
+    // ⑥ 填值保留：LLM script 不被改写
+    expect(r.content).toContain('function handleTabClick(k)')
+  })
+
+  it('阴·非同段：LLM 组件 data-section-id 与任一 sectionRoot 不等 → 零接管、逐字走旧路径', () => {
+    const src = llmIndexVue()
+    const offSection = TAB_VUE.replace('data-section-id="2:7954"', 'data-section-id="9:9999"')
+    const withC: any = applyDeterministicIndexTemplate(src, mkInput(plan()), withTab(offSection))
+    const without: any = applyDeterministicIndexTemplate(src, mkInput(plan()), {})
+    expect(withC.takeovers).toEqual([])
+    expect(withC.takeoverFiles).toEqual({})
+    // 「零行为变更」的强断言：与不传 componentContents 的旧路径逐字相同
+    expect(withC.content).toBe(without.content)
+    expect(withC.content).toContain('<HeaderSection')
+    expect(withC.content).not.toContain('<TabSwitchBar')
+  })
+
+  it('阴·骨架段组件自身已带交互 → 不换（判据 d，视觉精确的确定性渲染必须保留）', () => {
+    const r: any = applyDeterministicIndexTemplate(llmIndexVue(), mkInput(plan()), {
+      componentContents: {
+        'package/components/TabSwitchBar.vue': TAB_VUE,
+        'package/components/HeaderSection.vue': '<template><div @click="x">h</div></template>',
+      },
+    })
+    expect(r.takeovers).toEqual([])
+    expect(r.takeoverFiles).toEqual({})
+    expect(r.content).toContain('<HeaderSection')
+  })
+
+  it('阴·LLM 组件无交互语义（剥掉 @click）→ 不接管', () => {
+    const noClick = TAB_VUE.replace('@click="handleTabClick(t.key)"', '')
+    const r: any = applyDeterministicIndexTemplate(llmIndexVue(), mkInput(plan()), withTab(noClick))
+    expect(r.takeovers).toEqual([])
+    expect(r.content).toContain('<HeaderSection')
+  })
+
+  it('阴·动态绑定 :data-section-id 不算同段声明 → 不接管', () => {
+    const dyn = TAB_VUE.replace(' data-section-id="2:7954"', ' :data-section-id="tab.sectionId"')
+    const r: any = applyDeterministicIndexTemplate(llmIndexVue(), mkInput(plan()), withTab(dyn))
+    expect(r.takeovers).toEqual([])
+    expect(r.content).toContain('<HeaderSection')
+  })
+
+  it('阴·写盘表无该组件文件 → 不接管（不改出悬空标签，fail-open 保确定性骨架）', () => {
+    const r: any = applyDeterministicIndexTemplate(llmIndexVue(), mkInput(plan()), {
+      componentContents: {},
+    })
+    expect(r.applied).toBe(true)
+    expect(r.takeovers).toEqual([])
+    expect(r.takeoverFiles).toEqual({})
+    expect(r.content).toContain('<HeaderSection')
+    expect(r.content).not.toContain('<TabSwitchBar')
+  })
+})
+
+describe('#19 · 同段交互接管·纯函数判据（可辩驳边界）', () => {
+  it('hasInteractionSemantics：识别 @事件 / v-model / v-on:，静态内容不算', () => {
+    expect(hasInteractionSemantics('<div @click="f()">x</div>')).toBe(true)
+    expect(hasInteractionSemantics('<input v-model="v" />')).toBe(true)
+    expect(hasInteractionSemantics('<a v-on:click="f">x</a>')).toBe(true)
+    expect(hasInteractionSemantics('<button @update:value="f">x</button>')).toBe(true)
+    expect(hasInteractionSemantics('<div class="a">今日累计</div>')).toBe(false)
+    expect(hasInteractionSemantics('')).toBe(false)
+    expect(hasInteractionSemantics(null as any)).toBe(false)
+  })
+
+  it('extractSectionIds：只认**静态**属性，动态绑定（:data-section-id / v-bind:）不入集合', () => {
+    expect(Array.from(extractSectionIds('<div data-section-id="2:7954">x</div>'))).toEqual(['2:7954'])
+    expect(Array.from(extractSectionIds('data-section-id="a"'))).toEqual(['a'])
+    expect(extractSectionIds('<div :data-section-id="card.sectionId">x</div>').size).toBe(0)
+    expect(extractSectionIds('<div v-bind:data-section-id="a">x</div>').size).toBe(0)
+    // 真机 StatsCardRow.vue 同款：静态 + 动态并存 ⇒ 只取静态那个
+    const both = '<div data-section-id="2:8023"><i :data-section-id="card.sectionId" /></div>'
+    expect(Array.from(extractSectionIds(both))).toEqual(['2:8023'])
+  })
+
+  it('applySectionTakeovers：只换标签名（属性/顺序原样），不误伤同前缀的更长标签', () => {
+    const tk = [{ sectionId: '2:7954', from: 'HeaderSection', to: 'TabSwitchBar' }]
+    expect(applySectionTakeovers('<HeaderSection style="flex:1;min-height:0;" />', tk))
+      .toBe('<TabSwitchBar style="flex:1;min-height:0;" />')
+    expect(applySectionTakeovers('<template #header-right><HeaderSection /></template>', tk))
+      .toBe('<template #header-right><TabSwitchBar /></template>')
+    expect(applySectionTakeovers('<HeaderSection>a</HeaderSection>', tk))
+      .toBe('<TabSwitchBar>a</TabSwitchBar>')
+    // (?=[\s/>]) 断言：前缀相同但更长的标签不得被换
+    expect(applySectionTakeovers('<HeaderSectionFoo />', tk)).toBe('<HeaderSectionFoo />')
+    // from === to / 空决策 ⇒ 逐字不变
+    expect(applySectionTakeovers('<HeaderSection />', [{ sectionId: 'x', from: 'A', to: 'A' }]))
+      .toBe('<HeaderSection />')
+    expect(applySectionTakeovers('<HeaderSection />', [])).toBe('<HeaderSection />')
+  })
+
+  it('pickSameSectionInteractiveTakeovers：同段仅一个接管（首个命中胜，且不重复占用）', () => {
+    const got = pickSameSectionInteractiveTakeovers({
+      llmTemplate: '<template><A /><B /></template>',
+      planTemplate: '<template><HeaderSection /></template>',
+      sectionRoots: [{ id: '2:7954', component: 'HeaderSection', type: 'header' }],
+      componentContents: {
+        'package/components/A.vue': '<div data-section-id="2:7954" @click="f">a</div>',
+        'package/components/B.vue': '<div data-section-id="2:7954" @click="g">b</div>',
+      },
+    })
+    expect(got).toEqual([{ sectionId: '2:7954', from: 'HeaderSection', to: 'A' }])
+  })
+
+  it('pickSameSectionInteractiveTakeovers：骨架未引用该段组件（判据 e 不成立）→ 零决策', () => {
+    const got = pickSameSectionInteractiveTakeovers({
+      llmTemplate: '<template><A /></template>',
+      planTemplate: '<template><OtherSection /></template>',
+      sectionRoots: [{ id: '2:7954', component: 'HeaderSection', type: 'header' }],
+      componentContents: {
+        'package/components/A.vue': '<div data-section-id="2:7954" @click="f">a</div>',
+      },
+    })
+    expect(got).toEqual([])
+  })
+})
+
 describe('刀12 · 2D 行簇重建（ad8939a5 `801:3` 实锤：左图右文被纵切七段）', () => {
   const B = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
   // 801:3 真值几何（.checkpoint/figma.json）：头部带 = img(98×98) ｜ 右列（标题/编码行/pill），
@@ -1540,8 +1751,10 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     expect(tpl).toContain('border-radius:3px');
     expect(tpl).toContain('z-index:-1;');
     // ② 宿主是根 slot-con div，锚点用专用属性（**不复用 data-section-id**，避免双命中）
+    //    🛡️ 2026-11-12 弹窗尺寸契约：fixture 图根 483×515（比值 1.066 ≤1.5、max 515 ≤800）
+    //    命中弹窗类 ⇒ 根容器追加真值尺寸+水平居中（宽高比≈1 的面板本就该定尺寸）。
     expect(tpl).toContain('class="c-slot-con-slot-con" data-absorbed-host="807:2"');
-    expect(tpl).toContain('style="display:flex;flex-direction:column;height:100%;min-height:0;position:relative;isolation:isolate;"');
+    expect(tpl).toContain('style="display:flex;flex-direction:column;min-height:0;width:483px;height:515px;margin-left:auto;margin-right:auto;position:relative;isolation:isolate;"');
     // ③ 层必须渲染在根 div 内（紧跟根 div 开标签）
     const rootIdx = tpl.indexOf('class="c-slot-con-slot-con"');
     expect(rootIdx).toBeGreaterThan(-1);
@@ -1560,7 +1773,8 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     const tpl = facts!.template;
     expect(tpl).not.toContain('data-absorbed-host');
     expect(tpl).not.toContain('data-absorbed-bg');
-    expect(tpl).toContain('class="c-slot-con-slot-con" style="display:flex;flex-direction:column;height:100%;min-height:0;"');
+    // 🛡️ 2026-11-12 弹窗尺寸契约：吸收层不出 ⇒ 但根尺寸判据独立生效（图根仍 483×515 弹窗类）
+    expect(tpl).toContain('class="c-slot-con-slot-con" style="display:flex;flex-direction:column;min-height:0;width:483px;height:515px;margin-left:auto;margin-right:auto;"');
   });
 
   it('回归锁：容器段沿用 sourceNodeIds（枚举只对非容器启用）⇒ src 缺直系子也不出新层', () => {
@@ -1587,6 +1801,91 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     expect(facts).not.toBeNull();
     expect(facts!.template).toContain('style="display:flex;flex-direction:column;height:100%;min-height:0;"');
     expect(facts!.template).not.toContain('data-absorbed-bg');
+  });
+
+  // 🛡️ 刀 7d（2026-11-12 · mc-1794420031803-a2a0df58 实锤）：根直系壳层直采。
+  //   弹窗壳（RECTANGLE ≡ 根 bbox）不在段树 ⇒ 刀7c 零候选 ⇒ 壳渐变永不落。
+  //   判据：根直系 RECTANGLE + bbox ≡ 根（±2px）+ 未认领 ⇒ 全覆盖层注入根 div。
+  describe('刀 7d 根直系壳层直采（a2a0df58 弹窗壳缺失实锤）', () => {
+    const withShellRoot = (shellExtra: Record<string, unknown> = {}) => ({
+      ...makeInput([{ id: '36:1697', type: 'body', responsibility: '主内容区' }] as any, 'device'),
+      figmaNodeData: {
+        document: {
+          id: '36:1693',
+          name: 'cp-设备详情',
+          type: 'FRAME',
+          absoluteBoundingBox: { x: 100, y: 200, width: 603, height: 555 },
+          children: [
+            {
+              id: '36:1694',
+              name: 'bg',
+              type: 'RECTANGLE',
+              absoluteBoundingBox: { x: 100, y: 200, width: 603, height: 555 },
+              cornerRadius: 4,
+              fills: [
+                {
+                  type: 'GRADIENT_LINEAR',
+                  opacity: 0.9,
+                  gradientHandlePositions: [
+                    { x: 0.5, y: 0 },
+                    { x: 0.5, y: 1 },
+                    { x: 0, y: 0 },
+                  ],
+                  gradientStops: [
+                    { color: { r: 0.8325, g: 0.8883, b: 1, a: 1 }, position: 0 },
+                    { color: { r: 0.7563, g: 0.8375, b: 1, a: 1 }, position: 1 },
+                  ],
+                },
+              ],
+              ...shellExtra,
+            },
+          ],
+        },
+      },
+    });
+
+    it('⭐ 阳性：根直系 RECTANGLE ≡ 根 bbox + 渐变可 CSS 化 ⇒ 壳层注入根 div（z-index:-1 全覆盖）', () => {
+      const facts = buildDeterministicIndexTemplate(withShellRoot() as any);
+      expect(facts).not.toBeNull();
+      const tpl = facts!.template;
+      expect(tpl).toContain('data-absorbed-bg="36:1694"');
+      expect(tpl).toContain('linear-gradient(180deg');
+      expect(tpl).toContain('border-radius:4px');
+      expect(tpl).toContain('z-index:-1;');
+      // 全覆盖 edgeCss（left/top/right/bottom 全 0）
+      expect(tpl).toContain('left:0;top:0;right:0;bottom:0;');
+    });
+
+    it('阴性a：壳尺寸 ≠ 根 bbox（部分装饰条）⇒ 不注入（走段级通路）', () => {
+      const facts = buildDeterministicIndexTemplate(
+        withShellRoot({
+          absoluteBoundingBox: { x: 100, y: 200, width: 603, height: 40 },
+        }) as any,
+      );
+      const tpl = facts!.template;
+      expect(tpl).not.toContain('data-absorbed-bg="36:1694"');
+    });
+
+    it('阴性b：壳已被段认领（claimedNodeIds）⇒ 7d 跳过（避免双渲染）', () => {
+      // 让壳 id 出现在段 sourceNodeIds ⇒ 被常规刀7 认领 ⇒ 7d 的 claimed 检查拦截
+      const facts = buildDeterministicIndexTemplate({
+        ...withShellRoot(),
+        sections: [
+          {
+            id: '36:1697',
+            type: 'body',
+            responsibility: '主内容区',
+            sourceNodeIds: ['36:1694'],
+          },
+        ],
+        layoutStructure: undefined,
+      } as any);
+      const tpl = facts!.template;
+      // 被段认领后由常规刀7 通路处理（壳全贴根仍会出现，但经由不同主语）；此处只钉
+      // 「不因 7d 双注入」：根 div 中该 bg 层只出现一次
+      const hits = (tpl.match(/data-absorbed-bg="36:1694"/g) || []).length;
+      expect(hits).toBeLessThanOrEqual(1);
+    });
   });
 });
 

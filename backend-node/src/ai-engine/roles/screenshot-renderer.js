@@ -831,9 +831,25 @@ async function renderViaPreviewPage({
           if (!own) continue
           const r = el.getBoundingClientRect()
           if (r.width < 4 || r.height < 4) continue
+          // 🛡️ 根治⑪（2026-11-12 · 495857b7 实锤）：补字号 + 祖先容器链——
+          //    D2 回灌指导要能定位到具体 DOM（盲修 2 轮修不掉标题 vs 大数字重叠）。
+          let fs = 0
+          let anc = ''
+          try {
+            fs = Math.round(parseFloat(getComputedStyle(el).fontSize)) || 0
+            const segs = []
+            let p = el.parentElement
+            while (p && segs.length < 3) {
+              const cn = typeof p.className === 'string' ? p.className.trim() : ''
+              if (cn) segs.push(cn.split(/\s+/).slice(0, 2).join('.'))
+              p = p.parentElement
+            }
+            anc = segs.join(' < ')
+          } catch (e) { /* 采集失败不阻断渲染 */ }
           textNodes.push({
             text: (el.textContent || '').trim().slice(0, 24),
             x: r.x, y: r.y, w: r.width, h: r.height,
+            fs, anc,
           })
         }
       }
@@ -847,7 +863,12 @@ async function renderViaPreviewPage({
           const inter = ix * iy
           if (inter <= 0) continue
           const ratio = inter / Math.max(1, Math.min(a.w * a.h, b.w * b.h))
-          if (ratio > 0.15) textOverlaps.push({ a: a.text, b: b.text, ratio: +ratio.toFixed(2) })
+          // 🛡️ 根治⑪：overlap 对象带双节点 bbox/字号/容器链（此前只留 {a,b,ratio}，修复轮盲修）
+          if (ratio > 0.15) textOverlaps.push({
+            a: a.text, b: b.text, ratio: +ratio.toFixed(2),
+            aBox: [a.x, a.y, a.w, a.h], bBox: [b.x, b.y, b.w, b.h],
+            aFs: a.fs, bFs: b.fs, aAnc: a.anc, bAnc: b.anc,
+          })
         }
       }
       return {

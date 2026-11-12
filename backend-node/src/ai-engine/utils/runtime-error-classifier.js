@@ -28,6 +28,13 @@ export const DETERMINISTIC_MISSING_PATTERNS = [
   // Vue 运行时常见确定性错误
   /Maximum recursive updates exceeded/i, // 响应式死循环
   /\[Vue warn\].*?\b(?:Failed to resolve|Invalid|already been declared)/i,
+  // 🛡️ 根治⑫B（2026-11-12 · mc-1794490786159-c6e73f7a 实锤）：SFC 语法错（编译期）。
+  //   病灶：修复轮后置注入把 :style 对象改坏（CSS 文本拼进 JS 对象字面量）→ 组件加载
+  //   失败 errorType='component-load'，loadError 文本无 SyntaxError 前缀（「原始错误：
+  //   Unexpected token, expected ","」）→ 旧白名单全漏 → 降级 completed，坏产物带
+  //   「成功」交付。语法错=确定性产物缺陷（重试/降级都无法自愈），并入硬 BLOCK 判据。
+  /Unexpected token, expected/i,
+  /SyntaxError/i,
 ]
 
 /**

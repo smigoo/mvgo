@@ -3,14 +3,25 @@
  * 失败重试不再重发完整 Figma/规范/截图上下文，只携带：
  * - 目标文件清单
  * - 与目标文件直接相关的上下文契约（chunk.contextFiles，各最多 4000 字）
+ * - **段身份契约**（本文件负责哪个 section + 本段真值文案全集）🔴 2026-11-13 补
  * - 上一次的错误类型与说明
  * 并保留微码组件最关键约束，避免质量崩塌。
  *
- * @param {object} chunk - 分块描述（含 files / contextFiles）
+ * 🔴 2026-11-13 治本（生产实锤 mc-max-1794462377352-3d6fa463）：
+ *   此前重试 prompt **不含段身份契约** ⇒ 首轮 parse_failure 后，重试的 LLM 既不知道
+ *   本文件负责哪个 section、也不知道本段有哪些业务文案 ⇒ 输出最小合规产物
+ *   `<div ...><slot /></div>`（**空壳组件**）且静默落盘
+ *   ⇒ 该任务「排查计划 6/7 + 车辆图标」整块从产物中消失。
+ *   本函数现在必须携带契约（首轮与重试共用同一实现 `utils/section-identity-contract.js`，
+ *   文案真值口径零漂移）。
+ *
+ * @param {object} chunk - 分块描述（含 files / contextFiles / scopedInput._sectionScope）
  * @param {string} lastErrType - 'max_tokens' | 'truncation' | 'semantics' | 'parse_failure' | 其他
  * @param {string} lastErr - 上一次错误描述
  * @returns {string}
  */
+import { buildSectionIdentityContract } from './section-identity-contract.js';
+
 export function buildRetryPrompt(chunk, lastErrType, lastErr) {
   const targetFiles = (chunk?.files || []).join('\n') || '（由调用方指定）'
   const segmentType = chunk?.segmentType || ''
@@ -18,6 +29,9 @@ export function buildRetryPrompt(chunk, lastErrType, lastErr) {
     const content = (cf?.content || '').slice(0, 4000)
     return '// @file ' + cf.path + '\n' + content
   })
+  // 🔴 段身份契约（首轮与重试共用同一实现）：段 id + 本段真值文案全集 + 禁跨段 + 禁空壳。
+  //   没有它，重试产出的组件不知道自己该渲染什么 ⇒ 退化为空壳（实测 1972 字符上下文）。
+  const identityContract = buildSectionIdentityContract(chunk)
   let errorNote
   if (lastErrType === 'max_tokens') {
     errorNote = '⚠️ 上次因 max_tokens（输出长度超限）被截断，请精简输出（减少冗余注释和空白），只输出必要文件内容。'
@@ -45,6 +59,9 @@ export function buildRetryPrompt(chunk, lastErrType, lastErr) {
     '## 目标文件（必须输出）\n' + targetFiles,
   ]
   if (contractParts.length) parts.push('## 上下文契约（仅相关文件，各最多 4000 字）\n' + contractParts.join('\n\n'))
+  // 🔴 段身份契约必须在「上下文契约」之后、错误说明之前 —— 它是本文件唯一的内容依据，
+  //   放在错误说明前可避免 LLM 只顾修格式而把正文清空。
+  if (identityContract) parts.push(identityContract)
   parts.push(errorNote)
   parts.push('请只输出目标文件的完整内容，末尾闭合所有标签。')
   return parts.join('\n\n')

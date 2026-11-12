@@ -318,6 +318,16 @@ export function healOversizedTextRowAnchors({ sections, figmaNodeData } = {}) {
 /** 阈值来源：2026-11-11 八任务分布（合格 max 组件 8、爆炸 26-34；详见方案文档）。 */
 export const SECTION_COUNT_RATIO_LIMIT = 4;
 export const SECTION_COUNT_RATIO_HARD = 8;
+/**
+ * figmaTop 归位为「业务段下限」观测阈值（2026-11-12）：
+ *   leaf < figmaTop × 该值 ⇒ 欠生成告警（不阻断，欠生成危害交下游 acceptance 抓）。
+ *   旧实现把 figmaTop 塞进 ratio 分母（max(figmaTop,visionSections)），"下限"语义错配为"分母"。
+ */
+export const SECTION_COUNT_RATIO_UNDERGEN_RATIO = 0.5;
+/** 过拆碎片叶判定（2026-11-12）：elementCount < 该值 或 id 含 tail-text ⇒ 碎片叶。 */
+export const SECTION_OVER_SPLIT_FRAGMENT_ELEMENT = 3;
+/** 过拆特征显著阈值（2026-11-12）：碎片叶占比 > 该值 ⇒ 真·一段一组件退化（即便 base 精准也 blocked）。 */
+export const SECTION_OVER_SPLIT_FRAGMENT_RATIO = 0.3;
 
 /**
  * 🛡️ A5 段数比门禁专用错误（2026-11-11，实案 68f9d3f2）。
@@ -353,28 +363,155 @@ export class PlanningGateError extends Error {
  * @param {number} params.leafSections    叶子段数（collectLeafSections().length）
  * @param {number} [params.figmaTop]      Figma 顶层业务段数（planner :2536-2541 同口径）
  * @param {number} [params.visionSections] vision 段数（sections.length）
+ * @param {number} [params.truthLeafSections] vision 段树递归叶数（vision 口径真值）
+ * @param {number} [params.truthLayerSections] **Figma 真值层叶子段数**（真值口径，分子分母同层）
  * @param {Array}  [params.sections]      完整段树（trim 需要树结构；只判定时可省）
- * @returns {{ evaluated: boolean, skippedReason: string|null, base: number, ratio: number,
- *   verdict: 'pass'|'trim'|'blocked', trimmed: Array, sections: Array }}
+ * @returns {{ evaluated: boolean, skippedReason: string|null, base: number, baseSource: string,
+ *   ratio: number, verdict: 'pass'|'trim'|'blocked', softBlocked: boolean,
+ *   trimmed: Array, sections: Array }}
  */
-export function auditSectionCountRatio({ leafSections, figmaTop = 0, visionSections = 0, sections } = {}) {
-  const failOpen = (reason) => ({
+export function auditSectionCountRatio({ leafSections, figmaTop = 0, visionSections = 0, truthLeafSections, truthLayerSections, sections } = {}) {
+  const failOpen = (reason, extra = {}) => ({
     evaluated: false,
     skippedReason: reason,
     base: 0,
+    baseSource: 'none',
     ratio: 0,
     verdict: 'pass',
+    softBlocked: false,
     trimmed: [],
+    underGenerated: false,
+    fragmentRatio: 0,
+    avgElementCount: 0,
+    baseIsTopLevel: false,
+    // 🛡️ 2026-11-13 治本：过拆特征的计量口径（已计量 / 未计量分开计数）
+    measuredLeafCount: 0,
+    unmeasuredLeafCount: 0,
+    featuresUnmeasured: false,
     sections: Array.isArray(sections) ? sections : [],
+    ...extra,
   });
   if (!Number.isFinite(leafSections) || leafSections <= 0) return failOpen('no-leaf-sections');
-  const base = Math.max(Number(figmaTop) || 0, Number(visionSections) || 0);
+  // 🔴 治本·层2（2026-11-13 · 181 个真实任务语料标定）：base 优先取「Figma 真值层段数」。
+  //   分子分母**同源同层**：分子 = 规划产出树的叶子数，分母 = 设计稿真值层的叶子数
+  //   （deriveSectionsFromFigmaTree 全树推导，与 V-5 局部展开同一口径）。
+  //
+  //   🔴 为什么必须换口径（旧口径的病灶）：
+  //     旧 base 是「展开**前**」的量纲（vision 递归叶 / Figma 顶层块数），
+  //     而分子是「展开**后**」的量纲（规划产出树的叶子）⇒ V-5 局部展开把 1 个粗段
+  //     换成 N 个真值段时，比值必然暴涨。生产实锤 mc-max-1794459907233-547bfb75：
+  //     vision 递归叶=1 / 真值层=15 / 规划叶子=15 ⇒ 旧口径 ratio=15（误杀），
+  //     新口径 ratio=1.00（正常：规划段数 == 设计稿真值段数）。
+  //
+  //   📊 语料标定（backend-node/data/tasks.json，181 个含 checkpoint 的任务）：
+  //     真值层段数 p50=8 / p90=18，而 vision 段数 p50=3 ⇒ 真值层本就远多于 vision 段
+  //     ⇒ **V-5 展开是真实业务粒度，不是过拆**（这是旧口径误杀的根源）。
+  //     旧口径在 completed 任务上同样误杀：`d30c05b4` completed 却被算成 ratio=8.33（>8）。
+  const truthLayer = Number(truthLayerSections) || 0;
+  const truthLeaf = Number(truthLeafSections) || 0;
+  let base = 0;
+  let baseSource = 'top-level';
+  if (truthLayer > 0) {
+    base = truthLayer;
+    baseSource = 'truth-layer';
+  } else if (truthLeaf > 0) {
+    base = truthLeaf;
+    baseSource = 'truth-leaf';
+  } else {
+    base = Math.max(Number(figmaTop) || 0, Number(visionSections) || 0);
+    baseSource = 'top-level';
+  }
+  const baseIsTopLevel = baseSource === 'top-level';
   if (base <= 0) return failOpen('no-truth-baseline');
+  // 🛡️ figmaTop 归位为「业务段下限」观测（2026-11-12）：leaf 明显 < figmaTop ⇒ 欠生成告警，
+  //   不阻断（欠生成危害由下游 acceptance 抓，门禁只防过拆）。
+  const underGenerated = Number(figmaTop) > 0 && leafSections < Number(figmaTop) * SECTION_COUNT_RATIO_UNDERGEN_RATIO;
+  // 🛡️ 过拆特征（2026-11-12）：遍历 planner 产出段树算碎片叶占比 / 平均 elementCount，
+  //   精准区分「真·一段一组件退化（碎片）」vs「合理深嵌套（大段）」。
+  // 🔴 治本（2026-11-13 · 生产实锤 mc-max-1794459907233-547bfb75 · 13:05:52「段数比门禁阻断」）：
+  //   原实现用 `Number(s.elementCount) || 0` 把「元素**未计量**」与「计量为 **0**」压成同一个 0，
+  //   于是未计量段被当成碎片段、且均值分母算成**全部**叶子 ⇒ frag=1.00 / avgEc=0.0
+  //   ⇒ overSplitSignificant=true ⇒ ratio>8 时直接 blocked ⇒ 任务必败（生产实况 ratio=15）。
+  //   实锤形态：V-5 局部展开（applyOverCoarseExpansion → deriveSectionsFromFigmaTree，
+  //   over-coarse-section-expander.js:396）产出的段**根本不产 elementCount 字段**
+  //   （section-tree.js:2856-2878 只有 id/name/figmaNodeId/sourceNodeIds/layout/children/styles）
+  //   ⇒ 15 个段全部「未计量」，却被门禁当成「每段 0 元素的碎片」。
+  //   ⚠️ 指纹对照（判别依据，不可省）：
+  //     真过拆 bbf827f0 的碎片段 elementCount=1（**计量到 1**，小但已计量）；
+  //     本次 avgEc 是**精确 0.0**（15/15 段均无计数）⇒ 0 是「未计量」的指纹，不是「元素少」的指纹。
+  //   ⇒ 治本：过拆特征只统计**已计量**段（缺失/null/非有限数 = 未计量：不进碎片分子、不进均值分母）；
+  //     全段未计量 ⇒ featuresUnmeasured（这些段不是 vision 解析产物 ⇒「每段 0 元素」不成立）
+  //     ⇒ **不**默认判过拆显著（不阻断），但留痕计数，交下游 acceptance 复核。
+  let fragmentRatio = 0;
+  let avgElementCount = 0;
+  let featuresAvailable = false;
+  let measuredLeafCount = 0;
+  let unmeasuredLeafCount = 0;
+  if (Array.isArray(sections) && sections.length > 0) {
+    const leaves = collectLeafSections(sections);
+    if (leaves.length > 0) {
+      featuresAvailable = true;
+      let frag = 0;
+      let sumEc = 0;
+      for (const s of leaves) {
+        // 未计量 = 字段缺失 / null / 非有限数（**不是** 0；0 是「计量到零」）
+        const raw = s?.elementCount;
+        const measured = raw !== undefined && raw !== null && Number.isFinite(Number(raw));
+        if (!measured) {
+          unmeasuredLeafCount += 1;
+          continue;
+        }
+        const ec = Number(raw);
+        measuredLeafCount += 1;
+        sumEc += ec;
+        const isFrag = /tail-text/i.test(String(s?.id ?? '')) || ec < SECTION_OVER_SPLIT_FRAGMENT_ELEMENT;
+        if (isFrag) frag += 1;
+      }
+      // 碎片占比与均值只在**已计量**段上计算（分母 = 已计量数，不是全部叶子）
+      fragmentRatio = measuredLeafCount > 0 ? frag / measuredLeafCount : 0;
+      avgElementCount = measuredLeafCount > 0 ? sumEc / measuredLeafCount : 0;
+    }
+  }
+  // featuresUnmeasured：sections 给了但**全部叶子未计量** ⇒ 段不是 vision 解析产物
+  //   （Figma 树派生段）⇒ 「每段 0 元素」不成立 ⇒ 不判过拆显著（不阻断，留痕）。
+  const featuresUnmeasured = featuresAvailable && measuredLeafCount === 0;
   const ratio = leafSections / base;
+  // 🛡️ 保守策略**分层**（两者不可合并）：
+  //   - featuresAvailable=false（sections 未提供，真·无法评估）⇒ 保守判过拆显著（历史行为，保留）；
+  //   - featuresUnmeasured=true（sections 提供但元素全未计量）⇒ 不判过拆显著（本次治本点）。
+  const overSplitSignificant = featuresUnmeasured
+    ? false
+    : !featuresAvailable ||
+      fragmentRatio > SECTION_OVER_SPLIT_FRAGMENT_RATIO ||
+      avgElementCount < SECTION_OVER_SPLIT_FRAGMENT_ELEMENT;
+  // 🛡️ 放宽 + 补丁（2026-11-13 · 181 个真实任务语料标定）：**取消硬阻断**。
+  //   旧行为：ratio > HARD 且（base 不可靠 或 过拆显著）⇒ 抛 PlanningGateError 打死整个任务。
+  //   三条语料证据（判别依据，不可省）：
+  //     ① 旧口径在 **completed** 任务上同样误杀：`d30c05b4` completed，旧 ratio=8.33 > 8 被 blocked；
+  //     ② 新口径下 completed 最高 5.00 vs failed 最高 5.40 —— **区间重叠** ⇒ ratio 无判别力，
+  //        不具备承担「质量裁决」的资格（任何阈值都在「漏过真过拆」与「误伤成功任务」间二选一）；
+  //     ③ 生产实锤 mc-max-1794459907233-547bfb75：ratio=15 的**正常**任务（规划段数 == 真值段数）
+  //        被直接打死。
+  //   ⇒ 降级为「**裁剪 + 强告警**」：过碎段内容并回宿主容器段（不丢），任务继续跑；
+  //     最终质量裁决交下游 **acceptance**（C1/C2/D1 内容真值判据，判别力远高于段数比）。
+  //   ⚠️ 不可走「降级为不强拆」路径：A5 注释实锤该路返回**空规划** ⇒ 空壳产物（视觉分 0.40 仍 completed）。
+  let softBlocked = false;
   if (ratio > SECTION_COUNT_RATIO_HARD) {
-    return { evaluated: true, skippedReason: null, base, ratio, verdict: 'blocked', trimmed: [], sections: Array.isArray(sections) ? sections : [] };
+    //   - base 不可靠（顶层降级）⇒ 保守处理（历史行为，保留为软阻断）；
+    //   - base 准 且 过拆特征显著（碎片占比高 / 平均 elementCount 过低）⇒ 真·一段一组件退化 ⇒ 软阻断；
+    //   - base 准 且 段都合理大（过拆不显著）⇒ 落 trim 分支（不阻断）。
+    if (baseIsTopLevel || overSplitSignificant) {
+      softBlocked = true;
+    }
+    // fall-through 到 trim 分支（裁剪 + 告警，不中断任务）
   }
   if (ratio > SECTION_COUNT_RATIO_LIMIT) {
+    // 🛡️ 精准裁剪（2026-11-12）：仅过拆特征显著（碎片高 / 平均 elementCount 低）或无法评估特征
+    //   （sections 未提供，保守裁剪）时才裁剪；真值 base 准 且 段都合理大（过拆不显著）⇒ 视为合理
+    //   深嵌套，pass 不裁剪（避免误伤，内容不丢）。
+    if (!overSplitSignificant && !softBlocked) {
+      return { evaluated: true, skippedReason: null, base, baseSource, ratio, verdict: 'pass', softBlocked: false, trimmed: [], sections: Array.isArray(sections) ? sections : [], underGenerated, fragmentRatio, avgElementCount, baseIsTopLevel, measuredLeafCount, unmeasuredLeafCount, featuresUnmeasured };
+    }
     // 裁剪：保 top-(base×LIMIT) 叶子（elementCount 降序），其余内容并回最近祖先容器段。
     const keep = Math.max(1, Math.round(base * SECTION_COUNT_RATIO_LIMIT));
     const tree = Array.isArray(sections) ? sections : [];
@@ -443,9 +580,9 @@ export function auditSectionCountRatio({ leafSections, figmaTop = 0, visionSecti
       }
     };
     mergeItems(nextTree);
-    return { evaluated: true, skippedReason: null, base, ratio, verdict: 'trim', trimmed, sections: nextTree };
+    return { evaluated: true, skippedReason: null, base, baseSource, ratio, verdict: 'trim', softBlocked, trimmed, sections: nextTree, underGenerated, fragmentRatio, avgElementCount, baseIsTopLevel, measuredLeafCount, unmeasuredLeafCount, featuresUnmeasured };
   }
-  return { evaluated: true, skippedReason: null, base, ratio, verdict: 'pass', trimmed: [], sections: Array.isArray(sections) ? sections : [] };
+  return { evaluated: true, skippedReason: null, base, baseSource, ratio, verdict: 'pass', softBlocked: false, trimmed: [], sections: Array.isArray(sections) ? sections : [], underGenerated, fragmentRatio, avgElementCount, baseIsTopLevel, measuredLeafCount, unmeasuredLeafCount, featuresUnmeasured };
 }
 
 /**

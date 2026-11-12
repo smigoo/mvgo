@@ -23,6 +23,8 @@ import {
 // 🧱 段内结构事实（纯函数，零依赖）：段声明里没有任何子结构时，用 Figma 几何补一条
 //   「该段由 N 个并列同构块组成」的事实，防止 LLM 把一行两张卡画成一张（cbcac19a 实锤）。
 import { formatInternalStructureFact } from '../../utils/internal-structure-facts.js';
+// 🧬 刀 66-P1：mc/vue3 共用的同构模板契约文本（单一来源）
+import { buildIsoTemplateContract as buildIsoTemplateContractFromShared } from '../../utils/iso-template-contract.js';
 import {
   formatResourceMapping,
 } from '../../utils/resource-mapping-formatter.js';
@@ -44,11 +46,18 @@ import {
   extractResourceVarNames,
 } from '../../utils/resource-import-guard.js';
 import { buildRetryPrompt as buildRetryPromptBase } from '../../utils/retry-prompt.js';
+// 🔴 2026-11-13：段身份契约实现下沉到 utils（首轮 + 精简重试共用同一份，避免口径漂移）。
+//   详见 utils/section-identity-contract.js 头注释（生产实锤 mc-max-1794462377352-3d6fa463）。
+import {
+  buildSectionIdentityContract as buildSectionIdentityContractImpl,
+} from '../../utils/section-identity-contract.js';
 // 📊 WP1（2026-10-08）：chartSpec 像素事实消费规则（两线共用单一来源）
 import { buildChartSpecPromptRules } from '../../utils/chart-spec.js';
 // 🧩 WP2（2026-10-08）：资源绑定契约（RC1/RC3/RC5/RC7，两线共用单一来源）
 import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contract.js';
 import { formatRepeatedFillCss } from '../../utils/layout-truth-healer.js';
+// 🧬 B 层（2026-11-12 · c-cc6334 实锤）：装配同源——规划树分组数 vs 视觉真值复核
+import { ensureSectionGroupConservation } from '../../utils/section-group-conservation.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
 import { collectFigmaTextTruth } from '../../utils/text-truth-guard.js';
@@ -1854,38 +1863,14 @@ export function findFigmaParentOf(root, nodeId) {
  * 在**映射反查命中**时才写入）。index.vue / template / style 等 chunk 没有该字段 ⇒ 空串。
  */
 export function buildSectionIdentityContract(chunk) {
-  const scope = chunk?.scopedInput?._sectionScope;
-  if (!scope || scope.id == null || scope.id === '') return '';
-  const id = String(scope.id);
-  const name = String(scope.componentName || '');
-  const file = (chunk.files || [])[0] || name;
-  const truths = Array.isArray(scope.truthTexts) ? scope.truthTexts : [];
-  const out = [];
-  out.push('\n## 🎯 段身份契约（本文件唯一负责的段 · 强制）');
-  out.push('');
-  out.push(
-    `本文件 \`${file}\` 只负责 section \`${id}\`${
-      scope.title ? `（标题「${scope.title}」）` : ''
-    }${name ? `，系统分配组件名 \`${name}\`` : ''}。`,
-  );
-  out.push('');
-  out.push(
-    `1. 本文件**根元素**必须带 \`data-section-id="${id}"\`（逐字照抄；禁止改写该 id、禁止改用其他段的 id）。`,
-  );
-  if (truths.length > 0) {
-    out.push(
-      `2. 本文件允许渲染的**全部业务文案**＝下列真值（逐字照抄；禁止增删改、禁止拼接、禁止臆造同义文案）：`,
-    );
-    for (const t of truths) out.push(`   - \`${t}\``);
-  } else {
-    out.push(
-      `2. 系统未给出本段真值文案 ⇒ 只实现结构与样式，**禁止**自行编造任何业务文案。`,
-    );
-  }
-  out.push(
-    `3. **禁止渲染目标段之外的任何内容**：其他 section 的文案 / 图表 / 列表项 / 统计数字 / 分页一律不得出现在本文件——跨段渲染会让同一份内容在页面上重复出现（COMP-001 / COMP-002 判失败）。`,
-  );
-  return out.join('\n') + '\n';
+  // 🔴 2026-11-13：实现已下沉到 `utils/section-identity-contract.js` —— **首轮与重试必须共用同一份**。
+  //   原因（生产实锤 mc-max-1794462377352-3d6fa463）：实现只留在本文件时，
+  //   `utils/retry-prompt.js` 的精简重试 prompt 拿不到契约 ⇒ parse_failure 后重试的 LLM
+  //   既不知本文件负责哪个 section、也不知本段文案 ⇒ 输出 `<div><slot/></div>` 空壳并静默落盘
+  //   ⇒「排查计划 6/7 + 车辆图标」整块从产物消失。
+  //   下沉到 utils 的另一个原因：prompt-builder 已 import utils/retry-prompt ⇒ 反向 import 会成环。
+  //   本函数保留薄委托 ⇒ 对外 API 与既有调用方**零漂移**。
+  return buildSectionIdentityContractImpl(chunk);
 }
 
 /**
@@ -1900,49 +1885,9 @@ export function buildSectionIdentityContract(chunk) {
  * 违约会被校验拦截并回退独立生成路径（不会静默出坏产物）。
  */
 export function buildIsoTemplateContract(chunk) {
-  const iso = chunk?.isoContract;
-  if (!iso || !iso.groupSize) return '';
-  const file = (chunk.files || [])[0] || '本文件';
-  const out = [];
-  out.push('\n## 🧬 同构段模板契约（本文件是 N 个同构段的唯一模板 · 强制）');
-  out.push('');
-  out.push(
-    `本文件 \`${file}\` 对应的 section 与其他 ${iso.groupSize - 1} 个兄弟段**结构完全同构**` +
-      `（系统已判定）。兄弟段**不会各自生成**——\`index.vue\` 会用 \`v-for\` 遍历一份段数据数组、` +
-      `反复渲染本模板（并转发 props），因此本文件必须是**参数化模板**，任何硬编码都会被复制 ${iso.groupSize} 份：`,
-  );
-  out.push('');
-  out.push(
-    `1. **必须声明 props**（defineProps）：\`title\`（String, 段标题）、\`icon\`（String, 图标图片地址，可默认 ''）、\`items\`（Array&lt;{ name: string, value: string }&gt;, 段内条目）。`,
-  );
-  out.push(
-    `2. **头部**用 \`title\` + \`icon\` 渲染（\`<img :src="icon">\`）；**主体**用 \`v-for="item in items"\` 渲染条目，` +
-      `条目文案取 \`item.name\`、条目数值取 \`item.value\`（\`value\` 可能为空串 ⇒ 用 \`v-if\` 决定渲不渲染该槽）；` +
-      `**禁止**在本文件内联任何条目文案数组、**禁止** import 图片资源（icon 由 props 传入）。`,
-  );
-  out.push(
-    `3. **根元素必须带 \`v-bind="$attrs"\`**（使用方经 fallthrough 注入各段 data-section-id）；样式与结构按本段 Figma 真值实现（下方真值表仍有效）。`,
-  );
-  // 🛡️ 2026-11-06（245878e6 实锤）：列数由系统归一后**直接下发**，不让模型从
-  //   `horizontal-4-columns` 之类自由文本里猜 —— 实测三个同构段各自猜出三种结果
-  //   （扁平文本 / 自造嵌套子组 / 正确网格）。
-  const cols = Number(iso.columns);
-  if (Number.isInteger(cols) && cols >= 2) {
-    out.push(
-      `4. **条目排布**：本模板主体是 **${cols} 列** 的重复条目区（Figma 真值）。容器用网格或等分换行实现，` +
-        `每个条目是**独立单元**；**禁止**把名称与数值拼成同一段文本（如 \`{{ item.name }}{{ item.value }}\` 连排）——` +
-        `名称与数值必须落在**不同的元素**里（可用 grid 的两个列/上下两行），否则渲染出来是「华为技术8台」这种粘连形态。`,
-    );
-  } else {
-    out.push(
-      `4. **条目排布**：每个条目是**独立单元**；**禁止**把名称与数值拼成同一段文本（如 \`{{ item.name }}{{ item.value }}\` 连排），` +
-        `名称与数值必须落在不同的元素里。`,
-    );
-  }
-  out.push(
-    `5. 本模板会被 ${iso.groupSize} 个段复用，请按「最通用、最贴真值」的形态实现，不要为单一段做特殊分支。`,
-  );
-  return out.join('\n') + '\n';
+  // 🧬 刀 66-P1（2026-11-12 四象限同步）：契约文本唯一来源下沉到
+  //   utils/iso-template-contract.js —— vue3-prompt.js 调同一函数，杜绝 mc/vue3 双份漂移。
+  return buildIsoTemplateContractFromShared(chunk);
 }
 
 export function buildSubcomponentScopedInput(subPath, indexContent, input, options = {}) {    const tagName = String(subPath || '')
@@ -2320,7 +2265,41 @@ export function resolvePlanSections(input) {
   // 🛡️ 治本（2026-09-11 · c-device-monitor-hsvmkuvd-cfb53488）：planner 双重解释去重
   // （同一主内容区被 @antd/tab 壳 + 臆造语义壳各解释一次 → 双 tabs 副本）。
   // R1 单一事实源出口统一归一，模板装配/命名/prompt/COMP-001 全链自动受益。
-  return dedupeDuplicateSections(sections);
+  const deduped = dedupeDuplicateSections(sections);
+
+  // 🧬 B 层（2026-11-12 · mc-1794428749650-cc633474 实锤）：**装配同源**复核。
+  //   病灶：折叠器把三张并列分组卡拍平成 1 段，而分块 prompt 的 layoutStructure 仍是三段
+  //   （各带标题/列数/底色）⇒ 约束与装配不同源 ⇒ index.vue 只装配 1 个子组件。
+  //   动作：视觉真值里「带业务标题 + 分组结构证据」的段数 ≥3 且规划树少 ≥2 组时，
+  //   按视觉真值把缺失分组**追加**回规划树（纯附加，既有段一个不动），并留痕
+  //   `[SECTION-GROUP-CONSERVATION]`。无 layoutStructure / 标题不具业务语义 ⇒ 原样返回。
+  //   A 层（repeated-section-collapser 并列分组守卫）从源头阻止误折，本层是出口复核。
+  return ensureSectionGroupConservation({
+    sections: deduped,
+    layoutStructure: input?.layoutStructure,
+    logger: safeLogger(input?.logger),
+  });
+}
+
+/**
+ * 🧬 刀 66-P0（2026-11-12 · mc-max-1794420265256-036db2a1 实锤）：同构判据专用段解析。
+ *
+ * 为什么不能复用 `resolvePlanSections`：它优先 `generationInput.componentPlan`，而该 plan 已被
+ * `generation-context-assembler` 归一化（`body` → `declaredContent`，丢 `resourceFile`/`styles`）。
+ * 同构收敛需要的是**结构 + 资源真值**（条目轨、列数、各段自己的 icon），归一化口给不出。
+ * 实测：归一化口 `groupsRaw=0`（`no-body`×3）；planner 原形（subComponentPlan）能过结构与列数校验。
+ *
+ * fail-open：原形缺失 / 无任何段带内容轨 ⇒ 退回 `resolvePlanSections(input)`（逐字同旧版）。
+ */
+export function resolveIsoPlanSections(input) {
+  const subSections = Array.isArray(input?.subComponentPlan?.effectiveSections)
+    ? input.subComponentPlan.effectiveSections
+    : [];
+  const withContent = subSections.filter(
+    (s) => s && typeof s === 'object' && (s.body || s.declaredContent),
+  ).length;
+  if (withContent >= 2) return dedupeDuplicateSections(subSections);
+  return resolvePlanSections(input);
 }
 
 export function buildLayoutSkeleton(layoutStructure, planSections) {

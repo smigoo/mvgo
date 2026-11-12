@@ -67,6 +67,47 @@ function axisCss(a0, aSize, c0, cSize, startProp, endProp, sizeProp) {
 }
 
 /**
+ * 🛡️ 刀 7c-grad（2026-11-12 · 46ef66fa 弹窗壳渐变实锤）：Figma 渐变 fill → CSS background。
+ * 与 figma-connector.js#_gradientAngleDeg / fills→CSS 路径同算法口径：
+ *  · 角度 = atan2(dx, -dy)（handles[0]→[1]），负值 +360，缺 handles 回落 180（上→下）；
+ *  · stop 色值含 alpha（<1 用 rgba，=1 用 #hex），位置取 % 整数；
+ *  · 填充级 opacity 乘入（fill.opacity ?? 1）。
+ * 纯函数；无 stops ⇒ null（调用方 fail-open 跳过）。
+ */
+function gradientFillToCss(fill) {
+  const stops = Array.isArray(fill.gradientStops) ? [...fill.gradientStops] : []
+  if (stops.length < 2) return null
+  const opacity = typeof fill.opacity === 'number' ? fill.opacity : 1
+  const cssColor = (c) => {
+    if (!c || typeof c.r !== 'number') return null
+    const r = Math.round(c.r * 255)
+    const g = Math.round(c.g * 255)
+    const b = Math.round(c.b * 255)
+    const a = Math.round((c.a !== undefined ? c.a : 1) * opacity * 100) / 100
+    return a < 1 ? `rgba(${r},${g},${b},${a})` : `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+  }
+  const parts = stops
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((s) => {
+      const col = cssColor(s.color)
+      return col ? `${col} ${Math.round((s.position ?? 0) * 100)}%` : null
+    })
+    .filter(Boolean)
+  if (parts.length < 2) return null
+  if (fill.type === 'GRADIENT_RADIAL') return `radial-gradient(circle, ${parts.join(', ')})`
+  // GRADIENT_LINEAR：角度由 gradientHandlePositions 推导（与 _gradientAngleDeg 同式）
+  const handles = fill.gradientHandlePositions
+  let angle = 180
+  if (Array.isArray(handles) && handles.length >= 2 && handles[0] && handles[1]) {
+    const dx = (handles[1].x ?? 0) - (handles[0].x ?? 0)
+    const dy = (handles[1].y ?? 0) - (handles[0].y ?? 0)
+    angle = Math.round((Math.atan2(dx, -dy) * 180) / Math.PI)
+    if (angle < 0) angle += 360
+  }
+  return `linear-gradient(${angle}deg, ${parts.join(', ')})`
+}
+
+/**
  * @param {Object} sec 容器 section（读 id/sourceNodeIds）
  * @param {Map|null} figmaIndex `indexFigmaNodes` 产物
  * @param {Set<string>} claimedIds 全部叶子认领的节点 id（含叶子自身 id 与其 sourceNodeIds）
@@ -92,9 +133,30 @@ export function resolveAbsorbedBgLayers(sec, figmaIndex, claimedIds) {
     out.evaluated += 1
 
     const fills = Array.isArray(node.fills) ? node.fills : []
-    const solid = fills.find((f) => f && f.type === 'SOLID' && f.visible !== false)
-    if (!solid) continue
-    const background = fillToRgba(solid)
+    // 🛡️ 刀 7c-grad（2026-11-12 · mc-max-1794418321523-46ef66fa 实锤）：渐变壳吸收。
+    //   病灶：弹窗类画板的壳背景（如 36:1694 name='bg'，603×555 r4）是 GRADIENT_LINEAR
+    //   （#D4E2FF→#C1D5FF 纵向、opacity 0.9），旧判据 `fills.find(type==='SOLID')`
+    //   取不到 ⇒ `if (!solid) continue` 丢弃 ⇒ 壳层渐变+圆角永不落，弹窗观感全靠
+    //   预览页白底硬撑（用户对比设计图报「退化」）。
+    //   修法：SOLID 缺失时回落取首个可见 GRADIENT_LINEAR/RADIAL，CSS 化后照常吸收——
+    //   渐变→CSS 算法与 figma-connector.js#_gradientAngleDeg / 2347-2361 行同口径
+    //   （角度 atan2(dx,-dy)、stop 不透明度优先于填充级 opacity；在此本地实现最小版，
+    //   避免为单一函数引入 roles→utils 反向依赖）。
+    //   不命中枚举：SOLID 存在仍走原路（逐字不变）；IMAGE/VIDEO fill 不吸收；渐变无
+    //   gradientStops ⇒ 跳过（fail-open 不猜）。
+    let solid = fills.find((f) => f && f.type === 'SOLID' && f.visible !== false)
+    let background = solid ? fillToRgba(solid) : null
+    if (!background) {
+      const grad = fills.find(
+        (f) =>
+          f &&
+          f.visible !== false &&
+          (f.type === 'GRADIENT_LINEAR' || f.type === 'GRADIENT_RADIAL') &&
+          Array.isArray(f.gradientStops) &&
+          f.gradientStops.length >= 2,
+      )
+      if (grad) background = gradientFillToCss(grad)
+    }
     if (!background) continue
 
     const b = boxOf(node)

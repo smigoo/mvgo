@@ -153,9 +153,11 @@ export class LiteLabService {
 
   /**
    * 解析 Figma token —— 与 lite 正式链（fetchFigmaImage :1694-1699）完全同口径：
-   *   dto.config.figmaToken → 按用户 DB 配置 getMergedAiConfig(userId) → 环境变量 → data/ai-config.json 兜底
-   * 🔴 不能只读 data/ai-config.json 顶层 figmaToken：那是静态旧值，
-   *    真机实锤 mc-lab-1793861291047-28b3878d 因此 Figma 404（Stage A 用用户配置成功、Stage B 拿旧 token 404）。
+   *   dto.config.figmaToken → 按用户 DB 配置 getMergedAiConfig(userId) → 环境变量
+   * 🔴 2026-11-12 用户指令（零兜底）：**已删除末级 `data/ai-config.json` 全局兜底**。
+   *    该兜底会读到「别人保存过的全局 token」，既掩盖用户未配置，又造成跨用户串号
+   *    （真机实锤 mc-lab-1793861291047-28b3878d 因静态旧 token 直接 Figma 404）。
+   *    现在取不到就返回 undefined，由调用方按 L291 直接报错引导用户自行配置。
    */
   private async resolveFigmaToken(dto: RunLabDto, userId?: string): Promise<string | undefined> {
     const fromDto = (dto.config as any)?.figmaToken;
@@ -167,14 +169,7 @@ export class LiteLabService {
       this.logger.warn(`[lite-lab] getMergedAiConfig 失败（继续回落）: ${e?.message}`);
     }
     if (process.env.FIGMA_ACCESS_TOKEN) return process.env.FIGMA_ACCESS_TOKEN;
-    try {
-      const cfg = JSON.parse(
-        readFileSync(join(process.cwd(), 'data', 'ai-config.json'), 'utf8'),
-      );
-      return cfg?.figma?.token || cfg?.figmaToken;
-    } catch {
-      return undefined;
-    }
+    return undefined;
   }
 
   /**
@@ -288,7 +283,11 @@ export class LiteLabService {
         message: 'Stage B：拉取 Figma node 真值（颜色/字号/几何/图片）...',
       });
 
-      if (!token) throw new Error('未找到 Figma token（config.figmaToken 或 data/ai-config.json）');
+      if (!token) {
+        throw new Error(
+          '未找到 Figma token：请在「设置 → 模型配置」中配置 Figma Token（或在请求 config.figmaToken 中显式传入）后重试',
+        );
+      }
       const { FigmaConnector } = await import('../../ai-engine/roles/figma-connector.js');
       const connector = new FigmaConnector({ figmaToken: token });
       const nodeData = await connector.fetchNodeData(fileKey, nodeId);
@@ -1169,6 +1168,10 @@ export class LiteLabService {
       `严格输出 JSON，格式：{"文件名": "可见文字或null", ...}，不要输出任何其他内容。`;
     let content = '';
     try {
+      // 🔴 刻意不声明 outputKind：本 prompt 要求的是 `{"文件名": "可见文字"}` —— 顶层键是任意
+      //    文件名，**不含** sections/charts/interactions ⇒ 声明 'json' 会被结构判据恒判「损坏」
+      //    并每轮白烧一次抬温重试（2026-11-12 逐调用点枚举出的白烧点之一）。
+      //    本步的真实判据在下游：解析失败即走 anchor 兜底（返回结构候选而非编造）。
       content = await agent.analyzeImage(compositePath, prompt, {});
     } catch (e: any) {
       this.logger.warn(`[lite-lab] 背景图兜底 vision 调用失败: ${e?.message}`);

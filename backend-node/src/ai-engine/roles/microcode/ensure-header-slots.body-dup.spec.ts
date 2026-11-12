@@ -89,3 +89,45 @@ describe('T09 · 插槽内容与 body 段重复让位（3e924a69）', () => {
     expect(isSlotContentDuplicatedInBody('任意', undefined)).toBe(false)
   })
 })
+
+describe('T09 · corpus 纳入 index.vue（12ffdcbf 实锤）', () => {
+  // 12ffdcbf 实锤形态：S4-b（code-fix 链，先跑）把交互 tab 块注入 index.vue 正文；
+  // T09（后跑）corpus 排除 index ⇒ 检测不到 ⇒ 静态 span 再进 #header-right ⇒ tabs 双份。
+  const FILES_S4_TAB_IN_INDEX = {
+    'package/index.vue': `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-x-slot-con">
+      <div class="mc-s4-tabblock" data-section-id="2:7954">
+        <div class="mc-s4-tab mc-s4-tab--active">江阴靖江长江隧道</div>
+        <div class="mc-s4-tab">江阴大桥</div>
+      </div>
+    </div>
+  </base-panel>
+</template>`,
+    'package/components/StatsSection.vue': '<template><div class="c-s">统计卡片</div></template>',
+  }
+
+  it('⭐ 阳性：tab 文本已由 index.vue 正文（S4-b 注入）承载 ⇒ 插槽让位不注入', () => {
+    const out = ensureHeaderSlots(
+      FILES_S4_TAB_IN_INDEX['package/index.vue'],
+      { headerSlots: [{ slotType: 'header-right', elementType: 'label', content: '江阴靖江长江隧道 江阴大桥' }] },
+      OPTS(FILES_S4_TAB_IN_INDEX),
+    )
+    expect(out).not.toContain('由生成器按 Figma headerSlots 确定性补齐')
+    expect(out).not.toContain('江阴靖江长江隧道 江阴大桥') // 静态拼接 span 不再出现
+  })
+
+  it('阴性：index.vue 只有壳、子组件无该文本 ⇒ 仍注入（真插槽不误伤）', () => {
+    const out = ensureHeaderSlots(
+      INDEX,
+      { headerSlots: [{ slotType: 'header-right', elementType: 'statistic', content: '完好率 98%' }] },
+      OPTS(FILES_CLEAN),
+    )
+    expect(out).toContain('#header-right')
+    expect(out).toContain('完好率 98%')
+  })
+
+  it('纯函数：文本仅在 index.vue ⇒ true（旧行为为 false，本用例钉住回归）', () => {
+    expect(isSlotContentDuplicatedInBody('江阴靖江长江隧道 江阴大桥', FILES_S4_TAB_IN_INDEX)).toBe(true)
+  })
+})

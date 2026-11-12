@@ -1,0 +1,33 @@
+{
+  "name": "code-analyzer",
+  "label": "代码分析",
+  "description": "分析组件代码结构",
+  "category": "分析",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "code",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "analysis",
+      "type": "object"
+    }
+  ],
+  "params": {
+    "prompt": "你是资深前端架构师。分析组件代码，输出 JSON：structure（模板/脚本/样式概览）、props（props 列表及含义）、api（调用接口）、logic（核心逻辑说明）、extensionPoints（可扩展点）。只输出 JSON。"
+  },
+  "model": "qwen3.7-plus",
+  "referenceFiles": [],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/code-analyzer.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787277364425
+}

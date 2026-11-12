@@ -718,6 +718,64 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
           __absorbedBgRootHostDeferred += g.layers.length;
         }
       }
+
+      // 🛡️ 刀 7d（2026-11-12 · mc-1794420031803-a2a0df58 实锤）：**根直系壳层直采**。
+      //
+      //   ## 缺口（刀 7c 通路对「壳=根直系子」形态失明）
+      //   弹窗画板的壳背景是根节点（36:1693）的直系 RECTANGLE 子（36:1694 name='bg'，
+      //   603×555 r4 GRADIENT_LINEAR），而规划层段树从根的 children 开始建段 ⇒ 根/壳
+      //   都不在 treeSections ⇒ 刀 7c「顶层非容器段」枚举零候选可认领壳节点 ⇒
+      //   刀 7 常规通路（段 sourceNodeIds）也无主语 ⇒ 渐变壳永不落（46ef66fa/a2a0df58
+      //   用户对比设计图报「退化」）。
+      //
+      //   ## 判据（纯几何+真值，零语义猜测，仅当 7c 未命中时启用）
+      //   ① 根节点直系子中存在 RECTANGLE，且其 bbox ≡ 根 bbox（±2px，同 boxEq）；
+      //   ② 该子未被任何段认领（claimedNodeIds ∩ 自身 id 为空）且不在 consumedBgIds；
+      //   ③ fill 可 CSS 化（resolveAbsorbedBgLayers 同一裁决：SOLID 或 ≥2 stops 渐变）。
+      //   命中 ⇒ 构造 absolute 全覆盖层注入根 slot-con div（z-index:-1 沉底），
+      //   与刀 7c 注入同构（同 buildAbsorbedBgLayerStyle，禁第二份样式拼装）。
+      //   不命中枚举：7c 已命中（rootHostLayers 非空）跳过；壳尺寸 ≠ 根尺寸（部分宽
+      //   条/装饰条）不属「壳」，走段级通路；SOLID/渐变都不可 CSS 化跳过（fail-open）；
+      //   IMAGE fill 跳过（位图走 E3-v4 资源通路）。
+      if (!rootHostLayers.length && figmaIndex && typeof figmaIndex.get === 'function') {
+        const rootChildren = Array.isArray(rootNode?.children) ? rootNode.children : [];
+        const shellNode = rootChildren.find((c) => {
+          if (!c || String(c.type || '').toUpperCase() !== 'RECTANGLE') return false;
+          const cb = c.absoluteBoundingBox;
+          if (!cb) return false;
+          const eq =
+            Math.abs(cb.x - rootBox.x) <= 2 &&
+            Math.abs(cb.y - rootBox.y) <= 2 &&
+            Math.abs(cb.width - rootBox.w) <= 2 &&
+            Math.abs(cb.height - rootBox.h) <= 2;
+          if (!eq) return false;
+          if (claimedNodeIds.has(String(c.id))) return false;
+          if (consumedBgIds.has(String(c.id))) return false;
+          return true;
+        });
+        if (shellNode) {
+          const shellId = String(shellNode.id);
+          // 容器=根节点（resolveAbsorbedBgLayers 需 figmaIndex.get(sec.id) 取 cBox；
+          // 且 sourceNodeIds 不得含 sec.id 自身 ⇒ 必须以根为主语、壳为子）
+          const r = resolveAbsorbedBgLayers(
+            { id: String(rootNode?.id ?? 'root'), sourceNodeIds: [shellId] },
+            figmaIndex,
+            new Set(),
+          );
+          if (r.layers.length > 0) {
+            // 壳层全覆盖根容器：edgeCss 全 0（left/top/right/bottom 全贴），直接构造
+            for (const layer of r.layers) {
+              rootHostLayers.push({
+                ...layer,
+                edgeCss: 'left:0;top:0;right:0;bottom:0;',
+              });
+            }
+            consumedBgIds.add(shellId);
+            rootHostSection = { id: 'root', name: 'root-shell' };
+            __absorbedBgRootHostLayers += r.layers.length;
+          }
+        }
+      }
     }
   }
 
@@ -828,6 +886,37 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         ? ` data-absorbed-host="${rootHostSection.id}"`
         : '';
     const rootHostStyle = rootHostLayers.length ? 'position:relative;isolation:isolate;' : '';
+    // 🛡️ 弹窗画板尺寸契约（2026-11-12 · mc-max-1794418321523-46ef66fa 实锤）：
+    //   大屏画板根（如 2:7952 420×147）预览时应横向铺满（宽高比悬殊、卡片流）；
+    //   弹窗/面板类画板根（如 36:1693 603×555，宽高比 ≈1）被 `height:100%` 拉满
+    //   预览全屏 ⇒ 观感「退化」（壳撑满、内容稀疏）。判据（确定性、真值优先）：
+    //   根真值 max(w,h)/min(w,h) ≤ 1.5 且 max ≤ 800px ⇒ 弹窗类，slot-con 根容器
+    //   内联 width/height 钉真值尺寸 + margin:auto 居中（不依赖 LLM/共享样式表）；
+    //   其余（大屏/横幅）保持 height:100% 铺满逐字不变。
+    //   🛡️ 去重修正（2026-11-12 · mc-max-1794422523731-d7c469a9 实锤）：弹窗类画板下
+    //   模板串曾产出 `height:100%;…;height:555px`（同一属性重复）。标准 CSS 后者胜出，
+    //   但预览运行时（vue3-sfc-loader 沙箱的内联 style 解析）按首个键值生效 ⇒
+    //   height:100% 复活 ⇒ 弹窗壳被拉满全屏（用户报「为什么这样」）。修：弹窗类时
+    //   底串不再输出 height:100%（由 rootHeightStyle 单点提供），根 div 高度唯一来源。
+    let rootSizeStyle = '';
+    let rootHeightStyle = 'height:100%;'; // 大屏/横幅：保持铺满（逐字不变）
+    {
+      const _rootBb =
+        input?.figmaNodeData?.document?.absoluteBoundingBox ||
+        input?.figmaNodeData?.absoluteBoundingBox ||
+        null;
+      const rw = _rootBb ? Number(_rootBb.width) : NaN;
+      const rh = _rootBb ? Number(_rootBb.height) : NaN;
+      if (Number.isFinite(rw) && Number.isFinite(rh) && rw > 0 && rh > 0) {
+        const mx = Math.max(rw, rh);
+        const mn = Math.min(rw, rh);
+        const isDialogLike = mx / mn <= 1.5 && mx <= 800;
+        if (isDialogLike) {
+          rootSizeStyle = `width:${Math.round(rw)}px;height:${Math.round(rh)}px;margin-left:auto;margin-right:auto;`;
+          rootHeightStyle = ''; // 弹窗类：height 由 rootSizeStyle 唯一提供
+        }
+      }
+    }
     // 🛡️ F1 根容器高度契约（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：
     //   此前根 div 只写 `display:flex;flex-direction:column`，高度**全靠 LLM 在 less 里写
     //   `height:100%`**（见上方 P5 注释「LLM 写了才有」）。一旦 LLM 没写（本例 index.vue 的
@@ -838,7 +927,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   真机实测 slot-con 0 / chart 0 / canvas 110 溢出不可见。
     //   治本：把高度契约定在**产生处**（内联样式优先级最高，免疫后续合并/反杀），
     //   与既有正常组件的 `.c-…-slot-con{width:100%;height:100%;min-height:0}` 同口径。
-    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;height:100%;min-height:0;${rootHostStyle}">`);
+    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHeightStyle}min-height:0;${rootSizeStyle}${rootHostStyle}">`);
     for (const layer of rootHostLayers) {
       lines.push(
         `      <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
@@ -1404,6 +1493,145 @@ export function findRootTemplateBlock(src) {
   return null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ #19（2026-11-12 · mc-max-1794456460380-1efe65a2 实锤）：装配层「同段交互接管」
+//
+// 病灶（真机，非推理）：
+//   ① LLM 生成 index.vue 时按自己的命名产出段组件 —— `#header_right` slot 装 `TabSwitchBar`
+//      （带 @click 切换态）、内容区装 `TodaySummary` / `StatsCardRow`，并把三个文件写盘；
+//   ② `applyDeterministicIndexTemplate` 把 `<template>` 段整体换成 effectiveSections 派生的
+//      确定性骨架，段组件改用 `assignSectionComponentNames` 的命名（HeaderSection /
+//      ContentSection / StatsSection），而骨架只做**静态渲染**（`2:7954` 渲成 fg-grid 静态 pill 组）；
+//   ③ LLM 那三个组件随即成为「规划外引用」被 prune，文件被清理 ⇒ 产物零 `@click`
+//      ⇒ 面板无任何交互（用户可见症状「依旧没有交互」）。
+//
+// 判据（可辩驳、单一事实源；本函数只出决策，不改产物）：
+//   某 LLM 组件 `X` 满足全部条件时，判定「应与骨架段组件 `Y` 互换」：
+//     a) `data-section-id` ∈ X 的段 id 集，且与某 sectionRoot.id 相等（**同段**，非语义猜测）；
+//     b) X 的文件已落在 `package/components/X.vue`（真实产物，非臆造引用）；
+//     c) X 含交互语义（`@click` / `v-model` / `@change` …）；
+//     d) 骨架该 sectionRoot 的段组件 `Y` 未含交互语义（内容未知 ⇒ 视为无交互）；
+//     e) `Y` 在骨架 template 里被真实引用（否则无可替换主语）。
+//   任一不满足 ⇒ 不接管（**零行为变更**）。同段仅允许一个接管（首个命中胜）。
+//
+// ⚠️ 边界：只在「LLM 有交互、骨架无交互」时接管 ⇒ 视觉精确的确定性渲染默认保留；
+//    接管后几何/样式来自 LLM 组件，存在**视觉与真值偏差**风险（运行期日志落痕，可回滚）。
+//
+// ⚠️ 与刀 53（折叠网格确定性接管）/ 刀 66（同构段收敛）的关系（**无需额外互斥代码**，勿再补守卫）：
+//   两者都以「装配后 index.vue 派生的 `subComps`」为唯一门（`subComps.includes(subPath)`，
+//   microcode-engineer.js:2345 / :2440 / :2449）。本函数把骨架 template 的标签名 From 换成 To 后，
+//   `_detectSubComponents` + `pruneDeadSubComponentImports`（本函数内已跑完）使 From 不再被引用
+//   ⇒ From 不进 subComps ⇒ 刀 53 不再写 `From.vue`、刀 66 不再包 `From.vue`。
+//   「一段只物化一个组件」由 subComps 这一份事实源自动成立，无需第二处判据（否则判据两份必漂移）。
+//
+// ⚠️ 不变式：判据 c 已要求「`package/components/<To>.vue` 存在且非空」，而 applier 读的是**同一个**
+//   `componentContents` 对象 ⇒ 「判据命中但取不到内容」不可达。故 applier 不设「整体放弃」分支
+//   （死分支当作防线 = 假绿），只做逐条过滤并**只返回已生效的接管**。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 交互语义探测（v-on / v-model / 常用事件绑定）。 */
+const INTERACTION_RE =
+  /@click|@change|@input|@keyup|@keydown|@select\b|@update:|@mouseenter|@mouseleave|@touchstart|v-model|v-on:/;
+
+/** 该 SFC 全文/片段是否含交互语义。 */
+export function hasInteractionSemantics(content) {
+  return INTERACTION_RE.test(String(content || ''));
+}
+
+/** 提取内容里全部**静态** `data-section-id`（字符串化）。
+ *  🔴 只认属性名前一字符为空白/引号/`/`/`>` 的形态 ⇒ `:data-section-id="card.sectionId"`
+ *     （动态绑定，真机 StatsCardRow.vue 即有此写法）**不算**段归属声明，否则会把表达式文本
+ *     当成段 id 混进集合（判据假阳性的来源）。 */
+export function extractSectionIds(content) {
+  const ids = new Set();
+  for (const m of String(content || '').matchAll(/(?:^|[\s"'/>])data-section-id=["']([^"']+)["']/g)) {
+    ids.add(String(m[1]));
+  }
+  return ids;
+}
+
+/**
+ * 采集模板里引用的子组件名（PascalCase 标签 + `:is="X"`）。
+ * 与 `resource-mounter#pruneDeadSubComponentImports` 的 used 采集同口径（单一来源精神）。
+ */
+export function collectTemplateSubComponentRefs(template) {
+  const tpl = typeof template === 'string' ? template : '';
+  const refs = new Set();
+  for (const m of tpl.matchAll(/<([A-Z][\w]*)\b/g)) refs.add(m[1]);
+  for (const m of tpl.matchAll(/:is\s*=\s*["']([A-Za-z_$][\w$]*)["']/g)) refs.add(m[1]);
+  return refs;
+}
+
+/** 取 SFC 全文中根 `<template>` 块（无则空串）。 */
+function templateBlockOf(src) {
+  const b = findRootTemplateBlock(src);
+  return b ? src.slice(b.start, b.end) : '';
+}
+
+/**
+ * 同段交互接管决策（纯函数：只读入参，不读盘、不改入参）。
+ * @param {{ llmTemplate?: string, planTemplate?: string,
+ *           sectionRoots?: Array<{id:string|number, component:string}>,
+ *           componentContents?: Object }} input
+ *   llmTemplate:  LLM 生成的 index.vue 全文（覆盖前）
+ *   planTemplate: 确定性骨架 template 段
+ *   sectionRoots: 骨架透出的段 ↔ 组件映射（`[{id, component, type}]`）
+ *   componentContents: 写盘文件表（读 `package/components/<X>.vue`）
+ * @returns {Array<{sectionId:string, from:string, to:string}>}
+ */
+export function pickSameSectionInteractiveTakeovers({
+  llmTemplate,
+  planTemplate,
+  sectionRoots,
+  componentContents,
+} = {}) {
+  const contents =
+    componentContents && typeof componentContents === 'object' ? componentContents : {};
+  const readComp = (name) => {
+    const v = contents[`package/components/${name}.vue`];
+    return typeof v === 'string' ? v : '';
+  };
+  const planRefs = collectTemplateSubComponentRefs(planTemplate || '');
+  const llmRefs = collectTemplateSubComponentRefs(templateBlockOf(llmTemplate || ''));
+  const out = [];
+  const used = new Set();
+  for (const root of Array.isArray(sectionRoots) ? sectionRoots : []) {
+    if (!root || !root.component || root.id == null) continue;
+    const from = String(root.component);
+    // e) 骨架必须真实引用该段组件
+    if (!planRefs.has(from)) continue;
+    // d) 骨架段组件已带交互 ⇒ 不接管（不拿另一个交互组件去换）
+    if (hasInteractionSemantics(readComp(from))) continue;
+    const sectionId = String(root.id);
+    // a/b/c) LLM 侧候选：非骨架引用、文件存在、同段、带交互
+    const to = [...llmRefs].find((name) => {
+      if (planRefs.has(name) || used.has(name)) return false;
+      const c = readComp(name);
+      if (!c || !hasInteractionSemantics(c)) return false;
+      return extractSectionIds(c).has(sectionId);
+    });
+    if (!to) continue;
+    used.add(to);
+    out.push({ sectionId, from, to });
+  }
+  return out;
+}
+
+/**
+ * 按接管决策替换骨架 template 中的段组件标签（`<From … />` / `</From>` → `<To … />`）。
+ * 只替换**标签名**，属性/顺序/层级一律不动（几何锚点由骨架保持）。
+ */
+export function applySectionTakeovers(template, takeovers) {
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = String(template || '');
+  for (const t of Array.isArray(takeovers) ? takeovers : []) {
+    if (!t || !t.from || !t.to || t.from === t.to) continue;
+    out = out.replace(new RegExp(`<${esc(t.from)}(?=[\\s/>])`, 'g'), `<${t.to}`);
+    out = out.replace(new RegExp(`</${esc(t.from)}\\s*>`, 'g'), `</${t.to}>`);
+  }
+  return out;
+}
+
 /**
  * 🛡️ B（#719 主线 · 2026-09-26 · mc-max-1790420477334-6e065bd7 实锤）
  *
@@ -1423,8 +1651,14 @@ export function findRootTemplateBlock(src) {
  *
  * @param {string} content LLM 生成的 index.vue 全文
  * @param {Object} input 生成上下文（含 generationInput.componentPlan / subComponentPlan）
- * @param {Object} [options] { logger }
- * @returns {{content: string, applied: boolean, facts: Object|null, reason?: string}}
+ * @param {Object} [options] { logger, componentContents }
+ *   componentContents: 写盘文件表（`package/components/<X>.vue`）—— #19 同段交互接管的唯一事实源。
+ * @returns {{content: string, applied: boolean, facts: Object|null, reason?: string,
+ *            takeovers: Array<{sectionId:string,from:string,to:string}>,
+ *            takeoverFiles: Object<string,string>}}
+ *   takeovers/takeoverFiles：本次**已生效**的同段交互接管决策（两者条目一一对应）与「必须保产物」的
+ *   LLM 组件内容（调用方须**跳过**这些子组件的 LLM 重新生成，否则会被覆盖 ⇒ 交互丢失）。
+ *   未生效（判据未命中 / 取不到内容）的接管**不出现**在返回值里 ⇒ 调用方据此判定 0 命中即零行为变更。
  */
 export function applyDeterministicIndexTemplate(content, input, options = {}) {
   const src = typeof content === 'string' ? content : '';
@@ -1452,7 +1686,41 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
     return { content: src, applied: false, facts: null, reason: 'no-plan-sections' };
   }
 
-  let out = src.slice(0, block.start) + det.template + src.slice(block.end);
+  // 🛡️ #19（2026-11-12 · mc-max-1794456460380-1efe65a2 实锤）：同段交互接管。
+  //   覆盖前先算「LLM 交互段组件 ↔ 骨架同段静态组件」互换（判据见
+  //   `pickSameSectionInteractiveTakeovers` 头注释）。未命中 ⇒ 逐字走旧路径（零行为变更）。
+  //   实际接管需要该 LLM 组件的**内容**（写盘/保产物都要用）⇒ 内容缺失则整体放弃，
+  //   绝不改出悬空标签（fail-open 保确定性骨架）。
+  const takeovers = pickSameSectionInteractiveTakeovers({
+    llmTemplate: src,
+    planTemplate: det.template,
+    sectionRoots: det.sectionRoots,
+    componentContents: options.componentContents,
+  });
+  const _contents =
+    options.componentContents && typeof options.componentContents === 'object'
+      ? options.componentContents
+      : {};
+  const takeoverFiles = {};
+  const appliedTakeovers = [];
+  for (const t of takeovers) {
+    const p = `package/components/${t.to}.vue`;
+    const c = _contents[p];
+    // 不变式兜底（判据 c 已保证存在；此处逐条过滤而非整体放弃，避免一个坏条目拖垮其余接管）
+    if (typeof c !== 'string' || !c) continue;
+    takeoverFiles[p] = c;
+    appliedTakeovers.push(t);
+  }
+  let planTemplate = det.template;
+  if (appliedTakeovers.length > 0) {
+    planTemplate = applySectionTakeovers(det.template, appliedTakeovers);
+    options.logger?.info?.(
+      '🔗 #19 同段交互接管（骨架静态段组件 → LLM 交互段组件）',
+      { takeovers: appliedTakeovers.map((t) => `${t.sectionId}:${t.from}→${t.to}`) },
+    );
+  }
+
+  let out = src.slice(0, block.start) + planTemplate + src.slice(block.end);
   out = ensureSubComponentImport(out, options);
   out = pruneDeadSubComponentImports(out, options);
 
@@ -1465,6 +1733,8 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
       componentFiles: det.componentFiles || [],
       source: 'deterministic-template',
     },
+    takeovers: appliedTakeovers,
+    takeoverFiles,
   };
 }
 

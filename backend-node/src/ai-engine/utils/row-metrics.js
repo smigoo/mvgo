@@ -215,6 +215,16 @@ export function deriveGapSequence(boxes, direction, tol = 2) {
  * @param {number} gap
  * @returns {number} 0 表示算不出（入参非法）
  */
+/**
+ * 「两个 section 是否并排」的几何容差（**唯一来源**）。
+ *
+ * 2026-11-12：此前 D3 判据（component-acceptance）与 C 层 `enforceSiblingRowDirection`
+ * 各写一份 `4 / 4 / 3` ⇒ 改一处忘另一处必然漂移（判据非单一来源）。现两处统一引用本常量。
+ *
+ * 语义：`|Δy| ≤ y`（同一行）、`|Δx| > x`（横向分开）、`|Δw| ≤ width`（等宽才谈并排）。
+ */
+export const SIBLING_ROW_TOLERANCE = Object.freeze({ y: 4, x: 4, width: 3 })
+
 export function columnsFromWidth(containerInnerWidth, itemWidth, gap) {
   const W = Number(containerInnerWidth)
   const w = Number(itemWidth)
@@ -222,4 +232,108 @@ export function columnsFromWidth(containerInnerWidth, itemWidth, gap) {
   if (![W, w, g].every(Number.isFinite)) return 0
   if (w <= 0 || g < 0 || W <= 0) return 0
   return Math.max(1, Math.floor((W + g) / (w + g)))
+}
+
+/**
+ * 由「行带」反算网格列数（2026-11-12 · mc-1794428749650-cc633474 实锤）——**列数的唯一几何判据**。
+ *
+ * 病灶：`38:3137/3162/3206` 三组的 Figma 真值是
+ *   `Frame2136639905(HORIZONTAL, itemSpacing=20) [126,126,126,126]`、`…906 [126,126]`、`…908 [126,126,126]`，
+ *   即 **4 / 2 / 3 列的行带**，最大行带 564px ⇒ 真实列数 **4**。
+ *   但视觉分析给的 `body.gridColumns` 是 3，且优先级压过几何 ⇒ 产物列数与 D-GRID 判据同时错。
+ *
+ * 判据（纯几何、命名无关、零阈值魔数，全部复用 `deriveRowMetrics`）：
+ *   ① 每个「行带」内部必须满足 `deriveRowMetrics`（同行 + 同高 + **等宽** + 等距），否则该带作废；
+ *   ② 有效带数 ≥ `minRows`（默认 1）；
+ *   ③ 列数 = 有效带 `count` 的**众数**；并列时取较大值
+ *      （最后一行不满是常态：`[4,4,4,3]`→4、`[4,2]`→4）；
+ *   ④ 众数须覆盖 ≥ 半数有效带，否则返回 null（**不猜**）。
+ *
+ * 为什么用「行带内项数」而不是「容器子项 x 聚类」：本案例容器子项是行带本身
+ *   （564/564/564/418 四个不同宽度的 Frame），x 聚类必然得到 1 列或错列；
+ *   而列数的定义正是「一行放几项」，必须下钻到行带内部。
+ *
+ * @param {Array<{boxes?:Array}>} rows 行带候选，每项形如 `{ boxes: [{x,y,width,height}] }`
+ * @param {{tolerance?:number, minCount?:number, minRows?:number}} [opts]
+ * @returns {{count:number, itemWidth:number, gap:number, rows:number, agreement:number}|null}
+ *   null = 无充分几何证据（调用方应保留既有值，不得臆造）
+ */
+export function deriveGridColumnsFromBands(rows, opts = {}) {
+  const tol = Number.isFinite(opts.tolerance) ? opts.tolerance : 2
+  const minCount = Number.isFinite(opts.minCount) ? opts.minCount : 2
+  const minRows = Number.isFinite(opts.minRows) ? opts.minRows : 1
+  const list = Array.isArray(rows) ? rows : []
+
+  const per = []
+  for (const r of list) {
+    const boxes = r && Array.isArray(r.boxes) ? r.boxes : []
+    const m = deriveRowMetrics(boxes, { tolerance: tol, minCount })
+    if (m) per.push(m)
+  }
+  if (per.length < Math.max(1, minRows)) return null
+
+  // ③ 众数（并列取较大值）：最后一行不满是常态，最大值才是满行宽度
+  const freq = new Map()
+  for (const m of per) freq.set(m.count, (freq.get(m.count) || 0) + 1)
+  const ranked = [...freq.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])
+  const [bestCount, bestHits] = ranked[0]
+
+  // ④ 半数以上一致才采纳（`[3,2]` 这类拼接残骸不猜）
+  if (bestHits * 2 < per.length) return null
+
+  const rep = per.find((m) => m.count === bestCount)
+  return {
+    count: bestCount,
+    itemWidth: rep.itemWidth,
+    gap: rep.gap,
+    rows: per.length,
+    agreement: Math.round((bestHits / per.length) * 100) / 100,
+  }
+}
+
+/**
+ * 节点树 → 列数（`deriveGridColumnsFromBands` 的节点适配层，2026-11-12）。
+ *
+ * 只做「形状适配」，不做判据：两种真实形态各试一次，判据仍全在 `deriveRowMetrics`。
+ *   形态 A（卡列表）：`children` 本身就是并排的卡（同行、等宽、等距）⇒ 直接数一行几项；
+ *   形态 B（行带嵌套）：`children` 是若干**行带**（如 `Frame2136639905: [126,126,126,126]`），
+ *     行带之间宽度不等（564/272/418）⇒ 必须下钻一层，数每带内部项数取众数。
+ *
+ * 形态 A 优先且互斥：行带形态下 A 必然失败（背景矩形 604 与 icon 16 不等宽）。
+ *
+ * @param {object} node 含 `children`，每个子项带 `absoluteBoundingBox` / `bbox` / `{x,y,width,height}`
+ * @param {{tolerance?:number, minCount?:number, minRows?:number}} [opts]
+ * @returns {{count:number, itemWidth:number, gap:number, rows:number, agreement:number, form:'single-row'|'bands'}|null}
+ */
+export function deriveGridColumnsFromNode(node, opts = {}) {
+  const boxOf = (n) => {
+    if (!n || typeof n !== 'object') return null
+    const b = n.absoluteBoundingBox || n.bbox || n
+    const x = Number(b.x)
+    const y = Number(b.y)
+    const width = Number(b.width)
+    const height = Number(b.height)
+    if (![x, y, width, height].every(Number.isFinite)) return null
+    if (width <= 0 || height <= 0) return null
+    return { x, y, width, height }
+  }
+  const kids = Array.isArray(node?.children) ? node.children : []
+  const kidBoxes = kids.map(boxOf).filter(Boolean)
+  if (kidBoxes.length < 2) return null
+
+  const single = deriveRowMetrics(kidBoxes, {
+    tolerance: opts.tolerance,
+    minCount: opts.minCount,
+  })
+  if (single && single.count >= 2) {
+    return { ...single, rows: 1, agreement: 1, form: 'single-row' }
+  }
+
+  const bands = []
+  for (const c of kids) {
+    const sub = Array.isArray(c?.children) ? c.children.map(boxOf).filter(Boolean) : []
+    if (sub.length >= 2) bands.push({ boxes: sub })
+  }
+  const r = deriveGridColumnsFromBands(bands, opts)
+  return r && r.count >= 2 ? { ...r, form: 'bands' } : null
 }

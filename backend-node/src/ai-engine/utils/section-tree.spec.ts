@@ -308,16 +308,25 @@ describe('dedupeDuplicateSections（planner 双重解释去重）', () => {
 
   // ── 🛡️ G14b：去重留痕（removed[]）阳性对照 ──
   // 2026-11-04（mc-max-1793783486041-8e733a22 实锤）：静默丢段让 COMP-001 假绿 ——
-  // 36:1642 被 81:8 按 elementCount 6<36 收敛丢弃，日志与产物 0 次出现。
-  // 以下为**判据阳性对照**：构造真机形态，验证 removed[] 真的记录、口径与
+  // 共享锚点的重复解释被按 elementCount 收敛丢弃，日志与产物 0 次出现。
+  // 以下为**判据阳性对照**：构造真重复形态，验证 removed[] 真的记录、口径与
   // figma-coverage-dedupe#removed[] 对齐（id/coveredBy/size/reason/path）。
+  //
+  // ⚠️ 夹具形态（2026-11-12 复核修正）：必须构造成**真重复解释**——两段锚在**同一个**
+  //   Figma 节点（`figmaAnchorId` 同为 81:8）且声明了**同一段**文本（`title` 同）⇒
+  //   双方身份都落在交集里（`prevIsIdentity === curIsIdentity`），C0.3-B 又因文本重合
+  //   不成立 ⇒ 必然走 R1-1 的 elementCount 收敛并留痕。
+  //   不可再用「两段各锚不同节点、仅在第三方 id 上相交」的旧形态：那恰是 G14a/G14c 要
+  //   **豁免**的「非重复」（各自锚在真实节点 + 声明文本互斥或为空）⇒ 会被豁免而不再收敛
+  //   （8e733a22 的 36:1642 ⨯ 81:8 真机形态已归入 `g14a-nested-anchor.spec.ts` 阳性①，
+  //   断言「双方都保留」——那才是该形态的正确契约）。
   describe('G14b 留痕（removed[]）', () => {
     const big = {
-      id: '81:8', type: 'body', responsibility: '主体',
+      id: '81:8', figmaAnchorId: '81:8', type: 'body', title: '厂商清单',
       elementCount: 36, sourceNodeIds: ['81:8'],
     };
     const small = {
-      id: '36:1642', type: 'body', responsibility: '厂商清单',
+      id: '36:1642', figmaAnchorId: '81:8', type: 'body', title: '厂商清单',
       elementCount: 6, sourceNodeIds: ['81:8'],
     };
 

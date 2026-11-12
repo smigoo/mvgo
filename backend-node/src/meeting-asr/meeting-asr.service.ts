@@ -89,6 +89,17 @@ export class MeetingAsrService {
         503,
       )
     }
+    // 🔴 2026-11-12 用户指令（零兜底）：baseURL/model 的内置默认已拔除，
+    // 缺任一即报错引导 —— 否则会拼出 `${''}/chat/completions` 的相对地址并向空 model 发请求，
+    // 报错信息晦涩（fetch 层 Invalid URL / 上游 400），用户无从判断是「没配置」还是「配错了」。
+    if (!cfg.baseURL || !cfg.model) {
+      throw new MeetingAsrError(
+        MEETING_ASR_ERROR_CODES.CONFIG_MISSING,
+        '服务端未配置语音转写的上游端点或模型：请设置 MEETING_ASR_BASE_URL / MEETING_ASR_MODEL，' +
+          '或在 data/meeting-asr-config.json 中配置 baseURL / model（不再使用内置默认端点）',
+        503,
+      )
+    }
     if (!buffer?.length) {
       throw new MeetingAsrError(MEETING_ASR_ERROR_CODES.BAD_AUDIO, '音频内容为空', 400)
     }

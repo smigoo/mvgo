@@ -192,3 +192,131 @@ describe('rebuildSlotConContainers', () => {
     expect(flat.length).toBe(4)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════
+// 🛡️ v3 半提升回收（2026-11-12 · mc-1794474674611-37ed205e / 97af5197 实锤）
+//   vision 把 section 的部分直接子提升为顶层（1744:127/128 柱状图组被提走），
+//   all-or-nothing 判据放弃 ⇒ 柱状图拆成独立组件挂页面底部。
+//   回收判据 = 树父子关系（唯一、防抢占）∧ bbox 完整包含（容差 2px）。
+// ═══════════════════════════════════════════════════════════════
+describe('v3 半提升回收', () => {
+  // 流量监测真实坐标（微缩版）：
+  //   1744:125 slot-con(426×745 @y158)
+  //     88:33 当日总流量(426×556 @y158) —— 树上 4 子：88:32/2:3660/1744:127/1744:128
+  //     2:3438 车型分布(387×142 @y573)  —— 注意：bbox 几乎全落 88:33 框内（slot 重叠死区）
+  //     83:30 流量预测(378×174 @y730)
+  //   vision 顶层只给了 [1744:125(嵌套 88:33/2:3438/83:30), 1744:127, 1744:128]
+  const trafficFigma = {
+    document: {
+      id: 'root',
+      name: 'root',
+      type: 'DOCUMENT',
+      absoluteBoundingBox: { x: 0, y: 0, width: 500, height: 1100 },
+      children: [
+        {
+          id: '1744:125',
+          name: 'slot-con',
+          type: 'FRAME',
+          absoluteBoundingBox: { x: 10, y: 158, width: 426, height: 745 },
+          children: [
+            {
+              id: '88:33',
+              name: 'slot-当日总流量',
+              type: 'FRAME',
+              absoluteBoundingBox: { x: 10, y: 158, width: 426, height: 556 },
+              children: [
+                { id: '88:32', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: { x: 35, y: 158, width: 380, height: 30 }, children: [] },
+                { id: '2:3660', name: '统计', type: 'FRAME', absoluteBoundingBox: { x: 10, y: 196, width: 426, height: 91 }, children: [] },
+                { id: '1744:127', name: '1', type: 'FRAME', absoluteBoundingBox: { x: 33, y: 287, width: 379, height: 131 }, children: [] },
+                { id: '1744:128', name: '2', type: 'FRAME', absoluteBoundingBox: { x: 33, y: 428, width: 379, height: 131 }, children: [] },
+              ],
+            },
+            {
+              id: '2:3438',
+              name: 'slot-车型分布',
+              type: 'FRAME',
+              absoluteBoundingBox: { x: 30, y: 573, width: 387, height: 142 },
+              children: [],
+            },
+            {
+              id: '83:30',
+              name: 'slot-流量预测',
+              type: 'FRAME',
+              absoluteBoundingBox: { x: 30, y: 730, width: 378, height: 174 },
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  }
+
+  it('① 半提升形态：被 vision 提为顶层的树直接子（1744:127/128）回收进 88:33，按 y 序排尾', () => {
+    const layout = {
+      sections: [
+        {
+          id: '1744:125',
+          name: 'slot-con',
+          role: 'content-container',
+          layoutSource: 'container-rebuild',
+          children: [
+            { id: '88:33', name: '当日总流量', role: '常驻', layout: 'vertical' },
+            { id: '2:3438', name: '车型分布', role: '常驻', layout: 'vertical' },
+            { id: '83:30', name: '流量预测', role: '常驻', layout: 'vertical' },
+          ],
+        },
+        { id: '1744:127', name: '江阴靖江长江隧道流量', role: '常驻', layout: 'vertical' },
+        { id: '1744:128', name: '江阴大桥流量', role: '常驻', layout: 'vertical' },
+      ],
+    }
+    const out = rebuildSlotConContainers(layout, trafficFigma as any)
+    // 顶层不再有 1744:127/128
+    expect(out.sections.find((s: any) => s.id === '1744:127')).toBeUndefined()
+    expect(out.sections.find((s: any) => s.id === '1744:128')).toBeUndefined()
+    // 回收进 88:33.children（树对象，非 body 镜像克隆）
+    const daily = out.sections[0].children.find((c: any) => c.id === '88:33')
+    expect(daily.children.map((c: any) => c.id)).toEqual(['1744:127', '1744:128'])
+    expect(daily.reclaimedChildren).toEqual(['1744:127', '1744:128'])
+  })
+
+  it('② 阴性钉：bbox 包含但非树直接子（2:3438 落 88:33 框内）绝不被抢走', () => {
+    const layout = {
+      sections: [
+        {
+          id: '1744:125',
+          name: 'slot-con',
+          children: [
+            { id: '88:33', name: '当日总流量' },
+            { id: '2:3438', name: '车型分布' },
+            { id: '83:30', name: '流量预测' },
+          ],
+        },
+      ],
+    }
+    const out = rebuildSlotConContainers(layout, trafficFigma as any)
+    const con = out.sections[0]
+    // 2:3438 仍属 1744:125，没有被 88:33 抢走（虽然它 bbox 几乎全落 88:33 框内）
+    expect(con.children.map((c: any) => c.id)).toEqual(['88:33', '2:3438', '83:30'])
+  })
+
+  it('③ 幂等：回收后再跑一遍结果不变', () => {
+    const layout = {
+      sections: [
+        {
+          id: '1744:125',
+          name: 'slot-con',
+          children: [
+            { id: '88:33', name: '当日总流量' },
+            { id: '2:3438', name: '车型分布' },
+            { id: '83:30', name: '流量预测' },
+          ],
+        },
+        { id: '1744:127', name: '1' },
+        { id: '1744:128', name: '2' },
+      ],
+    }
+    const once = rebuildSlotConContainers(layout, trafficFigma as any)
+    const twice = rebuildSlotConContainers(once, trafficFigma as any)
+    expect(JSON.stringify(twice)).toEqual(JSON.stringify(once))
+  })
+})

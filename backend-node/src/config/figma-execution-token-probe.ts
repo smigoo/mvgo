@@ -88,6 +88,20 @@ export interface ProbeExecutionFigmaTokenInput extends ExecutionFigmaTokenInput 
   probe?: FigmaAccessProber;
   /** 探针超时（默认沿用 `FIGMA_PROBE_TIMEOUT_MS` = 5s） */
   probeTimeoutMs?: number;
+  /**
+   * 🛡️ 2026-11-12 强制探测：**仅供 404 降级路径**使用（`phase2.service.ts` 捕获
+   * `figStatus===404` 后二次调用）。语义：引用命中（`source==='ref'`）只证明
+   * 「那个 token 还在配置里」，不证明它**能读这个文件**——mc-max-1794425208588-385b1671
+   * 实锤：全量重发的新任务按当时 active 槽位（smigoo）建账 pin，引用恒命中，
+   * 但该 token 对目标文件无权限 ⇒ 404；且任务已 pin 错误凭证，再点重试也是
+   * 引用命中 → 404 的死循环。探测择优（#15）原设计只覆盖「引用无命中」象限，
+   * 本入参补上「引用命中但读不到」象限：拿候选逐槽探测，首个 200 即用。
+   *
+   * 🔴 常态链路（首轮/引用命中且可读）**仍零探测**——本入参只允许出现在
+   * 「已经付出一次 404 失败」之后的降级路径，正常任务不多付任何请求。
+   * `disableProbe` 优先级更高（显式关闭仍关闭）。
+   */
+  forceProbe?: boolean;
   /** 显式关闭探测：关闭后行为与 #14 逐字一致（判据/回放用） */
   disableProbe?: boolean;
 }
@@ -218,8 +232,8 @@ function orderProbeCandidates(
  * 行为矩阵：
  *   | base 情形                         | 本函数行为                                  |
  *   | --------------------------------- | ------------------------------------------- |
- *   | 引用命中 `source==='ref'`          | 原样返回，**零探测**                        |
- *   | 首轮/老任务 `reason==='no-ref'`    | 原样返回，**零探测**                        |
+ *   | 引用命中 `source==='ref'`          | 原样返回，**零探测**（`forceProbe` 时例外） |
+ *   | 首轮/老任务 `reason==='no-ref'`    | 原样返回，**零探测**（`forceProbe` 时例外） |
  *   | 需要探测但缺 fileKey/nodeId         | 原样返回 + `probe-unavailable`（不猜）      |
  *   | 需要探测且有目标、首个 200          | `source` 保持/`probe`，`reason='probe-selected'` |
  *   | 需要探测且全部读不到                | `token=null`，`reason='probe-failed'` ⇒ 调用方抛错 |
@@ -234,14 +248,24 @@ export async function resolveExecutionFigmaTokenWithProbe(
     ...(extra || {}),
   });
 
-  // 红线 ①：引用命中 / 首轮生成 / 显式关闭 —— 都不探测
-  if (base.source === 'ref') return untouched();
-  if (!NEEDS_PROBE.has(String(base.reason))) return untouched();
+  // 红线 ①：引用命中 / 首轮生成 / 显式关闭 —— 都不探测。
+  // 🛡️ 2026-11-12 例外：`forceProbe`（404 降级路径专用）放行——引用命中只证明
+  // token 还在配置里，不证明它能读这个文件（385b1671 实锤，见入参注释）。
+  if (base.source === 'ref' && !input.forceProbe) return untouched();
+  if (!NEEDS_PROBE.has(String(base.reason)) && !input.forceProbe) return untouched();
   if (input.disableProbe) return untouched();
 
   const reason = base.reason as FigmaCredentialResolveReason;
-  // 文案单一来源：`slot-overwritten` 的「哪个槽位」由 ref 层透传（不在本模块复刻判定）
-  const reasonText = describeFigmaCredentialReason(reason, base.ref, base.overwrittenSlotId);
+  // 文案单一来源：`slot-overwritten` 的「哪个槽位」由 ref 层透传（不在本模块复刻判定）。
+  // forceProbe 场景 base.reason 是 'matched'（引用命中但已被 404 证伪），不能落进
+  // describeFigmaCredentialReason 的 default 分支（那是 not-found 文案，归因会变成
+  // 「token 已不在配置中」—— 与事实相反），此处按已证伪口径单列。
+  const reasonText =
+    input.forceProbe && String(base.reason) === 'matched'
+      ? `任务记录的 Figma Token（${
+          asTrimmedString(base.ref?.slotName) || asTrimmedString(base.ref?.slotId) || '当前凭证'
+        }）已被证实读不到该文件（HTTP 404）`
+      : describeFigmaCredentialReason(reason, base.ref, base.overwrittenSlotId);
 
   const { fileKey, nodeId } = resolveProbeTarget(input);
   if (!fileKey || !nodeId) {

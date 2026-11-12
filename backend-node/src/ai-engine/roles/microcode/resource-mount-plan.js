@@ -241,13 +241,27 @@ export function mountCardBgGroups(allFiles, plan, options = {}) {
       continue;
     }
     let content = allFiles[targetFile];
-    if (/\bFG_CARD_BGS\b/.test(content)) continue; // 幂等
+    // 🛡️ 幂等守卫拆开（2026-11-12 · mc-max-1794461963464-28ec5c09 实锤，根治③a）：
+    //   旧实现是裸 `continue` —— 已注入时连「① 剥错位消费」一起跳过。而事实链通道
+    //   （锚点悬空回退祖先）在修复轮/重装配时会**重新追加**段根 :style ⇒ 无人再剥
+    //   ⇒ 段根 + item 双挂永久残留（同一张图画 n 份）。
+    //   正确语义：剥离幂等安全、永远执行；仅「注入」部分跳过。
+    const alreadyInjected = /\bFG_CARD_BGS\b/.test(content);
     // ① 剥错位消费（先于一切注入；item 标签自身的 bg 引用不在剥除范围——它本就是落点）
-    content = content.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
+    const strippedContent = content.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
       let out = tag;
       for (const mm of grp.members) out = stripBgKeysFromTag(out, mm.varName);
       return out;
     });
+    if (strippedContent !== content) {
+      allFiles[targetFile] = strippedContent;
+      content = strippedContent;
+      logger?.warn?.('🛡️ 兄弟卡背景组：已注入文件仍剥除错位 bg 消费（幂等拆分）', {
+        file: targetFile,
+        anchor: grp.anchorId,
+      });
+    }
+    if (alreadyInjected) continue; // 幂等：注入零改动（剥离结果已回写）
     // ② ensure import（mapping 仅用 resourceFile 字段；已在 ⇒ 原样返回）
     for (const mm of grp.members) {
       content = ensureResourceImportInVue(content, mm.varName, { resourceFile: mm.file }, targetFile);
@@ -413,6 +427,84 @@ function findPerItemYieldHost(allFiles, varName, candidateFile, candidateContent
  * @param {string} anchor section id（如 `2:3446`）
  * @returns {string|null} 开标签全文（如 `<div class="x" data-section-id="2:3446" :style="…">`）
  */
+/**
+ * 🛡️ 产物开标签 → Figma 节点几何真值（S7 几何相容门的落点盒解析，2026-11-12）。
+ *
+ * 两条纯事实路径，命中即返回；都取不到返回 null（调用方 fail-open）：
+ *   ① `data-section-id="X"` ⇒ `figmaIndex.get(X).absoluteBoundingBox`（产物段锚直连真值）；
+ *   ② class 内 ≥5 位数字 ↔ Figma 节点 `name` 里的同名数字（产物类名由节点名派生，
+ *      如 `c-hazard-investigation-2002-132-con` ↔ `item-inspection-stats-row-1 2002 132`）。
+ *      Figma 图层名会复用 ⇒ **只在唯一命中时采用**，歧义即放弃（不猜）。
+ *
+ * 刻意不做「按尺寸猜最像的节点」——几何真值必须来自 id/名映射，猜出来的尺寸不能当判据。
+ *
+ * @param {string} tag 开标签字符串
+ * @param {string} cls 该标签 class 串（缺省从 tag 里抽）
+ * @param {Map|null} figmaIndex nodeId → 原始 Figma 节点
+ * @returns {{x:number,y:number,width:number,height:number}|null}
+ */
+export function resolveProductTagBox(tag, cls, figmaIndex) {
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return null;
+  const ok = (b) => {
+    if (!b) return null;
+    const w = Number(b.width);
+    const h = Number(b.height);
+    return w > 0 && h > 0 ? { x: Number(b.x) || 0, y: Number(b.y) || 0, width: w, height: h } : null;
+  };
+  const t = String(tag || '');
+  // ① data-section-id 直连
+  const sid = (t.match(/data-section-id="([^"]+)"/) || [])[1] || (t.match(/data-section-id='([^']+)'/) || [])[1];
+  if (sid) {
+    const n = figmaIndex.get(String(sid));
+    const b = ok(n && (n.absoluteBoundingBox || n.box));
+    if (b) return b;
+  }
+  // ② class 数字 ↔ 节点名数字（唯一命中才用）
+  const clsStr =
+    cls != null && String(cls).trim()
+      ? String(cls)
+      : ((t.match(/\bclass="([^"]*)"/) || [])[1] || (t.match(/\bclass='([^']*)'/) || [])[1] || '');
+  for (const num of clsStr.match(/\d{5,}/g) || []) {
+    const hits = [];
+    for (const [, n] of figmaIndex) {
+      if (n && String(n.name || '').includes(num)) hits.push(n);
+      if (hits.length > 1) break; // 歧义：不再收集
+    }
+    if (hits.length === 1) {
+      const b = ok(hits[0].absoluteBoundingBox || hits[0].box);
+      if (b) return b;
+    }
+  }
+  // ③ class 词元 ↔ 节点 name 词元（无数字的中间容器，如 `…-slot-con` ↔ `slot-con`）
+  //    要求节点 name 的**全部**词元都出现在 class 词元里、且匹配词元数 ≥ 2，
+  //    并在「最多匹配」上唯一 —— 并列即放弃（`slot-con` 这类通用名在多组件里会重名）。
+  const tokenSet = new Set((clsStr.toLowerCase().match(/[a-z0-9]+/g) || []).filter((w) => w.length >= 2));
+  if (tokenSet.size >= 2) {
+    let bestN = 0;
+    let bestNode = null;
+    let tie = false;
+    for (const [, n] of figmaIndex) {
+      const nameTokens = String((n && n.name) || '')
+        .toLowerCase()
+        .match(/[a-z0-9]+/g) || [];
+      if (nameTokens.length < 2) continue;
+      if (!nameTokens.every((w) => tokenSet.has(w))) continue;
+      if (nameTokens.length > bestN) {
+        bestN = nameTokens.length;
+        bestNode = n;
+        tie = false;
+      } else if (nameTokens.length === bestN) {
+        tie = true;
+      }
+    }
+    if (!tie && bestNode) {
+      const b = ok(bestNode.absoluteBoundingBox || bestNode.box);
+      if (b) return b;
+    }
+  }
+  return null;
+}
+
 export function findTagBySectionAnchor(content, anchor) {
   if (typeof content !== 'string' || !content || anchor == null) return null;
   const a = String(anchor);
@@ -728,6 +820,40 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
   // 🛡️ 兄弟卡背景组折叠（识别半边；执行半边在 mountPlannedResources 末尾 mountCardBgGroups）
   plan.cardBgGroups = groupSiblingCardBgs(bgRecords);
 
+  // 🛡️ 互斥守卫（2026-11-12 · mc-max-1794461963464-28ec5c09 实锤，根治③b）：
+  //   已入兄弟卡背景组的 var，其「锚点悬空 → 祖先上提」挂载一律废锚（fail-closed）。
+  //   组通道负责轮换挂载（FG_CARD_BGS），事实链只允许 owner 精确命中；
+  //   放任祖先上提 = 事实链把组锚（常是远祖段根）反复重挂回来，与组通道形成
+  //   「挂载/剥离」拉锯（幂等拆分只止血，这里是源头减量）。
+  //   实现走 anchorPromotionRejected（下游既有 fail-closed 判据，禁名字兜底），
+  //   不新增第二份拦截逻辑。
+  if (Array.isArray(plan.cardBgGroups) && plan.cardBgGroups.length > 0) {
+    const groupedVars = new Set();
+    for (const grp of plan.cardBgGroups) {
+      for (const mem of grp.members || []) {
+        if (mem && mem.varName) groupedVars.add(mem.varName);
+      }
+    }
+    let demoted = 0;
+    for (const g of byFile.values()) {
+      if (!groupedVars.has(g.varName)) continue;
+      for (const mt of g.mounts) {
+        if (mt.anchorSource === 'ancestor') {
+          mt.sectionAnchorId = null;
+          mt.anchorSource = 'none';
+          mt.anchorPromotionRejected = true;
+          demoted += 1;
+        }
+      }
+    }
+    if (demoted > 0 && opts.logger?.warn) {
+      opts.logger.warn('🛡️ 兄弟卡背景组互斥：组内 var 的祖先上提锚已废（组通道负责挂载）', {
+        demoted,
+        groupedVars: [...groupedVars],
+      });
+    }
+  }
+
   return plan;
 }
 
@@ -761,6 +887,46 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
   //   注入会破坏 SFC 表达式 → P1-4 隔离 → 整块叶子静默消失（3 卡变 2 卡）。
   //   治本：每次写盘前用真实 SFC 编译器自检，失败即回滚该文件的本次注入，
   //   让坏文件根本不进入 P1-4 隔离链路。零硬编码、通用，覆盖任意注入破坏。
+  /**
+   * 🛡️ S7 几何相容门（2026-11-12 · mc-1794464620608-61ca9e0b 实锤）。
+   *
+   * ## 病灶
+   * S7 的「回退最优挂载点」只按 **类名/关键词相似度** 打分（`scoreMountTarget`），
+   * 完全不看尺寸。真机三张 tab 状态背景（`bg-tab-today/month/year`，各 **52×20**）
+   * 因 LLM 未给 tab 元素对应类名而 miss ⇒ 回退被评分挑中
+   * `slot-con`(396×292) / `item-inspection-stats-row`(288×45) / `Frame 2136638243`(385×192)
+   * ⇒ `background-size:100% 100%` 把 **52×20 小图拉伸铺满整块面板**
+   * （用户实测：上半区变成一块巨大蓝色渐变，雷达区数字发虚）。
+   *
+   * ## 判据（纯几何，与 `buildResourceMountPlan` 的 `isCoLocatedAnchor` **同源**）
+   * 资源真值盒 `parentBox || figmaBox` 与**落点容器真值盒**两轴覆盖率
+   * `min(w/aw, h/ah)` 必须 ≥ `ANCHOR_PROMOTION_MIN_AXIS_RATIO(0.5)`。
+   * 同层 ≈ 1.0；跨层实锤 0.186；本案 0.068~0.18 —— 0.5 两侧都留余量。
+   *
+   * ## 缺事实一律 fail-open（不劣于旧行为）
+   * 非 bg 角色 / 资源盒缺失 / 落点盒解析不到 ⇒ 放行。与 `isCoLocatedAnchor` 同一裁决：
+   * icon/img 真值盒天然远小于宿主且不做 100% 拉伸，套用会全部误杀。
+   *
+   * @returns {{ok:boolean, ratio:number|null, resBox:Object|null, anchorBox:Object|null}}
+   */
+  const checkS7FallbackGeometry = (tag, cls, mapping) => {
+    const entry = mapping || {};
+    if (entry.previewAnalysisRole !== 'bg') return { ok: true, ratio: null, resBox: null, anchorBox: null };
+    const resBox = entry.parentBox || entry.figmaBox || null;
+    const rw = Number(resBox && resBox.width);
+    const rh = Number(resBox && resBox.height);
+    if (!(rw > 0) || !(rh > 0)) return { ok: true, ratio: null, resBox: null, anchorBox: null };
+    const anchorBox = resolveProductTagBox(tag, cls, figmaIndex);
+    if (!anchorBox) return { ok: true, ratio: null, resBox, anchorBox: null };
+    const ratio = Math.min(rw / anchorBox.width, rh / anchorBox.height);
+    return {
+      ok: ratio >= ANCHOR_PROMOTION_MIN_AXIS_RATIO,
+      ratio: Number(ratio.toFixed(4)),
+      resBox,
+      anchorBox,
+    };
+  };
+
   const lessGlobalVars = extractLessGlobalVars(allFiles);
   const writeGuarded = (targetFile, updated, original) => {
     if (updated === original) return false;
@@ -1402,12 +1568,45 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
                 skipBound: true, // 优先选没有 bg 绑定的标签
               });
               if (best) {
-                tag = best.tag;
-                options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
-                  varName,
-                  mountTarget: mount.mountTarget || '(null)',
-                  file: targetFile,
-                });
+                // 🛡️ S7 几何相容门（2026-11-12 · 61ca9e0b 实锤）：评分回退只看名字相似度、
+                //   不看尺寸 ⇒ 52×20 的 tab 状态背景曾被挂到 396×292 段根 / 288×45 统计行 /
+                //   385×192 图表区，再被 background-size:100% 100% 拉满 ⇒ 整块面板视觉报废。
+                //   与 `isCoLocatedAnchor` 同一判据（覆盖率 ≥ 0.5），缺事实 fail-open。
+                const geo = checkS7FallbackGeometry(best.tag, best.cls, mapping);
+                if (!geo.ok) {
+                  diagnostics.push({
+                    reason: 's7-fallback-cross-layer-rejected',
+                    file: targetFile,
+                    var: varName,
+                    mountTarget: mount.mountTarget || null,
+                    fallbackCls: best.cls || '',
+                    ratio: geo.ratio,
+                    resBox: geo.resBox,
+                    anchorBox: geo.anchorBox,
+                  });
+                  options.logger?.warn?.(
+                    '🛡️ S7 回退被拒（落点与背景真值不同层，挂载会被拉伸铺满）⇒ 放弃挂载（fail-closed）',
+                    {
+                      varName,
+                      mountTarget: mount.mountTarget || '(null)',
+                      fallbackCls: best.cls || '',
+                      ratio: geo.ratio,
+                      resBox: geo.resBox ? `${Math.round(geo.resBox.width)}×${Math.round(geo.resBox.height)}` : null,
+                      anchorBox: geo.anchorBox
+                        ? `${Math.round(geo.anchorBox.width)}×${Math.round(geo.anchorBox.height)}`
+                        : null,
+                      file: targetFile,
+                    },
+                  );
+                } else {
+                  tag = best.tag;
+                  options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
+                    varName,
+                    mountTarget: mount.mountTarget || '(null)',
+                    ratio: geo.ratio,
+                    file: targetFile,
+                  });
+                }
               }
             }
           }

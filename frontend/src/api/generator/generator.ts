@@ -471,3 +471,70 @@ export async function startQueuedTask(sessionId: string): Promise<any> {
   const response = await generatorRequest.post(`/tasks/queue/start/${sessionId}`)
   return response.data
 }
+
+/**
+ * 🆕 人工精修：以已有代码（可能报错/无法运行）再次继续生成。
+ * 后端会冻结精修前基线、质量门禁未通过则自动回滚，保证「再跑一次不会更糟」。
+ * 支持 target(microcode/vue3) 与 generationTier(max/lite) 四象限透传。
+ */
+export async function refineComponent(params: {
+  componentId: string
+  refineType?: 'layout' | 'style' | 'both'
+  target?: 'microcode' | 'vue3'
+  generationTier?: 'max' | 'lite'
+  visionRefine?: boolean
+  visualDiffGuidance?: string
+  overrideImage?: string
+}): Promise<any> {
+  const response = await generatorRequest.post('/phase2/refine', params)
+  return response.data
+}
+
+/**
+ * 🆕 视觉优化精修·分析阶段：渲染现状 → 对比设计图 → 返回结构化视觉差异 + 两张对比图（不修改代码）。
+ * 失败返回 { success:false, error, message }，由调用方判定。
+ */
+export async function visionAnalyzeRefine(params: {
+  componentId: string
+  refineType?: 'layout' | 'style' | 'both'
+  target?: 'microcode' | 'vue3'
+  generationTier?: 'max' | 'lite'
+  overrideImage?: string
+}): Promise<any> {
+  const response = await generatorRequest.post('/phase2/refine/vision-analyze', params)
+  return response.data
+}
+
+/**
+ * 🆕 视觉精修对比图（design / rendered）：以 blob 取回。
+ * 🔴 不能用 <img src="/api/..."> 直接引用——img 请求带不了 Token 头会 401，
+ *    且 rendered 图落在 .mc-gen 点目录。此函数走 axios（自动带 Token）。
+ */
+export async function fetchVisionRefineImage(
+  analysisId: string,
+  kind: 'design' | 'rendered',
+): Promise<Blob> {
+  const response = await generatorRequest.get(
+    `/phase2/refine/vision-image/${encodeURIComponent(analysisId)}/${kind}`,
+    { responseType: 'blob' },
+  )
+  return response.data
+}
+
+/**
+ * 🆕 2026-11-12 精修续跑溯源：拉取某次精修「基线 → 候选」的具体文件改动，
+ * 供任务详情页「精修改动明细」面板展示本次精修改了哪些内容。
+ * @param refineSessionId 精修任务 sessionId（mc-refine-max-* / vue3-refine-max-*）
+ * @param sourceSessionId 源生成任务 sessionId（精修快照实际存储位置），直传最稳
+ */
+export async function getRefineDiff(
+  refineSessionId: string,
+  sourceSessionId?: string,
+): Promise<any> {
+  const params = sourceSessionId ? { source: sourceSessionId } : undefined
+  const response = await generatorRequest.get(
+    `/tasks/${encodeURIComponent(refineSessionId)}/refine-diff`,
+    { params },
+  )
+  return response.data
+}

@@ -1,0 +1,9 @@
+export declare function getPreviewBaseUrl(): string;
+export declare function getFrontendCandidates(): string[];
+export declare function getJavaBackendUrl(): string;
+export declare function getMaxIterations(): number;
+export declare function getQualityScoreThreshold(): number;
+export declare function getMinIterations(): number;
+export declare function getVisualSimilarityThreshold(): number;
+export declare function getMaxVisualIterations(): number;
+export declare function validateRuntimeEnv(): void;

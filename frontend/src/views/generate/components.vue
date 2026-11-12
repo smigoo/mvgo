@@ -275,7 +275,20 @@
                   class="input-feedback"
                   :class="{ invalid: !isValidFigmaUrl }"
                 >
-                  {{ isValidFigmaUrl ? '链接格式有效' : '请输入有效的 Figma 文件或节点链接' }}
+                  <span>{{ isValidFigmaUrl ? '链接格式有效' : '请输入有效的 Figma 文件或节点链接' }}</span>
+                  <!-- 🛡️ 2026-11-12：设计稿节点数据缓存有 24h TTL——在 Figma 里整理结构后
+                       重跑会吃到旧树（9abc87d3 实锤）。把删除能力交给用户：一键清缓存，
+                       下次生成真网络回源拉最新结构。 -->
+                  <button
+                    v-if="isValidFigmaUrl"
+                    type="button"
+                    class="figma-cache-clear-btn"
+                    :disabled="busy || figmaCacheClearing"
+                    :title="`删除该节点的设计稿数据缓存（在 Figma 整理结构后、重新生成前使用）`"
+                    @click="clearFigmaNodeCache"
+                  >
+                    {{ figmaCacheClearing ? '清除中…' : '清设计稿缓存' }}
+                  </button>
                 </div>
               </template>
 
@@ -1328,6 +1341,8 @@
               <div class="task-degraded" v-if="t.visualQualityWarning && t.status !== 'running'" :title="visualQualityWarningTitle(t.visualQualityWarning)">⚠ 内容可能不完整（{{ visualQualityWarningLabel(t.visualQualityWarning) }}），属模型识别能力问题，可换更强的视觉模型重试</div>
               <div class="task-degraded" v-if="t.degradedScriptParts && t.degradedScriptParts.length && t.status !== 'running'">⚠ 生成不完整（{{ degradedScriptPartsLabel(t.degradedScriptParts) }}），可二次生成</div>
               <div class="task-degraded" v-if="t.missingFiles && t.missingFiles.length && t.status !== 'running'">⚠ 缺失关键文件（{{ t.missingFiles.join('、') }}），可进入编辑器补全</div>
+              <!-- 🛡️ C 降级交付（2026-11-12 · 47b996c3）：判据未过但产物能打开 ⇒ 交付 + 一次性列出待补内容 -->
+              <div class="task-degraded" v-if="t.acceptanceDeliveredWithWarnings && t.status !== 'running'" :title="acceptanceWarningTitle(t)">⚠ 已交付，{{ acceptanceWarningLabel(t) }}，可进入编辑器补全</div>
               <div class="task-degraded task-degraded--retry" v-if="t.status === 'failed' && t.checkpointStatus && t.checkpointStatus !== 'none'">已缓存{{ checkpointCacheLabel(t.checkpointStatus) }}，换模型重试可秒续</div>
             </div>
             <span class="task-tag" :class="historyTagClass(t)">{{ historyTagText(t) }}</span>
@@ -1639,6 +1654,38 @@ function parseFigmaUrlLite(raw: string): { fileKey: string; nodeId: string } | n
     /* 无效 URL ⇒ null */
   }
   return null
+}
+
+// ══ 🛡️ 2026-11-12：设计稿节点数据缓存一键清除（用户自主管理）═══
+// 背景：后端 figma-connector 节点数据磁盘缓存 TTL 默认 24h，在 Figma 整理结构后
+// 重跑会吃到旧树（9abc87d3 实锤）。删除能力交给用户：清缓存后下次生成真网络回源。
+const figmaCacheClearing = ref(false)
+
+async function clearFigmaNodeCache() {
+  const parsed = parseFigmaUrlLite(figmaUrl.value.trim())
+  if (!parsed) {
+    showToast('请先输入有效的 Figma 链接')
+    return
+  }
+  figmaCacheClearing.value = true
+  try {
+    const r: any = await http.delete('tasks/figma-node-cache', undefined, {
+      params: { fileKey: parsed.fileKey, nodeId: parsed.nodeId },
+    })
+    // 🔴 响应信封：controller 返回值再包 {success,code,message,data,source}，
+    //    http 层不剥壳 ⇒ deletedCount 在 r.data 里（单字段直取不满足三特征剥除判据）
+    const payload = r?.data ?? r
+    const n = Number(payload?.deletedCount ?? 0)
+    showToast(
+      n > 0
+        ? `已清除 ${n} 个设计稿数据缓存，下次生成将拉取最新结构`
+        : '该节点暂无设计稿缓存，无需清除',
+    )
+  } catch (e: any) {
+    showToast(`清缓存失败：${e?.message || e}`)
+  } finally {
+    figmaCacheClearing.value = false
+  }
 }
 
 /** 已填链接的主题行（第 0 行复用主框已填的 figmaUrl） */
@@ -3274,6 +3321,14 @@ function onPaste(e) {
 
 // 轻量 toast（本项目无共享 toast 工具）
 const toastMsg = ref('')
+let _toastTimer: ReturnType<typeof setTimeout> | null = null
+function showToast(msg: string) {
+  toastMsg.value = msg
+  if (_toastTimer) clearTimeout(_toastTimer)
+  _toastTimer = setTimeout(() => {
+    toastMsg.value = ''
+  }, 3200)
+}
 
 function startTimer() {
   startAt = Date.now()
@@ -3793,6 +3848,31 @@ function checkpointCacheLabel(status?: string) {
     'code-generated': '生成代码',
   }
   return (status && map[status]) || '缓存'
+}
+
+// 🛡️ C 降级交付（2026-11-12 · mc-max-1794458950336-47b996c3 实锤）：acceptance 判据未过，
+// 但产物**能打开、能进编辑器** ⇒ 不再报「生成失败」，改为「已交付 + 待补清单」。
+// 这里只负责把**后端给出的真值清单**（acceptanceMissingTexts）念出来，不做任何推测。
+function acceptanceWarningLabel(t: any) {
+  const texts: string[] = Array.isArray(t?.acceptanceMissingTexts) ? t.acceptanceMissingTexts : []
+  if (texts.length) {
+    const head = texts.slice(0, 2).map((x: string) => `「${x}」`).join('')
+    return texts.length > 2 ? `${texts.length} 处内容待补（${head} 等）` : `${texts.length} 处内容待补（${head}）`
+  }
+  const codes: string[] = Array.isArray(t?.acceptanceWarningCodes) ? t.acceptanceWarningCodes : []
+  return codes.length ? `${codes.join('、')} 未通过` : '存在结构缺失'
+}
+
+// hover 明细：一次列全待补文本（用户明确要求「一次性列出待补文本」）
+function acceptanceWarningTitle(t: any) {
+  const texts: string[] = Array.isArray(t?.acceptanceMissingTexts) ? t.acceptanceMissingTexts : []
+  const codes: string[] = Array.isArray(t?.acceptanceWarningCodes) ? t.acceptanceWarningCodes : []
+  const lines: string[] = []
+  if (t?.acceptanceWarningText) lines.push(String(t.acceptanceWarningText))
+  if (texts.length) lines.push(`待补文本（${texts.length}）：${texts.map((x: string) => `「${x}」`).join('、')}`)
+  if (codes.length) lines.push(`未通过的判据：${codes.join('、')}`)
+  lines.push('产物已交付，可直接进入编辑器手动补全上述内容。')
+  return lines.join('\n')
 }
 
 // 🛡️ 2026-09-30: 视觉覆盖率不足但「降级放行」（非阻断）→ 内容完整性提示。
@@ -5832,6 +5912,28 @@ html[data-theme='dark'] .spinner--sm {
 }
 .input-feedback.invalid {
   color: var(--c-danger);
+}
+/* 🛡️ 2026-11-12：设计稿节点缓存一键清除按钮（贴 input-feedback 行，pill 形态） */
+.figma-cache-clear-btn {
+  margin-left: 8px;
+  padding: 1px 10px;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--c-cta);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.figma-cache-clear-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(120, 170, 255, 0.08);
+}
+.figma-cache-clear-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 /* ══ Figma 画布容器（始终存在，内部内容随状态切换） ══ */
 /* 原为 2px 虚线 + 径向渐变，视觉上像「拖拽上传区」，但这里并非上传区，

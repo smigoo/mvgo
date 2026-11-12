@@ -57,6 +57,55 @@ function asEntries(files) {
   return []
 }
 
+/**
+ * 🧩 P1-3（2026-11-12 · 8b15a757 实锤）：同构段收敛后的覆盖度豁免通道。
+ *
+ * ## 病灶（真机 expected=9 generated=2 missing=7 的三重来源）
+ * planner R2 密度拆分把三厂商段拆成 group1/2/3 记账（minFiles=9），而刀66 同构收敛
+ * 把三段收成 1 个 v-for + 1 份模板（物理文件 2 个）——**记账与产物两种建模都各自正确**，
+ * 按文件数对账恒 missing=7。锚点也被两处拆断：
+ *   ① 锚串「大华股份 8台」是整串，产物把条目拆成 `{"name":"大华股份","value":"8台"}` 后
+ *      整串不存在（anchors-not-materialized 假阳）；
+ *   ② `missing` 计数把 v-for 复用当缺文件。
+ *
+ * ## 豁免判据（全部满足；任一不满足 ⇒ 走原判据，红线：不误放水）
+ *  ① 调用方传入 `isoGroupedSectionIds`（同构收敛实际生效的段 id 集，来自刀66 改写
+ *     applied 记录；空集 ⇒ 完全零行为变更）；
+ *  ② internalSubcomponent 的 id 形如 `<isoSectionId>-group<N>` / `-col<N>` / `-nested`
+ *     （planner R2/R3 的派生 id 形态），宿主段在同构组内；
+ *  ③ 该组的锚点在**同构产物**里真实可寻：锚串整串命中，或拆分形态命中
+ *     （`"name":"X","value":"V"` / `>{{X}}` / `{{X}}` 模板插值——值段拼接等价，
+ *      与 C1b 拼接等价判据同口径）。
+ *     锚点找不到 ⇒ **不豁免**（真缺席照拦，防止「v-for 收敛」成为万能免死金牌）。
+ *  ④ expected 基数同步折算：同构组内每个被收敛的段不再按「每段 N 个文件」计，
+ *     折算为组内实际落盘文件数（v-for 复用算 1 份模板 + 各成员数据行，不计成员文件）。
+ */
+function anchorHitInIsoArtifact(content, anchors) {
+  if (typeof content !== 'string' || content.length === 0) return false
+  const text = content
+  // 拆分形态归一：{"name":"X","value":"V"} / {{X}} 插值 / >X< 文本节点
+  const normAnchor = (a) => a.replace(/\s+/g, ' ').trim()
+  for (const raw of anchors) {
+    const a = normAnchor(raw)
+    if (!a) continue
+    if (text.includes(a)) return true
+    // 「名称 数值」拆分等价：`华为技术 8台` → `"name":"华为技术","value":"8台"`
+    const sp = a.match(/^(.+?)\s+([\d.]+\S*)$/)
+    if (sp) {
+      const [, nm, val] = sp
+      if (
+        new RegExp(`"name"\\s*:\\s*"?"?${nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"?"?\\s*,\\s*"value"\\s*:\\s*"?"?${val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"?"?`).test(text)
+      ) return true
+      // 模板插值形态（成员数据行 + 插值）：只要名称能寻到（值由数据行承载）
+      if (text.includes(nm)) return true
+    }
+  }
+  return false
+}
+
+/** planner R2/R3 派生 id 形态：`<sectionId>-group<N>` / `-col<N>` / `-nested`。 */
+const PLANNER_DERIVED_SUBID_RE = /^(.+)-(group|col|nested)\d*$/
+
 /** 只保留非空字符串（锚点去噪）。 */
 function stringsOf(v) {
   return Array.isArray(v)
@@ -65,22 +114,36 @@ function stringsOf(v) {
 }
 
 /**
- * @param {{ subPlan?: object|null, files?: object|Array }} input
+ * @param {{ subPlan?: object|null, files?: object|Array, isoGroupedSectionIds?: Array<string|number> }} input
  *   subPlan: { isForced, minFiles, internalSubcomponents[] }
  *           null/undefined ⇒ skippedReason='no-plan'（planner 尚未记账，禁止打「零缺失」假绿）
  *   files:   写盘文件表 `{ 'package/components/X.vue': '...' }`，或路径数组
+ *   isoGroupedSectionIds: 刀66 同构收敛**实际生效**的段 id 集（P1-3 豁免通道；
+ *           未传/空 ⇒ 完全走原判据，零行为变更）
  * @returns {{ isForced:boolean, expected:number, generated:number, missing:number, ok:boolean,
  *             internalExpected:number, generatedFiles:string[],
  *             missingSubcomponents:Array<{subId:string|null,responsibility:string,reason:string,missingAnchors:string[]}>,
  *             anchoredGroups:number, unanchoredGroups:number,
  *             orphanFiles:string[], orphanCheck:string, skippedReason:string|null }}
  */
-export function assessSubComponentCoverage({ subPlan, files } = {}) {
+export function assessSubComponentCoverage({ subPlan, files, isoGroupedSectionIds } = {}) {
   const hasPlan = subPlan !== null && subPlan !== undefined
   const plan = hasPlan && typeof subPlan === 'object' ? subPlan : {}
   const isForced = plan.isForced === true
-  const expected = isForced ? Math.max(0, Number(plan.minFiles) || 0) : 0
+  // 🧩 P1-3：同构收敛生效的段 id 集（字符串化一次，供豁免判定）
+  const isoIds = new Set(
+    (Array.isArray(isoGroupedSectionIds) ? isoGroupedSectionIds : []).map((x) => String(x)),
+  )
   const subs = Array.isArray(plan.internalSubcomponents) ? plan.internalSubcomponents : []
+  // P1-3 ④：expected 折算——同构组内 planner 派生子组件（-group/-col/-nested）不按
+  //   「每派生组一个文件」计（v-for 收敛后由数据行承载，物理文件=组模板数）。
+  //   折算只作用于「派生组且宿主段在同构组内」，leaf 段与其余拆分一概不动。
+  const subsInIso = subs.filter((s) => {
+    const m = PLANNER_DERIVED_SUBID_RE.exec(String(s?.id ?? ''))
+    return !!(m && isoIds.has(m[1]))
+  })
+  const expectedBase = isForced ? Math.max(0, Number(plan.minFiles) || 0) : 0
+  const expected = Math.max(0, expectedBase - subsInIso.length)
   const internalExpected = subs.length
 
   const entries = asEntries(files)
@@ -102,14 +165,41 @@ export function assessSubComponentCoverage({ subPlan, files } = {}) {
   for (let i = 0; i < subs.length; i++) {
     const sub = subs[i] && typeof subs[i] === 'object' ? subs[i] : {}
     const anchors = [...new Set([...stringsOf(sub.textTruths), ...stringsOf(sub.elementNames)])]
+    // 🧩 P1-3 ②③：planner 派生组（宿主段在同构收敛组内）的锚点改在**全产物**里寻
+    //   （v-for 收敛后成员数据在 index.vue，不在子组件文件）；锚点可寻 ⇒ 计入
+    //   anchoredGroups（豁免 missing 计数）；不可寻 ⇒ 原判据照拦（真缺席不放水）。
+    const derivedM = PLANNER_DERIVED_SUBID_RE.exec(String(sub.id ?? ''))
+    if (derivedM && isoIds.has(derivedM[1]) && anchors.length > 0) {
+      const hit = entries.some(
+        ([, c]) => typeof c === 'string' && c.length > 0 && anchorHitInIsoArtifact(c, anchors),
+      )
+      if (hit) {
+        anchoredGroups++
+        continue
+      }
+      // 锚点全产物不可寻：真缺席，走下方原判据（会落 anchors-not-materialized）
+    }
     if (anchors.length === 0) {
       unanchoredGroups++
       continue
     }
-    const hosts = generatedFiles.filter((p) => {
+    // 🧩 P1-3 补充（与 C1b 拼接等价同口径）：宿主候选先按原判据（子组件文件含整串）；
+    //   未命中且**同构收敛生效**（段 id 在 isoIds 内——代表段组件不含条目文本，
+    //   条目数据在 index.vue 的 v-for 行里）⇒ 全产物按拆分形态寻（{"name":"X","value":"V"}
+    //   / 插值 / 名称可寻）。找不到 ⇒ 真缺席照拦。
+    let hosts = generatedFiles.filter((p) => {
       const c = contentOf.get(p)
       return typeof c === 'string' && c.length > 0 && anchors.some((a) => c.includes(a))
     })
+    if (hosts.length === 0 && isoIds.has(String(sub.id ?? ''))) {
+      const hit = entries.some(
+        ([, c]) => typeof c === 'string' && c.length > 0 && anchorHitInIsoArtifact(c, anchors),
+      )
+      if (hit) {
+        anchoredGroups++
+        continue
+      }
+    }
     if (hosts.length === 0) {
       missingSubcomponents.push({
         subId: sub.id != null ? String(sub.id) : null,

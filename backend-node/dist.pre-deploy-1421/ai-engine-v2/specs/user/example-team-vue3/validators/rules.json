@@ -1,0 +1,22 @@
+{
+  "ruleSet": "example-team-vue3",
+  "extends": "vue3",
+  "rules": [
+    {
+      "id": "no-hardcoded-color",
+      "level": "error",
+      "target": "style",
+      "type": "regex-forbid",
+      "pattern": "#[0-9a-fA-F]{3,8}\\b",
+      "message": "禁止硬编码色值，请使用 CSS 变量"
+    },
+    {
+      "id": "component-dir-prefix",
+      "level": "error",
+      "target": "naming",
+      "type": "prefix-required",
+      "value": "t-",
+      "message": "组件目录必须以 t- 开头"
+    }
+  ]
+}

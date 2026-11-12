@@ -79,7 +79,7 @@ import {
   MULTI_THEME_ERROR_CODES,
   MAX_THEMES,
 } from '../utils/multi-theme.js';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 //  引入 validators
 import { PreviewAnalysisValidator } from '../validators/preview-analysis-validator.js';
@@ -118,6 +118,14 @@ import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
 import { OrphanComponentDetector } from '../validators/orphan-component-detector.js';
 import { LessVariableChecker } from '../validators/less-variable-checker.js';
+// 🛡️ 根治⑤（2026-11-12 · cfe8977a 实锤）：CODE-023 确定性兜底（缓存补建悬空组件文件）
+import { tryFixDanglingComponentFiles } from '../validators/dangling-component-backstop.js';
+// 🛡️ 根治⑧（2026-11-12 · 97af5197 实锤）：CODE-022 确定性兜底（臆造名 alias 回契约名 / 孤儿 import 删除）
+import { tryFixOrphanResourceImports } from '../validators/orphan-import-backstop.js';
+// 🛡️ 根治⑩-b（2026-11-12 · 3cdc4757 实锤）：终局 SFC 扫描（复用写盘终验门，磁盘全量口径）
+import { runFinalVueExpressionGate } from '../roles/microcode/final-vue-expression-gate.js';
+// 🛡️ 根治⑪（2026-11-12 · 495857b7 实锤）：D2 重叠回灌指导构造器（配方化：bbox/字号/容器+形态修法+轮次递进）
+import { buildD2Guidance } from '../utils/d2-overlap-guidance.js';
 // 🔴 2026-10-13 批次二：业务样式颜色 → 槽位变量（确定性后处理，映射规则 v2）
 import { buildColorSlotMapping, applyColorSlotMapping } from '../utils/color-slot-mapper.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
@@ -141,6 +149,8 @@ import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 import { createLogger } from '../logger/index.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
 import { resolveBackgroundBrightness } from '../utils/style-tokens.js';
+// 🧬 刀 66-P0：同构段 Figma 真值（缓存命中路径也要补跑，与 A4/headerSlots 同区同思路）
+import { injectIsomorphicSectionTruth } from '../utils/layout-truth-healer.js';
 // 自优化器：基于历史 metrics 自动优化 Prompt 和参数
 import {
   recordRun,
@@ -1111,6 +1121,28 @@ export function createPhase2Graph(config = {}) {
           cachedResult,
           state.figmaNodeData,
         );
+        // 🧬 刀 66-P0（2026-11-12）：缓存命中路径补跑同构段 Figma 真值。
+        //   uiCache 存的是加工后结构，L0 判据升级对缓存任务永不生效 ⇒ 续跑会静默
+        //   沿用旧事实（A4 高度比例 / headerSlots 均踩过同一坑）。本函数是幂等纯函数，
+        //   事实源仍是实时 Figma 树 state.figmaNodeData，不是缓存里那份。
+        //   🔴 计数行恒打（0 也打），fail-open 不阻断缓存命中主流程。
+        try {
+          if (state.figmaNodeData) {
+            const _isoT = injectIsomorphicSectionTruth(
+              validatedCachedResult.layoutStructure,
+              state.figmaNodeData,
+            );
+            const _c = _isoT?.counts || {};
+            logger.info(
+              `🧬 VISION-ISO cache sections=${_c.sections || 0} figmaResolved=${_c.figmaResolved || 0} withTheme=${_c.withTheme || 0} declared=${_c.declaredGroups || 0}`,
+              { _uiCacheHit: true },
+            );
+          }
+        } catch (_isoCacheErr) {
+          logger.error('🚫 VISION-ISO 缓存补跑失败（fail-open）', {
+            error: _isoCacheErr?.message || String(_isoCacheErr),
+          });
+        }
         // 🛡️ R6（2026-11-09 · loop-verify）：缓存命中路径补跑 headerSlots 聚合。
         //   病灶：实时路径在 visual-parser.parse() 内跑 ensureHeaderSlots（段级
         //   headerSlots[] 收编，见 inline-header-slot-inferrer）+ graph :1275/:1322
@@ -1877,6 +1909,8 @@ export function createPhase2Graph(config = {}) {
         userComponentId: state.userComponentId || null,
         extraPrompt: state.extraPrompt || null,
         requirementDocText: state.requirementDocText || null,
+        // 🔁 2026-11-12：奇偶交替样式真值（视觉分析确定性检测）透传进 engineer input。
+        oddEvenHints: state.layoutStructure?.oddEvenHints || null,
       });
 
       state.onProgress?.({
@@ -1968,22 +2002,44 @@ export function createPhase2Graph(config = {}) {
       //   FAIL 非空 ⇒ 组装定向修复指导回灌 L0-B 修复轮（_pendingRetry 统一消费，P1-5），
       //   上限 1 轮（D4：_acceptanceRetried 跨轮保留）。复检行打 effective 供验收门读取。
       try {
-        const { runAcceptanceChecks, formatAcceptanceGuidance } = await import(
-          '../utils/component-acceptance/index.js'
-        );
+        const {
+          runAcceptanceChecks,
+          formatAcceptanceGuidance,
+          needsCarrierRebuild,
+          // 🛡️ C 降级交付（2026-11-12）：判据分级单一来源 + 待补清单文本
+          classifyAcceptanceFails,
+          formatDeliveryWarnings,
+        } = await import('../utils/component-acceptance/index.js');
+        // 🛡️ 修复轮「单调不劣」守卫（2026-11-12 · 253def62 实锤 FAIL 1→4）：
+        //   验收每轮留最优产物快照，下一轮更差就回滚再判，绝不按更坏版本交付。
+        const {
+          snapshotAcceptanceFiles,
+          isBetterSnapshot,
+          shouldRollback,
+          restoreAcceptanceSnapshot,
+        } = await import('../utils/component-acceptance/best-of.js');
         const accFiles =
           result?.generatedFiles && typeof result.generatedFiles === 'object'
             ? result.generatedFiles
             : conservationFiles;
         if (accFiles) {
-          if (!state._acceptanceRetried) {
+          // 🛡️ A6-d（2026-11-12 · tab 画板多张 bg 逐张修实锤）：轮次上限 1→2。
+          //   第一轮复检 FAIL 数 < 初检（收敛中）⇒ 给第二轮；不收敛或已两轮 ⇒ 拒交付。
+          //   计数行同步 retry=n/2。初检走 retry=0/2。
+          const _accMaxRetry = 2;
+          if ((state._acceptanceRetryCount || 0) < _accMaxRetry) {
+            const _retryNo = state._acceptanceRetryCount || 0;
             const acc = runAcceptanceChecks({
               files: accFiles,
               figmaNodeData: state.figmaNodeData,
               resourceDomMapping: state.resourceDomMapping || state._resourceDomMapping || null,
+              // 🛡️ D1/D2/D3（2026-11-12 · c-cc6334 实锤）：分组数守恒 / 网格列数 / 主轴方向
+              //   的真值源。纯附加入参：缺省时这三条判据整体 fail-open（既有判据行为不变）。
+              componentPlan:
+                state.subComponentPlan || state.generationInput?.componentPlan || null,
             });
             logger.info(
-              `🛡️ acceptance：FAIL=${acc.fails.length} checked=${acc.checked} retry=0/1`,
+              `🛡️ acceptance：FAIL=${acc.fails.length} checked=${acc.checked} retry=${_retryNo}/${_accMaxRetry}`,
               {
                 fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`),
                 // 判据计数行（含 E3-v4 卡片级 owner 放行数）——warns 在验收层面无消费方，
@@ -1991,8 +2047,45 @@ export function createPhase2Graph(config = {}) {
                 warns: (acc.warns || []).slice(0, 6),
               },
             );
+            // 🛡️ 单调不劣守卫（2026-11-12 · 253def62 实锤 FAIL 1→4）：每轮判定后保留
+            //   「FAIL 最少」的产物快照（内存字符串文件），供后续劣化回滚。
+            {
+              const _snap = snapshotAcceptanceFiles(accFiles, acc);
+              if (isBetterSnapshot(state._acceptanceBest, _snap)) {
+                state._acceptanceBest = _snap;
+              }
+            }
             if (acc.fails.length > 0) {
-              const guidance = formatAcceptanceGuidance(acc.fails);
+              // 🛡️ A6-e 最小 diff 修复契约（2026-11-12 · a1ee9908「什么都看不到」实锤）：
+              //   修复轮曾把 index.vue 重写成 <template #header-right><MainSection/>——
+              //   修一张图的挂载被 LLM 自由发挥成重排整个装配（换 slot/换组件树）⇒ 全部
+              //   内容塞进外壳右上小槽被裁剪不可见。修复必须是**增量**：装配结构不动。
+              // 🛡️ 防线2 例外（2026-11-12 · 3d081117 实锤）：大面积缺席（C1b≥3 / A1-v2<50%）
+              //   属「整块承载未生成」——A6-e「禁止新建组件文件」会与防线2「补建承载组件」自相
+              //   矛盾，LLM 必照禁止办 ⇒ 承载永不补建。故仅在防线2 触发时开例外（判据单一来源）。
+              const carrierRebuild = needsCarrierRebuild(acc.fails);
+              const guidance =
+                '🔴 修复契约（最高优先级，违反即返工）：\n' +
+                '- 禁止改变既有装配结构：base-panel 的 slot 分布（#title-left/#header-right/default）、' +
+                '组件树层级、既有 data-section-id 段锚一律保持不变；\n' +
+                '- 仅对 FAIL 指出的文件做**最小增量修改**（挂资源/补标签/删重复块），其余内容逐字保留；\n' +
+                '- 🛡️ 变体保护（e32c7951 三色拆丢实锤）：若 acceptance 判据给了 C1-DUP-variant ' +
+                '提示（两个组件文件模板骨架一致仅颜色不同＝同源变体对），**禁止按「重复」删除**' +
+                '任何一侧的数据/文本；颜色差异属正常变体，只能通过 prop/数据驱动合并，不能删；\n' +
+                (carrierRebuild
+                  ? '- ⚠️ 例外（防线2 大面积缺席）：本次 FAIL 属「整块承载未生成」⇒ **允许新建承载**' +
+                    '（新建承载组件文件，或在 index.vue 内新建 `<容器 data-section-id="段id">` 并装配/注册），' +
+                    '但**仅限下方配方逐段点名的那几段**；其余装配结构与既有段锚一律不动，' +
+                    '禁止借机重排 slot / 重写组件树。\n\n'
+                  : '- 禁止新建/重命名/删除组件文件，禁止把内容从 default 区挪进具名 slot。\n\n') +
+                formatAcceptanceGuidance(acc.fails) +
+                // 🛡️ 变体豁免 WARN 一并回灌：LLM 需要知道哪些「重复」不许删
+                ((acc.warns || []).some((w) => w.startsWith('C1-DUP-variant'))
+                  ? '\n⚠️ ' +
+                    (acc.warns || [])
+                      .filter((w) => w.startsWith('C1-DUP-variant'))
+                      .join('\n⚠️ ')
+                  : '');
               // 🛡️ A6（2026-11-11 · 68f9d3f2/95c3977c/5b978794 三实锤）：FAIL 文件集合落
               // state——engineer 断点续跑恢复时**跳过这些文件**（此前重试轮把坏文件当
               // 「已完成分块」恢复 ⇒ guidance 回灌了但坏内容原样复活 ⇒ effective=false
@@ -2003,6 +2096,14 @@ export function createPhase2Graph(config = {}) {
                 if (Array.isArray(f.files)) f.files.forEach((x) => failFiles.add(x));
               }
               state._acceptanceFailFiles = [...failFiles];
+              // 🛡️ A6-c（2026-11-12 · 9e75b757 修复轮 0 有效实锤）：**同时写 _reviseFiles**
+              //   与 failFiles 同值。此前只写指导不写 _reviseFiles ⇒ engineer isL0BRetry
+              //   分支退化为「全局重生成所有代码 chunk」⇒ index.vue 被无谓重写引入
+              //   C1-DUP 15 条新 FAIL（按下葫芦浮起瓢）；写 _reviseFiles 后走
+              //   「仅含目标文件的 chunk 重生成」定向分支 ⇒ 重写面收敛到 FAIL 承载文件。
+              //   engineer 侧消费匹配 `retryTargetFiles.includes(f) || _a6FailFiles.includes(f)`
+              //   双通道，两者同值等价于并集，无行为分歧。
+              state._reviseFiles = [...failFiles];
               logger.warn('🛡️ acceptance FAIL ⇒ 判分驱动定向重试（回灌修复轮，上限 1 轮）', {
                 failCount: acc.fails.length,
                 codes: acc.fails.map((f) => f.code),
@@ -2012,36 +2113,155 @@ export function createPhase2Graph(config = {}) {
                 _pendingRetry: true,
                 _pendingRetryPolicyId: 'acceptance-fail',
                 _l0CodeRetryGuidance: (state._l0CodeRetryGuidance || '') + '\n' + guidance,
-                _acceptanceRetried: true,
+                _acceptanceRetryCount: (state._acceptanceRetryCount || 0) + 1,
+                _acceptancePrevFailCount: acc.fails.length,
                 generatedFiles: result.generatedFiles
                   ? Object.keys(result.generatedFiles)
                   : state.generatedFiles,
               };
             }
           } else {
-            // 复检（重试后）：Δ 与 effective 落日志；🛡️ A6：复检仍 FAIL 且含可定位文件
-            // ⇒ 任务失败（不交付已判定坏的结构）。纯 detail 类 FAIL（无 file）保持放行，
-            // 避免「判据无法定位文件」的形态误杀整组。
-            const acc = runAcceptanceChecks({
+            // 复检（第 n 轮重试后）：🛡️ A6-d 收敛判定——FAIL 数 < 上一轮且 < 上限 ⇒
+            // 再给一轮（FAIL 在收敛=修复轮在干活）；不收敛或已到上限 ⇒ 拒交付。
+            let acc = runAcceptanceChecks({
               files: accFiles,
               figmaNodeData: state.figmaNodeData,
               resourceDomMapping: state.resourceDomMapping || state._resourceDomMapping || null,
+              // 🛡️ D1/D2/D3（2026-11-12 · c-cc6334 实锤）：分组数守恒 / 网格列数 / 主轴方向
+              //   的真值源。纯附加入参：缺省时这三条判据整体 fail-open（既有判据行为不变）。
+              componentPlan:
+                state.subComponentPlan || state.generationInput?.componentPlan || null,
             });
+            // 🛡️ 修复轮劣化 ⇒ 回滚最优产物再判（2026-11-12 · mc-max-1794461199581-253def62
+            //   实锤：修复轮为消一条 D-GRID 把「普通厂商」整组删掉，FAIL 1→4，最终按更坏
+            //   版本拒交付）。判据不动、FAIL 照数，只把「交付哪一版」钉在不劣于上一轮。
+            if (shouldRollback(state._acceptanceBest, acc.fails.length)) {
+              const _best = state._acceptanceBest;
+              const _fs = await import('node:fs');
+              const _rb = restoreAcceptanceSnapshot(_best, accFiles, state.outputPath || null, {
+                mkdirSync: _fs.mkdirSync,
+                writeFileSync: _fs.writeFileSync,
+                join,
+                dirname,
+              });
+              logger.warn('🛡️ acceptance 修复轮劣化 ⇒ 回滚到上一轮最优产物（单调不劣守卫）', {
+                fromFail: acc.fails.length,
+                toFail: _best.failCount,
+                fromCodes: acc.fails.map((f) => f.code),
+                bestCodes: _best.codes,
+                restored: _rb.restored.length,
+                writeFailed: _rb.writeFailed.slice(0, 6),
+              });
+              acc = runAcceptanceChecks({
+                files: accFiles,
+                figmaNodeData: state.figmaNodeData,
+                resourceDomMapping: state.resourceDomMapping || state._resourceDomMapping || null,
+                componentPlan:
+                  state.subComponentPlan || state.generationInput?.componentPlan || null,
+              });
+              logger.info(`🛡️ acceptance-rollback 复判：FAIL=${acc.fails.length}`, {
+                fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`),
+              });
+            } else {
+              const _snap = snapshotAcceptanceFiles(accFiles, acc);
+              if (isBetterSnapshot(state._acceptanceBest, _snap)) {
+                state._acceptanceBest = _snap;
+              }
+            }
             const recheckLocated = acc.fails.filter((f) => f.file || Array.isArray(f.files));
+            const prevCount = Number(state._acceptancePrevFailCount || 0);
+            const retryNo = state._acceptanceRetryCount || 1;
+            const converged = acc.fails.length < prevCount && acc.fails.length > 0;
             logger.info(
-              `🛡️ acceptance-retry：FAIL=${acc.fails.length} effective=${acc.fails.length === 0}`,
+              `🛡️ acceptance-retry：FAIL=${acc.fails.length} prev=${prevCount} effective=${acc.fails.length === 0} retry=${retryNo}/2`,
               {
                 fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`),
                 warns: (acc.warns || []).slice(0, 6),
               },
             );
             if (recheckLocated.length > 0) {
-              logger.error('🚫 acceptance 复检仍 FAIL（含可定位文件）⇒ 拒绝交付', {
-                codes: recheckLocated.map((f) => f.code),
-              });
-              throw new Error(
-                `acceptance 复检未通过（${recheckLocated.map((f) => f.code).join('、')}）：定向修复轮未能修复判定缺陷，拒绝交付坏结构`,
-              );
+              if (converged && retryNo < 2) {
+                // 🛡️ A6-d 收敛中 ⇒ 第二轮定向修复（同 A6-c 双通道：failFiles+reviseFiles）
+                // 🛡️ A6-e：第二轮同样受最小 diff 修复契约约束（同初检分支）。
+                const carrierRebuild2 = needsCarrierRebuild(acc.fails);
+                const guidance =
+                  '🔴 修复契约（最高优先级，违反即返工）：仅对 FAIL 文件做最小增量修改；' +
+                  'slot 分布/组件树/段锚不变；' +
+                  (carrierRebuild2
+                    ? '⚠️ 例外（防线2 大面积缺席）：允许新建承载（组件文件或 index.vue 内段容器 + 装配），但仅限配方点名的段。'
+                    : '禁止新建/重命名/删除组件文件。') +
+                  '🛡️ 变体保护：C1-DUP-variant 提示的「重复」实为同源变体对（仅颜色不同），禁止按重复删除任何一侧数据。\n\n' +
+                  formatAcceptanceGuidance(acc.fails);
+                const failFiles = new Set();
+                for (const f of acc.fails) {
+                  if (f.file) failFiles.add(f.file);
+                  if (Array.isArray(f.files)) f.files.forEach((x) => failFiles.add(x));
+                }
+                state._acceptanceFailFiles = [...failFiles];
+                state._reviseFiles = [...failFiles];
+                state._acceptancePrevFailCount = acc.fails.length;
+                state._acceptanceRetryCount = retryNo + 1;
+                logger.warn(
+                  `🛡️ acceptance 复检收敛中（${prevCount}→${acc.fails.length}）⇒ 第二轮定向修复`,
+                  { codes: acc.fails.map((f) => f.code), failFiles: state._acceptanceFailFiles },
+                );
+                return {
+                  _pendingRetry: true,
+                  _pendingRetryPolicyId: 'acceptance-fail',
+                  _l0CodeRetryGuidance: (state._l0CodeRetryGuidance || '') + '\n' + guidance,
+                  generatedFiles: result.generatedFiles
+                    ? Object.keys(result.generatedFiles)
+                    : state.generatedFiles,
+                };
+              }
+              // 🛡️ C 降级交付（2026-11-12 · mc-max-1794458950336-47b996c3 实锤）：
+              //   该任务 C1b 判「3 条真值文本未物化」**判据正确**，但两轮定向修复未修好 ⇒
+              //   旧实现一律 `throw 拒绝交付坏结构`，用户看到「生成失败」，而磁盘产物其实
+              //   能打开、能进编辑器，只差 3 处文本 —— 判据没问题，问题在交付策略。
+              //   现按「**能打开的产物就交付，打不开的才拦**」分级（判据分级单一来源
+              //   classifyAcceptanceFails）：可降级类（缺文本/缺图标/背景错挂/分组偏差/
+              //   props 断链/假数据/标题槽未挂）⇒ 交付 + 一次性列出待补清单（任务落
+              //   acceptanceWarnings，qualityGate 置 warned）；含阻断码（Dangling =
+              //   index 引用的组件未落盘 ⇒ 产物打不开）⇒ 维持 fail-closed。
+              //   🔴 放宽的是交付策略，不是判据：判据照旧全跑、FAIL 照旧计数、修复轮已尽力两轮。
+              const _delivCls = classifyAcceptanceFails(recheckLocated);
+              if (_delivCls.blocking.length === 0 && _delivCls.degradable.length > 0) {
+                const _delivWarn = formatDeliveryWarnings(_delivCls.degradable);
+                state._acceptanceDeliveredWithWarnings = true;
+                state._acceptanceWarnings = _delivWarn.items;
+                state._acceptanceWarningCodes = _delivWarn.codes;
+                state._acceptanceMissingTexts = _delivWarn.missingTexts;
+                state._acceptanceWarningText = `已交付，但仍有待补内容（${_delivWarn.codes.join('、')}）：${_delivWarn.text}`;
+                logger.warn(
+                  '🛡️ acceptance 复检未过但均为可降级缺失 ⇒ 降级交付（delivered-with-warnings）',
+                  {
+                    codes: _delivWarn.codes,
+                    missingCount: _delivWarn.missingTexts.length,
+                    missingTexts: _delivWarn.missingTexts.slice(0, 10),
+                    blocking: 0,
+                    converged,
+                    retryNo,
+                  },
+                );
+                // 不 throw、不 return：落到本节点统一 return 走正常交付，
+                // generatedFiles / componentStructure 等字段照旧上报（否则下游拿不到产物结构）。
+                // 实时告知（不等终态）：让用户当轮就看到「产物已交付，缺了什么」，而不是猜。
+                state.onProgress?.({
+                  stage: '验收',
+                  message: `⚠️ ${state._acceptanceWarningText}`,
+                  status: 'warning',
+                });
+              } else {
+                logger.error('🚫 acceptance 复检仍 FAIL（含可定位文件）⇒ 拒绝交付', {
+                  codes: recheckLocated.map((f) => f.code),
+                  blockingCodes: _delivCls.blocking.map((f) => f.code),
+                  converged,
+                  retryNo,
+                });
+                throw new Error(
+                  `acceptance 复检未通过（${recheckLocated.map((f) => f.code).join('、')}）：定向修复轮未能修复判定缺陷，拒绝交付坏结构`,
+                );
+              }
             }
           }
         }
@@ -2122,6 +2342,14 @@ export function createPhase2Graph(config = {}) {
         // 🛡️ 资源归属指导写回 state，供下一轮重试注入（单一事实源闭环）。
         _attributionGuidance:
           result._attributionGuidance || state._attributionGuidance || null,
+        // 🛡️ C 降级交付（2026-11-12 · 47b996c3 实锤）：降级标记必须随节点 return 透传，
+        //    否则 state 只写不读 = 死状态，任务落库拿不到「已交付但有 N 处待补」的证据，
+        //    用户体验又会退回「页面上看不出缺了什么」。空值一律 null（旧任务结构不变）。
+        _acceptanceDeliveredWithWarnings: state._acceptanceDeliveredWithWarnings === true,
+        _acceptanceWarningCodes: state._acceptanceWarningCodes || null,
+        _acceptanceWarningText: state._acceptanceWarningText || null,
+        _acceptanceMissingTexts: state._acceptanceMissingTexts || null,
+        _acceptanceWarnings: state._acceptanceWarnings || null,
       };
     } catch (error) {
       const errMsg = error?.message || String(error);
@@ -4149,6 +4377,25 @@ export function createPhase2Graph(config = {}) {
           customSlotsInjected: applied.customSlotsInjected,
           replacedCount: applied.replacedCount,
         });
+        // 🆕 刀 25（2026-11-12 · mc-max-1794463650286-c4c5dabc 实锤）：
+        //   「深浅两套主题建好了但深色没接上」的根因是 **JS 数据常量 / 内联 style
+        //   里的颜色字面值** —— applyColorSlotMapping 原射程只有 common.less，
+        //   对 v3.0 folded-grid 装配产物 replacedCount=0（实测），槽位表建了却 0 引用。
+        //   本刀把业务槽位同步进 css-vars.js（各主题对象 + common 兜底）+ declare.json
+        //   （M3-8 双向声明），再把 .vue 里的颜色字面量换成 var(--camelKey)
+        //   ⇒ 内联 style 也随主题切换（var() 取值由 documentElement 变量决定，
+        //     与特异性无关），浅色零差异（槽位值 ≡ 主稿实测色）。
+        if (applied.scriptReplacedCount > 0 || applied.cssVarKeysInjected?.length > 0) {
+          logger.info('🧩 刀 25：业务色值已接入主题变量（JS/内联 style 随主题切换）', {
+            cssVarKeysInjected: (applied.cssVarKeysInjected || []).length,
+            declaredCssVarKeys: (applied.declaredCssVarKeys || []).length,
+            scriptReplacedCount: applied.scriptReplacedCount || 0,
+            scriptReplacedFiles: (applied.scriptReplacedFiles || []).map((f) =>
+              String(f).split('/').slice(-2).join('/'),
+            ),
+            scriptSkipped: (applied.scriptSkipped || []).length,
+          });
+        }
         // 🛡️ 2026-10-20：fail-open 显性化——跨稿对齐全败/大比例未命中必须升 WARN
         //   （此前 pairs>0 但 unmatched 100% 只打 INFO，配色「回退到语义猜测」无人察觉）。
         const _al = Array.isArray(mapping.stats?.alignment) ? mapping.stats.alignment : [];
@@ -5931,7 +6178,97 @@ export function createPhase2Graph(config = {}) {
       // 路由到 complete（其产物完整性硬门禁仍会拦截「缺文件/空产物」这类完全不可用情况，作硬底线）。
       // 🛡️ 发布硬闸（2026-09-13）：021/022/023 这类「预览必然空白/缺块」的确定性硬伤，软失败
       // 不得降级放行——命中即走 l0b-fail fail-closed，禁止 publish / 标 completed。
+      // 🛡️ 根治⑩-b 终局 SFC 扫描（2026-11-12 · 3cdc4757 实锤）：写盘终验修好的文件会被
+      //   后续编辑器（theme 注入 / less checker / 统一终态落盘的内存回写）再次改坏——本任务
+      //   ContentForecast.vue 终验两次从缓存回退合法版，最终磁盘仍是坏版 ⇒ 预览「组件加载失败」。
+      //   此处是所有产物编辑器之后的第一站：全量 .vue 再扫一遍，坏⇒缓存回退；无候选保留
+      //   （removeIfNoCache:false，删了=悬空 import 必炸）。零命中也打计数行（铁律）。
+      if (state.outputPath) {
+        try {
+          const _fg = runFinalVueExpressionGate(state.outputPath, r._sfcManifest || undefined, {
+            logger,
+            removeIfNoCache: false,
+            allVueOnDisk: true,
+          });
+          logger.info('🛡️ 终局 SFC 扫描完成', {
+            checked: _fg.checked,
+            bad: _fg.bad.map((b) => `${b.path}:${b.action}`),
+          });
+        } catch (_fgErr) {
+          logger.warn(`🛡️ 终局 SFC 扫描跳过（${_fgErr?.message || _fgErr}）`);
+        }
+      }
       if (hasHardPublishBlock(r.issues)) {
+        // 🛡️ 根治⑤（2026-11-12 · cfe8977a 实锤）：hardBlocks 全为 CODE-023「缺组件文件」
+        // 时先做确定性兜底（缓存补建），复核通过 ⇒ 转软失败降级链；否则维持 fail-closed。
+        const _hardBlocks023 = (r.issues || []).filter(
+          (i) =>
+            i.severity === 'BLOCK' &&
+            (/^CODE-02[123]/.test(i.id) || String(i.id || '').endsWith('-ESCALATED')),
+        );
+        const _onlyMissingFile =
+          _hardBlocks023.length > 0 &&
+          _hardBlocks023.every((i) => i.id === 'CODE-023') &&
+          (r.issues || []).some((i) => i.id === 'CODE-023' && /缺组件文件/.test(String(i.message || '')));
+        if (_onlyMissingFile && state.outputPath) {
+          const _backstop = tryFixDanglingComponentFiles(
+            state.outputPath,
+            r.issues,
+            logger,
+          );
+          if (_backstop.fixed) {
+            logger.warn('🛡️ CODE-023 兜底成功：悬空组件已从缓存补建，转软失败降级链', {
+              actions: _backstop.actions,
+              remaining: _backstop.remaining,
+            });
+            state.onProgress?.({
+              stage: 'L0-B校验',
+              message: `🛡️ 悬空子组件已从生成缓存确定性补建（${_backstop.actions.filter((a) => a.includes('补建')).length} 个），降级完成`,
+              status: 'warning',
+            });
+            // 从 issues 剔除已消的 CODE-023 ⇒ hasHardPublishBlock 不再命中 ⇒ 走软失败链
+            r.issues = (r.issues || []).filter((i) => i.id !== 'CODE-023');
+            const _gs023 = r.gateScore || computeGateScore(r.issues);
+            state._l0SoftFail = true;
+            state._gateScore = _gs023;
+            return 'do-not-invent-check';
+          }
+          logger.warn('🛡️ CODE-023 兜底未生效（无合格缓存候选），维持 fail-closed', {
+            actions: _backstop.actions,
+          });
+        }
+        // 🛡️ 根治⑧（2026-11-12 · 97af5197 实锤）：hardBlocks 全为 CODE-022 时先做确定性兜底
+        // （臆造变量名 alias 回契约名 / 零引用孤儿 import 删除），复核通过 ⇒ 转软失败降级链；
+        // 否则维持 fail-closed。病灶链：LLM 自造 `bgbg_m36`（文件名派生+bg 前缀）import 后
+        // 0 引用 ⇒ CODE-022 硬闸；pre-write 修复器 pruneUnmountedResourceImports 只迭代
+        // 契约名 ⇒ 臆造名永不自愈 ⇒ 修复轮逐字复现 ⇒ 重试耗尽 fail-closed（与 2026-09-29
+        // 「门禁 BLOCK / 修复器不删」死锁同族，死锁面从注释换成臆造名）。
+        const _hardBlocks022 = _hardBlocks023.filter((i) => /^CODE-022/.test(String(i.id || '')));
+        const _onlyOrphanImport =
+          _hardBlocks022.length > 0 && _hardBlocks022.length === _hardBlocks023.length;
+        if (_onlyOrphanImport && state.outputPath) {
+          const _backstop022 = tryFixOrphanResourceImports(state.outputPath, r.issues, logger);
+          if (_backstop022.fixed) {
+            logger.warn('🛡️ CODE-022 兜底成功：孤儿资源 import 已确定性清理，转软失败降级链', {
+              actions: _backstop022.actions,
+            });
+            state.onProgress?.({
+              stage: 'L0-B校验',
+              message: '🛡️ 孤儿资源 import 已确定性清理（臆造名归位/删除），降级完成',
+              status: 'warning',
+            });
+            // 从 issues 剔除已消的 CODE-022 ⇒ hasHardPublishBlock 不再命中 ⇒ 走软失败链
+            r.issues = (r.issues || []).filter((i) => !/^CODE-022/.test(String(i.id || '')));
+            const _gs022 = r.gateScore || computeGateScore(r.issues);
+            state._l0SoftFail = true;
+            state._gateScore = _gs022;
+            return 'do-not-invent-check';
+          }
+          logger.warn('🛡️ CODE-022 兜底未完全生效，维持 fail-closed', {
+            actions: _backstop022.actions,
+            remaining: _backstop022.remaining,
+          });
+        }
         logger.error('🛡️ L0-B 硬闸 BLOCK（021/022/023 + WARN 升级）且重试耗尽：禁止发布，转 fail-closed', {
           hardBlocks: (r.issues || [])
             .filter(
@@ -6184,26 +6521,21 @@ export function createPhase2Graph(config = {}) {
           });
         }
         // 🛡️ D2 重叠回灌闭环（2026-11-10 · R14 三单实锤）：RUNTIME-016（文本重叠）阻断时，
-        //   先走一轮定向重试（重叠对样本 → guidance → 回 engineer 修复），重试后仍重叠才 fail。
+        //   先走定向重试（重叠对样本 → guidance → 回 engineer 修复），重试后仍重叠才 fail。
         //   与 acceptance 闭环（engineer 节点）互补：此处是渲染期数据（runtime-verify 阶段），
-        //   engineer 的静态验收拿不到 overlaps。上限 2 轮（2026-11-11 从 1 轮提升——
-        //   R21 设备实锤：首轮回灌修复后仍 RUNTIME-016+VISUAL-002，单轮重采样不够）。
-        if (textOverlapBlocked && (state._d2OverlapRetried || 0) < 2) {
-          const overlapIssue = (runtimeGate.issues || []).find((i) => i.id === 'RUNTIME-016');
-          const pairs = overlapIssue?.evidence?.overlaps || [];
-          const guidancePairs = (Array.isArray(pairs) ? pairs : [])
-            .slice(0, 8)
-            .map((o) => `「${o.a}」与「${o.b}」重叠 ${Math.round((o.ratio || 0) * 100)}%`)
-            .join('；');
-          const d2Guidance = [
-            '【D2 文本重叠修复指导（渲染实测命中）】',
-            guidancePairs ? `重叠对：${guidancePairs}` : '存在文本节点 bbox 两两相交（交比>15%）',
-            '修复要求：调整布局使重叠文本错位——加间距/换行/缩小字号/改 flex 布局，禁止用绝对定位叠放；必须逐对消除。',
-          ].join('\n');
-          logger.warn('🛡️ RUNTIME-016 首次命中 ⇒ D2 重叠回灌定向重试（上限 1 轮）', {
-            pairs: (Array.isArray(pairs) ? pairs : []).slice(0, 5),
+        //   engineer 的静态验收拿不到 overlaps。
+        //   🛡️ 根治⑪（2026-11-12 · 495857b7 实锤）：旧指导只有「A 与 B 重叠 X%」一句——
+        //     修复轮拿不到坐标/字号/容器 = 盲修，2 轮后仍 3 对顽固重叠 fail-closed。
+        //     升级：①指导构造抽 utils/d2-overlap-guidance.js（配方化：bbox/字号/容器+形态修法）
+        //     ②RUNTIME-007 资源 404 清单一并进指导（此前只管 016）③上限 2→3 轮策略递进。
+        if (textOverlapBlocked && (state._d2OverlapRetried || 0) < 3) {
+          const nextRound = (state._d2OverlapRetried || 0) + 1;
+          const d2Guidance = buildD2Guidance(runtimeGate, nextRound);
+          logger.warn('🛡️ RUNTIME-016 命中 ⇒ D2 重叠回灌定向重试（根治⑪配方化指导，上限 3 轮）', {
+            round: nextRound,
+            pairs: ((runtimeGate.issues || []).find((i) => i.id === 'RUNTIME-016')?.evidence?.overlaps || []).slice(0, 5),
           });
-          state._d2OverlapRetried = (state._d2OverlapRetried || 0) + 1;
+          state._d2OverlapRetried = nextRound;
           state._l0CodeRetryGuidance = (state._l0CodeRetryGuidance || '') + '\n' + d2Guidance;
           return {
             runtimeGate,

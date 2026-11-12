@@ -62,6 +62,40 @@ export class TaskStatsService {
   }
 
   /**
+   * failure-analysis 访问控制（2026-11-12，R13）：**任务所有者 或 管理员**可访问，其余 403。
+   *
+   * 🔴 为什么不再用「仅 admin」（原口径是整类连坐，不是该端点自身的需求）：
+   * `failure-analysis` 挂在「任务统计（管理员视角）」控制器下，因而被统一套了
+   * `assertAdmin`。但它实际只是 `SelfHealingService.analyzeFailure` 按 **sessionId**
+   * 做的纯文本规则分类（compile_error / timeout / rate_limit …），返回体只有
+   * 分类 / 原因说明 / 建议 / 可执行动作，**不含任何跨用户敏感数据**。
+   * 而前端 `TaskDetail.vue#loadFailureAnalysis` 对**任一失败任务**通用调用它
+   * ⇒ 普通用户打开自己的失败任务**必 403**，并且永久拿不到后端自愈建议
+   * （SelfHealingService 对普通用户形同废弃）。
+   * 生产实锤：普通用户（yangkun）任务详情页持续 403 噪音。
+   *
+   * 🔴 放宽面严格限定（**只有一条新增允许**）：
+   *   新增放行 = { 任务存在 且 task.userId 非空 且 === 调用者 userId }
+   *   其余一切路径 —— task 不存在 / task.userId 为空（历史无主任务）/ 非所有者 ——
+   *   **逐字回落到原 `assertAdmin`**，行为与改动前完全一致；不因「未知 sessionId」
+   *   或「无主任务」打开任何新的可访问面。
+   *
+   * 归属口径与 `tasks.service` 既有范式（packageTaskCode / publishToWorkspace /
+   * getTaskTree / cancelTask …）逐字同源：`task.userId && task.userId !== userId` 才拒。
+   *
+   * @param userId 调用者（SessionGuard 写入的 req.session.userId）
+   * @param sessionId 目标任务 sessionId
+   */
+  async assertFailureAnalysisAccess(
+    userId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const task = this.tasksService.getTask(sessionId);
+    if (task?.userId && task.userId === userId) return;
+    await this.assertAdmin(userId);
+  }
+
+  /**
    * R11 历史回填：从 tasks.json 的 configSnapshot 读取 baseURL，回填到历史 token 记录
    * @returns 回填结果统计
    */

@@ -1,0 +1,479 @@
+/**
+ * 🛡️ Phase E（2026-10-31 治理方案）：拒绝原因聚合对账（纯函数，审计家族成员）。
+ *
+ * 问题：刀53 接管器只在 map.size>0 时打日志 ⇒「接管 0 命中」与「零问题」不可区分；
+ *      接管 skip 原因（skipped[].reason）、契约审计缺失分散在各自日志里，任务级无对账视图。
+ *      排障纪律「接管/兜底 0 命中必须配阳性对照」此前没有结构化数据支撑。
+ *
+ * 交付：任务级 summary——
+ *  - `pickTakeoverAudit(takeover)`：collectFoldedGridTakeover 返回值 → 统计子集归一
+ *    （role 层调用，回写 result.takeoverAudit；空/畸形输入 null，不编造零值结论）；
+ *  - `buildRejectSummary({ takeoverAudit, contractAudit })`：任务级双源聚合
+ *    （graph 层调用；双源皆空 → null，不落盘不刷日志）；
+ *  - `formatRejectSummaryLine(summary)`：一行确定性日志（键=值可 grep）。
+ *
+ * 落盘：graph 生成节点完成后 `state._saveCheckpoint?.('reject-summary', s)` +
+ *       logger.info 一行。只观测、不阻断（与 D1 同纪律）。
+ *
+ * 数据源现状（治理方案 §Phase E 交付物 1）：刀53 skipped[].reason ✅ 结构化；
+ * 契约审计缺失 ✅（D1 contractAudit）；装配器剥离 / 兜底跳过 ⚠️ 无结构化记录
+ * （本模块留 contract 扩展位，不硬造数据；待后续刀补结构化源再接）。
+ *
+ * 🛡️ 2026-11-05 样式还原真值依据治理（docs/2026-11-05-样式还原真值依据治理方案.md §3.5）：
+ *   上条「待后续刀补结构化源」在此续接，不另造第二套口径 —— 新增第三源
+ *   `pickStyleTruthAudit(resourceDomMapping)`：统计 background-size 的来源档位
+ *   （Figma scaleMode 直读 / 几何兜底推断 / 未参与背景推断），**全部 0 也打**。
+ *   数据来自 `inferBackgroundStyle` 写回 mapping 的 `backgroundInferredBy`（既有 checkpoint
+ *   字段，不新增数据通道）。注意：`contractAudit` 是 visual-parser 的视觉契约审计产物，
+ *   **不是**通用扩展位，本源与它平级、互不复用。
+ *
+ * 🛡️ 2026-11-05 四任务根因修复（docs/2026-11-05-四任务样式各异根因修复方案.md §3.1/§3.5）：
+ *   同一扩展位再接两源，仍为**只报不改、0 也打**的观测型断言：
+ *   - 第四源 `pickResourceConservationAudit(mapping, files)`：全资源「应挂 vs 实挂」守恒对账。
+ *     判据**续接** `resource-facts.js#buildResourceFacts` 单一事实源（graph 侧 I8 因未传
+ *     resourceMapping 恒空转），不新写第二套 import 正则；files 不可用时标 filesUnavailable。
+ *   - 第五源 `pickFlexTruthAudit(files)`：续接 11-02 方案 R4-3a 观测意图，改为产物侧
+ *     flex 分档扫描（避免模块级计数在 MAX_CONCURRENT=2 下跨任务串扰），不碰任何写入口。
+ */
+
+import { buildResourceFacts } from './resource-facts.js';
+
+/** 10 类接管命中计数键（与 collectFoldedGridTakeover 返回字段一一对应） */
+const HIT_KEYS = [
+  ['headerHits', 'header'],
+  ['gridHits', 'grid'],
+  ['textHits', 'text'],
+  ['iconHits', 'icon'],
+  ['legendHits', 'legend'],
+  ['kvGridHits', 'kvGrid'],
+  ['listHits', 'list'],
+  ['statRowHits', 'statRow'],
+  ['tableHits', 'table'],
+  // 🔴 刀53h：新 kind 必须同步登记 —— 漏登记则「footer 接管了几段」在任务级对账里
+  //   不可见（接管 0 命中 与 零问题 不可区分 = 假绿温床，正是本模块存在的理由）。
+  ['footerHits', 'footer'],
+  // 🔴 刀54 段内分区接管：同上，漏登记则「regions 接管了几段」在任务级对账不可见。
+  ['regionHits', 'regions'],
+];
+
+/** skipped 截断上限（与接管器自身 slice(0,16) 同口径） */
+const SKIPPED_CAP = 16;
+
+/**
+ * takeover 返回值 → 统计子集归一。
+ * @param {{evaluated?:number, map?:Map, skipped?:Array, tableAnchorRepairs?:number}} takeover
+ * @returns {Object|null} null = 输入无有效统计（不编造）
+ */
+export function pickTakeoverAudit(takeover) {
+  if (!takeover || typeof takeover !== 'object' || !Number.isFinite(Number(takeover.evaluated))) {
+    return null;
+  }
+  const skipped = Array.isArray(takeover.skipped) ? takeover.skipped : [];
+  const hits = {};
+  for (const [, key] of HIT_KEYS) hits[key] = 0;
+  for (const [field, key] of HIT_KEYS) {
+    const n = Number(takeover[field]);
+    if (Number.isFinite(n)) hits[key] = n;
+  }
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  return {
+    evaluated: num(takeover.evaluated),
+    candidates: takeover.map instanceof Map ? takeover.map.size : 0,
+    hits,
+    suppressed: {
+      statRow: num(takeover.statRowSuppressed),
+      table: num(takeover.tableSuppressed),
+    },
+    listDirections: {
+      row: num(takeover.listRow),
+      column: num(takeover.listColumn),
+    },
+    listItemBgs: {
+      total: num(takeover.listItemBg),
+      declared: num(takeover.listItemBgDeclared),
+      subtree: num(takeover.listItemBgSubtree),
+      skipped: num(takeover.listItemBgSkipped),
+    },
+    // 🔴 2026-11-03（列表卡盒真值治本 步①②③）：列表几何真值可见化。
+    //   `negGapClamped`：负间距被总闸拦下（置 null，回落自然流）的段数 —— **0 也打**。
+    //     0 而产物仍含负值 ⇒ 判据未生效（或存在第四处写间距的路径）；暴涨 ⇒ 几何判据误伤。
+    //   `geoNotReady`：异宽/异高致 `geoReady=false` 的段数。过去是**静默降级**，与
+    //     「设计本就无间距」不可区分 —— 没有这一项，`gaps=null` 永远是盲区。
+    //   `widthNotUniform`（步③）：row 且「回退盒 + 异宽」⇒ 横向几何（宽度+间距）未下发的段数。
+    //     0 而产物仍见 `FG_LIST_WIDTHS` 异宽值 ⇒ 判据未生效；暴涨 ⇒ 误伤已证明的真异宽样本。
+    //   `samples`（封顶 8）：留真值现场；`rawW`/`rawX`=帧盒几何真值、`widths`=实际下发、
+    //     `neg`=clamp 前原始负值 —— 被拦下后仍可完整回溯。
+    //   🔴 步⑤（P0-2）：`innerStacked`/`innerInline`=卡内布局几何判定落点（`inline` 仅确认现状，
+    //     只有 `stacked` 会真正重排渲染结构 ⇒ 误判定性只看这一项）；`innerConflict`=各卡投票
+    //     不一致被拦的段数（判据在工作，非故障）；`valuePartsInline`/`Stacked`=数值/单位排布。
+    //     全部 **0 也打**：`innerStacked=0` 而产物仍把数值贴右 ⇒ 文本配对全 miss（判据未生效）。
+    listGeo: {
+      negGapClamped: num(takeover.listGeoNegGapClamped),
+      geoNotReady: num(takeover.listGeoGeoNotReady),
+      // 🛡️ 2026-11-06（64a1a31f 实锤）：「近似相似带」救回的段数 —— **0 也打**。
+      //   视觉阶段只能判「大概相似」（帧盒 470 vs 内容盒 459 这类 ±几 px 是常态），
+      //   故同组资格走容差；`relaxed>0` ⇒ 容差生效并保住了 cardH/gaps。
+      //   `relaxed=0` 且 `geoNotReady>0` ⇒ 真异形（不是容差没生效）；`relaxed>0` 而
+      //   产物仍无 cardH/`FG_LIST_GAPS` ⇒ 下游未消费（判据被架空）。
+      relaxed: num(takeover.listGeoRelaxed),
+      widthNotUniform: num(takeover.listGeoWidthNotUniform),
+      geomPicked: num(takeover.listGeoGeomPicked),
+      spanRejected: num(takeover.listGeoSpanRejected),
+      innerStacked: num(takeover.listGeoInnerStacked),
+      innerInline: num(takeover.listGeoInnerInline),
+      innerConflict: num(takeover.listGeoInnerConflict),
+      valuePartsInline: num(takeover.listGeoValuePartsInline),
+      valuePartsStacked: num(takeover.listGeoValuePartsStacked),
+      samples: Array.isArray(takeover.listGeoSamples) ? takeover.listGeoSamples.slice(0, 8) : [],
+    },
+    anchorRepairs: num(takeover.tableAnchorRepairs),
+    // 🔴 R3（2026-11-02）：超界段计数（refs 落在锚点子树之外 ⇒ 禁单元素接管）
+    scopeIncomplete: num(takeover.scopeIncomplete),
+    // 🛡️ F1（2026-11-05 · e23b0b40 实锤）：图表真值冲突排除计数 —— **0 也打**。
+    //   病灶：刀53 判据对 vision `charts[]` 零感知，把环形图段接管成 `<a-table>`
+    //   ⇒ 产物无 pie series ⇒ DO-NOT-INVENT-CHART-MISSING(BLOCK) 任务失败。
+    //   判据：`chartOwned>0` ⇒ 确有段因图表真值被让出（本次生效）；
+    //         `chartOwned=0` 且 vision charts[] 非空 ⇒ 判据未命中（id 归一有问题）。
+    //   `chartOwnedIds` 留真值现场（vision 声明的段 id，已剥 chart/table/list 前缀）。
+    chartOwned: num(takeover.chartOwned),
+    chartOwnedIds: Array.isArray(takeover.chartOwnedIds) ? takeover.chartOwnedIds.slice(0, 8) : [],
+    // 🔴 R6（2026-11-02）：接管形态 vs 段声明消费对账拒修计数
+    declaredUnconsumed: num(takeover.declaredUnconsumed),
+    // 🛡️ P3（2026-11-03）：icon/header 接管叶的**面板真值注入**计数。
+    //   `injected/tried` —— 0 也打；`tried>0 && injected=0` = 判据静默失效的形状
+    //   （曾实测：索引形状不符 ⇒ resolveSectionPanel 直接崩/返 null，而 hits 仍非 0 ⇒ 假绿）。
+    panelBg: {
+      injected: num(takeover.panelBgInjected),
+      tried: num(takeover.panelBgTried),
+    },
+    // 🛡️ 刀55（2026-11-05 · 8f4dfed9/89c25985 双实锤）：接管卡片 icon 通道计数。
+    //   `hit/evaluated` —— 0 也打：`evaluated>0 && hit=0` 而产物卡内确有 icon 资源
+    //   ⇒ 判据失效（mapping 未接/几何过滤过严）；真机验签以产物 `<img>` 对数。
+    cardIcon: {
+      hit: num(takeover.cardIconHit),
+      evaluated: num(takeover.cardIconEvaluated),
+    },
+    // 🛡️ 刀60（2026-11-05 · 0ddd1708「8总设备」+pad:86 实锤）：卡内同行容差排序计数。
+    //   `fixed/evaluated` —— 0 也打：真机验签看产物 runs 语序与 pad 值。
+    cardRow: {
+      fixed: num(takeover.cardRowOrderFixed),
+      evaluated: num(takeover.cardRowEvaluated),
+    },
+    skippedTotal: skipped.length,
+    skipped: skipped.slice(0, SKIPPED_CAP).map((s) => ({
+      id: String(s?.id ?? ''),
+      reason: String(s?.reason ?? ''),
+    })),
+  };
+}
+
+/**
+ * 🛡️ 2026-11-05 样式真值来源统计（纯函数，恒打 —— 0 也返回全零结构，不编造命中）。
+ *
+ * `inferBackgroundStyle` 把 `backgroundInferredBy` 写回 mapping 同一对象引用，
+ * 因此这里只需统计既有 checkpoint 字段，不新增数据结构、不解析产物文本。
+ *
+ * 可辩驳用途：`geometry=0` 而产物 background-size 却是像素/兜底值 ⇒ 接线失效；
+ * `noBackgroundInference` 高而产物确有背景 ⇒ 存在绕过统一出口的第四处写入路径。
+ *
+ * @param {Array<Object>|null} resourceDomMapping
+ * @returns {{evaluated:number, scaleMode:number, geometry:number, noBackgroundInference:number, unknownSource:number}}
+ */
+export function pickStyleTruthAudit(resourceDomMapping) {
+  const out = {
+    evaluated: 0,
+    scaleMode: 0,
+    geometry: 0,
+    noBackgroundInference: 0,
+    unknownSource: 0,
+  };
+  if (!Array.isArray(resourceDomMapping)) return out;
+  out.evaluated = resourceDomMapping.length;
+  for (const m of resourceDomMapping) {
+    const src = m && typeof m === 'object' ? m.backgroundInferredBy : null;
+    if (src == null) {
+      out.noBackgroundInference += 1;
+    } else if (src === 'scaleMode') {
+      out.scaleMode += 1;
+    } else if (src === 'geometry') {
+      out.geometry += 1;
+    } else {
+      out.unknownSource += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * 🛡️ 2026-11-05 C1 全资源守恒断言（只报不改、0 也打）。
+ *
+ * 续接 `resource-facts.js#buildResourceFacts`：mapping 声明的变量集合是「应挂」，
+ * 产物 `.vue` 里真实 import 的变量集合是「实挂」。graph 层 I8 因未传 resourceMapping
+ * 恒走空数组分支，这条对账此前在任务级完全不可见 —— 本函数只把它变成可辩驳的计数行，
+ * **不改挂载行为、不改 targetDomSelector、不做 fail-closed**。
+ *
+ * 分档语义：`excluded` = 合法不挂（下载 missing / skipMount）；`unmounted` 归因到
+ * `noVarName`（mapping 没给变量名）或 `notImported`（有变量名但产物无 import）。
+ * `filesUnavailable=1` 表示 graph 侧拿不到产物内容表（如 vue3 路径），此时其余计数
+ * 只反映 mapping 侧事实，不得据此推断「未挂载」。
+ *
+ * 🛡️ 2026-11-05 G1（治理方案 §4，A 档只报不改）：`unmounted` 再加**原因分档** `reasons`。
+ * 判据只认 mapping 的结构字段，不认 taskId / 组件名 / 具体 node id，且**单归类互斥**
+ * （分档和恒 ≡ unmounted，便于 `server.log` 复算）。优先级：
+ *   ① `noVarName` —— 连变量名都没有；
+ *   ② `reused`    —— `sharedBy.length > 1`，同一位图被多个 Figma 节点共享（合法复用候选）；
+ *   ③ `subState`  —— `bgRole === 'sub-state'`，per-item 状态类锚点（如激活态背景）；
+ *   ④ `noTarget`  —— 无 `targetDomSelector`，产物侧无确定性挂载目标；
+ *   ⑤ `imgSrcUnreferenced` —— `recommendedUsage==='imgSrc'`（或 `usage` 含 `<img`）
+ *      且 `mountTarget` 为空 ⇒ **产物未 import 这些静态资源**（生成侧引用覆盖率缺口）。
+ *      🔴 语义更正（2026-11-05，D1 撤销）：`!mountTarget` 对 `imgSrc` 类**恒真**——
+ *      `figma-connector.js:2953-2957` 明文设计「icon / img = 静态资源，**不做容器挂载**」，
+ *      且 `mountTarget` 仅在 `previewAnalysisRole === 'bg'` 分支赋值（`:2958`）、
+ *      `_inferRecommendedUsage` 的 bg 分支永不返回 `imgSrc`（`:3169-3195`）。
+ *      全样本 341 目录 / 4301 条目实测：`bg ∧ imgSrc` 交集 = 0、`imgSrc` 带 `mountTarget` = 0。
+ *      ⇒ 本档**不含「缺挂载点」信息**，只表示「LLM 未引用」，
+ *      **禁止**据此推断挂载器缺陷或据此改挂载计划覆盖范围（原「挂载计划未覆盖 `<img>`」解读已作废）。
+ *      保留 `!mountTarget` 条件作**设计哨兵**：若 `figma-connector` 将来让 imgSrc 带
+ *      `mountTarget`，本档自动不再命中，即提示需重新审视该设计假设。
+ *   ⑥ `other`     —— 其余（待进一步观测，退役判据要求它趋零）。
+ * 🔴 口径说明：方案初稿写的 `failClosed` 属**挂载计划内部状态**，本产物侧观测拿不到，
+ *    故不伪造该档；其余档位是 mapping 与产物结构可直接复算的事实。
+ *    ⑤ 原名 `imgSrcNoMountTarget`（2026-11-05 真机离线阳性后补：6 个真实任务 20/22 条
+ *    `other` 命中该结构）。**当日即更名**：该档恒 100% 命中（见上文语义更正），
+ *    原名暗示"缺 mountTarget 是缺陷"，已实测证伪并误导过一轮治本立项（D1）。
+ *    `filesUnavailable=1` 时分档仍为 mapping 侧事实，不代表实际挂载状态。
+ * 只加计数行，不改挂载行为、不改 `targetDomSelector`、不做 fail-closed、不写产物。
+ *
+ * @param {Array<Object>|null} resourceDomMapping
+ * @param {Object<string,string>|null} files 产物 path → content
+ */
+export function pickResourceConservationAudit(resourceDomMapping, files) {
+  const out = {
+    expected: 0,
+    excluded: 0,
+    mountable: 0,
+    declaredVar: 0,
+    imported: 0,
+    unmounted: 0,
+    noVarName: 0,
+    notImported: 0,
+    orphanImports: 0,
+    filesUnavailable: 0,
+    // G1：unmounted 原因分档（单归类互斥，和 ≡ unmounted）
+    reasons: {
+      noVarName: 0, reused: 0, subState: 0, noTarget: 0,
+      imgSrcUnreferenced: 0, other: 0,
+    },
+  };
+  const list = Array.isArray(resourceDomMapping) ? resourceDomMapping : [];
+  out.expected = list.length;
+
+  const available =
+    files && typeof files === 'object' && !Array.isArray(files) &&
+    Object.values(files).some((v) => typeof v === 'string');
+  if (!available) out.filesUnavailable = 1;
+
+  let importedSet = new Set();
+  let orphanImports = [];
+  if (available) {
+    const facts = buildResourceFacts({ mapping: list, files });
+    importedSet = facts.allImported instanceof Set ? facts.allImported : new Set();
+    orphanImports = Array.isArray(facts.orphanImports) ? facts.orphanImports : [];
+  }
+  out.orphanImports = orphanImports.length;
+
+  for (const m of list) {
+    const varName = m?.assignedVarName || m?.semanticVarName || null;
+    if (varName) out.declaredVar += 1;
+    if (m?.downloadStatus === 'missing' || m?.skipMount === true) {
+      out.excluded += 1;
+      continue;
+    }
+    out.mountable += 1;
+    if (!varName) {
+      out.noVarName += 1;
+      out.unmounted += 1;
+      out.reasons.noVarName += 1;
+    } else if (importedSet.has(String(varName))) {
+      out.imported += 1;
+    } else {
+      out.notImported += 1;
+      out.unmounted += 1;
+      // G1 单归类：按结构事实优先级，一条 unmounted 恰好落一档。
+      const sharedBy = Array.isArray(m?.sharedBy) ? m.sharedBy.length : 0;
+      if (sharedBy > 1) out.reasons.reused += 1;
+      else if (m?.bgRole === 'sub-state') out.reasons.subState += 1;
+      else if (!m?.targetDomSelector) out.reasons.noTarget += 1;
+      else {
+        const isImgSrc =
+          String(m?.recommendedUsage || '') === 'imgSrc' ||
+          /<img/i.test(String(m?.usage || ''));
+        if (isImgSrc && !m?.mountTarget) out.reasons.imgSrcUnreferenced += 1;
+        else out.reasons.other += 1;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * 🛡️ 2026-11-05 C2 R4-3a 观测（只报不改、0 也打）。
+ *
+ * 续接 docs/2026-11-02-锚点真值同源与段完整性根治方案.md:131-139/180/183/232-233：
+ * 原文要求 `flexItemStyleFromHeights` 回退分支加 `flexFallback++`。因该纯函数被 4 处
+ * 调用且模块级计数在 MAX_CONCURRENT=2 下会跨任务串扰，改为**产物侧守恒扫描**，
+ * 观测意图与命名不变，**不碰任何 flex 写入口**。
+ *
+ * 分档：`flex:1` 静默回退 / `flex:<小数>` 真值比例 / `flex:<数> 1 0` 混合写法。
+ * 验者扫产物实际 CSS 值，与改者（`code-generator.js` 的比例计算）不同实现。
+ *
+ * @param {Object<string,string>|null} files 产物 path → content
+ */
+export function pickFlexTruthAudit(files) {
+  const out = {
+    evaluated: 0,
+    flexFallback: 0,
+    truthed: 0,
+    mixedGrow: 0,
+    filesUnavailable: 0,
+  };
+  const available =
+    files && typeof files === 'object' && !Array.isArray(files) &&
+    Object.values(files).some((v) => typeof v === 'string');
+  if (!available) {
+    out.filesUnavailable = 1;
+    return out;
+  }
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== 'string' || !/\.(vue|less|css)$/i.test(p)) continue;
+    for (const m of c.matchAll(/flex\s*:\s*([^;}"']+)/gi)) {
+      const v = String(m[1] || '').trim();
+      if (!v) continue;
+      out.evaluated += 1;
+      if (/^1\s*$/.test(v)) out.flexFallback += 1;
+      else if (/^\d+(?:\.\d+)?\s+1\s+0\s*$/.test(v)) out.mixedGrow += 1;
+      else if (/^\d+(?:\.\d+)?\s*$/.test(v)) out.truthed += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * 任务级五源聚合。
+ * 第三/四/五源都只在**显式传入**时才参与（保持既有「双源皆空不落盘」契约零回归）；
+ * graph 侧只要拿到对应数据就传，空数组也传 ⇒ 全零仍落盘，满足「0 也打」。
+ * @param {{takeoverAudit?:Object|null, contractAudit?:Object|null, styleTruthAudit?:Object|null, resourceConservationAudit?:Object|null, flexTruthAudit?:Object|null}} inputs
+ * @returns {Object|null} 五源皆空 → null
+ */
+export function buildRejectSummary({
+  takeoverAudit,
+  contractAudit,
+  styleTruthAudit,
+  resourceConservationAudit,
+  flexTruthAudit,
+} = {}) {
+  const takeover = takeoverAudit && typeof takeoverAudit === 'object' ? takeoverAudit : null;
+  let contract = null;
+  if (contractAudit && typeof contractAudit === 'object') {
+    const missing = Array.isArray(contractAudit.missing) ? contractAudit.missing : [];
+    const conflicts = Array.isArray(contractAudit.conflicts) ? contractAudit.conflicts : [];
+    const codes = [...new Set(missing.map((m) => String(m?.code ?? '')))].filter(Boolean);
+    contract = {
+      missingCount: missing.length,
+      conflictCount: conflicts.length,
+      missingCodes: codes,
+    };
+  }
+  const styleTruth = styleTruthAudit && typeof styleTruthAudit === 'object' ? styleTruthAudit : null;
+  const resourceConservation = resourceConservationAudit && typeof resourceConservationAudit === 'object' ? resourceConservationAudit : null;
+  const flexTruth = flexTruthAudit && typeof flexTruthAudit === 'object' ? flexTruthAudit : null;
+  if (!takeover && !contract && !styleTruth && !resourceConservation && !flexTruth) return null;
+  const out = { takeover, contract };
+  if (styleTruth) out.styleTruth = styleTruth;
+  if (resourceConservation) out.resourceConservation = resourceConservation;
+  if (flexTruth) out.flexTruth = flexTruth;
+  return out;
+}
+
+/**
+ * takeover 统计子集单行（role 评估点用；任务级落盘行由 formatRejectSummaryLine 负责）。
+ * @returns {string} 空 audit → ''
+ */
+export function formatTakeoverAuditLine(audit) {
+  if (!audit) return '';
+  return formatRejectSummaryLine({ takeover: audit, contract: null })
+    .replace(/^REJECT-SUMMARY /, '');
+}
+
+/**
+ * 一行确定性日志（键=值，可 grep）。
+ * @returns {string} 空 summary → ''
+ */
+export function formatRejectSummaryLine(summary) {
+  if (!summary || typeof summary !== 'object') return '';
+  const parts = ['REJECT-SUMMARY'];
+  const t = summary.takeover;
+  if (t) {
+    parts.push(`evaluated=${t.evaluated}`, `candidates=${t.candidates}`);
+    const hitStr = Object.entries(t.hits || {})
+      .map(([k, v]) => `${k}=${v}`)
+      .join(',');
+    parts.push(`hits(${hitStr})`);
+    parts.push(
+      `suppressed:statRow=${t.suppressed?.statRow ?? 0}`,
+      `suppressed:table=${t.suppressed?.table ?? 0}`,
+      `listDirections:row=${t.listDirections?.row ?? 0},column=${t.listDirections?.column ?? 0}`,
+      `listItemBg=${t.listItemBgs?.total ?? 0},declared=${t.listItemBgs?.declared ?? 0},subtree=${t.listItemBgs?.subtree ?? 0},skipped=${t.listItemBgs?.skipped ?? 0}`,
+      // 🔴 2026-11-03：列表卡盒几何真值（负间距总闸 + geoReady 覆盖 + 步③ 异宽拦宽度）。0 也打 ——
+      //   `listGeo:negGap=0` 而产物含负值即判据失效；`widthNotUniform=0` 而产物仍含异宽
+      //   `FG_LIST_WIDTHS` 即步③ 判据失效。这是本行的唯一用途。
+      `listGeo:negGap=${t.listGeo?.negGapClamped ?? 0},geoNotReady=${t.listGeo?.geoNotReady ?? 0},relaxed=${t.listGeo?.relaxed ?? 0},widthNotUniform=${t.listGeo?.widthNotUniform ?? 0},geomPicked=${t.listGeo?.geomPicked ?? 0},spanRejected=${t.listGeo?.spanRejected ?? 0},innerStacked=${t.listGeo?.innerStacked ?? 0},innerInline=${t.listGeo?.innerInline ?? 0},innerConflict=${t.listGeo?.innerConflict ?? 0},vPartsInline=${t.listGeo?.valuePartsInline ?? 0},vPartsStacked=${t.listGeo?.valuePartsStacked ?? 0}`,
+    );
+    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`, `panelBg=${t.panelBg?.injected ?? 0}/${t.panelBg?.tried ?? 0}`, `chartOwned=${t.chartOwned ?? 0}${Array.isArray(t.chartOwnedIds) && t.chartOwnedIds.length ? '[' + t.chartOwnedIds.join(',') + ']' : ''}`, `cardIcon=${t.cardIcon?.hit ?? 0}/${t.cardIcon?.evaluated ?? 0}`, `cardRow=${t.cardRow?.fixed ?? 0}/${t.cardRow?.evaluated ?? 0}`);
+  }
+  const c = summary.contract;
+  if (c) {
+    parts.push(
+      `contract:missing=${c.missingCount}`,
+      `conflicts=${c.conflictCount}`,
+      c.missingCodes?.length ? `codes=${c.missingCodes.join('|')}` : 'codes=-',
+    );
+  }
+  // 🔴 2026-11-05 样式真值来源：**全 0 也打**。判据可辩驳靠这行 ——
+  //   `geometry=0` 而产物含像素 background-size ⇒ 接线失效；`noBg` 高而产物有背景
+  //   ⇒ 存在绕过 inferBackgroundStyle 统一出口的第四处写入路径。
+  const st = summary.styleTruth;
+  if (st) {
+    parts.push(
+      `styleTruth:evaluated=${st.evaluated ?? 0},scaleMode=${st.scaleMode ?? 0},geometry=${st.geometry ?? 0},noBg=${st.noBackgroundInference ?? 0},unknown=${st.unknownSource ?? 0}`,
+    );
+  }
+  // 🔴 2026-11-05 C1 全资源守恒：**全 0 也打**。
+  //   `expected>0` 而 `imported=0` ⇒ 资源注入整链失效；`filesUnavailable=1` 时
+  //   不得用 unmounted 下结论（vue3 路径拿不到产物内容表）。
+  const rc = summary.resourceConservation;
+  if (rc) {
+    parts.push(
+      `resConserve:expected=${rc.expected ?? 0},excluded=${rc.excluded ?? 0},mountable=${rc.mountable ?? 0},declared=${rc.declaredVar ?? 0},imported=${rc.imported ?? 0},unmounted=${rc.unmounted ?? 0},noVarName=${rc.noVarName ?? 0},notImported=${rc.notImported ?? 0},orphan=${rc.orphanImports ?? 0},filesUnavailable=${rc.filesUnavailable ?? 0}`,
+    );
+    // 🔴 G1（2026-11-05，A 档只报不改）：unmounted 原因分档，**全 0 也打**。
+    //   验者可在 server.log 直接复算「五档和 ≡ unmounted」；filesUnavailable=1 时
+    //   分档仍为 mapping 侧结构事实，不得当作「实际未挂载」结论。
+    const rr = rc.reasons || {};
+    parts.push(
+      `resConserveReasons:noVarName=${rr.noVarName ?? 0},reused=${rr.reused ?? 0},subState=${rr.subState ?? 0},noTarget=${rr.noTarget ?? 0},imgSrcUnreferenced=${rr.imgSrcUnreferenced ?? 0},other=${rr.other ?? 0},filesUnavailable=${rc.filesUnavailable ?? 0}`,
+    );
+  }
+  // 🔴 2026-11-05 C2 R4-3a：flex 来源分档，**全 0 也打**（0 = 产物无 flex 声明，
+  //   与「观测接线失效」可区分）。
+  const ft = summary.flexTruth;
+  if (ft) {
+    parts.push(
+      `flexTruth:evaluated=${ft.evaluated ?? 0},flexFallback=${ft.flexFallback ?? 0},truthed=${ft.truthed ?? 0},mixedGrow=${ft.mixedGrow ?? 0},filesUnavailable=${ft.filesUnavailable ?? 0}`,
+    );
+  }
+  return parts.join(' ');
+}

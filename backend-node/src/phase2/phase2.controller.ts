@@ -15,12 +15,13 @@ import {
 import type { Response } from 'express';
 import { randomBytes } from 'crypto';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { Phase2Service } from './phase2.service';
 import { ComponentService } from '../component/component.service';
 import { DocAnalyzerService } from './doc/doc-analyzer.service.js';
 import type { AnalyzeDocDto } from './doc/doc-analyzer.service.js';
 import { GeneratePhase2Dto } from './dto/generate-phase2.dto';
+import { RefineComponentDto } from './dto/refine-component.dto';
 import { QuotaService } from '../quota/quota.service';
 import { stripRedactedPlaceholders } from '../common/utils/redact';
 import { TaskQueueService } from '../queue/task-queue.service';
@@ -193,25 +194,31 @@ export class Phase2Controller implements OnModuleInit {
 
 
   /**
-   * 人工精修端点：生成完成（写完即停）后，用户可手动触发定向精修（布局/样式/两者）
+   * 人工精修端点：生成完成（写完即停）后，用户可手动触发定向精修（布局/样式/两者）。
+   * 支持「以已有代码（可能报错/无法运行）再次继续生成」——service 层会冻结精修前基线、
+   * 校验不通过则回滚，保证再跑一次不会更糟。
    * POST /phase2/refine
-   * body: { componentId, refineType?: 'layout' | 'style' | 'both' }
+   * body: RefineComponentDto { componentId, refineType?, target?, generationTier? }
    */
   @Post('refine')
-  async refine(@Body() body: { componentId: string; refineType?: string }, @Req() req: any) {
-    const { componentId, refineType = 'both' } = body || {};
-    if (!componentId) {
-      throw new HttpException('componentId 必填', HttpStatus.BAD_REQUEST);
-    }
-    if (!['layout', 'style', 'both'].includes(refineType)) {
-      throw new HttpException('refineType 仅支持 layout / style / both', HttpStatus.BAD_REQUEST);
-    }
+  async refine(@Body() dto: RefineComponentDto, @Req() req: any) {
+    const { componentId, refineType = 'both', target, generationTier, visionRefine, visualDiffGuidance, overrideImage } = dto;
     const userId = req.session?.userId;
-    const sessionId = `mc-refine-${Date.now()}-${randomBytes(4).toString('hex')}`;
+    const prefix = target === 'vue3' ? 'vue3' : 'mc';
+    const sessionId = `${prefix}-refine-${generationTier || 'max'}-${Date.now()}-${randomBytes(4).toString('hex')}`;
     try {
-      // 🔴 必须 await：预检（产物/checkpoint 存在性）在此完成，失败立即返回 400
-      await this.phase2Service.refineComponent(sessionId, { componentId, refineType, userId });
-      return { success: true, sessionId, message: '精修已开始' };
+      // 🔴 必须 await：预检（产物/checkpoint 存在性 + 归属校验）在此完成，失败立即返回 400
+      await this.phase2Service.refineComponent(sessionId, {
+        componentId,
+        refineType,
+        userId,
+        target,
+        generationTier,
+        visionRefine,
+        visualDiffGuidance,
+        overrideImage,
+      });
+      return { success: true, sessionId, message: visionRefine ? '视觉优化精修已开始' : '精修已开始', target, generationTier };
     } catch (error: any) {
       this.logger.error(`精修发起失败: ${error.message}`, error.stack);
       throw new HttpException(
@@ -219,6 +226,62 @@ export class Phase2Controller implements OnModuleInit {
         error.status || HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  /**
+   * 🆕 视觉优化精修·分析阶段：渲染现状 → 对比设计图 → 返回结构化视觉差异 + 两张对比图。
+   * 不修改代码，供用户「落地前确认」。失败以 { success:false, error, message } 返回，不抛 500。
+   * POST /phase2/refine/vision-analyze
+   */
+  @Post('refine/vision-analyze')
+  async visionAnalyze(@Body() dto: RefineComponentDto, @Req() req: any) {
+    const { componentId, refineType = 'both', target, generationTier, overrideImage } = dto;
+    const userId = req.session?.userId;
+    const prefix = target === 'vue3' ? 'vue3' : 'mc';
+    const sessionId = `${prefix}-refine-${generationTier || 'max'}-${Date.now()}-${randomBytes(4).toString('hex')}`;
+    try {
+      const result = await this.phase2Service.visionRefineAnalyze(sessionId, {
+        componentId,
+        refineType,
+        target,
+        generationTier,
+        overrideImage,
+        userId,
+      });
+      return result;
+    } catch (error: any) {
+      this.logger.error(`视觉分析失败: ${error.message}`, error.stack);
+      // 分析阶段失败（缺图/渲染失败/视觉模型不可用）属于预期内业务失败，返回结构化错误而非 500
+      return { success: false, error: 'ANALYZE_FAILED', message: error.message || '视觉分析失败' };
+    }
+  }
+
+  /**
+   * 🆕 视觉优化精修：提供分析阶段落盘的设计图/现状图，供前端弹窗并排展示。
+   * GET /phase2/refine/vision-image/:sessionId/:kind  (kind = design | rendered)
+   */
+  @Get('refine/vision-image/:sessionId/:kind')
+  async visionImage(@Param('sessionId') sessionId: string, @Param('kind') kind: string, @Res() res: Response) {
+    const metaPath = join(backendRoot, 'data', 'vision-refine', `${sessionId}.json`);
+    if (!existsSync(metaPath)) {
+      res.status(404).json({ error: 'NOT_FOUND', message: '分析记录不存在或已过期' });
+      return;
+    }
+    let meta: any;
+    try {
+      meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    } catch {
+      res.status(500).json({ error: 'META_CORRUPT', message: '分析元数据损坏' });
+      return;
+    }
+    const filePath = kind === 'design' ? meta.designPath : meta.renderedPath;
+    if (!filePath || !existsSync(filePath)) {
+      res.status(404).json({ error: 'IMAGE_MISSING', message: '图片文件不存在' });
+      return;
+    }
+    // ⚠️ rendered 图落在 `.mc-gen/screenshots/` 点目录下，Express sendFile 默认 dotfiles:'ignore'
+    // 会把点目录当不存在（404/500）⇒ 必须显式 dotfiles:'allow'，否则现状图永远取不到。
+    res.sendFile(filePath, { dotfiles: 'allow' });
   }
 
 

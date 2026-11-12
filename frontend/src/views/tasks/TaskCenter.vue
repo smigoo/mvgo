@@ -200,6 +200,12 @@
             <span v-if="getTaskSource(task)" class="task-source-box">
               {{ sourceLabel(getTaskSource(task)) }}
             </span>
+            <!-- 2026-11-12 收敛精修入口：徽标下线，只留纯文字「视觉优化」（用户指令：徽标不要，只要文字） -->
+            <span
+              v-if="task.sessionId && task.sessionId.includes('-refine-')"
+              class="task-refine-kind"
+              :title="`由「视觉优化」发起的续跑任务，源自 ${task.refineOf || '首次生成的同组件任务'}`"
+            >视觉优化</span>
           </div>
           <div class="task-subtitle-row">
             <span class="task-subtitle" :title="`任务号：${task.sessionId} · ${componentInfo(task)}`">任务号：{{ task.sessionId }}</span>
@@ -1759,6 +1765,17 @@ html[data-theme="dark"] .task-source-box {
   --source-box-bg: #111827;
   --source-box-text: #f8fafc;
   --source-box-border: #f8fafc;
+}
+
+/* 2026-11-12：徽标下线，只留纯文字「视觉优化」（无底色/无描边，两套主题都用文本色） */
+.task-refine-kind {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-left: 2px;
+  white-space: nowrap;
 }
 
 /* 生成档位徽章：lite 轻盈/快速，max 高级/完整（能力层级色，非状态色）→ 渐变胶囊 */

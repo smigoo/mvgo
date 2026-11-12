@@ -77,6 +77,10 @@ export class ChatAttachmentService {
         await writeFile(imagePath, attachment.buffer);
 
         try {
+          // 🔴 刻意不声明 outputKind：本调用输出是**自由文本摘要**，不是结构化 JSON。
+          //    旧实现走默认 JSON 口径 ⇒ `JSON.parse(摘要)` 必抛 ⇒ 每张截图都白烧一次抬温重试
+          //    并用第二份随机摘要盲覆盖首份（2026-11-12 逐调用点枚举出的白烧点之一）。
+          //    不声明 = 'text' = 自愈不适用，交给 buildPrompt 契约本身。
           const summary = await visionAgent.analyzeImage(imagePath, this.buildPrompt(index + 1, attachment));
           summaries.push(`### 截图 ${index + 1}: ${attachment.name}\n${summary}`);
         } catch (error) {

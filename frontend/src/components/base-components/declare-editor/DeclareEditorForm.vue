@@ -164,10 +164,16 @@ onMounted(async () => {
     try {
       loading.value = true
       if (!import.meta.env.DEV) return
-      // 仅开发环境加载 workspace 示例；custom-components 不参与生产构建
-      const declareJson = await import(
-        '../../../workspace/custom-components/c-mc-demo/declare.json'
-      )
+      // 仅开发环境加载 workspace 示例；custom-components 不参与生产构建。
+      // 🔴 2026-11-12：`workspace/` 已不入版本控制，直接 `await import('../../../workspace/...')`
+      //   会被 rollup 在构建期静态解析 ⇒ 干净检出差 `Could not resolve` 整包构建失败
+      //   （运行时 `if (!import.meta.env.DEV) return` 拦不住构建期解析）。
+      //   改用 import.meta.glob：目录不存在时得到空对象，构建不再受影响。
+      const demoDeclarePath = '../../../workspace/custom-components/c-mc-demo/declare.json'
+      const demoDeclares = import.meta.glob('../../../workspace/custom-components/c-mc-demo/declare.json')
+      const loadDemoDeclare = demoDeclares[demoDeclarePath]
+      if (!loadDemoDeclare) return
+      const declareJson = await loadDemoDeclare()
       const data = declareJson.default || declareJson
       initEditData(data)
     } catch (error) {

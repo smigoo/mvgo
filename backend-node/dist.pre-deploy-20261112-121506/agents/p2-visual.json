@@ -1,0 +1,38 @@
+{
+  "name": "p2-visual",
+  "label": "视觉分析",
+  "description": "",
+  "category": "自定义",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "previewImage",
+      "type": "image",
+      "required": false
+    },
+    {
+      "key": "designTree",
+      "type": "object",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "layoutStructure",
+      "type": "object"
+    }
+  ],
+  "params": {
+    "prompt": "你是UI布局分析师，根据预览图与设计树输出布局结构JSON",
+    "vision": true
+  },
+  "model": "qwen3.7-plus",
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/p2-visual.js",
+  "requires": {
+    "vision": true
+  },
+  "createdAt": 1787211749511
+}

@@ -224,4 +224,59 @@ describe('ai-request-gateway', () => {
     const heartbeatKinds = events.filter((e) => e.context === 'attrib').map((e) => e.kind)
     expect(heartbeatKinds.every((k) => typeof k === 'string')).toBe(true)
   });
+
+  // 🛡️ 2026-11-12 生产实锤回归锁：mv-lite-1794449903941-65f05402 整任务失败
+  // "Cannot set property code of  which has only a getter"。
+  // 根因：AbortController.abort() 无 reason 时，signal.reason 是 DOMException(name='AbortError')，
+  // 其 .code 是原型只读 getter（code=20 legacy 常量），ESM 严格模式下 gateway 给它赋
+  // MODEL_REQUEST_ABORTED 抛 TypeError，把「用户取消」变成「整任务崩溃」。
+  it('执行期父级取消（DOMException AbortError reason）不会被 error.code 赋值炸掉', async () => {
+    const controller = new AbortController();
+    const operation = async (_opts: any) => {
+      // 模拟 LLM invoke 挂在网络上时父级 abort（无 reason → reason 为 DOMException）
+      controller.abort();
+      // abort 后 invoke 内部通常抛 reason 本身
+      throw controller.signal.reason;
+    };
+
+    await expect(
+      gateway.executeModelRequest({
+        context: 'domexception-abort',
+        requestTimeoutMs: 10000,
+        requestMaxRetries: 0,
+        signal: controller.signal,
+        operation,
+      }),
+    ).rejects.toMatchObject({ code: 'MODEL_REQUEST_ABORTED' });
+  });
+
+  it('排队期取消携带 DOMException reason 时也安全包装（code 只读）', async () => {
+    const firstGrant = await gateway.requestScheduler.acquire(
+      1,
+      { context: 'queue-holder-dom' },
+      { queueTimeoutMs: 10000 },
+    );
+    const controller = new AbortController();
+    const operation = jest.fn();
+
+    const queuedRequest = gateway.executeModelRequest({
+      context: 'queue-abort-dom',
+      requestConcurrency: 1,
+      requestQueueTimeoutMs: 10000,
+      requestTimeoutMs: 10000,
+      requestMaxRetries: 0,
+      signal: controller.signal,
+      operation,
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    // 不带 reason abort → reason 是 DOMException(name='AbortError')，code 只读
+    controller.abort();
+    await expect(queuedRequest).rejects.toMatchObject({
+      code: 'MODEL_REQUEST_QUEUE_ABORTED',
+    });
+    expect(operation).not.toHaveBeenCalled();
+
+    firstGrant.release();
+  });
 });

@@ -12,13 +12,18 @@ import { effectsToBoxShadow } from './figma-effects.js';
 // 🛡️ C0.3-B（2026-11-04）：「段声明文本」收集口径**单一来源**。
 //   复用 figma-coverage-dedupe（零 import 的纯函数模块）——本文件不得复制第二份，
 //   否则「什么算声明内容」会在去重与覆盖率两处各长一套。
-import { haveDisjointDeclaredContent } from './figma-coverage-dedupe.js';
+//   🛡️ G14c（2026-11-12）起再取 `haveDisjointDeclaredText` —— 同一份文本判据，只去掉锚点前提。
+import { haveDisjointDeclaredContent, haveDisjointDeclaredText } from './figma-coverage-dedupe.js';
 // 🛡️ G14a（2026-11-05）：「section 自身声明身份」**单一来源**。
 //   复用零依赖模块 section-anchor-identity（候选优先级 figmaAnchorId → figmaNodeId → nodeId
 //   → figmaNode → id，与几何轨 `sectionAnchorKey` / 归属轨 planner **同一张表**）。
 //   🔴 不得改为从 `section-anchor-truth.js` 取：那个文件反向 import 本文件 ⇒ 成环。
 //   🔴 更不得在本文件内联第三份候选序列 —— 锚点优先级出现第二份就是漂移的开始。
-import { sectionAnchorKey } from './section-anchor-identity.js';
+//   🛡️ G14c（2026-11-12）的「真实节点锚定」前提复用同模块的 `FIGMA_ID_RE`（形态单一来源，
+//   与 `sectionAnchorKey` 同一张候选表），同样不得在本文件内联正则。
+import { sectionAnchorKey, FIGMA_ID_RE } from './section-anchor-identity.js';
+// 🛡️ 2026-11-12（cc633474 实锤）：列数几何反算的**唯一判据**在 row-metrics（纯几何模块，无反向依赖）。
+import { deriveGridColumnsFromNode } from './row-metrics.js';
 
 export function isLayoutContainerSection(sec) {
   if (!sec || typeof sec !== 'object') return false
@@ -61,6 +66,9 @@ export function collectLeafSections(sections) {
  * 确定性去重规则（递归整棵树）：
  *   ① sourceNodeIds 单一归属（R1-1，优先级最高、不依赖措辞）：任一 Figma 节点 id 只能归属
  *     一个叶子 section（layout 容器除外）；两个叶子 sourceNodeIds 有交集 → 保留 elementCount 更大者。
+ *     例外（按「交集里含几方自身身份」三分区）：恰一方 → G14a 父子嵌套；双方 → C0.3-B 同锚点集
+ *     且声明文本互斥；**零方 → G14c 争抢第三方后代，须「双方各自锚在真实 Figma 节点上」且
+ *     声明文本互斥**（三者都不得按 elementCount 折叠）。
  *   ② type=tabs 措辞兜底（原规则）：按 `type|responsibility` 分组，组内 >1 保留 elementCount 更大者。
  *   ③ 无归属壳判别力（2026-09-14 新增，治 B+C 重复解释，双实证 485d724d/a612a9f7）：
  *      planner 对同一主内容区会产出「无 Figma 归属壳」（sourceNodeIds=[]）与若干「有归属子集」
@@ -202,9 +210,16 @@ export function dedupeDuplicateSections(sections, removed = null, path = '', sta
       //     （大段的 id 集是后代并集，但两段各自的锚点互不包含），救不了任何一段。
       //   🔴 刻意不放宽到「交集非空」：会把真正同锚争抢（阴性②）一并放过，
       //     且 `intersect-ratio` 需要「重合率 ≤ 1/3」这类魔法数。
-      //   🔴 明确**不介入** chart↔chart：两条 chart 的归属由下方 ⑤（图表签名）单独裁决，
-      //     这里再叠一套豁免就成了两套判据抢同一件事。实测 110 条留档零命中。
-      const bothChartLeaves = isChartLeaf(prev) && isChartLeaf(sec)
+      //   🔴 明确**不介入任何「参与方含 chart」的配对**（2026-11-12 收窄）：
+      //     · chart↔chart → 由下方 ⑤（图表签名）单独裁决；
+      //     · chart↔非 chart → 由 ⑤ 的**作用域收窄**（注释「chart↔非 chart…维持原行为」）
+      //       维持原 elementCount 收敛。
+      //     这里再叠一套豁免就是两套判据抢同一件事，且会实打实吃掉 ⑤ 的阳性对照
+      //     （`section-tree.spec.ts` ⑤ 第三条：89:42 容器 ⨯ 89:38 图表，容器 elementCount 3
+      //     < 图表 23，应被收敛；旧 `bothChartLeaves` 只挡了「双 chart」，chart↔非 chart
+      //     落进 G14a「恰一方身份在交集」⇒ 容器被豁免留下 ⇒ 与 ⑤ 类型域直接冲突）。
+      //     ⇒ 判据只看「非图表段之间」的父子嵌套，图表域整体让位给 ⑤。
+      const anyChartLeaf = isChartLeaf(prev) || isChartLeaf(sec)
       const prevAnchor = sectionAnchorKey(prev)
       const curAnchor = sectionAnchorKey(sec)
       const prevIds = Array.isArray(prev?.sourceNodeIds) ? prev.sourceNodeIds.map(String) : []
@@ -228,7 +243,7 @@ export function dedupeDuplicateSections(sections, removed = null, path = '', sta
         stats.identityNormalized = (Number(stats.identityNormalized) || 0) + normalized
         stats.evaluated = (Number(stats.evaluated) || 0) + 1
       }
-      if (!bothChartLeaves && prevIsIdentity !== curIsIdentity) {
+      if (!anyChartLeaf && prevIsIdentity !== curIsIdentity) {
         if (stats && typeof stats === 'object') {
           stats.nestedExempt = (Number(stats.nestedExempt) || 0) + 1
         }
@@ -292,6 +307,74 @@ export function dedupeDuplicateSections(sections, removed = null, path = '', sta
           stats,
         ),
       })
+        } else {
+          out.push(sec)
+        }
+        continue
+      }
+      // 🛡️ G14c（2026-11-12 · 真机 mc-max-1794452025496-3d081117 实锤）：**交集 id 两侧都不是
+      //   「自身身份」⇒ 争抢的是第三方后代节点，不是同一区域**。
+      //
+      //   裂缝：vision 会给 section 的 `body.children[].id` 填**臆造锚点**——本单 nav `89:39`
+      //   的 6 个 tab 子节点 id（2:8438 / 2:8464…2:8468）经 figma.json 核对**全部位于兄弟网格
+      //   `2:8437` 子树内**。`subcomponent-planner#collectSourceNodeIds` 是并集累加器（`:1164-1172`
+      //   收 body.children 的 id）⇒ nav.sourceNodeIds 混入这些外来后代 id ⇒ 与 grid 在 `2:8438`
+      //   上相交 ⇒ 落入本分支。而此处裁决链三档全落空：
+      //     · G14a 要求「**恰一方**身份在交集」——此处两侧身份（89:39 / 2:8437）都不在交集；
+      //     · C0.3-B 要求「双方锚点集**完全相同**」——此处只是部分相交；
+      //   ⇒ 落到 elementCount 收敛：grid(12) > nav(6) ⇒ **nav 整块被 `shared-anchor-superseded`
+      //     丢弃**。nav 不占槽 ⇒ 产物只剩 StatsMetricsCardGrid.vue，tabs 整块蒸发
+      //     （A1-v2 命中率 13%、C1b 7 条缺席），而 nav 的 6 条 tab 文本在 Figma 真值里
+      //     （`89:39` 子树内 TEXT 2:8827/2:8832/2:8838/2:8843/2:8848/2:8853）确实存在。
+      //
+      //   把「交集里含几方自身身份」补全为**三分区（互斥且穷尽）**：
+      //     · 恰一方 → G14a（父子嵌套）；· 双方 → C0.3-B（同锚点集）；
+      //     · **零方 → 本条 G14c**：交集 id 是「第三方的后代」，两侧都只是把它当后代声明，
+      //       这不是「同一区域被两段争抢」，而是「同父容器下两个不同区域在臆造后代的坐标上撞车」。
+      //   判据（刻意收窄，四条同时满足）：
+      //     ① 交集里**不含任何一方**的自身身份（`sectionAnchorKey` 单一来源，`!prevIsIdentity
+      //        && !curIsIdentity`）—— 有一方身份即退回 G14a/C0.3-B 各自的领地；
+      //     ② **双方各自的自身身份都锚在真实 Figma 节点上**（`FIGMA_ID_RE` × `sectionAnchorKey`,
+      //        两者同出 `section-anchor-identity.js` 单点）—— 这是本条的**成立前提**，理由见下；
+      //     ③ 双方各自声明了**互不重叠**的文本（`haveDisjointDeclaredText` 单一来源）——
+      //        空壳段 / 同区域重复解释照旧走 elementCount 收敛；
+      //     ④ 非 chart↔chart（⑤ 图表签名单独裁决，不叠第二套判据）；
+      //        实际口径与 G14a 同源：**任何参与方含 chart 的配对一律不介入**
+      //        （`anyChartLeaf`，图表域整体让位 ⑤，含 ⑤ 的 chart↔非 chart 作用域）。
+      //
+      //   🔴 ②「真实节点锚定」前提的**可辩驳依据**（不是为绕开 spec 而加的形状条件）：
+      //     `subcomponent-planner#collectSourceNodeIds:1156-1160` 把 `sectionAnchorCandidates`
+      //     的四个锚点字段**无条件** push 进 sourceNodeIds，且 `id` 形如 `\d+:\d+` 时也 push；
+      //     而 `sectionAnchorKey` 走**同一张候选表**（figmaAnchorId → figmaNodeId → nodeId →
+      //     figmaNode → id）。⇒ 只要该段身份是「真实节点声明」，其自身身份**必在自己的
+      //     sourceNodeIds 里**（构造性保证）；反过来，身份落到**自由文本语义 id** 且无任何锚点
+      //     声明时，`collectSourceNodeIds` 刻意不 push（该函数注释：语义 id 不是节点引用、
+      //     不进归属图）⇒ 此时它声明的那些 id **就是它唯一的归属依据**，与对方共享即
+      //     「同一节点被两段争抢」= 真重复解释，必须照旧收敛（G14a spec 阴性② 形态）。
+      //     ⇒ 前提 ② 精确等价于「两段本体各自已被真实节点锚定，交集 id 对双方都是外来项」。
+      //   🔴 刻意不用「交集 id 是否真在对方子树内」：那需要 Figma 父链，而本文件是零图依赖的
+      //     纯函数模块（判据落层：归属裁决只认段自身字段，不爬树）。
+      //   🔴 刻意不改成「交集非空即豁免」：会把真正同锚争抢一并放过（G14a spec 阴性②）。
+      const prevNodeAnchored = FIGMA_ID_RE.test(prevIdentity || '')
+      const curNodeAnchored = FIGMA_ID_RE.test(curIdentity || '')
+      if (
+        !anyChartLeaf &&
+        !prevIsIdentity &&
+        !curIsIdentity &&
+        prevNodeAnchored &&
+        curNodeAnchored &&
+        haveDisjointDeclaredText(prev, sec)
+      ) {
+        if (Array.isArray(sec.children)) {
+          out.push({
+            ...sec,
+            children: dedupeDuplicateSections(
+              sec.children,
+              removed,
+              `${path}/${String(sec.id ?? '')}`,
+              stats,
+            ),
+          })
         } else {
           out.push(sec)
         }
@@ -1824,6 +1907,14 @@ function decideBaseName(sec) {
   const type = String(sec.type || '').toLowerCase();
   if (type === 'chart') return 'ChartSection';
   if (type === 'tabs') return 'TabsSection';
+  // 🛡️ G14c 配套（2026-11-12 · mc-max-1794452025496-3d081117）：`type === 'nav'` 是类型表**缺项**。
+  //   病灶：nav 段（89:39「左侧分类导航」，tabStructure.nav.present=true、orientation=vertical）
+  //   落到下方措辞兜底 —— responsibility「竖向导航区（分类/菜单切换）」命中 `切换` ⇒ 被判成
+  //   `SwitchSection`，于是「tabs 整块」即使被保住也被铸成开关组件（语义/命名/下游模板全错）。
+  //   判据单一来源：`roles/tab-structure-guard.js:18` 的 `TAB_ROLES = new Set(['tabs','nav'])`
+  //   早已把 nav 与 tabs 同归 tab 类（该模块强制 nav 段补 {nav, panels} 二元结构）。
+  //   ⇒ nav 与 tabs 同 base，命名分叉由同组后缀机制（semanticSuffixFor/stableIdSuffix）处理。
+  if (type === 'nav') return 'TabsSection';
   if (type === 'stats') return 'StatsSection';
   if (type === 'grid') return 'CardGrid';
   if (type === 'list') return 'ListSection';
@@ -2929,9 +3020,16 @@ function deriveChildLayout(node, layoutFacts = null) {
 function deriveChildGridColumns(node, layoutFacts = null) {
   const id = node && node.id != null ? String(node.id) : ''
   const fact = (id && layoutFacts && layoutFacts[id]) || null
-  if (!fact || fact.display !== 'grid') return null
-  const n = Number(fact.gridColumns)
-  return Number.isFinite(n) && n >= 2 ? n : null
+  if (fact && fact.display === 'grid') {
+    const n = Number(fact.gridColumns)
+    if (Number.isFinite(n) && n >= 2) return n
+  }
+  // 🛡️ 2026-11-12（mc-1794428749650-cc633474 实锤）：A 类事实缺失 / 无列数时，用**节点几何**反算。
+  //   病灶：`38:3137/3162/3206` 的 A 类事实没给出列数（B' 的 x 聚类对「行带容器」失效），
+  //   而视觉分析给的 3 压过一切 ⇒ 产物 4 列被判错。
+  //   判据单一来源 = `row-metrics#deriveGridColumnsFromNode`（行带内项数众数），此处不复制判据。
+  const geo = deriveGridColumnsFromNode(node)
+  return geo && geo.count >= 2 ? geo.count : null
 }
 
 /**

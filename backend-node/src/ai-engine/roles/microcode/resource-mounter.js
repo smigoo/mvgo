@@ -2432,9 +2432,18 @@ function extractTextFragments(content) {
  * 🛡️ 2026-11-06（mc-max-1793923099707-3e924a69 实锤）：插槽内容是否已被 body 段组件表达。
  *
  * 判据（零硬编码）：slot content 按空白分词，**全部** token（长度≥2）都能在 body 组件
- * （`components/*.vue`，除 index.vue）文本中找到 ⇒ 重复。body 版信息更完整（真渲染 vs 裸
- * span 兜底），故插槽让位、计数 `slotBodyDuplicate`，由调用方跳过注入。
+ * 文本中找到 ⇒ 重复。body 版信息更完整（真渲染 vs 裸 span 兜底），故插槽让位、计数
+ * `slotBodyDuplicate`，由调用方跳过注入。
  * fail-open：files 缺失 / 无 token ⇒ false（保守注入）。
+ *
+ * 🛡️ 2026-11-12（mc-max-1794412566863-12ffdcbf 实锤）：corpus 纳入 index.vue。
+ *   病灶：S4-b 交互 tab 块（code-fix 链，先跑）注入在 **index.vue** 正文；T09
+ *   ensureHeaderSlots（engineer execute 后段，后跑）对 derived 插槽「江阴靖江长江隧道
+ *   江阴大桥」做重复检测时 corpus 只查 components/*.vue、显式排除 index ⇒ 检测不到
+ *   S4-b 已承载的同文本 ⇒ 静态 span 再注入 #header-right ⇒ tabs 双份（且头部版无交互）。
+ *   修法：corpus 扩为全部 .vue（含 index）。index 正文/S4 注入文本本来就是「body 已
+ *   表达」的证据；T09 二次调用时首次注入的兜底文本也因此天然幂等让位。
+ *   误伤面：index.vue 的 JS 标识符/事件名为 ASCII，中文 token（≥2 字）不会撞。
  */
 export function isSlotContentDuplicatedInBody(content, files) {
   const tokens = String(content || '')
@@ -2444,7 +2453,7 @@ export function isSlotContentDuplicatedInBody(content, files) {
   if (tokens.length === 0 || !files || typeof files !== 'object') return false;
   let corpus = '';
   for (const [p, c] of Object.entries(files)) {
-    if (!/\.vue$/i.test(p) || /index\.vue$/i.test(p)) continue;
+    if (!/\.vue$/i.test(p)) continue;
     corpus += typeof c === 'string' ? c : '';
   }
   if (!corpus) return false;

@@ -1,0 +1,33 @@
+{
+  "name": "my-check",
+  "label": "我的校验器",
+  "description": "测试",
+  "category": "自定义",
+  "logicType": "tool",
+  "templateId": "validator",
+  "inputs": [
+    {
+      "key": "score",
+      "type": "number",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "ok",
+      "type": "boolean"
+    }
+  ],
+  "params": {
+    "required": [
+      "score"
+    ],
+    "minValue": 80,
+    "minField": "score"
+  },
+  "model": null,
+  "author": "test-user",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/my-check.js",
+  "createdAt": 1787210657289
+}

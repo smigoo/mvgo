@@ -23,7 +23,7 @@ import {
 import * as microcodePrompt from './microcode/prompt-builder.js';
 // 🔍 高级选项 P0（2026-11-02 抽出）：用户补充需求段构建迁至 utils/user-addendum.js
 //  （单一来源；抽出动机 = engineer 整体不可被 jest 加载，纯函数落 utils 才能挂行为断言 spec）。
-import { buildUserAddendumSection } from '../utils/user-addendum.js';
+import { buildUserAddendumSection, buildOddEvenHintSection } from '../utils/user-addendum.js';
 // 🚧 段级数据归属守卫（2026-11-03）：S8 字段映射对 component 分块的越界渲染禁令
 //  （P0 双渲染 mc-doc-337f2bf2 治本；纯函数落 utils = jest 可挂行为断言 spec）。
 import { buildDocScopeGuard, filterForeignMappings } from '../utils/doc-scope-guard.js';
@@ -240,6 +240,13 @@ import {
   collectIsomorphicSectionGroups,
   validateIsoTemplateProps,
   renderIsoWrapperSfc,
+  // 🔍 ISO-PROBE 专用：探针必须与判据同函数派生（自带一套判断＝假绿）
+  isoBodyEntries,
+  assessIsoEligibility,
+  isoSectionContent,
+  isoSectionLayout,
+  buildIsoResourceByNode,
+  buildIsoSectionIconMap,
 } from '../utils/isomorphic-section-group.js';
 // 🧬 刀 66-C（2026-11-06 · 用户裁决「vfor 的是三个厂商段」）：index.vue 段级 v-for 改写。
 //   刀66 v1 的薄包装让结构单源了，但 index 里仍是三个并排标签 —— 用户明确要求收成一个循环。
@@ -254,6 +261,8 @@ import { buildSectionContentContract } from '../utils/section-content-guard.js';
 import {
   assessStatRowConfidence,
   healStatRowMemberPairing,
+  // 🎯 P1-1（8b15a757）：stats 段横排真值注入（容器 row + stat-item flex row）
+  injectStatsRowGeometry,
 } from '../utils/inline-row-assembler.js';
 import { enforceInputBudget } from '../utils/input-budget.js';
 import { healLessSource } from '../validators/less-compile-gate.js';
@@ -414,6 +423,7 @@ import { relocateStrayTemplateRoots } from '../utils/stray-template-root-relocat
 import {
   auditSegTreeIntegrity,
   contentFingerprint,
+  restoreMissingSections,
 } from '../utils/seg-tree-integrity.js';
 import { auditHeaderSlotLanding } from '../utils/header-slot-landing-audit.js';
 
@@ -820,6 +830,7 @@ export class MicrocodeEngineer extends BaseAgent {
     //   判据：missing=真丢（全树找不到）/ reparented=容器吞并重挂（不算丢）/
     //   missingParent·unexpectedParent=父子关系差异子集 / inversions=顶层顺序偏离（vision 序基准）/
     //   synthetic=合成锚（合法机制只计数）。详见 utils/seg-tree-integrity.js 与方案文档 §3-F1a。
+    let _segGapAudit = null;
     try {
       const _f1aVision =
         layoutStructure?.layout?.sections || layoutStructure?.sections || [];
@@ -837,6 +848,85 @@ export class MicrocodeEngineer extends BaseAgent {
           reparented: _f1a.reparented.slice(0, 6),
         });
       }
+
+      // 🛡️ F1b 丢段归因（2026-11-12 · mc-max-1794458950336-47b996c3 实锤 · 方案 B）：
+      //   F1a 只回答「缺了几段」，不回答「缺的是不是**真缺口**」。此处对每个 missing 段做
+      //   三分类归因：restorable（确凿缺口）/ absorbed（figma 祖先链落在出口段内 ⇒ 内容由该段
+      //   消费）/ dedupeDropped（显式去重收敛），再叠加 undecidable（索引缺失）与
+      //   nestedMissing（嵌套层缺口，跨层补建会错挂父）两类不可判，输出 `blocked` =
+      //   「补建后仍有未被解释的缺口」。计数行恒打（0 也打）—— 恒 0 说明判据未生效。
+      //   🔴 **本层不做补建**：missing 段来自 vision 原始树，与出口段**不同构**（vision 段只有
+      //   id/name/header/body/geometryPx，没有 title/sourceNodeIds/absoluteBoundingBox/
+      //   layoutMetadata/complexityScore…）。深拷贝塞回出口 ⇒ 下游 prompt/装配/列表接管
+      //   拿到半残段。根治点在 planner（`isPureDecorationSection` 已补齐「段级 header 文本」
+      //   判据，真机 565:2 现已被保留且出口对象与兄弟段同构）。本层只做归因 + 可拦标记，
+      //   由交付出口决定「拦」还是「降级交付并列出待补文本」（C 方案）。
+      try {
+        if (_f1a.missing.length === 0) {
+          // happy path：无丢段 ⇒ 不构建全树索引（避免每次生成都白走一遍 figma 树）。
+          // 计数行仍然恒打（口径与有缺口时逐字一致），否则「0」与「没跑到」不可区分。
+          _segGapAudit = {
+            restorable: [],
+            absorbed: [],
+            dedupeDropped: [],
+            undecidable: [],
+            nestedMissing: [],
+            missingBefore: 0,
+            missingAfter: 0,
+            blocked: false,
+          };
+          this.logger.info(
+            '🛡️ F1b 丢段归因 restorable=0 absorbed=0 dedupeDropped=0 undecidable=0 nested=0 missing=0→0 blocked=false',
+          );
+        } else {
+          const _figmaRootForF1b =
+            input.figmaNodeData && typeof input.figmaNodeData === 'object'
+              ? input.figmaNodeData.document || input.figmaNodeData
+              : null;
+          const _f1aRestore = restoreMissingSections(_f1aVision, effectiveSections, {
+            figmaIndex: _figmaRootForF1b ? indexFigmaNodes(_figmaRootForF1b) : null,
+            skipIds: _dedupeRemoved.map((r) => String(r?.id ?? '')).filter(Boolean),
+          });
+          _segGapAudit = {
+            restorable: _f1aRestore.restored.map((r) => ({ id: r.id, title: r.title })),
+            absorbed: _f1aRestore.absorbed,
+            dedupeDropped: _f1aRestore.dedupeDropped,
+            undecidable: _f1aRestore.undecidable,
+            nestedMissing: _f1aRestore.nestedMissing,
+            missingBefore: _f1aRestore.missingBefore,
+            missingAfter: _f1aRestore.missingAfter,
+            blocked: _f1aRestore.blocked,
+          };
+          this.logger.info(
+            `🛡️ F1b 丢段归因 restorable=${_segGapAudit.restorable.length} absorbed=${_segGapAudit.absorbed.length} dedupeDropped=${_segGapAudit.dedupeDropped.length} undecidable=${_segGapAudit.undecidable.length} nested=${_segGapAudit.nestedMissing.length} missing=${_segGapAudit.missingBefore}→${_segGapAudit.missingAfter} blocked=${_segGapAudit.blocked}`,
+          );
+          if (_segGapAudit.restorable.length > 0) {
+            this.logger.warn(
+              '🛡️ F1b 存在**可补建**丢段（本层不补建，须在 planner 根因处修判据）',
+              { restorable: _segGapAudit.restorable.slice(0, 6) },
+            );
+          }
+          if (_segGapAudit.undecidable.length > 0) {
+            this.logger.warn('🛡️ F1b 丢段不可判（无 figma 索引/节点不存在，fail-open 不拦）', {
+              undecidable: _segGapAudit.undecidable.slice(0, 6),
+            });
+          }
+          if (_segGapAudit.blocked) {
+            this.logger.warn('🛡️ F1b 确凿段缺口（交交付出口裁决：拦 或 降级交付）', {
+              missingAfter: _segGapAudit.missingAfter,
+              nestedMissing: _segGapAudit.nestedMissing.slice(0, 6),
+            });
+          }
+        }
+      } catch (_f1bErr) {
+        reportPatchChainError(_f1bErr, {
+          logger: this.logger,
+          pass: 'execute:seg-gap-attribution',
+        });
+        this.logger.warn('🛡️ F1b 归因异常（fail-open，不影响主流程）', {
+          error: _f1bErr?.message || String(_f1bErr),
+        });
+      }
     } catch (_f1aErr) {
       reportPatchChainError(_f1aErr, {
         logger: this.logger,
@@ -846,6 +936,9 @@ export class MicrocodeEngineer extends BaseAgent {
         error: _f1aErr?.message || String(_f1aErr),
       });
     }
+    // 🛡️ F1b 归因结果挂实例：供写盘/交付出口做「拦 or 降级交付」裁决（C 方案消费点）。
+    //   未跑到对账时为 null —— 消费方必须按「未知」处理，不得当成「无缺口」。
+    this._segGapAudit = _segGapAudit;
     // 🛡️ 刀 41 挂载点迁移（2026-10-22 真机实锤）：折叠网格契约原先只在 `pre-write-self-healing`
     //   跑 —— 那一刻段容器的 `data-section-id` 还没补齐（后被 R22/结构自愈补上），
     //   于是 `sectionIdOf(hostAttrs)` 取不到 id、整段 `continue`：
@@ -883,6 +976,53 @@ export class MicrocodeEngineer extends BaseAgent {
           const compName = _nameOf.get(String(sec.id));
           if (compName) statRowHealMap.set(compName, r.members);
         }
+      }
+    }
+
+    // 🎯 P1-1（2026-11-12 · 8b15a757 实锤）：stats 段「容器横排 + 成员行内横排」真值记账。
+    //   病灶：真值 body.layout='horizontal-2-columns'（两卡并排）、每卡 layout='horizontal'
+    //   （icon 左/文本右），产物容器写 column、stat-item 无 display:flex（块级堆叠）、
+    //   两卡共用 icon（icon-263 零消费 ⇒ E2-v3）。判据只认结构真值：
+    //   ① section.type === 'stats'（planner 记账，命名无关）；
+    //   ② body.layout 横排语义（horizontal / N-columns N≥2）；
+    //   ③ 成员两形态自适应（vision 对同一形态有两种落点，与 ISO_ENTRY_KEYS 同教训）：
+    //      a. 嵌套形：children[].children[] 里 label/value 角色子节点（8b15a757 首单形态）；
+    //      b. 扁平形：成员自带 label/value/icon 字段（p1-verify 单形态）。
+    //      取不到 label+value ⇒ 该成员不计。
+    const statsRowTruthByComp = new Map();
+    {
+      const _nameOf = assignSectionComponentNames(effectiveSections);
+      for (const sec of leafSections) {
+        if (String(sec?.type || '') !== 'stats') continue;
+        const body = sec?.body;
+        const layRaw = String(body?.layout || '').toLowerCase();
+        const horizontalish = /horizontal|row/.test(layRaw) || /^(\d+)-columns?$/.exec(layRaw)?.[1] >= '2';
+        if (!horizontalish) continue;
+        const members = [];
+        for (const ch of Array.isArray(body?.children) ? body.children : []) {
+          if (!ch || typeof ch !== 'object') continue;
+          // 形态 a：嵌套 children（label/value 角色子节点）
+          const kids = Array.isArray(ch.children) ? ch.children : [];
+          const labelNode = kids.find((k) => String(k?.type || '') === 'label');
+          const valueNode = kids.find((k) => String(k?.type || '') === 'value');
+          const labelA = typeof labelNode?.text === 'string' ? labelNode.text.trim() : '';
+          const valueA = typeof valueNode?.text === 'string' ? valueNode.text.trim() : '';
+          // 形态 b：扁平字段（成员自带 label/value）
+          const labelB = typeof ch.label === 'string' ? ch.label.trim() : '';
+          const valueB = typeof ch.value === 'string' || typeof ch.value === 'number' ? String(ch.value).trim() : '';
+          const label = labelA || labelB;
+          const value = valueA || valueB;
+          if (label && value) members.push({ label, value });
+        }
+        if (members.length >= 2) {
+          const compName = _nameOf.get(String(sec.id));
+          if (compName) statsRowTruthByComp.set(compName, { members, sectionId: String(sec.id) });
+        }
+      }
+      if (statsRowTruthByComp.size > 0) {
+        this.logger.info(
+          `🎯 P1-1 stats 段横排真值记账: comps=[${[...statsRowTruthByComp.keys()].join(',')}] members=${[...statsRowTruthByComp.values()].reduce((s, v) => s + v.members.length, 0)}`,
+        );
       }
     }
 
@@ -1114,6 +1254,16 @@ export class MicrocodeEngineer extends BaseAgent {
           //   extraPrompt/requirementDocText 真的进了下发 prompt（而非链路某跳静默丢弃）。
           this.logger.info(
             `📎 用户补充需求段已注入分块 prompt (fileType=${fileType}, extraPrompt=${String(input.extraPrompt || '').length}字, requirementDoc=${String(input.requirementDocText || '').length}字)`,
+          );
+        }
+      }
+      // 🔁 2026-11-12：奇偶交替样式提示（视觉分析确定性检测产物 input.oddEvenHints）。
+      {
+        const _oddEvenHint = buildOddEvenHintSection(input.oddEvenHints);
+        if (_oddEvenHint) {
+          p += _oddEvenHint;
+          this.logger.info(
+            `🔁 奇偶交替样式提示已注入分块 prompt (fileType=${fileType}, hints=${Array.isArray(input.oddEvenHints) ? input.oddEvenHints.length : 0})`,
           );
         }
       }
@@ -2292,20 +2442,76 @@ export class MicrocodeEngineer extends BaseAgent {
       // 方案 A：代表段生成参数化模板（props: title/icon/items，契约见 prompt-builder#
       // buildIsoTemplateContract），兄弟段由系统确定性渲染薄包装；index.vue 零改动。
       // 与刀 53 互斥：已接管段不入组。fail-open：任何映射缺失 ⇒ 整组放弃走旧路径。
-      const _isoTreeSections = microcodePrompt.resolvePlanSections(input);
+      // 🔴 刀 66-P0（2026-11-12）：同构判据必须吃**全保真段**（planner 原形，含 body/资源），
+      //   不能用归一化后的 componentPlan（body→declaredContent、丢 resourceFile ⇒ 判据恒 0 命中）。
+      //   见 microcodePrompt.resolveIsoPlanSections 头注释。
+      const _isoTreeSections = microcodePrompt.resolveIsoPlanSections(input);
+      // 🧬 刀 66-P1（2026-11-12 四象限同步）：打开一层展平 + 接入 L0 Figma 真值。
+      //   真值来源兼容 layoutStructure 的多种形态；整体缺失时 collectIsomorphicSectionGroups
+      //   自动跳过真值校验（缓存/断点续跑零回归）。视觉声明只作候选，不豁免本地资格。
+      const _isoLS = input?.layoutStructure || {};
+      const _isoTruth =
+        _isoLS.isoSectionTruth || _isoLS.layout?.isoSectionTruth || input?.isoSectionTruth || null;
+      const _isoDeclared =
+        _isoTruth?.declaredGroups ||
+        _isoLS.isomorphicSectionGroups ||
+        _isoLS.layout?.isomorphicSectionGroups ||
+        [];
       let _isoEvaluated = 0;
       let _isoGroups = [];
+      let _isoStats = { declared: 0, verified: 0, rejected: 0, withTruth: 0, reasons: [] };
       try {
-        const _isoRes = collectIsomorphicSectionGroups(_isoTreeSections);
+        const _isoMapping = effectiveMapping || input.resourceDomMapping || [];
+        const _isoRes = collectIsomorphicSectionGroups(_isoTreeSections, {
+          flattenOneLevel: true,
+          truth: _isoTruth,
+          declaredGroups: _isoDeclared,
+          // 🧬 刀 66-P0：成员图标按 Figma 节点取（planner 会给多段塞同一个 resourceFile）
+          resourceByNode: buildIsoResourceByNode(_isoMapping),
+          // 🧬 2026-11-12：段头 icon 未进 header.controls 时按「资源归属段」取
+          //   （真机实锤 e35971ca：三段 controls=[] ⇒ 三张真值图标零消费 ⇒ E2-v3）
+          sectionIconByOwner: buildIsoSectionIconMap(_isoMapping),
+        });
         _isoEvaluated = _isoRes.evaluated;
         _isoGroups = _isoRes.groups;
+        _isoStats = _isoRes.stats || _isoStats;
       } catch (_isoEvalErr) {
         reportPatchChainError(_isoEvalErr, { logger: this.logger, pass: 'generateCode:iso-eval' });
+      }
+      // 🔍 ISO-PROBE（2026-11-12）：判据入参指纹。刀 66 出现「evaluated>0 且 groups=0」时，
+      //   必须能区分三种情况：①真没同构段 ②入参形态与落盘 checkpoint 不一致（运行时口 vs 落盘口）
+      //   ③判据否决（哪一条）。此前只有聚合计数行 ⇒ 0 命中不可归因（mc-max-1794418334200-47c8fb53
+      //   实测：落盘 effectiveSections 复跑 groups=1，运行时 groups=0，无证据可定位）。
+      //   本行与判据同函数派生（isoBodyEntries/assessIsoEligibility），不参与任何决策；0 命中也恒打。
+      try {
+        // 🔴 刀 66-P0：src 记**判据实际取到的那份 plan**（旧口径只记 input 里有什么，
+        //   正是「落盘复跑 groups=1 / 运行时 groups=0」不可归因的成因）。
+        const _probeSrc = Array.isArray(input?.subComponentPlan?.effectiveSections)
+          && _isoTreeSections === input.subComponentPlan.effectiveSections
+          ? 'subComponentPlan'
+          : input?.generationInput?.componentPlan
+            ? 'componentPlan'
+            : input?.subComponentPlan
+              ? 'subComponentPlan'
+              : 'none';
+        const _probeSegs = (_isoTreeSections || []).map((s) => {
+          const content = isoSectionContent(s);
+          const bodyKeys = content ? Object.keys(content).join('+') : '-';
+          const entries = isoBodyEntries(s, { flattenOneLevel: true }).length;
+          const v = assessIsoEligibility(s, { flattenOneLevel: true });
+          const lay = isoSectionLayout(s, { flattenOneLevel: true });
+          return `${String(s?.id)}~${v?.eligible ? 'ok' : String(v?.reason || '?')}~${bodyKeys}~e${entries}~${lay.direction || '-'}/${lay.columns ?? '-'}`;
+        });
+        this.logger.info(
+          `🧬 ISO-PROBE quadrant=mc/max src=${_probeSrc} n=${(_isoTreeSections || []).length} truth=${_isoTruth ? 'yes' : 'no'} segs=[${_probeSegs.join(' | ')}]`,
+        );
+      } catch (_isoProbeErr) {
+        reportPatchChainError(_isoProbeErr, { logger: this.logger, pass: 'generateCode:iso-probe' });
       }
       // repLayout：代表段的**归一布局事实**（direction/columns）—— 模板契约要用列数，
       // 不让 LLM 从 `horizontal-4-columns` 之类自由文本里猜（245878e6 实锤：三段各自猜，
       // 一段渲成扁平文本、一段自造嵌套组、一段渲成网格）。
-      const _isoPlan = { repGroupSize: new Map(), repLayout: new Map(), wrapperBySubPath: new Map(), indexGroups: [] };
+      const _isoPlan = { repGroupSize: new Map(), repLayout: new Map(), repHasTheme: new Map(), wrapperBySubPath: new Map(), indexGroups: [] };
       try {
         const _fgTakenIds = new Set();
         for (const tr of _fgFiles.values()) _fgTakenIds.add(String(tr.sectionId));
@@ -2337,6 +2543,11 @@ export class MicrocodeEngineer extends BaseAgent {
             direction: g.direction || '',
             columns: Number.isInteger(g.columns) ? g.columns : null,
           });
+          // 🧬 刀 66-P1：整组成员都有 Figma 配色真值才在契约里要求 theme props
+          _isoPlan.repHasTheme.set(
+            repSubPath,
+            g.members.every((m) => m.theme && typeof m.theme === 'object'),
+          );
           if (indexMembers.every((m) => m.compName)) {
             _isoPlan.indexGroups.push({ repName, members: indexMembers });
           }
@@ -2353,12 +2564,24 @@ export class MicrocodeEngineer extends BaseAgent {
         _isoPlan.repGroupSize.clear();
         _isoPlan.wrapperBySubPath.clear();
         _isoPlan.repLayout.clear();
+        _isoPlan.repHasTheme.clear();
         _isoPlan.indexGroups.length = 0;
       }
       // 观测纪律：0 命中也恒打（「无同构组」必须与「没评估」可区分）
       this.logger.info(
+        `🧬 ISO-CONVERGE quadrant=mc/max evaluated=${_isoEvaluated} declared=${_isoStats.declared} verified=${_isoStats.verified} rejected=${_isoStats.rejected} withTruth=${_isoStats.withTruth} groupsRaw=${_isoGroups.length} groups=${_isoPlan.repGroupSize.size} members=${_isoPlan.wrapperBySubPath.size + _isoPlan.repGroupSize.size} reps=[${[..._isoPlan.repGroupSize.keys()].map((p) => p.split('/').pop()).join(',')}] wrapped=${_isoPlan.wrapperBySubPath.size}`,
+      );
+      // 兼容旧采集器（replay.mjs 按「同构段收敛评估」grep）
+      this.logger.info(
         `🧬 同构段收敛评估: evaluated=${_isoEvaluated} groupsRaw=${_isoGroups.length} groups=${_isoPlan.repGroupSize.size} members=${_isoPlan.wrapperBySubPath.size + _isoPlan.repGroupSize.size} reps=[${[..._isoPlan.repGroupSize.keys()].map((p) => p.split('/').pop()).join(',')}] wrapped=${_isoPlan.wrapperBySubPath.size}`,
       );
+
+      // 🛡️ #19（2026-11-12）：同段交互接管「保产物」——
+      //   被接管的 LLM 段组件**不进 LLM chunk**（否则重生成会覆盖掉带真实交互的那份 ⇒
+      //   交互再次丢失，正是 mc-max-1794456460380-1efe65a2「依旧没有交互」的另一半成因），
+      //   其内容取自装配时点的 allFiles 快照，池后按同款最小修复管线写入。
+      const _takeoverFiles =
+        input._sectionTakeoverFiles instanceof Map ? input._sectionTakeoverFiles : new Map();
 
       // 🆕 方案 2：按组构建 chunks，同组子组件共享 scopedInput 缓存
       // 同组子组件通常引用相同的 figma 父节点区域，缓存 scopedInput 避免重复计算
@@ -2374,6 +2597,8 @@ export class MicrocodeEngineer extends BaseAgent {
         for (const subPath of group.paths) {
           // 🛡️ 刀 53：确定性接管的叶不进 LLM chunk（文件在下方整体写入）
           if (_fgFiles.has(subPath)) continue;
+          // 🛡️ #19：同段交互接管的 LLM 段组件不进 LLM chunk（文件在下方整体保产物写入）
+          if (_takeoverFiles.has(subPath)) continue;
           // 🧬 刀 66：同构兄弟段不进 LLM chunk——池后由系统确定性渲染薄包装
           // （转发代表模板 props）。代表段 chunk 在下方携带 isoContract。
           if (_isoPlan.wrapperBySubPath.has(subPath)) continue;
@@ -2414,6 +2639,7 @@ export class MicrocodeEngineer extends BaseAgent {
             isoContract: _isoPlan.repGroupSize.has(subPath)
               ? {
                   groupSize: _isoPlan.repGroupSize.get(subPath),
+                  hasTheme: _isoPlan.repHasTheme.get(subPath) === true,
                   // 归一布局事实（列数/方向）随契约下发：模板不需要从
                   // `horizontal-4-columns` 这类自由文本里猜列数（245878e6 实锤）
                   ...(_isoPlan.repLayout.get(subPath) || {}),
@@ -2457,6 +2683,43 @@ export class MicrocodeEngineer extends BaseAgent {
           this.logger.warn('🛡️ 刀 53 确定性写入异常，回退 LLM chunk', {
             subPath,
             error: fgErr?.message || String(fgErr),
+          });
+          const tag = subPath.split('/').pop().replace(/\.vue$/, '');
+          const usage = this._extractUsageSnippet(tag, indexContent);
+          chunks.push({
+            title: '子组件 ' + subPath,
+            files: [subPath],
+            index: startIndex + chunks.length,
+            total,
+            segmentType: 'component',
+            contextFiles: usage
+              ? [{ path: `package/index.vue（${tag} 使用处摘要）`, content: usage }]
+              : [{ path: 'package/index.vue', content: indexContent }],
+          });
+        }
+      }
+      // 🛡️ #19：同段交互接管文件整体保产物写入（与 刀53 / LLM 产物走同一最小修复管线：
+      //   style 属性补齐 + @import 补齐 + injectResourceImports —— 单一事实源、幂等）。
+      //   内容 = 装配时点 allFiles 里 LLM 亲笔那份（含真实 @click / v-model 交互语义）。
+      for (const [subPath, tk] of _takeoverFiles) {
+        try {
+          let fixed = this._ensureSubComponentStyleAttrs(tk.content);
+          fixed = this._ensureSubComponentStyleImport(fixed);
+          fixed = injectResourceImports(
+            fixed,
+            effectiveMapping || input.resourceDomMapping || [],
+            '../../resources/images/',
+          );
+          allFiles[subPath] = fixed;
+          this.logger.info(`🔗 #19 同段交互接管的段组件已保产物落盘: ${subPath}`, {
+            sectionId: tk.sectionId,
+          });
+        } catch (tkErr) {
+          reportPatchChainError(tkErr, { logger: this.logger, pass: 'generateCode:#19-takeover' });
+          // 写入失败 ⇒ 回退 LLM 路径（把该组件重新作为 chunk 补生成），不静默丢内容
+          this.logger.warn('🔗 #19 保产物写入异常，回退 LLM chunk', {
+            subPath,
+            error: tkErr?.message || String(tkErr),
           });
           const tag = subPath.split('/').pop().replace(/\.vue$/, '');
           const usage = this._extractUsageSnippet(tag, indexContent);
@@ -2544,6 +2807,17 @@ export class MicrocodeEngineer extends BaseAgent {
                     `🎯 阶段B 统计行配对确定性对齐: ${f}`,
                     { pairs: _statMembers.map((m) => `${m.title}→${m.value}`) },
                   );
+                }
+              }
+
+              // 🎯 P1-1（8b15a757）：stats 段容器/成员横排真值注入（icon 左/文本右、
+              //   两卡并排）。判据与注入器都在 inline-row-assembler（单一来源）。
+              const _statsTruth = statsRowTruthByComp.get(_statTag);
+              if (_statsTruth) {
+                const _inj = injectStatsRowGeometry(fixed, _statsTruth);
+                if (_inj.changed) {
+                  fixed = _inj.content;
+                  this.logger.info(`🎯 P1-1 stats 段横排真值注入: ${f}`, { reason: _inj.reason });
                 }
               }
 
@@ -2666,7 +2940,9 @@ export class MicrocodeEngineer extends BaseAgent {
           const tag = subPath.split('/').pop().replace(/\.vue$/, '');
           try {
             const tpl = allFiles[w.templateSubPath];
-            const verdict = validateIsoTemplateProps(tpl);
+            const verdict = validateIsoTemplateProps(tpl, {
+              requireTheme: !!(w.member?.theme && typeof w.member.theme === 'object'),
+            });
             if (!verdict.ok) {
               throw new Error(`代表模板契约违约: ${verdict.reasons.join(',')}`);
             }
@@ -2727,6 +3003,11 @@ export class MicrocodeEngineer extends BaseAgent {
       let _isoIndexApplied = 0;
       let _isoIndexSkipped = [];
       let _isoPrune = { removedImports: [], removedFiles: [], kept: [] };
+      // 🧩 P1-3（8b15a757 实锤）：同构收敛**实际生效**的段 id 集。
+      //   planner R2 密度拆分按「每派生组一文件」记账（minFiles=9），刀66 收敛后物理
+      //   文件=2 —— 覆盖度判据拿到这个集合才能按「逻辑组」对账（v-for 复用算 1 组 N
+      //   实例），否则恒 missing=7。只记 applied（改写真正落地的组），skipped 组不记。
+      let _isoGroupedSectionIds = [];
       // 🔴 只有「全部薄包装都成功」才改 index：若某成员已回退独立生成，说明该段没走参数化
       //   模板，此时把它的 index 标签收进 v-for 会让那份独立产物变成死文件（数据不再被消费）。
       if (_isoPlan.indexGroups.length > 0 && _isoFallback === 0) {
@@ -2754,6 +3035,8 @@ export class MicrocodeEngineer extends BaseAgent {
               for (const f of _pr.removedFiles) {
                 if (fileSectionMap[f] != null) delete fileSectionMap[f];
               }
+              // 🧩 P1-3：applied 组的成员段 id（覆盖度豁免通道的唯一事实来源）
+              _isoGroupedSectionIds = _rw.applied.flatMap((g) => (Array.isArray(g.members) ? g.members : []));
             }
           } else {
             _isoIndexSkipped = _isoPlan.indexGroups.map((g) => ({ repName: g.repName, reason: 'no-index' }));
@@ -2764,9 +3047,12 @@ export class MicrocodeEngineer extends BaseAgent {
         }
         // 计数行恒打（0 也打）：「改写未命中」必须与「没尝试改写」可区分
         this.logger.info(
-          `🧬 刀66-C index 段级 v-for: groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied} skipped=${_isoIndexSkipped.length} removedTags=${_isoIndexApplied > 0 ? _isoIndexApplied : 0} pruneFiles=${_isoPrune.removedFiles.length} pruneImports=${_isoPrune.removedImports.length} pruneKept=${_isoPrune.kept.length}${_isoIndexSkipped.length ? ` reasons=[${_isoIndexSkipped.map((s) => `${s.repName}:${s.reason}`).join(',')}]` : ''}${_isoPrune.kept.length ? ` pruneKeptReasons=[${_isoPrune.kept.join(',')}]` : ''}`,
+          `🧬 刀66-C index 段级 v-for: groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied} grouped=${_isoGroupedSectionIds.length} skipped=${_isoIndexSkipped.length} removedTags=${_isoIndexApplied > 0 ? _isoIndexApplied : 0} pruneFiles=${_isoPrune.removedFiles.length} pruneImports=${_isoPrune.removedImports.length} pruneKept=${_isoPrune.kept.length}${_isoIndexSkipped.length ? ` reasons=[${_isoIndexSkipped.map((s) => `${s.repName}:${s.reason}`).join(',')}]` : ''}${_isoPrune.kept.length ? ` pruneKeptReasons=[${_isoPrune.kept.join(',')}]` : ''}`,
         );
       }
+      // 🧩 P1-3：同构收敛段 id 集记到实例（写盘出口 assessSubComponentCoverage 消费；
+      //   未收敛/改写失败 ⇒ 空数组，判据零行为变更）
+      this._isoGroupedSectionIds = _isoGroupedSectionIds;
       // 🛡️ 2026-11-06（5d1eb324 用户质询）：**多卡段的装饰背景不属于段容器**。
       //   ⚠️ 位置在 2026-11-06 评审后**移到落盘前出口**（与 `dropRedundantCssOpacity` 同点）：
       //   此处（子组件生成阶段）样式 chunk（`common.less`）尚未生成，卡片底若只在
@@ -5021,8 +5307,13 @@ export class MicrocodeEngineer extends BaseAgent {
   _applyDeterministicIndexTemplate(allFiles, input) {
     const cur = allFiles['package/index.vue'];
     if (typeof cur !== 'string' || !cur) return;
+    // 🛡️ #19（2026-11-12）：把当前写盘文件表交给装配层做「同段交互接管」判据 ——
+    //   LLM 与 index.vue **同批**产出的段组件（实测 mc-max-1794456460380-1efe65a2
+    //   chunk-meta：TabSwitchBar/TodaySummary/StatsCardRow 与 index.vue 同为 index=2）
+    //   在此刻已在 allFiles 里，是判据的唯一事实源。
     const r = microcodeGenerator.applyDeterministicIndexTemplate(cur, input, {
       logger: this.logger,
+      componentContents: allFiles,
     });
     if (!r.applied) {
       this.logger.warn('🛡️ 确定性模板装配未生效（保留 LLM 模板）', {
@@ -5032,12 +5323,35 @@ export class MicrocodeEngineer extends BaseAgent {
       return;
     }
     allFiles['package/index.vue'] = r.content;
+    // 🛡️ #19：被接管的 LLM 交互段组件**必须保产物** —— 记到 input 上，供
+    //   `genSubComponents` 跳过其 LLM 重新生成（否则重生成覆盖 ⇒ 交互再次丢失），
+    //   并在池后按同款最小修复管线写入。空接管 ⇒ 清除，避免跨轮陈旧残留。
+    const _tk = r.takeoverFiles && typeof r.takeoverFiles === 'object' ? r.takeoverFiles : {};
+    const _tkKeys = Object.keys(_tk);
+    if (_tkKeys.length > 0) {
+      input._sectionTakeoverFiles = new Map(
+        Object.entries(_tk).map(([p, c]) => [
+          p,
+          {
+            content: c,
+            sectionId: (r.takeovers || []).find((t) => p.endsWith(`/${t.to}.vue`))?.sectionId,
+          },
+        ]),
+      );
+    } else {
+      delete input._sectionTakeoverFiles;
+    }
     input._indexTemplateFacts = r.facts;
     // 🛡️ P1（2026-09-28）：CodeFixPipeline 传给 registerBuiltinFixRules 的是**全新 input**
     //   （`{ subComponentPlan, generationInput }`），不含 `_indexTemplateFacts` ⇒ S1 规则读到
     //   roots:0（而 S3 在生成时读真 input 看到 sectionRoots:N）。把事实也存到实例上，
     //   供 fix 规则经 `engineer._lastIndexTemplateFacts` 兜底（单一事实源、避免各读各的）。
     this._lastIndexTemplateFacts = r.facts;
+    // 🛡️ #19 观测纪律：接管 0 命中也恒打行（「无同段交互段」必须与「没评估」可区分）。
+    //   `r.takeovers` 与 `r.takeoverFiles` 已一一对应（见 applyDeterministicIndexTemplate 不变式）。
+    this.logger.info(
+      `🔗 #19 同段交互接管: hits=${_tkKeys.length} files=[${_tkKeys.map((p) => p.split('/').pop()).join(',')}]`,
+    );
     this.logger.info(
       '🧩 确定性模板装配（simple/medium 分支）：<template> 段已由 effectiveSections 覆盖',
       {
@@ -6192,6 +6506,10 @@ export class MicrocodeEngineer extends BaseAgent {
         // null（未记账）⇒ skipped=no-plan，不得用 {} 兜底成「零缺失」
         subPlan: this._coverageMeta,
         files: onDisk,
+        // 🧩 P1-3（8b15a757）：同构收敛段 id 集——v-for 复用算 1 组 N 实例，按逻辑组对账
+        ...(Array.isArray(this._isoGroupedSectionIds) && this._isoGroupedSectionIds.length > 0
+          ? { isoGroupedSectionIds: this._isoGroupedSectionIds }
+          : {}),
       });
       this._subComponentCoverage = coverage;
       const coverageLog = formatSubComponentCoverage(coverage);
@@ -9588,6 +9906,12 @@ export default declareInfo
             outputPath,
             injectFn: injectResourceImports,
             effectiveSections,
+            // 🛡️ 2026-11-12：段内 items 级图标补位（自愈链 ③-b）的全保真段源。
+            //   归一化口（componentPlan.declaredContent）会剥离 items[].icon ⇒ 只有 planner 原形
+            //   （subComponentPlan）带 icon.resource；缺它则该 pass 恒零命中（纯附加）。
+            //   resolveIsoPlanSections 是纯读取函数（内部 fail-open 回退 resolvePlanSections），
+            //   不会抛 ⇒ 不再套 try/catch（避免无谓增加 PATCH-CHAIN 哨兵面）。
+            fullSections: microcodePrompt.resolveIsoPlanSections({ generationInput, subComponentPlan }) || [],
             // 🛡️ H1（2026-10-04）：figma 原始树作为「百分比高度拉伸检测」（⑪）的更权威真值源。
             //   effectiveSections 只含 section 级高度；figmaNodeData 含全部节点 ⇒ 区块级 T父 可解析，
             //   覆盖率显著提升（离线 552 产物实测即以此路径跑出 H1 全量命中面）。

@@ -37,9 +37,16 @@ describe('S3 bg 归属确定性补挂', () => {
     expect(out).toContain('width:426px');
     expect(out).toContain('height:91px');
     expect(out).toContain('bg-_m-34.png');
+    // 🛡️ 2026-11-12 治本断言（5afb401f 缺陷①）：背景必须走 :style 动态绑定——
+    //   静态 style 里 url('bg1') 是字面量，变量不解析 ⇒ 背景恒不显示。
+    expect(out).toContain("backgroundImage: 'url(' + bg1 + ')'");
+    expect(out).not.toMatch(/background-image:url\('bg1'\)/);
+    // 🛡️ 治本断言（5afb401f 缺陷②）：注入 div 必须是**根内容容器的子元素**
+    //   （原插「引用所在行行尾」落到父级/兄弟位置 ⇒ 错位方块破坏布局）。
+    expect(out).toMatch(/data-section-id="88:33">\s*<div data-section-id="2:3660"/);
   });
 
-  it('阳性②：归属容器存在但未消费 bg ⇒ 开标签补 background 绑定', () => {
+  it('阳性②：归属容器存在但未消费 bg ⇒ 开标签补 background 绑定（动态 :style，非静态 style）', () => {
     const files = {
       'package/components/Flow.vue':
         "<template>\n  <div data-section-id=\"2:3660\" style=\"width:426px;height:91px;\">\n    <span>34,620</span>\n  </div>\n</template>\n<script setup>\nimport bg1 from '../../resources/images/bg-_m-34.png'\n</script>",
@@ -47,7 +54,13 @@ describe('S3 bg 归属确定性补挂', () => {
     const r = backstopMountBgOwnership(files, MAPPING);
     const out = r.files['package/components/Flow.vue'];
     expect(r.stats.containerTagged).toBe(1);
-    expect(out).toMatch(/data-section-id="2:3660"[^>]*background-image/);
+    // 动态绑定形态（与幂等态样本同一正确形态）：`backgroundImage: 'url(' + bg1 + ')'`
+    expect(out).toMatch(/data-section-id="2:3660"/);
+    expect(out).toContain("backgroundImage: 'url(' + bg1 + ')'");
+    // 静态尺寸保留（真值尺寸不能丢）
+    expect(out).toContain('style="width:426px;height:91px;"');
+    // 不得再出现「静态 style 里塞变量名」的错误形态
+    expect(out).not.toMatch(/style="[^"]*url\('bg1'\)/);
   });
 
   it('幂等：归属容器已消费该 bg（变量名在标签内）⇒ 跳过不双挂', () => {
@@ -60,6 +73,125 @@ describe('S3 bg 归属确定性补挂', () => {
     expect(r.files['package/components/Flow.vue']).toBe(
       files['package/components/Flow.vue'],
     );
+  });
+
+  /**
+   * 🛡️ 2026-11-12 新增：S3 由「默认关闭」恢复「默认启用」后的**首要风险闸**。
+   *   判据 E3-v4 v4（component-acceptance/index.js:646）把「数据驱动消费」列为**独立合规形态**
+   *   并放行 ⇒ 修侧若照旧补挂，会造出第二份背景块（重复渲染）。
+   */
+  it('防护：数据驱动消费态（判据 E3-v4 v4 放行形态）⇒ 跳过注入，输出逐字不变', () => {
+    const code = `<template>
+  <div data-section-id="88:33">
+    <div v-for="it in statItems" :key="it.k" :style="{ backgroundImage: 'url(' + it.bg + ')' }">{{ it.k }}</div>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/bg-_m-34.png'
+const statItems = [{ k: 'a', bg: bg1 }]
+</script>`;
+    const r = backstopMountBgOwnership({ 'package/components/Flow.vue': code }, MAPPING);
+    expect(r.stats.skippedDataDriven).toBe(1);
+    expect(r.stats.missingContainerInjected).toBe(0);
+    expect(r.stats.containerTagged).toBe(0);
+    expect(r.files['package/components/Flow.vue']).toBe(code);
+  });
+
+  it('③ 动态形态祖先错挂：补挂归属容器同时剥掉祖先段的同资源动态背景（防双挂/拉伸）', () => {
+    const code = `<template>
+  <div data-section-id="88:33" :style="{ backgroundImage: 'url(' + bg1 + ')' }">
+    <span>当日总流量</span>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/bg-_m-34.png'
+</script>`;
+    const r = backstopMountBgOwnership({ 'package/components/Flow.vue': code }, MAPPING);
+    const out = r.files['package/components/Flow.vue'];
+    expect(r.stats.missingContainerInjected).toBe(1);
+    expect(r.stats.movedFromAncestor).toBe(1);
+    expect(out).toContain('data-section-id="2:3660"');
+    // 祖先段上的同资源动态背景已剥离（旧正则只认带连字符的 background-image ⇒ 清不掉）
+    expect(out).not.toMatch(/data-section-id="88:33"[^>]*backgroundImage/);
+  });
+});
+
+/**
+ * 🛡️ S3 ③ 错挂清理两处治本（2026-11-12 · 真机 mc-max-1794461963464-28ec5c09 实锤）
+ *   症状：S3 之后两张注入 div 的 `backgroundImage` **双双丢失** ⇒ E3-v4 由 1 条变 2 条。
+ *   两个独立缺陷叠加：
+ *     ⑥ `open.includes(varName)` 纯子串 ⇒ 短名命中长名内部（`bg3` ⊂ `bgbg3475`）。
+ *     ⑦ ③ 只豁免当前 wantId ⇒ 同一 fname 被多个归属段共用时，兄弟段互相剥离。
+ */
+describe('S3 ③ 错挂清理：同 fname 多归属段 + 短变量名子串', () => {
+  const SHARED_MAPPING = [
+    {
+      resourceFile: '../resources/images/bg-3475.png',
+      figmaNodeId: '2:3473',
+      ownerSectionId: '2:3474',
+      targetDomSelector: '[data-section-id="2:3474"]',
+      figmaBox: { x: 0, y: 0, width: 130, height: 9 },
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+    },
+    {
+      resourceFile: '../resources/images/bg-3475.png',
+      figmaNodeId: '2:3523',
+      ownerSectionId: '2:3524',
+      targetDomSelector: '[data-section-id="2:3524"]',
+      figmaBox: { x: 0, y: 0, width: 130, height: 9 },
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+    },
+    {
+      resourceFile: '../resources/images/bg-_m-35.png',
+      figmaNodeId: '2:3495',
+      ownerSectionId: '2:3496',
+      targetDomSelector: '[data-section-id="2:3496"]',
+      figmaBox: { x: 0, y: 0, width: 191, height: 81 },
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+    },
+  ];
+
+  it('缺陷⑦ 回归：同一 fname 被两个归属段共用 ⇒ 两份注入 div 均保留 backgroundImage（禁互剥）', () => {
+    const files = {
+      'package/index.vue':
+        "<template>\n  <div data-section-id=\"88:33\">\n    <span>x</span>\n  </div>\n</template>\n<script setup>\nconst x = 1\n</script>",
+    };
+    const r = backstopMountBgOwnership(files, SHARED_MAPPING);
+    const out = r.files['package/index.vue'];
+    // bg-3475.png 两条 + bg-_m-35.png 一条 = 3 个容器都不存在 ⇒ 各注入一份
+    expect(r.stats.missingContainerInjected).toBe(3);
+    const tag3474 = out.match(/<div data-section-id="2:3474"[^>]*>/)?.[0] || '';
+    const tag3524 = out.match(/<div data-section-id="2:3524"[^>]*>/)?.[0] || '';
+    // 关键：两个兄弟归属段必须**同时**保有背景（旧实现互相剥离 ⇒ 两者皆空）
+    expect(tag3474).toContain('backgroundImage');
+    expect(tag3524).toContain('backgroundImage');
+    expect(tag3474).toContain('bgbg3475');
+    expect(tag3524).toContain('bgbg3475');
+  });
+
+  it('缺陷⑥ 回归：短变量名 bg3 不得命中长变量名 bgbg3475 内部 ⇒ 不误剥他段背景', () => {
+    const files = {
+      'package/index.vue':
+        "<template>\n  <div data-section-id=\"2:3660\" :style=\"{ backgroundImage: 'url(' + bgbg3475 + ')' }\"></div>\n</template>\n<script setup>\nimport bg3 from '../../resources/images/bg-_m-35.png'\nconst bgbg3475 = 'x'\n</script>",
+    };
+    const mapping = [
+      {
+        resourceFile: '../resources/images/bg-_m-35.png',
+        figmaNodeId: '2:3495',
+        ownerSectionId: '2:3496',
+        figmaBox: { x: 0, y: 0, width: 191, height: 81 },
+        previewAnalysisRole: 'bg',
+        downloadStatus: 'success',
+      },
+    ];
+    const r = backstopMountBgOwnership(files, mapping);
+    const out = r.files['package/index.vue'];
+    // 2:3660 上的 bgbg3475 与 bg3 无任何关系 ⇒ 原样保留（旧实现被 `bg3 ⊂ bgbg3475` 误剥）
+    expect(out).toContain("backgroundImage: 'url(' + bgbg3475 + ')'");
+    expect(r.stats.movedFromAncestor).toBe(0);
   });
 });
 

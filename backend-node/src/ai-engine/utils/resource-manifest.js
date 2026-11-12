@@ -360,8 +360,36 @@ export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
   //   修法：以**结构归属**（entry.ancestorIds 含 section id ⇒ 资源位于该 section 子树内）补集，
   //   与 Figma 真值同源、与命名无关；无 ancestorIds 的旧映射自动退化为原「精确相等」行为。
   const keyStr = sectionKey != null ? String(sectionKey) : null
+
+  // 🛡️ 2026-11-12 治本（mc-max-1794459793796-e5de62fd 实锤）：
+  //   **合并段的成员节点归属**。段可以由多个 Figma 节点合并而成（统计卡段 `38:3134` =
+  //   合作厂商卡 `38:3260` + 在线设备卡 `38:3282`，见 `sourceNodeIds`），但资源映射里
+  //   `ownerSectionId` 记的仍是**成员卡** id ⇒ 只按 `matchedSection.id` 分桶 ⇒ 两卡各自的
+  //   图标（icon2 / icon3）全部落空 ⇒ 该段子组件 prompt 资源清单为 **0 条** ⇒ LLM 只能按
+  //   语义臆造变量名（`icon战略厂商`），无 import 可用 ⇒ E2-v3「落盘未消费」硬拒。
+  //   判据：`ownerSectionId` ∈ 段 id 或 ∈ 段的 `sourceNodeIds` ⇒ 归本段（同一份 sourceNodeIds
+  //   就是段划分的事实源，不另立口径）。
+  const memberKeys = new Set(
+    (Array.isArray(matchedSection.sourceNodeIds) ? matchedSection.sourceNodeIds : [])
+      .filter((n) => n != null)
+      .map(String),
+  )
+  if (keyStr) memberKeys.delete(keyStr)
+  const byMember = []
+  if (memberKeys.size > 0) {
+    for (const m of resourceDomMapping) {
+      if (!m || typeof m !== 'object') continue
+      if (memberKeys.has(String(m.ownerSectionId))) byMember.push(m)
+    }
+  }
+
+  // 子树补集（2026-11-05 治本，Tab 栏资源场景）**仅在精确归属为空时启用**。
+  //   原因：`ancestorIds` 记录的是 Figma **物理层级**，而段划分会重切 —— 实锤本轮
+  //   `icon4/5/6`（三组网格各自的图标）的 ancestorIds 也含 `38:3134`（它是整个内容区的
+  //   容器），若与精确归属一并合并，统计卡段会吞掉三组网格的图标 ⇒ 跨段错绑。
+  //   精确归属（段 id / 成员节点）本身就是「最近归属」，优先于物理祖先。
   const subtree = []
-  if (keyStr) {
+  if (keyStr && direct.length === 0 && byMember.length === 0) {
     for (const m of resourceDomMapping) {
       if (!m || typeof m !== 'object') continue
       const anc = Array.isArray(m.ancestorIds) ? m.ancestorIds : null
@@ -372,7 +400,7 @@ export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
 
   const seen = new Set()
   const merged = []
-  for (const m of [...direct, ...subtree]) {
+  for (const m of [...direct, ...byMember, ...subtree]) {
     if (!m || typeof m !== 'object') continue
     const k = [
       m.figmaNodeId ?? m.imageRef ?? m.targetDomSelector ?? '',
@@ -383,9 +411,9 @@ export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
     merged.push(m)
   }
 
-  // 过滤后未减少 ⇒ 视为无意义过滤，保持既有 fail-closed 语义（返回 []）
-  if (merged.length > 0 && merged.length < resourceDomMapping.length) {
-    return merged
-  }
-  return []
+  // 🔴 2026-11-12 判据修正：旧实现在「过滤后数量未减少」时返回 []（当作无意义过滤）。
+  //   但当本段**就是全部资源的宿主**（单段组件 / 段独占整棵树）时，未减少恰恰是正确结果，
+  //   返回 [] 会让该段 prompt 一条资源都拿不到（本轮 E2-v3 的直接成因）。
+  //   正确语义：命中归属就返回命中集，未命中才 fail-closed 返回 []。
+  return merged
 }

@@ -6,8 +6,11 @@ import { dataDir } from '../config/backend-root'
 
 export const MEETING_ASR_CONFIG_FILE = path.join(dataDir, 'meeting-asr-config.json')
 
-const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-const DEFAULT_MODEL = 'qwen3-asr-flash'
+// 🔴 2026-11-12 用户指令（零兜底）：原 `DEFAULT_BASE_URL`（dashscope compatible-mode）
+// 与 `DEFAULT_MODEL`（qwen3-asr-flash）**内置默认已拔除** —— 项目不需要任何硬编码模型/端点兜底。
+// 现在 baseURL/model 必须由 env（MEETING_ASR_BASE_URL / MEETING_ASR_MODEL）或
+// data/meeting-asr-config.json 显式提供；两者皆空时由 meeting-asr.service 直接报错引导配置，
+// 不再静默把请求发往某个「碰巧可用」的第三方端点。
 const DEFAULT_TIMEOUT_MS = 90_000
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 
@@ -34,7 +37,10 @@ interface MeetingAsrFileConfig {
   maxBytes?: number | string
 }
 
-/** 密钥解析顺序：MEETING_ASR_API_KEY → DASHSCOPE_API_KEY → data/meeting-asr-config.json → 内置默认（本地回退） */
+/**
+ * 密钥解析顺序：MEETING_ASR_API_KEY → DASHSCOPE_API_KEY → data/meeting-asr-config.json
+ * （🔴 2026-11-12：原「→ 内置默认」一级已删除，密钥/config 缺失即由调用方报错引导）
+ */
 function readFileConfig(): MeetingAsrFileConfig {
   try {
     if (!fs.existsSync(MEETING_ASR_CONFIG_FILE)) return {}
@@ -74,10 +80,11 @@ export function resolveMeetingAsrConfig(): MeetingAsrRuntimeConfig {
   const envKey = pickString(process.env.MEETING_ASR_API_KEY, process.env.DASHSCOPE_API_KEY)
   const fileKey = pickString(file.apiKey)
   const apiKey = envKey || fileKey
+  // 🔴 2026-11-12：不再有内置默认端点/模型兜底（见文件头说明），未配置即为空串。
   const baseURL = normalizeBaseURL(
-    pickString(process.env.MEETING_ASR_BASE_URL, file.baseURL, DEFAULT_BASE_URL),
+    pickString(process.env.MEETING_ASR_BASE_URL, file.baseURL),
   )
-  const model = pickString(process.env.MEETING_ASR_MODEL, file.model, DEFAULT_MODEL)
+  const model = pickString(process.env.MEETING_ASR_MODEL, file.model)
   const kindRaw = pickString(process.env.MEETING_ASR_PROVIDER, file.providerKind).toLowerCase()
   const providerKind: MeetingAsrProviderKind = kindRaw === 'dashscope' ? 'dashscope' : 'openai-compatible'
   return {

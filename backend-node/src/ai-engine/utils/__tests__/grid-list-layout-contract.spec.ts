@@ -17,6 +17,9 @@
  */
 
 import {
+  declaredColumns,
+  countTrackColumns,
+  columnsFromCalcWidth,
   buildGridContract,
   detectGridListLayoutIssues,
   healGridListLayout,
@@ -1019,5 +1022,97 @@ describe('刀 41 · 入口 2：section 树遍历（无 v-for 宿主 · fe2acd21 
     const det = detectGridListLayoutIssues(flatFiles(), { sections: [singleCol] })
     expect(det.issues).toEqual([])
     expect(det.stats.noVForContracts).toBe(0)
+  })
+})
+
+/**
+ * 🛡️ declaredColumns（2026-11-12 · mc-1794445866457-3d79ee84 实锤）
+ *
+ * 病灶：`gridColumns=3` 是视觉模型写的、被 planner 排在几何之前 ⇒ 产物写对的 `repeat(4)` 反被判错；
+ *      而 D-GRID 判据当时只认 `repeat(K`，写成 `1fr 1fr 1fr 1fr` 或 flex 等分一律**数不出**。
+ *
+ * 本组锁死「列数只能靠**静态可判定**的声明证明」这条线：
+ *   阳性 5 条 = 三种合法形态都能数出 K；
+ *   阴性 7 条 = 数不出的必须 null（**绝不因用了 flex 就放行** —— 那是放水）。
+ */
+describe('declaredColumns（唯一列数判定）', () => {
+  it('阳性①：grid + repeat(4, 126px) ⇒ 4 / repeat', () => {
+    const r = declaredColumns({ display: 'grid', 'grid-template-columns': 'repeat(4, 126px)' })
+    expect(r).toEqual({ cols: 4, form: 'repeat' })
+  })
+
+  it('阳性②：grid + 显式轨道 1fr × 4 ⇒ 4 / tracks', () => {
+    const r = declaredColumns({ display: 'grid', 'grid-template-columns': '1fr 1fr 1fr 1fr' })
+    expect(r).toEqual({ cols: 4, form: 'tracks' })
+  })
+
+  it('阳性③：grid + repeat 与显式轨道混写 ⇒ 相加（repeat(2,…) 1fr 1fr = 4）', () => {
+    const r = declaredColumns({
+      display: 'grid',
+      'grid-template-columns': 'repeat(2, minmax(0, 1fr)) 1fr 1fr',
+    })
+    expect(r?.cols).toBe(4)
+  })
+
+  it('阳性④：flex row + 子项 flex-basis calc((100% - 60px) / 4) ⇒ 4 / flex-calc', () => {
+    const r = declaredColumns(
+      { display: 'flex', 'flex-direction': 'row' },
+      { 'flex-basis': 'calc((100% - 60px) / 4)' },
+    )
+    expect(r).toEqual({ cols: 4, form: 'flex-calc' })
+  })
+
+  it('阳性⑤：flex row + 子项 width calc(100% / 3 - 13.33px) ⇒ 3', () => {
+    const r = declaredColumns(
+      { display: 'flex', 'flex-direction': 'row' },
+      { width: 'calc(100% / 3 - 13.33px)' },
+    )
+    expect(r?.cols).toBe(3)
+  })
+
+  it('阴性①：repeat(auto-fill, …) 列数由容器宽决定 ⇒ null（不猜）', () => {
+    const r = declaredColumns({
+      display: 'grid',
+      'grid-template-columns': 'repeat(auto-fill, minmax(126px, 1fr))',
+    })
+    expect(r).toBeNull()
+  })
+
+  it('阴性②：flex row + 子项 flex: 1 1 0 ⇒ null（等分数由子项个数决定，静态数不出）', () => {
+    const r = declaredColumns(
+      { display: 'flex', 'flex-direction': 'row' },
+      { flex: '1 1 0' },
+    )
+    expect(r).toBeNull()
+  })
+
+  it('阴性③：有 grid-template-columns 但未声明 display:grid ⇒ null（声明无效）', () => {
+    expect(declaredColumns({ 'grid-template-columns': 'repeat(4, 126px)' })).toBeNull()
+  })
+
+  it('阴性④：flex-direction: column ⇒ null（纵排不是列数问题）', () => {
+    const r = declaredColumns(
+      { display: 'flex', 'flex-direction': 'column' },
+      { 'flex-basis': 'calc(100% / 4)' },
+    )
+    expect(r).toBeNull()
+  })
+
+  it('阴性⑤：calc(100% - 20px / 2) ⇒ null（把长度折半，不是列等分）', () => {
+    expect(columnsFromCalcWidth('calc(100% - 20px / 2)')).toBeNull()
+  })
+
+  it('阴性⑥：单列 grid（1fr）⇒ null（列数判据不适用）', () => {
+    expect(declaredColumns({ display: 'grid', 'grid-template-columns': '1fr' })).toBeNull()
+  })
+
+  it('阴性⑦：空声明 ⇒ null', () => {
+    expect(declaredColumns()).toBeNull()
+    expect(declaredColumns({}, {})).toBeNull()
+  })
+
+  it('countTrackColumns：括号内空格不切分（minmax / fit-content）', () => {
+    expect(countTrackColumns('minmax(0, 1fr) minmax(0, 1fr)')).toBe(2)
+    expect(countTrackColumns('fit-content(50%) 1fr 1fr')).toBe(3)
   })
 })

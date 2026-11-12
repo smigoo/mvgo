@@ -26,6 +26,15 @@ import {
 import { buildChatUrl } from '../utils/chat-url.js';
 import { getProviderPool } from '../utils/provider-pool.js';
 import { isOpenAICompatibleBaseURL } from '../utils/provider-utils.js';
+// 🔴 brief（Lite 视觉分析）完整性判据唯一来源 —— 键集合与 buildAnalysisPrompt 的 schema
+//    同源。禁止在本文件另写「查 sections/charts/interactions」的错位判据（2026-11-12 事故：
+//    完整 brief 因键错位恒判损坏，每轮白烧一次高温重试）。
+import { isBriefAnalysisIntact } from '../../lite/lite-brief-intact.js';
+// 🔴 SFC（Lite codegen）完整性判据**刻意不在本文件**：归 lite 层
+//    `detectLiteCodegenTruncation` / `validateLiteSfc` 单点负责（判据单一来源）。
+//    2026-11-12 生产事故（mv-lite-1794451845045-33c30bf3）根因即「本文件持有第二份 SFC 判据
+//    + 自愈抬温盲覆盖首轮结果」⇒ 确定的 temperature=0 产物被 0.5 采样顶成空壳。
+//    故本文件不再引入 missingSfcBlocks，也不再对 outputKind='sfc' 做任何完整性判定。
 
 const logger = createLogger({ name: 'vision-agent' });
 
@@ -51,6 +60,15 @@ export class VisionAgent {
       this.model,
       config.maxTokens || VISION_DEFAULT_MAX_TOKENS,
     );
+
+    // 📊 真机归因埋点（2026-11-12，修「同图同模型不同果查不出原因」）：
+    //    `this.temperature` 会被完整性自愈临时抬高、并在 finally 还原 ⇒ 事后读实例恒得
+    //    「配置值」，日志里看不出那一轮真正用了多少温度（生产 `[lite-codegen] temperature=0`
+    //    实际采样温度是 0.5 的失真即由此而来）。
+    //    `_lastRequestTemperature` 记录**最后一次真正发出去的采样温度**（每次请求前刷新）；
+    //    `_selfHealCount` 记录本实例触发过几次完整性自愈。两者只观测、不参与任何判定。
+    this._lastRequestTemperature = this.temperature;
+    this._selfHealCount = 0;
 
     // 🔒 强制用户配置：不再回退到环境变量
     if (!config.apiKey) {
@@ -102,31 +120,7 @@ export class VisionAgent {
       }
 
       this.llm = new ChatAnthropic(llmConfig);
-      attachUnifiedInvoke(this.llm, {
-        context: 'vision-agent',
-        provider: 'anthropic',
-        model: this.model,
-        providerId: config.providerId,
-        // 🛡️ 2026-11-02：池归属 scope 透传给统一网关（get/pick 归属校验用）
-        poolScope: this.poolScope,
-        maxTokens: this.maxTokens,
-        // 🔀 方案 A：主 provider 熔断后自动切换备用 vision provider
-        // excludeIds：排除上一次 attempt 刚失败的 provider，实现「超时 → 切换大模型」故障转移。
-        refreshProvider: ({ excludeIds = [] } = {}) => {
-          // 🛡️ 2026-11-02：无本用户 scope ⇒ 不从全局池读（防读他人残留凭证），不做故障转移
-          if (!this.poolScope) return null;
-          const p = getProviderPool().pick('vision', { excludeIds, scope: this.poolScope });
-          if (!p || !p.apiKey) return null;
-          return {
-            providerId: p.id,
-            apiKey: p.apiKey,
-            baseURL: p.baseURL || '',
-            model: p.model || '',
-            providerType: p.providerType || 'auto',
-          };
-        },
-        createLLM: (snap) => this._buildLLM(snap),
-      });
+      this._attachAnthropicInvoke();
     } else {
       // 注意：此分支是「OpenAI 兼容协议」，实际模型/供应商由传入配置决定（可能是 gpt-5.5 或千问等），
       // 不要在文案里硬编码「通义千问」，否则会误导排查（曾导致误判 vision 用错了模型）
@@ -141,6 +135,40 @@ export class VisionAgent {
   }
 
   /**
+   * 给当前 `this.llm`（ChatAnthropic）挂统一网关。
+   * 🔴 唯一来源：构造函数与「截断升档重建 LLM」两处都必须调用本方法 —— `_buildLLM` 返回的是
+   *    **裸** ChatAnthropic，重建后若不重挂，重试请求会绕过统一网关（超时/心跳/熔断切换/关思考
+   *    参数全部失效），与主请求行为不一致。抽取本方法是防止两处 attach 选项漂移。
+   */
+  _attachAnthropicInvoke() {
+    attachUnifiedInvoke(this.llm, {
+      context: 'vision-agent',
+      provider: 'anthropic',
+      model: this.model,
+      providerId: this.providerId,
+      // 🛡️ 2026-11-02：池归属 scope 透传给统一网关（get/pick 归属校验用）
+      poolScope: this.poolScope,
+      maxTokens: this.maxTokens,
+      // 🔀 方案 A：主 provider 熔断后自动切换备用 vision provider
+      // excludeIds：排除上一次 attempt 刚失败的 provider，实现「超时 → 切换大模型」故障转移。
+      refreshProvider: ({ excludeIds = [] } = {}) => {
+        // 🛡️ 2026-11-02：无本用户 scope ⇒ 不从全局池读（防读他人残留凭证），不做故障转移
+        if (!this.poolScope) return null;
+        const p = getProviderPool().pick('vision', { excludeIds, scope: this.poolScope });
+        if (!p || !p.apiKey) return null;
+        return {
+          providerId: p.id,
+          apiKey: p.apiKey,
+          baseURL: p.baseURL || '',
+          model: p.model || '',
+          providerType: p.providerType || 'auto',
+        };
+      },
+      createLLM: (snap) => this._buildLLM(snap),
+    });
+  }
+
+  /**
    * 方案 A：按 provider 快照构建 LLM 客户端（主 provider 熔断切换备用时重建）
    * @param {{apiKey?:string,baseURL?:string,model?:string,providerType?:string}} [snapshot]
    */
@@ -150,6 +178,8 @@ export class VisionAgent {
     const model = snapshot.model || this.model;
     // 熔断切换 provider 后 model 可能变化，temperature 必须按最终模型重新归一化
     const temperature = normalizeRequestTemperature(model, this.temperature);
+    // 📊 建客户端即「本条链路的采样温度已定」⇒ 刷新真实生效温度埋点（唯一来源见构造函数注释）
+    this._lastRequestTemperature = temperature;
     const providerType = snapshot.providerType || this.providerType || 'auto';
     // 🐛 2026-09-02 修复「只有 qwen 可用」根因：协议判定必须基于「原始 baseURL」，
     // 与 base-agent._buildLLM 同款修复。原先先剥 /chat/completions 再判定，
@@ -188,6 +218,44 @@ export class VisionAgent {
       anthropicApiUrl: baseURL || undefined,
       streaming: true,
     });
+  }
+
+  /**
+   * 🎯 切换采样温度，并保证对**下一次请求**真实生效（2026-11-12）。
+   *
+   * 场景：调用方需要按「修复轮次」切换温度（Lite codegen 的修复轮阶梯抬温，对齐
+   * `microcode-engineer.js:8006` 范式）时，**必须走本方法**，不要直接赋 `this.temperature`：
+   *  · OpenAI 兼容分支：每次请求（`callOpenAICompatibleAPI`）都按 `this.temperature`
+   *    经 `normalizeRequestTemperature` 归一化后写进 body ⇒ 赋标量即生效；
+   *  · Anthropic 分支：`temperature` 是构造 `ChatAnthropic` 时的**快照** ⇒ 必须重建客户端
+   *    并重挂统一网关，否则「抬温」只是改了个没人读的字段，重试与原请求参数完全相同（白烧）。
+   *
+   * 🔴 归一化仍由 `_buildLLM`（Anthropic）/每次请求（OpenAI）单点负责，本方法只改标量，
+   *    不重复实现推理模型强制 1 的口径。
+   *
+   * @param {number} temperature 目标温度
+   * @returns {() => void} 还原函数（恢复温度与客户端）；**调用方必须在 finally 中调用**，
+   *   否则 Anthropic 分支重建出的客户端会带新温度泄漏到后续请求。
+   */
+  setRequestTemperature(temperature) {
+    const savedTemperature = this.temperature;
+    const savedLlm = this.llm;
+    this.temperature = temperature;
+    if (!this.isOpenAICompatible) {
+      // 重建裸 ChatAnthropic 让新温度生效（_buildLLM 内已按最终模型归一化并刷新埋点）
+      this.llm = this._buildLLM({
+        apiKey: this.apiKey,
+        baseURL: this.baseURL,
+        model: this.model,
+        providerType: this.providerType,
+      });
+      // 🔴 重建的是裸客户端，必须重挂统一网关（否则重试绕过超时/心跳/熔断/关思考）
+      this._attachAnthropicInvoke();
+    }
+    return () => {
+      this.temperature = savedTemperature;
+      this.llm = savedLlm;
+    };
   }
 
   /**
@@ -349,6 +417,8 @@ export class VisionAgent {
           snap.model,
           this.temperature,
         );
+        // 📊 这是真正进 axios body 的采样温度 ⇒ 刷新真实生效温度埋点（唯一来源见构造函数注释）
+        this._lastRequestTemperature = temperature;
         // 支持调用方动态覆盖 max_tokens（截断重试用更高上限）
         const maxTokens =
           Number(options.maxTokens) > 0 ? options.maxTokens : this.maxTokens;
@@ -541,24 +611,36 @@ export class VisionAgent {
           }
         }
 
-        // 🛡️ 完整性自愈：模型可能「正常完成（finish_reason 非 length）但输出损坏 JSON」（中部非法字符）。
-        // 既有截断检测只覆盖 max_tokens 截断，不覆盖「完成但损坏」。这里补一层：解析校验失败则
-        // 临时提升 temperature + 依赖 provider 熔断重新生成一次，避免损坏 JSON 直达 visual-parser 被判降级阻断。
-        if (!options._integrityRetry && !this._isAnalysisIntact(result)) {
+        // 🛡️ 完整性自愈：模型可能「正常完成（finish_reason 非 length）但输出结构损坏」（中部非法字符）。
+        // 既有截断检测只覆盖 max_tokens 截断，不覆盖「完成但损坏」。这里补一层：结构校验失败则
+        // 临时提升 temperature 重新生成一次，避免损坏输出直达 visual-parser 被判降级阻断。
+        // 🔴 适用性由 `_isSelfHealApplicable(options.outputKind)` 策略门判定（唯一来源）：
+        //    只有调用方**显式声明** 'json' / 'brief' 才自愈；'sfc' / 'text' / 未声明一律不自愈。
+        //    · 'sfc'（Lite codegen）截断归 Lite 层 `callCodegenWithTruncationRetry` 单点负责；
+        //    · 未声明（输出形态未知）自愈会做无依据的结构判定 ⇒ 每轮白烧一次高温重试。
+        //    2026-11-12 事故正是「未声明 + 按 JSON 判 SFC」⇒ 100% 命中 → 抬温盲覆盖确定性产物。
+        if (
+          !options._integrityRetry &&
+          this._isSelfHealApplicable(options.outputKind) &&
+          !this._isAnalysisIntact(result, options.outputKind)
+        ) {
           logger.warn(
-            '⚠️ Vision 输出完成但 JSON 损坏（非截断），启动完整性自愈重试一次',
-            { finishReason },
+            '⚠️ Vision 输出完成但结构损坏（非截断），启动完整性自愈重试一次',
+            { finishReason, outputKind: options.outputKind || '(undeclared)' },
           );
+          const first = result;
           const savedTemp = this.temperature;
-          this.temperature = normalizeRequestTemperature(
-            this.model,
-            Math.min(0.6, (this.temperature || 0.2) + 0.3),
-          );
+          this.temperature = this._escalateTemperature(this.temperature);
+          this._selfHealCount += 1;
           try {
-            result = await this.analyzeImage(imagePath, prompt, {
+            const second = await this.analyzeImage(imagePath, prompt, {
               ...options,
               _integrityRetry: true,
             });
+            // 🔴 择优保留，**不盲覆盖**：重试更差时必须保留首轮。
+            //    旧实现 `result = await ...` 无条件覆盖 ⇒ 确定性的低温产物被高温采样顶掉，
+            //    这正是 2026-11-12「同图同模型不同果」的直接来源（取代的是更完整的样本）。
+            result = this._pickBetterContent(first, second, options.outputKind);
           } finally {
             this.temperature = savedTemp;
           }
@@ -582,7 +664,8 @@ export class VisionAgent {
           ],
         });
 
-        const response = await this.llm.invoke([message], {
+        // 🔴 let 声明：截断升档路径需要重新赋值 response（下方升档重试块）
+        let response = await this.llm.invoke([message], {
           __mvgoRequestOptions: {
             context: 'vision-agent.analyzeImage',
             signal: options.signal,
@@ -593,15 +676,73 @@ export class VisionAgent {
             requestMaxRetries: options.requestMaxRetries,
           },
         });
+        // 🔴 let 声明：截断升档路径需要重新赋值 response（下方升档重试块）
+        // 🛡️ 截断升档（2026-11-12 补齐，与 OpenAI 分支 :482 对齐）：
+        // LangChain AIMessage 输出顶格 this.maxTokens（如 deepseek 经 Anthropic 协议端点
+        // outputTokens 精确=16384）⇒ finish_reason='length' ⇒ 输出被 max_tokens 硬截断。
+        // 此前本分支无任何升档逻辑，截断后只会原参数重试（生产 13 连败实锤）。
+        // 治本：重建 LLM 用更高上限（VISION_TRUNCATION_RETRY_MAX_TOKENS）重试一次。
+        // 仅在「调用方未显式指定 maxTokens」时触发，避免覆盖调用方的显式意图。
+        // 🔴 outputKind='sfc'（Lite codegen）时跳过本升档：SFC 截断由 Lite 截断守卫
+        //    （callCodegenWithTruncationRetry）负责语义级重试，这里升档只会重复长输出。
+        const anthropicUsage = coerceLLMUsage(response);
+        const anthropicTruncated =
+          anthropicUsage.outputTokens > 0 &&
+          anthropicUsage.outputTokens >= this.maxTokens;
+        if (anthropicTruncated && !options.maxTokens && options.outputKind !== 'sfc') {
+          logger.warn(
+            '⚠️ Vision(Anthropic协议) 输出疑似被 max_tokens 截断（outputTokens 顶格），用更高上限重试',
+            {
+              model: this.model,
+              firstMaxTokens: this.maxTokens,
+              retryMaxTokens: VISION_TRUNCATION_RETRY_MAX_TOKENS,
+            },
+          );
+          const savedMaxTokens = this.maxTokens;
+          // 🔴 同时保存/还原 this.llm：升档重建的是内建 32000 上限的新客户端，
+          //    若只还原标量 maxTokens，this.llm 会带着放大上限泄漏到后续请求
+          //    （与完整性自愈的 temperature save/restore 同款语义）。
+          const savedLlm = this.llm;
+          this.maxTokens = VISION_TRUNCATION_RETRY_MAX_TOKENS;
+          try {
+            // _buildLLM 读 this.maxTokens 构造 ChatAnthropic ⇒ 重建后新上限生效
+            this.llm = this._buildLLM({
+              apiKey: this.apiKey,
+              baseURL: this.baseURL,
+              model: this.model,
+              providerType: this.providerType,
+            });
+            // 🔴 重建的是裸 ChatAnthropic，必须重挂统一网关（否则重试绕过超时/心跳/熔断/关思考）
+            this._attachAnthropicInvoke();
+            response = await this.llm.invoke([message], {
+              __mvgoRequestOptions: {
+                context: 'vision-agent.analyzeImage',
+                signal: options.signal,
+                onProgress: options.onProgress || this.onProgress,
+                requestConcurrency: options.requestConcurrency,
+                requestQueueTimeoutMs: options.requestQueueTimeoutMs,
+                requestTimeoutMs: options.requestTimeoutMs,
+                requestMaxRetries: options.requestMaxRetries,
+              },
+            });
+          } finally {
+            this.maxTokens = savedMaxTokens;
+            this.llm = savedLlm;
+          }
+        }
+
         const totalDuration = Date.now() - startTime;
 
         // 提取并记录 token 用量
         const tokenUsage = coerceLLMUsage(response);
-        logger.info('✅ 图片分析完成 (Claude)', {
-          inputTokens: tokenUsage.inputTokens,
-          outputTokens: tokenUsage.outputTokens,
-          totalTokens: tokenUsage.totalTokens,
-        });
+        logger.info(
+          `✅ 图片分析完成 (Anthropic协议, model=${this.model})`,
+          {
+            inputTokens: tokenUsage.inputTokens,
+            outputTokens: tokenUsage.outputTokens,
+            totalTokens: tokenUsage.totalTokens,
+          },
+        );
 
         // 通过钩子记录 Token 用量（非阻塞）
         if (this.onTokenUsage && tokenUsage.totalTokens > 0) {
@@ -621,27 +762,52 @@ export class VisionAgent {
           }
         }
 
-        // 🛡️ 完整性自愈（同 OpenAI 分支）：模型「完成但 JSON 损坏」时截断检测无法捕获，
-        // 这里解析校验失败则临时提升 temperature + 重新生成一次，避免损坏 JSON 被判降级阻断。
+        // 🛡️ 完整性自愈（同 OpenAI 分支）：模型「完成但结构损坏」时截断检测无法捕获，
+        // 这里结构校验失败则临时提升 temperature + 重新生成一次，避免损坏输出被判降级阻断。
+        // 🔴 适用性同 OpenAI 分支（`_isSelfHealApplicable` 策略门）；'sfc' 归 Lite 层截断守卫。
+        // 🔴 本分支的 temperature 是**构造 LLM 客户端时的快照**，只改 `this.temperature` 不会
+        //    改变实际请求 ⇒ 必须像截断升档那样重建 `this.llm` 并重挂网关；否则就是「参数完全
+        //    相同的第二次调用」（旧实现即如此：白烧一次 + 盲覆盖首轮结果，净收益为负）。
         if (
           !options._integrityRetry &&
-          !this._isAnalysisIntact(coerceLLMText(response.content))
+          this._isSelfHealApplicable(options.outputKind) &&
+          !this._isAnalysisIntact(
+            coerceLLMText(response.content),
+            options.outputKind,
+          )
         ) {
           logger.warn(
-            '⚠️ Vision(Claude) 输出完成但 JSON 损坏，启动完整性自愈重试一次',
+            '⚠️ Vision(Anthropic协议) 输出完成但结构损坏，启动完整性自愈重试一次',
+            { outputKind: options.outputKind || '(undeclared)' },
           );
+          const first = coerceLLMText(response.content);
           const savedTemp = this.temperature;
-          this.temperature = normalizeRequestTemperature(
-            this.model,
-            Math.min(0.6, (this.temperature || 0.2) + 0.3),
-          );
+          const savedLlm = this.llm;
+          this.temperature = this._escalateTemperature(this.temperature);
+          this._selfHealCount += 1;
           try {
-            response.content = await this.analyzeImage(imagePath, prompt, {
+            // _buildLLM 读 this.temperature 构造 ChatAnthropic ⇒ 重建后新温度才生效
+            this.llm = this._buildLLM({
+              apiKey: this.apiKey,
+              baseURL: this.baseURL,
+              model: this.model,
+              providerType: this.providerType,
+            });
+            // 🔴 重建的是裸 ChatAnthropic，必须重挂统一网关（否则重试绕过超时/心跳/熔断/关思考）
+            this._attachAnthropicInvoke();
+            const second = await this.analyzeImage(imagePath, prompt, {
               ...options,
               _integrityRetry: true,
             });
+            // 🔴 择优保留，不盲覆盖（与 OpenAI 分支同口径）
+            response.content = this._pickBetterContent(
+              first,
+              second,
+              options.outputKind,
+            );
           } finally {
             this.temperature = savedTemp;
+            this.llm = savedLlm;
           }
         }
 
@@ -658,14 +824,88 @@ export class VisionAgent {
   }
 
   /**
-   * 🛡️ Vision 输出完整性校验：模型「正常完成（finish_reason 非 length）但 JSON 中部损坏」时，
-   * 截断检测（finish_reason=length）无法捕获，损坏内容会直达 visual-parser 被判降级并 fail-closed 阻断整个生成。
-   * 这里用严格 JSON.parse + 关键字段非空判定，提前识别损坏，供 analyzeImage 触发自愈重试。
-   * @param {string} content 模型原始输出
-   * @returns {boolean} 是否为「结构完整、非降级」的有效分析 JSON
+   * 🔒 完整性自愈**适用性策略门**（唯一来源，2026-11-12 根治）。
+   *
+   * 自愈的语义是「输出本该是结构化对象、但模型吐了损坏结构 ⇒ 抬温重生成一次」。
+   * 只有调用方**显式声明**了自己要的结构类型，这个前提才成立：
+   *   · `'json'`  → preview-analysis 系结构化 JSON（顶层 sections/charts/interactions）
+   *   · `'brief'` → Lite 视觉简报（键集合见 lite-brief-intact#BRIEF_SCHEMA_KEYS）
+   * 其余一律**不自愈**：
+   *   · `'sfc'` → Lite codegen 输出是 SFC 代码。截断/缺块归 lite 层
+   *     `detectLiteCodegenTruncation` / `validateLiteSfc` 单点负责（判据单一来源）。
+   *   · `'text'` / 未声明 → 输出是自由文本或形态未知，没有任何结构判据可用；
+   *     旧实现按默认 JSON 口径硬判 ⇒ chat-attachment 摘要、page-skeleton 骨架、
+   *     lite-lab 任意键 JSON **每一轮都恒判「损坏」**，白烧一次高温重试并盲覆盖首轮结果
+   *     （2026-11-12 逐调用点枚举：5 处白烧点，lite brief / lite sfc 与这 3 处同源）。
+   *
+   * 判据收紧/放松原则：本门只决定「要不要自愈」，不改变任何输出内容；
+   * 关掉自愈 = 保留首轮确定性产物 + 省一次模型调用，无新增失败面。
+   *
+   * @param {string} [outputKind] 调用方声明的输出类型
+   * @returns {boolean} 是否允许触发完整性自愈
    */
-  _isAnalysisIntact(content) {
+  _isSelfHealApplicable(outputKind) {
+    if (outputKind === 'sfc') return false; // 代码生成：截断归 Lite 层截断守卫
+    if (outputKind === 'text') return false; // 自由文本：无结构性判据
+    return outputKind === 'json' || outputKind === 'brief';
+  }
+
+  /**
+   * 自愈重试的温度升档（唯一来源）。
+   * 🔴 语义是「在当前基础上 +0.3 扰动」，基准取当前温度**本身**（0 也是有效基准）。
+   *    旧实现写 `(this.temperature || 0.2) + 0.3`：temperature=0 是 falsy ⇒ 基准变 0.2
+   *    ⇒ 实际升到 0.5（不是 0.3），比预期扰动大一倍。
+   * 推理模型仍由 normalizeRequestTemperature 强制为 1（服务端要求），此处不绕过。
+   */
+  _escalateTemperature(current) {
+    const base = Number.isFinite(current) ? current : 0.2;
+    return normalizeRequestTemperature(this.model, Math.min(0.6, base + 0.3));
+  }
+
+  /**
+   * 自愈两轮产物**择优保留**（唯一来源）—— 任何重试都不得无条件覆盖首轮。
+   * 排序判据（确定性、可辩驳）：
+   *   ① 结构合格者优先（`_isAnalysisIntact` 为真）；
+   *   ② 均不合格 / 均合格时，取内容更长者（截断/退化产物必然更短）。
+   * 背景：2026-11-12 生产事故里被采纳的重试样本只有首轮的 1/3（575 vs 1780 tokens）。
+   * @param {string} first 首轮输出
+   * @param {string} second 重试输出
+   * @param {string} [outputKind] 调用方声明的输出类型
+   * @returns {string} 应当采纳的输出
+   */
+  _pickBetterContent(first, second, outputKind) {
+    const a = typeof first === 'string' ? first : '';
+    const b = typeof second === 'string' ? second : '';
+    if (!b) return first; // 重试空产物 ⇒ 保留首轮
+    if (!a) return second; // 首轮空产物 ⇒ 只能取重试
+    const aOk = this._isAnalysisIntact(a, outputKind);
+    const bOk = this._isAnalysisIntact(b, outputKind);
+    if (aOk !== bOk) return bOk ? second : first;
+    return b.length >= a.length ? second : first;
+  }
+
+  /**
+   * 🛡️ Vision 输出完整性校验（**只服务自愈**，见 `_isSelfHealApplicable`）。
+   * 🔴 口径由调用方声明的 outputKind 决定，**不存在默认猜测**：
+   *   · `'json'`  → 可解析 JSON 对象 + 顶层有 sections/charts/interactions 之一
+   *     （与 visual-parser 自身的内容判据同源：见 visual-parser.js 的 hasContent）；
+   *   · `'brief'` → 复用 lite-brief-intact#isBriefAnalysisIntact（键集合与 buildAnalysisPrompt
+   *     的 schema 同源，禁止在本文件另写「查 sections/charts」的错位判据）；
+   *   · 其他（'sfc' / 'text' / 未声明）→ 本文件**没有**对应判据，返回 true（＝不阻止、不自愈）。
+   *     'sfc' 的完整性判据归 lite 层单点，2026-11-12 事故即本文件持第二份 SFC 判据所致。
+   * @param {string} content 模型原始输出
+   * @param {string} [outputKind='text'] 'json' | 'brief' | 'sfc' | 'text'
+   * @returns {boolean} 是否结构完整（返回 true 表示「判据不适用」，调用方须先过策略门）
+   */
+  _isAnalysisIntact(content, outputKind = 'text') {
     if (!content || typeof content !== 'string') return false;
+    if (outputKind === 'brief') {
+      // brief 口径：复用 lite-brief-intact#isBriefAnalysisIntact（键集合与 buildAnalysisPrompt
+      // 的 schema 同源），只判「JSON 对象 + schema 键命中」——不查组件产物的 sections/charts。
+      return isBriefAnalysisIntact(content);
+    }
+    // 'sfc' / 'text' / 未声明 / 其他：本文件无判据 ⇒ 返回 true（策略门已挡掉自愈，不会误用）
+    if (outputKind !== 'json') return true;
     try {
       const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(content);
       const raw = (fence ? fence[1] : content).trim();
@@ -836,6 +1076,10 @@ export class VisionAgent {
 
     const result = await this.analyzeImage(imagePath, prompt, {
       responseFormat: { type: 'json_object' },
+      // 🔴 显式声明结构化 JSON：本 prompt 契约就是 sections/interactions 形态，
+      //    满足 `_isSelfHealApplicable` 的 'json' 前提，损坏 JSON 才允许抬温自愈一次。
+      //    不声明 ⇒ 默认 'text' ⇒ 不自愈（feed 到 visual-parser 的降级判定）。
+      outputKind: 'json',
     });
 
     try {

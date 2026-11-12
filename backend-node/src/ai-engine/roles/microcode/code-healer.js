@@ -2808,3 +2808,294 @@ function scanBlockEnd(lines, start) {
   }
   return lines.length;
 }
+
+/** [G13] 图表容器重建自愈注入的幂等标记。 */
+const CHART_REBUILD_GUARD_MARK = 'G13-chart-rebuild-guard';
+
+/** 正则元字符转义（本地副本，避免依赖其它模块导出）。 */
+function escRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 逐字符大括号深度表（跳过行注释/块注释/字符串/模板串）。
+ * 返回 Int32Array，`dep[i]` = 处理第 i 个字符**之前**的深度 ⇒ 顶层声明处 dep === 0。
+ */
+function buildDepthMap(src) {
+  const n = src.length;
+  const dep = new Int32Array(n + 1);
+  let d = 0;
+  let i = 0;
+  while (i < n) {
+    const c = src[i];
+    // 行注释
+    if (c === '/' && src[i + 1] === '/') {
+      const nl = src.indexOf('\n', i);
+      const stop = nl === -1 ? n : nl;
+      for (let k = i; k < stop; k++) dep[k] = d;
+      i = stop;
+      continue;
+    }
+    // 块注释
+    if (c === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? n : end + 2;
+      for (let k = i; k < stop; k++) dep[k] = d;
+      i = stop;
+      continue;
+    }
+    // 字符串 / 模板串
+    if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1;
+      while (j < n) {
+        if (src[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (src[j] === c) {
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      for (let k = i; k < j; k++) dep[k] = d;
+      i = j;
+      continue;
+    }
+    dep[i] = d;
+    if (c === '{') d += 1;
+    else if (c === '}') d = Math.max(0, d - 1);
+    i += 1;
+  }
+  dep[n] = d;
+  return dep;
+}
+
+/** 由开括号下标求配对闭括号下标（依赖 buildDepthMap）。找不到返回 -1。 */
+function matchCloseBrace(src, dep, openIdx) {
+  const d0 = dep[openIdx];
+  for (let i = openIdx + 1; i < src.length; i++) {
+    if (src[i] === '}' && dep[i] === d0 + 1) return i;
+  }
+  return -1;
+}
+
+/**
+ * 为 vue 命名 import 补齐缺失符号（如 watch / nextTick）。
+ * 只追加、不重排、不改既有符号顺序；找不到 `from 'vue'` 具名 import 时返回 null（fail-open）。
+ */
+function ensureVueNamedImports(content, names) {
+  const re = /import\s*\{([^}]*)\}\s*from\s*(['"])vue\2/;
+  const m = content.match(re);
+  if (!m) return null;
+  const have = new Set(
+    m[1]
+      .split(',')
+      .map((s) => s.trim().split(/\s+as\s+/)[0].trim())
+      .filter(Boolean),
+  );
+  const missing = names.filter((n) => !have.has(n));
+  if (missing.length === 0) return content;
+  const inner = m[1].trim().replace(/,$/, '');
+  const merged = `${inner}, ${missing.join(', ')}`;
+  return content.replace(re, `import { ${merged} } from 'vue'`);
+}
+
+/**
+ * 🛡️ G13（2026-11-12 · mc-lite-1794462096859-e6a099a0 真机实锤）：
+ * 图表容器重建自愈注入 —— 宿主重建容器时图表不再永久空白。
+ *
+ * **病灶（真机实证）**：产物把图表挂在自身根模板里、并用 `<base-panel>` 作外壳；
+ * `<base-panel>` 内部是 `<component :is="panelComponent" :key="currentPanel">`，
+ * 面板类型一变（如深色主题自动联动 default-panel → aio-panel）⇒ 面板组件 unmount+mount
+ * ⇒ **slot 子树 DOM 整体销毁重建**，而产物根组件实例由宿主直接渲染、**不会被 unmount**。
+ * 于是：`let chart` 仍指向挂在已脱离文档的旧 div 上的实例（`onUnmounted` 不触发、不 dispose），
+ * 模板 ref 走到新 div，而产物 init 的首行守卫 `if (!ref.value || chart) return` 与
+ * `watch(ref, (el) => { if (el && !chart) ... })` 双双命中 `chart` 真值 ⇒ 直接早退，
+ * 新容器**永不初始化**（实测：新元素 `_echarts_instance_=null`、无 canvas）。
+ *
+ * **本注入（纯附加，不改产物既有任何语句）**：在 `<script setup>` 顶层追加一个
+ * `watch(<ref>, ...)`：
+ *   ① 当 ref 变更且现存实例仍挂在**旧元素**上 ⇒ 判定实例已失效，dispose 并置空；
+ *   ② 新元素出现 ⇒ 按序回调产物自身的 init 函数（其原有守卫此刻因实例已置空而放行）。
+ * 两条合起来才是完整治本：只做 ① 则无入口进入 init，只做 ② 则 init 仍被 `|| chart` 挡死。
+ *
+ * **判据（全部满足才注入，任一不满足即 fail-open 跳过）**：
+ * - `<script setup>`；存在 `<template>`；模板无动态 `:ref` / `v-bind:ref`
+ * - 存在 `X = echarts.init(<arg>)`（含 `X.value = ...` 形态）
+ * - init 实参经解析后指向一个**静态模板 ref**：`const R = ref(null)` + 模板 `ref="R"`
+ *   （实参为局部别名 `const el = R.value` 时同样解析回 R）
+ * - 实例持有者：`X` 为顶层 `let`（可重新赋值）或 `X.value` 的 `X` 为 `ref(...)`
+ * - 能唯一定位「内含该次 init 的顶层具名函数」作为初始化入口
+ * - `watch` / `nextTick` 可从既有 `from 'vue'` 具名 import 补齐
+ *
+ * @param {string} content .vue 源码
+ * @param {object} [options] 预留（保留调用形态一致）
+ * @returns {{content:string, changed:boolean, injected:string[], skipped?:string}}
+ */
+export function injectChartRebuildGuard(content, options = {}) {
+  void options;
+  const noop = (reason) => ({ content, changed: false, injected: [], skipped: reason });
+  if (typeof content !== 'string' || !content.includes('echarts.init(')) {
+    return noop('noEcharts');
+  }
+  if (content.includes(CHART_REBUILD_GUARD_MARK)) return noop('alreadyInjected');
+  const scriptMatch = content.match(/<script([^>]*)>([\s\S]*?)<\/script>/);
+  if (!scriptMatch) return noop('noScript');
+  if (!/(^|\s)setup(\s|$)/.test(scriptMatch[1] || '')) return noop('notScriptSetup');
+  const script = scriptMatch[2];
+  const template = (content.match(/<template[^>]*>([\s\S]*?)<\/template>/) || [])[1] || '';
+  if (!template) return noop('noTemplate');
+  if (/[:@]ref\s*=|v-bind:ref/.test(template)) return noop('dynamicRef');
+
+  const dep = buildDepthMap(script);
+
+  /** 顶层 `<kind> name` 声明是否存在（depth === 0）。 */
+  const hasTopLevelDecl = (kind, name) => {
+    const re = new RegExp(`\\b(?:${kind})\\s+${escRe(name)}\\b`, 'g');
+    let m;
+    while ((m = re.exec(script)) !== null) {
+      if (dep[m.index] === 0) return true;
+    }
+    return false;
+  };
+  /** 任意位置声明形态（用于 `.value` 持有者，可位于顶层 const）。 */
+  const hasDecl = (name, initHint) =>
+    new RegExp(
+      `\\b(?:const|let|var)\\s+${escRe(name)}\\s*(?::[^=;]+)?=\\s*${initHint}`,
+    ).test(script);
+
+  // ① 收集 `X = echarts.init(arg)` 赋值对
+  const pairRe =
+    /((?:[A-Za-z_$][\w$]*)(?:\s*\.\s*value)?)\s*=\s*echarts\.init\(\s*([A-Za-z_$][\w$]*)(\s*\.\s*value)?\s*\)/g;
+  const rawPairs = [];
+  let pm;
+  while ((pm = pairRe.exec(script)) !== null) {
+    rawPairs.push({
+      instanceExpr: pm[1].replace(/\s+/g, ''),
+      argBase: pm[2],
+      argExpr: pm[2] + (pm[3] ? '.value' : ''),
+    });
+  }
+  if (rawPairs.length === 0) return noop('noPair');
+
+  // ② 逐个解析 ref 归属，组装注入项
+  const injected = [];
+  const seen = new Set();
+  const skipReasons = [];
+  for (const p of rawPairs) {
+    let refName = p.argBase;
+    let refExpr = p.argExpr;
+    // 实参本身不是模板 ref ⇒ 尝试解析局部别名 `const <argBase> = <R>.value`
+    const aliasHit = new RegExp(
+      `\\b(?:const|let)\\s+${escRe(p.argBase)}\\s*=\\s*([A-Za-z_$][\\w$]*)\\s*(?:\\.value)?\\s*(?:\\|\\||;|\\n)`,
+    ).exec(script);
+    if (aliasHit) {
+      refName = aliasHit[1];
+      refExpr = p.argExpr;
+    }
+    if (!hasDecl(refName, 'ref\\s*\\(') && !hasTopLevelDecl('const|let', refName)) {
+      skipReasons.push(`noRefDecl:${refName}`);
+      continue;
+    }
+    if (!hasDecl(refName, 'ref\\s*\\(')) {
+      skipReasons.push(`notRefCall:${refName}`);
+      continue;
+    }
+    if (!new RegExp(`ref\\s*=\\s*["']${escRe(refName)}["']`).test(template)) {
+      skipReasons.push(`noStaticRefInTemplate:${refName}`);
+      continue;
+    }
+    // 实例持有者可重新赋值？
+    const instBase = p.instanceExpr.replace(/\.value$/, '');
+    const isValueHolder = /\.value$/.test(p.instanceExpr);
+    if (isValueHolder) {
+      if (!hasDecl(instBase, '(?:ref|shallowRef|reactive)\\s*\\(')) {
+        skipReasons.push(`holderNotRef:${instBase}`);
+        continue;
+      }
+    } else if (!hasTopLevelDecl('let', instBase)) {
+      skipReasons.push(`holderNotTopLevelLet:${instBase}`);
+      continue;
+    }
+    // ③ 唯一定位初始化入口函数
+    const fnRe =
+      /(?:const|let|function)\s+([A-Za-z_$][\w$]*)\s*(?:=\s*)?(?:async\s*)?\([^)]*\)\s*(?:=>)?\s*\{/g;
+    const fnCandidates = [];
+    let fm;
+    while ((fm = fnRe.exec(script)) !== null) {
+      if (dep[fm.index] !== 0) continue;
+      const open = fm.index + fm[0].length - 1;
+      const close = matchCloseBrace(script, dep, open);
+      if (close === -1) continue;
+      const body = script.slice(open, close + 1);
+      const initHit = new RegExp(
+        `echarts\\.init\\(\\s*${escRe(p.argExpr)}\\s*\\)`,
+      ).test(body);
+      if (initHit) fnCandidates.push(fm[1]);
+    }
+    if (fnCandidates.length !== 1) {
+      skipReasons.push(
+        fnCandidates.length === 0 ? `noInitFn:${p.argExpr}` : `ambiguousInitFn:${p.argExpr}`,
+      );
+      continue;
+    }
+    const key = `${refName}|${p.instanceExpr}|${fnCandidates[0]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    injected.push({
+      refName,
+      refExpr,
+      instanceExpr: p.instanceExpr,
+      initFn: fnCandidates[0],
+    });
+  }
+  if (injected.length === 0) {
+    return { content, changed: false, injected: [], skipped: skipReasons.join(';') || 'noTarget' };
+  }
+
+  // ④ 补齐 import
+  const scriptWithImports = ensureVueNamedImports(script, ['watch', 'nextTick']);
+  if (scriptWithImports === null) return noop('noVueNamedImport');
+
+  // ⑤ 追加自愈 watch（纯附加，不改任何既有语句）
+  let block =
+    `\n\n/* ${CHART_REBUILD_GUARD_MARK}：宿主重建图表容器自愈。\n` +
+    `   宿主（base-panel 的 <component :is :key>）切换面板类型时，slot 子树 DOM 被销毁重建，\n` +
+    `   而本组件实例存活 ⇒ 实例变量仍指向已脱离文档的旧实例，原 init 的「已有实例即早退」\n` +
+    `   守卫恒命中，新容器永不初始化（图表永久空白）。此处补：旧实例销毁 + 新容器重初始化。 */`;
+  for (const it of injected) {
+    block +=
+      `\nwatch(\n` +
+      `  ${it.refName},\n` +
+      `  (el, oldEl) => {\n` +
+      `    if (\n` +
+      `      oldEl &&\n` +
+      `      oldEl !== el &&\n` +
+      `      ${it.instanceExpr} &&\n` +
+      `      typeof ${it.instanceExpr}.getDom === 'function' &&\n` +
+      `      ${it.instanceExpr}.getDom() === oldEl\n` +
+      `    ) {\n` +
+      `      try {\n` +
+      `        ${it.instanceExpr}.dispose()\n` +
+      `      } catch (e) {}\n` +
+      `      ${it.instanceExpr} = null\n` +
+      `    }\n` +
+      `    if (el) nextTick(() => ${it.initFn}())\n` +
+      `  },\n` +
+      `  { flush: 'post' }\n` +
+      `)`;
+  }
+
+  const newScript = `${scriptWithImports}${block}\n`;
+  const newContent = content.replace(
+    scriptMatch[0],
+    `<script${scriptMatch[1]}>${newScript}</script>`,
+  );
+  return {
+    content: newContent,
+    changed: true,
+    injected: injected.map((it) => `${it.refName}→${it.initFn}(${it.instanceExpr})`),
+    skipped: skipReasons.length ? skipReasons.join(';') : undefined,
+  };
+}

@@ -24,6 +24,8 @@ import {
   formatSectionTreeForPrompt,
   buildSectionStyleFacts,
 } from '../../utils/section-tree.js';
+// 🧬 刀 66-P2（2026-11-12 四象限同步）：与 mc/max 共用**同一份**同构模板契约文本
+import { buildIsoTemplateContract } from '../../utils/iso-template-contract.js';
 
 /**
  * 构建上下文裁决约束文本（与 microcode-engineer 对齐）。
@@ -647,6 +649,11 @@ ${JSON.stringify(imageAssets, null, 1)}
     if (chunkSpec?.middle) {
       prompt += chunkSpec.middle;
     }
+
+    // 🧬 刀 66-P2：代表段 chunk 携带 isoContract 时下发参数化模板契约。
+    //   与 microcode/prompt-builder.js 调同一函数 ⇒ mc/vue3 文本零漂移；
+    //   非同构 chunk 返回空串（零回归）。
+    prompt += buildIsoTemplateContract(chunkSpec);
 
     return prompt;
 }

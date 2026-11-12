@@ -537,12 +537,36 @@ export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
   }
 
   // 3. 模板引用未声明变量/组件
-  if (templateContent && scriptBody) {
+  // 🔴 2026-11-12 治本（mc-refine-max-1794459143011-2b586ef5 实锤）：
+  //    旧守卫是 `if (templateContent && scriptBody)` —— `<script>` 整段被删时 scriptBody=''，
+  //    条件为假 ⇒ **模板引用检查整体跳过**。精修轮把子组件 ListSection.vue 的 <script setup>
+  //    连同 FG_LIST_ITEMS（6 条节点数据）、FG_LIST_GAPS 一起删掉（42 行→20 行），模板里
+  //    `v-for="(it,__i) in FG_LIST_ITEMS"` 因此引用了根本不存在的变量，却因这道守卫完全隐身；
+  //    requireScriptTag 又只对 package/index.vue 为 true，子组件删脚本也不报 ⇒ 两道关全漏，
+  //    门禁给 warned 就晋升，产物列表渲染为空、组件主体整块消失。
+  //    判定：一个**完整 SFC**（含 <template> 标签）却没有任何 <script> 标签时，模板里所有硬引用
+  //    都无处声明，必须照报；纯静态模板 used 为空不会误报，内置组件(v-if/<Transition>)已白名单。
+  //    分块生成的裸片段（content 不含 <template> 标签）维持旧行为，避免跨 chunk 误报。
+  const isSfcWithoutScript = /<template[\s>]/.test(content) && !/<script[\s>]/.test(content)
+  if (templateContent && (scriptBody || isSfcWithoutScript)) {
     const { used, loopVars } = extractTemplateRefs(templateContent)
-    const declared = extractScriptDeclarations(scriptBody)
-    const missing = [...used].filter(name => !declared.has(name) && !loopVars.has(name) && !implicitlyDeclared.has(name))
+    const declared = scriptBody ? extractScriptDeclarations(scriptBody) : new Set()
+    const missing = [...used].filter(
+      name =>
+        !declared.has(name) &&
+        !loopVars.has(name) &&
+        !implicitlyDeclared.has(name) &&
+        !VUE_BUILTIN_COMPONENTS.has(name),
+    )
     if (missing.length > 0) {
-      issues.push(`${filePath}: 模板引用了 script 中未声明的变量/组件（${missing.slice(0, 8).join('、')}）`)
+      if (!scriptBody) {
+        // 配方化文案（修复轮唯一实证有效的回灌形态）：点明「整个 script 段缺失」+ 点名无处声明的标识符
+        issues.push(
+          `${filePath}: 缺少 <script setup> 段，模板引用的 ${missing.slice(0, 8).join('、')} 无处声明（删掉脚本段会连带丢失主数据源，列表/内容整块渲染为空）——请补回 <script setup> 标签，并在其中声明这些变量或 import 对应子组件`,
+        )
+      } else {
+        issues.push(`${filePath}: 模板引用了 script 中未声明的变量/组件（${missing.slice(0, 8).join('、')}）`)
+      }
     }
     // 3b. 🛡️ 连字符裸标识符（extractTemplateRefs 的提取正则认不出 ⇒ 独立判据）
     const hyphenBad = findHyphenatedTemplateRefs(templateContent, declared)
