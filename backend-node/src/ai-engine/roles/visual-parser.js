@@ -3479,15 +3479,25 @@ ${analysisTask}`
   }
 
   /**
-   *  从可用 bg 资源中找到属于当前内容区的背景图
-   * 优先匹配**自身声明的占位名**，其次限定在目标节点子树内的路径匹配，最后才是尺寸兜底。
+   *  从可用 bg 资源中找到属于当前内容区（content/body）的**直接背景图**。
    *
-   * 🛡️ 2026-11-05（mc-max-1793869867060-e23b0b40 实锤）：原「策略1」是
-   *   `find(m => /slot-con|content|body/.test(m.figmaPath))` —— 与目标节点**无关**的
-   *   全局正则，返回**列表第一张**，命中即 return，**绕过**了策略3 的全部尺寸/比例过滤
-   *   （策略3 本可挡住 191×82 的 `h<120 && ratio>2.5`）。后果：子卡片的 191×82 底图被铺满
-   *   407×380 的整段 ⇒ 两个巨环（纵向放大 4.5×）；上一单 `bg-8788`（switch/active 的
-   *   193×65 底图）同理被挂到 `89:40 slot-con` 根。
+   * 🛡️ 2026-11-13 语义收口（mc-max-1794546172891-8b9302bc 实锤 + 用户申明「section 只在
+   *   有直接 bg 时才挂，大部分 section 没有背景」）：只有两种情况才算「直接 bg」——
+   *   ① 策略0：容器自身声明了 bgPlaceholder 占位名且能解析到真实文件；
+   *   ② 策略1：bg 的 figmaPath 落在容器子树内 **且铺满校验通过**（bg 盒 ≈ 容器盒，
+   *      宽高差 ≤8px，与 11-11 让位判据同口径）。
+   *   旧策略2（路径双向 includes）与策略3（尺寸面积最大猜）整体废除——它们是纯猜测：
+   *   本任务车型分布两张卡的光晕底（191×81，figmaPath 在 section 子树内）被策略1 无
+   *   尺寸校验直接命中 ⇒ 提升为 body 背景（贴到 base-panel 根 + 错位偏移 1px 30px），
+   *   同族另一张（bg-_m-36）无人认领 ⇒ 悬空 import ⇒ CODE-022 BLOCK。
+   *   11-05 的「h<120 && ratio>2.5」尺寸防线只挡细长条（191×82 ratio≈2.57 压线实锤），
+   *   该光晕 191/81≈2.34 从防线下面溜过去——几何启发式挡不全，只有铺满校验是语义正确的。
+   *   取舍：宁可不补（少挂 = RESOURCE-001 WARN）不可错挂（视觉错乱 + BLOCK）。
+   *
+   * @param {Object} contentNode - content 或 section.body 节点（须带 dimensions/figmaPath）
+   * @param {Array} availableBgMappings - previewAnalysisRole='bg' 的已下载资源映射
+   * @param {Object} parsed - 解析结果（读 root/header 已用资源，避免重复挂）
+   * @returns {Object|null} 命中的 bg mapping；没有直接 bg 时返回 null（容器不补背景）
    */
   _findContentBackgroundResource(contentNode, availableBgMappings, parsed) {
     const contentPathHint = contentNode.figmaPath || contentNode.path || ''
@@ -3504,61 +3514,41 @@ ${analysisTask}`
       if (bySelfName) return bySelfName
     }
 
-    // 策略1：路径语义（次可靠）——**必须限定在目标节点子树内**，且多张时取覆盖面积最大者，
-    //   不再「全局正则 + 列表第一张」。
+    // 🛡️ 策略1（唯一路径策略）：子树命中 + 铺满校验。bg 盒与容器盒宽高差 ≤8px 才算
+    //   「这层容器的直接背景」；不铺满 ⇒ 它是更深层子元素的背景，交还给子元素自己的
+    //   挂载配方（E2-v3），body 绝不越级认领。
     if (contentPathHint) {
-      const inSubtree = availableBgMappings.filter((m) => {
-        const path = String(m.figmaPath || '')
-        if (!path) return false
-        if (/header/.test(path)) return false
-        return path === contentPathHint || path.startsWith(contentPathHint + '/') || path.includes(contentPathHint)
-      })
-      if (inSubtree.length > 0) {
-        return inSubtree.reduce((best, m) => {
-          const mArea = (m.figmaBox?.width || 0) * (m.figmaBox?.height || 0)
-          const bestArea = (best.figmaBox?.width || 0) * (best.figmaBox?.height || 0)
-          return mArea > bestArea ? m : best
-        }, inSubtree[0])
+      const dims = contentNode.dimensions || contentNode.figmaBox || {}
+      const cw = Number(dims.width) || 0
+      const ch = Number(dims.height) || 0
+      if (cw > 0 && ch > 0) {
+        const directHits = availableBgMappings.filter((m) => {
+          const path = String(m.figmaPath || '')
+          if (!path) return false
+          if (/header/.test(path)) return false
+          const inSubtree =
+            path === contentPathHint ||
+            path.startsWith(contentPathHint + '/') ||
+            path.includes(contentPathHint)
+          if (!inSubtree) return false
+          const bw = Number(m.figmaBox?.width) || 0
+          const bh = Number(m.figmaBox?.height) || 0
+          if (bw <= 0 || bh <= 0) return false
+          return Math.abs(bw - cw) <= 8 && Math.abs(bh - ch) <= 8
+        })
+        if (directHits.length > 0) {
+          // 多张都铺满（罕见）：取面积最大者（最贴近整层底的）
+          return directHits.reduce((best, m) => {
+            const mArea = (m.figmaBox?.width || 0) * (m.figmaBox?.height || 0)
+            const bestArea = (best.figmaBox?.width || 0) * (best.figmaBox?.height || 0)
+            return mArea > bestArea ? m : best
+          }, directHits[0])
+        }
       }
     }
 
-    // 策略2：如果 content 节点本身有 figmaPath，找同一段路径下的 bg
-    if (contentPathHint) {
-      const sameSegment = availableBgMappings.find(m => {
-        const path = m.figmaPath || ''
-        return path.includes(contentPathHint) || contentPathHint.includes(path)
-      })
-      if (sameSegment) return sameSegment
-    }
-
-    // 策略3：尺寸匹配（选面积最大的可用 bg，但排除明显是 header/root 的小背景）
-    const candidates = availableBgMappings.filter(m => {
-      const w = m.figmaBox?.width || 0
-      const h = m.figmaBox?.height || 0
-      if (w <= 80 || h <= 40) return false
-      // 🛡️ 排除装饰横幅/分隔线：宽高比极端（>4:1 或 <0.25:1）的图片不是内容区背景
-      // 典型案例：bg-_m-34.png (852×184, ratio=4.6:1) 是 TotalTraffic 内汽车图标横幅
-      const ratio = w / Math.max(h, 1)
-      if (ratio > 4 || ratio < 0.25) return false
-      // 🛡️ 高度较小且宽高比偏大的也排除（如 <120px 且 ratio>2.5 的细条装饰）
-      if (h < 120 && ratio > 2.5) return false
-      return true
-    })
-    if (candidates.length === 0) return null
-
-    // 排除已经被 root/backgroundImage 使用的资源
-    const usedFiles = new Set()
-    if (parsed.backgroundImage?.src) usedFiles.add(parsed.backgroundImage.src)
-    if (parsed.header?.backgroundImage?.src) usedFiles.add(parsed.header.backgroundImage.src)
-
-    const unused = candidates.filter(m => !usedFiles.has(m.resourceFile))
-    const targetPool = unused.length > 0 ? unused : candidates
-
-    return targetPool.reduce((best, m) => {
-      const bestArea = (best?.figmaBox?.width || 0) * (best?.figmaBox?.height || 0)
-      const mArea = (m.figmaBox?.width || 0) * (m.figmaBox?.height || 0)
-      return mArea > bestArea ? m : best
-    }, null)
+    // 没有直接 bg ⇒ 容器不带背景（section 大多没有背景，这是常态不是缺失）
+    return null
   }
 
   /**

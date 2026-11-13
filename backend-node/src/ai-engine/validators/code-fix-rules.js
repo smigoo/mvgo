@@ -17,6 +17,9 @@
 
 import { FIX_PHASE } from './code-fix-pipeline.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
+import {
+  rebindInternalChildDeadProps,
+} from './cross-component-contract-heal.js';
 // 🛡️ S4：tab 段识别用内联判定（禁止 import component-acceptance——会造成循环依赖：
 //   component-acceptance 反向 import 本文件的 DEGENERATE_FALLBACK_CLASS）。
 import { ensureSectionAssembly } from '../utils/section-coverage-guard.js';
@@ -1600,9 +1603,25 @@ export function injectTabInteractivity(files, figmaNodeData, identifyTabSections
         .filter((c) => c !== tabList)
         .map((c) => String(c.id))
         .concat([String(parentOf.get(String(secId)) || '')]);
+      // 🛡️ S4-f（2026-11-13 · 0669e091 实锤）：tab 常嵌在「标题行」section（如 2:3565
+      //   6sub-header：tab + 「流量预测」标题 + 「节假日预测>」链接）内。落点优先取
+      //   **父 section 的兄弟**（同区块的图表宿主，产物锚为 `chart-<id>` 变体），
+      //   让整块落在图表组件之前（标题行在图表正上方，从属关系正确）。
+      const tabParentId = String(parentOf.get(String(secId)) || '');
+      const tabGrandId = String(parentOf.get(tabParentId) || '');
+      const tabParentSibs =
+        tabGrandId && nodeById.get(tabGrandId)
+          ? (nodeById.get(tabGrandId).children || []).map((c) => String(c.id))
+          : [];
+      const hasSectionAnchor = (content, sid) =>
+        content.includes(`data-section-id="${sid}"`) ||
+        content.includes(`data-section-id="chart-${sid}"`);
+      // 🔴 targetFile 判定**只用纯 sid**（兄弟/父）：若认 `chart-<id>` 变体会把整块注入
+      //   图表子组件文件（如 ChartChart3.vue）⇒ SFC 多根 + mcActiveTab 未定义 ⇒ 运行时报错。
+      //   chart- 变体只用于下面的**插入点**定位（且仅当目标文件里确实存在该锚）。
       let targetFile = null;
       for (const [p, c] of entries) {
-        if (siblingIds.some((sid) => sid && c.includes(`data-section-id="${sid}"`))) {
+        if ([...siblingIds].some((sid) => sid && c.includes(`data-section-id="${sid}"`))) {
           targetFile = p;
           break;
         }
@@ -1688,10 +1707,31 @@ export function injectTabInteractivity(files, figmaNodeData, identifyTabSections
         continue;
       }
       const listId = tabList?.id ? String(tabList.id) : `${secId}-list`;
+      // 🛡️ S4-f（2026-11-13 · 0669e091 实锤）：整块注入此前只重建 tab 条，把 tab 所在
+      //   「标题行」section 的其余文本（「流量预测」标题、「节假日预测>」链接）留置
+      //   **无人认领** ⇒ 整行副标题消失（vision 有、产物丢）。修法：按 Figma 父 section
+      //   子树重建完整标题行——标题在左（粗体 16px）、tab 条居中、其余文本（链接等）靠右。
+      const tabParentNode = tabParentId ? nodeById.get(tabParentId) : null;
+      const rowTexts = [];
+      if (tabParentNode && Array.isArray(tabParentNode.children)) {
+        for (const sib of tabParentNode.children) {
+          if (!sib || typeof sib !== 'object') continue;
+          if (String(sib.id) === String(secId)) continue; // tab 容器本身
+          if (tabList && String(sib.id) === String(tabList.id)) continue;
+          const txt = firstTextOf(sib);
+          if (txt) rowTexts.push({ id: String(sib.id), name: String(sib.name || ''), text: txt });
+        }
+      }
+      const titleItem = rowTexts.find((r) => /tit|标题/i.test(r.name)) || null;
+      const linkItems = rowTexts.filter((r) => r !== titleItem);
+      if (titleItem || linkItems.length > 0) stats.headerTextsRecovered = (stats.headerTextsRecovered || 0) + (titleItem ? 1 : 0) + linkItems.length;
       // 🛡️ S4-d：注入块必须自带**最小可用样式**——此前是一串无样式的 div，落进 flex 容器后
       //   被挤成竖排裸文字（a5df24e9 截图右侧那两行）。
       const TAB_ITEM_STYLE = 'font-size:14px;line-height:1;white-space:nowrap;cursor:pointer;';
       const TAB_ITEM_ACTIVE_STYLE = 'color:#3b82f6;font-weight:600;';
+      // 🛡️ S4-f：标题/链接行内样式（内联 style 是浏览器直接消费区；px 形态由写盘三态归一接手）
+      const ROW_TITLE_STYLE = 'font-size:16px;font-weight:600;line-height:1.2;white-space:nowrap;';
+      const ROW_LINK_STYLE = 'font-size:14px;line-height:1;white-space:nowrap;color:#3b82f6;cursor:pointer;';
       const itemsHtml = tabItems
         .map(
           (t, i) =>
@@ -1700,12 +1740,24 @@ export function injectTabInteractivity(files, figmaNodeData, identifyTabSections
             }" :class="{ 'mc-s4-tab--active': mcActiveTab === ${i} }" :data-mc-tab-key="${i}" @click="mcActiveTab = ${i}">${t}</div>`,
         )
         .join('\n');
-      const block = `\n    <div class="mc-s4-tabblock" data-section-id="${secId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;padding:4px 0;">\n      <div class="mc-s4-tablist" data-section-id="${listId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;">\n${itemsHtml}\n      </div>\n    </div>`;
-      // 插入点：①兄弟段（内容区）开标签之前 ②根容器闭合前
+      const titleHtml = titleItem
+        ? `      <span class="mc-s4-row-title" data-section-id="${titleItem.id}" style="${ROW_TITLE_STYLE}">${titleItem.text}</span>\n`
+        : '';
+      const linksHtml = linkItems
+        .map(
+          (r) =>
+            `      <span class="mc-s4-row-link" data-section-id="${r.id}" style="${ROW_LINK_STYLE}">${r.text}</span>`,
+        )
+        .join('\n');
+      const block = `\n    <div class="mc-s4-tabblock" data-section-id="${secId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;padding:4px 0;">\n${titleHtml}      <div class="mc-s4-tablist" data-section-id="${listId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;">\n${itemsHtml}\n      </div>\n${linksHtml ? linksHtml + '\n' : ''}    </div>`;
+      // 插入点：①兄弟段（内容区）开标签之前 ②父 section 的兄弟（图表宿主，chart- 锚变体）③根容器闭合前
       let next = null;
-      for (const sid of siblingIds) {
+      for (const sid of [...siblingIds, ...tabParentSibs]) {
         if (!sid) continue;
-        const m = new RegExp(`(\\n[ \\t]*<[A-Za-z][\\w.-]*(?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="${sid}")`).exec(src);
+        // S4-f：图表宿主组件锚是 `chart-<id>` 变体（R1 派工 data-chart-section 派生），两种形态都认
+        const m = new RegExp(
+          `(\\n[ \\t]*<[A-Za-z][\\w.-]*(?:"[^"]*"|'[^']*'|[^>"'])*?data-section-id="(?:chart-)?${sid}")`,
+        ).exec(src);
         if (m) {
           next = src.slice(0, m.index) + block + src.slice(m.index);
           break;
@@ -3051,6 +3103,27 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     // （mc-max-1788003319188-c32142f3 实锤：子组件 <style scoped> 与 common.less 都有 flex:180）。
     applyTo: /\.(vue|less|css)$/i,
     fix: (content, ctx) => engineer._fixSectionHeights(content, ctx),
+  });
+
+  // 🛡️ 根治⑯（2026-11-13 · mc-1794535248015-2ca2eb59 实锤）：跨组件 props 契约确定性修复。
+  //   内部子组件消费 businessProps.<key>（declare 未声明 ⇒ 运行期必然空渲染 + PROP-BIND
+  //   BLOCK 三轮不收敛——LLM 每轮照样编，回灌指导实证无效）。分级：死键 ∈ 父传同名 prop
+  //   ⇒ 确定性改绑（defineProps + props.k）；无父传 ⇒ 跳过（保持 BLOCK，不臆造数据）。
+  //   修复后当轮 L0-B 复检自然 PASS（改验分离：判据在 code-structure-validator 不动）。
+  pipeline.register({
+    id: 'cross-component-prop-rebind',
+    name: '内部子组件 businessProps 死键同名改绑（根治⑯）',
+    phase: FIX_PHASE.STRUCTURE,
+    fixFiles: (files) => {
+      const r = rebindInternalChildDeadProps(files);
+      if ((r?.healed?.length || 0) + (r?.skipped?.length || 0) > 0 && engineer?.logger) {
+        engineer.logger.warn(
+          `🛡️ 根治⑯ 跨组件 props 契约扫描：改绑 ${r.healed.length} 处 / 跳过 ${r.skipped.length} 处`,
+          { healed: r.healed.slice(0, 6), skipped: r.skipped.slice(0, 4) },
+        );
+      }
+      return r?.files && typeof r.files === 'object' ? r.files : files;
+    },
   });
 
   return pipeline;

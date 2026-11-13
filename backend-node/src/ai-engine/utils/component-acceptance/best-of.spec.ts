@@ -91,4 +91,59 @@ describe('best-of · 修复轮单调不劣守卫', () => {
     expect(r.restored).toEqual(['package/index.vue']);
     expect(files['package/components/StatsSection.vue']).toBe('<template><img/></template>');
   });
+
+  // 🛡️ 根治⑭-A（2026-11-13 · mc-1794530400449-1fc2485d 实锤）：acceptance-rollback 直写点
+  //   曾零校验，把内存快照里的坏版 StatsSection.vue（:style 注入 3515B）盖掉磁盘好版，
+  //   绕过全部门禁直达预览「组件加载失败」。
+  it('根治⑭-A：快照中的坏 .vue 拒绝恢复——不写盘、不回写内存、登记 skippedBad', () => {
+    const BAD_STYLE =
+      '<template><div :style="{ background: it.bg };display:flex"></div></template>';
+    const snap = {
+      failCount: 0,
+      codes: [],
+      files: { 'package/components/StatsSection.vue': BAD_STYLE },
+    };
+    // 磁盘/内存现状是好版（统一终态落盘产物），绝不允许被回滚盖成坏版
+    const GOOD_NOW = '<template><img/></template>';
+    const files: Record<string, any> = { 'package/components/StatsSection.vue': GOOD_NOW };
+    const written: string[] = [];
+    const io = {
+      join: (a: string, b: string) => `${a}/${b}`,
+      dirname: (p: string) => p.slice(0, p.lastIndexOf('/')),
+      mkdirSync: () => {},
+      writeFileSync: (abs: string) => void written.push(abs),
+    };
+    const r = restoreAcceptanceSnapshot(snap, files, '/out/proj', io as any);
+    expect(r.skippedBad).toEqual(['package/components/StatsSection.vue']);
+    expect(r.restored).toEqual([]);
+    expect(written).toEqual([]); // 坏版一个字节都不落盘
+    expect(files['package/components/StatsSection.vue']).toBe(GOOD_NOW); // 内存保留好版
+  });
+
+  it('根治⑭-A 回归：快照好坏混合 → 好文件照常恢复、坏文件跳过', () => {
+    const BAD_STYLE =
+      '<template><div :style="{ background: it.bg };display:flex"></div></template>';
+    const snap = {
+      failCount: 0,
+      codes: [],
+      files: {
+        'package/index.vue': '<template><A/></template>',
+        'package/components/StatsSection.vue': BAD_STYLE,
+      },
+    };
+    const files: Record<string, any> = {};
+    const written: string[] = [];
+    const io = {
+      join: (a: string, b: string) => `${a}/${b}`,
+      dirname: (p: string) => p.slice(0, p.lastIndexOf('/')),
+      mkdirSync: () => {},
+      writeFileSync: (abs: string) => void written.push(abs),
+    };
+    const r = restoreAcceptanceSnapshot(snap, files, '/out/proj', io as any);
+    expect(r.skippedBad).toEqual(['package/components/StatsSection.vue']);
+    expect(r.restored).toEqual(['package/index.vue']);
+    expect(written).toEqual(['/out/proj/package/index.vue']);
+    expect(files['package/index.vue']).toBe('<template><A/></template>');
+    expect('package/components/StatsSection.vue' in files).toBe(false);
+  });
 });

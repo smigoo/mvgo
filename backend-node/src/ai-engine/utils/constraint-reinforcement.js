@@ -547,45 +547,48 @@ export function buildStyleConstraintReinforcement() {
   return `
 ## 🎨 样式约束铁律（违反将被L0-B门禁拦截）
 
-### common.less 必须写在根层
+### common.less 顶层根类 + LESS 嵌套（2026-11-13 新范式）
 
-**🔴 错误示例（被外层选择器包裹）**：
+**🔴 错误示例（顶层主题类包裹 / 顶层裸类）**：
 \`\`\`less
-// ❌ 错误：被 .dark 包裹
+// ❌ 错误：被 .dark 包裹（宿主不给组件根加主题类）
 .dark {
-  .c-env-monitor-root {
-    background: #1a1a1a;
-  }
-  .c-env-monitor-header {
-    color: #fff;
-  }
+  .c-env-monitor-root { background: #1a1a1a; }
 }
+// ❌ 错误：顶层裸类污染全局命名空间
+.wrapper { color: red; }
 \`\`\`
 
-**✅ 正确示例（写在根层）**：
+**✅ 正确示例（根类命名空间）**：
 \`\`\`less
-// ✅ 正确：直接写在文件根层
+// ✅ 正确：顶层只有带前缀根类，业务样式全部嵌套在根类内
 .c-env-monitor-root {
-  background: #1a1a1a;
+  .header { color: #fff; }
+  .stats-item { padding: 12px; &.active { color: @color-primary; } }
 }
-.c-env-monitor-header {
-  color: #fff;
+@media (max-width: 768px) {
+  .c-env-monitor-root { .header { font-size: 12px; } }
 }
 \`\`\`
 
-**原因**：宿主环境不给组件根元素添加 .dark/.light 类，包裹后编译成 \`.dark .c-xxx\`，真实DOM上0命中 → 样式全部失效
+**原因**：宿主环境不给组件根元素添加 .dark/.light 类，主题包裹后编译成 \`.dark .c-xxx\` 真实DOM上0命中 → 样式全部失效；
+根类包裹则相反——它真实存在于 DOM，编译成 \`.c-xxx-root .header\` 特异性 (0,2,0) 恒压过宿主裸类规则，
+既防外部样式侵入，也不外泄到别的组件。主题色一律用 \`@xxx\` 变量（index.less 编译期注入），与嵌套无关。
 
 ### Class 命名约束
 
-**1. 必须使用 .c- 前缀**
+**1. 顶层根类必须使用 .c- 前缀（内层短名合法）**
 \`\`\`less
-// ✅ 正确
-.c-vehicle-card { }
+// ✅ 正确：顶层根类带前缀
+.c-vehicle-card-root { }
 .c-chart-container { }
 
-// ❌ 错误：缺少 c- 前缀
+// ❌ 错误：顶层裸类（污染全局）
 .vehicle-card { }
 .chart-container { }
+
+// ✅ 正确：嵌套在根类内的语义短名
+.c-vehicle-card-root { .header { } .stats-item { } }
 \`\`\`
 
 **2. 禁止使用实例ID作为前缀**
@@ -636,8 +639,8 @@ export function buildStyleConstraintReinforcement() {
 
 ### 自检清单
 
-- [ ] common.less 中所有 class 都写在文件根层（没有被 .dark/.light 包裹）
-- [ ] 所有 class 都有 .c- 前缀
+- [ ] common.less 顶层只有带 .c- 前缀的根类块（业务样式全部 LESS 嵌套在根类内）
+- [ ] 没有 .dark/.light/宿主类/实例 ID 类作顶层包裹；顶层无裸类；内层短名允许
 - [ ] 没有使用实例ID（如 f0abee、mc-max-1234567890）作为 class 前缀
 - [ ] 子组件根元素使用 width: 100%; height: 100%;
 - [ ] 子组件根元素没有设置 margin（由父组件控制）

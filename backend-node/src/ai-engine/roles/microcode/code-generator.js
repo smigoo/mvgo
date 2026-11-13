@@ -33,7 +33,7 @@ import {
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
 import { planRowBands, planColumnGroups, crossAxisCenterStyle } from '../../utils/row-band-cluster.js';
-import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle, claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../../utils/container-absorbed-bg.js';
+import { resolveAbsorbedBgLayers, isPanelBgNamed, buildAbsorbedBgParentCss, claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
 //   才能把它们从 flex 归一化分母里剔除。判据单一来源 = 接管器本身（不在本文件重判）。
@@ -558,6 +558,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let __absorbedBgCandidates = 0;
   let __absorbedBgLayers = 0;
   let __absorbedBgScrollbarExempted = 0;
+  // 🛡️ 面板底规范（2026-11-13 用户申明）：根宿主层中 bg 命名（面板背景）被丢弃的数量
+  let __absorbedBgPanelBgDropped = 0;
   // 🛡️ 刀 7c（2026-11-03 · `807:2`/`43:5688` 实锤）：根级宿主吸收背景层计数。
   //   顶层非容器叶子段的盒 ≡ 图根盒时，其吸收层注入根 slot-con div。
   let __absorbedBgRootHostCandidates = 0;
@@ -732,8 +734,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       //   ① 根节点直系子中存在 RECTANGLE，且其 bbox ≡ 根 bbox（±2px，同 boxEq）；
       //   ② 该子未被任何段认领（claimedNodeIds ∩ 自身 id 为空）且不在 consumedBgIds；
       //   ③ fill 可 CSS 化（resolveAbsorbedBgLayers 同一裁决：SOLID 或 ≥2 stops 渐变）。
-      //   命中 ⇒ 构造 absolute 全覆盖层注入根 slot-con div（z-index:-1 沉底），
-      //   与刀 7c 注入同构（同 buildAbsorbedBgLayerStyle，禁第二份样式拼装）。
+      //   命中 ⇒ 壳层并入根宿主层（面板底规范后由 buildAbsorbedBgParentCss 挂根 div
+      //   内联 CSS；bg 命名壳由下方 R3 过滤丢弃），与刀 7c 同构，禁第二份样式拼装。
       //   不命中枚举：7c 已命中（rootHostLayers 非空）跳过；壳尺寸 ≠ 根尺寸（部分宽
       //   条/装饰条）不属「壳」，走段级通路；SOLID/渐变都不可 CSS 化跳过（fail-open）；
       //   IMAGE fill 跳过（位图走 E3-v4 资源通路）。
@@ -767,7 +769,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             for (const layer of r.layers) {
               rootHostLayers.push({
                 ...layer,
-                edgeCss: 'left:0;top:0;right:0;bottom:0;',
+                edgeCss: 'left:0;right:0;top:0;bottom:0;',
               });
             }
             consumedBgIds.add(shellId);
@@ -871,9 +873,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   此前它是 block（display 由 LLM 的 less 决定），顶层容器/叶子失去 flex item 身份，
     //   高度只能靠 less 里的 height:100%（LLM 写了才有）。确定化后整条链从 pannel-content
     //   → slot-con → 容器 → wrapper → 子项 全程 flex 传导，不再依赖 LLM 样式。
-    // 🛡️ 刀 7c（2026-11-03）：根级宿主的吸收层注入根 div —— 与刀 7b 对容器所做的事**同构**
-    //   （`position:relative;isolation:isolate;` 把 `z-index:-1` 层圈进本层叠上下文，
-    //   沉到内容之下、根 div 背景之上）。
+    // 🛡️ 刀 7c（2026-11-03）：根级宿主的吸收层挂根 div —— 与容器分支**同构**
+    //   （🛡️ 面板底规范 2026-11-13：不再产 DOM 子层，bg 合并为根 div 自身内联 CSS，
+    //   bg 命名的组件直接子按 R3 丢弃）。
     //   🔴 样式**必须条件注入**：`code-generator.deterministic-template.spec.ts:80` 逐字断言
     //   无层时根 div 为 `class="c-…-slot-con" style="display:flex;flex-direction:column;"`；
     //   其 fixture（makeInput）不含 figmaNodeData ⇒ indexFigmaNodes 空 Map ⇒ 恒 0 层 ⇒ 逐字不变。
@@ -881,11 +883,35 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   根元素已带 `data-section-id="<该段id>"`（如 ContentFooter.vue 带 807:2），而
     //   `figma-connector.js:2580` 生成的 `[data-section-id="<id>"]` 是资源挂载锚 / 评分选择器
     //   ⇒ 同名会让该选择器在同页**双命中**（背景错挂 + mount-target-scoring 派分污染）。
+    // 🛡️ 面板底规范（2026-11-13 用户申明，R3）：组件直接子 bg/bg-xxxx = 面板背景，
+    //   微码组件**不允许生成面板**（含面板背景与标题）⇒ 根宿主层中 bg 命名的节点一律
+    //   **丢弃**（不产 DOM 也不产 CSS）。判据单一来源：`isPanelBgNamed`
+    //   （与 figma-connector `_isNonSemanticName` 的 /^bg(\b|[-_])/i 同源，命名即真值）。
+    //   非 bg 命名的根直接子（如装饰条）按 R4 挂根 div 内联 CSS（见 buildAbsorbedBgParentCss）。
+    //   丢弃是终局：consumedBgIds 已含其 id，其余容器不会再吸收。
+    if (rootHostLayers.length && figmaIndex && typeof figmaIndex.get === 'function') {
+      const kept = [];
+      for (const layer of rootHostLayers) {
+        const rec = figmaIndex.get(String(layer.id));
+        const nm = String(rec?.rawNode?.name || rec?.node?.name || '');
+        if (isPanelBgNamed(nm)) {
+          __absorbedBgPanelBgDropped += 1;
+          continue;
+        }
+        kept.push(layer);
+      }
+      rootHostLayers = kept;
+    }
+    // 🛡️ 面板底规范（2026-11-13 用户申明，R4）：bg 一律不产独立 DOM（旧 c-*-absorbed-bg
+    //   div + z-index:-1 形态废除），合并为根 div 自身内联 CSS；刀 7b 的
+    //   relative/isolation 层叠上下文问题随 DOM 子层消亡而消亡（背景画在父自身）。
+    //   data-absorbed-bg 审计锚（层 id 逗号串）迁到根 div 属性，排查抓手不丢。
+    const rootAbsorbed = buildAbsorbedBgParentCss(rootHostLayers);
     const rootHostAttr =
       rootHostLayers.length && rootHostSection
-        ? ` data-absorbed-host="${rootHostSection.id}"`
+        ? ` data-absorbed-host="${rootHostSection.id}" data-absorbed-bg="${rootAbsorbed.ids}"`
         : '';
-    const rootHostStyle = rootHostLayers.length ? 'position:relative;isolation:isolate;' : '';
+    const rootHostStyle = rootAbsorbed.css;
     // 🛡️ 弹窗画板尺寸契约（2026-11-12 · mc-max-1794418321523-46ef66fa 实锤）：
     //   大屏画板根（如 2:7952 420×147）预览时应横向铺满（宽高比悬殊、卡片流）；
     //   弹窗/面板类画板根（如 36:1693 603×555，宽高比 ≈1）被 `height:100%` 拉满
@@ -928,11 +954,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   治本：把高度契约定在**产生处**（内联样式优先级最高，免疫后续合并/反杀），
     //   与既有正常组件的 `.c-…-slot-con{width:100%;height:100%;min-height:0}` 同口径。
     lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHeightStyle}min-height:0;${rootSizeStyle}${rootHostStyle}">`);
-    for (const layer of rootHostLayers) {
-      lines.push(
-        `      <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
-      );
-    }
+    // 🛡️ 面板底规范（2026-11-13 用户申明）：bg 不再生成独立 DOM 层（旧 c-*-absorbed-bg
+    //   div 废除）——背景已合并进根 div 内联 style（rootHostStyle），层 id 审计锚在
+    //   data-absorbed-bg 属性。此处刻意不输出任何背景子元素。
     // 🛡️ E1 治本（2026-09-16）：递归保留容器层级。此前用 bodyLeavesFinal 平铺叶子，
     //   switch/@antd-tab 等中间容器被丢弃 → active/default/tabs/cons 全部平级，
     //   用户指正「switch 没有组成一个元素，而是和下面所有内容全部 flex 了」。
@@ -1042,21 +1066,18 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         if (intrinsic.ok) __intrinsicHits += 1;
         const intrinsicPad = buildIntrinsicContainerStyle(intrinsic);
         // 🛡️ 刀 7（2026-10-27 · 8bbcf027 `36:1695` 实锤）：容器 sourceNodeIds 里未被
-        //   叶子认领的可见 SOLID 底卡 ⇒ 渲染为绝对定位背景层（边锚定 + z-index:-1 沉底）。
+        //   叶子认领的可见 SOLID/渐变底卡 ⇒ 渲染为**容器自身内联背景 CSS**。
         //   归属已在上方自底向上预分配（最近容器独占），此处只消费自己名下的层。
-        //   容器需 position:relative 作定位参照；无层 ⇒ 产物逐字不变（零回归）。
-        // 🛡️ 刀 7b（2026-10-27 · ad8939a5 真机实锤）：z-index:-1 的层在**未形成层叠上下文**
-        //   的 relative 容器里会参与最近祖先层叠上下文 ⇒ 沉到 base-panel 面板底之下 = 不可见
-        //   （CSS 涂序：负 z-index 涂在「同一层叠上下文」祖先背景之后）。isolation:isolate
-        //   让容器自成层叠上下文，把 -1 层圈在容器内（高于祖先背景、低于容器内容）。
+        //   （历史：刀 7b 曾为 z-index:-1 DOM 子层补 position:relative/isolation:isolate
+        //   层叠上下文；面板底规范后 DOM 子层废除，该问题随之消亡。）
+        //   🛡️ 面板底规范（2026-11-13 用户申明，R4）：bg 一律不产独立 DOM——旧
+        //   `c-*-absorbed-bg` div + z-index:-1 形态废除，连同刀 7b 的
+        //   position:relative/isolation:isolate（层叠上下文问题随 DOM 子层消亡而消亡），
+        //   改挂容器 div 内联 CSS；data-absorbed-bg 审计锚迁到容器 div 属性。
         const absorbedLayers = bgLayersByContainer.get(String(sec.id)) || [];
-        const relativeStyle = absorbedLayers.length > 0 ? 'position:relative;isolation:isolate;' : '';
-        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${relativeStyle}">`);
-        for (const layer of absorbedLayers) {
-          lines.push(
-            `${pad}  <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
-          );
-        }
+        const absorbedCss = buildAbsorbedBgParentCss(absorbedLayers);
+        const absorbedAttr = absorbedLayers.length ? ` data-absorbed-bg="${absorbedCss.ids}"` : '';
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr}${absorbedAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${absorbedCss.css}">`);
         // 🛡️ P2 修复（2026-09-17）：水平 flex 子项按 Figma 实际宽度比例分配 flex-grow，
         //   替代旧版统一 flex:1 均分（此前 tabs 46px 和 cons 367px 被 50:50 均分，严重失真）。
         //   计算逻辑：收集所有子节点宽度 → 求和 → 每个子项 flex-grow = width / totalWidth。
@@ -1412,6 +1433,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       candidates: __absorbedBgCandidates,
       layers: __absorbedBgLayers,
       scrollbarExempted: __absorbedBgScrollbarExempted,
+      // 🛡️ 面板底规范（2026-11-13）：根宿主层中 bg 命名（面板背景）丢弃数，>0 = 按规范不渲染
+      panelBgDropped: __absorbedBgPanelBgDropped,
     });
     // 🛡️ 刀 7c 生效自检（2026-11-03）：`candidates` = 非容器段经「直系子枚举」后
     //   「未认领且 type=RECTANGLE」的节点数（0 = 无直系子可枚举 / 全被认领）；
@@ -2106,7 +2129,7 @@ export function mergeScriptParts(...parts) {
  *   ① phase2 微码链路 engineer input 顶层无 sessionId（只在 input.ctx 内）→ 恒走随机兜底；
  *   ② 随机段非纯 hex → classPrefixOf 剥离失效 → 随机段滞留进 class 前缀契约；
  *   ③ 与 LLM 自然生成的 `c-<语义>-*` 失配 → CODE-003 全量误判 → autoFix 双前缀叠加
- *      （common.less ~半数规则死样式，CODE-003-HIT-RATE 实测 48%）。
+ *      （common.less ~半数规则死样式，原 CODE-003-HIT-RATE 实测 48%，该门禁已于 2026-11-13 退役）。
  *
  * 现策略：sessionId 取值链 input.sessionId → input.ctx.sessionId → options.sessionId；
  * 仍取不到时 **不注入任何随机尾段**（componentId 保持 `c-<语义段>`），

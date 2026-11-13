@@ -41,6 +41,11 @@ import {
   generateAttributionGuidance,
 } from '../validators/resource-attribution-validator.js';
 import { buildResourceManifest } from '../utils/resource-manifest.js';
+// 🛡️ 分块响应守卫（2026-11-13 · 7dfc01e9 空壳覆写实锤，与 mc 侧同源）：剥 .vue 残片 + 越界计数
+import {
+  sanitizeChunkResponse,
+  buildScopeViolationFeedback,
+} from '../utils/chunk-response-guard.js';
 import {
   inferChartMinHeight,
   injectChartMinHeightIntoClass,
@@ -363,6 +368,9 @@ export class Vue3Engineer extends MicrocodeEngineer {
     ];
     const allFiles = {};
     const chunkDebug = [];
+    // 🛡️ 分块响应守卫回灌账本（2026-11-13 · 7dfc01e9，与 mc 侧 appendGlobalGuidance 同语义）：
+    //   已发生的越界残片剥除记录，由 appendGuidance「注入即消费」下发后续分块 prompt。
+    const scopeViolationNotes = [];
     if (isPartialRevision) {
       this.logger.info('🎯 P1: 部分修订模式，仅重做目标文件，其余从磁盘保留', {
         targetFiles: [...targetFileSet],
@@ -414,6 +422,13 @@ export class Vue3Engineer extends MicrocodeEngineer {
 
     const appendGuidance = (p) => {
       if (_l0CodeRetryGuidance) p += _l0CodeRetryGuidance;
+
+      // 🛡️ 越界拒收回灌（2026-11-13 · 7dfc01e9，与 mc 侧同语义）：把已发生的剥除事实
+      //   教给后续分块。注入即消费，避免同一事实重复下发。
+      if (scopeViolationNotes.length > 0) {
+        p += buildScopeViolationFeedback(scopeViolationNotes);
+        scopeViolationNotes.length = 0;
+      }
 
       // 🔍 P0-3（2026-11-10）：vue3 链路此前完全不消费 extraPrompt / requirementDocText，
       // 导致 Figma 节点整理工具推来的「结构契约」只有 microcode 档生效。与
@@ -552,14 +567,21 @@ export class Vue3Engineer extends MicrocodeEngineer {
       const effInput = chunk.scopedInput
         ? { ...input, ...chunk.scopedInput }
         : input;
-      const prompt = appendGuidance(
-        this.buildCodePrompt(effInput, {
-          // 🧬 刀 66-P2：把 chunk 原样展开进 chunkSpec。此前只传 {middle} ⇒
-          //   chunk.isoContract 在 vue3 恒丢，共享模板契约无法下发（mc 侧由
-          //   buildChunkMiddle(chunk) 直接拿全 chunk，本就通）。
-          ...chunk,
-          middle: middleBuilder.call(this, chunk),
-        }),
+      // 🛡️ C 刀（2026-11-13 · 与父类同源）：vue3 runChunk 是本方法局部函数、不走父类
+      //   generateCode 的注入点 ⇒ 必须显式调用共享方法，否则写盘门禁错误回灌对 vue3 失效。
+      //   fail-open 与父类一致。
+      const prompt = this.injectSfcBlockedFeedbackIntoPrompt(
+        appendGuidance(
+          this.buildCodePrompt(effInput, {
+            // 🧬 刀 66-P2：把 chunk 原样展开进 chunkSpec。此前只传 {middle} ⇒
+            //   chunk.isoContract 在 vue3 恒丢，共享模板契约无法下发（mc 侧由
+            //   buildChunkMiddle(chunk) 直接拿全 chunk，本就通）。
+            ...chunk,
+            middle: middleBuilder.call(this, chunk),
+          }),
+        ),
+        outputPath,
+        chunk.files,
       );
       // 📡 分块级文件生命周期：点亮当前正在生成的文件（前端 fileStates 逐文件跟踪）
       input.onProgress?.({
@@ -575,6 +597,18 @@ export class Vue3Engineer extends MicrocodeEngineer {
       let res = await this._generateSingleChunk(prompt, chunk, input);
       // 🛡️ P0 防护：_generateSingleChunk 异常路径可能返回 undefined/不完整对象
       res = res && typeof res === 'object' ? res : { files: {}, debug: {} };
+      // 🛡️ 分块响应守卫（2026-11-13 · 7dfc01e9，与 mc 侧 runChunk 同源同判据）：
+      //   剥 .vue 残片后再进任何消费点（pushChunkSnapshot、allFiles 合并、终态落盘）。
+      {
+        const _guard = sanitizeChunkResponse(res.files, chunk, this.logger);
+        res.files = _guard.files;
+        if (_guard.metrics.droppedFragments.length > 0) {
+          scopeViolationNotes.push({
+            chunk: chunk.title || (chunk.files || []).join(','),
+            dropped: _guard.metrics.droppedFragments,
+          });
+        }
+      }
       chunkDebug.push(res.debug || {});
       // 📡 分块完成：文件状态点亮 + 增量发布候选快照（代码 Tab 逐文件可见）
       if (res.files && Object.keys(res.files).length > 0) {

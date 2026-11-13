@@ -1,6 +1,6 @@
 /**
  * 代码结构校验（Agent Builder 自动生成，请勿手改）
- * 模板: code-structure | 创建: 2026-11-12T07:02:23.278Z
+ * 模板: code-structure | 创建: 2026-11-13T15:30:23.944Z
  * 输入: code
  * 输出: pass, errors
  */
@@ -52,7 +52,7 @@ export class DynamicAgent extends BaseAgent {
     if (/<style/i.test(code) && (!/@import/.test(code) || !/index\.less/.test(code))) {
       errors.push({ message: 'CODE-002: style 块必须 @import ...index.less' })
     }
-    // 规则3: class 前缀 c-（classPrefix 参数可指定）
+    // 规则3: 根类前缀（2026-11-13 新范式：仅检查 c- 开头的组件类是否与 classPrefix 一致；内层短名不检查）
     const prefix = classPrefix || 'c-'
     const classes = code.match(/class=["'][^"']+["']/g) || []
     const badClasses = classes
@@ -61,7 +61,7 @@ export class DynamicAgent extends BaseAgent {
       .filter((cls) => cls.startsWith('c-') && prefix !== 'c-' ? !cls.startsWith(prefix) : false)
       .slice(0, 5)
     if (prefix !== 'c-' && badClasses.length > 0) {
-      errors.push({ message: 'CODE-003: 类名必须以 ' + prefix + ' 为前缀: ' + badClasses.join(', ') })
+      errors.push({ message: 'CODE-003: 组件根类名必须以 ' + prefix + ' 为前缀: ' + badClasses.join(', ') })
     }
     const pass = errors.length === 0
     return { validationResult: { pass, blockCount: errors.length, errors }, pass, blockCount: errors.length, errors }

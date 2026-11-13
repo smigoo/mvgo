@@ -1,6 +1,6 @@
 /**
  * 规范驱动分析（Agent Builder 自动生成，请勿手改）
- * 模板: llm-analyzer | 创建: 2026-11-12T07:02:23.265Z
+ * 模板: llm-analyzer | 创建: 2026-11-13T15:30:23.943Z
  * 输入: componentName
  * 输出: spec
  */

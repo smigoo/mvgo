@@ -6,11 +6,12 @@
  * 它不是任何叶子的锚点 ⇒ 四层事实链上没有任何载体 ⇒ 产物里该背景色 0 次出现。
  *
  * 治本：装配层（`code-generator#buildDeterministicIndexTemplate` 容器分支）把这类
- * 「被吸收且无人认领」的矩形渲染为容器内的**绝对定位背景层**（`z-index:-1` 沉到内容之下、
- * 容器背景之上），几何用「边锚定」表达：
- *   - 边与容器贴合 ⇒ 该边 `:0`（跟随容器尺寸，不随 flex 比例漂移）；
- *   - 单边贴合 ⇒ 贴合边 `:0` + 真值尺寸；
- *   - 不贴合 ⇒ 真值偏移 + 真值尺寸。
+ * 「被吸收且无人认领」的矩形渲染为**直接父元素的内联背景 CSS**。
+ *   🛡️ 面板底规范（2026-11-13 用户申明，形态重构）：bg 一律**不再生成独立 DOM 层**
+ *   （旧 `c-*-absorbed-bg` div + `z-index:-1` 形态废除）：
+ *   · 组件直接子 ∧ 图层名 ^bg ⇒ **丢弃**（微码组件不允许生成面板背景，调用方过滤）；
+ *   · 与父贴合的层 ⇒ 父元素 `background` + `border-radius`；
+ *   · 有偏移的层 ⇒ 父元素多背景（background-image/position/size + no-repeat）。
  *
  * 判据（全走 Figma 真值，逐事实缺失即 fail-open，不猜）：
  *   ① 节点在容器 sourceNodeIds 里且能被 figmaIndex 解析；
@@ -22,6 +23,26 @@
  * 纯函数（不读盘、不改入参）。任何一条不满足 ⇒ 该节点跳过，其余照常。
  */
 import { fillToRgba } from './section-tree.js'
+
+/**
+ * 🛡️ 刀 7d（2026-11-13 实锤，mc-max-1794557930878-886d8437 流量监测）：吸收资格的面积门槛。
+ *
+ * 病灶：容器段把图标/图表标记等**微小实心矩形**（本案 19 层，最大 18×18，占容器面积
+ * ≤0.11%）整体收入 sourceNodeIds；knife 7 见「未认领 + 实心 RECTANGLE」即误吸为父容器
+ * `background-image` 多背景，19 层亚像素定位叠加 ⇒ 预览背景错乱（整行十几条 linear-gradient
+ * + 超长 background-position）。
+ *
+ * 这些不是背景卡——knife 7 要救的是 `36:1695` 这类 547×193、占容器 40%+ 的**大面积填充**。
+ * 它们本应被各自叶子段渲染成真实元素（图标/标记/装饰），被 planner 整体划给容器段后才落入吸收。
+ *
+ * 治本（纯几何，fail-open）：吸收资格加**最大边长门槛**——层的最大边长（max(w,h)）<
+ * `ABSORB_MIN_MAX_DIMENSION` 视为内容（图标/标记/小装饰）而非背景卡，跳过吸收。
+ * 与既有用例逐字段核对：所有合法被吸收的层最大边长均 ≥100px（36:1695=547、薄条
+ * 43:5688/9:10=218、9:7/8/9=100~547），本案误吸层最大边长 ≤18px，阈值 40 居中，gap 充足，
+ * 不误伤任何既有判据。另叠加 `icon` 命名排除（与 `isPanelBgNamed`/`isScrollbarNamed`
+ * 同源，命名来自设计稿是真值事实）。
+ */
+const ABSORB_MIN_MAX_DIMENSION = 40
 
 function boxOf(node) {
   const b = node?.absoluteBoundingBox || node?.bbox
@@ -161,6 +182,11 @@ export function resolveAbsorbedBgLayers(sec, figmaIndex, claimedIds) {
 
     const b = boxOf(node)
     if (!b) continue
+    // 🛡️ 刀 7d（2026-11-13 实锤）：最大边长 < 门槛 ⇒ 图标/标记/小装饰级内容，非背景卡，
+    // 跳过吸收（保留给叶子段渲染；真背景卡 36:1695/43:5688 等最大边长均 ≥100px）。
+    if (Math.max(b.width, b.height) < ABSORB_MIN_MAX_DIMENSION) continue
+    // 刀 7d 补充：命名确指 icon 的矩形 ⇒ 内容而非背景（与 isPanelBgNamed/isScrollbarNamed 同源）。
+    if (/^icon(\b|[-_])/i.test(String(node?.name || ''))) continue
     // 🛡️ 刀 20c（2026-10-28 · 657661ca 实锤）：滚动条滑块/轨道不是背景层——
     //   细长条贴容器右缘（宽 ≤12px、长宽比 ≥4、右缘贴边 ±4px）被吸收后画成
     //   装饰 div ⇒ 视觉上有滚动条但列表不能滚（假滚动）。真值滚由刀 20b 列表
@@ -248,15 +274,77 @@ export function expandCandidateIdsWithDirectChildren(sec, figmaIndex) {
   return out
 }
 
-/** 背景层的完整内联样式（`z-index:-1` 沉到容器内容之下、容器背景之上）。 */
-export function buildAbsorbedBgLayerStyle(layer) {
-  if (!layer) return ''
-  return (
-    `position:absolute;${layer.edgeCss}` +
-    `background:${layer.background};` +
-    (layer.borderRadius ? `border-radius:${layer.borderRadius}px;` : '') +
-    'z-index:-1;'
-  )
+/**
+ * 🛡️ 面板底规范（2026-11-13 用户申明，R3）：`bg` / `bg-xxxx` 命名的矩形 = 面板背景。
+ * 微码组件**不允许生成面板**（含面板背景与标题）⇒ 作为**组件直接子**出现的 bg 命名
+ * 节点一律丢弃（不产 DOM 也不产 CSS）。判据与 `figma-connector.js#_isNonSemanticName`
+ * 的 `/^bg(\b|[-_])/i` 同源（命名来自设计稿，是真值事实；自动名不构成证据）。
+ * 纯函数。
+ */
+export function isPanelBgNamed(name) {
+  return /^bg(?:\b|[-_])/i.test(String(name || ''))
+}
+
+/**
+ * 🛡️ 面板底规范（2026-11-13 用户申明，R4）：bg 的载体唯一化为**直接父元素的内联 CSS**，
+ * 一律不产独立 DOM。合并规则：
+ *   · 与父贴合的层（edgeCss 四边 0）⇒ 父元素 `background` + `border-radius`；
+ *   · 有偏移的层 ⇒ 父元素多背景（background-image/position/size + no-repeat，
+ *     偏移/尺寸取 layer 审计字段 top/left/width/height 真值）；
+ *   · 多层同宿主 ⇒ background-image 逗号列表（纯色包 linear-gradient 统一进 image）。
+ * CSS 边界：偏移层的 border-radius 无法用父元素背景表达（真值 id 仍留在
+ * `data-absorbed-bg` 宿主属性可追）。
+ * 纯函数；空入参 ⇒ `{css:'',ids:''}`（调用方零变化，保住无层 fixture 逐字断言）。
+ *
+ * @param {Array<{id:string, background:string, borderRadius:number|null, edgeCss:string, top:number, left:number, width:number, height:number}>} layers `resolveAbsorbedBgLayers` 产物
+ * @returns {{css:string, ids:string}} css=宿主 div 追加的内联样式；ids=审计锚（逗号串）
+ */
+export function buildAbsorbedBgParentCss(layers) {
+  const out = { css: '', ids: '' }
+  if (!Array.isArray(layers) || !layers.length) return out
+  const isCover = (l) => l?.edgeCss === 'left:0;right:0;top:0;bottom:0;'
+  const asImage = (bg) =>
+    /^(linear|radial)-gradient\(/i.test(String(bg)) ? bg : `linear-gradient(${bg}, ${bg})`
+  const cover = layers.filter(isCover)
+  const offset = layers.filter((l) => !isCover(l))
+  if (cover.length && !offset.length) {
+    // 全贴合（可多层）：单层走最简 `background` 形态；多层走 image 列表
+    if (cover.length === 1) {
+      out.css = `background:${cover[0].background};`
+    } else {
+      out.css =
+        `background-image:${cover.map((l) => asImage(l.background)).join(',')};` +
+        'background-position:' + cover.map(() => '0px 0px').join(',') + ';' +
+        'background-size:' + cover.map(() => 'auto').join(',') + ';' +
+        'background-repeat:no-repeat;'
+    }
+    const radius = cover.find((l) => l.borderRadius)?.borderRadius
+    if (radius) out.css += `border-radius:${radius}px;`
+  } else {
+    // 含偏移层：全部统一进多背景（贴合层 position=0 0 / size=auto）
+    const imgs = []
+    const poss = []
+    const sizes = []
+    for (const l of [...offset, ...cover]) {
+      imgs.push(asImage(l.background))
+      if (isCover(l)) {
+        poss.push('0px 0px')
+        sizes.push('auto')
+      } else {
+        poss.push(`${Number(l.left) || 0}px ${Number(l.top) || 0}px`)
+        sizes.push(`${Number(l.width) || 0}px ${Number(l.height) || 0}px`)
+      }
+    }
+    out.css =
+      `background-image:${imgs.join(',')};` +
+      `background-position:${poss.join(',')};` +
+      `background-size:${sizes.join(',')};` +
+      'background-repeat:no-repeat;'
+    const radius = cover.find((l) => l.borderRadius)?.borderRadius
+    if (radius) out.css += `border-radius:${radius}px;`
+  }
+  out.ids = layers.map((l) => String(l.id)).join(',')
+  return out
 }
 
 /**

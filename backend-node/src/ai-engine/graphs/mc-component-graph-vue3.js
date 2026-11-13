@@ -2422,6 +2422,8 @@ export function createPhase2Graph(config = {}) {
         skipPanelHeaderFilter: true,
         // 🛡️ 臆造壳锚定事实源（2026-09-14 · 34750940）：planner 内 anchorPhantomSections 消费
         figmaNodeData: state.figmaNodeData,
+        // 🔴 R1 派工规格下发（2026-11-13 · mc-1794532970423-0062020b 实锤）：同 phase2 口径
+        visionCharts: Array.isArray(state.charts) ? state.charts : [],
       }); // Vue3 无 base-panel，header 要独立拆
       // 🛡️ P0：导航作为必含 section —— 若检测到导航信号（styleMappings/elementStyleMap/figmaNodeData 任一含导航关键词）
       // 但 effectiveSections 尚无 nav，则强制注入，确保左侧竖向导航进入生成（含其样式事实）。
@@ -3039,7 +3041,7 @@ export function createPhase2Graph(config = {}) {
 
     //  🛡️ P0-4: flex 静态检查 + 自动修复（零 LLM）
     //  - FLEX-001: column-flex 容器内 flex:1 子元素缺 min-height:0 → BLOCK 并入校验结果，并自动补
-    //  - FLEX-002: column-flex 无任何 flex 子属性 → WARN 提示冗余
+    //  - FLEX-002（冗余 flex WARN）已于 2026-11-13 退役（评审 §5.2），checkFlexUsage 只余 FLEX-001
     //  增量模式下仅对变更文件执行（未变更文件上轮已检查并修复）
     try {
       let flexFixCount = 0;
@@ -3111,7 +3113,7 @@ export function createPhase2Graph(config = {}) {
       //   本处是 vue3 链路里**第二个**修复归口，且**直接 fs.writeFileSync 写盘** —— 正是
       //   2026-09-01「R0-7」注释自己反对的「双写盘分叉点」；它还绕过落盘前自愈链与写保护，
       //   且与 2.11 布局事实注入（依 Figma 几何注入 display:flex）方向相反 ⇒ 属性忽隐忽现。
-      //   FLEX-002 现为**纯 WARN 报告项**（无任何修复器），判定仍由 checkFlexUsage 负责。
+      //   FLEX-002 判定本体亦已于 2026-11-13 退役（评审 §5.2）——本段注释留作「门禁只报不删」纪律的史证。
     } catch (flexErr) {
       logger.warn('P0-4 flex 检查异常（非阻断）', { error: flexErr.message });
     }
@@ -3350,7 +3352,6 @@ export function createPhase2Graph(config = {}) {
           (i.id === 'CODE-001' ||
             i.id === 'CODE-002' ||
             i.id === 'CODE-008' ||
-            i.id === 'CODE-009' ||
             i.id === 'LESS-COMPILE-001' ||
             // 层 7：WARN 升级来的 BLOCK 同样不可被降级旁路（否则升级=零生效）
             String(i.id || '').endsWith('-ESCALATED')),

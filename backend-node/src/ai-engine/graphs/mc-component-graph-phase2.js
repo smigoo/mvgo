@@ -124,6 +124,8 @@ import { tryFixDanglingComponentFiles } from '../validators/dangling-component-b
 import { tryFixOrphanResourceImports } from '../validators/orphan-import-backstop.js';
 // 🛡️ 根治⑩-b（2026-11-12 · 3cdc4757 实锤）：终局 SFC 扫描（复用写盘终验门，磁盘全量口径）
 import { runFinalVueExpressionGate } from '../roles/microcode/final-vue-expression-gate.js';
+// 🛡️ 根治⑬（2026-11-13 · 8a74b874 实锤）：D2 重叠锚点提取（结构化透传至写盘防叠补齐）
+import { extractOverlapAnchors } from '../utils/overlap-proof-layout.js';
 // 🛡️ 根治⑪（2026-11-12 · 495857b7 实锤）：D2 重叠回灌指导构造器（配方化：bbox/字号/容器+形态修法+轮次递进）
 import { buildD2Guidance } from '../utils/d2-overlap-guidance.js';
 // 🔴 2026-10-13 批次二：业务样式颜色 → 槽位变量（确定性后处理，映射规则 v2）
@@ -1831,7 +1833,7 @@ export function createPhase2Graph(config = {}) {
         // 拼进 componentId（如 c-device-monitor-00g6b7vh-075b13a4）。该随机段非纯 hex，
         // classPrefixOf 的 `-[0-9a-f]{8}$` 剥离失效 → classPrefix 含随机段 →
         // 与 LLM 生成的 c-device-monitor-* 失配 → CODE-003 全量误判 + autoFix 双前缀叠加
-        // → common.less 约半数规则死样式（CODE-003-HIT-RATE 48%）。
+        // → common.less 约半数规则死样式（原 CODE-003-HIT-RATE 实测 48%，该门禁已于 2026-11-13 退役）。
         sessionId: state.sessionId,
         displayName, //  Figma 节点中文名称
         outputPath: state.outputPath,
@@ -1868,6 +1870,8 @@ export function createPhase2Graph(config = {}) {
         headerSlots: state.headerSlots || [],
         //L0-B 重试修复指导
         _l0CodeRetryGuidance: state._l0CodeRetryGuidance,
+        // 🛡️ 根治⑬（8a74b874）：D2 重叠锚点（结构化）→ engineer → writeFiles 防叠补齐
+        _d2OverlapAnchors: state._d2OverlapAnchors,
         //技术栈提示
         techStackHints: state.techStackHints,
         // 🧠 自优化：历史模式驱动的 Prompt 增强
@@ -2151,6 +2155,8 @@ export function createPhase2Graph(config = {}) {
                 bestCodes: _best.codes,
                 restored: _rb.restored.length,
                 writeFailed: _rb.writeFailed.slice(0, 6),
+                // 🛡️ 根治⑭-A（1fc2485d 实锤）：坏 .vue 拒绝回滚（不写盘不回写内存）
+                skippedBad: _rb.skippedBad || [],
               });
               acc = runAcceptanceChecks({
                 files: accFiles,
@@ -4962,6 +4968,9 @@ export function createPhase2Graph(config = {}) {
       const plan = subcomponentPlanner.plan(state.layoutStructure, {
         // 🛡️ 臆造壳锚定事实源（2026-09-14 · 34750940）：planner 内 anchorPhantomSections 消费
         figmaNodeData: state.figmaNodeData,
+        // 🔴 R1 派工规格下发（2026-11-13 · mc-1794532970423-0062020b 实锤）：
+        //   vision 图表真值池 → R1 chart-component 匹配 chartSpec，缺料拒派并回宿主
+        visionCharts: Array.isArray(state.charts) ? state.charts : [],
         // 🔍 L1 文档同构折叠（2026-11-03）：S8 文档子管线产物 → 折叠器第二证据
         docAnalysis: state.docAnalysis || null,
         diagnostics: {
@@ -5707,9 +5716,9 @@ export function createPhase2Graph(config = {}) {
         );
       }
 
-      // 🛡️ R0-7（2026-09-01）→ 2026-09-29 收敛：FLEX-002（冗余 flex column）**全链路只判不修**。
-      // 判定由上方 checkFlexUsage（FLEX-002，WARN）负责并计入 result.issues；
-      // 修复器 autoFixRedundantFlex 已从本处 / code-validator / vue3-graph 三处全部删除 ——
+      // 🛡️ R0-7（2026-09-01）→ 2026-09-29 收敛 → 2026-11-13 终局：FLEX-002（冗余 flex column）
+      // 判定本体已退役（评审 §5.2，110 命中零拦截）；修复器 autoFixRedundantFlex 更早（2026-09-29）
+      // 已从本处 / code-validator / vue3-graph 三处全部删除 ——
       // WARN 级判定不得静默改写布局属性（display:flex 可能来自 A 类布局事实注入，删它即振荡）。
     } catch (flexErr) {
       logger.warn('P0-4 flex 检查异常（非阻断）', { error: flexErr.message });
@@ -5964,7 +5973,7 @@ export function createPhase2Graph(config = {}) {
         retryGuidance +=
           "- style 块第一行是 @import '../resources/styles/index.less'\n";
         retryGuidance +=
-          '- common.less 中的 class 都带组件前缀 .c-{componentId}-\n';
+          '- common.less 顶层只有带 .c-{componentId}- 前缀的根类块（业务样式嵌套在根类内，内层短名合法）\n';
 
         // R1' 重试轮结构锚定：注入组件树骨架，约束 LLM 不得重排结构
         const skeleton = CodeStructureValidator.extractComponentSkeleton(filesForCheck);
@@ -6181,8 +6190,10 @@ export function createPhase2Graph(config = {}) {
       // 🛡️ 根治⑩-b 终局 SFC 扫描（2026-11-12 · 3cdc4757 实锤）：写盘终验修好的文件会被
       //   后续编辑器（theme 注入 / less checker / 统一终态落盘的内存回写）再次改坏——本任务
       //   ContentForecast.vue 终验两次从缓存回退合法版，最终磁盘仍是坏版 ⇒ 预览「组件加载失败」。
-      //   此处是所有产物编辑器之后的第一站：全量 .vue 再扫一遍，坏⇒缓存回退；无候选保留
-      //   （removeIfNoCache:false，删了=悬空 import 必炸）。零命中也打计数行（铁律）。
+      //   此处是所有产物编辑器之后的第一站：全量 .vue 再扫一遍，坏⇒缓存回退；无候选⇒
+      //   根治⑭（2026-11-13 · 1fc2485d 实锤）「检出→隔离」闭环：components/*.vue 删文件
+      //   + 确定性摘悬空 import（不再 left-in-place 留坏版直达前端）；index.vue 等不可
+      //   降级路径保持 left-in-place。零命中也打计数行（铁律）。
       if (state.outputPath) {
         try {
           const _fg = runFinalVueExpressionGate(state.outputPath, r._sfcManifest || undefined, {
@@ -6531,15 +6542,23 @@ export function createPhase2Graph(config = {}) {
         if (textOverlapBlocked && (state._d2OverlapRetried || 0) < 3) {
           const nextRound = (state._d2OverlapRetried || 0) + 1;
           const d2Guidance = buildD2Guidance(runtimeGate, nextRound);
+          // 🛡️ 根治⑬（2026-11-13 · 8a74b874）：同步提取重叠锚点（结构化），透传至
+          //   engineer → writeFiles，写盘前做确定性防叠补齐（flex column + 字号钳制）。
+          const d2Pairs = (runtimeGate.issues || []).find((i) => i.id === 'RUNTIME-016')
+            ?.evidence?.overlaps || [];
+          const d2Anchors = extractOverlapAnchors(d2Pairs);
           logger.warn('🛡️ RUNTIME-016 命中 ⇒ D2 重叠回灌定向重试（根治⑪配方化指导，上限 3 轮）', {
             round: nextRound,
-            pairs: ((runtimeGate.issues || []).find((i) => i.id === 'RUNTIME-016')?.evidence?.overlaps || []).slice(0, 5),
+            pairs: d2Pairs.slice(0, 5),
+            anchorClasses: d2Anchors.length,
           });
           state._d2OverlapRetried = nextRound;
+          state._d2OverlapAnchors = d2Anchors;
           state._l0CodeRetryGuidance = (state._l0CodeRetryGuidance || '') + '\n' + d2Guidance;
           return {
             runtimeGate,
             _d2OverlapRetried: state._d2OverlapRetried,
+            _d2OverlapAnchors: state._d2OverlapAnchors,
             _pendingRuntimeRetry: true,
             _l0CodeRetryGuidance: state._l0CodeRetryGuidance,
           };

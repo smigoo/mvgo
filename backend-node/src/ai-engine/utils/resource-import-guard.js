@@ -1396,6 +1396,58 @@ export function findImgSrcBindingGaps(content, resourceDomMapping) {
 }
 
 /**
+ * 🛡️ 宿主悬空子组件引用剥除（2026-11-13 · mc-max-1794546172891-8b9302bc 实锤 · CODE-023 联动）。
+ *
+ * 病灶：子组件 .vue 被写盘门禁判死（坏文件不落盘），宿主 index.vue 的
+ * `import X from './components/X.vue'` + `<X .../>` 标签原样保留 ⇒ 悬空标签
+ * ⇒ CODE-023 BLOCK ⇒ 重试耗尽 fail-closed。`pruneDeadSubComponentImports`
+ * （resource-mounter）是反方向（模板未引用才删 import），救不了「文件缺失」场景。
+ *
+ * 为什么放本模块：与 isResourceVarMounted 同族同层——纯文本判据、零 AI 依赖、
+ * 只依赖 fs/path，jest 可直接 import（resource-mounter 的 import 链拉起 logger →
+ * backend-root，jest 下 `__filename` 已声明冲突，先例：findStaticStyleUrlVars）。
+ *
+ * 判据：对每个「被拒文件名」（PascalCase），剥除：
+ *   ① import 行：`import X from '<任意相对路径>/X.vue'`；
+ *   ② defineAsyncComponent 声明行：`const X = defineAsyncComponent(() => import('.../X.vue'))`；
+ *   ③ 模板标签：成对 `<X ...>...</X>` 与自闭合 `<X ... />`（含跨行）。
+ * 剥除后该区块视觉缺失（可接受降级，产物已被标记 artifactIncomplete），
+ * 换取任务不再被 CODE-023 判死。
+ *
+ * @param {string} content - 宿主 .vue 内容
+ * @param {string[]} missingNames - 被拒子组件名（PascalCase，如 ContentBridge）
+ * @returns {string} 剥除后的内容（无命中时原样返回，引用相等）
+ */
+export function pruneDanglingComponentFileRefs(content, missingNames) {
+  if (!content || typeof content !== 'string' || !Array.isArray(missingNames) || missingNames.length === 0) {
+    return content;
+  }
+  let out = content;
+  for (const raw of missingNames) {
+    const name = String(raw || '').trim();
+    if (!/^[A-Z][\w$]*$/.test(name)) continue;
+    const esc = name.replace(/[.*+?${}()|[\]\\]/g, '\\$&');
+    // ① import 行（任意相对路径指向 X.vue）
+    out = out.replace(
+      new RegExp(`^[ \\t]*import\\s+${esc}\\s+from\\s*['"][^'"]*/${esc}\\.vue['"]\\s*;?\\s*\\n?`, 'gm'),
+      '',
+    );
+    // ② defineAsyncComponent 声明行
+    out = out.replace(
+      new RegExp(
+        `^[ \\t]*const\\s+${esc}\\s*=\\s*defineAsyncComponent\\(\\s*\\(\\s*\\)\\s*=>\\s*import\\([^)]*${esc}\\.vue[^)]*\\)\\s*\\)\\s*;?\\s*\\n?`,
+        'gm',
+      ),
+      '',
+    );
+    // ③ 模板标签（成对含跨行 / 自闭合）
+    out = out.replace(new RegExp(`<${esc}\\b[^>]*/>`, 'g'), '');
+    out = out.replace(new RegExp(`<${esc}\\b[^>]*>[\\s\\S]*?</${esc}\\s*>`, 'g'), '');
+  }
+  return out;
+}
+
+/**
  * 🛡️ CODE-022 修复器（2026-09-11 根治方案 R3-2）：资源 import 未挂载 → 确定性删除。
  *
  * 根因：LLM 偶发「import bg1 后模板/脚本 0 处引用」→ CODE-022 BLOCK → 全量重试 →
@@ -1418,12 +1470,28 @@ export function pruneUnmountedResourceImports(content, resourceDomMapping, optio
   const result = { content, changed: false, pruned: [] };
   if (typeof content !== 'string' || !content) return result;
   const { varToMapping } = buildVarToMapping(resourceDomMapping || []);
-  if (varToMapping.size === 0) return result;
   const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
   if (!scriptMatch) return result;
 
+  // 🛡️ 2026-11-13 同源化（mc-max-1794546172891-8b9302bc 实锤）：迭代源从「注册表 keys」
+  //   扩为「门禁 findUnmountedResourceVars 同款 importRe 扫出的全部资源 import 名 ∪ 注册表 keys」。
+  //   病灶：LLM 会从文件名臆造资源变量名（bg-_m-36.png → `bgbg_m36`，R3-WARN「未在资源
+   //  事实源登记」实锤），这类漂移名不在 varToMapping ⇒ 旧口径循环跳过 ⇒ CODE-022 门禁
+  //   （按 import 路径扫，能抓到）判死、修复器（按注册表迭代，抓不到）不删 ⇒ 自愈永不生效
+  //   ⇒ 重试耗尽 fail-closed。与 2026-09-29「门禁剥注释/修复器不剥」那次同族：**两侧判据
+  //   必须同源**，否则修复器永远追不上门禁。
+  //   isResourceVarMounted 是纯文本判定（不依赖注册表），对漂移名同样可靠：
+  //   真实挂载的漂移名（如 bgbg_m35 挂 base-panel）判真保留，绝不误删。
+  const importScanRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*(?:bg|icon|img)[\w-]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
+  const scanNames = new Set();
+  let scanMatch;
+  while ((scanMatch = importScanRe.exec(scriptMatch[1])) !== null) {
+    scanNames.add(scanMatch[1]);
+  }
+  const candidateNames = new Set([...scanNames, ...varToMapping.keys()]);
   let script = scriptMatch[1];
-  for (const varName of varToMapping.keys()) {
+  for (const varName of candidateNames) {
     const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const importRe = new RegExp(
       `^[ \\t]*import[ \\t]+${esc}[ \\t]+from[ \\t]*['"][^'"]*['"][ \\t]*;?[ \\t]*\\n?`,

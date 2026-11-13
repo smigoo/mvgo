@@ -6,7 +6,7 @@
  *   兜底，产出 8 位 base36 随机段（含 g/v/h 等非 hex 字母）拼进 componentId。
  *   classPrefixOf 的 `-[0-9a-f]{8}$` 剥离失效 → 随机段滞留进 class 前缀 →
  *   与 LLM 的 c-device-monitor-* 失配 → CODE-003 全量误判 + autoFix 双前缀叠加
- *   → common.less ~半数规则死样式（CODE-003-HIT-RATE 48%）。
+ *   → common.less ~半数规则死样式（原 CODE-003-HIT-RATE 实测 48%，该门禁已于 2026-11-13 退役）。
  *
  * 本 spec 锁定：正例命中、反例（语义词/纯 hex/纯数字）绝不误伤。
  */

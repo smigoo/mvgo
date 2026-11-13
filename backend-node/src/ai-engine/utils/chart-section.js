@@ -199,8 +199,14 @@ function collectLeafRefs(list) {
   return refs
 }
 
-/** chart section → internalSubcomponent 形状（与 planner R1 图表隔离同款，prompt 已支持）。 */
-function chartSectionToInternalSub(cs) {
+/** chart section → internalSubcomponent 形状（与 planner R1 图表隔离同款，prompt 已支持）。
+ *  🛡️ 2026-11-13（mc-max-1794546172891-8b9302bc 白色图例实锤）：补 chartSpec 规格载荷——
+ *  本函数注释自称「与 planner R1 同款」，但 planner R1（subcomponent-planner.js:1126）带
+ *  `...(spec ? { chartSpec: spec } : {})`，本路径漏了 ⇒ R1-geo 派生的 chart-component 全部
+ *  裸派（prompt 渲染「图表规格缺失…按名称语义实现」授权臆造 ⇒ 深色大屏先验霓虹色+白字）。
+ *  @param {object} cs - chart section
+ *  @param {object|null} spec - vision 图表规格（matchChartSpecForSub 产出），缺省不产键 */
+export function chartSectionToInternalSub(cs, spec = null) {
   return {
     type: 'chart-component',
     id: cs.id,
@@ -211,7 +217,69 @@ function chartSectionToInternalSub(cs) {
     emits: ['legendClick', 'dataZoom'],
     chartType: cs.chartType || null,
     sourceNodeIds: Array.isArray(cs.sourceNodeIds) ? cs.sourceNodeIds : [],
+    // 🛡️ 规格载荷（vision 真值 + Figma 容器尺寸真值），与 planner R1 同形状
+    ...(spec ? { chartSpec: spec } : {}),
   }
+}
+
+/**
+ * 🛡️ R1-geo 规格匹配（2026-11-13 · 白色图例实锤）：为 chart section 找 vision 图表规格。
+ * 与 planner matchVisionChartSpec 同判据族，外加几何包含桥（@echarts 节点 id 与
+ * charts[].section 不是同一 id 时，用「c.section 节点盒包含 @echarts 节点中心」衔接）。
+ *
+ * 颗粒度契约（用户申明 2026-11-13）：只透传 vision 已给的 L1/L2 字段（type/series/大致色/
+ * legend 位置等）+ Figma 容器尺寸真值（chartBox，从节点树取，非 vision 估值）；
+ * 图表内部细节（文字色/网格色/数据值）不提取、不臆造。tooltip 样式不在规格内
+ * （悬停交互态，设计稿不定义 ⇒ ECharts 默认）。
+ *
+ * @param {object} cs - chart section（sourceNodeIds[0] 为锚定节点 id）
+ * @param {Array} charts - vision 图表真值池（state.charts）
+ * @param {Function|null} boxOf - Figma id → absoluteBoundingBox（makeFigmaBoxResolver 产出）
+ * @param {Map|null} nodeById - @echarts 节点 id → 节点（含 bbox）
+ * @returns {object|null} 规格载荷（含 chartBox 尺寸真值），无命中返回 null
+ */
+export function matchChartSpecForSub(cs, charts, boxOf = null, nodeById = null) {
+  if (!Array.isArray(charts) || charts.length === 0) return null
+  const sid = String(cs?.sourceNodeIds?.[0] ?? '')
+  if (!sid) return null
+  // 判据①：section id 直等（chartsTruth 分支 sourceNodeIds[0] 即 c.section）
+  let hit = charts.find((c) => String(c?.section ?? '') === sid) || null
+  // 判据②：几何包含桥（@echarts 分支：c.section 节点盒包含 @echarts 节点中心，取最小面积盒）
+  if (!hit) {
+    const node = nodeById ? nodeById.get(sid) : null
+    if (node?.bbox && typeof boxOf === 'function') {
+      let best = null
+      let bestArea = Infinity
+      for (const c of charts) {
+        if (!c?.section) continue
+        const b = boxOf(c.section)
+        if (!b || boxArea(b) <= 0) continue
+        if (!boxContainsCenter(b, node.bbox)) continue
+        const a = boxArea(b)
+        if (a < bestArea) {
+          bestArea = a
+          best = c
+        }
+      }
+      hit = best
+    }
+  }
+  if (!hit) return null
+  // 字段白名单（与 planner CHART_SPEC_FIELDS 同族；本地声明避免跨模块环）
+  const spec = {}
+  for (const k of [
+    'type', 'series', 'seriesTypes', 'legend', 'legendPosition', 'legendType',
+    'seriesColors', 'axes', 'tooltip', 'innerRadius', 'stack', 'markLine',
+  ]) {
+    if (hit[k] !== undefined && hit[k] !== null) spec[k] = hit[k]
+  }
+  // 容器尺寸真值（用户申明 2026-11-13：图表尺寸从 Figma 节点树取，非 vision 估值）
+  const box = (typeof boxOf === 'function' ? boxOf(hit.section) : null)
+    || (nodeById ? nodeById.get(sid)?.bbox : null)
+  if (box && Number(box.width) > 0 && Number(box.height) > 0) {
+    spec.chartBox = { width: Number(box.width), height: Number(box.height) }
+  }
+  return Object.keys(spec).length > 0 ? spec : null
 }
 
 /**
@@ -445,7 +513,7 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
       list.map((sec) => {
         const pairs = hostedPairs.filter(([h]) => h === sec)
         if (pairs.length > 0) {
-          const subs = pairs.map(([, cs]) => chartSectionToInternalSub(cs))
+          const subs = pairs.map(([, cs]) => chartSectionToInternalSub(cs, matchChartSpecForSub(cs, charts, boxOf, nodeById)))
           return {
             ...sec,
             internalSubcomponents: [...(sec.internalSubcomponents || []), ...subs],
@@ -477,7 +545,7 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
 
   // 宿主归属的 plan 级记账（prompt 分组按 parentSectionId 消费；与 planner R1 同形状）
   const hostedPlanSubs = hostedPairs.map(([host, cs]) => ({
-    ...chartSectionToInternalSub(cs),
+    ...chartSectionToInternalSub(cs, matchChartSpecForSub(cs, charts, boxOf, nodeById)),
     parentSectionId: host.id || host.title || null,
     parentSectionTitle: host.title || null,
   }))

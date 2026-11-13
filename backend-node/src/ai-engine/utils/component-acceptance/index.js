@@ -997,14 +997,15 @@ export function runAcceptanceChecks(input = {}) {
   }
 
   // ── D2：文本重叠（消费 runtime 采集，不重复渲染）──────────────────
+  // 2026-11-13 安全组降级（BLOCK→WARN）：D2 与 RUNTIME-016 同源同数据（均消费 input.textOverlaps），
+  // RUNTIME-016 已是 BLOCK 兜底，D2 重复 BLOCK 属二次阻断；降级为 WARN 不改覆盖（RUNTIME-016 仍拦）。
   if (Array.isArray(input.textOverlaps) && input.textOverlaps.length > 0) {
-    fails.push({
-      code: 'D2',
-      detail: `文本重叠 ${input.textOverlaps.length} 对（${input.textOverlaps
+    warns.push(
+      `D2 文本重叠 ${input.textOverlaps.length} 对（${input.textOverlaps
         .slice(0, 3)
         .map((o) => `${o.a}↔${o.b}`)
-        .join('、')}）`,
-    });
+        .join('、')}）——与 RUNTIME-016 同源，已由 RUNTIME-016 拦截，此处仅留痕`,
+    );
   }
 
   // ── C2：假数据禁令（2026-11-11 · a3d97188 实锤：refreshStats() 用 Math.random()
@@ -1759,7 +1760,14 @@ export function runAcceptanceChecks(input = {}) {
       }
     }
 
-    // D3 主轴方向（并排段 ⇒ row）
+    // D3 主轴方向（顶层并排段 ⇒ 组件根容器须横向）
+    // 🛡️ 2026-11-13 评审整改（P1）：旧实现两缺陷——
+    //   ① 全局扫 index.vue 的 `flex-direction:row`（任一 header 的 row 即可蒙混 ⇒ 假通过）；
+    //   ② 列数写死正则 `\b2\b`（3/4 列并排网格 ⇒ 误 FAIL）。
+    //   新实现：只校验**组件根容器**（index.vue <template> 首个元素）的横向声明，
+    //   用与 D-GRID / GRID-CONTRACT-001 **同源**的 resolveElementDecls + declaredColumns，
+    //   支持任意 K 列（repeat(N,…) / 多轨道 / flex-calc）；根容器缺省 ⇒ fail-open（不猜）。
+    //   嵌套层级的并排方向由 LAYOUT-001（递归 + 元素级，WARN）覆盖，D3 只作顶层 BLOCK 保险。
     const boxOf = (s) => (s.figmaBox || s.absoluteBoundingBox || null);
     let rowPairs = 0;
     for (let i = 0; i < _planSections.length - 1; i++) {
@@ -1775,16 +1783,25 @@ export function runAcceptanceChecks(input = {}) {
       checked += 1;
       const idxEntry = entries.find(([p]) => /package\/index\.vue$/.test(p));
       if (idxEntry) {
-        const hasRow =
-          /flex-direction\s*:\s*row/.test(idxEntry[1]) ||
-          /grid-template-columns\s*:\s*[^;"]*\b2\b/.test(idxEntry[1]);
-        if (!hasRow) {
+        const rootAttrs = matchAllTags(idxEntry[1])[0] || '';
+        const styleSources = collectStyleSources(
+          entries.map(([p, c]) => ({ path: p, content: c })),
+        );
+        const wrap = resolveElementDecls(styleSources, classAttrOf(rootAttrs), inlineStyleOf(rootAttrs));
+        const isRow =
+          String(wrap.display || '').trim().toLowerCase() === 'flex' &&
+          /^(row|row-reverse)$/.test(String(wrap['flex-direction'] || '').trim().toLowerCase());
+        const dc = declaredColumns(wrap);
+        const isGridRow = dc && dc.cols >= 2;
+        if (!isRow && !isGridRow) {
           fails.push({
             code: 'D3',
             file: idxEntry[0],
             detail:
-              `真值有 ${rowPairs} 组并排段（y 相同、x 相邻、等宽），但 ${idxEntry[0]} 无 row 主轴声明` +
-              `（全列排布 ⇒ 并排卡被拉成整行高、各占等分高度）。应为并排段加 flex-direction:row 容器`,
+              `真值有 ${rowPairs} 组并排段（y 相同、x 相邻、等宽），但组件根容器` +
+              `（index.vue <template> 首个元素）未声明横向布局` +
+              `（须 flex-direction:row 或 ≥2 列网格 grid-template-columns）。` +
+              `并排段被排成纵向 ⇒ 卡片拉成整行高、各占等分高度`,
           });
         }
       }

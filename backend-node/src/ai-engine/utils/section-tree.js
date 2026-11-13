@@ -2891,6 +2891,118 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
   }
 }
 
+/**
+ * 🛡️ vision 漏提内容检测（2026-11-13 · mc-max-1794553882576-ce0eb032 实锤）：
+ *   判定 vision sections 是否漏提了 Figma 树中的真实内容（TEXT/IMAGE）——典型病灶是 vision 把误命名
+ *   `slot-icon` / `icon` / `*-icon` 的**大内容容器**当成图标/槽位装饰区，只提拔内层少数 GROUP/TEXT，
+ *   其名下松散的标题/副标题/图片被整组丢弃 ⇒ 组件结构残缺却被判 completed。
+ *   用户拍板规则（根锚定 opt-out）：**仅组件根的直接子节点中 name/role = bg / header 的不生成，
+ *   其余一切（含大 `slot-icon` 容器及其全部子树）都代表内容**。
+ *
+ *   本函数只做「缺陷探测」，不做修复：返回 true 时，调用方应回退到 `deriveSectionsFromFigmaTree`
+ *   （E1 确定性分区，已对大容器递归下钻 + 孤儿文本恢复），由已验证的骨架补回内容。
+ *   判据（纯几何 + 内容，命名无关）：
+ *     ① 覆盖集 = vision section 锚点（sourceNodeIds + figmaNodeId/id）在 Figma 树中的**整棵子树**；
+ *     ② 根级 chrome = 根的直接子节点中 name/role ∈ {bg, header}（严格字面量）⇒ 其子树不计入漏提；
+ *     ③ 遍历 Figma 树，任何 TEXT（非空字符）/IMAGE 节点未被覆盖且不在根级 chrome 子树内 ⇒ 漏提命中。
+ *
+ *   纯函数、fail-open：任意异常 / 缺料返回 false（不触发回退，维持 vision 主路径原状）。
+ *
+ * @param {Array} visionSections vision 原始 sections
+ * @param {Object} figmaNodeData figma-node-data.json（{ document } 或裸根）
+ * @param {Object} [options] { rootChromeNames?: string[], minDropped?: number }
+ * @returns {boolean} true = vision 漏提了真实内容，应回退 E1
+ */
+export function visionDroppedContent(visionSections, figmaNodeData, options = {}) {
+  const secs = Array.isArray(visionSections) ? visionSections : []
+  const doc = figmaNodeData?.document ?? figmaNodeData
+  if (secs.length === 0 || !doc || typeof doc !== 'object') return false
+  let root
+  try {
+    root = findRootFrame(doc)
+  } catch (e) {
+    return false
+  }
+  if (!root) return false
+  const index = indexFigmaNodes(root)
+  if (index.size === 0) return false
+
+  // ① 根级 chrome 排除集：仅根的直接子节点中 name/role = bg / header（严格字面量）
+  const rootChromeNames = new Set(
+    (options.rootChromeNames || ['bg', 'header']).map((s) => String(s).toLowerCase()),
+  )
+  const isChromeName = (n) => rootChromeNames.has(String(n || '').toLowerCase())
+  const rootChromeIds = new Set()
+  for (const c of root.children || []) {
+    if (!c || typeof c !== 'object') continue
+    const nm = String(c.name || '').toLowerCase()
+    const role = String(c.role || '').toLowerCase()
+    if (isChromeName(nm) || isChromeName(role)) rootChromeIds.add(String(c.id))
+  }
+
+  // ② 覆盖集：vision section 锚点 + 其整棵子树（section 拥有整棵子树）
+  const coveredIds = new Set()
+  const addSubtree = (node) => {
+    if (!node || typeof node !== 'object') return
+    const id = node.id != null ? String(node.id) : ''
+    if (id) coveredIds.add(id)
+    for (const c of node.children || []) addSubtree(c)
+  }
+  for (const s of secs) {
+    if (!s || typeof s !== 'object') continue
+    const anchors = new Set()
+    if (Array.isArray(s.sourceNodeIds)) {
+      for (const id of s.sourceNodeIds) if (id) anchors.add(String(id))
+    }
+    const a = s.figmaNodeId || s.id
+    if (a) anchors.add(String(a))
+    for (const aid of anchors) {
+      const node = index.get(aid)
+      if (node) addSubtree(node)
+    }
+  }
+
+  // 父映射（id → parentId），用于从锚点上溯判定覆盖
+  const parentMap = new Map()
+  const buildParent = (node, pid) => {
+    if (!node || typeof node !== 'object') return
+    const id = node.id != null ? String(node.id) : ''
+    if (id) parentMap.set(id, pid)
+    for (const c of node.children || []) buildParent(c, id)
+  }
+  buildParent(root, null)
+
+  const isCovered = (id) => {
+    let cur = id != null ? String(id) : null
+    while (cur != null) {
+      if (coveredIds.has(cur)) return true
+      cur = parentMap.get(cur) ?? null
+    }
+    return false
+  }
+
+  const minDropped = Number.isFinite(options.minDropped) ? options.minDropped : 1
+  let dropped = 0
+  const walk = (node) => {
+    if (!node || typeof node !== 'object' || dropped >= minDropped) return
+    const id = String(node.id || '')
+    if (rootChromeIds.has(id)) return // 根级 bg/header 子树不计入漏提
+    if (isCovered(id)) return // 已被 vision section 拥有（含子树），避免双渲
+    const type = String(node.type || '').toUpperCase()
+    if (type === 'TEXT' && String(node.characters || '').trim()) {
+      dropped++
+      return
+    }
+    if (type === 'IMAGE') {
+      dropped++
+      return
+    }
+    for (const c of node.children || []) walk(c)
+  }
+  for (const c of root.children || []) walk(c)
+  return dropped >= minDropped
+}
+
 /** 定位根 FRAME：type=FRAME 且 children 非空；document 本身是 FRAME 时直接返回。 */
 function findRootFrame(node) {
   if (!node || typeof node !== 'object') return null

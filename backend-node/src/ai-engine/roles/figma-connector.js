@@ -1235,6 +1235,7 @@ export class FigmaConnector {
       //   子图在映射里永远 missing（R17 实锤 19 条幻影 missing）。真图节点（自身带
       //   IMAGE fill）保持 return——子 VECTOR 碎片仍不拆。
       if (
+        !this._isBgNamedNode(node.name) && // 🛡️ 2026-11-13 bg 命名整体下载契约：父图已含子图视觉，禁下钻（0669e091 车徽章双重渲染实锤）
         !this._selfHasImageFill(node) &&
         this._hasDescendantImageFill(node)
       ) {
@@ -1614,6 +1615,29 @@ export class FigmaConnector {
       optimized.styles = node.styles;
     }
 
+    // 🛡️ bg 整体下载契约（2026-11-13 · 用户指令，0669e091 统计卡实锤）：
+    //   Figma 图层名不标准，**命名即契约**——凡是 bg/bg-xxx/bg_xxx/bg 空格/背景/background
+    //   命名的节点，一律视为「整张背景图」：结构侧剪除全部 children（内部矢量/位图视觉
+    //   已烘焙进整体导出的 PNG），并打 `wholeImageResource` 标记供挂载侧识别。
+    //   此前 bg-[m] 完整子树（每条 Vector 的渐变 stroke/opacity）下发 LLM ⇒ LLM 用 CSS
+    //   把分隔线/圆环/光晕又手绘一遍（deco--line-left 197px 照抄 2:3662 宽）+ 资源侧子组
+    //   再下载挂 <img> ⇒ 同一视觉三层重复渲染（bg 背景 + icon img + CSS deco）⇒ 车图叠字。
+    //   不区分节点类型（FRAME/GROUP/VECTOR 皆同判）：名字说了算，禁再猜「壳还是图」。
+    if (this._isBgNamedNode(node.name)) {
+      if (node.children && node.children.length > 0) {
+        optimized.wholeImageResource = true;
+        optimized.children = [];
+        logger.info(
+          `🔇 bg 命名整体下载：剪除内部子树（视觉已烘焙进整体导出图）: ${node.name}`,
+          {
+            nodeId: node.id,
+            prunedChildren: node.children.length,
+          },
+        );
+      }
+      return optimized;
+    }
+
     // 递归处理子节点（保留嵌套结构）
     if (node.children && Array.isArray(node.children)) {
       optimized.children = node.children
@@ -1622,6 +1646,24 @@ export class FigmaConnector {
     }
 
     return optimized;
+  }
+
+  /**
+   * 🛡️ bg 命名判据（2026-11-13 · 用户指令「只要是 bg/bg-xxx 的都作为整体下载」）
+   * 与 _identifyNodeType 第一优先级 bg 分支同源（单一事实源），两侧共用。
+   * @param {string} name Figma 图层名
+   * @returns {boolean}
+   */
+  _isBgNamedNode(name) {
+    const n = String(name || '').toLowerCase();
+    return (
+      n === 'bg' ||
+      n.startsWith('bg-') ||
+      n.startsWith('bg_') ||
+      n.startsWith('bg ') ||
+      n.includes('背景') ||
+      n.includes('background')
+    );
   }
 
   /**

@@ -348,14 +348,11 @@ export function checkMcComponent(files = {}, declare = null, options = {}) {
     run('M6', `M6 豁免（${compType} 组件不要求一体化适配）`, () => OK);
   }
 
-  // ── W 警告项（2 项）────────────────────────────────────────
-  const allContent = Object.values(files).filter((c) => typeof c === 'string').join('\n');
-  if (/#[0-9a-fA-F]{3,8}\b|rgba?\(/i.test(allContent)) {
-    warnings.push({ id: 'W-CSS-1', name: '硬编码颜色值', message: '样式中存在 hex/rgb 硬编码色值，建议改用 CSS 变量' });
-  }
-  if (/\bversionCode\b/.test(allContent)) {
-    warnings.push({ id: 'W-DEPRECATED-1', name: '废弃字段', message: '使用了已废弃字段 versionCode' });
-  }
+  // ── W 警告项 ────────────────────────────────────────────────
+  // 🗑️ W-CSS-1（硬编码颜色）已于 2026-11-13 退役（用户批准，评审 §5.1）：
+  //   真值色直写（Figma fill→rgba）是管线确定性正确行为，31 次命中 100% 噪音，
+  //   且「建议改用 CSS 变量」与用户申明（硬编码颜色不用 CSS 变量）、根治B 槽位方向冲突。
+  // 🗑️ W-DEPRECATED-1（versionCode）同日退役：字段早已废弃，0 命中历史遗留。
 
   const summary = { total: passed.length + failed.length, passed: passed.length, failed: failed.length, warnings: warnings.length };
   return { passed, failed, warnings, summary };

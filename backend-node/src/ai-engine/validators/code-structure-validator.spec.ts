@@ -1816,7 +1816,7 @@ describe('CODE-023 悬空子组件标签', () => {
  *   classPrefix（带不可剥离的 base36 随机段）与 LLM 自然生成的 c-device-monitor-* 失配
  *   → findPrefixViolations 误报 42 项 → autoFix 二次叠加 →
  *   .c-device-monitor-00g6b7vh-c-device-monitor-switch 永 不 命 中 模 板
- *   → CODE-003-HIT-RATE 死样式 48%。
+ *   → 死样式（原 CODE-003-HIT-RATE 实测 48%，该门禁已于 2026-11-13 退役）。
  *
  * 本 spec 锁定两条治本：
  *   ① 判定容忍「装饰段已剥离」的语义干形态 → 不再把正确类判为违规；
@@ -1913,18 +1913,19 @@ describe('刀 8c: CODE-003 前缀判定与折叠', () => {
     expect(findPrefixViolations('.wrapper { color: red; }', 'c-aa90-87aa90ce')).toEqual(['.wrapper'])
   })
 
-  it('🛡️ 批4（2026-09-28）：主题作用域类 .dark/.light 豁免前缀化（否则补成 .c-xxx-dark 主题失效）', () => {
-    expect(findPrefixViolations('.dark { color-scheme: dark; }', 'c-env-monitor')).toEqual([])
-    expect(findPrefixViolations('.light { color-scheme: light; }', 'c-env-monitor')).toEqual([])
-    // autoFix 不得把 .dark 补成 .c-env-monitor-dark
+  it('🛡️ 批4→2026-11-13 翻转：顶层主题类包裹 .dark/.light 改判违规（宿主不加主题类 ⇒ 0 命中）', () => {
+    expect(findPrefixViolations('.dark { color-scheme: dark; }', 'c-env-monitor')).toEqual(['.dark'])
+    expect(findPrefixViolations('.light { color-scheme: light; }', 'c-env-monitor')).toEqual(['.light'])
+    // autoFix 把违规顶层块包进带前缀根类（不再逐类补前缀、不再产生 .c-env-monitor-dark）
     const res = autoFixPrefixViolations(
       '.dark { color-scheme: dark; }\n.wrapper { color: red; }',
       'c-env-monitor',
       [],
     )
+    expect(res.commonLess).toContain('.c-env-monitor {')
     expect(res.commonLess).toContain('.dark {')
     expect(res.commonLess).not.toContain('c-env-monitor-dark')
-    expect(res.fixedClasses).toEqual(['wrapper']) // 泛化类照常补（能力不丢；fixedClasses 存不带点的类名）
+    expect(res.fixedClasses).toEqual(['dark', 'wrapper'])
   })
 
   it('🛡️ 批6（2026-09-28 · R2）：hash 前缀归一为组件规范前缀（内部 hash 去段）', () => {
@@ -1974,16 +1975,59 @@ describe('刀 8c: CODE-003 前缀判定与折叠', () => {
     expect(findNonAsciiClassNames('')).toEqual([])
   })
 
-  it('autoFixPrefixViolations：新增前缀写「语义干」，绝不写随机段', () => {
+  it('autoFixPrefixViolations：顶层裸块包进「语义干」根类，模板零改写（2026-11-13 新范式）', () => {
     const less = '.wrapper { color: red; }'
     const vueFiles = [
       { path: 'package/index.vue', content: '<template><div class="wrapper"></div></template>' },
     ]
     const res = autoFixPrefixViolations(less, SLUG_PREFIX, vueFiles)
     expect(res.fixedClasses).toEqual(['wrapper'])
-    expect(res.commonLess).toContain('.c-device-monitor-wrapper {')
+    expect(res.commonLess).toContain('.c-device-monitor {')
+    expect(res.commonLess).toContain('.wrapper { color: red; }')
     expect(res.commonLess).not.toContain('00g6b7vh')
-    expect(res.vueFiles[0].content).toContain('class="c-device-monitor-wrapper"')
+    expect(res.vueFiles[0].content).toContain('class="wrapper"')
+    expect(res.vueFiles[0].content).not.toContain('c-device-monitor-wrapper')
+  })
+
+  // ── 2026-11-13 新范式：根类命名空间 + LESS 嵌套（判据/修复器同源）──
+  it('⭐ 嵌套内层短名零违规（根类顶层合规 ⇒ 内层完全不检查）', () => {
+    const less = `.c-env-monitor {
+  .header { color: @text-primary; }
+  .stats-item { padding: 12px; &.active { color: @color-primary; } }
+}`
+    expect(findPrefixViolations(less, 'c-env-monitor')).toEqual([])
+  })
+
+  it('⭐ autoFix 不碰嵌套内层类、不碰模板（新范式产物幂等）', () => {
+    const less = `.c-env-monitor {
+  .header { color: red; }
+  .stats-item { &.active { color: blue; } }
+}`
+    const vueFiles = [
+      { path: 'package/index.vue', content: '<template><div class="header stats-item"></div></template>' },
+    ]
+    const res = autoFixPrefixViolations(less, 'c-env-monitor', vueFiles)
+    expect(res.fixedClasses).toEqual([])
+    expect(res.commonLess).toBe(less)
+    expect(res.vueFiles[0].content).toBe('<template><div class="header stats-item"></div></template>')
+  })
+
+  it('⭐ 顶层裸块 autoFix 包成根类块，且二跑幂等', () => {
+    const res = autoFixPrefixViolations('.wrapper { color: red; }', 'c-env-monitor', [])
+    expect(res.commonLess).toBe('.c-env-monitor {\n  .wrapper { color: red; }\n}')
+    expect(findPrefixViolations(res.commonLess, 'c-env-monitor')).toEqual([])
+    const twice = autoFixPrefixViolations(res.commonLess, 'c-env-monitor', [])
+    expect(twice.commonLess).toBe(res.commonLess)
+    expect(twice.fixedClasses).toEqual([])
+  })
+
+  it('⭐ @media 递归内查 / 第三方复合类 / LESS 混入调用不误报', () => {
+    expect(findPrefixViolations('@media (max-width:768px) { .c-env-monitor { .header { a:1; } } }', 'c-env-monitor')).toEqual([])
+    expect(findPrefixViolations('@media (max-width:768px) { .header { a:1; } }', 'c-env-monitor')).toEqual(['.header'])
+    expect(findPrefixViolations('.ant-btn.c-env-monitor-btn { a:1; }', 'c-env-monitor')).toEqual([])
+    expect(findPrefixViolations('.common();\n.c-env-monitor-tag { a:1; }', 'c-env-monitor')).toEqual([])
+    expect(findPrefixViolations('@keyframes spin { from { opacity:0; } to { opacity:1; } }', 'c-env-monitor')).toEqual([])
+    expect(findPrefixViolations('// .wrapper { a:1; }\n/* .item {a:1;} */\n.c-env-monitor { .ok {a:1;} }', 'c-env-monitor')).toEqual([])
   })
 })
 

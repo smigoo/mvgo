@@ -19,6 +19,7 @@ import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contr
 // 🛡️ 刀 53 家族（vue3 接线 2026-10-23）：下发「会被确定性接管的子组件名」。
 //   与 `vue3-engineer.js` 里的接管评估共用**同一个纯函数**（单一事实源，不写第二套判据）。
 import { collectFoldedGridTakeover } from '../../utils/folded-grid-section-takeover.js';
+import { buildEnhancedStyleTruthDirective } from '../../context/design-facts-compiler.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
@@ -80,6 +81,10 @@ export function buildVue3TrustGuidance(generationInput) {
         );
       }
     }
+
+    // 🛡️ 还原增强（RESTORE_ENHANCEMENT）：补充样式真值注入（有则建议对齐，不强制覆盖 LLM 既有判断）
+    const enhanced = generationInput?.designFacts?.root?.enhancedStyleTruth;
+    lines.push(...buildEnhancedStyleTruthDirective(enhanced));
 
     if (lines.length === 0) return '';
     const level = generationInput.trustVerdict?.level || 'trusted';
@@ -691,6 +696,7 @@ ${contextBlock}
 \`\`\`
 
 - 每个文件用 \`// === 文件路径 ===\` 分隔符开头，内容为原始代码（不转义换行/引号）
+- **⛔ 文件清单即输出边界**：只允许输出上面清单内的文件段，清单之外的任何 \`// === 文件 ===\` 段都会被守卫**整段丢弃**（写了等于白写，还挤占输出预算）；清单内每个 .vue 文件必须含完整 \`<template>\`（缺 template 的残片同样整段丢弃）
 - 分隔符只能标记文件开始，禁止在注释/说明中使用
 - **不要**输出 declare.json / component.js / base-panel 等微码运行时文件
 - \`.less\` 文件只需输出 \`common.less\`（业务 class，建议前缀 \`.mv3-<组件名>-\`）。\`theme-vars.less\` 与 \`index.less\` 均由系统自动生成，**无需输出**。
@@ -752,6 +758,7 @@ export function buildVue3ScriptMiddle(chunk) {
 # 任务要求（分段生成 ${chunk.index}/${chunk.total}：index.vue 脚本段）
 
 只输出 \`package/index.vue\` 的 **<script setup> 段**（JavaScript），与下方模板段的 ref/事件/子组件引用严格一致。不要输出 <template> 和 <style>。
+**⛔ 文件清单即输出边界**：本次只允许输出 \`// === package/index.vue ===\` 这一个文件段；其他文件即使出现在上方上下文里也已在先前批次生成完毕，任何清单外的 \`// === 文件 ===\` 段都会被守卫**整段丢弃**。
 ${ctx ? `\n# 参考上下文（模板段）\n${ctx}\n` : ''}
 # 输出格式
 

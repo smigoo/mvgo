@@ -71,9 +71,18 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
 
   // ── 2. 图表系列膨胀 ──
   const analysisCharts = analysis.charts || analysis.layoutStructure?.charts || []
+  // 🛡️ 判据修正（2026-11-13 · mc-1794532970423-0062020b 复算实锤）：旧判据只信
+  //   vision 的 `multiSeries`/`type!=='multiple'` 声明字段，但 vision 常不写 multiSeries
+  //   而 series/seriesTypes/seriesColors 数组明确 2 系列 ⇒ 单系列误判 → 双系列柱状图
+  //   被打「系列膨胀」WARN（域误伤）。修正：声明字段缺失时直接数确定性数组，数组
+  //   明确多系列即非 singleSeries（数组是 LLM 逐字段产出的事实，比声明字段可信）。
+  const hasMultipleSeriesFact = (c) =>
+    (Array.isArray(c.series) && c.series.length > 1) ||
+    (Array.isArray(c.seriesTypes) && c.seriesTypes.length > 1) ||
+    (Array.isArray(c.seriesColors) && c.seriesColors.length > 1)
   const singleSeries =
     analysisCharts.length > 0 &&
-    analysisCharts.every((c) => !c.multiSeries && c.type !== 'multiple')
+    analysisCharts.every((c) => !c.multiSeries && c.type !== 'multiple' && !hasMultipleSeriesFact(c))
   const genSeries = countChartSeries(vueContent)
   if (singleSeries && genSeries && genSeries > 1) {
     const msg = `图表系列膨胀：视觉分析为单系列，生成代码出现 ${genSeries} 个系列`

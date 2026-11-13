@@ -1,0 +1,39 @@
+{
+  "name": "my-excel",
+  "label": "Excel 解析",
+  "description": "解析 xlsx 文件",
+  "category": "数据源",
+  "logicType": "tool",
+  "templateId": "excel-parse",
+  "inputs": [
+    {
+      "key": "filePath",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "rows",
+      "type": "array"
+    },
+    {
+      "key": "sheetNames",
+      "type": "array"
+    },
+    {
+      "key": "ok",
+      "type": "boolean"
+    }
+  ],
+  "params": {},
+  "model": null,
+  "referenceFiles": [],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/my-excel.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787276963690
+}

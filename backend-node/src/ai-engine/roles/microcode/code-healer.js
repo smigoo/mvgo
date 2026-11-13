@@ -26,7 +26,7 @@
 import { planBadFileIsolation } from '../../utils/bad-file-isolation.js';
 import { validateVueSfc } from '../../utils/sfc-syntax-validation.js';
 import { safeLogger } from '../../logger/safe-logger.js';
-import { healMissingLessBraces, healMissingSemicolons } from '../../validators/less-compile-gate.js';
+import { healMissingLessBraces, healMissingSemicolons, healMisnestedStyleDeclarations } from '../../validators/less-compile-gate.js';
 import { fixTextOrderDrift } from '../../utils/text-order-guard.js';
 import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
@@ -1538,9 +1538,12 @@ export function healVueEmbeddedStyleBraces(content) {
       // 写盘后预览 less 编译报 Unrecognised input（实锤 mc-max-1789646354631-241fa856 ContentSection4.vue）。
       // 先补括号再补分号，二者同属「确定性后处理」，与 .less 文件写盘路径（healLessSource）口径一致。
       // 注意：传入的是 style 块正文（无 <style> 标签），须用 sourceType:'style'，否则 vue 守卫会整块跳过。
-      const healedBraces = healMissingLessBraces(css);
+      // 🛡️ 2026-11-13（mc-max-1794546172891-8b9302bc 实锤）：错嵌套（孤儿声明+多余 `}`）先修——
+      //   它删掉一个多余闭合，后续补缺括号/补分号的扫描基线才正确；顺序不可颠倒。
+      const misnested = healMisnestedStyleDeclarations(css);
+      const healedBraces = healMissingLessBraces(misnested.source);
       const healed = healMissingSemicolons(healedBraces.source, { sourceType: 'style' });
-      if (healed.changed || healedBraces.changed) {
+      if (healed.changed || healedBraces.changed || misnested.changed) {
         changed = true;
         return full.replace(css, healed.source);
       }

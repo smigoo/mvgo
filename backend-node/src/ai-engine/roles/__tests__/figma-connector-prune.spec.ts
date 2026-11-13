@@ -216,3 +216,174 @@ describe('pruneRedundantFields · fill/stroke 透明度保留（2026-10-19，c-a
     expect(pruned.fills[0].color.a).toBe(0.5);
   });
 });
+
+/**
+ * 🛡️ bg 整体下载契约（2026-11-13 · 用户指令「只要是 bg/bg-xxx 的都作为整体下载 不循环内部」）
+ * 病灶（0669e091 统计卡实锤）：bg-[m] 完整子树下发 LLM ⇒ CSS 手绘 deco 三层重复渲染；
+ * 资源侧 11-10 容器壳双轨下钻 ⇒ 内部车徽章/光晕组又下载挂 <img> ⇒ 车图叠字。
+ * 契约：命名即契约——bg/bg-xxx/bg_xxx/bg 空格/背景/background 命名的节点：
+ *   ① 结构侧 children 剪除 + wholeImageResource 标记；② 资源侧 push 后不再下钻。
+ *   不区分节点类型（FRAME/GROUP 皆同判）。
+ */
+describe('pruneRedundantFields · bg 命名整体下载契约（剪子树 + wholeImageResource 标记）', () => {
+  const conn = new FigmaConnector({ figmaToken: 'fake-token-for-test' });
+
+  const mkBgNode = (name: string) => ({
+    id: '88:34',
+    name,
+    type: 'FRAME',
+    absoluteBoundingBox: { x: 0, y: 0, width: 426, height: 91 },
+    fills: [],
+    children: [
+      {
+        id: '2:3662',
+        name: 'Vector',
+        type: 'VECTOR',
+        strokes: [{ type: 'GRADIENT_LINEAR' }],
+      },
+      {
+        id: '2:3670',
+        name: 'Group 1321318547',
+        type: 'GROUP',
+        children: [
+          {
+            id: '2:7458',
+            name: 'image 2136639306',
+            type: 'RECTANGLE',
+            fills: [
+              { type: 'IMAGE', visible: true, imageRef: 'hash-abc' },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  it.each(['bg-[m]', 'bg', 'bg-header', 'bg_x', 'bg main', '顶部背景', 'background-layer'])(
+    'bg 命名变体 %s：children 剪除 + wholeImageResource 标记 + 自身字段保留',
+    (name) => {
+      const pruned = conn.pruneRedundantFields(mkBgNode(name) as any);
+      expect(pruned.children).toEqual([]);
+      expect(pruned.wholeImageResource).toBe(true);
+      expect(pruned.id).toBe('88:34');
+      expect(pruned.absoluteBoundingBox).toEqual({
+        x: 0,
+        y: 0,
+        width: 426,
+        height: 91,
+      });
+    },
+  );
+
+  it('非 bg 命名节点：children 正常递归（不受契约误伤）', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '1744:126',
+      name: 'cards',
+      type: 'FRAME',
+      children: [
+        { id: '2:3683', name: 'Group 1321318553', type: 'GROUP', children: [] },
+      ],
+    } as any);
+    expect(pruned.wholeImageResource).toBeUndefined();
+    expect(pruned.children).toHaveLength(1);
+    expect(pruned.children[0].id).toBe('2:3683');
+  });
+
+  it('bg 命名嵌套在深层时同样生效（逐节点判定，非仅根）', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '2:3660',
+      name: '1统计',
+      type: 'FRAME',
+      children: [mkBgNode('bg-[m]') as any],
+    } as any);
+    expect(pruned.children[0].wholeImageResource).toBe(true);
+    expect(pruned.children[0].children).toEqual([]);
+  });
+});
+
+describe('extractResourceNodes · bg 命名禁下钻（11-10 容器壳双轨在 bg 命名上关闭）', () => {
+  const conn = new FigmaConnector({ figmaToken: 'fake-token-for-test' });
+
+  const mkCarBg = () => ({
+    id: '88:34',
+    name: 'bg-[m]',
+    type: 'FRAME',
+    absoluteBoundingBox: { x: 0, y: 0, width: 426, height: 91 },
+    fills: [],
+    children: [
+      { id: '2:3664', name: 'Group', type: 'GROUP', children: [{ id: '2:3665', name: 'Vector', type: 'VECTOR' }] },
+      {
+        id: '2:3670',
+        name: 'Group 1321318547',
+        type: 'GROUP',
+        absoluteBoundingBox: { x: 164, y: 0, width: 90, height: 86 },
+        children: [
+          {
+            id: '2:7458',
+            name: 'image 2136639306',
+            type: 'RECTANGLE',
+            absoluteBoundingBox: { x: 179, y: 13, width: 62, height: 62 },
+            fills: [{ type: 'IMAGE', visible: true, imageRef: 'hash-abc' }],
+          },
+        ],
+      },
+    ],
+  });
+
+  it('bg-[m] 整体入清单，内部子组（含 IMAGE fill 叶子）不再下钻收集', () => {
+    // ⚠️ bg 必须嵌在根的**非直接子**层：根的直接子 bg 命中「透明底要求」跳过分支
+    //    （M6-3a/3b，与整体下载契约无关）。真实管线 0669e091 中 bg-[m] 在 1统计 下两层。
+    const root = {
+      id: '2:9778',
+      name: '流量监测',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 426, height: 720 },
+      children: [
+        {
+          id: '2:3660',
+          name: '1统计',
+          type: 'FRAME',
+          absoluteBoundingBox: { x: 0, y: 0, width: 426, height: 91 },
+          children: [mkCarBg() as any],
+        },
+      ],
+    };
+    const collected = conn.extractResourceNodes(root as any, [], true, []);
+    const ids = collected.map((n: any) => String(n.id));
+    expect(ids).toContain('88:34'); // bg 整体导出
+    expect(ids).not.toContain('2:7458'); // 子 IMAGE 叶子不再收集
+    expect(ids).not.toContain('2:3670'); // 子矢量组不再收集
+  });
+
+  it('阴性（11-10 保真）：icon 命名容器壳仍下钻收集子图（不铺满包含，让位不命中）', () => {
+    // ⚠️ 内图须**不被壳铺满**（宽高差 >8px）：铺满包含会命中 11-11「组合图标内层位图让位」
+    //    （dd5791ba，独立根治，语义正确），那不是 11-10 下钻的管辖区。
+    const iconShell = {
+      id: '136:123',
+      name: 'icon',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 90, height: 90 },
+      fills: [],
+      children: [
+        {
+          id: '2:8060',
+          name: 'jimeng-base',
+          type: 'RECTANGLE',
+          absoluteBoundingBox: { x: 4, y: 4, width: 47.5, height: 47.5 },
+          fills: [{ type: 'IMAGE', visible: true, imageRef: 'hash-jimeng' }],
+        },
+      ],
+    };
+    const root = {
+      id: 'card',
+      name: 'card',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 200, height: 200 },
+      children: [iconShell],
+    };
+    const collected = conn.extractResourceNodes(root as any, [], true, []);
+    const ids = collected.map((n: any) => String(n.id));
+    expect(ids).toContain('136:123'); // 壳整体导出
+    expect(ids).toContain('2:8060'); // 子 IMAGE 叶子仍被收集（11-10 根治保真）
+  });
+});

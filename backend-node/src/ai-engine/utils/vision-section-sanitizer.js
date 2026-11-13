@@ -182,10 +182,32 @@ export function sanitizeVisionSections(layout, figmaData, meta = null) {
     if (!target) continue
 
     const fromId = String(sec.id)
+    const fromBox = anchorBoxes.get(sec)
     sec.id = target.rec.id
     sec.figmaNodeId = target.rec.id
-    const raw = target.rec.rawNode
-    if (raw?.absoluteBoundingBox) sec.absoluteBoundingBox = raw.absoluteBoundingBox
+    // 🛡️ 改锚领土回收（2026-11-13 · 7dfc01e9 实锤「车型分布」标题丢失）：
+    //   改锚只换主锚（锚点契约 / flex 主高 / 认领排序），**不丢弃原锚子树的领土**。
+    //   旧行为：bbox 整体改绑新锚盒 ⇒ 原锚（标题条）子树落在段领土之外 ⇒ 变孤儿，
+    //   被刀 7 吸成背景 ghost（886d8437 图例色块实锤）或刀 7d 排除后直接消失（7dfc01e9
+    //   菱形标题图标实锤）。回收两件事：
+    //     ① 原锚 id 并入 sourceNodeIds —— 装配层 claimedIds（collectSourceNodeIds
+    //       收显式 sourceNodeIds）含它，标题子树不再「未认领」；
+    //     ② 段盒扩为原锚 ∪ 新锚联合盒 —— claimCollapsedLeafContainedIds 按
+    //       resolveSectionBox（own bbox 优先）划 v-for 领土，联合盒让标题行进入领土。
+    //   flex 主高仍写新锚 figmaHeightPx（f3085ec6「锚对了 flex 自然回真值」语义逐字不变；
+    //   联合盒只影响领土与排序 y，不参与 flex 分配）。
+    if (!Array.isArray(sec.sourceNodeIds)) sec.sourceNodeIds = []
+    if (!sec.sourceNodeIds.map(String).includes(fromId)) sec.sourceNodeIds.push(fromId)
+    if (fromBox && target.box) {
+      const ux = Math.min(fromBox.x, target.box.x)
+      const uy = Math.min(fromBox.y, target.box.y)
+      const ur = Math.max(fromBox.x + fromBox.w, target.box.x + target.box.w)
+      const ub = Math.max(fromBox.y + fromBox.h, target.box.y + target.box.h)
+      sec.absoluteBoundingBox = { x: ux, y: uy, width: ur - ux, height: ub - uy }
+    } else {
+      const raw = target.rec.rawNode
+      if (raw?.absoluteBoundingBox) sec.absoluteBoundingBox = raw.absoluteBoundingBox
+    }
     if (sec.styles && typeof sec.styles === 'object') {
       sec.styles.figmaHeightPx = target.box.h
     }

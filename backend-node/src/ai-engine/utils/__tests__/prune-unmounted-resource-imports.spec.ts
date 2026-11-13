@@ -167,4 +167,57 @@ import bg1 from '../../resources/images/bg-1.png'
     expect(r.content).toContain('import icon1 from');
     expect(r.content).not.toContain('import bg1 from');
   });
+
+  // ────────── 2026-11-13：漂移名同源化（mc-max-1794546172891-8b9302bc 实锤） ──────────
+  // 病灶：LLM 从文件名臆造变量名（bg-_m-36.png → bgbg_m36），不在注册表 ⇒ 旧口径按
+  // varToMapping.keys() 迭代漏扫 ⇒ CODE-022 门禁（按 import 路径扫）判死、修复器不删
+  // ⇒ 自愈永不生效 ⇒ 重试耗尽 fail-closed。修复器迭代源扩为「门禁同款 importRe ∪ 注册表」。
+  describe('漂移名同源化（迭代源 = 门禁同款 importRe ∪ 注册表）', () => {
+    it('注册表外的漂移名（bgbg_m36）零引用 → 照样删除（空 mapping 也生效）', () => {
+      const content = `<template><base-panel :style="{ backgroundImage: url(bg1) }" /></template>
+<script setup>
+import bg1 from '../../resources/images/bg-1.png'
+import bgbg_m36 from '../../resources/images/bg-_m-36.png'
+</script>`;
+      const r = pruneUnmountedResourceImports(content, []);
+      expect(r.changed).toBe(true);
+      expect(r.pruned).toEqual(['bgbg_m36']);
+      expect(r.content).not.toContain('import bgbg_m36 from');
+      expect(r.content).toContain('import bg1 from');
+    });
+
+    it('已挂载的漂移名（bgbg_m35 挂 base-panel）→ 保留，不误删', () => {
+      const content = `<template><base-panel :style="{ backgroundImage: 'url(' + bgbg_m35 + ')' }" /></template>
+<script setup>
+import bgbg_m35 from '../../resources/images/bg-_m-35.png'
+</script>`;
+      const r = pruneUnmountedResourceImports(content, []);
+      expect(r.changed).toBe(false);
+      expect(r.pruned).toEqual([]);
+    });
+
+    it('漂移名悬空 + 注册名已挂载（混合）→ 只删漂移名', () => {
+      const content = `<template><div :style="{ backgroundImage: url(bg1) }" /></template>
+<script setup>
+import bg1 from '../../resources/images/bg-1.png'
+import bgbg_m35 from '../../resources/images/bg-_m-35.png'
+import bgbg_m36 from '../../resources/images/bg-_m-36.png'
+</script>`;
+      const r = pruneUnmountedResourceImports(content, mapping);
+      expect(r.pruned.sort()).toEqual(['bgbg_m35', 'bgbg_m36']);
+      expect(r.content).toContain('import bg1 from');
+    });
+
+    it('幂等：漂移名删除后二次调用零副作用', () => {
+      const content = `<template><div /></template>
+<script setup>
+import bgbg_m36 from '../../resources/images/bg-_m-36.png'
+</script>`;
+      const r1 = pruneUnmountedResourceImports(content, []);
+      expect(r1.changed).toBe(true);
+      const r2 = pruneUnmountedResourceImports(r1.content, []);
+      expect(r2.changed).toBe(false);
+      expect(r2.pruned).toEqual([]);
+    });
+  });
 });

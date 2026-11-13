@@ -57,7 +57,8 @@ describe('runAcceptanceChecks（判分闭环 D1 单一事实源）', () => {
     expect(codes).toContain('A1-v2');
     expect(codes).toContain('E3-v2');
     expect(codes).toContain('Dangling');
-    expect(codes).toContain('D2');
+    // D2 降级（2026-11-13 安全组）：文本重叠与 RUNTIME-016 同源，已转 warns 不再 BLOCK
+    expect(r.warns.some((w) => w.includes('D2'))).toBe(true);
   });
 
   it('② 阴性：tab 有绑定 + 段文本齐全 + 单 bg + 闭包闭合 ⇒ 零 FAIL', () => {

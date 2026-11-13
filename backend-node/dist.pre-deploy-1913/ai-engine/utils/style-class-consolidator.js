@@ -1,0 +1,1632 @@
+/**
+ * 子组件类样式收敛器（2026-09-03，管线 A 方案）
+ *
+ * 【背景 / 为什么需要】
+ * 契约化改造后，微码产物由「单体 index.vue」变成「主壳 + N 个子组件」，
+ * 子组件的类样式自然落在各自的 `<style lang="less" scoped>` 里。而预览加载器
+ * （vue3-sfc-loader 0.9.5）存在 **scopeId 失配**缺陷：元素 `data-v-X` 与 CSS 规则
+ * `[data-v-Y]` 对不上 → 子组件 scoped 样式在预览页**全部失效**
+ * （agent-browser 实测：icon 按 PNG 原始 104px 渲染、chart 容器 0 高 → echarts 不初始化）。
+ * 方案前单体组件 + 行内样式 + common.less，缺陷被掩盖 → 拆分后集中爆发 = 视觉退化。
+ *
+ * 【治本思路】
+ * 把子组件的**类规则**确定性收敛进 `resources/styles/common.less`：
+ *  - common.less 会被 `precompileCss` 编译进 `index.css`（无 scoped、全局生效）；
+ *  - 预览侧已确定性注入 index.css（loadVue3Runtime.injectGlobalIndexCss）；
+ *  → 类样式还原不再依赖 scoped 机制。
+ * 同名类冲突时**以子组件定义为准**（子组件样式更贴近其模板，且消除双源漂移）。
+ *
+ * 【④ 根因与治本（2026-09-09，#648/#649）】
+ *  实测 fixtures 暴露：LLM 给同一视觉节点生成**两套类名** —— scoped 内写**短语义类**
+ *  （如 `.c-device-monitor-header-stats`），而真实 DOM 上却套一层**实例前缀长形式**
+ *  （如 `c-device-monitor-malvtjd5-c-device-monitor-header-stats`，即 `c-{instanceId}-` + 短类）。
+ *  旧收敛把 scoped 短类**原样**搬进 common.less，但真实 DOM 是长类名 → 选择器永远对不上
+ *  → 样式失效（icon 按 PNG 原始尺寸、图表容器 0 高）+ 曾被 CODE-003-HIT-RATE 误判死样式（该门禁已于 2026-11-13 退役）。
+ *  治本：以「子组件 template DOM 实际类名」为事实源，对每个 scoped 短类选择器确定性重写为
+ *  DOM 实际出现的长/短形式（DOM 有 `c-{instanceId}-{短类}` 则用长、否则用短、都没有则
+ *  fail-open 保留短类）；无 instanceId 组件（DOM 全短）保持短类，不臆造前缀。
+ *
+ * 【安全边界】
+ *  - 只处理 `package/components/*.vue` 的顶层类规则，不碰变量声明 / @import / @media；
+ *  - 合并前做括号平衡校验，异常则**整体回退不改动**（不引入 LESS 语法错误）；
+ *  - 纯函数、幂等（重复执行结果一致）。
+ */
+
+/** 子组件路径：package/components/Xxx.vue */
+const SUB_COMPONENT_RE = /^package\/components\/[^/]+\.vue$/;
+/** 公共样式文件路径 */
+const COMMON_LESS_PATH = 'resources/styles/common.less';
+/** 顶层规则起始：行首 .cls / &  / @media 之外只收类选择器 */
+const RULE_START_RE = /^(\.[a-zA-Z][\w-]*)/;
+
+import {
+  collectClassFacts,
+  collectFileClassFact,
+  resolveDomClass,
+} from './class-facts.js';
+import { extractSfcTemplate } from './sfc-template-extractor.js';
+// 🛡️ L0 判据单点化（2026-10-20 · mc-max-1792497064987-195c8d0e 实锤）：
+//   本文件原有一个自写 `isBalanced()`（只数 `{}`，不数圆括号），与写盘门禁
+//   `scanStandaloneLessDefects`（数圆括号，LESS-WRITE-004）**判据不同构** ⇒
+//   合并器放行「大括号平衡但圆括号缺 1」的合并稿（13ms 前报「已收敛」），
+//   写盘门禁立刻判死并跳过（本组件连续 6 轮），无 last-good ⇒ 15 行兜底模板
+//   覆盖磁盘 ⇒ 641 行 / 覆盖 53/56 class 的合格样式表被丢弃，19 个布局容器
+//   类零定义（组件几乎无样式）。
+//   ⇒ 根治方式不是「给 isBalanced 补一维」（那仍是第二份副本，下次门禁升级
+//   判据还会错位），而是**只保留一个判据点**：合并产物直接交给写盘门禁判定，
+//   通过则接受其 heal 后的文本（保证合并器输出恒能过门禁，写盘时退化为幂等）。
+//   ⚠️ less-compile-gate.js 无任何内部 import（仅 less/fs/path）⇒ 无循环依赖。
+import { gateStandaloneLessWrite } from '../validators/less-compile-gate.js';
+
+/**
+ * 从 SFC 源码中提取 style 块内容（可能多个），返回拼接后的 Less 文本。
+ * @param {string} sfc 组件源码
+ * @returns {string}
+ */
+function extractStyleBlocks(sfc = '') {
+  const blocks = [];
+  const re = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let m;
+  while ((m = re.exec(sfc))) {
+    blocks.push(m[1] || '');
+  }
+  return blocks.join('\n');
+}
+
+/**
+ * 按括号平衡切分 Less 文本为「顶层块」数组（保留原始文本，含尾部 }）。
+ * 只保留以类选择器开头的块；跳过变量声明（@x: ...）、@import、注释、@media。
+ *
+ * 【④ 修复（2026-09-09）跨行选择器组】
+ *  旧实现遇到每个「非块体行」若其本身不是选择器开头（如 `.a,\n.b,` 这类逗号续行）就 `continue`，
+ *  导致多选择器跨行分组（`.stat-type,\n.stat-total,\n.stat-rate { ... }`）被切成多个碎片，
+ *  只有最后一个带 `{` 的选择器成块，前几个及其共享规则被静默丢弃 → 样式缺漏。
+ *  新实现：首行识别为类选择器即「开始一块」并持续累积后续行，直到 `{` 出现（进入块体）、
+ *  再直到 `}` 配对返回顶层才定稿——跨行多选择器被完整保留为单一块。
+ *
+ * 🛡️ 刀 53h（2026-10-23）：升级为**导出**——`orphan-style-rule-guard.js` 复用同一实现做
+ * 「孤儿规则」判定（块枚举）。**禁止在任何调用方另写一份块切分**（副本 ≥2 份 = 事故温床）。
+ *
+ * @param {string} less 样式文本
+ * @returns {Array<{selector: string, text: string}>}
+ */
+export function splitTopLevelClassBlocks(less = '') {
+  const lines = String(less).split('\n');
+  const blocks = [];
+  let buf = '';
+  let depth = 0;
+  let selector = '';
+  let started = false; // 已开始一个顶层块（首选择器识别后）
+  let entered = false; // 已遇到块体 { （进入过 depth>0）
+  let inAtRule = false; // 🛡️ 修复：追踪 @media/@supports 等 at-rule 块
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\/\/.*$/, ''); // 去行注释（不处理块注释，避免误判）
+    const trimmed = line.trim();
+
+    // 🛡️ 修复：检测 at-rule 开始（@media/@supports/@keyframes 等）
+    if (depth === 0 && !started && /^@(media|supports|keyframes|font-face|import|charset)/i.test(trimmed)) {
+      inAtRule = true;
+    }
+
+    // 顶层、尚未开始块、非 at-rule 内：识别块首选择器
+    if (depth === 0 && !started && !inAtRule) {
+      if (!trimmed || trimmed.startsWith('@') || trimmed.startsWith('/*')) {
+        if (buf.trim()) { blocks.push({ selector, text: buf.replace(/\s+$/, '') }); buf = ''; }
+        started = false; selector = '';
+        continue;
+      }
+      const sm = trimmed.match(RULE_START_RE);
+      if (!sm) {
+        // 非类选择器开头（裸属性 / 标签选择器）→ 若有累积先定稿
+        if (buf.trim()) { blocks.push({ selector, text: buf.replace(/\s+$/, '') }); buf = ''; }
+        started = false; selector = '';
+        continue;
+      }
+      // 进入新块：即便本行同时带 { 也继续累积（depth 会在下方更新）
+      selector = sm[1];
+      started = true;
+      entered = false;
+      buf = '';
+    }
+
+    if (started) buf += rawLine + '\n';
+
+    for (const ch of line) {
+      if (ch === '{') { depth += 1; entered = true; }
+      else if (ch === '}') depth -= 1;
+    }
+
+    // 🛡️ 修复：at-rule 块结束时重置状态
+    if (inAtRule && depth === 0) {
+      inAtRule = false;
+      buf = '';
+      started = false;
+      selector = '';
+      entered = false;
+      continue;
+    }
+
+    // 顶层闭合：一个完整块（首选择器 + 块体）结束。必须 entered —— 否则多行选择器
+    // 续行（.a,\n.b,）在 depth 仍为 0 时会被误判为独立块。只有真正 {→} 配对后才定稿。
+    if (started && entered && depth <= 0) {
+      if (buf.trim()) blocks.push({ selector, text: buf.replace(/\s+$/, '') });
+      buf = '';
+      started = false;
+      selector = '';
+      entered = false;
+      depth = 0;
+    }
+  }
+  // 末尾若有未定稿（理论不该出现，保守定稿）
+  if (started && entered && buf.trim()) blocks.push({ selector, text: buf.replace(/\s+$/, '') });
+  return blocks;
+}
+
+/**
+ * 从 Less 文本中删除指定类选择器的规则块（**含嵌套块**）。
+ *
+ * 为什么必须处理嵌套：LLM 常把子组件的类写进 common.less 的父选择器内
+ * （如 `.controls { .icon-btn { width: 100% } }`）。若只在文件末尾追加顶层定义，
+ * 嵌套选择器的优先级更高 → 追加的 24px **不会生效**（实测实锤）。
+ * 故收敛前先把同名块（任意层级）全部剥离，保证子组件定义是唯一事实源。
+ *
+ * 假定产物 Less 为规整格式（选择器独占行、`{` 在行尾、`}` 独占行）——
+ * 管线生成 + css-sanitizer 清洗后满足该前提；异常格式走括号校验回退。
+ * @param {string} less 原 Less 文本
+ * @param {string[]} selectors 待删除的类选择器（如 ['.c-x-icon-btn']）
+ * @returns {string}
+ */
+/**
+ * 🛡️ 批0（2026-09-28）：提取 common.less 中指定选择器的规则块原文（与 removeClassBlocks
+ * 同解析口径：按行 + 花括号深度 + 选择器 token 命中）。用于「同名类合并」时保留现有声明，
+ * 避免 remove+append 造成声明净丢失。
+ */
+function extractClassBlocks(less = '', selectors = []) {
+  if (!selectors.length) return [];
+  const out = [];
+  const lines = String(less).split('\n');
+  let depth = 0;
+  let buf = null;
+  const countBraces = (text) => {
+    let open = 0, close = 0;
+    for (const ch of text) {
+      if (ch === '{') open += 1;
+      else if (ch === '}') close += 1;
+    }
+    return { open, close };
+  };
+  for (const line of lines) {
+    if (depth <= 0) {
+      if (!line.includes('{')) continue;
+      const selPart = line.slice(0, line.indexOf('{')).trim();
+      // 🛡️ F2c（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：选择器 token 归一。
+      //   追加写盘（`...}\n.c-x {}` 或直接 `}.c-x {`）会让选择器与上一块的 `}` 粘连，
+      //   `tokens.includes('.c-x')` 判不中 ⇒ 既有同名块**根本没进并集** ⇒ 批0
+      //   「声明保真」保护失效（实测 tabs-list 的真值 height:27px / overflow:hidden 静默丢失）。
+      //   归一：按空白/逗号切分后剥掉行首装饰符（`}`/`;`），兼容 `,` 分隔的多选择器。
+      const tokens = selPart
+        .split(/[\s,]+/)
+        .map((t) => t.replace(/^[};]+/, ''))
+        .filter(Boolean);
+      const hit = selectors.some((s) => tokens.includes(s));
+      if (!hit) continue;
+      buf = [line];
+      // 🛡️ F2c（同批）：深度只从**本块开括号**起算 —— 行首若粘连上一块的 `}`（`}.c-x {`），
+      //   旧口径 open-close=0 ⇒ 块被判定「当场闭合」，只取到选择器行、正文全丢；再被
+      //   removeClassBlocks 删掉原块 ⇒ 声明净丢失（真值 height:27px/overflow:hidden 实测丢失）。
+      const { open, close } = countBraces(line.slice(line.indexOf('{')));
+      depth = open - close;
+      if (depth <= 0) { out.push(buf.join('\n')); buf = null; depth = 0; }
+    } else if (buf) {
+      buf.push(line);
+      const { open, close } = countBraces(line);
+      depth += open - close;
+      if (depth <= 0) { out.push(buf.join('\n')); buf = null; depth = 0; }
+    }
+  }
+  return out;
+}
+
+/**
+ * 🛡️ F2c（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：**粘连闭括号规范化**。
+ *
+ * 病灶：追加写盘会产生 `}.c-next {` / `flex: 0 0 auto;}.c-next {`（`}` 与下一个选择器同一行）。
+ *   `extractClassBlocks` / `removeClassBlocks` 都是**按行累计花括号深度**的实现 ⇒ 这种行里
+ *   「前块的 `}` + 后块的 `{`」被同时计入本行 ⇒ `open-close === 0` ⇒ 前块把后块整块吞掉
+ *   （实测 6 块只抽出 3 块，tabs-list / icon-wrap / num 三个全部丢失）⇒ 批0「声明保真」
+ *   并集失效 + `removeClassBlocks` 照删原块 ⇒ **声明净丢失**（真值 height:27px / overflow:hidden
+ *   消失）。真机 A/B 反证：把 `}.` 拆成 `}\n.` 后 6 块全部命中、真值声明回到并集。
+ *
+ * 判据：`}` 之后紧跟非空白/非 `}` 字符 ⇒ 插入换行。幂等（拆过之后不再命中）。
+ * @param {string} less
+ * @returns {string}
+ */
+function normalizeGluedBraces(less = '') {
+  return String(less).replace(/\}(?=[^\s}])/g, '}\n');
+}
+
+/**
+ * 🛡️ 刀 53h（2026-10-23）：升级为**导出**——`orphan-style-rule-guard.js` 复用同一实现做
+ * 「孤儿规则」删除（与 `splitTopLevelClassBlocks` 块枚举同解析口径：按行 + 花括号深度 +
+ * 选择器 token 命中）。**禁止在任何调用方另写一份块删除**（副本 ≥2 份 = 事故温床）。
+ *
+ * @param {string} less 原 Less 文本
+ * @param {string[]} selectors 待删除的类选择器（如 ['.c-x']）
+ * @returns {string}
+ */
+export function removeClassBlocks(less = '', selectors = []) {
+  if (!selectors.length) return less;
+  const lines = String(less).split('\n');
+  const out = [];
+  let skipDepth = 0;
+
+  const countBraces = (text) => {
+    let open = 0;
+    let close = 0;
+    for (const ch of text) {
+      if (ch === '{') open += 1;
+      else if (ch === '}') close += 1;
+    }
+    return { open, close };
+  };
+
+  for (const line of lines) {
+    if (skipDepth > 0) {
+      const { open, close } = countBraces(line);
+      skipDepth += open - close;
+      if (skipDepth <= 0) skipDepth = 0;
+      continue; // 跳过块体
+    }
+    const trimmed = line.trim();
+    const isBlockStart = trimmed.includes('{');
+    if (isBlockStart) {
+      const selPart = trimmed.slice(0, trimmed.indexOf('{')).trim();
+      const tokens = selPart.split(/\s+/).filter(Boolean);
+      const hit = selectors.some((s) => tokens.includes(s));
+      if (hit) {
+        const { open, close } = countBraces(line);
+        skipDepth = open - close; // 单行块（如 `.a { x: 1 }`）时为 0
+        if (skipDepth <= 0) skipDepth = 0;
+        continue; // 删除块头
+      }
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/**
+ * 检查块是否包含百分比尺寸值（如 width: 100%）
+ * @param {string} blockText 块文本
+ * @returns {boolean}
+ */
+function hasPercentageSize(blockText) {
+  return /\b(width|height)\s*:\s*\d+%/i.test(blockText);
+}
+
+/** 单条「百分比尺寸」声明（F2 逐声明剥离的唯一判据口径，与 hasPercentageSize 同源：只认 width/height） */
+const PCT_SIZE_DECL_RE = /^(?:width|height)\s*:\s*\d+(?:\.\d+)?%\s*(?:!important)?$/i;
+
+/**
+ * 🛡️ F2（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：**逐声明**剥百分比尺寸，而非整块丢弃。
+ *
+ * 事故形态（环境监测 tabs 纵向堆叠成大蓝块，真机 DOM 实测 `.c-…-tabs-list` 计算 display=block）：
+ *   子组件块 = `{ display:flex; flex-direction:row; align-items:center; flex:1;
+ *                min-width:0; height:100%; padding:0 3px; box-sizing:border-box; }`
+ *   common.less 同名类已有 Figma 真值像素块（`height:27px; padding:3px 4px; flex:0 0 auto;`）
+ *   ⇒ 旧保护判据 `hasPercentageSize && hasPixelSizeInCommon` 命中后 **`return false` 整块丢弃**
+ *   ⇒ `display:flex / flex-direction:row` 随块一起消失 ⇒ 四个 tab 纵向堆叠。
+ *   丢弃粒度与 `:408-414`「批0 并集防声明净丢失」的治理方向自相矛盾。
+ *
+ * 治本：只剥**冲突的尺寸声明**（width/height 百分比），其余声明（display / flex-direction /
+ *   align-* / gap / padding / 定位…）全部保留并参与合并；剥后无声明且无嵌套块才整块丢弃
+ *   （返回 null，调用方按旧语义丢弃）。
+ *
+ * @param {string} blockText 完整规则文本 `sel { body }`
+ * @returns {string|null} 剥后文本；原文无需改动时返回原文；剥空返回 null
+ */
+function stripPercentageSizeDecls(blockText) {
+  const text = String(blockText || '');
+  const open = text.indexOf('{');
+  if (open < 0) return text;
+  // 深度感知配对闭合（嵌套 LESS 子块不得截断父块，同 splitBlockBody 口径）
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        close = i;
+        break;
+      }
+    }
+  }
+  if (close < 0) return text;
+  const head = text.slice(0, open);
+  const body = text.slice(open + 1, close);
+  const tail = text.slice(close + 1);
+  const { decls, nested } = splitBlockBody(body);
+  const kept = decls.filter((d) => !PCT_SIZE_DECL_RE.test(String(d).trim()));
+  if (kept.length === decls.length) return text; // 无百分比尺寸声明 ⇒ 原样
+  if (kept.length === 0 && nested.length === 0) return null; // 剥空 ⇒ 整块丢弃（旧语义）
+  const nestedText = nested.map((n) => `  ${n.selector} {${n.body}}`).join('\n');
+  const bodyText = kept.map((d) => `  ${d};`).join('\n');
+  return `${head}{\n${bodyText}${nestedText ? `\n${nestedText}` : ''}\n}${tail}`;
+}
+
+/**
+ * 检查 common.less 中同名块是否包含像素尺寸值
+ * @param {string} commonLess common.less 内容
+ * @param {string} selector 选择器
+ * @returns {boolean}
+ */
+function hasPixelSizeInCommon(commonLess, selector) {
+  // 🛡️ 刀 48（2026-10-22）：旧版 `/\{([^}]*)\}/` 在第一个子块 `}` 处截断 ——
+  //   嵌套子块里的 px 会被误判成父块的 px ⇒ 保护规则误触发 ⇒ 子组件的百分比块被丢弃
+  //   （= 声明净丢失）。改用 outerBlockBody 深度感知取体（同为单一实现）。
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const head = new RegExp(`${escapedSelector}\\s*\\{`, 'i').exec(commonLess);
+  if (!head) return false;
+  const body = outerBlockBody(commonLess.slice(head.index));
+  return /\b(width|height)\s*:\s*\d+px/i.test(body);
+}
+
+/**
+ * 🗑️ P4 删减法收口（2026-09-19）：以下三个补偿器已删除——
+ *   - extractLayoutDecls / injectMissingLayoutDecls（保护规则 2「布局声明缺则保留」，89f28cb）
+ *   - injectDisplayFromFlexSignals（规则①「flex 信号补 display」，8404de1）
+ * 删除依据（B' 布局事实层接管 display 判定权）：
+ *   1. P1 buildNodeLayoutFacts（Figma 几何真值，全节点覆盖含子组件内部容器）；
+ *   2. P2 compileDesignFacts.nodeLayoutFacts 挂入 designFacts；
+ *   3. P3 style chunk prompt 注入强制约束；P3.5 component chunk（buildCodePrompt 路径）同样注入。
+ * 真机验证（P3.5 后 3 任务 A/B 离线重放）：删规则①②后容器级 display 全保留，
+ * 唯一差异是叶子节点 display:block 丢失——flex item 自动 blockify，无视觉影响。
+ */
+
+/**
+ * 🛡️ R2 治本（2026-09-30 · c-traffic-monitor-a6d2e5e1 实锤）：图表组件块的固定像素尺寸剥离。
+ *
+ * 背景：豁免（isChartComponent → protectedBlocks 保留）只解决了「百分比块不被丢弃」，
+ * 但没拦「LLM 误置真值像素随块进 common.less」。52px（Figma 徽章/图标真值）一旦进
+ * common，会被**每个子组件 SFC 的 scoped `@import index.less` 复制 N 份**（各自带不同
+ * data-v），其中一份与图表 DOM 的 data-v 匹配且 style 标签文档序靠后 ⇒ 同特异性下
+ * 52px 胜过 SFC 本体的 width:100% ⇒ 柱图宽度塌陷（computed width=52px 渲染实锤）。
+ * scoped 级联顺序不可控 ⇒ 唯一治本 = 图表类**任何写死像素尺寸不进 common**。
+ *
+ * 剥离范围：width/height/min-width/min-height/max-width/max-height 的 px 字面量声明
+ * （图表子组件布局职责 = 撑满装配空间，百分比/flex 全保留）。剥后块内无声明则整块丢弃。
+ *
+ * @param {string} blockText 块体文本（不含选择器与外层花括号）
+ * @returns {string|null} 剥离后的块体；null = 已无声明（整块丢弃）
+ */
+function stripFixedPxSizesForChartBlock(blockText) {
+  // 🛡️ 声明级切除（2026-09-30 · bc33c27d 二次实锤）：旧版整行 filter 只能剥
+  //   「声明独占行」形态；LLM 紧凑格式 `{width: 52px;`（与选择器同行）/
+  //   `min-height: 52px}`（与闭括号同行）整行不匹配 → 漏剥 → 52px 经合并回流。
+  //   改为声明级替换：左定界（行首/{/;/空格）防误伤 border-width 等复合属性。
+  const stripped = String(blockText || '')
+    .replace(/(^|[{;\n])(\s*)(?:min-|max-)?(?:width|height)\s*:\s*\d+(?:\.\d+)?px\s*;?/gi, '$1$2')
+    .replace(/;(\s*);/g, ';$1'); // 清理剥除后可能产生的空声明
+  // 剥后判定：块体内（首个 '{' 之后）去掉注释与空白后是否还有声明。
+  // 注意 b.text 是**完整规则文本**（含选择器行与花括号），只看「非空」会误判选择器行为声明。
+  const bodyStart = stripped.indexOf('{');
+  if (bodyStart === -1) {
+    // 无花括号（纯块体形态）：去注释后非空即有声明
+    const meaningful = stripped.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    return meaningful ? stripped : null;
+  }
+  const body = stripped
+    .slice(bodyStart + 1)
+    .replace(/\}[\s\S]*$/, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .trim();
+  if (!body) return null;
+  return stripped;
+}
+
+/**
+ * 把类规则块合并进 common.less：
+ * ① 先删除 common.less 中所有同名块（含嵌套）→ 消除双源与优先级陷阱；
+ * ② 再追加子组件版定义 → 子组件定义为唯一事实源。
+ * 
+ * 保护规则 1：如果 common.less 中有像素值（如 width: 8px），而子组件是百分比（如 width: 100%），
+ * 则保留 common.less 的版本，不覆盖。
+ *
+ * 保护规则 2（2026-09-18 · mc-max-1789661127982-51408ba2）：布局声明（display / flex-direction /
+ * grid-template-columns）「缺则保留 common.less」。子组件 scoped 常缺 display（LLM 受
+ * 「display 由系统确定性写入」影响只写 width/min-height），而 common.less（style chunk）写了
+ * 完整 display:flex + flex-direction:row。旧逻辑「以子组件为准」无脑后置覆盖 → display 丢失 →
+ * 同行元素纵排、各占 100% 宽。此处对布局声明做幂等补齐，不覆盖子组件已写的布局意图。
+ * @param {string} commonLess 原 common.less
+ * @param {Array<{selector: string, text: string}>} blocks 待合并块
+ * @returns {{content: string, replaced: string[], added: string[]}}
+ */
+function mergeIntoCommonLess(commonLess = '', blocks = []) {
+  // 🛡️ F2c（2026-11-04）：先把「`}` 与下一个选择器同行」的粘连拆行 —— 否则按行累计深度的
+  //   抽取/删除实现会把相邻两块判成一块（详见 normalizeGluedBraces 注释）。
+  commonLess = normalizeGluedBraces(commonLess);
+  // 🛡️ R2（2026-09-30 · a6d2e5e1）：图表组件块先剥固定 px 尺寸（详见 stripFixedPxSizesForChartBlock）
+  const normalizedBlocks = blocks.map((b) => {
+    if (!b || !b.isChartComponent || typeof b.text !== 'string') return b;
+    const stripped = stripFixedPxSizesForChartBlock(b.text);
+    if (stripped === null) return null; // 剥后无声明 → 整块丢弃
+    return stripped === b.text ? b : { ...b, text: stripped };
+  }).filter(Boolean);
+
+  // 过滤掉会覆盖像素值的百分比尺寸
+  // 🛡️ F2（2026-11-04）：粒度由「整块丢弃」改为「**逐声明**丢弃」——只剥 width/height 百分比，
+  //   display / flex-direction / align-* / gap / padding 等结构声明必须存活（详见
+  //   stripPercentageSizeDecls 注释：旧口径把 tabs-list 的 display:flex 一起丢掉 ⇒ tab 纵排）。
+  const percentStripped = [];
+  const protectedBlocks = normalizedBlocks.map((b) => {
+    // 🛡️ 图表组件豁免（2026-09-29 · c-traffic-monitor-4d6135d1 / bda1b2fd 双实锤）：
+    //   源文件含 echarts 的子组件，其**所有类**的百分比块不得被本保护丢弃——
+    //   图表根类/canvas 类必须以 width/height:100% 撑满装配空间；若 common.less 里有
+    //   LLM 误写的真值像素（如 52×52），正确方向是**子组件百分比覆盖它**，否则：
+    //   canvas 52×52 ⇒ 柱图不可见；根类 52px ⇒ 宽度塌陷（「还是一点点宽」）。
+    //   「真值集非最高权威」铁律同样适用：可绘制/可布局的结构特征优先于误置真值。
+    //   非图表类不受影响（真值像素仍被保护，见 spec 回归用例）。
+    if (!b) return null;
+    if (b.isChartComponent) return b;
+    if (!hasPercentageSize(b.text) || !hasPixelSizeInCommon(commonLess, b.selector)) {
+      return b;
+    }
+    // 子组件是百分比、common.less 是像素 → 只剥尺寸声明，保留结构声明（F2）
+    const stripped = stripPercentageSizeDecls(b.text);
+    if (stripped === null) {
+      percentStripped.push({ selector: b.selector, dropped: true, keptDecls: 0 });
+      return null; // 剥后无声明 ⇒ 沿用旧语义整块丢弃（common.less 像素块继续生效）
+    }
+    percentStripped.push({ selector: b.selector, dropped: false });
+    return stripped === b.text ? b : { ...b, text: stripped };
+  }).filter(Boolean);
+  // 🗑️ P4：extractLayoutDecls/injectMissingLayoutDecls/injectDisplayFromFlexSignals 补偿器
+  //    已删除（display 判定权由 B' 布局事实层接管，见文件头说明）。此层不再事后补 display。
+  const mergedBlocks = protectedBlocks;
+
+  // 🔧 修复（2026-09-19）：同名类合并而非重复追加
+  // 问题：多个子组件可能生成同名类（如 .c-f9e8c1-stat-card），旧逻辑直接追加导致
+  // common.less 中出现重复定义，后面的属性覆盖前面的。
+  // 修复：按 selector 分组合并属性，确保每个类只出现一次。
+  const selectorGroups = new Map();
+  for (const b of mergedBlocks) {
+    if (!selectorGroups.has(b.selector)) {
+      selectorGroups.set(b.selector, []);
+    }
+    selectorGroups.get(b.selector).push(b.text);
+  }
+
+  // 🛡️ 批0（2026-09-28 · 声明保真）：把 common.less 中**同名规则的现有块也纳入合并（并集）**。
+  //   旧行为：`removeClassBlocks` 先删 common.less 的同名规则、再追加子组件版本 →
+  //   当两个来源同名但内容不同时，common.less 的**丰富版**（含 display/flex-direction）
+  //   被自组件的**薄弱版**整体覆盖 → 声明净丢失（全语料实测：2764/13989 结构声明丢失、
+  //   68% 组件受影响，是「内部小布局没被识别」的主因）。
+  //   修复：现有块**排在最前**参与 mergeCssBlocks → 同名属性仍由子组件版本覆盖（语义不变），
+  //   但 common.less 独有的声明被**保留**下来。幂等；无同名则不改变行为。
+  const existingSameNameBlocks = extractClassBlocks(commonLess, mergedBlocks.map((b) => b.selector));
+  // 🛡️ R2 补口（2026-09-30 · mc-max-1790701114594-bc33c27d 实锤）：同名 existing 块
+  //   同样过图表 px 剥离——批0 并集会把旧 common.less 的 52px 原文回灌（新块剥了、
+  //   旧块又并回来 = 白剥；实测柱状图 canvas 仍 52×160）。判定口径与上面 strip 一致：
+  //   该 selector 有任一 isChartComponent 来源 ⇒ existing 块同样剥。
+  const chartSelectors = new Set(
+    mergedBlocks.filter((b) => b.isChartComponent).map((b) => b.selector),
+  );
+  for (const t of existingSameNameBlocks) {
+    const sel = (/^\s*([^{]+)\{/.exec(t) || [])[1];
+    if (!sel) continue;
+    const key = sel.trim();
+    if (!selectorGroups.has(key)) selectorGroups.set(key, []);
+    let blockText = t;
+    if (chartSelectors.has(key)) {
+      const stripped = stripFixedPxSizesForChartBlock(t);
+      if (stripped === null) continue; // 剥后无声明 → 旧块整体丢弃
+      blockText = stripped;
+    }
+    selectorGroups.get(key).unshift(blockText); // 放最前 → 优先级最低，子组件可覆盖同名属性
+  }
+
+  // 合并同名类的所有属性
+  const uniqueBlocks = [];
+  for (const [selector, texts] of selectorGroups) {
+    if (texts.length === 1) {
+      uniqueBlocks.push(texts[0]);
+    } else {
+      // 多个同名类，合并属性
+      const merged = mergeCssBlocks(selector, texts);
+      uniqueBlocks.push(merged);
+    }
+  }
+
+  const selectors = mergedBlocks.map((b) => b.selector);
+  const stripped = removeClassBlocks(commonLess, selectors);
+  const oldSelectors = selectors.filter((s) => commonLess.includes(s));
+  const appended = uniqueBlocks.join('\n\n');
+
+  const content = `${stripped.replace(/\s*$/, '')}\n\n${appended}\n`;
+  return {
+    content,
+    replaced: oldSelectors,
+    added: mergedBlocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
+    // 🛡️ F2：逐声明剥离留痕（调用方据此落计数行，避免「静默改写」）
+    percentStripped,
+  };
+}
+
+/**
+ * 🛡️ 刀 48（2026-10-22 · mc-1792643509867-db2d65f7 实锤）：**块体切分的唯一实现**。
+ *
+ * ── 事故（为什么是「嵌套块声明被当成父块声明」）─────────────────────────
+ * 旧 `mergeCssBlocks` 用 `/\{([^}]*)\}/` 取块体 —— `[^}]` 遇到**第一个 `}`** 就停。
+ * 而 LLM 产物里父类常带嵌套子规则：
+ *   `.parent { display:grid; column-gap:20px; .child { gap:4px; height:30px; … } .label{…} }`
+ * ⇒ 截断发生在 `.child` 的结尾，随后逐行按 `prop: value` 解析时，**子块内部的声明行
+ *   全部匹配**，被当成父块的声明并「后写者胜」覆盖父块：
+ *   · 真机产物 `.c-db2d65-card-grid-list2`（common.less:492）里混入了 item 的
+ *     `gap:4px` → 顶掉 `column-gap:20px`/`row-gap:20px`；`height:30px` → 顶掉 `height:100%`；
+ *     `padding:0 6px`、`background`、`border-radius` 同批泄漏 ⇒ 普通厂商段行距/列距都变 4px、
+ *     容器高被钉死 30px。
+ *
+ * ── 判据（确定性、命名无关）──────────────────────────────────────────
+ * 按花括号深度 + 字符串/注释状态逐字符扫描：
+ *   · 深度 0 的 `;` ⇒ 一条**顶层声明**；
+ *   · 深度 0 遇到 `{` ⇒ 之前累积的缓冲是**子选择器**，其后的内容归子块；
+ *   · 深度 ≥1 的一切字符（含更深的花括号）原样进子块体。
+ * ⇒ 顶层声明与嵌套子块彻底分离，两者互不污染。
+ *
+ * @param {string} body 块体文本（**不含**外层选择器与花括号）
+ * @returns {{decls: string[], nested: Array<{selector:string, body:string}>}}
+ */
+export function splitBlockBody(body) {
+  const text = String(body || '');
+  const decls = [];
+  const nested = [];
+  let buf = '';
+  let depth = 0;
+  let inStr = null;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    // 字符串内：原样累积，直到同种引号收尾（支持 \" 转义）
+    if (inStr) {
+      if (ch === '\\') {
+        buf += ch + (text[i + 1] ?? '');
+        i += 1;
+        continue;
+      }
+      if (ch === inStr) inStr = null;
+      if (depth > 0) nested[nested.length - 1].body += ch;
+      else buf += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inStr = ch;
+      if (depth > 0) nested[nested.length - 1].body += ch;
+      else buf += ch;
+      continue;
+    }
+    // 注释：整段原样带走（不参与声明解析，但保留可读性）
+    if (ch === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      const stop = end < 0 ? text.length : end + 2;
+      const seg = text.slice(i, stop);
+      if (depth > 0) nested[nested.length - 1].body += seg;
+      else buf += seg;
+      i = stop - 1;
+      continue;
+    }
+    // 🛡️ F2b（2026-11-04 · mc-max-1793769058951-9a0133fe 实锤）：LESS **单行注释** `//`
+    //   此前未被识别 → 注释行被并入下一个嵌套选择器（`// 普通态文字：浅蓝\n  .c-x-label`），
+    //   `nestedKey()` 判不出合法键 ⇒ 该嵌套块被跳过但父块重排时多出 `}` ⇒
+    //   **写盘门禁 LESS-WRITE-001 括号不平衡 ⇒ 整轮合并被回退**（本轮所有子组件类都进不了
+    //   common.less，tabs-list 的 display:flex 随之丢失）。真机实测：该块去 `//` 后 revert 消失。
+    //   判据：仅在「行首 / 声明分隔符后」把 `//` 当注释，避免误吃 `url(http://…)`。
+    if (ch === '/' && text[i + 1] === '/') {
+      const prev = i > 0 ? text[i - 1] : '\n';
+      if (prev === '\n' || /[\s;{}]/.test(prev)) {
+        let end = text.indexOf('\n', i);
+        if (end < 0) end = text.length;
+        i = end - 1; // 注释整段丢弃（不参与声明/选择器）
+        continue;
+      }
+    }
+
+    if (ch === '{') {
+      depth += 1;
+      if (depth === 1) {
+        nested.push({ selector: buf.trim(), body: '' });
+        buf = '';
+      } else {
+        nested[nested.length - 1].body += ch;
+      }
+      continue;
+    }
+    if (ch === '}') {
+      depth -= 1;
+      if (depth > 0) nested[nested.length - 1].body += ch;
+      continue;
+    }
+    if (depth > 0) {
+      nested[nested.length - 1].body += ch;
+      continue;
+    }
+    if (ch === ';') {
+      const d = buf.trim();
+      // 只剥注释再判空 —— 不能用 `^/*` 整条丢弃：`/* 说明 */\n column-gap: 20px;`
+      // 这种「注释在声明之前」的写法会把真声明一起扔掉（单测 ④ 实锤）。
+      if (d) {
+        const clean = d.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+        if (clean) decls.push(clean);
+      }
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  const tail = buf.trim();
+  if (tail) decls.push(tail.replace(/\/\*[\s\S]*?\*\//g, '').trim());
+  return { decls: decls.filter(Boolean), nested };
+}
+
+/**
+ * 从完整规则文本 `sel { body }` 里**深度感知地**取出外层块体。
+ * 旧实现 `/\{([^}]*)\}/` 会在第一个子块的 `}` 处截断（见 splitBlockBody 注释）。
+ * @param {string} blockText
+ * @returns {string} 外层块体；无花括号 ⇒ 原文（调用方按「纯块体」处理）
+ */
+export function outerBlockBody(blockText) {
+  const text = String(blockText || '');
+  const start = text.indexOf('{');
+  if (start < 0) return text;
+  let depth = 0;
+  let inStr = null;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (ch === '\\') { i += 1; continue; }
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inStr = ch; continue; }
+    if (ch === '/') {
+      const next = text[i + 1];
+      if (next === '*') { const e = text.indexOf('*/', i + 2); i = e < 0 ? text.length : e + 1; continue; }
+      if (next === '/') { const e = text.indexOf('\n', i + 2); i = e < 0 ? text.length : e; continue; }
+    }
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start + 1, i);
+    }
+  }
+  return text.slice(start + 1);
+}
+
+/** 声明文本数组 → Map（后写者胜；跳过无法解析的碎片） */
+function declsToMap(decls = []) {
+  const map = new Map();
+  for (const d of decls) {
+    const m = /^([^:]+):\s*([\s\S]+)$/.exec(String(d || '').trim());
+    if (!m) continue;
+    map.set(m[1].trim(), m[2].trim());
+  }
+  return map;
+}
+
+/** 子块归一化 key（空白折叠；`&:hover` 等原样作 key） */
+function nestedKey(selector) {
+  return String(selector || '').replace(/\s+/g, ' ').trim();
+}
+
+/** 渲染嵌套子块（缩进 2 空格；含更深嵌套时原文保留） */
+function renderNested(selector, map) {
+  const declText = Array.from(map.entries())
+    .map(([p, v]) => `    ${p}: ${v};`)
+    .join('\n');
+  return `  ${selector} {\n${declText}\n  }`;
+}
+
+/**
+ * 合并多个同名 CSS 块的属性（2026-09-19 新增；2026-10-22 刀 48 重写）
+ *
+ * 重写原因：旧版用 `/\{([^}]*)\}/` 取块体，**嵌套子块内的声明会被并入父块**
+ * （详见 splitBlockBody 的注释与真机数据）。新版：
+ *   · 顶层声明按 prop 合并（后写者胜，CSS 标准行为）；
+ *   · 嵌套子块按「归一化选择器」分组，同样后写者胜，且**原样保留在父块内**；
+ *   · 子块自身还有更深嵌套（depth ≥ 3）时整块原文保留，不做属性级合并（不猜）。
+ *
+ * @param {string} selector 选择器（如 '.c-f9e8c1-stat-card'）
+ * @param {string[]} blocks 多个块文本（如 ['.c-x { gap: 44px; }', '.c-x { gap: 4px; }']）
+ * @returns {string} 合并后的块文本
+ */
+function mergeCssBlocks(selector, blocks) {
+  if (blocks.length === 0) return '';
+  if (blocks.length === 1) return blocks[0];
+
+  const declMap = new Map();
+  const nestedMap = new Map(); // key → { selector, map } | { selector, raw }
+  const nestedOrder = [];
+
+  for (const block of blocks) {
+    const { decls, nested } = splitBlockBody(outerBlockBody(block));
+    for (const [p, v] of declsToMap(decls)) declMap.set(p, v);
+    for (const n of nested) {
+      const key = nestedKey(n.selector);
+      if (!key) continue;
+      const sub = splitBlockBody(n.body);
+      const deeper = sub.nested.length > 0;
+      const prev = nestedMap.get(key);
+      if (deeper) {
+        // 更深嵌套：原文保留（后写者胜），不做属性级合并
+        nestedMap.set(key, { selector: key, raw: n.body.trim() });
+      } else if (prev && prev.raw === undefined) {
+        for (const [p, v] of declsToMap(sub.decls)) prev.map.set(p, v);
+      } else {
+        nestedMap.set(key, { selector: key, map: declsToMap(sub.decls) });
+      }
+      if (!nestedOrder.includes(key)) nestedOrder.push(key);
+    }
+  }
+
+  const declText = Array.from(declMap.entries())
+    .map(([prop, value]) => `  ${prop}: ${value};`)
+    .join('\n');
+
+  const nestedText = nestedOrder
+    .map((key) => {
+      const n = nestedMap.get(key);
+      if (!n) return '';
+      if (n.raw !== undefined) return `  ${n.selector} {\n${n.raw}\n  }`;
+      return renderNested(n.selector, n.map);
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  const bodyText = [declText, nestedText].filter(Boolean).join('\n\n');
+  return `${selector} {\n${bodyText}\n}`;
+}
+
+/**
+ * 过滤明显不是 Less 规则的碎片，避免分隔文本 / LLM 杂质混入 common.less。
+ * 只保留像类规则的块；其它内容一律丢弃。
+ */
+/** 统计文本中的开括号数 / 闭括号数（忽略字符串内，避免 url("...") 干扰） */
+function countOpenBraces(text = '') {
+  let n = 0;
+  let inStr = null;
+  for (const ch of String(text)) {
+    if (inStr) {
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") inStr = ch;
+    else if (ch === '{') n += 1;
+  }
+  return n;
+}
+function countCloseBraces(text = '') {
+  let n = 0;
+  let inStr = null;
+  for (const ch of String(text)) {
+    if (inStr) {
+      if (ch === inStr) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") inStr = ch;
+    else if (ch === '}') n += 1;
+  }
+  return n;
+}
+function countBraces(text = '') {
+  return countOpenBraces(text) - countCloseBraces(text);
+}
+
+function isValidLessRuleBlock(text = '') {
+  const raw = String(text).trim();
+  if (!raw) return false;
+  if (/^=+/.test(raw)) return false;
+  if (/^[-—]{3,}/.test(raw)) return false;
+  if (/^\/\//.test(raw)) return false;
+  if (/^\/\*/.test(raw) && !raw.includes('}')) return false;
+  if (!raw.includes('{') || !raw.includes('}')) return false;
+  return RULE_START_RE.test(raw) || /^&[^{]*\{/.test(raw);
+}
+
+/**
+ * 清理 common.less 里明显的分隔文本碎片。
+ * 这类内容来自上游自愈 / 拼接残留，不属于 Less 规则，
+ * 若保留会直接污染最终样式文件。
+ */
+function sanitizeCommonLessText(less = '') {
+  // 🛡️ 2026-10-15（mc-max-1791967522207-a715fafc 实锤）：跨行块注释感知。
+  //   旧实现逐行判「=== 分隔线」无注释上下文——多行块注释的收尾行
+  //   `   ============ */` trim 后以 ≥3 个 `=` 开头，被下方分隔线规则清成空行
+  //   → 注释头 `/*` 永远失配（/* ×24 vs */ ×23）→ LESS-WRITE-002 门禁拦截
+  //   → 新任务首写无 last-good → 空兜底模板裸产物。
+  //   修复：逐行跟踪块注释深度，注释内行（含收尾行）一律原样保留。
+  let commentDepth = 0;
+  return String(less)
+    .split('\n')
+    .map((line) => {
+      const opens = (line.match(/\/\*/g) || []).length;
+      const closes = (line.match(/\*\//g) || []).length;
+      const inComment = commentDepth > 0;
+      commentDepth += opens - closes;
+      if (commentDepth < 0) commentDepth = 0;
+      // 注释内行 / 开启跨行注释的行：原样保留，不做分隔线清理
+      if (inComment || (opens > 0 && commentDepth > 0)) return line;
+      const trimmed = line.trim();
+      if (!trimmed) return line;
+      if (/^\}\s*[=—-]{3,}.*$/.test(trimmed)) return '}';
+      if (/^[=—-]{3,}\s*.*$/.test(trimmed)) return '';
+      if (/^\/\/[=—-]{3,}\s*.*$/.test(trimmed)) return '';
+      return line;
+    })
+    .join('\n');
+}
+
+/**
+ * 判断 class 是否为「c- 前缀语义类」候选（规范化：全小写、去除 -active/--active 尾缀）。
+ * 之所以用小写：微码管道统一小写语义类；Figma 层偶尔有 camelCase（如 stat-type--active）。
+ * 返回去尾缀后的语义基名，如 'c-device-monitor-stat-type'；非候选（.is-active / 工具类）返回 ''。
+ * @param {string} cls - 去除 . 前缀的 class 名
+ * @returns {string}
+ */
+export function normalizeShortClass(cls = '') {
+  const lower = String(cls).toLowerCase();
+  const m = lower.match(/^(c-[a-z][a-z0-9]*(?:-[a-z0-9]+)*?)(?:-+active)?$/);
+  if (!m) return '';
+  const base = m[1];
+  // 实例 ID 形态长类自身不带尾缀，直接返回（若带尾缀则同时是短类候选，由调用方先长类后短类优先级处理）
+  if (/^c-[a-z0-9]+-[a-z0-9]+-c-/.test(base)) return '';
+  return base;
+}
+
+/**
+ * 判断选择器首 token 是否为需对齐的短语义类选择器（c- 前缀，允许 & 复合）。
+ * 排除：父引用专用（&.active / &:hover，本身不独立成块）、active 工具类、c-mc-max 实例根类。
+ * @param {string} selectorToken
+ * @returns {boolean}
+ */
+function looksLikeShortClass(selectorToken = '') {
+  const t = String(selectorToken).trim();
+  if (!t) return false;
+  if (/^&[.:]/.test(t)) return false;
+  if (t === '&' || /^&\s*$/.test(t)) return false;
+  const clsName = t.replace(/^\./, '');
+  if (!clsName || !/^c-/.test(clsName)) return false;
+  if (/^c-mc-max-/i.test(clsName)) return false;
+  return normalizeShortClass(clsName) !== '';
+}
+
+/**
+ * 重写类块文本：把「每一行」里的短语义类选择器（.c-x-header-stats）重写为
+ * DOM 实际出现的长/短类。逐行处理，任意深度（顶层 / 嵌套）的 .c- 短类都对齐 DOM。
+ *
+ * 【为什么逐行而非两段式（2026-09-09 实锤）】
+ *  旧「累积 token 到 { 再统一重写」会把**块体声明行**（如 `flex: 30 1 0;`）误判成
+ *  选择器 token 累积进来，整段块体被丢弃 → 输出 `.class{` 空壳 → 括号不平衡 → 整体回退。
+ *  逐行方案：每行只替换其中 `.xxx` 形式的类 token，声明行（无 `.class` 形态）原样保留。
+ *
+ * 【纯父引用块跳过】`& { ... }` 这类仅作嵌套作用域、自身无独立类选择器的块，整体跳过
+ *  （其内部的 `.c-x` 已由父块选择器提供上下文，不该被改写为 DOM 长类）。
+ *
+ * @param {string} text 块文本（含选择器、块体、末尾 `}`）
+ * @param {(clsName: string) => {variants: string[]}|null} resolveDom
+ *        类名 → DOM 候选（多候选 = 长短并存，调用方逗号双写）；null = fail-open 保留原样
+ * @returns {string[]} 重写后的块文本变体（1 个 = 常规；>1 = 多形态候选，需双写）
+ */
+function rewriteBlockTextVariants(text = '', resolveDom) {
+  const lines = String(text).split('\n');
+  // 收集每行的重写替换点（行号 → [{clsName, variants}]）
+  const perLine = new Map();
+  let combinationCount = 1;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    // 仅「选择器行」参与重写：行内含 {（选择器 + 块开始）或以 , 结尾（跨行选择器续行）。
+    // 声明行（以 ; 结尾 / 纯属性）与 url(...) / 字符串值里的 .c- 片段一律不动（防误改）。
+    const isSelectorLine = trimmed.includes('{') || /,\s*$/.test(trimmed);
+    if (!isSelectorLine) continue;
+    const hits = [];
+    for (const m of trimmed.matchAll(/\.([a-zA-Z][\w-]*)/g)) {
+      const clsName = m[1];
+      if (!looksLikeShortClass(clsName)) continue;
+      const res = resolveDom(clsName);
+      if (!res || !res.variants || res.variants.length === 0) continue;
+      if (res.variants.length === 1 && res.variants[0] === clsName) continue;
+      hits.push({ clsName, variants: res.variants });
+      combinationCount *= res.variants.length;
+    }
+    if (hits.length > 0) perLine.set(i, hits);
+  }
+  // 组合爆炸保护：>4 组合时退化为「每个替换点取第一个候选」（确定性，避免指数膨胀）
+  const capExceeded = combinationCount > 4;
+  const buildVariant = (pickFirst) => {
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i];
+      const hits = perLine.get(i);
+      if (!hits) {
+        out.push(rawLine);
+        continue;
+      }
+      let replaced = rawLine;
+      // 逆序替换，避免下标漂移
+      const ordered = [...hits].reverse();
+      for (const h of ordered) {
+        const target = pickFirst ? h.variants[0] : h.variants[0];
+        replaced = replaceClassToken(replaced, h.clsName, target);
+      }
+      out.push(replaced);
+    }
+    return out.join('\n');
+  };
+  if (capExceeded) return [buildVariant(true)];
+  // 笛卡尔积展开（≤4）：每个替换点逐个候选生成变体
+  const variants = [];
+  const expand = (idx, picks) => {
+    if (idx === perLine.size) {
+      const out = [];
+      const entries = [...perLine.entries()];
+      for (let i = 0; i < lines.length; i++) {
+        const hitEntry = entries.find(([ln]) => ln === i);
+        if (!hitEntry) {
+          out.push(lines[i]);
+          continue;
+        }
+        let replaced = lines[i];
+        const hits = [...hitEntry[1]].reverse();
+        for (const h of hits) {
+          const target = picks.get(`${i}:${h.clsName}`) || h.variants[0];
+          replaced = replaceClassToken(replaced, h.clsName, target);
+        }
+        out.push(replaced);
+      }
+      variants.push(out.join('\n'));
+      return;
+    }
+    const [lineNo, hits] = [...perLine.entries()][idx];
+    for (const h of hits) {
+      for (const v of h.variants) {
+        picks.set(`${lineNo}:${h.clsName}`, v);
+        expand(idx + 1, picks);
+      }
+    }
+    picks.delete(`${lineNo}:${hits[0].clsName}`);
+  };
+  expand(0, new Map());
+  return variants.length > 0 ? variants : [text];
+}
+
+/** 精确替换单个 `.cls` token（避免子串误替换：要求前后非 [\w-]） */
+function replaceClassToken(line = '', clsName = '', target = '') {
+  const esc = String(clsName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(line).replace(
+    new RegExp(`\\.${esc}(?![\\w-])`, 'g'),
+    `.${target}`,
+  );
+}
+
+/**
+ * 🛡️ P1.1/P1.2（2026-09-11）：DOM 类事实 → 选择器解析器。
+ *
+ * 事实采集**唯一实现**在 utils/class-facts.js（`collectFileClassFact` / `collectClassFacts`），
+ * 本模块不再自扫模板（旧 `buildClassRewriteMap` + `registerClassToken` 已删）。
+ *
+ * 🔴 旧实现两宗罪（260ff122 实锤）：
+ *  ① 用「剥修饰符的基名」做键 + first-wins → `.c-x-tab-item--active` 与 `.c-x-tab-item`
+ *     抢占同一键：先见静态 class → 激活选择器被改写成基类（**激活态污染全部元素**）；
+ *     先见 :class → 基类选择器被改写成激活类（镜像形态）。攻击面随书写顺序漂移。
+ *  ② 单值返回 → 同基名长短并存时只能择一，天然不可靠。
+ * 治本：精确命中优先 + 修饰符逐字保留 + 多候选返回全部（调用方逗号双写）。
+ *
+ * @param {import('./class-facts.js').FileClassFact} fact
+ * @returns {(clsName: string) => ({variants: string[]}|null)}
+ */
+function makeDomResolver(fact) {
+  return (clsName) => resolveDomClass(fact, clsName);
+}
+
+/**
+ * 🛡️ 根因 B 修复（2026-09-18）：确保子组件根元素接收父组件 attrs 透传。
+ *
+ * 背景：确定性模板装配（code-generator.js:611-616）假设 "Vue3 attrs 继承自动透传 style 到子组件根"，
+ * 但子组件根元素没有 `v-bind="$attrs"` 时，父组件的 `:style="{ backgroundImage: ... }"` 等绑定
+ * **无法生效** → 资源背景丢失、flex 比例失效。
+ *
+ * 修复：对 `package/components/*.vue` 子组件，检查根元素是否有 `v-bind="$attrs"`，缺失则补上。
+ * 同时确保 script setup 中没有 `defineOptions({ inheritAttrs: false })`（显式关闭 attrs 继承）。
+ *
+ * @param {Object<string,string>} files 产物文件表
+ * @returns {Object<string,string>} 修复后的文件表
+ */
+export function ensureSubComponentAttrsBinding(files = {}) {
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+
+  for (const p of subPaths) {
+    const sfc = next[p];
+    if (typeof sfc !== 'string') continue;
+
+    // 提取 template 块
+    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tplContent = tplMatch[1];
+
+    // 找根元素（template 下第一个带标签的元素）
+    const rootMatch = tplContent.match(/<([a-zA-Z][\w-]*)\b[^>]*>/);
+    if (!rootMatch) continue;
+    const rootTag = rootMatch[1];
+    const rootTagFull = rootMatch[0];
+
+    // 已有 v-bind="$attrs" 或 v-bind='$attrs' → 跳过
+    if (/v-bind=["']\$attrs["']/.test(rootTagFull)) continue;
+
+    // 检查是否显式关闭了 attrs 继承（defineOptions({ inheritAttrs: false })）
+    const scriptMatch = sfc.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (scriptMatch && /defineOptions\s*\(\s*\{\s*inheritAttrs\s*:\s*false/.test(scriptMatch[1])) {
+      continue; // 显式关闭了，不强制加
+    }
+
+    // 在根元素标签末尾添加 v-bind="$attrs"
+    const newRootTag = rootTagFull.replace(/>$/, ' v-bind="$attrs">');
+    const newSfc = sfc.replace(rootTagFull, newRootTag);
+    if (newSfc !== sfc) {
+      next[p] = newSfc;
+    }
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 根因 C 修复（2026-09-18）+ F2 收窄（2026-11-05）：子组件根尺寸契约。
+ *
+ * 背景：子组件根元素缺少 width/height 时，内部 ECharts 容器 0 高不渲染、flex 比例失效。
+ * style-class-consolidator 只补 display/flex-direction，不补 width/height。
+ *
+ * 修复：对 `package/components/*.vue` 子组件，检查其根 class 在 common.less 中的样式规则，
+ * 缺失时补 `width: 100%`；**`height: 100%` 只补给图表子组件**（含 `echarts`）。
+ *
+ * 🔴 F2（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：此前无差别补 height 造成反向
+ *   伤害 —— 统计卡组 `.c-traffic-monitor-card-group` 在 column flex 父内取父全高，吃掉整个
+ *   section 高度，同段的两个柱状图被挤出可视区（截图：柱图消失、两张卡片底图被拉伸成巨环）。
+ *   判据复用本文件既有 `isChartComponent` 口径（`/echarts/.test(sfc)`），不新增第二套判定。
+ *
+ * @param {Object<string,string>} files 产物文件表
+ * @returns {Object<string,string>} 修复后的文件表
+ */
+export function ensureSubComponentRootDimensions(files = {}) {
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  for (const p of subPaths) {
+    const sfc = next[p];
+    if (typeof sfc !== 'string') continue;
+
+    // 提取 template 块
+    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tplContent = tplMatch[1];
+
+    // 找根元素的 class
+    const rootMatch = tplContent.match(/<([a-zA-Z][\w-]*)\b[^>]*\bclass=["']([^"']+)["']/);
+    if (!rootMatch) continue;
+    const rootClass = rootMatch[2].split(/\s+/)[0]; // 取第一个 class
+    if (!rootClass || !rootClass.startsWith('c-')) continue;
+
+    // 在 common.less 中找该 class 的规则块
+    const classRe = new RegExp(`(\\.${rootClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^}]*)(\\})`, 'g');
+    const match = classRe.exec(updatedCommonLess);
+    if (!match) continue;
+
+    const [fullMatch, openBrace, body, closeBrace] = match;
+    const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+    const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+
+    // 🛡️ F2（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：`height:100%` 契约收窄到
+    //   **图表子组件**。原规则（2026-09-18「根因 C 修复」）为「让 ECharts canvas 可见」
+    //   而无差别给所有子组件根补 `width/height:100%`；非图表子组件（如统计卡组
+    //   `.c-traffic-monitor-card-group`）位于 column flex 父内时，`height:100%` 取父全高
+    //   ⇒ 吃掉整个 section 高度 ⇒ 同段后面的两个柱状图被挤出可视区（真机截图：柱图完全
+    //   消失、只剩两张被 `100% 100%` 拉成巨环的卡片底图）。
+    //   判据同构：复用本文件既有的 `isChartComponent` 口径（`/echarts/.test(sfc)`，
+    //   见 `:1512` 与 `:473` 的图表豁免），**不新增第二套图表判定**。
+    //   width 仍对所有子组件补（宽度 100% 不会造成高度撑破，且缺宽会导致横向塌陷）。
+    const isChartComponent = /echarts/.test(sfc);
+
+    if (!hasWidth || (!hasHeight && isChartComponent)) {
+      let newBody = body;
+      if (!hasWidth) {
+        newBody = `width: 100%;\n${newBody}`;
+      }
+      if (!hasHeight && isChartComponent) {
+        newBody = `height: 100%;\n${newBody}`;
+      }
+      const newRule = openBrace + newBody + closeBrace;
+      updatedCommonLess = updatedCommonLess.replace(fullMatch, newRule);
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-env-monitor-c9e0be8a 实锤）：确保图表容器有完整尺寸。
+ * 
+ * 根因：ECharts 需要明确的宽高才能正确渲染。子组件内的图表容器（通常带 ref="chartRef"）
+ * 只有 min-width/min-height，缺少 width: 100%; height: 100% → 图表不可见。
+ * 
+ * 修复策略：
+ * 1. 扫描所有子组件 template，找到带 ref="chartRef" 的容器元素
+ * 2. 提取其 class，确保在 common.less 中有 width: 100%; height: 100%
+ */
+export function ensureChartContainerDimensions(files = {}) {
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  for (const p of subPaths) {
+    const sfc = next[p];
+    if (typeof sfc !== 'string') continue;
+
+    // 提取 template 块
+    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tplContent = tplMatch[1];
+
+    // 找带 ref="chartRef" 的容器元素的 class
+    const chartContainerRe = /<([a-zA-Z][\w-]*)\b[^>]*\bref=["']chartRef["'][^>]*\bclass=["']([^"']+)["']/g;
+    let match;
+    while ((match = chartContainerRe.exec(tplContent)) !== null) {
+      const chartClass = match[2].split(/\s+/)[0]; // 取第一个 class
+      if (!chartClass || !chartClass.startsWith('c-')) continue;
+
+      // 在 common.less 中找该 class 的规则块
+      const classRe = new RegExp(`(\\.${chartClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^}]*)(\\})`, 'g');
+      const classMatch = classRe.exec(updatedCommonLess);
+      if (!classMatch) continue;
+
+      const [fullMatch, openBrace, body, closeBrace] = classMatch;
+      const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+      const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+
+      if (!hasWidth || !hasHeight) {
+        let newBody = body;
+        if (!hasWidth) {
+          newBody = `width: 100%;\n${newBody}`;
+        }
+        if (!hasHeight) {
+          newBody = `height: 100%;\n${newBody}`;
+        }
+        const newRule = openBrace + newBody + closeBrace;
+        updatedCommonLess = updatedCommonLess.replace(fullMatch, newRule);
+      }
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-env-monitor-c9e0be8a 实锤）：确保中间层容器有宽度。
+ * 
+ * 根因：index.vue 中的中间层容器（如 sub-t-con）用于承载背景图等内容，
+ * 但只有 flex 值和 min-height，缺少 width: 100% → 背景图无法正确显示。
+ * 
+ * 修复策略：
+ * 1. 扫描 index.vue template，找到所有带 class 的 div 容器
+ * 2. 排除根容器（已有专门处理）和子组件标签
+ * 3. 对每个中间层容器，确保在 common.less 中有 width: 100%
+ */
+export function ensureMiddleContainerWidth(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  // 找 index.vue
+  const indexPath = Object.keys(next).find((p) => /(^|\/)package\/index\.vue$/i.test(p)) ||
+    Object.keys(next).find((p) => /(^|\/)index\.vue$/i.test(p));
+  if (!indexPath) return next;
+
+  const indexContent = next[indexPath];
+  if (typeof indexContent !== 'string') return next;
+
+  // 提取 template 块
+  const tplMatch = indexContent.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+  if (!tplMatch) return next;
+  const tplContent = tplMatch[1];
+
+  // 找所有带 class 的 div 容器（排除子组件标签）
+  const divRe = /<div\b[^>]*\bclass=["']([^"']+)["'][^>]*>/g;
+  let match;
+  while ((match = divRe.exec(tplContent)) !== null) {
+    const classes = match[1].split(/\s+/);
+    for (const cls of classes) {
+      if (!cls || !cls.startsWith('c-')) continue;
+      // 跳过根容器（已有专门处理）
+      if (/-slot-con$|-root$/.test(cls)) continue;
+
+      // 在 common.less 中找该 class 的规则块
+      const classRe = new RegExp(`(\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^}]*)(\\})`, 'g');
+      const classMatch = classRe.exec(updatedCommonLess);
+      if (!classMatch) continue;
+
+      const [fullMatch, openBrace, body, closeBrace] = classMatch;
+      const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+
+      if (!hasWidth) {
+        const newBody = `width: 100%;\n${body}`;
+        const newRule = openBrace + newBody + closeBrace;
+        updatedCommonLess = updatedCommonLess.replace(fullMatch, newRule);
+      }
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-vehicle-monitor-33780657 实锤）：确保背景层使用绝对定位。
+ * 
+ * 根因：卡片的背景层元素（通常带 pointer-events: none）应该有 position: absolute，
+ * 但 LLM 经常只写 pointer-events: none 而漏掉 position: absolute → 背景层参与 flex 布局
+ * 而不是覆盖在内容上方 → 卡片布局错误。
+ * 
+ * 修复策略：
+ * 1. 扫描所有样式，找到带 pointer-events: none 的 class
+ * 2. 确保它们有 position: absolute（或 position: fixed）
+ */
+export function ensureBackgroundLayerPosition(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  // 匹配所有带 pointer-events: none 的规则块
+  const pointerEventsRe = /(\.[a-zA-Z][\w-]*\s*\{)([^}]*pointer-events\s*:\s*none[^}]*)(\})/g;
+  updatedCommonLess = updatedCommonLess.replace(pointerEventsRe, (fullMatch, openBrace, body, closeBrace) => {
+    const hasPosition = /(^|[\s;{])position\s*:/i.test(body);
+    if (!hasPosition) {
+      const newBody = `position: absolute;\n${body}`;
+      return openBrace + newBody + closeBrace;
+    }
+    return fullMatch;
+  });
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-vehicle-monitor-33780657 实锤）：确保按钮有合理的最小高度。
+ * 
+ * 根因：LLM 生成的按钮只有 padding，没有明确高度 → 按钮高度过小。
+ * 
+ * 修复策略：
+ * 1. 扫描所有样式，找到带 cursor: pointer 的 class（按钮特征）
+ * 2. 确保它们有 min-height（如果没有 height 或 min-height）
+ */
+export function ensureButtonMinHeight(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  // 匹配所有带 cursor: pointer 的规则块
+  const cursorPointerRe = /(\.[a-zA-Z][\w-]*\s*\{)([^}]*cursor\s*:\s*pointer[^}]*)(\})/g;
+  updatedCommonLess = updatedCommonLess.replace(cursorPointerRe, (fullMatch, openBrace, body, closeBrace) => {
+    const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+    const hasMinHeight = /(^|[\s;{])min-height\s*:/i.test(body);
+    if (!hasHeight && !hasMinHeight) {
+      const newBody = `min-height: 24px;\n${body}`;
+      return openBrace + newBody + closeBrace;
+    }
+    return fullMatch;
+  });
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-vehicle-monitor-a03089cb 实锤）：确保带背景图的容器有 width:100%; height:100%。
+ *
+ * 根因：LLM 生成的 card-bg 容器使用内联 :style 设置 backgroundImage，但其 class 在
+ * scoped style 和 common.less 中都没有 width/height → 容器没有尺寸 → 背景图无法撑开。
+ *
+ * 修复策略：
+ * 1. 扫描所有 .vue 文件的 template，找带 :style 包含 backgroundImage 的元素
+ * 2. 提取其 class 名
+ * 3. 确保该 class 在 scoped style 和 common.less 中有 width:100%; height:100%
+ */
+export function ensureBackgroundContainerDimensions(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+  const classTargets = new Set(); // 需要确保有 width/height 的 class 名
+
+  // Step 1: 扫描所有 .vue 文件 template 中 backgroundImage 的元素
+  for (const [filePath, content] of Object.entries(next)) {
+    if (!/\.vue$/i.test(filePath) || typeof content !== 'string') continue;
+    const tplMatch = content.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tpl = tplMatch[1];
+
+    // 找带 :style 含 backgroundImage 的元素
+    const bgRe = /<(\w+)\b[^>]*\bclass=["']([^"']+)["'][^>]*:style=["'][^"']*backgroundImage[^"']*["'][^>]*>/g;
+    let m;
+    while ((m = bgRe.exec(tpl)) !== null) {
+      // 🛡️ 2026-10-20（ee06ee24 实锤）：v-for 重复单元 item 豁免。
+      //   病灶：item 首卡 :style 绑背景图 ⇒ 本函数给 item class 前置注入 width/height:100%，
+      //   在 flex-column wrapper 里 = 每项占满容器高 ⇒ 「6 卡只见首卡」。
+      //   且本函数跑在 writeFiles 写盘路径（自愈链之后）⇒ 刀 31 检出时 item 尚无
+      //   height:100%，写盘时才被注入 ⇒ 「门禁审计的内容 ≠ 落盘内容」破窗。
+      //   v-for item 的尺寸由重复单元几何真值（刀 31）/flex 配比管理，绝不可 100%。
+      if (/\bv-for\s*=/.test(m[0])) continue;
+      const classes = m[2].split(/\s+/);
+      for (const cls of classes) {
+        if (cls && cls.startsWith('c-')) classTargets.add(cls);
+      }
+    }
+    // 也匹配 :style 在 class 前面的情况
+    const bgRe2 = /<(\w+)\b[^>]*:style=["'][^"']*backgroundImage[^"']*["'][^>]*\bclass=["']([^"']+)["'][^>]*>/g;
+    while ((m = bgRe2.exec(tpl)) !== null) {
+      if (/\bv-for\s*=/.test(m[0])) continue; // 同上：v-for 重复单元豁免
+      const classes = m[2].split(/\s+/);
+      for (const cls of classes) {
+        if (cls && cls.startsWith('c-')) classTargets.add(cls);
+      }
+    }
+  }
+
+  if (classTargets.size === 0) return next;
+
+  // Step 2: 确保这些 class 在 common.less 中有 width:100%; height:100%
+  for (const cls of classTargets) {
+    const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const classRe = new RegExp(`(\\.${escaped}\\s*\\{)([^}]*)(\\})`, 'g');
+    const classMatch = classRe.exec(updatedCommonLess);
+    if (classMatch) {
+      const [fullMatch, openBrace, body, closeBrace] = classMatch;
+      const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+      const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+      if (!hasWidth || !hasHeight) {
+        let prefix = '';
+        if (!hasWidth) prefix += 'width: 100%;\n';
+        if (!hasHeight) prefix += 'height: 100%;\n';
+        const newBody = prefix + body;
+        updatedCommonLess = updatedCommonLess.replace(fullMatch, openBrace + newBody + closeBrace);
+      }
+    }
+  }
+
+  // Step 3: 同时确保子组件 scoped style 中也有 width/height
+  for (const [filePath, content] of Object.entries(next)) {
+    if (!/\.vue$/i.test(filePath) || typeof content !== 'string') continue;
+    let updated = content;
+    for (const cls of classTargets) {
+      const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // 找 scoped style 中的 class 规则块
+      const scopedRe = new RegExp(`(\\.${escaped}\\s*\\{)([^}]*)(\\})`, 'g');
+      updated = updated.replace(scopedRe, (fullMatch, openBrace, body, closeBrace) => {
+        const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+        const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+        if (!hasWidth || !hasHeight) {
+          let prefix = '';
+          if (!hasWidth) prefix += 'width: 100%;\n';
+          if (!hasHeight) prefix += 'height: 100%;\n';
+          return openBrace + prefix + body + closeBrace;
+        }
+        return fullMatch;
+      });
+    }
+    if (updated !== content) {
+      next[filePath] = updated;
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 主入口：把子组件 style 块里的类规则收敛进 common.less。
+ * 收敛前以子组件 template 真实 DOM 类名为事实源，把 scoped 短语义类选择器重写为
+ * DOM 实际出现的长/短形式（④ #648/#649），使 common.less 选择器与真实 DOM 匹配。
+ * @param {Object<string,string>} files 产物文件表（path → content）
+ * @param {Object} [options]
+ * @param {{warn?:Function,info?:Function,log?:Function}} [options.logger]
+ * @param {import('./class-facts.js').ClassFacts} [options.classFacts]
+ *        产物级类事实（engineer 生成期注入；缺省时本模块用同一实现 self-collect，行为等价）
+ * @returns {Object<string,string>} 新文件表（原对象不被修改；无变化时返回新对象但内容等价）
+ */
+export function consolidateSubComponentClasses(files = {}, options = {}) {
+  const logger = options.logger || {};
+  // 🛡️ 修复（2026-09-08 实测 mc-max-1788832532312 堆栈实锤）：裸方法提取丢 this ——
+  // logger.js 的 warn/info 是类方法（内部 this.log(...)），此处提取为裸引用后调用时
+  // this 为 undefined → "Cannot read properties of undefined (reading 'log')" →
+  // 收敛整体失败回退原样写盘（子组件 scoped 样式失配问题回归）。必须 bind(logger)。
+  const warn = typeof logger.warn === 'function' ? logger.warn.bind(logger) : () => {};
+  const info = typeof logger.info === 'function' ? logger.info.bind(logger) : () => {};
+
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+  const rawCommonLess = next[COMMON_LESS_PATH];
+
+  // 无子组件或没有 common.less → 无收敛目标（微码单体组件 / vue3 路不适用）
+  if (subPaths.length === 0 || typeof rawCommonLess !== 'string') return next;
+  const commonLess = sanitizeCommonLessText(rawCommonLess);
+
+  // 🛡️ P1.1/P1.2：类事实优先用注入产物（engineer 生成期一次性采集），缺省时用同一实现
+  // self-collect（确定性等价，保证单测/老路径行为一致）。
+  const facts = options.classFacts || collectClassFacts(next);
+
+  const blocks = [];
+  for (const p of subPaths) {
+    const sfc = next[p];
+    const styleText = extractStyleBlocks(sfc);
+    if (!styleText.trim()) continue;
+
+    // ④ #648/#649 + 🛡️ 2026-09-11 修饰符修复：以该子组件 template 真实 DOM 类事实为唯一依据，
+    // 精确命中优先 / 修饰符逐字保留 / 多候选逗号双写；无事实 → fail-open 保留原选择器。
+    const fact = facts.byFile?.[p] || collectFileClassFact(extractSfcTemplate(sfc) || '');
+    const resolveDom = makeDomResolver(fact);
+
+    for (const b of splitTopLevelClassBlocks(styleText)) {
+      if (!isValidLessRuleBlock(b.text)) continue;
+      const variants = rewriteBlockTextVariants(b.text, resolveDom);
+      for (const v of variants) {
+        if (!v) continue;
+        // 变体去重（多候选双向写时同块可能重复），selector 取重写后的首选择器
+        const headSel = (/^\s*([^{]+)\{/.exec(v) || [])[1];
+        const selector = headSel ? headSel.trim().slice(0, 200) : b.selector;
+        // 🛡️ 图表组件标记（2026-09-29 · c-traffic-monitor-4d6135d1 / bda1b2fd 双实锤）：
+        //   源文件含 echarts 的子组件，其布局职责 = 撑满装配器分配的空间
+        //   （flex 比例 + min-height 兜底 ⇒ 根类与 canvas 类的 width/height:100% 是唯一正确形态）。
+        //   LLM 会把设计稿上某框架的 Figma 真值像素（如 52×52）误写到图表根类/canvas 类上，
+        //   「百分比保护」会让该错误像素恒胜 ⇒ 4d6135d1 canvas 52×52 柱图不可见、
+        //   bda1b2fd 根类 52px 宽度塌陷（「还是一点点宽」）。
+        //   该标记供 mergeIntoCommonLess 的「百分比保护」豁免整个图表组件的类。
+        const isChartComponent = /echarts/.test(sfc);
+        blocks.push({ selector, sourceSelector: b.selector, text: v, isChartComponent });
+      }
+    }
+  }
+  if (blocks.length === 0) return next;
+
+  // 🛡️ 碰撞守卫（2026-09-11）：不同源选择器 → 同一目标选择器 = 映射缺陷（本次事故的
+  // 破坏形态正是静默合并 + 后者覆盖）。命中则 fail-open 保留双方**原选择器**（惰性 > 污染）
+  // 并 WARN，避免把激活态规则写到基类名下污染全部元素。
+  const byTarget = new Map();
+  for (const b of blocks) {
+    if (!byTarget.has(b.selector)) byTarget.set(b.selector, []);
+    byTarget.get(b.selector).push(b);
+  }
+  const collisions = [];
+  const resolvedBlocks = [];
+  for (const [target, group] of byTarget) {
+    const sources = new Set(group.map((g) => g.sourceSelector));
+    if (group.length > 1 && sources.size > 1) {
+      collisions.push({ target, sources: [...sources].slice(0, 4) });
+      for (const g of group) resolvedBlocks.push({ ...g, text: g.text, selector: g.sourceSelector });
+    } else {
+      resolvedBlocks.push(group[group.length - 1]);
+    }
+  }
+  if (collisions.length > 0) {
+    warn(
+      `[style-class-consolidator] 目标选择器碰撞 ${collisions.length} 处，已 fail-open 保留原选择器（防激活态污染基类）`,
+      { collisions: collisions.slice(0, 5) },
+    );
+  }
+
+  // 去重：同一（最终）selector 只保留最后一个（子组件内/间重复时后者优先）
+  const dedup = new Map();
+  for (const b of resolvedBlocks) dedup.set(b.selector, b);
+  const uniqueBlocks = [...dedup.values()];
+
+  // 🛡️ L1-a（2026-10-20 · 195c8d0e 实锤）：**逐块**先过门禁，坏块单独丢弃。
+  //   动机：L0 让合并产物整体过门禁，坏一个块仍会触发**整体回退** ⇒ 一个子组件的
+  //   一处笔误就能让其余 30+ 个正常块全部进不了 common.less。逐块校验把损失从
+  //   「全部」缩小到「那一块」，并且块内可自愈的缺陷（缺 `)` / 孤立 `)` / 漏分号）
+  //   当场修好再参与合并。
+  //   A/B 实测（195c8d0e 真实产物）：36 个真实子组件块全部通过、零改写 ⇒ 无误伤。
+  //   ⚠️ 单块跑 gate 的前提是 `b.text` 为完整 `sel { ... }`（见上文 variants 提取）。
+  const vettedBlocks = [];
+  const rejectedSelectors = [];
+  for (const b of uniqueBlocks) {
+    const vg = gateStandaloneLessWrite(b.text, COMMON_LESS_PATH);
+    if (!vg.ok) {
+      rejectedSelectors.push(b.selector);
+      continue;
+    }
+    vettedBlocks.push(vg.changed ? { ...b, text: vg.content } : b);
+  }
+  if (rejectedSelectors.length > 0) {
+    warn(
+      `[style-class-consolidator] ${rejectedSelectors.length} 个类块未过门禁，已单独丢弃（其余块照常合并）`,
+      { selectors: rejectedSelectors.slice(0, 8) },
+    );
+  }
+  if (vettedBlocks.length === 0) return next;
+
+  const merged = mergeIntoCommonLess(commonLess, vettedBlocks);
+  if (!merged.replaced.length && !merged.added.length) return next;
+
+  // 🛡️ L0 判据单点化（2026-10-20 · 195c8d0e 实锤）：合并产物直接交给**写盘门禁**
+  //   判定（唯一判据，含大括号/块注释/圆括号/深选择器四族）。此前本处调用本文件
+  //   自写的 isBalanced（只数 `{}`）⇒ 放行了圆括号缺 1 的稿，被写盘门禁判死，
+  //   641 行样式整体丢弃。现在：过则接受 gate 的 heal 结果（保证写盘时幂等），
+  //   不过则回退（不改动 common.less）。
+  const gate = gateStandaloneLessWrite(merged.content, COMMON_LESS_PATH);
+  if (!gate.ok) {
+    warn(
+      '[style-class-consolidator] 合并产物未过写盘门禁，已回退（不改动 common.less）',
+      { defects: gate.defects },
+    );
+    return next;
+  }
+  const mergedContent = gate.content;
+  if (gate.fixes.length > 0) {
+    info(
+      `[style-class-consolidator] 合并产物经门禁自愈（${gate.fixes.join(', ')}）`,
+    );
+  }
+  // 幂等短路：内容无实质变化则跳过（避免无意义写盘/日志噪音）
+  if (mergedContent.trim() === commonLess.trim()) return next;
+
+  next[COMMON_LESS_PATH] = mergedContent;
+  info(
+    `[style-class-consolidator] 子组件类样式已收敛进 common.less（新增 ${merged.added.length} / 覆盖同名 ${merged.replaced.length}）`,
+  );
+  // 🛡️ F2 计数行（恒 0 也打，保证「判据跑了但没命中」与「判据没跑」可区分）
+  {
+    const strippedList = Array.isArray(merged.percentStripped) ? merged.percentStripped : [];
+    info(
+      `[style-class-consolidator] F2 百分比尺寸逐声明剥离 ${strippedList.length} 处` +
+        `（整块丢弃 ${strippedList.filter((x) => x.dropped).length} / 结构声明保留 ${strippedList.filter((x) => !x.dropped).length}）`,
+      { selectors: strippedList.slice(0, 6).map((x) => x.selector) },
+    );
+  }
+  return next;
+}
+
+export default consolidateSubComponentClasses;

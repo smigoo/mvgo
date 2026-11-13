@@ -21,7 +21,7 @@
  *  （如 `.c-device-monitor-header-stats`），而真实 DOM 上却套一层**实例前缀长形式**
  *  （如 `c-device-monitor-malvtjd5-c-device-monitor-header-stats`，即 `c-{instanceId}-` + 短类）。
  *  旧收敛把 scoped 短类**原样**搬进 common.less，但真实 DOM 是长类名 → 选择器永远对不上
- *  → 样式失效（icon 按 PNG 原始尺寸、图表容器 0 高）+ 被 CODE-003-HIT-RATE 误判死样式。
+ *  → 样式失效（icon 按 PNG 原始尺寸、图表容器 0 高）+ 曾被 CODE-003-HIT-RATE 误判死样式（该门禁已于 2026-11-13 退役）。
  *  治本：以「子组件 template DOM 实际类名」为事实源，对每个 scoped 短类选择器确定性重写为
  *  DOM 实际出现的长/短形式（DOM 有 `c-{instanceId}-{短类}` 则用长、否则用短、都没有则
  *  fail-open 保留短类）；无 instanceId 组件（DOM 全短）保持短类，不臆造前缀。

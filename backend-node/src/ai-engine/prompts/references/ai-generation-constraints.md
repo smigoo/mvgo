@@ -299,21 +299,21 @@ themes/dark.less / light.less：覆盖层，仅当宿主给组件根注入 .dark
   @color-btn-bg: #ffffff;
 }
 
-/* ✅ common.less：所有业务 class 顶格写在文件根层，直接使用变量 */
-.c-monitor-tabs .c-monitor-tab-item {
-  color: @color-tab-default-text;
+/* ✅ common.less：顶层带前缀根类块，业务样式嵌套在内，直接使用变量 */
+.c-monitor-root {
+  .tabs { display: flex; }
+  .tab-item { color: @color-tab-default-text; }
 }
 ```
 
 **错误示例：**
 ```less
-/* ❌ 致命错误：把业务 class 包进主题/根 class 作用域 → 真实 DOM 0 命中，样式全失效 */
+/* ❌ 致命错误：顶层主题类包裹 → 宿主不给组件根加 .dark 类，真实 DOM 0 命中 */
 .dark {
-  .c-monitor-tab-item { color: #18ffce; }
+  .tab-item { color: #18ffce; }
 }
-.c-monitor-root {
-  .c-monitor-tab-item { color: #18ffce; }   /* 若 root class 本身也在 common.less 内则等价于自我嵌套 */
-}
+/* ❌ 错误：顶层裸类污染全局 */
+.tab-item { color: #18ffce; }
 
 /* ❌ 错误：使用 CSS var() 导致 lighten/darken 等 Less 函数不可用 */
 @color-btn-bg: var(--color-btn-bg, #ffffff);
@@ -325,7 +325,7 @@ themes/dark.less / light.less：覆盖层，仅当宿主给组件根注入 .dark
 **约束规则：**
 1. **所有主题变量必须在 `.theme-dark()` 和 `.theme-light()` mixin 中分别定义**
 2. **`theme-vars.less` 根级禁止调用任何 mixin**（默认主题由系统生成的 `index.less` 在根作用域调用）
-3. **`common.less` 中所有业务 class 必须写在文件根层**，禁止任何外层选择器（含 `.dark`/`.light`/组件根 class）包裹
+3. **`common.less` 顶层必须是带前缀的根类块**（`.c-{componentId}-root { ... }`），业务样式全部 LESS 嵌套在根类内、内层用语义短名；禁止 `.dark`/`.light`/宿主类/实例 ID 类作顶层包裹（0 命中），禁止顶层裸类（污染全局）
 4. **`index.less` / `dark.less` / `light.less` 由系统自动生成，禁止输出**
 5. **禁止使用 `var(--xxx)` 定义变量**（会导致 lighten/darken/saturate 等 Less 颜色函数编译报错）
 6. **不需要 `variables.less` 文件**（变量统一在 `theme-vars.less` 的 mixin 中管理）

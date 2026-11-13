@@ -59,6 +59,7 @@ import { formatRepeatedFillCss } from '../../utils/layout-truth-healer.js';
 // 🧬 B 层（2026-11-12 · c-cc6334 实锤）：装配同源——规划树分组数 vs 视觉真值复核
 import { ensureSectionGroupConservation } from '../../utils/section-group-conservation.js';
 import { safeLogger } from '../../logger/safe-logger.js';
+import { buildEnhancedStyleTruthDirective } from '../../context/design-facts-compiler.js';
 // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
 import { collectFigmaTextTruth } from '../../utils/text-truth-guard.js';
 import {
@@ -883,9 +884,9 @@ export function buildChecklistByType(fileType, input, options = {}) {
   - 🚫 **bg\*（背景图）变量与你无关**：背景挂载由系统写盘前确定性注入（见下条红线），你在模板里**不需要也不允许**引用 bg\* 变量
 - [ ] **🔴 背景挂载系统独占红线（2026-11-06 · ea959204 实锤，违反=违规产物）**：背景图的挂载（哪个元素挂哪张图、尺寸/位置/平铺四件套）**由系统在写盘前确定性注入**。**你禁止在任何模板 \`:style\` / CSS 里自写 background 图绑定**——包括 \`backgroundImage\`/\`backgroundSize\`/\`backgroundPosition\`/\`backgroundRepeat\`/\`background: url(...)\` 的任何形态。只负责 DOM 结构与内容：Figma 里哪个容器有背景图，你**留空容器**即可，系统会挂对地方、挂对尺寸。反面教材（真机事故原样，**禁止复现**）：\`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\` 写半截 → CSS 默认 repeat → 459×29 状态条在卡片内平铺 N 遍。检测到违规绑定会被 WARN 留痕并由守卫剥离/修正
 - [ ] **bg/icon DOM 语义铁律（违反即门禁重试）**：\`bg*\` 资源（背景图）是**父元素的 CSS 背景**，**禁止**为它单独创建 DOM 节点；\`icon*\`/\`img*\` 资源（图标/图片）才是独立 DOM。背景绑定由系统注入（见上条红线），你的职责是**保证挂载容器存在**（业务卡片/区块的真实容器），不要建 \`<div class="xxx-bg"></div>\` 空壳专用层。**半透明背景例外（唯一允许独立 DOM 壳的情况）**：当 Figma 中 bg 层自身 opacity<1（半透明底图）时，背景无法内联进容器，允许建独立层壳：容器 \`position:relative\`，首子元素 \`<div class="xxx-bg">\`（**壳上不写任何背景绑定**，四件套由系统注入）+ CSS \`position:absolute; inset:0; opacity:<真值>; pointer-events:none\`，其余内容子元素 \`position:relative\`（防半透明层盖住内容）；**🚫 严禁**把 opacity 写到容器本身——那会把图标/文字一并变透明（透明度只属于 bg 层）
-- [ ] **L4-003**: common.less 中所有 class 都使用了 \`.c-\` 前缀（如 \`.c-vehicle-card\`，没有 .item、.box、.wrapper 等通用名）
+- [ ] **L4-003（2026-11-13 新范式）**: common.less 顶层只有带组件前缀的根类块（\`.c-{componentId}-root { ... }\`），业务样式全部 LESS 嵌套在根类内；内层 class 用语义短名（.header/.stats-item）即可
 - [ ] **index.less**: 不要输出 resources/styles/index.less（由生成器按「根作用域默认主题 + @import common.less」固定模板生成）
-- [ ] **common.less 作用域**: common.less 内所有业务 class 写在文件根层，**禁止**用 \`.dark {}\` / \`.light {}\` / 任何外层选择器包裹（宿主不会给组件根加主题类，包裹后编译成 \`.dark .c-xxx\`，真实 DOM 0 命中 → 样式全部失效）
+- [ ] **common.less 作用域（2026-11-13 新范式）**: 顶层唯一允许 \`.c-{componentId}\` 根类块（业务样式全嵌在它内部）+ @media/@keyframes；**仍禁止** \`.dark {}\`/\`.light {}\`/宿主类/实例 ID 类包裹（宿主不给组件根加主题类 ⇒ \`.dark .c-xxx\` 真实 DOM 0 命中）；主题切换走 @xxx 变量（index.less 编译期注入），与嵌套无关
 - [ ] **style 块**: 末尾有 <style lang="less" scoped> 并 @import 对应的 index.less
 
 ## 🔍 样式自检（高频违规）
@@ -956,7 +957,7 @@ export function buildChecklistByType(fileType, input, options = {}) {
 ## 🔍 子组件专属自检
 
 - [ ] **子组件 style 块**：必须为 <style lang="less" scoped> 并 @import '../../resources/styles/index.less'（子组件 style 可选，但禁止无 scoped 的裸 style 污染全局）
-- [ ] **子组件 class 命名**：遵循 \`.c-${componentName}-xxx\` 前缀规范
+- [ ] **子组件 class 命名**：模板内 class 用语义短名即可（.header/.stats-item）；common.less 顶层根类须带 \`.c-${componentName}-\` 前缀，业务样式嵌套在该根类内
 
 ## 🔍 资源使用规范（必须遵守，违反会导致生成失败）
 
@@ -2423,6 +2424,10 @@ export function buildTrustGuidance(generationInput) {
       }
     }
 
+    // 🛡️ 还原增强（RESTORE_ENHANCEMENT）：补充样式真值注入（有则建议对齐，不强制覆盖 LLM 既有判断）
+    const enhanced = generationInput?.designFacts?.root?.enhancedStyleTruth;
+    lines.push(...buildEnhancedStyleTruthDirective(enhanced));
+
     if (lines.length === 0) return '';
     const level = generationInput.trustVerdict?.level || 'trusted';
     return (
@@ -2610,8 +2615,8 @@ ${fileList}
 
 - **组件ID规范**：declare.json 中的 componentId 必须使用：\`${componentName}\`
 - **Less变量规范**：theme-vars.less 必须定义三个 mixin：\`.common()\`、\`.theme-dark()\`、\`.theme-light()\`，但根级禁止调用；由系统生成的 index.less 在**根作用域**调用 \`.common()\` + 默认主题 mixin，再 \`@import (multiple) './common.less'\`。
-- **⚠️ common.less 必须写在根层**：所有业务 class 直接写在文件根层，**禁止**用 \`.dark {}\`/\`.light {}\`/任何外层选择器包裹（宿主不给组件根加主题类，包裹后编译成 \`.dark .c-xxx\`，真实 DOM 0 命中 → 样式全部失效）。
-- **Class 命名一致性（⚠️ 最重要）**：所有 \`.vue\` 和 \`.less\` 文件中的 class 名必须以 \`.c-\` 为前缀（如 \`.c-vehicle-card\`）。参考文件（📎 区块）中已出现的 class 名**必须在 common.less 中一一对应定义**，禁止在模板中使用 class 却在 common.less 中遗漏或使用不同名称。
+- **⚠️ common.less 顶层必须是带前缀根类块**：形态 \`.c-{componentName}-root { .header { ... } }\` —— 业务样式全部 LESS 嵌套在根类内，内层 class 用语义短名；**仍禁止** \`.dark {}\`/\`.light {}\`/宿主类/实例 ID 类包裹（宿主不给组件根加主题类 ⇒ 0 命中）。
+- **Class 命名一致性（⚠️ 最重要）**：common.less 顶层根类必须带 \`.c-{componentName}-\` 前缀；模板与 common.less 嵌套内层的 class 名**逐字对应**（内层用语义短名，禁止两边不一致/遗漏）。顶层禁止裸类。
 - **🚫 禁止双 c- 前缀**：如果语义名取自 declare.json 的 componentId（它本身已含 \`c-\`，如 \`c-monitor\`），直接写 \`.c-monitor-xxx\`；**禁止**再叠一层前缀写成 \`.c-c-monitor-xxx\`（错误示例：\`class="c-c-monitor-root"\`；正确示例：\`class="c-monitor-root"\`）。
 - **🚫 禁止用组件实例 ID 作 class 前缀**：组件实例 ID（如 \`mc-1786155067847-f0abee76\`）是运行时随机标识符，不得出现在 CSS 中。
   - ❌ 错误示例：\`c-f0abee-container\`、\`c-mc-max-<时间戳>-root\`、\`c-36f0218a-header\`
@@ -2656,6 +2661,7 @@ ${contextBlock}
 
 **格式要求**：
 - 每个文件用 \`// === 文件路径 ===\` 作为分隔符开头
+- **⛔ 文件清单即输出边界**：只允许输出上面清单内的文件段，清单之外的任何 \`// === 文件 ===\` 段都会被守卫**整段丢弃**（写了等于白写，还挤占输出预算）；清单内每个 .vue 文件必须含完整 \`<template>\`（缺 template 的残片同样整段丢弃）
 - 文件内容直接输出原始代码，**不要转义换行符和引号**（不要用 \\n 和 \\" ）
 - 文件之间用空行分隔
 - 不要包裹在 JSON 中，不要用 \`\`\` 代码块
@@ -3038,6 +3044,7 @@ export function buildCommonLessChunkPrompt(input, chunk, options = {}) {
 ## 🅰️ 字体缩放规范（微码组件必遵 · 支撑微前端整组件等比缩放）
 - 组件根容器（\`.c-xxx-root\` 或 base-panel 根元素）必须设置 \`font-size: var(--fontSize, 14px)\`（默认 14px = 设计稿基准，即 1@fontSize = 14px）。
 - 组件内**所有** \`font-size\` 必须使用 \`@fontSize\` 变量：恰好基准直接写 \`font-size: @fontSize\`；其他尺寸写 \`font-size: calc(@fontSize * 系数)\`（如 20px → \`calc(@fontSize * 1.4286)\`）。**禁止**出现 \`font-size: Npx\` 字面量。
+- 🔴 **上下文豁免（2026-11-13 · 6002417a 实锤）**：上条 \`@fontSize\` 形态**只适用于 \`<style>\` 块内**（LESS 编译消费）。**\`<template>\` 模板内联 \`style="..."\` 属性是浏览器直接消费的合法 CSS，LESS 变量 \`@fontSize\` 在此处非法（浏览器整句丢弃）** ⇒ 内联必须写 \`font-size: var(--fontSize, 14px)\` / \`calc(var(--fontSize, 14px) * 系数)\` 形态（效果等价、宿主缩放不丢）。
 - \`@fontSize\` 在 theme-vars.less 的 \`.common()\` 内定义（系统兜底 = 14px），业务样式直接引用即可，无需重复定义。
 - 中间容器（卡片/分区/头部）**不要**自行设置 font-size（如需统一请用 \`inherit\`），避免嵌套复利导致子元素字号漂移。
 - 宿主平台只需覆写该组件根的 \`--fontSize\` CSS 变量即可整体缩放字体；因此默认视图必须与原 px 设计稿像素级一致。
@@ -3066,11 +3073,11 @@ ${fileList}
 
 ## 关键约束
 
-**Class 命名规范**：
-- common.less 中的所有 class 必须以 \`.c-\` 为前缀
-- 格式：\`.c-{语义名称}\`（如 \`.c-vehicle-card\`、\`.c-stat-item\`）
-- 语义名称使用 kebab-case：vehicle-card, stat-item, chart-wrapper
-- 禁止使用无前缀的通用 class：.item, .box, .wrapper, .container
+**Class 命名规范（2026-11-13 新范式：根类命名空间 + LESS 嵌套）**：
+- common.less **顶层只有**带组件前缀的根类块：\`.c-{componentId}-root { ... }\`（或 \`.c-{componentId} { ... }\`）
+- 业务样式全部**嵌套在根类内**，内层 class 用语义短名 kebab-case：.header, .stats-item, .chart-wrap
+- 内层短名允许（.item/.box/.wrapper 等作内层无歧义）；**禁止**把它们写在顶层（顶层裸类会污染全局）
+- 主题色一律用 @xxx 变量（index.less 编译期注入），禁止 .dark/.light 类包裹
 
 **主题变量引用规则（跨文件一致性）**：
 - 主题变量已在参考文件 theme-vars.less 中定义（见 📎 区块），common.less 中引用变量时必须使用其中已存在的变量名
@@ -3278,17 +3285,17 @@ ${fileList}
 
 ## 关键约束
 
-**Class 命名规范**：
-- common.less 中的所有 class 必须以 \`.c-\` 为前缀
-- 格式：\`.c-{语义名称}\`（如 \`.c-vehicle-card\`、\`.c-stat-item\`）
-- 语义名称使用 kebab-case：vehicle-card, stat-item, chart-wrapper
-- 禁止使用无前缀的通用 class：.item, .box, .wrapper, .container
+**Class 命名规范（2026-11-13 新范式：根类命名空间 + LESS 嵌套）**：
+- common.less **顶层只有**带组件前缀的根类块：\`.c-{componentId}-root { ... }\`（或 \`.c-{componentId} { ... }\`）
+- 业务样式全部**嵌套在根类内**，内层 class 用语义短名 kebab-case：.header, .stats-item, .chart-wrap
+- 内层短名允许（.item/.box/.wrapper 等作内层无歧义）；**禁止**把它们写在顶层（顶层裸类会污染全局）
+- 主题色一律用 @xxx 变量（index.less 编译期注入），禁止 .dark/.light 类包裹
 
 **Less变量规范**：
 - theme-vars.less 必须定义三个 mixin：\`.common()\`、\`.theme-dark()\`、\`.theme-light()\`
 - 颜色变量定义在 mixin 内部，theme-vars.less 根级禁止调用任何主题 mixin
 - 系统生成的 index.less 会在**根作用域**调用 \`.common()\` 与默认主题 mixin，再 \`@import (multiple) './common.less'\`
-- ⚠️ common.less 中所有 class 必须写在**文件根层**，禁止用 \`.dark {}\`/\`.light {}\`/任何外层选择器包裹（宿主不给组件根加主题类，包裹后规则在真实 DOM 上 0 命中）
+- ⚠️ common.less **顶层必须是带前缀根类块**，业务样式全部 LESS 嵌套在根类内（内层短名合法）；禁止用 \`.dark {}\`/\`.light {}\`/宿主类/实例 ID 类包裹（宿主不给组件根加主题类 ⇒ 0 命中）
 
 **🚫 禁止 CSS 变量**：
 - theme-vars.less 中**禁止**使用 CSS 变量（\`var(--xxx)\`），只允许 Less 变量（\`@xxx\`）
@@ -3474,7 +3481,7 @@ ${layoutSkeleton}
 ## 关键约束
 
 - 必须使用 \`<base-panel panelKey="${panelType}">\` 包裹，通过具名插槽填充内容
-- 所有 class 必须使用 \`.c-\` 前缀（如 \`.c-vehicle-card\`）
+- 根容器 class 必须带 \`.c-\` 前缀（如 \`.c-vehicle-card-root\`）；内部 class 用语义短名（.header/.stats-item），样式统一在 common.less 根类块内嵌套定义
 - **🚫 禁止用组件实例 ID 作 class 前缀**：组件实例 ID 是运行时随机标识符，不得出现在 CSS 中。
   - ❌ 错误：\`c-f0abee-container\`、\`c-mc-max-<时间戳>-root\`
   - ✅ 正确：\`c-env-monitor-root\`、\`c-env-monitor-header\`、\`c-env-monitor-chart\`（基于功能语义命名）
@@ -3704,6 +3711,7 @@ ${contextBlock}${buildSubComponentResponsibilityTable(input)}
 **格式要求**：
 - 以 \`// === package/index.vue ===\` 开头
 - 紧接着输出 \`<script setup>\` 到 \`</script>\` 的完整内容
+- **⛔ 文件清单即输出边界**：本次只允许输出 \`// === ${chunk.files?.[0] || 'package/index.vue'} ===\` 这一个文件段；其他文件即使出现在上方上下文里也**已在先前批次生成完毕**，任何清单外的 \`// === 文件 ===\` 段都会被守卫**整段丢弃**（写了等于白写，还挤占输出预算）
 - **不要输出 <template> 块**
 - **不要输出 <style> 块**
 - 不要包裹在 JSON 或代码围栏中

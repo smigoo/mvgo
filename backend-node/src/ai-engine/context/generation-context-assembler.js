@@ -516,6 +516,9 @@ export function assembleGenerationContext(state = {}) {
   const designFacts = compileDesignFacts({
     figmaNodeData: state.figmaNodeData || state.figmaData,
     visualAnalysis,
+    // 🛡️ 还原增强（RESTORE_ENHANCEMENT）：任务 option 显式开启优先，否则读环境变量兜底；默认 false（零影响）
+    restoreEnhancement:
+      state.restoreEnhancement ?? (process.env.MV_RESTORE_ENHANCEMENT === 'true'),
   })
   const resolution = resolveContextConflicts({
     designFacts,

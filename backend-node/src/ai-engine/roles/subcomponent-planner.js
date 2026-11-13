@@ -34,6 +34,7 @@ import {
   stripFabricatedSourceIds,
   uniqueSectionIds,
   deriveSectionsFromFigmaTree,
+  visionDroppedContent,
   clusterItemsByColumnX,
   getFigmaBox,
 } from '../utils/section-tree.js';
@@ -1026,6 +1027,41 @@ function mergeLegendSections(sections) {
  */
 
 /**
+ * 🎯 R1 派工规格下发（2026-11-13 · mc-1794532970423-0062020b 实锤）：
+ *   vision chart 条目 → chart-component 子组件的规格载荷。
+ *   病灶：R1 拆分只给子组件「名字 + chartData/ChartConfig prop 名」，vision 识别出的
+ *   图表类型/系列/颜色/innerRadius 等完整规格**零下发** → 批次 prompt 里 Donut 只有
+ *   「(无描述)」一行 → LLM 只能写「待续」stub → DO-NOT-INVENT-CHART-MISSING 13 轮全灭。
+ *   匹配键：vision 条目的 `section` 字段（Figma 节点 id）== R1 extractCharts 的节点 id。
+ */
+const CHART_SPEC_FIELDS = [
+  'type', 'series', 'seriesTypes', 'seriesColors', 'legend', 'legendPosition',
+  'innerRadius', 'axes', 'tooltip', 'gradient', 'title',
+];
+
+function matchVisionChartSpec(chart, visionCharts) {
+  if (!Array.isArray(visionCharts) || visionCharts.length === 0) return null;
+  const cid = String(chart?.id ?? '');
+  if (!cid) return null;
+  return (
+    visionCharts.find((vc) => String(vc?.section ?? '') === cid) ||
+    visionCharts.find(
+      (vc) => String(vc?.nodeId ?? '') === cid || String(vc?.id ?? '') === cid,
+    ) ||
+    null
+  );
+}
+
+function compactChartSpec(vc) {
+  if (!vc || typeof vc !== 'object') return null;
+  const spec = {};
+  for (const k of CHART_SPEC_FIELDS) {
+    if (vc[k] !== undefined && vc[k] !== null) spec[k] = vc[k];
+  }
+  return Object.keys(spec).length > 0 ? spec : null;
+}
+
+/**
  * 🎯 Phase 2 方案1: Section 内部拆分策略
  *
  * 拆分规则（按优先级）：
@@ -1034,7 +1070,12 @@ function mergeLegendSections(sections) {
  * R3: 嵌套深度 >3 → 深层节点提升为子组件
  * R4: 交互复杂度 >3 → 每个交互区域独立子组件
  */
-function splitSectionInternally(section, sectionIndex, figmaIndex = null) {
+function splitSectionInternally(
+  section,
+  sectionIndex,
+  figmaIndex = null,
+  visionCharts = null,
+) {
   const scoreResult = calculateSplitScore(section);
 
   if (!scoreResult.shouldSplit) {
@@ -1046,7 +1087,34 @@ function splitSectionInternally(section, sectionIndex, figmaIndex = null) {
 
   // R1: 图表隔离（优先级最高）
   if (charts.length >= 2) {
-    charts.forEach((chart, idx) => {
+    // 🔴 R1 派工 fail-loud（2026-11-13 · mc-1794532970423-0062020b 实锤）：
+    //   vision 明确识别出 ≥2 个图表却匹配不到规格 ⇒ 拒绝裸派，整段并回宿主生成。
+    //   裸派 = LLM 拿不到任何图表规格只能写 stub，13 轮重试同 prompt 全灭的根因。
+    //   fail-open 边界：visionCharts 为空（无 vision 数据的管线形态）不拦截，
+    //   维持既有拆分行为 —— 只挡「有真值却没接上」的断链，不新增无真值场景的拒绝面。
+    const vcList = Array.isArray(visionCharts) ? visionCharts : [];
+    const resolved = charts.map((chart) => {
+      const vc = matchVisionChartSpec(chart, vcList);
+      return { chart, spec: compactChartSpec(vc) };
+    });
+    if (vcList.length > 0) {
+      const missing = resolved
+        .filter((r) => !r.spec)
+        .map((r) => `${r.chart.id}(${r.chart.name})`);
+      if (missing.length > 0) {
+        logger.warn(
+          `🔴 R1 派工 fail-loud：section-${sectionIndex} 的图表在 vision 规格池中匹配不到 ⇒ 拒派并回宿主生成（禁止空描述裸派）`,
+          {
+            sectionId: section?.id || `section-${sectionIndex + 1}`,
+            missingCharts: missing,
+            visionChartSections: vcList.map((vc) => String(vc?.section ?? '')),
+          },
+        );
+        return []; // 整段并回宿主，不产裸派子组件
+      }
+    }
+
+    resolved.forEach(({ chart, spec }, idx) => {
       subcomponents.push({
         type: 'chart-component',
         id: chart.id,
@@ -1055,6 +1123,8 @@ function splitSectionInternally(section, sectionIndex, figmaIndex = null) {
         reason: 'R1: 图表隔离策略',
         props: ['chartData', 'chartConfig'],
         emits: ['legendClick', 'dataZoom'],
+        // 🛡️ 规格载荷（vision 真值），下游 prompt 渲染时逐字段下发；缺字段不产键
+        ...(spec ? { chartSpec: spec } : {}),
       });
     });
 
@@ -2150,7 +2220,12 @@ export function buildEffectiveSection(sec, idx, ctx) {
         `🛡️ R2 豁免：section ${sec.id} 是 ${sec.parallelSiblingCount} 张同构并列卡之一，整卡作为最小组件单元（卡内富内容不拆分）`,
       );
     } else {
-      internalSubcomponents = splitSectionInternally(sec, idx, ctx.figmaIndex);
+      internalSubcomponents = splitSectionInternally(
+        sec,
+        idx,
+        ctx.figmaIndex,
+        ctx.visionCharts,
+      );
       ctx.allInternalSubcomponents.push(
         ...internalSubcomponents.map((sub) => ({
           ...sub,
@@ -2708,6 +2783,17 @@ export class SubcomponentPlanner {
         logger.warn(
           '🛡️ structure-source：vision 段锚点缺失（逐项内容无法映射 Figma 节点），回退 E1 保底',
           { reason: 'vision-anchor-missing', sections: sections.map((s) => String(s?.id ?? '')) },
+        );
+      } else if (visionDroppedContent(sections, opts.figmaNodeData)) {
+        // 🛡️ 2026-11-13（mc-max-1794553882576-ce0eb032 实锤）：vision 把误命名 `slot-icon`/`icon`
+        //   的大内容容器当图标/槽位装饰区，只提拔内层少数节点，其名下标题/副标题/图片被整组丢弃
+        //   ⇒ 组件结构残缺却被判 completed。用户拍板规则（根锚定 opt-out）：仅根直接子节点 bg/header
+        //   不生成，其余一律内容。E1（deriveSectionsFromFigmaTree）已对大容器递归下钻 + 孤儿文本恢复，
+        //   故回退 E1 由已验证的确定性骨架补回漏提内容；正常组件（vision 全覆盖）零行为变化。
+        effectiveStructureSource = STRUCTURE_SOURCE_FIGMA;
+        logger.warn(
+          '🛡️ structure-source：vision 漏提内容（大容器误命名 slot-icon/icon 等当装饰丢弃），回退 E1 保底',
+          { reason: 'vision-dropped-content', sections: sections.map((s) => String(s?.id ?? '')) },
         );
       }
     }
@@ -3298,6 +3384,9 @@ export class SubcomponentPlanner {
         allInternalSubcomponents,
         e1Derived,
         figmaIndex: figmaIndexForRefine,
+        // 🔴 R1 派工规格下发（2026-11-13 · mc-1794532970423-0062020b 实锤）：
+        //   vision 图表真值池，R1 拆分时按节点 id 匹配 chartSpec；缺料即拒派并回宿主
+        visionCharts: opts.visionCharts,
       }),
     );
 

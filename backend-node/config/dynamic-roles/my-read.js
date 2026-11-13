@@ -1,6 +1,6 @@
 /**
  * 读组件（Agent Builder 自动生成，请勿手改）
- * 模板: file-read | 创建: 2026-11-12T07:02:23.255Z
+ * 模板: file-read | 创建: 2026-11-13T15:30:23.892Z
  * 输入: sourcePath
  * 输出: content, ok
  */

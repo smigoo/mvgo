@@ -1665,6 +1665,21 @@ export function cardTruth(node, resourceMapping) {
     pad = iconTruth.dx;
     gap = iconTruth.gap;
   }
+  // 🧱 column-pair（2026-11-13 · mc-max-1794551009165-7dfc01e9 实锤）：多列卡内布局。
+  //   病灶：卡内真值 =「副标题行 + 左列(客车/22350 x 对齐) + 右列(货车/16270 右缘对齐)」，
+  //   既有 textDir 判据只有 row|column 两种形态（column 要求全部 run x 对齐 ≤2px），
+  //   双列卡 x 起点差 142px ⇒ fallback 'row' ⇒ 确定性生成单行横排模板 ⇒
+  //   五段文字挤爆 192px 卡，数字被 overflow:hidden 裁掉（产物 runs 只剩「66」残骸）。
+  //   治本：几何列聚类（x 区间重叠 = 同列连通分量），输出列结构交模板竖排渲染。
+  //   判据全几何零命名、任一前提不满足 ⇒ null（fail-open 保持 row，阴性零回归）。
+  const columnPair = analyzeColumnPair(runs);
+  let padRight = 0;
+  if (columnPair) {
+    // 末列右缘距卡右缘（space-between 布局的右 padding 真值）
+    const lastCol = columnPair.columnRuns[columnPair.columnRuns.length - 1];
+    const rightEdge = Math.max(...lastCol.map((x) => x.box.x + x.box.w));
+    padRight = Math.max(0, Math.round(box.x + box.w - rightEdge));
+  }
   return {
     bg,
     bgImage,
@@ -1674,10 +1689,118 @@ export function cardTruth(node, resourceMapping) {
     icon,
     // 🛡️ 刀60 观测出参：本卡同行容差判据是否改变了文本序（0 也打，真机计数行用）
     rowOrderFixed,
-    // 🧱 卡内文本列方向（column = icon 左 + 名称上/数值下；row = 单行横排）
-    textDir,
+    // 🧱 卡内文本列方向（column = icon 左 + 名称上/数值下；row = 单行横排；
+    //   column-pair = 多列各竖排，附带 title/columns/colAligns/rowGap 结构真值）
+    textDir: columnPair ? 'column-pair' : textDir,
     ...(stackGap !== null ? { stackGap } : {}),
+    ...(columnPair
+      ? {
+          title: columnPair.titleRun
+            ? {
+                text: columnPair.titleRun.text,
+                color: columnPair.titleRun.color,
+                fs: columnPair.titleRun.fs,
+                fw: columnPair.titleRun.fw,
+              }
+            : null,
+          columns: columnPair.columnRuns.map((col) =>
+            col.map((x) => ({ text: x.text, color: x.color, fs: x.fs, fw: x.fw })),
+          ),
+          colAligns: columnPair.colAligns,
+          rowGap: columnPair.rowGap,
+          padRight,
+        }
+      : {}),
     runs: runs.map((x) => ({ text: x.text, color: x.color, fs: x.fs, fw: x.fw })),
+  };
+}
+
+/**
+ * 🧱 column-pair 列聚类分析（2026-11-13 · 7dfc01e9 实锤，纯函数可单测）。
+ *
+ * 输入 runs（含 `.box`，已按 y-then-x 排序），输出多列结构或 null（fail-open）。
+ * 判据（全几何、零命名，逐条可辩驳）：
+ *   ① 行分组：y 中心差 ≤ 较小盒高一半 ⇒ 同行（与 cardTextCmp sameRow 同语义）
+ *   ② 行组数 ≥2（单行横排是既有 row 形态，不劫持）
+ *   ③ 首行组单 run ⇒ 拆为标题行（副标题，仅允许首行组）；其余行组列数必须一致
+ *   ④ 列数 ≥2（单列是既有 column 形态，不劫持）
+ *   ⑤ 列校验：各行第 j 个 run 的 x 区间两两有重叠（同一列才连通）；右对齐列
+ *      （货车 w24[x187] 与 16270 w52[x159] 右缘同）也满足「区间重叠」⇒ 判据兼容
+ *   ⑥ 标题行须横跨主行全部列（与每列 x 区间有重叠），否则结构可疑 ⇒ 不猜
+ * 输出：{ titleRun, columnRuns, colAligns, rowGap }；colAligns 按列内左/右缘极差
+ *   ≤2px 判 left/right，否则 center。rowGap = 列内相邻行垂直间距均值。
+ */
+export function analyzeColumnPair(runs) {
+  if (!Array.isArray(runs) || runs.length < 3) return null;
+  const boxOf = (r) => r?.box;
+  if (!runs.every(boxOf)) return null;
+  // ① 行分组（按 y 中心升序扫描，与行代表比较）
+  const sorted = [...runs].sort((a, b) => boxOf(a).y + boxOf(a).h / 2 - (boxOf(b).y + boxOf(b).h / 2));
+  const rows = [];
+  for (const r of sorted) {
+    const last = rows[rows.length - 1];
+    if (last) {
+      const rep = last[0];
+      const rowTol = Math.min(boxOf(rep).h, boxOf(r).h) / 2;
+      if (Math.abs(boxOf(rep).y + boxOf(rep).h / 2 - (boxOf(r).y + boxOf(r).h / 2)) <= rowTol) {
+        last.push(r);
+        continue;
+      }
+    }
+    rows.push([r]);
+  }
+  for (const row of rows) row.sort((a, b) => boxOf(a).x - boxOf(b).x);
+  // ② 行组数 ≥2
+  if (rows.length < 2) return null;
+  // ③ 标题行拆分 + 列数一致
+  let titleRun = null;
+  let bodyRows = rows;
+  if (rows[0].length === 1) {
+    titleRun = rows[0][0];
+    bodyRows = rows.slice(1);
+  }
+  if (bodyRows.length < 1) return null;
+  const k = bodyRows[0].length;
+  if (k < 2) return null; // ④ 单列 ⇒ 既有 column 形态
+  if (!bodyRows.every((r) => r.length === k)) return null;
+  // ⑤ 列校验：第 j 列各行 run 的 x 区间两两重叠
+  for (let j = 0; j < k; j++) {
+    for (let i = 1; i < bodyRows.length; i++) {
+      const a = boxOf(bodyRows[i - 1][j]);
+      const b = boxOf(bodyRows[i][j]);
+      if (Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) <= 0) return null;
+    }
+  }
+  // ⑥ 标题须落在主行水平范围内（居中副标题与侧列无重叠是常态，如 7dfc01e9
+  //    标题[73,185] vs 左列[45,69]；只要不越出内容区即承认其标题地位）
+  if (titleRun) {
+    const tb = boxOf(titleRun);
+    const lo = Math.min(...bodyRows[0].map((r) => boxOf(r).x));
+    const hi = Math.max(...bodyRows[0].map((r) => boxOf(r).x + boxOf(r).w));
+    if (tb.x < lo - 2 || tb.x + tb.w > hi + 2) return null;
+  }
+  // 列内对齐 + 行距真值
+  const colAligns = [];
+  for (let j = 0; j < k; j++) {
+    const col = bodyRows.map((r) => boxOf(r[j]));
+    const lSpread = Math.max(...col.map((b) => b.x)) - Math.min(...col.map((b) => b.x));
+    const rSpread = Math.max(...col.map((b) => b.x + b.w)) - Math.min(...col.map((b) => b.x + b.w));
+    colAligns.push(lSpread <= 2 ? 'left' : rSpread <= 2 ? 'right' : 'center');
+  }
+  const gaps = [];
+  for (let j = 0; j < k; j++) {
+    for (let i = 1; i < bodyRows.length; i++) {
+      const a = boxOf(bodyRows[i - 1][j]);
+      const b = boxOf(bodyRows[i][j]);
+      gaps.push(Math.max(0, Math.round(b.y - (a.y + a.h))));
+    }
+  }
+  const rowGap = gaps.length ? Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length) : 0;
+  return {
+    titleRun,
+    columnRuns: bodyRows[0].map((_, j) => bodyRows.map((r) => r[j])),
+    colAligns,
+    rowGap,
   };
 }
 
@@ -4338,17 +4461,25 @@ export function renderFoldedGridLeafVue(tr, semantic) {
   // 🧱 卡内文本列方向：只有**全部卡一致**为 column 才启用（混排时不猜，逐字保持旧结构）。
   const hasTextColumn =
     tr.items.length > 0 && tr.items.every((it) => it.textDir === 'column');
+  // 🧱 column-pair（2026-11-13 · 7dfc01e9 实锤）：全部卡一致为多列 ⇒ 双层结构
+  //   （标题行 + space-between 多列竖排）。判据与产物全几何确定性，混排不猜。
+  const hasColumnPair =
+    tr.items.length > 0 && tr.items.every((it) => it.textDir === 'column-pair');
+  const hasPairTitle = hasColumnPair && tr.items.some((it) => it.title != null);
   const stackGapPx = tr.items[0]?.stackGap;
   const textColGap =
     Number.isFinite(stackGapPx) && stackGapPx > 0 ? `gap:${stackGapPx}px;` : '';
 
+  // 🧱 column-pair：右列右缘真值 padding（space-between 布局右距）。非 column-pair
+  //   项无 padRight 字段 ⇒ 本绑定片段为空串 ⇒ 既有产物逐字不变。
+  const pairPadBind = hasColumnPair ? ", paddingRight: it.padRight + 'px'" : '';
   const lines = [
     '<template>',
     // 🔴 justify-content 必须显式内联：只要有写作者（LLM/注入器）给宿主 class 写
     //   `justify-content:space-between`，列不满时第二排卡会被甩到行末尾（round-11 实锤，
     //   战略段第二行「天地伟业」跑到右侧）。真值一律左起排布。
     `  <div data-section-id="${tr.sectionId}" class="${cls}" style="display:grid;justify-content:start;grid-template-columns:repeat(${tr.cols}, ${tr.cardW}px);grid-auto-rows:${tr.cardH}px;column-gap:${tr.colGap}px;${tr.rows > 1 && tr.rowGap !== null ? `row-gap:${tr.rowGap}px;` : ''}align-content:start;align-items:stretch;">`,
-    `    <div v-for="(it, i) in items" :key="i" class="${cls}-card" :style="{ background: it.bg, borderRadius: it.r + 'px', paddingLeft: it.pad + 'px', gap: it.gap + 'px'${cardImgBind} }">`,
+    `    <div v-for="(it, i) in items" :key="i" class="${cls}-card" :style="{ background: it.bg, borderRadius: it.r + 'px', paddingLeft: it.pad + 'px', gap: it.gap + 'px'${cardImgBind}${pairPadBind} }">`,
     // 🛡️ 刀55：前导 icon（真值几何 w/h；pad/gap 已在 cardTruth 改写为 icon 左缘/间距）。
     //   条件展开：无 icon 项 ⇒ 本行整行不存在 ⇒ 产物逐字不变。
     ...(hasIcon
@@ -4361,15 +4492,37 @@ export function renderFoldedGridLeafVue(tr, semantic) {
     //   旧模板固定 flex(row) ⇒ 两行被拉成一行，数值右边界超出卡宽 21px 被裁。
     //   现按 `textDir` 决定：column ⇒ 包一层竖排 text 列（垂直 gap 用真值 stackGap）；
     //   row（默认/单文本/无法判定）⇒ 逐字保持旧结构，阴性零回归。
-    ...(hasTextColumn
+    // 🧱 column-pair 分支（优先于 hasTextColumn/row）：标题行 + 多列竖排。
+    //   卡容器是 flex row + align-items:center，故整包一层竖排 wrap（100% 宽高）；
+    //   pair 行 space-between（列间空位即中心图形区，后续 @echarts donut 挂载点）。
+    //   列内对齐 colAligns 真值内联（左缘/右缘极差判据），gap 用列内行距真值 rowGap。
+    //   pad/padRight 走 :style 绑定（Vue 静态 style 不支持 mustache 插值）。
+    ...(hasColumnPair
       ? [
-          `      <div class="${cls}-text" style="display:flex;flex-direction:column;${textColGap}min-width:0;">`,
-          `        <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
-          '      </div>',
+          `      <div style="display:flex;flex-direction:column;justify-content:center;width:100%;height:100%;min-width:0;box-sizing:border-box;">`,
+          ...(hasPairTitle
+            ? [
+                `        <div v-if="it.title != null" style="display:flex;justify-content:center;width:100%;">`,
+                `          <span :style="{ color: it.title.color, fontSize: it.title.fs + 'px', fontWeight: it.title.fw, lineHeight: 1.4, whiteSpace: 'nowrap' }">{{ it.title.text }}</span>`,
+                `        </div>`,
+              ]
+            : []),
+          `        <div style="display:flex;align-items:center;justify-content:space-between;min-width:0;">`,
+          `          <div v-for="(col, ci) in it.columns" :key="ci" :style="{ display: 'flex', flexDirection: 'column', alignItems: it.colAligns[ci] === 'left' ? 'flex-start' : it.colAligns[ci] === 'right' ? 'flex-end' : 'center', gap: it.rowGap + 'px', minWidth: 0 }">`,
+          `            <span v-for="(t, ti) in col" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+          `          </div>`,
+          `        </div>`,
+          `      </div>`,
         ]
-      : [
-          `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
-        ]),
+      : hasTextColumn
+        ? [
+            `      <div class="${cls}-text" style="display:flex;flex-direction:column;${textColGap}min-width:0;">`,
+            `        <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+            '      </div>',
+          ]
+        : [
+            `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+          ]),
     '    </div>',
     '  </div>',
     '</template>',
@@ -4394,6 +4547,18 @@ export function renderFoldedGridLeafVue(tr, semantic) {
         // 🔴 刀55：icon 项带下标 + 尺寸真值（w/h）；无 icon 项不写字段（阴性逐字不变）
         if (hasIcon && itemIconIdx[i] != null) {
           out = { ...out, icon: itemIconIdx[i], iw: it.icon.w, ih: it.icon.h };
+        }
+        // 🧱 column-pair（2026-11-13 · 7dfc01e9）：列结构真值透传。
+        //   非 column-pair 项不写字段（阴性逐字不变）。runs 字段保留（向后兼容）。
+        if (it.textDir === 'column-pair') {
+          out = {
+            ...out,
+            title: it.title ?? null,
+            columns: it.columns,
+            colAligns: it.colAligns,
+            rowGap: it.rowGap ?? 0,
+            padRight: it.padRight ?? 0,
+          };
         }
         return out;
       }),

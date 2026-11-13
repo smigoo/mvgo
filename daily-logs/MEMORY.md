@@ -11,6 +11,7 @@
 - 🔴 **提交**：显式路径（禁 `git add .`）、`git commit -F msg -- <pathspec>`（索引常有他会话 staged 文件）、先子仓后主仓、禁 stash/reset 清场；并行会话会 stash+reset ⇒ 判「改动丢失」须 `git show HEAD:<path>`+`hash-object` 双证，恢复源 `git fsck --no-reflogs`/file-history 快照库。**交付分支统一走 `main`**（11-12 用户指令：撤销原「默认 `go-dev` 永不落 main」规范；`go-dev` 已于 11-12 10:10 并入 main 并删除本地分支，四仓一律 `main`；仅留 `backup/pre-merge-go-dev-20261112-100759` 作回滚锚）。**发布前必校验当前分支 + 产物来源分支**（11-12 生产前端误用 go-dev 构建 ⇒ main 独有的「任务反馈/续跑徽章/单元拆分」整块消失）。
 - 🔴 **`git commit -- <pathspec>` 取【工作区】内容、绕过 index**（11-13 实锤踩坑）：同一文件混有他人 WIP 时，即使 index 已用 `git apply --cached` 精确到 hunk，`git commit -- path` 仍会把**工作区全量**写入提交 ⇒ 他人 WIP 被我方提交污染。正确姿势：① `git diff -U3 <file> > full.patch` ② python 按 hunk 切出自己那几段 → `mine.patch` ③ `git apply --cached mine.patch`（或 `git hash-object -w` + `git update-index --cacheinfo 100644,<blob>,<path>`）④ `git commit --amend -F msg`（**不带 pathspec**，让它取 index）⑤ 把含他人 WIP 的工作区版本 `cp` 回来（提交前务必先备份）。验证：`git show HEAD -- <file> | grep '^@@'` 逐 hunk 对账 + `diff -q` 与备份逐字比对。
 - 🔴 几何/真值判据必挂真机日志计数行（塞入参=假绿）；改的人=验的人同正则=假绿。
+- 🔴 **门禁变更文档同步**（11-13 用户指令）：每一次门禁改动（增/删/退役/判据/severity/message 文案/修复器同源化/接线/定性结论）必须**同轮**更新 `docs/2026-11-13-门禁全景评审.md` §七 台账 + 修订 §二~§五 明细状态；标题「建议/已删除」须 `git show HEAD:<path>` + 工作区 diff 双证核对。状态三分口径＝工作区已改 / HEAD 已固化(hash) / 已部署，缺一不得称「已删」。禁「代码已删、文档仍写建议」。
 
 ## 状态（11-12）
 - 本地 :13030 跑 dist（改源码须 build+重启）；:2610 Vite；:8080 java。生产：前端 11-03；Node 11-05 `da19f6e`；⚠️ 生产 backend-node 目录多会话同操作。

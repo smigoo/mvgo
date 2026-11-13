@@ -299,15 +299,13 @@ onMounted(() => {
 const option = {
   tooltip: {
     trigger: 'axis', // 或 'item'（饼图等）
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1,
-    textStyle: {
-      color: '#ffffff',
-      fontSize: 12
-    },
+    // 🛡️ 样式规则（2026-11-13 · mc-max-1794542621368-771da11e 白色图例实锤）：
+    //   tooltip 是悬停交互态，静态设计稿通常不定义其样式 ⇒ 直接使用 ECharts 默认样式
+    //   （不写 backgroundColor/borderColor/textStyle 等样式字段 = 默认）。
+    //   禁止硬编码任何字面色值（历史模板曾内置黑底白字导致浅色主题产物出现白色文字）。
+    //   仅当规格块明确给出 tooltip 样式真值时才按真值覆盖。
     formatter: (params) => {
-      // 自定义格式
+      // 自定义格式（显示哪些字段来自视觉阶段的内容描述）
       const p = Array.isArray(params) ? params[0] : params
       return `${p.name}<br/>${p.seriesName}: ${p.value} ${unit || ''}`
     }

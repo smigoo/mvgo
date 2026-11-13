@@ -24,7 +24,9 @@ import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFle
 // 🔴 2026-10-12：接上 M5-7 字号归一（此前 `lite.service.ts#prepareMicrocodeVueContent`
 //   实现了它但**全文无调用点** ⇒ 死代码 ⇒ 归一从未生效，硬编码 px 字号直接过检失败）。
 //   顶层静态导入（`writeFiles` 是同步函数，不能动态 import）。
-import { normalizeFontSizeLiterals } from '../../utils/font-size-normalizer.js';
+import { normalizeFontSizeLiterals, normalizeVueFileFontSize } from '../../utils/font-size-normalizer.js';
+import { healColorSlotLiteralsInVue } from '../../utils/color-slot-literal-healer.js';
+import { parseThemeVarsMixins } from '../../utils/color-slot-mapper.js';
 import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.js';
 // 🛡️ 刀 53h（2026-10-23 · cd8938f8 实锤）：**接管后样式失配**的第三态收尾。
 //   刀 53 家族接管叶段时用确定性模板渲染（`c-<sem>-fg-<kind>-<id>`），**完全不读**旧 LLM
@@ -44,6 +46,10 @@ import { runFinalVueExpressionGate } from './final-vue-expression-gate.js';
 //    bg 挂载链把目标标签原静态 style 值残留拼进 `:style` 引号内（`:style="{...};display:flex;..."`）
 //    ⇒ 前端表达式解析炸。写前确定性归位（残留 CSS 并入静态 style），比门禁拦截更优（内容可救）。
 import { healStyleBindingResidue } from './style-binding-residue-healer.js';
+// 🛡️ 根治⑬（2026-11-13 · 8a74b874 实锤）：确定性防叠布局引擎——D2 渲染实测重叠对的
+//    锚点链类，写盘前确定性补 flex column（半缺失容器）+ --fontSize 钳制（失配子树），
+//    不依赖 LLM 自觉。精准触发：options.d2OverlapAnchors 为空 ⇒ 零接触。
+import { applyOverlapProofHeal } from '../../utils/overlap-proof-layout.js';
 // 🛡️ 根治⑨（2026-11-12 · 9abc87d3 实锤）：echarts 挂载点缺失自愈——script 有
 //    `echarts.init(X.value)` 但 template 漏 `<div ref="X">` ⇒ 图表永不渲染 ⇒
 //    do-not-invent 硬闸 BLOCK ⇒ 整单 failed。写前确定性注入挂载 div（判据同口径）。
@@ -102,7 +108,7 @@ import { healMissingIconRender } from '../../utils/missing-icon-render-healer.js
 //   本刀真值改用**导入图片的原始像素**（导出 1x，与 Figma bbox 等价），永不缺失。
 //   自愈只写**元素级内联**（inline 恒胜），绝不改写共享 class。
 import { enforceIconSlotSize, resolveImageAbsPath } from '../../utils/icon-slot-size-contract.js';
-import { resolveResourceDomMapping } from '../../utils/resource-import-guard.js';
+import { resolveResourceDomMapping, pruneDanglingComponentFileRefs } from '../../utils/resource-import-guard.js';
 // 🛡️ 刀 51（2026-10-22）：**段内标题行几何契约**。刀 50 把段的 padding / 子项间距钉到 Figma
 //   真值后，段内标题行**自身**仍是三套实现（`padding: 0 calc(@fontSize*0.6)`=7.2px、
 //   `gap` 6px/7px、标题 line-height 16px/1.2）⇒ 标题被推到 x=49（真值 44），三段还差 1~2px。
@@ -860,6 +866,26 @@ export function writeFiles(files, outputPath, options = {}) {
     });
   }
 
+  // 🛡️ 根治⑬（2026-11-13 · 8a74b874 实锤）：写盘前确定性防叠补齐。挂在刀 3 同位
+  //   （唯一写盘出口、全部覆写/回退之后），随后的根治⑫ 出口终验会验 heal 后内容。
+  //   触发条件：options.d2OverlapAnchors 非空（仅 D2 渲染实测重叠后的重试轮携带）。
+  if (Array.isArray(options.d2OverlapAnchors) && options.d2OverlapAnchors.length > 0) {
+    try {
+      const opHeal = applyOverlapProofHeal(files, options.d2OverlapAnchors, logger);
+      for (const [fp13, fc13] of Object.entries(opHeal.files)) files[fp13] = fc13;
+      if (opHeal.healed.length > 0) {
+        logger.info(
+          `🛡️ [mc] 根治⑬ 防叠布局补齐 ${opHeal.healed.length} 文件（写盘出口）`,
+          { healed: opHeal.healed.slice(0, 6), skipped: opHeal.skipped.slice(0, 4) },
+        );
+      }
+    } catch (op13Err) {
+      logger.warn('⚠️ [mc] 根治⑬ 防叠补齐失败（非阻塞，不挡写盘）', {
+        error: op13Err?.message || String(op13Err),
+      });
+    }
+  }
+
   // 🛡️ F3 刀 3（2026-11-04）：写盘前终态修复「图表 min-height 被后置同名规则反杀」。
   //   放在这里而不是某个样式步骤里：本函数是所有产物文件的**唯一写盘出口**，
   //   其上任何一步（含 `[自动修复]` fallback / VERT-004）都可能再追加同名 0 值规则。
@@ -1178,6 +1204,23 @@ export function writeFiles(files, outputPath, options = {}) {
 
   try {
     let pendingThemeVars = '';
+    // 🛡️ 2026-11-13 根治 B（mc-max-1794536353410-358a1476 实锤）：JS/template 区主题槽位
+    //   字面量残留兜底 —— LLM 把 `color: '@color-text-base'` 写进 echarts option（JS 字符串），
+    //   LESS 槽位在 JS 里无法解析 ⇒ tooltip 文字色失效。写盘前把 .vue 的 script/template 区
+    //   引号包裹的 @color-*/@border-radius-*/* 字面量替换为 theme-vars `.theme-light()` 槽值。
+    //   判据单一来源：parseThemeVarsMixins（与 color-slot-mapper 同一解析器）。
+    let _lightSlots = null;
+    try {
+      const _tvPath = Object.keys(filesForWrite).find(
+        (p) => /(^|\/)theme-vars\.less$/i.test(p),
+      );
+      if (_tvPath && typeof filesForWrite[_tvPath] === 'string') {
+        _lightSlots = parseThemeVarsMixins(filesForWrite[_tvPath]).light || null;
+      }
+    } catch (_tvErr) {
+      logger?.warn?.(`主题槽位解析失败，槽位字面量兜底跳过: ${_tvErr?.message || _tvErr}`);
+      _lightSlots = null;
+    }
     // 🔴 数据源是 `filesForWrite`（= files 经刀 41 改写后）：若这里仍用 `files`，
     //   刀 41 的改写会被**静默丢弃**（它是循环外算好的，不写盘等于白跑一轮）。
     // 🛡️ R11-A：终态收敛——写盘前最后一刻重跑 R10（幂等；成果此前可能被刀 66-C 覆盖）
@@ -1250,7 +1293,7 @@ export function writeFiles(files, outputPath, options = {}) {
       //   ⚠️ 与 A7 同口径：倍数一律用 `calc()` —— Less 的 `var()` 变量不能参与算术，
       //     而 `@fontSize` 是 Less 槽位，裸乘法可行但 `calc()` 兼容性更好。
       //   ⚠️ 只动 `>5px`（`MIN_FONT_PX`）的字号，图标类小字号（≤5px）保持原样。
-      if (/\.(less|css|vue)$/i.test(relativePath)) {
+      if (/\.(less|css)$/i.test(relativePath)) {
         try {
           // ⚠️ `writeFiles` 是**同步函数**（:496）⇒ 不能用动态 import（await 会语法错），
           //   故用顶层静态导入（见文件头 import）。
@@ -1267,6 +1310,46 @@ export function writeFiles(files, outputPath, options = {}) {
         } catch (fsnErr) {
           // 归一失败**不阻断**写盘（它只是兜底优化，门禁该拦就拦）
           logger?.warn?.(`字号归一跳过（${relativePath}）: ${fsnErr?.message || fsnErr}`);
+        }
+      } else if (/\.vue$/i.test(relativePath)) {
+        // 🛡️ 2026-11-13 治本（mc-max-1794536353410-358a1476 实锤）：.vue 必须按区域分形态。
+        //   旧逻辑（上方被替换的 `\.(less|css|vue)$` 全文归一）把 template 内联 style 的
+        //   `font-size:14px`（tab 守卫模板等确定性产物）也归一成 LESS 变量 `@fontSize`，
+        //   而 LESS 变量在模板 style 属性里是非法 CSS、浏览器整句丢弃 ⇒ tab 字号失控
+        //   ⇒ 顶部文字重叠雪上加霜。normalizeVueFileFontSize 分区处理：
+        //   内联 → var(--fontSize, Npx)（合法 CSS + 过 M5-7 + 保留宿主缩放）；
+        //   <style> 块 → 维持 @fontSize 形态（less 编译消费）。
+        try {
+          const normalized = normalizeVueFileFontSize(sanitizedContent);
+          if (normalized.changes.length > 0) {
+            sanitizedContent = normalized.text;
+            if (logger) {
+              const inline = normalized.changes.filter((c) => c.scope === 'inline-style').length;
+              logger.warn(
+                `🛡️ M5-7 字号归一（.vue 分区：内联→var(--fontSize,Npx) ${inline} 处 / style块→@fontSize ${normalized.changes.length - inline} 处）: ${relativePath}`,
+                { changes: normalized.changes.length, sample: normalized.changes.slice(0, 3) },
+              );
+            }
+          }
+        } catch (fsnErr) {
+          logger?.warn?.(`字号归一跳过（${relativePath}）: ${fsnErr?.message || fsnErr}`);
+        }
+        // 🛡️ 根治 B：JS/template 区 '@color-*' 等槽位字面量 → theme-light 槽值（style 块不碰）
+        if (_lightSlots) {
+          try {
+            const healed = healColorSlotLiteralsInVue(sanitizedContent, _lightSlots);
+            if (healed.changes.length > 0) {
+              sanitizedContent = healed.text;
+              if (logger) {
+                logger.warn(
+                  `🛡️ 槽位字面量兜底（JS/template 区 '@color-*' → theme-light 槽值）: ${relativePath}`,
+                  { changes: healed.changes.length, sample: healed.changes.slice(0, 3) },
+                );
+              }
+            }
+          } catch (slotErr) {
+            logger?.warn?.(`槽位字面量兜底跳过（${relativePath}）: ${slotErr?.message || slotErr}`);
+          }
         }
       }
       if (relativePath.endsWith('.vue')) {
@@ -2776,6 +2859,78 @@ export function writeFiles(files, outputPath, options = {}) {
         skipped: skippedFiles.length,
         skippedPaths: skippedFiles.length > 0 ? skippedFiles.slice(0, 5) : [],
       });
+    }
+    // 🛡️ CODE-023 宿主联动剥除（2026-11-13 · mc-max-1794546172891-8b9302bc 实锤）：
+    //   子组件被写盘门禁判死（sfcBlocked）后，宿主 index.vue（及其他 .vue）对它的
+    //   import + 模板标签若不剥除 ⇒ 悬空标签 ⇒ CODE-023 BLOCK ⇒ 重试耗尽全任务死。
+    //   此前 sfcBlocked 只记账不消费（全仓 0 消费方）。此处确定性剥除宿主引用，
+    //   产物降级为「区块缺失」（artifactIncomplete 仍诚实标记），任务不再被判死。
+    //   只动「被拒文件名」的引用，已落盘文件内容零触碰（除引用行/标签本身）。
+    try {
+      const missingNames = [
+        ...new Set(
+          sfcBlocked
+            .map((b) => String(b?.path || ''))
+            .filter((p) => /(^|\/)components\/[^/]+\.vue$/.test(p))
+            .map((p) => p.replace(/^.*\/components\//, '').replace(/\.vue$/, ''))
+            .filter((n) => /^[A-Z][\w$]*$/.test(n)),
+        ),
+      ];
+      if (missingNames.length > 0 && files && typeof files === 'object') {
+        let prunedHosts = [];
+        for (const rel of Object.keys(files)) {
+          if (!rel.endsWith('.vue')) continue;
+          if (missingNames.some((n) => rel.endsWith(`/${n}.vue`) || rel.endsWith(`\\${n}.vue`))) continue;
+          const before = files[rel];
+          const after = pruneDanglingComponentFileRefs(before, missingNames);
+          if (after !== before) {
+            files[rel] = after;
+            const abs = join(outputPath, rel);
+            if (existsSync(abs)) {
+              writeFileSync(abs, after, 'utf-8');
+            }
+            prunedHosts.push(rel);
+          }
+        }
+        if (prunedHosts.length > 0 && logger) {
+          logger.warn('🛡️ CODE-023 宿主联动剥除：被拒子组件的 import/标签已从宿主剥除', {
+            missing: missingNames,
+            hosts: prunedHosts,
+          });
+        }
+      }
+    } catch (danglingErr) {
+      if (logger) {
+        logger.warn('CODE-023 宿主联动剥除失败（非致命，走既有门禁判死路径）', {
+          error: danglingErr.message,
+        });
+      }
+    }
+    // 🛡️ C 刀（2026-11-13）：sfcBlocked 错误回灌缓存——下一轮 chunk prompt 携带具体错误行，
+    //   让 LLM 有明确修复靶子（此前同错重掷：ContentBridge 两轮栽在同一处 style 语法，行号只挪 1 行）。
+    //   本轮成功落盘的文件清除记录（A 刀自愈/重新生成成功 ⇒ 不再需要靶子）；fail-open 不阻断。
+    try {
+      const cacheDir = join(outputPath, '.mc-gen', 'cache');
+      const cacheFile = join(cacheDir, 'sfc-blocked.json');
+      let cache = {};
+      try {
+        cache = JSON.parse(readFileSync(cacheFile, 'utf-8') || '{}');
+      } catch (_readErr) {
+        cache = {};
+      }
+      if (!cache || typeof cache !== 'object' || Array.isArray(cache)) cache = {};
+      for (const rel of writtenFiles) delete cache[rel];
+      for (const b of sfcBlocked) {
+        cache[String(b?.path || '')] = {
+          errors: (b?.errors || []).map((e) => String(e).slice(0, 400)).slice(0, 5),
+          reason: b?.reason || 'sfc-invalid',
+          at: Date.now(),
+        };
+      }
+      mkdirSync(cacheDir, { recursive: true });
+      writeFileSync(cacheFile, JSON.stringify(cache, null, 2), 'utf-8');
+    } catch (cacheErr) {
+      /* 回灌缓存写失败不阻断（下一轮退化为无靶子重试，与旧行为一致） */
     }
     // 🛡️ 刀 41 计数随返回值上抛（noVFor* 六键进 patchHitReport.selfHealing 供 meta 验签）
     return {

@@ -44,7 +44,7 @@ onMounted(() => {
 ✅ **必须生成的文件**（核心样式，由你输出）：
 ```
 resources/styles/
-├── common.less      (所有业务样式，使用 .c-{{COMPONENT_NAME}}- 前缀)
+├── common.less      (顶层 .c-{{COMPONENT_NAME}}-root 根类块 + LESS 嵌套业务样式)
 └── themes/theme-vars.less   (主题变量：.common() .theme-dark() .theme-light())
 ```
 
@@ -58,10 +58,12 @@ resources/styles/
 
 **index.less 最终由系统生成，你不要输出它。**
 
-⚠️ **common.less 必须写在文件根层**：所有 `.c-` 业务 class 直接顶格写，
-**禁止**用 `.dark {}` / `.light {}` / 组件根 class 等任何外层选择器包裹。
+⚠️ **common.less 顶层必须是带前缀根类块（2026-11-13 新范式）**：所有业务样式
+LESS 嵌套在 `.c-{{COMPONENT_ID}}-root { ... }` 内，内层 class 用语义短名。
+**仍禁止** `.dark {}` / `.light {}` / 宿主类 / 实例 ID 类作**顶层包裹**：
 宿主 base-panel 不会给组件根加 `.dark`/`.light` 类，一旦包裹就会编译成
 `.dark .c-xxx`，在真实 DOM 上 0 命中 → 背景/边框/圆角/图标尺寸/内部布局**全部失效**。
+主题切换走 `@xxx` 变量（index.less 编译期注入），与根类嵌套无关。
 
 **package/index.vue 必须包含**：
 ```vue

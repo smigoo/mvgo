@@ -401,6 +401,60 @@ function isEmptyValueDeclarationDangling(line, nextSignificant) {
 }
 
 /**
+ * 🛡️ 修复「错误嵌套声明」（2026-11-13 · mc-max-1794546172891-8b9302bc 实锤）：
+ * 孤儿声明出现在选择器位置 ⇒ LESS 报 `Unrecognised input. Possibly missing opening '{'`
+ * ⇒ SFC 写盘门禁判死整文件 ⇒ 子组件不落盘 ⇒ 宿主悬空引用 ⇒ CODE-023 BLOCK（重试两轮
+ * 同错，ContentBridge.vue:45/:44 实锤——healMissingLessBraces 只补「缺失」方向，
+ * 本形是「多余 `}` 过早闭合」方向，此前无人管）。
+ *
+ * 病灶形态（两变体，共同点 = 上一非空行是孤立 `}`）：
+ *   ```less
+ *   .x { decls...
+ *   }                      ← 过早闭合（本应更晚才关）
+ *       display: flex;}    ← 孤儿声明 + 自带闭合（变体1）
+ *   }                      ← 连锁多余
+ *   ```
+ *   变体2 = 孤儿声明行无自带 `}`（`display: flex;`），后随孤立 `}`。
+ *
+ * 修复：删除孤儿声明行**前面最近的孤立 `}`**（过早闭合者）——声明归位到块内，
+ * 孤儿行自带的 `}`（变体1）接替闭合，后续 `}` 逐级归位；变体2 由紧随的孤立 `}` 闭合、
+ * 外层缺口交给 healMissingLessBraces（调用序：本函数先跑 → 补缺括号 → 补分号）。
+ *
+ * 判据（纯行级、命名无关）：
+ *   ① 孤儿声明行 = `prop: value;` 形态、行内无 `{`、值非空（`[^;{}]+`）；
+ *   ② 上一**非空**行是孤立 `}`（该形态在任何合法 LESS 中都不存在——块内声明的上一行
+ *     必是声明/嵌套规则，孤立 `}` 后紧跟声明必是错嵌套）；
+ *   ③ 上限 20 处/文件（防极端残片连环误删）；引号/注释行不匹配形态，天然跳过。
+ *
+ * @param {string} styleSource - style 块正文（无 <style> 标签）
+ * @returns {{ source: string, changed: boolean, fixed: number }}
+ */
+export function healMisnestedStyleDeclarations(styleSource = '') {
+  const source = String(styleSource || '')
+  const lines = source.split('\n')
+  if (lines.length < 2) return { source, changed: false, fixed: 0 }
+  const orphanRe = /^\s*[-\w]+\s*:\s*[^;{}]+;\s*}?\s*$/
+  const loneCloseRe = /^\s*}\s*$/
+  const output = [...lines]
+  const removed = new Set()
+  const MAX_FIXES = 20
+  for (let i = 1; i < lines.length && removed.size < MAX_FIXES; i++) {
+    if (!orphanRe.test(lines[i])) continue
+    if (lines[i].includes('{')) continue
+    let p = i - 1
+    while (p >= 0 && lines[p].trim() === '') p--
+    if (p < 0 || !loneCloseRe.test(lines[p]) || removed.has(p)) continue
+    removed.add(p)
+  }
+  if (removed.size === 0) return { source, changed: false, fixed: 0 }
+  return {
+    source: output.filter((_, idx) => !removed.has(idx)).join('\n'),
+    changed: true,
+    fixed: removed.size,
+  }
+}
+
+/**
  * 根级裸属性（深度 0 且行内无 `{` 的游离声明）扫描。与 LESS-WRITE-007 **同一判据**。
  * @returns {number[]} 命中的 0 基行号数组
  */

@@ -246,9 +246,9 @@ const b = Math.round(fill.color.b * 255)
   3. 若当前代码只改了 active class 而没更新数据，**必须**添加 Mock 数据演示切换效果。
 - 样式精修：根据 Figma 节点数据精修 Tab 按钮的激活态背景色、文字颜色、过渡动画。
 
-### 3. 🔴 Tooltip 样式（必须提取 Figma 数据）
-- 检查点：图表 Tooltip 的背景色、圆角、文字颜色不能是 ECharts 默认值。
-- 修复动作：通过 `option.tooltip` 精确还原设计稿中的 Tooltip 样式（如 `backgroundColor`, `borderRadius`, `textStyle`）。
+### 3. Tooltip 样式（默认值即可，禁止臆造）
+- 规则：tooltip 是悬停交互态，静态设计稿通常不定义其样式 ⇒ **直接使用 ECharts 默认样式**（不写 backgroundColor/textStyle 等样式字段）。Figma 内部节点无需遍历提取。
+- 例外：仅当规格块明确给出 tooltip 样式真值（设计稿明确画出了 tooltip 样式节点）时，才按真值覆盖。
 
 ### 4. 其他交互样式精修
 | 交互元素 | 可精修内容 | Figma 数据来源 |

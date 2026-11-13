@@ -181,10 +181,93 @@ export function normalizeFontSizesInFiles(files = {}) {
       const out = c.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (whole, body) => {
         const r = normalizeFontSizeLiterals(body);
         for (const ch of r.changes) changes.push({ path: p, ...ch });
-        return r.changes.length > 0 ? whole.replace(body, r.text) : whole;
+        return r.changes.length > 0 ? whole.replace(body, () => r.text) : whole;
       });
       if (out !== c) next[p] = out;
     }
   }
   return { files: next, changes };
+}
+
+/**
+ * 🛡️ .vue 专用归一（2026-11-13 · mc-max-1794536353410-358a1476 实锤）—— **按区域分形态**。
+ *
+ * 病灶：file-writer 曾对 SFC **全文**跑 `normalizeFontSizeLiterals`，template 内联
+ *   style 的 `font-size:14px`（tab 守卫模板等确定性产物）被归一成 LESS 变量
+ *   `font-size: @fontSize` —— LESS 变量在**模板 style 属性里是非法 CSS，浏览器整句丢弃**
+ *   ⇒ tab 字号失控（继承 16px/默认值）⇒ 顶部文字重叠雪上加霜。
+ *
+ * 两条约束必须同时满足：
+ *   - M5-7 门禁全文扫 `font-size:Npx`（>5px 即 error）⇒ 内联不能留 px 字面量；
+ *   - 浏览器内联 style 只认合法 CSS ⇒ 内联不能用 `@fontSize`。
+ * 唯一同时合法的形态：`var(--fontSize, Npx)` / `calc(var(--fontSize, 14px) * r)`
+ * （宿主根注入 --fontSize 驱动整体缩放，与 M5-6 的 `@fontSize: var(--fontSize)` 映射同源）。
+ *
+ * 分工：
+ *   ① `<template>` 区内联 `style="..."` → var() 形态（`:style` 绑定、fg- 接管标签不碰）；
+ *   ② `<style>` 块 → 现行为（@fontSize 形态，less 编译消费）。
+ *
+ * @returns {{ text:string, changes:Array<{from:string,to:string,scope:string}> }}
+ */
+export function normalizeVueFileFontSize(content = '', options = {}) {
+  const base = options.base || FONT_BASE_PX;
+  const changes = [];
+  let out = String(content);
+
+  // ① template 区内联 style
+  const tplMatch = out.match(/<template[\s>][\s\S]*<\/template>/i);
+  if (tplMatch) {
+    const tpl = tplMatch[0];
+    const fg = protectFgTagInlineStyles(tpl);
+    let t = fg.text;
+    // 只碰字面 style="..."（前置空白 + 非冒号），:style="..." 绑定表达式不碰
+    t = t.replace(/(\sstyle=")([^"]*)(")/g, (whole, pre, styleVal, post) => {
+      const nv = styleVal.replace(
+        /(^|[^-\w])font-size\s*:\s*(\d+(?:\.\d+)?)\s*px\b/g,
+        (m2, p2, numStr) => {
+          const px = Number(numStr);
+          if (!Number.isFinite(px) || px <= MIN_FONT_PX) return m2;
+          const ratio = ratioOf(px, base);
+          const to =
+            ratio === null
+              ? `font-size: var(--fontSize, ${px}px)`
+              : `font-size: calc(var(--fontSize, ${base}px) * ${ratio})`;
+          changes.push({ from: m2.trim(), to, scope: 'inline-style' });
+          return `${p2}${to}`;
+        },
+      );
+      // 🔴 第二态（2026-11-13 · mc-max-1794538000904-6002417a 实锤）：LLM 按 M5-7 prompt
+      //   「所有 font-size 必须用 @fontSize、禁止 Npx」**未区分上下文**，把 LESS 变量
+      //   直写进模板内联 style（prompt-builder.js:3040）—— 归一器第一态拦不到（没有 px 可归一）。
+      //   语义映射：@fontSize ≡ var(--fontSize)（common.less:1），内联补 base 兜底。
+      const nv2 = nv.replace(
+        /(^|[^-\w])font-size\s*:\s*calc\(\s*@fontSize\s*\*\s*(\d+(?:\.\d+)?)\s*\)/g,
+        (m2, p2, ratioStr) => {
+          const to = `font-size: calc(var(--fontSize, ${base}px) * ${ratioStr})`;
+          changes.push({ from: m2.trim(), to, scope: 'inline-style' });
+          return `${p2}${to}`;
+        },
+      );
+      const nv3 = nv2.replace(
+        /(^|[^-\w])font-size\s*:\s*@fontSize\b(?!\s*\*)/g,
+        (m2, p2) => {
+          const to = `font-size: var(--fontSize, ${base}px)`;
+          changes.push({ from: m2.trim(), to, scope: 'inline-style' });
+          return `${p2}${to}`;
+        },
+      );
+      return nv3 === styleVal ? whole : `${pre}${nv3}${post}`;
+    });
+    const restored = fg.restore(t);
+    if (restored !== tpl) out = out.replace(tpl, () => restored);
+  }
+
+  // ② style 块：既有口径（@fontSize 形态，less 编译消费）
+  out = out.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (whole, body) => {
+    const r = normalizeFontSizeLiterals(body, options);
+    for (const ch of r.changes) changes.push({ ...ch, scope: 'style-block' });
+    return r.changes.length > 0 ? whole.replace(body, () => r.text) : whole;
+  });
+
+  return { text: out, changes };
 }

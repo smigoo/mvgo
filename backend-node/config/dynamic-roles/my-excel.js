@@ -1,6 +1,6 @@
 /**
  * Excel 解析（Agent Builder 自动生成，请勿手改）
- * 模板: excel-parse | 创建: 2026-11-12T07:02:23.219Z
+ * 模板: excel-parse | 创建: 2026-11-13T15:30:23.427Z
  * 输入: filePath
  * 输出: rows, sheetNames, ok
  */

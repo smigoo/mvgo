@@ -46,7 +46,7 @@ onBeforeUnmount(() => {
 1. 数据获取直接用 `fetch` / 全局挂载的请求工具；没有微码 componentApi
 2. 定时刷新自己管理 `setInterval`，并在 `onBeforeUnmount` 清理
 3. 图表：`echarts.init(chartRef.value)` + `ResizeObserver` 自适应 + `onBeforeUnmount` 中 `dispose()`
-4. 样式 class 使用 `.c-{{COMPONENT_NAME}}-` 语义前缀（如 `.c-{{COMPONENT_NAME}}-root`）
+4. common.less 顶层根类使用 `.c-{{COMPONENT_NAME}}-` 语义前缀（如 `.c-{{COMPONENT_NAME}}-root`），业务样式 LESS 嵌套在根类内、内层用语义短名
 
 ## 3.2️⃣ 布局防挤压铁律（flex 压扁是最高频失真，必须遵守）
 
@@ -78,7 +78,7 @@ onBeforeUnmount(() => {
 ✅ **必须生成的文件**（核心样式，由你输出）：
 ```
 resources/styles/
-├── common.less      (所有业务样式，使用 .c-{{COMPONENT_NAME}}- 前缀)
+├── common.less      (顶层 .c-{{COMPONENT_NAME}}-root 根类块 + LESS 嵌套业务样式)
 └── themes/theme-vars.less   (主题变量：.common() .theme-dark() .theme-light())
 ```
 

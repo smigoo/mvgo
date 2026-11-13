@@ -407,6 +407,12 @@ import {
   evaluateArtifactCompleteness,
   resolveArtifactIncomplete,
 } from '../utils/bad-file-isolation.js';
+// 🛡️ 分块响应守卫（2026-11-13 · 7dfc01e9 空壳覆写实锤）：剥 .vue 残片 + 越界计数（纯函数）
+import {
+  isFragmentVueFile,
+  sanitizeChunkResponse,
+  buildScopeViolationFeedback,
+} from '../utils/chunk-response-guard.js';
 // 🛡️ P2-1（2026-08-30）：背景尺寸四件套推断（纯函数，可单测；修 R11 覆盖率不足与 repeat 误判）
 import {
   inferBackgroundStyle,
@@ -445,6 +451,23 @@ import { auditHeaderSlotLanding } from '../utils/header-slot-landing-audit.js';
  * 如需回退旧行为（不引入），设 env MC_EMIT_THEME_OVERRIDES=0。
  */
 const EMIT_THEME_OVERRIDES = process.env.MC_EMIT_THEME_OVERRIDES !== '0';
+
+/**
+ * ⚙️ internal chart 子组件**确定性文件名派生**（2026-11-13 · 7dfc01e9 环形图缺失实锤）。
+ *
+ * 病灶：internalSubcomponents（R1-geo 挂宿主的 chart-component）只有 prompt 软提示，
+ * 派工清单 `subComps = _detectSubComponents(index文本)` 反推不到它（宿主未写引用）⇒
+ * 二级补齐也无从触发（无引用无文件）⇒ 环形图整图缺失（bar/line 能成是 LLM 自建碰上，
+ * 不是机制保证）。治本：名字契约——prompt 用本函数派生的文件名要求 LLM 随宿主 chunk
+ * 一并输出独立文件；LLM 忘输出但宿主写了引用 ⇒ 既有「二级子组件补齐」按引用自动二波
+ * 生成（名字一致 ⇒ 引用与文件天然对齐）。id 形态 `chart-246:30` ⇒ `Chart24630.vue`。
+ * @param {object} sub - internalSubcomponent（type=chart-component）
+ * @returns {string|null} 文件名（无数字可派生 ⇒ null，调用方跳过契约行）
+ */
+const internalChartSubFileName = (sub) => {
+  const digits = String(sub?.id ?? '').replace(/[^0-9]/g, '');
+  return digits ? `Chart${digits}.vue` : null;
+};
 
 /**
  * 🛡️ 二级子组件补齐上限（2026-11-05 · mc-max-1793865322699-ef841b68 实锤）
@@ -610,6 +633,53 @@ export class MicrocodeEngineer extends BaseAgent {
   /**
    * 生成组件代码
    */
+  /**
+   * 🛡️ C 刀共享方法（2026-11-13 · mc-max-1794546172891-8b9302bc 实锤）：把上轮被写盘门禁
+   * 拒绝的文件错误原文（行号+类型）注入 chunk prompt——修复靶子。此前同错重掷
+   * （ContentBridge 两轮同一处 style 语法错，行号只挪 1 行），因为重试 prompt 与首轮
+   * 完全一致，模型不知道自己错在哪。
+   *
+   * 为什么是共享方法：vue3 的 runChunk 是 generateCode 内局部函数（vue3-engineer.js:515，
+   * 不走父类 generateCode），mc / vue3 两侧 chunk prompt 组装路径不同——判据必须单一来源，
+   * 两侧同调本方法，防漂移。fail-open：读不到缓存 = 无靶子，与旧行为一致。
+   *
+   * @param {string} prompt - 已组装的 chunk prompt
+   * @param {string|null} outputPath - 产物输出目录（缓存位于 <outputPath>/.mc-gen/cache/sfc-blocked.json）
+   * @param {string[]|undefined} chunkFiles - 本 chunk 负责的文件清单
+   * @returns {string} 注入后的 prompt（无命中/异常时原样返回）
+   */
+  injectSfcBlockedFeedbackIntoPrompt(prompt, outputPath, chunkFiles) {
+    try {
+      if (outputPath && Array.isArray(chunkFiles) && chunkFiles.length > 0) {
+        const _blockedCacheFile = join(outputPath, '.mc-gen', 'cache', 'sfc-blocked.json');
+        if (existsSync(_blockedCacheFile)) {
+          const _blockedCache = JSON.parse(readFileSync(_blockedCacheFile, 'utf-8') || '{}');
+          const _blockedHits = (chunkFiles || []).filter((f) => _blockedCache && _blockedCache[f]);
+          if (_blockedHits.length > 0) {
+            let _feedback =
+              '\n\n🔴🔴 上轮以下文件被写盘门禁拒绝（坏文件不落盘）。本轮输出必须修复下述错误，禁止原样重掷：\n';
+            for (const _bf of _blockedHits) {
+              _feedback += `\n【${_bf}】\n`;
+              for (const _be of (_blockedCache[_bf]?.errors || []).slice(0, 5)) {
+                _feedback += `  - ${_be}\n`;
+              }
+            }
+            _feedback +=
+              '\n重点自查：style 块大括号配对（多余的 `}` / 缺失的 `{`）、每条声明必须在规则块内部、<style> 标签闭合完整。\n';
+            prompt += _feedback;
+            this.logger.info('🛡️ 写盘门禁错误已回灌到 chunk prompt', {
+              files: _blockedHits,
+              feedbackChars: _feedback.length,
+            });
+          }
+        }
+      }
+    } catch (_feedbackErr) {
+      /* 回灌失败不阻断（退化为无靶子重试） */
+    }
+    return prompt;
+  }
+
   async generateCode(input) {
     this.logger.info('开始生成组件代码（自适应分块生成模式）', {
       stage: input.stage,
@@ -1155,6 +1225,16 @@ export class MicrocodeEngineer extends BaseAgent {
                   );
                   continue;
                 }
+                // 🛡️ 恢复侧残片守卫（2026-11-13 · 7dfc01e9）：非 index.vue 的 .vue 缓存段
+                //   缺 <template> ⇒ 残片（7dfc01e9 实锤：刀6 后写覆盖让 meta 只剩 script 段，
+                //   原样复活成 572B 空壳且后续轮「内容未变化跳过写盘」固化）。宁可不恢复。
+                if (isFragmentVueFile(relPath, only)) {
+                  this.logger.warn(
+                    '🛡️ 恢复侧残片守卫：子组件缓存段缺少 <template>，放弃恢复（交由重新生成）',
+                    { relPath, file: loaded[0].file, bytes: String(only || '').length },
+                  );
+                  continue;
+                }
                 allFiles[relPath] = only;
                 restoredCount++;
                 continue;
@@ -1209,11 +1289,21 @@ export class MicrocodeEngineer extends BaseAgent {
     //并行子组件生成：chunk-meta.json 是共享文件，用链式锁串行化其读改写，避免并发竞态
     let metaWriteChain = Promise.resolve();
 
+    // 🛡️ 分块响应守卫回灌账本（2026-11-13 · 7dfc01e9）：本任务内已发生的越界残片剥除记录，
+    //   由 appendGlobalGuidance「注入即消费」下发后续分块 prompt（教学层：降低越界复发/省 token）。
+    const scopeViolationNotes = [];
+
     //瘦身：全局技术栈规则按 chunk 类型裁剪——declare/style 块不需要表单/表格细节，避免每块都背整段
     const appendGlobalGuidance = (p, fileType, chunk = null) => {
       // 🛡️ 上下文裁决约束（trustVerdict/currentIssues，权威优先，置于最前）
       const _trustGuidance = this._buildTrustGuidance(input.generationInput);
       if (_trustGuidance) p += _trustGuidance;
+      // 🛡️ 越界拒收回灌（2026-11-13 · 7dfc01e9）：把已发生的剥除事实教给后续分块。
+      //   注入即消费，避免同一事实重复下发。
+      if (scopeViolationNotes.length > 0) {
+        p += buildScopeViolationFeedback(scopeViolationNotes);
+        scopeViolationNotes.length = 0;
+      }
       if (docDesignBlock) p += docDesignBlock; //S8: 文档设计注入（位于重试/技术栈之前，权威依据优先展示）
       // 🚧 段级数据归属守卫（2026-11-03 P0 双渲染治本）：S8 字段映射表全 chunk 共享，
       //   纯标题段（如 136:122「今日累计」）的 component chunk 也看到三卡字段映射
@@ -1510,6 +1600,52 @@ export class MicrocodeEngineer extends BaseAgent {
                     p += `         📝 文本真值: ${sub.textTruths.join(' / ')}\n`;
                   }
                 }
+                // 🛡️ R1 派工规格下发（2026-11-13 · mc-1794532970423-0062020b 实锤）：
+                //   旧版 chart-component 在清单里只有「(无描述)」一行，vision 图表规格
+                //   零下发 → LLM 写「待续」stub → 图表整图缺失。清单处至少给类型+系列摘要。
+                // 🛡️ 2026-11-13 白色图例实锤（mc-max-1794542621368-771da11e）增强：
+                //   ① 规格块补容器尺寸真值（chartBox，Figma 节点树取，非 vision 估值）；
+                //   ② 主题明度事实下发（图表内常显文字消费主题文字槽，禁止字面色值）；
+                //   ③ 「图表规格缺失…按名称语义实现」授权臆造句删除——改为指向 prompt
+                //      内 charts[] JSON 的指针句（R1-geo 路径已在上游 chart-section.js
+                //      补 chartSpec 匹配，此分支为残留兜底）。
+                if (sub.type === 'chart-component') {
+                  const _themeBright = input?.layoutStructure?.styles?.backgroundBrightness
+                    || input?.styles?.backgroundBrightness || null;
+                  if (sub.chartSpec) {
+                    const cs = sub.chartSpec;
+                    const parts = [
+                      cs.type ? `类型=${cs.type}` : null,
+                      Array.isArray(cs.series) && cs.series.length > 0
+                        ? `系列=[${cs.series.join('、')}]`
+                        : null,
+                      Array.isArray(cs.seriesColors) && cs.seriesColors.length > 0
+                        ? `颜色=[${cs.seriesColors.join(', ')}]（vision 大致色，按序对应）`
+                        : null,
+                      cs.innerRadius != null ? `innerRadius=${cs.innerRadius}（环形）` : null,
+                      cs.chartBox && Number(cs.chartBox.width) > 0
+                        ? `容器尺寸=${Math.round(cs.chartBox.width)}×${Math.round(cs.chartBox.height)}px（Figma 节点真值，min-height 参考此值）`
+                        : null,
+                    ].filter(Boolean);
+                    p += `         📊 图表规格（vision 真值，逐字段遵守）: ${parts.join(' ｜ ')}\n`;
+                    p += `         🎨 图表内常显文字（轴/图例标签）颜色一律消费主题文字槽（Less 语义变量），禁止字面色值；tooltip 样式用 ECharts 默认（禁止硬编码色值）\n`;
+                    if (_themeBright) {
+                      p += `         🌗 本组件主题明度: ${_themeBright}（图表配色须与之一致，禁止默认深色大屏配色）\n`;
+                    }
+                  } else {
+                    p += `         📊 图表规格：从下方「图表信息」charts[] JSON 中选择与本组件系列名一致的条目，逐字段遵守（type/series/seriesColors 大致色）；图表内常显文字消费主题文字槽，禁止字面色值与深色大屏默认配色\n`;
+                  }
+                  // ⚙️ 文件契约（2026-11-13 · 7dfc01e9 环形图缺失实锤，与「内部子组件详细
+                  // 说明」块同款）：internal chart 子组件按 sub.id 确定性文件名独立落盘，
+                  // 宿主必须挂载（LLM 忘输出时由二级子组件补齐按引用二波生成兜底）。
+                  {
+                    const _chartSubFile2 = internalChartSubFileName(sub);
+                    if (_chartSubFile2) {
+                      const _chartSubTag = _chartSubFile2.replace(/\.vue$/, '');
+                      p += `         ⚙️ 文件契约（强制）：本图表必须作为**独立文件** \`package/components/${_chartSubFile2}\` 与本组件**一并输出**（\`// === package/components/${_chartSubFile2} ===\` 分隔符段落），并在本组件模板中 import + 挂载 \`<${_chartSubTag} :chart-data="..." :chart-config="..." />\`，禁止省略挂载或内联\n`;
+                    }
+                  }
+                }
               });
             }
           });
@@ -1586,11 +1722,81 @@ export class MicrocodeEngineer extends BaseAgent {
 
                 // 图表组件特殊说明
                 if (sub.type === 'chart-component') {
+                  const _chartSubFile = internalChartSubFileName(sub);
                   p += `   要求：\n`;
                   p += `   - 使用 echarts 渲染图表\n`;
                   p += `   - 根元素设置 width: 100%; height: 100%;\n`;
                   p += `   - 监听 chartData 和 chartConfig 变化，自动更新图表\n`;
                   p += `   - 图表交互事件通过 emit 传递给父组件\n`;
+                  // ⚙️ 文件契约（2026-11-13 · 7dfc01e9 环形图整图缺失实锤）：internal
+                  //   chart 子组件此前只有软提示，派工清单反推不到、二级补齐无引用不可触发
+                  //   ⇒ 无人生成。名字契约：独立文件名由 sub.id 确定性派生（单一来源
+                  //   internalChartSubFileName），随宿主 chunk 一并输出，宿主必须挂载。
+                  if (_chartSubFile) {
+                    p += `   - ⚙️ 文件契约（强制）：本图表必须作为**独立文件** \`package/components/${_chartSubFile}\` 与宿主组件**一并输出**（用 \`// === package/components/${_chartSubFile} ===\` 分隔符段落）；宿主必须 import 并挂载 \`<${_chartSubFile.replace(/\.vue$/, '')} :chart-data="..." :chart-config="..." />\`，禁止省略挂载、禁止把图表内联进宿主模板\n`;
+                    // 🎨 中心图形叠放语义（2026-11-13 · 7dfc01e9：宿主卡背景图已含中心圆+icon
+                    //   真值，echarts 环形中心保持透明即可让背景 icon 从环洞露出；禁止自绘
+                    //   中心底色遮挡背景图形）。仅对容器内嵌于卡片背景的环形形态生效。
+                    if ((cs?.type || sub.chartSpec?.type) === 'pie') {
+                      p += `   - 🎨 中心透明：若宿主卡片背景图已含中心圆形/icon 图形，环形图（pie）中心**必须保持透明**（不设中心底色/不绘制中心圆），让背景图形从环洞露出；禁止 echarts 自绘中心遮挡背景\n`;
+                    }
+                  }
+                  // 🛡️ R1 派工规格下发（2026-11-13 · mc-1794532970423-0062020b 实锤）：
+                  //   旧版此处只有上面 4 行通用要求，vision 图表规格零下发。
+                  //   实测后果：批次 prompt 里 Donut 子组件仅「(无描述)」→ LLM 输出
+                  //   279B「环形图初始化在后续脚本段完成」stub → 覆盖度门禁假绿 →
+                  //   DO-NOT-INVENT-CHART-MISSING 13 轮重试全灭（同 prompt 每轮同 stub）。
+                  if (sub.chartSpec && typeof sub.chartSpec === 'object') {
+                    const cs = sub.chartSpec;
+                    p += `   📊 图表规格（vision 真值，**逐字段强制遵守，禁止改类型/增删系列**）：\n`;
+                    if (cs.type) {
+                      p += `   - 图表类型: ${cs.type}${cs.type === 'pie' ? '（饼/环形图，禁止改成 bar/line）' : ''}\n`;
+                    }
+                    if (Array.isArray(cs.series) && cs.series.length > 0) {
+                      p += `   - 系列名（${cs.series.length} 个）: ${cs.series.join(' | ')}\n`;
+                    }
+                    if (Array.isArray(cs.seriesTypes) && cs.seriesTypes.length > 0) {
+                      p += `   - 各系列 type: ${cs.seriesTypes.join(', ')}\n`;
+                    }
+                    if (Array.isArray(cs.seriesColors) && cs.seriesColors.length > 0) {
+                      p += `   - 系列颜色（按序对应）: ${cs.seriesColors.join(', ')}\n`;
+                    }
+                    if (cs.chartBox && Number(cs.chartBox.width) > 0) {
+                      p += `   - 容器尺寸: ${Math.round(cs.chartBox.width)}×${Math.round(cs.chartBox.height)}px（Figma 节点真值，容器 min-height 参考此值）\n`;
+                    }
+                    if (Array.isArray(cs.legend) && cs.legend.length > 0) {
+                      p += `   - 图例: ${cs.legend.join(' | ')}${cs.legendPosition ? `（位置 ${cs.legendPosition}）` : ''}\n`;
+                    }
+                    if (cs.innerRadius != null) {
+                      p += `   - innerRadius: ${cs.innerRadius}（环形图，必须设置）\n`;
+                    }
+                    if (cs.axes) {
+                      p += `   - 坐标轴: ${cs.axes}\n`;
+                    }
+                    if (cs.tooltip) {
+                      // tooltip 只约束内容（显示哪些字段）；样式用 ECharts 默认，禁止硬编码色值
+                      p += `   - tooltip 内容: ${cs.tooltip}（样式用 ECharts 默认，禁止硬编码色值）\n`;
+                    }
+                    // 🛡️ 主题明度 + 槽位红线（2026-11-13 白色图例实锤）
+                    const _brightDeep = input?.layoutStructure?.styles?.backgroundBrightness
+                      || input?.styles?.backgroundBrightness || null;
+                    p += `   - 🎨 图表内常显文字（轴刻度/图例文字/标签）颜色一律消费主题文字槽（Less 语义变量），禁止字面色值（rgba(255,255,255,*)/#fff 等深色大屏配色被门禁视为违规）\n`;
+                    if (_brightDeep) {
+                      p += `   - 🌗 本组件主题明度: ${_brightDeep}（图表配色须与之一致）\n`;
+                    }
+                    if (cs.gradient && typeof cs.gradient === 'object') {
+                      p += `   - 渐变: ${JSON.stringify(cs.gradient)}\n`;
+                    }
+                  }
+                  // 🛡️ ③ 归属锚点：所属 Figma 节点 id 下发（与 element-group sourceNodeIds 同口径），
+                  //   供归属映射与门禁消费；R24 实锤 ownerSectionId:null 即此处断链。
+                  if (sub.id != null && String(sub.id)) {
+                    p += `   🔗 所属 Figma 节点: ${sub.id} —— 组件模板根元素必须挂 data-chart-section="${sub.id}" 锚点\n`;
+                  }
+                  // 🚨 stub 禁令：规格已齐，再出「待续」类 stub 即为纯臆造
+                  p += `   🚨 必须在本文件内完整实现该图表（echarts.init + series + resize 监听一步到位），\n`;
+                  p += `      严禁输出「待续/后续脚本段完成/初始化在后续完成」类未完成代码；\n`;
+                  p += `      series 数据必须与上述系列名一一对应，禁止空 series 数组。\n`;
                 }
               });
             }
@@ -2111,6 +2317,11 @@ export class MicrocodeEngineer extends BaseAgent {
           segmentType: chunk.segmentType,
         });
       }
+      // 🛡️ C 刀（2026-11-13 · mc-max-1794546172891-8b9302bc 实锤）：注入上轮写盘门禁错误原文。
+      //   实现抽为共享方法 injectSfcBlockedFeedbackIntoPrompt —— vue3 的 runChunk 是
+      //   generateCode 内局部函数（vue3-engineer.js:515，不走本方法），四象限同源调用它，
+      //   避免两份判据漂移。fail-open：读不到缓存 = 无靶子，与旧行为一致。
+      prompt = this.injectSfcBlockedFeedbackIntoPrompt(prompt, outputPath, chunk.files);
       prompt = appendGlobalGuidance(prompt, fileType, chunk);
       // 📸 chunk prompt 落盘取证（2026-11-03 P0 双渲染归因）：prompt 此前不落盘，
       //   「污染源是 S8 共享块还是结构契约错划」两说无法辩驳。落盘 .mc-gen/cache/prompts/
@@ -2154,6 +2365,19 @@ export class MicrocodeEngineer extends BaseAgent {
       // 🛡️ P0 防护：_generateSingleChunk 异常路径可能返回 undefined/不完整对象
       // 统一兜底为空对象，避免 "Cannot read properties of undefined (reading 'debug'/'error')"
       res = res && typeof res === 'object' ? res : { files: {}, debug: {} };
+      // 🛡️ 分块响应守卫（2026-11-13 · 7dfc01e9 空壳覆写实锤）：剥 .vue 残片后再进任何消费点
+      //（chunk 缓存/meta 登记、pushChunkSnapshot、allFiles 合并、统一终态落盘全部只见到干净集合）。
+      // 判据收窄为「残片」而非「越界一刀切」：越界完整 SFC 是合法捎带形态（chunk8 ForecastChart 实锤）。
+      {
+        const _guard = sanitizeChunkResponse(res.files, chunk, this.logger);
+        res.files = _guard.files;
+        if (_guard.metrics.droppedFragments.length > 0) {
+          scopeViolationNotes.push({
+            chunk: chunk.title || (chunk.files || []).join(','),
+            dropped: _guard.metrics.droppedFragments,
+          });
+        }
+      }
       chunkDebug.push(res.debug || {});
 
       //断点续跑：每块生成完成后增量落盘（只追加本块产生的文件，不覆盖已有块）
@@ -6467,6 +6691,10 @@ export class MicrocodeEngineer extends BaseAgent {
     const writeResult = microcodeWriter.writeFiles(targetFiles, outputPath, {
       logger: this.logger,
       componentType: this.componentType,
+      // 🛡️ 根治⑬（8a74b874）：D2 重叠锚点透传至写盘出口（防叠确定性补齐）
+      ...(Array.isArray(this._d2OverlapAnchors) && this._d2OverlapAnchors.length > 0
+        ? { d2OverlapAnchors: this._d2OverlapAnchors }
+        : {}),
       // 🧩 C9 二次注入（15484123 实锤）：写盘前（filesForWrite 定稿后）按 plan 事实再跑一遍
       //   注入——幂等；覆盖「execute 出口注入后 index 又被重写」的孤儿场景。
       ...(Array.isArray(this._internalSubsFlat) && this._internalSubsFlat.length > 0
@@ -8019,6 +8247,8 @@ export class MicrocodeEngineer extends BaseAgent {
       assets,
       resourceDomMapping, //资源-DOM映射表（用于自动注入import）
       _l0CodeRetryGuidance, //L0-B 重试修复指导
+      // 🛡️ 根治⑬（2026-11-13 · 8a74b874）：D2 渲染实测重叠锚点（结构化，供写盘前确定性防叠补齐）
+      _d2OverlapAnchors = null,
       techStackHints, //技术栈提示
       _selfOptimization, // 🧠 自优化：历史模式驱动的 Prompt 增强
       panelType = 'default-panel', //面板类型
@@ -8086,6 +8316,8 @@ export class MicrocodeEngineer extends BaseAgent {
     //   零报错零日志。离线探针是手工塞了 figmaRoot 才「看起来生效」——属假绿闭环。
     //   同一份 figmaNodeData 既供色板也供几何判据，二者无依赖关系。
     this._figmaRootForTruthPalette = figmaNodeData || null;
+    // 🛡️ 根治⑬（8a74b874）：D2 重叠锚点挂 this，供 writeFiles options 透传（见 :6467 附近）
+    this._d2OverlapAnchors = Array.isArray(_d2OverlapAnchors) ? _d2OverlapAnchors : null;
     try {
       this._truthPalette = figmaNodeData ? buildTruthPalette(figmaNodeData) : null;
       if (this._truthPalette && this.logger) {
