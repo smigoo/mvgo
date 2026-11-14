@@ -58,6 +58,8 @@ import { declaredTableHeaders } from './section-type-derive.js';
 //   （与 `FG_TAKEOVER_CLASS_RX` 同一纪律）。vision-facts.js 无 import（纯函数集），
 //   故引入无循环依赖风险。
 import { declaredSectionType, declaredTableHeaderContainerTexts, declaredTableRowArity } from './vision-facts.js';
+// 🛡️ S2（2026-11-14）：布局结构事实（方向/间距/叠放）单一来源，与本文件各自的推断互补。
+import { inferLayoutFacts, pickLayoutFacts } from './layout-geom-facts.js';
 // 🛡️ 刀33：列表 item 的**卡盒真值**回收要按「行填充色」归一比较（与 N1 真值色值门禁
 //   同一口径，禁止自造颜色归一），故引入 `normalizeCssColor`（纯函数、零依赖，无环）。
 import { normalizeCssColor } from './truth-color-usage-guard.js';
@@ -3727,7 +3729,92 @@ function fgKvCellConsts(kv, lp, vp) {
   return lines;
 }
 
+/**
+ * 🛡️ S1（2026-11-14）：段头渲染包装。
+ * 无 header 事实 ⇒ **原样返回**（逐字不变，这是零回归的硬约束）。
+ * 有 header ⇒ 在模板外包一层 flex column，头部按真值高/字色/字号/左内距渲染，
+ * 原根节点降为 `flex:1;min-height:0` 的 body。
+ */
+const HEADER_RENDER_KINDS = new Set(['grid', 'list']);
+
+function escapeHtmlText(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export function applySectionHeader(body, tr, semantic) {
+  const hdr = tr && tr.header;
+  if (!hdr || !hdr.title) return body;
+  if (!HEADER_RENDER_KINDS.has(String(tr.kind))) return body;
+  const lines = String(body).split('\n');
+  const tplStart = lines.findIndex((l) => l.trim() === '<template>');
+  if (tplStart < 0) return body;
+  const tplEnd = lines.findIndex((l, i) => i > tplStart && l.trim() === '</template>');
+  if (tplEnd < 0) return body;
+  let rootOpen = -1;
+  for (let i = tplStart + 1; i < tplEnd; i += 1) {
+    if (lines[i].includes('<div')) {
+      rootOpen = i;
+      break;
+    }
+  }
+  let rootClose = -1;
+  for (let i = tplEnd - 1; i > rootOpen; i -= 1) {
+    if (lines[i].includes('</div>')) {
+      rootClose = i;
+      break;
+    }
+  }
+  if (rootOpen < 0 || rootClose < 0) return body;
+  // 原根降为 body：只在其 style 里前置 flex:1/min-height:0（无 style 属性则不动）
+  if (lines[rootOpen].includes('style="')) {
+    lines[rootOpen] = lines[rootOpen].replace('style="', 'style="flex:1;min-height:0;');
+  } else {
+    return body;
+  }
+  const sem = String(semantic || tr.semantic || 'component');
+  // 🛡️ M5-7 合规（2026-11-14）：段头是 **Figma 真值渲染**（字号/字色都取真值 px），
+  //   而微码规范 M5-7 禁止硬编码 font-size —— 唯一合规口径是走 fg- 接管类豁免
+  //   （`FG_TAKEOVER_CLASS_RX = /-fg-(header|grid|…)-/`，与其它 fg- 真值模板同口径；
+  //   归一化会把真值字号压成 calc(var(--fontSize)*N) 而失真，故豁免而非归一）。
+  //   故类名必须是 `-fg-header-` 形态，不能是自定义的 `-fg-sec-`。
+  const cls = `c-${sem}-fg-header-${idSlug(tr.sectionId)}`;
+  const h = Number(hdr.height) > 0 ? Math.round(Number(hdr.height)) : 0;
+  if (!(h > 0)) return body;
+  const gap = Number.isFinite(Number(hdr.gap)) && Number(hdr.gap) > 0 ? Math.round(Number(hdr.gap)) : 0;
+  const pad = Number.isFinite(Number(hdr.paddingLeft)) && Number(hdr.paddingLeft) > 0
+    ? Math.round(Number(hdr.paddingLeft))
+    : 0;
+  const fs = Number(hdr.fontSize) > 0 ? Number(hdr.fontSize) : 14;
+  const fw = hdr.fontWeight != null ? Number(hdr.fontWeight) : 500;
+  const color = hdr.color || 'rgba(51, 51, 51, 1)';
+  const wrapOpen = `  <div class="${cls}" style="display:flex;flex-direction:column;height:100%;min-height:0;">`;
+  const headerLines = [
+    `    <div data-section-header="${escapeHtmlText(tr.sectionId)}" style="height:${h}px;flex:none;display:flex;align-items:center;padding-left:${pad}px;margin-bottom:${gap}px;">`,
+    // 🛡️ M5-7 豁免必须**命中本标签**：掩码函数只看「标签自身的 class」是否匹配
+    //   `/-fg-(header|…)-/`，父级带 fg- 不算 ⇒ span 自己也要挂 fg-header 类，
+    //   否则它的真值 `font-size:${fs}px` 会被判硬编码（真机 cc0eddc6 实测）。
+    `      <span class="${cls}-title" style="font-size:${fs}px;font-weight:${fw};color:${color};line-height:1.2;white-space:nowrap;">${escapeHtmlText(hdr.title)}</span>`,
+    '    </div>',
+  ];
+  const out = [
+    ...lines.slice(0, rootOpen),
+    wrapOpen,
+    ...headerLines,
+    ...lines.slice(rootOpen, rootClose + 1),
+    '  </div>',
+    ...lines.slice(rootClose + 1),
+  ];
+  return out.join('\n');
+}
+
 export function renderFoldedGridLeafVue(tr, semantic) {
+  return applySectionHeader(renderFoldedGridLeafVueBody(tr, semantic), tr, semantic);
+}
+
+function renderFoldedGridLeafVueBody(tr, semantic) {
   const sem = String(semantic || 'component');
   // 🔴 同构列表（刀 20b）：N 项 v-for 真值展开。文案/色值/字号逐项内联进
   //   FG_LIST_ITEMS（script const），卡高/间距/左内距全部几何真值；缺事实的属性
@@ -4710,10 +4797,99 @@ function declaredUnconsumedCount(sec, kind) {
   return 0;
 }
 
+/**
+ * 🛡️ S1（2026-11-14）：解析段头真值事实（不猜、缺项即 null）。
+ *
+ * 候选**只来自 `section.sourceNodeIds`** —— 那是 P0-8b 合并进来的「副标题条」id
+ * （`4sub-header` / `6sub-header` / `0sub-header`）。这保证：
+ *   - 不依赖图层命名（不看 name）；
+ *   - 不依赖 `slot-<段名>` 那套已失效的约定；
+ *   - plan 没合并过条 ⇒ 没有 sourceNodeIds ⇒ 直接不画（零回归）。
+ *
+ * 判据（几何 + 类型）：高 ≤ 40、宽 ≥ 锚点宽 × 0.5、底边不高于锚点顶（+2px 容差）、子树含 TEXT。
+ * 取「间隙最小」的那一条；字色/字号/字重/左内距全部取该条首个 TEXT 的真值。
+ */
+function resolveSectionHeaderFacts(sec, figmaIndex) {
+  const title = String(sec?.header?.title || '').trim();
+  if (!title || !figmaIndex) return null;
+  const entryOf = (id) => {
+    if (id == null || id === '') return null;
+    const e = figmaIndex.get(String(id));
+    if (!e) return null;
+    const node = e.rawNode || e.node || e;
+    const bbox = e.bbox || node?.absoluteBoundingBox || null;
+    if (!bbox) return null;
+    return { id: String(id), node, bbox };
+  };
+  const anchorEntry = entryOf(sec.id) || entryOf(sec.figmaNodeId);
+  if (!anchorEntry?.bbox) return null;
+  const ab = anchorEntry.bbox;
+  const anchorTop = Number(ab.y);
+  const anchorBottom = anchorTop + Number(ab.height);
+  const anchorW = Number(ab.width);
+  if (![anchorTop, anchorBottom, anchorW].every(Number.isFinite)) return null;
+
+  const firstText = (node, depth = 0) => {
+    if (!node || depth > 6) return null;
+    if (String(node.type || '').toUpperCase() === 'TEXT' && String(node.characters || '').trim()) {
+      return node;
+    }
+    for (const c of node.children || []) {
+      const hit = firstText(c, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const colorOf = (node) => {
+    const f = (node?.fills || []).find((x) => x && x.visible !== false && x.type === 'SOLID');
+    if (!f?.color) return null;
+    const c = f.color;
+    const a = typeof f.opacity === 'number' ? f.opacity : (typeof c.a === 'number' ? c.a : 1);
+    const to255 = (v) => Math.round((Number(v) || 0) * 255);
+    return `rgba(${to255(c.r)}, ${to255(c.g)}, ${to255(c.b)}, ${Number(a.toFixed(3))})`;
+  };
+
+  let best = null;
+  for (const rawId of Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : []) {
+    const cand = entryOf(rawId);
+    if (!cand?.bbox) continue;
+    const h = Number(cand.bbox.height);
+    const w = Number(cand.bbox.width);
+    const top = Number(cand.bbox.y);
+    const bottom = top + h;
+    if (![h, w, top, bottom].every(Number.isFinite)) continue;
+    // 🔴 宽度用**绝对下限**而非占比：真机「车型分布」条仅 86px（段宽 387）⇒ 占比判据会误杀
+    if (h > 40 || w < 40) continue;
+    if (bottom > anchorTop + 2) continue; // 必须在段上方
+    const gapRaw = anchorTop - bottom;
+    if (!(gapRaw >= -2 && gapRaw <= 120)) continue;
+    const textNode = firstText(cand.node);
+    if (!textNode) continue;
+    if (!best || gapRaw < best.gapRaw) {
+      best = { cand, textNode, gapRaw };
+    }
+  }
+  if (!best) return null;
+  const { cand, textNode, gapRaw } = best;
+  const tb = textNode.absoluteBoundingBox || null;
+  const paddingLeft = tb && Number.isFinite(Number(tb.x)) ? Math.max(0, Math.round(Number(tb.x) - Number(ab.x))) : 0;
+  const style = textNode.style || {};
+  return {
+    title,
+    height: Number(cand.bbox.height),
+    gap: Math.max(0, Math.round(gapRaw)),
+    fontSize: Number(style.fontSize) > 0 ? Number(style.fontSize) : null,
+    fontWeight: style.fontWeight != null ? Number(style.fontWeight) : null,
+    color: colorOf(textNode),
+    paddingLeft,
+    stripId: cand.id,
+  };
+}
+
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], layoutGapFromFacts: 0, overlayMarked: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
   // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：vision `charts[]` 段归属集合。
@@ -4737,6 +4913,12 @@ export function collectFoldedGridTakeover(p = {}) {
   const figmaIndex = indexFigmaNodes(
     p.figmaNodeData?.document || p.figmaNodeData || null,
   );
+  // 🛡️ S2：布局事实——优先复用分析阶段冻结的 facts（单一真值），没有则本地算一份
+  //   （同一个纯函数，不会出现两侧口径漂移）。纯几何、无 IO，成本可忽略。
+  const __layoutFacts =
+    (p.layoutFacts && typeof p.layoutFacts === 'object' && Object.keys(p.layoutFacts).length
+      ? p.layoutFacts
+      : null) || inferLayoutFacts(p.figmaNodeData);
   const semantic = String(p.componentName || '')
     .replace(/^c-/, '')
     .toLowerCase() || 'component';
@@ -4881,6 +5063,36 @@ export function collectFoldedGridTakeover(p = {}) {
       out.skipped.push({ id: String(sec.id), reason: `${tr.kind}:declaredUnconsumed(${unconsumed})` });
       continue;
     }
+    // 🛡️ S2（2026-11-14）：布局事实落地 —— 间距改取几何真值。
+    //   病灶：`1263:38 5cards` 的 `itemSpacing` 写 3，几何实际 29 ⇒ 产物 `column-gap:3px`，
+    //   两张卡被挤在一起；`@antd/tab` 同类。事实由 `layout-geom-facts` 统一给出（只吃 bbox）。
+    const __lf = pickLayoutFacts(__layoutFacts, [
+      sec.id,
+      sec.figmaNodeId,
+      ...(Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : []),
+    ]);
+    if (__lf) {
+      tr.layoutFacts = __lf;
+      if (
+        (__lf.mode === 'row' || __lf.mode === 'row-between') &&
+        __lf.gap != null &&
+        Number.isFinite(Number(__lf.gap)) &&
+        'colGap' in tr &&
+        Number(tr.colGap) !== Number(__lf.gap)
+      ) {
+        tr.colGap = Math.round(Number(__lf.gap));
+        out.layoutGapFromFacts += 1;
+      }
+      if (__lf.mode === 'free-overlay') out.overlayMarked += 1;
+    }
+
+    // 🛡️ P0-9 / S1（2026-11-14 · 9ed088e3 实锤）：段头事实（全部真值，缺一项就不画）。
+    //   病灶：副标题条与段是兄弟（`4sub-header` ↔ `5cards`），takeover 产物**没有任何
+    //   header 落点** ⇒ 即使 plan 已把标题并进 section.header（P0-8b），产物仍是"只有卡片"。
+    //   这里只做**事实采集**，是否渲染由渲染器按 kind 决定（S1 先开 grid/list）。
+    const _secHeader = resolveSectionHeaderFacts(sec, figmaIndex);
+    if (_secHeader) tr.header = _secHeader;
+
     const tag = nameOf.get(String(sec.id));
     if (!tag) {
       out.skipped.push({ id: String(sec.id), reason: 'noComponentName' });

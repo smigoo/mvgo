@@ -15,6 +15,7 @@ import {
   buildRejectSummary,
   formatRejectSummaryLine,
 } from '../reject-summary.js';
+import { readVisionTruth } from '../read-vision-truth.js';
 
 const ROLES = join(__dirname, '../../roles');
 const GRAPHS = join(__dirname, '../../graphs');
@@ -209,13 +210,52 @@ describe('Phase E · 接线判据（role 回写 + graph 落盘 + 零命中可见
     const p2 = readSrc('../../graphs/mc-component-graph-phase2.js');
     const v3 = readSrc('../../graphs/mc-component-graph-vue3.js');
     for (const [name, src] of [['phase2', p2], ['vue3', v3]]) {
-      // 🔴 真机修正断言：读取位置必须含 layoutStructure 双路归一（parser 挂在 parsed 上，
-      // 顶层 result.contractAudit 恒 undefined——mc-max-1793452481019 实锤）
-      expect(src).toMatch(/result\.layoutStructure\?\.contractAudit/);
+      // 🛡️ G06（2026-11-14 契约变更）：原文本级断言 `result.layoutStructure?.contractAudit`
+      //   已被单一读取器替代。真机实锤仍是「parser 把 contractAudit 挂在 parsed
+      //   （= layoutStructure）上、顶层恒 undefined」⇒ 判据改为：
+      //   ① 两图都必须经 readVisionTruth 取事实层（不得各自再写顶层表达式）；
+      //   ② contractAudit 从 readTruth() 派生，且仍落 checkpoint / state / reject-summary。
+      expect(src).toMatch(/import\s*\{[^}]*readVisionTruth[^}]*\}\s*from\s*['"][^'"]*read-vision-truth\.js['"]/);
+      expect(src).toMatch(/const\s+readTruth\s*=\s*\(\)\s*=>\s*readVisionTruth\(result\)/);
+      expect(src).toMatch(/const\s+__contractAudit\s*=\s*readTruth\(\)\.contractAudit/);
+      expect(src).not.toMatch(/const\s+__contractAudit\s*=\s*result\.contractAudit/);
       expect(src).toMatch(/state\._contractAudit = __contractAudit/);
+      expect(src).toMatch(/_saveCheckpoint\?\.\('contract-audit', __contractAudit\)/);
       expect(src).toMatch(/_saveCheckpoint\?\.\('reject-summary'/);
       expect(src).toMatch(/buildRejectSummary\(/);
     }
+    // 🔴 阴阳对照：读取器本身必须保留「事实层优先」——否则上面 ① 只是换了层皮，
+    //   contractAudit 又会像 mc-max-1793452481019 那样永远读不到。
+    const reader = readSrc('../../utils/read-vision-truth.js');
+    expect(reader).toMatch(/result\.layoutStructure/);
+    expect(reader).toMatch(/innerHas\s*\?\s*'inner'/);
+    expect(reader).toContain('contractAudit');
+  });
+
+  it('G06 阴性对照：真实 visual.json 顶层诊断为空、内层有值时读数不回退到顶层', () => {
+    // 用两代真机 checkpoint 的形态构造：顶层空数组 / null + 内层有值。
+    // 只验读取器行为，不改产物、不依赖文件路径。
+    const result = {
+      contractAudit: null,
+      analysisDiagnostics: [],
+      layoutStructure: {
+        contractAudit: { missing: [{ code: 'K' }], conflicts: [] },
+        analysisDiagnostics: ['真值诊断'],
+      },
+    };
+    // 直接调源码纯函数，不复制实现（静态导入，Jest CJS 环境不支持动态 import ESM）
+    const t = readVisionTruth(result);
+    expect(t.source).toBe('layoutStructure');
+    expect(t.contractAudit).toEqual({ missing: [{ code: 'K' }], conflicts: [] });
+    expect(t.byKey.contractAudit).toBe('inner');
+    expect(t.byKey.analysisDiagnostics).toBe('inner');
+    // 内层「定义了但为空」也必须是真值，不得回退到顶层镜像空值
+    const emptyInner = readVisionTruth({
+      analysisDiagnostics: ['陈旧'],
+      layoutStructure: { analysisDiagnostics: [] },
+    });
+    expect(emptyInner.analysisDiagnostics).toEqual([]);
+    expect(emptyInner.byKey.analysisDiagnostics).toBe('inner');
   });
 });
 

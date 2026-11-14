@@ -14,6 +14,8 @@
  */
 
 import { sanitizeCssContent } from '../../utils/css-sanitizer.js';
+// 🛡️ G05：判据层 plan 与 mc-max 共用单一解析器（G02 决策 1）。
+import { resolvePlanSourceFromInput } from '../../utils/resolve-plan-source.js';
 import { extractComponentTagNames } from '../../utils/sfc-semantics.js';
 import { extractVue3SfcBlock } from './vue3-healer.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
@@ -229,18 +231,21 @@ export function wireVue3SubComponentImports(files, options = {}) {
  * @returns {{ subPlan: object, effectiveSections: Array, requiredSubComps: Array }}
  */
 export function resolveVue3SubComponentPlan(input) {
-  // 🛡️ 接管（P1）：优先消费 Context Assembler 裁决的 componentPlan（单一事实源），
-  // 但以合并策略保留 legacy 的 items（requiredSubComps 来源，防御历史路径），
-  // effectiveSections/isForced/minFiles/reason 由 genPlan 覆盖。
-  const genPlan = input && input.generationInput?.componentPlan;
+  // 🛡️ G05（2026-11-14 · G02 决策 1）：判据层 plan 一律由 resolvePlanSource 解析。
+  //   旧实现「genPlan 覆盖 legacy」把**有损白名单投影**当成单一事实源，与 phase2/mc-max
+  //   刚统一的「planner 全保真原形优先」口径相反 ⇒ 同一轮生成里两套判据。
+  //   现在：全保真原形优先；投影口仅在原形无段时兼容回退且 degraded 可观测。
+  //   合并策略保留 legacy.items / internalSubcomponents（requiredSubComps 来源），
+  //   不改变返回结构与兜底对象形状。
   const legacy = input && input.subComponentPlan;
+  const resolution = resolvePlanSourceFromInput(input);
   const raw =
-    genPlan && typeof genPlan === 'object'
-      ? {
+    resolution.source === 'none'
+      ? null
+      : {
           ...(legacy && typeof legacy === 'object' ? legacy : {}),
-          ...genPlan,
-        }
-      : legacy;
+          ...resolution.plan,
+        };
   const subPlan =
     raw && typeof raw === 'object'
       ? raw

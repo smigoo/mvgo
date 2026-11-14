@@ -12,6 +12,7 @@
 - 🔴 **`git commit -- <pathspec>` 取【工作区】内容、绕过 index**（11-13 实锤踩坑）：同一文件混有他人 WIP 时，即使 index 已用 `git apply --cached` 精确到 hunk，`git commit -- path` 仍会把**工作区全量**写入提交 ⇒ 他人 WIP 被我方提交污染。正确姿势：① `git diff -U3 <file> > full.patch` ② python 按 hunk 切出自己那几段 → `mine.patch` ③ `git apply --cached mine.patch`（或 `git hash-object -w` + `git update-index --cacheinfo 100644,<blob>,<path>`）④ `git commit --amend -F msg`（**不带 pathspec**，让它取 index）⑤ 把含他人 WIP 的工作区版本 `cp` 回来（提交前务必先备份）。验证：`git show HEAD -- <file> | grep '^@@'` 逐 hunk 对账 + `diff -q` 与备份逐字比对。
 - 🔴 几何/真值判据必挂真机日志计数行（塞入参=假绿）；改的人=验的人同正则=假绿。
 - 🔴 **门禁变更文档同步**（11-13 用户指令）：每一次门禁改动（增/删/退役/判据/severity/message 文案/修复器同源化/接线/定性结论）必须**同轮**更新 `docs/2026-11-13-门禁全景评审.md` §七 台账 + 修订 §二~§五 明细状态；标题「建议/已删除」须 `git show HEAD:<path>` + 工作区 diff 双证核对。状态三分口径＝工作区已改 / HEAD 已固化(hash) / 已部署，缺一不得称「已删」。禁「代码已删、文档仍写建议」。
+- 🔴 **Figma 整理插件自包含边界**（`figma/src/cursor_mcp_plugin/`，11-14 用户三次确认「插件不需要后端、本地缓存、整理即可」）：插件**不接生成管线、不需要后端**，只做本地结构化整理；结果只落 `figma.clientStorage`(`mvgo-structure-cache`) + 本地下载（💾存JSON/存契约）。**禁止新增或恢复** `structureJson` / `geometryDigest` 等传给 `/api/lite/generate` 的字段及任何生成管线请求（已撤销，勿回灌）。例外两项：① UI 既有「🚀推送生成」是历史可选入口，新功能不得依赖/扩展；② LLM 网关 `baseUrl/apiKey` 与 3055 本地 relay(`/llm-proxy`、`/llm-models`) 属插件自身 AI 整理能力，**不属于**生成管线后端。判据/整理规范以 `docs/2026-11-14-Figma结构整理规范.md`(**v2**，插件本地) 为准；`docs/2026-11-14-布局真值整治方案.md` 是服务端另一条线，不得据此给插件加接口。v1 `自动插件对接文档.md` 已作废。
 
 ## 状态（11-12）
 - 本地 :13030 跑 dist（改源码须 build+重启）；:2610 Vite；:8080 java。生产：前端 11-03；Node 11-05 `da19f6e`；⚠️ 生产 backend-node 目录多会话同操作。

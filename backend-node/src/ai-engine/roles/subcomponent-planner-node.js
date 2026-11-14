@@ -46,6 +46,12 @@ export class SubcomponentPlannerNode extends BaseAgent {
       visionCharts: Array.isArray(params.charts) ? params.charts : [],
       // 🔍 L1 文档同构折叠（2026-11-03）：S8 文档子管线产物 → 折叠器第二证据
       docAnalysis: params.docAnalysis || null,
+      // 🛡️ S1（2026-11-14）：分析阶段冻结的布局事实 → 由 planner 绑定到段对象
+      layoutFacts:
+        params.layoutFacts ||
+        params.previewAnalysis?.layoutFacts ||
+        layoutStructure?.layoutFacts ||
+        null,
     })
     logger.info('子组件规划完成', { count: plan.effectiveSections?.length, reason: plan.reason })
     return { subcomponentPlan: plan }

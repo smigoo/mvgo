@@ -580,6 +580,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   //   同样出现在日志里，便于区分「未生效」与「判据失效」。
   bump('slotAncestor', 0)
   bump('idDirectSkipHallucinated', 0)
+  bump('idDirectPartial', 0)
   bump('idDirectLeftover', 0)
   // 🛡️ 2026-11-05 追认补闭环：② 视觉序归一的两态计数（0 也打，便于区分「未生效」与「判据失效」）
   bump('orderVisualSort', 0)
@@ -619,6 +620,27 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
       }))
       bump('rootDirect', directMatched.length)
       return writeSectionRatios(directMatched, figmaNodes, stats)
+    }
+  }
+
+  // 🛡️ P0-8c（2026-11-14 · 9ed088e3 实锤）：**混合配对补全**。
+  //   病灶：6 段里 4 段带 `figmaNodeId`（走 ① 命中），另 2 段（`2:3550` 面板标题栏、`2:3559`
+  //   当日总流量）只有 `id`。而 ①-β 的前置是「**全无** figmaNodeId」⇒ 整块被跳过；这两段
+  //   于是既拿不到 Figma 高度、也进不了几何并集（真机实测：段高恒 24、统计块永不并入）。
+  //   判据（强证据、fail-open）：缺项的 `id` 恰好就是 Figma 节点 id 且 `effectiveH>0`、
+  //   且未被判幻觉（`anchorValid!==false`）；**仅当缺项全部命中**时才采纳（多一少一项都不猜，
+  //   与 ①-β「全命中才采纳」同纪律）。
+  if (idMatched.length > 0 && restSections.length > 0) {
+    const extra = []
+    for (const section of restSections) {
+      const sid = section?.id
+      const node = sid ? figmaNodes.find((n) => n._id === String(sid)) : null
+      const usable = node && node.effectiveH > 0 && section?.anchorValid !== false
+      if (usable) extra.push({ section, node })
+    }
+    if (extra.length === restSections.length && extra.length > 0) {
+      bump('idDirectPartial', extra.length)
+      return writeSectionRatios([...idMatched, ...extra], figmaNodes, stats)
     }
   }
 
@@ -952,6 +974,167 @@ function hasNonOverlappingVerticalBoxes(regions) {
 }
 
 /**
+ * 🛡️ P0-8（2026-11-14 · mc-max-1794651114530-9ed088e3 实锤）：**几何并集段高**。
+ *
+ * 病灶（同一病在四类形态上复发）：
+ *   - 段锚点落在「标题条」上（`2:3559` h=24，真正的内容块 `2:3660「1统计」` 是它祖父
+ *     `1744:125` 下的**兄弟**）⇒ 段高 = 24，模型只能在 24px 里画一个标题，整块统计消失；
+ *   - 副标题条（`4sub-header` 24 / `6sub-header` 24）在段外 ⇒ 段高不含它、标题也不进段。
+ *
+ * 三条既有机制为何都救不到：`effectiveHeightForSection` 只吃 body.items（list/重复卡）；
+ * `slotAncestorHeightFor` 要求父节点名**严格等于** `slot-<段名>`（本设计里叫
+ * `0sub-header`/`slot-con`，早就不符合）；V-6 抬锚点要 body 子项能映回真值节点，
+ * 而 body 子项是虚拟 id（`2:3559-left`）。⇒ 三条全部 miss，24 被当成权威高度。
+ *
+ * 本判据（**纯几何 + 节点类型，完全不看 name**）：
+ *   从锚点向上最多 `UNION_MAX_HOPS` 跳，每一级父容器 P：
+ *     ① P 内的**未认领兄弟**（不在任何段的节点集合里）且 y 与当前并集区间相邻
+ *        （间隙 ≤ `UNION_MAX_GAP_PX`，允许少量重叠）且**子树含 TEXT**（内容承载，
+ *        排除纯装饰/分隔线）⇒ 并入；
+ *     ② 若 P 内**没有其它已认领段** ⇒ 把 P 自身也并入（段是 P 的一部分）；
+ *        否则停止上溯（再往上就是整块画布，会把别的段吞进来）。
+ *   结果取 `max(锚点高, 并集高)` —— **只升不降**，与既有两条机制同纪律；
+ *   任何一步缺 bbox / 缺父链 ⇒ 原样返回（fail-open，不猜）。
+ */
+const UNION_MAX_HOPS = 2
+const UNION_MAX_GAP_PX = 32
+/** 段锚点必须是容器：裸 TEXT 锚点（vision 把一行文字升格成段）不参与几何并集 */
+const UNION_ANCHOR_CONTAINER_TYPES = new Set([
+  'FRAME',
+  'GROUP',
+  'INSTANCE',
+  'COMPONENT',
+  'COMPONENT_SET',
+  'SECTION',
+])
+/** 薄条判定：≤ 此高度的候选按「副标题条」处理（属于下方段），否则按内容块（属于上方段） */
+const UNION_STRIP_MAX_H = 40
+/** 可并入的「父容器」高度上限：只有标题行这种薄条才算段的一部分 */
+const UNION_PARENT_MAX_H = 40
+
+/** 子树是否含 TEXT（内容承载的信号；与命名无关） */
+function subtreeHasText(node, childrenOf, depth = 0) {
+  if (!node || depth > 6) return false
+  if (String(node.type || '').toUpperCase() === 'TEXT') return true
+  const kids = childrenOf.get(String(node._id)) || []
+  return kids.some((c) => subtreeHasText(c, childrenOf, depth + 1))
+}
+
+/** 子树是否命中技术标记（@echarts / @ant*）——图表/技术组件不得被当背景条吞进来 */
+function subtreeHasTechMarker(node, childrenOf, depth = 0) {
+  if (!node || depth > 4) return false
+  if (String(node.name || '').trim().startsWith('@')) return true
+  const kids = childrenOf.get(String(node._id)) || []
+  return kids.some((c) => subtreeHasTechMarker(c, childrenOf, depth + 1))
+}
+
+const bboxOfNode = (n) => {
+  const b = n && n.bbox
+  if (!b) return null
+  const { x, y, width, height } = b
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null
+  return { x, y, width, height }
+}
+
+/**
+ * @param {Map<string,object>} byId
+ * @param {Map<string,object[]>} childrenOf
+ * @param {Set<string>} claimedIds 所有配对段的锚点 id
+ * @param {Array<{id:string, box:object}>} anchors 全部段锚点（最近归属裁决用）
+ * @returns {number} 并集高度（仅当严格高于锚点高时才返回，否则 0）
+ */
+function geometricUnionHeightFor(node, section, byId, childrenOf, claimedIds, anchors) {
+  // 🔴 只对**容器锚点**生效：锚点是裸 TEXT 时（vision 把一行文字升格成段），再去并邻居
+  //    就是猜测（既有阴性对照实测 10 → 19，等于凭空给文本行加高）。容器类型判断不依赖命名。
+  const anchorType = String(node?.type || '').toUpperCase()
+  if (!UNION_ANCHOR_CONTAINER_TYPES.has(anchorType)) return 0
+  const anchorBox = bboxOfNode(node)
+  if (!anchorBox) return 0
+  const anchorId = String(node._id)
+  let top = anchorBox.y
+  let bottom = anchorBox.y + anchorBox.height
+
+  // ① 候选：往上最多 UNION_MAX_HOPS 跳，每一级父容器下的**未认领兄弟**
+  const candidates = []
+  let cur = node
+  for (let hop = 0; hop < UNION_MAX_HOPS; hop += 1) {
+    const pid = cur?.parentId
+    if (pid == null || pid === '') break
+    const parent = byId.get(String(pid))
+    if (!parent) break
+    for (const sib of childrenOf.get(String(parent._id)) || []) {
+      const sid = String(sib._id)
+      if (sid === String(cur._id) || sid === anchorId) continue
+      if (claimedIds.has(sid)) continue
+      const b = bboxOfNode(sib)
+      if (!b) continue
+      if (!subtreeHasText(sib, childrenOf)) continue
+      // 🔴 技术标记（`@echarts`/`@antd/tab`）排除**只对内容块生效**：薄条里的 tab 组
+      //    （`6sub-header` 内含 `@antd/tab`）本就是该段的标题行，排除它会让「流量预测」
+      //    副标题既进不了高度也进不了 header（真机实测 141 不升，即此因）。
+      const isThinStrip = b.height <= UNION_STRIP_MAX_H
+      if (!isThinStrip && subtreeHasTechMarker(sib, childrenOf)) continue
+      candidates.push({ node: sib, box: b })
+    }
+    cur = parent
+  }
+
+  // ② 归属裁决（**方向由候选形态决定**，纯几何）：
+  //    - 候选是**薄条**（h ≤ UNION_STRIP_MAX_H，如副标题 24px）⇒ 它属于**下方**的段
+  //      （标题条在内容上方）；
+  //    - 候选是**内容块**（h > 40，如统计区 91px）⇒ 它属于**上方**的段
+  //      （标题锚点吸收自己的内容块）。
+  //    🔴 不能只按「最近距离」：真机 2:3660(91) 与 1744:127 严丝合缝（gap 0）、
+  //      与标题 2:3559 隔 10px，纯距离会把统计块判给下方图表段（实测 131 → 222 的过度并集）。
+  for (const cand of candidates) {
+    const isStripCand = cand.box.height <= UNION_STRIP_MAX_H
+    let ownerId = null
+    let ownerGap = Infinity
+    for (const a of anchors) {
+      if (!a.box) continue
+      const gap = isStripCand
+        ? a.box.y - (cand.box.y + cand.box.height) // 段在条下方
+        : cand.box.y - (a.box.y + a.box.height) // 段在块上方
+      if (gap < -2) continue // 方向不符（-2 容忍亚像素贴合）
+      if (gap > UNION_MAX_GAP_PX) continue
+      if (gap < ownerGap - 1e-6) {
+        ownerGap = gap
+        ownerId = a.id
+      }
+    }
+    if (ownerId !== anchorId) continue
+    top = Math.min(top, cand.box.y)
+    bottom = Math.max(bottom, cand.box.y + cand.box.height)
+  }
+
+  // ③ 父容器本身也属于这个段 —— 但**只并入 thin 容器**（高度 ≤ UNION_PARENT_MAX_H，即标题行这种
+  //    "段的一部分"），且父内不能有别的已认领段。🔴 不设此限会把整块画布/大容器并进来
+  //    （既有阴性对照实测：33 → 807 = 整个 root 高，属过度并集）。
+  let curForParent = node
+  for (let hop = 0; hop < UNION_MAX_HOPS; hop += 1) {
+    const pid = curForParent?.parentId
+    if (pid == null || pid === '') break
+    const parent = byId.get(String(pid))
+    if (!parent) break
+    const pb = bboxOfNode(parent)
+    if (!pb || pb.height > UNION_PARENT_MAX_H) break
+    const claimedInside = (childrenOf.get(String(parent._id)) || []).filter(
+      (c) => String(c._id) !== String(curForParent._id) && claimedIds.has(String(c._id)),
+    ).length
+    if (claimedInside > 0) break
+    top = Math.min(top, pb.y)
+    bottom = Math.max(bottom, pb.y + pb.height)
+    curForParent = parent
+  }
+
+  // ④ 不做坐标夹取：Figma 里子节点越出父容器边界是常态（本例 `2:3604` 764..905 越出
+  //    `slot-con` 46..791），按父盒裁切会把真实内容剪掉 4px。越界防护靠 ③ 的「只并入薄条
+  //    父容器」+ ② 的「间隙 ≤32」两条几何约束即可，不需要再引入会误伤的夹取。
+  const unionH = bottom - top
+  return unionH > anchorBox.height ? unionH : 0
+}
+
+/**
  * 把「section ↔ Figma 节点」配对写入 flex 比例（比例量纲，avg=1）。
  * 🛡️ 单一来源：根下直配（②-α）、section.id 直配（①-β）、顺序配对（②）三条路径共用同一写比例逻辑。
  * 🛡️ 2026-11-03 治本（09063447 实锤）：collapsed list section 的 effectiveH 先过
@@ -960,14 +1143,34 @@ function hasNonOverlappingVerticalBoxes(regions) {
  * 🛡️ 2026-11-03 治本（ec1db095 实锤）：再叠加 slot 同名容器上溯（段标题 24 → 整段 556）。
  *   两者互补（列表并集看 body.items 几何；slot 上溯看 Figma 命名约定父链），取最大值，
  *   只升级不降级 ⇒ 任一判据命中都生效，都未命中则保持原配对值（fail-open 不猜）。
+ * 🛡️ P0-8（2026-11-14）：第三条来源 —— **几何并集**（上方注释），补「命名不规范就全 miss」
+ *   的死角，与既有两条同取 max，只升不降。
  */
 function writeSectionRatios(matched, figmaNodes, stats = null) {
   if (!Array.isArray(matched) || matched.length < 2) return 0
   const byId = new Map()
+  const childrenOf = new Map()
   for (const n of figmaNodes || []) {
     if (n && n._id != null) byId.set(String(n._id), n)
   }
+  for (const n of byId.values()) {
+    const pid = n?.parentId
+    if (pid == null || pid === '') continue
+    const k = String(pid)
+    if (!childrenOf.has(k)) childrenOf.set(k, [])
+    childrenOf.get(k).push(n)
+  }
+  // 已认领 = 所有配对段的节点 id（兄弟判据的排他集）
+  const claimedIds = new Set()
+  for (const m of matched) {
+    if (m?.node?._id != null) claimedIds.add(String(m.node._id))
+  }
+  // 最近归属裁决用的锚点表（id + 自身 bbox）
+  const anchors = matched
+    .filter((m) => m?.node?._id != null)
+    .map((m) => ({ id: String(m.node._id), box: bboxOfNode(m.node) }))
   let slotAncestorHits = 0
+  let unionHits = 0
   const resolved = matched.map(({ section, node }) => {
     let effH = effectiveHeightForSection(section, node, figmaNodes)
     const ancestorH = slotAncestorHeightFor(node, section?.name, byId)
@@ -975,11 +1178,26 @@ function writeSectionRatios(matched, figmaNodes, stats = null) {
       effH = ancestorH
       slotAncestorHits += 1
     }
+    const unionH = geometricUnionHeightFor(
+      node,
+      section,
+      byId,
+      childrenOf,
+      claimedIds,
+      anchors,
+    )
+    if (unionH > effH) {
+      effH = unionH
+      unionHits += 1
+    }
     return { section, node: { ...node, effectiveH: effH } }
   })
   // 计数语义：**实际生效**（祖先值严格大于配对值才计）——找到但更小说明配对已合理，不算命中。
   if (slotAncestorHits && stats && typeof stats === 'object') {
     stats.slotAncestor = (Number(stats.slotAncestor) || 0) + slotAncestorHits
+  }
+  if (stats && typeof stats === 'object') {
+    stats.geometricUnion = (Number(stats.geometricUnion) || 0) + unionHits
   }
   const total = resolved.reduce((a, m) => a + m.node.effectiveH, 0)
   if (!(total > 0)) return 0

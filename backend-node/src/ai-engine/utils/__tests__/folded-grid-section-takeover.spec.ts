@@ -1678,12 +1678,14 @@ describe('刀 53 外观扩维 · detectStatRowLeaf（统计卡渐变底 + 描边
     const idx = indexFigmaNodes(doc(gradedCard));
     const r = detectStatRowLeaf({ id: '43:4898' }, idx, buildParentMap(idx), []);
     expect(r.ok).toBe(true);
-    expect(r.members[0].bg).toContain('linear-gradient(90deg');
+    // 🛡️ P0-9（2026-11-14）：夹具 handles 是 [0,0]→[0,1]（自上而下，dx=0/dy=1），
+    //   旧断言 `90deg` 是把 `atan2(dy,dx)` 的错误实现当成期望值烤进来的 —— 正确 CSS 是 180deg。
+    expect(r.members[0].bg).toContain('linear-gradient(180deg');
     expect(r.members[0].bg).toContain('rgba(212,227,255,0.9) 0%');
     expect(r.members[0].bg).toContain('rgba(193,214,255,0.9) 100%');
     expect(r.members[0].border).toBe('1px solid #a0c1ff');
     const vue = renderFoldedGridLeafVue({ ...r, memberIndex: 0 }, 'device');
-    expect(vue).toContain('background:linear-gradient(90deg');
+    expect(vue).toContain('background:linear-gradient(180deg');
     expect(vue).toContain('border:1px solid #a0c1ff;');
     expect(vue).toContain('box-sizing:border-box;');
   });

@@ -3,28 +3,68 @@ import {
   buildSectionLayoutFacts,
   resolveSubComponentPlan,
 } from './figma-section-heights.js';
+import { resolvePlanSource, PLAN_SOURCE } from './resolve-plan-source.js';
 
 /**
  * TASK #523：A4 比例确定性落到 CSS —— 验证子组件根 class → Figma 高度 px 映射构建正确。
  * 用 25e40782（2:8417）真实产物结构的最小复刻做回归断言。
  */
 
-describe('resolveSubComponentPlan（2026-09-16 c-vehicle-monitor-f177f631 治本）', () => {
+describe('resolveSubComponentPlan（G04 2026-11-14：判据层全保真原形优先）', () => {
   const legacy = { effectiveSections: [{ id: 's1' }], isForced: true, minFiles: 1, reason: 'legacy' };
   const genPlan = { effectiveSections: [{ id: 's2' }], isForced: false, minFiles: 2, reason: 'gen' };
 
-  it('优先取 generationInput.componentPlan', () => {
-    expect(resolveSubComponentPlan({ componentPlan: genPlan }, legacy)).toBe(genPlan);
+  // G02 决策 1：subComponentPlan = 唯一判据事实源；componentPlan 保留但 deprecated，
+  // 只兼容旧断点（有损投影逐段保留率 27.9%~46.5%，不得再当判据来源）。
+  it('优先取 subComponentPlan（planner 全保真原形）', () => {
+    expect(resolveSubComponentPlan({ componentPlan: genPlan }, legacy)).toBe(legacy);
   });
-  it('generationInput 无 componentPlan 时 fallback subComponentPlan', () => {
+  it('subComponentPlan 缺省时兼容回退 componentPlan（仅旧断点）', () => {
+    expect(resolveSubComponentPlan({ componentPlan: genPlan }, null)).toBe(genPlan);
+    expect(resolveSubComponentPlan({ componentPlan: genPlan }, undefined)).toBe(genPlan);
+  });
+  it('generationInput 无 componentPlan 时取 subComponentPlan', () => {
     expect(resolveSubComponentPlan({}, legacy)).toBe(legacy);
     expect(resolveSubComponentPlan(null, legacy)).toBe(legacy);
   });
-  it('两者皆空返回空兜底（恒有 effectiveSections 数组）', () => {
+  it('full 有对象但无有效段 ⇒ 回退投影口（兼容，source 可观测）', () => {
+    expect(resolveSubComponentPlan({ componentPlan: genPlan }, { effectiveSections: [] })).toBe(genPlan);
+  });
+  it('两者皆空返回空兜底（真错仍 FAIL，不伪造段）', () => {
     const r = resolveSubComponentPlan(null, null);
     expect(Array.isArray(r.effectiveSections)).toBe(true);
     expect(r.effectiveSections.length).toBe(0);
     expect(r.isForced).toBe(false);
+    expect(r.reason).toBeTruthy();
+  });
+});
+
+describe('resolvePlanSource（G04 单一解析器 · 阴阳对照）', () => {
+  const full = { effectiveSections: [{ id: 's1', body: { children: [{ id: 'chart', charts: [] }] } }] };
+  const projected = { effectiveSections: [{ id: 's1', declaredContent: { children: [] } }] };
+
+  it('A1 全保真优先且 degraded=false', () => {
+    const r = resolvePlanSource({ componentPlan: projected }, full);
+    expect(r.source).toBe(PLAN_SOURCE.FULL);
+    expect(r.plan).toBe(full);
+    expect(r.degraded).toBe(false);
+  });
+  it('A2 兼容回退必须留痕 degraded=true', () => {
+    const r = resolvePlanSource({ componentPlan: projected }, null);
+    expect(r.source).toBe(PLAN_SOURCE.PROJECTED);
+    expect(r.degraded).toBe(true);
+  });
+  it('N1 投影口带臆造段也不得被采用', () => {
+    const evil = { effectiveSections: [...projected.effectiveSections, { id: 'INVENTED' }] };
+    const r = resolvePlanSource({ componentPlan: evil }, full);
+    expect(r.source).toBe(PLAN_SOURCE.FULL);
+    expect(r.plan.effectiveSections.some((s: any) => s.id === 'INVENTED')).toBe(false);
+  });
+  it('A3 真错不伪造', () => {
+    const r = resolvePlanSource(null, null);
+    expect(r.source).toBe(PLAN_SOURCE.NONE);
+    expect(r.plan.effectiveSections).toHaveLength(0);
+    expect(r.plan.reason).toBeTruthy();
   });
 });
 

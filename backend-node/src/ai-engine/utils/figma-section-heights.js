@@ -22,6 +22,8 @@ import {
   findSectionById,
   dedupeDuplicateSections,
 } from './section-tree.js';
+// 🛡️ G04：判据层 plan 事实源单一解析器（planner 全保真原形优先，投影口仅兼容旧断点）
+import { resolvePlanSource } from './resolve-plan-source.js';
 
 /**
  * 解析「子组件规划」（subComponentPlan）的单一事实源。
@@ -33,22 +35,17 @@ import {
  * 整段静默失败 → section 根 height:100% 未改写 → 多区块各占 100% 高互相溢出、仅首块可见。
  * 此处收口为纯函数，两处复用 + 可单测。
  *
- * @param {object|null} [generationInput] Context Assembler 裁决事实（优先取 .componentPlan）
- * @param {object|null} [subComponentPlan] graph 直传的子组件规划（fallback）
+ * @param {object|null} [generationInput] Context Assembler 裁决事实（.componentPlan 已 deprecated，仅兼容）
+ * @param {object|null} [subComponentPlan] graph 直传的 planner 全保真原形（判据唯一事实源）
  * @returns {object} 规划对象，恒有 effectiveSections 数组
+ *
+ * 🛡️ G04（2026-11-14）：原实现「投影口优先」是 S7 有损投影占主链的根因之一
+ *   （归一化口剥掉 25 类细粒度真值，逐段保留率 27.9%~46.5%）。现收口到
+ *   `resolvePlanSource`；返回形状不变，调用方零改动。兼容旧断点仍可回退投影口，
+ *   但 `source=generationInput / degraded=true` 由调用方按需落真机计数行。
  */
 export function resolveSubComponentPlan(generationInput, subComponentPlan) {
-  const plan = generationInput?.componentPlan;
-  if (plan && typeof plan === 'object') return plan;
-  if (subComponentPlan && typeof subComponentPlan === 'object') {
-    return subComponentPlan;
-  }
-  return {
-    effectiveSections: [],
-    isForced: false,
-    minFiles: 0,
-    reason: '未传入 subComponentPlan',
-  };
+  return resolvePlanSource(generationInput, subComponentPlan).plan;
 }
 
 /**
@@ -148,8 +145,8 @@ function extractRootDirectChildClasses(tpl) {
 export function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
   const rawSections =
     layoutStructure?.layout?.sections || layoutStructure?.sections || [];
-  const plan =
-    params?.subComponentPlan || params?.generationInput?.componentPlan || null;
+  // 🛡️ G04：与 resolveSubComponentPlan 同源，禁止各自写 `||` 优先级（判据单一事实源）
+  const plan = resolvePlanSource(params?.generationInput, params?.subComponentPlan).plan;
   // 🛡️ 治本（2026-09-16 · c-vehicle-monitor-b82c9d84）：reuseCache 时 layoutStructure 为空 →
   // rawSections=[]，但 plan.effectiveSections 仍有视觉真值（layout/layoutMetadata.flexGrow）。
   // 此时不应提前 return null，而是继续走 secOf（回退 eff 本身）。仅当「rawSections 与 plan 都空」才 fail-open。
@@ -300,8 +297,10 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
     if (!Array.isArray(rawSections) || rawSections.length < 2) return null;
 
     // ① section 序列（视觉顺序）：优先 plan.effectiveSections（与强制拆分同源、已滤 header）
-    const plan =
-      params?.subComponentPlan || params?.generationInput?.componentPlan || null;
+    // 🛡️ G05 补齐（G04 次生缺口）：同文件 resolveSubComponentPlan 已收口到单一解析器，
+    //   此处仍残留 `subComponentPlan || generationInput.componentPlan` 的旧兜底表达式。
+    //   A4 高度比例是判据，必须与生成轮读同一份全保真 plan；投影口仅在旧断点兼容回退。
+    const plan = resolvePlanSource(params?.generationInput, params?.subComponentPlan).plan;
     // 读 flexGrow 系数（A4 归一化 avg=1 量纲，如 0.978 / 1.061），
     // 而非 figmaHeightPx（像素，仅审计用），flexGrow 与 FLEX-005 系数阈值兼容
     const pxOf = (sec) => {

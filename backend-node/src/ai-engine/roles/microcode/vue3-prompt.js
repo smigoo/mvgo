@@ -19,7 +19,6 @@ import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contr
 // 🛡️ 刀 53 家族（vue3 接线 2026-10-23）：下发「会被确定性接管的子组件名」。
 //   与 `vue3-engineer.js` 里的接管评估共用**同一个纯函数**（单一事实源，不写第二套判据）。
 import { collectFoldedGridTakeover } from '../../utils/folded-grid-section-takeover.js';
-import { buildEnhancedStyleTruthDirective } from '../../context/design-facts-compiler.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
@@ -81,10 +80,6 @@ export function buildVue3TrustGuidance(generationInput) {
         );
       }
     }
-
-    // 🛡️ 还原增强（RESTORE_ENHANCEMENT）：补充样式真值注入（有则建议对齐，不强制覆盖 LLM 既有判断）
-    const enhanced = generationInput?.designFacts?.root?.enhancedStyleTruth;
-    lines.push(...buildEnhancedStyleTruthDirective(enhanced));
 
     if (lines.length === 0) return '';
     const level = generationInput.trustVerdict?.level || 'trusted';

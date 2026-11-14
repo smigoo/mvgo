@@ -1,0 +1,20 @@
+{
+  "src/ai-engine/agents/base-agent.js": {
+    "logger": 3
+  },
+  "src/ai-engine/roles/microcode-engineer.js": {
+    "workingManifest": 2
+  },
+  "src/workspace/custom-components/c-mc-css-demo-event/declare.js": {
+    "$createMcDeclare": 1
+  },
+  "src/workspace/custom-components/c-mc-css-demo-event/resources/config/css-vars.js": {
+    "$mcCssBuilder": 2
+  },
+  "src/workspace/custom-components/c-mc-demo/declare.js": {
+    "$createMcDeclare": 1
+  },
+  "src/workspace/custom-components/c-mc-demo/resources/config/css-vars.js": {
+    "$mcCssBuilder": 1
+  }
+}

@@ -6,6 +6,8 @@
  */
 
 import { BaseAgent } from '../agents/base-agent.js';
+// 🛡️ G04：ISO-PROBE 判据实际来源与 generateCode 主链同源（单一解析器）
+import { resolvePlanSourceFromInput } from '../utils/resolve-plan-source.js';
 import { createGapWatchdog, resolveGapWatchdogTimeoutMs, wrapOnProgressWithTouch } from '../utils/gap-watchdog.js';
 // 🔴 2026-10-12 A8-3：静态导入 dark 三核心枚举（`normalizeDeclareJson` 是**同步**函数，
 //   不能用 await 动态 import；该常量是纯数据，静态导入安全且无循环依赖 ——
@@ -212,6 +214,7 @@ function _getSectionTextLines(figmaRoot, sec) {
 // 🎯 2026-09-29 图表容器双刀（刀1 剥 index.vue inline min-height:0 / 刀2 内层 wrapper 承载 echarts）
 import {
   stripChartInlineMinHeight as _stripChartInlineMinHeight,
+  chartRootIsEchartsContainer as _chartRootIsEchartsContainer,
   wrapChartRootAsInnerWrapper as _wrapChartRootAsInnerWrapper,
 } from '../utils/chart-container-guard.js';
 import {
@@ -1737,7 +1740,10 @@ export class MicrocodeEngineer extends BaseAgent {
                     // 🎨 中心图形叠放语义（2026-11-13 · 7dfc01e9：宿主卡背景图已含中心圆+icon
                     //   真值，echarts 环形中心保持透明即可让背景 icon 从环洞露出；禁止自绘
                     //   中心底色遮挡背景图形）。仅对容器内嵌于卡片背景的环形形态生效。
-                    if ((cs?.type || sub.chartSpec?.type) === 'pie') {
+                    // 🛡️ G03 卫生修复：原写法引用了本作用域未声明的 `cs`（`const cs = sub.chartSpec`
+                    //   在下方 `if (sub.chartSpec)` 块内），进入图表分支必抛 ReferenceError。
+                    //   此处只读 chartSpec，不用 sub.chartType（Figma 节点名派生、非权威真值）填空。
+                    if (sub.chartSpec?.type === 'pie') {
                       p += `   - 🎨 中心透明：若宿主卡片背景图已含中心圆形/icon 图形，环形图（pie）中心**必须保持透明**（不设中心底色/不绘制中心圆），让背景图形从环洞露出；禁止 echarts 自绘中心遮挡背景\n`;
                     }
                   }
@@ -2633,6 +2639,9 @@ export class MicrocodeEngineer extends BaseAgent {
         //   修法：优先原口径 previewAnalysis.charts，回落真实通道 input.charts；
         //   两者皆空时保持空数组（fail-open，行为逐字同旧版）。
         analysisCharts: input?.previewAnalysis?.charts || input?.charts || [],
+        // 🛡️ S2（2026-11-14 · 9ed088e3 实锤）：复用分析阶段冻结的布局事实（单一真值）。
+        //   没有则接管器用同一纯函数本地算一份（口径一致，不会漂移）。
+        layoutFacts: input?.previewAnalysis?.layoutFacts || input?.layoutFacts || null,
         logger: this.logger,
       });
       // 🛡️ Phase E（2026-10-31 治理方案）：接管评估无条件单行可见 + 统计子集回写。
@@ -2656,6 +2665,10 @@ export class MicrocodeEngineer extends BaseAgent {
           this.logger.info('🛡️ 刀 53 确定性接管命中子组件', {
             files: [..._fgFiles.keys()],
             kinds: [..._fgFiles.values()].map((t) => t.kind),
+            // 🛡️ S2：间距改取几何真值的次数 / free-overlay 标记数（0 也打，便于辨「没命中」与「没生效」）
+            layoutGapFromFacts: _fgTakeover.layoutGapFromFacts || 0,
+            overlayMarked: _fgTakeover.overlayMarked || 0,
+            headerRendered: [..._fgFiles.values()].filter((t) => String(t.vue || '').includes('data-section-header')).length,
           });
         }
       }
@@ -2710,14 +2723,17 @@ export class MicrocodeEngineer extends BaseAgent {
       try {
         // 🔴 刀 66-P0：src 记**判据实际取到的那份 plan**（旧口径只记 input 里有什么，
         //   正是「落盘复跑 groups=1 / 运行时 groups=0」不可归因的成因）。
-        const _probeSrc = Array.isArray(input?.subComponentPlan?.effectiveSections)
-          && _isoTreeSections === input.subComponentPlan.effectiveSections
-          ? 'subComponentPlan'
-          : input?.generationInput?.componentPlan
-            ? 'componentPlan'
-            : input?.subComponentPlan
-              ? 'subComponentPlan'
-              : 'none';
+        // 🛡️ G04（2026-11-14）：旧写法用「数组引用相等」判来源，但 resolveIsoPlanSections
+        //   必经 dedupeDuplicateSections（恒返回新数组）⇒ 引用永远不等 ⇒ src 恒落
+        //   `componentPlan` 假绿（真机日志 ISO-PROBE src=componentPlan 即由此而来）。
+        //   改读单一解析器（与 resolvePlanSections / resolveSubComponentPlan 同源），
+        //   degraded 落日志：兼容旧断点吃了投影口时必须可见。
+        const _probeResolution = resolvePlanSourceFromInput(input);
+        const _probeSrc = _probeResolution.source === 'none'
+          ? 'none'
+          : _probeResolution.source === 'subComponentPlan'
+            ? 'subComponentPlan'
+            : 'componentPlan';
         const _probeSegs = (_isoTreeSections || []).map((s) => {
           const content = isoSectionContent(s);
           const bodyKeys = content ? Object.keys(content).join('+') : '-';
@@ -2727,7 +2743,7 @@ export class MicrocodeEngineer extends BaseAgent {
           return `${String(s?.id)}~${v?.eligible ? 'ok' : String(v?.reason || '?')}~${bodyKeys}~e${entries}~${lay.direction || '-'}/${lay.columns ?? '-'}`;
         });
         this.logger.info(
-          `🧬 ISO-PROBE quadrant=mc/max src=${_probeSrc} n=${(_isoTreeSections || []).length} truth=${_isoTruth ? 'yes' : 'no'} segs=[${_probeSegs.join(' | ')}]`,
+          `🧬 ISO-PROBE quadrant=mc/max src=${_probeSrc} degraded=${_probeResolution.degraded ? 1 : 0} n=${(_isoTreeSections || []).length} truth=${_isoTruth ? 'yes' : 'no'} segs=[${_probeSegs.join(' | ')}]`,
         );
       } catch (_isoProbeErr) {
         reportPatchChainError(_isoProbeErr, { logger: this.logger, pass: 'generateCode:iso-probe' });
@@ -8485,6 +8501,11 @@ export class MicrocodeEngineer extends BaseAgent {
         reviseTarget, //  修订目标类别
         ctx, //  1-1 接入：生成上下文值对象（档位/类型/资源映射）
         generationInput, // 🆕 Context Assembler 裁决事实（供 trustVerdict/currentIssues 注入 prompt）
+        // 🛡️ G04（2026-11-14）：execute 此前漏传 subComponentPlan ⇒ generateCode 内
+        //   `input.subComponentPlan` 恒 undefined ⇒ resolveIsoPlanSections 的「全保真原形」
+        //   withContent=0 fail-open 回退到有损投影 ⇒ 刀 66-P0 被架空、同轮双轨口径。
+        //   此处传**原始形参**（planner 全保真），不用下游 subPlan；纯补传，不改其它入参。
+        subComponentPlan,
         _attributionGuidance, // 🛡️ 资源归属指导（方案5，重试轮注入）
         // 🛡️ D 步（2026-08-31）：此前 execute 解构了 _l0CodeRetryGuidance 但重组装 generateCode input 时
         // 丢失该字段 → runChunk 的 isL0BRetry 恒 falsy → L0-B 重试轮 R12 仍从磁盘恢复坏分块（不重新生成）
@@ -9051,7 +9072,26 @@ export class MicrocodeEngineer extends BaseAgent {
           const _idxPath = 'package/index.vue';
           const _idxContent = codeResult.files[_idxPath];
           if (typeof _idxContent === 'string' && _chartTagNames.length > 0) {
-            const _stripped = _stripChartInlineMinHeight(_idxContent, _chartTagNames);
+            // 🛡️ 2026-11-14（6f02cdb0 实锤）：**只对「根 == echarts 容器」的组件剥**。
+            //   真机 ContentTunnel/ContentBridge/ChartSection 的根不是 echarts 容器，
+            //   剥掉 min-height:0 ⇒ flex item 回落 min-height:auto ⇒ 图表段被内容撑高、
+            //   兄弟段被压缩 ⇒ 段高比例与设计不符（用户肉眼可见）。
+            const _stripTags = _chartTagNames.filter((_t) => {
+              const _fp = Object.keys(codeResult.files || {}).find(
+                (k) => k.endsWith(`/${_t}.vue`) || k === `${_t}.vue`,
+              );
+              const _src = _fp ? codeResult.files[_fp] : '';
+              const _refM = typeof _src === 'string' ? _src.match(/echarts\.init\(\s*([A-Za-z_$][\w$]*)\.value/) : null;
+              return _refM ? _chartRootIsEchartsContainer(_src, _refM[1]) : false;
+            });
+            if (_stripTags.length === 0) {
+              this.logger.info(
+                `🎯 [mc] 图表标签 min-height:0 保留（刀 1 跳过）：${_chartTagNames.length} 个图表组件均非「根即 echarts 容器」⇒ 保比例`,
+              );
+            }
+            const _stripped = _stripTags.length
+              ? _stripChartInlineMinHeight(_idxContent, _stripTags)
+              : { code: _idxContent, stripped: [] };
             if (_stripped.stripped.length > 0) {
               codeResult.files[_idxPath] = _stripped.code;
               this.logger.info(

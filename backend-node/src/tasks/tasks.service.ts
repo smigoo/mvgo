@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { promises as fs, existsSync, readFileSync, writeFileSync, mkdirSync, cpSync, readdirSync, statSync, rmSync } from 'fs';
+import { promises as fs, existsSync, readFileSync, writeFileSync, mkdirSync, cpSync, copyFileSync, readdirSync, statSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, dirname, resolve, sep } from 'path';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
@@ -707,7 +707,7 @@ export class TasksService {
           const packageDir = join(componentDir, 'package');
           if (!this.hasRecoverableArtifacts(task, componentDir, packageDir)) continue;
 
-          const syntaxErrors = this.validateVueArtifacts(packageDir);
+          const syntaxErrors = this.collectSyntaxErrorsForRecover(task, packageDir);
           if (syntaxErrors.length > 0) {
             console.warn(
               `[TasksService] 拒绝恢复不可编译产物 ${task.sessionId}: ${syntaxErrors[0]}`,
@@ -718,9 +718,15 @@ export class TasksService {
           await this.restoreWorkspaceArtifacts(task, componentDir, packageDir, groupId);
 
           // 检查是否还有进行中的步骤（避免把 running 任务误判为 completed）
-          const hasRunningStep = (task.progress || []).some(
-            (p: any) => p.type === 'progress' && p.status === 'running'
-          );
+          // 🛡️ P0-4b（2026-11-14 · a9c2f958/ef41c265 实锤）：**终态任务的残留 running 步骤
+          //   不代表"仍在跑"**。cancel/failed 会把 running 步骤留在 progress 里（历史数据尤其如此），
+          //   旧判据因此恒 true ⇒ recover 永远走「产物已存在，任务仍在运行中」分支，
+          //   完整产物永远无法纠正回 completed。只有 status==='running'（崩后启动恢复）才看步骤。
+          const hasRunningStep =
+            task.status === 'running' &&
+            (task.progress || []).some(
+              (p: any) => p.type === 'progress' && p.status === 'running'
+            );
 
           if (hasRunningStep) {
             // 仍有步骤在运行：恢复产物但不改状态，让任务继续跑完
@@ -872,7 +878,7 @@ export class TasksService {
           const packageDir = join(componentDir, 'package');
           if (!this.hasRecoverableArtifacts(task, componentDir, packageDir)) continue;
 
-          const syntaxErrors = this.validateVueArtifacts(packageDir);
+          const syntaxErrors = this.collectSyntaxErrorsForRecover(task, packageDir);
           if (syntaxErrors.length > 0) {
             console.warn(
               `[TasksService] 拒绝手动恢复不可编译产物 ${task.sessionId}: ${syntaxErrors[0]}`,
@@ -883,9 +889,15 @@ export class TasksService {
           this.restoreWorkspaceArtifactsSync(task, componentDir, packageDir, groupId);
 
           // 检查是否还有进行中的步骤（避免把 running 任务误判为 completed）
-          const hasRunningStep = (task.progress || []).some(
-            (p: any) => p.type === 'progress' && p.status === 'running'
-          );
+          // 🛡️ P0-4b（2026-11-14 · a9c2f958/ef41c265 实锤）：**终态任务的残留 running 步骤
+          //   不代表"仍在跑"**。cancel/failed 会把 running 步骤留在 progress 里（历史数据尤其如此），
+          //   旧判据因此恒 true ⇒ recover 永远走「产物已存在，任务仍在运行中」分支，
+          //   完整产物永远无法纠正回 completed。只有 status==='running'（崩后启动恢复）才看步骤。
+          const hasRunningStep =
+            task.status === 'running' &&
+            (task.progress || []).some(
+              (p: any) => p.type === 'progress' && p.status === 'running'
+            );
 
           if (hasRunningStep) {
             task.groupId = groupId;
@@ -945,7 +957,7 @@ export class TasksService {
           : join(componentBase, 'package', 'index.vue');
         if (!wsIndex || !existsSync(wsIndex)) continue;
 
-        const syntaxErrors = this.validateVueArtifacts(join(componentBase, 'package'));
+        const syntaxErrors = this.collectSyntaxErrorsForRecover(task, join(componentBase, 'package'));
         if (syntaxErrors.length > 0) {
           console.warn(
             `[TasksService] 拒绝从 workspace 恢复不可编译产物 ${task.sessionId}: ${syntaxErrors[0]}`,
@@ -956,9 +968,15 @@ export class TasksService {
         const content = readFileSync(wsIndex, 'utf8');
         if (content.includes('<template') && content.length > 200) {
           // 检查是否还有进行中的步骤（避免把 running 任务误判为 completed）
-          const hasRunningStep = (task.progress || []).some(
-            (p: any) => p.type === 'progress' && p.status === 'running'
-          );
+          // 🛡️ P0-4b（2026-11-14 · a9c2f958/ef41c265 实锤）：**终态任务的残留 running 步骤
+          //   不代表"仍在跑"**。cancel/failed 会把 running 步骤留在 progress 里（历史数据尤其如此），
+          //   旧判据因此恒 true ⇒ recover 永远走「产物已存在，任务仍在运行中」分支，
+          //   完整产物永远无法纠正回 completed。只有 status==='running'（崩后启动恢复）才看步骤。
+          const hasRunningStep =
+            task.status === 'running' &&
+            (task.progress || []).some(
+              (p: any) => p.type === 'progress' && p.status === 'running'
+            );
 
           if (hasRunningStep) {
             task.groupId = groupId || task.groupId;
@@ -986,8 +1004,14 @@ export class TasksService {
             ? join(resolveFrontendWorkspace(), 'vue3-components', groupId, task.componentId)
             : join(resolveFrontendWorkspace(), 'custom-components', task.componentId);
           if (!existsSync(frontendWs)) {
-            mkdirSync(frontendWs, { recursive: true });
-            cpSync(componentBase, frontendWs, { recursive: true });
+            // 🛡️ P0-6：前端 workspace 补同步同样走降级，EPERM 不得让恢复流产。
+            try {
+              mkdirSync(frontendWs, { recursive: true });
+              cpSync(componentBase, frontendWs, { recursive: true });
+            } catch (cpErr: any) {
+              this.warnRestoreDegraded(task, frontendWs, cpErr);
+              this.copyTreeResilientSync(componentBase, frontendWs);
+            }
           }
           return true;
         }
@@ -996,6 +1020,23 @@ export class TasksService {
     } catch (err: any) {
       console.warn(`[TasksService] workspace 恢复失败 ${task.sessionId}: ${err.message}`);
       return false;
+    }
+  }
+
+  /**
+   * 🛡️ P0-6（2026-11-14 · ef41c265 实锤）：恢复期语法校验的**失败安全包装**。
+   *   校验器内部涉及临时文件 IO，沙箱态可能抛 EPERM；旧实现让异常冒泡到
+   *   `_tryRecoverTask` 的 catch ⇒ 整条断点恢复流产。现在：校验抛错只 warn 并放行，
+   *   产物仍要过下游 Less / SFC 门禁，不会因此把坏产物当成品。
+   */
+  private collectSyntaxErrorsForRecover(task: Task, packageDir: string): string[] {
+    try {
+      return this.validateVueArtifacts(packageDir);
+    } catch (err: any) {
+      console.warn(
+        `[TasksService] 恢复期语法校验不可用，按放行处理 ${task.sessionId}: ${err?.code || ''} ${err?.message || err}`,
+      );
+      return [];
     }
   }
 
@@ -1061,16 +1102,36 @@ export class TasksService {
     for (const target of targets) {
       await fs.mkdir(target, { recursive: true });
       if (isVue3) {
-        await fs.cp(packageDir, join(target, 'package'), { recursive: true });
+        // 🛡️ P0-6（2026-11-14 · ef41c265 实锤）：恢复链路的整目录复制在沙箱态会命中
+        //   `EPERM: unlink <target>/...`（fs.cp 对已存在目标做覆盖时的删除被策略拦截），
+        //   旧实现在这里**硬抛** ⇒ 整条断点恢复失败、产物白生成。改为「先整目录、失败降级逐文件」。
+        try {
+          await fs.cp(packageDir, join(target, 'package'), { recursive: true });
+        } catch (cpErr: any) {
+          this.warnRestoreDegraded(task, target, cpErr);
+          await this.copyTreeResilientAsync(packageDir, join(target, 'package'));
+        }
         const resourcesDir = join(componentDir, 'resources');
         if (existsSync(resourcesDir)) {
-          await fs.cp(resourcesDir, join(target, 'resources'), { recursive: true });
+          try {
+            await fs.cp(resourcesDir, join(target, 'resources'), { recursive: true });
+          } catch (cpErr: any) {
+            this.warnRestoreDegraded(task, target, cpErr);
+            await this.copyTreeResilientAsync(resourcesDir, join(target, 'resources'));
+          }
         }
       } else {
-        await fs.cp(componentDir, target, {
-          recursive: true,
-          filter: (src) => !src.endsWith('index.html'),
-        });
+        try {
+          await fs.cp(componentDir, target, {
+            recursive: true,
+            filter: (src) => !src.endsWith('index.html'),
+          });
+        } catch (cpErr: any) {
+          this.warnRestoreDegraded(task, target, cpErr);
+          await this.copyTreeResilientAsync(componentDir, target, (src) =>
+            src.endsWith('index.html'),
+          );
+        }
         await this.ensureMicrocodeEntry(target, componentDir);
       }
     }
@@ -1096,19 +1157,120 @@ export class TasksService {
     for (const target of targets) {
       mkdirSync(target, { recursive: true });
       if (isVue3) {
-        cpSync(packageDir, join(target, 'package'), { recursive: true });
+        try {
+          cpSync(packageDir, join(target, 'package'), { recursive: true });
+        } catch (cpErr: any) {
+          this.warnRestoreDegraded(task, target, cpErr);
+          this.copyTreeResilientSync(packageDir, join(target, 'package'));
+        }
         const resourcesDir = join(componentDir, 'resources');
         if (existsSync(resourcesDir)) {
-          cpSync(resourcesDir, join(target, 'resources'), { recursive: true });
+          try {
+            cpSync(resourcesDir, join(target, 'resources'), { recursive: true });
+          } catch (cpErr: any) {
+            this.warnRestoreDegraded(task, target, cpErr);
+            this.copyTreeResilientSync(resourcesDir, join(target, 'resources'));
+          }
         }
       } else {
-        cpSync(componentDir, target, {
-          recursive: true,
-          filter: (src) => !src.endsWith('index.html'),
-        });
+        try {
+          cpSync(componentDir, target, {
+            recursive: true,
+            filter: (src) => !src.endsWith('index.html'),
+          });
+        } catch (cpErr: any) {
+          this.warnRestoreDegraded(task, target, cpErr);
+          this.copyTreeResilientSync(componentDir, target, (src) =>
+            src.endsWith('index.html'),
+          );
+        }
         this.ensureMicrocodeEntrySync(target, componentDir);
       }
     }
+  }
+
+  /**
+   * 🛡️ P0-6（2026-11-14 · ef41c265 实锤）：恢复链路的**降级复制**（异步版）。
+   * 整目录 `fs.cp` 在沙箱态会因覆盖已存在目标触发 `EPERM unlink` 而整体失败；
+   * 这里逐文件 `copyFile`（覆盖写不涉及 unlink），单文件失败只记 warn 不中断，
+   * 保证「能恢复多少恢复多少」，绝不因为一个文件让整条断点恢复流产。
+   */
+  private async copyTreeResilientAsync(
+    src: string,
+    dest: string,
+    skip?: (p: string) => boolean,
+    errors: string[] = [],
+  ): Promise<string[]> {
+    let entries: import('fs').Dirent[] = [];
+    try {
+      entries = await fs.readdir(src, { withFileTypes: true });
+    } catch (e: any) {
+      errors.push(`${src}: ${e.code || ''} ${e.message}`);
+      return errors;
+    }
+    try {
+      await fs.mkdir(dest, { recursive: true });
+    } catch (e: any) {
+      errors.push(`${dest}: ${e.code || ''} ${e.message}`);
+    }
+    for (const ent of entries) {
+      const s = join(src, ent.name);
+      const d = join(dest, ent.name);
+      if (skip && skip(s)) continue;
+      if (ent.isDirectory()) {
+        await this.copyTreeResilientAsync(s, d, skip, errors);
+      } else {
+        try {
+          await fs.copyFile(s, d);
+        } catch (e: any) {
+          errors.push(`${d}: ${e.code || ''} ${e.message}`);
+        }
+      }
+    }
+    return errors;
+  }
+
+  /** 🛡️ P0-6：降级复制（同步版），服务于手动恢复 `_tryRecoverTaskSync`。 */
+  private copyTreeResilientSync(
+    src: string,
+    dest: string,
+    skip?: (p: string) => boolean,
+    errors: string[] = [],
+  ): string[] {
+    let entries: import('fs').Dirent[] = [];
+    try {
+      entries = readdirSync(src, { withFileTypes: true });
+    } catch (e: any) {
+      errors.push(`${src}: ${e.code || ''} ${e.message}`);
+      return errors;
+    }
+    try {
+      mkdirSync(dest, { recursive: true });
+    } catch (e: any) {
+      errors.push(`${dest}: ${e.code || ''} ${e.message}`);
+    }
+    for (const ent of entries) {
+      const s = join(src, ent.name);
+      const d = join(dest, ent.name);
+      if (skip && skip(s)) continue;
+      if (ent.isDirectory()) {
+        this.copyTreeResilientSync(s, d, skip, errors);
+      } else {
+        try {
+          copyFileSync(s, d);
+        } catch (e: any) {
+          errors.push(`${d}: ${e.code || ''} ${e.message}`);
+        }
+      }
+    }
+    return errors;
+  }
+
+  /** 降级留痕：只在首次失败时 warn，避免逐文件刷屏。 */
+  private warnRestoreDegraded(task: Task, target: string, err: any): void {
+    console.warn(
+      `[TasksService] 产物恢复降级为逐文件复制 ${task.sessionId} -> ${target}: ${err?.code || ''} ${err?.message || err}`,
+    );
   }
 
   private async ensureMicrocodeEntry(target: string, componentDir: string): Promise<void> {
@@ -2388,6 +2550,26 @@ export class TasksService {
 
     if (opts.result !== undefined) {
       task.result = opts.result;
+    }
+
+    // 🛡️ P0-4（2026-11-14 · mc-max-1794649936763-a9c2f958 实锤）：
+    //   终态收口必须**同时收尾 progress 里残留的 `running` 步骤**，否则会出现两类假故障：
+    //   ① UI 进度条永远"转"（任务已 cancelled，某步仍 running）；
+    //   ② `recoverTask` 的 `hasRunningStep` 判据恒为 true ⇒ 走「产物已存在，任务仍在运行中」
+    //      分支，**已完整生成的产物永远无法从 cancelled/failed 纠正回 completed**（假失败）。
+    //   语义：completed ⇒ 残留步骤置 completed；failed/cancelled ⇒ 置同状态（并保留原 message），
+    //   保证「任务终态」与「步骤终态」自洽。幂等：无 running 步骤时零改动。
+    if (Array.isArray(task.progress)) {
+      const settled = status === 'completed' ? 'completed' : status;
+      for (const p of task.progress as any[]) {
+        if (p && p.type === 'progress' && p.status === 'running') {
+          p.status = settled;
+          if (settled !== 'completed') {
+            p.message = p.message || `任务已${status === 'cancelled' ? '终止' : '失败'}，该步骤已中断`;
+          }
+          if (!p.endTime) p.endTime = task.endTime;
+        }
+      }
     }
 
     // 监控指标宽表落库（P0-2）：fire-and-forget，失败只记日志、不影响任务主流程。

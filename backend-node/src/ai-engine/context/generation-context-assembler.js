@@ -92,6 +92,13 @@ const BODY_MAX_DEPTH = 4
 const BODY_MAX_NODES_PER_SECTION = 200
 const BODY_MAX_TEXT_LEN = 40
 const BODY_BUDGET_BYTES = 6144
+// 🛡️ G04 观测（2026-11-14）：body 子节点白名单的「已透传」全集。
+//   原 R8-7 droppedKeys 只扫 section 顶层，body 子节点里被剥的 25 类细粒度真值
+//   （charts/series/seriesColors/axes/styles/resourceFile/…）0 留痕 ⇒ S7 断裂长期不可见。
+//   这里把「被剥字段名 + 次数」聚合进 normalization.bodyDroppedKeys（纯附加，不改 plan 结构）。
+const BODY_NODE_PASSTHROUGH_KEYS = new Set([
+  ...BODY_NODE_SCALAR_KEYS, ...BODY_NODE_ARRAY_KEYS, 'content', 'icon',
+])
 
 function normalizeBodyText(value) {
   if (typeof value === 'string') return value.slice(0, BODY_MAX_TEXT_LEN)
@@ -107,6 +114,15 @@ function normalizeBodyNode(node, depth, counter) {
   }
   counter.nodes += 1
   const out = {}
+  // 🛡️ G04：逐节点登记被白名单剥掉的内容型字段（0 也必须可观测，聚合在 normalizeBodyContract）
+  if (counter.droppedKeys) {
+    for (const [key, value] of Object.entries(node)) {
+      if (BODY_NODE_PASSTHROUGH_KEYS.has(key)) continue
+      if (value && typeof value === 'object') {
+        counter.droppedKeys[key] = (counter.droppedKeys[key] || 0) + 1
+      }
+    }
+  }
   for (const key of BODY_NODE_SCALAR_KEYS) {
     const v = normalizeBodyText(node[key])
     if (v !== undefined && v !== '') out[key] = v
@@ -151,11 +167,16 @@ function normalizeBodyContract(body) {
   const contract = {}
   if (typeof body.layout === 'string' && body.layout) contract.layout = body.layout
   if (Number.isFinite(Number(body.gridColumns))) contract.gridColumns = Number(body.gridColumns)
-  const counter = { nodes: 0, truncated: 0 }
+  const counter = { nodes: 0, truncated: 0, droppedKeys: {} }
   const kids = items.arr.map((child) => normalizeBodyNode(child, 0, counter)).filter(Boolean)
   if (kids.length > 0) contract[items.key] = kids
   if (Object.keys(contract).length === 0) return undefined
-  return { contract, nodes: counter.nodes, truncated: counter.truncated }
+  return {
+    contract,
+    nodes: counter.nodes,
+    truncated: counter.truncated,
+    droppedKeys: counter.droppedKeys,
+  }
 }
 
 /** R8-7 droppedKeys 判定的「已透传字段」全集（与本函数 return 的键一一对应）。 */
@@ -325,6 +346,10 @@ function normalizeSectionNode(section, ctx = null) {  if (!section || typeof sec
       ctx.bodySections += 1
       ctx.bodyNodes += bodyResult.nodes
       ctx.bodyTruncated += bodyResult.truncated
+      // 🛡️ G04：body 子节点被剥字段按名计数（0 也出现在 normalization.bodyDroppedKeys={}）
+      for (const [key, count] of Object.entries(bodyResult.droppedKeys || {})) {
+        ctx.bodyDroppedKeys[key] = (ctx.bodyDroppedKeys[key] || 0) + count
+      }
     }
   }
   return {
@@ -436,6 +461,7 @@ export function normalizeComponentPlan(plan) {
   if (!plan || typeof plan !== 'object') return null
   const ctx = {
     droppedKeys: {},
+    bodyDroppedKeys: {},
     repairedAnchors: 0,
     bodySections: 0,
     bodyNodes: 0,
@@ -516,9 +542,6 @@ export function assembleGenerationContext(state = {}) {
   const designFacts = compileDesignFacts({
     figmaNodeData: state.figmaNodeData || state.figmaData,
     visualAnalysis,
-    // 🛡️ 还原增强（RESTORE_ENHANCEMENT）：任务 option 显式开启优先，否则读环境变量兜底；默认 false（零影响）
-    restoreEnhancement:
-      state.restoreEnhancement ?? (process.env.MV_RESTORE_ENHANCEMENT === 'true'),
   })
   const resolution = resolveContextConflicts({
     designFacts,

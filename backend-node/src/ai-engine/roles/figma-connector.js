@@ -15,6 +15,7 @@ import {
 import { join, dirname } from 'path';
 import { createHash } from 'node:crypto';
 import { connect as tlsConnectImpl } from 'node:tls';
+import { promises as dnsPromises } from 'node:dns';
 import { createLogger } from '../logger/index.js';
 import { backendRoot } from '../../config/backend-root.js';
 import tunnel from 'tunnel';
@@ -103,6 +104,21 @@ export class FigmaConnector {
         process.env.FIGMA_NODE_CACHE_TTL_MS ??
         24 * 60 * 60 * 1000,
     );
+    // 🛡️ P0-7（2026-11-14 · mc-max-1794651114530-9ed088e3 实锤）：**设计稿版本比对**层。
+    //    病灶：节点树缓存只按 token 失效 + 24h TTL，**完全不看设计稿有没有被改**
+    //    （实测命中 18.6h 前的树 `ageMs=67028349`，而设计在期间被整理过：容器名从
+    //    `slot-当日总流量` 改成 `0sub-header/1统计/5cards`）⇒ 管线拿旧树跑新判据，
+    //    现场表现成「生成器坏了」，实际是缓存替我们记住了旧世界。
+    //    治本：缓存条目落 `fileVersion`（Figma files API 的 `version`，缺失回落 `lastModified`），
+    //    读缓存前先取当前版本比对；不一致 ⇒ 视为未命中回源重拉。
+    //    🔴 版本查询本身必须 fail-open：查不到就走老 TTL 行为，绝不因版本接口抖动卡死生成。
+    //    🔴 版本结果做短 TTL 内存缓存（默认 60s），同一次生成里多次取节点只回源一次。
+    this._fileVersionTtlMs = Number(
+      config.fileVersionTtlMs ??
+        process.env.FIGMA_FILE_VERSION_TTL_MS ??
+        60 * 1000,
+    );
+    this._fileVersionCache = new Map(); // fileKey → { version, at }
 
     // 代理配置（Figma API 在某些网络环境下必须走代理）- 保留系统配置
     const proxyUrl =
@@ -148,9 +164,9 @@ export class FigmaConnector {
     const probeEnv = String(process.env.FIGMA_CHANNEL_PROBE ?? 'on').toLowerCase();
     this._probeEnabled = !['0', 'false', 'off', 'no'].includes(probeEnv);
     this._connectTimeoutMs = Number(
-      process.env.FIGMA_CONNECT_TIMEOUT_MS ?? 12000,
+      process.env.FIGMA_CONNECT_TIMEOUT_MS ?? 25000,
     );
-    this._totalBudgetMs = Number(process.env.FIGMA_TOTAL_BUDGET_MS ?? 300000);
+    this._totalBudgetMs = Number(process.env.FIGMA_TOTAL_BUDGET_MS ?? 420000);
     // 探测器的 TLS 实现可注入（单测接口；生产恒用 node:tls）
     this._tlsConnect = null;
 
@@ -166,47 +182,13 @@ export class FigmaConnector {
   }
 
   /**
-   * 📡 通道握手探测（2026-11-03 新增，mc-max-1793671867830-acb4cb93 治本）
-   *
-   * 只做 **TCP + TLS 握手**，不发任何 Figma API 请求、不带 Token、不占限流槽。
-   * 判据：握手在 connectTimeoutMs 内完成 ⇒ 通道可用；超时/报错 ⇒ 通道坏。
-   *
-   * 为什么需要：生产 ECS(47.98.216.206) → api.figma.com(AWS CloudFront 65.9.168.x)
-   * 跨境链路偶发「TCP 建连成功(0.1s) 但 TLS 永不完成」或「首字节阶段被 RST」，
-   * 这类失败只能靠吃满 axios 超时才发现；而 axios 的 timeout 同时约束「连接阶段」
-   * 与「socket 空闲」(lib/adapters/http.js)，无法既快失败又保留慢响应预算。
-   * 探测把它们拆开：握手阶段单独短超时，业务阶段继续保留长超时。
-   *
-   * 代理模式下跳过探测：走代理时真实对端是代理（明文 CONNECT，不是 TLS），
-   * 用 TLS 语义探测代理会得到假阴性 ⇒ 交由 tunnel agent 自身处理建隧道。
-   *
-   * @param {string} url 目标 URL（取 host/port 作为探测目标）
-   * @param {number} connectTimeoutMs 握手超时（默认 FIGMA_CONNECT_TIMEOUT_MS=12000）
-   * @returns {Promise<{ok:boolean, phase:string, ms:number, error?:string}>}
+   * 探测单个 host（IP 或域名）的 TLS 握手。
+   * host 传 IP 时，servername 仍传域名以保证 SNI / 证书校验正确。
+   * @returns {Promise<{ok:boolean, phase:string, ms:number, error?:string, host?:string}>}
    */
-  _probeChannel(url, connectTimeoutMs = this._connectTimeoutMs) {
-    if (this.proxyAgent) {
-      return Promise.resolve({ ok: true, phase: 'skipped-proxy', ms: 0 });
-    }
-
-    let hostname = null;
-    let port = 443;
-    try {
-      const u = new URL(url);
-      hostname = u.hostname;
-      port = parseInt(u.port, 10) || (u.protocol === 'https:' ? 443 : 80);
-    } catch {
-      return Promise.resolve({
-        ok: false,
-        phase: 'url',
-        ms: 0,
-        error: 'URL 解析失败',
-      });
-    }
-
+  _probeOne(host, servername, port, connectTimeoutMs) {
     const tlsConnect = this._tlsConnect || tlsConnectImpl;
     const startedAt = Date.now();
-
     return new Promise((resolve) => {
       let done = false;
       let socket = null;
@@ -218,7 +200,7 @@ export class FigmaConnector {
         } catch {
           /* socket 已销毁：忽略 */
         }
-        resolve({ ...res, ms: Date.now() - startedAt });
+        resolve({ ...res, ms: Date.now() - startedAt, host });
       };
 
       const timer = setTimeout(
@@ -230,9 +212,9 @@ export class FigmaConnector {
 
       try {
         socket = tlsConnect({
-          host: hostname,
+          host,
           port,
-          servername: hostname,
+          servername,
           rejectUnauthorized: true,
         });
         socket.once('secureConnect', () => {
@@ -256,6 +238,79 @@ export class FigmaConnector {
         });
       }
     });
+  }
+
+  /**
+   * 📡 通道握手探测（2026-11-03 新增，2026-11-14 增强换 IP 重试）
+   *
+   * 只做 **TCP + TLS 握手**，不发任何 Figma API 请求、不带 Token、不占限流槽。
+   * 判据：握手在 connectTimeoutMs 内完成 ⇒ 通道可用；超时/报错 ⇒ 通道坏。
+   *
+   * 为什么需要：生产 ECS → api.figma.com(AWS CloudFront) 跨境链路偶发
+   * 「TCP 建连成功(0.1s) 但 TLS 永不完成」或「首字节阶段被 RST」。
+   *
+   * 2026-11-14 增强（治本）：CloudFront / AWS 这类 CDN 返回**多个 A 记录**。
+   * 偶发「某个边缘 IP 到本机链路差 / 被 RST」会让 TLS 握手卡死 → connect-timeout，
+   * 而系统 DNS 每次都返回同一顺序的首个 IP，导致重试一直撞同一个坏 IP。
+   * 改为 `dns.lookup(all:true, family:4)` 拿到全部 IPv4，**逐个探测、首个
+   * secureConnect 成功即判通道可用**；全部失败才判坏通道。
+   * 强制 family:4 顺带规避「环境存在 AAAA 且 node 先试 IPv6 卡死」的风险
+   * （与「curl 永远走 IPv4 正常、node 偶发挂起」的现象一致）。
+   *
+   * 代理模式下跳过探测：走代理时真实对端是代理（明文 CONNECT，不是 TLS）。
+   *
+   * @param {string} url 目标 URL（取 host/port 作为探测目标）
+   * @param {number} connectTimeoutMs 单 IP 握手超时（默认 FIGMA_CONNECT_TIMEOUT_MS）
+   * @returns {Promise<{ok:boolean, phase:string, ms:number, error?:string, triedIps?:number}>}
+   */
+  async _probeChannel(url, connectTimeoutMs = this._connectTimeoutMs) {
+    if (this.proxyAgent) {
+      return { ok: true, phase: 'skipped-proxy', ms: 0 };
+    }
+
+    let hostname = null;
+    let port = 443;
+    try {
+      const u = new URL(url);
+      hostname = u.hostname;
+      port = parseInt(u.port, 10) || (u.protocol === 'https:' ? 443 : 80);
+    } catch {
+      return { ok: false, phase: 'url', ms: 0, error: 'URL 解析失败' };
+    }
+
+    const startedAt = Date.now();
+
+    // 🛡️ 拿全部 IPv4，逐个探测换 IP 重试（CDN 多 A 记录场景）
+    let ips = [];
+    try {
+      const looked = await dnsPromises
+        .lookup(hostname, { all: true, family: 4 })
+        .catch(() => null);
+      if (looked && Array.isArray(looked) && looked.length) {
+        ips = looked.map((r) => r.address).filter(Boolean);
+      }
+    } catch {
+      ips = [];
+    }
+
+    if (ips.length === 0) {
+      // DNS 失败：回退到原行为，交给系统解析 hostname
+      return this._probeOne(hostname, hostname, port, connectTimeoutMs);
+    }
+
+    let lastError = null;
+    for (let i = 0; i < ips.length; i += 1) {
+      const r = await this._probeOne(ips[i], hostname, port, connectTimeoutMs);
+      if (r.ok) return r;
+      lastError = r.error;
+    }
+    return {
+      ok: false,
+      phase: 'handshake',
+      error: lastError || 'connect-timeout',
+      ms: Date.now() - startedAt,
+      triedIps: ips.length,
+    };
   }
 
   /**
@@ -576,12 +631,15 @@ export class FigmaConnector {
 
     // 🛡️ 节点数据磁盘缓存读路径：TTL 内命中零网络（见构造函数注释）。
     //    key = fileKey_nodeId(冒号转横杠)_tokenHash8 —— token 变更自动失效，与预览图缓存同纪律。
-    const cacheHit = this._readNodeCache(fileKey, apiNodeId);
+    // 🛡️ P0-7：读缓存前先比对**设计稿版本**（fail-open：取不到版本就退回纯 TTL 行为）。
+    const fileVersion = (await this._fetchFileVersion(fileKey))?.version || null;
+    const cacheHit = this._readNodeCache(fileKey, apiNodeId, fileVersion);
     if (cacheHit !== null) {
       logger.info('✅ Figma节点数据缓存命中，跳过 API', {
         fileKey,
         nodeId,
         ageMs: cacheHit.ageMs,
+        fileVersion: cacheHit.fileVersion,
       });
       return cacheHit.document;
     }
@@ -599,7 +657,7 @@ export class FigmaConnector {
       }
       logger.info('✅ Figma节点数据获取成功');
       // 🛡️ 成功后回写缓存（深拷贝落盘；失败不缓存）
-      this._writeNodeCache(fileKey, apiNodeId, nodeData.document);
+      this._writeNodeCache(fileKey, apiNodeId, nodeData.document, fileVersion);
       return nodeData.document;
     } catch (error) {
       // 保留原有 401/403 友好提示
@@ -664,10 +722,60 @@ export class FigmaConnector {
   }
 
   /**
-   * 读节点缓存：TTL 内命中返回 {document, ageMs}；未命中/过期/禁用/畸形返回 null。
-   * 返回的 document 为深拷贝（防调用方原地修改污染缓存）。
+   * 🛡️ P0-7：取 Figma 文件版本（内存短 TTL + **fail-open**）。
+   *
+   * 语义：只回答「此刻这份设计稿是什么版本」，不参与任何生成判据。
+   * - 内存缓存 `_fileVersionTtlMs`（默认 60s）内直接复用，避免同一次生成反复回源；
+   * - 任何失败（网络/权限/限流/字段缺失）⇒ 返回 null + warn，调用方按老 TTL 行为继续；
+   * - 不写磁盘：版本会变，落盘就是给自己造第二份过期数据。
+   *
+   * @returns {Promise<{version: string, at: number}|null>}
    */
-  _readNodeCache(fileKey, apiNodeId) {
+  async _fetchFileVersion(fileKey) {
+    if (!this.cacheEnabled || !(this._fileVersionTtlMs > 0)) return null;
+    const key = String(fileKey || '').trim();
+    if (!key) return null;
+    const now = Date.now();
+    const memo = this._fileVersionCache.get(key);
+    if (memo && now - memo.at <= this._fileVersionTtlMs) return memo;
+    try {
+      // depth=1：只取文件元信息（version/lastModified/name），不拉整棵树。
+      const url = `https://api.figma.com/v1/files/${key}?depth=1`;
+      const res = await this._figmaApiGet(url, {
+        timeoutMs: 30000,
+        tag: 'fetchFileVersion',
+        maxRetries: 1,
+      });
+      const version = String(
+        res?.data?.version || res?.data?.lastModified || '',
+      ).trim();
+      if (!version) {
+        logger.warn('设计稿版本读取为空（按未取到处理，回落 TTL 策略）', {
+          fileKey: key,
+        });
+        return null;
+      }
+      const rec = { version, at: now };
+      this._fileVersionCache.set(key, rec);
+      return rec;
+    } catch (e) {
+      logger.warn('设计稿版本读取失败（fail-open：回落 TTL 缓存策略）', {
+        fileKey: key,
+        error: e?.message || String(e),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * 读节点缓存：TTL 内命中返回 {document, ageMs, fileVersion}；未命中/过期/禁用/畸形返回 null。
+   * 返回的 document 为深拷贝（防调用方原地修改污染缓存）。
+   *
+   * 🛡️ P0-7：`currentVersion` 非空且与缓存记录的 `fileVersion` 不一致 ⇒ 直接判未命中。
+   * 历史缓存没有 `fileVersion` 字段时**继续复用**（否则一次上线会把存量缓存全部作废、
+   * 每个任务多付一次 121s 回源），只在命中时 warn 一次并在下次写入时补上。
+   */
+  _readNodeCache(fileKey, apiNodeId, currentVersion = null) {
     if (!this.cacheEnabled || !(this._nodeCacheTtlMs > 0)) return null;
     const p = this._nodeCachePath(fileKey, apiNodeId);
     try {
@@ -678,7 +786,28 @@ export class FigmaConnector {
       if (!(Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= this._nodeCacheTtlMs)) {
         return null;
       }
-      return { document: JSON.parse(JSON.stringify(raw.document)), ageMs };
+      const cachedVersion = String(raw.fileVersion || '').trim();
+      if (currentVersion && cachedVersion && cachedVersion !== currentVersion) {
+        logger.info('🧾 设计稿版本已变，节点缓存失效（回源重拉）', {
+          fileKey,
+          nodeId: apiNodeId,
+          cachedVersion,
+          currentVersion,
+        });
+        return null;
+      }
+      if (currentVersion && !cachedVersion) {
+        logger.warn('节点缓存缺 fileVersion（历史缓存），本次按 TTL 复用，写入时补版本', {
+          fileKey,
+          nodeId: apiNodeId,
+          ageMs,
+        });
+      }
+      return {
+        document: JSON.parse(JSON.stringify(raw.document)),
+        ageMs,
+        fileVersion: cachedVersion || null,
+      };
     } catch (e) {
       logger.warn('节点缓存读取失败（视为未命中）', { error: e.message });
       return null;
@@ -686,14 +815,21 @@ export class FigmaConnector {
   }
 
   /** 写节点缓存（成功拉取后调用；失败仅告警不抛——缓存是优化不是依赖） */
-  _writeNodeCache(fileKey, apiNodeId, document) {
+  _writeNodeCache(fileKey, apiNodeId, document, fileVersion = null) {
     if (!this.cacheEnabled || !(this._nodeCacheTtlMs > 0)) return;
     const p = this._nodeCachePath(fileKey, apiNodeId);
     try {
       mkdirSync(this._nodeCacheDir, { recursive: true });
       writeFileSync(
         p,
-        JSON.stringify({ document, savedAt: Date.now(), fileKey, nodeId: apiNodeId }),
+        JSON.stringify({
+          document,
+          savedAt: Date.now(),
+          fileKey,
+          nodeId: apiNodeId,
+          // 🛡️ P0-7：设计稿版本随缓存落盘，供下次读取时比对
+          ...(fileVersion ? { fileVersion } : {}),
+        }),
       );
     } catch (e) {
       logger.warn('节点缓存写入失败（非阻断）', { error: e.message });

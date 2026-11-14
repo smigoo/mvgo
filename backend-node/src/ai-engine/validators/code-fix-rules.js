@@ -16,6 +16,8 @@
  */
 
 import { FIX_PHASE } from './code-fix-pipeline.js';
+// 🛡️ G05：修复轮判据 plan 与生成轮共用同一解析器，禁止再各自回退到归一化投影口。
+import { resolvePlanSource } from '../utils/resolve-plan-source.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import {
   rebindInternalChildDeadProps,
@@ -37,6 +39,8 @@ import {
 } from '../utils/post-process.js';
 import { normalizeCssVarNames } from '../utils/css-var-contract.js';
 import { collectCardGroups, collectCardBgByOwner } from '../utils/card-background-truth.js';
+// 🛡️ S2：布局事实（tab 间距等）与渲染侧同源
+import { inferLayoutFactsForContainer } from '../utils/layout-geom-facts.js';
 import { sizeFromScaleMode } from '../utils/background-size-inference.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 import {
@@ -1749,7 +1753,24 @@ export function injectTabInteractivity(files, figmaNodeData, identifyTabSections
             `      <span class="mc-s4-row-link" data-section-id="${r.id}" style="${ROW_LINK_STYLE}">${r.text}</span>`,
         )
         .join('\n');
-      const block = `\n    <div class="mc-s4-tabblock" data-section-id="${secId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;padding:4px 0;">\n${titleHtml}      <div class="mc-s4-tablist" data-section-id="${listId}" style="display:flex;flex-direction:row;align-items:center;gap:16px;">\n${itemsHtml}\n      </div>\n${linksHtml ? linksHtml + '\n' : ''}    </div>`;
+      // 🛡️ S2（2026-11-14 · 9ed088e3 实锤）：tab 间距取**几何真值**，不再硬编码 16。
+      //   真机：`@antd/tab` 的 itemSpacing = 8.04、几何间距 8 ⇒ 产物写 16 等于把间距放大一倍。
+      //   外层（标题|tabs|按钮）几何上首尾贴边、间距不齐 ⇒ 用 space-between。
+      const _tabInnerNode = nodeById.get(String(secId));
+      const _tabOuterNode = tabParentId ? nodeById.get(String(tabParentId)) : null;
+      const _innerFacts = _tabInnerNode ? inferLayoutFactsForContainer(_tabInnerNode) : null;
+      const _outerFacts = _tabOuterNode ? inferLayoutFactsForContainer(_tabOuterNode) : null;
+      const tabInnerGap =
+        _innerFacts && Number.isFinite(Number(_innerFacts.gap)) ? Number(_innerFacts.gap) : 16;
+      const tabOuterBetween = Boolean(_outerFacts && String(_outerFacts.mode).endsWith('-between'));
+      const tabOuterGap =
+        tabOuterBetween
+          ? 0
+          : _outerFacts && Number.isFinite(Number(_outerFacts.gap))
+            ? Number(_outerFacts.gap)
+            : 16;
+      const tabOuterJustify = tabOuterBetween ? 'justify-content:space-between;' : '';
+      const block = `\n    <div class="mc-s4-tabblock" data-section-id="${secId}" style="display:flex;flex-direction:row;align-items:center;${tabOuterJustify}gap:${tabOuterGap}px;padding:4px 0;">\n${titleHtml}      <div class="mc-s4-tablist" data-section-id="${listId}" style="display:flex;flex-direction:row;align-items:center;gap:${tabInnerGap}px;">\n${itemsHtml}\n      </div>\n${linksHtml ? linksHtml + '\n' : ''}    </div>`;
       // 插入点：①兄弟段（内容区）开标签之前 ②父 section 的兄弟（图表宿主，chart- 锚变体）③根容器闭合前
       let next = null;
       for (const sid of [...siblingIds, ...tabParentSibs]) {
@@ -2241,12 +2262,11 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     });
   }
   // 🛡️ COMP-001 前置自愈（ensure-section-assembly）所需的子组件规划。
-  // 来源优先级：显式 context.componentPlan > input.subComponentPlan（graph 直传）> generationInput.componentPlan（裁决事实）。
-  const componentPlan =
-    context.componentPlan ||
-    input?.subComponentPlan ||
-    input?.generationInput?.componentPlan ||
-    null;
+  //   G05：事实源优先级收敛到 resolvePlanSource（全保真 planner 原形优先，投影口兼容且留痕）。
+  //   `context.componentPlan` 是调用方**显式注入的覆盖参数**，不属于事实源优先级链，
+  //   保留其显式优先语义；除此之外所有规则只读同一个 componentPlan，不再二次读投影口。
+  const _planResolution = resolvePlanSource(input?.generationInput, input?.subComponentPlan);
+  const componentPlan = context.componentPlan || _planResolution.plan;
 
   // S1：把 figmaNodeData 并入 pipeline.context，使各规则 fix(content, ctx) 能拿到 ctx.figmaNodeData
   if (figmaNodeData && pipeline && pipeline.context) {
@@ -2392,10 +2412,9 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
       phase: FIX_PHASE.RESOURCE,
       enabled: () => process.env.RESOURCE_PLANNED_MOUNT !== 'false',
       fixFiles: (files) => {
-        const sections =
-          componentPlan?.effectiveSections ||
-          input?.generationInput?.componentPlan?.effectiveSections ||
-          [];
+        const sections = Array.isArray(componentPlan?.effectiveSections)
+          ? componentPlan.effectiveSections
+          : [];
         const r = engineer._mountPlannedResources(files, sections, resourceDomMapping, {
           ...input,
           figmaNodeData: figmaNodeData || input?.figmaNodeData || null,
@@ -2894,10 +2913,9 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
       name: '段根 flex 真值双向注入（L4）',
       phase: FIX_PHASE.POLISH,
       fixFiles: (files) => {
-        const sections =
-          componentPlan?.effectiveSections ||
-          input?.generationInput?.componentPlan?.effectiveSections ||
-          [];
+        const sections = Array.isArray(componentPlan?.effectiveSections)
+          ? componentPlan.effectiveSections
+          : [];
         const r = applySectionRootFlexTruth(files, sections, figmaNodeData);
         // 计数行铁律：恒打，区分「没跑/跑了没命中/命中多少」
         engineer.logger?.info?.(

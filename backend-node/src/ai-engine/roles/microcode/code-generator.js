@@ -26,6 +26,8 @@ import { enforceInputBudget } from '../../utils/input-budget.js';
 import { getIndexVueChunkBudgets } from './chunk-budget.js';
 import { getProviderPool } from '../../utils/provider-pool.js';
 import { safeLogger } from '../../logger/safe-logger.js';
+// 🛡️ G04：图表父壳挂载判据的 plan 事实源（planner 全保真原形优先）
+import { resolvePlanSourceFromInput } from '../../utils/resolve-plan-source.js';
 import {
   extractResourceVarNames,
   resolveResourceDomMapping,
@@ -33,7 +35,7 @@ import {
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
 import { planRowBands, planColumnGroups, crossAxisCenterStyle } from '../../utils/row-band-cluster.js';
-import { resolveAbsorbedBgLayers, isPanelBgNamed, buildAbsorbedBgParentCss, claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../../utils/container-absorbed-bg.js';
+import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle, claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
 //   才能把它们从 flex 归一化分母里剔除。判据单一来源 = 接管器本身（不在本文件重判）。
@@ -333,9 +335,15 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
  * @param {number} index
  * @returns {string}
  */
-export function flexItemStyleFromWidths(widths, index) {
+export function flexItemStyleFromWidths(widths, index, denominatorOverride) {
   const nums = (Array.isArray(widths) ? widths : []).map((w) => Number(w) || 0);
-  const total = nums.reduce((sum, w) => sum + w, 0);
+  const sumW = nums.reduce((sum, w) => sum + w, 0);
+  // 🛡️ S4（2026-11-14）：与 heights 版同口径 —— 分母可覆盖为 `Σ宽 + Σ间距`，
+  //   否则 `w/Σw` 之和恒为 1，再叠 `margin-left` 就是「100% + 间距」⇒ 横向溢出。
+  const total =
+    Number.isFinite(denominatorOverride) && denominatorOverride > 0
+      ? Number(denominatorOverride)
+      : sumW;
   const w = nums[index] || 0;
   // 🛡️ P6 wrapper 容器化合并（2026-09-17 · 1c98bab9 层次过深实锤）：比例不再由独立
   //   wrapper div 承载，而是直接内联到目标元素（容器 div / 子组件标签）自身的 style。
@@ -376,6 +384,22 @@ export function flexItemStyleFromWidths(widths, index) {
 const SIBLING_GAP_MAX_PX = 100;
 
 export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, guardStats = null) {
+  const px = siblingGapPx(prevBox, curBox, axis, prevEffectiveSize, guardStats);
+  if (!(px > 0)) return '';
+  return `${axis === 'vertical' ? 'margin-top' : 'margin-left'}:${Math.round(px)}px;`;
+}
+
+/**
+ * 🛡️ S4（2026-11-14 · 9ed088e3 实锤）：兄弟间距的**数值**版本（单一实现，供分母使用）。
+ *
+ * 病灶：`flex:<h/Σh>` 之和恒为 1，再叠 `margin-top` ⇒ 子项总高 = 容器 100% + Σgap
+ *   ⇒ 必然溢出（真机 101px / 807 画布 = 12.5%，末段被压）。
+ * 正解：flex 分母改为 `Σh + Σgap`，把间距份额让出来（Σflex < 1，剩余量正好是 Σmargin）。
+ *
+ * 与 `siblingGapStyle` 同一判据（含 G1 超限守卫），区别只是返回数字。
+ * @returns {number} >0 的间距像素；不合法/贴合/超限 ⇒ 0
+ */
+export function siblingGapPx(prevBox, curBox, axis, prevEffectiveSize = 0, guardStats = null) {
   const ok = (b) =>
     b &&
     Number.isFinite(b.x) &&
@@ -384,7 +408,7 @@ export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, gu
     Number.isFinite(b.h) &&
     b.w > 0 &&
     b.h > 0;
-  if (!ok(prevBox) || !ok(curBox)) return '';
+  if (!ok(prevBox) || !ok(curBox)) return 0;
   const vertical = axis === 'vertical';
   // 🔴 刀16b（2026-11-03 · mc-1793686933827-7a07febd 实锤）：间距基准必须与 flex 分配**同源**。
   //   病灶：prev 的段盒常只是**段标题 GROUP**（`2:3559 标题` y=162 h=24），而 flex 分配用的是
@@ -404,14 +428,13 @@ export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, gu
   const gap = vertical
     ? curBox.y - (prevBox.y + prevExtent)
     : curBox.x - (prevBox.x + prevExtent);
-  if (!Number.isFinite(gap) || gap < 1) return '';
+  if (!Number.isFinite(gap) || gap < 1) return 0;
   // 🛡️ G1：异常间距守卫（在刀16b 同源修正之后——仍超限说明盒输入本身被推歪）
   if (gap > SIBLING_GAP_MAX_PX) {
     if (guardStats && typeof guardStats === 'object') guardStats.guarded = (guardStats.guarded || 0) + 1;
-    return '';
+    return 0;
   }
-  const prop = vertical ? 'margin-top' : 'margin-left';
-  return `${prop}:${Math.round(gap)}px;`;
+  return Math.round(gap);
 }
 
 /**
@@ -423,9 +446,27 @@ export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, gu
  * @param {number} index
  * @returns {string}
  */
-export function flexItemStyleFromHeights(heights, index, denominatorOverride) {
+/**
+ * 🛡️ P0-10（2026-11-14 · 用户实测「最后的折线图比设计稿明显更高」）：**纵向改 px basis**。
+ *
+ * 病灶：`flex:<h/Σh>` 是 grow 型比例，flexbox 会把容器**剩余空间按比例分光** ⇒ 只要容器
+ *   比设计内容高，每一段都被等比放大，且**绝对偏差与段高成正比**（真机：容器 807 时
+ *   折线图 141 → 153.5，+12.5px / +9%；标题 24 → 26，+2px 几乎看不出来）⇒ 视觉上
+ *   "越高的段越像错的"。
+ *
+ * ⚠️ 2026-11-14 用户否决 inline px 方案（`flex:0 1 131px`）：
+ *   **DOM 上不允许直接写尺寸** —— 项目靠 `postcss-pxtorem`（vite.config.js:468，
+ *   rootValue = config.pxtorem.baseSize）把 less/css 里的 px 转 rem 做适配；inline style
+ *   不经过 postcss ⇒ px 永远不转 ⇒ 大屏/rem 适配失效。
+ *   故本函数只输出**比例**（无尺寸）；若要段高与设计 1:1，尺寸必须进样式表（less），
+ *   由 px2rem 统一转换后以 class 承载（见 docs 里的方案 D 评估）。
+ */
+const USE_PX_BASIS = () => false;
+
+export function flexItemStyleFromHeights(heights, index, denominatorOverride, forceRatio = false) {
   const nums = (Array.isArray(heights) ? heights : []).map((h) => Number(h) || 0);
   const sumH = nums.reduce((sum, h) => sum + h, 0);
+  const px = nums[index] || 0;
   // 🛡️ G10v2：分母可覆盖为 `Σ子项高 + Σ兄弟间距`（= 容器可用高的真实份额）。
   //   否则 `h/Σh` 之和恒为 1，再叠 margin 就是「100% + 间距」⇒ 必然溢出。
   const total =
@@ -558,8 +599,6 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let __absorbedBgCandidates = 0;
   let __absorbedBgLayers = 0;
   let __absorbedBgScrollbarExempted = 0;
-  // 🛡️ 面板底规范（2026-11-13 用户申明）：根宿主层中 bg 命名（面板背景）被丢弃的数量
-  let __absorbedBgPanelBgDropped = 0;
   // 🛡️ 刀 7c（2026-11-03 · `807:2`/`43:5688` 实锤）：根级宿主吸收背景层计数。
   //   顶层非容器叶子段的盒 ≡ 图根盒时，其吸收层注入根 slot-con div。
   let __absorbedBgRootHostCandidates = 0;
@@ -568,7 +607,14 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   // 🛡️ 刀 12（2026-10-27 · ad8939a5 `801:3` 实锤）：2D 行簇重建计数。
   let __rowBandEvaluated = 0;
   let __rowBandHits = 0;
-  let __gapApplied = 0; // 刀16 兄弟间距真值注入计数
+  let __gapApplied = 0;
+  // 🛡️ S4：分母已含 Σgap 的容器数（0 也打，便于辨「没命中」与「没生效」）
+  let __gapDenominatorApplied = 0;
+  // 🛡️ px basis 因覆盖率不足退回比例填满的容器数（0 也打）
+  let __pxBasisFallback = 0;
+  // 🛡️ 方案 E：段高 class 规则收集（less 片段，px 由 px2rem 转 rem）
+  const __secHeightRules = [];
+  let __pxHeightSkipped = 0; // 刀16 兄弟间距真值注入计数
   let __gapRebased = 0; // 刀16b 间距基准被上移到「与 flex 同源高度」的注入数（修双计）
   let __canvasMismatchCount = 0; // G10 v1 画布收敛复核拦停数（兄弟盒跨度 vs 容器高偏差>15%）
   let __ratioCanvasGroups = 0; // G10 v2 进入「Σ子项高+Σ间距 vs 容器高」复核的竖排容器数
@@ -734,8 +780,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       //   ① 根节点直系子中存在 RECTANGLE，且其 bbox ≡ 根 bbox（±2px，同 boxEq）；
       //   ② 该子未被任何段认领（claimedNodeIds ∩ 自身 id 为空）且不在 consumedBgIds；
       //   ③ fill 可 CSS 化（resolveAbsorbedBgLayers 同一裁决：SOLID 或 ≥2 stops 渐变）。
-      //   命中 ⇒ 壳层并入根宿主层（面板底规范后由 buildAbsorbedBgParentCss 挂根 div
-      //   内联 CSS；bg 命名壳由下方 R3 过滤丢弃），与刀 7c 同构，禁第二份样式拼装。
+      //   命中 ⇒ 构造 absolute 全覆盖层注入根 slot-con div（z-index:-1 沉底），
+      //   与刀 7c 注入同构（同 buildAbsorbedBgLayerStyle，禁第二份样式拼装）。
       //   不命中枚举：7c 已命中（rootHostLayers 非空）跳过；壳尺寸 ≠ 根尺寸（部分宽
       //   条/装饰条）不属「壳」，走段级通路；SOLID/渐变都不可 CSS 化跳过（fail-open）；
       //   IMAGE fill 跳过（位图走 E3-v4 资源通路）。
@@ -769,7 +815,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             for (const layer of r.layers) {
               rootHostLayers.push({
                 ...layer,
-                edgeCss: 'left:0;right:0;top:0;bottom:0;',
+                edgeCss: 'left:0;top:0;right:0;bottom:0;',
               });
             }
             consumedBgIds.add(shellId);
@@ -873,9 +919,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   此前它是 block（display 由 LLM 的 less 决定），顶层容器/叶子失去 flex item 身份，
     //   高度只能靠 less 里的 height:100%（LLM 写了才有）。确定化后整条链从 pannel-content
     //   → slot-con → 容器 → wrapper → 子项 全程 flex 传导，不再依赖 LLM 样式。
-    // 🛡️ 刀 7c（2026-11-03）：根级宿主的吸收层挂根 div —— 与容器分支**同构**
-    //   （🛡️ 面板底规范 2026-11-13：不再产 DOM 子层，bg 合并为根 div 自身内联 CSS，
-    //   bg 命名的组件直接子按 R3 丢弃）。
+    // 🛡️ 刀 7c（2026-11-03）：根级宿主的吸收层注入根 div —— 与刀 7b 对容器所做的事**同构**
+    //   （`position:relative;isolation:isolate;` 把 `z-index:-1` 层圈进本层叠上下文，
+    //   沉到内容之下、根 div 背景之上）。
     //   🔴 样式**必须条件注入**：`code-generator.deterministic-template.spec.ts:80` 逐字断言
     //   无层时根 div 为 `class="c-…-slot-con" style="display:flex;flex-direction:column;"`；
     //   其 fixture（makeInput）不含 figmaNodeData ⇒ indexFigmaNodes 空 Map ⇒ 恒 0 层 ⇒ 逐字不变。
@@ -883,35 +929,11 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   根元素已带 `data-section-id="<该段id>"`（如 ContentFooter.vue 带 807:2），而
     //   `figma-connector.js:2580` 生成的 `[data-section-id="<id>"]` 是资源挂载锚 / 评分选择器
     //   ⇒ 同名会让该选择器在同页**双命中**（背景错挂 + mount-target-scoring 派分污染）。
-    // 🛡️ 面板底规范（2026-11-13 用户申明，R3）：组件直接子 bg/bg-xxxx = 面板背景，
-    //   微码组件**不允许生成面板**（含面板背景与标题）⇒ 根宿主层中 bg 命名的节点一律
-    //   **丢弃**（不产 DOM 也不产 CSS）。判据单一来源：`isPanelBgNamed`
-    //   （与 figma-connector `_isNonSemanticName` 的 /^bg(\b|[-_])/i 同源，命名即真值）。
-    //   非 bg 命名的根直接子（如装饰条）按 R4 挂根 div 内联 CSS（见 buildAbsorbedBgParentCss）。
-    //   丢弃是终局：consumedBgIds 已含其 id，其余容器不会再吸收。
-    if (rootHostLayers.length && figmaIndex && typeof figmaIndex.get === 'function') {
-      const kept = [];
-      for (const layer of rootHostLayers) {
-        const rec = figmaIndex.get(String(layer.id));
-        const nm = String(rec?.rawNode?.name || rec?.node?.name || '');
-        if (isPanelBgNamed(nm)) {
-          __absorbedBgPanelBgDropped += 1;
-          continue;
-        }
-        kept.push(layer);
-      }
-      rootHostLayers = kept;
-    }
-    // 🛡️ 面板底规范（2026-11-13 用户申明，R4）：bg 一律不产独立 DOM（旧 c-*-absorbed-bg
-    //   div + z-index:-1 形态废除），合并为根 div 自身内联 CSS；刀 7b 的
-    //   relative/isolation 层叠上下文问题随 DOM 子层消亡而消亡（背景画在父自身）。
-    //   data-absorbed-bg 审计锚（层 id 逗号串）迁到根 div 属性，排查抓手不丢。
-    const rootAbsorbed = buildAbsorbedBgParentCss(rootHostLayers);
     const rootHostAttr =
       rootHostLayers.length && rootHostSection
-        ? ` data-absorbed-host="${rootHostSection.id}" data-absorbed-bg="${rootAbsorbed.ids}"`
+        ? ` data-absorbed-host="${rootHostSection.id}"`
         : '';
-    const rootHostStyle = rootAbsorbed.css;
+    const rootHostStyle = rootHostLayers.length ? 'position:relative;isolation:isolate;' : '';
     // 🛡️ 弹窗画板尺寸契约（2026-11-12 · mc-max-1794418321523-46ef66fa 实锤）：
     //   大屏画板根（如 2:7952 420×147）预览时应横向铺满（宽高比悬殊、卡片流）；
     //   弹窗/面板类画板根（如 36:1693 603×555，宽高比 ≈1）被 `height:100%` 拉满
@@ -954,9 +976,11 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   治本：把高度契约定在**产生处**（内联样式优先级最高，免疫后续合并/反杀），
     //   与既有正常组件的 `.c-…-slot-con{width:100%;height:100%;min-height:0}` 同口径。
     lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHeightStyle}min-height:0;${rootSizeStyle}${rootHostStyle}">`);
-    // 🛡️ 面板底规范（2026-11-13 用户申明）：bg 不再生成独立 DOM 层（旧 c-*-absorbed-bg
-    //   div 废除）——背景已合并进根 div 内联 style（rootHostStyle），层 id 审计锚在
-    //   data-absorbed-bg 属性。此处刻意不输出任何背景子元素。
+    for (const layer of rootHostLayers) {
+      lines.push(
+        `      <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
+      );
+    }
     // 🛡️ E1 治本（2026-09-16）：递归保留容器层级。此前用 bodyLeavesFinal 平铺叶子，
     //   switch/@antd-tab 等中间容器被丢弃 → active/default/tabs/cons 全部平级，
     //   用户指正「switch 没有组成一个元素，而是和下面所有内容全部 flex 了」。
@@ -970,7 +994,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   · 叶子子组件标签：吃父比例（parentFlexStyle，Vue attrs 继承透传到子组件根元素）
     //   一层承载全部职责，wrapper 整体消失。传导链不变：
     //   pannel-content → slot-con → 容器(比例+方向) → 子元素(比例) 全程 flex。
-    const renderBodyNode = (sec, indent, parentFlexStyle = '') => {
+    const renderBodyNode = (sec, indent, parentFlexStyle = '', extraClass = '') => {
       // 入槽叶在任意嵌套深度都不得再由 body 渲染；归属只读结构契约。
       if (structureContract.byId.get(String(sec?.id ?? ''))?.placement === 'header-right') return;
       const pad = '      ' + '  '.repeat(indent);
@@ -1066,18 +1090,21 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         if (intrinsic.ok) __intrinsicHits += 1;
         const intrinsicPad = buildIntrinsicContainerStyle(intrinsic);
         // 🛡️ 刀 7（2026-10-27 · 8bbcf027 `36:1695` 实锤）：容器 sourceNodeIds 里未被
-        //   叶子认领的可见 SOLID/渐变底卡 ⇒ 渲染为**容器自身内联背景 CSS**。
+        //   叶子认领的可见 SOLID 底卡 ⇒ 渲染为绝对定位背景层（边锚定 + z-index:-1 沉底）。
         //   归属已在上方自底向上预分配（最近容器独占），此处只消费自己名下的层。
-        //   （历史：刀 7b 曾为 z-index:-1 DOM 子层补 position:relative/isolation:isolate
-        //   层叠上下文；面板底规范后 DOM 子层废除，该问题随之消亡。）
-        //   🛡️ 面板底规范（2026-11-13 用户申明，R4）：bg 一律不产独立 DOM——旧
-        //   `c-*-absorbed-bg` div + z-index:-1 形态废除，连同刀 7b 的
-        //   position:relative/isolation:isolate（层叠上下文问题随 DOM 子层消亡而消亡），
-        //   改挂容器 div 内联 CSS；data-absorbed-bg 审计锚迁到容器 div 属性。
+        //   容器需 position:relative 作定位参照；无层 ⇒ 产物逐字不变（零回归）。
+        // 🛡️ 刀 7b（2026-10-27 · ad8939a5 真机实锤）：z-index:-1 的层在**未形成层叠上下文**
+        //   的 relative 容器里会参与最近祖先层叠上下文 ⇒ 沉到 base-panel 面板底之下 = 不可见
+        //   （CSS 涂序：负 z-index 涂在「同一层叠上下文」祖先背景之后）。isolation:isolate
+        //   让容器自成层叠上下文，把 -1 层圈在容器内（高于祖先背景、低于容器内容）。
         const absorbedLayers = bgLayersByContainer.get(String(sec.id)) || [];
-        const absorbedCss = buildAbsorbedBgParentCss(absorbedLayers);
-        const absorbedAttr = absorbedLayers.length ? ` data-absorbed-bg="${absorbedCss.ids}"` : '';
-        lines.push(`${pad}<div class="${cls}"${sectionIdAttr}${absorbedAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${absorbedCss.css}">`);
+        const relativeStyle = absorbedLayers.length > 0 ? 'position:relative;isolation:isolate;' : '';
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${relativeStyle}">`);
+        for (const layer of absorbedLayers) {
+          lines.push(
+            `${pad}  <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
+          );
+        }
         // 🛡️ P2 修复（2026-09-17）：水平 flex 子项按 Figma 实际宽度比例分配 flex-grow，
         //   替代旧版统一 flex:1 均分（此前 tabs 46px 和 cons 367px 被 50:50 均分，严重失真）。
         //   计算逻辑：收集所有子节点宽度 → 求和 → 每个子项 flex-grow = width / totalWidth。
@@ -1315,7 +1342,12 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   自身就是 flex item，无需 wrapper 中转。无分配时回退 flex:1;min-height:0
         //   （顶层叶子直挂 slot-con 的兜底，slot-con 是 column 容器）。
         const leafStyle = consumedLayoutStyle || parentFlexStyle || 'flex:1;min-height:0;';
-        lines.push(`${pad}<${tagFor(sec, 'ContentSection')} style="${leafStyle}" />`);
+        // 🛡️ 方案 E（2026-11-14 用户硬约束）：段高**不进 inline**（px2rem 不处理 inline style），
+        //   改由 `class="c-…-sech-i"` 承载，规则写进 index.vue 的 `<style lang="less" scoped>`
+        //   （less 里的 px 会被 postcss-pxtorem 转 rem，大屏适配才成立）。
+        //   inline 仍保留比例（无尺寸，合规），class 规则用 !important 覆盖它。
+        const _clsAttr = extraClass ? ` class="${extraClass}"` : '';
+        lines.push(`${pad}<${tagFor(sec, 'ContentSection')}${_clsAttr} style="${leafStyle}" />`);
       }
     };
     // 🛡️ 刀 12（2026-10-27 · ad8939a5 `801:3` 实锤）：2D 行簇渲染。
@@ -1339,24 +1371,32 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       lines.push(
         `${pad}<div class="c-${semantic}-band" style="${flexStyle}${alignSelf}display:flex;flex-direction:${node.direction};${isRowBand ? 'align-items:stretch;' : ''}">`,
       );
+      // 🛡️ S4：带内兄弟同样先把间距算进分母（否则 row 带横向溢出、column 组纵向溢出）
+      const __bandGaps = node.children.map((_, i) =>
+        i > 0
+          ? siblingGapPx(
+              node.children[i - 1].box,
+              node.children[i].box,
+              isRowBand ? 'horizontal' : 'vertical',
+              0,
+              __gapGuardStats,
+            )
+          : 0,
+      );
+      const __bandGapSum = __bandGaps.reduce((a, g) => a + (Number(g) || 0), 0);
+      const __bandDen = sizes.reduce((a, v) => a + (Number(v) || 0), 0) + __bandGapSum;
+      if (__bandGapSum > 0) __gapDenominatorApplied += 1;
       for (let i = 0; i < node.children.length; i++) {
         // 🛡️ 刀16：带内兄弟间距（row 带看 x 差、column 组看 y 差）
-        const innerGap =
-          i > 0
-            ? siblingGapStyle(
-                node.children[i - 1].box,
-                node.children[i].box,
-                isRowBand ? 'horizontal' : 'vertical',
-                0,
-                __gapGuardStats,
-              )
-            : '';
+        const __gpx2 = __bandGaps[i] || 0;
+        const innerGap = __gpx2 > 0 ? `${isRowBand ? 'margin-left' : 'margin-top'}:${Math.round(__gpx2)}px;` : '';
         if (innerGap) __gapApplied += 1;
         renderBandNode(
           node.children[i],
           indent + 1,
-          (isRowBand ? flexItemStyleFromWidths(sizes, i) : flexItemStyleFromHeights(sizes, i)) +
-            innerGap,
+          (isRowBand
+            ? flexItemStyleFromWidths(sizes, i, __bandDen > 0 ? __bandDen : undefined)
+            : flexItemStyleFromHeights(sizes, i, __bandDen > 0 ? __bandDen : undefined)) + innerGap,
           // 居中只作用根的直接子项（嵌套组不再继承——组内对齐由组自身判据决定）
           '',
         );
@@ -1376,6 +1416,34 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       const topHeights = topBodyRoots.map((s) =>
         isSizeExcluded(s) ? 0 : resolveHeightWithTakeover(s),
       );
+      // 🛡️ S4（2026-11-14）：先算兄弟间距，再定 flex 分母。
+      //   病灶：`flex:<h/Σh>` 之和恒为 1，再叠 `margin-top` ⇒ 总高 = 容器 + Σgap ⇒ 溢出
+      //   （真机 101px/807）。分母改为 `Σh + Σgap`：Σflex < 1，剩余份额正好容纳 margin。
+      const __topGaps = topBodyRoots.map((_, i) => {
+        if (i === 0) return 0;
+        const prevB = resolveSectionBox(topBodyRoots[i - 1], figmaIndex);
+        const curB = resolveSectionBox(topBodyRoots[i], figmaIndex);
+        return siblingGapPx(prevB, curB, 'vertical', topHeights[i - 1], __gapGuardStats);
+      });
+      const __topGapSum = __topGaps.reduce((a, g) => a + (Number(g) || 0), 0);
+      const __topDen =
+        topHeights.reduce((a, h) => a + (Number(h) || 0), 0) + __topGapSum;
+      if (__topGapSum > 0) __gapDenominatorApplied += 1;
+      // 🛡️ px basis 护栏：Σ(真值高+间距) 占设计容器高的比例太低 ⇒ 说明分段退化/内容缺失，
+      //   这时用 basis 会留下大片空白，退回比例填满更稳；同时计数便于发现「分段退化」样本。
+      // 设计容器高用「子项盒跨度」近似（不依赖根节点 id）：span = max(bottom) − min(top)。
+      const __topBoxes = topBodyRoots
+        .map((s) => resolveSectionBox(s, figmaIndex))
+        .filter(Boolean);
+      const __designH = __topBoxes.length
+        ? Math.max(...__topBoxes.map((b) => b.y + b.h)) - Math.min(...__topBoxes.map((b) => b.y))
+        : 0;
+      const __basisRatio =
+        __designH > 0
+          ? (topHeights.reduce((a, h) => a + (Number(h) || 0), 0) + __topGapSum) / __designH
+          : 1;
+      const __basisOk = __basisRatio >= 0.85;
+      if (!__basisOk) __pxBasisFallback += 1;
       for (let i = 0; i < topBodyRoots.length; i++) {
         // 🛡️ 刀16：顶层兄弟纵向间距（真值 y 差）
         //   🔴 刀16b：prev 基准与 flex 同源 —— topHeights[i-1] 就是该兄弟拿到的分配高度
@@ -1383,19 +1451,35 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   → `2:3570`：旧算法 737−(162+24)=551（把 556 正文又算一遍），修正后 737−(162+556)=19。
         const prevTopBox =
           i > 0 ? resolveSectionBox(topBodyRoots[i - 1], figmaIndex) : null;
-        const topGap =
-          i > 0
-            ? siblingGapStyle(
-                prevTopBox,
-                resolveSectionBox(topBodyRoots[i], figmaIndex),
-                'vertical',
-                topHeights[i - 1],
-                __gapGuardStats,
-              )
-            : '';
+        const __gpx = __topGaps[i] || 0;
+        const topGap = __gpx > 0 ? `margin-top:${Math.round(__gpx)}px;` : '';
         if (topGap) __gapApplied += 1;
         if (topGap && prevTopBox && topHeights[i - 1] > prevTopBox.h) __gapRebased += 1;
-        renderBodyNode(topBodyRoots[i], 0, flexItemStyleFromHeights(topHeights, i) + topGap);
+        // 🛡️ 方案 E：真值高写进 class 规则（less ⇒ px2rem 转换），模板只挂 class。
+        //   仅叶子段参与（容器段要改结构，风险大），非叶子计 `pxHeightSkipped`。
+        let _secCls = '';
+        const _h = Number(topHeights[i]) || 0;
+        if (_h > 0 && !isLayoutContainerSection(topBodyRoots[i])) {
+          _secCls = `c-${semantic}-sech-${i + 1}`;
+          __secHeightRules.push({
+            cls: _secCls,
+            h: Math.round(_h),
+            gap: Math.round(__topGaps[i] || 0),
+          });
+        } else if (_h > 0) {
+          __pxHeightSkipped += 1;
+        }
+        renderBodyNode(
+          topBodyRoots[i],
+          0,
+          flexItemStyleFromHeights(
+            topHeights,
+            i,
+            __topDen > 0 ? __topDen : undefined,
+            !__basisOk,
+          ) + topGap,
+          _secCls,
+        );
       }
     } else {
       for (const root of topBodyRoots) renderBodyNode(root, 0);
@@ -1416,6 +1500,16 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     // 🛡️ G10v2 生效自检（0 也打）：`groups` = 进入「Σ子项高+Σ间距 vs 容器高」复核的竖排容器数；
     //   `mismatch` = 判比例不可信并弃用 flex 的容器数（>0 = 真有容器被拦下，
     //   与「没跑」用 groups 区分）。本刀只拦不修：段锚归位属 G3/上游。
+    // 🛡️ S4：间距已计入 flex 分母的容器数（0 也打）
+    options.logger.info('🛡️ S4 间距计入 flex 分母·已评估', {
+      gapDenominatorApplied: __gapDenominatorApplied,
+      gapApplied: __gapApplied,
+    });
+    // 🛡️ P0-10：px basis 生效/退避计数（0 也打 —— 辨「没命中」与「没生效」）
+    options.logger.info('🛡️ P0-10 段高 px basis·已评估', {
+      pxBasisFallback: __pxBasisFallback,
+      pxBasisEnabled: USE_PX_BASIS(),
+    });
     options.logger.info('🛡️ G10v2 段高比例画布收敛·已评估', {
       groups: __ratioCanvasGroups,
       mismatch: __ratioCanvasMismatch,
@@ -1433,8 +1527,6 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       candidates: __absorbedBgCandidates,
       layers: __absorbedBgLayers,
       scrollbarExempted: __absorbedBgScrollbarExempted,
-      // 🛡️ 面板底规范（2026-11-13）：根宿主层中 bg 命名（面板背景）丢弃数，>0 = 按规范不渲染
-      panelBgDropped: __absorbedBgPanelBgDropped,
     });
     // 🛡️ 刀 7c 生效自检（2026-11-03）：`candidates` = 非容器段经「直系子枚举」后
     //   「未认领且 type=RECTANGLE」的节点数（0 = 无直系子可枚举 / 全被认领）；
@@ -1477,7 +1569,15 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       applied: __takeoverHeightFallbacks,
     });
   }
-  return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };
+  // 🛡️ 方案 E：段高样式片段（less 语法，px 由 postcss-pxtorem 转 rem）。
+  //   !important 用于压过模板上的比例内联样式（内联无尺寸，只承载比例与方向）。
+  const layoutStyle = __secHeightRules
+    .map(
+      (r) =>
+        `  .${r.cls} { flex: 0 1 ${r.h}px !important; min-height: 0${r.gap > 0 ? `; margin-top: ${r.gap}px !important` : ''}; }`,
+    )
+    .join('\n');
+  return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles, layoutStyle, pxHeightSkipped: __pxHeightSkipped };
 }
 
 /**
@@ -1683,6 +1783,34 @@ export function applySectionTakeovers(template, takeovers) {
  *   LLM 组件内容（调用方须**跳过**这些子组件的 LLM 重新生成，否则会被覆盖 ⇒ 交互丢失）。
  *   未生效（判据未命中 / 取不到内容）的接管**不出现**在返回值里 ⇒ 调用方据此判定 0 命中即零行为变更。
  */
+
+/**
+ * 🛡️ 方案 E（2026-11-14 · 用户硬约束「DOM 上不允许直接写尺寸」）：把段高 less 规则注入 index.vue。
+ *
+ * 为什么不能 inline：项目用 `postcss-pxtorem`（vite.config.js）把 **less/css 里的 px → rem**，
+ *   inline style 不经过 postcss ⇒ px 永不转换 ⇒ 大屏适配失效。
+ * 注入位置：已有的 `<style lang="less" scoped>` 块末尾（没有则追加一个），与既有 `@import` 并存。
+ *
+ * @param {string} content index.vue 内容
+ * @param {string} rules less 规则片段（可多行，已缩进）
+ * @returns {string}
+ */
+export function injectLayoutStyle(content, rules) {
+  if (typeof content !== 'string' || !content || !rules || !String(rules).trim()) return content;
+  // 已在末尾则不重复注入（幂等：apply 可能被多轮调用）
+  if (content.includes('mvgo-layout-truth')) return content;
+  const payload = `\n  /* mvgo-layout-truth：段高真值（px 由 postcss-pxtorem 转 rem，勿改为 inline） */\n${rules}\n`;
+  const styleRe = /<style\b[^>]*lang=["']less["'][^>]*>([\s\S]*?)<\/style>/i;
+  const m = content.match(styleRe);
+  if (m) {
+    const body = m[1].replace(/\s*$/, '\n');
+    const replaced = `<style lang="less" scoped>${body}${payload}</style>`;
+    return content.replace(styleRe, replaced);
+  }
+  // 无 less style 块 ⇒ 追加一个（scoped：段 class 只作用于本组件模板元素）
+  return `${content.replace(/\s*$/, '')}\n\n<style lang="less" scoped>${payload}</style>\n`;
+}
+
 export function applyDeterministicIndexTemplate(content, input, options = {}) {
   const src = typeof content === 'string' ? content : '';
   if (!src) return { content: src, applied: false, facts: null, reason: 'empty-content' };
@@ -1744,6 +1872,13 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
   }
 
   let out = src.slice(0, block.start) + planTemplate + src.slice(block.end);
+  // 🛡️ 方案 E（2026-11-14）：把段高规则注入 `<style lang="less" scoped>`。
+  //   为什么必须走样式表：inline style 不经过 postcss ⇒ px2rem 不转换 ⇒ 大屏/rem 适配失效。
+  //   为什么加 !important：模板上仍内联着比例（`flex:0.176`，只为方向/兜底，无尺寸），
+  //   类规则的优先级低于 inline，必须 !important 才能让"真值 px"最终生效。
+  if (det.layoutStyle) {
+    out = injectLayoutStyle(out, det.layoutStyle);
+  }
   out = ensureSubComponentImport(out, options);
   out = pruneDeadSubComponentImports(out, options);
 
@@ -1909,11 +2044,9 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
       //   ⇒ charts 段写出的 echarts.init(chartRef) 必然孤儿 ⇒ DO-NOT-INVENT-CHART-MOUNT-MISSING
       //   终态拦截（iteration 8 无回环，任务失败）。判据扩为：isForced || 父模板无挂载锚
       //   （templateHasNoRefMount，prompt-builder 单一来源，与门禁同源思想；模板有锚 → false 零行为变化）。
-      const _genPlanForCharts = input.generationInput?.componentPlan;
-      const _subPlanForCharts =
-        _genPlanForCharts && typeof _genPlanForCharts === 'object'
-          ? _genPlanForCharts
-          : input.subComponentPlan;
+      // 🛡️ G04（2026-11-14）：原实现优先读归一化口 ⇒ 图表父壳挂载判据吃残缺 plan。
+      //   收口到单一解析器；入参结构与下游消费（isForced / collectLeafSections）零改动。
+      const _subPlanForCharts = resolvePlanSourceFromInput(input).plan;
       const _leafForCharts = collectLeafSections(
         _subPlanForCharts?.effectiveSections || [],
       );
@@ -2129,7 +2262,7 @@ export function mergeScriptParts(...parts) {
  *   ① phase2 微码链路 engineer input 顶层无 sessionId（只在 input.ctx 内）→ 恒走随机兜底；
  *   ② 随机段非纯 hex → classPrefixOf 剥离失效 → 随机段滞留进 class 前缀契约；
  *   ③ 与 LLM 自然生成的 `c-<语义>-*` 失配 → CODE-003 全量误判 → autoFix 双前缀叠加
- *      （common.less ~半数规则死样式，原 CODE-003-HIT-RATE 实测 48%，该门禁已于 2026-11-13 退役）。
+ *      （common.less ~半数规则死样式，CODE-003-HIT-RATE 实测 48%）。
  *
  * 现策略：sessionId 取值链 input.sessionId → input.ctx.sessionId → options.sessionId；
  * 仍取不到时 **不注入任何随机尾段**（componentId 保持 `c-<语义段>`），

@@ -1,6 +1,6 @@
 /**
  * 运行时验证（Agent Builder 自动生成，请勿手改）
- * 模板: runtime-verify | 创建: 2026-11-13T15:30:23.945Z
+ * 模板: runtime-verify | 创建: 2026-11-12T07:02:23.284Z
  * 输入: outputPath
  * 输出: pass, errors
  */

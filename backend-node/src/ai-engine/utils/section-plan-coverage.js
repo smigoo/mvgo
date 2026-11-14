@@ -1104,3 +1104,212 @@ export function mergeChildHeaderSections({ sections, figmaNodeData } = {}) {
   if (drop.size === 0) return { sections, stats };
   return { sections: sections.filter((_, i) => !drop.has(i)), stats };
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * 🛡️ P0-8b（2026-11-14 · mc-max-1794651114530-9ed088e3 实锤）：**相邻 header 条并入**。
+ *
+ * 病灶：副标题条是段锚点的**兄弟**，不在段内 ⇒ 段高不含它（高度侧已由
+ *   `figma-height-ratio#geometricUnionHeightFor` 兜住），但**标题本身也不进段**
+ *   ⇒ 产物只有卡片、没有「车型分布 / 流量预测」两个副标题；
+ *   更糟的是「流量预测」的 tab 块只能靠 S4-b 兜底注入**组件根**，跑到面板顶部去压标题。
+ *
+ * **与 V-8 分工**：V-8 处理「父子关系」（子段就是父段的 header）；本函数处理
+ *   「**兄弟关系**」——A 的父节点不是任何段（如 `slot-con`），A 只是相邻内容段的标题条。
+ *
+ * 判据（纯几何 + 节点类型，**不认 name**）：
+ *   ① 未被任何段认领；
+ *   ② 高度 ≤ `STRIP_MAX_HEIGHT_PX`(40) —— 只吃标题条，绝不吃内容块（本例 `1统计`=91 被排除）；
+ *   ③ 宽度 ≥ `STRIP_MIN_WIDTH_PX`(40) —— 🔴 不用「占段宽比例」：真机「车型分布」副标题条只有
+ *      86px（占 387px 段宽的 0.22）⇒ 比例判据会把它整个误杀（实测只并上 88:32、漏掉两条）；
+ *   ④ 与段锚点 y 间隙 ≤ `STRIP_MAX_GAP_PX`(32)，且按「间隙最小」归属唯一段（防同一条被两段抢）；
+ *   ⑤ 子树 ≤ `STRIP_MAX_DESCENDANTS` 个后代、含 TEXT、且**不含图片填充/ELLIPSE/ARC**
+ *      —— 排除图标卡/统计块/图表块（容器 FRAME/GROUP 允许：真机 tab 容器就是 FRAME）。
+ *   另：若**锚点自身在一条 thin 祖先里**（本例 `2:3559` 在 `88:32` 内），该祖先也算本条的一项，
+ *   归属该段，用于把「当日总流量 + 24小时下拉」提升为段 header 事实。
+ *
+ * **处置**（不改锚点、不改结构，只补事实）：
+ *   ① 段无 `header.title` ⇒ 用条内首个 TEXT 作标题；
+ *   ② 条 id 写进 `section.sourceNodeIds`（不重复、原数组不动）；
+ *   ③ 记 `stats.merged / detail` 留痕。
+ * 幂等（已并过的条已在 sourceNodeIds 里 ⇒ 再跑不重复计数）、fail-open（无树/无 bbox ⇒ 原样返回）。
+ */
+const STRIP_MAX_HEIGHT_PX = 40;
+const STRIP_MAX_GAP_PX = 32;
+/** 绝对最小宽度（替代「占段宽比例」：真机副标题条只有 86px 宽，占比 0.22 被比例判据误杀） */
+const STRIP_MIN_WIDTH_PX = 40;
+const STRIP_MAX_DESCENDANTS = 24;
+
+export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
+  const stats = { evaluated: 0, candidates: 0, merged: 0, detail: [] };
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return { sections: sections || [], stats };
+  }
+  const tree = indexCoverageTree(figmaNodeData);
+  if (!tree) return { sections, stats };
+  const { byId, parentOf } = tree;
+
+  const childrenOf = new Map();
+  for (const [id, pid] of parentOf) {
+    if (!pid) continue;
+    if (!childrenOf.has(pid)) childrenOf.set(pid, []);
+    childrenOf.get(pid).push(id);
+  }
+
+  const boxOf = (id) => {
+    const b = byId.get(String(id))?.absoluteBoundingBox;
+    if (!b) return null;
+    const { x, y, width, height } = b;
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+    return { x, y, width, height };
+  };
+
+  const descendants = (id, depth = 0, acc = []) => {
+    if (depth > 4) return acc;
+    for (const cid of childrenOf.get(String(id)) || []) {
+      acc.push(cid);
+      descendants(cid, depth + 1, acc);
+    }
+    return acc;
+  };
+
+  const firstText = (id) => {
+    const self = byId.get(String(id));
+    if (String(self?.type || '').toUpperCase() === 'TEXT') {
+      return String(self.characters || '').trim();
+    }
+    for (const cid of descendants(id)) {
+      const n = byId.get(cid);
+      if (String(n?.type || '').toUpperCase() === 'TEXT') {
+        const t = String(n.characters || '').trim();
+        if (t) return t;
+      }
+    }
+    return '';
+  };
+
+  /** 子树是否「只有文字/矢量」——排除内容块（卡片/图表/统计区） */
+  const isStripLike = (id) => {
+    const self = byId.get(String(id));
+    if (!self) return false;
+    if (String(self.name || '').trim().startsWith('@')) return false; // 技术标记
+    const kids = descendants(id);
+    if (kids.length > STRIP_MAX_DESCENDANTS) return false;
+    // 🔴 只拦「真·内容块」，不拦容器：真机副标题条里 `@antd/tab`/`btn` 都是 FRAME
+  //    ⇒ 按类型拦 FRAME 会把「流量预测」整条误杀（实测 candidates=1、漏 2:3565）。
+  //    内容信号改用**填充形态**：图片填充 / 图表图元（ELLIPSE/ARC）⇒ 判为内容块。
+  for (const cid of kids) {
+    const kid = byId.get(cid);
+    if (!kid) continue;
+    const t = String(kid.type || '').toUpperCase();
+    if (t === 'ELLIPSE' || t === 'ARC') return false;
+    const hasImageFill = (kid.fills || []).some((f) => f && f.type === 'IMAGE');
+    if (hasImageFill) return false;
+  }
+  return Boolean(firstText(id));
+  };
+
+  // 段锚点表 + 已认领集合
+  const anchors = [];
+  const claimed = new Set();
+  walkSections(sections, (s) => {
+    const id = String(s?.figmaNodeId ?? s?.id ?? '');
+    if (!id) return;
+    claimed.add(id);
+    const b = boxOf(id);
+    if (b) anchors.push({ id, box: b, section: s });
+  });
+  if (anchors.length === 0) return { sections, stats };
+
+  const nearestAnchorId = (b) => {
+    let owner = null;
+    let gapMin = Infinity;
+    for (const a of anchors) {
+      const gap = Math.max(b.y - (a.box.y + a.box.height), a.box.y - (b.y + b.height));
+      if (gap < gapMin - 1e-6) {
+        gapMin = gap;
+        owner = a.id;
+      }
+    }
+    return { owner, gap: gapMin };
+  };
+
+  // 候选：每段往上 ≤2 跳的兄弟条（含锚点自身的 thin 祖先）
+  const bySection = new Map(); // sectionId → [stripId]
+  for (const a of anchors) {
+    const add = (sid, isAncestor) => {
+      const b = boxOf(sid);
+      if (!b) return;
+      if (b.height > STRIP_MAX_HEIGHT_PX) return;
+      if (b.width < STRIP_MIN_WIDTH_PX) return;
+      if (!isStripLike(sid)) return;
+      if (!claimed.has(String(sid))) {
+        const { owner, gap } = nearestAnchorId(b);
+        if (owner !== a.id || gap > STRIP_MAX_GAP_PX) return;
+        claimed.add(String(sid)); // 先占位，避免被相邻段重复并入
+        stats.candidates += 1;
+      } else if (!isAncestor) {
+        return; // 已被认领的兄弟不是候选
+      }
+      if (!bySection.has(a.id)) bySection.set(a.id, []);
+      const list = bySection.get(a.id);
+      if (!list.includes(String(sid))) {
+        list.push(String(sid));
+        // 记录间隙用于"只留最近一条"（一个段只可能有一个 header 条；
+        // 单段场景下远处条也会贴边 ⇒ 全收会污染 sourceNodeIds 与标题选择）
+        const gapToAnchor = Math.max(0, Math.round(a.box.y - (b.y + b.height)));
+        if (!bySection._gap) bySection._gap = new Map();
+        bySection._gap.set(String(sid), gapToAnchor);
+      }
+    };
+
+    let curId = a.id;
+    for (let hop = 0; hop < 2; hop += 1) {
+      const pid = parentOf.get(String(curId));
+      if (!pid) break;
+      const parentBox = boxOf(pid);
+      // 锚点所在容器若是 thin 条（标题行），整条归属该段
+      if (parentBox && parentBox.height <= STRIP_MAX_HEIGHT_PX && isStripLike(pid)) {
+        add(pid, true);
+      }
+      for (const sibId of childrenOf.get(String(pid)) || []) {
+        if (String(sibId) === String(curId)) continue;
+        add(sibId, false);
+      }
+      curId = pid;
+    }
+  }
+
+  if (bySection.size === 0) return { sections, stats };
+
+  walkSections(sections, (s) => {
+    const id = String(s?.figmaNodeId ?? s?.id ?? '');
+    let strips = bySection.get(id);
+    if (!strips || strips.length === 0) return;
+    // 🔴 只保留最近的一条（多收会把远处标题条并进来，标题选择与 sourceNodeIds 都会被污染）
+    if (strips.length > 1) {
+      const gaps = bySection._gap || new Map();
+      strips = [strips.slice().sort((x, y) => (gaps.get(x) ?? 1e9) - (gaps.get(y) ?? 1e9))[0]];
+    }
+    stats.evaluated += 1;
+    const prevIds = Array.isArray(s?.sourceNodeIds) ? s.sourceNodeIds : [];
+    for (const sid of strips) {
+      const title = firstText(sid);
+      const noTitle = !s?.header || !String(s.header.title || '').trim();
+      if (noTitle && title) {
+        s.header = { ...(s.header && typeof s.header === 'object' ? s.header : {}), title };
+      }
+      if (!prevIds.includes(sid)) {
+        s.sourceNodeIds = [...(Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds : []), sid];
+      }
+      stats.merged += 1;
+      stats.detail.push({
+        sectionId: id,
+        stripId: sid,
+        stripH: Math.round(boxOf(sid)?.height || 0),
+        promotedTitle: noTitle ? title || null : null,
+      });
+    }
+  });
+
+  return { sections, stats };
+}

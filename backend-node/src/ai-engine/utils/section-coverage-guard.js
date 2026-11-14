@@ -36,6 +36,21 @@ import { extractSfcTemplate } from './sfc-template-extractor.js';
 // 🛡️ 刀 9（2026-10-27）：宿主外壳名单唯一事实源（base-panel/mc-panel 由宿主全局注册，
 // 产物只删别名 import 行，**绝不删模板标签**）
 import { HOST_SHELL_TAG_RE } from './mount-target-scoring.js';
+// 🛡️ G05（2026-11-14 · G02 决策 1）：门禁层 plan 参数形态归一。
+//   调用方可能直接传 plan 对象，也可能传整个 input（含 generationInput/subComponentPlan）。
+//   旧实现在后者形态下**只回退到有损投影口** generationInput.componentPlan，
+//   使 COMP-001 / 空壳降级等门禁与生成轮读到不同真值。现统一交给单一解析器。
+import { resolvePlanSource } from './resolve-plan-source.js';
+
+/** 显式传入的 plan 对象原样返回；传入 input 形态则解析判据层 plan；其余为 null。 */
+function coercePlanArg(arg) {
+  if (!arg || typeof arg !== 'object') return null;
+  if (Array.isArray(arg.effectiveSections)) return arg;
+  if (arg.generationInput || arg.subComponentPlan) {
+    return resolvePlanSource(arg.generationInput, arg.subComponentPlan).plan;
+  }
+  return null;
+}
 
 /**
  * kebab-case / snake_case → PascalCase
@@ -83,10 +98,7 @@ function normalizeSectionId(id) {
  * @returns {Map<string, string[]>} section.id → 组件名候选（按优先级，去重）
  */
 function sectionNameCandidates(componentPlan) {
-  const plan =
-    componentPlan && Array.isArray(componentPlan.effectiveSections)
-      ? componentPlan
-      : componentPlan?.generationInput?.componentPlan;
+  const plan = coercePlanArg(componentPlan);
   const tree = dedupeDuplicateSections(plan?.effectiveSections);
   let deterministic = new Map();
   try {
@@ -145,12 +157,12 @@ function sectionCoveredByVFor(tpl, reachable, itemCount) {
 function analyzeSectionCoverage(files, componentPlan) {
   const empty = { missing: [] };
   // 🛡️ A′ Phase 5：只校验叶子 section。布局容器不占 .vue，不能当缺失模块。
-  const plan =
-    componentPlan && Array.isArray(componentPlan.effectiveSections)
-      ? componentPlan
-      : componentPlan?.generationInput?.componentPlan;
+  const plan = coercePlanArg(componentPlan);
   const sections = collectLeafSections(plan?.effectiveSections);
-  if (!componentPlan?.isForced || sections.length < 2) {
+  // 🛡️ G05：isForced 也必须读**同一个已解析的 plan**。旧实现读原始入参，
+  //   当调用方传 input 形态时恒 undefined ⇒ 门禁静默哑火（漏报）；
+  //   传 plan 对象时 plan === componentPlan，行为逐字不变（阴阳对照 S6）。
+  if (!plan?.isForced || sections.length < 2) {
     return empty;
   }
 
@@ -943,10 +955,7 @@ function _rootSectionId(content) {
 export function detectEmptySectionComponents(files, componentPlan) {
   const out = [];
   try {
-    const plan =
-      componentPlan && Array.isArray(componentPlan.effectiveSections)
-        ? componentPlan
-        : componentPlan?.generationInput?.componentPlan;
+    const plan = coercePlanArg(componentPlan);
     const sections = collectLeafSections(plan?.effectiveSections);
     // 无 plan 锚点 ⇒ 不判（宁漏不误伤：无法区分「本该有内容」与「本就该空」）
     if (!sections || sections.length === 0) return out;

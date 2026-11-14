@@ -55,9 +55,12 @@ import {
 // 🎯 2026-09-29 图表容器双刀（刀1 剥 index.vue inline min-height:0 / 刀2 内层 wrapper 承载 echarts）
 import {
   stripChartInlineMinHeight,
+  chartRootIsEchartsContainer,
   wrapChartRootAsInnerWrapper,
 } from '../utils/chart-container-guard.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
+// 🛡️ G05：数字字面量判据的 plan 入参与 mc-max 同源（全保真 planner 原形优先）。
+import { resolvePlanSourceFromInput } from '../utils/resolve-plan-source.js';
 import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource, buildChartTypeTruthSet } from '../utils/chart-type-guard.js';
 // 🛡️ A4→CSS 高度比例落表（2026-09-15）：Vue3 链路此前未接入 buildSectionLayoutFacts
 //（buildSectionHeightsMap 经 this._buildSectionHeightsMap 继承自 MicrocodeEngineer），
@@ -1856,7 +1859,19 @@ export class Vue3Engineer extends MicrocodeEngineer {
           const _idxPath = 'package/index.vue';
           const _idxContent = codeResult.files[_idxPath];
           if (typeof _idxContent === 'string' && _chartTagNames.length > 0) {
-            const _stripped = stripChartInlineMinHeight(_idxContent, _chartTagNames);
+            // 🛡️ 2026-11-14：只对「根 == echarts 容器」的组件剥（否则 flex item 回落
+            //   min-height:auto，图表段被内容撑高、兄弟段被压缩 ⇒ 段高比例失真）
+            const _stripTags = _chartTagNames.filter((_t) => {
+              const _fp = Object.keys(codeResult.files || {}).find(
+                (k) => k.endsWith(`/${_t}.vue`) || k === `${_t}.vue`,
+              );
+              const _src = _fp ? codeResult.files[_fp] : '';
+              const _refM = typeof _src === 'string' ? _src.match(/echarts\.init\(\s*([A-Za-z_$][\w$]*)\.value/) : null;
+              return _refM ? chartRootIsEchartsContainer(_src, _refM[1]) : false;
+            });
+            const _stripped = _stripTags.length
+              ? stripChartInlineMinHeight(_idxContent, _stripTags)
+              : { code: _idxContent, stripped: [] as any[] };
             if (_stripped.stripped.length > 0) {
               codeResult.files[_idxPath] = _stripped.code;
               this.logger.info(
@@ -1986,7 +2001,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             chunks: input.chunks,
             charts: input.charts,
             subComponentPlan: input.subComponentPlan,
-            componentPlan: input.generationInput?.componentPlan,
+            componentPlan: resolvePlanSourceFromInput(input).plan,
           });
           if (textSet.size > 0) {
             let ghostCount = 0;

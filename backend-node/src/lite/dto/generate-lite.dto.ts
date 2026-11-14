@@ -246,4 +246,5 @@ export class GenerateLiteDto {
   @IsOptional()
   @IsString()
   requirementDocText?: string;
+
 }

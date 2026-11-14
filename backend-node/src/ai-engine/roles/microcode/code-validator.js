@@ -2647,7 +2647,7 @@ export async function validateAndFixGeneratedFiles(
         fixedFiles[commonLessPath] = prefixFixResult.commonLess;
         if (prefixFixResult.fixedClasses.length > 0) {
           fixes.push(
-            `CODE-003: common.less 中 ${prefixFixResult.fixedClasses.length} 个顶层违规块已包进根类 .${componentName}-（内层 class 零改写）: ${prefixFixResult.fixedClasses.slice(0, 3).join(', ')}${prefixFixResult.fixedClasses.length > 3 ? '...' : ''}`,
+            `CODE-003: common.less 中 ${prefixFixResult.fixedClasses.length} 个 class 已补齐前缀 .${componentName}-: ${prefixFixResult.fixedClasses.slice(0, 3).join(', ')}${prefixFixResult.fixedClasses.length > 3 ? '...' : ''}`,
           );
         }
         // 🛡️ 刀 8c（2026-09-13）：历史「组件前缀重复叠加」病灶就地折叠（幂等自愈）
@@ -2678,9 +2678,7 @@ export async function validateAndFixGeneratedFiles(
     //      且与 2.11 形成「一边注入、一边删除」的振荡对；产物上表现为「属性忽隐忽现」。
     //   保留：FLEX-002 判定本身（WARN，仍计入 issues 供 prompt 反馈与取证），只删「自动删除器」。
     //   注：2026-09-01「R0-7」曾把修复归口到此处（phase2 侧删除重复器）；本次进一步确认
-    //       WARN 不该有任何修复器，故连此处一并移除。
-    //   终局（2026-11-13）：FLEX-002 判定本体亦已退役（评审 §5.2，110 命中零拦截，
-    //       「column 无 flex 子属性」本就是合法写法）——本段注释留作「门禁只报不删」纪律的史证。
+    //       WARN 不该有任何修复器，故连此处一并移除 —— FLEX-002 现为**纯报告项**。
 
     // 2.9 VERT-001/002/003 竖排布局反截断 autoFix（治本 2026-09-04）
     // 竖排侧栏按钮「只显示单字 / 断列 / 长标签只显示首行」兜底：

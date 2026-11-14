@@ -153,7 +153,7 @@ describe('约束强化模块', () => {
       const result = buildStyleConstraintReinforcement()
 
       expect(result).toContain('🎨 样式约束铁律')
-      expect(result).toContain('common.less 顶层根类 + LESS 嵌套（2026-11-13 新范式）')
+      expect(result).toContain('common.less 必须写在根层')
       expect(result).toContain('Class 命名约束')
       expect(result).toContain('子组件样式约束')
       expect(result).toContain('自检清单')
@@ -162,7 +162,7 @@ describe('约束强化模块', () => {
     it('包含 common.less 错误示例', () => {
       const result = buildStyleConstraintReinforcement()
 
-      expect(result).toContain('🔴 错误示例（顶层主题类包裹 / 顶层裸类）')
+      expect(result).toContain('🔴 错误示例（被外层选择器包裹）')
       expect(result).toContain('.dark {')
       expect(result).toContain('❌ 错误：被 .dark 包裹')
     })
@@ -170,8 +170,8 @@ describe('约束强化模块', () => {
     it('包含 common.less 正确示例', () => {
       const result = buildStyleConstraintReinforcement()
 
-      expect(result).toContain('✅ 正确示例（根类命名空间）')
-      expect(result).toContain('✅ 正确：顶层只有带前缀根类')
+      expect(result).toContain('✅ 正确示例（写在根层）')
+      expect(result).toContain('✅ 正确：直接写在文件根层')
     })
 
     it('包含 class 命名规范', () => {

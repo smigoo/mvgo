@@ -5,7 +5,7 @@
  * sourceNodeIds，但无任何叶子认领它 ⇒ 描述卡底在产物里 0 次出现。
  * 判据全走 Figma 真值（bbox/fills/cornerRadius），逐事实缺失即 fail-open。
  */
-import { resolveAbsorbedBgLayers , claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren, isPanelBgNamed, buildAbsorbedBgParentCss } from '../container-absorbed-bg.js'
+import { resolveAbsorbedBgLayers , claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../container-absorbed-bg.js'
 import { indexFigmaNodes } from '../section-tree.js'
 
 // 真值几何（8bbcf027 checkpoint 逐字段抄录）
@@ -344,62 +344,3 @@ describe('刀 7c — expandCandidateIdsWithDirectChildren 直系子枚举', () =
     expect(r.scrollbarExempted).toBe(0); // 自动名 ⇒ 不豁免
   });
 });
-
-// ── 面板底规范（2026-11-13 用户申明）：bg 不产独立 DOM，载体唯一化为直接父元素 CSS ──
-describe('isPanelBgNamed / buildAbsorbedBgParentCss（面板底规范 R3/R4）', () => {
-  it('isPanelBgNamed：bg / bg-xxxx / bg_x 命中；自动名与 background 不命中（与 figma-connector /^bg(\\b|[-_])/i 同源）', () => {
-    expect(isPanelBgNamed('bg')).toBe(true)
-    expect(isPanelBgNamed('bg-2')).toBe(true)
-    expect(isPanelBgNamed('bg_x')).toBe(true)
-    expect(isPanelBgNamed('Rectangle 346242323')).toBe(false)
-    expect(isPanelBgNamed('滚动条')).toBe(false)
-    expect(isPanelBgNamed('background')).toBe(false)
-    expect(isPanelBgNamed('')).toBe(false)
-  })
-
-  it('单一贴合层 ⇒ 父元素 background + border-radius（最简形态）', () => {
-    const css = buildAbsorbedBgParentCss([
-      { id: '38:3138', background: 'rgba(225,235,255,1)', borderRadius: 8, edgeCss: 'left:0;right:0;top:0;bottom:0;', top: 0, left: 0, width: 300, height: 161 },
-    ])
-    expect(css.css).toBe('background:rgba(225,235,255,1);border-radius:8px;')
-    expect(css.ids).toBe('38:3138')
-  })
-
-  it('偏移层 ⇒ 多背景（position/size 取真值审计字段，纯色包 linear-gradient）', () => {
-    const css = buildAbsorbedBgParentCss([
-      { id: '43:5688', background: 'rgba(20,105,169,0.37)', borderRadius: 3, edgeCss: 'right:0;width:6px;top:178px;height:218px;', top: 178, left: 477, width: 6, height: 218 },
-    ])
-    expect(css.css).toBe(
-      'background-image:linear-gradient(rgba(20,105,169,0.37), rgba(20,105,169,0.37));' +
-      'background-position:477px 178px;' +
-      'background-size:6px 218px;' +
-      'background-repeat:no-repeat;',
-    )
-    // CSS 边界：偏移层的 border-radius 无法用父元素背景表达（id 留审计锚可追）
-    expect(css.css).not.toContain('border-radius')
-  })
-
-  it('贴合渐变层 ⇒ background 直出渐变，不二次包装', () => {
-    const grad = 'linear-gradient(180deg, rgba(212,227,255,0.9) 0%, rgba(193,214,255,0.9) 100%)'
-    const css = buildAbsorbedBgParentCss([
-      { id: '36:1694', background: grad, borderRadius: 4, edgeCss: 'left:0;right:0;top:0;bottom:0;', top: 0, left: 0, width: 603, height: 555 },
-    ])
-    expect(css.css).toBe(`background:${grad};border-radius:4px;`)
-  })
-
-  it('多层同宿主 ⇒ background-image 逗号列表（贴合层 0 0/auto，偏移层真值）', () => {
-    const css = buildAbsorbedBgParentCss([
-      { id: 'a', background: '#fff', borderRadius: null, edgeCss: 'left:0;right:0;top:0;bottom:0;', top: 0, left: 0, width: 100, height: 100 },
-      { id: 'b', background: '#f00', borderRadius: null, edgeCss: 'right:0;width:6px;top:10px;height:20px;', top: 10, left: 94, width: 6, height: 20 },
-    ])
-    expect(css.css).toContain('background-image:linear-gradient(#f00, #f00),linear-gradient(#fff, #fff);')
-    expect(css.css).toContain('background-position:94px 10px,0px 0px;')
-    expect(css.css).toContain('background-size:6px 20px,auto;')
-    expect(css.ids).toBe('a,b')
-  })
-
-  it('空入参 ⇒ {css:"",ids:""}（调用方零变化）', () => {
-    expect(buildAbsorbedBgParentCss([])).toEqual({ css: '', ids: '' })
-    expect(buildAbsorbedBgParentCss(null as any)).toEqual({ css: '', ids: '' })
-  })
-})

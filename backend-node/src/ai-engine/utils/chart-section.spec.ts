@@ -23,7 +23,7 @@ describe('detectChartSignal：charts[] 真值也作为信号（2026-09-16 扩展
   });
 });
 
-describe('injectChartSectionIfMissing：charts 真值兜底注入', () => {
+describe('injectChartSectionIfMissing：G07 视觉真值单一来源（2026-11-14 契约变更）', () => {
   const doughnutTruth = [
     {
       section: '2:200',
@@ -34,18 +34,19 @@ describe('injectChartSectionIfMissing：charts 真值兜底注入', () => {
     },
   ];
 
-  it('charts 有真值但 effectiveSections 无 chart section → 注入（chartType 归一化 doughnut→pie）', () => {
+  // 🛡️ G02 决策 2（sectionUnresolved 绝对禁令）：视觉 charts[] 已声明图表时，
+  // 下游**零注入、零重新解释**。原 ② 分支（造 chart-truth-* 根级重复段）会造成
+  // 双渲染 + 假绿，12:34 失败件实锤：4 个 chartSpec=null 的 chart-component
+  // 直接触发 microcode-engineer.js:1740 的 `cs is not defined`。
+  it('[旧契约已废] charts 有真值 → 零注入，且真值原样保留（不再造根级重复段）', () => {
     const plan = { effectiveSections: [{ id: 's1', type: 'header' }], isForced: false };
     const out = injectChartSectionIfMissing(plan, true, { charts: doughnutTruth });
-    expect(out).not.toBe(plan);
-    const chart = out.effectiveSections.find((s) => s.type === 'chart');
-    expect(chart).toBeTruthy();
-    expect(chart.chartType).toBe('pie');
-    expect(chart.chartSeries).toEqual(['交通事故', '车辆故障', '施工养护', '恶劣天气']);
-    expect(chart.chartColors).toEqual(['#ff6262', '#f8bd1f', '#06acd3', '#13cad1']);
+    expect(out).toBe(plan);
+    expect(out.effectiveSections.find((s) => s.type === 'chart')).toBeFalsy();
+    expect(out.effectiveSections).toHaveLength(1);
   });
 
-  it('已有 chart section 时不重复注入', () => {
+  it('已有 chart section 时不重复注入（视觉真值存在 → 早返回，与措辞判据无关）', () => {
     const plan = {
       effectiveSections: [
         { id: 's1', type: 'header' },
@@ -63,16 +64,54 @@ describe('injectChartSectionIfMissing：charts 真值兜底注入', () => {
     expect(out).toBe(plan);
   });
 
-  it('@echarts 标记节点兜底仍生效（原逻辑不回退）', () => {
+  // 🛡️ 缓存命中路径 P0 防线：视觉诊断族存在「顶层空、layoutStructure 内层为真」形态，
+  // 只读顶层 charts 会误判真值缺失 → Figma 兜底复活 → 臆造图表复发。
+  it('顶层 charts 为空但 layoutStructure.charts 有真值 → 仍零注入', () => {
+    const plan = { effectiveSections: [{ id: 's1', type: 'header' }], isForced: false };
+    const out = injectChartSectionIfMissing(plan, true, {
+      charts: [], layoutStructure: { charts: doughnutTruth },
+    });
+    expect(out).toBe(plan);
+  });
+
+  it('视觉真值存在时，即使 Figma 有 5 个 @echarts 节点也零注入（阳性对照：不是恒返回）', () => {
+    const figmaNodeData = {
+      name: 'root',
+      children: [0, 1, 2, 3, 4].map((i) => ({
+        name: '@echarts/pie', id: `9:${i}`, absoluteBoundingBox: { y: i * 100, height: 90 },
+      })),
+    };
+    const plan = { effectiveSections: [{ id: 's1', type: 'header' }], isForced: false };
+    const out = injectChartSectionIfMissing(plan, true, {
+      charts: doughnutTruth, figmaNodeData, allowFigmaFallback: true,
+    });
+    expect(out).toBe(plan);
+  });
+
+  // 真错仍 FAIL：视觉真值**完全缺失**时 Figma 兜底必须仍工作，且带 source 记账。
+  it('@echarts 标记节点兜底仍生效（视觉真值缺失，原逻辑不回退）', () => {
     const figmaNodeData = {
       name: 'root',
       children: [{ name: '@echarts/pie', id: '1:9', absoluteBoundingBox: { y: 10, height: 200 } }],
     };
     const plan = { effectiveSections: [{ id: 's1', type: 'header' }], isForced: false };
-    const out = injectChartSectionIfMissing(plan, true, { figmaNodeData });
+    const out = injectChartSectionIfMissing(plan, true, { figmaNodeData, charts: [] });
     const chart = out.effectiveSections.find((s) => s.type === 'chart');
     expect(chart).toBeTruthy();
     expect(chart.sourceNodeIds).toEqual(['1:9']);
+    expect(chart.source).toBe('figma-fallback');
+  });
+
+  it('视觉真值缺失 + 显式关闭 fallback → 零注入且不抛（真错不漏检）', () => {
+    const figmaNodeData = {
+      name: 'root',
+      children: [{ name: '@echarts/pie', id: '1:9', absoluteBoundingBox: { y: 10, height: 200 } }],
+    };
+    const plan = { effectiveSections: [{ id: 's1', type: 'header' }], isForced: false };
+    const out = injectChartSectionIfMissing(plan, true, {
+      figmaNodeData, charts: [], allowFigmaFallback: false,
+    });
+    expect(out).toBe(plan);
   });
 });
 

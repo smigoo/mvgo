@@ -125,103 +125,10 @@ function compileBackgroundTruthColors(fills) {
 }
 
 /**
- * 🛡️ 还原增强（RESTORE_ENHANCEMENT，2026-11-13）：补充样式真值提取。
- *
- * 纯增量、确定性编译 Figma 节点的「静默遗漏」样式事实：四角圆角、渐变（含径向）、
- * 文字大小写、裁剪、透明度、图层 id。这些字段**不进入**现有 styleEvidence/backgroundTruth
- * （门禁只读那些键），故开关关闭（默认）时 compileDesignFacts 输出与现状逐字一致；
- * 开启后挂到 root.enhancedStyleTruth，供 style-mapper / LLM 作为更全约束源（改造2 消费侧）。
- *
- * 注意：本文件是「存活」的样式真值编译入口；方案原写的 figma-style-extractor.js 已无人
- * import，属死代码，故改造2 提取侧落到此处而非那文件。
- */
-export function compileEnhancedStyleTruth(node) {
-  if (!node || typeof node !== 'object') return null
-  const out = {}
-
-  // 四角圆角（区别于 uniform cornerRadius；仅在确实有分角定义时产出）
-  const radii = Array.isArray(node.rectangleCornerRadii) ? node.rectangleCornerRadii : null
-  if (radii && radii.length === 4 && typeof node.cornerRadius !== 'number') {
-    out.cornerRadii = {
-      topLeft: Number(radii[0]) || 0,
-      topRight: Number(radii[1]) || 0,
-      bottomRight: Number(radii[2]) || 0,
-      bottomLeft: Number(radii[3]) || 0,
-    }
-  }
-
-  // 渐变（fill 级，含 LINEAR / RADIAL / ANGULAR）
-  const grads = visiblePaints(node.fills).filter((p) => /^GRADIENT/.test(p.type || ''))
-  if (grads.length > 0) {
-    out.gradients = grads.map((g) => ({
-      type: g.type,
-      stops: (g.gradientStops || [])
-        .map((s) => {
-          const c = s.color || {}
-          const a = Math.round(((c.a ?? 1) * (g.opacity ?? 1) + Number.EPSILON) * 100) / 100
-          return `rgba(${Math.round((c.r ?? 0) * 255)},${Math.round((c.g ?? 0) * 255)},${Math.round((c.b ?? 0) * 255)},${a})`
-        })
-        .filter(Boolean),
-    }))
-  }
-
-  // 文字大小写（textCase → text-transform）
-  if (node.type === 'TEXT' && node.style && node.style.textCase && node.style.textCase !== 'ORIGINAL') {
-    const map = { UPPER: 'uppercase', LOWER: 'lowercase', TITLE: 'capitalize' }
-    const tf = map[node.style.textCase]
-    if (tf) out.textTransform = tf
-  }
-
-  // 裁剪（clipsContent → overflow:hidden）
-  if (node.clipsContent === true) out.overflow = 'hidden'
-
-  // 透明度（仅当 < 1 才有意义）
-  if (typeof node.opacity === 'number' && node.opacity < 1) out.opacity = node.opacity
-
-  // 图层 id（信息性，供消费侧决定 z-index 顺序）
-  if (node.layerId != null) out.layerId = node.layerId
-
-  return Object.keys(out).length > 0 ? out : null
-}
-
-/**
- * 还原增强（RESTORE_ENHANCEMENT）消费侧：把 enhancedStyleTruth 编译成要注入 LLM prompt 的约束行。
- * 纯函数、不依赖 import.meta.url（可被 jest 直接单测）；prompt-builder / vue3-prompt 调用它。
- * 返回 string[]（无效输入或无可注入提示时返回空数组）。
- */
-export function buildEnhancedStyleTruthDirective(enhanced) {
-  if (!enhanced || typeof enhanced !== 'object') return []
-  const hints = []
-  if (enhanced.cornerRadii) {
-    const r = enhanced.cornerRadii
-    hints.push(
-      `四角圆角（figma 真值·非统一值）：topLeft=${r.topLeft} topRight=${r.topRight} bottomRight=${r.bottomRight} bottomLeft=${r.bottomLeft}px`,
-    )
-  }
-  if (Array.isArray(enhanced.gradients) && enhanced.gradients.length > 0) {
-    enhanced.gradients.forEach((g, i) => {
-      const stops = (g.stops || []).join(' → ')
-      hints.push(`渐变#${i + 1}（figma 真值·勿降级）：type=${g.type} stops=[${stops}]`)
-    })
-  }
-  if (enhanced.textTransform)
-    hints.push(`文字大小写（figma 真值）：text-transform=${enhanced.textTransform}`)
-  if (enhanced.overflow) hints.push(`裁剪（figma 真值）：overflow=${enhanced.overflow}`)
-  if (typeof enhanced.opacity === 'number')
-    hints.push(`节点透明度（figma 真值）：opacity=${enhanced.opacity}`)
-  if (typeof enhanced.layerId !== 'undefined')
-    hints.push(`图层 id（figma 真值·供 z-index 排序参考）：layerId=${enhanced.layerId}`)
-  if (hints.length === 0) return []
-  return [
-    `- 🎯 以下为 figma 确定性样式真值补充（RESTORE_ENHANCEMENT 开启），请优先对齐、不要臆造偏离：${hints.join('；')}。`,
-  ]
-}
-
-/**
  * 将 Figma API 的确定性属性编译为最小设计事实。
  * Vision 只补充图表语义，不得覆盖根尺寸和根样式证据。
  */
-export function compileDesignFacts({ figmaNodeData, visualAnalysis, restoreEnhancement = false } = {}) {
+export function compileDesignFacts({ figmaNodeData, visualAnalysis } = {}) {
   const root = figmaNodeData && typeof figmaNodeData === 'object' ? figmaNodeData : null
   const bounds = root?.absoluteBoundingBox || null
   const ownFills = visiblePaints(root?.fills)
@@ -280,8 +187,6 @@ export function compileDesignFacts({ figmaNodeData, visualAnalysis, restoreEnhan
         colors: compileBackgroundTruthColors(fills),
         source: 'figma-api',
       },
-      // 🛡️ 还原增强（RESTORE_ENHANCEMENT，默认关闭）：补充样式真值，开关 off 时不输出、不影响门禁
-      ...(restoreEnhancement ? { enhancedStyleTruth: compileEnhancedStyleTruth(root) } : {}),
     },
     charts: normalizeCharts(visualAnalysis?.charts || visualAnalysis?.layoutStructure?.charts),
     // 🛡️ B' 事实层（2026-09-18 治本）：每 figma 节点的布局模型（display/flex-direction），

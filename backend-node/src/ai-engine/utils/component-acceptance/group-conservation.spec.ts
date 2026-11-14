@@ -113,19 +113,19 @@ describe('D 层 · 分组结构验收判据', () => {
     expect(guide).toContain('禁止只保留第一个')
   })
 
-  test('阳性对照（撞码回归）：文本重叠 D2 降级为 WARN，不得触发分组结构配方', () => {
+  test('阳性对照（撞码回归）：文本重叠 D2 不得触发分组结构配方', () => {
     // 2026-11-12：改名前 /^D[123]$/ 会把「文本重叠 D2」也拉进分组配方 ⇒ 修复轮被误导。
-    // 2026-11-13 安全组：D2 与 RUNTIME-016 同源，已降级为 warns（不再 BLOCK）。
     const r = runAcceptanceChecks({
       files: CORRECT_FILES,
       componentPlan: COMPONENT_PLAN,
       textOverlaps: [{ a: '战略合作厂商', b: '优质厂商' }],
     })
-    expect(r.warns.some((w) => w.includes('D2'))).toBe(true) // 文本重叠真的命中（在 warns）
-    expect(r.fails.map((f: any) => f.code)).not.toContain('D2') // 已不在 fails
-    expect(r.fails.map((f: any) => f.code)).not.toContain('D-GRID') // 列数判据不沾边（产物已 4 列）
+    const codes = r.fails.map((f: any) => f.code)
+    expect(codes).toContain('D2') // 文本重叠真的命中
+    expect(codes).not.toContain('D-GRID') // 列数判据不沾边（产物已 4 列）
     const guide = formatAcceptanceGuidance(r.fails)
-    expect(guide).not.toContain('分组结构修复配方') // D2 永远不该拉进分组配方
+    expect(guide).toContain('文本重叠')
+    expect(guide).not.toContain('分组结构修复配方')
   })
 
   test('阴性：单组列表（仅 1 个 header.title）⇒ D1 不判', () => {
@@ -142,30 +142,5 @@ describe('D 层 · 分组结构验收判据', () => {
       },
     })
     expect(dCodes(r.fails)).not.toContain('D1')
-  })
-
-  test('P1 整改：根容器 3 列网格 ⇒ D3 不再误 FAIL（旧 \b2\b 写死）', () => {
-    const files = {
-      'package/index.vue':
-        '<template><div class="root" style="display:grid;grid-template-columns:repeat(3,1fr)">' +
-        '<StatsSection /><StatsSection2 /></div></template>',
-      'package/components/StatsSection.vue': '<template><div data-section-id="38:3260">33</div></template>',
-      'package/components/StatsSection2.vue': '<template><div data-section-id="38:3282">66</div></template>',
-    }
-    const r = runAcceptanceChecks({ files, componentPlan: COMPONENT_PLAN })
-    expect(dCodes(r.fails)).not.toContain('D3')
-  })
-
-  test('P1 整改：根容器 column + header 含 row ⇒ D3 仍 FAIL（消除全局正则假通过）', () => {
-    const files = {
-      'package/index.vue':
-        '<template><div class="root" style="display:flex;flex-direction:column">' +
-        '<div class="hd" style="display:flex;flex-direction:row"><span>标题</span><span>图标</span></div>' +
-        '<StatsSection /><StatsSection2 /></div></template>',
-      'package/components/StatsSection.vue': '<template><div data-section-id="38:3260">33</div></template>',
-      'package/components/StatsSection2.vue': '<template><div data-section-id="38:3282">66</div></template>',
-    }
-    const r = runAcceptanceChecks({ files, componentPlan: COMPONENT_PLAN })
-    expect(dCodes(r.fails)).toContain('D3')
   })
 })

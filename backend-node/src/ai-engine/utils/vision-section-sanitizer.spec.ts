@@ -172,32 +172,6 @@ describe('sanitizeVisionSections · R2 标题条锚点纠偏', () => {
       91, 114, 131, 131, 141,
     ])
   })
-
-  // 🛡️ 改锚领土回收（2026-11-13 · 7dfc01e9「车型分布」标题丢失实锤）
-  it('改锚领土回收：原锚并入 sourceNodeIds，段盒扩为原锚∪新锚联合盒', () => {
-    const out = sanitizeVisionSections(visionLayout() as any, flatTree as any)
-    // 车型分布：锚 2:3439(y573 h24.3) → 1263:38(y601 h114)，联合盒应含标题行
-    const car = out.sections.find((s: any) => s.reanchoredFrom === '2:3439')
-    expect(car).toBeDefined()
-    expect(car.sourceNodeIds).toContain('2:3439')
-    expect(car.absoluteBoundingBox.y).toBeCloseTo(573, 1)
-    expect(car.absoluteBoundingBox.height).toBeCloseTo(601 + 114 - 573, 1)
-    // 流量预测：锚 2:3565(y730) → 2:3604(y764.3 h140.7)
-    const forecast = out.sections.find((s: any) => s.reanchoredFrom === '2:3565')
-    expect(forecast.sourceNodeIds).toContain('2:3565')
-    expect(forecast.absoluteBoundingBox.y).toBeCloseTo(730, 1)
-    expect(forecast.absoluteBoundingBox.height).toBeCloseTo(764.34 + 140.66 - 730, 1)
-    // 策略 a（组内 sub-title → 父块）：父块盒本就含标题条，联合盒=父块盒，零扩大
-    const chart = out.sections.find((s: any) => s.reanchoredFrom === '2:7625')
-    expect(chart.absoluteBoundingBox.y).toBeCloseTo(287, 1)
-    expect(chart.absoluteBoundingBox.height).toBeCloseTo(131, 1)
-  })
-
-  it('领土回收不改变 flex 主高：figmaHeightPx 仍取新锚', () => {
-    const out = sanitizeVisionSections(visionLayout() as any, flatTree as any)
-    const car = out.sections.find((s: any) => s.reanchoredFrom === '2:3439')
-    expect(car.styles.figmaHeightPx).toBeCloseTo(114, 1) // 新锚 5cards 高，非联合 142
-  })
 })
 
 describe('sanitizeVisionSections · 幂等与阴性', () => {

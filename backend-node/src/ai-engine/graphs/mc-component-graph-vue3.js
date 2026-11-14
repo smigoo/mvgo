@@ -122,6 +122,16 @@ import { withTimeout } from '../orchestrator/orchestrator.js';
 import { resolveWarnEscalations } from '../utils/gate-severity.js';
 // 🛡️ #128 流程四件套 ②/③：fail-open 显性化台账（降级/WARN 升级事件落 component-meta.json）
 import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
+// 🛡️ G05（2026-11-14 · 四象限同源）：判据层 plan 事实源与 mc/max 共用同一解析器，
+//   禁止本图再写 `generationInput.componentPlan || subComponentPlan` 的反向双轨。
+import { resolvePlanSource, legacyPlanSourceLabel } from '../utils/resolve-plan-source.js';
+// 🛡️ G06：视觉诊断族唯一读取器（与 mc/max 同一函数，不复制判据）。
+import {
+  readVisionTruth,
+  visionTruthDiagnostics,
+  visionTruthCounts,
+  collectVisionBans,
+} from '../utils/read-vision-truth.js';
 
 const logger = createLogger({ name: 'mc-component-graph-vue3' });
 
@@ -436,12 +446,15 @@ export function createPhase2Graph(config = {}) {
           status: 'completed',
         });
         const cached = state._uiCache.previewAnalysis;
+        // 🛡️ G06：缓存命中与实时路径读同一事实层（visual.json 顶层诊断同样为空）。
+        const _cachedTruth = readVisionTruth(
+          cached.layoutStructure ? cached : { layoutStructure: cached },
+        );
         const cachedResult = {
           layoutStructure: cached.layoutStructure,
           visualElements: cached.visualElements,
           interactions: cached.interactions || [],
           charts: cached.charts || [],
-          chartDataHints: cached.chartDataHints || [],
           headerValidation: cached.headerValidation || {
             headerRightElements: [],
           },
@@ -455,6 +468,7 @@ export function createPhase2Graph(config = {}) {
           analysisTarget: cached.analysisTarget || '',
           analysisDescription: cached.analysisDescription || '',
           analysisEvidence: cached.analysisEvidence || [],
+          ...visionTruthDiagnostics(_cachedTruth),
           _uiCacheHit: true,
         };
         // 🛡️ 缓存命中也要做事实校验（2026-09-15）：uiCache 里存的是**加工后**结构，
@@ -520,9 +534,12 @@ export function createPhase2Graph(config = {}) {
         { nodeName: 'visual-parser', onProgress: state.onProgress },
       );
       const result = await runVisualParser(state);
+      // 🛡️ G06：诊断族一律经 readVisionTruth 读事实层；现读不缓存快照。
+      const readTruth = () => readVisionTruth(result);
 
       //  Figma 视觉覆盖率硬校验 —— 覆盖率过低说明组件缺乏可靠设计依据
-      const figmaCoverageRate = result.coverageReport?.coverageRate;
+      // G06：原读顶层镜像（恒 null）⇒ 覆盖率硬校验哑火。
+      const figmaCoverageRate = readTruth().coverageReport?.coverageRate;
       state._figmaCoverageRate = figmaCoverageRate ?? null;
       const FIGMA_COVERAGE_WARN_THRESHOLD = parseInt(
         process.env.FIGMA_COVERAGE_WARN_THRESHOLD || '60',
@@ -710,13 +727,27 @@ export function createPhase2Graph(config = {}) {
         });
       }
 
+      // 🛡️ G01 观测基线：视觉真值读取计数（与微码图同源，0 也必须出现）。只观测，不阻断。
+      logger.info('[vision-truth] 视觉真值读取', {
+        topLevelDiagnostics: Array.isArray(result.analysisDiagnostics) ? result.analysisDiagnostics.length : 0,
+        innerDiagnostics: Array.isArray(result.layoutStructure?.analysisDiagnostics)
+          ? result.layoutStructure.analysisDiagnostics.length : 0,
+        topLevelCoverageReport: result.coverageReport ? 1 : 0,
+        innerCoverageReport: result.layoutStructure?.coverageReport ? 1 : 0,
+        visionCharts: Array.isArray(result.charts) ? result.charts.length : 0,
+        sectionUnresolved: (Array.isArray(result.layoutStructure?.charts) ? result.layoutStructure.charts : [])
+          .filter((c) => c && c.sectionUnresolved === true).length,
+        // 🛡️ G06：单一读取器计数 + 视觉禁令是否进入下游（与 mc/max 同字段）。
+        ...visionTruthCounts(readTruth()),
+        visionBans: collectVisionBans(readTruth()),
+      });
+
       //保存视觉分析 checkpoint（断点续跑用）— 结构对齐微码图 visual.json
       state._saveCheckpoint?.('visual', {
         layoutStructure: result.layoutStructure,
         visualElements: result.visualElements,
         interactions: result.interactions,
         charts: result.charts,
-        chartDataHints: result.chartDataHints || [],
         headerValidation,
         headerSlotValidation,
         headerSlots: result.headerSlots || [],
@@ -724,14 +755,15 @@ export function createPhase2Graph(config = {}) {
         analysisTarget: result.analysisTarget || '',
         analysisDescription: result.analysisDescription || '',
         analysisEvidence: result.analysisEvidence || [],
+        // 🛡️ G06：visual.json 不再写顶层空值，落事实层真值。
+        ...visionTruthDiagnostics(readTruth()),
       });
 
       // 🛡️ Phase D1（2026-10-31 治理方案）：vision 出口契约审计落盘（只观测，不阻断）
       //   🔴 真机修正（mc-max-1793452481019 实锤）：parser 把 contractAudit 挂在
       //   parsed（= result.layoutStructure）上，顶层 result.contractAudit 恒 undefined
-      //   ⇒ checkpoint 从不落盘。读取位置补双路归一。
-      const __contractAudit =
-        result.contractAudit || result.layoutStructure?.contractAudit || null;
+      //   ⇒ checkpoint 从不落盘。G06：统一由 readVisionTruth 从事实层读，不再各写双路表达式。
+      const __contractAudit = readTruth().contractAudit;
       if (__contractAudit) {
         state._saveCheckpoint?.('contract-audit', __contractAudit);
         // 🛡️ Phase E：暂存到 state，供生成节点聚合 reject-summary
@@ -743,8 +775,6 @@ export function createPhase2Graph(config = {}) {
         visualElements: result.visualElements,
         interactions: result.interactions,
         charts: result.charts,
-        //  Figma 图表数据提示
-        chartDataHints: result.chartDataHints || [],
         headerValidation,
         headerSlotValidation,
         //headerSlots：面板头部插槽信息（供 microcode-engineer 使用）
@@ -754,6 +784,8 @@ export function createPhase2Graph(config = {}) {
         analysisTarget: result.analysisTarget || '',
         analysisDescription: result.analysisDescription || '',
         analysisEvidence: result.analysisEvidence || [],
+        // 🛡️ G06：诊断族透传事实层（此前 vue3 图完全没有这些字段）。
+        ...visionTruthDiagnostics(readTruth()),
         // 视觉可信度 verdict 透传（trusted/warning/conflict/blocked）
         _visualTrustVerdict:
           visualTrust?.verdict || state._visualTrustVerdict || null,
@@ -1819,14 +1851,14 @@ export function createPhase2Graph(config = {}) {
         state._uiCache?.figmaNodeData ||
         state._visualParserCache?.figmaNodeData;
       const contentPlanForGuard =
-        state.generationInput?.componentPlan || state.subComponentPlan;
+        resolvePlanSource(state.generationInput, state.subComponentPlan).plan;
       const contentCheck = checkSectionContent({
         files,
         plan: contentPlanForGuard,
         figmaRoot: figmaRootForGuard,
       });
       logger.info('🛡️ section 内容归属·已评估', {
-        planSource: state.generationInput?.componentPlan ? 'generationInput' : 'legacy',
+        planSource: legacyPlanSourceLabel(resolvePlanSource(state.generationInput, state.subComponentPlan).source),
         ...(contentCheck.ownerStats || {}),
       });
       if (contentCheck.duplicateTextIssues.length > 0) {
@@ -2444,8 +2476,33 @@ export function createPhase2Graph(config = {}) {
       const finalPlan = injectChartSectionIfMissing(currentPlan, chartSignal, {
         figmaNodeData: state.figmaNodeData,
         charts: state.charts,
+        layoutStructure: state.layoutStructure,
+        // 🛡️ G07/G08：vue3-max 与 mc-max 共用同一裁决器与同一显式 fallback 开关。
+        allowFigmaFallback: true,
+        // 🛡️ G01 观测基线：让 chart-section 的「图表兜底注入裁决」计数行真机可见（纯附加，不改判据）
+        logger,
       });
       const injectedChart = finalPlan !== currentPlan;
+
+      // 🛡️ G01 观测基线：图表真值守恒计数（与微码图同源，0 也必须出现）。只观测，不阻断。
+      const _allChartSubs = [
+        ...(Array.isArray(finalPlan.internalSubcomponents) ? finalPlan.internalSubcomponents : []),
+        ...(finalPlan.effectiveSections || []).flatMap((sec) =>
+          Array.isArray(sec?.internalSubcomponents) ? sec.internalSubcomponents : []),
+      ].filter((sub) => sub && sub.type === 'chart-component');
+      // 与微码图同源口径：按 id 去重得到出口图表数，mountPoints 保留双挂载事实。
+      const _exitChartSubs = [...new Map(_allChartSubs.map((sub) => [String(sub.id), sub])).values()];
+      logger.info('[vision-truth] 图表真值守恒', {
+        visionCharts: Array.isArray(state.charts) ? state.charts.length : 0,
+        exitChartSubcomponents: _exitChartSubs.length,
+        chartSubMountPoints: _allChartSubs.length,
+        withChartSpec: _exitChartSubs.filter((sub) => sub.chartSpec && typeof sub.chartSpec === 'object').length,
+        ids: _exitChartSubs.map((sub) => sub.id).slice(0, 12),
+        // 🛡️ G11（2026-11-14）：同微码图——本打点在 planner 产出点，state 尚未收到 plan，
+        //   旧 `resolvePlanSource(state…)` 恒报 `none`。显式标注事实来源，见评审文档 §五-6。
+        planSource: 'subComponentPlan',
+        planSourceBasis: 'planner-origin',
+      });
       state.onProgress?.({
         stage: '子组件规划',
         message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}${injectedChart ? '（已强制注入图表 section）' : ''}`,
@@ -3041,7 +3098,7 @@ export function createPhase2Graph(config = {}) {
 
     //  🛡️ P0-4: flex 静态检查 + 自动修复（零 LLM）
     //  - FLEX-001: column-flex 容器内 flex:1 子元素缺 min-height:0 → BLOCK 并入校验结果，并自动补
-    //  - FLEX-002（冗余 flex WARN）已于 2026-11-13 退役（评审 §5.2），checkFlexUsage 只余 FLEX-001
+    //  - FLEX-002: column-flex 无任何 flex 子属性 → WARN 提示冗余
     //  增量模式下仅对变更文件执行（未变更文件上轮已检查并修复）
     try {
       let flexFixCount = 0;
@@ -3113,7 +3170,7 @@ export function createPhase2Graph(config = {}) {
       //   本处是 vue3 链路里**第二个**修复归口，且**直接 fs.writeFileSync 写盘** —— 正是
       //   2026-09-01「R0-7」注释自己反对的「双写盘分叉点」；它还绕过落盘前自愈链与写保护，
       //   且与 2.11 布局事实注入（依 Figma 几何注入 display:flex）方向相反 ⇒ 属性忽隐忽现。
-      //   FLEX-002 判定本体亦已于 2026-11-13 退役（评审 §5.2）——本段注释留作「门禁只报不删」纪律的史证。
+      //   FLEX-002 现为**纯 WARN 报告项**（无任何修复器），判定仍由 checkFlexUsage 负责。
     } catch (flexErr) {
       logger.warn('P0-4 flex 检查异常（非阻断）', { error: flexErr.message });
     }
@@ -3352,6 +3409,7 @@ export function createPhase2Graph(config = {}) {
           (i.id === 'CODE-001' ||
             i.id === 'CODE-002' ||
             i.id === 'CODE-008' ||
+            i.id === 'CODE-009' ||
             i.id === 'LESS-COMPILE-001' ||
             // 层 7：WARN 升级来的 BLOCK 同样不可被降级旁路（否则升级=零生效）
             String(i.id || '').endsWith('-ESCALATED')),

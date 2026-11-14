@@ -14,6 +14,7 @@
  *     容器 isLayoutContainer=true，不占独立 .vue 槽；minFiles / isForced 按叶子计数。
  */
 
+import { inferLayoutFacts } from '../utils/layout-geom-facts.js';
 import { createLogger } from '../logger/index.js';
 import { enforceTabStructure } from './tab-structure-guard.js';
 import {
@@ -34,7 +35,6 @@ import {
   stripFabricatedSourceIds,
   uniqueSectionIds,
   deriveSectionsFromFigmaTree,
-  visionDroppedContent,
   clusterItemsByColumnX,
   getFigmaBox,
 } from '../utils/section-tree.js';
@@ -98,6 +98,29 @@ import { expandOverCoarseSections } from '../utils/over-coarse-section-expander.
 //   本开关把「保留 vision sections + Figma 尺寸注入」由 E1 失败兜底**升格为主路径**；
 //   Figma 树继续提供 absoluteBoundingBox / figmaHeightPx 等精确尺寸真值。
 //   显式传 'figma' 可回退旧行为（逃生门）。
+
+/**
+ * 🛡️ S1：把布局事实绑定到 section（含子树）。
+ * 取用顺序：figmaNodeId → id → sourceNodeIds 首个命中（与 `pickLayoutFacts` 同口径）。
+ */
+function walkSectionsForLayoutFacts(list, facts, onBound) {
+  if (!facts || !Array.isArray(list)) return
+  for (const s of list) {
+    if (!s || typeof s !== 'object') continue
+    const ids = [s.figmaNodeId, s.figmaAnchorId, s.id, ...(Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds : [])]
+    for (const id of ids) {
+      if (id == null || id === '') continue
+      const hit = facts[String(id)]
+      if (hit && hit.mode && hit.mode !== 'unknown') {
+        s.layoutFacts = hit
+        onBound()
+        break
+      }
+    }
+    walkSectionsForLayoutFacts(s.children, facts, onBound)
+  }
+}
+
 export const STRUCTURE_SOURCE_VISION = 'vision';
 export const STRUCTURE_SOURCE_FIGMA = 'figma';
 export const DEFAULT_STRUCTURE_SOURCE = STRUCTURE_SOURCE_VISION;
@@ -315,6 +338,7 @@ import {
   liftSectionAnchorsByContentRange,
   mergeCollidedSections,
   mergeChildHeaderSections,
+  mergeAdjacentHeaderStrips,
   PlanningGateError,
 } from '../utils/section-plan-coverage.js';
 // 🛡️ P1-A（2026-10-25 · mc-max-1792934367321-ab7bb76c 实锤）：plan `body.children[].id` 一致性校验。
@@ -2784,17 +2808,6 @@ export class SubcomponentPlanner {
           '🛡️ structure-source：vision 段锚点缺失（逐项内容无法映射 Figma 节点），回退 E1 保底',
           { reason: 'vision-anchor-missing', sections: sections.map((s) => String(s?.id ?? '')) },
         );
-      } else if (visionDroppedContent(sections, opts.figmaNodeData)) {
-        // 🛡️ 2026-11-13（mc-max-1794553882576-ce0eb032 实锤）：vision 把误命名 `slot-icon`/`icon`
-        //   的大内容容器当图标/槽位装饰区，只提拔内层少数节点，其名下标题/副标题/图片被整组丢弃
-        //   ⇒ 组件结构残缺却被判 completed。用户拍板规则（根锚定 opt-out）：仅根直接子节点 bg/header
-        //   不生成，其余一律内容。E1（deriveSectionsFromFigmaTree）已对大容器递归下钻 + 孤儿文本恢复，
-        //   故回退 E1 由已验证的确定性骨架补回漏提内容；正常组件（vision 全覆盖）零行为变化。
-        effectiveStructureSource = STRUCTURE_SOURCE_FIGMA;
-        logger.warn(
-          '🛡️ structure-source：vision 漏提内容（大容器误命名 slot-icon/icon 等当装饰丢弃），回退 E1 保底',
-          { reason: 'vision-dropped-content', sections: sections.map((s) => String(s?.id ?? '')) },
-        );
       }
     }
     if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
@@ -3548,6 +3561,46 @@ export class SubcomponentPlanner {
         logger.warn('🛡️ section-header-merge：子段只是父段的标题条，已合并并把标题上提', {
           detail: headerMerge.stats.detail,
         });
+      }
+
+      // 🛡️ P0-8b（2026-11-14 · 9ed088e3 实锤）：**兄弟 header 条并入**（与 V-8 互补）。
+      //   V-8 只处理「子段 = 父段的 header」；本设计里副标题条是段锚点的**兄弟**
+      //   （`4sub-header` 与 `5cards`、`6sub-header` 与 `@echarts/line-7`），V-8 命中不了
+      //   ⇒ 段里没有标题 ⇒ 产物只剩卡片/图表，两个副标题消失，tab 只能被 S4-b 兜底注入组件根。
+      //   判据纯几何/类型（未认领 + 高≤40 + 宽≥锚点×0.5 + y 间隙≤32 + 子树只有文字/矢量），
+      //   归属按「间隙最小」唯一裁决；只补 section.header.title 与 sourceNodeIds，不改锚点。
+      const stripMerge = mergeAdjacentHeaderStrips({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = stripMerge.sections;
+      logger.info(
+        `🛡️ section-strip-merge：evaluated=${stripMerge.stats.evaluated} candidates=${stripMerge.stats.candidates} merged=${stripMerge.stats.merged}`,
+      );
+      if (stripMerge.stats.merged > 0) {
+        logger.warn('🛡️ section-strip-merge：相邻标题条已并入所属段（不改锚点）', {
+          detail: stripMerge.stats.detail,
+        });
+      }
+
+      // 🛡️ S1（2026-11-14 · 9ed088e3 实锤）：把分析阶段冻结的布局事实**绑定到段对象**。
+      //   为什么不按 id 查表：后面还有 uniqueSectionIds / mergeAdjacentHeaderStrips 会改 id
+      //   与 sourceNodeIds，按 id 查会静默查不到（假绿）。绑定后随对象走，下游只读。
+      try {
+        // 🔴 本地兜底：缺 facts 就用**同一个纯函数**从真值树算（口径一致，不引入第二套判据）；
+        //   仍拿不到树 ⇒ null ⇒ 不绑定（下游回落各自判断，fail-open）。
+        const factsSource =
+          opts.layoutFacts ||
+          opts.figmaLayoutFacts ||
+          (opts.figmaNodeData ? inferLayoutFacts(opts.figmaNodeData) : null)
+        let bound = 0
+        walkSectionsForLayoutFacts(effectiveSections, factsSource, () => {
+          bound += 1
+        })
+        // 🔴 计数行铁律：0 也打
+        logger.info(`🛡️ layout-facts 绑定：bound=${bound} source=${factsSource ? 'analysis' : 'none'}`)
+      } catch (e) {
+        logger.warn({ err: e?.message }, '[S1] layout-facts 绑定失败，跳过（下游各自判断）')
       }
 
       // ① id 唯一化必须提前到 flexGrow 归一化之前（否则同 id 两段各自归一化，值分裂）。

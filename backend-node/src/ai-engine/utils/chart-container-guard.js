@@ -287,3 +287,33 @@ export function restoreChartMinHeightAfterZero(files = {}) {
   }
   return { files: next, fixed };
 }
+
+/**
+ * 🛡️ 2026-11-14（真机 6f02cdb0 实锤）：**剥除前提判定** —— 组件根是否就是 echarts 容器。
+ *
+ * 刀 1 的存在理由是「`min-height:0` 经 `$attrs` 落到 echarts 挂载容器 ⇒ 图表被压成 0」，
+ * 而这只在 **根元素 == echarts 容器** 时成立。真机 `ContentTunnel` / `ContentBridge` /
+ * `ChartSection` 的根都**不是** echarts 容器（图在内部子元素上），刀 1 仍把
+ * `flex:<比例>;min-height:0;` 里的 `min-height:0` 剥掉 ⇒ flex item 回到 `min-height:auto`
+ * ⇒ 图表段被内容最小高**撑高**、兄弟段被压缩 ⇒ 段高比例与设计不符
+ * （实测 3 段各被撑高，画布 807 内其它段等比缩水）。
+ *
+ * 判据：`<template>` 的第一个元素是否带 `ref="<refName>"`（与 `wrapChartRootAsInnerWrapper`
+ *   同一观察口径）。是 ⇒ 才允许剥；否 ⇒ 保留 `min-height:0`（比例优先，图表不会塌，因为
+ *   挂载容器在内层、自带非零 min-height）。
+ *
+ * @param {string} content 组件源码
+ * @param {string} refName echarts.init 的 ref 变量名
+ * @returns {boolean}
+ */
+export function chartRootIsEchartsContainer(content, refName) {
+  if (typeof content !== 'string' || !content || !refName) return false;
+  const tplM = content.match(/<template>([\s\S]*?)<\/template>/);
+  if (!tplM) return false;
+  const body = tplM[1];
+  // 跳过注释/空白后取第一个标签
+  const first = body.replace(/<!--[\s\S]*?-->/g, '').match(/<([A-Za-z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/);
+  if (!first) return false;
+  const attrs = first[2] || '';
+  return new RegExp(`\\bref\\s*=\\s*["']${refName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`).test(attrs);
+}

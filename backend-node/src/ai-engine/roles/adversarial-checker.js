@@ -242,7 +242,7 @@ ${JSON.stringify(layoutStructure, null, 2)}
 - 每个 .vue 文件是否包含 \`<style lang="less" scoped>\`
 - .vue 的 style 块是否引入 \`index.less\`
 - ⚠️ **排除规则**：\`component.js\` 是系统自动生成的入口文件（非 LLM 产物），其 \`import './resources/styles/index.less'\` 是正确的样式导入方式（index.less → dark.less/light.less → theme-vars.less + common.less）。禁止将 component.js 的样式导入标记为违规。
-- common.less 顶层是否为带组件前缀的根类块（内层短名嵌套合法）
+- common.less 中的 class 是否带组件前缀 (\`.c-{componentId}-\`)
 - 是否有禁止的静态内联 \`style\` 属性
 - 子组件 .vue 文件是否有 scoped less
 
@@ -596,7 +596,7 @@ ${JSON.stringify(layoutStructure, null, 2)}
 ### 2. L4 样式合规检查
 - 主组件 package/index.vue 必须有 \`<style lang="less" scoped>\` 并引入 index.less
 - 子组件 package/components/*.vue 的 style 可选：允许不写（样式由主组件统一引入）；若写必须 \`<style lang="less" scoped>\` 并 \`@import '../../resources/styles/index.less'\`，禁止裸 \`<style>\`（无 scoped）
-- common.less 顶层根类是否带组件前缀（内层短名嵌套合法）、是否有禁止的静态内联 style
+- common.less class 是否带组件前缀、是否有禁止的静态内联 style
 - ⚠️ component.js 是系统生成文件，其 import './resources/styles/index.less' 是正确的，禁止标记为违规
 ${l4Standard ? l4Standard.substring(0, 400) : ''}
 

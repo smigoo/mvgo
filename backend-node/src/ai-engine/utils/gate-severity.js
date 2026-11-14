@@ -63,7 +63,10 @@ export const WARN_ESCALATION_POLICY = Object.freeze({
   },
 
   // ── 显式保持 WARN（升级会 fail-closed，得不偿失；在此列表是为了「决策留痕」）──
-  // 🗑️ FLEX-002 条目已于 2026-11-13 随门禁本体一并退役（用户批准，评审 §5.2）。
+  'FLEX-002': {
+    action: 'WARN',
+    rationale: 'column-flex 容器无任何 flex 子属性 ⇒ 与块级布局等价，纯冗余；产物完全可用。',
+  },
   'STYLE-002': {
     action: 'WARN',
     rationale: 'class 名用实例 ID ⇒ 命名规范问题，与渲染结果无关（且与「文本/命名无关」既有取向一致）。',

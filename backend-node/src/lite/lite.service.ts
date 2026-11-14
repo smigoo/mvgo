@@ -2817,7 +2817,7 @@ ${typoSize}
     //  必须落实，仅视觉样式冲突让位设计稿（tab 切换事故 mc-max-1793601934772-3c973404）。
     const epUser = String((dto as any).extraPrompt || '').trim().slice(0, 4000);
     const rdtUser = String((dto as any).requirementDocText || '').trim().slice(0, 20000);
-    const userAddendum = epUser || rdtUser
+    let userAddendum = (epUser || rdtUser)
       ? `\n【用户补充需求（用户显式输入，必须遵守；视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准，但交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
       : '';
     // 🧬 刀 66-P3：vue3/lite 注入同构区块规则块（与 mc/lite 同一来源，不强制收敛）
@@ -2952,7 +2952,7 @@ ${userAddendum}${buildOddEvenHintSection(brief.oddEvenHints)}
     // 🔧 契约句与 utils/user-addendum.js 同步：交互/行为类显式要求必须落实，仅视觉样式冲突让位设计稿。
     const epUser = String((dto as any).extraPrompt || '').trim().slice(0, 4000);
     const rdtUser = String((dto as any).requirementDocText || '').trim().slice(0, 20000);
-    const userAddendum = epUser || rdtUser
+    let userAddendum = (epUser || rdtUser)
       ? `\n【用户补充需求（用户显式输入，必须遵守；视觉样式（颜色/尺寸/布局/字体）与设计稿冲突时以设计稿为准，但交互/行为类显式要求（tab 切换、轮播、折叠展开、点击联动等）必须落实，不得以「设计稿没有」为由省略；用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
       : '';
     // 🛡️ 2026-09-30 治本：工作台演示主题面板（深色/浅色）→ 用户显式选择的主题必须覆盖 vision 推断

@@ -14,6 +14,8 @@ import { createHash } from 'crypto'
 import { createLogger } from '../logger/index.js'
 import { coerceLLMText } from '../utils/model-config.js'
 import { robustJSONParse } from '../utils/json-parser.js'
+// 🛡️ S1：布局结构事实（方向/间距/叠放）—— 分析阶段冻结的单一真值
+import { inferLayoutFacts } from '../utils/layout-geom-facts.js'
 import { getProviderPool } from '../utils/provider-pool.js'
 import { matchResourceMapping } from '../utils/resource-mapping-formatter.js'
 import { isChromeOnlySection, stripChromeSectionsInPlace } from '../utils/chrome-section-filter.js'
@@ -1787,6 +1789,41 @@ ${analysisTask}`
         }
       } catch (e) {
         logger.warn({ err: e?.message }, '[R22-d] 视觉 section 锚点审计失败，跳过')
+      }
+
+      // 🛡️ S1（2026-11-14 · 9ed088e3 实锤）：**布局结构事实冻结**。
+      //   为什么必须在分析阶段：只有此刻手里是完整真值树（planner 之后只剩裁剪视图，
+      //   到装配层只剩 prompt 片段）。下游 7 个写者（prompt/takeover/装配/heal/终裁覆写）
+      //   一律只读这份事实，禁止各自再猜方向与间距（否则就是多源真值）。
+      //   只吃 bbox：不读 `layoutMode`（真机 2/6 与几何冲突），命名也不参与。
+      try {
+        const layoutStats = {}
+        const layoutFacts = inferLayoutFacts(figmaData, layoutStats)
+        const factCount = Object.keys(layoutFacts).length
+        if (factCount > 0) {
+          parsed.layoutFacts = layoutFacts
+          if (parsed.layoutStructure) parsed.layoutStructure.layoutFacts = layoutFacts
+          // 与既有 analysisFixes 惯例同址：让「已回写什么、多少条」可 grep
+          if (!Array.isArray(parsed.analysisFixes)) parsed.analysisFixes = []
+          parsed.analysisFixes.push({
+            kind: 'layoutFacts',
+            detail: '已回写布局结构事实（方向/间距/叠放）',
+            count: factCount,
+          })
+        }
+        // 🔴 计数行铁律：0 也打 —— 「没命中」与「判据没生效」必须可辨
+        logger.info('🛡️ layout-facts·已评估', {
+          evaluated: layoutStats.evaluated || 0,
+          bound: factCount,
+          row: layoutStats.row || 0,
+          between: layoutStats.between || 0,
+          stack: layoutStats.stack || 0,
+          overlay: layoutStats.overlay || 0,
+          unknown: layoutStats.unknown || 0,
+          modeConflict: layoutStats.modeConflict || 0,
+        })
+      } catch (e) {
+        logger.warn({ err: e?.message }, '[S1] 布局事实冻结失败，跳过（下游回落各自判断）')
       }
 
       try {

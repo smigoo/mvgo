@@ -99,7 +99,9 @@ describe('buildSubComponentResponsibilityTable 嵌套容器', () => {
     expect(text).toContain('禁止打平')
   })
 
-  it('generationInput.componentPlan 优先于 legacy subComponentPlan', () => {
+  // 🛡️ G04（2026-11-14 · G02 决策 1）：职责表是判据/骨架，改读 planner 全保真原形；
+  //   componentPlan 是有损投影（body→declaredContent），保留但仅兼容旧断点。
+  it('subComponentPlan 全保真优先于 componentPlan 投影', () => {
     const text = buildSubComponentResponsibilityTable({
       generationInput: { componentPlan: nestedPlan() },
       subComponentPlan: {
@@ -107,8 +109,14 @@ describe('buildSubComponentResponsibilityTable 嵌套容器', () => {
         effectiveSections: [{ id: 'legacy-only', responsibility: '旧平铺' }],
       },
     })
+    expect(text).toContain('legacy-only')
+    expect(text).not.toContain('`89:38`')
+  })
+  it('subComponentPlan 缺省时仍兼容 componentPlan（旧断点不回归）', () => {
+    const text = buildSubComponentResponsibilityTable({
+      generationInput: { componentPlan: nestedPlan() },
+    })
     expect(text).toContain('`89:38`')
-    expect(text).not.toContain('legacy-only')
   })
 
   it('无容器时仍按顶层叶子计数（env 形态）', () => {

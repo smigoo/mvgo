@@ -15,7 +15,8 @@ import {
   collectLeafSections,
   findSectionById,
 } from './section-tree.js'
-import { resolveEchartsType } from './chart-type-guard.js'
+// 🛡️ G07：图表真值单一来源裁决（视觉声明优先，Figma 树只做显式 fallback）。
+import { resolveChartTruth, chartTruthCounts } from './resolve-chart-anchor.js'
 
 /**
  * 从 @echarts 节点名推断 echarts 类型。
@@ -85,17 +86,10 @@ export function detectChartSignal(sources = {}) {
 }
 
 /**
- * 判断 section 是否为 chart 类型。
+ * 🛡️ G07：原 `isChartSection()` **措辞判据**（title/responsibility 含「图表/chart」即算图表段）
+ * 已删除。它是「下游重新解释视觉声明」的一环：文本措辞不能决定有几个图表。
+ * 现在图表数量/规格只由 `resolveChartTruth()` 从视觉 charts[] 与段内已挂载 charts 决定。
  */
-function isChartSection(sec) {
-  const hay = `${sec?.type || ''} ${sec?.title || ''} ${sec?.responsibility || ''}`.toLowerCase()
-  return (
-    hay === 'chart' ||
-    /图表/.test(hay) ||
-    /echarts/.test(hay) ||
-    /chart/.test(hay)
-  )
-}
 
 // ==================== 几何宿主归属（2026-11-04 · mc-max-1793771678347-18544d9c 实锤） ====================
 // 病灶：vision 的 layout.sections 无 children、charts[] 无 id/父级（上游脱锚）→ planner 产出
@@ -219,6 +213,8 @@ export function chartSectionToInternalSub(cs, spec = null) {
     sourceNodeIds: Array.isArray(cs.sourceNodeIds) ? cs.sourceNodeIds : [],
     // 🛡️ 规格载荷（vision 真值 + Figma 容器尺寸真值），与 planner R1 同形状
     ...(spec ? { chartSpec: spec } : {}),
+    // 🛡️ G07：来源记账。视觉真值路径不再创建 chart-component；仅 figma-fallback 会带此键。
+    ...(cs?.source ? { source: cs.source } : {}),
   }
 }
 
@@ -348,12 +344,32 @@ function replaceSectionByIdDeep(sections, nodeId, replacement) {
  * @returns {object} 可能修改后的 plan（新对象，不污染入参）
  */
 export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
+  const { figmaNodeData, charts } = sources
+
+  // 🛡️ G07（R3 根治）：图表真值单一来源裁决。
+  //   12:34 失败件实锤：视觉 charts[]=3（含完整规格、3/3 sectionUnresolved=true、
+  //   诊断逐字「无宿主不注入」），且 3 条已重锚挂进 planner 全保真 plan 的
+  //   `effectiveSections[].body.children[].charts`；但本函数按 Figma @echarts 节点名
+  //   派生出 4 个 `chart-<nodeId>` chart-component（chartSpec 全 null），直接触发
+  //   microcode-engineer.js:1740 的 `cs is not defined`。
+  //   治本：**视觉声明存在 ⇒ 下游零注入、零重新解释**，由宿主段 + prompt 消费真值；
+  //   仅当视觉真值完全缺失时才允许 Figma 节点名兜底，且必须落 source='figma-fallback'。
+  //   计数行恒打（0 也必须出现），真值/产物/日志三证可复算。
+  const truthDecision = resolveChartTruth({
+    plan,
+    charts,
+    // 🛡️ G07：必须转发视觉事实层，否则缓存命中路径（顶层 charts 空、内层有真值）
+    //   会被误判为「视觉真值缺失」⇒ Figma 兜底复活、臆造图表复发。
+    layoutStructure: sources.layoutStructure,
+    figmaNodeData,
+    allowFigmaFallback: sources.allowFigmaFallback !== false,
+  })
+  sources.logger?.info?.('[chart-section] 图表真值守恒裁决', chartTruthCounts(truthDecision))
+  if (truthDecision.source !== 'figma-fallback') return plan
   if (!chartSignal) return plan
 
-  const { figmaNodeData, charts } = sources
   const effectiveSections = Array.isArray(plan?.effectiveSections) ? plan.effectiveSections : []
   const allLeaves = collectLeafSections(effectiveSections)
-  const hasChartSection = allLeaves.some((sec) => isChartSection(sec))
 
   // ① @echarts 节点兜底
   const echartsNodes = collectEchartsNodes(figmaNodeData)
@@ -361,15 +377,11 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
     (node) => !allLeaves.some((sec) => sectionCoversNode(sec, node.id)),
   )
 
-  // ② charts[] 真值兜底（2026-09-16 · c-d7334a-d7334a67 实锤）：vision 顶层 charts 有真值
-  // （doughnut + series），但 Figma 节点是「中间图表」无 @echarts 标记 → ① 找不到节点。
-  // 只要 charts 有 type/series 且 effectiveSections 无 chart section，就按真值注入。
-  const chartsTruth = (Array.isArray(charts) ? charts : []).filter(
-    (c) => c && (c.type || (Array.isArray(c.series) && c.series.length > 0)),
-  )
-  const needChartFromTruth =
-    uncoveredNodes.length === 0 && chartsTruth.length > 0 && !hasChartSection
-
+  // 🛡️ G07：原 ② 分支（charts[] 真值 → 造 `chart-truth-<idx>` 根级重复段）已删除。
+  //   实锤复算：① 分支被压掉后该分支会造 3 个根级重复图表段（假绿 + 双渲染）；
+  //   且视觉真值存在时本函数现在直接早返回，chartsTruth 恒为空 ⇒ 该分支本就是死代码。
+  //   视觉真值的消费口是宿主段 body.children[].charts + prompt-builder 的 input.charts，
+  //   **不是**再合成一份根级 chart section。
   let chartSections = []
   if (uncoveredNodes.length > 0) {
     // 按 y 坐标排序（与视觉文档序一致）
@@ -381,6 +393,8 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
     chartSections = uncoveredNodes.map((node, idx) => ({
       id: `chart-${node.id}`,
       type: 'chart',
+      // 🛡️ G07：显式 fallback 记账，禁止与视觉真值混淆（守恒门禁按 source 判定）。
+      source: 'figma-fallback',
       chartType: node.chartType,
       responsibility: '图表区域（echarts）',
       elementCount: 1,
@@ -414,41 +428,6 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
       internalSubcomponents: [],
       shouldSplitInternally: false,
     }))
-  } else if (needChartFromTruth) {
-    chartSections = chartsTruth.map((c, idx) => ({
-      id: `chart-truth-${idx}`,
-      type: 'chart',
-      chartType: resolveEchartsType(c.type) || 'pie',
-      responsibility: '图表区域（echarts）',
-      elementCount: 1,
-      title: `图表${chartsTruth.length > 1 ? idx + 1 : ''}`,
-      // 🛡️ 透传视觉真值（series/legend/colors），供下游 prompt/N2 兜底消费
-      chartSeries: Array.isArray(c.series) ? c.series : [],
-      chartLegend: c.legend || null,
-      chartColors: Array.isArray(c.seriesColors) ? c.seriesColors : [],
-      sourceNodeIds: c.section ? [c.section] : [],
-      complexityScore: 1,
-      complexityReasons: {
-        elementCount: 1,
-        charts: 1,
-        interactions: 0,
-        maxDepth: 1,
-      },
-      // 🛡️ 2026-09-30 复审 §8.8.4「P3/P4 决策」**结案：保留 `direction:'column'`，不改 null**。
-      //   同上一分支（`chart-<nodeId>`）：本 section 由**视觉真值**合成（id = `chart-truth-<idx>`），
-      //   同样绕过 `extractLayoutMetadata` ⇒ 不适用「Figma 派生事实无值 → null」。
-      //   `height: 0` 表示此处**无几何事实**（下文由下游按真值回填）；`direction` 保留构造者声明。
-      layoutMetadata: {
-        direction: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 0,
-        height: 0,
-        padding: { top: 0, right: 0, bottom: 0, left: 0 },
-      },
-      internalSubcomponents: [],
-      shouldSplitInternally: false,
-    }))
   }
 
   if (chartSections.length === 0) return plan
@@ -472,10 +451,9 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
       : null
     // 🛡️ 守卫（2026-09-26 · 全语料审计结论固化）：只有宿主确实是**图表语义容器**才就地替换。
     //   依据：① @echarts 分支（chart-<nodeId>）全语料 68 例撞 id，宿主 100% 是图表容器（title/type 含
-    //   echarts|chart|图表）→ 就地替换安全；② chartsTruth 分支的 sourceNodeIds[0] 是 **vision 提供的
-    //   c.section**（复用、不唯一，同一节点可承载多个不同图表，如 bc0c25aa 的 bar/pie/area 三条真值
-    //   同挂 426:807），当前语料 0 例撞既有 section id，但**无类型校验的替换一旦撞上真实非图表 section
-    //   就会连带删掉其子树**。故加语义守卫：不匹配即退回旧的「根级追加」，宁可多一个 section 也不误删。
+    //   echarts|chart|图表）→ 就地替换安全；② G07 后本函数**只剩 figma-fallback 一条路径**
+    //   （视觉真值分支已删除），sourceNodeIds[0] 恒为 @echarts 节点 id。守卫仍保留：
+    //   万一 Figma 树里同 id 的是非图表语义容器，宁可根级追加也不误删其子树。
     const host = hostId ? findSectionById(tree, hostId) : null
     const hostHay = host
       ? `${host.title || ''} ${host.type || ''} ${host.responsibility || ''}`
@@ -557,8 +535,15 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
     (Array.isArray(plan.internalSubcomponents) ? plan.internalSubcomponents.length : 0) +
     hostedPlanSubs.length
 
-  // 🔴 计数行（0 也必须出现）：hosted/orphan/replaced 三分支真机可观测
+  // 🔴 计数行（0 也必须出现）：hosted/orphan/replaced 三分支真机可观测。
+  //   G08 口径修正：`fallbackCandidateNodes` 是裁决层候选上限（含已被 section 覆盖的节点），
+  //   **不等于实际出口**。这里补产物侧实测，避免真机日志出现「候选 5 / 实际 0」却无法解释。
   sources.logger?.info?.('[chart-section] 图表兜底注入裁决', {
+    ...chartTruthCounts(truthDecision),
+    // 🛡️ 产物实测：真正进入 plan 的图表 section / 未被现有 section 覆盖的 Figma 节点数。
+    actualInjectedChartSections: chartSections.length,
+    uncoveredFigmaNodes: uncoveredNodes.length,
+    coveredFigmaNodes: collectEchartsNodes(figmaNodeData).length - uncoveredNodes.length,
     chartSections: chartSections.length,
     replacedInTree: replacedCount,
     hostedByGeometry: hostedPairs.length,

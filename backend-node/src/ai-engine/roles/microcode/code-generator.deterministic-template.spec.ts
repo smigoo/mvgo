@@ -74,9 +74,9 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(tpl).toContain('<template #header-right>')
     expect(tpl).toContain('<HeaderSection />')
     // 🛡️ P5（2026-09-17）：叶子子组件标签内联传导样式（flex:1;min-height:0）
-    expect(tpl).toContain('<SwitchSection style="flex:1;min-height:0;" />')
-    expect(tpl).toContain('<TabsSection style="flex:1;min-height:0;" />')
-    expect(tpl).toContain('<MainSection style="flex:1;min-height:0;" />')
+    expect(tpl).toMatch(/<SwitchSection[^>]*style="flex:1;min\-height:0;"\s*\/>/)
+    expect(tpl).toMatch(/<TabsSection[^>]*style="flex:1;min\-height:0;"\s*\/>/)
+    expect(tpl).toMatch(/<MainSection[^>]*style="flex:1;min\-height:0;"\s*\/>/)
     // 🛡️ F1（2026-11-04）：根 slot-con 必须自带高度契约（height:100%;min-height:0）——
     //   此前只写 display/flex-direction，高度靠 LLM 的 less，缺规则时整树塌 0（图表被裁）。
     expect(tpl).toContain('class="c-device-monitor-slot-con" style="display:flex;flex-direction:column;height:100%;min-height:0;"')
@@ -102,8 +102,8 @@ describe('层① 确定性 index.vue 模板装配', () => {
     ]
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     const tpl = facts!.template
-    expect(tpl).toContain('<MainA style="flex:1;min-height:0;" />')
-    expect(tpl).toContain('<MainB style="flex:1;min-height:0;" />')
+    expect(tpl).toMatch(/<MainA[^>]*style="flex:1;min\-height:0;"\s*\/>/)
+    expect(tpl).toMatch(/<MainB[^>]*style="flex:1;min\-height:0;"\s*\/>/)
     expect(tpl).not.toContain('<MainSection2 />') // 不再产出裸序号
   })
 
@@ -133,8 +133,8 @@ describe('层① 确定性 index.vue 模板装配', () => {
     }]
     const tpl = buildDeterministicIndexTemplate(makeInput(secs))!.template
     // P6：比例直接内联到子组件标签（无 wrapper 中转）
-    expect(tpl).toContain('<TabsSection style="flex:0.111;min-width:0;" />')
-    expect(tpl).toContain('<MainSection style="flex:0.889;min-width:0;" />')
+    expect(tpl).toMatch(/<TabsSection[^>]*style="flex:0\.111;min\-width:0;"\s*\/>/)
+    expect(tpl).toMatch(/<MainSection[^>]*style="flex:0\.889;min\-width:0;"\s*\/>/)
     // P6：不再产出任何纯比例空壳 wrapper div
     expect(tpl).not.toContain('<div style="flex:')
     expect(tpl).not.toMatch(/antd-tab-con[\s\S]*flex:1;min-width:0;[\s\S]*flex:1;min-width:0;/)
@@ -163,8 +163,8 @@ describe('层① 确定性 index.vue 模板装配', () => {
       ] } },
     ]
     const tpl = buildDeterministicIndexTemplate({ ...makeInput(sections), figmaNodeData })!.template
-    expect(tpl).toContain('<MainSection style="flex:0.847;min-height:0;" />')
-    expect(tpl).toContain('<StatsSection style="flex:0.153;min-height:0;" />')
+    expect(tpl).toMatch(/<MainSection[^>]*style="flex:0.847;min-height:0;"/)
+    expect(tpl).toMatch(/<StatsSection[^>]*style="flex:0\.153;min\-height:0;"\s*\/>/)
     expect(tpl).not.toContain('<StatsSection style="flex:1;min-height:0;" />')
   })
 
@@ -178,7 +178,7 @@ describe('层① 确定性 index.vue 模板装配', () => {
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     const tpl = facts!.template
     expect(tpl).not.toContain('#header-right')
-    expect(tpl).toContain('<TabsSection style="flex:1;min-height:0;" />')
+    expect(tpl).toMatch(/<TabsSection[^>]*style="flex:1;min\-height:0;"\s*\/>/)
   })
 
   test('刀 5c：headerSlots 契约 figmaNodeId 匹配 sourceNodeIds → tabs 进 header-right，body 不重复', () => {
@@ -461,27 +461,23 @@ describe('层① 确定性 index.vue 模板装配', () => {
       ],
     }]
 
-    test('⭐ 未被认领的 SOLID 底卡 ⇒ 挂容器 div 内联 CSS（面板底规范：不产独立 DOM）', () => {
+    test('⭐ 未被认领的 SOLID 底卡 ⇒ 容器 position:relative + 绝对定位背景层（真值 rgba/r12/边锚定）', () => {
       const input = { ...makeInput(secs), figmaNodeData }
       const tpl = buildDeterministicIndexTemplate(input)!.template
-      // 审计锚迁到容器 div 属性（层 id 不丢）
       expect(tpl).toContain('data-absorbed-bg="36:1695"')
-      // 底部贴合层（top 偏移 300）：挂容器自身多背景，偏移/尺寸取真值审计字段
-      const line = tpl.split('\n').find((l) => l.includes('data-absorbed-bg="36:1695"')) || ''
-      expect(line).toContain('data-section-id="801:3"')
-      expect(line).toContain(
-        'background-image:linear-gradient(rgba(225,235,255,1), rgba(225,235,255,1));',
-      )
-      expect(line).toContain('background-position:0px 300px;')
-      expect(line).toContain('background-size:547px 193px;')
-      expect(line).toContain('background-repeat:no-repeat;')
-      // 面板底规范：不再生成独立 DOM 背景层（旧 c-*-absorbed-bg div 废除）
-      expect(tpl).not.toMatch(/class="[^"]*absorbed-bg/)
-      expect(tpl).not.toContain('z-index:-1;')
-      // 无 DOM 子层 ⇒ 容器不再需要 relative/isolation（刀 7b 问题随子层消亡）
-      const hostLine = tpl.split('\n').find((l) => l.includes('data-absorbed-bg="36:1695"')) || ''
-      expect(hostLine).not.toContain('position:relative')
-      expect(hostLine).not.toContain('isolation:isolate')
+      expect(tpl).toContain('background:rgba(225,235,255,1);')
+      expect(tpl).toContain('border-radius:12px;')
+      expect(tpl).toContain('left:0;right:0;bottom:0;height:193px;')
+      expect(tpl).toContain('z-index:-1;')
+      // 容器 div 必须 position:relative（绝对定位参照）
+      expect(tpl).toMatch(/data-section-id="801:3" style="[^"]*position:relative;/)
+      // 刀 7b（ad8939a5 真机实锤）：relative 不成层叠上下文 ⇒ z-index:-1 层沉到 base-panel
+      // 面板底之下不可见 ⇒ 容器必须 isolation:isolate 把负层圈在本容器内
+      expect(tpl).toMatch(/data-section-id="801:3" style="[^"]*isolation:isolate;/)
+      // 背景层必须先于容器内首个子组件标签（沉底语义；子组件名由 assignSectionComponentNames 派生）
+      const firstChildTag = tpl.search(/<Content\w+ /)
+      expect(firstChildTag).toBeGreaterThan(-1)
+      expect(tpl.indexOf('data-absorbed-bg="36:1695"')).toBeLessThan(firstChildTag)
     })
 
     test('反向：无 figmaNodeData ⇒ 零行为变化（fail-open，模板不含背景层）', () => {
@@ -537,16 +533,14 @@ describe('层① 确定性 index.vue 模板装配', () => {
       }]
       const input = { ...makeInput(nestedSecs), figmaNodeData: nestedFigma }
       const tpl = buildDeterministicIndexTemplate(input)!.template
-      // 只出一层，且挂在**内层**容器（38:3137 的 div 自身 CSS；四边贴合 ⇒ background 直出）
+      // 只出一层，且挂在**内层**容器（38:3137 的 div 内、四边 0）
       expect(tpl.match(/data-absorbed-bg="38:3138"/g)!.length).toBe(1)
-      const innerLine = tpl.split('\n').find((l) => l.includes('data-absorbed-bg="38:3138"')) || ''
-      expect(innerLine).toContain('data-section-id="38:3137"')
-      expect(innerLine).toContain('background:rgba(225,235,255,1);')
-      expect(innerLine).toContain('border-radius:8px;')
-      // 外层容器不得带任何背景/层叠样式（它名下无层）
+      expect(tpl).toContain('left:0;right:0;top:0;bottom:0;')
+      // 外层容器不得带 position:relative（它名下无层）
       const outerLine = tpl.split('\n').find((l) => l.includes('data-section-id="796:3"')) || ''
       expect(outerLine).not.toContain('position:relative')
-      expect(outerLine).not.toContain('data-absorbed-bg')
+      const innerLine = tpl.split('\n').find((l) => l.includes('data-section-id="38:3137"')) || ''
+      expect(innerLine).toContain('position:relative')
     })
 
     // ── 刀 20c-R（2026-11-02 · `43:5688` 实锤）：几何不足以判别滚动条 ──────────
@@ -581,17 +575,13 @@ describe('层① 确定性 index.vue 模板装配', () => {
       ],
     }]
 
-    test('⭐ 贴右缘 + 条状 + **自动名**（Rectangle 346242323）⇒ 仍挂容器 CSS（多背景）', () => {
+    test('⭐ 贴右缘 + 条状 + **自动名**（Rectangle 346242323）⇒ 仍出 absorbed-bg 层', () => {
       const input = { ...makeInput(barSecs), figmaNodeData: barFigma('Rectangle 346242323') }
       const tpl = buildDeterministicIndexTemplate(input)!.template
       expect(tpl).toContain('data-absorbed-bg="43:5688"')
-      const line = tpl.split('\n').find((l) => l.includes('data-absorbed-bg="43:5688"')) || ''
-      expect(line).toContain('data-section-id="801:3"')
-      // 右缘贴合 + 顶边偏移 100 ⇒ 偏移/尺寸真值进 background-position/size
-      expect(line).toContain('background-position:541px 100px;')
-      expect(line).toContain('background-size:6px 218px;')
-      // 面板底规范：不产 DOM 层
-      expect(tpl).not.toMatch(/class="[^"]*absorbed-bg/)
+      expect(tpl).toContain('border-radius:3px;')
+      // 右缘精确贴合 ⇒ right:0 + 真值宽；顶边不贴 ⇒ 真值偏移 + 真值高
+      expect(tpl).toContain('right:0;width:6px;top:100px;height:218px;')
     })
 
     test('反向：同几何但名确指滚动条（滚动条）⇒ 不出层（不画假滚动条）', () => {
@@ -810,9 +800,9 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
     }
     const tpl = buildDeterministicIndexTemplate(input)!.template
     // 66:388:14 → 0.141 / 0.829 / 0.030
-    expect(tpl).toContain('<StatsSection style="flex:0.141;min-height:0;" />')
-    expect(tpl).toContain('<ContentTable style="flex:0.829;min-height:0;" />')
-    expect(tpl).toContain('<ContentFooter style="flex:0.030;min-height:0;" />')
+    expect(tpl).toMatch(/<StatsSection[^>]*style="flex:0.141;min-height:0;"/)
+    expect(tpl).toMatch(/<ContentTable[^>]*style="flex:0\.829;min\-height:0;"\s*\/>/)
+    expect(tpl).toMatch(/<ContentFooter[^>]*style="flex:0\.030;min\-height:0;"\s*\/>/)
     expect(tpl).not.toContain('flex:0.373;min-height:0;')
     expect(tpl).not.toContain('flex:0.556;min-height:0;')
   })
@@ -847,9 +837,12 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
       ],
     }
     const tpl = buildDeterministicIndexTemplate(input)!.template
-    expect(tpl).toContain('<StatsSection style="flex:0.141;min-height:0;" />')
-    expect(tpl).toContain('<ContentSection style="flex:0.829;min-height:0;margin-top:25px;" />')
-    expect(tpl).toContain('<ContentFooterLegend style="flex:0.030;min-height:0;" />')
+    // 🛡️ S4（2026-11-14）：分母 = Σ高 + Σ间距（66+388+14+25=493）⇒ 0.134 / 0.787 / 0.028，
+    //   Σflex 0.949 + 25px 份额 0.051 = 1.000。旧值 0.141/0.829/0.030 是"纯 Σ高"分母，
+    //   叠 margin-top:25px 后总高 515+25 = 540 > 容器 515（溢出）。
+    expect(tpl).toMatch(/<StatsSection[^>]*style="flex:0.134;min-height:0;"/)
+    expect(tpl).toMatch(/<ContentSection[^>]*style="flex:0.787;min-height:0;margin-top:25px;"/)
+    expect(tpl).toMatch(/<ContentFooterLegend[^>]*style="flex:0.028;min-height:0;"/)
     expect(tpl).not.toContain('margin-top:68px')
   })
 
@@ -896,15 +889,18 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
       const component = facts.sectionRoots.find((s) => s.id === id)!.component
       return facts.template.split('\n').find((line) => line.includes(`<${component} `)) || ''
     }
-    expect(lineOf('43:4893')).toContain('flex:0.141;min-height:0;')
+    // 🛡️ S4：分母含间距（25 + 22）⇒ 0.128；表格 0.753、footer 0.027（Σflex 0.908 + 47px 份额 ≈ 1）
+    expect(lineOf('43:4893')).toContain('flex:0.128;min-height:0;')
     expect(lineOf('43:4898')).toContain('flex:0;min-height:0;')
     expect(lineOf('43:4903')).toContain('flex:0;min-height:0;')
     expect(lineOf('43:4898')).not.toContain('flex:1')
     expect(lineOf('43:4903')).not.toContain('flex:1')
     expect(lineOf('43:4898')).not.toContain('margin-')
     expect(lineOf('43:4903')).not.toContain('margin-')
-    expect(lineOf('table')).toContain('flex:0.829;min-height:0;margin-top:25px;')
-    expect(lineOf('footer')).toContain('flex:0.030;min-height:0;')
+    // 🛡️ S4：表格比例同受间距分母影响（同一条容器）⇒ 0.753
+    expect(lineOf('table')).toContain('flex:0.753;min-height:0;margin-top:25px;')
+    // 🛡️ S4：footer 同样吃间距分母（且带 margin-top:22px）⇒ 0.027
+    expect(lineOf('footer')).toContain('flex:0.027;min-height:0;margin-top:22px;')
   })
 
   test('无高度事实时顶层多 section 行为不变（回落 flex:1，零回归）', () => {
@@ -1273,9 +1269,11 @@ describe('刀12 · 2D 行簇重建（ad8939a5 `801:3` 实锤：左图右文被�
     // 首带 4 叶全在 row wrapper 之后；网格（第 5 叶）在其后（不再与 img 同级纵切通栏）
     expect(leafTags[0].at).toBeGreaterThan(rowAt)
     expect(leafTags[4].at).toBeGreaterThan(leafTags[3].at)
-    // ③ 行带内 img 与右列按真值宽度比分 flex（98/(98+173)=0.362；右列并集宽 173 ⇒ 0.638）
-    expect(tpl).toContain('flex:0.362;min-width:0;')
-    expect(tpl).toContain('flex:0.638;min-width:0;')
+    // ③ 行带内 img 与右列按真值宽度比分 flex。
+    //   🛡️ S4（2026-11-14）：分母改为 `Σ宽 + Σ间距`（98+173+21=292）⇒ 98/292=0.336、173/292=0.592，
+    //   Σflex 0.928 + margin 21px 份额 0.072 = 1.000（旧值 0.362/0.638 是"Σ宽"分母，叠 margin 会横向溢出）。
+    expect(tpl).toContain('flex:0.336;min-width:0;')
+    expect(tpl).toContain('flex:0.592;min-width:0;margin-left:21px;')
     // ④ 带高比例：头带 98/(98+135.25+16+90) ≈ 0.289（与既有「子项高度和」口径一致）
     expect(tpl).toContain('flex:0.289;min-height:0;')
   })
@@ -1482,8 +1480,12 @@ describe('刀16 · 兄弟间距真值注入（6bba7218 实锤：纵流 33/20/20p
     // 纵向兄弟：33/20/20
     expect(tpl).toContain('margin-top:33px')
     expect((tpl.match(/margin-top:20px/g) || []).length).toBe(2)
-    // flex 比例链不变（分母照旧，margin 与 grow 相容）
-    expect(tpl).toContain('flex:0.500')
+    // 🛡️ S4（2026-11-14）：分母改为 `Σ尺寸 + Σ间距`，比例值随之变化（旧值 0.500 = 纯 Σ宽 分母）。
+    //   行带两卡：W = 2w + 64 ⇒ 每卡 w/(2w+64) = 0.446（Σ 0.892 + 64px 份额 0.108 = 1.000）。
+    expect((tpl.match(/flex:0\.446;min-width:0;/g) || []).length).toBe(2)
+    //   纵流三段：Σflex 0.893 + (33+20+20)/容器高 份额 = 1.000（不再"1.0 + 73px"）
+    const __ys = [0.225, 0.297, 0.371]
+    expect(tpl).toContain(`flex:${__ys[0]};min-height:0;margin-top:33px;`)
   })
 
   it('反向：兄弟贴合（gap=0）⇒ 零 margin，零行为变化', () => {
@@ -1750,60 +1752,25 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
     },
   });
 
-  it('⭐ 阳性：非容器段盒 ≡ 图根盒 ⇒ 直系子枚举出层，挂根 div 内联 CSS（面板底规范）', () => {
+  it('⭐ 阳性：非容器段盒 ≡ 图根盒 ⇒ 直系子枚举出层，注入根 div（条件定位样式）', () => {
     const facts = buildDeterministicIndexTemplate(withFigma([{ id: '807:2', type: 'body', responsibility: '主内容区' }]) as any);
     expect(facts).not.toBeNull();
     const tpl = facts!.template;
-    // ① 层真的出来了（旧行为：0 层）；审计锚迁到根 div 属性（层 id 不丢）
+    // ① 层真的出来了（旧行为：0 层）
     expect(tpl).toContain('data-absorbed-bg="43:5688"');
-    // 面板底规范：不再生成独立 DOM 背景层
-    expect(tpl).not.toMatch(/class="[^"]*absorbed-bg/);
-    expect(tpl).not.toContain('z-index:-1;');
-    // 偏移层（left 477 / top 178，右缘贴合）⇒ 多背景真值表达
-    expect(tpl).toContain(
-      'background-image:linear-gradient(rgba(20,105,169,0.37), rgba(20,105,169,0.37));background-position:477px 178px;background-size:6px 218px;background-repeat:no-repeat;',
-    );
+    expect(tpl).toContain('class="c-slot-con-absorbed-bg"');
+    expect(tpl).toContain('right:0;width:6px;top:178px;height:218px;');
+    expect(tpl).toContain('border-radius:3px');
+    expect(tpl).toContain('z-index:-1;');
     // ② 宿主是根 slot-con div，锚点用专用属性（**不复用 data-section-id**，避免双命中）
     //    🛡️ 2026-11-12 弹窗尺寸契约：fixture 图根 483×515（比值 1.066 ≤1.5、max 515 ≤800）
     //    命中弹窗类 ⇒ 根容器追加真值尺寸+水平居中（宽高比≈1 的面板本就该定尺寸）。
-    //    🛡️ 面板底规范 2026-11-13：背景画在根 div 自身 ⇒ 不再需要 relative/isolation。
-    expect(tpl).toContain('class="c-slot-con-slot-con" data-absorbed-host="807:2" data-absorbed-bg="43:5688"');
-    expect(tpl).toContain('style="display:flex;flex-direction:column;min-height:0;width:483px;height:515px;margin-left:auto;margin-right:auto;background-image:linear-gradient(rgba(20,105,169,0.37), rgba(20,105,169,0.37));background-position:477px 178px;background-size:6px 218px;background-repeat:no-repeat;"');
-  });
-
-  it('⭐ R3（2026-11-13 用户申明）：根直接子 bg 命名壳 ⇒ 丢弃（不产 DOM 也不产 CSS）', () => {
-    // 真值形态：36:1693 FRAME（fills=[]）+ 直系子 36:1694 name='bg' 603×555 GRADIENT_LINEAR
-    const figma = {
-      document: {
-        id: '36:1693', name: 'cp-设备详情', type: 'FRAME',
-        absoluteBoundingBox: { x: 100, y: 100, width: 603, height: 555 },
-        children: [
-          {
-            id: '36:1694', name: 'bg', type: 'RECTANGLE', cornerRadius: 4,
-            absoluteBoundingBox: { x: 100, y: 100, width: 603, height: 555 },
-            fills: [{
-              type: 'GRADIENT_LINEAR', visible: true, opacity: 0.9,
-              gradientStops: [
-                { position: 0, color: { r: 0.831, g: 0.886, b: 1, a: 0.9 } },
-                { position: 1, color: { r: 0.757, g: 0.835, b: 1, a: 0.9 } },
-              ],
-              gradientHandlePositions: [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }],
-            }],
-          },
-          { id: '36:1697', type: 'TEXT', characters: 'x', absoluteBoundingBox: { x: 130, y: 130, width: 60, height: 16 } },
-        ],
-      },
-    };
-    const facts = buildDeterministicIndexTemplate({
-      ...makeInput([{ id: '36:1693', type: 'body', responsibility: '主内容区' }]),
-      figmaNodeData: figma,
-    } as any);
-    const tpl = facts!.template;
-    // 面板背景不允许由微码组件生成：无锚、无渐变 CSS、无任何背景层痕迹
-    expect(tpl).not.toContain('data-absorbed-bg');
-    expect(tpl).not.toContain('36:1694');
-    expect(tpl).not.toContain('linear-gradient');
-    expect(tpl).not.toMatch(/class="[^"]*absorbed-bg/);
+    expect(tpl).toContain('class="c-slot-con-slot-con" data-absorbed-host="807:2"');
+    expect(tpl).toContain('style="display:flex;flex-direction:column;min-height:0;width:483px;height:515px;margin-left:auto;margin-right:auto;position:relative;isolation:isolate;"');
+    // ③ 层必须渲染在根 div 内（紧跟根 div 开标签）
+    const rootIdx = tpl.indexOf('class="c-slot-con-slot-con"');
+    expect(rootIdx).toBeGreaterThan(-1);
+    expect(tpl.indexOf('data-absorbed-bg="43:5688"')).toBeGreaterThan(rootIdx);
   });
 
   it('反向（错位 fail-open）：段盒 ≠ 图根盒 ⇒ 不注入、根 div 样式逐字不变', () => {
@@ -1850,9 +1817,7 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
 
   // 🛡️ 刀 7d（2026-11-12 · mc-1794420031803-a2a0df58 实锤）：根直系壳层直采。
   //   弹窗壳（RECTANGLE ≡ 根 bbox）不在段树 ⇒ 刀7c 零候选 ⇒ 壳渐变永不落。
-  //   判据：根直系 RECTANGLE + bbox ≡ 根（±2px）+ 未认领 ⇒ 并入根宿主层。
-  //   🛡️ 面板底规范（2026-11-13 用户申明）：bg 命名壳 = 面板背景 ⇒ R3 丢弃；
-  //   非 bg 命名壳 ⇒ R4 挂根 div 内联 CSS（不再产 DOM 层）。
+  //   判据：根直系 RECTANGLE + bbox ≡ 根（±2px）+ 未认领 ⇒ 全覆盖层注入根 div。
   describe('刀 7d 根直系壳层直采（a2a0df58 弹窗壳缺失实锤）', () => {
     const withShellRoot = (shellExtra: Record<string, unknown> = {}) => ({
       ...makeInput([{ id: '36:1697', type: 'body', responsibility: '主内容区' }] as any, 'device'),
@@ -1891,34 +1856,16 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
       },
     });
 
-    it('⭐ R3（2026-11-13 用户申明）：根直系壳 name=bg ⇒ 丢弃（微码组件不允许生成面板背景）', () => {
-      // 真值形态（mc-max-1794538012601-05381314 同构）：36:1694 name='bg' 全覆盖渐变壳
+    it('⭐ 阳性：根直系 RECTANGLE ≡ 根 bbox + 渐变可 CSS 化 ⇒ 壳层注入根 div（z-index:-1 全覆盖）', () => {
       const facts = buildDeterministicIndexTemplate(withShellRoot() as any);
       expect(facts).not.toBeNull();
       const tpl = facts!.template;
-      // 面板背景不允许由微码组件生成：无锚、无渐变 CSS、无 DOM 层
-      expect(tpl).not.toContain('data-absorbed-bg');
-      expect(tpl).not.toContain('36:1694');
-      expect(tpl).not.toContain('linear-gradient');
-      expect(tpl).not.toMatch(/class="[^"]*absorbed-bg/);
-    });
-
-    it('⭐ R4（2026-11-13 用户申明）：根直系壳**自动名**（非 bg）⇒ 挂根 div 内联 CSS（不产 DOM）', () => {
-      const facts = buildDeterministicIndexTemplate(
-        withShellRoot({ name: 'Rectangle 346242323' }) as any,
-      );
-      const tpl = facts!.template;
-      // 审计锚 + 背景都在根 div 自身；四边贴合 ⇒ background 直出 + radius
       expect(tpl).toContain('data-absorbed-bg="36:1694"');
-      expect(tpl).toContain('data-absorbed-host="root" data-absorbed-bg="36:1694"');
       expect(tpl).toContain('linear-gradient(180deg');
       expect(tpl).toContain('border-radius:4px');
-      // 面板底规范：不再生成独立 DOM 层、不再需要 relative/isolation
-      expect(tpl).not.toMatch(/class="[^"]*absorbed-bg/);
-      expect(tpl).not.toContain('z-index:-1;');
-      const rootLine = tpl.split('\n').find((l) => l.includes('data-absorbed-bg="36:1694"')) || '';
-      expect(rootLine).toContain('background:linear-gradient(180deg');
-      expect(rootLine).not.toContain('position:relative');
+      expect(tpl).toContain('z-index:-1;');
+      // 全覆盖 edgeCss（left/top/right/bottom 全 0）
+      expect(tpl).toContain('left:0;top:0;right:0;bottom:0;');
     });
 
     it('阴性a：壳尺寸 ≠ 根 bbox（部分装饰条）⇒ 不注入（走段级通路）', () => {

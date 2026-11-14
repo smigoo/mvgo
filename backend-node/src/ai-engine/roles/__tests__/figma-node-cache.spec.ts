@@ -48,7 +48,17 @@ const tmpDirs = [];
 
 /** 造 connector：注入临时缓存目录 + 计数限流器（被 acquire 即测试失败信号） */
 function makeConnector(token, cacheDir, ttlMs) {
-  const c = new FigmaConnector({ figmaToken: token, cacheDir, nodeCacheTtlMs: ttlMs });
+  // 🛡️ P0-7（2026-11-14）：本套件只验「TTL / token / 回源计数」这三条原始判据，
+  //   设计稿版本比对会额外发一次 files?depth=1（版本查询本身走 _figmaApiGet，
+  //   会把 fetched 计数 +1 ⇒ 与本套件的"网络次数"断言冲突）。
+  //   故此处显式 `fileVersionTtlMs: 0` 关掉版本层；版本比对语义由
+  //   `figma-node-cache-version.spec.ts` 独立覆盖。
+  const c = new FigmaConnector({
+    figmaToken: token,
+    cacheDir,
+    nodeCacheTtlMs: ttlMs,
+    fileVersionTtlMs: 0,
+  });
   c._rateLimiter = {
     acquire() {
       throw new Error('NETWORK_LEAK: 缓存命中时不应发起网络请求');

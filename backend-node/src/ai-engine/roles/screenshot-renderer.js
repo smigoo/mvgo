@@ -1103,7 +1103,7 @@ async function buildVue3ContainerHTML(componentDir, componentName) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { display: inline-block; background: transparent; }
     #app { display: inline-block; }
-    ${styleCode}
+    ${buildThemeCssVarsShim()}${styleCode}
   </style>
 </head>
 <body>
@@ -1158,6 +1158,31 @@ async function analyzeScreenshotPixels(screenshotPath) {
   } catch (error) {
     return { blank: false, analysisError: error.message }
   }
+}
+
+
+/**
+ * 🛡️ T-FONT（2026-11-14 · 真机 cf4f8d3d 实锤）：截图容器必须注入微码主题 CSS 变量。
+ *
+ * 病灶：微码产物 `theme-vars.less` 里有 `@fontSize: var(--fontSize)`（mc-check M5-6 要求的
+ *   精确形态，**不允许带 fallback**），而 `--fontSize` 的注入方是**宿主预览容器**
+ *   （frontend/src/views/preview/index.vue:1177 用设计 token 注入）。
+ *   管线自带的截图 harness 是纯静态 HTML，**从未注入** ⇒ 产物里所有
+ *   `font-size: var(--fontSize)` / `calc(var(--fontSize) * N)` 全部
+ *   invalid at computed-value time ⇒ 字号回落 inherit（16px）⇒ 与设计稿不一致
+ *   （真机实测「34,620 比设计大一圈」就是这个原因，不是生成器写错了倍数）。
+ *
+ * 值来源：微码生成器把设计 px 折算成「相对基准的倍数」（如 24px → calc(*1.714)），
+ *   基准即框架 `@font-size-base: 14px`（theme-vars.less 同源）。故注入 14px 后，
+ *   calc(14 * 1.714) = 24px = 设计值精确一致。
+ *   可用 `MVGO_BASE_FONT_PX` 覆盖（不同设计稿基准不同时）。
+ *
+ * @returns {string} `<style>` 片段（放在 harness 的 <style> 最前，供 var() 解析）
+ */
+function buildThemeCssVarsShim() {
+  const base = Number(process.env.MVGO_BASE_FONT_PX) || 14;
+  // font-weight 真值：产物用 `var(--fontWeightStrong)` 表达强调字重；缺省 700 与框架一致
+  return `:root { --fontSize: ${base}px; --fontWeightStrong: 700; }\n    `;
 }
 
 async function buildMicrocodeContainerHTML(componentDir, componentName) {
@@ -1223,7 +1248,7 @@ async function buildMicrocodeContainerHTML(componentDir, componentName) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { display: inline-block; background: transparent; }
     #mc-root { display: inline-block; }
-    ${vueStyle}
+    ${buildThemeCssVarsShim()}${vueStyle}
     ${stylesContent}
   </style>
 </head>

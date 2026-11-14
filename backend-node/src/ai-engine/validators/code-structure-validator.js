@@ -5,8 +5,8 @@
  * 校验生成的 Vue 文件是否符合 scoped-less 标准。
  *
  * 检查项适用范围：
- *   两者通用：CODE-001 / CODE-002 / CODE-004 / CODE-005 / CODE-008
- *   仅微码：  CODE-003（CODE-009 已于 2026-11-13 退役）
+ *   两者通用：CODE-001 / CODE-002 / CODE-004 / CODE-005 / CODE-006 / CODE-008
+ *   仅微码：  CODE-003 / CODE-009
  *   仅 Vue3： CODE-007
  */
 
@@ -24,9 +24,14 @@ const HOST_STYLE_LEAK_PATTERNS = [
       /from\s*["']@inspira-ui\/plugins["']|from\s*["']tailwindcss["']|from\s*["']tw-animate-css["']|import\s*["']@inspira-ui\/plugins["']|import\s*["']tailwindcss["']|import\s*["']tw-animate-css["']/,
     message: '检测到宿主 UI / Tailwind 依赖导入，生成组件必须保持自包含',
   },
-  // 🗑️ CODE-006（Tailwind utility 名单正则）已于 2026-11-13 退役（用户批准，评审 §5.1）：
-  //   名单法误杀面大（当年降 WARN 的原因本身）、本地日志 0 命中零拦截力；
-  //   产物自包含性已由 CODE-005（宿主依赖 import 断链）管住，class 体系由 classname-contract 管住。
+  // CODE-006 是硬编码 Tailwind utility class 名单的复杂正则，误杀面大，降级 WARN（不阻断，仅提示精修）
+  {
+    id: 'CODE-006',
+    severity: 'WARN',
+    regex:
+      /\bclass\s*=\s*["'](?:[^"']*\s)?(?:flex|grid|inline-flex|items-center|justify-center|justify-between|gap-\d+|p[xytrbl]?-[\w.\/[\]-]+|m[xytrbl]?-[\w.\/[\]-]+|text-(?:xs|sm|base|lg|xl|\d+xl)|font-(?:bold|semibold|medium|light)|bg-[\w/\-[\]]+|rounded(?:-[\w/\-[\]]+)?|border(?:-[\w/\-[\]]+)?|shadow(?:-[\w/\-[\]]+)?|w-(?:full|\d+)|h-(?:full|\d+))\b(?:\s[^"']*)?["']/i,
+    message: '检测到疑似 Tailwind utility class，生成组件禁止依赖宿主原子类',
+  },
 ];
 
 // CODE-011/012 用 AST 结构分析检测 echarts 时序与 resize 监听（非正则写法枚举），
@@ -341,21 +346,15 @@ export function hasScopedLessStyle(content = '') {
 }
 
 /**
- * 提取 common.less 中缺少组件前缀的 **顶层选择器**（CODE-003 / complete 最终扫描 / autoFix 共用的事实源）
- *
- * 🛡️ 2026-11-13 范式替换（用户申明）：common.less 顶层只允许「带组件前缀的根类块」，
- *   内部一律用 LESS 嵌套定义（内层短名合法、可读，@xxx 变量照常切主题）。
- *   - 判据与修复器共用 scanTopLevelLessBlocks（单一事实源，禁第二份块解析）；
- *   - 顶层 .dark/.light（运行时主题类包裹）**改判违规**：宿主不给组件根加主题类 ⇒
- *     编译成 `.dark .c-xxx` 真实 DOM 0 命中（旧 prompt 三条禁令的有效部分，原样保留）；
- *   - @media/@supports/@container 递归内查（内部第一层仍须带前缀根类）；
- *   - @keyframes/@font-face/@import/变量声明/混入定义豁免；
- *   - 历史平铺产物（每个顶层类各自带前缀）天然兼容，零迁移。
+ * 提取 common.less 中缺少组件前缀的 class 列表（CODE-003 / complete 最终扫描共用的事实源）
  * @param {string} content - common.less 文件内容
  * @param {string} [prefixId] - 组件前缀（如 c-env-monitor 或 env-monitor）；为空时放宽为「只要有 .c- 前缀即通过」
- * @returns {string[]} 违规顶层类名（含 . 前缀，去重，如 ['.wrapper', '.dark']）
+ * @returns {string[]} 违规 class 列表（不含 . 前缀，如 ['wrapper', 'item']）
  */
-/** 主题作用域类名（保留导出供外部引用；2026-11-13 起**不再作为顶层豁免**——见 findPrefixViolations 注释） */
+/**
+ * 🛡️ 批4（2026-09-28）：**主题作用域类** —— `.dark` / `.light` 挂在主题根（深浅色切换）上，
+ * 不是组件作用域 class，禁止被 CODE-003 补前缀（补成 `.c-xxx-dark` 会让主题作用域选择器失效）。
+ */
 export const THEME_SCOPE_CLASSES = new Set(['dark', 'light']);
 
 /**
@@ -381,179 +380,48 @@ export function findNonAsciiClassNames(content) {
   return [...out];
 }
 
-/**
- * 保长度剥除 LESS 注释（块注释与行首双斜线注释）——不缩短字符串，保证扫描坐标与原文件逐字对齐。
- */
-function maskLessComments(s) {
-  const out = s.split('');
-  const mask = (from, to) => {
-    for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' ';
-  };
-  const blockRe = /\/\*[\s\S]*?\*\//g;
-  let m;
-  while ((m = blockRe.exec(s))) mask(m.index, m.index + m[0].length);
-  // 只认行首（可含前导空白）的 // —— 避免把 url(http://...) 里的 // 当注释
-  const lineRe = /(^|\n)([ \t]*)\/\/[^\n]*/g;
-  while ((m = lineRe.exec(s))) {
-    const from = m.index + m[1].length + m[2].length;
-    mask(from, m.index + m[0].length);
-  }
-  return out.join('');
-}
-
-/** 从 openIdx（指向 '{'）找匹配 '}'，字符串感知，返回 '}' 之后的下标（exclusive） */
-function findMatchingBraceEnd(masked, openIdx) {
-  let d = 1;
-  let j = openIdx + 1;
-  while (j < masked.length && d > 0) {
-    const c = masked[j];
-    if (c === '"' || c === "'" || c === '`') {
-      const q = c;
-      j++;
-      while (j < masked.length) {
-        if (masked[j] === '\\') { j += 2; continue; }
-        if (masked[j] === q) { j++; break; }
-        j++;
-      }
-      continue;
-    }
-    if (c === '{') d++;
-    else if (c === '}') d--;
-    j++;
-  }
-  return j;
-}
-
-/**
- * 扫描 LESS **顶层块**（判据与修复器共用的唯一事实源）。
- * 顶层 = 不在任何 {} 内的选择器头；嵌套内层块天然不进结果（这正是新范式的核心）。
- * @returns {Array<{headStart:number,end:number,head:string,bodyStart:number,body:string,text:string}>}
- */
-export function scanTopLevelLessBlocks(content) {
-  const s = typeof content === 'string' ? content : '';
-  if (!s) return [];
-  const masked = maskLessComments(s);
-  const blocks = [];
-  let cursor = 0;
-  let i = 0;
-  while (i < masked.length) {
-    const ch = masked[i];
-    if (ch === '"' || ch === "'" || ch === '`') {
-      const q = ch;
-      i++;
-      while (i < masked.length) {
-        if (masked[i] === '\\') { i += 2; continue; }
-        if (masked[i] === q) { i++; break; }
-        i++;
-      }
-      continue;
-    }
-    if (ch === '{') {
-      const end = findMatchingBraceEnd(masked, i);
-      const headRaw = masked.slice(cursor, i);
-      const lead = headRaw.length - headRaw.trimStart().length;
-      const headStart = cursor + lead;
-      // head 必须取**剥注释后**的文本：否则行注释里的 `.wrapper {` 会被当成选择器头误报
-      const head = headRaw.trim();
-      blocks.push({
-        headStart,
-        end,
-        head,
-        bodyStart: i + 1,
-        body: s.slice(i + 1, Math.max(i + 1, end - 1)),
-        text: s.slice(headStart, end),
-      });
-      i = end;
-      cursor = end;
-      continue;
-    }
-    i++;
-  }
-  return blocks;
-}
-
-/** 单个 class 能否充当「顶层命名空间」（复用既有前缀归一 + 批3 放行，逐字保留） */
-function isPrefixedTopLevelClass(c, prefixId) {
-  if (/^\.c-mc-max-/i.test(c)) return true; // 实例 ID 根类仅作作用域标记，豁免
-  if (!prefixId) return c.startsWith('.c-'); // 空 componentId 放宽，防越修越多死循环
-  const barePrefix = prefixId.startsWith('c-') ? prefixId : `c-${prefixId}`;
-  const stem = stripDecorSlugTail(barePrefix); // 刀 8c：装饰性随机段剥离后的语义干
-  for (const p of new Set([barePrefix, stem])) {
-    if (!p) continue;
-    if (c.startsWith(`.${p}-`) || c.startsWith(`.${p}`)) return true;
-  }
-  // 批3：类名已自带 c- 组件作用域前缀 → 放行（不二次叠加，防双前缀孤儿化）
-  if (/^\.c-[a-z0-9]{2,}-/i.test(c)) return true;
-  return false;
-}
-
-/**
- * 顶层选择器头 → 违规类名集合（每个逗号分支独立判定）。
- * - 分支的**首个复合选择器**里只要有任一 class 带合法前缀 ⇒ 该分支合规
- *   （容纳 `.ant-btn.c-xxx-btn` 这类第三方类+自有类复合形态：它仍只命中带自有类的元素，
- *    不泄漏到宿主；corpus 200 文件实锤此形态存在）。
- * - 顶层 LESS 混入调用/变量声明（行尾 `;`，如 `.common();`）不参与判定——它们不是选择器，
- *   否则会与紧随其后的合法选择器连成一个 head 造成误报（corpus 实锤）。
- * - 无 class 的顶层块（`:root{}` 等）：沿旧行为豁免。corpus 200 文件仅 1 例畸形 `.0台`，
- *   收紧收益≈0、误伤风险不为 0 ⇒ 本批不收紧，登记为观察项。
- */
-function headViolationClasses(head, prefixId) {
-  const cleaned = head
-    .split('\n')
-    .filter((line) => !/;\s*$/.test(line))
-    .join('\n');
-  const bad = new Set();
-  for (const sel of cleaned.split(',')) {
-    const t = sel.trim();
-    if (!t) continue;
-    const firstCompound = t.split(/\s+|>|~|\+/)[0];
-    const classes = firstCompound.match(/\.[A-Za-z_][\w-]*/g) || [];
-    if (classes.length === 0) continue;
-    if (!classes.some((c) => isPrefixedTopLevelClass(c, prefixId))) bad.add(classes[0]);
-  }
-  return [...bad];
-}
-
-/**
- * 收集全部「顶层违规块」（含 @media/@supports/@container 递归内查）。
- * 坐标为**原始全文**绝对下标，text 与原文逐字一致，供 autoFix 原位包裹。
- */
-export function collectPrefixViolationBlocks(content, prefixId = '', opts = {}) {
-  const full = opts.full || content;
-  const base = opts.base || 0;
-  const depth = opts.depth || 0;
-  const out = [];
-  if (depth > 4) return out;
-  for (const b of scanTopLevelLessBlocks(content)) {
-    if (/^@(media|supports|container|layer)\b/i.test(b.head)) {
-      out.push(
-        ...collectPrefixViolationBlocks(b.body, prefixId, {
-          full,
-          base: base + b.bodyStart,
-          depth: depth + 1,
-        }),
-      );
-      continue;
-    }
-    if (/^@/.test(b.head)) continue; // @keyframes/@font-face/@import/变量/混入定义豁免
-    const bad = headViolationClasses(b.head, prefixId);
-    if (bad.length === 0) continue;
-    const start = base + b.headStart;
-    const end = base + b.end;
-    out.push({ start, end, text: full.slice(start, end), head: b.head, classes: bad });
-  }
-  return out;
-}
-
 export function findPrefixViolations(content = '', prefixId = '') {
-  const out = [];
-  const seen = new Set();
-  for (const b of collectPrefixViolationBlocks(content, prefixId)) {
-    for (const c of b.classes) {
-      if (!seen.has(c)) { seen.add(c); out.push(c); }
+  // 负向后瞻 (?<!&) 排除 LESS 父引用写法（&.active / &:hover:not(.active)）——
+  // 这类 class 继承父选择器前缀，不是独立全局 class，不应被判「缺前缀」。
+  // 旧正则 /\.\w+(?=\s*\{)/ 会把 "&.active {" 误提取为 ".active"（& 被丢弃），
+  // 触发 CODE-003 误报 + autoFix 漏修（declRegex 要求 . 前是空白/行首，匹配不到 & 后场景）。
+  const classes = content.match(/(?<!&)\.[a-zA-Z][\w-]+(?=\s*\{)/g) || [];
+  return classes.filter((c) => {
+    if (/^&|^:root|^@keyframes/.test(c)) return false;
+    // 🛡️ 批4（2026-09-28）：主题作用域类（.dark / .light）豁免前缀化 —— 它们挂在**主题根**
+    //   （深浅色切换）上，不是组件作用域 class；补前缀会变成 `.c-xxx-dark`，使 `.dark ...`
+    //   这类主题作用域选择器全部失效。全语料实测：修复前 268 组件 / 1246 个类被误报，
+    //   其中绝大多数正是 `.dark` / `.light`（以及 `.error` / `.normal` 等状态作用域类）。
+    if (THEME_SCOPE_CLASSES.has(c.slice(1).toLowerCase())) return false;
+    // 豁免实例 ID 根类（.c-mc-max-{id}）：它仅作根容器作用域标记，不受组件语义前缀约束；
+    // 否则会被 CODE-003 误报为「缺前缀」并触发 autoFix 二次叠加前缀。
+    if (/^\.c-mc-max-/i.test(c)) return false;
+    // componentId 为空（上游未传）时放宽为「只要有 .c- 前缀即通过」，
+    // 避免空 componentId 导致所有 class 被误报「缺前缀」，陷入越修越多的死循环。
+    if (!prefixId) return !c.startsWith('.c-');
+    // componentId 可能已含 c- 前缀（如 c-env-monitor）或纯 id（如 env-monitor），
+    // 统一归一化为「含 c- 的标准前缀」再匹配；旧实现直接拼 .c-${prefixId}，
+    // 当 componentId 已含 c- 时会叠成 .c-c-env-monitor-，永远不匹配实际 class 导致误报。
+    const barePrefix = prefixId.startsWith('c-') ? prefixId : `c-${prefixId}`;
+    // 🛡️ 刀 8c（2026-09-13）：同时接受「装饰性随机段已剥离」的语义干形态。
+    // 例：全前缀 c-device-monitor-00g6b7vh（随机兜底段）的语义干是 c-device-monitor，
+    // 而 LLM 生成的自然是 .c-device-monitor-*。若只认带装饰段的全前缀，
+    // 会把**正确**的类判为「缺前缀」并二次叠加 → common.less ~半数规则死样式。
+    const stem = stripDecorSlugTail(barePrefix);
+    for (const p of new Set([barePrefix, stem])) {
+      if (!p) continue;
+      if (c.startsWith(`.${p}-`) || c.startsWith(`.${p}`)) return false;
     }
-  }
-  return out;
+    // 🛡️ 批3（2026-09-28 · 幂等收口）：类名**已自带 c- 组件前缀**时不得再叠加。
+    //   背景：LLM 自然命名的前缀（如 `.c-87aa90-stat-item`）常与 componentId 派生的前缀
+    //   （`.c-aa90-`）**不一致** → 旧判据把「已具组件作用域前缀」的类判为「缺前缀」并叠加 →
+    //   产出 `.<stem>-c-87aa90-stat-item` 这种**永不命中模板**的死规则，原声明被孤儿化、
+    //   元素退回 block/默认布局（全语料实测：14/436 组件、330 个选择器被双前缀孤儿化）。
+    //   判据：`^\.c-[a-z0-9]{2,}-` 视为「已有组件作用域前缀」→ 放行。仍保留真正泛化类
+    //   （`.wrapper`/`.item` 等无 c- 前缀者）的补前缀能力。
+    if (/^\.c-[a-z0-9]{2,}-/i.test(c)) return false;
+    return true;
+  });
 }
 
 /**
@@ -639,9 +507,23 @@ export function extractTemplateClasses(files) {
   return classSet;
 }
 
-// [退役 2026-11-13] checkClassHitRate 已随 CODE-003-HIT-RATE 退役一并移除：其唯一调用方即该门禁，
-// 全仓再无消费者；common.less / template 类名集合仍由 extractCommonLessClasses / extractTemplateClasses
-// 提供，供 CODE-020（findUndefinedComponentClasses）消费，不受影响。
+/**
+ * 检查 common.less 类名在 template 中的命中率（CODE-003 扩展：死样式检测）
+ * @param {Set<string>} commonClasses - common.less 中定义的 class 集合
+ * @param {Set<string>} templateClasses - template 中使用的 class 集合
+ * @returns {{ hitRate: number, unusedClasses: string[], totalClasses: number }}
+ */
+export function checkClassHitRate(commonClasses, templateClasses) {
+  const unusedClasses = [];
+  for (const cls of commonClasses) {
+    if (!templateClasses.has(cls)) {
+      unusedClasses.push(cls);
+    }
+  }
+  const totalClasses = commonClasses.size;
+  const hitRate = totalClasses > 0 ? (totalClasses - unusedClasses.length) / totalClasses : 1;
+  return { hitRate, unusedClasses, totalClasses };
+}
 
 /**
  * 提取 SFC 最外层 <template>...</template> 内容。
@@ -1488,9 +1370,40 @@ export class CodeStructureValidator {
       }
     }
 
-    // ========== CODE-009 已于 2026-11-13 退役（用户批准，评审 §5.1）==========
-    // 判据输入 previewAnalysis.componentTitle 经常缺失⇒静默跳过形同虚设；
-    // T1 标题剥离后 declare.componentName 走 componentId 派生，与预览图 OCR 标题不同源，比对无意义。
+    // ========== CODE-009: componentName vs 预览图标题（仅微码）==========
+    // Vue3 不生成 declare.json，跳过此检查
+    if (!isVue3) {
+      const previewTitle =
+        options?.previewAnalysis?.componentTitle ||
+        options?.previewAnalysis?.title ||
+        '';
+      if (previewTitle) {
+        const declareFile = generatedFiles.find(
+          (f) =>
+            f.path &&
+            (f.path.endsWith('declare.json') ||
+              f.path.includes('declare.json')),
+        );
+        if (declareFile) {
+          try {
+            const declare = JSON.parse(declareFile.content);
+            if (
+              declare.componentName &&
+              declare.componentName !== previewTitle
+            ) {
+              issues.push({
+                id: 'CODE-009',
+                severity: 'WARN',
+                file: declareFile.path,
+                message: `declare.json componentName='${declare.componentName}' 与预览图识别标题='${previewTitle}' 不一致，必须使用预览图识别的标题`,
+              });
+            }
+          } catch (e) {
+            // JSON 解析失败，跳过
+          }
+        }
+      }
+    }
 
     // ========== CODE-003: common.less 前缀检查（仅微码）==========
     if (!isVue3) {
@@ -1521,9 +1434,26 @@ export class CodeStructureValidator {
           });
         }
 
-        // [退役 2026-11-13] CODE-003-HIT-RATE（死样式命中率 WARN）已退役：
-        // 0 拦截力、无修复器、在真缺陷场景给出反向错误指导（会把活样式删光），
-        // 且与 CODE-020（反向类名不命中，BLOCK）重叠。死样式症状由覆盖度/DO-NOT-INVENT 负责。
+        // ========== CODE-003 扩展：类名命中率检查（死样式检测）==========
+        // 检查 common.less 中定义的 class 是否真的在 template 中被使用
+        // 命中率 < 60% 视为 WARN（LLM 可能生成了大量无用样式）
+        const commonClasses = extractCommonLessClasses(commonLessFile.content);
+        const templateClasses = extractTemplateClasses(generatedFiles);
+        const { hitRate, unusedClasses, totalClasses } = checkClassHitRate(
+          commonClasses,
+          templateClasses,
+        );
+
+        if (totalClasses > 0 && hitRate < 0.6) {
+          const unusedExamples = unusedClasses.slice(0, 5).join(', ');
+          const moreCount = unusedClasses.length > 5 ? ` 等 ${unusedClasses.length} 个` : '';
+          issues.push({
+            id: 'CODE-003-HIT-RATE',
+            severity: 'WARN',
+            file: commonLessFile.path,
+            message: `common.less 类名命中率过低（${Math.round(hitRate * 100)}%，${unusedClasses.length}/${totalClasses} 个未使用）：${unusedExamples}${moreCount}。这些 class 在 template 中未被引用，属于死样式。建议删除未使用的 class 定义，或检查 template 是否遗漏了对应的 DOM 元素`,
+          });
+        }
       }
     }
 
@@ -1913,11 +1843,9 @@ export class CodeStructureValidator {
       }
     }
 
-    // ========== 🎯 方案6: STYLE-001 common.less 主题类外层选择器包裹检测（微码，BLOCK）==========
-    // 🛡️ 2026-11-13 新范式口径：common.less 顶层是带前缀根类块、业务样式 LESS 嵌套在其内
-    //   （内层短名合法）；本判据只防 **.dark/.light/宿主类** 这种「顶层主题包裹」——
-    //   宿主不给组件根元素添加主题类，包裹后编译成 `.dark .c-xxx` 真实 DOM 0 命中。
-    //   根类（c- 开头）包裹由 (?!c-) 前瞻豁免，与新范式天然兼容。
+    // ========== 🎯 方案6: STYLE-001 common.less 外层选择器包裹检测（微码，BLOCK）==========
+    // common.less 中的 class 必须写在文件根层，禁止被 .dark / .light / 任何外层选择器包裹
+    // 原因：宿主环境不给组件根元素添加 .dark/.light 类，包裹后编译成 `.dark .c-xxx`，真实DOM上0命中 → 样式全部失效
     if (!isVue3) {
       const commonLessFile = generatedFiles.find(
         (f) =>
@@ -1947,8 +1875,8 @@ export class CodeStructureValidator {
             severity: isThemeLike ? 'BLOCK' : 'WARN',
             file: commonLessFile.path,
             message: isThemeLike
-              ? `common.less 中的 class 被主题/作用域选择器 .${wrapper} 外层选择器包裹。宿主不给组件根添加该类，包裹后样式在真实DOM上0命中。必须移除该顶层包裹层（业务样式改为嵌套在带前缀的根类块内）`
-              : `common.less 中 .c- class 被外层选择器 .${wrapper} 包裹（非主题类）。请确认该包裹层在真实 DOM 上存在；若不存在请把业务样式改为嵌套在带前缀的根类块内`,
+              ? `common.less 中的 class 被主题/作用域选择器 .${wrapper} 包裹。宿主不给组件根添加该类，包裹后样式在真实DOM上0命中。必须将所有 .c- class 直接写在文件根层`
+              : `common.less 中 .c- class 被外层选择器 .${wrapper} 包裹（非主题类）。请确认该包裹层在真实 DOM 上存在；若不存在请将 .c- class 提到文件根层`,
           });
         }
       }
@@ -3627,7 +3555,7 @@ export class CodeStructureValidator {
     // ========== 🛡️ CODE-020: 反向类名不命中（fail-closed BLOCK，2026-09-10）==========
     // 事故 P0-6：模板 :class="['c-device-monitor-tab-item', ...]" 漏实例前缀，而 common.less 里是
     // .c-device-monitor-0quu3hqa-c-device-monitor-tab-item → 选择器不命中、样式失效。
-    // CODE-003-HIT-RATE 已于 2026-11-13 退役（0 拦截力、反向误指导、与本条重叠）；反向检测现完全由本 CODE-020 负责。
+    // 已有 CODE-003-HIT-RATE 只查「样式定义了模板没用」（正向死样式），缺「模板用了样式没定义」（反向）。
     // 本检测补反向，纯正则、fail-closed。
     {
       let undefinedCls = [];
@@ -4288,7 +4216,8 @@ export function checkFlexSourceConflicts(files = []) {
  * 检查生成代码中的 flex 使用是否合理：
  * 1. [BLOCK 级] column-flex 容器内有 flex:1 子元素，但容器/子元素缺 min-height:0
  *    → 高度坍塌/撑破父级风险（echarts/表格容器致命），自动补 min-height:0
- * 2. [已退役] FLEX-002（column 无 flex 子属性 WARN）2026-11-13 删除（评审 §5.2）
+ * 2. [WARN 级] column-flex 容器无任何 flex 子属性（无 flex:1 / align / justify / gap）
+ *    → 与块布局等价，纯冗余
  *
  * @param {string} styleContent - <style> 块内容（可含嵌套 less）
  * @returns {Array<{ id: string, severity: string, message: string, suggestion?: string, autoFix?: boolean }>}
@@ -4305,6 +4234,11 @@ export function checkFlexUsage(styleContent) {
 
     const hasFlexChild = /\bflex\s*:\s*1\b|\bflex-grow\s*:\s*1\b/.test(b.body);
     const hasMinHeight0 = /min-height\s*:\s*0\b/.test(b.body);
+    const hasFlexProps =
+      hasFlexChild ||
+      /align-items|justify-content|\bgap\s*:|align-self|flex-shrink|margin-top\s*:\s*auto|margin-bottom\s*:\s*auto/.test(
+        b.body,
+      );
 
     // 1. flex:1 子项 + 缺 min-height:0 → BLOCK，自动补
     if (hasFlexChild && !hasMinHeight0) {
@@ -4318,9 +4252,18 @@ export function checkFlexUsage(styleContent) {
         body: b.body,
       });
     }
-    // 2. 无任何 flex 子属性 → 🗑️ FLEX-002 已于 2026-11-13 退役（用户批准，评审 §5.2）：
-    //    把「column 无 flex 子属性」当坏味道本就不成立（合法写法：语义表达+布局扩展位），
-    //    110 命中零拦截、无 autoFix、无修复轮消费。
+    // 2. 无任何 flex 子属性 → WARN，纯冗余
+    else if (!hasFlexProps) {
+      issues.push({
+        id: 'FLEX-002',
+        severity: 'WARN',
+        message: `column-flex 容器 ${b.selector} 无任何 flex 子属性（flex:1/align/justify/gap），与块级布局等价，属冗余 flex`,
+        suggestion: `移除 \`display:flex; flex-direction:column\` 改用默认块级流，或补充实际需要的 flex 子属性`,
+        autoFix: false,
+        selector: b.selector,
+        body: b.body,
+      });
+    }
   }
 
   return issues;
@@ -4425,7 +4368,7 @@ export function autoFixStyleTag(content, filePath) {
  * 病灶成因：CODE-003 曾用「带装饰性随机段的全前缀」（如 c-device-monitor-00g6b7vh）
  * 判定 LLM 生成的 .c-device-monitor-* 为「缺前缀」，于是在 common.less / .vue 上
  * 二次叠加，产出 .c-device-monitor-00g6b7vh-c-device-monitor-switch —— 该选择器
- * 与模板（c-device-monitor-switch）永不匹配 → 死样式（原 CODE-003-HIT-RATE 实测 48%，该门禁已于 2026-11-13 退役）。
+ * 与模板（c-device-monitor-switch）永不匹配 → 死样式（CODE-003-HIT-RATE 实测 48%）。
  *
  * 折叠规则：`<stem>-<slug8>-<stem>-<rest>` → `<stem>-<rest>`
  *   - stem = 语义干（如 c-device-monitor）
@@ -4555,40 +4498,104 @@ export function autoFixPrefixViolations(
     }
   }
 
-  // 🛡️ 2026-11-13 范式替换：修复动作从「逐类补前缀 + 同步改模板」改为
-  //   「把顶层违规块整体包进带前缀的根类命名空间」。
-  //   - 判据与修复共用 collectPrefixViolationBlocks（同源），不解析第二份样式；
-  //   - 嵌套内层类**零改写**（短名合法），模板 / scoped style 一律零改写；
-  //   - 包一层即获得命名空间与特异性（.c-root .header），幂等：二跑顶层已合规。
-  //   - 历史「逐类补前缀」的双前缀孤儿化（批3 330 选择器实锤）结构性消失。
-  const violationBlocks = collectPrefixViolationBlocks(fixedContent, componentId);
-  if (violationBlocks.length === 0) {
+  const violations = findPrefixViolations(fixedContent, componentId);
+  if (violations.length === 0) {
     // 纯折叠场景：内容已变，交由调用方按 collapsed>0 写回
     return { commonLess: fixedContent, vueFiles, fixedClasses: [], collapsed };
   }
 
   const fixedClasses = [];
-  // 从后往前替换（坐标不失效）；多个违规块各自包一层根类（顶层允许多个带前缀根类块）
-  for (const b of [...violationBlocks].sort((a, z) => z.start - a.start)) {
-    // 继承原块所在行的缩进（@media 内块尤其需要），避免包裹后产物缩进错乱
-    const lineStart = fixedContent.lastIndexOf('\n', b.start - 1) + 1;
-    const baseIndent = /^[ \t]*/.exec(fixedContent.slice(lineStart, b.start))?.[0] || '';
-    const inner = b.text
-      .split('\n')
-      .map((line) => `${baseIndent}  ${line}`)
-      .join('\n');
-    const wrapped = `.${stemPrefix} {\n${inner}\n${baseIndent}}`;
-    fixedContent = fixedContent.slice(0, b.start) + wrapped + fixedContent.slice(b.end);
-    for (const c of b.classes) {
-      const name = c.startsWith('.') ? c.slice(1) : c;
-      if (!fixedClasses.includes(name)) fixedClasses.unshift(name); // 保持源码顺序
+  // 逐个修复违规 class
+  for (const cls of violations) {
+    // cls 形如 ".wrapper" ".item"（已含 . 前缀）
+    const className = cls.startsWith('.') ? cls.slice(1) : cls;
+    const prefixedName = `${stemPrefix}-${className}`;
+
+    // 替换 class 选择器声明（.wrapper { → .c-xxx-wrapper {）
+    // 只替换声明位置（.{className} 后跟 { 或 : 或 ,），不替换内部引用
+    const declRegex = new RegExp(
+      `(\\s|^)\\.${escapeRegExp(className)}(\\s*[{:,])`,
+      'g',
+    );
+    const before = fixedContent;
+    fixedContent = fixedContent.replace(declRegex, `$1.${prefixedName}$2`);
+    if (fixedContent !== before) {
+      fixedClasses.push(className);
+    }
+
+    // 联动修复 .vue 文件中的 class="wrapper" → class="c-xxx-wrapper"
+    for (const vueFile of vueFiles) {
+      if (!vueFile.content) continue;
+      // 匹配 class="...wrapper..." 或 :class="'wrapper'"（要求 className 前不是字母/数字/短横，
+      // 避免在已带前缀类如 c-monitor-root 中二次匹配到裸名 'root' 造成双重前缀）
+      const classAttrRegex = new RegExp(
+        `((?:class|:class)\\s*=\\s*["'][^"']*)(?<![a-z0-9-])\\b${escapeRegExp(className)}\\b([^"']*["'])`,
+        'g',
+      );
+      const beforeVue = vueFile.content;
+      vueFile.content = vueFile.content.replace(
+        classAttrRegex,
+        `$1${prefixedName}$2`,
+      );
+
+      // 也修复模板中 :class 绑定对象字面量 { wrapper: true }
+      // 🛡️ 修复（2026-08-28 mc-1787904543641-38cfa308 实锤 P0）：
+      //   这里把「裸 key」改写成带前缀的 class（active → c-monitor-active）。改写后的 key 含连字符，
+      //   若不加引号就是非法 JS 表达式，compiler-sfc 直接报
+      //   "Error parsing JavaScript expression: Unexpected token, expected ',' (1:27)"
+      //   → Vite 对 index.vue 返回 500 → 前端 fetch 失败，表现为「组件资源加载失败（网络错误 / 404）」。
+      //   此处就地补引号：标识符 key 保持裸写，非标识符 key 包单引号。
+      //   已带引号的 key（{ 'active': x }）因前置引号挡住字面量匹配，不会被二次改写。
+      const classBindRegex = new RegExp(
+        `([\\[{,]\\s*)(?<![a-z0-9-])${escapeRegExp(className)}(\\s*[:}\\]])`,
+        'g',
+      );
+      vueFile.content = vueFile.content.replace(
+        classBindRegex,
+        (_m, pre, post) =>
+          `${pre}${quoteObjectKeyIfNeeded(prefixedName)}${post}`,
+      );
+
+      // 🛡️ P2（2026-09-08）：同时修复 <style scoped> 块内无前缀的 CSS 选择器。
+      // 子组件的 <style scoped> 也可能引用裸 class 名（.wrapper），需要加前缀。
+      // 只处理 <style scoped> 块（不处理 <style> 全局块，因为全局块走 common.less 路径）。
+      const styleScopedRegex = /<style\s+scoped[^>]*>([\s\S]*?)<\/style>/gi;
+      const styleMatch = styleScopedRegex.exec(vueFile.content);
+      if (styleMatch) {
+        const styleBody = styleMatch[1];
+        const scopedSelectorRegex = new RegExp(
+          `\\.${escapeRegExp(className)}(\\s*[{:,>~+\\s])`,
+          'g',
+        );
+        const fixedStyleBody = styleBody.replace(
+          scopedSelectorRegex,
+          `.${prefixedName}$1`,
+        );
+        if (fixedStyleBody !== styleBody) {
+          vueFile.content = vueFile.content.replace(styleBody, fixedStyleBody);
+        }
+      }
     }
   }
 
   return { commonLess: fixedContent, vueFiles, fixedClasses, collapsed };
 }
 
-// 🗑️ 2026-11-13：逐类补前缀修复器退役 ⇒ 其对象字面量 key 加引号辅助函数一并删除。
+/** JS 标识符（对象字面量可裸写的 key） */
+const JS_IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * 对象字面量 key 按需加引号。
+ * 含 - / . / : 等非标识符字符的 key 裸写会导致 compiler-sfc 解析失败，必须加引号。
+ * @param {string} key
+ * @returns {string} 原样返回或单引号包裹
+ */
+function quoteObjectKeyIfNeeded(key) {
+  const k = String(key ?? '');
+  if (!k) return k;
+  return JS_IDENTIFIER_RE.test(k) ? k : `'${k.replace(/'/g, "\\'")}'`;
+}
+
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

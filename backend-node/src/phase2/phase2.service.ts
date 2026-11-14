@@ -563,6 +563,32 @@ export class Phase2Service {
     });
   }
 
+  /**
+   * 🛡️ P0-5（2026-11-14 · mc-max-1794649936763-a9c2f958 实锤）：**交付前终态闸**的唯一判据源。
+   *
+   * 背景：`cancelTask` 只 abort 了 AbortController，而交付段（候选预览发布 / 组件登记 / 配额）
+   * 发生在 code-gen 之后、且不检查 abort ⇒ 实测 cancel 17:53:26 后，17:53:36 仍
+   * `Component record saved` + 配额更新，出现「已终止却产出正式组件」的矛盾状态。
+   *
+   * 判据：任务终态为 `cancelled` / `failed` ⇒ 视为已交付流产，跳过发布与登记。
+   * 只读、幂等、失败安全：读不到任务时按「未终止」放行（宁可多交付一次，也不误丢产物）。
+   */
+  private isDeliveryAbortedInDelivery(sessionId: string): {
+    aborted: boolean;
+    status?: string;
+  } {
+    try {
+      const task = this.tasksService?.getTask?.(sessionId);
+      const status = task?.status;
+      if (status === 'cancelled' || status === 'failed') {
+        return { aborted: true, status };
+      }
+    } catch {
+      /* 读取失败按未终止处理，不阻断交付 */
+    }
+    return { aborted: false };
+  }
+
   private async executeGeneration(
     sessionId: string,
     params: {
@@ -688,13 +714,26 @@ export class Phase2Service {
       // 现在用户自己的池注册与择优统一由下方 resolveVisionConfig/resolveTextConfig 完成
       // （内部 setProviders 打 scope 标 + pick，只认本用户指纹），本任务绝不再读他人注册。
 
-      console.log('[Phase2] 原始 config:', JSON.stringify(config).substring(0, 400));
+      // 🔴 安全（2026-11-14）：原实现直接 `JSON.stringify(cfg)` 打日志，apiKey 明文落盘到
+      //   server.log（实测泄露 sk-tl-…）。改成统一掩码：只保留前后 4 位，其余打码。
+      const maskCfg = (cfg: any) => {
+        if (!cfg || typeof cfg !== 'object') return cfg;
+        const out: any = { ...cfg };
+        for (const k of Object.keys(out)) {
+          if (/apikey|token|secret/i.test(k) && typeof out[k] === 'string' && out[k]) {
+            const v = String(out[k]);
+            out[k] = v.length <= 8 ? '***' : `${v.slice(0, 4)}***${v.slice(-4)}`;
+          }
+        }
+        return out;
+      };
+      console.log('[Phase2] 原始 config:', JSON.stringify(maskCfg(config)).substring(0, 400));
       const visionCfg = resolveVisionConfig(mergedAiConfig);
       const textCfg = resolveTextConfig(mergedAiConfig);
       visionModelUsed = visionCfg?.model || null;
       textModelUsed = textCfg?.model || null;
-      console.log('[Phase2] visionCfg:', JSON.stringify(visionCfg));
-      console.log('[Phase2] textCfg:', JSON.stringify(textCfg));
+      console.log('[Phase2] visionCfg:', JSON.stringify(maskCfg(visionCfg)));
+      console.log('[Phase2] textCfg:', JSON.stringify(maskCfg(textCfg)));
 
       // 🛡️ 生成闸门：视觉能力硬校验（2026-09-10）
       // 组件生成的第一步就是「看截图 / Figma 图」做视觉解析，模型若不具备视觉能力，
@@ -1217,7 +1256,23 @@ export class Phase2Service {
       // （实锤：mc-max-1788444537578 生成 c-env-monitor-3 后报「候选预览发布事务提交失败」）。
       let publishContext = { ...previewContext };
 
-      if (hasPreviewEntry) {
+      // 🛡️ P0-5（2026-11-14 · mc-max-1794649936763-a9c2f958 实锤）：**交付前终态闸**。
+      //   实测 cancel 17:53:26 → 管线没理会 abort，17:53:36 仍发布候选预览并登记为正式组件，
+      //   造成「用户已终止，却依然产出一个正式组件」+ 配额被扣 + 任务状态自相矛盾。
+      //   语义：cancelled / failed ⇒ 不发布、不登记，只留 warn 与事务回滚；产物仍留在 temp/workspace
+      //   供人工或 retry 复用，绝不静默丢弃。
+      const deliveryGate = this.isDeliveryAbortedInDelivery(sessionId);
+      if (deliveryGate.aborted) {
+        this.logger.warn(
+          `[Phase2] 任务已${deliveryGate.status === 'cancelled' ? '终止' : '失败'}，跳过候选预览发布与组件登记: ${sessionId}`,
+        );
+        publisher.rollbackQualityPreviewTransaction({
+          ...previewContext,
+          reason: `任务已${deliveryGate.status === 'cancelled' ? '终止' : '失败'}`,
+        });
+      }
+
+      if (hasPreviewEntry && !deliveryGate.aborted) {
         try {
           // 以最终 outputPath 再同步一次，确保预启动截图不会发布过时文件。
           // publisher 会复用现有 baseline，只替换当前 candidate，不会覆盖回滚基线。
@@ -1254,7 +1309,7 @@ export class Phase2Service {
             candidatePublishError.stack,
           );
         }
-      } else {
+      } else if (!deliveryGate.aborted) {
         publisher.rollbackQualityPreviewTransaction({
           ...previewContext,
           reason: '缺少 package/index.vue，无法发布候选预览',
@@ -1389,6 +1444,15 @@ export class Phase2Service {
       // workspace 同步已在 broadcast 前完成，此处仅剩 DB 持久化；DB 单次写入 ~1.6s，远低于前端 SSE 看门狗阈值。
       await (async () => {
         if (terminalError || !qualityPassed) return; // 生成/质量/LESS 门禁失败时不登记为正式组件
+        // 🛡️ P0-5：任务已被用户终止/已失败 ⇒ 不登记为正式组件（终态闸二次校验，
+        //   防止 publish 段与 save 段之间的竞态窗口；与发布段同一判据源）。
+        const saveGate = this.isDeliveryAbortedInDelivery(sessionId);
+        if (saveGate.aborted) {
+          this.logger.warn(
+            `[Phase2] 任务已${saveGate.status === 'cancelled' ? '终止' : '失败'}，跳过组件登记与配额更新: ${sessionId}`,
+          );
+          return;
+        }
 
         const hasEntry =
           !!outputPath && existsSync(join(outputPath, 'package', 'index.vue'));

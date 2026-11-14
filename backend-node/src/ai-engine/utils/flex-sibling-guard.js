@@ -213,8 +213,7 @@ export function extractStyleBlocks(styleContent) {
     // 🛡️ 2026-09-17 根治：此前只剥 @ 指令与变量定义，漏了 // 单行注释 ——
     // vue3 产物 <style> 顶部常写 `// 引入根共享 less...`、`// 根容器（零添加铁律...）`，
     // 正则 `([^{}]+)\{` 把注释连同 selector 一起吞进 selector（注释里无 {}），
-    // 导致冗余 flex 判定（原 FLEX-002，2026-11-13 已退役）误报「该 selector 无 flex 子属性」、
-    // 或把真实 flex 规则整块错配。
+    // 导致 FLEX-002 误报「该 selector 无 flex 子属性」、或把真实 flex 规则整块错配。
     // 先剥注释再匹配，selector 才是纯类名。
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|\n)\s*\/\/[^\n]*/g, '$1')
