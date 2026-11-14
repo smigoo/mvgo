@@ -83,7 +83,7 @@
             <input type="checkbox" id="ai-use-vision" style="width:auto;margin:0;" /> 导出渲染图并用视觉模型定层级/顺序
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
-            <input type="checkbox" id="ai-use-layout-intent" style="width:auto;margin:0;" checked /> 启用视觉布局分析（默认开）
+            <input type="checkbox" id="ai-use-layout-intent" style="width:auto;margin:0;" checked /> 启用视觉布局分析（AI 命名用，非 Auto Layout；默认开）
           </label>
           <label class="hidden" style="display:none;align-items:center;gap:6px;font-weight:500;color:#cccccc;cursor:pointer;">
             <input type="checkbox" id="ai-set-export" style="width:auto;margin:0;" checked /> 设置资源导出属性（icon→SVG、img/bg→PNG@2x）
@@ -96,6 +96,12 @@
           </label>
           <label class="hidden">命名规范参考（可选）</label>
           <textarea id="ai-naming-ref" class="hidden" rows="3" placeholder="例：header / header-slot-right / section-title-xxx / section-xxx / graphic-xxx / icon-xxx" style="border:1px solid #444444;border-radius:4px;padding:8px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box;background-color:#2d2d2d;color:#e0e0e0;resize:vertical;font-family:inherit;"></textarea>
+          <label style="display:block;font-weight:500;color:#cccccc;font-size:12px;margin-bottom:4px;">组件命名规范（落盘给生成管线的组件名）</label>
+          <select id="ai-naming-convention" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;margin-bottom:12px;">
+            <option value="cp">cp-（整理工具内部语义标签，默认）</option>
+            <option value="kebab">c-tunnel-*（kebab-case，aidocs / 隧道组件库）</option>
+            <option value="pascal">PascalCase（如 EquipmentMonitor）</option>
+          </select>
           <button id="btn-save-ai" class="secondary" style="width:100%">保存设置（仅存本机）</button>
           <button id="btn-list-models" class="secondary" style="width:100%;margin-top:8px;">列出可用模型（探测哪些支持视觉）</button>
           <button id="btn-probe-thinking" class="secondary" style="width:100%;margin-top:8px;">探测关思考（逐个方言实测，纯文本小请求）</button>
@@ -153,10 +159,16 @@
                   <strong style="font-size:12px;color:#66b3ff;">结构契约</strong>
                   <span id="contract-meta" style="font-size:10px;color:#888;"></span>
                   <button id="btn-copy-contract" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">📋 复制</button>
+                  <button id="btn-export-json" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">🧩 JSON</button>
                   <button id="btn-push-mvgo" class="primary" style="font-size:11px;padding:3px 8px;margin:0;">🚀 推送生成</button>
+                  <button id="btn-download-json" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">💾 存JSON</button>
+                  <button id="btn-download-contract" class="secondary" style="font-size:11px;padding:3px 8px;margin:0;">💾 存契约</button>
                 </div>
                 <div id="mvgo-tip" style="font-size:11px;color:#4ade80;line-height:1.5;margin-bottom:4px;"></div>
                 <pre id="contract-text" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;margin:0;"></pre>
+                <pre id="contract-json-text" class="hidden" style="font-size:10px;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;margin:6px 0 0;"></pre>
+                <pre id="auto-layout-report" class="hidden" style="font-size:10px;line-height:1.5;color:#ffcc99;white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;margin:6px 0 0;padding:6px;background:#161616;border:1px solid #444;border-radius:4px;"></pre>
+                <div id="cache-hint" style="font-size:10px;color:#888;margin-top:4px;display:none;"></div>
                 <details style="margin-top:8px;">
                   <summary style="cursor:pointer;font-size:11px;color:#888;">⚙️ 推送设置</summary>
                   <div style="margin-top:6px;font-size:11px;color:#bbb;line-height:1.6;">
@@ -211,6 +223,7 @@
           <h2>关于</h2>
           <p class="hint">
             把 Figma 里 Frame 2136、Rectangle 8 这类默认图层名改成看得懂的名字，按模块分组，标上导出设置，整理完导出一份结构清单（结构契约 → mvgo）。只改名字、分组和导出设置，样式不改；「仅结构化整理」这类零 token 工具不需要填 Key。
+            <br/><span style="color:#ffcc99;">Auto Layout 自检是<strong>只读体检</strong>：只用几何推断「该不该有 AL / mode 是否标错」，把建议值输出到结构清单与 JSON，<strong>不设置也不修改任何 Auto Layout 属性</strong>。插件不连生成管线，整理结果仅本地缓存与下载。</span>
           </p>
           <h2>使用步骤</h2>
           <ol>
@@ -367,6 +380,7 @@
         const groupModules = document.getElementById("ai-group-modules").checked;
         const disableThinking = document.getElementById("ai-disable-thinking").checked;
         const namingRef = document.getElementById("ai-naming-ref").value.trim();
+        const namingConvention = document.getElementById("ai-naming-convention").value.trim() || "cp";
         if (!baseUrl || !apiKey || !model) {
           aiConfigStatus.innerHTML = "<span style='color:#ff9999'>❌ 请填写完整的接口地址 / API Key / 模型名</span>";
           return;
@@ -381,7 +395,7 @@
           const ok = !!(data.choices && data.choices[0] && data.choices[0].message);
           if (!ok) throw new Error("返回结构异常：" + JSON.stringify(data).slice(0, 200));
           parent.postMessage(
-            { pluginMessage: { type: "save-ai-config", baseUrl, apiKey, model, visionModel, organizeModel, useVision, useLayoutIntent, autoLayoutIntent: useLayoutIntent, setExport, groupModules, disableThinking, namingRef } },
+            { pluginMessage: { type: "save-ai-config", baseUrl, apiKey, model, visionModel, organizeModel, useVision, useLayoutIntent, autoLayoutIntent: useLayoutIntent, setExport, groupModules, disableThinking, namingRef, namingConvention } },
             "*"
           );
         } catch (e) {
@@ -496,6 +510,8 @@
 
       // v20261110.19 结构契约：纯内存把「整理后节点名 + 层级」送进 mvgo 生成请求，不落盘、不缓存。
       let currentContract = null;
+      // v20261114 P0-1：结构化 JSON 契约（与文本契约同源，嵌套 JSON 形态），推送时一并发给管线。
+      let currentJson = null;
       function setMvgoTip(s, ok) {
         const tip = document.getElementById("mvgo-tip");
         if (!tip) return;
@@ -520,8 +536,34 @@
           navigator.clipboard.writeText(text).then(() => done("已复制 " + text.length + " 字"), fallback);
         else fallback();
       }
+      function downloadFile(filename, content, mime) {
+        try {
+          const blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click();
+          setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+          return true;
+        } catch (e) { return false; }
+      }
+      function downloadContract() {
+        const text = (currentContract && currentContract.text) || "";
+        if (!text) { setMvgoTip("请先生成结构契约", false); return; }
+        const name = (currentJson && currentJson.componentName) || (currentContract && currentContract.componentName) || "figma-structure";
+        if (downloadFile(name + ".structure.txt", text, "text/plain;charset=utf-8")) setMvgoTip("已下载契约文本 " + text.length + " 字", true);
+        else copyContractText();
+      }
+      function downloadJson() {
+        if (!currentJson || !currentJson.json) { setMvgoTip("请先生成 JSON 契约", false); return; }
+        const name = currentJson.componentName || "figma-structure";
+        const content = JSON.stringify(currentJson.json, null, 2);
+        if (downloadFile(name + ".structure.json", content, "application/json")) setMvgoTip("已下载 JSON " + content.length + " 字", true);
+        else copyContractText();
+      }
       // v20261110.28：契约格式版本由 PLUGIN_VERSION 单一来源下发；nodeId 开关显式开启。
       function requestContract() {
+        currentJson = null; // v20261114 P0-1：刷新文本契约时清空可能过期的 JSON 缓存，避免 push 错配
         document.getElementById("contract-box").classList.remove("hidden");
         document.getElementById("contract-text").textContent = "⏳ 正在读取整理后的图层树...";
         setMvgoTip("");
@@ -533,6 +575,22 @@
         } }, "*");
       }
       document.getElementById("btn-export-contract").addEventListener("click", requestContract);
+      // v20261114 P0-1：导出结构化 JSON 契约（同名「🧩 JSON」按钮），与文本契约同源。
+      function requestJson() {
+        const jsonBox = document.getElementById("contract-json-text");
+        jsonBox.classList.remove("hidden");
+        jsonBox.textContent = "⏳ 正在读取整理后的图层树（JSON）...";
+        setMvgoTip("");
+        const cb = document.getElementById("mvgo-include-ids");
+        const nc = document.getElementById("ai-naming-convention");
+        parent.postMessage({ pluginMessage: {
+          type: "export-structure-json",
+          includeIds: !!(cb && cb.checked),
+          namingConvention: (nc && nc.value) || "cp",
+          version: PLUGIN_VERSION,
+        } }, "*");
+      }
+      document.getElementById("btn-export-json").addEventListener("click", requestJson);
       document.getElementById("mvgo-include-ids").addEventListener("change", () => {
         if (currentContract && currentContract.text) requestContract();
       });
@@ -548,10 +606,13 @@
           || (currentContract.figmaUrl || "");
         if (!base) { setMvgoTip("请填 mvgo 地址", false); return; }
         if (!figmaUrl) { setMvgoTip("缺少 Figma 链接（Max 档必需）", false); return; }
-        // v20261110.28 P1-5：契约首行是 cp-<语义>（已归一化），优先用它做组件名，
-        // 避免把 Figma 原始中文名 / 带空格名当成 componentName 传下游。
-        const cpMatch = text.match(/^-\s+(cp-[^\s#]+)/m);
-        const componentName = (cpMatch && cpMatch[1]) || currentContract.rootName || "figma-component";
+        // v20261114 P0-2：若已导出 JSON 契约，优先用其按命名规范派生的 componentName；
+        // 否则回退到文本契约首行 cp-<语义>（v20261110.28 P1-5），避免把 Figma 原始名当组件名。
+        let componentName = (currentJson && currentJson.componentName) || null;
+        if (!componentName) {
+          const cpMatch = text.match(/^-\s+(cp-[^\s#]+)/m);
+          componentName = (cpMatch && cpMatch[1]) || currentContract.rootName || "figma-component";
+        }
         const body = {
           figmaUrl: figmaUrl,
           componentType: componentType,
@@ -576,6 +637,8 @@
           copyContractText();
         }
       });
+      document.getElementById("btn-download-json").addEventListener("click", downloadJson);
+      document.getElementById("btn-download-contract").addEventListener("click", downloadContract);
 
       // 阶段 1：只读结构方案（C 双轨：视觉语义分区 + 几何校验兜底）
       document.getElementById("btn-plan-structure").addEventListener("click", () => {
@@ -675,6 +738,7 @@
         if (msg.grouped) parts.push("成组 " + msg.grouped);
         if (msg.deleted) parts.push("删除 " + msg.deleted);
         if (msg.decorMerged) parts.push("背景收纳 " + msg.decorMerged);
+        if (msg.chartLegendGuarded) parts.push("图例同图表容器守护 " + msg.chartLegendGuarded);
         if (msg.sorted) parts.push("顺序整理 " + msg.sorted);
         if (msg.exportSet) parts.push("导出预设 " + msg.exportSet);
         if (msg.moduleGroups) parts.push("业务容器 " + msg.moduleGroups);
@@ -711,6 +775,7 @@
           "版本 v" + PLUGIN_VERSION,
           "容器 " + (msg.containers || 0),
           "背景收纳 " + (msg.decorMerged || 0),
+          "图例同图表容器守护 " + (msg.chartLegendGuarded || 0),
           "前景保留 " + (msg.foregroundKept || 0),
           "建组失败 " + (msg.groupFailed || 0),
           "布局异常 " + (msg.layoutErrors || 0),
@@ -754,6 +819,7 @@
           (msg.groupErrorMsg ? "<br/><span style='color:#ffcc99;font-size:11px;'>建组异常（figma.group 真实报错）：" + esc(msg.groupErrorMsg) + "</span>" : "") +
           (msg.structurePlanText ? "<br/><span style='color:#66b3ff;font-size:11px;'>结构方案（执行前只读快照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #3a3a3a;border-radius:4px;color:#a9b6c4;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structurePlanText) + "</pre>" : "") +
           (msg.structureList ? "<br/><span style='color:#4ade80;font-size:11px;'>新建业务容器清单（方案 / 实际对照）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #444;border-radius:4px;color:#c9d1d9;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.structureList) + "</pre>" : "") +
+          (msg.autoLayoutText ? "<br/><span style='color:#ffcc99;font-size:11px;'>Auto Layout 自检（只读 · 不修改图层）</span><pre style='margin:4px 0 0;padding:6px;background:#161616;border:1px solid #5a4a2a;border-radius:4px;color:#ffcc99;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto;'>" + esc(msg.autoLayoutText) + "</pre>" : "") +
           qualityHtml +
           (timingLine() ? "<br/><span style='color:#ffd166;font-size:11px;'>" + esc(timingLine()) + "</span>" : "") +
           "<br/>回画布刷新查看结果。";
@@ -765,6 +831,7 @@
             (msg.groupErrorMsg ? "\n建组异常：" + msg.groupErrorMsg : "") +
             (msg.structurePlanText ? "\n\n【结构方案（执行前快照）】\n" + msg.structurePlanText : "") +
             (msg.structureList ? "\n\n【新建业务容器清单（方案/实际对照）】\n" + msg.structureList : "") +
+            (msg.autoLayoutText ? "\n\n【Auto Layout 自检（只读）】\n" + msg.autoLayoutText : "") +
             (msg.qualityText ? "\n\n【结构质量评分】\n" + msg.qualityText : "") +
             (timingLine() ? "\n\n【分阶段耗时】\n" + timingLine() : "");
         } catch (e) {}
@@ -1949,6 +2016,59 @@
             if (fu && message.figmaUrl) fu.value = message.figmaUrl;
             break;
           }
+          case "structure-json": {
+            const el = document.getElementById("contract-json-text");
+            if (!message.ok) {
+              el.classList.remove("hidden");
+              el.textContent = "❌ " + message.error;
+              currentJson = null;
+              break;
+            }
+            currentJson = message;
+            el.textContent = message.text;
+            const meta = document.getElementById("contract-meta");
+            if (meta) {
+              meta.textContent = (meta.textContent ? meta.textContent + "  · " : "")
+                + "JSON " + (message.json && message.json.schemaVersion || "")
+                + " · 组件名 " + (message.componentName || "?")
+                + " · " + ((message.json && message.json.stats && message.json.stats.nodes) || 0) + " 节点";
+            }
+            // JSON 已就绪：componentName 供可选「推送生成」使用；JSON 本身只走本地缓存/下载，不传后端。
+            const alRep = document.getElementById("auto-layout-report");
+            if (alRep) {
+              if (message.autoLayoutText) { alRep.textContent = message.autoLayoutText; alRep.classList.remove("hidden"); }
+              else alRep.classList.add("hidden");
+            }
+            setMvgoTip("已生成 JSON 契约，可点「🚀 推送生成」", true);
+            break;
+          }
+          case "structure-cache": {
+            // v20261114：启动时从本地缓存回填整理结果，不依赖后端。
+            const c = message.cache;
+            if (!c) break;
+            try {
+              if (c.contractText) {
+                currentContract = { ok: true, text: c.contractText, componentName: c.componentName, figmaUrl: c.figmaUrl, rootName: c.rootName, version: "" };
+                const box = document.getElementById("contract-box");
+                if (box) box.classList.remove("hidden");
+                const el = document.getElementById("contract-text");
+                if (el) el.textContent = c.contractText;
+                const meta = document.getElementById("contract-meta");
+                if (meta) meta.textContent = "本地缓存" + (c.ts ? " · " + new Date(c.ts).toLocaleString() : "");
+                const fu = document.getElementById("mvgo-figma-url");
+                if (fu && c.figmaUrl) fu.value = c.figmaUrl;
+              }
+              if (c.json) {
+                currentJson = { ok: true, json: c.json, text: JSON.stringify(c.json, null, 2), componentName: c.componentName };
+                const jel = document.getElementById("contract-json-text");
+                if (jel) { jel.classList.remove("hidden"); jel.textContent = currentJson.text; }
+              }
+              const hint = document.getElementById("cache-hint");
+              if (hint) { hint.style.display = "block"; hint.textContent = "已从本地缓存恢复（" + (c.ts ? new Date(c.ts).toLocaleString() : "上次") + "）· 重新生成即覆盖"; }
+              setMvgoTip("已恢复本地缓存的整理结果（不依赖后端）", true);
+            } catch (e) {}
+            break;
+          }
           case "ai-organize-result":
             // v20261110.53：应用阶段 = 发出 apply-ai-ops → Figma 回报结果（其中 postMs 是 code.js 自身后处理）
             if (RUN_TIMING.applyT0) RUN_TIMING.applyMs = Date.now() - RUN_TIMING.applyT0;
@@ -1975,6 +2095,7 @@
               document.getElementById("ai-group-modules").checked = message.cfg.autoModuleGroups !== false; // v20261110.8 起默认开启（旧配置无此键）
               document.getElementById("ai-disable-thinking").checked = message.cfg.disableThinking !== false;
               document.getElementById("ai-naming-ref").value = message.cfg.namingRef || "";
+              document.getElementById("ai-naming-convention").value = message.cfg.namingConvention || "cp";
               aiConfigStatus.textContent = "已加载保存的配置";
             }
             break;

@@ -53,11 +53,25 @@ figma.on("selectionchange", broadcastSelection);
 
 figma.showUI(__html__, { width: 360, height: 560 });
 
-// 启动：恢复本地服务端口 + 广播一次当前选区
+// v20261114：整理结果本地缓存（figma.clientStorage）。重开插件 / 切换文件后自动回填，不依赖后端。
+async function cacheStructureResult(partial) {
+  try {
+    const prev = await figma.clientStorage.getAsync("mvgo-structure-cache") || {};
+    await figma.clientStorage.setAsync("mvgo-structure-cache", { ...prev, ...partial, ts: Date.now() });
+  } catch (e) {}
+}
+
+// 启动：恢复本地服务端口 + 恢复整理缓存 + 广播一次当前选区
 (async () => {
   try {
     const p = await figma.clientStorage.getAsync("serverPort");
     if (p) state.serverPort = p;
+  } catch (e) {}
+  try {
+    const cache = await figma.clientStorage.getAsync("mvgo-structure-cache");
+    if (cache && (cache.contractText || cache.json)) {
+      figma.ui.postMessage({ type: "structure-cache", cache });
+    }
   } catch (e) {}
   broadcastSelection();
 })();
@@ -90,6 +104,7 @@ figma.ui.onmessage = async (msg) => {
     case "clear-cache":
       // 插件关闭时清空 transient 缓存（选区回退缓存）；AI 配置(clientStorage)属「设置」保留不清除
       lastNonEmptySelection = [];
+      figma.clientStorage.deleteAsync("mvgo-structure-cache").catch(() => {});
       break;
     case "save-server-port":
       state.serverPort = msg.port || 3055;
@@ -210,6 +225,8 @@ figma.ui.onmessage = async (msg) => {
         const contract = buildStructureContract(root, {
           includeIds: !!cOpts.includeIds,
           version: String(cOpts.version || SCHEMA_VERSION),
+          // v20261114 P0-2：命名规范仅影响落盘 componentName，组织内 cp-* 语义标签不变。
+          namingConvention: String(cOpts.namingConvention || "cp"),
         });
         let fileKey = "";
         try { fileKey = String(figma.fileKey || ""); } catch (e) {}
@@ -222,10 +239,65 @@ figma.ui.onmessage = async (msg) => {
           text: contract.text, nodes: contract.nodes, truncated: contract.truncated,
           loops: contract.loops, slots: contract.slots, sections: contract.sections,
           omitted: contract.omitted, includeIds: !!cOpts.includeIds, version: contract.version,
+          componentName: contract.componentName,
           rootName: String(root.name || ""), fileKey: fileKey, nodeId: nodeId, figmaUrl: figmaUrl,
+        });
+        // v20261114：整理结果本地缓存（不依赖后端）；只带本指令产生的字段，避免覆盖另一形态。
+        cacheStructureResult({
+          fileKey, nodeId, rootName: String(root.name || ""), figmaUrl,
+          componentName: contract.componentName, namingConvention: String(cOpts.namingConvention || "cp"),
+          contractText: contract.text,
         });
       } catch (error) {
         figma.ui.postMessage({ type: "structure-contract", ok: false, error: error.message });
+      }
+      break;
+    }
+    // v20261114 P0-1：结构化 JSON 契约（与 export-structure-contract 同源，输出嵌套 JSON 而非文本）。
+    // 供管线按 nodeId 精确回填、按骨架做结构校验；纯内存、不写文件、不缓存。
+    case "export-structure-json": {
+      try {
+        const jOpts = msg || {};
+        let sel = figma.currentPage.selection;
+        if (!sel || sel.length === 0) sel = resolveCachedSelection();
+        if (!sel || sel.length === 0) {
+          figma.ui.postMessage({ type: "structure-json", ok: false, error: "请先在画布中选中要整理的框架节点" });
+          break;
+        }
+        let root = sel[0];
+        if (sel.length > 1) root = sel[0].parent;
+        if (!root || !("children" in root)) {
+          figma.ui.postMessage({ type: "structure-json", ok: false, error: "选中的节点不是容器，请选中框架 / 分组" });
+          break;
+        }
+        const json = buildStructureJson(root, {
+          includeIds: !!jOpts.includeIds,
+          version: String(jOpts.version || SCHEMA_VERSION),
+          namingConvention: String(jOpts.namingConvention || "cp"),
+          raw: !!jOpts.raw,
+        });
+        let fileKey = "";
+        try { fileKey = String(figma.fileKey || ""); } catch (e) {}
+        const nodeId = String(root.id || "").replace(/:/g, "-");
+        figma.ui.postMessage({
+          type: "structure-json", ok: true,
+          json: json,
+          text: JSON.stringify(json, null, 2),
+          componentName: json.componentName,
+          rootName: String(root.name || ""),
+          fileKey: fileKey, nodeId: nodeId,
+          figmaUrl: fileKey ? "https://www.figma.com/design/" + fileKey + "/x?node-id=" + nodeId : "",
+          // v20261114 L0：只读自检摘要，UI 直接展示；完整明细在 json.autoLayout 里。
+          autoLayoutText: json.autoLayout ? formatAutoLayoutReport(json.autoLayout) : "",
+        });
+        // v20261114：整理结果本地缓存（不依赖后端）；只带本指令产生的字段，避免覆盖另一形态。
+        cacheStructureResult({
+          fileKey, nodeId, rootName: String(root.name || ""),
+          componentName: json.componentName, namingConvention: String(jOpts.namingConvention || "cp"),
+          json,
+        });
+      } catch (error) {
+        figma.ui.postMessage({ type: "structure-json", ok: false, error: error.message });
       }
       break;
     }
@@ -268,6 +340,7 @@ figma.ui.onmessage = async (msg) => {
           chartNormalized: 0, chartAtFixed: 0,
           arcChartPromoted: 0, arcChartExportCleared: 0, arcChartFailed: 0,
           legendNormalized: 0, legendSwatchFixed: 0,
+          chartLegendGuarded: 0, chartLegendSkippedMerge: 0,
           lineChartPromoted: 0, lineChartExportCleared: 0, lineChartFailed: 0,
           chartSeriesFolders: 0, chartExportsBlocked: 0, chartSubtreeGuarded: 0,
           barChartPromoted: 0, barChartFailed: 0,
@@ -355,6 +428,8 @@ figma.ui.onmessage = async (msg) => {
           postMs: Date.now() - tStruct0,   // v20261110.53
           total, renamed: 0, reparented: 0, reordered: 0, grouped: 0, deleted: 0,
           decorMerged: summary.decorMerged, sorted: summary.sorted,
+          chartLegendGuarded: summary.chartLegendGuarded,
+          chartLegendSkippedMerge: summary.chartLegendSkippedMerge,
           skippedOverlap: summary.skippedOverlap, conflict: 0, doubleConfirmed: 0,
           intentShared: 0, orderMismatch: 0,
           rootHeaderPromoted: summary.rootHeaderPromoted, rootHeaderAlready: summary.rootHeaderAlready,
@@ -389,6 +464,7 @@ figma.ui.onmessage = async (msg) => {
           sectionContainersRenamed: summary.sectionContainersRenamed,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
+          autoLayoutText: autoLayoutTextFor(root), // v20261114 L0：整理后只读 AL 自检，不写图层
           structurePlanText: planPreview ? planPreview.text : "",
           layoutErrorMsg: summary.layoutErrorMsg, failed: 0, opsCount: 0,
           qualityBefore: qualityBefore, qualityAfter: qualityAfter,
@@ -413,6 +489,8 @@ figma.ui.onmessage = async (msg) => {
         // 'planPreview' is not defined（整理其实已执行完，只是回报失败）。node --check 查不出这种错误。
         let planPreview = null;
         // v20261110.15 教训：内层 try 算出的值外层要用，必须在外层先声明。
+        // v20261114 L0：整理根同理——内层 const root 作用域不覆盖结果消息，需在外层持有。
+        let applyRoot = null;
         let qualityBefore = null, qualityAfter = null;
         const ops = Array.isArray(msg.ops) ? msg.ops : [];
         const tApply0 = Date.now();   // v20261110.53：应用阶段计时（含 P0-a 确定性后处理）
@@ -449,6 +527,7 @@ figma.ui.onmessage = async (msg) => {
           chartNormalized: 0, chartAtFixed: 0,
           arcChartPromoted: 0, arcChartExportCleared: 0, arcChartFailed: 0,
           legendNormalized: 0, legendSwatchFixed: 0,
+          chartLegendGuarded: 0, chartLegendSkippedMerge: 0,
           lineChartPromoted: 0, lineChartExportCleared: 0, lineChartFailed: 0,
           chartSeriesFolders: 0, chartExportsBlocked: 0, chartSubtreeGuarded: 0,
           barChartPromoted: 0, barChartFailed: 0,
@@ -528,6 +607,7 @@ figma.ui.onmessage = async (msg) => {
         // 后者会让整段没有 rename 的容器（背景层最常出现在这里）永远漏合并。
         try {
           const root = msg.rootId ? await figma.getNodeByIdAsync(msg.rootId) : null;
+          applyRoot = root; // v20261114 L0：供外层结果消息做只读 AL 自检（不写图层）
           try { qualityBefore = root ? collectQualityMetrics(root) : null; } catch (e) {}
           // 阶段 1 快照：建组前先算只读结构方案（视觉语义分区 + 几何兜底），用于方案/实际对照。
           planPreview = await describeStructurePlan(root, moduleGroups).catch(() => null);
@@ -614,6 +694,8 @@ figma.ui.onmessage = async (msg) => {
           deleted: summary.delete,
           decorMerged: summary.decorMerged,
           sorted: summary.sorted,
+          chartLegendGuarded: summary.chartLegendGuarded,
+          chartLegendSkippedMerge: summary.chartLegendSkippedMerge,
           skippedOverlap: summary.skippedOverlap,
           conflict: summary.conflict,
           doubleConfirmed: summary.doubleConfirmed,
@@ -661,6 +743,7 @@ figma.ui.onmessage = async (msg) => {
           sectionContainersRenamed: summary.sectionContainersRenamed,
           groupErrorMsg: groupDiag.err, frameGroups: groupDiag.frames,
           structureList: structLog.join("\n"),
+          autoLayoutText: autoLayoutTextFor(applyRoot), // v20261114 L0：整理后只读 AL 自检，不写图层
           structurePlanText: planPreview ? planPreview.text : "",
           layoutErrorMsg: summary.layoutErrorMsg,
           // v20261111.44 修复：AI 路径的结果消息漏了这三项，护栏实际命中（几何计算里有值）
@@ -698,6 +781,9 @@ figma.ui.onmessage = async (msg) => {
           autoModuleGroups: !!msg.groupModules, // v20261110.8 新键：旧配置无此键 → 默认开启
           disableThinking: !!msg.disableThinking,
           namingRef: msg.namingRef || "",
+          // v20261114 P0-2：组件命名规范（cp 默认 / kebab=c-tunnel-* / pascal=PascalCase）。
+          // 仅影响「落盘给生成管线的 componentName」，组织内语义标签 cp-* 保持不变。
+          namingConvention: msg.namingConvention || "cp",
         });
         figma.ui.postMessage({ type: "ai-config-saved", ok: true });
       } catch (error) {
@@ -998,6 +1084,38 @@ function moduleSlug(raw) {
   s = s.replace(/[\s_]+/g, "-").replace(/[^a-z0-9\-]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
   return (s || "module").slice(0, 36);
 }
+// v20261114 根治护栏：成员内部子结构签名。仅统计与「是否同构循环」相关的维度：
+//   texts = 后代 TEXT 数量；nums = 纯数值文本数量；ratio = 是否含比率(x%)文本。
+// 两个块 texts 差≤1 且 nums 相同且 ratio 一致 ⇒ 视为同构（可安全 v-for）；
+// 否则内部字段不齐（如一块有 36%+450/1568，另一块只有 120）⇒ 不同构，不应折成 item-<slug>-N 循环。
+function memberStructureSig(node) {
+  let texts = 0, nums = 0, ratio = false;
+  const walk = (n) => {
+    if (!n) return;
+    if (n.type === "TEXT") {
+      texts++;
+      const t = String(n.characters || n.name || "").replace(/\s/g, "");
+      if (/%/.test(t)) ratio = true;
+      if (/^[\d.,+\-/]+%?$/.test(t)) nums++;
+      return;
+    }
+    if ("children" in n) for (const c of n.children) walk(c);
+  };
+  walk(node);
+  return texts + "|" + nums + "|" + (ratio ? 1 : 0);
+}
+function membersAreUniformLoop(members) {
+  const arr = (Array.isArray(members) ? members : []).filter(Boolean);
+  if (arr.length < 2) return false;
+  const base = memberStructureSig(arr[0]).split("|").map(Number);
+  for (let i = 1; i < arr.length; i++) {
+    const s = memberStructureSig(arr[i]).split("|").map(Number);
+    if (Math.abs(s[0] - base[0]) > 1) return false; // 文本槽位差太多
+    if (s[1] !== base[1]) return false;              // 数值字段数不同
+    if (s[2] !== base[2]) return false;              // 比率字段有无不一致
+  }
+  return true;
+}
 function verticalOverlap(a, b) {
   const ay = a.y || 0, ah = a.height || 0, by = b.y || 0, bh = b.height || 0;
   return ay < by + bh && by < ay + ah;
@@ -1136,6 +1254,9 @@ function loopSlugFor(container, members) {
 function planLoopNames(container, members) {
   const targets = (Array.isArray(members) ? members : []).filter(n => n && DEFAULT_NAME_RE.test(String(n.name || "")));
   if (targets.length < 2) return [];
+  // v20261114 根治护栏：默认名兄弟若内部子结构明显不同构（数值/比率字段数不对齐），不强行折成循环，
+  // 避免生成 v-for 时首项模板字段在后续项缺失。返回空 ⇒ 这些兄弟保持默认名，由人工或视觉路径把关。
+  if (!membersAreUniformLoop(targets)) return [];
   const slug = loopSlugFor(container, targets);
   return targets.slice()
     .sort((a, b) => ((a.y || 0) - (b.y || 0)) || ((a.x || 0) - (b.x || 0)))
@@ -1255,9 +1376,12 @@ function collectGeometryRows(root) {
       if (!rowSizesComparable(members)) { info.rowRejected++; continue; }
       seq++;
       const slug = rowSlug(members) || moduleSlug(container.name) || "row";
+      // v20261114 根治护栏：同行成员内部子结构明显不同构（数值/比率字段数不对齐）⇒ 不折成 item-<slug>-N 循环，
+      // 改落 section-<slug>（异构容器，不进 v-for），与视觉路径同口径。
+      const rowName = membersAreUniformLoop(members) ? ("item-" + slug + "-" + seq) : ("section-" + slug);
       info.rows.push({
         container, containerName: String(container.name || ""),
-        members, slug, seq, name: "item-" + slug + "-" + seq,
+        members, slug, seq, name: rowName,
       });
     }
   }
@@ -1318,7 +1442,11 @@ async function describeStructurePlan(root, modules) {
     // 与执行路径共用同一个扩展函数，方案才能准确预测单 id 模块会收哪些节点
     const nodes = expandModuleNodes(rawNodes, rawNodes.length === 1 ? rawNodes[0].parent : null);
     const order = Number.isFinite(Number(m.order)) ? "-" + Number(m.order) : "";
-    const name = "item-" + moduleSlug(m.name) + order;
+    // v20261114 同步执行路径护栏：预览与执行同判据，避免「方案显示循环、实际异构」的落差。
+    const previewSlug = moduleSlug(m.name);
+    const name = (order !== "" && membersAreUniformLoop(nodes))
+      ? ("item-" + previewSlug + order)
+      : ("section-" + previewSlug);
     if (!nodes.length) { out.conflicts++; visionLines.push("├─ [视觉×] " + name + "  无有效节点，跳过"); continue; }
     const sameParent = nodes.every(n => n.parent === nodes[0].parent);
     const sameRow = nodes.every(n => verticalOverlap(nodes[0], n));
@@ -1413,7 +1541,12 @@ async function groupModulesByIntent(modules, summary) {
       if (nodes.some(n => !verticalOverlap(anchor, n))) { summary.moduleSkipped++; continue; } // 不在同一视觉行
       for (const n of nodes) { try { if (n.locked) n.locked = false; } catch (e) {} }
       const order = Number.isFinite(Number(m.order)) ? Number(m.order) : "";
-      const name = "item-" + moduleSlug(m.name) + (order !== "" ? "-" + order : "");
+      const slug = moduleSlug(m.name);
+      // v20261114 根治护栏：视觉模块成员内部子结构差异过大（数值/比率字段数不对齐）⇒ 不是同构循环，
+      // 不应折成 item-<slug>-N（否则生成 v-for 时首项模板字段在第二项缺失）。改落 section-<slug> 异构容器。
+      const name = (order !== "" && membersAreUniformLoop(nodes))
+        ? "item-" + slug + "-" + order
+        : "section-" + slug;
       const kids = Array.prototype.slice.call(parent.children || []);
       const minIdx = Math.min.apply(null, nodes.map(n => kids.indexOf(n)));
       const g = safeGroup(nodes, name);
@@ -1457,6 +1590,63 @@ function isPureGraphicNode(n) {
   if (!GRAPHIC_TYPES[n.type]) return false;
   if ((n.type === "FRAME" || n.type === "GROUP" || n.type === "INSTANCE") && !isDefaultGraphicName(n.name)) return false;
   return true;
+}
+
+// ---- 图例归属护栏（v20261114.66）------------------------------------------------
+// 用户判据：「图例永远和图表一个文件夹」。
+// 落地方式：默认名 VECTOR 无法确定性判定「哪个节点是图例」，所以不逐节点识别，而是保护
+// 【整个图表几何容器】不被矢量合并 / 装饰收纳拆开 —— 同心多边形、轴标 TEXT、图例色块与
+// 文字必然同留一个容器 ⇒ 图例与图表恒在同一个文件夹，零节点移动、零 bbox 变化。
+// 只拦「未定性的几何图表组」（雷达同心多边形 + 多轴标）：真 @echarts/* 走 series-* 合并，
+// 图形与图例本就同组；graphic-speed-gauge 只有 2 个 TEXT 且图例是平级兄弟 ⇒ 不命中，
+// promoteArcCharts 的历史升级链零回归。判据单一来源：三处跳过分支只调本函数。
+const LEGEND_NAME_RE = /^(?:legend(?:-|$)|list-[a-z0-9-]*legend)/i;
+function isLegendNode(n) {
+  if (!n) return false;
+  try { if (LEGEND_NAME_RE.test(String(n.name || ""))) return true; } catch (e) {}
+  try { return n.getPluginData("mvLegend") === "1"; } catch (e) { return false; }
+}
+function hasLegendIn(ctn) {
+  if (!ctn || !("children" in ctn)) return false;
+  const walk = (n, d) => {
+    if (!n || d > 8) return false;
+    if (isLegendNode(n)) return true;
+    if ("children" in n) for (const c of (n.children || [])) if (walk(c, d + 1)) return true;
+    return false;
+  };
+  return walk(ctn, 0);
+}
+function isChartGeometryContainer(ctn) {
+  if (!ctn || !("children" in ctn) || ctn.type === "PAGE") return false;
+  const kids = Array.prototype.slice.call(ctn.children || []);
+  if (kids.length < 3) return false;
+  // 排除组件根 / slot-con / 业务大容器：它们直属子级多是容器，若误命中，
+  // organizeLayout 会把所有装饰都 keepInPlace ⇒ 背景收纳整体失效（回归）。
+  const nested = kids.filter(k => k && "children" in k && (k.children || []).length > 0 && k.type !== "TEXT");
+  if (nested.length > 2) return false;
+  const leaves = [];
+  let texts = 0;
+  const scan = (n, d) => {
+    if (!n || d > 4) return;
+    if (n.type === "TEXT") { texts++; return; }
+    if (isPureGraphicNode(n)) leaves.push(n);
+    if ("children" in n) for (const c of (n.children || [])) scan(c, d + 1);
+  };
+  for (const k of kids) scan(k, 0);
+  // ① ≥3 个纯图形叶子；② ≥4 个 TEXT（雷达多轴标）或容器内已有 legend-* 命名节点；
+  //    TEXT 上限 12 再次排除整页容器。环形图 53:34075 只有 2 个 TEXT 且图例平级 ⇒ 不命中。
+  if (leaves.length < 3 || texts > 12 || (texts < 4 && !hasLegendIn(ctn))) return false;
+  // ③ 图形中心近似重合 + 尺寸递减（同心多边形），普通卡片的 1~2 个装饰图形不适用。
+  const ctr = absRect(ctn);
+  const boxes = leaves.map(absRect).filter(r => r && r.w > 0 && r.h > 0);
+  if (!ctr || ctr.w <= 0 || ctr.h <= 0 || boxes.length < 3) return false;
+  const cx = ctr.x + ctr.w / 2, cy = ctr.y + ctr.h / 2;
+  const tol = Math.max(ctr.w, ctr.h) * 0.25;
+  const centered = boxes.filter(r =>
+    Math.abs((r.x + r.w / 2) - cx) <= tol && Math.abs((r.y + r.h / 2) - cy) <= tol);
+  if (centered.length < 3) return false;
+  const areas = boxes.map(r => r.w * r.h).sort((a, b) => b - a);
+  return areas[0] > areas[1] * 1.1 && areas[1] > areas[2] * 1.1;
 }
 function chartSlug(name) {
   const m = /^(?:echarts-|@echarts\/|chart-|gauge-)(.+)$/i.exec(String(name || ""));
@@ -1651,6 +1841,12 @@ function organizeGraphicContainers(root, summary) {
   for (const ctn of targets) {
     try {
       if (!ctn || !("children" in ctn)) continue;
+      // v20261114.66：图例永远和图表一个文件夹 —— 未定性的几何图表容器整体跳过矢量合并，
+      // 同心多边形 / 轴标 TEXT / 图例色块全部留在原容器，不新建 img-* 把图例分家。
+      if (isChartGeometryContainer(ctn)) {
+        if (summary) summary.chartLegendGuarded = (Number(summary.chartLegendGuarded) || 0) + 1;
+        continue;
+      }
       const already = isGraphicContainer(ctn);
       const kids = Array.prototype.slice.call(ctn.children || []);
       // 容器外同级散落矢量：只诊断不移动 —— 跨父级 appendChild 会改相对坐标，视觉会漂移。
@@ -2034,6 +2230,12 @@ function mergeLooseGraphicRuns(containers, summary) {
     try {
       if (!parent || !("children" in parent)) continue;
       if (folderRole(parent) || isGraphicContainer(parent)) continue;
+      // v20261114.66：图例永远和图表一个文件夹 —— 几何图表容器里的裸 VECTOR
+      // 不按连续图形段收进 bg-*，否则图例色块会与雷达几何分到两个文件夹。
+      if (isChartGeometryContainer(parent)) {
+        summary.chartLegendSkippedMerge = (Number(summary.chartLegendSkippedMerge) || 0) + 1;
+        continue;
+      }
       const kids = Array.prototype.slice.call(parent.children || []);
       if (kids.length < 2) continue;
       let run = [];
@@ -2303,6 +2505,203 @@ function isAutoLayoutContainer(n) {
   return mode !== "" && mode !== "NONE";
 }
 
+// === v20261114 L0 · Auto Layout 只读自检（BEGIN）===
+// 判据单一来源：docs/2026-11-14-Figma结构整理规范.md §3.1/§3.2 + 布局真值整治方案 §4.3。
+// 纯计算：不写任何 Figma 属性、不连生成管线；输出只进本地 JSON / 结构清单 / clientStorage。
+// 与上面 isAutoLayoutContainer() 的区别：那个只判「现在是不是 AL」，这里判「几何上该不该是 AL」。
+// BEGIN/END 标记供离线 golden 自测按源码切片执行，避免测试跑的是复制品。
+function inferAutoLayoutFromBoxes(boxes, containerBox, current) {
+  const cur = current || {};
+  const EPS = 2;
+  const arr = (Array.isArray(boxes) ? boxes : []).filter(b =>
+    b && Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.w) && Number.isFinite(b.h) && b.w > 0 && b.h > 0);
+  const out = { geoMode: "unknown", gaps: [], gap: null, uniform: false, reason: "", suggest: null, modeConflict: false, warnings: [] };
+  if (arr.length < 2) { out.reason = arr.length ? "single-child" : "no-bbox"; return out; }
+
+  const overlapRate = (a, b, axis) => {
+    const s1 = axis === "x" ? a.x : a.y, e1 = s1 + (axis === "x" ? a.w : a.h);
+    const s2 = axis === "x" ? b.x : b.y, e2 = s2 + (axis === "x" ? b.w : b.h);
+    const inter = Math.min(e1, e2) - Math.max(s1, s2);
+    const span = Math.min(e1 - s1, e2 - s2);
+    return span > 0 ? inter / span : 0;
+  };
+  // 主轴判定（区间法，不用「对齐」）：沿轴排序，区间两两不交叠（容差 2px）且另一轴重叠率 ≥0.5
+  const axisGaps = (axis) => {
+    const sorted = arr.slice().sort((p, q) => (axis === "y" ? p.y - q.y : p.x - q.x));
+    const gaps = [];
+    let disjoint = true;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1], next = sorted[i];
+      const ps = axis === "y" ? prev.y : prev.x, pe = ps + (axis === "y" ? prev.h : prev.w);
+      const ns = axis === "y" ? next.y : next.x;
+      gaps.push(Math.round((ns - pe) * 10) / 10);
+      if (ns - pe < -EPS) disjoint = false;
+      if (overlapRate(prev, next, axis === "y" ? "x" : "y") < 0.5) disjoint = false;
+    }
+    return { gaps: gaps, disjoint: disjoint, sorted: sorted };
+  };
+
+  const col = axisGaps("y"), row = axisGaps("x");
+  let mode = "", gaps = [];
+  if (col.disjoint) { mode = "column"; gaps = col.gaps; }
+  else if (row.disjoint) { mode = "row"; gaps = row.gaps; }
+  else mode = "free-overlay";
+
+  if (mode === "free-overlay" || gaps.some(g => g < -EPS)) {
+    // 子项重叠 ⇒ AL 无法表达重叠；硬设会把内容摊平（真机 2:3660 就是这么错的）
+    out.geoMode = "free-overlay";
+    out.reason = "children-overlap";
+    out.suggest = { layoutMode: "NONE", hint: "子项重叠，Auto Layout 无法表达；保持普通 Frame 自由摆放" };
+    out.gaps = gaps;
+  } else {
+    out.gaps = gaps;
+    const maxG = Math.max.apply(null, gaps), minG = Math.min.apply(null, gaps);
+    out.uniform = (maxG - minG) <= EPS;
+    out.gap = out.uniform ? Math.round((gaps.reduce((a, b) => a + b, 0) / gaps.length) * 10) / 10 : null;
+    // 守卫 G1：任一子项越出容器 bbox >2px ⇒ 不判 between
+    let outOfBounds = false;
+    if (containerBox) for (const b of arr) {
+      if (b.x < containerBox.x - EPS || b.y < containerBox.y - EPS ||
+          b.x + b.w > containerBox.x + containerBox.w + EPS ||
+          b.y + b.h > containerBox.y + containerBox.h + EPS) { outOfBounds = true; break; }
+    }
+    // 首尾贴边（≤16px）
+    let edgeTouch = false;
+    if (containerBox) {
+      const sorted = mode === "row" ? row.sorted : col.sorted;
+      const first = sorted[0], last = sorted[sorted.length - 1];
+      const lead = mode === "row" ? first.x - containerBox.x : first.y - containerBox.y;
+      const tail = mode === "row"
+        ? (containerBox.x + containerBox.w) - (last.x + last.w)
+        : (containerBox.y + containerBox.h) - (last.y + last.h);
+      edgeTouch = lead <= 16 && tail <= 16 && lead >= -EPS && tail >= -EPS;
+    }
+    // 守卫 G2：仅 1 个 gap 且 gap > 主轴尺寸×0.3 ⇒ between（不写 gap）
+    const axisSize = containerBox ? (mode === "row" ? containerBox.w : containerBox.h) : 0;
+    const singleLargeGap = gaps.length === 1 && axisSize > 0 && gaps[0] > axisSize * 0.3;
+    const modeUpper = mode === "row" ? "HORIZONTAL" : "VERTICAL";
+    // 守卫 G2 必须优先于 uniform：单个 gap 恒满足 max-min=0，若不提前判 between，
+    // 「标题左 + 下拉右」会被误写成 itemSpacing=220（整治方案 §4.3 step6 / §4.4 88:32 实锤）。
+    if (singleLargeGap && !outOfBounds) {
+      out.uniform = false; out.gap = null;
+      out.geoMode = mode + "-between";
+      out.reason = "single-large-gap";
+      out.suggest = { layoutMode: modeUpper, itemSpacing: 0, primaryAxisAlignItems: "SPACE_BETWEEN",
+        counterAxisAlignItems: "CENTER", primaryAxisSizingMode: "FIXED", counterAxisSizingMode: "FIXED" };
+    } else if (out.uniform) {
+      out.geoMode = mode;
+      out.suggest = { layoutMode: modeUpper, itemSpacing: out.gap, primaryAxisAlignItems: "MIN",
+        counterAxisAlignItems: "MIN", primaryAxisSizingMode: "FIXED", counterAxisSizingMode: "FIXED" };
+    } else if (edgeTouch && !outOfBounds) {
+      // 守卫 G3：间距不齐但首尾贴边 ⇒ between（不写 gap）
+      out.geoMode = mode + "-between";
+      out.reason = "edge-to-edge";
+      out.suggest = { layoutMode: modeUpper, itemSpacing: 0, primaryAxisAlignItems: "SPACE_BETWEEN",
+        counterAxisAlignItems: "CENTER", primaryAxisSizingMode: "FIXED", counterAxisSizingMode: "FIXED" };
+    } else {
+      // 间距不齐：v2 §3.4 明确「若强行 VERTICAL 会把不齐的间距抹平」⇒ 保持自由摆放
+      out.geoMode = "column-stack";
+      out.reason = "non-uniform-gaps";
+      out.suggest = { layoutMode: "NONE", hint: "间距不齐（gaps " + gaps.join("/") + "），强行 AL 会抹平间距；保持自由摆放" };
+    }
+  }
+
+  // 现有属性（只读）vs 几何推断 → 冲突 / 建议补 AL
+  const lm = String(cur.layoutMode || "NONE").toUpperCase();
+  const hasAL = lm === "HORIZONTAL" || lm === "VERTICAL";
+  const geoWantsAL = !!(out.suggest && (out.suggest.layoutMode === "HORIZONTAL" || out.suggest.layoutMode === "VERTICAL"));
+  if (hasAL && !geoWantsAL) {
+    out.modeConflict = true;
+    out.warnings.push({ code: "mode-conflict", hint: "mode=" + lm + " 但几何为 " + out.geoMode + "（" + out.reason + "）⇒ 建议 layoutMode=NONE" });
+  } else if (hasAL && geoWantsAL && lm !== out.suggest.layoutMode) {
+    out.modeConflict = true;
+    out.warnings.push({ code: "mode-direction", hint: "mode=" + lm + " 与几何方向 " + out.suggest.layoutMode + " 相反" });
+  } else if (!hasAL && geoWantsAL) {
+    out.warnings.push({ code: "al-missing", hint: "mode=" + lm + " 但几何是 " + out.geoMode + " ⇒ 建议 " + out.suggest.layoutMode +
+      (out.suggest.primaryAxisAlignItems === "SPACE_BETWEEN" ? " + SPACE_BETWEEN" : " + itemSpacing " + out.suggest.itemSpacing) });
+  }
+  if (hasAL && Number(cur.itemSpacing) > 0 && out.gap !== null && Math.abs(Number(cur.itemSpacing) - out.gap) > 1) {
+    out.warnings.push({ code: "gap-mismatch", hint: "itemSpacing=" + cur.itemSpacing + " 与几何间距 " + out.gap + " 不符" });
+  }
+  if (Number(cur.absoluteChildren) > 0 && hasAL) {
+    out.warnings.push({ code: "absolute-in-al", hint: "AL 容器内存在 " + cur.absoluteChildren + " 个 absolute 子项，几何会出现重叠（规范 §3.2）" });
+  }
+  if (String(cur.primaryAxisSizingMode || "").toUpperCase() === "HUG" || String(cur.counterAxisSizingMode || "").toUpperCase() === "HUG") {
+    out.warnings.push({ code: "hug-size", hint: "容器 sizing=HUG，导出尺寸会随内容漂移（规范 B3）⇒ 建议 FIXED" });
+  }
+  return out;
+}
+
+// 全树只读体检：遍历容器，取直接子节点 absoluteBoundingBox，产出 v2 §四 的 segments/warnings。
+function inspectAutoLayout(root) {
+  const MAX = 200, MAX_WARN = 60, MAX_DEPTH = 12;
+  const segments = [], warnings = [];
+  let truncated = false;
+  const s = { containers: 0, conflicts: 0, alMissing: 0, overlay: 0, hugSize: 0, absoluteInAl: 0, singleChild: 0, warnings: 0 };
+  const read = (n, k, dflt) => { try { const v = n[k]; return (v === undefined || v === null) ? dflt : v; } catch (e) { return dflt; } };
+  const safeStr = (n, k) => { try { return String(n[k] || ""); } catch (e) { return ""; } };
+  function walk(n, depth) {
+    if (!n || depth > MAX_DEPTH || truncated) return;
+    let kids = [];
+    try {
+      if (Array.isArray(n.children)) kids = n.children.filter(c => { try { return c && c.visible !== false; } catch (e) { return !!c; } });
+    } catch (e) {}
+    if (kids.length >= 2 && s.containers >= MAX) { truncated = true; return; }
+    if (kids.length >= 2) {
+      const cur = {
+        layoutMode: read(n, "layoutMode", "NONE"),
+        itemSpacing: read(n, "itemSpacing", 0),
+        primaryAxisAlignItems: read(n, "primaryAxisAlignItems", ""),
+        counterAxisAlignItems: read(n, "counterAxisAlignItems", ""),
+        primaryAxisSizingMode: read(n, "primaryAxisSizingMode", ""),
+        counterAxisSizingMode: read(n, "counterAxisSizingMode", ""),
+        absoluteChildren: kids.filter(c => { try { return c.layoutPositioning === "ABSOLUTE"; } catch (e) { return false; } }).length,
+      };
+      const r = inferAutoLayoutFromBoxes(kids.map(nodeBox), nodeBox(n), cur);
+      const id = safeStr(n, "id"), name = safeStr(n, "name");
+      s.containers++;
+      if (r.modeConflict) s.conflicts++;
+      if (r.geoMode === "free-overlay") s.overlay++;
+      segments.push({ id: id, name: name, children: kids.length, geoMode: r.geoMode, gap: r.gap,
+        gaps: r.gaps, reason: r.reason, current: cur, suggest: r.suggest, modeConflict: r.modeConflict });
+      for (const w of r.warnings) {
+        if (w.code === "al-missing") s.alMissing++;
+        if (w.code === "hug-size") s.hugSize++;
+        if (w.code === "absolute-in-al") s.absoluteInAl++;
+        if (warnings.length < MAX_WARN) warnings.push({ code: w.code, id: id, name: name, hint: w.hint });
+      }
+    } else if (kids.length === 1 && s.singleChild < MAX_WARN && warnings.length < MAX_WARN) {
+      const id = safeStr(n, "id"), name = safeStr(n, "name");
+      s.singleChild++;
+      warnings.push({ code: "single-child", id: id, name: name, hint: "容器只有 1 个直接子节点，布局判定将跳过（规范 §四）" });
+    }
+    for (const c of kids) walk(c, depth + 1);
+  }
+  walk(root, 0);
+  s.warnings = warnings.length;
+  s.truncated = truncated;
+  return { version: 1, readOnly: true, rootId: safeStr(root, "id"), summary: s, segments: segments, warnings: warnings };
+}
+
+function formatAutoLayoutReport(report) {
+  if (!report) return "";
+  const s = report.summary || {};
+  const lines = ["【Auto Layout 自检（只读 · 本地计算 · 不修改图层）】"];
+  lines.push("容器 " + (s.containers || 0) + " · 冲突 " + (s.conflicts || 0) + " · 建议补 AL " + (s.alMissing || 0) +
+    " · 重叠 " + (s.overlay || 0) + " · HUG " + (s.hugSize || 0) + " · AL内absolute " + (s.absoluteInAl || 0) +
+    (s.truncated ? " · 已截断" : ""));
+  const ws = report.warnings || [];
+  for (const w of ws.slice(0, 30)) lines.push("⚠ " + (w.id || "?") + " " + (w.name || "") + " [" + w.code + "] " + w.hint);
+  if (ws.length > 30) lines.push("… 其余 " + (ws.length - 30) + " 条见 JSON 的 autoLayout.warnings");
+  if (!ws.length) lines.push("✅ 未发现 mode 与几何冲突");
+  return lines.join("\n");
+}
+function autoLayoutTextFor(root) {
+  if (!root) return ""; // 拿不到整理根时不输出「容器 0 ✅ 未发现冲突」这种误导性空报告
+  try { return formatAutoLayoutReport(inspectAutoLayout(root)); } catch (e) { return ""; }
+}
+// === v20261114 L0 · Auto Layout 只读自检（END）===
+
 function organizeLayout(parent, summary, intentCtx) {
   if (!parent || !("children" in parent)) return;
   if (folderRole(parent)) return; // 已是插件建的文件夹，避免嵌套
@@ -2390,10 +2789,14 @@ function organizeLayout(parent, summary, intentCtx) {
   // v20261111.29 Step 1：去掉 bg- 前缀的「强制收纳豁免」。
   // 旧逻辑只要名字带 bg- 就跳过 isForegroundDecor 保护，局部卡片底、分隔线、内容图
   // 会被一起拖进根级 bg 文件夹，与毛玻璃底图重排 z-order。现在所有装饰一视同仁。
+  // v20261114.66：图例永远和图表一个文件夹 —— 几何图表容器内的装饰（图例色块等）
+  // 一律 keepInPlace，不进 toMerge ⇒ 不新建 bg-* 文件夹把图例从图表里分家。
+  const legendGuarded = isChartGeometryContainer(parent);
+  if (legendGuarded) summary.chartLegendGuarded = (Number(summary.chartLegendGuarded) || 0) + 1;
   for (const n of decor) {
     const bgNamed = /^bg-/.test(n.name || "");
     if (bgNamed) summary.forcedBg++; // 保留旧计数语义：统计本轮命中的 bg- 前缀节点数
-    if (isForegroundDecor(n)) {
+    if (legendGuarded || isForegroundDecor(n)) {
       keepInPlace.push(n);
       if (bgNamed) summary.bgProtected = (Number(summary.bgProtected) || 0) + 1;
     } else toMerge.push(n);
@@ -3707,6 +4110,7 @@ function buildStructureContract(root, opts) {
   const raw = !!o.raw; // raw=true：原样镜像图层树（不做骨架归一化），供对照与回归
   const version = String(o.version || SCHEMA_VERSION);
   const includeIds = !!o.includeIds; // v20261110.28 P0-2：默认关，UI 开关显式开启
+  const namingConvention = o.namingConvention || "cp"; // v20261114 P0-2：仅影响落盘 componentName
   const lines = [];
   let count = 0, chars = 0, truncated = false, loops = 0, slots = 0;
   let sections = 0, omitted = 0, omittedDepth = -1;
@@ -3891,6 +4295,7 @@ function buildStructureContract(root, opts) {
     : "";
   return {
     text: CONTRACT_HEADER + "\n" + meta + "\n\n" + lines.join("\n") + tail,
+    componentName: deriveComponentName(root, namingConvention), // v20261114 P0-2
     nodes: count,
     truncated: truncated,
     loops: loops,
@@ -3901,6 +4306,242 @@ function buildStructureContract(root, opts) {
     version: version,
     includeIds: includeIds,
     raw: raw,
+  };
+}
+
+// v20261114 P0-1：结构化 JSON 契约 —— 与 buildStructureContract 同源，复用全部判据
+// （虚拟 unwrap / 数据槽 / 图表关联 / 循环折叠 / 三段式骨架），仅把「缩进文本」换成
+// 「嵌套 JSON」，供管线按 nodeId 精确回填、按骨架做结构校验，避免再被 LLM 用视觉重扫一遍。
+function nodeGeom(n) {
+  const b = nodeBox(n);
+  const r = (v) => Math.round(v * 10) / 10;
+  return { x: r(b.x), y: r(b.y), w: r(b.w), h: r(b.h) };
+}
+function roleOfName(nm) {
+  const m = String(nm || "");
+  if (/^cp-/i.test(m)) return "component-root";
+  if (/^header-title/i.test(m)) return "header-title";
+  if (/^header-slot-/i.test(m)) return "header-slot";
+  if (/^header(?:[-/]|$)/i.test(m)) return "header";
+  if (/^bg(?:-|$)/i.test(m)) return "bg";
+  if (/^slot-con$/i.test(m)) return "slot-con";
+  if (/^section-\d{2}-/i.test(m)) return "section";
+  if (/^section-title/i.test(m)) return "section-title";
+  if (/^item-/i.test(m)) return "item";
+  if (/^card-/i.test(m)) return "card";
+  if (/^list-/i.test(m)) return "list";
+  if (/^form-/i.test(m)) return "form";
+  if (/^graphic-/i.test(m)) return "graphic";
+  if (/^icon-/i.test(m)) return "icon";
+  if (/^img-/i.test(m)) return "img";
+  if (/^@echarts\//i.test(m)) return "chart";
+  if (/^legend-/i.test(m)) return "legend";
+  if (/^axis-/i.test(m)) return "axis";
+  if (/^series-/i.test(m)) return "series";
+  if (/^badge-count-/i.test(m)) return "badge";
+  if (/^@antd\//i.test(m)) return "antd";
+  if (m === "(unnamed)") return "other";
+  return "node";
+}
+function parseDataSlot(slotStr) {
+  if (!slotStr) return null;
+  const m = String(slotStr).trim().match(/^\[data:(\w+)(?:\s+"([^"]*)")?\]\s*$/);
+  if (!m) return null;
+  return { kind: m[1], preview: m[2] || "" };
+}
+// v20261114 P0-2：cp-* 仅作组织内语义标签；落盘给生成管线的 componentName 按规范派生。
+function deriveComponentName(root, convention) {
+  const nm = cleanContractName(root);
+  const slug = nm.replace(/[^\w\u4e00-\u9fa5]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 40);
+  const base = slug || "component";
+  if (convention === "kebab") return "c-" + base;          // c-tunnel-* 风格（aidocs / 隧道组件）
+  if (convention === "pascal") {                            // PascalCase
+    return base.split("-").filter(Boolean).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join("");
+  }
+  // 默认 cp：与旧行为一致
+  return /^cp-/i.test(nm) ? nm : "cp-" + base;
+}
+
+function buildStructureJson(root, opts) {
+  const o = opts || {};
+  const version = String(o.version || SCHEMA_VERSION);
+  const includeIds = !!o.includeIds;
+  const virtualUnwrap = !o.raw && o.virtualUnwrap !== false;
+  const raw = !!o.raw;
+  const maxNodes = o.maxNodes || 600;
+  const maxDepth = o.maxDepth || 12;
+  const namingConvention = o.namingConvention || "cp";
+  let truncated = false, count = 0, loops = 0, slots = 0, sections = 0;
+  const slotBudget = { left: 3000 };
+
+  function newId(n) {
+    let id = "";
+    try { id = String((n && n.id) || "").replace(/:/g, "-"); } catch (e) {}
+    return id || null;
+  }
+  function makeNode(n, depth, overrideName, overrideRole) {
+    if (truncated) return null;
+    if (count >= maxNodes || depth > maxDepth) { truncated = true; return null; }
+    count++;
+    const target = virtualUnwrap ? contractUnwrapTarget(n) : n;
+    const name = overrideName || cleanContractName(target);
+    const node = { name, role: overrideRole || roleOfName(name), type: String((target && target.type) || "?") };
+    Object.assign(node, nodeGeom(target));
+    if (includeIds) { const id = newId(target); if (id) node.id = id; }
+    const slot = describeDataSlot(n, slotBudget);
+    if (slot) { node.data = parseDataSlot(slot); slots++; }
+    const badge = describeTabBadge(n);
+    if (badge) node.badgeTab = badge.replace(/^.*\[tab:([^\]]*)\].*$/, "$1");
+    const chart = describeChartBinding(n);
+    if (chart) {
+      const cm = chart.match(/\[chart:([^\s]+)(?:\s+legend:([^\]]+))?\]/);
+      const lg = chart.match(/\[legend→\s*([^\]]+)\]/);
+      node.chart = cm ? { type: cm[1], legend: cm[2] || null } : (lg ? { legendOf: lg[1] } : {});
+    }
+    const decor = virtualUnwrap ? contractDecorLeafCount(target) : 0;
+    if (decor) node.decorVectors = decor;
+    if (!decor) {
+      const kids = visibleChildren(target);
+      const groups = findLoopGroups(kids).filter(g =>
+        !g.some(x => /^badge-count-/i.test(cleanContractName(x && x.node))));
+      const folded = new Set();
+      for (const g of groups) for (const item of g.slice(1)) folded.add(item.at);
+      const children = [];
+      for (let i = 0; i < kids.length; i++) {
+        if (folded.has(i)) continue;
+        const g = groups.find(x => x[0].at === i);
+        if (g) {
+          const child = makeNode(kids[i], depth + 1);
+          if (child) {
+            const base = cleanContractName(g[0].node).replace(/[-_]\d+$/, "");
+            child.loop = { base: base, from: g[0].index, to: g[g.length - 1].index, count: g.length };
+            loops++;
+            children.push(child);
+          }
+          continue;
+        }
+        const child = makeNode(kids[i], depth + 1);
+        if (child) children.push(child);
+      }
+      if (children.length) node.children = children;
+    }
+    return node;
+  }
+
+  let rootNode;
+  if (raw) {
+    rootNode = makeNode(root, 0);
+  } else {
+    const kids = visibleChildren(root);
+    const allHeaders = kids.filter(isHeaderNode);
+    const rootHeader = pickRootHeader(allHeaders, root);
+    const geoHeader = rootHeader ? null : findRootHeaderBand(root);
+    const demotedHeaders = allHeaders.filter(h => h !== rootHeader);
+    const bgs = kids.filter(isBgNode);
+    const slotCons = kids.filter(isSlotConNode);
+    const contents = kids.filter(n => !isHeaderNode(n) && !isBgNode(n) && !isSlotConNode(n));
+    rootNode = { name: cpComponentName(root), role: "component-root", type: String(root.type || "?") };
+    Object.assign(rootNode, nodeGeom(root));
+    if (includeIds) { const id = newId(root); if (id) rootNode.id = id; }
+    const headerArr = [];
+    const headers = rootHeader ? [rootHeader] : (geoHeader ? [geoHeader] : []);
+    if (headers.length) {
+      const hkidsAll = [];
+      for (const h of headers) {
+        const hk = [];
+        for (const c of visibleChildren(h)) hk.push({ node: c, header: h });
+        if (!hk.length) for (const h2 of headers) hk.push({ node: h2, header: h2 });
+        for (const it of hk) hkidsAll.push(it);
+      }
+      for (const it of hkidsAll) {
+        const nm = cleanContractName(it.node);
+        let out;
+        if (/^header-(?:slot-|title)/i.test(nm)) out = nm;
+        else if (isBgNode(it.node)) out = "bg";
+        else if (it === hkidsAll[0] && (/(?:title|label|caption|name)/i.test(nm) || it.node.type === "TEXT")) out = "header-title";
+        else if (/right|action|btn|button|tab|tool|filter|legend|control|more|操作|筛选|按钮/i.test(nm)) out = "header-slot-right";
+        else {
+          const w = Number(it.header && it.header.width) || 0;
+          const x = Number(it.node.x) || 0;
+          if (w > 0 && x >= w * 0.6) out = "header-slot-right";
+          else if (w > 0 && x <= w * 0.25) out = "header-slot-left";
+          else out = "header-slot-center";
+        }
+        const cn = makeNode(it.node, 2, out, roleOfName(out));
+        if (cn) headerArr.push(cn);
+      }
+    }
+    const bgArr = bgs.map(b => makeNode(b, 1, "bg", "bg")).filter(Boolean);
+    const body = [];
+    for (const k of kids) {
+      if (k === rootHeader || isBgNode(k) || isSlotConNode(k)) continue;
+      if (demotedHeaders.indexOf(k) >= 0) body.push({ node: k, forced: contractSectionTitle(cleanContractName(k)) });
+      else if (contents.indexOf(k) >= 0) body.push({ node: k });
+    }
+    const slotChildren = [];
+    const nameOf = (b) => b.forced || cleanContractName(b.node);
+    const emitItem = (b, d) => {
+      if (b.forced) {
+        const cn = makeNode(b.node, d, b.forced, roleOfName(b.forced));
+        if (cn) { cn.data = { kind: "label" }; slots++; slotChildren.push(cn); }
+      } else {
+        const cn = makeNode(b.node, d);
+        if (cn) slotChildren.push(cn);
+      }
+    };
+    const anchors = [];
+    body.forEach((b, i) => { if (/^section-title(?:-|$)/i.test(nameOf(b))) anchors.push(i); });
+    const realGroups = body.filter(b =>
+      /^(item|card|list|form|section|graphic)-/i.test(cleanContractName(b.node)) &&
+      visibleChildren(b.node).some(c => isSectionTitle(c)));
+    let realSections = 0;
+    for (const sl of slotCons)
+      for (const c of visibleChildren(sl)) {
+        const cnm = cleanContractName(c);
+        if (/^section-(?:\d{2}-)?/i.test(cnm) && !/^section-title(?:-|$)/i.test(cnm)) realSections++;
+      }
+    sections = realSections > 0 ? realSections
+      : ((anchors.length >= 2 && !realGroups.length) ? anchors.length : realGroups.length);
+    if (anchors.length < 2 || realGroups.length) {
+      for (const b of body) emitItem(b, 2);
+    } else {
+      let cur = -1;
+      for (let i = 0; i < body.length; i++) {
+        if (anchors.indexOf(i) >= 0) { cur++; const sg = makeNode(body[i].node, 2, sectionGroupName(nameOf(body[i])), "section"); if (sg) slotChildren.push(sg); }
+        emitItem(body[i], cur >= 0 ? 3 : 2);
+      }
+    }
+    for (const s of slotCons) {
+      const cn = makeNode(s, 2);
+      if (cn && cn.children) slotChildren.push(...cn.children);
+    }
+    const slotCon = { name: "slot-con", role: "slot-con", type: "GROUP" };
+    Object.assign(slotCon, nodeGeom(root));
+    if (includeIds) { const id = newId(root); if (id) slotCon.id = id + "-slotcon"; }
+    slotCon.children = slotChildren;
+    rootNode.children = [];
+    if (headerArr.length) rootNode.children.push(...headerArr);
+    if (bgArr.length) rootNode.children.push(...bgArr);
+    rootNode.children.push(slotCon);
+  }
+  let quality = -1;
+  try { quality = collectQualityMetrics(root).score; } catch (e) {}
+  // v20261114 L0：AL 只读自检随 JSON 一起本地输出（纯新增字段；includeAutoLayout:false 可关）。
+  // 不写任何 Figma 属性、不连生成管线；下载 / clientStorage 通道天然带出。
+  let autoLayout = null;
+  if (o.includeAutoLayout !== false) {
+    try { autoLayout = inspectAutoLayout(root); } catch (e) { autoLayout = null; }
+  }
+  return {
+    schemaVersion: version,
+    namingConvention: namingConvention,
+    componentName: deriveComponentName(root, namingConvention),
+    rootId: newId(root),
+    rootName: String(root.name || ""),
+    root: rootNode,
+    stats: { nodes: count, sections: sections, loops: loops, slots: slots, truncated: truncated },
+    quality: quality,
+    autoLayout: autoLayout,
   };
 }
 
