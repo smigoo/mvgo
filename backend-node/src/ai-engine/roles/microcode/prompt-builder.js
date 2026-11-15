@@ -23,6 +23,12 @@ import {
 // 🧱 段内结构事实（纯函数，零依赖）：段声明里没有任何子结构时，用 Figma 几何补一条
 //   「该段由 N 个并列同构块组成」的事实，防止 LLM 把一行两张卡画成一张（cbcac19a 实锤）。
 import { formatInternalStructureFact } from '../../utils/internal-structure-facts.js';
+// 🛡️ S3-B（2026-11-15 · dd4be3be 实锤）：几何重复证据判定的单一来源，
+//   让 countSameShapeSiblings / isoSectionTruth / inlineCompositeRows 真正参与 declaredRepeated。
+import {
+  isDeclaredOrGeometricRepeated,
+  resolveRepeatEvidence,
+} from '../../utils/repeated-section-contract.js';
 // 🛡️ G04：判据层 plan 事实源单一解析器（planner 全保真原形优先）
 import { resolvePlanSourceFromInput } from '../../utils/resolve-plan-source.js';
 // 🧬 刀 66-P1：mc/vue3 共用的同构模板契约文本（单一来源）
@@ -1804,10 +1810,14 @@ export function resolveSectionScopeFacts(input) {
   if (hit.id != null && root.id != null && String(hit.id) === String(root.id)) {
     return { sections, figmaNodeData: root, mode: 'pruned' };
   }
-  const declaredRepeated =
-    Number(sec?.itemCount) > 1 || sec?.collapsed === true || sec?.renderHint === 'v-for';
-  const repeated = declaredRepeated || countSameShapeSiblings(root, hit.id) > 1;
-  if (!repeated) return { sections, figmaNodeData: hit, mode: 'subtree' };
+  // 🛡️ S3-B：判据从「只读 3 个可选契约字段」扩到几何证据（同形兄弟数 /
+  //   isoSectionTruth.entryCount / inlineCompositeRows.members / A 注入的 _repeatContract）。
+  //   旧口径 `declaredRepeated || siblings>1` 完全包含在新口径里（零漂移 + 只增事实）。
+  const repeatFlags = isDeclaredOrGeometricRepeated(sec, {
+    siblings: countSameShapeSiblings(root, hit.id),
+    ...resolveRepeatEvidence(input, sec),
+  });
+  if (!repeatFlags.repeated) return { sections, figmaNodeData: hit, mode: 'subtree' };
   // 重复组实例：上抬到同形组父容器（保住全部兄弟实例），父容器即根则只能收窄 sections
   const parent = findFigmaParentOf(root, hit.id);
   if (parent && parent.id != null && root.id != null && String(parent.id) !== String(root.id)) {
@@ -2004,16 +2014,21 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
       const hit = findFigmaNodeByIds(input.figmaNodeData, ids);
       if (hit && hit !== input.figmaNodeData) {
         const siblings = countSameShapeSiblings(input.figmaNodeData, hit.id);
-        const declaredRepeated =
-          Number(matchedSection?.itemCount) > 1 ||
-          matchedSection?.collapsed === true ||
-          matchedSection?.renderHint === 'v-for';
-        if (byMapper && siblings <= 1 && !declaredRepeated) {
+        // 🛡️ S3-B：几何证据（siblings / isoSectionTruth / inlineCompositeRows）也算重复组，
+        //   不再出现「siblings=2 declaredRepeated=false」这种事实白拿。命中 ⇒ 不精确裁图，
+        //   保住全部兄弟实例的上下文（裁图只在「无任何重复证据」时才允许）。
+        const repeatFlags = isDeclaredOrGeometricRepeated(matchedSection, {
+          siblings,
+          ...resolveRepeatEvidence(input, matchedSection),
+        });
+        if (byMapper && siblings <= 1 && !repeatFlags.repeated) {
           scoped.figmaNodeData = hit;
           scoped.figmaStyleTree = null; // 强制 buildFigmaStage 对子树重新格式化
           figmaCut = 'byId';
         } else {
-          report.repeatedAnchor = `siblings=${siblings} declaredRepeated=${declaredRepeated}`;
+          report.repeatedAnchor =
+            `siblings=${siblings} declaredRepeated=${repeatFlags.declared} ` +
+            `geometricRepeated=${repeatFlags.geometric} sources=${repeatFlags.sources.join('+') || '-'}`;
         }
       }
     } catch {

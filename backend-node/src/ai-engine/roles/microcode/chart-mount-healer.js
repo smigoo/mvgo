@@ -9,10 +9,15 @@
  * 治法（与根治② :style 残留归一同款纪律——机械可修缺陷在校验前还原）：
  *   写盘前置自愈链扫描每个 .vue：
  *     ① script 有 `echarts.init(X.value)` / `echarts.init(X)`（X 为简单标识符）；
- *     ② template 无 `ref="X"`（判据与 do-not-invent-validator#detectEchartsMountPointMissing
- *        逐字同口径：`ref\s*=\s*["']X["']`）；
+ *     ② 经 `chart-mount-truth#resolveChartMount` 裁决为「真缺挂载」
+ *        （X 声明为 ref(null)/ref([]) 且模板无静态/动态/fn ref 挂载；判据与
+ *         do-not-invent-validator#collectChartMountVerdicts 单一来源，禁止复制正则）；
  *     ③ 命中 ⇒ 在 template 根元素闭合标签前注入
  *        `<div ref="X" class="chart-mount-healed" style="width:100%;min-height:120px;"></div>`。
+ *
+ * ⚠️ 2026-11-15（bca81048 实锤）：X 为循环变量 / querySelector 自取 DOM / 声明无法溯源时
+ *    **一律不注入** —— 旧版只看「模板有无 ref="X"」，会给函数式 ref 收集数组的产物
+ *    塞进一个无人引用的 `ref="el"` 幽灵 div，既无效又污染产物。
  *
  * 注入形态取舍：
  *   - 内联 style（width 100% 保证 clientWidth>0，min-height 120px 保证 clientHeight>0
@@ -24,13 +29,8 @@
  * 四象限覆盖：挂在 file-writer.js 写前自愈链，mc-max / vue3-max / lite 各象限共用该出口。
  */
 
-/** 与 do-not-invent-validator#detectEchartsMountPointMissing 的 init 提取正则逐字同口径 */
-const INIT_REF_RE = /echarts\.init\(\s*([A-Za-z_$][\w$]*)(?:\.value)?\s*\)/g;
-
-/** 挂载判定正则（与 do-not-invent-validator 逐字同口径：ref\s*=\s*["']X["']） */
-function mountedRefRe(refName) {
-  return new RegExp(`ref\\s*=\\s*["']${refName}["']`);
-}
+/** 判据单一来源（2026-11-15）：挂载点裁决统一走 chart-mount-truth，禁止此处复制正则 */
+import { collectChartInitTargets, resolveChartMount } from '../../utils/chart-mount-truth.js';
 
 /** 提取 <template>...</template> 内层内容；无模板返回 null */
 function extractTemplateInner(content) {
@@ -78,6 +78,11 @@ function findRootCloseIndex(inner) {
 
 /**
  * 扫描并自愈单个 SFC 内容。
+ *
+ * 🛡️ 2026-11-15（bca81048 假阳性）：判据与门禁同源（chart-mount-truth），
+ * 只对「声明为模板 ref（ref(null)/ref([])）且模板真无挂载」的目标注入，
+ * 循环变量 / querySelector / 无法溯源的形态一律不动（避免给好产物塞无效 ref div）。
+ *
  * @param {string} content 完整 .vue 文件内容
  * @returns {{ content: string, healed: boolean, fixes: Array<{refName: string}> }}
  */
@@ -88,17 +93,15 @@ export function healChartMountPoints(content) {
   const tpl = extractTemplateInner(content);
   if (!tpl) return empty;
 
-  // ① 收集 init ref 名（简单标识符；Set 去重保序）
-  const refNames = [];
-  INIT_REF_RE.lastIndex = 0;
-  let m;
-  while ((m = INIT_REF_RE.exec(content)) !== null) {
-    if (!refNames.includes(m[1])) refNames.push(m[1]);
-  }
+  // ① 收集 init 目标（简单标识符；保序去重）
+  const refNames = collectChartInitTargets(content);
   if (refNames.length === 0) return empty;
 
-  // ② 过滤出 template 里真缺挂载点的
-  const missing = refNames.filter((name) => !mountedRefRe(name).test(tpl.inner));
+  // ② 只留「模板 ref 声明但无挂载」的真缺口（与门禁同一裁决函数）
+  const missing = refNames
+    .map((name) => ({ name, verdict: resolveChartMount(content, name) }))
+    .filter(({ verdict }) => !verdict.mounted)
+    .map(({ name }) => name);
   if (missing.length === 0) return empty;
 
   // ③ 定位根元素闭合点

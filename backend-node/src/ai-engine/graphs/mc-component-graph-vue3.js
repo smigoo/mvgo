@@ -26,6 +26,12 @@ import { StyleRefiner } from '../roles/style-refiner.js';
 import { LayoutStyleRefiner } from '../roles/layout-style-refiner.js';
 import { postRefineResourceImportGuard } from '../utils/resource-import-guard.js';
 import { PlanningGateError } from '../utils/section-plan-coverage.js';
+// 🛡️ 步骤 0（2026-11-15 · c0cb00f1）：与微码图同源的 chart 守恒观测基线，纯附加。
+import {
+  auditChartConservation,
+  chartConservationPlanFields,
+  chartConservationCounts,
+} from '../utils/chart-conservation-audit.js';
 // P2 收编：saveCheckpoint 原在本文件重复实现一份，与 phase2 graph 逐字节相同 → 统一到 utils
 import { saveCheckpoint as saveCheckpointShared } from '../utils/save-checkpoint.js';
 import { Vue3Engineer } from '../roles/vue3-engineer.js';
@@ -970,6 +976,16 @@ export function createPhase2Graph(config = {}) {
         state._saveCheckpoint?.('reject-summary', rejectSummary);
         logger.info(formatRejectSummaryLine(rejectSummary));
       }
+
+      // 🛡️ 步骤 0 观测基线：与微码图同源，产物落盘后补齐第三段（只读 conservationFiles）。
+      const _ccFinal = auditChartConservation({
+        visionCharts: state.charts,
+        plan: state.subComponentPlan,
+        files: conservationFiles,
+        layoutSections: state.layoutStructure?.layout?.sections,
+        stage: 'artifact',
+      });
+      logger.info('[chart-conservation] 产物守恒·已评估', chartConservationCounts(_ccFinal));
 
       return {
         generatedFiles: result.writtenFiles,
@@ -2492,6 +2508,13 @@ export function createPhase2Graph(config = {}) {
       ].filter((sub) => sub && sub.type === 'chart-component');
       // 与微码图同源口径：按 id 去重得到出口图表数，mountPoints 保留双挂载事实。
       const _exitChartSubs = [...new Map(_allChartSubs.map((sub) => [String(sub.id), sub])).values()];
+      // 🛡️ 步骤 0 观测基线：与微码图同口径；planner 点不传 files，产物段记 null 不编 0。
+      const _ccPlan = auditChartConservation({
+        visionCharts: state.charts,
+        plan: finalPlan,
+        layoutSections: state.layoutStructure?.layout?.sections,
+        stage: 'plan',
+      });
       logger.info('[vision-truth] 图表真值守恒', {
         visionCharts: Array.isArray(state.charts) ? state.charts.length : 0,
         exitChartSubcomponents: _exitChartSubs.length,
@@ -2502,6 +2525,8 @@ export function createPhase2Graph(config = {}) {
         //   旧 `resolvePlanSource(state…)` 恒报 `none`。显式标注事实来源，见评审文档 §五-6。
         planSource: 'subComponentPlan',
         planSourceBasis: 'planner-origin',
+        // 纯附加字段组：不覆盖任何既有键，不改 severity、不阻断。
+        ...chartConservationPlanFields(_ccPlan),
       });
       state.onProgress?.({
         stage: '子组件规划',

@@ -26,6 +26,7 @@
  */
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
 import { indexFigmaNodes } from '../utils/section-tree.js'
+import { resolveAllChartMounts } from '../utils/chart-mount-truth.js'
 
 export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData = null } = {}) {
   const issues = []
@@ -209,9 +210,13 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
   // script 写了 echarts.init(chartRef.value)，但 template 漏写 <div ref="chartRef"> 挂载点
   // → chartRef.value 恒 null → 图表永不渲染。这是「图表类型缺失」抓不到的假阳性：
   // series type:'pie' 确实在 script 里，但没有任何 DOM 挂载它。
-  const mountMissing = detectEchartsMountPointMissing(files)
+  // 🛡️ 2026-11-15（bca81048 实锤假阳性）：判据已收敛到 chart-mount-truth 单一来源，
+  //    只对「声明为模板 ref 却无模板挂载」拦单；循环变量 / querySelector / 函数式 ref
+  //    收集数组均视为有挂载；声明无法溯源 ⇒ fail-open 并计入 warnUncertainMount 观测。
+  const mountVerdicts = collectChartMountVerdicts(files)
+  const mountMissing = mountVerdicts.missing
   if (mountMissing.length > 0) {
-    for (const { path, refName } of mountMissing) {
+    for (const { path, refName, kind } of mountMissing) {
       const msg = `echarts 挂载点缺失：${path} 的 script 调用了 echarts.init(${refName}.value)，但 template 中没有 <div ref="${refName}"> 挂载点 —— 图表永远无法渲染`
       if (!seen.has(msg)) {
         seen.add(msg)
@@ -220,6 +225,7 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
           id: 'DO-NOT-INVENT-CHART-MOUNT-MISSING',
           message: msg,
           file: path,
+          _mountKind: kind,
         })
       }
     }
@@ -232,8 +238,41 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
     issues,
     // 🛡️ G12b：段级图表缺失计数（WARN 观测，0 也打——调用方落日志）
     warnChartSectionMissing: chartSectionMissing,
+    // 🛡️ 2026-11-15：挂载点判据 fail-open 计数（声明无法溯源的目标数，恒打便于真机对账）
+    warnUncertainMount: mountVerdicts.uncertain.length,
+    _uncertainMounts: mountVerdicts.uncertain,
+    _mountChecked: mountVerdicts.checked,
     _analyzed: true,
   }
+}
+
+/**
+ * 汇总全部 .vue 的挂载点裁决。
+ *
+ * @param {Record<string,string>} files
+ * @returns {{
+ *   missing: Array<{ path: string, refName: string, kind: string, reason: string }>,
+ *   uncertain: Array<{ path: string, refName: string, reason: string }>,
+ *   checked: number
+ * }}
+ */
+export function collectChartMountVerdicts(files) {
+  const missing = []
+  const uncertain = []
+  let checked = 0
+  for (const [path, content] of Object.entries(files || {})) {
+    if (typeof content !== 'string' || !/\.vue$/.test(path)) continue
+    if (!/echarts\.init\(/.test(content)) continue
+    for (const row of resolveAllChartMounts(content)) {
+      checked += 1
+      if (!row.mounted) {
+        missing.push({ path, refName: row.name, kind: row.kind, reason: row.reason })
+      } else if (row.kind === 'unknown') {
+        uncertain.push({ path, refName: row.name, reason: row.reason })
+      }
+    }
+  }
+  return { missing, uncertain, checked }
 }
 
 /**
@@ -422,41 +461,18 @@ function subtreeHasNumericText(node, depth) {
  * → chartRef.value 恒为 null → 图表永不渲染。这种「script 有 echarts、template 无 DOM」
  * 无法被「图表类型缺失」检查抓住（series type:'pie' 确实在 script 里）。
  *
- * 判据（精确、零误伤）：
- * 1. 逐 .vue 文件独立检查（不跨文件），避免误判子组件；
- * 2. 提取 script 里 `echarts.init(X.value)` / `echarts.init(X)` 的 ref 名 X；
- * 3. 若 X 是简单标识符（排除 this.$refs / document.getElementById 等），
- *    且该文件 template 里没有 `ref="X"` → 挂载点缺失。
+ * 🛡️ 2026-11-15 修正（mc-max-1794742815773-bca81048 假阳性实锤）：
+ * 本函数只做**兼容包装**，判据统一走 `chart-mount-truth#resolveAllChartMounts`。
+ * 原版把 init 目标一律当模板 ref 名，导致
+ * `ringRefs.value.forEach((el) => echarts.init(el))`（el 是回调参数）+ 函数式
+ * `:ref="(el) => { ringRefs[idx] = el }"` 这种合法形态被误判 BLOCK。
+ * 现按「声明溯源」分类：ref(null) 才要求模板挂载，局部 DOM 变量天然有挂载。
  *
  * @param {Record<string,string>} files 文件名→内容
  * @returns {Array<{ path: string, refName: string }>}
  */
 export function detectEchartsMountPointMissing(files) {
-  const missing = []
-  for (const [path, content] of Object.entries(files)) {
-    if (typeof content !== 'string' || !/\.vue$/.test(path)) continue
-    if (!/echarts\.init\(/.test(content)) continue
-
-    const template = extractSfcTemplate(content)
-    if (!template) continue
-
-    // 提取 echarts.init(X) / echarts.init(X.value) 的 ref 名（只认简单标识符）
-    const initRe = /echarts\.init\(\s*([A-Za-z_$][\w$]*)(?:\.value)?\s*\)/g
-    const refNames = new Set()
-    let m
-    while ((m = initRe.exec(content)) !== null) {
-      refNames.add(m[1])
-    }
-    if (refNames.size === 0) continue // 提取不到 ref 名（this.$refs / getElementById 等）→ 跳过
-
-    for (const refName of refNames) {
-      const refAttr = new RegExp(`ref\\s*=\\s*["']${refName}["']`)
-      if (!refAttr.test(template)) {
-        missing.push({ path, refName })
-      }
-    }
-  }
-  return missing
+  return collectChartMountVerdicts(files).missing.map(({ path, refName }) => ({ path, refName }))
 }
 
 /**

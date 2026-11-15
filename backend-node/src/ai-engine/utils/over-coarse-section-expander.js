@@ -458,11 +458,12 @@ export function expandOverCoarseSections(sections, figmaRoot) {
       }
       // ③ 无条件补齐下游契约元数据（与 ①② 独立：真展开场景同样需要）
       k.layoutMetadata = buildExpandedLayoutMetadata(rawNode, k)
-      // 断点① 源头纠正：`section-tree` 按节点名 `/header/i` 打 `type:'header'`，
-      //   展开子段若**并非 chrome-only**（`chromeOnly === false`，子树含实质内容），
-      //   名字里的 "header" 不构成「面板标题栏」语义 ⇒ 剥掉自动 type，
-      //   否则 `applyFigmaHeightGrow` L2413 会把它永久排除出 flex 归一（比例失真）。
-      //   ⚠️ 只动**展开产物**，不改变既有段的既有判定（那是 P1-C 的收敛范围）。
+      // 🛡️ 纵深防御（2026-11-15 降级治理后保留）：源头 section-tree 已改用
+      //   vision-facts#isPanelHeaderName 严格判据，内容区 sub-header 不再被打
+      //   `type:'header'`，本分支正常情况下不再触发；保留作为「其它路径回填 type」
+      //   时的最后一道防线。原病灶：展开子段并非 chrome-only 时，名字里的
+      //   "header" 不构成面板标题栏语义，否则 `applyFigmaHeightGrow` L2413 会把
+      //   它永久排除出 flex 归一（比例失真，docs/2026-11-11 根因 D 断点①）。
       if (k.type === 'header' && k.chromeOnly === false && !hasDeclaredSectionSemantics(k)) {
         delete k.type
         k._headerTypeStripped = true

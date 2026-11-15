@@ -82,7 +82,15 @@ const FILES = [
   //   `catch (_peErr)`（pass='writeFiles:5341'）——enforcePanelKeyInFiles
   //   替换异常时**非致命**（沿用原 files 继续写盘）；异常必须留哨兵（否则「未触发兜底」
   //   与「兜底执行但异常」不可归因）；已接 reportPatchChainError，基线同步 +1。
-  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 91 },  // 25→26（2026-11-11 归因）：根因 G 第四道缺口——vue3 链路此前**从不**执行运行时标识符兜底
+  // 91→94（2026-11-15 归因）：header-right 契约恢复 + 交互 Tab 终写前提升新增 2 处 catch
+  //   （pass='execute:header-right-contract-recovery' / 'execute:header-right-tab-promotion'），
+  //   均接 reportPatchChainError；另 +1 为此前已接入哨兵但本门禁基线未同步的历史增量。
+  //   全量回归实测 94 处 catch，逐个接哨兵（下方 missing 断言逐行校验）。
+  // 94→95（2026-11-15 归因）：P0-a 资源归属上溯新增 1 处
+  //   `catch (_ownErr)`（pass='generateCode:resource-ownership-normalize'）——
+  //   ownerSectionId 上溯异常时**非致命**（保留原 mapping 继续生成）；异常必须留哨兵
+  //   （否则「未上溯」与「上溯执行但异常」不可归因）；已接 reportPatchChainError，基线同步 +1。
+  { rel: 'src/ai-engine/roles/microcode-engineer.js', expectCatches: 95 },  // 25→26（2026-11-11 归因）：根因 G 第四道缺口——vue3 链路此前**从不**执行运行时标识符兜底
   //   （`validateAndFixGeneratedFiles` 只在 microcode-engineer 上），实测 `<script setup>` 顶层引用
   //   未声明 `runtimeBuilder` ⇒ onMounted ReferenceError ⇒ 白屏。治理落点 writeFiles 之前新增
   //   `catch (e)`（pass='execute:runtime-idents'），接 neutralizeFilesRuntimeIdents 异常；

@@ -227,6 +227,80 @@ export function injectChartMinHeightIntoClass(code, chartCls, minHeight) {
 }
 
 /**
+ * 从 SFC 解析 echarts 挂载点（ref + class）的**唯一来源**。
+ * max 两象限的 T2 循环各自已有同款解析（历史链路，不动以零回归）；lite 单文件链路
+ * 直接调 `anchorChartWrapperWidth(code)`，由本函数补齐，杜绝第二套判据。
+ *
+ * @returns {{refName:string, chartCls:string}|null} 解析失败一律 null（fail-closed）
+ */
+export function resolveEchartsContainer(code) {
+  if (!code || typeof code !== 'string' || !code.includes('echarts.init(')) return null;
+  const refMatch = code.match(/echarts\.init\(\s*([A-Za-z_$][\w$]*)\.value/);
+  if (!refMatch) return null;
+  const refName = refMatch[1];
+  const escRef = refName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const elMatch =
+    code.match(new RegExp(`<div[^>]*ref="${escRef}"[^>]*class="([\\w -]+)"`)) ||
+    code.match(new RegExp(`<div[^>]*class="([\\w -]+)"[^>]*ref="${escRef}"`));
+  if (!elMatch) return null;
+  return { refName, chartCls: elMatch[1].trim().split(/\s+/)[0] };
+}
+
+/**
+ * 🛡️ T2-W（2026-11-15 · mc-max-1794680105142-4804ca47 流量预测折线图整图空白实锤）：
+ * **echarts 挂载元素的直接父容器**缺 width 时，条件化补 `width: 100%`。
+ *
+ * 真机实证（同一预览页 5 组 Puppeteer 对照，见 /tmp/probe-chart-width-plain-20261115.mjs）：
+ *   - 只给外层 wrap 补普通 `width:100%` → wrap/chart 宽 0→411、canvas 2→3（折线图出现）；
+ *   - 只给内层 chart 补 `width:100%` → 宽仍 0、canvas 仍 2（父零宽 ⇒ 100% of 0）；
+ *   - `flex:1 1 auto` 无效；`!important` 非必需。
+ * 故锚定对象必须是**直接父容器**，且不得无条件给每个 chart 类名容器补（内层注入是无效噪声）。
+ *
+ * 语义复用 validators/code-fix-rules.js#anchorRootContainerInFiles 的 N4 中性化：
+ *   **已有 width 声明一律不覆盖**（杜绝 mc-max-1788248984779-862c6b29 式反复拉锯）、
+ *   缺则补规范默认值 100%。不引入新真值源、不改入参结构，新输出纯附加。
+ *
+ * 不命中（fail-closed，逐条）：无 ref 匹配 / 父不是 div / 父无 class / 父与 chartCls 同类 /
+ *   父规则块不存在 / 块内已有 width / 块为 absolute|fixed 定位 / 父子之间夹其它标签或注释。
+ *
+ * @param {string} code SFC 全文
+ * @param {string} [refName] echarts.init 目标 ref 名（如 chartRef）；缺省由 resolveEchartsContainer 解析
+ * @param {string} [chartCls] echarts 挂载容器 class（内层）；缺省由 resolveEchartsContainer 解析
+ * @returns {{ code: string, wrapperCls: string|null, injectedCount: number }}
+ */
+export function anchorChartWrapperWidth(code, refName, chartCls) {
+  const empty = { code, wrapperCls: null, injectedCount: 0 };
+  if (!code || typeof code !== 'string') return empty;
+  // 未显式给 ref/class（如 lite 单文件链路）⇒ 由同一解析函数内部定位，杜绝判据双源
+  if (!refName || !chartCls) {
+    const resolved = resolveEchartsContainer(code);
+    if (!resolved) return empty;
+    refName = resolved.refName;
+    chartCls = resolved.chartCls;
+  }
+  const escRef = String(refName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // 父 div 开标签 + 空白 + 子 div（子标签任意位置含 ref="refName"），中间不得夹其它标签
+  const pairRe = new RegExp(
+    `<div([^>]*\\bclass="([^"]+)"[^>]*)>\\s*<div(?=[^>]*\\bref="${escRef}")[^>]*>`,
+    'm',
+  );
+  const pair = code.match(pairRe);
+  if (!pair) return empty;
+  const wrapperCls = pair[2].trim().split(/\s+/)[0];
+  if (!wrapperCls || wrapperCls === chartCls) return empty;
+  const escCls = wrapperCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const blockRe = new RegExp(`(\\.${escCls}\\s*\\{)([^}]*)\\}`, 'g');
+  let injectedCount = 0;
+  const out = code.replace(blockRe, (m, head, body) => {
+    if (/(^|[\s;{])width\s*:/i.test(body)) return m; // 已有 width ⇒ 不覆盖
+    if (/(^|[\s;{])position\s*:\s*(absolute|fixed)/i.test(body)) return m; // 绝对定位 ⇒ 不动
+    injectedCount += 1;
+    return `${head}${body.replace(/\s*$/, '')}\n  width: 100%; /* 🎯 T2-W：图表父容器宽度锚定（缺则补，已有不覆盖） */\n}`;
+  });
+  return { code: out, wrapperCls, injectedCount };
+}
+
+/**
  * class 规则块完全缺失时，在 <style> 段 @import 之后创建规则块并注入 min-height。
  * （实锤环境监测 ChartSection：.chart-container 在 style 段无任何规则 → 容器塌陷）
  *

@@ -128,11 +128,26 @@ export function isChromeOnlySection(section) {
   return false
 }
 
-function filterSectionArray(sections, removed, path) {
+function filterSectionArray(sections, removed, path, headerOwnerId) {
   if (!Array.isArray(sections)) return sections
   const kept = []
   for (let i = 0; i < sections.length; i += 1) {
     const section = sections[i]
+    // 🛡️ 2026-11-15（mc-max-1794749284344-c5e0aadc 实锤）：header 归属单一事实源优先。
+    //   ownerId 来自 header-owner-truth#resolveHeaderOwner（结构锚 + 无量纲几何），
+    //   此处不再按 headerRelation 字面二次判定——vision 把 header 组标成
+    //   `content-below-title` 时旧判据会把它当业务段留在内容流（真插槽留内容区）。
+    if (headerOwnerId && String(section?.id ?? '') === String(headerOwnerId)) {
+      removed.push({
+        path: `${path}[${i}]`,
+        id: section?.id,
+        name: section?.name || section?.title,
+        title: section?.title || section?.name,
+        headerRelation: normalizedRelation(section) || undefined,
+        reason: 'header-owner',
+      })
+      continue
+    }
     if (isChromeOnlySection(section)) {
       removed.push({
         path: `${path}[${i}]`,
@@ -140,6 +155,7 @@ function filterSectionArray(sections, removed, path) {
         name: section?.name || section?.title,
         title: section?.title || section?.name,
         headerRelation: normalizedRelation(section) || undefined,
+        reason: 'chrome-relation',
       })
       continue
     }
@@ -150,25 +166,28 @@ function filterSectionArray(sections, removed, path) {
 
 /**
  * 原地清理 parsed 中所有可能的 section 入口，返回被剔除的 chrome section 清单。
+ * @param {object} parsed
+ * @param {{ headerOwnerId?: string }} [opts] header 归属单一事实源给出的 owner id
  */
-export function stripChromeSectionsInPlace(parsed) {
+export function stripChromeSectionsInPlace(parsed, opts = {}) {
   const removed = []
   if (!parsed || typeof parsed !== 'object') return removed
+  const headerOwnerId = typeof opts?.headerOwnerId === 'string' && opts.headerOwnerId ? opts.headerOwnerId : ''
 
   if (parsed.layout && Array.isArray(parsed.layout.sections)) {
-    parsed.layout.sections = filterSectionArray(parsed.layout.sections, removed, 'layout.sections')
+    parsed.layout.sections = filterSectionArray(parsed.layout.sections, removed, 'layout.sections', headerOwnerId)
   }
 
   if (Array.isArray(parsed.sections)) {
-    parsed.sections = filterSectionArray(parsed.sections, removed, 'sections')
+    parsed.sections = filterSectionArray(parsed.sections, removed, 'sections', headerOwnerId)
   }
 
   if (parsed.layoutStructure && typeof parsed.layoutStructure === 'object') {
     if (Array.isArray(parsed.layoutStructure.sections)) {
-      parsed.layoutStructure.sections = filterSectionArray(parsed.layoutStructure.sections, removed, 'layoutStructure.sections')
+      parsed.layoutStructure.sections = filterSectionArray(parsed.layoutStructure.sections, removed, 'layoutStructure.sections', headerOwnerId)
     }
     if (parsed.layoutStructure.layout && Array.isArray(parsed.layoutStructure.layout.sections)) {
-      parsed.layoutStructure.layout.sections = filterSectionArray(parsed.layoutStructure.layout.sections, removed, 'layoutStructure.layout.sections')
+      parsed.layoutStructure.layout.sections = filterSectionArray(parsed.layoutStructure.layout.sections, removed, 'layoutStructure.layout.sections', headerOwnerId)
     }
   }
 

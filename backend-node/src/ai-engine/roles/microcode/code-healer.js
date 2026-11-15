@@ -32,6 +32,7 @@ import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
 import { CARTESIAN_SERIES_TYPES } from '../../utils/chart-type-guard.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
+import { resolveChartMount } from '../../utils/chart-mount-truth.js';
 import { stripDanglingComponentRefs } from '../../utils/section-coverage-guard.js';
 import {
   isUsedByLessColorFn,
@@ -2415,7 +2416,24 @@ export function healClassPrefixedDataKeys(vueContent) {
   const tplMatch = vueContent.match(/<template\b[^>]*>([\s\S]*?)<\/template>/i);
   if (!tplMatch) return vueContent;
   for (const m of tplMatch[1].matchAll(/\.([A-Za-z_$][\w$]*)/g)) usedProps.add(m[1]);
-  if (usedProps.size === 0) return vueContent;
+
+  // 🛡️ 扩展（2026-11-15 · mc-max-1794674982043-8c966d20 实锤）：tab 数组 value 兜底识别。
+  //   旧判据仅认「模板访问过的裸属性名」，但图表数据 map 的 key（如 'c-traffic-monitor-tunnel'）
+  //   其裸名 'tunnel' 是 tab 的取值，模板从不以 `.tunnel` 访问 ⇒ 旧规则失效 ⇒ 运行时
+  //   chartDataMap[currentTab.value] 取不到 → 访问 data.actual 抛 undefined（RUNTIME-004）。
+  //   此处额外把脚本内 tab 数组的 value 纳入候选裸名，使「类名前缀 + tab 裸值」的 key 也能剥离前缀。
+  const tabValueCandidates = new Set();
+  for (const sm of vueContent.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const arrM = sm[1].match(
+      /\b(?:const|let|var)\s+\w*[Tt]ab\w*\s*=\s*(?:ref\s*\(\s*)?\[([\s\S]*?)\]/,
+    );
+    if (!arrM) continue;
+    for (const vm of arrM[1].matchAll(/\bvalue\s*:\s*['"]([^'"]+)['"]/g)) {
+      tabValueCandidates.add(vm[1]);
+    }
+  }
+
+  if (usedProps.size === 0 && tabValueCandidates.size === 0) return vueContent;
 
   let changed = false;
   const out = vueContent.replace(
@@ -2428,7 +2446,7 @@ export function healClassPrefixedDataKeys(vueContent) {
           // 最短后缀优先：`c-device-monitor-error` → 先试 `error`，再 `monitor-error`…
           for (let i = parts.length - 1; i >= 1; i -= 1) {
             const cand = parts.slice(i).join('-');
-            if (!usedProps.has(cand)) continue;
+            if (!usedProps.has(cand) && !tabValueCandidates.has(cand)) continue;
             // 已存在同名裸键 → 不改（否则对象里出现两个键，语义更乱）
             const hasBare = new RegExp(`(?:^|[{,])\\s*${cand}\\s*:`, 'm').test(body);
             if (hasBare) return full;
@@ -2690,15 +2708,18 @@ export function stripDeadChartImpl(content, options = {}) {
   if (/[:@]ref\s*=|v-bind:ref/.test(template)) {
     return { content, changed: false, removed: [], skipped: 'dynamicRef' };
   }
-  // 提取 init ref 名（与门禁同正则口径）
+  // 提取 init ref 名（判据单一来源：与门禁 chart-mount-truth 同源裁决）
   const refNames = new Set();
   const initRe = /echarts\.init\(\s*([A-Za-z_$][\w$]*)(?:\.value)?\s*\)/g;
   let m;
   while ((m = initRe.exec(content)) !== null) refNames.add(m[1]);
   if (refNames.size === 0) return { content, changed: false, removed: [] };
-  const deadRefs = [...refNames].filter(
-    (r) => !new RegExp(`ref\\s*=\\s*["']${r}["']`).test(template),
-  );
+  // 🛡️ 2026-11-15（bca81048 假阳性）：只有「声明为模板 ref 且真无挂载」才算死代码。
+  //    循环变量 / querySelector / 声明无法溯源的一律不动（旧版会把活代码当死代码删）。
+  const deadRefs = [...refNames].filter((r) => {
+    const verdict = resolveChartMount(content, r);
+    return !verdict.mounted && (verdict.kind === 'ref-single' || verdict.kind === 'ref-collection');
+  });
   if (deadRefs.length === 0) return { content, changed: false, removed: [] };
 
   const DEAD_SIGNAL = /echarts\.init\(|chartObserver|chart\.setOption\(|chart\.resize\(/;

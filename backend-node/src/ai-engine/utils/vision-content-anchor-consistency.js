@@ -416,4 +416,232 @@ export function reanchorMisalignedDeclaredTexts(params = {}) {
   return { relinked, relinkSkipped, examined }
 }
 
+/**
+ * P0（2026-11-15 · mc-max-1794747724143-89b32111「流量监测」实锤）：
+ * 「声明值 ↔ 引用节点子树真值」归属判据（独立轨道，不并入 CONTENT_TEXT_FIELDS）。
+ *
+ * 病灶：vision 把数字卡声明成 `{ id: '2:3456', value: '34,620' }`，而 `2:3456` 在 Figma
+ *   真值里是 `1263:38 5cards` 内环形图的椭圆（子树 0 个 TEXT）。真数字在 `2:3684`/`2:3682`
+ *   （`1744:126 cards`, y≈240）。三层既有守卫全漏：
+ *     - `validateVisionAnchors` 只判 id 在不在树里（2:3456 存在 ⇒ 绿灯）；
+ *     - 本文件 `auditContentAnchorConsistency` 的 `CONTENT_TEXT_FIELDS` 刻意不含 `value`
+ *       （58de7d47 实测 `name/label/value` 会把图层描述当可见文案，污染对账）
+ *       ⇒ 本单 `skipped=true / no-declared-pairs`；
+ *     - `auditSectionAnchors` 拿到引用集后**自动 LCA 重锚到 1263:38**（repaired=4）
+ *       ⇒ 把幻觉 ref 的几何钉成段真值，段计划与产物一路错到底。
+ *
+ * 判据（零命名、零业务值、可辩驳）：
+ *   条目带 Figma 形态 id 且声明了 `value` ⇒ 该 ref 在真值树内，且 ref 子树文本域
+ *   （`collectSubtreeTexts`，只认 TEXT / CHARACTER）必须存在与声明值**精确相等**
+ *   （或仅千分位格式差异）的文本；不用双向包含，防单字符真值文本造成假绿。
+ *   真值文本域为空 ⇒ 结构性矛盾（节点完全没有文本，却声称承载某段文案）：
+ *     - 记 issue，且把该 ref 收进 `blockedRefIds`，供 `auditSectionAnchors` 拒绝 LCA 重锚；
+ *   真值文本域非空但不匹配（OCR 误读等）⇒ **只记 issue，不 blocked**：ref 位置本身
+ *     可能合法，禁止用它否决正当重锚（不猜纪律）。
+ *
+ * 配方化（判据收紧后修复轮有能力过）：对每条错配，按「文本串」在全树 TEXT/CHARACTER
+ *   中定位**唯一命中**节点，输出 `{ truthNodeId, parentId, y }` 可照抄形态；零命中或
+ *   多命中只标 `unresolved/ambiguous`，**不给空段**（指空段 = 没给）。
+ *
+ * 纯函数、零副作用：不改入参；skipped 与 0 命中都返回确定值，供真机计数行采集。
+ */
+export const VALUE_TEXT_FIELDS = Object.freeze(['value'])
+const MAX_VALUE_PAIRS = 200
+const MAX_VALUE_ISSUES = 40
+
+export function isDeclaredValueEntry(node) {
+  if (!node || typeof node !== 'object') return false
+  const id = typeof node.id === 'string' ? node.id.trim() : ''
+  if (!FIGMA_ID_RE.test(id)) return false
+  return VALUE_TEXT_FIELDS.some((f) => {
+    const v = node[f]
+    return (typeof v === 'string' || typeof v === 'number') && String(v).trim() !== ''
+  })
+}
+
+export function readDeclaredValues(node) {
+  const out = []
+  if (!node || typeof node !== 'object') return out
+  for (const field of VALUE_TEXT_FIELDS) {
+    const raw = node[field]
+    if (typeof raw !== 'string' && typeof raw !== 'number') continue
+    const text = String(raw).trim()
+    if (text) out.push(text)
+  }
+  return out
+}
+
+/** 判定域与 `collectSectionFigmaRefs` 同源：children / body.children / declaredContent.* */
+function collectDeclaredValuePairs(sections) {
+  const pairs = []
+  const seen = new Set()
+  const visitNode = (node, sectionId, path, depth) => {
+    if (!node || typeof node !== 'object' || depth > 3 || pairs.length >= MAX_VALUE_PAIRS) return
+    if (isDeclaredValueEntry(node)) {
+      const id = node.id.trim()
+      for (const value of readDeclaredValues(node)) {
+        const key = `${id}\u0000${value}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        pairs.push({ sectionId, path, id, value })
+      }
+    }
+    for (const kid of [].concat(node.children || [], node.body?.children || [])) {
+      visitNode(kid, sectionId, `${path}.children`, depth + 1)
+    }
+  }
+  const visitSection = (section, path, depth) => {
+    if (!section || typeof section !== 'object' || depth > 8) return
+    const sectionId = typeof section.id === 'string' ? section.id : ''
+    const dc = section.declaredContent
+    const kids = [].concat(
+      section.children || [],
+      section.body?.children || [],
+      dc?.children || [],
+      dc?.items || [],
+      dc?.elements || [],
+    )
+    for (const kid of kids) visitNode(kid, sectionId, path, 0)
+    for (const child of section.children || []) {
+      visitSection(child, `${path}/${sectionId}`, depth + 1)
+    }
+  }
+  ;(Array.isArray(sections) ? sections : []).forEach((s, i) => visitSection(s, `sections[${i}]`, 0))
+  return pairs
+}
+
+/** 全树真值 TEXT 索引：文本口径复用 `collectSubtreeTexts`（单一来源，只认 TEXT/CHARACTER） */
+function buildTruthTextIndex(index, childrenOf) {
+  const out = []
+  for (const node of index.values()) {
+    if (node.type !== 'TEXT' && node.type !== 'CHARACTER') continue
+    for (const it of collectSubtreeTexts(node.id, index, childrenOf)) {
+      out.push({ id: node.id, text: normalize(it.text), parentId: node.parentId, y: it.y })
+    }
+  }
+  return out
+}
+
+/**
+ * 声明值匹配口径（P0 收紧，2026-11-15 真机回放实锤）。
+ *
+ * 不用既有 `covers()` 的**双向包含**：真值树里有大量单字符数字 TEXT（'2'/'4'/'6'/'20'），
+ * `declared.includes(t)` 会让 `'34,620'` 假命中 9 个节点 ⇒ 配方恒 ambiguous（修复轮拿不到
+ * 可照抄形态），且短声明值会假绿放行。新轨道只用「精确相等 + 纯数字格式归一」，
+ * 数字千分位差异（'34,620' vs '34620'）不算错配，其余一律判不命中。
+ */
+function matchesDeclaredValue(truthText, declared) {
+  const t = normalize(truthText)
+  const d = normalize(declared)
+  if (!t || !d) return false
+  if (t === d) return true
+  const NUMERIC_RE = /^[\d,，.\s]+$/
+  if (NUMERIC_RE.test(t) && NUMERIC_RE.test(d)) {
+    return t.replace(/[,，\s]/g, '') === d.replace(/[,，\s]/g, '')
+  }
+  return false
+}
+
+function resolveValueRecipe(declared, fromId, truthIndex) {
+  const hits = truthIndex.filter((t) => matchesDeclaredValue(t.text, declared))
+  if (hits.length === 1) {
+    const h = hits[0]
+    return {
+      declared,
+      from: fromId,
+      status: 'unique',
+      truthNodeId: h.id,
+      parentId: h.parentId,
+      y: h.y,
+    }
+  }
+  return {
+    declared,
+    from: fromId,
+    status: hits.length === 0 ? 'unresolved' : 'ambiguous',
+    hitCount: hits.length,
+  }
+}
+
+export function auditDeclaredValueAnchors(params = {}) {
+  const { sections, figmaNodeData } = params || {}
+  const empty = (reason) => ({
+    evaluated: 0,
+    matched: 0,
+    mismatched: 0,
+    notInTree: 0,
+    blockedRefs: 0,
+    blockedRefIds: [],
+    issues: [],
+    recipes: [],
+    skipped: true,
+    skippedReason: reason,
+  })
+  if (!Array.isArray(sections) || sections.length === 0) return empty('no-sections')
+  const index = indexFigmaNodes(figmaNodeData?.document || figmaNodeData)
+  if (index.size === 0) return empty('no-figma-tree')
+
+  const pairs = collectDeclaredValuePairs(sections)
+  if (pairs.length === 0) return empty('no-declared-values')
+
+  const childrenOf = buildChildrenMap(index)
+  const truthIndex = buildTruthTextIndex(index, childrenOf)
+  const issues = []
+  const recipes = []
+  const blocked = new Set()
+  let matched = 0
+  let mismatched = 0
+  let notInTree = 0
+
+  for (const p of pairs) {
+    const node = index.get(p.id)
+    if (!node) {
+      // 幻影 id 的归属方是 validateVisionAnchors（单一来源），此处只计数不报第二份 issue
+      notInTree += 1
+      continue
+    }
+    const truthTexts = collectSubtreeTexts(p.id, index, childrenOf)
+      .map((it) => String(it.text || '').trim())
+      .filter(Boolean)
+    const declared = normalize(p.value)
+    if (truthTexts.some((t) => matchesDeclaredValue(t, declared))) {
+      matched += 1
+      continue
+    }
+    mismatched += 1
+    const zeroText = truthTexts.length === 0
+    if (zeroText) blocked.add(p.id)
+    if (issues.length < MAX_VALUE_ISSUES) {
+      issues.push({
+        sectionId: p.sectionId,
+        path: p.path,
+        id: p.id,
+        declared: p.value,
+        truthTexts: truthTexts.slice(0, TRUTH_SAMPLE_LIMIT),
+        truthType: node.type || '?',
+        reason: zeroText
+          ? `真值 ${p.id} 子树内无任何 TEXT/CHARACTER（却声明承载「${p.value}」）`
+          : `声明值「${p.value}」不在真值 ${p.id} 的文本域 [${truthTexts.slice(0, TRUTH_SAMPLE_LIMIT).join(' / ')}] 中`,
+        blocksReanchor: zeroText,
+      })
+    }
+    if (recipes.length < MAX_VALUE_ISSUES) {
+      recipes.push(resolveValueRecipe(p.value, p.id, truthIndex))
+    }
+  }
+
+  return {
+    evaluated: pairs.length,
+    matched,
+    mismatched,
+    notInTree,
+    blockedRefs: blocked.size,
+    blockedRefIds: [...blocked],
+    issues,
+    recipes,
+    skipped: false,
+    skippedReason: null,
+  }
+}
+
 export default auditContentAnchorConsistency

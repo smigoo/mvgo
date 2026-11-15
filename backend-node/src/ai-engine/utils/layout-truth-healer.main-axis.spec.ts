@@ -210,4 +210,98 @@ describe('刀 56 容器主轴真值归一', () => {
     const after = detectContainerMainAxisConflicts(fixed.files, { figmaRoot: figmaGroupRoot() });
     expect(after.hits).toHaveLength(0);
   });
+
+  /**
+   * 2026-11-15（mc-max-1794749284344-c5e0aadc 实锤）：
+   *   `GROUP 'header'` 2:8419 真值 = 横向一行（标题 + 三组「标签+数值」，y 441~445），
+   *   组内挂了一个 8×8 装饰圆点（y=463，挂在文本基线下方）⇒ 旧实现把它算成独立 y 带
+   *   （bands=2）⇒ 判 column ⇒ header 被写成竖排（30px 高塞 42px 内容，溢出压住 switch 条）。
+   *   判据：装饰叶（子树无 TEXT 且面积占比 <5%）不参与主轴聚类 —— 无量纲、命名无关。
+   */
+  it('阳性④：header 行内 8×8 装饰圆点不得把 row 带成 column', () => {
+    const headerRoot = () => ({
+      document: {
+        id: '0:0',
+        type: 'DOCUMENT',
+        name: 'Document',
+        children: [
+          {
+            id: SID,
+            type: 'GROUP',
+            name: 'header',
+            absoluteBoundingBox: { x: 0, y: 0, width: 388, height: 30.09 },
+            children: [
+              { id: 'h-t', type: 'TEXT', name: '设备监测', characters: '设备监测', absoluteBoundingBox: { x: 0, y: 2, width: 64, height: 19 } },
+              { id: 'h-n', type: 'TEXT', name: 'note', characters: '*数据实时更新', absoluteBoundingBox: { x: 287, y: 0, width: 91, height: 21 } },
+              { id: 'h-s1', type: 'FRAME', name: 'stat1', absoluteBoundingBox: { x: 100, y: 1, width: 80, height: 23 }, children: [
+                { id: 'h-s1t', type: 'TEXT', name: 'label', characters: '设备类型', absoluteBoundingBox: { x: 100, y: 1, width: 60, height: 20 } },
+              ] },
+              { id: 'h-s2', type: 'FRAME', name: 'stat2', absoluteBoundingBox: { x: 186, y: 1, width: 100, height: 23 }, children: [
+                { id: 'h-s2t', type: 'TEXT', name: 'label', characters: '设备总数', absoluteBoundingBox: { x: 186, y: 1, width: 60, height: 20 } },
+              ] },
+              // 装饰圆点：8×8 / (388×30.09) = 0.55% ⇒ 必须豁免
+              { id: 'h-g', type: 'FRAME', name: 'g', absoluteBoundingBox: { x: 1, y: 22, width: 8, height: 8 } },
+            ],
+          },
+        ],
+      },
+    });
+    const file = `<template>
+  <div class="c-device-monitor-header" data-section-id="${SID}" style="display:flex;flex-direction:column;align-items:center">
+    <span>设备监测</span>
+  </div>
+</template>
+
+<style lang="less" scoped>
+.c-device-monitor-header { display: flex; }
+</style>`;
+    const r = enforceContainerMainAxisTruth(
+      { 'package/components/StatsSection.vue': file },
+      { figmaRoot: headerRoot() },
+    );
+    const out = r.files['package/components/StatsSection.vue'];
+    expect(out).toContain('flex-direction:row');
+    expect(out).not.toContain('flex-direction:column;align-items:center');
+    expect(r.stats.fixed).toBe(1);
+  });
+
+  it('阴性⑤：真列布局（每行都有文本）仍判 column —— 装饰豁免不误伤', () => {
+    const colRoot = () => ({
+      document: {
+        id: '0:0',
+        type: 'DOCUMENT',
+        name: 'Document',
+        children: [
+          {
+            id: SID,
+            type: 'GROUP',
+            name: 'col',
+            absoluteBoundingBox: { x: 0, y: 0, width: 300, height: 200 },
+            children: [
+              { id: 'c1', type: 'FRAME', name: 'r1', absoluteBoundingBox: { x: 0, y: 0, width: 300, height: 40 }, children: [
+                { id: 'c1t', type: 'TEXT', name: 't', characters: '第一行', absoluteBoundingBox: { x: 8, y: 8, width: 60, height: 20 } },
+              ] },
+              { id: 'c2', type: 'FRAME', name: 'r2', absoluteBoundingBox: { x: 0, y: 60, width: 300, height: 40 }, children: [
+                { id: 'c2t', type: 'TEXT', name: 't', characters: '第二行', absoluteBoundingBox: { x: 8, y: 68, width: 60, height: 20 } },
+              ] },
+            ],
+          },
+        ],
+      },
+    });
+    const file = `<template>
+  <div class="c-device-monitor-col" data-section-id="${SID}" style="display:flex;flex-direction:row">
+    <span>第一行</span>
+  </div>
+</template>
+
+<style lang="less" scoped>
+.c-device-monitor-col { display: flex; }
+</style>`;
+    const r = enforceContainerMainAxisTruth(
+      { 'package/components/ContentSection.vue': file },
+      { figmaRoot: colRoot() },
+    );
+    expect(r.files['package/components/ContentSection.vue']).toContain('flex-direction:column');
+  });
 });

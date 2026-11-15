@@ -23,6 +23,12 @@ import {
 // 🛡️ A4 高度比例（2026-11-03）：缓存命中路径补跑（与 visual-parser 主路径同一纯函数）
 import { applyFigmaElementHeightRatios } from '../utils/figma-height-ratio.js';
 import { PlanningGateError } from '../utils/section-plan-coverage.js';
+// 🛡️ 步骤 0（2026-11-15 · c0cb00f1）：chart 守恒观测基线，纯附加计数 + 配方，不接门禁。
+import {
+  auditChartConservation,
+  chartConservationPlanFields,
+  chartConservationCounts,
+} from '../utils/chart-conservation-audit.js';
 // 🛡️ G04：判据层 plan 事实源单一解析器（planner 全保真原形优先；投影口仅兼容旧断点）
 import { resolvePlanSource, legacyPlanSourceLabel } from '../utils/resolve-plan-source.js';
 // 🛡️ G06：视觉诊断族唯一读取器（顶层镜像为空 / layoutStructure 内为真值）。
@@ -143,7 +149,11 @@ import { HeaderRelationValidator } from '../validators/header-relation-validator
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
 // 🛡️ R6（2026-11-09）：缓存命中路径的 headerSlots 聚合补跑（判据单一来源 = inferrer）。
 import { ensureHeaderSlots } from '../utils/inline-header-slot-inferrer.js';
-import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
+import {
+  applyHeaderSlotContractRewrite,
+  inheritHeaderSlotsOnVisionRetry,
+  syncTabContractsToSections,
+} from '../utils/header-slot-contract.js';
 // 🧩 v20261110.28 P0-1：Figma 结构契约不是需求文档，禁止触发文档分析子管线。
 import { isStructureContract } from '../utils/structure-contract.js';
 // 📊 WP1（2026-10-08）：chartSpec 红线留痕（文字色硬编码/数据混入/seriesTypes 盲区），独立字段只留痕不阻断
@@ -160,7 +170,7 @@ import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 import { createLogger } from '../logger/index.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
 // 🛡️ 2026-11-14：视觉重跑/择优判据（纯函数，单测覆盖）
-import { shouldRetryVisionAnalysis, pickBetterVisionAnalysis } from '../utils/vision-retry-gate.js';
+import { shouldRetryVisionAnalysis, pickBetterVisionAnalysis, countOrphanChartCarriers } from '../utils/vision-retry-gate.js';
 import { resolveBackgroundBrightness } from '../utils/style-tokens.js';
 // 🧬 刀 66-P0：同构段 Figma 真值（缓存命中路径也要补跑，与 A4/headerSlots 同区同思路）
 import { injectIsomorphicSectionTruth } from '../utils/layout-truth-healer.js';
@@ -1429,6 +1439,22 @@ export function createPhase2Graph(config = {}) {
           `✅ headerSlots 契约回写: vision ${rewrite.existingAll}（纠错后 ${rewrite.visionKept}）+ derived kept=${rewrite.derivedKept} = ${result.headerSlots.length} 个`,
         );
       }
+      // 🛡️ A3（2026-11-15）：结构化 tab 契约同步到 figmaNodeId 对应段的 headerSlots[]，
+      //   让 F1b / 结构契约 / 下游回查都能读到段级真值。仅同步数据，不改 extractSections
+      //   的顶层遍历口径 ⇒ 不会启用 renderHeaderTabTemplate 的 inline px 渲染。
+      try {
+        for (const __loc of [result.layoutStructure, result.layout]) {
+          if (!__loc || typeof __loc !== 'object') continue;
+          const __sync = syncTabContractsToSections(__loc, result.headerSlots);
+          if (__sync.stats.tabSlots > 0) {
+            logger.info('🛡️ headerSlots 段级 tab 契约同步·已评估', __sync.stats);
+          }
+        }
+      } catch (__slotSyncErr) {
+        logger.warn('⚠️ headerSlots 段级 tab 契约同步失败（fail-open）', {
+          error: __slotSyncErr?.message || String(__slotSyncErr),
+        });
+      }
 
       // 🛡️ Loop 2.1.C（2026-09-10）：header vs content 互斥（figmaNodeId 只落一次）。
       // 同一 node 同时出现在 headerSlots 与 layout.sections → 二选一，避免 T09 双份渲染。
@@ -1549,13 +1575,28 @@ export function createPhase2Graph(config = {}) {
       const __truthLeaf = Number(
         __cr.truthLeafSections ?? Math.max(Number(__cr.judgedTotal) || 0, Math.ceil((Number(__cr.totalFigma) || 0) / 4)),
       );
+      // 🛡️ 2026-11-15（mc-max-1794723552731-13daa0e4 实锤）：第三支触发条件 —— 图表声明无段承载。
+      //   该支 vision 只吐 3 个段（全是标题条），把数字卡段与两张柱状图段整体丢掉，但
+      //   `charts[]` 仍声明 2 张图且指向 `2:7625`/`2:7794`，**没有任何段承载这两个 id**。
+      //   段数契约要求 `< 3`，本例恰好 3 段 ⇒ 差一未触发，空产物被当正常结果发布。
+      //   判据（零阈值/零命名，445 支历史任务 0 误伤）见 `countOrphanChartCarriers`。
+      const __firstOrphan = countOrphanChartCarriers(result);
       const __gate = shouldRetryVisionAnalysis({
         sections: __firstSections,
         truthLeafSections: __truthLeaf,
         lowCoverage: visualTrust.verdict === VISUAL_VERDICTS.LOW_COVERAGE,
+        orphanCharts: __firstOrphan.orphanCount,
       });
       const __fewSections = __gate.fewSections;
+      const __orphanCharts = __gate.orphanCharts;
       const __needRetry = __gate.retry;
+      if (__orphanCharts) {
+        logger.warn('⚠️ vision 图表声明无段承载（自相矛盾），触发重分析', {
+          orphanCount: __firstOrphan.orphanCount,
+          orphans: __firstOrphan.orphans.slice(0, 8),
+          sections: __firstSections,
+        });
+      }
       if (__needRetry && !state._lowCoverageRetried) {
         state._lowCoverageRetried = true;
         let retryGuidance;
@@ -1580,6 +1621,16 @@ export function createPhase2Graph(config = {}) {
             `上一轮只切出 ${__firstSections} 个 section，而 Figma 真值里有 ${__truthLeaf} 个独立内容块。` +
             `请按「一个语义块 = 一个 section」重新切分：每个块必须有独立 section（含其标题与内容区），` +
             `严禁把所有内容塞进一个 section；保持已识别的文字与几何事实不变，禁止臆造 Figma 中不存在的元素。`;
+        } else if (__orphanCharts) {
+          // 🛡️ 2026-11-15：图表声明了却没有段承载 —— 视觉把「有图的区块」整段丢了。
+          //   只给结构约束，不给答案：要求补回承载这些图表的区块，禁止臆造。
+          retryGuidance =
+            `上一轮只切出 ${__firstSections} 个 section，但声明了图表（引用节点 ${__firstOrphan.orphans
+              .slice(0, 6)
+              .join('、')}）却**没有任何 section 承载它们**——说明有图表的区块被整段丢弃。` +
+            `请补齐这些图表所在的区块：每个图表必须落在其所属 section 内（图表的 section 要么等于该段 id，` +
+            `要么该段内部有对应内容区），并保留区块自身的标题与数据；保持已识别的文字与几何事实不变，` +
+            `严禁臆造 Figma 中不存在的元素。`;
         } else if (visualTrust.coverageRate < 35) {
           // 现状：全量重分析（补：附上遗漏元素名单，避免盲目重识别）
           const names35 = formatMissing(visualTrust.missing);
@@ -1601,11 +1652,17 @@ export function createPhase2Graph(config = {}) {
           logger.warn('⚠️ 视觉覆盖率不足，触发定向重分析', {
             rate: visualTrust.coverageRate,
             missingCount: visualTrust.missingCount,
-            condition: visualTrust.coverageRate < 35 ? '全量重分析' : '定向补分析',
+            condition: __orphanCharts
+              ? '图表无段承载'
+              : visualTrust.coverageRate < 35
+                ? '全量重分析'
+                : '定向补分析',
           });
           state.onProgress?.({
             stage: '视觉分析',
-            message: `⚠️ 覆盖率 ${visualTrust.coverageRate}% 不足，正在定向补全重分析…`,
+            message: __orphanCharts
+              ? `⚠️ 图表声明缺少承载区块（${__firstOrphan.orphanCount} 项），正在重新分析…`
+              : `⚠️ 覆盖率 ${visualTrust.coverageRate}% 不足，正在定向补全重分析…`,
             status: 'running',
           });
           try {
@@ -1629,21 +1686,69 @@ export function createPhase2Graph(config = {}) {
             if (retried && !isUntrustedVisualAnalysis(retried)) {
               const __retryTrust = evaluateVisualTrustVerdict(retried);
               const __retrySections = __sectionsOf(retried);
+              // 🛡️ 2026-11-15：择优增加「无承载图表」维度（少者胜）。残缺支段数可能不少，
+              //   但 orphan 差异极大（8 vs 0）；只看段数/覆盖率会选错。
+              const __retryOrphan = countOrphanChartCarriers(retried);
               const __pickRetry =
                 pickBetterVisionAnalysis(
-                  { sections: __firstSections, rate: visualTrust.coverageRate },
-                  { sections: __retrySections, rate: __retryTrust.coverageRate },
+                  {
+                    sections: __firstSections,
+                    rate: visualTrust.coverageRate,
+                    orphans: __firstOrphan.orphanCount,
+                  },
+                  {
+                    sections: __retrySections,
+                    rate: __retryTrust.coverageRate,
+                    orphans: __retryOrphan.orphanCount,
+                  },
                 ) === 'retry';
               logger.info('🛡️ vision-retry·已评估', {
-                reason: __fewSections ? 'few-sections' : 'low-coverage',
+                reason: __fewSections ? 'few-sections' : __orphanCharts ? 'orphan-charts' : 'low-coverage',
                 firstSections: __firstSections,
                 retrySections: __retrySections,
                 firstRate: visualTrust.coverageRate,
                 retryRate: __retryTrust.coverageRate,
+                firstOrphans: __firstOrphan.orphanCount,
+                retryOrphans: __retryOrphan.orphanCount,
                 picked: __pickRetry ? 'retry' : 'first',
               });
               if (__pickRetry) {
+              // 🛡️ A1（2026-11-15 · mc-max-1794706325675-693c8d17 实锤）：
+              //   `retried` 是一次全新的 parser.execute 结果（bypassCache），**不会**带上首轮
+              //   已跑完的 headerSlotValidation / applyHeaderSlotContractRewrite 成果。旧代码
+              //   直接整体替换 ⇒ 首轮 1 条 header-right 契约（Figma 确定性推导）被丢弃 ⇒
+              //   state.headerSlots=[] ⇒ engineer F1b total=0、T09 不注入、header 行落进 body。
+              //   修法：替换后重跑同一纯函数回写（contractSlots/rejectedNodes 来自 Figma 节点
+              //   真值、与视觉轮次无关），并继承首轮已过 rejectedKeys 防线的契约（按 slotKey 去重）。
+              const __firstSlots = Array.isArray(result.headerSlots) ? result.headerSlots : [];
               result = retried;
+              try {
+                const __inherit = inheritHeaderSlotsOnVisionRetry(
+                  __firstSlots,
+                  result.headerSlots,
+                  headerSlotValidation,
+                );
+                result.headerSlots = __inherit.headerSlots;
+                // 重试替换了整个 layoutStructure ⇒ 首轮做过的段级同步需在新树上重跑（幂等）
+                for (const __loc of [result.layoutStructure, result.layout]) {
+                  if (__loc && typeof __loc === 'object') {
+                    syncTabContractsToSections(__loc, result.headerSlots);
+                  }
+                }
+                logger.info('🛡️ vision-retry headerSlots 继承·已评估', {
+                  retryKept: __inherit.visionKept,
+                  rewritten: __inherit.rewritten,
+                  derivedKept: __inherit.derivedKept,
+                  inherited: __inherit.inherited,
+                  total: result.headerSlots.length,
+                });
+              } catch (__slotInheritErr) {
+                // fail-open：保持重试原始结果，不阻断生成
+                logger.warn('⚠️ vision-retry headerSlots 继承失败（fail-open）', {
+                  error: __slotInheritErr?.message || String(__slotInheritErr),
+                });
+                result.headerSlots = __firstSlots;
+              }
               visualTrust = __retryTrust;
               state._visualTrustVerdict = visualTrust.verdict;
               logger.info('✅ 定向重分析完成', {
@@ -2060,6 +2165,17 @@ export function createPhase2Graph(config = {}) {
         state._saveCheckpoint?.('reject-summary', rejectSummary);
         logger.info(formatRejectSummaryLine(rejectSummary));
       }
+
+      // 🛡️ 步骤 0 观测基线：产物落盘后补齐第三段（full-truth files map 同源，只读）。
+      //   恒打、0 也打；只输出实测数与差集，不接门禁、不改 severity、不写回 plan / files。
+      const _ccFinal = auditChartConservation({
+        visionCharts: state.charts,
+        plan: state.subComponentPlan,
+        files: conservationFiles,
+        layoutSections: state.layoutStructure?.layout?.sections,
+        stage: 'artifact',
+      });
+      logger.info('[chart-conservation] 产物守恒·已评估', chartConservationCounts(_ccFinal));
 
       // 🛡️ 判分驱动定向重试（2026-11-10 立项 · D2/D3/D4 · docs/2026-11-10-判分驱动定向重试闭环立项.md）：
       //   generate 完成后跑管线内快速验收（判据单一来源 component-acceptance util，D1），
@@ -5092,6 +5208,14 @@ export function createPhase2Graph(config = {}) {
       // R1-geo 会把同一批图表同时挂 plan 级与宿主段级 ⇒ 按 id 去重才是「出口图表数」；
       //   mountPoints 保留未去重计数，让双挂载这一事实仍可观测（G01 离线夹具实测 4 / 8）。
       const _exitChartSubs = [...new Map(_allChartSubs.map((sub) => [String(sub.id), sub])).values()];
+      // 🛡️ 步骤 0 观测基线：planner 出口只数「视觉声明 → 段内容轨」两段；
+      //   此刻产物尚未生成 ⇒ **不传 files**，产物段记 null，不编 0（塞入参 = 假绿）。
+      const _ccPlan = auditChartConservation({
+        visionCharts: state.charts,
+        plan: finalPlan,
+        layoutSections: state.layoutStructure?.layout?.sections,
+        stage: 'plan',
+      });
       logger.info('[vision-truth] 图表真值守恒', {
         visionCharts: Array.isArray(state.charts) ? state.charts.length : 0,
         exitChartSubcomponents: _exitChartSubs.length,
@@ -5106,6 +5230,8 @@ export function createPhase2Graph(config = {}) {
         //   下游「section 内容归属 / ISO-PROBE」仍走 resolvePlanSource 报真实解析源。
         planSource: 'subComponentPlan',
         planSourceBasis: 'planner-origin',
+        // 纯附加字段组：不覆盖任何既有键，不改 severity、不阻断。
+        ...chartConservationPlanFields(_ccPlan),
       });
 
       state.onProgress?.({

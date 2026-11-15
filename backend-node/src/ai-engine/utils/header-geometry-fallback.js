@@ -32,6 +32,7 @@
 import {
   declaredHeaderRelation,
   hasStatValueElement,
+  INLINE_HEADING_RE,
 } from './vision-facts.js';
 import { isBusinessContent } from './section-semantics.js';
 
@@ -80,6 +81,10 @@ export function applyHeaderGeometryFallback(sections, opts = {}) {
   // top 自身的 role/type 也是 vision 结构事实，不能只检查 body 后代；
   // 否则顶层 role='stat-card'、body 仅 label/value 的统计卡会被误塞进 header 插槽。
   if (isBusinessContent(top)) return null;
+  // 🛡️ 2026-11-15 降级治理：内容区小标题条（sub-header / 小标题 / section-title）
+  //   已由 section-tree 源头降级为普通容器，不得被「顶部薄条」几何兜底补回
+  //   type='header'（否则用一个新误判换掉旧误判，与 ab7bb76c 同型）。
+  if (INLINE_HEADING_RE.test(String(top?.name || '').toLowerCase())) return null;
   // 🛡️ 4851eedd（mc-max-1793430567896 实锤）：vision 已显式声明本段 header 关系时
   //   不得翻案。`headerRelation:'no-header'` 是 vision 的结构发言——"本段不是面板
   //   头部"。本兜底的定位是**填 vision 沉默**（"无任何 header 类型事实"），不是

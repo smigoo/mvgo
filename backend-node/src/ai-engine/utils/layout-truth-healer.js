@@ -1916,12 +1916,42 @@ function axisBoxOf(n) {
   return { x, y, w, h };
 }
 
+/** 子树内是否有可见文本（纯结构，命名无关）。 */
+function hasTextUnder(node, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 24) return false
+  if (node.type === 'TEXT' && String(node.characters ?? '').trim() !== '') return true
+  for (const c of node.children || []) {
+    if (hasTextUnder(c, depth + 1)) return true
+  }
+  return false
+}
+
+/**
+ * 装饰叶豁免（2026-11-15 · mc-max-1794749284344-c5e0aadc 实锤）：
+ *   `GROUP 'header'` 的真实成员是「标题 + 三组 标签/数值」，全部同一 y 带（441~445）；
+ *   但组内挂了一个 8×8 装饰圆点（y=463，挂在文本基线下方）⇒ 旧实现在 y 带聚类时
+ *   把它算成独立行带（bands=2）⇒ 判 `column`，把横向 header 写成竖排（30px 高塞 42px 内容，
+ *   溢出压住下方 switch 条）。装饰不参与主轴判定，判据无量纲：无文本 + 面积占比 < 5%。
+ */
+const DECOR_AREA_RATIO = 0.05
+
+function isDecorationLeaf(child, parentBox) {
+  if (!parentBox) return false
+  const b = axisBoxOf(child)
+  if (!b) return true // 无几何 ⇒ 不参与聚类（原实现已跳过）
+  if (hasTextUnder(child)) return false
+  const ratio = (b.w * b.h) / (parentBox.w * parentBox.h)
+  return ratio < DECOR_AREA_RATIO
+}
+
 /** 由 Figma 节点直接子元素几何判定主轴：'column' | 'row' | null（判不出）。 */
 function judgeAxisFromNode(node) {
   const kids = [];
+  const parentBox = axisBoxOf(node);
   for (const c of node?.children || []) {
     const b = axisBoxOf(c);
     if (!b) continue;
+    if (isDecorationLeaf(c, parentBox)) continue;
     const nm = String(c.name || '').toLowerCase();
     const t = String(c.type || '').toUpperCase();
     // 背景/装饰矩形会铺满整框，参与聚类会把所有行并成一个带 ⇒ 排除。
@@ -2121,8 +2151,13 @@ export function enforceContainerMainAxisTruth(files, ctx = {}) {
     for (const e of [...list].sort((a, b) => b.start - a.start)) {
       s = s.slice(0, e.start) + e.next + s.slice(e.end);
     }
-    // 安全阀：编辑只允许「等长或变长」（只改属性值/追加声明），变短说明下标越界 ⇒ 丢弃该文件。
-    if (s.length < fc.length) continue;
+    // 安全阀：编辑量必须与「每条命中自身声明的替换长度差」逐字对账（下标越界 ⇒ 丢弃该文件）。
+    //   旧闸门是「只允许等长或变长」——2026-11-15（c5e0aadc 实锤）暴露致命后果：
+    //   `column→row` 少 3 个字符，永远被丢弃 ⇒ 刀 56 只能把 row 改 column，反向修不回来，
+    //   横向 header 被写成竖排后没有任何一刀能纠正。改为等值对账 + 结构守恒双证。
+    const expectedDelta = list.reduce((a, e) => a + (e.next.length - (e.end - e.start)), 0);
+    if (s.length !== fc.length + expectedDelta) continue;
+    if ((s.match(/</g) || []).length !== (fc.match(/</g) || []).length) continue;
     if (s === fc) continue;
     out[fp] = s;
     changes.push({

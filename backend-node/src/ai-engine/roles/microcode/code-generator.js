@@ -26,6 +26,15 @@ import { enforceInputBudget } from '../../utils/input-budget.js';
 import { getIndexVueChunkBudgets } from './chunk-budget.js';
 import { getProviderPool } from '../../utils/provider-pool.js';
 import { safeLogger } from '../../logger/safe-logger.js';
+// 🛡️ P0-A/P0-B（2026-11-15）：段级几何「排他性落点」单一事实源。
+//   归一（写盘前）与判据（L0-B）共用同一实现，杜绝「修复器一套判据、校验器一套判据」。
+import {
+  stripInlineGeometryDuplicates,
+  normalizeInlineLengthPx,
+  auditInlineGeometryDuplicates,
+  formatInlineGeomStats,
+  INLINE_GEOM_DUP,
+} from '../../utils/inline-geom-dup-guard.js';
 // 🛡️ G04：图表父壳挂载判据的 plan 事实源（planner 全保真原形优先）
 import { resolvePlanSourceFromInput } from '../../utils/resolve-plan-source.js';
 import {
@@ -612,8 +621,11 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let __gapDenominatorApplied = 0;
   // 🛡️ px basis 因覆盖率不足退回比例填满的容器数（0 也打）
   let __pxBasisFallback = 0;
-  // 🛡️ 方案 E：段高 class 规则收集（less 片段，px 由 px2rem 转 rem）
-  const __secHeightRules = [];
+  // 🛡️ P0-A（2026-11-15）：段级几何唯一事实源。
+  //   inline 模板 / less 真值规则 / 写盘前终裁归一，三者全部由本数组派生，
+  //   杜绝「同一真值两写者、两载体、两量纲」（11-14 整治方案 R1 残留面）。
+  //   carrier='less' ⇒ 几何只由 class 规则承载；'inline' ⇒ 保持既有内联比例（无 class 可承载）。
+  const __sectionGeometries = [];
   let __pxHeightSkipped = 0; // 刀16 兄弟间距真值注入计数
   let __gapRebased = 0; // 刀16b 间距基准被上移到「与 flex 同源高度」的注入数（修双计）
   let __canvasMismatchCount = 0; // G10 v1 画布收敛复核拦停数（兄弟盒跨度 vs 容器高偏差>15%）
@@ -1461,25 +1473,28 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         const _h = Number(topHeights[i]) || 0;
         if (_h > 0 && !isLayoutContainerSection(topBodyRoots[i])) {
           _secCls = `c-${semantic}-sech-${i + 1}`;
-          __secHeightRules.push({
-            cls: _secCls,
-            h: Math.round(_h),
-            gap: Math.round(__topGaps[i] || 0),
-          });
         } else if (_h > 0) {
           __pxHeightSkipped += 1;
         }
-        renderBodyNode(
-          topBodyRoots[i],
-          0,
-          flexItemStyleFromHeights(
-            topHeights,
-            i,
-            __topDen > 0 ? __topDen : undefined,
-            !__basisOk,
-          ) + topGap,
-          _secCls,
+        const _ratioStyle = flexItemStyleFromHeights(
+          topHeights,
+          i,
+          __topDen > 0 ? __topDen : undefined,
+          !__basisOk,
         );
+        // 🛡️ P0-A：唯一事实对象。inline 与 less 规则不再各自推断，全部由它派生。
+        //   build 层仍按既有语义产出 inline（保持既有 spec / fail-open 行为），
+        //   carrier='less' 的重复声明由 applyDeterministicIndexTemplate 出口终裁剥除。
+        __sectionGeometries.push({
+          index: i,
+          heightPx: Math.round(_h),
+          gapPx: Math.round(__topGaps[i] || 0),
+          ratioStyle: _ratioStyle,
+          gapStyle: topGap,
+          cls: _secCls,
+          carrier: _secCls ? 'less' : 'inline',
+        });
+        renderBodyNode(topBodyRoots[i], 0, _ratioStyle + topGap, _secCls);
       }
     } else {
       for (const root of topBodyRoots) renderBodyNode(root, 0);
@@ -1569,15 +1584,25 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       applied: __takeoverHeightFallbacks,
     });
   }
-  // 🛡️ 方案 E：段高样式片段（less 语法，px 由 postcss-pxtorem 转 rem）。
-  //   !important 用于压过模板上的比例内联样式（内联无尺寸，只承载比例与方向）。
-  const layoutStyle = __secHeightRules
+  // 🛡️ 方案 E + P0-A：段高样式片段（less 语法，px 由 postcss-pxtorem 转 rem）。
+  //   规则由 __sectionGeometries 派生，与 inline 比例同源，不再有第二套推断。
+  //   !important 仅作 legacy 兜底：终裁归一后 carrier='less' 的段已无 inline 几何声明。
+  const layoutStyle = __sectionGeometries
+    .filter((g) => g.carrier === 'less')
     .map(
-      (r) =>
-        `  .${r.cls} { flex: 0 1 ${r.h}px !important; min-height: 0${r.gap > 0 ? `; margin-top: ${r.gap}px !important` : ''}; }`,
+      (g) =>
+        `  .${g.cls} { flex: 0 1 ${g.heightPx}px !important; min-height: 0${g.gapPx > 0 ? `; margin-top: ${g.gapPx}px !important` : ''}; }`,
     )
     .join('\n');
-  return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles, layoutStyle, pxHeightSkipped: __pxHeightSkipped };
+  return {
+    template: lines.join('\n'),
+    rootContainerClass,
+    sectionRoots,
+    componentFiles,
+    layoutStyle,
+    sectionGeometries: __sectionGeometries,
+    pxHeightSkipped: __pxHeightSkipped,
+  };
 }
 
 /**
@@ -1879,6 +1904,42 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
   if (det.layoutStyle) {
     out = injectLayoutStyle(out, det.layoutStyle);
   }
+  // 🛡️ P0-A（2026-11-15）终裁归一：less 真值规则注入后，把 carrier='less' 段上
+  //   被 class 承载的 inline 声明剥掉 ⇒ 同一几何真值只剩一个落点。
+  //   fail-closed：无 mvgo-layout-truth 标记 / 无真值 class ⇒ 逐字返回，绝不把段高弄丢。
+  const _geomNorm = stripInlineGeometryDuplicates(out);
+  out = _geomNorm.content;
+  // 🛡️ P3-A 第一道归一（2026-11-15 真机回检补）：L0-B 的 validateCodeStructure 在
+  //   **图内早期**就扫描装配产物，若此时 F1 根容器 `width:420px;height:425px` 仍在 inline，
+  //   收紧后的 INLINE-GEOM-PX 会每轮 BLOCK（确定性写者每轮重写，修复轮无法根治）。
+  //   故装配出口（injectLayoutStyle 之后、truth mark 已在位）立即做 P3-B 语义 class 整段收口
+  //   （确定性写者的 inline 样式整体搬进 class+less，var()/calc()/url() 声明刻意留 inline）；
+  //   终写前最后窗口那次归一保留，专门覆盖 T09 补跑 / header-right 提升等更晚的写者。
+  const _pxNorm = normalizeInlineLengthPx(out);
+  out = _pxNorm.content;
+  // 计数行（0 也打）：区分「没命中」与「没生效」。这是**观测**，不是判据本身——
+  //   L0-B 的 INLINE-GEOM-DUP / INLINE-GEOM-PX 会独立扫描写盘产物，避免「改的人=验的人」假绿。
+  const _geomResidual = auditInlineGeometryDuplicates(out);
+  const _geomStats = {
+    ..._geomNorm.stats,
+    pxMovedTags: _pxNorm.stats.movedTags,
+    pxMovedDecls: _pxNorm.stats.movedDecls,
+    pxInjectedClasses: _pxNorm.stats.injectedClasses,
+    pxSemanticTags: _pxNorm.stats.semanticTags,
+    pxStyleAttrsRemoved: _pxNorm.stats.styleAttrsRemoved,
+    dupTags: _geomResidual.stats.dupTags,
+    pxTags: _geomResidual.stats.pxTags,
+  };
+  options?.logger?.info?.(formatInlineGeomStats('🛡️ INLINE-GEOM 终裁归一·已评估', _geomStats));
+  // ⚠️ 分层口径：装配出口只负责「段级双写」(INLINE-GEOM-DUP) 的残留 warn。
+  //   此处 audit 若仍报 INLINE-GEOM-PX，只可能是 fail-closed（规则没落地）这类真错，
+  //   交由 L0-B 独立拒收；不再据 PX 打「应 BLOCK」warn，避免把预期中间态误报成失败。
+  const _dupResidual = _geomResidual.issues.filter((x) => x.id === INLINE_GEOM_DUP);
+  if (_dupResidual.length > 0) {
+    options?.logger?.warn?.('🛡️ INLINE-GEOM 终裁归一残留双写（L0-B 应 BLOCK）', {
+      ids: _dupResidual.map((x) => x.id),
+    });
+  }
   out = ensureSubComponentImport(out, options);
   out = pruneDeadSubComponentImports(out, options);
 
@@ -1889,6 +1950,8 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
       rootContainerClass: det.rootContainerClass,
       sectionRoots: det.sectionRoots,
       componentFiles: det.componentFiles || [],
+      sectionGeometries: det.sectionGeometries || [],
+      inlineGeomStats: _geomStats,
       source: 'deterministic-template',
     },
     takeovers: appliedTakeovers,

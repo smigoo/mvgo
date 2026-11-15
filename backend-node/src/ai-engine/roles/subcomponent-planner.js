@@ -341,6 +341,13 @@ import {
   mergeAdjacentHeaderStrips,
   PlanningGateError,
 } from '../utils/section-plan-coverage.js';
+// 🛡️ P0.5（2026-11-15 · mc-max-1794751753773-12e2285e 实锤）：段→组件高度归属终裁。
+//   V-7 同 id 合并只并内容不重算高度 ⇒ 标题条 24px 被当成整段图表高，折线图整块空白。
+//   纯函数 / 真值派生 / 零写死值，详见 utils/section-height-ownership.js。
+import { repairTailChartSectionHeight } from '../utils/section-height-ownership.js';
+// 🛡️ 步骤 1（2026-11-15）：回收 chart 声明归一（契约层双轨断点治理）。
+//   必须在 P0.5 之前 —— P0.5 的 declaresChart() 扫 body.children，归一后尾段才算「声明图表」。
+import { reclaimChartDeclarations } from '../utils/reclaim-chart-declarations.js';
 // 🛡️ P1-A（2026-10-25 · mc-max-1792934367321-ab7bb76c 实锤）：plan `body.children[].id` 一致性校验。
 //   vision 输出的 body child id 系统性错位（self / duplicate-sibling / not-a-descendant 三形态）⇒
 //   下游按 id 取真值全落空 ⇒ 无刀接管 ⇒ LLM 自由渲染 ⇒ 文案串味。判据与「为什么只诊断不改数据」
@@ -3575,10 +3582,10 @@ export class SubcomponentPlanner {
       });
       effectiveSections = stripMerge.sections;
       logger.info(
-        `🛡️ section-strip-merge：evaluated=${stripMerge.stats.evaluated} candidates=${stripMerge.stats.candidates} merged=${stripMerge.stats.merged}`,
+        `🛡️ section-strip-merge：evaluated=${stripMerge.stats.evaluated} candidates=${stripMerge.stats.candidates} merged=${stripMerge.stats.merged} lifted=${stripMerge.stats.lifted}`,
       );
       if (stripMerge.stats.merged > 0) {
-        logger.warn('🛡️ section-strip-merge：相邻标题条已并入所属段（不改锚点）', {
+        logger.warn('🛡️ section-strip-merge：相邻标题条已并入所属段（段盒同源抬升至条顶）', {
           detail: stripMerge.stats.detail,
         });
       }
@@ -3606,6 +3613,52 @@ export class SubcomponentPlanner {
       // ① id 唯一化必须提前到 flexGrow 归一化之前（否则同 id 两段各自归一化，值分裂）。
       //    :below 处（leafSections 之前）仍保留一次调用——幂等，用于兜底后续步骤新增的重复。
       effectiveSections = uniqueSectionIds(effectiveSections);
+
+      // 🛡️ 步骤 1（2026-11-15）：回收 chart 声明归一。必须在 P0.5 **之前** ——
+      //   `declaresChart()` 扫 body.children，只有先把回收轨的 chart 声明并进主内容轨，
+      //   尾段才会被判为「声明图表」，P0.5 的高度归属才有对象可算。
+      //   入参 / 视觉输出逐字不动；`sections` 是 buildEffectiveSection 之前的原始 derived 树
+      //   （仍带 children / 回收子段），`effectiveSections` 是叶子分支重建后的主轨。
+      // 🔴 计数行铁律：无论命中与否、是否跳过，一律打「已评估」行（0 也打）。
+      const chartReclaim = reclaimChartDeclarations({
+        sections: effectiveSections,
+        sourceSections: sections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = chartReclaim.sections;
+      logger.info('🛡️ [步骤1] 回收 chart 声明归一·已评估', {
+        evaluated: chartReclaim.stats.evaluated,
+        sourceMatched: chartReclaim.stats.sourceMatched,
+        reclaimedDeclarations: chartReclaim.stats.reclaimedDeclarations,
+        hostCandidates: chartReclaim.stats.hostCandidates,
+        truthPanels: chartReclaim.stats.truthPanels,
+        attached: chartReclaim.stats.attached,
+        skipped: chartReclaim.stats.skipped,
+        skippedReason: chartReclaim.stats.skippedReason,
+        ...(chartReclaim.stats.details.length ? { recipes: chartReclaim.stats.details } : {}),
+      });
+
+      // 🛡️ P0.5（2026-11-15）：段→组件高度归属终裁。必须在 applyFigmaHeightGrow **之前**
+      //   ——后者按 `styles.figmaHeightPx` 归一 flexGrow；若先归一，同 id 双段合并残留的
+      //   标题条高度（24px）会把整段图表压死，下游 code-generator 的 resolveSectionFlexSize
+      //   也优先读同一字段。判据纯几何（容器 bottom − ref top），零命名 / 零写死 px。
+      // 🔴 计数行铁律：无论命中与否、是否跳过，一律打「已评估」行（0 也打）。
+      const heightOwnershipRepair = repairTailChartSectionHeight({
+        sections: effectiveSections,
+        figmaNodeData: opts.figmaNodeData,
+      });
+      effectiveSections = heightOwnershipRepair.sections;
+      logger.info('🛡️ [P0.5] 段高归属·已评估', {
+        evaluated: heightOwnershipRepair.stats.evaluated,
+        chartSections: heightOwnershipRepair.stats.chartSections,
+        tailCandidates: heightOwnershipRepair.stats.tailCandidates,
+        recomputed: heightOwnershipRepair.stats.recomputed,
+        skipped: heightOwnershipRepair.stats.skipped,
+        skippedReason: heightOwnershipRepair.stats.skippedReason,
+        ...(heightOwnershipRepair.stats.details.length
+          ? { recipes: heightOwnershipRepair.stats.details }
+          : {}),
+      });
 
       // 🛡️ 治本：flex 比例同样以 Figma 实测高度为事实源（vision 自报 flexGrow 只作兜底）。
       // ⚠️ 必须解包 `.document`（T-GROW 2026-11-05）：`opts.figmaNodeData` 存在

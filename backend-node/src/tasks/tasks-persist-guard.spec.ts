@@ -411,3 +411,140 @@ describe('补强2：EPERM 降级直写前落 tasks.json.prev', () => {
     expect(ids).toEqual(['p1', 'p2']);
   });
 });
+
+/**
+ * 2026-11-15 线上实证（server.log 22:28，用户「批量删除后数据还在」）：
+ *   落盘 40 条（磁盘基线 41，有意删除 2，合并磁盘独有 0）
+ *   → 落盘护栏：内存 39 < 磁盘 40 且无有意删除，已合并磁盘独有项
+ *   → 落盘护栏：已回灌 1 条磁盘独有任务到内存（连续 9 次）
+ * 根因：落盘成功后整表 clear 掉「删除意图」，吞掉了 flush 进行期间登记的删除；
+ *       下一次缩短被缩减护栏误判为磁盘异常，把刚删的任务从磁盘合并回内存。
+ * 阴/阳对照：⑤ 竞态下意图必须保留、护栏零触发；⑥ 真异常缩短仍必须被拦截。
+ */
+describe('2026-11-15 批量删除复活根治（删除意图按落盘快照消费）', () => {
+  const fiveTasks = () => [
+    mkTask('d1', 1000),
+    mkTask('d2', 2000),
+    mkTask('d3', 3000),
+    mkTask('d4', 4000),
+    mkTask('d5', 5000),
+  ];
+
+  beforeEach(() => {
+    rmSync(mockTestDataDir, { recursive: true, force: true });
+    mkdirSync(mockTestDataDir, { recursive: true });
+  });
+  afterAll(() => {
+    rmSync(mockTestDataDir, { recursive: true, force: true });
+  });
+
+  /** 等掉 persist 的 inFlight / persistAgain 链，避免用例提前结束留下后台写盘。 */
+  const drainPersist = async (svc: TasksService) => {
+    for (let i = 0; i < 10; i++) {
+      const pending = (svc as any).persistInFlight;
+      if (!pending) return;
+      await pending;
+    }
+  };
+
+  it('⑤ 落盘进行中登记的批量删除意图不被吞掉 → 第二次 flush 不触发护栏、任务不复活', async () => {
+    writeDiskFixture(fiveTasks());
+    const svc = buildService(); // loadSync：内存 5 条、磁盘基线 5
+    expect((svc as any).lastKnownDiskCount).toBe(5);
+
+    // 启动一次落盘（模拟 30s 定时 persist / 生成任务 persist 与用户批量删除重叠）。
+    // flushPersistQueue 的 list 快照在同步段即已取好，调用返回时停在第一个 await。
+    const inFlight = (svc as any).flushPersistQueue();
+    // 此刻用户批量删除 d4/d5（内存删除 + 登记删除意图）
+    (svc as any).tasks.delete('d4');
+    (svc as any).tasks.delete('d5');
+    (svc as any).pendingDeletedIds.add('d4');
+    (svc as any).pendingDeletedIds.add('d5');
+
+    await inFlight;
+    // 第一次落盘是旧快照，仍含 d4/d5（正常），但删除意图必须保留
+    expect(readDiskTasks().length).toBe(5);
+    // 🔴 核心判据：原实现 .clear() 会把这两个意图吞掉（size=0）→ 下一次缩短必被护栏复活
+    expect([...(svc as any).pendingDeletedIds].sort()).toEqual(['d4', 'd5']);
+
+    const readSpy = jest.spyOn(svc as any, 'readDiskTaskList');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let guardWarns: string[] = [];
+    let readCalls = -1;
+    try {
+      await (svc as any).flushPersistQueue();
+      // ⚠️ 必须在 mockRestore 之前取数：restore 会清空 mock.calls，
+      //    否则「零调用」断言恒为 0（假绿）。
+      readCalls = readSpy.mock.calls.length;
+      guardWarns = warnSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((s) => s.includes('[TasksService] 落盘护栏'));
+    } finally {
+      warnSpy.mockRestore();
+      readSpy.mockRestore();
+    }
+
+    // 真值三证：产物（磁盘）／内存（列表真值）／日志（护栏零 WARN、零读盘）
+    expect(readDiskTasks().map((t) => t.sessionId).sort()).toEqual(['d1', 'd2', 'd3']);
+    expect([...(svc as any).tasks.keys()].sort()).toEqual(['d1', 'd2', 'd3']);
+    expect(readCalls).toBe(0);
+    expect(guardWarns.length).toBe(0);
+    expect((svc as any).pendingDeletedIds.size).toBe(0);
+  });
+
+  it('⑥ 阳性对照：无任何删除意图的异常缩短仍被护栏拦截并回灌（真错仍 FAIL）', async () => {
+    writeDiskFixture(fiveTasks());
+    const svc = buildService();
+    (svc as any).tasks.delete('d4');
+    (svc as any).tasks.delete('d5');
+    // 不登记删除意图 ⇒ 等价「磁盘被外部替换/内存异常丢数据」的真实异常
+    expect((svc as any).pendingDeletedIds.size).toBe(0);
+
+    const readSpy = jest.spyOn(svc as any, 'readDiskTaskList');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let guardWarns: string[] = [];
+    let readCalls = -1;
+    try {
+      await (svc as any).flushPersistQueue();
+      // ⚠️ 同上：必须在 mockRestore 之前取数
+      readCalls = readSpy.mock.calls.length;
+      guardWarns = warnSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((s) => s.includes('[TasksService] 落盘护栏'));
+    } finally {
+      warnSpy.mockRestore();
+      readSpy.mockRestore();
+    }
+
+    expect(readDiskTasks().length).toBe(5);
+    expect((svc as any).tasks.size).toBe(5);
+    expect(readCalls).toBe(1);
+    expect(guardWarns.length).toBeGreaterThan(0);
+  });
+
+  it('⑦ 端到端：removeTasksBatch 后磁盘与内存均只剩 3 条，且全程无护栏 WARN', async () => {
+    writeDiskFixture(fiveTasks());
+    const svc = buildService();
+    // 隔离磁盘副作用：本用例只验任务账本，不验产物文件清理与组件记录级联
+    jest.spyOn(svc as any, 'cleanupTaskArtifacts').mockReturnValue(0);
+    jest.spyOn(svc as any, 'deleteComponentRecordsForTask').mockResolvedValue(0);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = await svc.removeTasksBatch(['d4', 'd5'], undefined);
+      await drainPersist(svc);
+
+      expect(result.removed.sort()).toEqual(['d4', 'd5']);
+      expect(result.failed.length).toBe(0);
+      expect(readDiskTasks().map((t) => t.sessionId).sort()).toEqual(['d1', 'd2', 'd3']);
+      expect([...(svc as any).tasks.keys()].sort()).toEqual(['d1', 'd2', 'd3']);
+      expect((svc as any).pendingDeletedIds.size).toBe(0);
+      const guardWarns = warnSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((s) => s.includes('[TasksService] 落盘护栏'));
+      expect(guardWarns.length).toBe(0);
+    } finally {
+      warnSpy.mockRestore();
+      jest.restoreAllMocks();
+    }
+  });
+});

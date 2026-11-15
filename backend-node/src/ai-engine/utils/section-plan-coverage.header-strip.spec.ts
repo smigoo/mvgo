@@ -97,3 +97,54 @@ describe('P0-8b 相邻 header 条并入（不看图层名）', () => {
     expect(stats.merged).toBe(0);
   });
 });
+
+/**
+ * 🛡️ 高度同源抬升（2026-11-15 · mc-max-1794725297064-b532dc69 实锤）。
+ *
+ * 病灶：本函数只并语义不并高度 ⇒ 产物 `resolveSectionSize` 最高优先级读
+ *   `styles.figmaHeightPx`（锚点原始 bbox，不带标题条）⇒ 段内缺一整行标题；
+ *   刀16 又把「条 + 间隙」算成 `margin-top`（真机 42 = 14 + 24.3+3.7）。
+ * 判据：条在锚点上方（间隙 ∈ [-1,32]）且「锚点底 − 条顶」> 现高 ⇒ 段盒上移到条顶。
+ */
+describe('D1 段盒同源抬升（标题条高度计入本段）', () => {
+  it('车型分布：段盒顶移到条顶、高度含条与间隙', () => {
+    const sections = mkSections();
+    mergeAdjacentHeaderStrips({ sections, figmaNodeData: makeFigma() });
+    const s = secOf(sections, '1263:38');
+    // 条 2:3439 y=476 h=24；锚点 1263:38 y=500 h=114 ⇒ 抬升后 y=476 h=138
+    expect(s.absoluteBoundingBox.y).toBe(476);
+    expect(s.absoluteBoundingBox.height).toBe(138);
+    expect(s.styles.figmaHeightPx).toBe(138);
+  });
+
+  it('同时写计数 stats.lifted（0 与 >0 可区分）', () => {
+    const sections = mkSections();
+    const { stats } = mergeAdjacentHeaderStrips({ sections, figmaNodeData: makeFigma() });
+    expect(stats.lifted).toBeGreaterThanOrEqual(1);
+  });
+
+  it('只升不降：A4/并集已算出更高值时不覆盖', () => {
+    const sections = mkSections();
+    secOf(sections, '1263:38').styles = { figmaHeightPx: 200 };
+    mergeAdjacentHeaderStrips({ sections, figmaNodeData: makeFigma() });
+    const s = secOf(sections, '1263:38');
+    expect(s.styles.figmaHeightPx).toBe(200);
+    expect(s.absoluteBoundingBox).toBeUndefined();
+  });
+
+  it('幂等：抬升后再跑高度不变（不累加）', () => {
+    const sections = mkSections();
+    mergeAdjacentHeaderStrips({ sections, figmaNodeData: makeFigma() });
+    const once = secOf(sections, '1263:38').styles.figmaHeightPx;
+    mergeAdjacentHeaderStrips({ sections, figmaNodeData: makeFigma() });
+    expect(secOf(sections, '1263:38').styles.figmaHeightPx).toBe(once);
+  });
+
+  it('间隙为 0 的紧邻段不动（隧道图无条 ⇒ 保持原高）', () => {
+    const sections = mkSections();
+    mergeAdjacentHeaderStrips({ sections, figmaNodeData: makeFigma() });
+    const s = secOf(sections, '1744:127');
+    expect(s.absoluteBoundingBox).toBeUndefined();
+    expect(s.styles).toBeUndefined();
+  });
+});

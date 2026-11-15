@@ -8,6 +8,11 @@
 import { BaseAgent } from '../agents/base-agent.js';
 // 🛡️ G04：ISO-PROBE 判据实际来源与 generateCode 主链同源（单一解析器）
 import { resolvePlanSourceFromInput } from '../utils/resolve-plan-source.js';
+// 🛡️ P0-a（2026-11-15）：资源归属上溯（ownerSectionId 中间容器 → 最近 section）
+import {
+  collectSectionIds,
+  resolveOwnerSectionToNearestSection,
+} from '../utils/resource-ownership-normalize.js';
 import { createGapWatchdog, resolveGapWatchdogTimeoutMs, wrapOnProgressWithTouch } from '../utils/gap-watchdog.js';
 // 🔴 2026-10-12 A8-3：静态导入 dark 三核心枚举（`normalizeDeclareJson` 是**同步**函数，
 //   不能用 await 动态 import；该常量是纯数据，静态导入安全且无循环依赖 ——
@@ -171,6 +176,8 @@ import {
   injectChartMinHeightIntoClass,
   createChartClassBlockIfAbsent,
   stripZeroMinHeightForClass,
+  // 🛡️ T2-W（2026-11-15）：图表父容器宽度锚定（单一事实源 post-process.js）
+  anchorChartWrapperWidth,
   stripHeaderChromeDecorations as _stripHeaderChromeDecorationsPure,
   ensureHeaderSlotRowLayout as _ensureHeaderSlotRowLayoutPure,
   collapseBackgroundShellDivs as _collapseBackgroundShellDivsPure,
@@ -217,6 +224,10 @@ import {
   chartRootIsEchartsContainer as _chartRootIsEchartsContainer,
   wrapChartRootAsInnerWrapper as _wrapChartRootAsInnerWrapper,
 } from '../utils/chart-container-guard.js';
+// 🎯 2026-11-15（mc-max-1794725297064-b532dc69 实锤「图表黄单线 vs 设计蓝+青双线」）：
+//   `charts[].seriesColors` 只进了 prompt，LLM 写出的 series 一个 color 都没有 ⇒
+//   echarts 回落默认调色板。本模块把真值确定性落到 `option.color`（判据见模块头注释）。
+import { injectSeriesColorTruth as _injectSeriesColorTruth } from '../utils/chart-series-color-truth.js';
 import {
   validateVueSfc,
   findDuplicateSlotNames,
@@ -435,6 +446,17 @@ import {
   restoreMissingSections,
 } from '../utils/seg-tree-integrity.js';
 import { auditHeaderSlotLanding } from '../utils/header-slot-landing-audit.js';
+// 🛡️ 2026-11-15：header-right 契约断供恢复 + 交互 Tab 确定性提升（693c8d17 实锤）
+import {
+  recoverHeaderSlotContract,
+  promoteHeaderRightTabs,
+} from '../utils/header-right-tab-contract.js';
+// 🛡️ P3-A / P3-B（2026-11-15）：终写前把确定性写者的 inline 整段收口到语义 class + less
+// （px 交 px2rem；var()/calc()/url() 声明刻意留 inline 以保护变量回退值语义）
+import {
+  normalizeInlineLengthPx,
+  formatInlinePxStats,
+} from '../utils/inline-geom-dup-guard.js';
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const THEME_WRAPPER_TEMPLATES = { dark: …, light: … }`
 //   及其架构 docblock（2026-08-26 治本修复：宿主/预览从不注入 .dark/.light 类 ⇒
@@ -679,6 +701,12 @@ export class MicrocodeEngineer extends BaseAgent {
       }
     } catch (_feedbackErr) {
       /* 回灌失败不阻断（退化为无靶子重试） */
+      // 🛡️ 2026-11-15 补哨兵：PATCH-CHAIN-ERROR 覆盖门禁实测此处是唯一裸吞 catch，
+      //   异常时「未触发兜底」与「兜底执行但异常」无法归因。
+      reportPatchChainError(_feedbackErr, {
+        logger: this.logger,
+        pass: 'generateCode:blocked-feedback-reinject',
+      });
     }
     return prompt;
   }
@@ -1464,11 +1492,15 @@ export class MicrocodeEngineer extends BaseAgent {
                     const nm = String(m?.fileName || m?.name || '');
                     return /\.(png|svg|jpe?g)$/i.test(nm) ? nm : null;
                   };
+                  // 🛡️ S3-BG（2026-11-15）：卡底 bg 的 `figmaNodeId` 是 **bg 节点本身**
+                  //   （136:125），而 item 的锚点是卡节点（136:129）⇒ 旧判据恒 miss。
+                  //   两张卡各不同的 bg 由 `ownerSectionId` 归属，必须一并纳入唯一命中。
                   const hits = rdm.filter(
                     (m) =>
                       m &&
                       /^bg/i.test(String(fileOf(m) || '')) &&
-                      srcIds.has(String(m.figmaNodeId || m.nodeId || '')),
+                      (srcIds.has(String(m.figmaNodeId || m.nodeId || '')) ||
+                        srcIds.has(String(m.ownerSectionId || ''))),
                   );
                   return hits.length === 1 ? fileOf(hits[0]) : null;
                 };
@@ -2531,10 +2563,35 @@ export class MicrocodeEngineer extends BaseAgent {
     //    若放进 genSubComponents 函数体内部，主干将失去定义 →
     //    ReferenceError: effectiveMapping is not defined（mc-max-1788164636144-38637208 实锤）。
     // 行为与原先 1620 行的 resolveResourceDomMapping 一致（in-memory 优先，磁盘兜底）。
-    const effectiveMapping = resolveResourceDomMapping(
+    const _rawEffectiveMapping = resolveResourceDomMapping(
       input.resourceDomMapping,
       input.outputPath,
     );
+
+    // 🛡️ P0-a（2026-11-15 · mc-max-1794714093985-c60fbe6f 实锤）：资源归属上溯。
+    //   figma-connector 的 ownerSectionId = **直接父节点**，常是中间 group（2:3550 /
+    //   2:3559 / 2:3571），而产物输出 data-section-id 的是上层 section（88:32 / 2:3565）
+    //   ⇒ 资源在目标文件里查不到 ⇒ 「有 icon 位无 icon 图」⇒ LLM 手写 CSS 伪元素画假图标，
+    //   且下游图标守恒修复器逐个 `no-icon-truth` 跳过（9 个图形块只处理 1 个）。
+    //   判据：以段树出口 effectiveSections 为权威 section 集合，沿 ancestorIds
+    //   （最近父→根，figma-connector 已固化）取首个命中祖先；找不到 fail-open 原样保留。
+    //   幂等：已在集合内的 owner 原样保留。只改 ownerSectionId（+2 个观测字段）。
+    let effectiveMapping = _rawEffectiveMapping;
+    try {
+      const _sectionIdSet = collectSectionIds(
+        effectiveSections,
+        layoutStructure?.layout?.sections || layoutStructure?.sections || [],
+      );
+      const _ownNorm = resolveOwnerSectionToNearestSection(_rawEffectiveMapping, _sectionIdSet, {
+        logger: this.logger,
+      });
+      effectiveMapping = _ownNorm.mappings;
+    } catch (_ownErr) {
+      reportPatchChainError(_ownErr, {
+        logger: this.logger,
+        pass: 'generateCode:resource-ownership-normalize',
+      });
+    }
 
     // 🔗 0907 L7 闭环（2026-09-09）：fileSectionMap 必须定义在 genSubComponents **之外**（generateCode 主干作用域）。
     // 同 effectiveMapping（见上方 L1332-1338 注释的实锤教训 mc-max-1788164636144）：
@@ -8271,7 +8328,7 @@ export class MicrocodeEngineer extends BaseAgent {
       // 🛡️ 2026-09-30 治本：存到 this，供 writeFiles 统一兜底替换 panelKey。
       //   即使 LLM 没遵守 prompt 的 panelKeyValue 注入，落盘时仍会强制对齐用户选择。
       //   mc-max-1790692481760-8afc00c5 实锤：选了 aio-panel 产物仍是 default-panel。
-      headerSlots = null, //面板头部插槽信息
+      headerSlots: _headerSlotsFromParams = null, //面板头部插槽信息（下方经契约恢复后另存可变副本）
       elementStyleMap = null, //  per-element 样式映射（来自 Style Mapper）
       backgroundBrightness = 'dark', //面板明暗主题
       dualTruth = null, //🆕 2026-10-10 双主题：深浅两份设计真值（单稿恒为 null）
@@ -8291,6 +8348,36 @@ export class MicrocodeEngineer extends BaseAgent {
       extraPrompt = null, // 🆕 高级选项 P0：用户补充提示词
       requirementDocText = null, // 🆕 高级选项 P0：需求文档文本
     } = params;
+
+    // 🛡️ 2026-11-15 修 P0-b（c60fbe6f / 3e2bc817 双任务实锤）：
+    //   `headerSlots` 此前从 `const { ... } = params` 解构，下面契约恢复又要重新赋值 ⇒
+    //   `TypeError: Assignment to constant variable.`（PATCH-CHAIN-ERROR，pass 每次都被
+    //   fail-open 跳过，header-right 契约恒不生效）。解构字段改名后此处建立可变副本，
+    //   下游全部引用（结构契约 / prompt / T09 / F1b）继续用 `headerSlots`，语义不变。
+    let headerSlots = _headerSlotsFromParams;
+
+    // 🛡️ 2026-11-15（693c8d17 实锤）：headerSlots 在 graph→engineer 传递中断供时
+    //   （vision 已装配 header-right/label 2:7954，但 state.headerSlots=[] ⇒ F1b total=0），
+    //   从 layoutStructure 的 slotCandidate + tab children + interactions 回查契约。
+    //   恢复后 headerSlots 是本方法内**唯一事实源**：结构契约、prompt、T09、F1b 全部共用，
+    //   避免「一处补、多处仍空」。幂等 + fail-open：无证据原样返回。
+    try {
+      const _hdrRecovery = recoverHeaderSlotContract({
+        headerSlots,
+        layoutStructure,
+        interactions,
+        figmaNodeData,
+      });
+      headerSlots = _hdrRecovery.headerSlots;
+      this.logger?.info?.(
+        `🛡️ header-right 契约恢复·已评估 ${JSON.stringify(_hdrRecovery.stats)}`,
+      );
+    } catch (_hdrRecoveryErr) {
+      reportPatchChainError(_hdrRecoveryErr, {
+        logger: this.logger,
+        pass: 'execute:header-right-contract-recovery',
+      });
+    }
 
     // 🆕 2026-09-04：暂存 sessionId 供 normalizeDeclareJson 唯一化 componentId 使用
     // （code-validator 回调 options.normalizeDeclareJson 时通过 this 取用；无 sessionId
@@ -8952,6 +9039,8 @@ export class MicrocodeEngineer extends BaseAgent {
           bySection: 0,
           clamped: 0,
         };
+        // 🎯 2026-11-15：系列配色注入计数（恒打，0 也打；skipped 按 reason 分桶便于定位）
+        const _chartColorStats = { evaluated: 0, injected: 0, skipped: {} };
         for (const [fp, fc0] of Object.entries(codeResult.files || {})) {
           if (
             !fp.endsWith('.vue') ||
@@ -9045,6 +9134,40 @@ export class MicrocodeEngineer extends BaseAgent {
               `🎯 [mc] echarts 容器最小高度已注入: ${fp} → .${chartCls} min-height: ${minHeight}px（命中块 ${injectedCount || '兜底新建'}，min-height:0 反杀已剥除）`,
             );
           }
+          // 🛡️ T2-W（2026-11-15 · 折线图整图空白实锤）：**直接父容器**缺 width ⇒ 补 100%。
+          // 只补父、不补内层（真机实证：只补内层无效）；已有 width 一律不覆盖（N4 中性语义）。
+          // 取 codeResult.files[fp] 最新内容，避免刀 2 的内层 wrapper 改写被覆盖。
+          const _widthAnchored = anchorChartWrapperWidth(
+            codeResult.files[fp] || patched,
+            refName,
+            chartCls,
+          );
+          if (_widthAnchored.injectedCount > 0) {
+            codeResult.files[fp] = _widthAnchored.code;
+            this.logger.info(
+              `🎯 [mc] 图表父容器宽度已锚定: ${fp} → .${_widthAnchored.wrapperCls} width:100%（已有 width 不覆盖，命中块 ${_widthAnchored.injectedCount}）`,
+            );
+          }
+          // 🎯 2026-11-15：系列配色真值落到 option.color。
+          //   为什么在产物层做而不是只写 prompt：prompt 是建议、LLM 会漏（真机 series 全无色
+          //   ⇒ echarts 默认调色板 ⇒ 黄单线）。判据见 utils/chart-series-color-truth.js：
+          //   系列名与 `charts[].series` 完全一致才注入，已有 color/itemStyle 一律不动。
+          {
+            const _colorRes = _injectSeriesColorTruth(codeResult.files[fp] || patched, {
+              charts: Array.isArray(charts) ? charts : [],
+            });
+            _chartColorStats.evaluated += 1;
+            if (_colorRes.applied) {
+              codeResult.files[fp] = _colorRes.code;
+              _chartColorStats.injected += 1;
+              this.logger.info(
+                `🎯 [mc] 图表系列配色已注入真值: ${fp} → color=[${_colorRes.colors.join(', ')}]（系列 ${_colorRes.series.join(' / ')}，段 ${_colorRes.chartSection || '-'}）`,
+              );
+            } else {
+              _chartColorStats.skipped[_colorRes.reason] =
+                (_chartColorStats.skipped[_colorRes.reason] || 0) + 1;
+            }
+          }
           // 🛡️ T2-D：共享表（common.less）常被 consolidateSubComponentClasses 搬入同名
           // class 且带 `min-height: 0`（LLM 原值）→ 在事实源处把 0 一并剥除。
           for (const [lf, lc] of Object.entries(codeResult.files || {})) {
@@ -9062,6 +9185,11 @@ export class MicrocodeEngineer extends BaseAgent {
         //   byChartBox/bySection= 走①/②档命中；clamped= 兜底超段高被压。全 0 = 无图表单。
         this.logger.info('🎯 [mc] 图表 min-height 真值封顶评估', {
           ..._chartMinHeightTruthStats,
+        });
+        this.logger.info('🎯 [mc] 图表系列配色真值注入·已评估', {
+          evaluated: _chartColorStats.evaluated,
+          injected: _chartColorStats.injected,
+          skipped: _chartColorStats.skipped,
         });
         // 🎯 刀 1（2026-09-29）：装配产物 index.vue 里，图表组件标签上的 inline
         //   `min-height: 0/0px/auto/...` 一律剥除（保留 flex 比例）。
@@ -10675,6 +10803,67 @@ export default declareInfo
           error: _t09FinalErr?.message || String(_t09FinalErr),
         });
       }
+      // 🛡️ 2026-11-15（693c8d17 实锤）：header-right 交互 Tab 终写前确定性提升。
+      //   S4/G1-v2 的 @click 注入发生在 chunk 修复层，终态合并会把它冲掉（真机产物
+      //   零 @click）；T09 又因 headerSlots 断供不跑。此处在 F1b 审计前收口：
+      //   按 Figma tab 真值生成 <template #header-right> + ref active + @click，
+      //   尺寸走 less class（px2rem），并摘掉 body 里重复的静态 tab 组件。
+      try {
+        const _promo = promoteHeaderRightTabs(finalTruthFiles, {
+          headerSlots,
+          layoutStructure,
+          interactions,
+          figmaNodeData,
+        });
+        this.logger?.info?.(
+          `🛡️ header-right 交互Tab提升·已评估 ${JSON.stringify(_promo.stats)}`,
+        );
+        if (_promo.stats.injected > 0 || _promo.stats.removedTags > 0) {
+          for (const [p, c] of Object.entries(_promo.files)) {
+            if (typeof c === 'string') finalTruthFiles[p] = c;
+          }
+          for (const p of Object.keys(finalTruthFiles)) {
+            if (!(p in _promo.files)) delete finalTruthFiles[p];
+          }
+        }
+      } catch (_promoErr) {
+        reportPatchChainError(_promoErr, {
+          logger: this.logger,
+          pass: 'execute:header-right-tab-promotion',
+        });
+        this.logger.warn('🛡️ header-right 交互Tab提升异常（fail-open）', {
+          error: _promoErr?.message || String(_promoErr),
+        });
+      }
+      // 🛡️ P3-A / P3-B（2026-11-15 · mc-max-1794751473723-92612fc0 实锤）：终写前语义 class 整段收口。
+      //   为什么挂在这里：T09 文本兜底(:10777) 与 header-right 交互 Tab 提升(:10806) 都在装配
+      //   出口**之后**补跑，任何「只改产生处」的方案都会被这次补跑绕开；此处是 writeFiles 之前的
+      //   最后窗口，一层收口覆盖全部写者（含 LLM 自由写入的 inline px）。
+      //   判据与归一同源（utils/inline-geom-dup-guard.js），只对含 mvgo-layout-truth 的确定性
+      //   产物启用；计数行恒打（0 也打），fail-closed：规则没落地就不剥 inline，由 L0-B 拒收。
+      try {
+        const _ipxIdxPath =
+          Object.keys(finalTruthFiles).find((p) => p === 'package/index.vue') ||
+          Object.keys(finalTruthFiles).find((p) => p.endsWith('/index.vue'));
+        if (_ipxIdxPath && typeof finalTruthFiles[_ipxIdxPath] === 'string') {
+          const _ipx = normalizeInlineLengthPx(finalTruthFiles[_ipxIdxPath]);
+          this.logger.info(
+            `🛡️ INLINE-PX 终裁归一·已评估 ${formatInlinePxStats('', _ipx.stats).trim()}`,
+          );
+          if (_ipx.content !== finalTruthFiles[_ipxIdxPath]) {
+            finalTruthFiles[_ipxIdxPath] = _ipx.content;
+          }
+        }
+      } catch (_ipxErr) {
+        reportPatchChainError(_ipxErr, {
+          logger: this.logger,
+          pass: 'execute:inline-length-px',
+        });
+        this.logger.warn('🛡️ INLINE-PX 终裁归一异常（fail-open，L0-B 判据仍独立拒收残留）', {
+          error: _ipxErr?.message || String(_ipxErr),
+        });
+      }
+
       // 🛡️ F1b headerSlots 落地审计（2026-11-10 · 方案 v4，reportOnly 只读，不注入不落地）：
       //   两级锚——结构锚（<template #header-right> 等具名插槽开标签）+ 内容弱锚
       //   （figmaNodeId / content 文本片段命中插槽块）；结构锚在但无证据 ⇒ unverified

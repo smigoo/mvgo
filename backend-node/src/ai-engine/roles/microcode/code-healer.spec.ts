@@ -1287,6 +1287,32 @@ const tabs = ref([{ 'c-device-monitor-label': '实时监控', value: 'realtime' 
     const src = sfc('{{ item.error }}', "{ 'error-code': '5' }")
     expect(healClassPrefixedDataKeys(src)).toBe(src)
   })
+
+  it('扩展（mc-max-1794674982043-8c966d20）：图表数据 map key=类名前缀+tab裸值，模板不访问裸值 → 按 tab value 剥离前缀', () => {
+    const src = `<template>
+  <div class="c-traffic-monitor-forecast" data-section-id="2:3604">
+    <div v-for="tab in forecastTabs" :key="tab.value" @click="handleTabChange(tab.value)">{{ tab.label }}</div>
+  </div>
+</template>
+<script setup>
+import { ref } from 'vue'
+const forecastTabs = [
+  { label: '江阴靖江长江隧道', value: 'tunnel' },
+  { label: '江阴大桥', value: 'bridge' }
+]
+const currentTab = ref('')
+const chartDataMap = {
+  'c-traffic-monitor-tunnel': { actual: [1, 2, 3], predict: [4, 5, 6] },
+  'c-traffic-monitor-bridge': { actual: [7, 8, 9], predict: [1, 2, 3] }
+}
+const data = chartDataMap[currentTab.value] || chartDataMap.tunnel
+</script>`
+    const out = healClassPrefixedDataKeys(src)
+    expect(out).toContain("'tunnel': { actual: [1, 2, 3], predict: [4, 5, 6] }")
+    expect(out).toContain("'bridge': { actual: [7, 8, 9], predict: [1, 2, 3] }")
+    expect(out).not.toContain("'c-traffic-monitor-tunnel'")
+    expect(out).not.toContain("'c-traffic-monitor-bridge'")
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════

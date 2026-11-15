@@ -29,6 +29,7 @@ function stats(overrides: Record<string, number> = {}) {
     repaired: 0,
     unrepaired: 0,
     siblingCovered: 0,
+    blockedReanchors: 0,
     ...overrides,
   }
 }

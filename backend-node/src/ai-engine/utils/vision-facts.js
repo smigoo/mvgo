@@ -101,6 +101,36 @@ export const TYPE_KEYWORDS = [
 export const INLINE_HEADING_RE =
   /(sub[-_ ]?header|小标题|副标题|子标题|分组标题|section[-_ ]?title)/;
 
+/**
+ * 🛡️ 面板 header（A 类：base-panel 外壳 chrome）严格命名判据（2026-11-15 降级治理）。
+ *
+ * 病灶：`section-tree.js` 此前用 `/header/i` 无差别递归到任意层，把 slot-con 内部的
+ * 业务段头（`0sub-header` / `4sub-header` / `6sub-header`）也标成 `type:'header'`
+ * + `chromeOnly` + `header:{title}`，导致 ① 段头 icon / 右侧控件被窄契约截断、
+ * ② 被排除出 flex 高度归一（比例失真）、③ 门禁 typedHeaders 计数污染。
+ * 该误判在 docs/2026-11-11-组件生成根因治理改动清单.md 根因 C/D 已记录，但当时
+ * 只在下游打补丁（expander 剥 type / HEADER_CHROME_RELATIONS 白名单），未收敛源头。
+ *
+ * 判据对齐 roles/figma-connector.js#findHeaderTitle 第三级 fallback 的严格命名
+ * （`header` / `header ` / `header-` / `panel-header` 前缀），并显式排除
+ * INLINE_HEADING_RE 命中的内容区小标题。
+ * ⚠️ E1（骨架 = Figma 树）路径只复用本词表常量，不使用 declared* 显式发言协议
+ * （后者按治理方案 §Phase B 仅适用于 vision 骨架路径）。
+ *
+ * @param {string} name Figma 节点名
+ * @returns {boolean}
+ */
+export function isPanelHeaderName(name) {
+  const n = String(name || '').trim().toLowerCase()
+  if (!n || INLINE_HEADING_RE.test(n)) return false
+  return (
+    n === 'header' ||
+    n.startsWith('header ') ||
+    n.startsWith('header-') ||
+    n.startsWith('panel-header')
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ② 显式发言读取口径（declared*）
 //    归一口径：只 String().toLowerCase()，不 trim（与 4851eedd 闸门原实现逐字同口径，

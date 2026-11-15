@@ -1322,6 +1322,14 @@ export class TasksService {
   }
 
   private async flushPersistQueue() {
+    // 🛡️ 删除意图按「本次落盘快照」消费（2026-11-15 批量删除复活根治）：
+    //    pendingDeletedIds 的语义是「尚未在落盘结果中体现的删除意图」。原实现在**任意一次**
+    //    落盘成功后整表 clear，会把本次 flush 进行期间新登记的删除意图一并吞掉；随后那次
+    //    flush 的「缩短」在护栏看来就是「无有意删除」，于是把刚删掉的任务从磁盘合并回内存。
+    //    线上 22:28 批量删 2 条后连续 9 次
+    //    「落盘护栏：内存 39 < 磁盘 40 且无有意删除 → 已回灌 N 条」即此机理。
+    //    故只消费本次 flush 开始时已登记的 id；快照之后新登记的意图留到下一次 flush 生效。
+    const deleteIntentSnapshot = new Set(this.pendingDeletedIds);
     try {
       const list = Array.from(this.tasks.values())
         .sort((a, b) => b.startTime - a.startTime)
@@ -1416,11 +1424,13 @@ export class TasksService {
       if (finalList.length !== prevBaseline) {
         console.log(
           `[TasksService] 落盘 ${finalList.length} 条（磁盘基线 ${prevBaseline}，` +
-          `有意删除 ${this.pendingDeletedIds.size}，合并磁盘独有 ${finalList.length - list.length}）`,
+          `有意删除 ${deleteIntentSnapshot.size}，合并磁盘独有 ${finalList.length - list.length}）`,
         );
       }
       this.lastKnownDiskCount = finalList.length;
-      this.pendingDeletedIds.clear();
+      // ✅ 只消费本次落盘快照所覆盖的删除意图，不吞掉并发登记的新意图。
+      //    落盘失败（catch）时快照不被消费，意图保留给下一次 flush 重试。
+      for (const id of deleteIntentSnapshot) this.pendingDeletedIds.delete(id);
     } catch (err) {
       console.warn('[TasksService] 持久化任务失败:', err.message);
     }

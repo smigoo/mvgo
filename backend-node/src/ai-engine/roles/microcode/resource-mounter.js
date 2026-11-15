@@ -67,6 +67,11 @@ import {
   validateVueSfc,
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
+// 🛡️ 2026-11-15（mc-max-1794749284344-c5e0aadc 实锤）：header 归属单一事实源。
+//   P1-3 去重此前只看「文本是否在子组件出现过」⇒ 模型把 header 内容写进内容区 section 后，
+//   插槽被判重复而永不注入（模型写错 → 去重认账 → 插槽恒空 的循环因果）。
+//   owner 子树内的文本不再作为「已渲染」证据。
+import { resolveHeaderOwner, isInHeaderOwnerSubtree } from '../../utils/header-owner-truth.js';
 
 // 🗑️ 2026-09-30（删减法）：此处原有 `const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i`。
 //   该常量与 `microcode-engineer.js` 的死代码副本、`utils/mount-target-scoring.js` 的私有副本
@@ -2487,12 +2492,32 @@ export function ensureHeaderSlots(code, input, options = {}) {
 
   // 🛡️ P1-3（2026-09-07）：headerSlots/sections 重叠去重。
   // 收集子组件中已渲染的文本内容，与 headerSlots 比对，重叠则跳过注入。
+  // 🛡️ 2026-11-15（c5e0aadc 实锤）：owner 门禁——候选插槽的 figmaNodeId 落在 header owner
+  //   子树内时，**不得**因「文本已在内容区子组件出现」而判重复：那份内容本身就是错位的
+  //   头部内容（模型把 header 组当业务 section 写了）。没有这道门禁，去重会把错误当事实
+  //   固化，形成「模型写错 → 去重认账 → 插槽恒空」的闭环。
+  const headerOwner = (() => {
+    try {
+      const raw = input?.figmaNodeData?.document || input?.figmaNodeData
+      return raw ? resolveHeaderOwner(raw) : null
+    } catch {
+      return null
+    }
+  })()
   const subcomponentTexts = collectSubcomponentTexts(files);
+  let ownerExempt = 0
+  const ownerProtectedFragments = new Set()
   if (subcomponentTexts.size > 0) {
     const beforeDedup = slots.length;
     slots = slots.filter((slot) => {
       const content = String(slot?.content || '').trim();
       if (!content) return true;
+      // owner 子树内 ⇒ 结构上确属头部，保留插槽（不让内容区的错位副本冒充「已渲染」）
+      if (headerOwner && isInHeaderOwnerSubtree(headerOwner, slot?.figmaNodeId)) {
+        ownerExempt += 1
+        for (const f of extractTextFragments(content)) ownerProtectedFragments.add(f)
+        return true
+      }
       // 提取 slot content 中的关键数字/文本片段，检查子组件是否已渲染
       const fragments = extractTextFragments(content);
       for (const frag of fragments) {
@@ -2505,10 +2530,17 @@ export function ensureHeaderSlots(code, input, options = {}) {
       }
       return true;
     });
-    if (slots.length !== beforeDedup) {
+    if (ownerExempt > 0) {
+      logger?.info('🛡️ T09 P1-3 owner 门禁：头部插槽豁免重叠去重（owner 子树内文本不算已渲染）', {
+        ownerId: headerOwner?.ownerId || '',
+        exempt: ownerExempt,
+        kept: slots.length,
+      })
+    }
+    if (slots.length !== beforeDedup - ownerExempt) {
       logger?.warn(
-        `🛡️ T09 P1-3 已剔除 ${beforeDedup - slots.length} 个与子组件重叠的 headerSlots（防重复渲染）`,
-      );
+        `🛡️ T09 P1-3 已剔除 ${beforeDedup - ownerExempt - slots.length} 个与子组件重叠的 headerSlots（防重复渲染）`,
+      )
     }
   }
 
@@ -2518,7 +2550,10 @@ export function ensureHeaderSlots(code, input, options = {}) {
   // 🛡️ Loop 2.1.D（2026-09-10）：逻辑抽到 utils/slot-dom-deduper.js（纯函数、可单测），
   // 与 2.1.C 互斥裁决配套——契约删了 DOM 也要删。
   if (subcomponentTexts.size > 0) {
-    const domResult = removeOverlappingSlotDom(code, { subcomponentTexts });
+    const domResult = removeOverlappingSlotDom(code, {
+      subcomponentTexts,
+      protectedTexts: ownerProtectedFragments,
+    });
     if (domResult.removed > 0) {
       code = domResult.code;
       logger?.warn(
@@ -2663,7 +2698,9 @@ export function ensureHeaderSlots(code, input, options = {}) {
     //   插槽是独立机制，不读撤单结果 ⇒ 双表达无人拦。
     //   判据（单一出口）：slot 内容按空白分词后**全部** token（长度≥2）都能在 body 组件
     //   （components/*.vue，除 index）文本中找到 ⇒ 视为重复。body 版信息更完整，插槽让位。
-    if (isSlotContentDuplicatedInBody(content, files)) {
+    //   🛡️ 2026-11-15（c5e0aadc 实锤）：owner 子树内的插槽同样豁免——内容区里的同文本副本
+    //   是错位产物，不是「body 已表达」的证据；否则这条守卫与 P1-3 一起把插槽锁死为 0。
+    if (!(headerOwner && isInHeaderOwnerSubtree(headerOwner, slot?.figmaNodeId)) && isSlotContentDuplicatedInBody(content, files)) {
       t09ResourceSlotStats.slotBodyDuplicate += 1;
       continue;
     }

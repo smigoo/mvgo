@@ -22,6 +22,19 @@ import { renameWithCopyFallback } from './rename-with-copy-fallback.js'
 //   max 线校验的是内存 files map，补缺追加/字号守卫/写盘后的形态从未被复验）。
 //   静态 import 安全：less-compile-gate.js 刻意不依赖 config/backend-root.js（见其文件头 R0-8）。
 import { LessCompileGate } from '../validators/less-compile-gate.js'
+// 🛡️ 2026-11-15 P0-3（mc-max-1794717024986-bb0c260b 实锤）：发布前**图标真假终态断言**。
+//   病灶：图标真值守恒器只在写盘出口单点运行，之后仍有 7 处绕过 file-writer 的
+//   `writeFileSync` 直写（microcode-engineer.js）把结果覆盖掉 ⇒ 磁盘产物里
+//   「真 `<img>` + CSS 画的假图标」双份并存（mtime 与最后一次守恒器运行同秒）。
+//   在「产物完成」语义唯一的收口点（本文件 publishQualityPreview，同步 workspace 之前）
+//   做终态复跑 + 写回，与 pass 执行顺序解耦，不猜。
+import {
+  buildDrawClassIndex,
+  collectAllSectionIds,
+  healIconTruthConservation,
+  formatIconTruthConservationLog,
+} from './icon-truth-conservation.js'
+import { resolveOwnerSectionToNearestSection } from './resource-ownership-normalize.js'
 import {
   projectRoot,
   workspaceRoot,
@@ -758,6 +771,131 @@ function sessionIdFromOutputPath(outputPath) {
  *   · 仍 BLOCK 时只告警 + 写 `.less-gate.json` 标记（供 UI/运维取证），不抛错、不改返回值；
  *   · 任何异常一律吞掉——预览发布链路本身不能因为多一道校验而失败。
  */
+/** 图标真值终态断言扫描根（相对 outputPath）：只扫模板与样式，不碰其它产物。 */
+const ICON_TRUTH_SCAN_ROOTS = ['package', 'resources/styles']
+
+/** 递归读取 outputPath 下的 .vue/.less/.css（单文件读失败不影响整体）。 */
+function collectIconTruthFacts(outputPath) {
+  const files = {}
+  const walk = (absDir, relDir) => {
+    let entries = []
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const abs = join(absDir, entry.name)
+      const rel = relDir ? `${relDir}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        walk(abs, rel)
+        continue
+      }
+      if (!/\.(vue|less|css)$/i.test(entry.name)) continue
+      // 事务基线/待清理残留不是产物本体，跳过
+      if (/quality-baseline|\.cleanup-/.test(entry.name)) continue
+      try {
+        files[rel] = readFileSync(abs, 'utf-8')
+      } catch {
+        /* 单文件读失败不影响其它文件 */
+      }
+    }
+  }
+  for (const root of ICON_TRUTH_SCAN_ROOTS) walk(join(outputPath, root), root)
+  return files
+}
+
+/**
+ * 🛡️ P0-3（2026-11-15 · mc-max-1794717024986-bb0c260b 实锤）：发布前图标真假终态断言。
+ *
+ * 为什么在这里：图标真值守恒器只在 `microcode/file-writer.js` 写盘出口单点运行，之后
+ * `microcode-engineer.js` 仍有 7 处直写 `writeFileSync` 会覆盖它的结果（真机实证：
+ * 磁盘产物里假图标仍在，而文件 mtime 与最后一次守恒器运行**同秒**）。
+ * 与其在「收口不存在」的前提下加第 N 个调用点，这里用**产物完成语义唯一的边界** ——
+ * publishQualityPreview 同步 workspace 之前对磁盘产物做终态复跑。
+ *
+ * 判据/修复全在 `icon-truth-conservation.js` 纯函数内（同一份，不复制阈值）：
+ * 同段「icon 真值 ≥1」与「CSS 绘制类假图标 ≥1」并存 ⇒ 删假块或换成真 `<img>`。
+ * 归属归一复用 P0-a `resolveOwnerSectionToNearestSection`（磁盘 mapping 的 owner 也可能悬空）。
+ *
+ * 边界：无 `.mc-gen/resource-dom-mapping.json` 或 mapping 为空 ⇒ 无 icon 真值 ⇒ 只打计数行不动产物；
+ * 任何异常吞掉（发布链路不能因多一道自愈而失败）；恒打 `[icon-truth-consistency]` 单行日志。
+ *
+ * @returns {Promise<object|null>} 守恒器 stats（不可用时 null）
+ */
+async function selfHealIconTruthBeforePublish(outputPath) {
+  const sessionId = sessionIdFromOutputPath(outputPath)
+  try {
+    const mappingPath = join(outputPath, '.mc-gen', 'resource-dom-mapping.json')
+    if (!existsSync(mappingPath)) {
+      logger.info(`[icon-truth-consistency] sessionId=${sessionId} verdict=no-mapping reason=resource-dom-mapping-missing`)
+      return null
+    }
+    let mappings
+    try {
+      mappings = JSON.parse(readFileSync(mappingPath, 'utf-8'))
+    } catch (error) {
+      logger.info(`[icon-truth-consistency] sessionId=${sessionId} verdict=no-evidence reason=mapping-unreadable error=${error?.message || ''}`)
+      return null
+    }
+    if (!Array.isArray(mappings) || mappings.length === 0) {
+      logger.info(`[icon-truth-consistency] sessionId=${sessionId} verdict=no-evidence reason=mapping-empty`)
+      return null
+    }
+
+    const files = collectIconTruthFacts(outputPath)
+    if (Object.keys(files).length === 0) {
+      logger.info(`[icon-truth-consistency] sessionId=${sessionId} verdict=no-files`)
+      return null
+    }
+
+    const drawIndex = buildDrawClassIndex(files)
+    const allSectionIds = collectAllSectionIds(files)
+    // P0-a 同源：磁盘 mapping 的 ownerSectionId 可能仍指向中间容器 ⇒ 上溯到最近 section
+    const normalized = resolveOwnerSectionToNearestSection(mappings, allSectionIds, { silent: true })
+    const res = healIconTruthConservation({ ...files }, {
+      mappings: normalized?.mappings || mappings,
+      drawIndex,
+      allSectionIds,
+      silent: true,
+    })
+
+    let written = 0
+    for (const [rel, next] of Object.entries(res.files || {})) {
+      if (typeof next !== 'string' || next === files[rel]) continue
+      try {
+        writeFileSync(join(outputPath, rel), next, 'utf-8')
+        written += 1
+      } catch (error) {
+        logger.warn('[icon-truth-consistency] 终态写回失败（fail-open）', {
+          file: rel,
+          error: error?.message || String(error),
+        })
+      }
+    }
+
+    const line = formatIconTruthConservationLog(res.stats)
+    logger.info(
+      `[icon-truth-consistency] sessionId=${sessionId} ` +
+        `ownerResolved=${normalized?.stats?.resolved ?? 0} written=${written} ${line?.message || ''}`,
+    )
+    if (written > 0) {
+      logger.warn('[publishQualityPreview] 发布前图标真假终态断言已写回源产物', {
+        outputPath,
+        written,
+        changes: res.changes?.slice(0, 5) || [],
+      })
+    }
+    return res.stats
+  } catch (error) {
+    logger.warn('[publishQualityPreview] 发布前图标终态断言异常（已忽略，不影响发布）', {
+      outputPath,
+      error: error?.message || String(error),
+    })
+    return null
+  }
+}
+
 async function selfHealLessBeforePublish(outputPath) {
   const hasStyles = existsSync(join(outputPath, 'resources', 'styles'))
   const hasEntry = existsSync(join(outputPath, LESS_ENTRY))
@@ -860,6 +998,11 @@ async function publishQualityPreview({
     throw new Error('质量预览暂存缺少 outputPath')
   }
 
+  // 🛡️ 2026-11-15 P0-3：发布前**图标真假终态断言**（在 LESS 自愈之前，先修模板再验样式）。
+  //   与 pass 执行顺序解耦：此处是「产物完成」语义唯一的收口点，写盘出口单点之外的
+  //   7 处直写覆盖问题在这里兜住。fail-open、恒打 `[icon-truth-consistency]` 计数行。
+  await selfHealIconTruthBeforePublish(outputPath)
+
   // 🛡️ 2026-11-11：同步到 workspace **之前**对源产物做磁盘级 LESS 终验 + 自愈。
   //   必须在 buildStagingCopy 之前——它复制的是磁盘内容，先修再复制才能让三处产物一致。
   await selfHealLessBeforePublish(outputPath)
@@ -960,6 +1103,9 @@ export const __testing = {
   collectCleanupDirs,
   // 🛡️ 2026-11-11：暴露发布前 LESS 终验，供 spec 做阳性/阴性对照
   selfHealLessBeforePublish,
+  // 🛡️ 2026-11-15 P0-3：暴露发布前图标真假终态断言，供 spec 做阳性/阴性对照
+  selfHealIconTruthBeforePublish,
+  collectIconTruthFacts,
   buildStagingCopy,
   promotePreparedTarget,
   rollbackPreparedTarget,

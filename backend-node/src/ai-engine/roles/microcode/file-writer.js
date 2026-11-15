@@ -38,6 +38,7 @@ import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
 import { stripSectionContractBleed } from '../../utils/section-contract-bleed-guard.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl, injectChartRebuildGuard } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
+import { normalizeInlineLengthPx, formatInlinePxStats } from '../../utils/inline-geom-dup-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
 // 🛡️ 产物终验（2026-11-12 · 8fa6d6f3 实锤）：表达式级最后闸，拦「写盘出口自愈链
 //    注坏 :style 后、磁盘残留坏版」到达前端（详见 final-vue-expression-gate.js docblock）。
@@ -101,6 +102,16 @@ import {
 // 🛡️ 刀 45（2026-10-22）：「section 有图标真值但组件零渲染」—— 连 `<img>` 都没有，
 //   R24 无对象可修。位置与尺寸全部取自 mapping 的 figmaBox/parentBox 真值，缺即不判。
 import { healMissingIconRender } from '../../utils/missing-icon-render-healer.js';
+// 🛡️ 图标真值守恒（2026-11-15）：刀 45 只补 `<img>`、不清 CSS 假图标 ⇒ 同一标题行
+//   「真 img + CSS 画的假图形」双份。本模块按 DOM 结构 + 样式绘制事实（节点归属）收口，
+//   判据与角色定义分别复用 candidatesForSection / isIconRole，不新建第二套。
+import {
+  buildDrawClassIndex,
+  collectAllSectionIds,
+  healIconTruthConservation,
+  mergeIconTruthStats,
+  formatIconTruthConservationLog,
+} from '../../utils/icon-truth-conservation.js';
 // 🛡️ 刀 49（2026-10-22 · mc-1792643509867-db2d65f7 实锤）：**图标槽位尺寸契约**。
 //   共享 class 被「图标容器」和「图标本体」共用时（`.c-db2d65-icon` = div 的
 //   `width:100%;flex:1 1 0` + img 的 16×16），img 被拉成 570px。刀 39 依赖
@@ -1256,6 +1267,16 @@ export function writeFiles(files, outputPath, options = {}) {
       }
     }
 
+    // 🛡️ 图标真值守恒（2026-11-15）：绘制事实索引必须用**全量 filesForWrite** 预建 ——
+    //   逐文件循环里只有单个 .vue，拿不到 common.less / index.css ⇒ 不预建就恒 fail-open 假绿。
+    //   本段为纯函数零 IO，刻意不新增 catch（避免改变 PATCH-CHAIN-ERROR 覆盖基线）。
+    const _iconTruthDrawIndex = buildDrawClassIndex(filesForWrite);
+    // 🛡️ P0-c（2026-11-15 · c60fbe6f 实锤）：全量 section 集合同样必须用**全量**预建 ——
+    //   图标 mapping 的 ownerSectionId 常是中间 group，精确命中为空时需按
+    //   「ancestorIds 中最近的 section」兜底归属；逐文件拿不到别的文件的 data-section-id。
+    const _iconTruthSectionIds = collectAllSectionIds(filesForWrite);
+    let _iconTruthStats = null;
+
     for (const [relativePath, content] of Object.entries(filesForWrite)) {
       currentFile = relativePath;
       currentStep = 'validating_path';
@@ -2299,6 +2320,29 @@ export function writeFiles(files, outputPath, options = {}) {
         }
       }
 
+      // 🛡️ 图标真值守恒（2026-11-15 · 刀 45 之后、刀 51 之前）：
+      //   刀 45 只补 `<img>` 从不清理 CSS 假图标 ⇒ 「真 img + CSS 画的假图形」双份。
+      //   已有 <img> ⇒ 删全部假图标块；零 <img> 且有 figmaBox 尺寸真值 ⇒ 首块换成 <img>。
+      //   单文件调用 + 循环外预建的**全量**绘制索引；silent 让汇总计数行在循环外恒打一次。
+      if (relativePath.endsWith('.vue') && _iconTruthDrawIndex?.size > 0) {
+        const _iconFiles = { [relativePath]: sanitizedContent };
+        const _iconRes = healIconTruthConservation(_iconFiles, {
+          mappings: _r24Mapping,
+          drawIndex: _iconTruthDrawIndex,
+          allSectionIds: _iconTruthSectionIds,
+          silent: true,
+        });
+        const _iconNext = _iconFiles[relativePath];
+        if (typeof _iconNext === 'string' && _iconNext !== sanitizedContent) {
+          sanitizedContent = _iconNext;
+          currentStep = 'icon_truth_conservation';
+        }
+        _iconTruthStats = mergeIconTruthStats(_iconTruthStats, _iconRes.stats);
+        if (_iconRes.changes.length > 0 && logger) {
+          logger.warn(`🛡️ 图标真值守恒：${relativePath} 已收口`, { changes: _iconRes.changes });
+        }
+      }
+
       // 🛡️ 刀 51（2026-10-22）：**段内标题行几何契约**。
       //   位置：R24 / 刀 45 之后 —— 那两步可能刚补出 `<img>`，本步才有「图标」可对齐；
       //   且必须在所有覆写/回退步骤之后（写盘出口是唯一能保证「校验 === 落盘」的地方）。
@@ -2543,6 +2587,39 @@ export function writeFiles(files, outputPath, options = {}) {
         }
       }
 
+      // 🛡️ P3-B 写盘出口归一（2026-11-15 · mc-max-1794756373942-3cacdefb 实锤）：
+      //   病灶：**本写盘器内部**的确定性自愈（Tab UI 骨架自愈 :1412 injectMissingTabUi、
+      //   ensure* 系列）会在 microcode-engineer 的终写前归一**之后**注入硬编码 inline px
+      //   ⇒ 归一看到的是「注入前」内存版（真机 scannedTags=8/movedTags=0/skip 全 0），
+      //   磁盘落地的却是「注入后」11 标签版（2 处 inline px）⇒ L0-B INLINE-GEOM-PX BLOCK、
+      //   禁止晋升 last-good，产物带 px 交付。
+      //   治本：归一挂到**落盘唯一出口**（writeFileSync 前的最终定稿点），任何上游 /
+      //   内部修复器注入的 inline px 一律在此收口；随后由下方根治⑫ 出口终验校验最终字节
+      //   （顺序不可颠倒：先归一再验，否则验的不是落盘内容）。
+      //   判据与终写前归一同源（utils/inline-geom-dup-guard.js）；fail-closed：无
+      //   mvgo-layout-truth 标记或无可注入 style 宿主 ⇒ 原样返回（不剥 inline），仍由 L0-B 拒收。
+      //   作用域只认 index.vue（L0-B 判据作用域同口径），不扩到子组件，避免放大改动面。
+      if (relativePath.endsWith('index.vue')) {
+        try {
+          const _oip = normalizeInlineLengthPx(sanitizedContent);
+          if (_oip.stats.eligible > 0) {
+            if (logger) {
+              logger.info(
+                `🛡️ INLINE-PX 写盘出口归一·已评估 ${formatInlinePxStats('', _oip.stats).trim()}`,
+              );
+            }
+            sanitizedContent = _oip.content;
+          }
+        } catch (_oipErr) {
+          if (logger) {
+            logger.warn('🛡️ INLINE-PX 写盘出口归一异常（fail-open，L0-B 判据仍独立拒收残留）', {
+              path: relativePath,
+              error: _oipErr?.message || String(_oipErr),
+            });
+          }
+        }
+      }
+
       // 🛡️ 根治⑫（2026-11-12 · mc-1794490786159-c6e73f7a 实锤）：写盘出口单点终验。
       //   病灶：R5 冻结救回把快照换回 sanitizedContent 后，R24/S7/G13 等刀**继续**在
       //   其上注入改写（resource mountTarget 回退、img 注入等），这些改写不再经过
@@ -2675,6 +2752,15 @@ export function writeFiles(files, outputPath, options = {}) {
           sanitized: sanitizedContent.length !== content.length,
         });
       }
+    }
+
+    // 🛡️ 图标真值守恒（2026-11-15）：**恒打计数行**（0 也打），把「没跑 / 跑了零命中 /
+    //   被 continue 跳过」三态分开。逐文件调用 silent，格式唯一来源 = formatIconTruthConservationLog。
+    if (logger) {
+      const _iconLine = formatIconTruthConservationLog(
+        _iconTruthStats || { skipped: ['no-vue-file-evaluated'] },
+      );
+      logger.info(_iconLine.message, _iconLine.meta);
     }
 
     // 🛡️ 产物终验（2026-11-12 · mc-1794463362140-8fa6d6f3 实锤）：表达式级最后闸。

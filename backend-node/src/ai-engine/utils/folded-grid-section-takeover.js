@@ -37,6 +37,17 @@ import {
   nodeAppearanceTruth,
 } from './section-tree.js';
 import { buildGridContract, uniformPitch } from './grid-list-layout-contract.js';
+// 🛡️ P-12（2026-11-15 · 9fad7892 实锤）：卡内文本的**字符级样式**（Figma
+//   `characterStyleOverrides` + `styleOverrideTable`）单一来源。
+//   病灶：本模块 `textRun()` 只读节点级 `fills`/`style` ⇒ 拿到的是「从不显示的兜底色」
+//   （`(2/484)` 节点级 `#ffffff`，实际 7 个字符全被覆盖成「(」蓝16 + 「2」红18/600 + "/484)" 蓝16）
+//   ⇒ 产物白字落白底不可见。禁止在本文件另写逐字符解析（同源纪律）。
+import { runsOfTextNode } from './text-runs.js';
+// 🛡️ S3-BG（2026-11-15 · 0fde9c29 实锤）：折叠循环项的逐卡 bg 归属绑定。
+//   单一入口放在 collectFoldedGridTakeover —— 所有调用方（code-generator /
+//   microcode-engineer / vue3-prompt / vue3-engineer）都经此处，且此处持有
+//   p.resourceMapping 全量（含 figma-connector 固化的 assignedVarName）。
+import { bindFoldedItemBackgrounds } from './folded-item-background.js';
 // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：图表真值冲突排除复用
 //   下方 `section-anchor-truth.js` 已 re-export 的 `sectionAnchorCandidates`（G14a 下沉，
 //   同一份锚点候选口径）——**不新增第二条 import 路径**，避免第二套口径漂移。
@@ -284,6 +295,51 @@ function isScopeIncomplete(sec, figmaIndex) {
   return false;
 }
 
+/**
+ * 🛡️ P-12（2026-11-15 · 9fad7892 实锤）：TEXT 节点的**字符级分段**真值。
+ *
+ * 背景：Figma 用 `characterStyleOverrides` + `styleOverrideTable` 表达「同一 TEXT 节点内
+ * 分段着色/字号」，此时节点级 `fills` 只是**从不显示的兜底色**。
+ * 实证（2:8443 `(2/484)`）：节点级 `#ffffff`，而 7 个字符全被覆盖 ⇒
+ *   `(` `/484)` = #1990ff/16px/500，`2` = #e03434/18px/600。
+ * 只读节点级 fills 会产出「白字落白底不可见」的产物。
+ *
+ * 契约（纯附加、可辩驳）：
+ *   ① 拆出 ≥2 段才有意义；否则 `undefined`（调用方零改动、产物逐字不变）；
+ *   ② 段文本按序拼接**必须**逐字等于节点 `characters`，否则解析异常 ⇒ `undefined`（fail-open，不猜）；
+ *   ③ 段缺失的 color/fs/fw 用节点级值兜底（不臆造新值）；
+ *   ④ 任一步抛错 ⇒ `undefined`（渲染永不因本函数中断）。
+ *
+ * @param {Object} t Figma TEXT 节点
+ * @param {{color:string, fs:number, fw:number}} base 节点级真值（兜底用）
+ * @returns {Array<{text:string,color:string,fs:number,fw:number}>|undefined}
+ */
+function runSegs(t, base) {
+  try {
+    if (!t || typeof t.characters !== 'string' || !t.characters) return undefined;
+    const raw = runsOfTextNode(t);
+    if (!Array.isArray(raw) || raw.length < 2) return undefined;
+    const out = [];
+    for (const s of raw) {
+      const text = String(s?.text ?? '');
+      if (!text) continue;
+      const fs = Number(s?.fontSize);
+      out.push({
+        text,
+        color: s?.color || base.color,
+        fs: Number.isFinite(fs) && fs > 0 ? Math.round(fs * 100) / 100 : base.fs,
+        fw: s?.fontWeight == null ? base.fw : Number(s.fontWeight),
+      });
+    }
+    if (out.length < 2) return undefined;
+    // ② 逐字对账：拼接必须与节点文本完全一致
+    if (out.map((s) => s.text).join('') !== t.characters) return undefined;
+    return out;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 /** 文本节点 → 渲染 run（颜色/字号/字重任一缺失 ⇒ null，调用方 fail-open）。 */
 export function textRun(t) {
   const color = firstSolidFillRgba(t);
@@ -293,6 +349,7 @@ export function textRun(t) {
   if (!color || !Number.isFinite(fs) || fs <= 0 || fw == null) return null;
   const b = bboxOf(t);
   const lhRaw = Number(st.lineHeightPx);
+  const segs = runSegs(t, { color, fs, fw });
   return {
     text: String(t.characters),
     color,
@@ -301,6 +358,9 @@ export function textRun(t) {
     // 真值行高（px）。缺失 ⇒ null，调用方保持原有单行形态（fail-open，不臆造行高）。
     lh: Number.isFinite(lhRaw) && lhRaw > 0 ? lhRaw : null,
     box: b,
+    // 🛡️ P-12：字符级分段（仅真实存在 per-char 覆盖时才有）。**纯附加字段**：
+    //   上面的 text/color/fs/fw 一律保持节点级不变 ⇒ 行列聚类/几何判据零扰动。
+    ...(segs ? { segs } : {}),
   };
 }
 
@@ -1527,6 +1587,9 @@ function subtreeIconTruth(node, resourceMapping, firstTextX) {
     varName,
     file,
     dx: Math.max(0, Math.round(pick.b.x - cardBox.x)),
+    // 🧱 2026-11-15（mc-max-1794746516643-2348cf5c 实锤）：icon 垂直真值（距卡上缘）——
+    //   伴随文本（caption）判据需要 icon 的 y 区间，不能只有 dx/w/h。
+    dy: Math.max(0, Math.round(pick.b.y - cardBox.y)),
     w: Math.max(0, Math.round(pick.b.w)),
     h: Math.max(0, Math.round(pick.b.h)),
     gap: Math.max(0, Math.round(Number(firstTextX) - (pick.b.x + pick.b.w))),
@@ -1667,6 +1730,65 @@ export function cardTruth(node, resourceMapping) {
     pad = iconTruth.dx;
     gap = iconTruth.gap;
   }
+  // 🧱 2026-11-15（mc-max-1794746516643-2348cf5c 实锤）：**icon 伴随文本（caption）**。
+  //   病灶真值（89:38 活动卡 2:8787）：左列 = icon(rel 18,8 35×28) + 「隧道设备」(rel 14,39 45×16)，
+  //   右侧 = line1/line2 两个 HORIZONTAL FRAME（label 列 rel x64 + value 列 rel x111，跨两行对齐）。
+  //   既有模型只有「icon 前缀 + 一维文本流」——没有「左列伴随文本」这一维 ⇒「隧道设备」
+  //   被当成 runs[2] 混进文本流 ⇒ 两行 run 数变 2 与 3 ⇒ `analyzeColumnPair` ③（各行列数
+  //   须一致）fail-open ⇒ textDir 退回 single-row ⇒ 5 段塞进一条 nowrap flex row：
+  //   卡 193 − pad 18 − icon 35 − gap 11 = 文本区 129px，而 5 段真值合计 149px ⇒
+  //   `flex-shrink` 把 span 盒压到内容宽以下（真机实测「总数:」46→31.7px），
+  //   `white-space:nowrap` 的文字画出盒外互相覆盖 ⇒ RUNTIME-016「5」×「总数:」=0.70。
+  //   判据（全几何、零命名、可辩驳）：run 的 x 区间与 icon 的 x 区间**相交** ∧ y 区间
+  //   与 icon **不相交**（不在同一水平带）⇒ 该 run 是 icon 的伴随文本（左列第 2 行）。
+  //   **恰命中 1 条才认**（≥2 条结构可疑，不猜 ⇒ fail-open 保持旧形态）。
+  //   剔除后文本流恢复 2×2，走既有 column-pair 通道（无新形态、无新渲染分支）。
+  let iconCaption = null;
+  if (icon && Number.isFinite(iconTruth?.dy)) {
+    const ix0 = box.x + iconTruth.dx;
+    const ix1 = ix0 + iconTruth.w;
+    const iy0 = box.y + iconTruth.dy;
+    const iy1 = iy0 + iconTruth.h;
+    const cand = runs.filter(
+      (r) =>
+        r?.box &&
+        Math.min(r.box.x + r.box.w, ix1) - Math.max(r.box.x, ix0) > 0 &&
+        Math.min(r.box.y + r.box.h, iy1) - Math.max(r.box.y, iy0) <= 0,
+    );
+    if (cand.length === 1) {
+      iconCaption = cand[0];
+      runs.splice(runs.indexOf(iconCaption), 1);
+      // 左列几何：起点 = min(icon 左缘, caption 左缘)，右缘 = max(两者右缘)。
+      // 真值里 caption 常比 icon 更靠左/更宽（窄 icon + 长单位名），按 icon 左缘当
+      // 列起点会把 icon 整体右移（实测偏 5px）⇒ 列起点必须取两者最左。
+      // gap 改写为「左列右缘 → 文本流首 run 左缘」，与既有 gap 语义（icon→首文本）同轴。
+      const capLeft = Math.round(iconCaption.box.x - box.x);
+      const iconLeft = iconTruth.dx;
+      const colLeft = Math.max(0, Math.min(iconLeft, capLeft));
+      const colRight = Math.max(iconLeft + icon.w, capLeft + Math.round(iconCaption.box.w));
+      const colW = Math.max(icon.w, colRight - colLeft);
+      const firstFlowX = Math.min(...runs.map((r) => r.box?.x ?? Infinity));
+      // runs[].box 是**绝对**坐标，colLeft/colRight 是**卡内相对**坐标 ⇒ gap 必须换算到
+      // 同一坐标系再相减（混用会把绝对 x 当间距，实测 gap=1491）。
+      pad = colLeft;
+      gap = Number.isFinite(firstFlowX)
+        ? Math.max(0, Math.round(firstFlowX - (box.x + colRight)))
+        : gap;
+      icon = {
+        ...icon,
+        caption: {
+          text: iconCaption.text,
+          color: iconCaption.color,
+          fs: iconCaption.fs,
+          fw: iconCaption.fw,
+          lh: iconCaption.lh ?? null,
+          // 真值行距：caption 上缘 − icon 下缘（竖排列的 gap，非水平间距）
+          gapTop: Math.max(0, Math.round(iconCaption.box.y - (iy0 + iconTruth.h))),
+          colW,
+        },
+      };
+    }
+  }
   // 🧱 column-pair（2026-11-13 · mc-max-1794551009165-7dfc01e9 实锤）：多列卡内布局。
   //   病灶：卡内真值 =「副标题行 + 左列(客车/22350 x 对齐) + 右列(货车/16270 右缘对齐)」，
   //   既有 textDir 判据只有 row|column 两种形态（column 要求全部 run x 对齐 ≤2px），
@@ -1703,17 +1825,27 @@ export function cardTruth(node, resourceMapping) {
                 color: columnPair.titleRun.color,
                 fs: columnPair.titleRun.fs,
                 fw: columnPair.titleRun.fw,
+                // 🛡️ P-12：标题同样可能有字符级混合色（如「异常数:」红字）
+                ...(columnPair.titleRun.segs ? { segs: columnPair.titleRun.segs } : {}),
               }
             : null,
           columns: columnPair.columnRuns.map((col) =>
-            col.map((x) => ({ text: x.text, color: x.color, fs: x.fs, fw: x.fw })),
+            col.map((x) => ({
+              text: x.text, color: x.color, fs: x.fs, fw: x.fw,
+              // 🛡️ P-12：字符级分段（仅真实存在 per-char 覆盖时才出现）
+              ...(x.segs ? { segs: x.segs } : {}),
+            })),
           ),
           colAligns: columnPair.colAligns,
           rowGap: columnPair.rowGap,
           padRight,
         }
       : {}),
-    runs: runs.map((x) => ({ text: x.text, color: x.color, fs: x.fs, fw: x.fw })),
+    runs: runs.map((x) => ({
+      text: x.text, color: x.color, fs: x.fs, fw: x.fw,
+      // 🛡️ P-12：字符级分段（仅真实存在 per-char 覆盖时才出现，否则字段不存在 ⇒ 产物逐字不变）
+      ...(x.segs ? { segs: x.segs } : {}),
+    })),
   };
 }
 
@@ -4553,6 +4685,10 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
   const hasColumnPair =
     tr.items.length > 0 && tr.items.every((it) => it.textDir === 'column-pair');
   const hasPairTitle = hasColumnPair && tr.items.some((it) => it.title != null);
+  // 🧱 2026-11-15（mc-max-1794746516643-2348cf5c）：icon 伴随文本（左列第 2 行）。
+  //   仅当**任一**卡命中 caption 时把 icon 由 flex 单元素升级为竖排列（icon 上 / caption 下）；
+  //   零命中 ⇒ 下方 `<img>` 行逐字不变 ⇒ 既有产物零回归。
+  const hasIconCaption = hasIcon && tr.items.some((it) => it?.icon?.caption);
   const stackGapPx = tr.items[0]?.stackGap;
   const textColGap =
     Number.isFinite(stackGapPx) && stackGapPx > 0 ? `gap:${stackGapPx}px;` : '';
@@ -4570,9 +4706,23 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
     // 🛡️ 刀55：前导 icon（真值几何 w/h；pad/gap 已在 cardTruth 改写为 icon 左缘/间距）。
     //   条件展开：无 icon 项 ⇒ 本行整行不存在 ⇒ 产物逐字不变。
     ...(hasIcon
-      ? [
-          `      <img v-if="it.icon != null" :src="FG_GRID_ICONS[it.icon]" :style="{ width: it.iw + 'px', height: it.ih + 'px', flex: '0 0 auto' }" />`,
-        ]
+      ? hasIconCaption
+        ? [
+            // 🧱 2026-11-15：左列 = icon + 伴随文本竖排（真值 gap = caption 上缘 − icon 下缘）。
+            //   宽度取真值 colW，使右侧文本流起点与真值首 run 左缘对齐（pad/gap 已在 cardTruth 改写）。
+            //   ⚠️ caption 必须 `white-space: pre`（只认 Figma 显式换行），**不能 pre-line**：
+            //   列宽是真值宽（Figma 字体），浏览器 fallback 字体更宽（实测 45px 装不下 48px）
+            //   ⇒ pre-line 会按列宽自动折行（「隧道设备」变 2 行、「南北接线\n设备」变 3 行），
+            //   caption 高度虚胖 ⇒ 整列垂直居中位移 7px。A/B 实测 pre 后 1 行/2 行与真值一致、
+            //   icon 位移收敛到 1px（见 2026-11-15 memory）。
+            `      <div v-if="it.icon != null" style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 auto;width:${Math.max(...tr.items.map((it) => it?.icon?.caption?.colW ?? it?.icon?.w ?? 0))}px;">`,
+            `        <img :src="FG_GRID_ICONS[it.icon]" :style="{ width: it.iw + 'px', height: it.ih + 'px', flex: '0 0 auto' }" />`,
+            `        <span v-if="it.iconCap != null" :style="{ color: it.iconCap.color, fontSize: it.iconCap.fs + 'px', fontWeight: it.iconCap.fw, lineHeight: it.iconCap.lh ? it.iconCap.lh + 'px' : 1.2, whiteSpace: 'pre', textAlign: 'center', marginTop: it.iconCap.gapTop + 'px' }">{{ it.iconCap.text }}</span>`,
+            `      </div>`,
+          ]
+        : [
+            `      <img v-if="it.icon != null" :src="FG_GRID_ICONS[it.icon]" :style="{ width: it.iw + 'px', height: it.ih + 'px', flex: '0 0 auto' }" />`,
+          ]
       : []),
     // 🧱 2026-11-08（mc-1794143134686 实锤）：文本列方向按 Figma 几何还原。
     //   真值 `摄像机`(39,13) 与 `(2/484)`(39,35) 是 **x 对齐 + y 递增** 的竖排两行；
@@ -4586,17 +4736,17 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
     //   pad/padRight 走 :style 绑定（Vue 静态 style 不支持 mustache 插值）。
     ...(hasColumnPair
       ? [
-          `      <div style="display:flex;flex-direction:column;justify-content:center;width:100%;height:100%;min-width:0;box-sizing:border-box;">`,
+          `      <div style="display:flex;flex-direction:column;justify-content:center;flex:1 1 auto;height:100%;min-width:0;box-sizing:border-box;">`,
           ...(hasPairTitle
             ? [
                 `        <div v-if="it.title != null" style="display:flex;justify-content:center;width:100%;">`,
-                `          <span :style="{ color: it.title.color, fontSize: it.title.fs + 'px', fontWeight: it.title.fw, lineHeight: 1.4, whiteSpace: 'nowrap' }">{{ it.title.text }}</span>`,
+                `          <span :style="{ color: it.title.color, fontSize: it.title.fs + 'px', fontWeight: it.title.fw, lineHeight: 1.4, whiteSpace: 'nowrap' }"><template v-if="it.title.segs"><span v-for="(s, si) in it.title.segs" :key="si" :style="{ color: s.color, fontSize: s.fs + 'px', fontWeight: s.fw }">{{ s.text }}</span></template><template v-else>{{ it.title.text }}</template></span>`,
                 `        </div>`,
               ]
             : []),
           `        <div style="display:flex;align-items:center;justify-content:space-between;min-width:0;">`,
           `          <div v-for="(col, ci) in it.columns" :key="ci" :style="{ display: 'flex', flexDirection: 'column', alignItems: it.colAligns[ci] === 'left' ? 'flex-start' : it.colAligns[ci] === 'right' ? 'flex-end' : 'center', gap: it.rowGap + 'px', minWidth: 0 }">`,
-          `            <span v-for="(t, ti) in col" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+          `            <span v-for="(t, ti) in col" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }"><template v-if="t.segs"><span v-for="(s, si) in t.segs" :key="si" :style="{ color: s.color, fontSize: s.fs + 'px', fontWeight: s.fw }">{{ s.text }}</span></template><template v-else>{{ t.text }}</template></span>`,
           `          </div>`,
           `        </div>`,
           `      </div>`,
@@ -4604,11 +4754,11 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
       : hasTextColumn
         ? [
             `      <div class="${cls}-text" style="display:flex;flex-direction:column;${textColGap}min-width:0;">`,
-            `        <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+            `        <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }"><template v-if="t.segs"><span v-for="(s, si) in t.segs" :key="si" :style="{ color: s.color, fontSize: s.fs + 'px', fontWeight: s.fw }">{{ s.text }}</span></template><template v-else>{{ t.text }}</template></span>`,
             '      </div>',
           ]
         : [
-            `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }">{{ t.text }}</span>`,
+            `      <span v-for="(t, ti) in it.runs" :key="ti" :style="{ color: t.color, fontSize: t.fs + 'px', fontWeight: t.fw, lineHeight: 1, whiteSpace: 'nowrap' }"><template v-if="t.segs"><span v-for="(s, si) in t.segs" :key="si" :style="{ color: s.color, fontSize: s.fs + 'px', fontWeight: s.fw }">{{ s.text }}</span></template><template v-else>{{ t.text }}</template></span>`,
           ]),
     '    </div>',
     '  </div>',
@@ -4634,6 +4784,15 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
         // 🔴 刀55：icon 项带下标 + 尺寸真值（w/h）；无 icon 项不写字段（阴性逐字不变）
         if (hasIcon && itemIconIdx[i] != null) {
           out = { ...out, icon: itemIconIdx[i], iw: it.icon.w, ih: it.icon.h };
+        }
+        // 🧱 2026-11-15：icon 伴随文本（左列第 2 行）真值透传；无 caption 项不写字段
+        //   （阴性逐字不变）。
+        if (it.icon?.caption) {
+          const cp = it.icon.caption;
+          out = {
+            ...out,
+            iconCap: { text: cp.text, color: cp.color, fs: cp.fs, fw: cp.fw, lh: cp.lh, gapTop: cp.gapTop },
+          };
         }
         // 🧱 column-pair（2026-11-13 · 7dfc01e9）：列结构真值透传。
         //   非 column-pair 项不写字段（阴性逐字不变）。runs 字段保留（向后兼容）。
@@ -4892,6 +5051,16 @@ export function collectFoldedGridTakeover(p = {}) {
   const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], layoutGapFromFacts: 0, overlayMarked: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
+
+  // 🛡️ S3-BG：折叠段 items 的 bg 声明必须在任何 detector 之前补齐 ——
+  //   `detectListLeaf` 的 declared 通道读 `it.bg.resourceFile`，缺了它三张不同卡底图
+  //   会全部 skipped（`bg:false, bgVar:null`），只剩统一纯色 `fill`。
+  //   幂等纯函数、零 LLM；审计计数恒落（0 也落，便于 grep 区分「没证据」与「判据失效」）。
+  const bgBind = bindFoldedItemBackgrounds(treeSections, p.resourceMapping);
+  out.foldedItemBgBound = bgBind.bound;
+  out.foldedItemBgAmbiguous = bgBind.ambiguous;
+  out.foldedItemBgSkipped = bgBind.skipped;
+  out.foldedItemBgGroups = bgBind.groups;
   // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：vision `charts[]` 段归属集合。
   //   病灶：本文件判据只看「同构标题行 + 折叠网格」结构形态，**对 charts[] 零感知** ⇒
   //   环形图段（标题行 + 两个圆环容器并排）在结构上被判成折叠网格 ⇒ `kind=table`

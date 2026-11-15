@@ -13,6 +13,13 @@ const logger = createLogger({ name: 'generation-context-assembler' })
 // 🛡️ e7da39ca（2026-11-02）：形态⑤（单个 `table-header` 容器）的**读取口径唯一来源**
 //   在 vision-facts.js；本模块只消费，不自写第二份解析（判据同构单一来源纪律）。
 import { declaredTableHeaderContainerTexts } from '../utils/vision-facts.js'
+// 🛡️ 2026-11-15（92612fc0 实锤）：卡内行分组 / 文字方向真值（纯几何，judge 单一来源在本模块）。
+import {
+  deriveCardInnerRows,
+  indexFigmaNodes,
+  textOrientationOf,
+  unwrapFigmaRoot,
+} from '../utils/card-inner-layout-truth.js'
 
 function normalizeTableHeaderContract(section) {
   const headers = (owner) => Array.isArray(owner?.headers) ? owner.headers.map((h) => String(h)) : undefined
@@ -92,18 +99,68 @@ const BODY_MAX_DEPTH = 4
 const BODY_MAX_NODES_PER_SECTION = 200
 const BODY_MAX_TEXT_LEN = 40
 const BODY_BUDGET_BYTES = 6144
+// 🔴 2026-11-15（mc-max-1794751473723-92612fc0 实锤）：elem 级**排版四件套**放行。
+//   病灶：vision 对 `2:8787` 已给 `styles:{fontSize:14,color:'#ffffff'}`（真值 fs14/20 + 白字），
+//   本模块 `BODY_NODE_PASSTHROUGH_KEYS` 不含 styles ⇒ 全被剥（该单 bodyDroppedKeys.styles=42）
+//   ⇒ prompt 里只剩裸文本 ⇒ 模型字号落 `var(--fontSize)`=12、颜色落主题基色 #0f172a
+//   ⇒ 截图「蓝卡上暗字 + 总数: 竖折两行」。
+//   只放**排版**四件套：backgroundColor / borderRadius / padding / backgroundSize 一概不放行
+//   （它们属资源层与几何层，已有 bg 资源挂载 / layoutMetadata / A4 通道，重复下发会让模型手写
+//   卡底与 bg 图**双重上色**）。值不做字符截断——超长直接丢弃并计数（截断会产出非法 CSS）。
+const BODY_NODE_TYPOGRAPHY_KEYS = ['fontSize', 'color', 'fontWeight', 'lineHeight']
+const BODY_TYPO_MAX_COLOR_LEN = 48
 // 🛡️ G04 观测（2026-11-14）：body 子节点白名单的「已透传」全集。
 //   原 R8-7 droppedKeys 只扫 section 顶层，body 子节点里被剥的 25 类细粒度真值
 //   （charts/series/seriesColors/axes/styles/resourceFile/…）0 留痕 ⇒ S7 断裂长期不可见。
 //   这里把「被剥字段名 + 次数」聚合进 normalization.bodyDroppedKeys（纯附加，不改 plan 结构）。
 const BODY_NODE_PASSTHROUGH_KEYS = new Set([
-  ...BODY_NODE_SCALAR_KEYS, ...BODY_NODE_ARRAY_KEYS, 'content', 'icon',
+  // 🛡️ 2026-11-15：styles 由 normalizeTypography 结构化裁剪后放行（只留排版四件套），
+  //   故计入"已透传"全集 —— 否则 droppedKeys.styles 会与 typographyPassed 重复计数。
+  ...BODY_NODE_SCALAR_KEYS, ...BODY_NODE_ARRAY_KEYS, 'content', 'icon', 'styles',
 ])
 
 function normalizeBodyText(value) {
   if (typeof value === 'string') return value.slice(0, BODY_MAX_TEXT_LEN)
   if (typeof value === 'number' && Number.isFinite(value)) return value
   return undefined
+}
+
+/**
+ * 🛡️ 2026-11-15（92612fc0）：elem 级排版事实结构化裁剪 —— 只留四件套，超限**丢弃不截断**。
+ *
+ * 为什么不能沿用 `BODY_MAX_TEXT_LEN` 的字符截断：`linear-gradient(270deg, #318aff 0%, ...)`
+ * 被切成 40 字符后是非法 CSS，模型会照抄成坏值；宁可丢这个键（并在对账里计数）。
+ *
+ * @param {Object} styles vision 的节点级 styles
+ * @param {{dropped?:number}} counter 超限丢弃计数（聚合进 normalization.typographyDropped）
+ * @returns {{fontSize?:number,color?:string,fontWeight?:number|string,lineHeight?:number}|undefined}
+ */
+function normalizeTypography(styles, counter) {
+  if (!styles || typeof styles !== 'object' || Array.isArray(styles)) return undefined
+  const out = {}
+  const fontSize = Number(styles.fontSize)
+  if (Number.isFinite(fontSize) && fontSize > 0 && fontSize <= 200) {
+    out.fontSize = Math.round(fontSize * 100) / 100
+  }
+  const lineHeight = Number(styles.lineHeight)
+  if (Number.isFinite(lineHeight) && lineHeight > 0 && lineHeight <= 300) {
+    out.lineHeight = Math.round(lineHeight * 100) / 100
+  }
+  const weight = styles.fontWeight
+  if (typeof weight === 'number' && Number.isFinite(weight) && weight >= 100 && weight <= 1000) {
+    out.fontWeight = weight
+  } else if (typeof weight === 'string' && /^(normal|bold|bolder|lighter|[1-9]00)$/.test(weight.trim())) {
+    out.fontWeight = weight.trim()
+  }
+  const color = typeof styles.color === 'string' ? styles.color.trim() : ''
+  if (color) {
+    if (color.length <= BODY_TYPO_MAX_COLOR_LEN && /^[#a-zA-Z0-9.,()%\s/+-]+$/.test(color)) {
+      out.color = color
+    } else if (counter) {
+      counter.typographyDropped = (counter.typographyDropped || 0) + 1
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 function normalizeBodyNode(node, depth, counter) {
@@ -126,6 +183,30 @@ function normalizeBodyNode(node, depth, counter) {
   for (const key of BODY_NODE_SCALAR_KEYS) {
     const v = normalizeBodyText(node[key])
     if (v !== undefined && v !== '') out[key] = v
+  }
+  // 🛡️ 2026-11-15（92612fc0）：elem 级排版四件套透传 + 对账计数（vision 有 / 实际过 的分子分母）。
+  if (node.styles && typeof node.styles === 'object' && !Array.isArray(node.styles)) {
+    const hasTypography = BODY_NODE_TYPOGRAPHY_KEYS.some(
+      (key) => node.styles[key] !== undefined && node.styles[key] !== null && node.styles[key] !== '',
+    )
+    if (hasTypography) counter.typographySeen = (counter.typographySeen || 0) + 1
+    const typography = normalizeTypography(node.styles, counter)
+    if (typography) {
+      out.styles = typography
+      counter.typographyPassed = (counter.typographyPassed || 0) + 1
+    }
+  }
+  // 🛡️ 2026-11-15（92612fc0）：竖排文字事实（只在 vertical 时产键 —— 横排是默认行为，产键纯浪费体积）。
+  //   病灶：`89:39` 的 tab 真值是每字一行（15×36 / fs14），vision 只给 fs 不给方向 ⇒ 模型横排 ⇒
+  //   「交通诱导」48px 宽溢出 46px 容器。判据在 card-inner-layout-truth（无量纲、零图层名）。
+  if (counter.figmaIndex) {
+    const figmaId = out.figmaNode || out.id
+    const textNode = figmaId ? counter.figmaIndex.get(String(figmaId)) : null
+    const orient = textOrientationOf(textNode)
+    if (orient && orient.orientation === 'vertical') {
+      out.textOrientation = 'vertical'
+      counter.verticalTexts = (counter.verticalTexts || 0) + 1
+    }
   }
   // 容器对象（`content` 在 vision 里是对象，其 parts/elements 才是文本载体）
   if (node.content && typeof node.content === 'object' && !Array.isArray(node.content)) {
@@ -153,7 +234,7 @@ function normalizeBodyNode(node, depth, counter) {
 /**
  * @returns {{contract:Object, nodes:number, truncated:number}|undefined} 无内容契约 ⇒ undefined
  */
-function normalizeBodyContract(body) {
+function normalizeBodyContract(body, options = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined
   const items =
     (Array.isArray(body.items) && body.items.length > 0 && { key: 'items', arr: body.items }) ||
@@ -167,7 +248,17 @@ function normalizeBodyContract(body) {
   const contract = {}
   if (typeof body.layout === 'string' && body.layout) contract.layout = body.layout
   if (Number.isFinite(Number(body.gridColumns))) contract.gridColumns = Number(body.gridColumns)
-  const counter = { nodes: 0, truncated: 0, droppedKeys: {} }
+  const counter = {
+    nodes: 0,
+    truncated: 0,
+    droppedKeys: {},
+    // 🛡️ 2026-11-15（92612fc0）：排版事实对账分母/分子 + 几何附加计数（0 也必须可观测）。
+    typographySeen: 0,
+    typographyPassed: 0,
+    typographyDropped: 0,
+    verticalTexts: 0,
+    figmaIndex: options.figmaIndex || null,
+  }
   const kids = items.arr.map((child) => normalizeBodyNode(child, 0, counter)).filter(Boolean)
   if (kids.length > 0) contract[items.key] = kids
   if (Object.keys(contract).length === 0) return undefined
@@ -176,6 +267,10 @@ function normalizeBodyContract(body) {
     nodes: counter.nodes,
     truncated: counter.truncated,
     droppedKeys: counter.droppedKeys,
+    typographySeen: counter.typographySeen,
+    typographyPassed: counter.typographyPassed,
+    typographyDropped: counter.typographyDropped,
+    verticalTexts: counter.verticalTexts,
   }
 }
 
@@ -323,7 +418,21 @@ function normalizeSectionNode(section, ctx = null) {  if (!section || typeof sec
           : undefined,
       }
     : undefined
-  const bodyResult = normalizeBodyContract(section.body)
+  const bodyResult = normalizeBodyContract(section.body, { figmaIndex: ctx?.figmaIndex || null })
+  // 🛡️ 2026-11-15（92612fc0 实锤）：卡内行分组真值（stat-card 才判）。
+  //   病灶：vision 对 `2:8787` 只给 5 条扁平 elem、不给卡内布局 ⇒ 模型排成 row 四元素一字排开。
+  //   判据（y 带聚类，无量纲）在 utils/card-inner-layout-truth.js；只在 bandCount ≥ 2 时产键，
+  //   单行卡与判不出的卡不产键（零副作用）。
+  const innerRows = (() => {
+    if (!ctx?.figmaIndex) return null
+    if (String(section.type || '') !== 'stat-card') return null
+    const figmaId = section.figmaAnchorId || section.id
+    if (!figmaId) return null
+    const node = ctx.figmaIndex.get(String(figmaId))
+    const derived = node ? deriveCardInnerRows(node) : null
+    if (!derived || derived.bandCount < 2) return null
+    return { axis: derived.axis, rows: derived.rows.map((row) => row.members) }
+  })()
   // 🛡️ 2026-11-04（18544d9c 实锤）：图表宿主归属（internalSubcomponents）透传——
   //   几何宿主挂载在 section 级与 plan 级两处消费，归一化剥掉即生产断供。
   const internalSubcomponents = normalizeInternalSubs(section.internalSubcomponents)
@@ -346,11 +455,17 @@ function normalizeSectionNode(section, ctx = null) {  if (!section || typeof sec
       ctx.bodySections += 1
       ctx.bodyNodes += bodyResult.nodes
       ctx.bodyTruncated += bodyResult.truncated
-      // 🛡️ G04：body 子节点被剥字段按名计数（0 也出现在 normalization.bodyDroppedKeys={}）
+      // 🛡️ 2026-11-15（92612fc0）：排版事实对账（vision 有排版事实的节点数 vs 实际透传数）。
+      //   reportOnly 观测：本行与 `plan 归一化·已评估` 同批输出，二者不等即「第 N 次白名单断层」红灯。
+      ctx.typographySeen += bodyResult.typographySeen || 0
+      ctx.typographyPassed += bodyResult.typographyPassed || 0
+      ctx.typographyDropped += bodyResult.typographyDropped || 0
+      ctx.verticalTexts += bodyResult.verticalTexts || 0
       for (const [key, count] of Object.entries(bodyResult.droppedKeys || {})) {
         ctx.bodyDroppedKeys[key] = (ctx.bodyDroppedKeys[key] || 0) + count
       }
     }
+    if (innerRows) ctx.innerRowSections += 1
   }
   return {
     id: section.id || null,
@@ -453,11 +568,13 @@ function normalizeSectionNode(section, ctx = null) {  if (!section || typeof sec
       : {}),
     // 🛡️ 2026-09-16：透传布局元数据（height/flexGrow/direction/gap/padding）
     ...(layoutMetadata ? { layoutMetadata } : {}),
+    // 🛡️ 2026-11-15（92612fc0 实锤）：卡内行分组真值透传（只在 bandCount ≥ 2 时产键）。
+    ...(innerRows ? { innerRows } : {}),
     ...(children && children.length > 0 ? { children } : {}),
   }
 }
 
-export function normalizeComponentPlan(plan) {
+export function normalizeComponentPlan(plan, options = {}) {
   if (!plan || typeof plan !== 'object') return null
   const ctx = {
     droppedKeys: {},
@@ -469,6 +586,17 @@ export function normalizeComponentPlan(plan) {
     bodyDroppedByBudget: 0,
     bodyBytes: 0,
     derivedIdPassthrough: 0,
+    // 🛡️ 2026-11-15（92612fc0）：排版事实对账 + 几何附加计数（0 也出现，判据可审计）。
+    typographySeen: 0,
+    typographyPassed: 0,
+    typographyDropped: 0,
+    verticalTexts: 0,
+    innerRowSections: 0,
+    // id → Figma 节点索引（只在归一化期间用，不进入 normalization 输出）。
+    figmaIndex: (() => {
+      const root = options.figmaRoot ? unwrapFigmaRoot(options.figmaRoot) : null
+      return root ? indexFigmaNodes(root) : null
+    })(),
   }
   const sections = Array.isArray(plan.effectiveSections)
     ? plan.effectiveSections.map((sec) => normalizeSectionNode(sec, ctx)).filter(Boolean)
@@ -500,7 +628,11 @@ export function normalizeComponentPlan(plan) {
     reason: plan.reason || null,
     ...(planInternalSubs ? { internalSubcomponents: planInternalSubs } : {}),
     // 🔴 R8-7 计数行数据源（0 也必须出现）：调用方据此打一行 `plan 归一化·已评估`。
-    normalization: { sections: sections.length, ...ctx },
+    //   figmaIndex 是运行期索引（Map），不进入可序列化输出。
+    normalization: (() => {
+      const { figmaIndex, ...rest } = ctx
+      return { sections: sections.length, ...rest }
+    })(),
   }
 }
 
@@ -550,7 +682,11 @@ export function assembleGenerationContext(state = {}) {
     styleMappings,
   })
 
-  const componentPlan = normalizeComponentPlan(state.subComponentPlan || state.componentPlan)
+  // 🛡️ 2026-11-15（92612fc0）：同时把 Figma 真值树交给归一化 —— 用于派生「卡内行分组」与
+  //   「竖排文字」两项 vision 缺测的事实（纯几何、fail-open：无树/查不到节点即不产键）。
+  const componentPlan = normalizeComponentPlan(state.subComponentPlan || state.componentPlan, {
+    figmaRoot: state.figmaNodeData || state.figmaData,
+  })
   // 🔴 R8-7 计数行（0 也必须出现）：bodySections/bodyBytes=透传生效分母；bodyDroppedByBudget/
   //   bodyTruncated=截断留痕；droppedKeys=白名单剔除的内容型字段（第 N 次同类补丁的终结观测）。
   if (componentPlan?.normalization) {

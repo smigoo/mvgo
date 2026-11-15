@@ -141,6 +141,9 @@ export function emptyAnchorStats() {
     unrepaired: 0,
     // R2（2026-11-02）：LCA 覆盖兄弟段声明锚点被拒修的事件数（0 也必须出现，防假绿）
     siblingCovered: 0,
+    // P0（2026-11-15）：引用节点被「声明值↔真值归属」判据判为结构矛盾、拒绝 LCA 重锚
+    //   的事件数（0 也必须出现，防假绿）
+    blockedReanchors: 0,
   }
 }
 
@@ -184,8 +187,25 @@ export function emptyAnchorStats() {
  *    判据刻意**不设**「高度放大倍数」——刀33 聚合段修复（首卡→整组）本就需要更大 LCA，
  *    放大是正当的；「是否覆盖兄弟段声明锚点」才是正当聚合与有害扩张的充要条件。
  *    拒修事件计 `stats.siblingCovered`，unrepaired 条目附 `coveredAnchors` 留痕待判。
+ *
+ * ## P0 加固（2026-11-15 · mc-max-1794747724143-89b32111「流量监测」实锤）
+ *
+ * ④ **引用节点声明值无真值 ⇒ 拒修**（`ref-text-mismatch`）：本模块原先只判
+ *    「锚点是否为 ref 祖先」，不判「ref 本身有没有资格承载该段声明的内容」。真机 vision
+ *    把数字卡 `34,620/82,379` 挂到 `2:3456/2:3457`（`1263:38 5cards` 内环形图的两个椭圆，
+ *    子树 0 个 TEXT），本模块据此算出 LCA=`1263:38` 并**自动重锚**（`repaired=4`）
+ *    ⇒ 把「顶部统计块」的语义钉到「底部车型分布卡片」的几何上，段计划与产物一路错到底。
+ *
+ *    第三参 `options.blockedRefIds` 由层 2 的 `auditDeclaredValueAnchors` 给出（纯附加、
+ *    不改入参形状）：命中这些 ref 的 section 一律拒绝 LCA 落地，记 `unrepaired` 留痕。
+ *    为什么不自己扫一遍文案：判据单一来源在层 2（那里才有完整 Figma 真值树与 TEXT 口径），
+ *    本模块只消费结论，不形成第二份判据。
  */
-export function auditSectionAnchors(sections, figmaRoot) {
+export function auditSectionAnchors(sections, figmaRoot, options = {}) {
+  // P0：被「声明值↔真值归属」判据判为结构矛盾的 ref（只消费结论，不在此重算）
+  const blockedRefIds = new Set(
+    Array.isArray(options?.blockedRefIds) ? options.blockedRefIds.map((v) => String(v)) : [],
+  )
   const root = (figmaRoot && (figmaRoot.document || figmaRoot)) || null
   const index = indexFigmaNodes(root)
   const issues = []
@@ -279,7 +299,11 @@ export function auditSectionAnchors(sections, figmaRoot) {
     const coveredSiblings = candidateLca
       ? declaredAnchors.filter((d) => d.section !== section && isAncestorOrSelf(index, candidateLca, d.anchor))
       : []
+    // P0：只要本段引用了「声明值在其子树内无任何 TEXT/CHARACTER」的节点，就不得用该
+    //   残缺/错配引用集算 LCA —— 否则等于把幻觉 ref 的几何写成段真值（真机 repaired=4）。
+    const blockedRefsHit = [...refs].filter((ref) => blockedRefIds.has(String(ref)))
     const reason = (() => {
+      if (blockedRefsHit.length > 0) return 'ref-text-mismatch'
       if (!candidateLca || !index.has(candidateLca)) return 'no-lca'
       if (rootId && candidateLca === rootId) return 'lca-is-root'
       if (missingRefs.length > 0) return 'phantom-refs'
@@ -300,8 +324,10 @@ export function auditSectionAnchors(sections, figmaRoot) {
         candidateLca,
         reason,
         ...(coveredSiblings.length > 0 ? { coveredAnchors: coveredSiblings.map((d) => d.anchor) } : {}),
+        ...(blockedRefsHit.length > 0 ? { blockedRefs: blockedRefsHit } : {}),
       })
       if (reason === 'lca-covers-sibling-sections') stats.siblingCovered += 1
+      if (reason === 'ref-text-mismatch') stats.blockedReanchors += 1
       stats.unrepaired += 1
     }
   }

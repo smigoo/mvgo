@@ -360,6 +360,16 @@ figma.ui.onmessage = async (msg) => {
           bandErrors: 0, bandsDetected: 0, bandsPinned: 0, bandGroupsCreated: 0,
           bandContainersRenamed: 0, bandHeaderCreated: 0, bandFoldersDissolved: 0,
           rootHeaderPromoted: 0, rootHeaderAlready: 0, rootHeaderNoCandidate: 0, rootHeaderFailed: 0,
+          rootBackdropMarked: 0, headerSlotMarked: 0, headerSlotRestored: 0, slotScaffoldExcluded: 0,
+          slotEjectScaffold: 0, slotEjectRolledBack: 0, slotEjectRenamed: 0,
+          slotEjectAutoLayoutSkipped: 0, slotEjectNoGeometry: 0, slotEjectFailed: 0, scaffoldMarkFailed: 0,
+          contentBackdropScanned: 0, contentBackdropHoisted: 0, contentBackdropRolledBack: 0,
+          contentBackdropAutoLayoutSkipped: 0, contentBackdropNoGeometry: 0,
+          contentBackdropRenamed: 0, contentBackdropHoistFailed: 0,
+          nestedComponentRoots: 0, nestedCpDemoted: 0, deepHeaderFound: 0,
+          rootScopeChecked: 0, rootScopeCpKids: 0, rootScopeIsCp: 0, rootScopeMulti: 0, rootScopeNonCp: 0,
+          bgAuditChecked: 0, bgByPluginData: 0, bgByGeometry: 0, bgByNameOnly: 0,
+          rootHeaderDemotedDeep: 0, deepNormFailed: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
           rootBackdropMoved: 0, rootBackdropOrdered: 0,
         };
@@ -398,8 +408,27 @@ figma.ui.onmessage = async (msg) => {
         // v20261111.61：AI 命名态若把面板主标题降级成 section-title-*，先按几何提升回根级 header。
         // 必须在 demoteSubHeaders / groupSectionsByTitle / createSlotConGroup 之前，否则标题已进 slot-con。
         try { promoteRootHeader(root || containers[0] || null, summary); } catch (e19) { summary.rootHeaderFailed = (Number(summary.rootHeaderFailed) || 0) + 1; }
+        // v20261115 P2：建槽前给根直属骨架节点打标（pluginData，零几何变化）。
+        try { markRootScaffold(root || containers[0] || null, summary); } catch (e23) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
+        // v20261115 P3【最小止损·接线已摘除，本轮不生效】：深层背景提回（hoistContentBackdrops，
+        // 定义保留在下文）在多组件 Frame 上退化为纯名字判据 + 全树 reparent：段内装饰被抽到
+        // root、z-order 重排、跨组件节点被搬走（53:19567 真机画板崩坏）。两条主流程不再调用；
+        // 判据 isRootBackdrop / rootBackdropCandidate、pluginData 人工兜底、markRootScaffold
+        // 打标均保留且照常执行。恢复锚：备份目录 mvgo-plugin-rollback-20261115-231648 / plugin-full.patch。
         // v20261110.24：先归一化根级骨架命名（唯一 header / 唯一 slot-con），再建组。
         try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
+        // v20261115 P2：头部插槽身份归一 —— 降级痕迹 section-title-slot-* 复原为 header-slot-*。
+        // 纯改名 + 全树打标；必须在 groupSectionsByTitle 之前，否则痕迹会被当成段标题锚点。
+        try { normalizeHeaderSlots(root || containers[0] || null, summary); }
+        catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
+        // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
+        try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
+        // v20261116 阶段3：背景判据健康度审计 —— 统计识别来源（打标/几何/仅名字），零写入。
+        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
+        // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
+        // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
+        try { normalizeDeepStructure(root || containers[0] || null, summary); }
+        catch (e21) { summary.deepNormFailed = (Number(summary.deepNormFailed) || 0) + 1; }
         // v20261110.26：按副标题把内容切成子模块 Group，再统一收进 slot-con。
         try { groupSectionsByTitle(root || containers[0] || null, summary); } catch (e12) {}
         // v20261110.21：收尾建组件骨架 —— 根下 header/bg 保持平级，其余内容（含所有模块 Group）收进一个真 slot-con Group。
@@ -434,6 +463,28 @@ figma.ui.onmessage = async (msg) => {
           intentShared: 0, orderMismatch: 0,
           rootHeaderPromoted: summary.rootHeaderPromoted, rootHeaderAlready: summary.rootHeaderAlready,
           rootHeaderPromotedFrom: summary.rootHeaderPromotedFrom, rootHeaderFailed: summary.rootHeaderFailed,
+          rootBackdropMarked: summary.rootBackdropMarked, headerSlotMarked: summary.headerSlotMarked,
+          headerSlotRestored: summary.headerSlotRestored,
+          slotScaffoldExcluded: summary.slotScaffoldExcluded,
+          slotEjectScaffold: summary.slotEjectScaffold, slotEjectRolledBack: summary.slotEjectRolledBack,
+          slotEjectRenamed: summary.slotEjectRenamed,
+          slotEjectAutoLayoutSkipped: summary.slotEjectAutoLayoutSkipped,
+          contentBackdropScanned: summary.contentBackdropScanned,
+          contentBackdropHoisted: summary.contentBackdropHoisted,
+          contentBackdropRolledBack: summary.contentBackdropRolledBack,
+          contentBackdropAutoLayoutSkipped: summary.contentBackdropAutoLayoutSkipped,
+          contentBackdropNoGeometry: summary.contentBackdropNoGeometry,
+          contentBackdropRenamed: summary.contentBackdropRenamed,
+          contentBackdropHoistFailed: summary.contentBackdropHoistFailed,
+          slotEjectFailed: summary.slotEjectFailed, scaffoldMarkFailed: summary.scaffoldMarkFailed,
+          nestedComponentRoots: summary.nestedComponentRoots, nestedCpDemoted: summary.nestedCpDemoted,
+          rootScopeChecked: summary.rootScopeChecked, rootScopeCpKids: summary.rootScopeCpKids,
+          rootScopeIsCp: summary.rootScopeIsCp, rootScopeMulti: summary.rootScopeMulti,
+          rootScopeNonCp: summary.rootScopeNonCp,
+          bgAuditChecked: summary.bgAuditChecked, bgByPluginData: summary.bgByPluginData,
+          bgByGeometry: summary.bgByGeometry, bgByNameOnly: summary.bgByNameOnly,
+          deepHeaderFound: summary.deepHeaderFound, rootHeaderDemotedDeep: summary.rootHeaderDemotedDeep,
+          deepNormFailed: summary.deepNormFailed,
           exportSet: summary.exportSet, exportCleared: summary.exportCleared, exportLoose: summary.exportLoose,
           foregroundKept: summary.foregroundKept, forcedBg: summary.forcedBg,
           groupFailed: summary.groupFailed, singleDecor: summary.singleDecor,
@@ -547,6 +598,16 @@ figma.ui.onmessage = async (msg) => {
           bandErrors: 0, bandsDetected: 0, bandsPinned: 0, bandGroupsCreated: 0,
           bandContainersRenamed: 0, bandHeaderCreated: 0, bandFoldersDissolved: 0,
           rootHeaderPromoted: 0, rootHeaderAlready: 0, rootHeaderNoCandidate: 0, rootHeaderFailed: 0,
+          rootBackdropMarked: 0, headerSlotMarked: 0, headerSlotRestored: 0, slotScaffoldExcluded: 0,
+          slotEjectScaffold: 0, slotEjectRolledBack: 0, slotEjectRenamed: 0,
+          slotEjectAutoLayoutSkipped: 0, slotEjectNoGeometry: 0, slotEjectFailed: 0, scaffoldMarkFailed: 0,
+          contentBackdropScanned: 0, contentBackdropHoisted: 0, contentBackdropRolledBack: 0,
+          contentBackdropAutoLayoutSkipped: 0, contentBackdropNoGeometry: 0,
+          contentBackdropRenamed: 0, contentBackdropHoistFailed: 0,
+          nestedComponentRoots: 0, nestedCpDemoted: 0, deepHeaderFound: 0,
+          rootScopeChecked: 0, rootScopeCpKids: 0, rootScopeIsCp: 0, rootScopeMulti: 0, rootScopeNonCp: 0,
+          bgAuditChecked: 0, bgByPluginData: 0, bgByGeometry: 0, bgByNameOnly: 0,
+          rootHeaderDemotedDeep: 0, deepNormFailed: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
           rootBackdropMoved: 0, rootBackdropOrdered: 0,
         };
@@ -662,8 +723,24 @@ figma.ui.onmessage = async (msg) => {
           }
           // v20261111.61：同上，AI / 视觉命名态也要先把面板主标题按几何提升回根级 header。
           try { promoteRootHeader(root || containers[0] || null, summary); } catch (e20) { summary.rootHeaderFailed = (Number(summary.rootHeaderFailed) || 0) + 1; }
+          // v20261115 P2：建槽前给根直属骨架节点打标（pluginData，零几何变化）。
+          try { markRootScaffold(root || containers[0] || null, summary); } catch (e24) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
+          // v20261115 P3【最小止损·接线已摘除，本轮不生效】：AI ops 命名态同样停用深层背景提回，
+          // 原因见 structure-only 分支；函数定义与判据保留，恢复锚同上。
           // v20261110.24：先归一化根级骨架命名（唯一 header / 唯一 slot-con），再建组。
           try { demoteSubHeaders(root || containers[0] || null, summary); } catch (e10) {}
+        // v20261115 P2：头部插槽身份归一 —— 降级痕迹 section-title-slot-* 复原为 header-slot-*。
+        // 纯改名 + 全树打标；必须在 groupSectionsByTitle 之前，否则痕迹会被当成段标题锚点。
+        try { normalizeHeaderSlots(root || containers[0] || null, summary); }
+        catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
+        // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
+        try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
+        // v20261116 阶段3：背景判据健康度审计 —— 统计识别来源（打标/几何/仅名字），零写入。
+        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
+        // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
+        // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
+        try { normalizeDeepStructure(root || containers[0] || null, summary); }
+        catch (e21) { summary.deepNormFailed = (Number(summary.deepNormFailed) || 0) + 1; }
           // v20261110.26：按副标题把内容切成子模块 Group，再统一收进 slot-con。
           try { groupSectionsByTitle(root || containers[0] || null, summary); } catch (e12) {}
           // v20261110.21：收尾建组件骨架 —— 视觉/几何模块与其它内容统一收进一个真 slot-con Group。
@@ -703,6 +780,28 @@ figma.ui.onmessage = async (msg) => {
           orderMismatch: summary.orderMismatch,
           rootHeaderPromoted: summary.rootHeaderPromoted, rootHeaderAlready: summary.rootHeaderAlready,
           rootHeaderPromotedFrom: summary.rootHeaderPromotedFrom, rootHeaderFailed: summary.rootHeaderFailed,
+          rootBackdropMarked: summary.rootBackdropMarked, headerSlotMarked: summary.headerSlotMarked,
+          headerSlotRestored: summary.headerSlotRestored,
+          slotScaffoldExcluded: summary.slotScaffoldExcluded,
+          slotEjectScaffold: summary.slotEjectScaffold, slotEjectRolledBack: summary.slotEjectRolledBack,
+          slotEjectRenamed: summary.slotEjectRenamed,
+          slotEjectAutoLayoutSkipped: summary.slotEjectAutoLayoutSkipped,
+          contentBackdropScanned: summary.contentBackdropScanned,
+          contentBackdropHoisted: summary.contentBackdropHoisted,
+          contentBackdropRolledBack: summary.contentBackdropRolledBack,
+          contentBackdropAutoLayoutSkipped: summary.contentBackdropAutoLayoutSkipped,
+          contentBackdropNoGeometry: summary.contentBackdropNoGeometry,
+          contentBackdropRenamed: summary.contentBackdropRenamed,
+          contentBackdropHoistFailed: summary.contentBackdropHoistFailed,
+          slotEjectFailed: summary.slotEjectFailed, scaffoldMarkFailed: summary.scaffoldMarkFailed,
+          nestedComponentRoots: summary.nestedComponentRoots, nestedCpDemoted: summary.nestedCpDemoted,
+          rootScopeChecked: summary.rootScopeChecked, rootScopeCpKids: summary.rootScopeCpKids,
+          rootScopeIsCp: summary.rootScopeIsCp, rootScopeMulti: summary.rootScopeMulti,
+          rootScopeNonCp: summary.rootScopeNonCp,
+          bgAuditChecked: summary.bgAuditChecked, bgByPluginData: summary.bgByPluginData,
+          bgByGeometry: summary.bgByGeometry, bgByNameOnly: summary.bgByNameOnly,
+          deepHeaderFound: summary.deepHeaderFound, rootHeaderDemotedDeep: summary.rootHeaderDemotedDeep,
+          deepNormFailed: summary.deepNormFailed,
           exportSet: summary.exportSet,
           exportCleared: summary.exportCleared,
           exportLoose: summary.exportLoose,
@@ -2943,10 +3042,293 @@ function isSlotContainer(n) {
   return /^slot-con$/i.test(String((n && n.name) || "").trim());
 }
 function isHeaderLike(n) { return /^header(?:[-/]|$)/i.test(String((n && n.name) || "")); }
+// v20261115 深层骨架归一化：根 header 只认【精确名 header】或带 mvRootHeader 标记的已提升节点。
+// header-slot-* / header-title-* 是 header 内的合法插槽，不能当成「已有根级 header」占位 ——
+// 53:19567 实测：根直属 header-slot-right 被旧 isHeaderLike 误认 ⇒ promoteRootHeader 直接
+// return，v20261111.61 的几何提升护栏整条不执行，深层主标题永远进不了根级。
+function isRootHeader(n) {
+  if (!n) return false;
+  if (/^header$/i.test(String(n.name || "").trim())) return true;
+  try { return n.getPluginData("mvRootHeader") === "1"; } catch (e) { return false; }
+}
 function isBgLike(n) {
   const nm = String((n && n.name) || "");
   return /^bg(?:-|$)/i.test(nm) || folderRole(n) === "bg";
 }
+
+// ---- v20261115 P2：根级骨架「单一来源」判据 ------------------------------------------
+// 根因（53:19567 / cp-traffic-flow-alarm 真机截图）：createSlotConGroup 旧黑名单只认
+// header*/bg* 名字 ⇒ ① header-slot-right 被 demoteSubHeaders 降级成 section-title-slot-right
+// 后失去排除、进 slot-con；② 中文名 / 默认名的近全屏纯色底块 isBgLike=false、进 slot-con。
+// 治本：把「谁不进内容区」收敛到 isRootScaffold 一个函数；主证据是 pluginData 标记 +
+// 可辩驳几何（近全屏 / 无 TEXT / 纯图形 / 有可见绘制），名字只作证据之一。
+// 绝不使用 children index 当输入：z-order 是插件自己排出来的，拿它判背景是循环论证。
+const ROOT_BACKDROP_KEY = "mvRootBackdrop";
+const HEADER_SLOT_KEY = "mvHeaderSlot";
+// section-title-slot-* 是「已整理坏稿」里 header-slot-* 被降级留下的痕迹，也要认，
+// 否则重跑自愈不了；精确名 header-title 是历史根 header 候选，不算插槽。
+const HEADER_SLOT_RE = /^(?:header-(?:slot|icon|bg|decor|action|right|title|left|center)|section-title-(?:slot|icon|bg|decor|right|action|more))(?:[-/]|$)/i;
+// 纯字符串判据（单一来源）：isHeaderSlot / roleOfName / restoreHeaderSlotName / 契约输出共用。
+// header 分支覆盖契约头声明的全部合法插槽名；section-title 分支只认 demoteSubHeaders
+// 的【降级痕迹】形态，不认普通段标题（section-title-traffic 等）。
+function isHeaderSlotName(nm) {
+  const m = String(nm || "").trim();
+  if (/^header-title$/i.test(m)) return false;   // 精确名是历史根 header 候选，不是插槽
+  return HEADER_SLOT_RE.test(m);
+}
+function isHeaderSlot(n) {
+  if (!n) return false;
+  try { if (n.getPluginData(HEADER_SLOT_KEY) === "1") return true; } catch (e) {}
+  return isHeaderSlotName(n.name);
+}
+// contractSectionTitle 的精确逆变换：header-slot-right → section-title-slot-right → header-slot-right。
+// 只在 isHeaderSlot 命中后调用，绝不把真正的 section-title-* 段标题改成 header-*。
+function restoreHeaderSlotName(nm) {
+  const m = String(nm || "").trim();
+  if (!isHeaderSlotName(m)) return m;          // 守卫：真段标题一律不动
+  return /^section-title-/i.test(m) ? m.replace(/^section-title-/i, "header-") : m;
+}
+// 已整理坏稿身份归一：全树（含槽内）把降级痕迹复原为 header-slot-*，并写 pluginData 标记。
+// 纯改名 + 打标：零 reparent / 零新建结构层 / 零 bbox 变化；复原后不再命中痕迹 ⇒ 幂等。
+// 复原必须在 groupSectionsByTitle 之前：否则 section-title-slot-* 会被当成段标题锚点参与切段。
+function normalizeHeaderSlots(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") return null;
+  let restored = 0, marked = 0;
+  const walk = (n, depth) => {
+    if (!n || depth > 24) return;
+    for (const c of Array.prototype.slice.call(n.children || [])) {
+      if (!c) continue;
+      if (isHeaderSlot(c)) {
+        const nm = String(c.name || "").trim();
+        if (/^section-title-/i.test(nm)) {
+          const target = restoreHeaderSlotName(nm);
+          try { if (c.locked) c.locked = false; c.name = target; restored++; } catch (e) {}
+        }
+        // markRootScaffold 已给根直属打标 ⇒ 只计「本函数新增标记」，避免同一节点双计。
+        try {
+          if (c.getPluginData(HEADER_SLOT_KEY) !== "1") {
+            c.setPluginData(HEADER_SLOT_KEY, "1"); marked++;
+          }
+        } catch (e) {}
+      }
+      walk(c, depth + 1);
+    }
+  };
+  walk(root, 0);
+  s.headerSlotRestored = (Number(s.headerSlotRestored) || 0) + restored;
+  s.headerSlotMarked = (Number(s.headerSlotMarked) || 0) + marked;
+  return { restored: restored, marked: marked };
+}
+// 绘制属性可能挂在父节点，也可能挂在纯图形子层（渐变光晕组）⇒ 必须递归下钻，
+// 否则「配方指空段」：判据对着没有 fills 的父组直接漏判。
+function hasVisiblePaint(n) {
+  if (!n) return false;
+  try {
+    if (Array.isArray(n.fills))
+      for (const f of n.fills) if (f && f.visible !== false) return true;
+    if (Array.isArray(n.effects))
+      for (const e of n.effects) if (e && e.visible !== false && /BLUR/i.test(String(e.type || ""))) return true;
+  } catch (e2) {}
+  if ("children" in n) for (const c of (n.children || [])) if (hasVisiblePaint(c)) return true;
+  return false;
+}
+// 「n 是否在 root 子树内」：沿 parent 上溯，桩树 / 真机同一判据；40 跳上限防环。
+function isInRootTree(n, root) {
+  if (!n || !root) return false;
+  let p = n.parent, hops = 0;
+  while (p && hops++ < 40) { if (p === root) return true; p = p.parent; }
+  return false;
+}
+// allowNested 只放宽【作用域】，不新增第二套判据：近全屏 / 无 TEXT / 纯图形 / 可见 paint
+// 逐条不变。默认 false 严格保持「只认根直属」的历史行为（契约 z-order 零回归）；
+// true 仅用于已整理坏稿里背景被收进 slot-con / section-* 内部时的自愈扫描。
+function rootBackdropCandidate(n, root, allowNested) {
+  if (!n || !root || n === root) return false;
+  if (allowNested ? !isInRootTree(n, root) : n.parent !== root) return false;
+  if (n.visible === false || n.type === "TEXT") return false;
+  if (isSlotContainer(n) || isRootHeader(n) || isHeaderSlot(n)) return false;
+  if (hasTextDescendant(n)) return false;                // 有文字 ⇒ 内容
+  const role = folderRole(n);
+  if (role === "img" || role === "icon") return false;
+  if (childCount(n)) {
+    for (const c of (n.children || [])) if (!isPureGraphicNode(c)) return false;
+  }
+  const base = absRect(root);
+  if (!isNearFullscreen(n, base)) return false;         // 复用 0.9 宽且高常量
+  return hasVisiblePaint(n);                            // SOLID / GRADIENT / IMAGE / BLUR 都算
+}
+function isRootBackdrop(n, root) {
+  if (!n) return false;
+  try { if (n.getPluginData(ROOT_BACKDROP_KEY) === "1") return true; } catch (e) {}
+  if (isBgLike(n)) return true;                         // 历史命名 / 资产夹，保留兼容
+  return rootBackdropCandidate(n, root || null);
+}
+function isRootScaffold(n, root) {
+  if (!n) return false;
+  return isSlotContainer(n) || isRootHeader(n) || isHeaderSlot(n)
+      || isHeaderLike(n) || isRootBackdrop(n, root || null);
+}
+// 两条主流程在建槽前调用：给「根直属」骨架节点打标（pluginData，零几何变化）。
+// 打标后即使节点被误收进槽，标记仍在 ⇒ ejectSlotScaffold 能认出来、已整理稿可自愈。
+function markRootScaffold(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") return null;
+  let backdrop = 0, slot = 0;
+  for (const n of Array.prototype.slice.call(root.children || [])) {
+    if (!n) continue;
+    if (isHeaderSlot(n)) {
+      try { n.setPluginData(HEADER_SLOT_KEY, "1"); slot++; } catch (e) {}
+      continue;
+    }
+    if (isRootBackdrop(n, root)) {
+      try { n.setPluginData(ROOT_BACKDROP_KEY, "1"); backdrop++; } catch (e) {}
+    }
+  }
+  s.rootBackdropMarked = (Number(s.rootBackdropMarked) || 0) + backdrop;
+  s.headerSlotMarked = (Number(s.headerSlotMarked) || 0) + slot;
+  return { backdrop: backdrop, headerSlot: slot };
+}
+// 已整理坏稿自愈：把槽内【直属】骨架节点提回根级。只认明确证据
+// （pluginData / bg-* / header 插槽 / 降级痕迹），不靠猜，也不新建任何结构层。
+// 跨父级必然改相对坐标 ⇒ 按 root/slot 绝对原点差补偿，再复读 absoluteBoundingBox；
+// 偏移 >1px 或 Auto Layout 一律跳过 / 回滚，视觉零变化（v2 §3.3）。
+function ejectSlotScaffold(root, slot, summary) {
+  const s = summary || {};
+  if (!root || !slot || !("children" in slot)) return 0;
+  const rootBox = absRect(root), slotBox = absRect(slot);
+  if (!rootBox || !slotBox) { s.slotEjectNoGeometry = (Number(s.slotEjectNoGeometry) || 0) + 1; return 0; }
+  if (isAutoLayoutContainer(root) || isAutoLayoutContainer(slot)) {
+    s.slotEjectAutoLayoutSkipped = (Number(s.slotEjectAutoLayoutSkipped) || 0) + 1;
+    return 0;
+  }
+  const dx = slotBox.x - rootBox.x, dy = slotBox.y - rootBox.y;
+  let ejected = 0, rolled = 0, renamed = 0;
+  for (const n of Array.prototype.slice.call(slot.children || [])) {
+    if (!n || isSlotContainer(n) || isSectionGroup(n)) continue;
+    const backdrop = isRootBackdrop(n, root);
+    const headerSlot = isHeaderSlot(n);
+    const exactHeader = /^header$/i.test(String(n.name || "").trim());
+    if (!backdrop && !headerSlot && !exactHeader) continue;
+    const before = absRect(n);
+    const ox = Number(n.x) || 0, oy = Number(n.y) || 0;
+    let ok = false;
+    try {
+      if (n.locked) n.locked = false;
+      if (backdrop) root.insertChild(0, n); else root.appendChild(n);
+      n.x = ox + dx; n.y = oy + dy;
+      const after = absRect(n);
+      ok = !before || !after ||
+        (Math.abs(after.x - before.x) <= 1 && Math.abs(after.y - before.y) <= 1);
+      if (ok && headerSlot) {
+        // 与 normalizeHeaderSlots 同一逆变换（单一来源），只在确为插槽时执行。
+        const cur = String(n.name || "").trim();
+        const target = restoreHeaderSlotName(cur);
+        if (target !== cur) { try { n.name = target; renamed++; } catch (e4) {} }
+      }
+    } catch (e) { ok = false; }
+    if (ok) ejected++;
+    else {
+      try { slot.appendChild(n); n.x = ox; n.y = oy; } catch (e5) {}
+      rolled++;
+    }
+  }
+  s.slotEjectScaffold = (Number(s.slotEjectScaffold) || 0) + ejected;
+  s.slotEjectRolledBack = (Number(s.slotEjectRolledBack) || 0) + rolled;
+  s.slotEjectRenamed = (Number(s.slotEjectRenamed) || 0) + renamed;
+  return ejected;
+}
+
+// ---- v20261115 P3：内容区深层背景提回（已整理坏稿自愈）--------------------------------
+// 真机 53:19567 / section-01-traffic-imbalance-alarm：整块背景被收进 slot-con 的 section
+// 内部，名字是中文 / 默认名（isBgLike=false）、无 pluginData。旧两条自愈链都够不到：
+//   ① markRootScaffold 只扫 root.children；② ejectSlotScaffold 只扫 slot.children 直属；
+//   rootBackdropCandidate 的 n.parent === root 又直接短路 ⇒ 判据全灭，重跑永远留在内容区。
+// 治本：把【作用域】放宽到内容区子树（allowNested），证据集合逐条不变（近全屏 / 无 TEXT /
+// 纯图形 / 可见 paint）。只提背景，section 内其余节点原位保留。跨父级 reparent 按直接父级
+// 绝对原点差补偿 x/y，复读 bbox ≤1px 才算成功，否则回滚到原父级原 index（v2 §3.3）。
+function hoistContentBackdrops(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") return 0;
+  const rootBox = absRect(root);
+  if (!rootBox) { s.contentBackdropNoGeometry = (Number(s.contentBackdropNoGeometry) || 0) + 1; return 0; }
+  if (isAutoLayoutContainer(root)) {
+    s.contentBackdropAutoLayoutSkipped = (Number(s.contentBackdropAutoLayoutSkipped) || 0) + 1;
+    return 0;
+  }
+  const hits = [];
+  let scanned = 0;
+  const walk = (n, depth) => {
+    if (!n || depth > 24) return;
+    for (const c of Array.prototype.slice.call(n.children || [])) {
+      if (!c) continue;
+      // header 子树里的 bg-header / icon-header 是 header 自己的资源，绝不上提。
+      if (isHeaderLike(c) || isRootHeader(c) || isHeaderSlot(c)) continue;
+      // root 直属由 markRootScaffold 负责；这里只处理被误收进内容区的嵌套层。
+      if (c.parent !== root) {
+        scanned++;
+        if (!isSlotContainer(c) &&
+            (isRootBackdrop(c, root) || rootBackdropCandidate(c, root, true))) hits.push(c);
+      }
+      if ("children" in c) walk(c, depth + 1);
+    }
+  };
+  walk(root, 0);
+  s.contentBackdropScanned = (Number(s.contentBackdropScanned) || 0) + scanned;
+  // 背景容器与其内层纯色矩形会同时命中 ⇒ 只提最外层，保住内部结构零拆解。
+  const topHits = hits.filter(n => {
+    let p = n.parent, hops = 0;
+    while (p && p !== root && hops++ < 40) {
+      if (hits.indexOf(p) >= 0) return false;
+      p = p.parent;
+    }
+    return true;
+  });
+  let hoisted = 0, rolled = 0, alSkipped = 0, noGeom = 0, renamed = 0, insertAt = 0;
+  for (const n of topHits) {
+    const oldParent = n.parent;
+    if (!oldParent || oldParent === root) continue;
+    if (isAutoLayoutContainer(oldParent)) { alSkipped++; continue; }
+    const pBox = absRect(oldParent);
+    if (!pBox) { noGeom++; continue; }
+    const oldIdx = oldParent.children.indexOf(n);
+    const before = absRect(n);
+    const ox = Number(n.x) || 0, oy = Number(n.y) || 0;
+    let ok = false;
+    try {
+      if (n.locked) n.locked = false;
+      root.insertChild(insertAt, n);
+      n.x = ox + (pBox.x - rootBox.x);
+      n.y = oy + (pBox.y - rootBox.y);
+      const after = absRect(n);
+      ok = !before || !after ||
+        (Math.abs(after.x - before.x) <= 1 && Math.abs(after.y - before.y) <= 1);
+      if (ok) {
+        n.setPluginData(ROOT_BACKDROP_KEY, "1");
+        // 只收拾「被误降级成组件根 / 段名」的痕迹；中文名 / 默认名一律原样保留。
+        const cur = String(n.name || "").trim();
+        if (/^(?:cp-|section-\d{2}-)/i.test(cur) && !isBgLike(n)) {
+          const slug = cur.replace(/^(?:cp-|section-\d{2}-)/i, "")
+            .replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "")
+            .slice(0, 40) || "panel";
+          try { if (n.locked) n.locked = false; n.name = "bg-" + slug; renamed++; } catch (e3) {}
+        }
+      }
+    } catch (e) { ok = false; }
+    if (ok) { hoisted++; insertAt++; }
+    else {
+      try { oldParent.insertChild(Math.max(0, oldIdx), n); n.x = ox; n.y = oy; } catch (e4) {}
+      rolled++;
+    }
+  }
+  s.contentBackdropHoisted = (Number(s.contentBackdropHoisted) || 0) + hoisted;
+  s.contentBackdropRolledBack = (Number(s.contentBackdropRolledBack) || 0) + rolled;
+  s.contentBackdropAutoLayoutSkipped = (Number(s.contentBackdropAutoLayoutSkipped) || 0) + alSkipped;
+  s.contentBackdropNoGeometry = (Number(s.contentBackdropNoGeometry) || 0) + noGeom;
+  s.contentBackdropRenamed = (Number(s.contentBackdropRenamed) || 0) + renamed;
+  return hoisted;
+}
+
 function isModuleLike(n) {
   if (!n || n.type === "TEXT") return false;
   return isModuleContainer(n) || /^(item|card|list|form|cp|section|graphic)-/i.test(String(n.name || ""));
@@ -2998,6 +3380,8 @@ function isHeaderBandCandidate(n, base) {
   if (!n || !("children" in n)) return false;
   const nm = String((n && n.name) || "").trim();
   if (!nm || isSlotContainer(n)) return false;
+  // 头部插槽不是标题条：即使横跨整宽、薄带、含短文本，也不能被几何提升成根 header。
+  if (isHeaderSlot(n)) return false;
   // 背景 / 资源 / 图表 / 图例 / 列表项不可能是根级标题条
   if (/^(?:bg|img|icon|graphic|series|axis|legend|badge|item|card|list|form|@echarts\/|@antd\/)/i.test(nm)) return false;
   const r = relRect(n, base);
@@ -3030,7 +3414,8 @@ function promoteRootHeader(root, summary) {
   const s = summary || {};
   if (!root || !("children" in root) || root.type === "PAGE") return null;
   const kids = Array.prototype.slice.call(root.children || []);
-  const existing = kids.filter(isHeaderLike)[0];
+  // v20261115：只认精确 root header；header-slot-* 不再占位，几何提升护栏得以执行。
+  const existing = kids.filter(isRootHeader)[0];
   if (existing) { // 幂等：已有根级 header，绝不改动、绝不第二个 header
     s.rootHeaderAlready = (Number(s.rootHeaderAlready) || 0) + 1;
     return existing;
@@ -3088,7 +3473,9 @@ function demoteSubHeaders(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
   const s = summary || {};
   const kids = Array.prototype.slice.call(root.children || []);
-  const headers = kids.filter(isHeaderLike);
+  // v20261115 P2：header 内合法插槽不参与「唯一根 header」竞争，也不能被降级改名 ——
+  // 改名会让骨架排除失配，槽位被当内容收进 slot-con（53:19567 真机实锤）。
+  const headers = kids.filter(n => isHeaderLike(n) && !isHeaderSlot(n));
   const keep = pickRootHeader(headers, root);
   let demoted = 0, slotsDemoted = 0;
   for (const n of headers) {
@@ -3107,6 +3494,126 @@ function demoteSubHeaders(root, summary) {
   s.subHeadersDemoted = (Number(s.subHeadersDemoted) || 0) + demoted;
   s.subSlotConsDemoted = (Number(s.subSlotConsDemoted) || 0) + slotsDemoted;
   return keep;
+}
+
+// ---- v20261115：全树骨架归一化（53:19567 / cp-traffic-loss-alarm 根治）---------------------
+// 旧链路（promoteRootHeader / demoteSubHeaders / createSlotConGroup / groupSectionsByTitle）
+// 全部只取 root.children 一层：非根 cp-* 被 createSlotConGroup 整块收进 slot-con，深层精确
+// v20261116 阶段2【只读作用域体检】：识别「根作用域是多组件 Frame」形态。
+// 背景：53:19567 一个 Frame 下挂多个 cp-* 组件根，插件整条链路假设「root=单组件根、唯一骨架」，
+// normalizeDeepStructure 会把每个非根 cp-* 降级成 section-NN 并塞进同一个 slot-con ⇒ 多组件被合并。
+// 本阶段【只检测、不改行为】：统计根直属可见 cp-* 数、根自身是否 cp-*、是否多组件形态，
+// 供 UI 常显警告。零改名 / 零移动 / 零新建 / 零 pluginData 写入 ⇒ 整理结果零差异。
+// 后续阶段是否在多组件时「拒绝」或「拆分」，需真机确认后另行授权，本函数只提供判据真值。
+function detectRootScope(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") {
+    s.rootScopeChecked = 1; return null;
+  }
+  const kids = Array.prototype.slice.call(root.children || []);
+  const visible = kids.filter(n => n && n.visible !== false);
+  const rootName = String(root.name || "").trim();
+  const rootIsCp = /^cp-/i.test(rootName);
+  const cpKids = visible.filter(n => /^cp-/i.test(String(n.name || "").trim()));
+  const multi = cpKids.length >= 2;                 // 根下平级 ≥2 个组件根 = 多组件 Frame
+  const nonCpRoot = !rootIsCp && visible.length > 0; // 根自身不是组件名（如「左2」「cp」画板）
+  s.rootScopeChecked = 1;
+  s.rootScopeCpKids = cpKids.length;
+  s.rootScopeIsCp = rootIsCp ? 1 : 0;
+  s.rootScopeMulti = multi ? 1 : 0;
+  s.rootScopeNonCp = nonCpRoot ? 1 : 0;
+  try {
+    return {
+      rootIsCp, cpKids: cpKids.length, multi, nonCpRoot,
+      names: cpKids.map(n => String(n.name || "").trim()).slice(0, 12),
+    };
+  } finally { /* 只读，无写入 */ }
+}
+
+// v20261116 阶段3【只读判据健康度审计】：统计根级背景的识别来源，暴露「纯名字脆弱识别」.
+// 预演实证：直接去掉 isBgLike 名字短路会让 11/29 样本背景识别退化（破坏非修复），
+// 因为 29 样本里 642 个 bg-* 名字命中节点中仅 39 个近全屏、603 个是局部卡片底。
+// 故本阶段【只统计、不改判据】：pluginData 已打标 / 几何可证 / 仅凭名字 三分类计数，
+// UI 常显「仅凭名字」数量作为技术债警告。零改名/零移动/零 pluginData 写入。
+function auditBackdropEvidence(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") { s.bgAuditChecked = 1; return null; }
+  let byMark = 0, byGeom = 0, byNameOnly = 0;
+  const nameOnlyNodes = [];
+  for (const n of Array.prototype.slice.call(root.children || [])) {
+    if (!n) continue;
+    let marked = false;
+    try { marked = n.getPluginData(ROOT_BACKDROP_KEY) === "1"; } catch (e) {}
+    if (marked) { byMark++; continue; }
+    // 几何可证：近全屏 + 无 TEXT + 有绘制（复用现有候选判据，不另立标准）
+    let geom = false;
+    try { geom = !!rootBackdropCandidate(n, root); } catch (e) {}
+    if (geom) { byGeom++; continue; }
+    // 只剩名字命中：脆弱识别（改名即失效），单列计数
+    try { if (isBgLike(n)) { byNameOnly++; nameOnlyNodes.push(String(n.name || "").trim()); } } catch (e) {}
+  }
+  s.bgAuditChecked = 1;
+  s.bgByPluginData = byMark;
+  s.bgByGeometry = byGeom;
+  s.bgByNameOnly = byNameOnly;
+  return { byMark, byGeom, byNameOnly, nameOnlyNodes: nameOnlyNodes.slice(0, 12) };
+}
+
+// header 既不提升也不降级 ⇒ 组件里套两个「组件结构」，只读契约 JSON 里出现多个 component-root。
+// 本函数只做【改名】：零 reparent / 零新建结构层 / 零 bbox 变化；改名后不再命中判据 ⇒ 幂等。
+// 收窄口径：只降级【精确名 header】；header-slot-* / header-title-* 是 header 内合法插槽，保留。
+function normalizeDeepStructure(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") return null;
+  const rootKids = Array.prototype.slice.call(root.children || []);
+  const rootHeader = rootKids.filter(isRootHeader)[0] || null;
+  const nestedCp = [], deepHeaders = [];
+  const walk = (n, depth) => {
+    if (!n || depth > 24) return;
+    for (const c of Array.prototype.slice.call(n.children || [])) {
+      if (!c) continue;
+      const nm = String(c.name || "").trim();
+      // root 自身不进遍历 ⇒ 命中的 cp-* 一律是「非根组件名」。
+      // v20261115 P3：hoistContentBackdrops 提回的背景带 mvRootBackdrop 标记，不再是组件根，
+      // 别再降级成 section-NN。只读标记（消费），不在此重新判「是不是背景」⇒ 判据仍单一来源。
+      let hoisted = false;
+      try { hoisted = c.getPluginData(ROOT_BACKDROP_KEY) === "1"; } catch (e5) {}
+      if (/^cp-/i.test(nm) && !hoisted) nestedCp.push(c);
+      // 非 root 直属、且不是根 header 的精确名 header ⇒ 模块小标题
+      // 归属名由遍历时的父节点给出（不依赖 n.parent，桩树/真机同一判据）
+      if (c !== rootHeader && /^header$/i.test(nm) && rootKids.indexOf(c) < 0)
+        deepHeaders.push({ n: c, parentNode: n });
+      walk(c, depth + 1);
+    }
+  };
+  walk(root, 0);
+  s.nestedComponentRoots = (Number(s.nestedComponentRoots) || 0) + nestedCp.length;
+  s.deepHeaderFound = (Number(s.deepHeaderFound) || 0) + deepHeaders.length;
+  const boxOf = (n) => { try { return absRect(n) || { x: 0, y: 0 }; } catch (e) { return { x: 0, y: 0 }; } };
+  nestedCp.sort((a, b) => {
+    const ra = boxOf(a), rb = boxOf(b);
+    return ((ra.y || 0) - (rb.y || 0)) || ((ra.x || 0) - (rb.x || 0));
+  });
+  let cpDemoted = 0, headerDemoted = 0;
+  for (let i = 0; i < nestedCp.length; i++) {
+    const n = nestedCp[i];
+    const slug = String(n.name || "").replace(/^cp-/i, "")
+      .replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "")
+      .slice(0, 40).toLowerCase() || "block";
+    const target = "section-" + twoDigit(i + 1) + "-" + slug;
+    try { if (n.locked) n.locked = false; n.name = target; cpDemoted++; } catch (e) {}
+  }
+  for (const hit of deepHeaders) {
+    const n = hit.n;
+    const pnm = String((hit.parentNode && hit.parentNode.name) || "")
+      .replace(/^section-\d{2}-/i, "").replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
+      .replace(/^-+|-+$/g, "").slice(0, 32).toLowerCase();
+    const target = "section-title" + (pnm ? "-" + pnm : "");
+    try { if (n.locked) n.locked = false; n.name = target; headerDemoted++; } catch (e) {}
+  }
+  s.nestedCpDemoted = (Number(s.nestedCpDemoted) || 0) + cpDemoted;
+  s.rootHeaderDemotedDeep = (Number(s.rootHeaderDemotedDeep) || 0) + headerDemoted;
+  return { cpDemoted: cpDemoted, headerDemoted: headerDemoted };
 }
 // v20261110.25：复用分支里多余的历史空 slot-con 会夹在图层面板中间，让顺序看起来没排上。
 function mergeExtraSlotCons(existing, slot, summary) {
@@ -3202,8 +3709,10 @@ function groupSectionsByTitle(root, summary) {
   const slot = rootKids.filter(isSlotContainer)[0];
   // 优先整理已有槽（重跑时内容都在槽内）；首次整理则作用于组件根。
   const parent = (slot && (slot.children || []).length >= 2) ? slot : root;
+  // v20261115 P2：槽内 / 根直属一视同仁，骨架节点都不参与按标题切段（旧判据带
+  // parent === root 前提，重跑时槽内的 header/bg 会被当普通内容切进 section-*）。
   const kids = Array.prototype.slice.call(parent.children || []).filter(n =>
-    n && !isSlotContainer(n) && !(parent === root && (isHeaderLike(n) || isBgLike(n))));
+    n && !isRootScaffold(n, root));
   const anchored = kids.filter(isSectionTitle);
 
   // ② 平铺标题不足 2 个：多半是「红框本来就是 Frame」或「已整理过」。
@@ -3272,8 +3781,14 @@ function createSlotConGroup(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
   const kids = Array.prototype.slice.call(root.children || []);
   const existing = kids.filter(isSlotContainer);
-  // header / bg 保持与 slot-con 平级；其余全部内容节点（含视觉与几何模块 Group）收进 slot-con。
-  const contents = kids.filter(n => !isSlotContainer(n) && !isHeaderLike(n) && !isBgLike(n));
+  // v20261115 P3【最小止损·接线已摘除，本轮不生效】：坏稿 eject 自愈（ejectSlotScaffold，
+  // 定义保留在下文）依赖 reparent + 手动 x/y 补偿，而 Figma insertChild 自身保持绝对位置
+  // ⇒ 真机二次补偿漂移；全树扫描还会跨组件抽节点。两条主流程共用本函数，一次摘除即同时停用。
+  // existing 仍供下方 slotConReused 判定使用，保持零结构改动。恢复锚：plugin-full.patch。
+  // header / header 插槽 / bg（含几何判定的整块底图）保持与 slot-con 平级；
+  // 「谁不进内容区」只由 isRootScaffold 一个函数决定，杜绝名字判据双源。
+  const contents = kids.filter(n => !isRootScaffold(n, root));
+  summary.slotScaffoldExcluded = (Number(summary.slotScaffoldExcluded) || 0) + (kids.length - contents.length);
   if (!contents.length) {
     if (existing.length) summary.slotConReused = 1;
     // v20261110.25：即使本次没有新内容，也要清掉多余的历史空槽
@@ -3562,10 +4077,10 @@ function normalizeRootBackdropOrder(root, base, summary) {
   if (kids.length < 2) return;
   const slot = kids.filter(isSlotContainer)[0];
   if (!slot) return;
-  const header = kids.filter(isHeaderLike)[0];
-  const isBackdrop = (n) =>
-    /^bg-/i.test(String((n && n.name) || "")) ||
-    (!!base && isBlurBackdrop(n, base));
+  // v20261115 P2：与建槽/切段共用 isRootBackdrop / isRootHeader，不再单独按 ^bg- 名字认背景。
+  // base 参数保留兼容（BLUR 证据已由 hasVisiblePaint 递归读取）。
+  const header = kids.filter(isRootHeader)[0] || kids.filter(n => isHeaderLike(n) && !isHeaderSlot(n))[0];
+  const isBackdrop = (n) => isRootBackdrop(n, root) && !isHeaderSlot(n);
   const backs = kids.filter(n => n !== slot && n !== header && isBackdrop(n));
   if (!backs.length) return;
   const blur = backs.filter(n => !!base && isBlurBackdrop(n, base));
@@ -3730,7 +4245,7 @@ function collectQualityMetrics(root) {
       try { ex = n.exportSettings || []; } catch (e) {}
       if (!ex.length) m.resourceNoExport++;
     }
-    if (isHeaderLike(n)) m.hasHeader = true;
+    if (isHeaderLike(n) && !isHeaderSlot(n)) m.hasHeader = true;
     if (isSlotContainer(n)) m.hasSlotCon = true;
     if (n !== root && isModuleLike(n)) m.modules++;
     if ("children" in n && Array.isArray(n.children))
@@ -4189,7 +4704,10 @@ function buildStructureContract(root, opts) {
     const kids = visibleChildren(rootNode);
     // v20261110.24：只读导出也要归一化 —— 未整理的文件常有多个 header-* / slot-con-*，
     // 契约里只能有一个根 header；其余副标题按 section-title-* 输出在 slot-con 内。
-    const allHeaders = kids.filter(isHeaderNode);
+    // v20261115 P2：头部插槽不是 header 容器，不能参与 pickRootHeader 竞争；
+    // 否则根直属 header-slot-right 会被当成唯一 header，输出成 header-title（身份错判）。
+    const allHeaders = kids.filter(n => isHeaderNode(n) && !isHeaderSlot(n));
+    const headerSlots = kids.filter(isHeaderSlot);
     const rootHeader = pickRootHeader(allHeaders, rootNode);
     // v20261111.61：未整理 / AI 误命名的稿子里，主标题常叫 section-title-* 且藏在 slot-con 内。
     // 只读契约也按同一套几何判据（最顶 y + 整宽 + 薄带 + 短文本）把它输出成根级 header，
@@ -4200,9 +4718,12 @@ function buildStructureContract(root, opts) {
     const demotedHeaders = allHeaders.filter(h => h !== rootHeader);
     const bgs = kids.filter(isBgNode);
     const slotCons = kids.filter(isSlotConNode);
-    const contents = kids.filter(n => !isHeaderNode(n) && !isBgNode(n) && !isSlotConNode(n));
+    // isHeaderSlot 必须一并排除：降级痕迹 section-title-slot-* 不以 header 开头，
+    // 只按 isHeaderNode 过滤会既进 headerSlots 又进 contents ⇒ 契约里出现两个同节点。
+    const contents = kids.filter(n => !isHeaderNode(n) && !isBgNode(n)
+      && !isSlotConNode(n) && !isHeaderSlot(n));
 
-    if (headers.length) {
+    if (headers.length || headerSlots.length) {
       push("header", 1);
       const hkids = [];
       for (const h of headers) for (const c of visibleChildren(h)) hkids.push({ node: c, header: h });
@@ -4227,6 +4748,14 @@ function buildStructureContract(root, opts) {
         push(out + slot, 2, it.node);
         emitChildren(it.node, 3);
       });
+      // 根直属头部插槽按 header 区插槽输出（纯文本归一化，不写 Figma）。
+      for (const hs of headerSlots) {
+        const out = restoreHeaderSlotName(cleanContractName(hs));
+        const hslot = describeDataSlot(hs, slotBudget);
+        if (hslot) slots++;
+        push(out + hslot, 2, hs);
+        emitChildren(hs, 3);
+      }
     }
     if (bgs.length) push("bg", 1); // 背景整体导出，内部矢量不需要展开
     // 按根级原始顺序装配 body：副标题按归一化名输出并标 label，其余节点原样展开。
@@ -4317,11 +4846,17 @@ function nodeGeom(n) {
   const r = (v) => Math.round(v * 10) / 10;
   return { x: r(b.x), y: r(b.y), w: r(b.w), h: r(b.h) };
 }
-function roleOfName(nm) {
+// v20261115：cp- 只有在【组件根】上才是 component-root。旧版不分层级，slot-con 内每个
+// cp-* 子面板都被标成组件根 ⇒ 只读 JSON 里出现多个组件骨架（53:19567 实测）。
+// node/rootNode 缺省时保持旧行为，供纯命名映射调用点兼容。
+function roleOfName(nm, node, rootNode) {
   const m = String(nm || "");
-  if (/^cp-/i.test(m)) return "component-root";
+  if (/^cp-/i.test(m)) return (node && rootNode && node !== rootNode) ? "section" : "component-root";
   if (/^header-title/i.test(m)) return "header-title";
   if (/^header-slot-/i.test(m)) return "header-slot";
+  // 未整理/已整理坏稿里 header-slot-* 被降级成 section-title-slot-* 时，契约身份仍是头部插槽，
+  // 不能标成段标题（否则生成端会把它当成 slot-con 内的小标题）。判据与 isHeaderSlot 同源。
+  if (/^section-title-/i.test(m) && isHeaderSlotName(m)) return "header-slot";
   if (/^header(?:[-/]|$)/i.test(m)) return "header";
   if (/^bg(?:-|$)/i.test(m)) return "bg";
   if (/^slot-con$/i.test(m)) return "slot-con";
@@ -4385,7 +4920,7 @@ function buildStructureJson(root, opts) {
     count++;
     const target = virtualUnwrap ? contractUnwrapTarget(n) : n;
     const name = overrideName || cleanContractName(target);
-    const node = { name, role: overrideRole || roleOfName(name), type: String((target && target.type) || "?") };
+    const node = { name, role: overrideRole || roleOfName(name, target, root), type: String((target && target.type) || "?") };
     Object.assign(node, nodeGeom(target));
     if (includeIds) { const id = newId(target); if (id) node.id = id; }
     const slot = describeDataSlot(n, slotBudget);
@@ -4433,13 +4968,19 @@ function buildStructureJson(root, opts) {
     rootNode = makeNode(root, 0);
   } else {
     const kids = visibleChildren(root);
-    const allHeaders = kids.filter(isHeaderNode);
+    // v20261115 P2：头部插槽不是 header 容器，不能参与 pickRootHeader 竞争；
+    // 否则根直属 header-slot-right 会被当成唯一 header，输出成 header-title（身份错判）。
+    const allHeaders = kids.filter(n => isHeaderNode(n) && !isHeaderSlot(n));
+    const headerSlots = kids.filter(isHeaderSlot);
     const rootHeader = pickRootHeader(allHeaders, root);
     const geoHeader = rootHeader ? null : findRootHeaderBand(root);
     const demotedHeaders = allHeaders.filter(h => h !== rootHeader);
     const bgs = kids.filter(isBgNode);
     const slotCons = kids.filter(isSlotConNode);
-    const contents = kids.filter(n => !isHeaderNode(n) && !isBgNode(n) && !isSlotConNode(n));
+    // isHeaderSlot 必须一并排除：降级痕迹 section-title-slot-* 不以 header 开头，
+    // 只按 isHeaderNode 过滤会既进 headerSlots 又进 contents ⇒ 契约里出现两个同节点。
+    const contents = kids.filter(n => !isHeaderNode(n) && !isBgNode(n)
+      && !isSlotConNode(n) && !isHeaderSlot(n));
     rootNode = { name: cpComponentName(root), role: "component-root", type: String(root.type || "?") };
     Object.assign(rootNode, nodeGeom(root));
     if (includeIds) { const id = newId(root); if (id) rootNode.id = id; }
@@ -4467,9 +5008,15 @@ function buildStructureJson(root, opts) {
           else if (w > 0 && x <= w * 0.25) out = "header-slot-left";
           else out = "header-slot-center";
         }
-        const cn = makeNode(it.node, 2, out, roleOfName(out));
+        const cn = makeNode(it.node, 2, out, roleOfName(out, it.node, root));
         if (cn) headerArr.push(cn);
       }
+    }
+    // 根直属头部插槽：与文本契约同源，输出标准名 + role=header-slot。
+    for (const hs of headerSlots) {
+      const out = restoreHeaderSlotName(cleanContractName(hs));
+      const cn = makeNode(hs, 2, out, "header-slot");
+      if (cn) headerArr.push(cn);
     }
     const bgArr = bgs.map(b => makeNode(b, 1, "bg", "bg")).filter(Boolean);
     const body = [];
@@ -4482,7 +5029,7 @@ function buildStructureJson(root, opts) {
     const nameOf = (b) => b.forced || cleanContractName(b.node);
     const emitItem = (b, d) => {
       if (b.forced) {
-        const cn = makeNode(b.node, d, b.forced, roleOfName(b.forced));
+        const cn = makeNode(b.node, d, b.forced, roleOfName(b.forced, b.node, root));
         if (cn) { cn.data = { kind: "label" }; slots++; slotChildren.push(cn); }
       } else {
         const cn = makeNode(b.node, d);

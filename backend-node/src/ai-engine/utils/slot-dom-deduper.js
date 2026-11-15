@@ -43,6 +43,10 @@ export function removeOverlappingSlotDom(code, opts = {}) {
   if (!code || typeof code !== 'string') return { code, removed: 0 }
   if (!/<base-panel/i.test(code)) return { code, removed: 0 }
   const subcomponentTexts = opts.subcomponentTexts instanceof Set ? opts.subcomponentTexts : new Set()
+  // 🛡️ 2026-11-15（c5e0aadc 实锤）：owner 门禁豁免下来的插槽内容受保护——
+  //   它们在结构上确属 header（figmaNodeId 落在 header owner 子树内），内容区里的同文本
+  //   副本才是错位的那一份，不能反过来把正确插槽删掉。
+  const protectedTexts = opts.protectedTexts instanceof Set ? opts.protectedTexts : new Set()
 
   let removed = 0
   let out = code
@@ -52,6 +56,7 @@ export function removeOverlappingSlotDom(code, opts = {}) {
       const cleanInner = inner.replace(/<!--[\s\S]*?-->/g, '').trim()
       if (!cleanInner) return match // 空/仅注释插槽 → 保留
       const fragments = extractTextFragments(cleanInner)
+      if (fragments.some((f) => protectedTexts.has(f))) return match // 受 owner 保护 → 保留
       for (const frag of fragments) {
         if (subcomponentTexts.has(frag)) {
           removed += 1

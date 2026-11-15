@@ -48,13 +48,15 @@ import {
 /** 图标类角色（只认这些；`bg` / 空值一律不判） */
 const ICON_ROLES = new Set(['icon', 'slot-icon', 'iconsloticon']);
 
-function isIconRole(mapping) {
+// 🛡️ 2026-11-15：导出为**唯一图标角色判据**，供 icon-truth-conservation 复用，
+//   避免「刀 45 判 icon / 守恒判据另判一次」形成第二套角色来源。
+export function isIconRole(mapping) {
   const r = String(mapping?.previewAnalysisRole || '').toLowerCase();
   return ICON_ROLES.has(r);
 }
 
-/** `usage` 是否声明为 `<img …>` 形态 */
-function usageIsImg(mapping) {
+/** `usage` 是否声明为 `<img …>` 形态（同一判据来源） */
+export function usageIsImg(mapping) {
   const u = String(mapping?.usage || '');
   return /<img\b/i.test(u);
 }

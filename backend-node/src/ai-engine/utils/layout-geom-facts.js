@@ -256,3 +256,94 @@ export function pickLayoutFacts(facts, candidateIds) {
   }
   return null;
 }
+
+/**
+ * 🛡️ S2（2026-11-15 · 用户指令「方向对账拦截」）：用 bbox 几何真值纠正 vision 记录的
+ * section 级排列方向误判。
+ *
+ * ## 背景（实锤）
+ * 视觉分析阶段会把每个 section 的 `layout` 记为 `horizontal` / `vertical`，但实测常把
+ * 「标题在上、内容在下」的纵向 section 误记为 `horizontal`（如本仓 `c-traffic-monitor-cc0eddc6`
+ * 的「当日总流量」`2:3660` 被记成 horizontal，而 bbox 真值是 `free-overlay` ⇒ 实际应为 vertical）。
+ * 该 `layout` 字段直接进 engineer prompt，LLM 据此在 LESS 写 `flex-direction: row; justify-content:
+ * space-between`，把标题与统计卡挤到同一行（混排 bug）。inline code-generator 走另一条 bbox 通道
+ * （`deriveChildLayout` 读 `flexDirection`，free-overlay ⇒ null 不内联），与 prompt 不一致。
+ *
+ * ## 口径（与 `deriveChildLayout` 对齐）
+ *   mode 体系 → 方向：
+ *     row / row-between / row-stack           → horizontal
+ *     column / column-between / column-stack  → vertical
+ *     free-overlay / unknown                  → null（bbox 无法判定）
+ *
+ * ## 作用域（严格收窄，防过度纠正）
+ *   仅当 vision 记录 `layout === 'horizontal'` **且** 该 section 有 header 语义
+ *   （`headerRelation` 非空，覆盖 title-same-row / content-below-title / title-itself）时才介入：
+ *     - bbox 判为 row*     → 与 vision 一致，保留 horizontal（不误伤合法横排）；
+ *     - bbox 判为 column* / free-overlay / unknown → 覆盖为 `vertical`
+ *       （header-above-body 是 section 的安全默认；且与 inline 生成器不写 horizontal 的口径一致），
+ *       并顺带把 `headerRelation: title-same-row` 纠正为 `content-below-title`。
+ *   vision 记录 `vertical` 的 section 一律不动（避免过度纠正、误把合法纵向翻成横排）。
+ *
+ * 纯函数：原地修正 `layoutStructure.layout.sections[].layout` / `.headerRelation`，
+ * 并在 `layoutStructure.layoutFactsAudit` 追加一条可 grep 的审计记录。
+ *
+ * @param {object} layoutStructure vision 产出的 layoutStructure（需含 `.layout.sections` 与 `.layoutFacts`）
+ * @returns {{checked:number, overridden:number, overrides:Array}}
+ */
+export function reconcileSectionLayoutWithFacts(layoutStructure) {
+  const result = { checked: 0, overridden: 0, overrides: [] };
+  if (!layoutStructure || typeof layoutStructure !== 'object') return result;
+  const facts = layoutStructure.layoutFacts;
+  if (!facts) return result;
+  const sections = layoutStructure.layout?.sections;
+  if (!Array.isArray(sections)) return result;
+
+  // mode → 方向（与 deriveChildLayout 的 flexDirection 口径一致）
+  const modeToDirection = (mode) => {
+    if (!mode || mode === 'unknown') return null;
+    if (mode.startsWith('row')) return 'horizontal';
+    if (mode.startsWith('column')) return 'vertical';
+    return null; // free-overlay 等
+  };
+
+  for (const sec of sections) {
+    if (!sec || typeof sec !== 'object') continue;
+    // 收窄：仅纠正 vision 误记为 horizontal 且有 header 语义的 section
+    if (sec.layout !== 'horizontal') continue;
+    if (!sec.headerRelation) continue;
+    result.checked += 1;
+
+    const fact = pickLayoutFacts(facts, [sec.id, sec.figmaNodeId, ...(sec.sourceNodeIds || [])]);
+    const bboxDir = fact ? modeToDirection(fact.mode) : null;
+
+    // bbox 确认是横排 → 与 vision 一致，保留
+    if (bboxDir === 'horizontal') continue;
+
+    // bbox 与 horizontal 矛盾（column / free-overlay / unknown）⇒ 覆盖为 vertical
+    const from = sec.layout;
+    sec.layout = 'vertical';
+    if (sec.headerRelation === 'title-same-row') {
+      sec.headerRelation = 'content-below-title';
+    }
+    result.overridden += 1;
+    result.overrides.push({
+      id: sec.id,
+      name: sec.name,
+      from,
+      to: sec.layout,
+      bboxMode: fact?.mode || 'unknown',
+      headerRelation: sec.headerRelation,
+    });
+  }
+
+  if (result.overridden > 0) {
+    if (!Array.isArray(layoutStructure.layoutFactsAudit)) layoutStructure.layoutFactsAudit = [];
+    layoutStructure.layoutFactsAudit.push({
+      kind: 'section-layout-reconcile',
+      checked: result.checked,
+      overridden: result.overridden,
+      overrides: result.overrides,
+    });
+  }
+  return result;
+}

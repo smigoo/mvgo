@@ -286,12 +286,43 @@ const init = () => { chart = echarts.init(this.$refs.chart) }
     expect(res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MOUNT-MISSING')).toBeUndefined()
   })
 
-  it('detectEchartsMountPointMissing：提取 echarts.init 的 ref 名并校验挂载点', () => {
+  it('detectEchartsMountPointMissing：ref 声明存在但模板无挂载 ⇒ 报缺失', () => {
+    // 🛡️ 2026-11-15（bca81048 假阳性）：判据改为声明溯源 —— 必须存在 ref 声明才算
+    //    「该有模板挂载」。旧用例用未声明的 chartRef（那是未声明变量缺陷，归 SFC 语义门禁），
+    //    在无声明时判据 fail-open 不再拦单。
     const files = {
-      'a.vue': `<template><div></div></template><script>echarts.init(chartRef.value)</script>`,
-      'b.vue': `<template><div ref="chartRef"></div></template><script>echarts.init(chartRef.value)</script>`,
+      'a.vue': `<template><div></div></template><script setup>const chartRef = ref(null)
+echarts.init(chartRef.value)</script>`,
+      'b.vue': `<template><div ref="chartRef"></div></template><script setup>const chartRef = ref(null)
+echarts.init(chartRef.value)</script>`,
     }
     const missing = detectEchartsMountPointMissing(files)
     expect(missing).toEqual([{ path: 'a.vue', refName: 'chartRef' }])
+  })
+
+  it('detectEchartsMountPointMissing：声明无法溯源 ⇒ fail-open（不拦单，计入不确定观测）', () => {
+    const files = {
+      'a.vue': `<template><div></div></template><script>echarts.init(chartRef.value)</script>`,
+    }
+    expect(detectEchartsMountPointMissing(files)).toEqual([])
+    const res = validateDoNotInvent({ files, analysis: {} })
+    expect(res.pass).toBe(true)
+    expect(res.warnUncertainMount).toBe(1)
+  })
+
+  it('函数式 ref 收集数组 + 循环变量 init ⇒ 不拦单（bca81048 实锤假阳性回归）', () => {
+    const files = {
+      'components/ListSection.vue': `<template>
+  <div v-for="(item, idx) in list" :key="idx" :ref="(el) => { if (el) ringRefs[idx] = el }"></div>
+</template>
+<script setup>
+const ringRefs = ref([])
+const list = ref([])
+onMounted(() => { ringRefs.value.forEach((el, idx) => { const chart = echarts.init(el) }) })
+</script>`,
+    }
+    const res = validateDoNotInvent({ files, analysis: {} })
+    expect(res.issues.filter((i) => i.id === 'DO-NOT-INVENT-CHART-MOUNT-MISSING')).toEqual([])
+    expect(res.pass).toBe(true)
   })
 })

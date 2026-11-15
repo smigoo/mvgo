@@ -4,6 +4,10 @@
  */
 
 import { createLogger } from '../logger/index.js';
+// 🛡️ 2026-11-15（mc-max-1794749284344-c5e0aadc 实锤）：header 容器改由结构事实单源给出。
+//   原实现 `figmaConnector.findHeaderContainer()` 按图层名匹配（header/头部前缀），
+//   设计稿改名即失效；owner 用「标题锚 → 其父即 root 的祖先」+ 无量纲几何，命名无关。
+import { findHeaderOwnerNode } from '../utils/header-owner-truth.js';
 
 const logger = createLogger({ name: 'header-slot-validator' });
 
@@ -137,7 +141,9 @@ export class HeaderSlotValidator {
    * 🆕 v3.1 优化：按 X 坐标和间距智能分类插槽位置
    */
   deriveHeaderSlotsFromFigma(figmaNodeData, titleNode = null, headerSlotCandidates = []) {
-    const container = this.figmaConnector.findHeaderContainer(figmaNodeData);
+    // 🛡️ 2026-11-15：owner 优先（结构事实），图层名匹配仅作 fail-open 兜底。
+    const ownerRes = findHeaderOwnerNode(figmaNodeData);
+    const container = ownerRes.node || this.figmaConnector.findHeaderContainer(figmaNodeData);
     const isAnnotation = (t) =>
       /^[*#]/.test(t) || /TODO|FIXME|标注|备注/.test(t);
     const slots = [];
@@ -185,6 +191,25 @@ export class HeaderSlotValidator {
           titleNode.absoluteBoundingBox.x + titleNode.absoluteBoundingBox.width;
       }
     }
+
+    // 🛡️ A2（2026-11-15 · mc-max-1794706325675-693c8d17 实锤）：纯文本 else 分支此前
+    //   **完全不看节点名**，名为 "tabs" 但 tab 文本不含数字的容器一律被判 label ⇒
+    //   resolveHeaderTabModels / 结构契约 / derivedHasTab 全拿不到 tab 语义。
+    //   补窄判据用的采集器：每个直接子 FRAME 取首个有效文本，id 用子 FRAME id
+    //   （与视觉 body.children[].id 对齐，如 2:7955 / 2:7957），不猜 active 状态。
+    const collectTabItems = (node) => {
+      const items = [];
+      for (const c of Array.isArray(node?.children) ? node.children : []) {
+        if (!c || typeof c !== 'object') continue;
+        const acc = [];
+        collectTexts(c, acc);
+        const text = acc
+          .map((t) => t.text)
+          .find((t) => t && !isAnnotation(t) && t !== titleText);
+        if (text) items.push({ id: String(c.id || ''), text });
+      }
+      return items;
+    };
 
     const sources =
       Array.isArray(container?.children) && container.children.length > 0
@@ -259,18 +284,33 @@ export class HeaderSlotValidator {
           });
         }
       } else {
-        // 🆕 纯文本根据距离判断：紧贴标题为 title-right，远离为 header-right
-        const slotType =
-          gapFromTitle > 0 && gapFromTitle < CLOSE_GAP_THRESHOLD
-            ? 'title-right'
-            : 'header-right';
-        slots.push({
-          slotType,
-          elementType: 'label',
-          content: joined,
-          figmaNodeId: child.id,
-          _gap: gapFromTitle, // 调试用
-        });
+        // 🛡️ A2：Tab 组结构化（窄判据，普通文本逐字不变）。
+        //   仅当节点名含 tab/switch/segmented 且 ≥2 个独立子项（各有 id + 有效文本）时
+        //   才升级为 tab 契约；单文本/装饰容器/普通 label 一律保持原行为。
+        const tabItems = /tab|switch|segmented/.test(name) ? collectTabItems(child) : [];
+        if (tabItems.length >= 2 && tabItems.every((t) => t.id && t.text)) {
+          slots.push({
+            slotType: 'header-right',
+            elementType: 'tab',
+            content: joined,
+            figmaNodeId: child.id,
+            tabs: tabItems,
+            _gap: gapFromTitle,
+          });
+        } else {
+          // 🆕 纯文本根据距离判断：紧贴标题为 title-right，远离为 header-right
+          const slotType =
+            gapFromTitle > 0 && gapFromTitle < CLOSE_GAP_THRESHOLD
+              ? 'title-right'
+              : 'header-right';
+          slots.push({
+            slotType,
+            elementType: 'label',
+            content: joined,
+            figmaNodeId: child.id,
+            _gap: gapFromTitle, // 调试用
+          });
+        }
       }
     }
 

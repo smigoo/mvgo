@@ -48,6 +48,17 @@ import { MIN_BODY_FONT_PX, MIN_BODY_FONT_RATIO } from '../ai-engine/utils/font-s
 // 🛡️ 字号落盘下限守卫（与 microcode-engineer writeFiles 后处理链同一实现）
 //    历史缺口：该守卫原先只挂在 writeFiles 里，而 Lite 链路全库不调 writeFiles ⇒ Lite 零兜底。
 import { ensureMinFontSize, formatFontGuardLog } from '../ai-engine/utils/font-size-guard.js';
+// 🛡️ T2-W（2026-11-15 四象限同步）：图表父容器宽度锚定，与 max 两象限同一纯函数。
+//    Lite 不走 microcode/file-writer ⇒ 与 G13 / 字号守卫同例，必须在 Lite 自己的落盘点接线。
+import { anchorChartWrapperWidth } from '../ai-engine/utils/post-process.js';
+// 🛡️ 2026-11-15 四象限同步：图标真值守恒，与 max 两象限（microcode/file-writer 写盘出口）
+//    同一纯函数 + 同一计数行格式。Lite 不调 writeFiles ⇒ 必须在自己的落盘点单独接线。
+import {
+  buildDrawClassIndex,
+  collectAllSectionIds,
+  healIconTruthConservation,
+  formatIconTruthConservationLog,
+} from '../ai-engine/utils/icon-truth-conservation.js';
 import { compileIndexCssStrict } from '../ai-engine/utils/index-css-recompiler.js';
 // 🛡️ 2026-11-11：业务样式落盘前自愈（与写盘门禁 gateStandaloneLessWrite 同一条链）
 import { healLessFull } from '../ai-engine/validators/less-compile-gate.js';
@@ -736,6 +747,7 @@ export class LiteService {
         vueFinal = await this.injectChartRebuildGuardSafely(
           vueFinal,
           'lite/microcode:main',
+          businessStyles,
         );
 
         await writeFile(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
@@ -4143,6 +4155,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOd
         vueFinal = await this.injectChartRebuildGuardSafely(
           vueFinal,
           'lite/microcode:resume',
+          businessStyles,
         );
 
         writeFileSync(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
@@ -4380,20 +4393,34 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOd
    * Lite 链路不走 `microcode/file-writer`（全库不调 writeFiles），故必须在 Lite 自己的
    * 落盘点单独接线——否则「max 已修、Lite 仍炸」，正是本次实锤产物的处境（`mc-lite-*`）。
    *
+   * 🛡️ 2026-11-15 四象限同步：本落盘点现承载**三项互不重叠**的自愈：
+   *   ⓪ `applyIconTruthConservationSafely` —— 只增删模板里「CSS 假图标块」DOM 节点
+   *      （真值守恒：已有 img 清多余假图形；零 img 且有尺寸真值则换成 img）；
+   *   ① `applyChartWrapperWidthSafely` —— 只改 `<style>` 中图表**直接父容器**规则块，
+   *      缺 width 补 100%（治零宽 ⇒ echarts.init 守卫短路 ⇒ 整图空白）；
+   *   ② G13 `injectChartRebuildGuard` —— 只改 `<script setup>` 附加 watch。
+   *   顺序固定 ⓪→①→②，三者作用域无交集；均 fail-open、均幂等。
+   *
    * @param tag 落点标识（日志定位用，如 `lite/microcode`）
+   * @param styleContent Lite 微码分支的业务样式（common.less）；用于建「图形绘制事实」索引，
+   *   缺省时只从单 SFC 的 `<style>` 取事实 —— 两者都没有则守恒 fail-open 原样返回。
    */
   private async injectChartRebuildGuardSafely(
     vueCode: string,
     tag: string,
+    styleContent?: string,
   ): Promise<string> {
-    if (typeof vueCode !== 'string' || !vueCode.includes('echarts.init(')) {
-      return vueCode;
+    // 🛡️ ⓪ 图标真值守恒（DOM 层）→ ① 父容器宽度锚定（CSS 层）→ ② G13 重建守卫（script 层）
+    const iconBase = this.applyIconTruthConservationSafely(vueCode, tag, styleContent);
+    const base = this.applyChartWrapperWidthSafely(iconBase, tag);
+    if (typeof base !== 'string' || !base.includes('echarts.init(')) {
+      return base;
     }
     try {
       const { injectChartRebuildGuard } = await import(
         '../ai-engine/roles/microcode/code-healer.js'
       );
-      const guarded = injectChartRebuildGuard(vueCode);
+      const guarded = injectChartRebuildGuard(base);
       if (guarded.changed) {
         this.logger.log(
           `🛡️ G13 图表容器重建自愈已注入（${tag}）：${guarded.injected.join('；')}`,
@@ -4401,11 +4428,80 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOd
         );
         return guarded.content;
       }
-      return vueCode;
+      return base;
     } catch (e) {
       // 注入器自身异常 ⇒ 不阻断生成（沿用原产物，交由下游门禁/预览暴露）
       this.logger.warn(
         `🛡️ G13 图表容器重建自愈跳过（${tag}，非阻断）: ${(e as Error)?.message || e}`,
+      );
+      return base;
+    }
+  }
+
+  /**
+   * 🛡️ T2-W（2026-11-15 · mc-max-1794680105142-4804ca47 折线图整图空白实锤）：
+   * Lite 侧图表父容器宽度锚定。与 max 两象限共用 `post-process.js#anchorChartWrapperWidth`
+   * 纯函数；不传 ref/class ⇒ 由函数内部的 `resolveEchartsContainer` 单一来源解析，
+   * Lite 不自建第二套判据。已有 width 不覆盖、幂等、异常 fail-open。
+   */
+  private applyChartWrapperWidthSafely(vueCode: string, tag: string): string {
+    if (typeof vueCode !== 'string' || !vueCode.includes('echarts.init(')) {
+      return vueCode;
+    }
+    try {
+      const r = anchorChartWrapperWidth(vueCode);
+      if (r.injectedCount > 0) {
+        this.logger.log(
+          `🎯 T2-W 图表父容器宽度已锚定（${tag}）：.${r.wrapperCls} width:100%（已有 width 不覆盖，命中块 ${r.injectedCount}）`,
+          { sessionId: tag } as any,
+        );
+        return r.code;
+      }
+      return vueCode;
+    } catch (e) {
+      this.logger.warn(
+        `🎯 T2-W 图表父容器宽度锚定跳过（${tag}，非阻断）: ${(e as Error)?.message || e}`,
+      );
+      return vueCode;
+    }
+  }
+
+  /**
+   * 🛡️ 2026-11-15（四象限同源）：Lite 侧「图标真值守恒」。
+   *
+   * 与 max 两象限（microcode/file-writer 写盘出口）共用 `icon-truth-conservation.js` 纯函数
+   * 与 `formatIconTruthConservationLog` 计数行格式，Lite 不自建第二套判据。
+   * Lite 拿不到 `resourceDomMapping`（资源升级在另一阶段）⇒ 真值侧走「产物自身已声明且
+   * 已渲染的图标 import」这一支：只清「已有真 img 却还画着 CSS 假图形」的多余图形；
+   * 无 mapping 且无尺寸真值 ⇒ 绝不替换、绝不删除唯一图标（fail-open）。
+   * 计数行恒打（0 也打），与 T2-W 同例。
+   */
+  private applyIconTruthConservationSafely(
+    vueCode: string,
+    tag: string,
+    styleContent?: string,
+  ): string {
+    try {
+      const facts: Record<string, string> = { 'package/index.vue': vueCode };
+      if (typeof styleContent === 'string' && styleContent.length > 0) {
+        facts['resources/styles/common.less'] = styleContent;
+      }
+      const drawIndex = buildDrawClassIndex(facts);
+      const target: Record<string, string> = { 'package/index.vue': vueCode };
+      // 🛡️ P0-c（四象限同源）：P0-c 的全量 section 集合在 Lite 侧同样传入（Lite 无
+      //   resourceDomMapping ⇒ 兜底分支不会命中，仅口径统一，行为与旧版一致）。
+      const r = healIconTruthConservation(target, {
+        drawIndex,
+        allSectionIds: collectAllSectionIds(facts),
+        silent: true,
+      });
+      const out = target['package/index.vue'];
+      const line = formatIconTruthConservationLog(r.stats);
+      this.logger.log(`🛡️ ${tag} ${line.message}`, line.meta as any);
+      return typeof out === 'string' ? out : vueCode;
+    } catch (e) {
+      this.logger.warn(
+        `🛡️ 图标真值守恒跳过（${tag}，非阻断）: ${(e as Error)?.message || e}`,
       );
       return vueCode;
     }

@@ -43,6 +43,9 @@ import {
 import { compileDesignFacts } from '../context/design-facts-compiler.js';
 // 🛡️ P1-1（2026-08-30）：节点级尺寸绑定 —— class→figmaBox ±2px 精确校验
 import { validateNodeSizes } from '../utils/node-size-validator.js';
+// 🛡️ P0-B（2026-11-15）：段级几何排他性落点判据（INLINE-GEOM-DUP / INLINE-GEOM-PX）。
+//   与 code-generator 终裁归一共用同一实现，杜绝「修复器一套判据、校验器一套判据」。
+import { auditInlineGeometryDuplicates } from '../utils/inline-geom-dup-guard.js';
 // 🆕 2026-09-04：componentId 确定性格式 c-<语义>-<sessionId 尾 8hex>，
 // class 前缀事实源经 classPrefixOf 剥离尾段（c-monitor-43e7fe45 → c-monitor）。
 // 🛡️ 刀 8b/8c（2026-09-13）：额外剥离「装饰性随机尾段」并修复历史双前缀病灶。
@@ -1047,6 +1050,44 @@ export class CodeStructureValidator {
         severity: 'WARN',
         file: '(全部)',
         message: `跨样式源 flex 冲突检查异常（非阻断）：${flexErr?.message || flexErr}`,
+      });
+    }
+
+    // ========== 🛡️ P0-B + P3-A + P3-B（2026-11-15）：内联几何排他性落点 ==========
+    // 方案 E 把段高真值写进 mvgo-layout-truth class 规则后，确定性装配层曾仍把同样的
+    // flex / min-height / margin-top 写进 inline ⇒ 死样式 + px 不过 px2rem + 双量纲（P0-B）。
+    // P3-A 把 INLINE-GEOM-PX 从「flex 比例 + px 混排」收紧为「任何静态 inline 长度 px」；
+    // P3-B 再把长度名单扩到 border-radius，并把确定性写者的 inline 整段收进语义 class
+    // （var()/calc()/url() 声明刻意留 inline，避免 px2rem 改变量回退值语义）。
+    // 生成即合规由两处归一负责：装配出口 stripInlineGeometryDuplicates（段级双写）、
+    // 终写前最后窗口 normalizeInlineLengthPx（语义 class 整段收口）；这里独立扫描**写盘产物**兜底，
+    // 任何来源漏剥/漏归一/回灌都 BLOCK。判据只在含 mvgo-layout-truth 的 index.vue 上启用，
+    // 对 LLM 自由模板 / 无 facts 产物 / vue3 与 lite 路径零命中、逐字不变。
+    try {
+      const geomIndexVue = productFiles.find(
+        (f) => f && (f.path || '').endsWith('package/index.vue') && f.content,
+      );
+      if (geomIndexVue) {
+        const geomAudit = auditInlineGeometryDuplicates(geomIndexVue.content, {
+          file: geomIndexVue.path,
+        });
+        for (const gi of geomAudit.issues) {
+          issues.push({
+            id: gi.id,
+            severity: gi.severity,
+            file: gi.file,
+            message: gi.message,
+            hint: gi.hint,
+          });
+        }
+      }
+    } catch (geomErr) {
+      // 与既有门禁同策略：判据自身异常不静默吞掉，降为 WARN 留痕
+      issues.push({
+        id: 'INLINE-GEOM-CHECK-ERROR',
+        severity: 'WARN',
+        file: 'package/index.vue',
+        message: `段级几何排他性判据异常（非阻断）：${geomErr?.message || geomErr}`,
       });
     }
 

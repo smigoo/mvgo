@@ -51,6 +51,8 @@ import {
   injectChartMinHeightIntoClass,
   createChartClassBlockIfAbsent,
   stripZeroMinHeightForClass,
+  // 🛡️ T2-W（2026-11-15）：与 mc 侧同源的图表父容器宽度锚定
+  anchorChartWrapperWidth,
 } from '../utils/post-process.js';
 // 🎯 2026-09-29 图表容器双刀（刀1 剥 index.vue inline min-height:0 / 刀2 内层 wrapper 承载 echarts）
 import {
@@ -1836,6 +1838,19 @@ export class Vue3Engineer extends MicrocodeEngineer {
             codeResult.files[fp] = patched;
             this.logger.info(
               `🎯 echarts 容器最小高度已注入: ${fp} → .${chartCls} min-height: ${targetMinHeight}px（命中块 ${injectedCount3 || '兜底新建'}，min-height:0 反杀已剥除）`,
+            );
+          }
+          // 🛡️ T2-W（2026-11-15）：与 mc 侧同源，图表**直接父容器**缺 width ⇒ 补 100%。
+          // 已有 width 不覆盖；只补父不补内层（真机实证：只补内层无效）。
+          const _widthAnchored = anchorChartWrapperWidth(
+            codeResult.files[fp] || patched,
+            refName,
+            chartCls,
+          );
+          if (_widthAnchored.injectedCount > 0) {
+            codeResult.files[fp] = _widthAnchored.code;
+            this.logger.info(
+              `🎯 图表父容器宽度已锚定: ${fp} → .${_widthAnchored.wrapperCls} width:100%（已有 width 不覆盖，命中块 ${_widthAnchored.injectedCount}）`,
             );
           }
           // 🛡️ T2-D：共享表（common.less）同名 class 的 min-height:0 一并剥除。

@@ -25,7 +25,22 @@ for (const k of ['NODE_OPTIONS', 'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'ht
   delete env[k];
 }
 
-const child = spawn('npm', ['run', 'dev', '--', '--host', '--port', '2610'], {
+// 🔴 2026-11-15 治本（实锤：本机 spawn 'npm run dev' 报
+//   `Cannot find module '/Users/smigoo/工作/mvgo/vite/bin/vite.js'` + 「Brokered program
+//   policy check unavailable」）：PATH 上的 npm 是 WorkBuddy 的 brokered wrapper
+//   （~/.workbuddy/binaries/node/.../bin/npm），它**忽略 spawn 的 cwd**，在会话 cwd（仓库根）
+//   执行 `npm run dev` ⇒ 命中根 package.json 的同名脚本，却按根 prefix 解析 vite bin
+//   （根 node_modules 无 vite）⇒ MODULE_NOT_FOUND。
+//   ⇒ 不再经 npm：直接用同一 node 执行 frontend/node_modules/vite/bin/vite.js，
+//     cwd 显式给 FE_DIR（vite 自身尊重 cwd，读 frontend/vite.config.*）。
+const NODE_BIN = process.execPath;
+const VITE_BIN = path.join(FE_DIR, 'node_modules', 'vite', 'bin', 'vite.js');
+if (!fs.existsSync(VITE_BIN)) {
+  console.error('[start-frontend] 未找到 vite bin：' + VITE_BIN + '（请先在 frontend/ 执行 npm install）');
+  process.exit(1);
+}
+
+const child = spawn(NODE_BIN, [VITE_BIN, '--host', '--port', '2610'], {
   cwd: FE_DIR,
   detached: true,          // Unix 下 -> 新 session/process group（等同 setsid）
   env,

@@ -1127,10 +1127,15 @@ export function mergeChildHeaderSections({ sections, figmaNodeData } = {}) {
  *   另：若**锚点自身在一条 thin 祖先里**（本例 `2:3559` 在 `88:32` 内），该祖先也算本条的一项，
  *   归属该段，用于把「当日总流量 + 24小时下拉」提升为段 header 事实。
  *
- * **处置**（不改锚点、不改结构，只补事实）：
+ * **处置**（不改结构，只补事实）：
  *   ① 段无 `header.title` ⇒ 用条内首个 TEXT 作标题；
  *   ② 条 id 写进 `section.sourceNodeIds`（不重复、原数组不动）；
- *   ③ 记 `stats.merged / detail` 留痕。
+ *   ③ **段盒同源抬升**：条在锚点上方时，把 `absoluteBoundingBox` 的顶边移到条顶、
+ *      高度改成「锚点底 − 条顶」（含条与间隙），并写 `styles.figmaHeightPx`。
+ *      条的高度本来就是这一段的一行标题，不抬 ⇒ 产物段内缺一行，且这几十 px 会被
+ *      刀16 当成兄弟间距写成 `margin-top`（2026-11-15 真机 42/49 实锤）。只升不降
+ *      （已更高时不动，与 A4 的 `max` 同规则）⇒ 幂等、不与 A4/P0-8 打架；
+ *   ④ 记 `stats.merged / lifted / detail` 留痕。
  * 幂等（已并过的条已在 sourceNodeIds 里 ⇒ 再跑不重复计数）、fail-open（无树/无 bbox ⇒ 原样返回）。
  */
 const STRIP_MAX_HEIGHT_PX = 40;
@@ -1140,7 +1145,7 @@ const STRIP_MIN_WIDTH_PX = 40;
 const STRIP_MAX_DESCENDANTS = 24;
 
 export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
-  const stats = { evaluated: 0, candidates: 0, merged: 0, detail: [] };
+  const stats = { evaluated: 0, candidates: 0, merged: 0, lifted: 0, detail: [] };
   if (!Array.isArray(sections) || sections.length === 0) {
     return { sections: sections || [], stats };
   }
@@ -1301,11 +1306,43 @@ export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
       if (!prevIds.includes(sid)) {
         s.sourceNodeIds = [...(Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds : []), sid];
       }
+      // 🛡️ 高度同源（2026-11-15 · mc-max-1794725297064-b532dc69 实锤）：
+      //   病灶：本函数只并「语义」（header.title / sourceNodeIds），**不并高度** ⇒
+      //     ① A4（`figma-height-ratio`）按锚点算段高，标题条在锚点**外**，这几十 px 不进段；
+      //     ② 产物层 `section-intrinsic-layout#resolveSectionSize` 的最高优先级正是
+      //        `styles.figmaHeightPx`（注释明写「不得再被锚点覆盖」）⇒ 拿到锚点原始 bbox
+      //        （真机 91.44/114/140.66，小数特征 = `section-tree.js` 的 box.height 直取）；
+      //     ③ 刀16 兄弟间距按「prev 底 → cur 锚点顶」算 gap ⇒ 把标题条 + 间隙整段算成
+      //        `margin-top`（真机 42 = 设计 14 + 条 24.3+3.7；49 = 15 + 24.3+10）⇒
+      //        段内缺一整行标题，缺的量又变成段间空白。
+      //   判据（只用几何，不认 name/图层）：条在锚点上方（间隙 ∈ [-1, STRIP_MAX_GAP_PX]）、
+      //     抬升后高度（锚点底 − 条顶）> 现高 + 0.5 ⇒ 段盒整体上移到条顶、高到锚点底。
+      //   **只升不降**（与 A4 同规则）：A4/P0-8 已算出更高值时保持原值不动，故幂等、不打架。
+      const stripBox = boxOf(sid);
+      const anchorBox = boxOf(id);
+      if (stripBox && anchorBox) {
+        const gapToStrip = anchorBox.y - (stripBox.y + stripBox.height);
+        const liftedH = anchorBox.y + anchorBox.height - stripBox.y;
+        const prevH = Number(s?.styles?.figmaHeightPx);
+        const effectivePrevH = Number.isFinite(prevH) && prevH > 0 ? prevH : anchorBox.height;
+        if (gapToStrip >= -1 && liftedH > effectivePrevH + 0.5) {
+          const base = s.absoluteBoundingBox && typeof s.absoluteBoundingBox === 'object'
+            ? s.absoluteBoundingBox
+            : null;
+          const usesWidthKey = base ? Number.isFinite(Number(base.width)) : true;
+          s.absoluteBoundingBox = usesWidthKey
+            ? { ...(base || {}), x: anchorBox.x, y: stripBox.y, width: anchorBox.width, height: liftedH }
+            : { ...(base || {}), x: anchorBox.x, y: stripBox.y, w: anchorBox.width, h: liftedH };
+          s.styles = { ...(s.styles && typeof s.styles === 'object' ? s.styles : {}), figmaHeightPx: liftedH };
+          stats.lifted += 1;
+        }
+      }
       stats.merged += 1;
       stats.detail.push({
         sectionId: id,
         stripId: sid,
         stripH: Math.round(boxOf(sid)?.height || 0),
+        liftedPx: Math.round(Number(s?.styles?.figmaHeightPx) || 0),
         promotedTitle: noTitle ? title || null : null,
       });
     }

@@ -366,12 +366,170 @@ function maxEdgeOf(node) {
   return Math.max(w, h);
 }
 
+/** 节点 bbox 高度（无几何 ⇒ null）。 */
+function heightOf(node) {
+  const h = Number(node?.absoluteBoundingBox?.height);
+  return Number.isFinite(h) && h > 0 ? h : null;
+}
+
+/**
+ * Figma 真值树索引：id → 节点、id → 直接父 id。一次遍历，供兄弟关系判定。
+ * @param {object} root
+ * @returns {{byId: Map<string,object>, parentOf: Map<string,string>}}
+ */
+function indexFigmaTree(root) {
+  const byId = new Map();
+  const parentOf = new Map();
+  const walk = (node, parentId) => {
+    if (!node || typeof node !== 'object') return;
+    const id = node.id != null ? String(node.id) : '';
+    if (id) {
+      byId.set(id, node);
+      parentOf.set(id, parentId);
+    }
+    const kids = Array.isArray(node.children) ? node.children : [];
+    for (const c of kids) walk(c, id || parentId);
+  };
+  walk(root, '');
+  return { byId, parentOf, rootId: root?.id != null ? String(root.id) : '' };
+}
+
+/**
+ * 同父兄弟 section 数（不含自身）。
+ *
+ * 语义：一个**独占一行**的面板 header 段，其父容器里只会有它自己（或极少数同层结构块），
+ * 不会是「一堆 body 段并排堆叠的容器」。反之，若同父直接子层里有 ≥2 个**其它 preview
+ * section**，说明该段与 body 段共处同一个流式容器 ⇒ 它是 body 首段，不是面板头。
+ *
+ * 该判据与类名/图层名无关，只看「段锚点在 Figma 树里的兄弟集合 ∩ 段集合」。
+ *
+ * @returns {{count:number, parentNode:object}|null} 无父/无节点 ⇒ null（fail-open）
+ */
+function siblingSectionFacts(secId, sectionIdSet, tree) {
+  if (!secId || !tree) return null;
+  const parentId = tree.parentOf.get(secId);
+  if (!parentId) return null; // 父为空 = 面板根节点自身，不判（根必然包含全部段）
+  const parentNode = tree.byId.get(parentId);
+  if (!parentNode) return null;
+  const kids = Array.isArray(parentNode.children) ? parentNode.children : [];
+  let count = 0;
+  for (const c of kids) {
+    const cid = c?.id != null ? String(c.id) : '';
+    if (!cid || cid === secId) continue;
+    if (sectionIdSet.has(cid)) count += 1;
+  }
+  return { count, parentNode };
+}
+
+/** 兄弟 section 数阈值：≥2 即判定「与 body 段共处同一流式容器」。 */
+export const SLOT_SIBLING_SECTION_MIN = 2;
+
+/** 父容器高度 / 段高度 比值阈值：父必须明显更高（≥2 倍），排除「父紧包段本身」。 */
+export const SLOT_PARENT_HEIGHT_RATIO_MIN = 2;
+
+/** 收集 sections（含嵌套 children）全部 id。 */
+export function collectSectionIdSet(sections, out = new Set()) {
+  for (const sec of Array.isArray(sections) ? sections : []) {
+    if (!sec || typeof sec !== 'object') continue;
+    if (sec.id != null) out.add(String(sec.id));
+    if (Array.isArray(sec.children)) collectSectionIdSet(sec.children, out);
+  }
+  return out;
+}
+
+/** Figma 树索引缓存（WeakMap，按 figmaNodeData 对象身份复用，避免每次重建）。 */
+const FIGMA_TREE_CACHE = new WeakMap();
+
+function treeOf(figmaNodeData) {
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return null;
+  const cached = FIGMA_TREE_CACHE.get(figmaNodeData);
+  if (cached) return cached;
+  const built = indexFigmaTree(figmaNodeData);
+  FIGMA_TREE_CACHE.set(figmaNodeData, built);
+  return built;
+}
+
+/**
+ * 「流式容器共居」资格判据 —— **单一事实源**，两个消费点共用：
+ *   ① `revokeUnqualifiedHeaderSlotCandidates` 第三支（装配前复核 sections）；
+ *   ② `header-right-tab-contract.js#recoverHeaderSlotContract` 兜底搬运
+ *      `layoutStructure.headerSlots` 时复核（防止从另一条路把已撤销的段搬回来）。
+ *
+ * 判据（结构化、命名无关）：
+ *   - 段锚点必须能在 Figma 真值树中定位（否则 no-evidence，fail-open）；
+ *   - 段锚点的直接父 **不是面板根**（父为根 = 面板级结构层，可能是真 header 行）；
+ *   - 同父直接子层中 ≥SLOT_SIBLING_SECTION_MIN 个**其它 section**；
+ *   - 父容器高度 ≥ 段高度 × SLOT_PARENT_HEIGHT_RATIO_MIN。
+ *
+ * @param {string} secId 段/槽锚点 id
+ * @param {Set<string>} sectionIdSet 全部 preview section id 集合
+ * @param {object} figmaNodeData Figma 真值树
+ * @returns {{verdict:'reject'|'keep'|'no-evidence', reason:string, siblingCount?:number,
+ *            parentHeight?:number, segHeight?:number}}
+ */
+export function evaluateSlotFlowCoResidency(secId, sectionIdSet, figmaNodeData) {
+  const id = String(secId ?? '');
+  if (!id) return { verdict: 'no-evidence', reason: 'no-section-id' };
+  const tree = treeOf(figmaNodeData);
+  if (!tree) return { verdict: 'no-evidence', reason: 'no-figma-data' };
+  const anchorNode = tree.byId.get(id);
+  if (!anchorNode) return { verdict: 'no-evidence', reason: 'anchor-not-in-figma-tree' };
+  const parentId = tree.parentOf.get(id) || '';
+  if (!parentId) return { verdict: 'no-evidence', reason: 'no-parent' };
+  if (parentId === tree.rootId) return { verdict: 'keep', reason: 'parent-is-panel-root' };
+
+  const ids = sectionIdSet instanceof Set ? sectionIdSet : new Set();
+  const facts = siblingSectionFacts(id, ids, tree);
+  if (!facts) return { verdict: 'no-evidence', reason: 'parent-not-in-tree' };
+
+  const segH = heightOf(anchorNode);
+  const parentH = heightOf(facts.parentNode);
+  if (segH == null || parentH == null) {
+    return { verdict: 'no-evidence', reason: 'missing-geometry', siblingCount: facts.count };
+  }
+  if (facts.count < SLOT_SIBLING_SECTION_MIN) {
+    return {
+      verdict: 'keep',
+      reason: `bodySiblingSections=${facts.count}<${SLOT_SIBLING_SECTION_MIN}`,
+      siblingCount: facts.count,
+      parentHeight: parentH,
+      segHeight: segH,
+    };
+  }
+  if (parentH < segH * SLOT_PARENT_HEIGHT_RATIO_MIN) {
+    return {
+      verdict: 'keep',
+      reason: `parentH=${Math.round(parentH)}<segH=${Math.round(segH)}x${SLOT_PARENT_HEIGHT_RATIO_MIN}`,
+      siblingCount: facts.count,
+      parentHeight: parentH,
+      segHeight: segH,
+    };
+  }
+  return {
+    verdict: 'reject',
+    reason:
+      `bodySiblingSections=${facts.count}>=${SLOT_SIBLING_SECTION_MIN},` +
+      `parentH=${Math.round(parentH)}>=segH=${Math.round(segH)}x${SLOT_PARENT_HEIGHT_RATIO_MIN}`,
+    siblingCount: facts.count,
+    parentHeight: parentH,
+    segHeight: segH,
+  };
+}
+
 /**
  * 撤销不合格段的 header 插槽资格（原地改 sections，fail-open）。
  *
- * 判据（两支，任一命中即撤销；均结构化、命名无关）：
+ * 判据（三支，任一命中即撤销；均结构化、命名无关）：
  *   ① 锚点尺度矛盾：段锚定节点在 Figma 真值中最大边 ≤ SLOT_ANCHOR_MAX_PX；
- *   ② 空内容段：body 与 items 均空（无内容可装配）。
+ *   ② 空内容段：body 与 items 均空（无内容可装配）；
+ *   ③ 流式容器共居（2026-11-15 · mc-max-1794717024986-bb0c260b 实锤）：
+ *      段锚点与 ≥SLOT_SIBLING_SECTION_MIN 个**其它 preview section** 同父，
+ *      且父容器高度 ≥ 段高度 × SLOT_PARENT_HEIGHT_RATIO_MIN
+ *      ⇒ 该段与 body 段共处同一堆叠容器，是 body 首段而非面板 header。
+ *      实例：`88:32`（380×30.4）与 `1744:127/1744:128/2:3439/1263:38/2:3660`
+ *      同父于 `1744:125 slot-con`（425.8×745.3）⇒ 撤销；真面板头 `2:3550`
+ *      （其父为面板根，兄弟中无 section）⇒ 不撤。
+ *      该支能拦住 ① ② 都漏掉的「大尺寸 + 有控件」误判（88:32 是 380×30.4 且有筛选控件）。
  *
  * 撤销动作：`sec.slotCandidate` 与 `sec.header?.slotCandidate` 置 null ⇒
  * 下游 `ensureHeaderSlots`（normalizeSlotCandidate(null)=null）与 prompt 蓝图透传全链一致。
@@ -387,6 +545,7 @@ export function revokeUnqualifiedHeaderSlotCandidates(sections, figmaNodeData) {
   let revoked = 0;
   const revokedIds = [];
   const reasons = {};
+  const sectionIdSet = collectSectionIdSet(list);
 
   for (const sec of list) {
     if (!sec || typeof sec !== 'object') continue;
@@ -401,8 +560,8 @@ export function revokeUnqualifiedHeaderSlotCandidates(sections, figmaNodeData) {
     const secId = sec.id != null ? String(sec.id) : '';
     let reason = '';
     if (secId && figmaNodeData) {
-      const anchor = findFigmaNodeByIdIn(figmaNodeData, secId);
-      const edge = anchor ? maxEdgeOf(anchor) : null;
+      const anchorNode = findFigmaNodeByIdIn(figmaNodeData, secId);
+      const edge = anchorNode ? maxEdgeOf(anchorNode) : null;
       if (edge != null && edge <= SLOT_ANCHOR_MAX_PX) {
         reason = `anchorMaxEdge=${edge}px<=${SLOT_ANCHOR_MAX_PX}px`;
       }
@@ -417,6 +576,12 @@ export function revokeUnqualifiedHeaderSlotCandidates(sections, figmaNodeData) {
       if (!hasBodyChildren && !hasItems && !hasHeaderControls) {
         reason = 'emptyBodyAndItems';
       }
+    }
+    // ③ 流式容器共居（与 body 段同父 ⇒ body 首段，不是面板头）
+    //    判据单一事实源：evaluateSlotFlowCoResidency()，兜底搬运 slot 时共用同一函数。
+    if (!reason && secId) {
+      const verdict = evaluateSlotFlowCoResidency(secId, sectionIdSet, figmaNodeData);
+      if (verdict.verdict === 'reject') reason = verdict.reason;
     }
 
     if (reason) {

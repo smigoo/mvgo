@@ -43,6 +43,9 @@ import { collectCardGroups, collectCardBgByOwner } from '../utils/card-backgroun
 import { inferLayoutFactsForContainer } from '../utils/layout-geom-facts.js';
 import { sizeFromScaleMode } from '../utils/background-size-inference.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
+// 🛡️ S3-BG（2026-11-15）：折叠进 v-for 的段，其原锚点已从模板消失；
+//   资源归属兜底不得再为它们注入承载 div（否则被 M6-3a 剥背景后只剩孤儿空 div）。
+import { collectFoldedOwnerIds } from '../utils/folded-item-background.js';
 import {
   ensureGridDisplay,
   ensureGridDisplayInVueSfc,
@@ -1187,7 +1190,39 @@ export function healDegenerateSubComponentContent(files, figmaNodeData) {
  * @param {Array|null} resourceDomMapping
  * @returns {{files: Object<string,string>, stats: Object}}
  */
-export function backstopMountBgOwnership(files, resourceDomMapping) {
+/**
+ * 🛡️ S3-BG（2026-11-15）：承载 div 的尺寸写进 `<style>` 段，**不写 inline px**。
+ *
+ * 硬约束：`postcss-pxtorem` 只处理 less/css 文件里的 px；DOM 上 `style="width:140px"`
+ * 不经过该转换 ⇒ 运行时按设计稿像素硬渲染，缩放失配。故注入 div 只带 class，
+ * 尺寸规则落到同文件 style 段（px 由 px2rem 转 rem）。无 style 段时补一个最小
+ * `<style lang="less" scoped>` 块；规则已存在 ⇒ 幂等返回。
+ *
+ * @returns {{code:string, inserted:boolean}}
+ */
+function ensureCarrierSizeRule(code, cls, w, h) {
+  if (typeof code !== 'string' || !cls) return { code, inserted: false };
+  const rule = `.${cls} { width:${w}px; height:${h}px; }`;
+  if (code.includes(rule) || code.includes(`.${cls}{`) || code.includes(`.${cls} {`)) {
+    return { code, inserted: false };
+  }
+  const openM = /<style\b[^>]*>/i.exec(code);
+  if (openM) {
+    const close = code.lastIndexOf('</style>');
+    if (close > openM.index) {
+      return {
+        code: code.slice(0, close) + `\n${rule}\n` + code.slice(close),
+        inserted: true,
+      };
+    }
+  }
+  return {
+    code: `${code}\n<style lang="less" scoped>\n${rule}\n</style>\n`,
+    inserted: true,
+  };
+}
+
+export function backstopMountBgOwnership(files, resourceDomMapping, options = {}) {
   const stats = {
     scanned: 0,
     missingContainerInjected: 0,
@@ -1199,6 +1234,9 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     importInjected: 0,
     skippedDataDriven: 0,
     skippedNonObjectStyle: 0,
+    // 2026-11-15（0fde9c29 实锤）：折叠段跳过计数（0 也打，便于区分「没折叠」与「闸失效」）
+    skippedFoldedList: 0,
+    carrierSizeRuleInjected: 0,
   };
   const out = { ...files };
   if (!files || typeof files !== 'object' || !Array.isArray(resourceDomMapping)) {
@@ -1207,6 +1245,27 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
   const entries = Object.entries(files).filter(
     ([p, c]) => /\.vue$/i.test(p) && typeof c === 'string',
   );
+
+  // 🛡️ S3-BG 折叠段闸（2026-11-15 · mc-max-1794677281125-0fde9c29 实锤）：
+  //   `2:8023` 三卡折叠成 `136:129-list` 后，`136:129/128/127` 三个锚点从模板消失，
+  //   旧逻辑按 ownerSectionId 判「归属容器不存在」⇒ 注入 3 个承载 div；M6-3a 又剥掉
+  //   首子元素的 :style ⇒ 剩下 `<div data-section-id="136:129" style="width:140px;height:74px"></div>`
+  //   孤儿空 div。真值此时已由刀 53 的 v-for 逐卡消费，兜底必须**整体跳过**。
+  //   ① plan 侧事实：collapsed/v-for 段的 items[].id 与 _repeatContract.members；
+  //   ② 产物侧事实：`<xxx>-list` 锚点 + v-for（覆盖 plan 未透传的场景，零跨阶段依赖）。
+  const foldedIds = new Set(
+    options.foldedOwnerIds instanceof Set
+      ? [...options.foldedOwnerIds]
+      : Array.isArray(options.foldedOwnerIds)
+        ? options.foldedOwnerIds.filter((x) => x != null && String(x))
+        : [],
+  );
+  for (const [, code] of entries) {
+    if (!/v-for\s*=/.test(code)) continue;
+    for (const m of code.matchAll(/data-section-id="([^"]+)-list"/g)) {
+      if (m[1]) foldedIds.add(m[1]);
+    }
+  }
   // varName → { file, importLine }（该资源 import 的落点；改验分离：判据侧同逻辑独立实现）
   const varByFile = new Map();
   for (const [p, code] of entries) {
@@ -1242,6 +1301,19 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     }
     return false;
   };
+  // 🛡️ S3-BG 跨文件数据驱动判据（收窄版）：只认「刀 53 v-for 列表」形态——
+  //   `v-for` + `FG_LIST_ITEMS` / `bgVar` 数据数组 + 该 bg 变量名出现在数组里。
+  //   刻意复用不了 isDataDrivenConsumedLocal 的宽判据（任意 const 都能命中），
+  //   否则跨文件会把本该补挂的场景一并误跳过。
+  const isFoldedListVarConsumed = (code, varName) => {
+    if (!/v-for\s*=/.test(String(code))) return false;
+    const srcM = String(code).match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!srcM) return false;
+    const src = srcM[1];
+    if (!/const\s+FG_LIST_ITEMS\s*=|bgVar\s*:/.test(src)) return false;
+    const escV = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escV}\\b`).test(src);
+  };
   for (const r of resourceDomMapping) {
     if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
     stats.scanned += 1;
@@ -1249,6 +1321,12 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     if (!fname) continue;
     const wantId = String(r.ownerSectionId || '');
     if (!wantId) continue;
+    // 🛡️ 折叠段闸：该 owner 已被 v-for 逐卡消费（真 bg 在 FG_LIST_ITEMS 里），
+    //   不得再注入承载 div / 补绑到外层容器，否则制造孤儿空 div 或双挂。
+    if (foldedIds.has(wantId)) {
+      stats.skippedFoldedList += 1;
+      continue;
+    }
     let varInfo = varByFile.get(fname);
     if (!varInfo) {
       // 🛡️ S3-b（2026-11-11 · de2d9836 实锤 noVarConsumer=18/20）：无 import ⇒ **自动补
@@ -1310,7 +1388,15 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
 
     // 🛡️ 统一前置闸（2026-11-12 · S3 恢复默认启用后的首要风险闸）：已处**数据驱动消费态**
     //   ⇒ 跳过注入/补绑（防造第二份背景块）。
-    if (isDataDrivenConsumedLocal(hostSrc, varInfo.varName)) {
+    //   🔴 2026-11-15 补：刀 53 把 v-for 渲染在 components/ListSection.vue，而 import
+    //      落点可能是 index.vue ⇒ 只查 hostSrc 会漏判，补一条收窄的跨文件判据。
+    const consumedInFoldedListElsewhere = entries.some(
+      ([p, c]) => p !== varInfo.file && isFoldedListVarConsumed(c, varInfo.varName),
+    );
+    if (
+      isDataDrivenConsumedLocal(hostSrc, varInfo.varName) ||
+      consumedInFoldedListElsewhere
+    ) {
       stats.skippedDataDriven += 1;
       continue;
     }
@@ -1368,9 +1454,12 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     //   ③ 原 `hostSrc.slice(0, tplIdx + insertAt)` 与 insertAt 的**绝对坐标重复叠加 tplIdx**
     //      （仅当 `<template>` 位于文件首、tplIdx===0 时才凑巧正确）⇒ 现统一用绝对坐标。
     const dynDecl = `backgroundImage: 'url(' + ${varInfo.varName} + ')', backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat'`;
-    const injectDiv = `<div data-section-id="${wantId}" style="width:${Math.round(
-      r.figmaBox?.width || 0,
-    )}px;height:${Math.round(r.figmaBox?.height || 0)}px;" :style="{ ${dynDecl} }"></div>`;
+    // 🔴 2026-11-15：尺寸不再写 inline px（px2rem 只对 less/css 生效）——
+    //   改为确定性 class + 同文件 <style> 段规则，规则里的 px 会被 postcss-pxtorem 转换。
+    const w = Math.round(r.figmaBox?.width || 0);
+    const h = Math.round(r.figmaBox?.height || 0);
+    const cls = `mc-bg-carrier-${String(wantId).replace(/[^A-Za-z0-9]/g, '') || 'x'}`;
+    const injectDiv = `<div data-section-id="${wantId}" class="${cls}" :style="{ ${dynDecl} }"></div>`;
     const tplIdx = hostSrc.indexOf('<template>');
     if (tplIdx < 0) continue;
     const closeIdx = hostSrc.lastIndexOf('</template>');
@@ -1396,6 +1485,9 @@ export function backstopMountBgOwnership(files, resourceDomMapping) {
     }
     out[varInfo.file] =
       hostSrc.slice(0, atAbs) + '\n' + injectDiv + hostSrc.slice(atAbs);
+    const sized = ensureCarrierSizeRule(out[varInfo.file], cls, w, h);
+    out[varInfo.file] = sized.code;
+    if (sized.inserted) stats.carrierSizeRuleInjected += 1;
     stats.missingContainerInjected += 1;
   }
   // ③ 错挂清理：归属容器已补挂后，其它段开标签上同资源的 bg 声明移除（防双挂/拉伸）。
@@ -2502,9 +2594,12 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     //   回滚开关：S3_BG_BACKSTOP=false。
     enabled: () => process.env.S3_BG_BACKSTOP !== 'false',
     fixFiles: (files) => {
-      const r = backstopMountBgOwnership(files, resourceDomMapping);
+      // 🛡️ S3-BG：把「已折叠进 v-for 的原锚点」交给归属兜底，避免为消失的
+      //   ownerSectionId 补挂承载 div（0fde9c29 的孤儿空 div 根因）。
+      const foldedOwnerIds = collectFoldedOwnerIds(input || {});
+      const r = backstopMountBgOwnership(files, resourceDomMapping, { foldedOwnerIds });
       engineer.logger?.info?.(
-        `🛡️ S3 bg 归属补挂·已评估 ${JSON.stringify(r.stats)}`,
+        `🛡️ S3 bg 归属补挂·已评估 ${JSON.stringify(r.stats)} foldedOwnerIds=${foldedOwnerIds.size}`,
       );
       return r.files;
     },

@@ -15,12 +15,19 @@ import { createLogger } from '../logger/index.js'
 import { coerceLLMText } from '../utils/model-config.js'
 import { robustJSONParse } from '../utils/json-parser.js'
 // 🛡️ S1：布局结构事实（方向/间距/叠放）—— 分析阶段冻结的单一真值
-import { inferLayoutFacts } from '../utils/layout-geom-facts.js'
+import { inferLayoutFacts, reconcileSectionLayoutWithFacts } from '../utils/layout-geom-facts.js'
+import { injectRepeatedSectionContract } from '../utils/repeated-section-contract.js'
 import { getProviderPool } from '../utils/provider-pool.js'
 import { matchResourceMapping } from '../utils/resource-mapping-formatter.js'
 import { isChromeOnlySection, stripChromeSectionsInPlace } from '../utils/chrome-section-filter.js'
+// 🛡️ 2026-11-15（mc-max-1794749284344-c5e0aadc 实锤）：header 归属单一事实源。
+//   结构锚（标题文本的「父即 root」祖先）+ 无量纲几何，判据不靠图层名、不靠 vision 标签。
+import { resolveHeaderOwner, summarizeVisionAgreement } from '../utils/header-owner-truth.js'
 // 🛡️ A4（2026-09-03）：元素级高度比例覆盖的纯函数层（零依赖、可独立单测）
 import { collectFigmaNodes, applyFigmaElementHeightRatios } from '../utils/figma-height-ratio.js'
+// 🛡️ P0-6（2026-11-15 真机 mc-max-1794719857954-049e54f6）：段内容项节点真实性校准。
+//   vision 把 body.items 指到段外标题文字/图标节点 ⇒ 卡底色/字号/方向全错。判据唯一来源。
+import { repairSectionItemsTruth } from '../utils/section-items-truth.js'
 // 🛡️ P0（2026-09-04）：Vision 结果与 Figma TEXT 节点交叉校验，在 vision 阶段就发现 OCR 误读/臆造
 import { collectFigmaTextTruth, findClosestTruth } from '../utils/text-truth-guard.js'
 // 🛡️ 6-B（2026-09-15）：seriesColors 臆造色真值修正（VLM 红蓝对比先验 vs Figma 蓝系真值）
@@ -137,7 +144,10 @@ import {
   auditContentAnchorConsistency,
   reanchorMisalignedDeclaredTexts,
   collectDeclaredTexts,
+  auditDeclaredValueAnchors,
 } from '../utils/vision-content-anchor-consistency.js'
+// P0（2026-11-15 · mc-max-1794747724143-89b32111）：声明值↔ref 子树 TEXT 归属判据。
+//   必须早于 R22-d 的 LCA 重锚 —— 否则错配 ref 会被当成真值重锚成段几何（repaired=4）。
 // 🛡️ A′（2026-09-10）：纵向容器层级重建（纯函数，无 import.meta，jest 可 require）。
 // 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
 import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
@@ -192,7 +202,7 @@ function readSectionCounts(target) {
  * 为什么要遍历全部形态：merger 对 `parsed.layout` 与 `parsed.layoutStructure.layout` 分别调用，
  * 漏一个形态 = 该形态里的幻觉锚点在 `sectionY` 里继续生效（排序错位、静默）。
  */
-function auditVisionSectionAnchors(parsed, figmaData) {
+function auditVisionSectionAnchors(parsed, figmaData, blockedRefIds = []) {
   const issues = []
   const fixes = []
   const unrepaired = []
@@ -200,7 +210,7 @@ function auditVisionSectionAnchors(parsed, figmaData) {
   //   否则层 1 扩键时这里静默丢键（真机曾因此让 `phantomRefs`/`unrepaired` 不可见）。
   const stats = emptyAnchorStats()
   for (const arr of collectSectionArrays(parsed)) {
-    const report = auditSectionAnchors(arr, figmaData)
+    const report = auditSectionAnchors(arr, figmaData, { blockedRefIds })
     for (const key of Object.keys(stats)) {
       stats[key] += (report.stats && report.stats[key]) || 0
     }
@@ -1503,9 +1513,45 @@ ${analysisTask}`
       // 🛡️ 0908 P0：chrome/content 分流。title-itself / panel-title / title-note / sub-header
       // 只属于 base-panel chrome 或标题备注，不得作为业务 section 进入 SubcomponentPlanner。
       // 兼容 layout.sections / sections / layoutStructure.sections / layoutStructure.layout.sections 四种形态。
+      // 🛡️ 2026-11-15（c5e0aadc 实锤）：owner 由结构事实单源判定，优先于 headerRelation 字面——
+      //   vision 把 `GROUP 'header'` 标成 content-below-title / no-header 时（历史 1121 段里
+      //   27.2% 落在这类无消费通道标签上），旧判据会把它留在内容流 ⇒ 真插槽留内容区、
+      //   头部内容与下方 switch/内容段抢高度。owner 命中即剥离，vision 只记账不改判。
+      const headerOwner = this.componentType === 'microcode' && figmaData
+        ? resolveHeaderOwner(figmaData)
+        : null
+      // vision 对账必须在剥离前取快照（剥离后 owner section 已不在列表，会误报 absent）
+      const visionVerdict = headerOwner
+        ? summarizeVisionAgreement(headerOwner, parsed?.layout?.sections || parsed?.sections || [])
+        : null
       const chromeSectionsRemoved = this.componentType === 'microcode'
-        ? stripChromeSectionsInPlace(parsed)
+        ? stripChromeSectionsInPlace(parsed, { headerOwnerId: headerOwner?.ownerId || '' })
         : []
+      if (headerOwner) {
+        const vision = visionVerdict
+        logger.info('🛡️ header-owner 归属判定（结构锚，vision 只记账）', {
+          ownerId: headerOwner.ownerId,
+          ownerName: headerOwner.ownerName,
+          source: headerOwner.source,
+          ambiguous: headerOwner.ambiguous,
+          titleText: headerOwner.titleText,
+          heightRatio: headerOwner.metrics?.heightRatio,
+          topDeltaRatio: headerOwner.metrics?.topDeltaRatio,
+          memberCount: headerOwner.memberIds.length,
+          visionVerdict: vision.verdict,
+          visionRelation: vision.relation,
+          visionControls: vision.controls,
+          strippedByOwner: chromeSectionsRemoved.filter((s) => s.reason === 'header-owner').length,
+        })
+        if (vision.verdict === 'disagree') {
+          logger.warn('🛡️ header-owner 与 vision 不一致（以结构为准，vision 不改判）', {
+            ownerId: headerOwner.ownerId,
+            visionRelation: vision.relation,
+            visionControls: vision.controls,
+            sectionName: vision.sectionName,
+          })
+        }
+      }
       if (chromeSectionsRemoved.length > 0) {
         logger.info('已从业务 sections 剥离 base-panel chrome 区块', {
           removed: chromeSectionsRemoved.map((s) => ({
@@ -1560,6 +1606,19 @@ ${analysisTask}`
       // ⚠️ 本方法内含 L2 几何校验（merger + A′ 容器重建 + 幻觉剔除），会**改变段集**，
       //   故必须排在 A4 之后（见上方顺序铁律）。
       const figmaDimOverridden = this._overrideVisionDimensionsWithFigma(parsed, figmaData)
+
+      // 🛡️ P0-6（2026-11-15 · mc-max-1794719857954-049e54f6「当日总流量」实锤）：
+      //   段内容项节点真实性校准。vision 的 `body.items[].id` 可能指向**段子树之外**的节点
+      //   （真机：指到段外标题文字 `2:3560` 与图标方块 `2:3562`），下游一切「忠实执行」都
+      //   只是放大这个上游错误 —— 卡底 `repeatedFill` 臆造、字号/字重/颜色全错、两张同款卡
+      //   高度 52/21、`horizontal` 段被纵排。
+      //   判据零命名零窗口：items 必须在段子树内 + 不能是 TEXT + repeatedFill 必须能在
+      //   item 子树找到同值 SOLID。不满足 ⇒ 用段子树内「几何重复组」重建（纯真值）。
+      //   必须排在 _overrideVisionDimensionsWithFigma 之后（该方法会改变段集与锚点）。
+      const itemsTruthStats = this._repairSectionItemsTruth(parsed, figmaData)
+      if (itemsTruthStats.audited) {
+        logger.info('段内容项真值校准', itemsTruthStats)
+      }
 
       const analysisNormalization = this._normalizeAnalysisOutput(parsed, figmaData, resourceDomMapping)
       if (analysisNormalization?.applied > 0 || analysisNormalization?.hasDiagnostics) {
@@ -1761,8 +1820,50 @@ ${analysisTask}`
       //   它们是 `subcomponent-planner` / `microcode-engineer` / `code-generator` 的查找 key）。
       //
       //   位置：必须早于 merger —— merger 的 `sectionY` 与同区域判定都以锚点为输入。
+      // P0（2026-11-15 · mc-max-1794747724143-89b32111）：**先判内容归属，再谈锚点修复**。
+      //   判据结论通过第三参传给 R22-d；命中错配 ref 的 section 拒绝 LCA 重锚。
+      //   纯函数、零副作用；异常时保持空结论（fail-open，不阻断既有自愈链）。
+      let refTextAudit = auditDeclaredValueAnchors({ sections: [], figmaNodeData: figmaData })
       try {
-        const anchorAudit = auditVisionSectionAnchors(parsed, figmaData)
+        refTextAudit = auditDeclaredValueAnchors({
+          sections: collectSectionArrays(parsed).flat(),
+          figmaNodeData: figmaData,
+        })
+        parsed.refTextAudit = {
+          evaluated: refTextAudit.evaluated,
+          matched: refTextAudit.matched,
+          mismatched: refTextAudit.mismatched,
+          notInTree: refTextAudit.notInTree,
+          blockedRefs: refTextAudit.blockedRefs,
+          blockedRefIds: refTextAudit.blockedRefIds.slice(0, 20),
+          skipped: refTextAudit.skipped,
+          skippedReason: refTextAudit.skippedReason,
+          issues: refTextAudit.issues.slice(0, 20),
+          recipes: refTextAudit.recipes.slice(0, 20),
+        }
+        // 计数行铁律：0 命中 / skipped 一律打，离线可辨「真没问题」vs「判据没生效」
+        logger.info('[P0] 声明值-锚点归属.已评估', {
+          evaluated: refTextAudit.evaluated,
+          matched: refTextAudit.matched,
+          mismatched: refTextAudit.mismatched,
+          notInTree: refTextAudit.notInTree,
+          blockedRefs: refTextAudit.blockedRefs,
+          skipped: refTextAudit.skipped,
+          skippedReason: refTextAudit.skippedReason,
+        })
+        if (refTextAudit.blockedRefs > 0) {
+          logger.warn('[P0] 声明值与引用节点不相容（已拒绝该段 LCA 重锚）', {
+            blockedRefIds: refTextAudit.blockedRefIds.slice(0, 8),
+            samples: refTextAudit.issues.slice(0, 4),
+            recipes: refTextAudit.recipes.slice(0, 4),
+          })
+        }
+      } catch (e) {
+        logger.warn({ err: e?.message }, '[P0] 声明值-锚点归属判据失败，跳过')
+      }
+
+      try {
+        const anchorAudit = auditVisionSectionAnchors(parsed, figmaData, refTextAudit.blockedRefIds)
         // 🔴 计数行铁律：无论命中与否、是否含跳过/空输入路径，**一律**打 `已评估` 行。
         //   否则「零命中」既可能是「判据不生效」也可能是「真没问题」，离线不可辨（假绿温床）。
         logger.info('🛡️ 视觉 section 锚点审计·已评估', {
@@ -1778,6 +1879,8 @@ ${analysisTask}`
             unrepaired: anchorAudit.stats.unrepaired,
             // R2（2026-11-02）：LCA 覆盖兄弟段被拒修的事件数
             siblingCovered: anchorAudit.stats.siblingCovered,
+            // P0（2026-11-15）：内容归属矛盾被拒修的事件数
+            blockedReanchors: anchorAudit.stats.blockedReanchors,
             issues: anchorAudit.issues.slice(0, 20),
             fixes: anchorAudit.fixes.slice(0, 20),
             unrepairedDetail: anchorAudit.unrepaired.slice(0, 20),
@@ -1803,6 +1906,18 @@ ${analysisTask}`
         if (factCount > 0) {
           parsed.layoutFacts = layoutFacts
           if (parsed.layoutStructure) parsed.layoutStructure.layoutFacts = layoutFacts
+          // 🛡️ S2：方向对账拦截（vision 误记的 section 级 horizontal 用 bbox 真值纠正）
+          //   必须在 facts 冻结后立即跑，确保下游 planner / engineer prompt 拿到的是纠正后结构。
+          if (parsed.layoutStructure) {
+            const rec = reconcileSectionLayoutWithFacts(parsed.layoutStructure)
+            if (rec.overridden > 0) {
+              logger.info('🛡️ 方向对账·已纠正 section 级 horizontal 误判', {
+                checked: rec.checked,
+                overridden: rec.overridden,
+                overrides: rec.overrides,
+              })
+            }
+          }
           // 与既有 analysisFixes 惯例同址：让「已回写什么、多少条」可 grep
           if (!Array.isArray(parsed.analysisFixes)) parsed.analysisFixes = []
           parsed.analysisFixes.push({
@@ -1971,6 +2086,34 @@ ${analysisTask}`
     }
 
     return overrideCount
+  }
+
+  /**
+   * 🛡️ P0-6（2026-11-15）：段内容项节点真实性校准（判据在纯函数模块，零依赖可单测）。
+   *
+   * 只做三件事，全部基于 Figma 结构事实（不认名称、不认业务词表、无形态窗口）：
+   *   V1 `items[].id` 必须落在 `section.figmaNodeId` 子树内；
+   *   V2 该节点不能是 TEXT（文本节点装不下「标题 + 数值」两行）；
+   *   V3 `repeatedFill` 必须是 item 子树内真实存在的 SOLID fill（否则=臆造，清空）。
+   * V1/V2 任一不成立 ⇒ 用段子树内「N 子几何重复组」重建 items（数值/标签/字号/字重/颜色
+   * 全部取自节点真值，绝不生成新色值），并按卡的实际排布归一 `body.layout`。
+   *
+   * fail-open：段无 figmaNodeId / 节点不在树里 / 找不到合法重复组 ⇒ 原样返回，只记 unresolved。
+   * @param {object} parsed vision 结果（就地改写 body.items / body.layout）
+   * @param {object} figmaData Figma 节点树
+   * @returns {object} 计数（audited/violated/rebuilt/itemsRebuilt/fillCleared/unresolved）
+   */
+  _repairSectionItemsTruth(parsed, figmaData) {
+    const stats = {}
+    if (!figmaData) return stats
+    try {
+      repairSectionItemsTruth(parsed, figmaData, stats)
+    } catch (err) {
+      logger.warn('段内容项真值校准异常（fail-open，保持 vision 原值）', {
+        message: err?.message,
+      })
+    }
+    return stats
   }
 
   /**
@@ -4530,6 +4673,53 @@ ${analysisTask}`
         if (validated !== cached) {
           logger.info('🛡️ 缓存命中：已补跑幻觉 section 事实校验')
         }
+        // 🛡️ S3（2026-11-15 · dd4be3be 实锤）：同构循环契约必须**缓存命中也补跑**。
+        //   缓存存的是「加工后」结构，新增的确定性后处理对命中缓存的任务永不生效；
+        //   契约注入是幂等纯函数，不改 section 数量/层级/顺序（与上方幻觉校验同址惯例）。
+        try {
+          const rc = injectRepeatedSectionContract(validated)
+          // 🔴 计数行铁律：0 也打 —— 「没命中」与「判据没生效」必须可辨
+          logger.info('🛡️ repeat-contract·缓存命中已评估', {
+            checked: rc.checked,
+            injected: rc.injected,
+            groups: rc.groups,
+          })
+        } catch (e) {
+          logger.warn({ err: e?.message }, '[S3] 缓存命中：循环契约注入失败，跳过')
+        }
+        // P0（2026-11-15）：缓存命中同样补跑内容归属判据。
+        //   只判定 + 计数行 + 挂纯附加字段，**不触发 LCA 重锚**（命中路径按既有惯例
+        //   不改形状归一）；否则一次错分析会在 24h TTL 内全程免检。
+        try {
+          const cacheRefText = auditDeclaredValueAnchors({
+            sections: collectSectionArrays(validated).flat(),
+            figmaNodeData: figmaData,
+          })
+          validated.refTextAudit = {
+            evaluated: cacheRefText.evaluated,
+            matched: cacheRefText.matched,
+            mismatched: cacheRefText.mismatched,
+            notInTree: cacheRefText.notInTree,
+            blockedRefs: cacheRefText.blockedRefs,
+            blockedRefIds: cacheRefText.blockedRefIds.slice(0, 20),
+            skipped: cacheRefText.skipped,
+            skippedReason: cacheRefText.skippedReason,
+            issues: cacheRefText.issues.slice(0, 20),
+            recipes: cacheRefText.recipes.slice(0, 20),
+          }
+          logger.info('[P0] 声明值-锚点归属.已评估', {
+            evaluated: cacheRefText.evaluated,
+            matched: cacheRefText.matched,
+            mismatched: cacheRefText.mismatched,
+            notInTree: cacheRefText.notInTree,
+            blockedRefs: cacheRefText.blockedRefs,
+            skipped: cacheRefText.skipped,
+            skippedReason: cacheRefText.skippedReason,
+            cacheHit: true,
+          })
+        } catch (e) {
+          logger.warn({ err: e?.message }, '[P0] 缓存命中：声明值-锚点归属判据失败，跳过')
+        }
         return validated
       }
     }
@@ -4580,6 +4770,25 @@ ${analysisTask}`
         visualDegraded: analysisResult.visualDegraded === true || undefined,
         layoutSource: analysisResult.layoutSource || undefined,
         degradeReason: analysisResult.degradeReason || undefined,
+      }
+
+      // 🛡️ S3（2026-11-15 · dd4be3be 实锤）：视觉出口「同构循环契约」确定性注入。
+      //   vision 模型把 N 张同构并列卡输出成 N 个独立 section、从不写 items/collapsed，
+      //   但系统侧已有几何证据（inlineCompositeRows.members / isoSectionTruth.entryCount）。
+      //   在此把证据兑现成 v-for 契约，下游 planner/engineer 才会生成「1 个模板 + N 份数据」
+      //   而不是三次独立 LLM 分块生成（三套 DOM/三套样式）。必须在写缓存**之前**跑，
+      //   让缓存也带上契约；幂等纯函数，失败不影响主流程。
+      try {
+        const rc = injectRepeatedSectionContract(executeResult)
+        // 🔴 计数行铁律：0 也打
+        logger.info('🛡️ repeat-contract·已评估', {
+          checked: rc.checked,
+          injected: rc.injected,
+          groups: rc.groups,
+          skipped: rc.skipped.slice(0, 8),
+        })
+      } catch (e) {
+        logger.warn({ err: e?.message }, '[S3] 循环契约注入失败，跳过（下游回落各自判断）')
       }
 
       //  写入 Vision 缓存（仅在结果有效时；退化/空结构结果不缓存，避免重试命中缓存后永久复用坏数据）

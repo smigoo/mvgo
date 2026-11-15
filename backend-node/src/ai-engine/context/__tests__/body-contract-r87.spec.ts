@@ -91,7 +91,13 @@ describe('R8-7 段内容契约透传（normalizeComponentPlan）', () => {
     // 样式/占位符不属于内容契约
     expect(sec.declaredContent.bgPlaceholder).toBeUndefined()
     expect(sec.declaredContent.items[0].repeatedFill).toBeUndefined()
-    expect(sec.declaredContent.items[0].content.parts[0].styles).toBeUndefined()
+    // 🛡️ 2026-11-15（mc-max-1794751473723-92612fc0 实锤）：契约**演进**（非弱化）。
+    //   原断言「parts[].styles 一律不透传」的意图是挡「大字段 + 幻觉 + 体积」（repeatedFill /
+    //   bgPlaceholder / backgroundColor 仍在下方与 V1 用例里继续被挡）。但把**排版四件套**
+    //   一起挡掉的后果是：vision 已给 fs14/20 + #ffffff，模型拿不到 ⇒ 字号落 var(--fontSize)=12、
+    //   颜色落主题基色 rgb(15,23,42) ⇒ 蓝卡上暗字 + 「总数:」竖折两行。
+    //   故新口径 = 只透传 fontSize/color/fontWeight/lineHeight，其余样式仍剥。
+    expect(sec.declaredContent.items[0].content.parts[0].styles).toEqual({ fontSize: 12, color: '#333333' })
   })
 
   it('V1b：body.children（stat-card）透传 + icon 仅引用不回 base64', () => {

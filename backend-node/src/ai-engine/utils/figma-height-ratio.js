@@ -26,6 +26,7 @@ const MAX_DEPTH = 5
  */
 import { getFigmaBox } from './section-tree.js'
 import { unionBoxes } from './section-intrinsic-layout.js'
+import { INLINE_HEADING_RE } from './vision-facts.js'
 
 /**
  * 🛡️ 2026-11-03 治本（mc-max-1793682828131-09063447 实锤）：collapsed list section 的
@@ -551,7 +552,11 @@ const HEADER_SECTION_RE = /(header|顶部|标题|头部|title)/i
 function isHeaderLikeSection(section) {
   const name = String(section?.name || '').toLowerCase()
   const type = String(section?.type || '').toLowerCase()
-  return HEADER_SECTION_RE.test(name) || HEADER_SECTION_RE.test(type)
+  // 🛡️ 2026-11-15 降级治理：内容区小标题（sub-header / 小标题 / section-title）
+  //   已由 section-tree 源头降级为普通容器，不得再按 name 当作面板 header-like，
+  //   否则 applyFigmaHeightGrow 仍会把它排除出 flex 归一（docs/2026-11-11 根因 D）。
+  //   A 类面板 header 仍由 type==='header'（严格判据产出）命中，不受影响。
+  return HEADER_SECTION_RE.test(type) || (HEADER_SECTION_RE.test(name) && !INLINE_HEADING_RE.test(name))
 }
 
 /**

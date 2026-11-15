@@ -27,6 +27,12 @@ import { resolveWorkspaceComponentId } from '../utils/workspace-preview-publishe
 import { compareRenderedVsDesign, FIDELITY_VERDICTS } from '../utils/render-fidelity-gate.js'
 // 🛡️ 2026-11-05 C3：console 噪声判据收敛为纯函数模块（单一事实源、零重依赖、可单测）
 import { isBenignConsoleError, isFatalConsoleError } from '../utils/console-noise-classifier.js'
+// 🛡️ 2026-11-15：RUNTIME-016 文本重叠判据单一事实源（X1 祖先对 / X3 同文本复制层豁免）
+import { collectTextOverlaps } from '../utils/text-overlap-truth.js'
+// 🛡️ 2026-11-15 T2-W：RUNTIME-017 图表容器渲染裁决收敛为纯函数模块（同 C3 惯例）
+import { evaluateChartRenderReality } from '../utils/chart-render-reality.js'
+// 🛡️ 2026-11-15：RUNTIME-018 标题行几何裁决收敛为纯函数模块（判据单一来源，同 RUNTIME-017 惯例）
+import { evaluateTitleGeometryReality } from '../utils/title-geometry-reality.js'
 
 const logger = createLogger({ name: 'screenshot-renderer' })
 const RUNTIME_SELF_HEAL_WARNING_CODE = 'RUNTIME_SELF_HEAL_MISSING_ASSET'
@@ -45,6 +51,14 @@ const RUNTIME_BLOCK_IDS = new Set([
   'RUNTIME-014',
   'RUNTIME-015',
   'RUNTIME-016',
+  // 🛡️ 2026-11-15 T2-W（mc-max-1794680105142-4804ca47 折线图整图空白实锤）：
+  // 图表父容器宽度塌成 0 → echarts.init 守卫短路、不抛错、无 canvas，静态门禁与
+  // RUNTIME-004/009 全绿。判据见 evaluateChartRenderReality()，只吃真机 DOM 事实。
+  'RUNTIME-017',
+  // 🛡️ 2026-11-15（mc-max-1794710719020-d8887ee9 副标题文字跑到右侧实锤）：
+  // 内层标题组叠加外层分布语义类 ⇒ 文字被 space-between 推到最右。静态门禁与
+  // VISUAL-002 像素分都无法归因，判据见 evaluateTitleGeometryReality()，只吃真机 DOM 几何。
+  'RUNTIME-018',
 ])
 
 const RUNTIME_INCREMENTAL_IDS = new Set([
@@ -245,6 +259,8 @@ import { hasDeterministicRuntimeMissing } from '../utils/runtime-error-classifie
 // 保持对外导出不变：graph 层（phase2/vue3）仍从本模块 import 该函数。
 export { hasDeterministicRuntimeMissing }
 
+// RUNTIME-017 裁决函数见 utils/chart-render-reality.js（单一事实源，本文件只 import 消费）。
+
 export function classifyRuntimeGate(runtimeGate) {
   const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []
   const issueIds = issues.map(issue => issue?.id).filter(Boolean)
@@ -435,8 +451,10 @@ async function detectFrontendUrl() {
  * 设计约束：
  * - 【自包含函数】本函数体由 Puppeteer page.evaluate 序列化到浏览器执行，
  *   内部不得引用任何外部作用域标识符（helper 全部内联定义）。
- * - 【只输出事实】五项探测全部只读、不判定对错：输出 DOM 事实（选择器短描 + 数值），
- *   供人工/后续管线评审，绝不 addBlock、不进 runtimeGate.issues。
+ * - 【只输出事实】七项探测全部只读、不判定对错：输出 DOM 事实（选择器短描 + 数值），
+ *   页内绝不 addBlock。前 5 项只留痕；第 6 项 `chartContainers` 的裁决放在 Node 侧
+ *   纯函数 `evaluateChartRenderReality()`，第 7 项 `titleGroups` 交给
+ *   `evaluateTitleGeometryReality()`（判据单一来源），分别决定 RUNTIME-017/018 是否进门禁。
  * - 【与盘读版正交】graph 钩子 scanOrphanResources 判源码引用层（import 了但未引用）；
  *   本探针判运行时 DOM 层（引用了但没渲染出来）。HTTP 加载失败已由 RUNTIME-007/008 覆盖，
  *   本探针不做源码引用判定、不做网络判定——避免同一属性双源双判。
@@ -447,6 +465,11 @@ async function detectFrontendUrl() {
  *   3. clipped       内容溢出且被 overflow hidden/auto/scroll 祖先裁切（治 11afe1c9 tab 裁切）
  *   4. collapsedText 有文本但可见尺寸 < 4px 的塌缩槽（治 header-right 8px 类问题）
  *   5. chartNoEcharts 图表命名容器有占位面积但无 canvas/svg/echarts 实例（治 N2 兜底面）
+ *   6. chartContainers 图表容器渲染事实（chartLike/rendered/zeroWidth/canvasTotal）。
+ *      🛡️ 治 T2-W 零宽盲区：第 5 项的 `rect.width * rect.height < 1000 continue` 恰好把
+ *      「宽 0、高 160」的塌陷容器排除，故 echarts 从未 init 却零门禁痕迹。
+ *   7. titleGroups 标题组几何事实（组宽 / 文字左缘偏移 / justify / 空槽数）。
+ *      🛡️ 治「文字跑到右侧」盲区：只采不判，判据阈值在 title-geometry-reality.js 单一来源。
  *
  * @param {{contrastMin:number}} options
  * @returns {object} 探测结果（各项数组，含上限控制，总输出 < ~8KB）
@@ -464,6 +487,10 @@ function collectRenderProbesInPage(options) {
     clipped: [],
     collapsedText: [],
     chartNoEcharts: [],
+    // 🛡️ 第 6 项（2026-11-15 T2-W）：只采事实，裁决在 Node 侧 evaluateChartRenderReality
+    chartContainers: { chartLike: 0, rendered: 0, zeroWidth: [], canvasTotal: 0 },
+    // 🛡️ 第 7 项（2026-11-15）：只采事实，裁决在 Node 侧 evaluateTitleGeometryReality
+    titleGroups: [],
   }
   // stage 必须在函数内部查询（page.evaluate 序列化后无外部作用域）
   const stageEl = document.querySelector('.mc-preview-stage')
@@ -622,6 +649,82 @@ function collectRenderProbesInPage(options) {
     if (el.hasAttribute('_echarts_instance_')) continue
     out.chartNoEcharts.push({ el: desc(el), w: Math.round(rect.width), h: Math.round(rect.height) })
   }
+
+  // 6. 图表容器渲染事实（2026-11-15 T2-W）：**只采不判**，Node 侧 evaluateChartRenderReality 裁决。
+  //    🔴 不得与第 5 项合并：第 5 项的面积前置 `continue` 正是零宽盲区的来源，本项必须以
+  //    「零宽」为采集对象。真机阴阳对照（同一预览页）：
+  //      破损态 chartLike=6 / rendered=4 / zeroWidth=2（wrap + chart）→ BLOCK；
+  //      给父容器补 width:100% 后 rendered=6 / zeroWidth=0 → PASS，原有 4 个正常图表容器零误伤。
+  const cc = out.chartContainers
+  for (const el of stageEl.querySelectorAll('[class*="chart"], [id*="chart"], [class*="echart"]')) {
+    cc.chartLike += 1
+    let rect, cs
+    try {
+      rect = el.getBoundingClientRect()
+      cs = getComputedStyle(el)
+    } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.1) continue
+    // 已渲染：自身或后代有 canvas/svg，或 echarts 已打实例标记
+    if (el.querySelector('canvas, svg') || el.hasAttribute('_echarts_instance_')) {
+      cc.rendered += 1
+      continue
+    }
+    const minH = parseFloat(cs.minHeight) || 0
+    // 图表容器特征 = 实质高度 >= 60px 或显式 min-height >= 60；
+    // 排除图例、装饰条、文字槽等「类名带 chart 但本就不该有 canvas」的小节点。
+    if (rect.height < 60 && minH < 60) continue
+    if (rect.width >= 2) continue
+    if (cc.zeroWidth.length >= 10) continue
+    cc.zeroWidth.push({
+      el: desc(el),
+      w: Math.round(rect.width * 10) / 10,
+      h: Math.round(rect.height),
+      minHeight: cs.minHeight,
+    })
+  }
+  cc.canvasTotal = stageEl.querySelectorAll('canvas').length
+
+  // 7. 标题组几何事实（2026-11-15）：**只采不判**，Node 侧 evaluateTitleGeometryReality 裁决。
+  //    🔴 本段不含任何阈值/裁决：分布语义集合与 0.5 比例阈值只存在于
+  //    `utils/title-geometry-reality.js`，页内不得先筛一遍（否则就是第二套判据）。
+  //    采集形态：一个父元素含「直接文本子元素」+「空占位子元素」（标题行典型形态）。
+  try {
+    const tg = out.titleGroups
+    const directTextChildren = (el) =>
+      Array.from(el.children || []).filter((c) => hasDirectText(c))
+    const isEmptySlot = (el) => {
+      if (hasDirectText(el)) return false
+      if ((el.children || []).length > 0) return false
+      if (el.querySelector('img, svg, canvas')) return false
+      if (el.hasAttribute('src') || el.hasAttribute('_echarts_instance_')) return false
+      const st = el.getAttribute('style') || ''
+      return !/background-image/i.test(st)
+    }
+    for (const el of stageEl.querySelectorAll('*')) {
+      if (tg.length >= 12) break
+      const kids = Array.from(el.children || [])
+      if (kids.length < 2 || kids.length > 6) continue
+      const textKids = directTextChildren(el)
+      if (textKids.length === 0) continue
+      const emptyKids = kids.filter(isEmptySlot)
+      if (emptyKids.length === 0) continue
+      let rect, titleRect, cs
+      try {
+        rect = el.getBoundingClientRect()
+        titleRect = textKids[0].getBoundingClientRect()
+        cs = getComputedStyle(el)
+      } catch (_) { continue }
+      if (rect.width <= 0 || rect.height <= 0) continue
+      tg.push({
+        el: desc(el),
+        justify: cs.justifyContent || '',
+        groupWidth: Math.round(rect.width * 10) / 10,
+        leftGap: Math.round((titleRect.left - rect.left) * 10) / 10,
+        emptyChildren: emptyKids.length,
+        titleText: (textKids[0].textContent || '').trim().slice(0, 24),
+      })
+    }
+  } catch (_) { /* 事实缺失不阻断 */ }
 
   return out
 }
@@ -816,12 +919,16 @@ async function renderViaPreviewPage({
         }
       }).filter(item => item.width > 1 && item.height > 1 && item.display !== 'none' && item.visibility !== 'hidden' && Number(item.opacity) > 0)
       const stageRect = stage?.getBoundingClientRect()
-      // 🛡️ RUNTIME-016 文本重叠采集（2026-11-10 · 流量 6c12ab55 实锤）：
-      //   stage 内自有文本节点 bbox 两两相交（交比=交面积/较小面积，>0.15 记一对）。
-      //   与 mvgo-component-acceptance skill 的 D2 同源判据（改验分离：门禁在管线内，
-      //   skill 判分器独立复检）。只扫 stage（防宿主 chrome 误报，skill 首跑教训）。
+      // 🛡️ RUNTIME-016 文本节点采集（2026-11-10 · 流量 6c12ab55 实锤）：
+      //   stage 内自有文本节点 bbox + 字号 + 祖先容器链 + **祖先文本节点 id 链**。
+      //   🛡️ 2026-11-15（RUNTIME-016 假阳性探针 5/8 实锤）：成对相交判定与结构化豁免
+      //   （X1 祖先对 / X3 同文本复制层）收敛到 utils/text-overlap-truth.js 单一事实源，
+      //   浏览器内**只产出事实**（不判交比、不判豁免），Node 侧 collectTextOverlaps 裁决。
+      //   与 mvgo-component-acceptance skill 的 D2 同源口径（改验分离，skill 侧镜像同规则）。
+      //   只扫 stage（防宿主 chrome 误报，skill 首跑教训）。
       const TEXTISH = new Set(['SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'DIV', 'LABEL', 'A'])
       const textNodes = []
+      const textIdOf = new Map()
       if (stage) {
         for (const el of stage.querySelectorAll('*')) {
           if (!TEXTISH.has(el.tagName)) continue
@@ -835,8 +942,15 @@ async function renderViaPreviewPage({
           //    D2 回灌指导要能定位到具体 DOM（盲修 2 轮修不掉标题 vs 大数字重叠）。
           let fs = 0
           let anc = ''
+          let pos = 'static'
+          let tf = false
           try {
-            fs = Math.round(parseFloat(getComputedStyle(el).fontSize)) || 0
+            const cs = getComputedStyle(el)
+            fs = Math.round(parseFloat(cs.fontSize)) || 0
+            // 🛡️ 2026-11-15 X2：`getBoundingClientRect` 返回变换后 AABB ⇒ rotate/scale 文本
+            //    的 AABB 相交不等于视觉叠字；position 只作诊断事实（不参与豁免，见 util 注释）
+            pos = cs.position || 'static'
+            tf = !!cs.transform && cs.transform !== 'none'
             const segs = []
             let p = el.parentElement
             while (p && segs.length < 3) {
@@ -846,28 +960,20 @@ async function renderViaPreviewPage({
             }
             anc = segs.join(' < ')
           } catch (e) { /* 采集失败不阻断渲染 */ }
+          // X1 事实：祖先中已收集的文本节点 id（文档序保证父先于子被收集）
+          const ancestors = []
+          let ap = el.parentElement
+          while (ap && ap !== stage.parentElement) {
+            if (textIdOf.has(ap)) ancestors.push(textIdOf.get(ap))
+            ap = ap.parentElement
+          }
+          const nodeId = textNodes.length
+          textIdOf.set(el, nodeId)
           textNodes.push({
+            i: nodeId,
             text: (el.textContent || '').trim().slice(0, 24),
             x: r.x, y: r.y, w: r.width, h: r.height,
-            fs, anc,
-          })
-        }
-      }
-      const textOverlaps = []
-      for (let i = 0; i < textNodes.length; i += 1) {
-        for (let j = i + 1; j < textNodes.length; j += 1) {
-          const a = textNodes[i]
-          const b = textNodes[j]
-          const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
-          const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
-          const inter = ix * iy
-          if (inter <= 0) continue
-          const ratio = inter / Math.max(1, Math.min(a.w * a.h, b.w * b.h))
-          // 🛡️ 根治⑪：overlap 对象带双节点 bbox/字号/容器链（此前只留 {a,b,ratio}，修复轮盲修）
-          if (ratio > 0.15) textOverlaps.push({
-            a: a.text, b: b.text, ratio: +ratio.toFixed(2),
-            aBox: [a.x, a.y, a.w, a.h], bBox: [b.x, b.y, b.w, b.h],
-            aFs: a.fs, bFs: b.fs, aAnc: a.anc, bAnc: b.anc,
+            fs, anc, ancestors, pos, tf,
           })
         }
       }
@@ -878,9 +984,38 @@ async function renderViaPreviewPage({
         renderError,
         stage: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
         visibleChildren,
-        textOverlaps: textOverlaps.slice(0, 12),
+        // 原始事实（Node 侧 collectTextOverlaps 转成 overlap 对；不直接进 evidence）
+        textNodes: textNodes.slice(0, 400),
       }
     })
+
+    // 🛡️ 2026-11-15（RUNTIME-016 假阳性探针 5/8 实锤）：重叠对裁决走单一事实源——
+    //   X1 祖先对（父容器盒罩住子盒，非文字压字）+ X2 变换节点（AABB 假交）+
+    //   X3 同文本复制层（描边/阴影层）豁免。浏览器内只采事实，这里判交比与豁免；
+    //   evidence 字段形态与旧版逐字一致。
+    const {
+      overlaps: allOverlaps,
+      skipped: skippedOverlaps,
+      positionFacts: overlapPositionFacts,
+    } = collectTextOverlaps(previewState.textNodes)
+    delete previewState.textNodes
+    previewState.textOverlaps = allOverlaps.slice(0, 12)
+    if (skippedOverlaps.length > 0) {
+      // 真机日志计数行（审计三证：豁免了几对、何因）——不塞入参，独立可核
+      logger.info('🛡️ RUNTIME-016 结构化豁免重叠对（不计入 BLOCK）', {
+        skipped: skippedOverlaps.length,
+        kept: allOverlaps.length,
+        reasons: skippedOverlaps.reduce((acc, item) => {
+          acc[item.reason] = (acc[item.reason] || 0) + 1
+          return acc
+        }, {}),
+        samples: skippedOverlaps.slice(0, 3),
+      })
+    }
+    if (overlapPositionFacts?.total > 0) {
+      // 诊断（不改判据）：显式定位对占比 —— absolute 既可能设计叠层也可能堆出坍缩
+      logger.info('🛡️ RUNTIME-016 定位分布诊断（非 static 不豁免）', overlapPositionFacts)
+    }
 
     if (previewState.status !== 'ready') {
       addBlock('RUNTIME-004', 'preview-status', `真实预览状态为 ${previewState.status}`, previewState)
@@ -937,9 +1072,12 @@ async function renderViaPreviewPage({
     // 面板切换器隐藏后留一点重排时间
     await new Promise(resolve => setTimeout(resolve, 300))
 
-    // ── WP3 渲染探针（2026-10-08）：只读 DOM 事实探测，只留痕不阻断 ──
+    // ── WP3 渲染探针（2026-10-08）：只读 DOM 事实探测 ──
     // 放在图片等待/重排之后，保证布局事实已定；环境开关 RENDER_PROBES_ENABLED=false 可整体关闭，
-    // 阈值 RENDER_PROBE_CONTRAST_MIN（默认 3.0）。探针失败绝不影响截图与门禁流程。
+    // 阈值 RENDER_PROBE_CONTRAST_MIN（默认 3.0）。探针失败绝不影响截图流程。
+    // ⚠️ 前 5 项只留痕；第 6 项 chartContainers 由 RUNTIME-017、第 7 项 titleGroups 由
+    //    RUNTIME-018 判据裁决（2026-11-15）。开关关闭 / 探针失败 ⇒ 两个纯函数均返回
+    //    no-evidence，fail-open 不阻断。
     let renderProbes = null
     if (process.env.RENDER_PROBES_ENABLED !== 'false') {
       try {
@@ -949,6 +1087,46 @@ async function renderViaPreviewPage({
         logger.warn('渲染探针执行失败（非阻断）', { error: probeError?.message || String(probeError) })
         renderProbes = { error: probeError?.message || String(probeError) }
       }
+    }
+
+    // 🛡️ RUNTIME-017（2026-11-15 T2-W）：图表父容器零宽 ⇒ echarts.init 守卫短路、整图空白且
+    //    不抛错；旧第 5 项面积阈值与静态 G12b 均漏。判据只吃真机 DOM 事实，计数行恒打（0 也打）。
+    const chartReality = evaluateChartRenderReality(renderProbes)
+    logger.info(
+      `chartRenderReality:evaluated=${chartReality.evaluated},` +
+        `chartLike=${chartReality.chartLike},rendered=${chartReality.rendered},` +
+        `zeroWidth=${chartReality.zeroWidth.length},verdict=${chartReality.verdict}`,
+    )
+    if (chartReality.shouldBlock) {
+      addBlock(
+        'RUNTIME-017',
+        'chart',
+        `真实预览存在 ${chartReality.zeroWidth.length} 个零宽图表容器（echarts 未初始化，图表整块空白）`,
+        {
+          chartContainers: renderProbes.chartContainers,
+          samples: chartReality.zeroWidth.slice(0, 10),
+        },
+      )
+    }
+
+    // 🛡️ RUNTIME-018（2026-11-15）：标题组被分布语义类推成两端对齐 ⇒ 文字跑到右侧。
+    //    判据只吃真机 DOM 几何（leftGap/groupWidth + computed justify），计数行恒打（0 也打）。
+    const titleReality = evaluateTitleGeometryReality(renderProbes)
+    logger.info(
+      `titleGeometryReality:evaluated=${titleReality.evaluated},` +
+        `total=${titleReality.total},distributed=${titleReality.distributed},` +
+        `bad=${titleReality.bad.length},verdict=${titleReality.verdict}`,
+    )
+    if (titleReality.shouldBlock) {
+      addBlock(
+        'RUNTIME-018',
+        'layout',
+        `真实预览存在 ${titleReality.bad.length} 个标题组文字被分布布局推到右侧（左缘偏移 > 组宽 50%）`,
+        {
+          titleGroups: renderProbes.titleGroups,
+          samples: titleReality.bad.slice(0, 10),
+        },
+      )
     }
 
     const stageElement = await page.$('.mc-preview-stage')

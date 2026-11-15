@@ -24,6 +24,7 @@ import { haveDisjointDeclaredContent, haveDisjointDeclaredText } from './figma-c
 import { sectionAnchorKey, FIGMA_ID_RE } from './section-anchor-identity.js';
 // 🛡️ 2026-11-12（cc633474 实锤）：列数几何反算的**唯一判据**在 row-metrics（纯几何模块，无反向依赖）。
 import { deriveGridColumnsFromNode } from './row-metrics.js';
+import { isPanelHeaderName } from './vision-facts.js';
 
 export function isLayoutContainerSection(sec) {
   if (!sec || typeof sec !== 'object') return false
@@ -2618,7 +2619,11 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       const box = child.absoluteBoundingBox || null
       const id = String(child.id || '')
       
+      // 🛡️ 2026-11-15 降级治理：`/header/i` 只保留作「内容区块子项 item 化」的递归控制
+      //   （isContentBlock），不再承载「面板 chrome 标题栏」语义；后者改由
+      //   vision-facts#isPanelHeaderName 严格判据（单一事实源）决定。
       const isHeader = /header/i.test(name)
+      const isPanelHeader = isPanelHeaderName(name)
       const isStats = /统计|数据|概览|指标/.test(name)
       const cleanName = name.replace(/^slot-/, '').trim()
       const childKids = (child.children || []).filter((c) => c && typeof c === 'object')
@@ -2645,17 +2650,17 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       const nestedSection = {
         id,
         name: cleanName || name,
-        ...(isHeader ? { type: 'header' } : isStats ? { type: 'stats' } : hasEcharts ? { type: 'chart' } : {}),
+        ...(isPanelHeader ? { type: 'header' } : isStats ? { type: 'stats' } : hasEcharts ? { type: 'chart' } : {}),
         figmaNodeId: id,
         // 🛡️ P1 修复（2026-09-17）：sourceNodeIds 收集子树所有节点 id，供资源挂载系统匹配 owner
         sourceNodeIds: collectSubtreeNodeIds(child),
         ...(box ? { absoluteBoundingBox: box } : {}),
         layout: deriveChildLayout(child, layoutFacts),
         ...(childGridColumns != null ? { gridColumns: childGridColumns } : {}),
-        ...(isHeader ? { header: { title: cleanName || name } } : {}),
+        ...(isPanelHeader ? { header: { title: cleanName || name } } : {}),
         // 🛡️ 纯 chrome 标题栏标记（2026-09-17）：供 planner 在微码流程剥离，
         //   Vue3 流程自行渲染外壳、保留。
-        ...(isHeader ? { chromeOnly: headerIsChromeOnly(child) } : {}),
+        ...(isPanelHeader ? { chromeOnly: headerIsChromeOnly(child) } : {}),
         children: sub.sections,
         // 🛡️ 容器标记：有嵌套业务 section 子节点 → 空间包裹容器（不占独立 .vue）
         ...(sub.hasNested ? { isLayoutContainer: true } : {}),
@@ -2837,7 +2842,10 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     }
 
     // section：FRAME / GROUP / INSTANCE / COMPONENT / COMPONENT_SET
+    // 🛡️ 2026-11-15 降级治理：与 deriveNestedSections 同口径。`/header/i` 仅用于
+    //   「标题区子节点 item 化」的递归控制；面板 chrome 语义走严格判据单一事实源。
     const isHeader = /header/i.test(name)
+    const isPanelHeader = isPanelHeaderName(name)
     const cleanName = name.replace(/^slot-/, '').trim()
     const directKids = (child.children || []).filter((c) => c && typeof c === 'object')
     
@@ -2856,7 +2864,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     sections.push({
       id,
       name: cleanName || name,
-      ...(isHeader ? { type: 'header' } : hasEcharts ? { type: 'chart' } : {}),
+      ...(isPanelHeader ? { type: 'header' } : hasEcharts ? { type: 'chart' } : {}),
       figmaNodeId: id,
       // 🛡️ P1 修复（2026-09-17）：sourceNodeIds 收集子树所有节点 id，供资源挂载系统匹配 owner
       sourceNodeIds: collectSubtreeNodeIds(child),
@@ -2864,9 +2872,9 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       ...(box ? { absoluteBoundingBox: box } : {}),
       layout: deriveChildLayout(child, layoutFacts),
       ...(childGridColumns != null ? { gridColumns: childGridColumns } : {}),
-      ...(isHeader ? { header: { title: cleanName || name } } : {}),
+      ...(isPanelHeader ? { header: { title: cleanName || name } } : {}),
       // 🛡️ 纯 chrome 标题栏标记（2026-09-17）：供 planner 在微码流程剥离。
-      ...(isHeader ? { chromeOnly: headerIsChromeOnly(child) } : {}),
+      ...(isPanelHeader ? { chromeOnly: headerIsChromeOnly(child) } : {}),
       // 🆕 递归推导嵌套 section（核心改进）
       children: sub.sections,
       // 🛡️ 容器标记：非 header 且有嵌套业务 section → 空间包裹容器

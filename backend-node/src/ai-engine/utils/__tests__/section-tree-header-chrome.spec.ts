@@ -15,7 +15,9 @@
  *   阴性（该剥）= 装饰 FRAME + 单标题文本 + 裸装饰形状；
  *   阳性（该留）= 真业务 header（tabs / 组件实例 / 交互命名的 FRAME / 双文本 / 交互图标容器）。
  */
-import { headerIsChromeOnly } from '../section-tree.js';
+import { headerIsChromeOnly, deriveSectionsFromFigmaTree } from '../section-tree.js';
+import { isPanelHeaderName } from '../vision-facts.js';
+import { applyHeaderGeometryFallback } from '../header-geometry-fallback.js';
 
 // ── Fixture 构造器（只认 type/name/children/characters，判据命名无关）──────────
 const shape = (type, name) => ({ type, name });
@@ -132,5 +134,91 @@ describe('headerIsChromeOnly · 阳性对照（真业务 header 绝不能被剥�
       frame('tabs', [text('t', '运行中')]),
     ]);
     expect(headerIsChromeOnly(node)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2026-11-15 降级治理：B 类（slot-con 内 sub-header）不再作为「面板 header」特殊类型。
+// 判据纪律：A 类阳性 / B 类阴性 / 其它类型逐条不命中 / 真错仍 FAIL。
+// 事故件 mc-max-1794674982043-8c966d20（4sub-header = 车型分布标题 + icon 组）。
+// 历史依据：docs/2026-11-11-组件生成根因治理改动清单.md 根因 C/D 验收标准第 3 条。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('B 类 sub-header 降级 · 阴阳对照', () => {
+  const box = (x: number, y: number, w: number, h: number) => ({ x, y, width: w, height: h });
+  const textNode = (id: string, chars: string) => ({
+    id, name: '文字', type: 'TEXT', characters: chars,
+    absoluteBoundingBox: box(36, 573, 64, 24),
+  });
+  const iconNode = (id: string) => ({
+    id, name: 'icon', type: 'GROUP', absoluteBoundingBox: box(36, 573, 18, 18),
+    children: [{ id: `${id}-r`, name: 'Rectangle 26', type: 'RECTANGLE', absoluteBoundingBox: box(36, 573, 18, 18) }],
+  });
+  const heading = (name: string) => ({
+    id: '2:3439', name, type: 'GROUP', absoluteBoundingBox: box(36, 573, 86, 24),
+    children: [textNode('2:3440', '车型分布'), iconNode('2:3441')],
+  });
+  const cards = {
+    id: '1263:38', name: '5cards', type: 'FRAME', absoluteBoundingBox: box(30, 600, 387, 114),
+    children: [{
+      id: 'c1', name: 'card', type: 'FRAME', absoluteBoundingBox: box(30, 600, 192, 114),
+      children: [textNode('c1-t', '隧道内车辆')],
+    }],
+  };
+  const deriveTop = (name: string): any[] => {
+    const doc = {
+      document: {
+        id: 'root', name: 'cp-流量监测', type: 'FRAME',
+        absoluteBoundingBox: box(30, 560, 400, 170),
+        children: [heading(name), cards],
+      },
+    };
+    const res: any = deriveSectionsFromFigmaTree(doc as any, null as any);
+    return Array.isArray(res) ? res : (res?.sections || []);
+  };
+
+  it('A 类面板 header 严格命名仍保留 type/chromeOnly/header 事实（阳性对照）', () => {
+    for (const nm of ['header', 'header-', 'header 标题', 'panel-header']) {
+      expect(isPanelHeaderName(nm)).toBe(true);
+      const s = deriveTop(nm).find((x) => x.id === '2:3439');
+      expect(s?.type).toBe('header');
+      expect(s).toHaveProperty('chromeOnly');
+      expect(s?.header?.title).toBe(nm);
+    }
+  });
+
+  it('B 类 sub-header 不再打 type/chromeOnly/header 事实（本次事故件）', () => {
+    for (const nm of ['0sub-header', '4sub-header', '6sub-header', 'sub_header', '小标题', 'section-title']) {
+      expect(isPanelHeaderName(nm)).toBe(false);
+      const s = deriveTop(nm).find((x) => x.id === '2:3439');
+      expect(s?.type).toBeUndefined();
+      expect(s?.chromeOnly).toBeUndefined();
+      expect(s?.header).toBeUndefined();
+      // 降级 ≠ 丢结构：标题 TEXT + icon 组仍作为 item 保留（isContentBlock 不变）
+      expect(s?.children?.length).toBe(2);
+    }
+  });
+
+  it('其它类型逐条不命中，普通内容块不受影响', () => {
+    for (const nm of ['5cards', '1统计', '图例', '@echarts/line-7', 'tit']) {
+      expect(isPanelHeaderName(nm)).toBe(false);
+    }
+    const cardsSec = deriveTop('4sub-header').find((x) => x.id === '1263:38');
+    expect(cardsSec?.type).toBeUndefined();
+    expect(cardsSec?.isLayoutContainer).toBe(true);
+  });
+
+  it('几何兜底不得把 B 类薄条补回 type=header（防「新误判换旧误判」）', () => {
+    const bClass: any[] = [
+      { id: 'A', name: '4sub-header', absoluteBoundingBox: box(0, 0, 400, 20), children: [] },
+      { id: 'B', name: '5cards', absoluteBoundingBox: box(0, 20, 400, 180), children: [] },
+    ];
+    expect(applyHeaderGeometryFallback(bClass, {})).toBeNull();
+    expect(bClass[0].type).toBeUndefined();
+    const aClass: any[] = [
+      { id: 'A', name: 'header-', absoluteBoundingBox: box(0, 0, 400, 20), children: [] },
+      { id: 'B', name: '5cards', absoluteBoundingBox: box(0, 20, 400, 180), children: [] },
+    ];
+    expect(applyHeaderGeometryFallback(aClass, {})).not.toBeNull();
+    expect(aClass[0].type).toBe('header');
   });
 });
