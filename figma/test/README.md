@@ -20,7 +20,8 @@
 | `figma-node-shim.cjs` | REST 节点升格成 Plugin API 语义节点：几何精确还原、reparent 保绝对位置、x/y 联动、pluginData |
 | `corpus-harness.cjs` | 加载真实 code.js 到 vm，对 29 树跑 `structure-only`，输出结构快照；`--baseline` / `--check` / `--summary` / `--list` |
 | `verify.cjs` | 统一入口：语法 + 几何还原 + reparent 语义 + corpus diff + 阴阳对照，一条命令 |
-| `corpus-snapshots/baseline.json` | 固化基线（29 样本 × 结构快照），当前代码对应 tag `038c080fb` |
+| `mark-backdrop-verify.cjs` | 阶段4 手工背景打标入口验证（7 项：写标记/几何零变化/不误标/幂等/空选区） |
+| `corpus-snapshots/baseline.json` | 固化基线（29 样本 × 结构快照），对应 tag `038c080fb`（阶段2/3/4 只读改动均零差异） |
 
 ## 用法
 
@@ -39,6 +40,9 @@ node corpus-harness.cjs --check --allow=Q1QuWz0j9YdIsxUnu6F1oV_1-479_9e4c1b4f.js
 # 调试：看每样本 summary 计数
 node corpus-harness.cjs --summary
 
+# 阶段4 手工背景打标入口验证
+node mark-backdrop-verify.cjs
+
 # 确认行为变更是有意的，才重建基线（重建即宣布新行为为 accepted）
 node corpus-harness.cjs --baseline && node verify.cjs
 ```
@@ -53,11 +57,20 @@ node corpus-harness.cjs --baseline && node verify.cjs
 4. **基线更新即声明**：`--baseline` 会把当前行为固化为 accepted。只有在你确认
    「这 29 个样本的新行为都正确」后才能跑；禁止用它掩盖回归。
 
+## 阶段 2/3/4 落地状态（均零行为变更，corpus 29/29 零差异）
+
+| 阶段 | 内容 | 提交 |
+|---|---|---|
+| 2 作用域控制 | `detectRootScope()` 只读检测多组件 Frame / 非组件根，UI 警告；「保持现状先跳过」不拆分 | `380af3101` |
+| 3 判据硬化 | 预演实证去掉 `isBgLike` 名字短路会让 11/29 样本背景识别退化（破坏非修复）⇒ 改为 `auditBackdropEvidence()` 只读审计（打标/几何/仅名字三分类）。实测打标0/几何16/仅名字16 | `23664388f`(auto-sync 抢先) + `78e507e2e`(时机修复) |
+| 4 功能收尾 | 切段护栏实测 `1:479` 当前不切 3 段⇒跳过；L0 AL 报告已含完整建议值⇒不加；仅落地手工背景打标入口 `🏷 标记选中为根背景`（写 pluginData，零几何变化） | 本轮待提交 |
+
 ## 当前基线
 
-- 产品代码 tag：`backup/pre-optimization-20261115-2353`（`038c080fb`）
+- 产品代码 tag：`backup/pre-optimization-20261115-2353`（`038c080fb`，止损态）
+- 阶段 2/3/4 均为只读检测或手工入口，**自动整理行为零变化** ⇒ 基线无需重建
 - 样本数：29，快照行数：6884
-- 统一验证：PASS 6 / FAIL 0（2026-11-15）
+- 统一验证：PASS 6 / FAIL 0；手工打标验证：PASS 7 / FAIL 0
 - 阴阳对照：几何篡改被抓、判据篡改 29/29 被抓
 
 ## 纳入样本（按 fileKey 分组）

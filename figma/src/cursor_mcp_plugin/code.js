@@ -106,6 +106,24 @@ figma.ui.onmessage = async (msg) => {
       lastNonEmptySelection = [];
       figma.clientStorage.deleteAsync("mvgo-structure-cache").catch(() => {});
       break;
+    case "mark-backdrop-manual": {
+      // v20261116 阶段4：手工背景打标入口。当用户选中「近全屏但识别不到」的根背景时，
+      // 显式写 pluginData: mvRootBackdrop=1，后续整理/契约认这个标记。只写标记、零几何变化。
+      // 这是「最下层+纯色无法 100% 判定」时的白名单兜底，不依赖名字/LLM/自动几何猜测。
+      let sel = figma.currentPage.selection;
+      if (!sel || sel.length === 0) sel = resolveCachedSelection();
+      if (!sel || sel.length === 0) {
+        figma.ui.postMessage({ type: "mark-backdrop-result", ok: false, error: "请先选中要标记为背景的节点" });
+        break;
+      }
+      let marked = 0, skipped = 0;
+      for (const n of sel) {
+        try { n.setPluginData(ROOT_BACKDROP_KEY, "1"); marked++; }
+        catch (e) { skipped++; }
+      }
+      figma.ui.postMessage({ type: "mark-backdrop-result", ok: marked > 0, marked, skipped });
+      break;
+    }
     case "save-server-port":
       state.serverPort = msg.port || 3055;
       figma.clientStorage.setAsync("serverPort", state.serverPort).catch(() => {});
