@@ -350,7 +350,7 @@ figma.ui.onmessage = async (msg) => {
           conflict: 0, doubleConfirmed: 0, intentShared: 0, orderMismatch: 0,
           exportSet: 0, exportCleared: 0, exportLoose: 0,
           foregroundKept: 0, forcedBg: 0, groupFailed: 0, singleDecor: 0, unlocked: 0, prefixFixed: 0,
-          moduleGroups: 0, moduleSkipped: 0, moduleGroupFailed: 0,
+          moduleGroups: 0, moduleSkipped: 0, moduleGroupFailed: 0, moduleClaimedSkip: 0,
           containers: 0, layoutErrors: 0, layoutErrorMsg: "", moduleExpanded: 0,
           geometricGroups: 0, geoCandidates: 0, geoRows: 0, geoSpanKept: 0, geoGroupFailed: 0,
           geoColumnsKept: 0, geoProtectedSets: 0, geoRowRejected: 0, geoLoopNamed: 0,
@@ -508,7 +508,7 @@ figma.ui.onmessage = async (msg) => {
           foregroundKept: summary.foregroundKept, forcedBg: summary.forcedBg,
           groupFailed: summary.groupFailed, singleDecor: summary.singleDecor,
           unlocked: summary.unlocked, prefixFixed: summary.prefixFixed,
-          moduleGroups: 0, moduleSkipped: 0, moduleGroupFailed: 0,
+          moduleGroups: 0, moduleSkipped: 0, moduleGroupFailed: 0, moduleClaimedSkip: 0,
           containers: summary.containers, layoutErrors: summary.layoutErrors,
           groupModulesOn: groupModules, intentModuleCount: 0, moduleExpanded: 0,
           geometricGroups: summary.geometricGroups, geoCandidates: summary.geoCandidates,
@@ -589,7 +589,7 @@ figma.ui.onmessage = async (msg) => {
           conflict: 0, doubleConfirmed: 0, intentShared: 0, orderMismatch: 0,
           exportSet: 0, exportCleared: 0, exportLoose: 0,
           foregroundKept: 0, forcedBg: 0, groupFailed: 0, singleDecor: 0, unlocked: 0, prefixFixed: 0,
-          moduleGroups: 0, moduleSkipped: 0, moduleGroupFailed: 0,
+          moduleGroups: 0, moduleSkipped: 0, moduleGroupFailed: 0, moduleClaimedSkip: 0,
           containers: 0, layoutErrors: 0, layoutErrorMsg: "", moduleExpanded: 0,
           geometricGroups: 0, geoCandidates: 0, geoRows: 0, geoSpanKept: 0, geoGroupFailed: 0,
           geoColumnsKept: 0, geoProtectedSets: 0, geoRowRejected: 0, geoLoopNamed: 0,
@@ -832,6 +832,7 @@ figma.ui.onmessage = async (msg) => {
           prefixFixed: summary.prefixFixed,
           moduleGroups: summary.moduleGroups,
           moduleSkipped: summary.moduleSkipped,
+          moduleClaimedSkip: summary.moduleClaimedSkip,
           moduleGroupFailed: summary.moduleGroupFailed,
           containers: summary.containers,
           layoutErrors: summary.layoutErrors,
@@ -1290,6 +1291,17 @@ function sameVisualRow(a, b) {
 // 单 id 视觉模块的确定性几何扩展：同父级 + 同一视觉行 + 内容型节点，最多补到 5 个。
 // 方案预览（describeStructurePlan）与实际执行（groupModulesByIntent）共用同一函数，
 // 否则方案会把单 id 模块误标成「待补」，又把即将被视觉占用的节点重复列进几何兜底。
+// v20261116 P0：加「内容形态同构」护栏。真机 2015-130 实测：radar(1:816, sig=7|0|0)
+// 与两张卡(1:727=2|1|1 / 1:735=2|1|0)在 y 上完全重叠 ⇒ sameVisualRow 命中 ⇒ 被单 id
+// rectified-stat 扩展吞进同一 section，同一 radar 又被 overdue-stat / hazard-radar 各吞一次，
+// 「左图表+右上下卡」被打散成三平级。根治 = 扩展只补与 seed 同内容形态的兄弟：
+// 结构签名 texts 差 ≤1、nums 相等、ratio 一致（与 membersAreUniformLoop 同一判据口径）。
+// 不改 sameVisualRow（同行循环卡片本就 x 并排，加 x 分离会误杀正常 item-* 行）。
+function isSameContentShape(a, b) {
+  const sa = memberStructureSig(a).split("|").map(Number);
+  const sb = memberStructureSig(b).split("|").map(Number);
+  return Math.abs(sa[0] - sb[0]) <= 1 && sa[1] === sb[1] && sa[2] === sb[2];
+}
 function expandModuleNodes(nodes, parent, onExcluded) {
   if (!Array.isArray(nodes) || nodes.length !== 1) return nodes || [];
   if (!parent || !("children" in parent) || parent.type === "PAGE") return nodes;
@@ -1298,6 +1310,7 @@ function expandModuleNodes(nodes, parent, onExcluded) {
     if (sib === out[0]) continue;
     if (!isContentCandidate(sib, parent)) { if (onExcluded) onExcluded(sib); continue; }
     if (!sameVisualRow(out[0], sib)) continue;
+    if (!isSameContentShape(out[0], sib)) continue;
     out.push(sib);
     if (out.length >= 5) break;
   }
@@ -1632,12 +1645,18 @@ async function groupModulesByIntent(modules, summary) {
   // （.8 日志 8 个 module 里 5 个单 id ⇒ 模块扩展 0），单 id 交给下面的几何扩展补齐即可。
   const list = modules.filter(m => m && Array.isArray(m.nodeIds) && m.nodeIds.length >= 1)
     .slice().sort((a, b) => (Number(a.order) || 999) - (Number(b.order) || 999));
+  // v20261116 P0：执行路径跨模块去重。真机 2015-130 日志里 @echarts/radar(1:816) 被
+  // rectified-stat / overdue-stat / hazard-radar 三个 module 同时认领 ⇒ safeGroup 反复 reparent
+  // 同一节点，「左图表+右上下卡」被打散成三平级。与 describeStructurePlan 的 claimed
+  // 同一口径：一个节点只能归属先处理它的那个模块，后到的模块跳过（不改节点、不改几何）。
+  const claimed = new Set();
   for (const m of list) {
     try {
       const raw = [];
       for (const id of m.nodeIds) {
         const n = await figma.getNodeByIdAsync(id);
         if (!n) continue;
+        if (claimed.has(n.id)) { summary.moduleClaimedSkip = (Number(summary.moduleClaimedSkip) || 0) + 1; continue; }
         if (!isContentCandidate(n, n.parent)) { summary.moduleExcluded++; continue; }
         if (raw.indexOf(n) === -1) raw.push(n);
       }
@@ -1648,7 +1667,10 @@ async function groupModulesByIntent(modules, summary) {
       if (nodes.length === 1) {
         const expanded = expandModuleNodes(nodes, nodes[0].parent, () => { summary.moduleExcluded++; });
         nodes.length = 0;
-        for (const n of expanded) nodes.push(n);
+        for (const n of expanded) {
+          if (claimed.has(n.id)) { summary.moduleClaimedSkip = (Number(summary.moduleClaimedSkip) || 0) + 1; continue; }
+          nodes.push(n);
+        }
         if (nodes.length >= 2) summary.moduleExpanded++;
       }
       if (nodes.length < 2) { summary.moduleSkipped++; continue; }
@@ -1672,6 +1694,7 @@ async function groupModulesByIntent(modules, summary) {
       try { g.setPluginData("mvModuleContainer", "1"); } catch (e) {}
       // 插回被收纳节点中最靠下的原位置，保护与其它兄弟的 z-order
       try { parent.insertChild(Math.max(0, Math.min(minIdx, parent.children.length - 1)), g); } catch (e) {}
+      for (const n of nodes) claimed.add(n.id);
       summary.moduleGroups++;
       logContainer("[视觉]", g, nodes.length, parent.name);
     } catch (e) { summary.moduleGroupFailed++; }
