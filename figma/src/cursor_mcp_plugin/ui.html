@@ -739,6 +739,11 @@
         if (msg.deleted) parts.push("删除 " + msg.deleted);
         if (msg.decorMerged) parts.push("背景收纳 " + msg.decorMerged);
         if (msg.chartLegendGuarded) parts.push("图例同图表容器守护 " + msg.chartLegendGuarded);
+        if (msg.nestedCpDemoted) parts.push("深层组件降级 " + msg.nestedCpDemoted);
+        if (msg.rootHeaderDemotedDeep) parts.push("深层标题降级 " + msg.rootHeaderDemotedDeep);
+        if (msg.headerSlotRestored) parts.push("头部插槽复原 " + msg.headerSlotRestored);
+        if (msg.slotEjectScaffold) parts.push("骨架提回根级 " + msg.slotEjectScaffold);
+        if (msg.slotEjectRolledBack) parts.push("⚠️ 提回已回滚 " + msg.slotEjectRolledBack);
         if (msg.sorted) parts.push("顺序整理 " + msg.sorted);
         if (msg.exportSet) parts.push("导出预设 " + msg.exportSet);
         if (msg.moduleGroups) parts.push("业务容器 " + msg.moduleGroups);
@@ -776,6 +781,21 @@
           "容器 " + (msg.containers || 0),
           "背景收纳 " + (msg.decorMerged || 0),
           "图例同图表容器守护 " + (msg.chartLegendGuarded || 0),
+          "深层组件根 " + (msg.nestedComponentRoots || 0) + " → 降级 " + (msg.nestedCpDemoted || 0),
+          "深层标题 " + (msg.deepHeaderFound || 0) + " → 降级 " + (msg.rootHeaderDemotedDeep || 0),
+          "全树归一化异常 " + (msg.deepNormFailed || 0),
+          "根级背景打标 " + (msg.rootBackdropMarked || 0) + " / 头部插槽打标 " + (msg.headerSlotMarked || 0)
+            + " / 复原 " + (msg.headerSlotRestored || 0),
+          "骨架排除 " + (msg.slotScaffoldExcluded || 0) + " / 提回 " + (msg.slotEjectScaffold || 0)
+            + " / 回滚 " + (msg.slotEjectRolledBack || 0) + " / 改名 " + (msg.slotEjectRenamed || 0),
+          "打标异常 " + (msg.scaffoldMarkFailed || 0) + " / 提回异常 " + (msg.slotEjectFailed || 0)
+            + " / AL跳过 " + (msg.slotEjectAutoLayoutSkipped || 0),
+          "深层背景 扫描 " + (msg.contentBackdropScanned || 0) + " → 提回 " + (msg.contentBackdropHoisted || 0)
+            + " / 回滚 " + (msg.contentBackdropRolledBack || 0)
+            + " / 改名 " + (msg.contentBackdropRenamed || 0)
+            + " / AL跳过 " + (msg.contentBackdropAutoLayoutSkipped || 0)
+            + " / 无几何 " + (msg.contentBackdropNoGeometry || 0)
+            + " / 异常 " + (msg.contentBackdropHoistFailed || 0),
           "前景保留 " + (msg.foregroundKept || 0),
           "建组失败 " + (msg.groupFailed || 0),
           "布局异常 " + (msg.layoutErrors || 0),
