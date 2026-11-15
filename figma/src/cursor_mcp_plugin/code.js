@@ -368,6 +368,7 @@ figma.ui.onmessage = async (msg) => {
           contentBackdropRenamed: 0, contentBackdropHoistFailed: 0,
           nestedComponentRoots: 0, nestedCpDemoted: 0, deepHeaderFound: 0,
           rootScopeChecked: 0, rootScopeCpKids: 0, rootScopeIsCp: 0, rootScopeMulti: 0, rootScopeNonCp: 0,
+          bgAuditChecked: 0, bgByPluginData: 0, bgByGeometry: 0, bgByNameOnly: 0,
           rootHeaderDemotedDeep: 0, deepNormFailed: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
           rootBackdropMoved: 0, rootBackdropOrdered: 0,
@@ -422,6 +423,8 @@ figma.ui.onmessage = async (msg) => {
         catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
         // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
         try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
+        // v20261116 阶段3：背景判据健康度审计 —— 统计识别来源（打标/几何/仅名字），零写入。
+        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
         // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
         // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
         try { normalizeDeepStructure(root || containers[0] || null, summary); }
@@ -478,6 +481,8 @@ figma.ui.onmessage = async (msg) => {
           rootScopeChecked: summary.rootScopeChecked, rootScopeCpKids: summary.rootScopeCpKids,
           rootScopeIsCp: summary.rootScopeIsCp, rootScopeMulti: summary.rootScopeMulti,
           rootScopeNonCp: summary.rootScopeNonCp,
+          bgAuditChecked: summary.bgAuditChecked, bgByPluginData: summary.bgByPluginData,
+          bgByGeometry: summary.bgByGeometry, bgByNameOnly: summary.bgByNameOnly,
           deepHeaderFound: summary.deepHeaderFound, rootHeaderDemotedDeep: summary.rootHeaderDemotedDeep,
           deepNormFailed: summary.deepNormFailed,
           exportSet: summary.exportSet, exportCleared: summary.exportCleared, exportLoose: summary.exportLoose,
@@ -601,6 +606,7 @@ figma.ui.onmessage = async (msg) => {
           contentBackdropRenamed: 0, contentBackdropHoistFailed: 0,
           nestedComponentRoots: 0, nestedCpDemoted: 0, deepHeaderFound: 0,
           rootScopeChecked: 0, rootScopeCpKids: 0, rootScopeIsCp: 0, rootScopeMulti: 0, rootScopeNonCp: 0,
+          bgAuditChecked: 0, bgByPluginData: 0, bgByGeometry: 0, bgByNameOnly: 0,
           rootHeaderDemotedDeep: 0, deepNormFailed: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
           rootBackdropMoved: 0, rootBackdropOrdered: 0,
@@ -729,6 +735,8 @@ figma.ui.onmessage = async (msg) => {
         catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
         // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
         try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
+        // v20261116 阶段3：背景判据健康度审计 —— 统计识别来源（打标/几何/仅名字），零写入。
+        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
         // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
         // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
         try { normalizeDeepStructure(root || containers[0] || null, summary); }
@@ -790,6 +798,8 @@ figma.ui.onmessage = async (msg) => {
           rootScopeChecked: summary.rootScopeChecked, rootScopeCpKids: summary.rootScopeCpKids,
           rootScopeIsCp: summary.rootScopeIsCp, rootScopeMulti: summary.rootScopeMulti,
           rootScopeNonCp: summary.rootScopeNonCp,
+          bgAuditChecked: summary.bgAuditChecked, bgByPluginData: summary.bgByPluginData,
+          bgByGeometry: summary.bgByGeometry, bgByNameOnly: summary.bgByNameOnly,
           deepHeaderFound: summary.deepHeaderFound, rootHeaderDemotedDeep: summary.rootHeaderDemotedDeep,
           deepNormFailed: summary.deepNormFailed,
           exportSet: summary.exportSet,
@@ -3518,6 +3528,35 @@ function detectRootScope(root, summary) {
       names: cpKids.map(n => String(n.name || "").trim()).slice(0, 12),
     };
   } finally { /* 只读，无写入 */ }
+}
+
+// v20261116 阶段3【只读判据健康度审计】：统计根级背景的识别来源，暴露「纯名字脆弱识别」.
+// 预演实证：直接去掉 isBgLike 名字短路会让 11/29 样本背景识别退化（破坏非修复），
+// 因为 29 样本里 642 个 bg-* 名字命中节点中仅 39 个近全屏、603 个是局部卡片底。
+// 故本阶段【只统计、不改判据】：pluginData 已打标 / 几何可证 / 仅凭名字 三分类计数，
+// UI 常显「仅凭名字」数量作为技术债警告。零改名/零移动/零 pluginData 写入。
+function auditBackdropEvidence(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") { s.bgAuditChecked = 1; return null; }
+  let byMark = 0, byGeom = 0, byNameOnly = 0;
+  const nameOnlyNodes = [];
+  for (const n of Array.prototype.slice.call(root.children || [])) {
+    if (!n) continue;
+    let marked = false;
+    try { marked = n.getPluginData(ROOT_BACKDROP_KEY) === "1"; } catch (e) {}
+    if (marked) { byMark++; continue; }
+    // 几何可证：近全屏 + 无 TEXT + 有绘制（复用现有候选判据，不另立标准）
+    let geom = false;
+    try { geom = !!rootBackdropCandidate(n, root); } catch (e) {}
+    if (geom) { byGeom++; continue; }
+    // 只剩名字命中：脆弱识别（改名即失效），单列计数
+    try { if (isBgLike(n)) { byNameOnly++; nameOnlyNodes.push(String(n.name || "").trim()); } } catch (e) {}
+  }
+  s.bgAuditChecked = 1;
+  s.bgByPluginData = byMark;
+  s.bgByGeometry = byGeom;
+  s.bgByNameOnly = byNameOnly;
+  return { byMark, byGeom, byNameOnly, nameOnlyNodes: nameOnlyNodes.slice(0, 12) };
 }
 
 // header 既不提升也不降级 ⇒ 组件里套两个「组件结构」，只读契约 JSON 里出现多个 component-root。

@@ -245,10 +245,13 @@ function snapshot(figma) {
   function walk(n, depth) {
     const b = n.absoluteBoundingBox;
     const pd = Object.keys(n.pluginData || {}).sort().map(k => k + '=' + n.pluginData[k]).join(',');
+    // 合成节点 id（shim-group-N / shim-frame-N）的自增序号随运行批次变化，
+    // 不代表结构差异；归一成稳定占位符，保证跨批次基线可比。真实节点 id 保留。
+    const stableId = /^shim-(?:group|frame)-\d+$/.test(n.id) ? n.id.replace(/-\d+$/, '-#') : n.id;
     lines.push([
       '  '.repeat(depth) + n.type,
       'name=' + JSON.stringify(n.name),
-      'id=' + n.id,
+      'id=' + stableId,
       'abs=' + Math.round(b.x) + ',' + Math.round(b.y) + ',' + Math.round(b.width) + ',' + Math.round(b.height),
       'vis=' + (n.visible === false ? 0 : 1),
       'pd={' + pd + '}',
