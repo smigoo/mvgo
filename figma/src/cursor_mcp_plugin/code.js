@@ -408,6 +408,9 @@ figma.ui.onmessage = async (msg) => {
         // v20261111.61：AI 命名态若把面板主标题降级成 section-title-*，先按几何提升回根级 header。
         // 必须在 demoteSubHeaders / groupSectionsByTitle / createSlotConGroup 之前，否则标题已进 slot-con。
         try { promoteRootHeader(root || containers[0] || null, summary); } catch (e19) { summary.rootHeaderFailed = (Number(summary.rootHeaderFailed) || 0) + 1; }
+        // v20261116 阶段3：背景判据健康度审计 —— 必须在 markRootScaffold 打标【之前】，
+        // 否则看到的都是已打标节点，暴露不出「仅凭名字」的脆弱识别。零写入。
+        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
         // v20261115 P2：建槽前给根直属骨架节点打标（pluginData，零几何变化）。
         try { markRootScaffold(root || containers[0] || null, summary); } catch (e23) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
         // v20261115 P3【最小止损·接线已摘除，本轮不生效】：深层背景提回（hoistContentBackdrops，
@@ -423,8 +426,6 @@ figma.ui.onmessage = async (msg) => {
         catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
         // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
         try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
-        // v20261116 阶段3：背景判据健康度审计 —— 统计识别来源（打标/几何/仅名字），零写入。
-        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
         // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
         // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
         try { normalizeDeepStructure(root || containers[0] || null, summary); }
@@ -723,6 +724,8 @@ figma.ui.onmessage = async (msg) => {
           }
           // v20261111.61：同上，AI / 视觉命名态也要先把面板主标题按几何提升回根级 header。
           try { promoteRootHeader(root || containers[0] || null, summary); } catch (e20) { summary.rootHeaderFailed = (Number(summary.rootHeaderFailed) || 0) + 1; }
+          // v20261116 阶段3：背景判据健康度审计 —— 必须在 markRootScaffold 打标【之前】，零写入。
+          try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
           // v20261115 P2：建槽前给根直属骨架节点打标（pluginData，零几何变化）。
           try { markRootScaffold(root || containers[0] || null, summary); } catch (e24) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
           // v20261115 P3【最小止损·接线已摘除，本轮不生效】：AI ops 命名态同样停用深层背景提回，
@@ -735,8 +738,6 @@ figma.ui.onmessage = async (msg) => {
         catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
         // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
         try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
-        // v20261116 阶段3：背景判据健康度审计 —— 统计识别来源（打标/几何/仅名字），零写入。
-        try { auditBackdropEvidence(root || containers[0] || null, summary); } catch (eBA) { summary.bgAuditChecked = -1; }
         // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
         // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
         try { normalizeDeepStructure(root || containers[0] || null, summary); }
