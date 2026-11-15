@@ -367,6 +367,7 @@ figma.ui.onmessage = async (msg) => {
           contentBackdropAutoLayoutSkipped: 0, contentBackdropNoGeometry: 0,
           contentBackdropRenamed: 0, contentBackdropHoistFailed: 0,
           nestedComponentRoots: 0, nestedCpDemoted: 0, deepHeaderFound: 0,
+          rootScopeChecked: 0, rootScopeCpKids: 0, rootScopeIsCp: 0, rootScopeMulti: 0, rootScopeNonCp: 0,
           rootHeaderDemotedDeep: 0, deepNormFailed: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
           rootBackdropMoved: 0, rootBackdropOrdered: 0,
@@ -419,6 +420,8 @@ figma.ui.onmessage = async (msg) => {
         // 纯改名 + 全树打标；必须在 groupSectionsByTitle 之前，否则痕迹会被当成段标题锚点。
         try { normalizeHeaderSlots(root || containers[0] || null, summary); }
         catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
+        // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
+        try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
         // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
         // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
         try { normalizeDeepStructure(root || containers[0] || null, summary); }
@@ -472,6 +475,9 @@ figma.ui.onmessage = async (msg) => {
           contentBackdropHoistFailed: summary.contentBackdropHoistFailed,
           slotEjectFailed: summary.slotEjectFailed, scaffoldMarkFailed: summary.scaffoldMarkFailed,
           nestedComponentRoots: summary.nestedComponentRoots, nestedCpDemoted: summary.nestedCpDemoted,
+          rootScopeChecked: summary.rootScopeChecked, rootScopeCpKids: summary.rootScopeCpKids,
+          rootScopeIsCp: summary.rootScopeIsCp, rootScopeMulti: summary.rootScopeMulti,
+          rootScopeNonCp: summary.rootScopeNonCp,
           deepHeaderFound: summary.deepHeaderFound, rootHeaderDemotedDeep: summary.rootHeaderDemotedDeep,
           deepNormFailed: summary.deepNormFailed,
           exportSet: summary.exportSet, exportCleared: summary.exportCleared, exportLoose: summary.exportLoose,
@@ -594,6 +600,7 @@ figma.ui.onmessage = async (msg) => {
           contentBackdropAutoLayoutSkipped: 0, contentBackdropNoGeometry: 0,
           contentBackdropRenamed: 0, contentBackdropHoistFailed: 0,
           nestedComponentRoots: 0, nestedCpDemoted: 0, deepHeaderFound: 0,
+          rootScopeChecked: 0, rootScopeCpKids: 0, rootScopeIsCp: 0, rootScopeMulti: 0, rootScopeNonCp: 0,
           rootHeaderDemotedDeep: 0, deepNormFailed: 0,
           bandFoldersRemoved: 0, bandGroupFailed: 0, bandIdempotent: 0,
           rootBackdropMoved: 0, rootBackdropOrdered: 0,
@@ -720,6 +727,8 @@ figma.ui.onmessage = async (msg) => {
         // 纯改名 + 全树打标；必须在 groupSectionsByTitle 之前，否则痕迹会被当成段标题锚点。
         try { normalizeHeaderSlots(root || containers[0] || null, summary); }
         catch (e25) { summary.scaffoldMarkFailed = (Number(summary.scaffoldMarkFailed) || 0) + 1; }
+        // v20261116 阶段2：根作用域只读体检 —— 多组件 Frame 只检测+计数、不改行为；判据真值供 UI 警告。
+        try { detectRootScope(root || containers[0] || null, summary); } catch (eRS) { summary.rootScopeChecked = -1; }
         // v20261115：全树骨架归一化 —— 非根 cp-* 与深层精确 header 只改名、零移动。
         // 必须在 groupSectionsByTitle / createSlotConGroup 之前，否则名字随容器进槽后再也改不到。
         try { normalizeDeepStructure(root || containers[0] || null, summary); }
@@ -778,6 +787,9 @@ figma.ui.onmessage = async (msg) => {
           contentBackdropHoistFailed: summary.contentBackdropHoistFailed,
           slotEjectFailed: summary.slotEjectFailed, scaffoldMarkFailed: summary.scaffoldMarkFailed,
           nestedComponentRoots: summary.nestedComponentRoots, nestedCpDemoted: summary.nestedCpDemoted,
+          rootScopeChecked: summary.rootScopeChecked, rootScopeCpKids: summary.rootScopeCpKids,
+          rootScopeIsCp: summary.rootScopeIsCp, rootScopeMulti: summary.rootScopeMulti,
+          rootScopeNonCp: summary.rootScopeNonCp,
           deepHeaderFound: summary.deepHeaderFound, rootHeaderDemotedDeep: summary.rootHeaderDemotedDeep,
           deepNormFailed: summary.deepNormFailed,
           exportSet: summary.exportSet,
@@ -3477,6 +3489,37 @@ function demoteSubHeaders(root, summary) {
 // ---- v20261115：全树骨架归一化（53:19567 / cp-traffic-loss-alarm 根治）---------------------
 // 旧链路（promoteRootHeader / demoteSubHeaders / createSlotConGroup / groupSectionsByTitle）
 // 全部只取 root.children 一层：非根 cp-* 被 createSlotConGroup 整块收进 slot-con，深层精确
+// v20261116 阶段2【只读作用域体检】：识别「根作用域是多组件 Frame」形态。
+// 背景：53:19567 一个 Frame 下挂多个 cp-* 组件根，插件整条链路假设「root=单组件根、唯一骨架」，
+// normalizeDeepStructure 会把每个非根 cp-* 降级成 section-NN 并塞进同一个 slot-con ⇒ 多组件被合并。
+// 本阶段【只检测、不改行为】：统计根直属可见 cp-* 数、根自身是否 cp-*、是否多组件形态，
+// 供 UI 常显警告。零改名 / 零移动 / 零新建 / 零 pluginData 写入 ⇒ 整理结果零差异。
+// 后续阶段是否在多组件时「拒绝」或「拆分」，需真机确认后另行授权，本函数只提供判据真值。
+function detectRootScope(root, summary) {
+  const s = summary || {};
+  if (!root || !("children" in root) || root.type === "PAGE") {
+    s.rootScopeChecked = 1; return null;
+  }
+  const kids = Array.prototype.slice.call(root.children || []);
+  const visible = kids.filter(n => n && n.visible !== false);
+  const rootName = String(root.name || "").trim();
+  const rootIsCp = /^cp-/i.test(rootName);
+  const cpKids = visible.filter(n => /^cp-/i.test(String(n.name || "").trim()));
+  const multi = cpKids.length >= 2;                 // 根下平级 ≥2 个组件根 = 多组件 Frame
+  const nonCpRoot = !rootIsCp && visible.length > 0; // 根自身不是组件名（如「左2」「cp」画板）
+  s.rootScopeChecked = 1;
+  s.rootScopeCpKids = cpKids.length;
+  s.rootScopeIsCp = rootIsCp ? 1 : 0;
+  s.rootScopeMulti = multi ? 1 : 0;
+  s.rootScopeNonCp = nonCpRoot ? 1 : 0;
+  try {
+    return {
+      rootIsCp, cpKids: cpKids.length, multi, nonCpRoot,
+      names: cpKids.map(n => String(n.name || "").trim()).slice(0, 12),
+    };
+  } finally { /* 只读，无写入 */ }
+}
+
 // header 既不提升也不降级 ⇒ 组件里套两个「组件结构」，只读契约 JSON 里出现多个 component-root。
 // 本函数只做【改名】：零 reparent / 零新建结构层 / 零 bbox 变化；改名后不再命中判据 ⇒ 幂等。
 // 收窄口径：只降级【精确名 header】；header-slot-* / header-title-* 是 header 内合法插槽，保留。

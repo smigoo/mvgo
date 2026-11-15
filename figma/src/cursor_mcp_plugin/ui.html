@@ -740,6 +740,8 @@
         if (msg.decorMerged) parts.push("背景收纳 " + msg.decorMerged);
         if (msg.chartLegendGuarded) parts.push("图例同图表容器守护 " + msg.chartLegendGuarded);
         if (msg.nestedCpDemoted) parts.push("深层组件降级 " + msg.nestedCpDemoted);
+        if (msg.rootScopeMulti) parts.push("⚠️ 多组件根 " + msg.rootScopeCpKids + " 个（未拆分，可能被合并）");
+        else if (msg.rootScopeNonCp) parts.push("⚠️ 根非组件名（画板？请逐个组件整理）");
         if (msg.rootHeaderDemotedDeep) parts.push("深层标题降级 " + msg.rootHeaderDemotedDeep);
         if (msg.headerSlotRestored) parts.push("头部插槽复原 " + msg.headerSlotRestored);
         if (msg.slotEjectScaffold) parts.push("骨架提回根级 " + msg.slotEjectScaffold);
@@ -782,6 +784,8 @@
           "背景收纳 " + (msg.decorMerged || 0),
           "图例同图表容器守护 " + (msg.chartLegendGuarded || 0),
           "深层组件根 " + (msg.nestedComponentRoots || 0) + " → 降级 " + (msg.nestedCpDemoted || 0),
+          "根作用域 " + (msg.rootScopeIsCp ? "组件根" : "非组件根") + " / 直属组件 " + (msg.rootScopeCpKids || 0)
+            + (msg.rootScopeMulti ? " ⚠️多组件（保持现状未拆分）" : "") + (msg.rootScopeNonCp ? " ⚠️非组件根画板" : ""),
           "深层标题 " + (msg.deepHeaderFound || 0) + " → 降级 " + (msg.rootHeaderDemotedDeep || 0),
           "全树归一化异常 " + (msg.deepNormFailed || 0),
           "根级背景打标 " + (msg.rootBackdropMarked || 0) + " / 头部插槽打标 " + (msg.headerSlotMarked || 0)
