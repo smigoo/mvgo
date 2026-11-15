@@ -3796,6 +3796,38 @@ function groupSectionsByTitle(root, summary) {
   s.sectionGroupsMerged = (Number(s.sectionGroupsMerged) || 0) + merged;
   return parent;
 }
+// v20261116：建槽复用判据去名字化。原判据 countModuleKids 只认 item-/card-/section- 等
+// 名字前缀，遇到 inspection-progress / maintenance-plans 这类语义 section 会误判为 0，
+// 于是给唯一内容容器又套一层 slot-con（真机 1:479 实锤）。根治判据 = 纵向内容带：
+// 非骨架、非 TEXT、非资源夹的直接子节点 ≥2，按 y 严格不重叠（容差 2px），
+// 每块高度 ≥容器 12% 且合计 ≥50% ⇒ 它就是真正的内容容器，原地升格。
+// 骨架排除仍只由 isRootScaffold 单点决定；不改 isModuleLike / countModules，零名字特例。
+function hasTwoContentBands(n, root) {
+  if (!n || !("children" in n)) return false;
+  const rawKids = Array.isArray(n.children) ? n.children : [];
+  // 严格限定形态：只处理「刚好两个 section」的内容容器，避免多块图标/文本行被误升格。
+  if (rawKids.length !== 2) return false;
+  const host = absRect(n);
+  if (!host || !(host.h > 0)) return false;
+  const arr = [];
+  for (const ch of rawKids) {
+    if (!ch || ch.type === "TEXT") continue;
+    if (folderRole(ch)) continue;
+    if (isRootScaffold(ch, root || null)) continue;
+    const b = absRect(ch);
+    if (b && b.w > 0 && b.h > 0) arr.push(b);
+  }
+  if (arr.length < 2) return false;
+  arr.sort((a, b) => a.y - b.y || a.x - b.x);
+  let covered = 0;
+  for (let i = 0; i < arr.length; i++) {
+    const b = arr[i];
+    if (b.h < host.h * 0.12) return false;
+    if (i && b.y - (arr[i - 1].y + arr[i - 1].h) < -2) return false;
+    covered += b.h;
+  }
+  return covered >= host.h * 0.5;
+}
 function createSlotConGroup(root, summary) {
   if (!root || !("children" in root) || root.type === "PAGE") return null;
   const kids = Array.prototype.slice.call(root.children || []);
@@ -3824,9 +3856,11 @@ function createSlotConGroup(root, summary) {
     summary.slotConMerged = moved;
     // v20261110.25：并入剩余槽的内容后删掉空槽，避免图层面板夹着多个 slot-con
     mergeExtraSlotCons(existing, slot, summary);
-  } else if (contents.length === 1 && countModuleKids(contents[0]) >= 2) {
+  } else if (contents.length === 1 && (countModuleKids(contents[0]) >= 2 || hasTwoContentBands(contents[0], root))) {
     // 视觉/几何模块本来就都挂在同一个内容容器里 → 直接把它标记成 slot-con，
     // 不新建 Group、不移动任何节点，视觉零改动，模块自然都在同一 group 中。
+    // v20261116：补入「纵向内容带」几何判据，语义 section（*-progress / *-plans 等）
+    // 不再因为名字前缀不认识而多套一层 wrapper；重叠/小图标行不会命中。
     slot = contents[0];
     try { slot.setPluginData(SLOT_CON_KEY, "1"); } catch (e) {}
     try { slot.name = "slot-con"; } catch (e) {}
