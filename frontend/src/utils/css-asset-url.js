@@ -32,6 +32,51 @@ const SELF_ANCHORED_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|\/|#)/i;
 /** `url(...)` 抓取：优先引号包裹（可含空格），其次裸值（不含空白与右括号）。 */
 const URL_FN_RE = /url\(\s*(?:(["'])([^"']*)\1|([^)'"\s]+))\s*\)/gi;
 
+/**
+ * 🛡️ 消歧三（2026-11-16 · c-traffic-trend-10176e21 快照源预览实锤）：
+ * 相对路径按 base 解析——**query 传 path 的快照代理形态必须走「path 参数感知」**。
+ *
+ * 病灶：`…/code-snapshots/{rev}/file?path=resources/styles/index.css` 做 base 时，
+ * `new URL('../images/bg.png', base)` 按 **URL path 段**解析（query 不参与相对消解）
+ * ⇒ 产出 `…/code-snapshots/images/bg.png`（丢 revision、丢 ?path=）⇒ 404 ⇒
+ * 背景规则在 cascade 中竞争失败（另一条 workspace 链 200 但被 404 项覆盖序影响）
+ * ⇒ computed background-image = none。
+ *
+ * 修法：base 命中 `/file?path=<虚拟路径>` 形态时，把相对路径与 **path 参数内的
+ * 虚拟路径**归一（纯字符串段级消解 `a/b/../c` → `a/c`，越界向上则回退原解析），
+ * 再回填同代理形态 URL（保 revision、保 query 语义、幂等——绝对引用仍走原路）。
+ *
+ * @param {string} raw    相对引用（shouldRewrite 已过滤绝对/协议/函数形态）
+ * @param {string} absBase 已绝对化的基准 URL
+ * @returns {string} 绝对 URL
+ */
+function resolveAgainstBase(raw, absBase) {
+  const m = /([?&])path=([^&]+)(&|$)/.exec(absBase);
+  if (!m || !/\/file(?:\?|$)/.test(absBase.slice(0, m.index + 1))) {
+    return new URL(raw, absBase).href; // 常规路径形态：URL 标准解析
+  }
+  // 快照 file 代理形态：在 path 参数的虚拟路径内归一
+  const prefix = absBase.slice(0, m.index + m[1].length); // …/file?
+  const virtPath = decodeURIComponent(m[2]);
+  const segments = virtPath.split('/');
+  const steps = raw.split('/');
+  // 先去掉虚拟路径最后一段（文件名），再逐段消费相对步进
+  const stack = segments.slice(0, -1);
+  for (const s of steps) {
+    if (s === '' || s === '.') continue;
+    if (s === '..') {
+      if (stack.length === 0) return new URL(raw, absBase).href; // 越界：回退标准解析（不猜）
+      stack.pop();
+    } else {
+      stack.push(s);
+    }
+  }
+  // 回填：保留 base 上除 path 外的其余 query（preview=1/token/_t 等）
+  const restQuery = absBase.slice(m.index + m[0].length).replace(/^[&?]/, '');
+  const keepQuery = restQuery ? `&${restQuery}` : '';
+  return `${prefix}path=${encodeURIComponent(stack.join('/'))}${keepQuery}`;
+}
+
 function shouldRewrite(raw) {
   if (!raw) return false;
   const v = String(raw).trim();
@@ -49,6 +94,8 @@ function shouldRewrite(raw) {
  * @param baseUrl  该 CSS 内容的**解析基准**，应为绝对 URL；传相对路径时会以 `location.origin` 补齐。
  *                 例：`http://host/api/preview/g/c/resources/styles/index.css`
  *                 ⇒ `url('../images/bg-1.png')` → `http://host/api/preview/g/c/resources/images/bg-1.png`
+ *                 快照代理形态（`…/file?path=resources/styles/index.css`）走 **path 参数感知**
+ *                 解析（见 resolveAgainstBase），`../images/` 在 path 虚拟路径内归一。
  * @returns 重写后的文本；`baseUrl` 不可解析时**原样返回**（绝不让预览因路径工具崩掉）。
  */
 export function rewriteCssAssetUrls(css, baseUrl) {
@@ -64,7 +111,7 @@ export function rewriteCssAssetUrls(css, baseUrl) {
     const raw = quoted !== undefined ? quoted : bare;
     if (!shouldRewrite(raw)) return full;
     try {
-      return `url("${new URL(String(raw).trim(), absBase).href}")`;
+      return `url("${resolveAgainstBase(String(raw).trim(), absBase)}")`;
     } catch {
       return full;
     }

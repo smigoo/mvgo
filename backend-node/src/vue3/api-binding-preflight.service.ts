@@ -2,6 +2,10 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { extname, join, relative, sep } from 'path';
 import ts from 'typescript';
+// 🧷 2026-11-16：`<script setup>` 锚点唯一事实源（属性顺序无关）。
+// 旧 `/<script\s+setup[^>]*>([\s\S]*?)<\/script>/i` 对 `<script data-section-id="x" setup>` 失配
+// ⇒ 发布前检查误报「缺少 <script setup>」直接拒收真机产物（错杀，非漏放）。
+import { findScriptSetupBlock } from '../ai-engine/utils/sfc-script-anchor.js';
 
 const ALLOWED_BARE_MODULES = new Set(['vue', 'echarts', 'microvideo-request']);
 
@@ -55,15 +59,17 @@ export class ApiBindingPreflightService {
     errors: string[],
   ): void {
     const hasTemplate = /<template(?:\s|>)[\s\S]*<\/template>/i.test(sfc);
-    const scriptMatch = sfc.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/i);
+    // 属性顺序无关；严格等价旧正则的「必须闭合」前提（无 `</script>` ⇒ 视为缺失）。
+    const scriptBlock = findScriptSetupBlock(sfc);
+    const scriptInner = scriptBlock && scriptBlock.closeIndex !== -1 ? scriptBlock.inner : null;
 
     if (!hasTemplate) errors.push(`${entryPath}: 缺少完整的 <template>`);
-    if (!scriptMatch) {
+    if (scriptInner === null) {
       errors.push(`${entryPath}: 缺少 <script setup>`);
       return;
     }
 
-    const parseResult = ts.transpileModule(scriptMatch[1], {
+    const parseResult = ts.transpileModule(scriptInner, {
       compilerOptions: {
         module: ts.ModuleKind.ESNext,
         target: ts.ScriptTarget.ES2022,
@@ -78,7 +84,7 @@ export class ApiBindingPreflightService {
       }
     }
 
-    this.validateImports(entryPath, scriptMatch[1], errors, componentDir);
+    this.validateImports(entryPath, scriptInner, errors, componentDir);
   }
 
   private validateModule(

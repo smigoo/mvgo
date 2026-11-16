@@ -1,0 +1,10 @@
+{
+  "data": {
+    "subComponentPlan": {
+      "effectiveSections": [
+        { "id": "2:3660", "name": "当日总流量" },
+        { "id": "2:3604", "name": "流量预测" }
+      ]
+    }
+  }
+}

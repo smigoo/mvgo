@@ -35,11 +35,16 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
     })
   })
 
-  it('标准 Auto-Layout：layoutMode=HORIZONTAL → flex-row high（不依赖几何）', () => {
+  it('标准 Auto-Layout：layoutMode=HORIZONTAL 且几何同为一行 → flex-row high（两源一致，逐字保持既有输出）', () => {
+    // 🛡️ R3-2（2026-11-16）：原夹具子项写成 (0,0)/(0,200)（**纵向**摆放却声明 HORIZONTAL），
+    //   物理上不可能（Figma 会按 AL 强制排布），属合成的「不可能态」，且恰好把「声明压几何」
+    //   这条错误策略固化了。改为与声明一致的几何；「声明与几何冲突」的阳性对照见
+    //   layout-al-reconcile.spec.ts。
     const node = {
       id: '3:10',
+      type: 'FRAME',
       layoutMode: 'HORIZONTAL',
-      children: [child('3:11', 0, 0, 50, 50), child('3:12', 0, 200, 50, 50)],
+      children: [child('3:11', 0, 0, 50, 50), child('3:12', 50, 0, 50, 50)],
     }
     const facts = buildNodeLayoutFacts(node)
     expect(facts['3:10']).toEqual({
@@ -50,11 +55,12 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
     })
   })
 
-  it('标准 Auto-Layout：layoutMode=VERTICAL → flex-column high', () => {
+  it('标准 Auto-Layout：layoutMode=VERTICAL 且几何同为纵向 → flex-column high', () => {
     const node = {
       id: '3:20',
+      type: 'FRAME',
       layoutMode: 'VERTICAL',
-      children: [child('3:21', 0, 0, 50, 50), child('3:22', 200, 0, 50, 50)],
+      children: [child('3:21', 0, 0, 50, 50), child('3:22', 0, 50, 50, 50)],
     }
     const facts = buildNodeLayoutFacts(node)
     expect(facts['3:20']).toEqual({
@@ -155,6 +161,8 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
   })
 
   it('递归遍历：嵌套节点各自产出事实', () => {
+    // 🛡️ R3-2：补上容器 bbox —— 声明要与几何对账才可能判 high（无 bbox 时只能 al-only，
+    //   见 layout-al-reconcile.spec.ts ⑤）。此处几何与声明一致，保留原断言不变。
     const root = {
       id: '7:0',
       layoutMode: 'VERTICAL',
@@ -162,11 +170,13 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
         {
           id: '7:1',
           layoutMode: 'NONE',
+          absoluteBoundingBox: box(0, 0, 200, 30),
           children: [child('7:2', 0, 0, 80, 30), child('7:3', 90, 0, 80, 30)],
         },
         {
           id: '7:4',
           layoutMode: 'NONE',
+          absoluteBoundingBox: box(0, 60, 200, 30),
           children: [child('7:5', 0, 60, 80, 30), child('7:6', 90, 60, 80, 30)],
         },
       ],
@@ -246,6 +256,10 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
 
   it('🛡️ 过滤后不足 2 个 ⇒ 回退全集（不返回 null）：1 背景层 + 1 内容 仍有事实', () => {
     // 「无事实 ⇒ LLM 只能猜 ⇒ 竖排堆叠」是本仓最坏结果，故宁可带背景层判定也不丢事实。
+    // 🛡️ P0（2026-11-16）：断言由 `flex` 改为 `stack` —— **本 spec 的核心意图（不丢事实）不变**，
+    //   变的是「1 背景层 + 1 内嵌内容」的正确形态：既是层叠，就不存在主轴排列，给 flex 方向
+    //   必然错（真机 `2:7941` icon：RECT 24×24 铺底 + FRAME 18×18 内嵌 ⇒ 旧行为 flex/column
+    //   ⇒ 注入器硬写 flex-direction ⇒ 图标被推到背景下方）。T0 实测 29 语料同形态 232 个容器。
     const node = {
       id: '11:1',
       layoutMode: 'NONE',
@@ -257,7 +271,11 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
     }
     const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
     expect(facts['11:1']).toBeDefined()
-    expect(facts['11:1']).toMatchObject({ display: 'flex', source: 'geometric-inference' })
+    expect(facts['11:1']).toMatchObject({
+      display: 'stack',
+      source: 'geometric-stack-inference',
+      confidence: 'high',
+    })
   })
 
   it('🛡️ 真 2×2 网格不被误伤：带背景层的 4 卡网格 → 仍 grid-2（且比旧行为更准）', () => {

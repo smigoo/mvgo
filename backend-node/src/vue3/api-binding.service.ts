@@ -21,6 +21,21 @@ import { WorkspaceTransactionService } from './workspace-transaction.service';
 import { IncrementalFileCleanupService } from './incremental-file-cleanup.service';
 import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
 import { workspaceRoot, vue3ComponentsDir, dataDir } from '../config/backend-root';
+// 🧷 2026-11-16：`<script setup>` 锚点唯一事实源（属性顺序无关）。
+// 旧 `/<script\s+setup[^>]*>/` 要求 setup 紧跟 `<script`+空白，遇
+// `<script data-section-id="x" setup>` 全链失配：① 标识符扫描拿到空 body ⇒ 重复注入；
+// ② `:1215` 插入点失配后走 else 分支**追加第二个 script 块**；③ `:1293` 旧注入块不被移除。
+import { findScriptSetupBlock, findScriptSetupOpen } from '../ai-engine/utils/sfc-script-anchor.js';
+
+/**
+ * 取「带 setup」脚本段的 inner（唯一事实源，属性顺序无关）。
+ * 严格等价旧 `/<script\s+setup[^>]*>([\s\S]*?)<\/script>/`：要求存在 `</script>` 闭合，
+ * 否则返回空串（不把「未闭合」误当成「有内容」而扩大扫描面）。
+ */
+function setupScriptInner(code: string): string {
+  const hit = findScriptSetupBlock(code);
+  return hit && hit.closeIndex !== -1 ? hit.inner : '';
+}
 
 interface RuntimeRequestMock {
   method: string;
@@ -1000,9 +1015,8 @@ export const ${exportName} = ${mockData}
     // 1. 移除旧的注入代码
     let content = this.removeInjectedCode(sfc);
 
-    // 提取 <script setup> 内容用于标识符扫描
-    const scriptMatch = content.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/);
-    const scriptBody = scriptMatch ? scriptMatch[1] : '';
+    // 提取 <script setup> 内容用于标识符扫描（属性顺序无关，唯一事实源）
+    const scriptBody = setupScriptInner(content);
 
     // 扫描所有已存在的标识符
     const {
@@ -1038,8 +1052,7 @@ export const ${exportName} = ${mockData}
       const fixResult = this.autoFixBareConstInSFC(content, allFixable, scriptBody);
       content = fixResult.newContent;
       // 修复后的 slot 重新加入 injectable 列表（需要重新扫描标识符）
-      const newScriptMatch = content.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/);
-      const newScriptBody = newScriptMatch ? newScriptMatch[1] : '';
+      const newScriptBody = setupScriptInner(content);
       const { writable: newWritable } = this.scanExistingIdentifiers(newScriptBody);
       const fixedNames = new Set(fixResult.fixedNames);
       // 只有确实完成 AST 边界内字面量改写、且重新扫描后可写的变量才进入注入链路。
@@ -1211,28 +1224,26 @@ export const ${exportName} = ${mockData}
     nonImportParts.push('// === END API 对接注入 ===');
     const nonImportInjectionText = '\n' + nonImportParts.join('\n') + '\n';
 
-    // 7. 插入到正确位置
-    const scriptStartMatch = content.match(/<script\s+setup[^>]*>/);
-    if (scriptStartMatch && scriptMatch && scriptMatch.index !== undefined) {
-      const tagEnd = scriptMatch.index + scriptStartMatch[0].length;
-      const scriptCloseIdx = content.indexOf('</script>', tagEnd);
+    // 7. 插入到正确位置（属性顺序无关；闭合识别与事实源同源）
+    //    旧实现：开标签正则失配 ⇒ 掉进 else 分支，在模板尾部**追加第二个 `<script setup>` 块**。
+    const scriptBlock = findScriptSetupBlock(content);
+    if (scriptBlock && scriptBlock.closeIndex !== -1) {
+      const tagEnd = scriptBlock.start;
+      const scriptCloseIdx = scriptBlock.closeIndex;
+      const scriptBodyContent = scriptBlock.inner;
+      const lastImportEnd = this.findLastImportEnd(scriptBodyContent);
+      const insertImportAt = tagEnd + lastImportEnd;
 
-      if (scriptCloseIdx !== -1) {
-        const scriptBodyContent = content.substring(tagEnd, scriptCloseIdx);
-        const lastImportEnd = this.findLastImportEnd(scriptBodyContent);
-        const insertImportAt = tagEnd + lastImportEnd;
-
-        // 先插入后面的（非 import 块在 script 末尾），再插入前面的（import 块在 import 之后）
-        // 避免偏移问题
-        content =
-          content.substring(0, insertImportAt) +
-          importInjectionText +
-          content.substring(insertImportAt, scriptCloseIdx) +
-          nonImportInjectionText +
-          content.substring(scriptCloseIdx);
-      }
+      // 先插入后面的（非 import 块在 script 末尾），再插入前面的（import 块在 import 之后）
+      // 避免偏移问题
+      content =
+        content.substring(0, insertImportAt) +
+        importInjectionText +
+        content.substring(insertImportAt, scriptCloseIdx) +
+        nonImportInjectionText +
+        content.substring(scriptCloseIdx);
     } else {
-      // 没有 <script setup> 标签 — 在 SFC 末尾添加完整 script 块
+      // 没有 <script setup> 块 — 在 SFC 末尾添加完整 script 块
       const allText = importInjectionText + nonImportInjectionText;
       content += `\n<script setup>${allText}</script>\n`;
     }
@@ -1289,10 +1300,21 @@ export const ${exportName} = ${mockData}
    */
   private removeInjectedCode(sfc: string): string {
     // 只移除紧贴自动注入块的 Vue import，避免误删用户原本写在脚本顶部的 import。
-    let content = sfc.replace(
-      /(<script\s+setup[^>]*>\s*\n)(import\s*\{\s*(ref|onMounted)(\s*,\s*(ref|onMounted))*\s*\}\s*from\s*'vue'\s*\n)(\/\/ === API 对接注入[\s\S]*?\/\/ === END API 对接注入 ===\s*)/g,
-      '$1',
-    );
+    // 🧷 2026-11-16 属性顺序无关：旧正则要求 `setup` 紧跟 `<script`+空白，遇
+    //    `<script data-section-id="x" setup>` 整体失配 ⇒ 旧注入块不被移除、每次绑定都重复累积。
+    //    改为「先按事实源定位首个 setup 开标签，再只在该段起始处做一次剥离」。
+    let content = sfc;
+    const setupOpen = findScriptSetupOpen(content);
+    if (setupOpen) {
+      const head = content.slice(0, setupOpen.index + setupOpen.tag.length);
+      const rest = content.slice(setupOpen.index + setupOpen.tag.length);
+      content =
+        head +
+        rest.replace(
+          /^(\s*\n)(import\s*\{\s*(ref|onMounted)(\s*,\s*(ref|onMounted))*\s*\}\s*from\s*'vue'\s*\n)(\/\/ === API 对接注入[\s\S]*?\/\/ === END API 对接注入 ===\s*)/,
+          '$1',
+        );
+    }
 
     content = content.replace(
       /\/\/ === API 对接导入 \(自动生成\)[\s\S]*?\/\/ === END API 导入 ===\s*/g,
@@ -1363,8 +1385,7 @@ export const ${exportName} = ${mockData}
     const warnings: string[] = [];
     const templateMatch = sfcContent.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
     const template = templateMatch ? templateMatch[1] : '';
-    const scriptMatch = sfcContent.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/i);
-    const script = scriptMatch ? scriptMatch[1] : '';
+    const script = setupScriptInner(sfcContent);
 
     for (const slot of slots) {
       const dataName = this.getBindingDataName(slot);

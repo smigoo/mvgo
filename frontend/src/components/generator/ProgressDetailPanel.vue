@@ -90,6 +90,7 @@
       </div>
     </div>
 
+
     <!-- 页签内容：统计 -->
     <div v-if="activeTab === 'stats'" class="pdp-tab-content">
       <template v-if="allEvents.length === 0">
@@ -354,10 +355,10 @@ const emit = defineEmits<{
 }>()
 
 // 状态
-const activeTab = ref<'stages' | 'logs' | 'stats'>('stages')
 const timelineRef = ref<HTMLElement>()
 const logListRef = ref<HTMLElement>()
 const stagesRef = ref<HTMLElement>()
+
 
 // 页签定义
 const tabs = computed(() => [
@@ -2330,4 +2331,5 @@ html[data-theme="dark"] .pdp-btn-playground:hover:not(:disabled) {
     white-space: normal;
   }
 }
+
 </style>

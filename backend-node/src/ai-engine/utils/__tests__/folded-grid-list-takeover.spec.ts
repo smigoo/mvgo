@@ -1437,3 +1437,116 @@ describe('列表条目 · trailing 平铺交替（64a1a31f 阳性对照）', () 
     expect(r.items[0].texts.map((t: any) => t.t)).toEqual(['甲节点', '地址-甲节点']);
   });
 });
+
+/**
+ * ③（2026-11-16 · mc-1794808831127-c019cd88 实锤）：值列「软换行真值」下发。
+ *
+ * 病灶：渲染器对 stats 值一律 `white-space:nowrap`（无真值宽）⇒ 长值不换行、撑破卡宽；
+ * 而 Figma 里该值 TEXT 是**固定宽盒 + 软换行**（盒高 > 行高 × 1.5）。
+ * 判据（宁漏勿错，任一不成立即不下发 ⇒ 渲染层保持 nowrap）：① 本卡子树内**恰 1 个**
+ * 「无硬换行 `\n` 且软换行」的 TEXT；② 本项**恰 1 个** stat。下发真值盒宽只作 `maxWidth`
+ * 封顶 ⇒ 短值零视觉变化。真机实证 `ww = 254 / 254 / 256`（Figma 253.89 / 253.89 / 255.96）。
+ */
+describe('③值列软换行真值下发（mc-1794808831127-c019cd88 实锤）', () => {
+  const mkText = (id: string, chars: string, x: number, w: number, h: number) => ({
+    id,
+    name: id,
+    type: 'TEXT',
+    absoluteBoundingBox: { x, y: 16, width: w, height: h },
+    fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1, visible: true }],
+    style: {
+      fontFamily: 'Source Han Sans CN', fontSize: 14, fontWeight: 400, lineHeightPx: 21,
+      textAlignHorizontal: 'LEFT', textAlignVertical: 'CENTER',
+    },
+    characters: chars,
+  });
+  // 卡盒：左文本（硬换行 `甲\n15:34`，真机 label 同形）+ 右值文本（单行长值、软换行 h=43）
+  const CARD = (id: string, name: string, value: string, extra: any[] = [], valueH = 43) => ({
+    id,
+    type: 'FRAME',
+    absoluteBoundingBox: { x: 0, y: 0, width: 386, height: 72 },
+    children: [mkText(`${id}-L`, `${name}\n15:34`, 45, 59, 43), mkText(`${id}-V`, value, 130, 254, valueH), ...extra],
+  });
+  const NO_LABEL = { type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1, visible: true };
+  const SOFT_EXTRA = {
+    id: '20:1-X', name: '20:1-X', type: 'TEXT',
+    absoluteBoundingBox: { x: 300, y: 16, width: 60, height: 43 },
+    fills: [NO_LABEL],
+    style: { fontFamily: 'Source Han Sans CN', fontSize: 14, fontWeight: 400, lineHeightPx: 21 },
+    characters: '另一个软换行文本',
+  };
+  const fig = (cards: any[]) => ({
+    id: 'r', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 300 }, children: cards,
+  });
+  const mkCardItem = (id: string, name: string, value: string) => ({
+    id,
+    layout: 'horizontal',
+    content: {
+      layout: 'vertical', position: 'right',
+      elements: [{ type: 'label', text: name, figmaNode: id, position: 'top', styles: { fontSize: 12, color: '#a8d4f9' } }],
+    },
+    stats: [{ type: 'online', value, label: '在线', styles: { fontSize: 14, color: '#ffffff' } }],
+  });
+  const mkSec = (a: any, b: any) => ({
+    id: '20:1-list', type: 'list', collapsed: true, renderHint: 'v-for', itemCount: 2, items: [a, b],
+  });
+  const VALUE_A = '枫港大桥温度到达55℃';
+  const VALUE_B = 'K1064+300边波-3h降雨量达到30mm';
+
+  it('⭐ 阳性：卡内恰 1 个「无 \\n 且软换行」TEXT ⇒ 下发真值盒宽 ww（254），渲染层 maxWidth 封顶 + 允许换行', () => {
+    const r: any = detectListLeaf(
+      mkSec(mkCardItem('20:1', '甲', VALUE_A), mkCardItem('20:2', '乙', VALUE_B)),
+      indexFigmaNodes(fig([CARD('20:1', '甲', VALUE_A), CARD('20:2', '乙', VALUE_B)])),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.wrapStats).toEqual({ proven: 2, unresolved: 0 });
+    expect(r.items[0].stats[0].ww).toBe(254);
+    expect(r.items[1].stats[0].ww).toBe(254);
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    // 数据层：ww 真值已在绑定量里
+    expect([...vue.matchAll(/ww:\s*(\d+|null)/g)].map((m) => m[1])).toEqual(['254', '254']);
+    // 渲染层：真值宽只作封顶（maxWidth），无真值则逐字保持 nowrap
+    expect(vue).toContain("whiteSpace: s.ww ? 'normal' : 'nowrap'");
+    expect(vue).toContain("maxWidth: s.ww ? s.ww + 'px' : undefined");
+  });
+
+  it('阴性对照：值盒高 = 行高（真值单行）⇒ 不下发 ww，保持 nowrap', () => {
+    const r: any = detectListLeaf(
+      mkSec(mkCardItem('20:1', '甲', VALUE_A), mkCardItem('20:2', '乙', VALUE_B)),
+      indexFigmaNodes(fig([CARD('20:1', '甲', VALUE_A, [], 21), CARD('20:2', '乙', VALUE_B, [], 21)])),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.wrapStats).toEqual({ proven: 0, unresolved: 2 });
+    expect(r.items[0].stats[0].ww).toBeUndefined();
+    const vue = renderFoldedGridLeafVue(r, 'c-demo');
+    expect([...vue.matchAll(/ww:\s*(\d+|null)/g)].map((m) => m[1])).toEqual(['null', 'null']);
+  });
+
+  it('反向：卡内 2 个软换行 TEXT（候选不唯一）⇒ 归属不明，fail-open 不下发', () => {
+    const r: any = detectListLeaf(
+      mkSec(mkCardItem('20:1', '甲', VALUE_A), mkCardItem('20:2', '乙', VALUE_B)),
+      indexFigmaNodes(fig([CARD('20:1', '甲', VALUE_A, [SOFT_EXTRA]), CARD('20:2', '乙', VALUE_B)])),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.wrapStats).toEqual({ proven: 1, unresolved: 1 });
+    expect(r.items[0].stats[0].ww).toBeUndefined();
+    expect(r.items[1].stats[0].ww).toBe(254);
+  });
+
+  it('反向：值列带硬换行 \\n（显式分行，非软换行需求）⇒ 排除；无候选即不下发', () => {
+    const r: any = detectListLeaf(
+      mkSec(mkCardItem('20:1', '甲', VALUE_A), mkCardItem('20:2', '乙', VALUE_B)),
+      indexFigmaNodes(fig([CARD('20:1', '甲', `${VALUE_A}\n${VALUE_A}`), CARD('20:2', '乙', VALUE_B)])),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.wrapStats).toEqual({ proven: 1, unresolved: 1 });
+    expect(r.items[1].stats[0].ww).toBe(254);
+  });
+
+  it('反向：figma 索引缺失（几何真值断供）⇒ 不下发、不臆造宽度', () => {
+    const r: any = detectListLeaf(mkSec(mkCardItem('20:1', '甲', VALUE_A), mkCardItem('20:2', '乙', VALUE_B)), null as any);
+    expect(r.ok).toBe(true);
+    expect(r.wrapStats).toEqual({ proven: 0, unresolved: 2 });
+    expect(r.items[0].stats[0].ww).toBeUndefined();
+  });
+});

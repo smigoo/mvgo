@@ -290,6 +290,8 @@ export function resolveStackGeometry(parentBox, childBoxes) {
  *   paddingLeft?: number,
  *   leftover?: number,
  *   children?: Array<{height:number, gapBefore:number}>
+ *   designW?: number  — 设计盒宽（B1-S1b β，锁定用）
+ *   designH?: number  — 设计盒高
  * }}
  */
 export function resolveIntrinsicLayout(sec, figmaIndex) {
@@ -323,16 +325,34 @@ export function resolveIntrinsicLayout(sec, figmaIndex) {
     paddingTop: geo.paddingTop,
     paddingLeft: geo.paddingLeft,
     leftover: geo.leftover,
+    // 🎯 B1-S1b β（2026-11-16 · aca64532「空这么高」实锤）：设计盒真值随 plan 下发，
+    //   供 buildIntrinsicContainerStyle 产 aspect-ratio + max-height（设计保真语义：
+    //   宿主面板高 ≠ 设计高时容器锁定设计尺寸，不再 flex:1 吃满后底部露宿主底色）。
+    designW: Math.round(pbox.w),
+    designH: Math.round(pbox.h),
     children: geo.units.map((u) => ({ height: u.height, gapBefore: u.gapBefore })),
   };
 }
 
-/** 容器侧 padding 声明（真值 0 不写 ⇒ 不覆盖 class 上的合法 padding 语义） */
+/**
+ * 容器侧声明（真值 0 不写 ⇒ 不覆盖 class 上的合法 padding 语义）。
+ * 🎯 B1-S1b β（2026-11-16 · aca64532 实锤）：新增 aspect-ratio + max-height
+ *   设计锁定。语义：intrinsic 形态 = 设计保真——容器在 flex:1 拉伸下受
+ *   设计高封顶（max-height）+ 宽高比锁定（aspect-ratio），宿主面板高 ≠ 设计时
+ *   容器止步于设计尺寸，剩余空间交给根容器 justify-content:center 居中，
+ *   不再 flex:1 吃满后底部露宿主底色。
+ *   降级：designW/H 缺失（box 无宽/高）⇒ 不写 aspect-ratio 只写 max-height
+ *   （真错不臆造）；两者都缺 ⇒ 维持纯 padding（零回归）。
+ */
 export function buildIntrinsicContainerStyle(plan) {
   if (!plan || !plan.ok) return '';
   let s = '';
   if (plan.paddingTop > 0) s += `padding-top:${plan.paddingTop}px;`;
   if (plan.paddingLeft > 0) s += `padding-left:${plan.paddingLeft}px;`;
+  const _w = Number(plan.designW);
+  const _h = Number(plan.designH);
+  if (_h > 0) s += `max-height:${_h}px;`;
+  if (_w > 0 && _h > 0) s += `aspect-ratio:${_w}/${_h};`;
   return s;
 }
 

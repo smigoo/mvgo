@@ -23,12 +23,25 @@
  *     - 折叠契约本身带上 bg 归属事实 ⇒ 下游不必再猜、审计可 grep。
  *
  * 设计约束（与 repeated-section-contract.js 同风格）：
- *   ① 纯函数（无 import、无 import.meta），jest 可直接 require/import；
+ *   ① 纯函数（无 node 内建 / 无 IO / 无 import.meta；只允许 import 同级纯工具），
+ *      jest 可直接 require/import；
  *   ② 原地修改 + 返回审计，幂等；不增删 section / item / children；
  *   ③ **严格收窄**：只处理已折叠段；每 item 必须「恰好 1 条」背景证据且该证据有
  *      已固化的变量名；同组内同一文件不得重复绑定；歧义/缺证据一律跳过（fail-open）；
  *   ④ 不改既有 `bg` 声明（模型已给真值时以模型为准，避免覆盖）。
+ *
+ * P0-b（2026-11-15 · mc-1794808831127-c019cd88 实锤）：P0-a「资源归属上溯」
+ *   (`resource-ownership-normalize.js`) 会把落在非 section 中间容器上的 `ownerSectionId`
+ *   改写成最近祖先 section，并**保留原值**到 `ownerSectionOriginal`。
+ *   折叠列表项的合法归属 id 是 item 自身锚点（`1:377` 等 Figma 节点 id），
+ *   上溯后 `ownerSectionId` 变成 section（`2016:219`）⇒ 命中过滤 `ownerSectionId` 恒空，
+ *   `skipped=3 / bound=0`（真机日志逐字复现）。
+ *   ⇒ 命中口径改用 `ownerMatchesIds`（P0-b 单一判据，认 `ownerSectionOriginal`）：
+ *     仍是**精确 id 相等**（不放松唯一命中判据），只把 P0-a 挪走的键找回来。
+ *     审计加 `matchedByOriginal` 槽（计数行铁律：0 也要打）。
  */
+
+import { ownerMatchesIds, ownerKeyCandidates } from './resource-ownership-normalize.js';
 
 const MAX_DEPTH = 8;
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -146,7 +159,7 @@ export function collectFoldedOwnerIds(sections) {
  *
  * @param {Array|object} sections section 树 / plan 对象
  * @param {Array} resourceMapping resourceDomMapping（含 assignedVarName / ownerSectionId）
- * @returns {{checked:number, bound:number, alreadyBound:number, ambiguous:number, skipped:number, groups:Array}}
+ * @returns {{checked:number, bound:number, alreadyBound:number, ambiguous:number, skipped:number, matchedByOriginal:number, groups:Array}}
  */
 export function bindFoldedItemBackgrounds(sections, resourceMapping) {
   const audit = {
@@ -155,6 +168,7 @@ export function bindFoldedItemBackgrounds(sections, resourceMapping) {
     alreadyBound: 0,
     ambiguous: 0,
     skipped: 0,
+    matchedByOriginal: 0,
     groups: [],
   };
   const mapping = Array.isArray(resourceMapping) ? resourceMapping : [];
@@ -187,7 +201,7 @@ export function bindFoldedItemBackgrounds(sections, resourceMapping) {
             continue;
           }
           const hits = bgEntries.filter(
-            (m) => ownerIds.has(s(m.ownerSectionId)) || ownerIds.has(s(m.figmaNodeId)),
+            (m) => ownerMatchesIds(ownerIds, m) || ownerIds.has(s(m.figmaNodeId)),
           );
           // 唯一命中 + 同组内该文件未被别卡占用 ⇒ 才写；歧义一律 fail-open。
           if (hits.length !== 1) {
@@ -224,6 +238,14 @@ export function bindFoldedItemBackgrounds(sections, resourceMapping) {
             it._vforData.resourceFiles = files.slice(0, 8);
           }
           audit.bound += 1;
+          // P0-a 上溯挪走了直接 owner ⇒ 只有 `ownerSectionOriginal` 命中（而 `ownerSectionId` 不中），
+          // 单独计数（可 grep「本行靠 P0-b 找回」）。
+          if (
+            !ownerIds.has(s(hit.ownerSectionId)) &&
+            ownerKeyCandidates(hit).includes(s(hit.ownerSectionOriginal))
+          ) {
+            audit.matchedByOriginal += 1;
+          }
           group.bound += 1;
           group.members.push({ id: s(it.id), file: fname, varName });
         }

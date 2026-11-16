@@ -885,6 +885,13 @@
                   </button>
                   <button
                     class="ch-tab"
+                    :class="{ active: activeTab === 'vision' }"
+                    @click="activeTab = 'vision'"
+                  >
+                    视觉
+                  </button>
+                  <button
+                    class="ch-tab"
                     :class="{ active: activeTab === 'code' }"
                     @click="activeTab = 'code'; hasUnreadCode = false"
                   >
@@ -979,6 +986,11 @@
                       切换面板
                     </span>
                   </div>
+                </div>
+
+                <!-- ── Tab 面板：视觉分析溯源（视觉原始输出 vs 管线 plan） ── -->
+                <div class="vision-panel" :class="{ visible: activeTab === 'vision' }">
+                  <VisionTracePanel :session-id="sessionId" />
                 </div>
 
                 <!-- ── Tab 面板：生成中代码（只读草稿，不执行 candidate） ── -->
@@ -1968,6 +1980,7 @@ import { buildPreviewUrl as buildResolvedPreviewUrl, resolvePreviewDescriptor } 
 import { useTheme } from '@/composables/useTheme'
 import http from '@/core/http'
 import GitLabPushModal from '@/components/GitLabPushModal.vue'
+import VisionTracePanel from '@/components/generator/VisionTracePanel.vue'
 
 // 🆕 预览 iframe 主题透传用：跟随宿主全局暗色模式（见 buildPreviewUrl 内注释）
 const { currentTheme: hostTheme } = useTheme()
@@ -9191,6 +9204,16 @@ watch(bindingWizardOpen, (open) => {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
+}
+
+/* ── 视觉分析溯源面板（视觉原始输出 vs 管线 plan 对照） ── */
+.vision-panel {
+  display: none;
+  padding: 0;
+}
+
+.vision-panel.visible {
+  display: block;
 }
 
 .preview-hint {

@@ -48,6 +48,12 @@ import {
 } from '../../utils/resource-import-guard.js';
 import { normalizeFileSegments } from '../../utils/chunk-meta-files.js';
 import {
+  findScriptSetupOpen,
+  findScriptSetupBlock,
+  injectIntoScript,
+  replaceScriptInner,
+} from '../../utils/sfc-script-anchor.js';
+import {
   extractLessVarReferences,
   isLessVarDeclared,
   safeLessVarValue,
@@ -851,11 +857,11 @@ export function injectBgStyleBinding(content, tag, varName, mapping = null, diag
 export function fixBrokenPropsDestructuring(code) {
   if (typeof code !== 'string' || code.length === 0) return code;
 
-  // 提取 <script setup> 块
-  const scriptMatch = code.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/);
-  if (!scriptMatch) return code;
+  // 提取 <script setup> 块（🔴 2026-11-16：改走唯一事实源，属性顺序无关）
+  const scriptBlock = findScriptSetupBlock(code);
+  if (!scriptBlock) return code;
 
-  const scriptContent = scriptMatch[1];
+  const scriptContent = scriptBlock.inner;
   let fixedScript = scriptContent;
 
   // 检测 defineProps 的参数（支持对象和泛型两种形式）
@@ -917,7 +923,10 @@ export function fixBrokenPropsDestructuring(code) {
   // 清理多余空行
   fixedScript = fixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
 
-  return code.replace(/<script\s+setup[^>]*>[\s\S]*?<\/script>/, `<script setup>${fixedScript}</script>`);
+  // 🔴 2026-11-16 同源修正：① 属性顺序无关；② 逐字保留原开标签
+  //   （旧实现写成 `<script setup>${fixedScript}</script>`，会把 `lang="ts"` /
+  //    `data-section-id` 等属性静默丢掉 ⇒ 归属链锚点消失）。
+  return replaceScriptInner(code, fixedScript).code;
 }
 
 /**
@@ -1010,10 +1019,11 @@ export function ensureResourceImportInVue(content, varName, mapping, filePath) {
     ? '../../resources/images/'
     : '../resources/images/';
   const importLine = `import ${varName} from '${relBase}${file}'`;
-  const scriptRe = /<script\s+setup[^>]*>/;
-  if (scriptRe.test(content)) {
-    return content.replace(scriptRe, (m) => `${m}\n${importLine}`);
-  }
+  // 🔴 2026-11-16：改走唯一事实源。旧 `/<script\s+setup[^>]*>/` 对
+  //   `<script data-section-id="…" setup>` 失配 ⇒ 掉到下方 `</template>` 兜底分支
+  //   ⇒ 在 template 尾部**另起一个 `<script setup>` 块**（双脚本块 = 写盘门禁 BLOCK 形态）。
+  const anchored = injectIntoScript(content, `\n${importLine}`);
+  if (anchored.injected) return anchored.code;
   if (/<\/template>/i.test(content)) {
     return content.replace(
       /<\/template>/i,
@@ -2672,7 +2682,21 @@ export function ensureHeaderSlots(code, input, options = {}) {
       (c) => c && typeof c === 'object' && !!(c.resourceFile || c.imageRef || c.assetVar),
     )
   }
-  const t09ResourceSlotStats = { evaluated: 0, blocked: 0, slotBodyDuplicate: 0 }
+  // 🔴 2026-11-16（a1dbffb6 实锤）：旧计数只有 evaluated/blocked/slotBodyDuplicate，
+  //   真机出现「evaluated=3 blocked=2 injected=0」时，剩下那条死在哪个静默出口
+  //   （slotType 未映射 / content 空 / 既有插槽已有内容）**无法归因**——三个出口都是
+  //   裸 `continue`，不计数。违反「计数行恒打、可区分没跑与判据失效」守则。
+  //   本改动只加观测：每出口独立计数 + 未注入时打形状快照（不改任何分支行为）。
+  const t09ResourceSlotStats = {
+    evaluated: 0,
+    blocked: 0,
+    slotBodyDuplicate: 0,
+    noSlotName: 0,
+    emptyContent: 0,
+    existingSlotKept: 0,
+    pending: 0,
+    injected: 0,
+  }
 
   // 🛡️ 案①：同一 figmaNodeId 的 section 结构契约优先；顶层 label/content 不再决定只能拼文本。
   const tabResolution = resolveHeaderTabModels(input);
@@ -2688,9 +2712,9 @@ export function ensureHeaderSlots(code, input, options = {}) {
       continue;
     }
     const slotName = slotNameMap[String(slot?.slotType || '').trim()];
-    if (!slotName) continue;
+    if (!slotName) { t09ResourceSlotStats.noSlotName += 1; continue; }
     const content = String(slot?.content || '').trim();
-    if (!content) continue;
+    if (!content) { t09ResourceSlotStats.emptyContent += 1; continue; }
     // 🛡️ 2026-11-06（mc-max-1793923099707-3e924a69 实锤）：**插槽内容与 body 段重复 ⇒ 让位**。
     //   病灶：derived 插槽「江阴靖江长江隧道 江阴大桥」进了 #header-right（裸 span 简样式），
     //   而同文本的 tabs 已由 body 段组件（ContentMonitor）真渲染 ⇒ 同内容两处、样式各异。
@@ -2715,15 +2739,34 @@ export function ensureHeaderSlots(code, input, options = {}) {
     if (existing) {
       const inner = existing[1].replace(/<!--[\s\S]*?-->/g, '').trim();
       const isPriorT09TextFallback = existing[0].includes('由生成器按 Figma headerSlots 确定性补齐');
-      if (inner && !(tabModel && isPriorT09TextFallback)) continue;
+      if (inner && !(tabModel && isPriorT09TextFallback)) {
+        t09ResourceSlotStats.existingSlotKept += 1;
+        continue;
+      }
     }
     if (!pending.has(slotName)) pending.set(slotName, []);
     pending.get(slotName).push(tabModel ? { kind: 'tabs', model: tabModel } : { kind: 'text', content });
   }
   // 🔴 计数行恒打（0 也打）：可区分「没有资源型插槽」与「判据失效」
   logger?.info('🛡️ T09 资源型插槽文本注入拦截', t09ResourceSlotStats);
+  // 🔴 未注入诊断（2026-11-16 a1dbffb6 实锤）：evaluated>0 而注入 0 时，把**入参形状**原样
+  //   打出来（slotType/elementType/content/figmaNodeId/children 资源标记）。此前只能靠
+  //   逐个反推判据，真机 3 条插槽里有 1 条无声消失、无法归因。仅观测，不改分支。
+  if (t09ResourceSlotStats.evaluated > 0 && pending.size === 0) {
+    logger?.info('🛡️ T09 未注入诊断（入参形状）', {
+      slotsShape: slots.slice(0, 6).map((s) => ({
+        slotType: s?.slotType ?? null,
+        elementType: s?.elementType ?? null,
+        content: String(s?.content ?? '').slice(0, 24),
+        figmaNodeId: s?.figmaNodeId ?? null,
+        children: Array.isArray(s?.children) ? s.children.length : 0,
+        resourceBacked: isResourceBackedHeaderSlot(s),
+      })),
+    });
+  }
   if (pending.size === 0) {
     logger?.info('🛡️ T09 头部Tab结构升级', tabStats);
+    logger?.info('🛡️ T09 插槽注入结果', t09ResourceSlotStats);
     return code;
   }
 
@@ -2762,12 +2805,16 @@ export function ensureHeaderSlots(code, input, options = {}) {
     }
     injected.push(slotName);
   }
+  t09ResourceSlotStats.pending = pending.size;
+  t09ResourceSlotStats.injected = injected.length;
 
   if (upgradedTabModels.size > 0) {
     const declarations = [...upgradedTabModels.values()]
       .map((model) => renderHeaderTabScript(model))
       .join('\n');
-    const scriptOpen = result.match(/<script\s+setup[^>]*>/i);
+    // 🔴 2026-11-16：属性顺序无关（旧 `/<script\s+setup[^>]*>/i` 对
+    //   `<script data-section-id="…" setup>` 失配 ⇒ T09 头部 Tab 升级整块弃权）。
+    const scriptOpen = findScriptSetupOpen(result);
     if (!scriptOpen) {
       tabStats.failed = upgradedTabModels.size;
       logger?.warn('🛡️ T09 头部Tab结构升级弃权：缺少 script setup，已回退原始代码');
@@ -2775,7 +2822,7 @@ export function ensureHeaderSlots(code, input, options = {}) {
       return originalCode;
     }
     let next = result;
-    const scriptBody = next.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/i)?.[1] || '';
+    const scriptBody = findScriptSetupBlock(next)?.inner || '';
     // ref 已声明/导入则复用；否则优先合并进既有 vue import，避免重复声明。
     if (!/\bref\b/.test(scriptBody)) {
       const vueImportRe = /import\s*\{([^}]+)\}\s*from\s*(['"])vue\2/;
@@ -2784,7 +2831,7 @@ export function ensureHeaderSlots(code, input, options = {}) {
           return `import { ${names.trim()}, ref } from ${quote}vue${quote}`;
         });
       } else {
-        next = next.replace(scriptOpen[0], `${scriptOpen[0]}\nimport { ref } from 'vue'`);
+        next = next.replace(scriptOpen.tag, `${scriptOpen.tag}\nimport { ref } from 'vue'`);
       }
     }
     next = next.replace(/<\/script>/i, `\n${declarations}\n</script>`);
@@ -2803,6 +2850,8 @@ export function ensureHeaderSlots(code, input, options = {}) {
     tabStats.upgraded = upgradedTabModels.size;
   }
   logger?.info('🛡️ T09 头部Tab结构升级', tabStats);
+  // 🔴 注入结果恒打（0 也打）：与上面「拦截」行成对，才能一眼看出「过了资源判据却没有注入」
+  logger?.info('🛡️ T09 插槽注入结果', t09ResourceSlotStats);
 
   if (injected.length > 0 && logger) {
     logger.warn('🔧 T09 已确定性补齐 base-panel 头部插槽（模型漏生成）', {

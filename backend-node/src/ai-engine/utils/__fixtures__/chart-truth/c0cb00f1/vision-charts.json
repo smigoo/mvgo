@@ -1,0 +1,102 @@
+[
+ {
+  "section": "2:7625",
+  "type": "bar",
+  "series": [
+   "北京方向",
+   "上海方向"
+  ],
+  "seriesTypes": [
+   "bar",
+   "bar"
+  ],
+  "legend": [
+   "北京方向",
+   "上海方向"
+  ],
+  "legendPosition": "top-right",
+  "seriesColors": [
+   "#1588f8",
+   "#18c02e"
+  ],
+  "legendType": "horizontal",
+  "axes": "X轴为小时，Y轴为车辆数",
+  "tooltip": "显示时间点、方向及车辆数",
+  "barStyle": {
+   "widthRatio": 0.5,
+   "gapRatio": 0.4,
+   "roundCorner": 3
+  },
+  "notes": [
+   "有16时的tooltip提示"
+  ],
+  "sectionUnresolved": true
+ },
+ {
+  "section": "2:7794",
+  "type": "bar",
+  "series": [
+   "北京方向",
+   "上海方向"
+  ],
+  "seriesTypes": [
+   "bar",
+   "bar"
+  ],
+  "legend": [
+   "北京方向",
+   "上海方向"
+  ],
+  "legendPosition": "top-right",
+  "seriesColors": [
+   "#1588f8",
+   "#18c02e"
+  ],
+  "legendType": "horizontal",
+  "axes": "X轴为小时，Y轴为车辆数",
+  "tooltip": "显示时间点、方向及车辆数",
+  "barStyle": {
+   "widthRatio": 0.5,
+   "gapRatio": 0.4,
+   "roundCorner": 3
+  },
+  "notes": [
+   "有16时的tooltip提示"
+  ],
+  "sectionUnresolved": true
+ },
+ {
+  "section": "2:3573",
+  "type": "line",
+  "series": [
+   "实际流量",
+   "预测流量"
+  ],
+  "seriesTypes": [
+   "line",
+   "line"
+  ],
+  "legend": [
+   "实际流量",
+   "预测流量"
+  ],
+  "legendPosition": "top-right",
+  "seriesColors": [
+   "#1588f8",
+   "#18c02e"
+  ],
+  "legendType": "horizontal",
+  "axes": "X轴为时间（2小时前至2小时后），Y轴为车辆数",
+  "tooltip": "显示时间点及流量数值",
+  "lineStyle": {
+   "width": 2,
+   "smooth": true,
+   "showSymbol": true,
+   "areaOpacity": 0.25
+  },
+  "notes": [
+   "底部有准确率标签"
+  ],
+  "sectionUnresolved": true
+ }
+]

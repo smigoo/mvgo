@@ -48,6 +48,7 @@ import { runsOfTextNode } from './text-runs.js';
 //   microcode-engineer / vue3-prompt / vue3-engineer）都经此处，且此处持有
 //   p.resourceMapping 全量（含 figma-connector 固化的 assignedVarName）。
 import { bindFoldedItemBackgrounds } from './folded-item-background.js';
+import { ownerMatchesIds, ownerKeyCandidates } from './resource-ownership-normalize.js';
 // 🛡️ F1（2026-11-05 · mc-max-1793869867060-e23b0b40 实锤）：图表真值冲突排除复用
 //   下方 `section-anchor-truth.js` 已 re-export 的 `sectionAnchorCandidates`（G14a 下沉，
 //   同一份锚点候选口径）——**不新增第二条 import 路径**，避免第二套口径漂移。
@@ -362,6 +363,29 @@ export function textRun(t) {
     //   上面的 text/color/fs/fw 一律保持节点级不变 ⇒ 行列聚类/几何判据零扰动。
     ...(segs ? { segs } : {}),
   };
+}
+
+/**
+ * 🔴 软换行真值（**判据单一来源**，2026-11-16 · ③）：文本真值盒高 > 行高 × 1.5
+ *   ⇒ 真值里它是**多行**（须给宽换行），否则保持单行 `nowrap`。
+ *
+ * 病灶：不认这个事实时，「长描述/长值」会被渲染成 `white-space:nowrap` 的一行溢出
+ *   （detectTextLeaf 754-756 的前车之鉴；本次 c019cd88 折叠卡右值 30 字溢出同一根因）。
+ *
+ * 口径：`box.h > lh * 1.5`。**缺行高或缺盒 ⇒ false**（不猜、不臆造 ⇒ fail-open 保持原形态）。
+ *   本函数是 detectTextLeaf 两处（旧的 735/757 内联式）**唯一实现**；`regions` 分区
+ *   另一处带 `+1` 容差（2642），系该形态历史口径，不在此收敛（避免改其既有产物）。
+ *
+ * @param {{lh?: number|null, box?: {h?: number}|null}} run textRun() 产物
+ * @param {{h?: number}|null} [box] 覆盖盒（缺省用 run.box）
+ * @returns {boolean} true=真值为多行（须给宽换行）
+ */
+export function textSoftWraps(run, box) {
+  const b = box || run?.box;
+  const lh = Number(run?.lh);
+  if (!b || !Number.isFinite(lh) || lh <= 0) return false;
+  const h = Number(b.h);
+  return Number.isFinite(h) && h > lh * 1.5;
 }
 
 /**
@@ -731,7 +755,7 @@ export function detectTextLeaf(sec, figmaIndex) {
         lineHeight: run.lh,
         width: Math.round(run.box.w * 100) / 100,
         height: Math.round(run.box.h * 100) / 100,
-        multiline: Boolean(run.lh && run.box.h > run.lh * 1.5),
+        multiline: textSoftWraps(run),
         gapBefore: Math.round(gapBefore * 100) / 100,
       });
     }
@@ -753,7 +777,8 @@ export function detectTextLeaf(sec, figmaIndex) {
   // 🔴 多行判定只认真值几何：盒高 > 行高 × 1.5 ⇒ 必然多行（真值 36:1719 = 496×90、
   //   fs14 / lineHeightPx30 ⇒ 90 > 45 ⇒ 3 行）。行高缺失 ⇒ 不多行（保持原单行形态）。
   //   不这么做会把「长描述」渲染成 `white-space:nowrap; line-height:1` 的一行溢出。
-  const multiline = Boolean(tb && ti.lh && tb.h > ti.lh * 1.5);
+  //   判据收敛到 `textSoftWraps`（单一实现，与折叠列表 ③ 下发同源）。
+  const multiline = textSoftWraps(ti, tb);
   return {
     ok: true,
     kind: 'text',
@@ -3605,8 +3630,14 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
         if (String(e?.resourceFile || '') !== declaredFile) return false;
         // 复用既有背景用途/下载状态判据，禁止把同名图标借成卡片背景。
         if (backgroundImageOf({ id: e?.figmaNodeId }, [e]) !== e) return false;
-        const owner = String(e?.ownerSectionId || '');
-        return !owner || ownerIds.has(owner);
+        // 🔴 P0-b（2026-11-15 · c019cd88 实锤）：P0-a「资源归属上溯」把折叠卡项的直接
+        //   owner（`1:377` 等 item 锚）改写成最近 section（`2016:219`）并保留原值到
+        //   `ownerSectionOriginal`。本处 ownerIds 是 **item 锚点**，只比 ownerSectionId
+        //   ⇒ 恒不命中 ⇒ declared 通道 0（真机 `listItemBg=0,declared=0,skipped=3` 逐字复现）。
+        //   判据收敛到 `ownerMatchesIds`（单一来源，认原值；仍精确相等，不放松唯一命中）。
+        //   老产物无 owner 键 ⇒ 保持既有「通配放行」语义不变。
+        if (ownerKeyCandidates(e).length === 0) return true;
+        return ownerMatchesIds(ownerIds, e);
       });
       if (declaredHits.length === 1) {
         const bg = toItemBg(declaredHits[0], 'declared');
@@ -3634,6 +3665,49 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     norm[i].bg = !!bg;
     if (bg) itemBgStats[bg.source] += 1;
     else itemBgStats.skipped += 1;
+  });
+  // 🔴 ③（2026-11-16 · mc-1794808831127-c019cd88 实锤）：「值列换行真值」下发。
+  //   病灶：渲染器对 stats 值一律硬编码 `white-space:nowrap`（无真值宽）⇒ 长值（真机
+  //     30 字 / 28 字）不换行，撑破卡宽溢出；而 Figma 里该值 TEXT 是**固定宽盒 + 软换行**
+  //     （盒高 > 行高 × 1.5，与 detectTextLeaf 同判据 `textSoftWraps`）。
+  //   判据（宁漏勿错，任一不成立即不下发 ⇒ 渲染层保持 nowrap，fail-open）：
+  //     ① 本卡子树内**恰 1 个**「无硬换行 `\n` 且软换行」的 TEXT ⇒ 它就是值列
+  //        （真机 label `环境温度\n15:34` 带 `\n` 被排除，只剩右值 `1:387`）；
+  //     ② 本项**恰 1 个** stat ⇒ 归属唯一、不会张冠李戴。
+  //   下发的是**真值盒宽**，渲染层只作 `maxWidth` 封顶（不撑宽）⇒ 短值零视觉变化，
+  //   只有真正超宽的长值才按真值换行。**不改文本量的任何落层判定**。
+  const wrapStats = { proven: 0, unresolved: 0 };
+  norm.forEach((n, i) => {
+    // 🔴 锚点解析用**本文件既有单一写法**（与 :3402/:3421 的 texts/stats 几何走查同源）：
+    //   直接取**本项直属**的 figma 节点，**不上溯祖先** —— 上溯必吞邻卡文本 ⇒ 候选数
+    //   混淆（真机实测 `cards[i].node` 在本形态解析为空 ⇒ 走查空转、proven 恒 0）。
+    const id = String(items[i]?.figmaNodeId ?? items[i]?.figmaNode ?? items[i]?.id ?? '');
+    const entry = id ? figmaIndex?.get(id) : null;
+    const cardNode = cards[i]?.node || entry?.rawNode || entry?.node || null;
+    const cands = [];
+    if (cardNode) {
+      const seenN = new Set();
+      const walk = (node) => {
+        if (!node || seenN.has(node)) return;
+        seenN.add(node);
+        if (String(node.type || '').toUpperCase() === 'TEXT' && typeof node.characters === 'string') {
+          const run = textRun(node);
+          // 硬换行（`\n`）是**显式分行**（vision 已拆成多个 text），不是软换行需求 ⇒ 排除。
+          if (run && !String(run.text).includes('\n') && textSoftWraps(run)) cands.push(run);
+        }
+        for (const c of Array.isArray(node.children) ? node.children : []) walk(c);
+      };
+      walk(cardNode);
+    }
+    if (cands.length === 1 && n.stats.length === 1 && cands[0].box) {
+      const w = Math.round(cands[0].box.w);
+      if (Number.isFinite(w) && w > 0) {
+        n.stats[0].ww = w;
+        wrapStats.proven += 1;
+        return;
+      }
+    }
+    if (n.stats.length) wrapStats.unresolved += 1;
   });
   // 🛡️ G4（2026-11-04 · mc-max-1793775868744-c7d56bd7 实锤 FG_LIST_ITEMS texts:[]）：
   //   文本可观测性——textsFilled/textsEmpty 恒计（调用方计数行落日志，0 也打）。
@@ -3669,6 +3743,8 @@ export function detectListLeaf(sec, figmaIndex, resourceMapping) {
     radius,
     itemBgs,
     itemBgStats,
+    // 🔴 ③（2026-11-16）：值列换行真值下发计数（proven/unresolved 恒计，调用方落计数行，0 也打）。
+    wrapStats,
     // 🔴 2026-11-03：几何真值事实（含 `negGapClamped` / `geoReady`）——调用方 `out` 聚合，
     //   不得只留在返回体里（否则计数行在审计侧不可见 = 假绿）。
     listGeo,
@@ -3990,7 +4066,7 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
       const stats = `[${it.stats
         .map(
           (s) =>
-            `{ v: ${jsonStr(s.v)}, l: ${jsonStr(s.l)}, vc: ${s.vc ? jsonStr(s.vc) : 'null'}, vfs: ${s.vfs ?? 'null'}, vfw: ${s.vfw ? jsonStr(s.vfw) : 'null'}, lc: ${s.lc ? jsonStr(s.lc) : 'null'}, lfs: ${s.lfs ?? 'null'} }`,
+            `{ v: ${jsonStr(s.v)}, l: ${jsonStr(s.l)}, vc: ${s.vc ? jsonStr(s.vc) : 'null'}, vfs: ${s.vfs ?? 'null'}, vfw: ${s.vfw ? jsonStr(s.vfw) : 'null'}, lc: ${s.lc ? jsonStr(s.lc) : 'null'}, lfs: ${s.lfs ?? 'null'}, ww: ${s.ww ?? 'null'} }`,
         )
         .join(', ')}]`;
       const bg = itemBgs[i] || null;
@@ -4066,7 +4142,10 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
     const statsOuterStyle = innerStacked
       ? 'display:flex;flex-direction:column;align-items:flex-start;flex:none;'
       : 'margin-left:auto;display:flex;flex-direction:row;flex:none;';
-    const vSpanHtml = `<span :style="{ color: s.vc || undefined, fontSize: s.vfs ? s.vfs + 'px' : undefined, fontWeight: s.vfw || undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.v }}</span>`;
+    // 🔴 ③（2026-11-16 · c019cd88 实锤）：真值给出「值列软换行」时（`s.ww` 有值）用
+    //   `maxWidth` 按真值盒宽**封顶** + 允许软换行；无真值 ⇒ 逐字保持旧 `nowrap`
+    //   （fail-open，绝不臆造宽度）。只封顶不撑宽 ⇒ 短值零视觉变化。
+    const vSpanHtml = `<span :style="{ color: s.vc || undefined, fontSize: s.vfs ? s.vfs + 'px' : undefined, fontWeight: s.vfw || undefined, lineHeight: 1.2, whiteSpace: s.ww ? 'normal' : 'nowrap', maxWidth: s.ww ? s.ww + 'px' : undefined }">{{ s.v }}</span>`;
     const lSpanHtml = `<span v-if="s.l" :style="{ color: s.lc || undefined, fontSize: s.lfs ? s.lfs + 'px' : undefined, lineHeight: 1.2, whiteSpace: 'nowrap' }">{{ s.l }}</span>`;
     const statsBlock = (pad) => [
       `${pad}<div v-if="it.stats.length" style="${statsOuterStyle}">`,
@@ -4957,6 +5036,52 @@ function declaredUnconsumedCount(sec, kind) {
 }
 
 /**
+ * 🛡️ S1-a（2026-11-16）：段头条与段盒的包含容差（px）。
+ *   Figma 盒有小数，planner 抬升后盒顶与条顶可能差 <1px ⇒ 只容许 ±2px，不放大。
+ */
+const SECTION_HEADER_BOX_TOL_PX = 2;
+
+/**
+ * 🛡️ S1-a（2026-11-16）：取段盒 —— **必须以渲染端自己的高度基准为准**。
+ *   渲染高来自 `code-generator#resolveHeightWithTakeover`（优先 `styles.figmaHeightPx`，
+ *   其次段盒），故这里同口径：顶取 `absoluteBoundingBox`/`figmaBox` 的 y，
+ *   高优先 `styles.figmaHeightPx`、其次盒高。
+ *   返回 null ⇒ 该段没有显式盒真值（高度另由他处决定）⇒ **不参与判定**（fail-open）。
+ */
+function sectionBoxOf(sec) {
+  const pick = (b) => {
+    if (!b || typeof b !== 'object') return null;
+    const y = Number(b.y ?? b.top);
+    if (!Number.isFinite(y)) return null;
+    const h = Number(b.height ?? b.h);
+    return { y, h: Number.isFinite(h) ? h : null };
+  };
+  const box = pick(sec?.absoluteBoundingBox) || pick(sec?.figmaBox);
+  if (!box) return null;
+  const declared = Number(sec?.styles?.figmaHeightPx);
+  const h = Number.isFinite(declared) && declared > 0 ? declared : box.h;
+  if (!Number.isFinite(h) || h <= 0) return null;
+  return { y: box.y, h };
+}
+
+/**
+ * 🛡️ S1-a（2026-11-16）：段锚点 → 图根的祖先链（`[anchor, parent, …, root]`）。
+ *   只走 `figmaIndex` 的 `parentId`，不认 name。断链（父节点缺失）⇒ 提前返回已有部分。
+ */
+function ancestorChainOf(anchorId, figmaIndex) {
+  const chain = [];
+  const seen = new Set();
+  let cur = anchorId ? String(anchorId) : '';
+  while (cur && !seen.has(cur)) {
+    chain.push(cur);
+    seen.add(cur);
+    const pid = figmaIndex.get(cur)?.parentId;
+    cur = pid == null ? '' : String(pid);
+  }
+  return chain;
+}
+
+/**
  * 🛡️ S1（2026-11-14）：解析段头真值事实（不猜、缺项即 null）。
  *
  * 候选**只来自 `section.sourceNodeIds`** —— 那是 P0-8b 合并进来的「副标题条」id
@@ -4967,8 +5092,24 @@ function declaredUnconsumedCount(sec, kind) {
  *
  * 判据（几何 + 类型）：高 ≤ 40、宽 ≥ 锚点宽 × 0.5、底边不高于锚点顶（+2px 容差）、子树含 TEXT。
  * 取「间隙最小」的那一条；字色/字号/字重/左内距全部取该条首个 TEXT 的真值。
+ *
+ * 🛡️ S1-a（2026-11-16 · mc-max-1794759571672-75d5786e 实锤）：**条必须落在段盒内**。
+ *   病灶：段锚点是折叠列表的首卡（`48:5798`），P0-8b 把**面板级 header 组**（`565:2`，
+ *   图根直接子级、与段所属容器 `565:3` 同级，内含「全国」= panel headerSlot）并进
+ *   `sourceNodeIds` ⇒ 段内又画一遍面板标题（30 + gap 25 = 55px），而段高真值 532 只覆盖
+ *   6 张卡（`532 − 55 = 477`）⇒ 第 6 卡被 `overflow-y:auto` 裁到可视区外，渲染端却按
+ *   未裁剪的 `getBoundingClientRect` 判成 RUNTIME-016 文本重叠（ratio 0.89），D2 回灌 3 轮
+ *   恒不清零（`2→2→1`，最后一对是恒存项）。
+ *   判据（纯几何/层级、零命名）：**面板级块**排他，三条件同时成立才拒 ——
+ *   ① 条是图根直接子级；② 条与段锚点所属容器同级或更高（祖先链位置 ≥ 2，即它在容器外）；
+ *   ③ 段盒不覆盖条（真画进段内必然挤占内容高）。
+ *   合法场景天然不命中：V-8 的子标题条是段锚点**直接子节点**（条件②不成立）；
+ *   P0-8b 的同父兄弟条（`4sub-header`/`6sub-header`/`@antd/tab`）父节点不是图根（条件①不成立）；
+ *   已抬升的段盒覆盖条（条件③不成立）。缺段盒 ⇒ 不参与判定（fail-open 零回归）。
+ *   🔴 实测教训：只用条件③ 「盒包含」在 2178 个历史产物上会误杀 128 例合法副标题
+ *   （盒未抬升的老 checkpoint / 容器内兄弟条），故必须叠条件①②。
  */
-function resolveSectionHeaderFacts(sec, figmaIndex) {
+export function resolveSectionHeaderFacts(sec, figmaIndex, stats) {
   const title = String(sec?.header?.title || '').trim();
   if (!title || !figmaIndex) return null;
   const entryOf = (id) => {
@@ -5030,6 +5171,30 @@ function resolveSectionHeaderFacts(sec, figmaIndex) {
   }
   if (!best) return null;
   const { cand, textNode, gapRaw } = best;
+  // 🛡️ S1-a：**面板级块**排他（详见函数头注释）。三条件必须同时成立才拒，方向一律偏 fail-open：
+  //   ① 条是**图根直接子级**（图根的直接子级只有背景层 / panel chrome / 各 body 容器）；
+  //   ② 条与「段锚点所属容器」同级或更高（祖先链上位置 ≥ 2）⇒ 它在容器**外**，不属于任何段；
+  //   ③ 段盒**不覆盖**条 ⇒ 真把它画进段内必然挤占内容高（本单 532−55=477）。
+  //   条件 ① 单用会误杀「同父兄弟副标题」（`4sub-header`/`6sub-header`/`@antd/tab`，实测 46 例）；
+  //   条件 ③ 单用会误杀「盒未抬升的合法副标题」（同批实测 128 例）—— 故必须双闸。
+  const secBox = sectionBoxOf(sec);
+  if (secBox) {
+    if (stats) stats.evaluated += 1;
+    const anchorChain = ancestorChainOf(String(sec?.id ?? sec?.figmaNodeId ?? ''), figmaIndex);
+    const rootId = anchorChain.length ? anchorChain[anchorChain.length - 1] : '';
+    const stripParentId = String(figmaIndex.get(String(cand.id))?.parentId ?? '');
+    const stripLevel = stripParentId ? anchorChain.indexOf(stripParentId) : -1;
+    const panelLevelStrip = Boolean(rootId) && stripParentId === rootId && stripLevel >= 2;
+    const stripTop = Number(cand.bbox.y);
+    const stripBottom = stripTop + Number(cand.bbox.height);
+    const inside =
+      stripTop >= secBox.y - SECTION_HEADER_BOX_TOL_PX &&
+      stripBottom <= secBox.y + secBox.h + SECTION_HEADER_BOX_TOL_PX;
+    if (panelLevelStrip && !inside) {
+      if (stats) stats.outOfBox += 1;
+      return null;
+    }
+  }
   const tb = textNode.absoluteBoundingBox || null;
   const paddingLeft = tb && Number.isFinite(Number(tb.x)) ? Math.max(0, Math.round(Number(tb.x) - Number(ab.x))) : 0;
   const style = textNode.style || {};
@@ -5048,7 +5213,7 @@ function resolveSectionHeaderFacts(sec, figmaIndex) {
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], layoutGapFromFacts: 0, overlayMarked: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listWrapProven: 0, listWrapUnresolved: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], layoutGapFromFacts: 0, overlayMarked: 0, sectionHeaderEvaluated: 0, sectionHeaderOutOfBox: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
 
@@ -5259,7 +5424,11 @@ export function collectFoldedGridTakeover(p = {}) {
     //   病灶：副标题条与段是兄弟（`4sub-header` ↔ `5cards`），takeover 产物**没有任何
     //   header 落点** ⇒ 即使 plan 已把标题并进 section.header（P0-8b），产物仍是"只有卡片"。
     //   这里只做**事实采集**，是否渲染由渲染器按 kind 决定（S1 先开 grid/list）。
-    const _secHeader = resolveSectionHeaderFacts(sec, figmaIndex);
+    //   🛡️ S1-a（2026-11-16）：evaluated/outOfBox 逐段累加，任务级 0 也落行（见审计行）。
+    const _secHeaderStats = { evaluated: 0, outOfBox: 0 };
+    const _secHeader = resolveSectionHeaderFacts(sec, figmaIndex, _secHeaderStats);
+    out.sectionHeaderEvaluated += _secHeaderStats.evaluated;
+    out.sectionHeaderOutOfBox += _secHeaderStats.outOfBox;
     if (_secHeader) tr.header = _secHeader;
 
     const tag = nameOf.get(String(sec.id));
@@ -5309,6 +5478,12 @@ export function collectFoldedGridTakeover(p = {}) {
       out.listItemBgSubtree += subtree;
       out.listItemBgSkipped += Number(tr.itemBgStats?.skipped || 0);
       out.listItemBg += declared + subtree;
+      // 🔴 ③（2026-11-16 · c019cd88 实锤）：值列换行真值下发计数 —— 0 也打。
+      //   `listWrapProven>0` ⇒ 有段下发了真值宽（长值将按真值换行）；
+      //   `listWrapUnresolved>0` ⇒ 有段的 stats 未取得唯一值列（保持 nowrap，非故障）。
+      //   若 proven 恒 0 而真机仍有长值溢出 ⇒ 判据未生效（塞入参=假绿的形状）。
+      out.listWrapProven += Number(tr.wrapStats?.proven || 0);
+      out.listWrapUnresolved += Number(tr.wrapStats?.unresolved || 0);
       // 🔴 2026-11-03（步①②）：列表几何真值可见化 —— 与刀55「几何翻案次数必 grep」同款铁律。
       //   `listGeoNegGapClamped`：负间距被总闸拦下的段数。0 而产物仍含负值 ⇒ 判据未生效。
       //   `listGeoGeoNotReady`：异宽/异高致 `geoReady=false` 的段数 —— 过去是静默降级，
@@ -5500,6 +5675,19 @@ export function collectFoldedGridTakeover(p = {}) {
     footerTaken: out.footerHits,
     regionsTaken: out.regionHits,
     listDirectionOverrides: out.listDirectionOverrides,
+    // 🔴 ①（2026-11-16 · c019cd88 实锤）：行背景两通道（declared 声明 / subtree 子树）计数——0 也打。
+    //   `listItemBg=0 且 declared=0 且 skipped>0` ⇒ ① 的归属判据未命中（资源归属上溯回归）；
+    //   `declared>0` ⇒ 通道已通（真机 3 项各 1 张 bg 资源）。
+    listItemBg: out.listItemBg,
+    listItemBgDeclared: out.listItemBgDeclared,
+    listItemBgSubtree: out.listItemBgSubtree,
+    listItemBgSkipped: out.listItemBgSkipped,
+    // 🔴 ③（2026-11-16 · c019cd88 实锤）：值列「软换行真值」下发计数——0 也打。
+    //   `listWrapProven>0` ⇒ 有段下发了真值盒宽（长值将按真值换行，非硬编码 nowrap）；
+    //   `listWrapUnresolved>0` ⇒ 有段 stats 未取得唯一值列（保持 nowrap，非故障）。
+    //   若 proven 恒 0 而真机仍有长值溢出 ⇒ 判据未生效（塞入参=假绿的形状）。
+    listWrapProven: out.listWrapProven,
+    listWrapUnresolved: out.listWrapUnresolved,
     // 🛡️ G4（2026-11-04 · c7d56bd7 texts:[] 实锤）：行文本可观测性——0 也打。
     listTextsFilled: out.listTextsFilled,
     listTextsEmpty: out.listTextsEmpty,

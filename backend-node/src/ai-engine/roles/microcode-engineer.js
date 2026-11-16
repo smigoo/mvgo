@@ -9,9 +9,11 @@ import { BaseAgent } from '../agents/base-agent.js';
 // 🛡️ G04：ISO-PROBE 判据实际来源与 generateCode 主链同源（单一解析器）
 import { resolvePlanSourceFromInput } from '../utils/resolve-plan-source.js';
 // 🛡️ P0-a（2026-11-15）：资源归属上溯（ownerSectionId 中间容器 → 最近 section）
+// 🛡️ P0-b（2026-11-15）：归属键判据唯一来源（认上溯前原值 ownerSectionOriginal）
 import {
   collectSectionIds,
   resolveOwnerSectionToNearestSection,
+  ownerMatchesIds,
 } from '../utils/resource-ownership-normalize.js';
 import { createGapWatchdog, resolveGapWatchdogTimeoutMs, wrapOnProgressWithTouch } from '../utils/gap-watchdog.js';
 // 🔴 2026-10-12 A8-3：静态导入 dark 三核心枚举（`normalizeDeclareJson` 是**同步**函数，
@@ -1495,12 +1497,15 @@ export class MicrocodeEngineer extends BaseAgent {
                   // 🛡️ S3-BG（2026-11-15）：卡底 bg 的 `figmaNodeId` 是 **bg 节点本身**
                   //   （136:125），而 item 的锚点是卡节点（136:129）⇒ 旧判据恒 miss。
                   //   两张卡各不同的 bg 由 `ownerSectionId` 归属，必须一并纳入唯一命中。
+                  // 🛡️ P0-b（2026-11-15 · c019cd88）：P0-a 上溯把卡项直接 owner 改写成
+                  //   最近 section（`2016:219`）并留原值 ⇒ 必须走 `ownerMatchesIds`
+                  //   （单一判据，认 `ownerSectionOriginal`），否则此处恒 miss。
                   const hits = rdm.filter(
                     (m) =>
                       m &&
                       /^bg/i.test(String(fileOf(m) || '')) &&
                       (srcIds.has(String(m.figmaNodeId || m.nodeId || '')) ||
-                        srcIds.has(String(m.ownerSectionId || ''))),
+                        ownerMatchesIds(srcIds, m)),
                   );
                   return hits.length === 1 ? fileOf(hits[0]) : null;
                 };
@@ -3308,6 +3313,9 @@ export class MicrocodeEngineer extends BaseAgent {
       // 🔴 只有「全部薄包装都成功」才改 index：若某成员已回退独立生成，说明该段没走参数化
       //   模板，此时把它的 index 标签收进 v-for 会让那份独立产物变成死文件（数据不再被消费）。
       if (_isoPlan.indexGroups.length > 0 && _isoFallback === 0) {
+        // 🎯 R-a ③：兜底内联计数（跨 try 边界供日志使用；0 也落行 —— 「没命中」与「没跑」可区分）
+        let _isoInlined = 0;
+        let _isoInlinePatched = 0;
         try {
           const _idxPath = 'package/index.vue';
           const _before = allFiles[_idxPath];
@@ -3315,6 +3323,8 @@ export class MicrocodeEngineer extends BaseAgent {
             const _rw = rewriteIndexRepeatGroups(_before, _isoPlan.indexGroups);
             _isoIndexApplied = _rw.applied.length;
             _isoIndexSkipped = _rw.skipped;
+            // 🎯 R-a ③（2026-11-16）：改写 fail-open 但兜底内联生效的组数（0 也参与日志）
+            _isoInlined = Array.isArray(_rw.inlined) ? _rw.inlined.length : 0;
             if (_isoIndexApplied > 0) {
               // 🧬 2026-11-06 评审修正（P1）：**包装文件与 import 原子清理**。
               //   只收模板不收文件 ⇒ 交付仍是 3 个组件文件 + 2 条模板零引用的 import，
@@ -3334,6 +3344,12 @@ export class MicrocodeEngineer extends BaseAgent {
               }
               // 🧩 P1-3：applied 组的成员段 id（覆盖度豁免通道的唯一事实来源）
               _isoGroupedSectionIds = _rw.applied.flatMap((g) => (Array.isArray(g.members) ? g.members : []));
+            } else if (_isoInlined > 0) {
+              // 🎯 R-a ③（2026-11-16）：改写 fail-open —— 但兜底内联刀已把成员数据补进残留标签。
+              //   写回 index 即可（**不删文件、不改 import**）：三份薄包装仍在，覆盖门禁按
+              //   「每段一文件」记账逐字不变（不记 _isoGroupedSectionIds ⇒ 零豁免副作用）。
+              allFiles[_idxPath] = _rw.content;
+              _isoInlinePatched = _rw.inlined.reduce((a, g) => a + (Number(g.patched) || 0), 0);
             }
           } else {
             _isoIndexSkipped = _isoPlan.indexGroups.map((g) => ({ repName: g.repName, reason: 'no-index' }));
@@ -3344,7 +3360,7 @@ export class MicrocodeEngineer extends BaseAgent {
         }
         // 计数行恒打（0 也打）：「改写未命中」必须与「没尝试改写」可区分
         this.logger.info(
-          `🧬 刀66-C index 段级 v-for: groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied} grouped=${_isoGroupedSectionIds.length} skipped=${_isoIndexSkipped.length} removedTags=${_isoIndexApplied > 0 ? _isoIndexApplied : 0} pruneFiles=${_isoPrune.removedFiles.length} pruneImports=${_isoPrune.removedImports.length} pruneKept=${_isoPrune.kept.length}${_isoIndexSkipped.length ? ` reasons=[${_isoIndexSkipped.map((s) => `${s.repName}:${s.reason}`).join(',')}]` : ''}${_isoPrune.kept.length ? ` pruneKeptReasons=[${_isoPrune.kept.join(',')}]` : ''}`,
+          `🧬 刀66-C index 段级 v-for: groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied} grouped=${_isoGroupedSectionIds.length} inlined=${_isoInlined} inlinePatched=${_isoInlinePatched} skipped=${_isoIndexSkipped.length} removedTags=${_isoIndexApplied > 0 ? _isoIndexApplied : 0} pruneFiles=${_isoPrune.removedFiles.length} pruneImports=${_isoPrune.removedImports.length} pruneKept=${_isoPrune.kept.length}${_isoIndexSkipped.length ? ` reasons=[${_isoIndexSkipped.map((s) => `${s.repName}:${s.reason}`).join(',')}]` : ''}${_isoPrune.kept.length ? ` pruneKeptReasons=[${_isoPrune.kept.join(',')}]` : ''}`,
         );
       }
       // 🧩 P1-3：同构收敛段 id 集记到实例（写盘出口 assessSubComponentCoverage 消费；
@@ -10711,11 +10727,8 @@ export default declareInfo
       let _auditBlocked = false
       try {
         const _auditWorking = {
-          ...(codeResult?.workingManifest || workingManifest || { contracts: [] }),
-          contracts:
-            codeResult?.workingManifest?.contracts ||
-            workingManifest?.contracts ||
-            [],
+          ...(codeResult?.workingManifest || { contracts: [] }),
+          contracts: codeResult?.workingManifest?.contracts || [],
         }
         const _enforce = process.env.MANIFEST_AUDIT_ENFORCE === '1'
         const _auditResult = this.goldenManifest

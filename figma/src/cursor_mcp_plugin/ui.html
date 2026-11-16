@@ -153,7 +153,8 @@
               <button id="btn-structure-only" class="secondary" style="width:100%;">仅结构化整理（会改图层 · 不调模型）</button>
               <button id="btn-plan-structure" class="secondary" style="width:100%;margin-top:8px;">📐 生成结构方案（只读预览）</button>
               <button id="btn-export-contract" class="secondary" style="width:100%;margin-top:8px;">📤 结构契约 → mvgo</button>
-              <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5;">仅「结构化整理」会改图层；方案与契约只读。</div>
+              <button id="btn-mark-backdrop" class="secondary" style="width:100%;margin-top:8px;" title="选中近全屏背景节点后点击：显式打标为根背景（只写标记，不改几何）">🏷 标记选中为根背景</button>
+              <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5;">仅「结构化整理」会改图层；方案与契约只读。「标记根背景」用于识别不到的近全屏底色，只打标记。</div>
               <div id="contract-box" class="hidden" style="margin-top:10px;border:1px solid #444;border-radius:6px;padding:8px;background:#1c1c1c;">
                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
                   <strong style="font-size:12px;color:#66b3ff;">结构契约</strong>
@@ -575,6 +576,11 @@
         } }, "*");
       }
       document.getElementById("btn-export-contract").addEventListener("click", requestContract);
+      // v20261116 阶段4：手工背景打标（零几何变更，只写 pluginData mvRootBackdrop=1）
+      document.getElementById("btn-mark-backdrop").addEventListener("click", () => {
+        setMvgoTip("");
+        parent.postMessage({ pluginMessage: { type: "mark-backdrop-manual" } }, "*");
+      });
       // v20261114 P0-1：导出结构化 JSON 契约（同名「🧩 JSON」按钮），与文本契约同源。
       function requestJson() {
         const jsonBox = document.getElementById("contract-json-text");
@@ -1969,6 +1975,14 @@
         if (!message) return;
 
         switch (message.type) {
+          case "mark-backdrop-result":
+            if (message.ok) {
+              setMvgoTip("已标记 " + (message.marked || 0) + " 个节点为根背景（只打标记，几何未变）");
+              aiResult.textContent = "🏷 已显式打标根背景 " + (message.marked || 0) + " 个" + (message.skipped ? " / 跳过 " + message.skipped : "");
+            } else {
+              setMvgoTip(message.error ? ("打标失败：" + message.error) : "打标失败：未选中节点");
+            }
+            break;
           case "organize-undo-state":
             undoOrganizeButton.disabled = !message.available;
             undoOrganizeButton.title = message.available

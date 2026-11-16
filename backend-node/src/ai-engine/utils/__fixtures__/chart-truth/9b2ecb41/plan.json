@@ -1,0 +1,696 @@
+[
+ {
+  "id": "2:3660",
+  "responsibility": "当日总流量（请按功能拆分）",
+  "elementCount": 2,
+  "title": "当日总流量",
+  "header": {
+   "title": "当日总流量",
+   "controls": [
+    {
+     "id": "2:3545",
+     "name": "时间选择",
+     "role": "dropdown",
+     "control": "select",
+     "value": "24小时"
+    }
+   ]
+  },
+  "body": {
+   "layout": "horizontal-2-columns",
+   "bgPlaceholder": "body-bg-total",
+   "children": [
+    {
+     "id": "88:34",
+     "name": "江阴靖江长江隧道",
+     "role": "stat-card",
+     "value": "34,620",
+     "label": "江阴靖江长江隧道",
+     "icon": {
+      "placeholder": "icon-tunnel",
+      "position": "left"
+     },
+     "styles": {
+      "flexGrow": 1.425,
+      "flexShrink": 1,
+      "flexBasis": 0,
+      "figmaHeightPx": 52
+     },
+     "children": []
+    },
+    {
+     "id": "88:34",
+     "name": "江阴大桥",
+     "role": "stat-card",
+     "value": "82,379",
+     "label": "江阴大桥",
+     "icon": {
+      "placeholder": "icon-bridge",
+      "position": "left"
+     },
+     "styles": {
+      "flexGrow": 0.575,
+      "flexShrink": 1,
+      "flexBasis": 0,
+      "figmaHeightPx": 21
+     }
+    }
+   ]
+  },
+  "layout": "vertical",
+  "collapsed": false,
+  "absoluteBoundingBox": {
+   "x": 9.999755859375,
+   "y": 158.69012451171875,
+   "width": 425.8287353515625,
+   "height": 128.74954986572266
+  },
+  "figmaBox": {
+   "x": 9.999755859375,
+   "y": 196,
+   "width": 425.8287353515625,
+   "height": 91.4396743774414
+  },
+  "styles": {
+   "figmaHeightPx": 128.74954986572266
+  },
+  "sourceNodeIds": [
+   "2:3660",
+   "88:34",
+   "88:32"
+  ],
+  "complexityScore": 0,
+  "complexityReasons": {
+   "elementCount": 2,
+   "charts": 0,
+   "interactions": 0,
+   "maxDepth": 1
+  },
+  "layoutMetadata": {
+   "direction": "column",
+   "alignItems": "flex-start",
+   "justifyContent": "flex-start",
+   "gap": 0,
+   "height": 128.74954986572266,
+   "flexGrow": 0.911,
+   "padding": {
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+   }
+  },
+  "internalSubcomponents": [],
+  "shouldSplitInternally": false,
+  "layoutFacts": {
+   "mode": "free-overlay",
+   "reason": "cross-axis-layout",
+   "childCount": 2,
+   "layoutMode": "HORIZONTAL",
+   "modeConflict": true
+  },
+  "internalGeometry": [
+   {
+    "x": 10,
+    "y": 196,
+    "w": 426,
+    "h": 91
+   },
+   {
+    "x": 43,
+    "y": 216,
+    "w": 359,
+    "h": 52
+   }
+  ]
+ },
+ {
+  "id": "1744:127",
+  "responsibility": "江阴靖江长江隧道（请按功能拆分）",
+  "elementCount": 1,
+  "title": "江阴靖江长江隧道",
+  "header": {
+   "title": "江阴靖江长江隧道",
+   "controls": []
+  },
+  "body": {
+   "layout": "vertical",
+   "children": [
+    {
+     "id": "2:7625",
+     "name": "图表区",
+     "role": "chart",
+     "type": "bar",
+     "children": []
+    }
+   ]
+  },
+  "layout": "vertical",
+  "collapsed": false,
+  "absoluteBoundingBox": {
+   "x": 33.8271484375,
+   "y": 287,
+   "width": 379,
+   "height": 130.99996948242188
+  },
+  "figmaBox": {
+   "x": 33.8271484375,
+   "y": 287,
+   "width": 379,
+   "height": 130.99996948242188
+  },
+  "styles": {
+   "figmaHeightPx": 130.99996948242188
+  },
+  "sourceNodeIds": [
+   "1744:127",
+   "2:7625"
+  ],
+  "complexityScore": 0,
+  "complexityReasons": {
+   "elementCount": 1,
+   "charts": 1,
+   "interactions": 0,
+   "maxDepth": 1
+  },
+  "layoutMetadata": {
+   "direction": "column",
+   "alignItems": "flex-start",
+   "justifyContent": "flex-start",
+   "gap": 0,
+   "height": 130.99996948242188,
+   "flexGrow": 0.927,
+   "padding": {
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+   }
+  },
+  "internalSubcomponents": [],
+  "shouldSplitInternally": false,
+  "layoutFacts": {
+   "mode": "free-overlay",
+   "reason": "cross-axis-layout",
+   "childCount": 2,
+   "layoutMode": null
+  },
+  "internalGeometry": [
+   {
+    "x": 34,
+    "y": 287,
+    "w": 118,
+    "h": 21
+   },
+   {
+    "x": 34,
+    "y": 291,
+    "w": 379,
+    "h": 127
+   }
+  ]
+ },
+ {
+  "id": "1744:128",
+  "responsibility": "江阴大桥（请按功能拆分）",
+  "elementCount": 1,
+  "title": "江阴大桥",
+  "header": {
+   "title": "江阴大桥",
+   "controls": []
+  },
+  "body": {
+   "layout": "vertical",
+   "children": [
+    {
+     "id": "2:7794",
+     "name": "图表区",
+     "role": "chart",
+     "type": "bar",
+     "children": []
+    }
+   ]
+  },
+  "layout": "vertical",
+  "collapsed": false,
+  "absoluteBoundingBox": {
+   "x": 33.8271484375,
+   "y": 428,
+   "width": 379,
+   "height": 130.99996948242188
+  },
+  "figmaBox": {
+   "x": 33.8271484375,
+   "y": 428,
+   "width": 379,
+   "height": 130.99996948242188
+  },
+  "styles": {
+   "figmaHeightPx": 130.99996948242188
+  },
+  "sourceNodeIds": [
+   "1744:128",
+   "2:7794"
+  ],
+  "complexityScore": 0,
+  "complexityReasons": {
+   "elementCount": 1,
+   "charts": 1,
+   "interactions": 0,
+   "maxDepth": 1
+  },
+  "layoutMetadata": {
+   "direction": "column",
+   "alignItems": "flex-start",
+   "justifyContent": "flex-start",
+   "gap": 0,
+   "height": 130.99996948242188,
+   "flexGrow": 0.927,
+   "padding": {
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+   }
+  },
+  "internalSubcomponents": [],
+  "shouldSplitInternally": false,
+  "layoutFacts": {
+   "mode": "free-overlay",
+   "reason": "cross-axis-layout",
+   "childCount": 2,
+   "layoutMode": null
+  },
+  "internalGeometry": [
+   {
+    "x": 34,
+    "y": 428,
+    "w": 62,
+    "h": 21
+   },
+   {
+    "x": 34,
+    "y": 432,
+    "w": 379,
+    "h": 127
+   }
+  ]
+ },
+ {
+  "id": "1263:38",
+  "responsibility": "车型分布（请按功能拆分）",
+  "elementCount": 2,
+  "title": "车型分布",
+  "header": {
+   "title": "车型分布",
+   "controls": [],
+   "icon": {
+    "resourceFile": "../resources/images/icon-3561.png",
+    "recommendedUsage": "imgSrc",
+    "width": 18,
+    "height": 18
+   }
+  },
+  "body": {
+   "layout": "horizontal-2-columns",
+   "children": [
+    {
+     "id": "2:3446",
+     "name": "江阴靖江长江隧道车型分布",
+     "role": "card",
+     "layout": "horizontal",
+     "items": [
+      {
+       "type": "stat-item",
+       "layout": "vertical",
+       "alignItems": "center",
+       "repeatedFill": "#ffffff",
+       "icon": {
+        "placeholder": "icon-passenger",
+        "position": "top"
+       },
+       "content": {
+        "layout": "vertical",
+        "elements": [
+         {
+          "type": "label",
+          "text": "客车",
+          "position": "top",
+          "styles": {
+           "fontSize": 12,
+           "color": "#333333"
+          }
+         },
+         {
+          "type": "value",
+          "position": "bottom",
+          "parts": [
+           {
+            "text": "22350",
+            "type": "number",
+            "styles": {
+             "fontSize": 16,
+             "color": "#1990FF",
+             "fontWeight": "bold"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "type": "stat-item",
+       "layout": "vertical",
+       "alignItems": "center",
+       "repeatedFill": "#ffffff",
+       "icon": {
+        "placeholder": "icon-truck",
+        "position": "top"
+       },
+       "content": {
+        "layout": "vertical",
+        "elements": [
+         {
+          "type": "label",
+          "text": "货车",
+          "position": "top",
+          "styles": {
+           "fontSize": 12,
+           "color": "#333333"
+          }
+         },
+         {
+          "type": "value",
+          "position": "bottom",
+          "parts": [
+           {
+            "text": "16270",
+            "type": "number",
+            "styles": {
+             "fontSize": 16,
+             "color": "#FF7D00",
+             "fontWeight": "bold"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      }
+     ],
+     "bgPlaceholder": "card-bg-tunnel",
+     "styles": {
+      "flexGrow": 0.627,
+      "flexShrink": 1,
+      "flexBasis": 0,
+      "figmaHeightPx": 52
+     },
+     "children": []
+    },
+    {
+     "id": "2:3496",
+     "name": "江阴大桥车型分布",
+     "role": "card",
+     "layout": "horizontal",
+     "items": [
+      {
+       "type": "stat-item",
+       "layout": "vertical",
+       "alignItems": "center",
+       "repeatedFill": "#ffffff",
+       "icon": {
+        "placeholder": "icon-passenger",
+        "position": "top"
+       },
+       "content": {
+        "layout": "vertical",
+        "elements": [
+         {
+          "type": "label",
+          "text": "客车",
+          "position": "top",
+          "styles": {
+           "fontSize": 12,
+           "color": "#333333"
+          }
+         },
+         {
+          "type": "value",
+          "position": "bottom",
+          "parts": [
+           {
+            "text": "66109",
+            "type": "number",
+            "styles": {
+             "fontSize": 16,
+             "color": "#1990FF",
+             "fontWeight": "bold"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "type": "stat-item",
+       "layout": "vertical",
+       "alignItems": "center",
+       "repeatedFill": "#ffffff",
+       "icon": {
+        "placeholder": "icon-truck",
+        "position": "top"
+       },
+       "content": {
+        "layout": "vertical",
+        "elements": [
+         {
+          "type": "label",
+          "text": "货车",
+          "position": "top",
+          "styles": {
+           "fontSize": 12,
+           "color": "#333333"
+          }
+         },
+         {
+          "type": "value",
+          "position": "bottom",
+          "parts": [
+           {
+            "text": "16270",
+            "type": "number",
+            "styles": {
+             "fontSize": 16,
+             "color": "#FF7D00",
+             "fontWeight": "bold"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      }
+     ],
+     "bgPlaceholder": "card-bg-bridge",
+     "styles": {
+      "flexGrow": 1.373,
+      "flexShrink": 1,
+      "flexBasis": 0,
+      "figmaHeightPx": 114
+     },
+     "children": []
+    }
+   ]
+  },
+  "layout": "vertical",
+  "collapsed": false,
+  "absoluteBoundingBox": {
+   "x": 32.8271484375,
+   "y": 573,
+   "width": 387,
+   "height": 142.000244140625
+  },
+  "figmaBox": {
+   "x": 32.8271484375,
+   "y": 601.000244140625,
+   "width": 387,
+   "height": 114
+  },
+  "styles": {
+   "figmaHeightPx": 142.000244140625
+  },
+  "sourceNodeIds": [
+   "1263:38",
+   "2:3446",
+   "2:3496",
+   "2:3439"
+  ],
+  "figmaAnchorId": "1263:38",
+  "complexityScore": 0,
+  "complexityReasons": {
+   "elementCount": 2,
+   "charts": 0,
+   "interactions": 0,
+   "maxDepth": 1
+  },
+  "layoutMetadata": {
+   "direction": "column",
+   "alignItems": "flex-start",
+   "justifyContent": "flex-start",
+   "gap": 0,
+   "height": 142.000244140625,
+   "flexGrow": 1.005,
+   "padding": {
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+   }
+  },
+  "internalSubcomponents": [],
+  "shouldSplitInternally": false,
+  "layoutFacts": {
+   "gaps": [
+    3
+   ],
+   "childCount": 2,
+   "align": "MIN",
+   "layoutMode": "HORIZONTAL",
+   "overflow": false,
+   "mode": "row",
+   "gap": 3,
+   "modeConflict": false
+  },
+  "internalGeometry": [
+   {
+    "x": 33,
+    "y": 601,
+    "w": 192,
+    "h": 114
+   },
+   {
+    "x": 228,
+    "y": 601,
+    "w": 192,
+    "h": 114
+   }
+  ]
+ },
+ {
+  "id": "2:3571",
+  "responsibility": "流量预测（请按功能拆分）",
+  "elementCount": 1,
+  "title": "流量预测",
+  "header": {
+   "title": "流量预测",
+   "controls": [
+    {
+     "id": "2:3566",
+     "name": "Tab切换",
+     "role": "tabs",
+     "control": "tabs",
+     "options": [
+      {
+       "label": "江阴靖江长江隧道",
+       "active": true
+      },
+      {
+       "label": "江阴大桥",
+       "active": false
+      }
+     ]
+    },
+    {
+     "id": "2:3577",
+     "name": "节假日预测",
+     "role": "label",
+     "value": "节假日预测"
+    }
+   ],
+   "icon": {
+    "resourceFile": "../resources/images/icon-3561.png",
+    "recommendedUsage": "imgSrc",
+    "width": 18,
+    "height": 18
+   }
+  },
+  "body": {
+   "layout": "vertical",
+   "children": [
+    {
+     "id": "2:3571",
+     "name": "图表区",
+     "role": "chart",
+     "type": "area"
+    }
+   ]
+  },
+  "layout": "vertical",
+  "collapsed": false,
+  "styles": {
+   "figmaHeightPx": 174
+  },
+  "sourceNodeIds": [
+   "2:3571",
+   "2:3565"
+  ],
+  "complexityScore": 0,
+  "complexityReasons": {
+   "elementCount": 1,
+   "charts": 1,
+   "interactions": 0,
+   "maxDepth": 1
+  },
+  "layoutMetadata": {
+   "direction": "column",
+   "alignItems": "flex-start",
+   "justifyContent": "flex-start",
+   "gap": 0,
+   "height": 174,
+   "flexGrow": 1.231,
+   "padding": {
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+   }
+  },
+  "internalSubcomponents": [],
+  "shouldSplitInternally": false,
+  "layoutFacts": {
+   "gaps": [
+    4
+   ],
+   "childCount": 2,
+   "align": "CENTER",
+   "layoutMode": null,
+   "overflow": false,
+   "mode": "row",
+   "gap": 4
+  },
+  "heightOwnership": {
+   "refId": "2:3571",
+   "containerId": "1744:125",
+   "formula": "container.absoluteBoundingBox.bottom - ref.absoluteBoundingBox.top",
+   "declaredHeightPx": 24,
+   "truthHeightPx": 174
+  },
+  "internalGeometry": [
+   {
+    "x": 58,
+    "y": 730,
+    "w": 64,
+    "h": 24,
+    "text": "流量预测"
+   },
+   {
+    "x": 36,
+    "y": 733,
+    "w": 18,
+    "h": 18
+   }
+  ]
+ }
+]

@@ -1045,7 +1045,18 @@ export class FigmaConnector {
     const startTime = Date.now();
 
     try {
-      const resourceNodes = this.extractResourceNodes(nodeData);
+      const extractionStats = {
+        hiddenNodesSkipped: 0,
+        noVisiblePaintSkipped: 0,
+      };
+      const resourceNodes = this.extractResourceNodes(
+        nodeData,
+        [],
+        true,
+        [],
+        extractionStats,
+      );
+      logger.info('资源节点可见性过滤计数', extractionStats);
 
       if (resourceNodes.length === 0) {
         logger.info('未发现需要下载的资源节点');
@@ -1269,8 +1280,22 @@ export class FigmaConnector {
    * 根据节点名称判断是否为bg/icon/img/image
    * 优化：找到资源节点后跳过其子节点（子节点通常是VECTOR等，不需要递归）
    */
-  extractResourceNodes(node, collected = [], isRoot = true, ancestors = []) {
+  extractResourceNodes(
+    node,
+    collected = [],
+    isRoot = true,
+    ancestors = [],
+    extractionStats = null,
+  ) {
     if (!node) return collected;
+
+    // 🛡️ visible:false 资源过滤（2026-11-16）：隐藏节点仍保留 bbox 供布局，但不得进入图片
+    //   导出清单。该判定只在资源提取出口生效，不改 pruneRedundantFields 的布局真值。
+    if (node.visible === false) {
+      if (extractionStats) extractionStats.hiddenNodesSkipped += 1;
+      logger.info('⏭️ 跳过隐藏资源节点（visible:false）', { nodeId: node.id, nodeName: node.name });
+      return collected;
+    }
 
     // 🛡️ 透明底兜底（M6-3a/3b）：根元素（组件根容器）的背景图不下载
     //   组件内容不设置背景色，是透明底。根容器的背景图是多余的，跳过。
@@ -1281,7 +1306,7 @@ export class FigmaConnector {
         // 不 push 根节点，但继续递归子节点（子节点可能是真正的业务资源）
         if (node.children && Array.isArray(node.children)) {
           for (const child of node.children) {
-            this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
+            this.extractResourceNodes(child, collected, false, [node, ...ancestors], extractionStats);
           }
         }
         return collected;
@@ -1314,7 +1339,7 @@ export class FigmaConnector {
       for (const k of kids) {
         if (this._isStackControlPart(k)) continue;
         descended++;
-        this.extractResourceNodes(k, collected, false, [node, ...ancestors]);
+        this.extractResourceNodes(k, collected, false, [node, ...ancestors], extractionStats);
       }
       if (descended > 0) {
         logger.info(
@@ -1329,6 +1354,14 @@ export class FigmaConnector {
 
     //使用增强的 _identifyNodeType 判断（命名+视觉属性）
     const nodeType = this._identifyNodeType(node.name, node, ancestors);
+
+    // 无可见绘制证据的候选资源不是可导出图片（如 visible:false 的 icon）。只在资源候选
+    // 已识别后过滤，普通布局容器仍继续遍历其子节点；含可见子 paint 的组合资源保留。
+    if (nodeType !== 'unknown' && nodeType !== 'chrome' && this._isResourceNodeWithoutVisiblePaint(node)) {
+      if (extractionStats) extractionStats.noVisiblePaintSkipped += 1;
+      logger.info('⏭️ 跳过无可见绘制资源节点', { nodeId: node.id, nodeName: node.name });
+      return collected;
+    }
 
     // 跳过面板 chrome 资源（header/title 装饰元素由 base-panel 提供）
     if (nodeType === 'chrome') {
@@ -1384,7 +1417,7 @@ export class FigmaConnector {
         //   吞掉子图（R19 实锤：分流 6+6 不变，2:7458 仍未下载）。此处内联尾递归语义。
         if (node.children && Array.isArray(node.children)) {
           for (const child of node.children) {
-            this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
+            this.extractResourceNodes(child, collected, false, [node, ...ancestors], extractionStats);
           }
         }
         return collected;
@@ -1420,7 +1453,7 @@ export class FigmaConnector {
       );
       if (node.children && Array.isArray(node.children)) {
         for (const child of node.children) {
-          this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
+          this.extractResourceNodes(child, collected, false, [node, ...ancestors], extractionStats);
         }
       }
       return collected;
@@ -1444,29 +1477,25 @@ export class FigmaConnector {
     // 只有不是资源节点时才递归子节点
     if (node.children && Array.isArray(node.children)) {
       for (const child of node.children) {
-        // 🛡️ 根容器背景跳过（2026-08-31，与挂载侧判定同口径）
-        // 语义（M6-3a/3b 透明底要求）：组件内容不设背景色，根容器的背景图多余，无需还原。
-        // 判定：根节点的「直接子 bg」（其 figmaPath 必为 2 段，如 `cp-环境监测/bg`），
-        //   与挂载侧 figma-connector.js:2287-2291「段数 < 3 → skipMount = true」完全等价
-        //   → 这类资源即使下载也注定不被挂载（mc-max-1788164636144 实锤白下一张 48KB 图，
-        //     还占 mapping 清单、可能触发「资源未使用」校验误伤）。
-        // ⚠️ 不可用面积比判定：嵌套的 tabs-list/bg 也完整覆盖其父容器（实测 areaRatio 1.000），
-        //    按面积会误伤业务背景（2:7890 tabs-list 背景 / 2:7891 bg-tab-active）。
-        //    因此这里必须用「根节点的直接子节点」这一结构信号。
+        // 🛡️ 根容器背景（2026-08-31 规则修订 · 2026-11-16 消歧三样本实锤）：
+        // 「透明底不挂载」由挂载侧 skipMount（figmaPath 2 段 ⇒ skipMount=true，
+        // `_buildResourceDomMapping` :3342-3362）保证，**不依赖导出侧跳过**。
+        // 旧实现在此整节点跳过收集 ⇒ 根 bg 图永不下载 ⇒ `resourceFile` 恒空 ⇒
+        // N4 面板背景注入（`code-fix-rules.js#anchorRootContainerInFiles` 要求
+        // `skipMount && resourceFile` 同时成立）断粮 ⇒ 产物白底（真机 3 样本实锤：
+        // `53:34075` bg-cp-traffic-trend 420×358 深色底板缺失渲染行亮度 244 vs 真值 35、
+        // low-speed `4572:6988`、device-detail bg 组；好样本 5f38e508 的面板底图
+        // 是 LLM **碰巧**复用卡片 bg 救场，非链路保证）。
+        // 现改为：正常收集（进入下载与映射），skipMount 语义原样保留 ⇒
+        // ① 不做段级挂载（透明底要求不破）② N4 panelBg 拿到原料注入根容器
+        // ③ RESOURCE-001 不误伤（注入即「已使用」）。
         if (isRoot && this._identifyNodeType(child.name, child, [node]) === 'bg') {
           logger.info(
-            `⏭️ 跳过根容器直接子背景图（透明底要求，挂载侧 skipMount 注定不用）: ${child.name}`,
+            `📥 根容器直接子背景图纳入导出（skipMount 由挂载侧段数规则兜住，供 N4 面板背景注入）: ${child.name}`,
             { nodeId: child.id },
           );
-          // 仅跳过背景节点自身，仍下钻其子节点——避免背景层内裹着真实业务资源时被误删
-          if (child.children && Array.isArray(child.children)) {
-            for (const grandchild of child.children) {
-              this.extractResourceNodes(grandchild, collected, false, [child, node, ...ancestors]);
-            }
-          }
-          continue;
         }
-        this.extractResourceNodes(child, collected, false, [node, ...ancestors]);
+        this.extractResourceNodes(child, collected, false, [node, ...ancestors], extractionStats);
       }
     }
 
@@ -1543,6 +1572,12 @@ export class FigmaConnector {
     // ✅ 保留 Auto Layout 属性（布局分析必需 — vue3-engineer / microcode-engineer 均依赖此数据做 flex 映射）
     if (typeof node.layoutMode !== 'undefined')
       optimized.layoutMode = node.layoutMode;
+    // 🛡️ R3-2（2026-11-16）：`layoutPositioning` 必须透传。
+    //   原裁剪白名单漏了它 ⇒ 绝对定位子项在管线里与普通 flow 子项无法区分 ⇒
+    //   「AL 容器 + 绝对浮层」被几何判据误判成「声明说谎」，把真 row 容器改成 column。
+    //   只在字段存在时透传（不凭空注入），体积可忽略（单值枚举）。
+    if (typeof node.layoutPositioning !== 'undefined')
+      optimized.layoutPositioning = node.layoutPositioning;
     if (typeof node.primaryAxisAlignItems !== 'undefined')
       optimized.primaryAxisAlignItems = node.primaryAxisAlignItems;
     if (typeof node.counterAxisAlignItems !== 'undefined')
@@ -2724,6 +2759,21 @@ export class FigmaConnector {
   }
 
   /**
+   * 资源候选节点是否没有任何可见绘制证据。
+   * 仅供资源导出/映射两侧使用；不改变布局节点树，隐藏节点的 bbox 仍由 pruneRedundantFields 保留。
+   */
+  _isResourceNodeWithoutVisiblePaint(node, depth = 0) {
+    if (!node || depth > 32 || node.visible === false) return true;
+    const hasVisiblePaint = (items) =>
+      Array.isArray(items) && items.some((item) => item && item.visible !== false);
+    if (hasVisiblePaint(node.fills) || hasVisiblePaint(node.strokes) || hasVisiblePaint(node.effects)) {
+      return false;
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    return !children.some((child) => !this._isResourceNodeWithoutVisiblePaint(child, depth + 1));
+  }
+
+  /**
    *生成资源去重签名（基于 fill 内容）
    * 相同颜色/渐变的节点复用同一张图片，避免重复下载
    * @param {Object} node - Figma 节点
@@ -3091,6 +3141,9 @@ export class FigmaConnector {
     const traverse = (node, path = [], parentBox = null, parentId = null, idPath = [], ancestors = []) => {
       if (!node) return;
 
+      // 与 extractResourceNodes 同源：隐藏节点不进入映射；普通布局容器仍继续遍历其子树。
+      if (node.visible === false) return;
+
       // 🛡️ 技术栈标记子树跳过（与 extractResourceNodes 下载阶段保持一致）：
       // @antd/@echarts 等第三方组件区域由组件渲染，不导出静态资源，也不进映射。
       // 否则 mapping 阶段会重新遍历 @antd/tab 整棵子树，把 tab 图标装饰矢量、卡片背景
@@ -3108,6 +3161,9 @@ export class FigmaConnector {
       }
 
       const nodeType = this._identifyNodeType(node.name, node, ancestors);
+
+      // 与下载侧同源：已识别为资源但没有任何可见绘制证据的节点不建立 phantom mapping。
+      if (nodeType !== 'unknown' && nodeType !== 'chrome' && this._isResourceNodeWithoutVisiblePaint(node)) return;
 
       // 跳过 chrome 资源和 unknown 节点
       if (nodeType !== 'unknown' && nodeType !== 'chrome') {

@@ -126,6 +126,13 @@ import {
 import { withTimeout } from '../orchestrator/orchestrator.js';
 // 🛡️ 层 7（2026-10-26 · 方案 A）：门禁分级 —— WARN 升级策略单一真相源（逐 id 决策）。
 import { resolveWarnEscalations } from '../utils/gate-severity.js';
+// 🛡️ P0-b（2026-11-16）：重试预算分级单一真相源 —— 只有 A 档真硬伤才占 LLM 重试轮次。
+import {
+  shouldRetryL0B,
+  isLegacyRetryPolicy,
+  pickRetryWorthyIssues,
+  summarizeNoiseIssues,
+} from '../utils/gate-retry-policy.js';
 // 🛡️ #128 流程四件套 ②/③：fail-open 显性化台账（降级/WARN 升级事件落 component-meta.json）
 import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
 // 🛡️ G05（2026-11-14 · 四象限同源）：判据层 plan 事实源与 mc/max 共用同一解析器，
@@ -3504,12 +3511,16 @@ export function createPhase2Graph(config = {}) {
     //生成修复指导（用于重试）
     let retryGuidance = '';
     if (!result.pass && !result._bypassed) {
+      // 🛡️ P3（2026-11-16 · 四象限同源）：修复指导只列 A 档「值得修」的判据，
+      //   形态/语义/几何欠佳折叠成一行汇总计数（明细仍全量进 issues 与日志）。
       const blockIssues =
         result.issues?.filter((i) => i.severity === 'BLOCK') || [];
+      const _worthyIssues = pickRetryWorthyIssues(blockIssues);
+      const _noiseSummary = summarizeNoiseIssues(result.issues || []);
       if (blockIssues.length > 0) {
         retryGuidance =
           '\n\n🔴 上次生成未通过 L0-B 代码结构校验，必须修复以下问题：\n\n';
-        blockIssues.forEach((issue, i) => {
+        _worthyIssues.forEach((issue, i) => {
           retryGuidance += `${i + 1}. [${issue.id}] ${issue.message}\n`;
           if (issue.file)
             retryGuidance += `   文件: ${issue.file}${issue.line ? `:${issue.line}:${issue.column || 1}` : ''}\n`;
@@ -3518,6 +3529,11 @@ export function createPhase2Graph(config = {}) {
           if (issue.hint?.suggestion)
             retryGuidance += `   诊断建议: ${issue.hint.suggestion}\n`;
         });
+        if (_worthyIssues.length === 0) {
+          retryGuidance +=
+            '（本轮无「产物不可用」级硬伤，明细见下方汇总行；不要为欠佳项重排结构）\n';
+        }
+        if (_noiseSummary.line) retryGuidance += `\n${_noiseSummary.line}\n`;
         if (result.lessCompileGate && !result.lessCompileGate.pass) {
           retryGuidance += LessCompileGate.buildFixGuidance(
             result.lessCompileGate,
@@ -3658,8 +3674,23 @@ export function createPhase2Graph(config = {}) {
     const maxRetry = state._v3Config?.l0MaxRetry ?? 1;
     const retryCount = state.codeValidatorRetryCount || 0;
 
+    // 🛡️ 2026-11-16 · P0-b（四象限同源）：只有 A 档「产物确定不可用」才占重试预算；
+    //   B-C 档（静态形态/语义标签/几何欠佳/命名规范）零重试直接降级交付。
+    //   与 mc-max 图同源判据（gate-retry-policy），不得只改一张图。
+    const _retryBudgetWorthy =
+      isLegacyRetryPolicy(process.env) || shouldRetryL0B(r.issues);
+    if (!r.pass && !r._bypassed && retryCount <= maxRetry && !_retryBudgetWorthy) {
+      logger.warn('🛡️ L0-B 未过但无 A 档硬伤 ⇒ 不吃重试预算，直接降级交付（vue3）', {
+        retryCount,
+        maxRetry,
+        blockIds: (r.issues || [])
+          .filter((i) => i.severity === 'BLOCK')
+          .map((i) => i.id)
+          .slice(0, 12),
+      });
+    }
     // BLOCK 且可重试 → 回 engineer 重做（计数由 code-structure-validator 节点管理）
-    if (!r.pass && !r._bypassed && retryCount <= maxRetry) {
+    if (!r.pass && !r._bypassed && retryCount <= maxRetry && _retryBudgetWorthy) {
       logger.info(
         `L0-B 校验失败，回退 engineer 重试 (${retryCount}/${maxRetry})`,
         {

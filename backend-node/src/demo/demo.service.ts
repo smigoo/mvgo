@@ -16,6 +16,10 @@ import {
   hasInitialSnapshot,
 } from '../ai-engine/tools/snapshot-manager.js';
 import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
+// 🧷 2026-11-16：`<script setup>` 锚点唯一事实源（属性顺序无关）。
+// 旧 `/<script\s+setup(?:\s[^>]*)?>/` 要求 setup 紧跟 `<script`+空白，
+// 遇归属链契约诱导出的 `<script data-section-id="x" setup>` 会判「缺少 script 块」误拒。
+import { findScriptSetupOpen } from '../ai-engine/utils/sfc-script-anchor.js';
 import { vue3ComponentsDir, frontendVue3ComponentsDir } from '../config/backend-root.js';
 import { EXCLUDED_PACKAGE_DIRS } from '../common/utils/package-filter';
 
@@ -405,7 +409,7 @@ ${stack || '无'}
   private validateVueSfcStructure(content: string): string | null {
     const templateOpen = content.match(/<template(?:\s[^>]*)?>/);
     const templateClose = content.match(/<\/template>/);
-    const scriptOpen = content.match(/<script\s+setup(?:\s[^>]*)?>/);
+    const scriptOpen = findScriptSetupOpen(content);
     const scriptClose = content.match(/<\/script>/);
     const styleOpen = content.match(/<style(?:\s[^>]*)?>/);
     const styleClose = content.match(/<\/style>/);
@@ -413,13 +417,13 @@ ${stack || '无'}
     if (!templateOpen || !templateClose) return '缺少完整的 <template>...</template> 块';
     if (!scriptOpen || !scriptClose) return '缺少完整的 <script setup>...</script> 块';
     if (templateOpen.index! > templateClose.index!) return '<template> 闭合顺序错误';
-    if (scriptOpen.index! > scriptClose.index!) return '<script setup> 闭合顺序错误';
-    if (templateClose.index! > scriptOpen.index!) return '<script setup> 必须位于 template 之后';
+    if (scriptOpen.index > scriptClose.index!) return '<script setup> 闭合顺序错误';
+    if (templateClose.index! > scriptOpen.index) return '<script setup> 必须位于 template 之后';
     if (styleOpen && styleClose && scriptClose.index! > styleOpen.index!) {
       return '<style> 必须位于 script 之后';
     }
 
-    const scriptContent = content.slice(scriptOpen.index! + scriptOpen[0].length, scriptClose.index!);
+    const scriptContent = content.slice(scriptOpen.index + scriptOpen.tag.length, scriptClose.index!);
     if (/^\s*\/\/[^\n]*\n\s*[\w$]+\s*:\s*\{/m.test(scriptContent) && !scriptContent.includes('defineProps({')) {
       return '检测到疑似 props 字段残留，但缺少 defineProps({ 开头';
     }

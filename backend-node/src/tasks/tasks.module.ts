@@ -5,6 +5,7 @@ import { TasksService } from './tasks.service';
 import { TaskCodeSnapshotService } from './task-code-snapshot.service';
 import { SnapshotQualityService } from './snapshot-quality.service';
 import { PipelineMetricsService } from './pipeline-metrics.service';
+import { VisionTraceService } from './vision-trace.service';
 import { Component, ComponentSchema } from '../schemas/component.schema';
 import { GenerationMetric, GenerationMetricSchema } from '../schemas/generation-metric.schema';
 import { User, UserSchema } from '../schemas/user.schema';
@@ -25,6 +26,7 @@ import { User, UserSchema } from '../schemas/user.schema';
     TaskCodeSnapshotService,
     SnapshotQualityService,
     PipelineMetricsService,
+    VisionTraceService,
   ],
   // 导出供生成管线发布候选快照；SnapshotQualityService 供其它模块复用同一套离线门禁；
   // PipelineMetricsService 供管理端监控接口读取/聚合（P0-4）

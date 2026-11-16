@@ -182,7 +182,6 @@ import {
 import { getComponentBySessionId, getRouteUrl } from '@/api/component'
 import { downloadByUrl } from '@/utils/download-file'
 import { useConfigStore } from '@/stores/config'
-import ProgressDetailPanel from './ProgressDetailPanel.vue'
 
 const router = useRouter()
 const configStore = useConfigStore()

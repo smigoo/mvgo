@@ -1,5 +1,5 @@
 #!/bin/bash
-# 四路分发打包：按 客户端(mac/win) / 网页 拆分，产出三个 zip 到 dist/
+# 三路分发打包：按 客户端(mac/win) / 网页 拆分，产出三个 zip 到唯一时间戳目录
 # 默认零安装：插件直连 LLM 网关；start-relay-* 仅为「网关跨域被拦」时的可选兜底。
 # 用法: ./pack-dist.sh
 set -e
@@ -24,20 +24,21 @@ copy_plugin () {
 # ---- 公共：可选本地代理 + ws 依赖（免联网） ----
 copy_relay () {
   local pkg="$1"
-  cp socket-server.mjs "$pkg/" 2>/dev/null || true
-  cp package.json      "$pkg/" 2>/dev/null || true
+  cp socket-server.mjs "$pkg/"
+  cp package.json      "$pkg/"
   mkdir -p "$pkg/node_modules"
   if [ -d node_modules/ws ]; then
     cp -R node_modules/ws "$pkg/node_modules/"
   else
-    echo "[pack] 警告: 未找到 node_modules/ws，代理用户需自行 npm install ws"
+    echo "[pack] 错误: 未找到 node_modules/ws，无法生成完整代理分发包" >&2
+    exit 1
   fi
 }
 
 # ---- 公共：完整使用文档（zip 内用 ASCII 名 README.md，避免 Windows 中文名乱码） ----
 copy_readme () {
   local pkg="$1"
-  cp docs/mvgo-figma-structure-使用文档.md "$pkg/README.md" 2>/dev/null || true
+  cp docs/mvgo-figma-structure-使用文档.md "$pkg/README.md"
 }
 
 # 统一打包：先在 $TMP 生成 zip，再 cp 到唯一 DIST 目录（纯新建，不覆盖/不删除）

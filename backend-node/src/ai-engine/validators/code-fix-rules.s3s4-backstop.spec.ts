@@ -154,22 +154,38 @@ describe('S3 ③ 错挂清理：同 fname 多归属段 + 短变量名子串', ()
     },
   ];
 
-  it('缺陷⑦ 回归：同一 fname 被两个归属段共用 ⇒ 两份注入 div 均保留 backgroundImage（禁互剥）', () => {
-    const files = {
+  it('缺陷⑦ 回归（v2 修订）：容器存在形态 ⇒ ① 补绑互不干扰（家族去重不介入）；全无容器形态 ⇒ 家族去重只注入 1 个代表', () => {
+    // 🛡️ 2026-11-16 修订（L2 套娃根治 v2）：原断言「3 容器全无 ⇒ 各注入一份=3」是套娃前兆
+    //   形态——同 fname 多 owner 全无容器时逐条注入正是 1c15a129 病灶。v2 语义拆两半：
+    //   ① 容器存在（28ec5c09 真实病灶：互剥）⇒ 补绑分支，双段背景均保留；
+    //   ② 全无容器 ⇒ 家族位次去重，同 varName 只注入 1 个代表 carrier。
+    // 形态①：容器存在 ⇒ 补绑互不干扰
+    const filesWithContainers = {
+      'package/index.vue':
+        "<template>\n  <div data-section-id=\"2:3474\" style=\"width:130px\">a</div>\n  <div data-section-id=\"2:3524\" style=\"width:130px\">b</div>\n</template>\n<script setup>\nimport bgbg3475 from '../../resources/images/bg-3475.png'\nconst x = 1\n</script>",
+    };
+    const r1 = backstopMountBgOwnership(filesWithContainers, SHARED_MAPPING);
+    expect(r1.stats.containerTagged).toBe(2);
+    expect(r1.stats.skippedSharedDuplicate).toBe(0);
+    expect(r1.stats.revertedInvalid).toBe(0);
+    const out1 = r1.files['package/index.vue'];
+    expect((out1.match(/url\(' \+ bgbg3475 \+ '\)'/g) || []).length).toBe(2);
+    expect(out1).toContain('<div :style="{ backgroundImage');
+
+    // 形态②：全无容器 ⇒ 家族去重（bg-3475 双条目只注入 1 代表；bg-_m-35 单条目独立注入）
+    const filesNoContainers = {
       'package/index.vue':
         "<template>\n  <div data-section-id=\"88:33\">\n    <span>x</span>\n  </div>\n</template>\n<script setup>\nconst x = 1\n</script>",
     };
-    const r = backstopMountBgOwnership(files, SHARED_MAPPING);
-    const out = r.files['package/index.vue'];
-    // bg-3475.png 两条 + bg-_m-35.png 一条 = 3 个容器都不存在 ⇒ 各注入一份
-    expect(r.stats.missingContainerInjected).toBe(3);
-    const tag3474 = out.match(/<div data-section-id="2:3474"[^>]*>/)?.[0] || '';
-    const tag3524 = out.match(/<div data-section-id="2:3524"[^>]*>/)?.[0] || '';
-    // 关键：两个兄弟归属段必须**同时**保有背景（旧实现互相剥离 ⇒ 两者皆空）
+    const r2 = backstopMountBgOwnership(filesNoContainers, SHARED_MAPPING);
+    expect(r2.stats.missingContainerInjected).toBe(2); // 3474 代表 + 3496 独立
+    expect(r2.stats.skippedSharedDuplicate).toBe(1); // 3524 让位
+    const out2 = r2.files['package/index.vue'];
+    const tag3474 = out2.match(/<div data-section-id="2:3474"[^>]*>/)?.[0] || '';
     expect(tag3474).toContain('backgroundImage');
-    expect(tag3524).toContain('backgroundImage');
     expect(tag3474).toContain('bgbg3475');
-    expect(tag3524).toContain('bgbg3475');
+    // 3524 无独立 carrier（去重）
+    expect(out2).not.toContain('mc-bg-carrier-23524');
   });
 
   it('缺陷⑥ 回归：短变量名 bg3 不得命中长变量名 bgbg3475 内部 ⇒ 不误剥他段背景', () => {

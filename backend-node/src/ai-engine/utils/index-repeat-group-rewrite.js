@@ -149,7 +149,9 @@ function membersLiteral(constName, members) {
       ? `, theme: ${JSON.stringify(m.theme)}`
       : '';
     const iconExpr = m.iconVar ? String(m.iconVar) : JSON.stringify(String(m.icon || ''));
-    return `  { id: ${JSON.stringify(String(m.id))}, title: ${JSON.stringify(String(m.title || ''))}, icon: ${iconExpr}, items: ${items}, style: ${JSON.stringify(String(m.style || ''))}${theme} }`;
+    // 🎯 R-a ①：段高锚 class 随段数据下发（仅改绑通道命中时附加 ⇒ 旧形态产物逐字不变）
+    const sech = m.sechCls ? `, sechCls: ${JSON.stringify(String(m.sechCls))}` : '';
+    return `  { id: ${JSON.stringify(String(m.id))}, title: ${JSON.stringify(String(m.title || ''))}, icon: ${iconExpr}, items: ${items}, style: ${JSON.stringify(String(m.style || ''))}${theme}${sech} }`;
   });
   return `const ${constName} = [\n${rows.join(',\n')}\n]`;
 }
@@ -229,11 +231,52 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
   const attrByMember = perMember.map((p) =>
     parseTagAttrs(p.span.raw).filter((a) => !RESERVED.has(a.name)),
   );
+
+  // 🎯 R-a ① （2026-11-16 · 68783bf6 实锤 · `applied=0 reasons=[ContentSection:attr-diverges:class]`）：
+  //   **class 段高锚改绑通道**（与下方 data-section-id 通道同构）。
+  //   同构段三兄弟在 index 上各挂段高锚 `.c-…-sech-N` —— N 是该段在**顶层段序**中的位置，
+  //   由 code-generator `__sectionGeometries` 派生（`:1486` `_secCls = c-${semantic}-sech-${i+1}`）
+  //   ⇒ **逐成员必然不同**。旧判据把「class 逐成员不同」当不可表达 ⇒ 整组 fail-open ⇒
+  //   三个挂载标签残留，其中**代表标签无数据兜底** ⇒ props 默认 '' / [] ⇒ 空壳。
+  //   判据（零语义、纯形态，四条件全中才改绑）：
+  //     ① 逐成员各有**恰好 1 个**静态 `class`（无则整组走通用守恒逻辑，与前逐字一致）；
+  //     ② 值均匹配 `^(.*-sech-)(\d+)$`（同一段高锚形态）；
+  //     ③ 前缀**逐字相同**（同一组同一语义前缀）；
+  //     ④ N **严格递增** —— 保证 v-for 渲染顺序（=成员文档顺序）与段序一致，
+  //        否则 `.sech-N` 规则里的 `margin-top:<gap>`（相对上一段间距）会串位。
+  //   命中 ⇒ 类名原文逐成员进数据字段 `sechCls`，标签改 `:class="isoItem.sechCls"`（逐字保真）。
+  //   任一不满足 ⇒ 与旧实现逐字同源地 fail-open（`attr-diverges:class`）。
+  let dynamicSechClass = false;
+  let sechClsValues = null;
+  {
+    const clsLists = perMember.map((p) =>
+      parseTagAttrs(p.span.raw).filter((a) => a.name === 'class'),
+    );
+    if (clsLists.some((l) => l.length > 0)) {
+      const allOne =
+        clsLists.every((l) => l.length === 1 && l[0].value != null && !l[0].dynamic);
+      const rx = /^(.*-sech-)(\d+)$/;
+      const parsed = allOne ? clsLists.map((l) => rx.exec(String(l[0].value))) : [];
+      let ok = allOne && parsed.every((m) => m && m[1] === parsed[0][1]);
+      if (ok) {
+        const nums = parsed.map((m) => Number(m[2]));
+        for (let i = 1; i < nums.length; i += 1) {
+          if (!(nums[i] > nums[i - 1])) ok = false;
+        }
+      }
+      if (!ok) return { ok: false, content, reason: 'attr-diverges:class' };
+      sechClsValues = clsLists.map((l) => String(l[0].value));
+      dynamicSechClass = true;
+    }
+  }
+
   const staticAttrs = [];
   let dynamicSectionId = false;
   {
     const names = new Set();
     for (const list of attrByMember) for (const a of list) names.add(a.name);
+    // class 已被上方 R-a ① 段高锚通道接管 ⇒ 不再进通用守恒循环（否则重复判一次必然 fail）
+    if (dynamicSechClass) names.delete('class');
     for (const name of names) {
       const raws = attrByMember.map((list) => list.filter((a) => a.name === name).map((a) => a.raw));
       // 每个成员都必须恰好出现一次，否则无法用同一个循环标签表达
@@ -258,6 +301,14 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
       }
       dynamicSectionId = true;
     }
+  }
+
+  // 🎯 R-a ① 收尾：段高锚 class 逐成员写入数据字段。
+  //   顺序天然对齐：perMember 已按文档序排序，dataMembers 由 `perMember.map(...)` 产出。
+  if (dynamicSechClass && sechClsValues) {
+    dataMembers.forEach((m, i) => {
+      m.sechCls = sechClsValues[i];
+    });
   }
 
   // ③c icon 资源确定性落地（真机实锤 mc-max-1794426617609-e35971ca）：
@@ -311,6 +362,7 @@ export function rewriteOneRepeatGroup(indexContent, plan) {
     `${indent}:items="isoItem.items"`,
     ...(hasTheme ? [`${indent}:theme="isoItem.theme"`] : []),
     `${indent}:style="isoItem.style"`,
+    ...(dynamicSechClass ? [`${indent}:class="isoItem.sechCls"`] : []),
     ...(dynamicSectionId ? [`${indent}:data-section-id="isoItem.id"`] : []),
     ...staticAttrs.map((a) => `${indent}${a}`),
     '      />',
@@ -356,10 +408,22 @@ export function rewriteIndexRepeatGroups(indexContent, plans) {
   let content = String(indexContent || '');
   const applied = [];
   const skipped = [];
+  const inlined = [];
   for (const plan of Array.isArray(plans) ? plans : []) {
     const res = rewriteOneRepeatGroup(content, plan);
     if (!res.ok) {
       skipped.push({ repName: plan?.repName || '', reason: res.reason || 'unknown' });
+      // 🎯 R-a ③（2026-11-16）：改写 fail-open ⇒ 兜底把成员数据内联到残留标签（防空壳）。
+      //   与 ① 的关系：① 命中即不再走这里；本刀只覆盖「① 之外的 fail-open 原因」。
+      try {
+        const fb = inlineRepeatGroupData(content, plan);
+        if (fb.ok && fb.patched > 0) {
+          content = fb.content;
+          inlined.push({ repName: plan?.repName || '', patched: fb.patched, reason: res.reason || 'unknown' });
+        }
+      } catch (_inlineErr) {
+        // 兜底刀失败不影响主流程：index 保持 fail-open 原状（零行为变更）
+      }
       continue;
     }
     content = res.content;
@@ -372,7 +436,102 @@ export function rewriteIndexRepeatGroups(indexContent, plans) {
       memberPlans: plan.members.map((m) => ({ id: String(m.id), compName: m.compName || plan.repName })),
     });
   }
-  return { content, applied, skipped };
+  return { content, applied, skipped, inlined };
+}
+
+/**
+ * 🎯 R-a ③（2026-11-16 · 68783bf6 实锤）：**fail-open 兜底内联刀**。
+ *
+ * ## 为什么需要这一刀
+ * ① 段高锚改绑通道覆盖了「class 逐成员不同」这一类 fail-open，但改写仍可能因**其他**原因
+ * 失败（`not-adjacent` / `tag-count` / 其他属性分歧）。此时 index 保持三个并排标签 ——
+ * 而 LLM 是按「index 会 v-for」的理解生成的：**代表标签往往不传 `:title`/`:items`**
+ * （真机：`<ContentSection class="c-68783b-sech-2" />` 是三个挂载标签里唯一不传数据的），
+ * 于是代表段 props 取默认 `''` / `[]` ⇒ 渲染空壳。
+ *
+ * ## 判据（零语义、纯确定性，不做任何猜测）
+ * - 逐成员标签在 index 中恰好 1 个，且为**自闭合**（成对标签含子内容 ⇒ 不动，避免插错位置）；
+ * - 该标签**未绑定** `items`（`items` / `:items` / `v-bind:items` 任一）且成员 `items` 非空；
+ * - 命中 ⇒ 注入一份段数据常量（`{ id, title, items }`，逐成员一行），把标签补上
+ *   `:title="<cn>[i].title"` + `:items="<cn>[i].items"`；常量索引按**标签文档序**逐个对齐
+ *   （与 ① 同一顺序约定；用常量引用而非内联 JSON 字面量 ⇒ 零引号转义风险）。
+ *
+ * ## 边界（与 ①、与覆盖门禁的关系）
+ * - ① 成功 ⇒ `rewriteIndexRepeatGroups` 不调本刀（对该组零动作）；
+ * - 本刀**不删文件、不改 import** ⇒ 三份薄包装仍在、`_isoGroupedSectionIds` 不记该组，
+ *   覆盖门禁按「每段一文件」记账逐字不变（零副作用）；
+ * - 任何异常 ⇒ 返回原文（`ok:false`），index 保持 fail-open 原状。
+ *
+ * @param {string} indexContent index.vue 原文
+ * @param {{repName:string, members:Array}} plan 与 `rewriteOneRepeatGroup` 同一份 plan
+ * @returns {{ok:boolean, content:string, patched:number, reason?:string}}
+ */
+export function inlineRepeatGroupData(indexContent, plan) {
+  const content = String(indexContent || '');
+  const repName = String(plan?.repName || '');
+  const members = Array.isArray(plan?.members) ? plan.members : [];
+  if (!content || !repName || members.length < 2) {
+    return { ok: false, content, patched: 0, reason: 'empty-input' };
+  }
+  const perMember = [];
+  for (const m of members) {
+    const name = m.compName || repName;
+    const spans = findComponentTagSpans(content, name);
+    if (spans.length !== 1) {
+      return { ok: false, content, patched: 0, reason: `tag-count:${name}=${spans.length}` };
+    }
+    perMember.push({ member: m, name, span: spans[0] });
+  }
+  perMember.sort((a, b) => a.span.start - b.span.start);
+
+  // 只补「自闭合 + 未绑定 items + 成员确有 items」的标签（其余原样）
+  const targets = [];
+  perMember.forEach((p, i) => {
+    const raw = String(p.span.raw || '');
+    if (!/\/>\s*$/.test(raw)) return; // 成对标签（含子内容）不动
+    const attrs = parseTagAttrs(raw);
+    const boundItems = attrs.some(
+      (a) => a.name === 'items' || a.name === ':items' || a.name === 'v-bind:items',
+    );
+    if (boundItems) return; // 已传数据（真机的 ContentSection3/4）不动
+    const items = Array.isArray(p.member.items) ? p.member.items : [];
+    if (items.length === 0) return; // 无数据可内联
+    targets.push({ idx: i, span: p.span });
+  });
+  if (targets.length === 0) return { ok: true, content, patched: 0 };
+
+  const constName = pickConstName(content, `ISO_INLINE_${scream(repName)}`);
+  const rows = perMember.map(
+    (p) =>
+      `  { id: ${JSON.stringify(String(p.member.id))}, title: ${JSON.stringify(String(p.member.title || ''))}, items: ${JSON.stringify(Array.isArray(p.member.items) ? p.member.items : [])} }`,
+  );
+  const literal = `const ${constName} = [\n${rows.join(',\n')}\n]`;
+
+  // 逐标签补属性：自后向前改，避免前面插入导致后面 span 偏移
+  let next = content;
+  for (let k = targets.length - 1; k >= 0; k -= 1) {
+    const t = targets[k];
+    const attr = ` :title="${constName}[${t.idx}].title" :items="${constName}[${t.idx}].items"`;
+    const newRaw = t.span.raw.replace(/(\s*\/>\s*)$/, `${attr}$1`);
+    if (newRaw === t.span.raw) continue;
+    next = `${next.slice(0, t.span.start)}${newRaw}${next.slice(t.span.end)}`;
+  }
+
+  // 注入数据常量（`</script>` 之前 —— 与 ① 同一注入点约定）
+  const scriptClose = next.lastIndexOf('</script>');
+  if (scriptClose < 0) return { ok: false, content, patched: 0, reason: 'no-script-block' };
+  next = `${next.slice(0, scriptClose)}\n${literal}\n${next.slice(scriptClose)}`;
+
+  // 自校验：常量真的在 + 每个目标标签都带上了绑定
+  if (!next.includes(`const ${constName} = [`)) {
+    return { ok: false, content, patched: 0, reason: 'post-check-failed' };
+  }
+  for (const t of targets) {
+    if (!next.includes(`:items="${constName}[${t.idx}].items"`)) {
+      return { ok: false, content, patched: 0, reason: 'post-check-failed' };
+    }
+  }
+  return { ok: true, content: next, patched: targets.length };
 }
 
 /**

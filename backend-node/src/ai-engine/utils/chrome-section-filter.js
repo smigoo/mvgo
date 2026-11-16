@@ -128,6 +128,21 @@ export function isChromeOnlySection(section) {
   return false
 }
 
+/**
+ * 🛡️ P2（2026-11-16 · c-monitor 73:3 实锤）：收集 section 上所有 Figma 节点标识。
+ * vision 段的 id 形态不统一（多数 sections.id 即 Figma 节点 id，另有 figmaNode/
+ * figmaNodeId 注入形态），全部收集并去重，供 chromeStrippedNodeIds 契约字段使用。
+ */
+function sectionNodeIds(section) {
+  const out = []
+  for (const key of ['id', 'figmaNode', 'figmaNodeId']) {
+    const v = section?.[key]
+    if (typeof v === 'string' && v) out.push(v)
+    else if (typeof v === 'number') out.push(String(v))
+  }
+  return [...new Set(out)]
+}
+
 function filterSectionArray(sections, removed, path, headerOwnerId) {
   if (!Array.isArray(sections)) return sections
   const kept = []
@@ -144,6 +159,7 @@ function filterSectionArray(sections, removed, path, headerOwnerId) {
         name: section?.name || section?.title,
         title: section?.title || section?.name,
         headerRelation: normalizedRelation(section) || undefined,
+        nodeIds: sectionNodeIds(section),
         reason: 'header-owner',
       })
       continue
@@ -155,6 +171,7 @@ function filterSectionArray(sections, removed, path, headerOwnerId) {
         name: section?.name || section?.title,
         title: section?.title || section?.name,
         headerRelation: normalizedRelation(section) || undefined,
+        nodeIds: sectionNodeIds(section),
         reason: 'chrome-relation',
       })
       continue
@@ -189,6 +206,17 @@ export function stripChromeSectionsInPlace(parsed, opts = {}) {
     if (parsed.layoutStructure.layout && Array.isArray(parsed.layoutStructure.layout.sections)) {
       parsed.layoutStructure.layout.sections = filterSectionArray(parsed.layoutStructure.layout.sections, removed, 'layoutStructure.layout.sections', headerOwnerId)
     }
+  }
+
+  // 🛡️ P2（2026-11-16 · c-monitor 73:3 实锤）：契约字段 —— 把被剥离 chrome/header-owner 段的
+  //   Figma 节点 id 记到 parsed 上，供 A4 几何并集（figma-height-ratio#geometricUnionHeightFor）
+  //   作「已被 chrome 剥离的节点不得再被段高吸收」判据（病灶：剥离后的 header 1:449 薄条
+  //   既不在 claimedIds、又无人认领，被 tab 段向上吸收，段高 27 → 256）。
+  //   经 parsed 对象自动贯通双消费方（visual-parser 主链 / phase2 缓存补跑），零接线；
+  //   旧缓存无此字段 ⇒ A4 侧 null ⇒ 旧行为（fail-open）。
+  if (removed.length > 0) {
+    const prev = Array.isArray(parsed.chromeStrippedNodeIds) ? parsed.chromeStrippedNodeIds : []
+    parsed.chromeStrippedNodeIds = [...new Set([...prev, ...removed.flatMap((r) => r.nodeIds || [])])]
   }
 
   return removed

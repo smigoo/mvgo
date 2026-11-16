@@ -139,10 +139,10 @@ describe('planner 视觉结构：vision 决定顺序，Figma 提供几何事实'
     const { effectiveSections } = plan()
     const header = effectiveSections.find((s) => s.id === '2:3550')
     expect(header?.type).toBe('header')
-    // 参与分配者的均值为 1：(30.42+91.44+131+131+142+24.34+140.66)/7
+    // B1-S2 Σ=1：参与分配者的 flexGrow 之和 ≈ 1（30.42+91.44+131+131+142+24.34+140.66 的归一）
     const scored = effectiveSections.filter((s) => s.type !== 'header')
-    const avg = scored.reduce((sum, s) => sum + (s.layoutMetadata?.flexGrow || 0), 0) / scored.length
-    expect(avg).toBeCloseTo(1, 2)
+    const sum = scored.reduce((acc, s) => acc + (s.layoutMetadata?.flexGrow || 0), 0)
+    expect(sum).toBeCloseTo(1, 2)
   })
 
   test('无 figmaNodeData → 退回 vision 原序原值（旧调用方零行为变化）', () => {

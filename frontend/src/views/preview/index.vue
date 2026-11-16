@@ -2208,9 +2208,16 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
  *      仅作用于微码（.preview-microcode），Vue3 不受影响。
  *      注意：嵌套 wrapper 里的背景/自建 header 是生成阶段过滤的范畴，
  *            这里只兜底「写在根节点」的 padding/阴影/背景/边框/外边距。
+ * 🛡️ 消歧三-b（2026-11-16 · c-traffic-trend-10176e21 实锤）：豁免
+ *      [data-mvgo-geom=root] 根容器——N4 面板背景机制（code-fix-rules
+ *      #anchorRootContainerInFiles）正是把 Figma 整组底板图确定性挂到
+ *      内容根 class；本兜底写于 N4 存在之前，`background-image:none
+ *      !important` 与 N4 正面冲突 ⇒ bg 供料/注入/编译/url 全对仍白底。
+ *      geom=root 是装配层机器标记（N4 认根同一事实源，detectRootContainer
+ *      Class 同源），命中即豁免——LLM 自写在普通子容器的背景仍被剥。
  * =================================================================== */
-.preview-microcode :deep(.pannel-content) > *,
-.preview-microcode :deep(.base-panel-content-main) > * {
+.preview-microcode :deep(.pannel-content) > *:not([data-mvgo-geom='root']),
+.preview-microcode :deep(.base-panel-content-main) > *:not([data-mvgo-geom='root']) {
   padding: 0 !important;
   margin: 0 !important;
   box-shadow: none !important;

@@ -172,9 +172,9 @@ describe('elementMatchPatterns / findFigmaNodeForElement', () => {
     expect(applyFigmaElementHeightRatios(parsed, figmaData)).toBe(2)
     const [counter, m1, m2] = parsed.layoutStructure.layout.sections[0].body.children
     expect(counter.styles).toBeUndefined() // 固定尺寸元素不参与比例
-    const avg = (54 + 44) / 2
-    expect(m1.styles.flexGrow).toBeCloseTo(54 / avg, 2)
-    expect(m2.styles.flexGrow).toBeCloseTo(44 / avg, 2)
+    const total = 54 + 44
+    expect(m1.styles.flexGrow).toBeCloseTo(54 / total, 2)
+    expect(m2.styles.flexGrow).toBeCloseTo(44 / total, 2)
   })
 
   it('顶层 section 1:1 顺序配对（bg 剔除、包装容器展开）', () => {
@@ -207,8 +207,8 @@ describe('elementMatchPatterns / findFigmaNodeForElement', () => {
     expect(s0.styles.figmaHeightPx).toBe(30) // header
     expect(s1.styles.figmaHeightPx).toBe(65) // switch
     expect(s2.styles.figmaHeightPx).toBe(317) // @antd/tab 取子节点最大高
-    const avg = (30 + 65 + 317) / 3
-    expect(s1.styles.flexGrow).toBeCloseTo(65 / avg, 2) // device-switch 按父列比例被约束
+    const total = 30 + 65 + 317
+    expect(s1.styles.flexGrow).toBeCloseTo(65 / total, 2) // device-switch 按父列比例被约束
     expect(s1.styles.flexGrow).toBeLessThan(s2.styles.flexGrow as number)
   })
 
@@ -237,9 +237,9 @@ describe('elementMatchPatterns / findFigmaNodeForElement', () => {
     const [s0, s1] = parsed.layout.sections
     expect(s0.styles.figmaHeightPx).toBe(65) // switch（概览区）
     expect(s1.styles.figmaHeightPx).toBe(317) // @antd/tab（列表区）
-    const avg = (65 + 317) / 2
-    expect(s0.styles.flexGrow).toBeCloseTo(65 / avg, 2) // ≈0.34，远小于列表区
-    expect(s1.styles.flexGrow).toBeCloseTo(317 / avg, 2) // ≈1.66
+    const total = 65 + 317
+    expect(s0.styles.flexGrow).toBeCloseTo(65 / total, 2) // ≈0.34，远小于列表区
+    expect(s1.styles.flexGrow).toBeCloseTo(317 / total, 2) // ≈1.66
   })
 
   it('header 容错不滥用：首项非 header 名称或过高时维持跳过不猜', () => {
@@ -295,10 +295,10 @@ describe('applyFigmaElementHeightRatios（A4）', () => {
     expect(applyFigmaElementHeightRatios(parsed, figmaData)).toBe(3)
 
     const [a, b, c] = parsed.layoutStructure.layout.sections[0].body.children
-    const avg = (54 + 44 + 40) / 3
-    expect(a.styles.flexGrow).toBeCloseTo(54 / avg, 2)
-    expect(b.styles.flexGrow).toBeCloseTo(44 / avg, 2)
-    expect(c.styles.flexGrow).toBeCloseTo(40 / avg, 2)
+    const total = 54 + 44 + 40
+    expect(a.styles.flexGrow).toBeCloseTo(54 / total, 2)
+    expect(b.styles.flexGrow).toBeCloseTo(44 / total, 2)
+    expect(c.styles.flexGrow).toBeCloseTo(40 / total, 2)
     for (const el of [a, b, c]) {
       expect(el.styles.flexGrow).toBeLessThan(3) // 比例量级（~1），非像素量级
       expect(el.styles.flexShrink).toBe(1)
@@ -332,8 +332,9 @@ describe('applyFigmaElementHeightRatios（A4）', () => {
     ])
     expect(applyFigmaElementHeightRatios(parsed, figmaData)).toBe(2)
     const [c1, c2] = parsed.layoutStructure.layout.sections[0].body.items
-    expect(c1.styles.flexGrow).toBeCloseTo(30 / 32, 2)
-    expect(c2.styles.flexGrow).toBeCloseTo(34 / 32, 2)
+    // B1-S2：Σ=1 归一（30+34=64）
+    expect(c1.styles.flexGrow).toBeCloseTo(30 / 64, 2)
+    expect(c2.styles.flexGrow).toBeCloseTo(34 / 64, 2)
   })
 
   it('单元素组不猜比例（避免误伤固定尺寸元素）', () => {
@@ -403,9 +404,9 @@ describe('applyFigmaElementHeightRatios（A4）', () => {
     expect(parsed.layoutStructure).toBeUndefined() // 前置：确认测的是扁平形态
     expect(applyFigmaElementHeightRatios(parsed, figmaData)).toBe(2)
     const [a, b] = parsed.layout.sections[0].body.children
-    const avg = (54 + 44) / 2
-    expect(a.styles.flexGrow).toBeCloseTo(54 / avg, 2)
-    expect(b.styles.flexGrow).toBeCloseTo(44 / avg, 2)
+    const total = 54 + 44
+    expect(a.styles.flexGrow).toBeCloseTo(54 / total, 2)
+    expect(b.styles.flexGrow).toBeCloseTo(44 / total, 2)
   })
 })
 
@@ -486,12 +487,12 @@ describe('复合 region 展开（2026-09-04 不同构场景）', () => {
     expect(applyFigmaElementHeightRatios(parsed, root)).toBe(5)
     const px_list = parsed.layoutStructure.layout.sections.map((s: any) => s.styles.figmaHeightPx)
     expect(px_list).toEqual([91, 131, 131, 142, 174])
-    const avg = (91 + 131 + 131 + 142 + 174) / 5
+    const total = 91 + 131 + 131 + 142 + 174
     const flexGrows = parsed.layoutStructure.layout.sections.map((s: any) => s.styles.flexGrow)
-    expect(flexGrows[0]).toBeCloseTo(91 / avg, 2)
-    expect(flexGrows[1]).toBeCloseTo(131 / avg, 2)
-    expect(flexGrows[3]).toBeCloseTo(142 / avg, 2)
-    expect(flexGrows[4]).toBeCloseTo(174 / avg, 2)
+    expect(flexGrows[0]).toBeCloseTo(91 / total, 2)
+    expect(flexGrows[1]).toBeCloseTo(131 / total, 2)
+    expect(flexGrows[3]).toBeCloseTo(142 / total, 2)
+    expect(flexGrows[4]).toBeCloseTo(174 / total, 2)
     for (const s of parsed.layoutStructure.layout.sections) {
       expect(s.styles.flexGrow).toBeLessThan(3) // 比例量级 ~1（非像素量级）
       expect(s.styles.flexBasis).toBe(0)
@@ -582,10 +583,10 @@ describe('mergeVisualRows —— 视觉行归并（regions 粒度 → 视觉语�
     expect(sections[1].styles.figmaHeightPx).toBe(388)
     expect(sections[2].styles.figmaHeightPx).toBe(14)
 
-    const avg = (66 + 388 + 14) / 3
-    expect(sections[0].styles.flexGrow).toBeCloseTo(66 / avg, 2) // ≈0.423
-    expect(sections[1].styles.flexGrow).toBeCloseTo(388 / avg, 2) // ≈2.487
-    expect(sections[2].styles.flexGrow).toBeCloseTo(14 / avg, 2) // ≈0.090
+    const total = 66 + 388 + 14
+    expect(sections[0].styles.flexGrow).toBeCloseTo(66 / total, 2) // ≈0.423
+    expect(sections[1].styles.flexGrow).toBeCloseTo(388 / total, 2) // ≈2.487
+    expect(sections[2].styles.flexGrow).toBeCloseTo(14 / total, 2) // ≈0.090
     for (const s of sections) {
       expect(s.styles.flexGrow).toBeLessThan(3) // 比例量级（~1），非像素量级 → 不触 FLEX-005
       expect(s.styles.flexGrow).toBeGreaterThan(0)
@@ -640,9 +641,9 @@ describe('根下直配（2026-11-03 治本 · mc-max-1793669737047-17691193）',
     // 🔴 修复前：头部被配成 74（三卡）、内容被配成 24（sub-header），正好反了
     expect(sections[0].styles.figmaHeightPx).toBe(28)
     expect(sections[1].styles.figmaHeightPx).toBe(86)
-    const avg = (28 + 86) / 2
-    expect(sections[0].styles.flexGrow).toBeCloseTo(28 / avg, 2) // ≈0.49
-    expect(sections[1].styles.flexGrow).toBeCloseTo(86 / avg, 2) // ≈1.51
+    const total = 28 + 86
+    expect(sections[0].styles.flexGrow).toBeCloseTo(28 / total, 2) // ≈0.49
+    expect(sections[1].styles.flexGrow).toBeCloseTo(86 / total, 2) // ≈1.51
     expect(sections[0].styles.flexGrow).toBeLessThan(sections[1].styles.flexGrow as number)
   })
 
@@ -706,9 +707,9 @@ describe('section.id 直配（2026-11-03 治本 · mc-max-1793675066942-7396124c
     expect(applyFigmaSectionRatios(sections, { document: doc }, stats)).toBe(4)
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([76, 161, 212, 265])
     expect(stats.idDirect).toBe(4) // 计数行取证：走了 id 直配分支
-    const avg = (76 + 161 + 212 + 265) / 4
-    expect(sections[0].styles.flexGrow).toBeCloseTo(76 / avg, 2)
-    expect(sections[3].styles.flexGrow).toBeCloseTo(265 / avg, 2)
+    const total = 76 + 161 + 212 + 265
+    expect(sections[0].styles.flexGrow).toBeCloseTo(76 / total, 2)
+    expect(sections[3].styles.flexGrow).toBeCloseTo(265 / total, 2)
   })
 
   it('⭐ Loop 3 阳性（设备详情）：语义 id 不命中 → ①-β 放弃，② 路径复合展开后再归并成功 [98,135,193]', () => {
@@ -751,10 +752,10 @@ describe('section.id 直配（2026-11-03 治本 · mc-max-1793675066942-7396124c
     expect(stats.idDirectMiss).toBe(3)
     expect(stats.order).toBe(3) // 计数行取证：走了 ② 顺序配对（复合展开后再归并）
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([98, 135, 193])
-    const avg = (98 + 135.25 + 193) / 3
-    expect(sections[0].styles.flexGrow).toBeCloseTo(98 / avg, 2)
-    expect(sections[1].styles.flexGrow).toBeCloseTo(135.25 / avg, 2)
-    expect(sections[2].styles.flexGrow).toBeCloseTo(193 / avg, 2)
+    const total = 98 + 135.25 + 193
+    expect(sections[0].styles.flexGrow).toBeCloseTo(98 / total, 2)
+    expect(sections[1].styles.flexGrow).toBeCloseTo(135.25 / total, 2)
+    expect(sections[2].styles.flexGrow).toBeCloseTo(193 / total, 2)
     // 视觉行高递增 ⇒ 系数单调递增（头部信息 < 设备属性 < 产品描述）
     expect(sections[0].styles.flexGrow).toBeLessThan(sections[1].styles.flexGrow as number)
     expect(sections[1].styles.flexGrow).toBeLessThan(sections[2].styles.flexGrow as number)
@@ -839,9 +840,9 @@ describe('section.id 直配（2026-11-03 治本 · mc-max-1793675066942-7396124c
     expect(stats.idDirectMiss).toBe(4)
     expect(stats.order).toBe(4) // ② 顺序配对（展开后再归并）
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([76, 161, 212, 265])
-    const avg = (76 + 161 + 212 + 265) / 4
-    expect(sections[0].styles.flexGrow).toBeCloseTo(76 / avg, 2) // ≈0.426
-    expect(sections[3].styles.flexGrow).toBeCloseTo(265 / avg, 2) // ≈1.485
+    const total = 76 + 161 + 212 + 265
+    expect(sections[0].styles.flexGrow).toBeCloseTo(76 / total, 2) // ≈0.426
+    expect(sections[3].styles.flexGrow).toBeCloseTo(265 / total, 2) // ≈1.485
   })
 
   it('顺序保护：根下直配必须先于 section.id 直配（重点车辆监测保持 28/86，不被 28/24 抢走）', () => {
@@ -1038,10 +1039,10 @@ describe('slot 同名容器上溯（2026-11-03 治本 · ec1db095 实锤）', ()
     expect(stats.idDirect).toBe(3) // 仍走 ①-β id 直配，仅采纳值被上溯替换
     expect(stats.slotAncestor).toBe(3) // 计数行取证：3 段全部上溯生效
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([556, 142, 174])
-    const avg = (556 + 142 + 174) / 3
-    expect(sections[0].styles.flexGrow).toBeCloseTo(556 / avg, 2) // ≈1.913
-    expect(sections[1].styles.flexGrow).toBeCloseTo(142 / avg, 2) // ≈0.489
-    expect(sections[2].styles.flexGrow).toBeCloseTo(174 / avg, 2) // ≈0.599
+    const total = 556 + 142 + 174
+    expect(sections[0].styles.flexGrow).toBeCloseTo(556 / total, 2) // ≈1.913
+    expect(sections[1].styles.flexGrow).toBeCloseTo(142 / total, 2) // ≈0.489
+    expect(sections[2].styles.flexGrow).toBeCloseTo(174 / total, 2) // ≈0.599
     for (const s of sections) {
       expect(s.styles.flexBasis).toBe(0)
       expect(s.styles.height).toBeUndefined() // 仍是比例，不写固定 px
@@ -1184,12 +1185,12 @@ describe('①-β 追认幻觉缺项（2026-11-03 治本 · ec1db095 实锤）', 
     expect(sections.map((s: any) => s.styles?.figmaHeightPx)).toEqual([33, 556, 10, undefined, 142, 174])
     // 幻觉项本身完全不给比例（fail-open ⇒ 交宿主默认 flex，不猜不混配）
     expect(sections[3].styles).toBeUndefined()
-    const avg = (32.54178237915039 + 556.3101196289062 + 10 + 142.000244140625 + 174) / 5
-    expect(sections[0].styles.flexGrow).toBeCloseTo(32.54178237915039 / avg, 2) // ≈0.178
-    expect(sections[1].styles.flexGrow).toBeCloseTo(556.3101196289062 / avg, 2) // ≈3.04
-    expect(sections[2].styles.flexGrow).toBeCloseTo(10 / avg, 2) // ≈0.055
-    expect(sections[4].styles.flexGrow).toBeCloseTo(142.000244140625 / avg, 2) // ≈0.776
-    expect(sections[5].styles.flexGrow).toBeCloseTo(174 / avg, 2) // ≈0.951
+    const total = 32.54178237915039 + 556.3101196289062 + 10 + 142.000244140625 + 174
+    expect(sections[0].styles.flexGrow).toBeCloseTo(32.54178237915039 / total, 2) // ≈0.178
+    expect(sections[1].styles.flexGrow).toBeCloseTo(556.3101196289062 / total, 2) // ≈3.04
+    expect(sections[2].styles.flexGrow).toBeCloseTo(10 / total, 2) // ≈0.055
+    expect(sections[4].styles.flexGrow).toBeCloseTo(142.000244140625 / total, 2) // ≈0.776
+    expect(sections[5].styles.flexGrow).toBeCloseTo(174 / total, 2) // ≈0.951
   })
 
   it('阴性（上界）：幻觉缺项数 > 命中数 ⇒ 不采纳（防「大半段臆造」静默劣化）', () => {
@@ -1309,14 +1310,14 @@ describe('①-γ id 部分命中 + 剩余区域兜底（2026-11-04 治本 · 4cb
     expect(stats.idDirectMiss).toBe(1)
     // 修复前：标签栏 113 / 图表 24（正好反了）；修复后按 Figma 图元真值
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([27, 24, 14, 113])
-    const avg = (27 + 24 + 14 + 113) / 4 // 44.5
-    expect(sections[0].styles.flexGrow).toBeCloseTo(27 / avg, 2) // ≈0.607
-    expect(sections[1].styles.flexGrow).toBeCloseTo(24 / avg, 2) // ≈0.539
-    expect(sections[2].styles.flexGrow).toBeCloseTo(14 / avg, 2) // ≈0.315
-    expect(sections[3].styles.flexGrow).toBeCloseTo(113 / avg, 2) // ≈2.539
-    // 比例量纲（avg=1，和 = 段数），图表段独占设计事实的 63.5%
+    const total = 27 + 24 + 14 + 113 // Σ=178
+    expect(sections[0].styles.flexGrow).toBeCloseTo(27 / total, 2) // ≈0.607
+    expect(sections[1].styles.flexGrow).toBeCloseTo(24 / total, 2) // ≈0.539
+    expect(sections[2].styles.flexGrow).toBeCloseTo(14 / total, 2) // ≈0.315
+    expect(sections[3].styles.flexGrow).toBeCloseTo(113 / total, 2) // ≈2.539
+    // 比例量纲（Σ=1 三源归一），图表段独占设计事实的 63.5%
     const sum = sections.reduce((a: number, s: any) => a + s.styles.flexGrow, 0)
-    expect(sum).toBeCloseTo(4, 2)
+    expect(sum).toBeCloseTo(1, 2)
     expect(113 / 178).toBeCloseTo(0.635, 3)
     // header 走 base-panel header slot：28.09 的区域被容错剥掉，不得被任何段认领
     expect(sections.some((s: any) => s.styles.figmaHeightPx === 28)).toBe(false)
@@ -1403,9 +1404,9 @@ describe('①-γ id 部分命中 + 剩余区域兜底（2026-11-04 治本 · 4cb
     expect(stats.order).toBeUndefined()
     // 若按文档序兜底：[160, 40, 30, 30]（错）；按 y 视觉序：[40, 160, 30, 30]（对）
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([40, 160, 30, 30])
-    const avg = (40 + 160 + 30 + 30) / 4 // 65
-    expect(sections[0].styles.flexGrow).toBeCloseTo(40 / avg, 2) // ≈0.615
-    expect(sections[1].styles.flexGrow).toBeCloseTo(160 / avg, 2) // ≈2.462
+    const total = 40 + 160 + 30 + 30 // Σ=260
+    expect(sections[0].styles.flexGrow).toBeCloseTo(40 / total, 2) // ≈0.615
+    expect(sections[1].styles.flexGrow).toBeCloseTo(160 / total, 2) // ≈2.462
     // header(24) 被容错剥掉，未被任何段认领
     expect(sections.some((s: any) => s.styles.figmaHeightPx === 24)).toBe(false)
   })
@@ -1521,12 +1522,12 @@ describe('② 顺序配对视觉序（2026-11-05 治本 · 76bb6b43 实锤）', 
     expect(stats.order).toBe(2)
     // 修复前：[113, 32] —— 图表与标签栏对调，正是用户报「Tab 栏占了半个组件」
     expect(sections.map((s: any) => s.styles.figmaHeightPx)).toEqual([32, 113])
-    const avg = (32 + 113) / 2
-    expect(sections[0].styles.flexGrow).toBeCloseTo(32 / avg, 2) // ≈0.441
-    expect(sections[1].styles.flexGrow).toBeCloseTo(113 / avg, 2) // ≈1.559
-    // 比例量纲 avg=1（和为段数）
+    const total = 32 + 113
+    expect(sections[0].styles.flexGrow).toBeCloseTo(32 / total, 2) // ≈0.441
+    expect(sections[1].styles.flexGrow).toBeCloseTo(113 / total, 2) // ≈1.559
+    // 比例量纲 Σ=1（三源归一）
     const sum = sections.reduce((a: number, s: any) => a + s.styles.flexGrow, 0)
-    expect(sum).toBeCloseTo(2, 2)
+    expect(sum).toBeCloseTo(1, 2)
     // header 28.09 仍被容错剥掉，不得被任何段认领
     expect(sections.some((s: any) => s.styles.figmaHeightPx === 28)).toBe(false)
   })

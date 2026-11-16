@@ -19,6 +19,18 @@
  *   - 方向模糊（side-by-side 比例介于 0.25~0.75）→ 默认 row（用户定调：common failure 是横排被堆纵），confidence=low
  *   - 单子节点容器 → 默认 column（single-child-default，防 LLM 漏写 flex-direction 默认 row）
  *
+ * 🔴 R3-2（2026-11-16）：`layoutMode` **不再是硬真值**，与 `layout-geom-facts` 口径对齐。
+ *   背景：`docs/2026-11-14-布局真值整治方案.md` R3 已定「几何优先，`layoutMode` 只作交叉验证」，
+ *     但本模块当时仍留「layoutMode 存在即 high、几何完全不参与」的旧分支 ⇒ 同一节点两套裁决：
+ *     planner 按几何判 column、validator 按声明强注入 row，且无任何一致性校验。
+ *   现规则（与 `layout-child-filter` 同源）：
+ *     · 声明 + 几何一致          ⇒ 采信声明（source/confidence 逐字保持既有，零回归）
+ *     · 声明 + 几何冲突          ⇒ **几何胜**，附 `alConflict/alDeclared/alSource` 留痕
+ *     · 声明 + 几何不可判        ⇒ 采信声明但降级 `al-only` / confidence=low（声明≠实测）
+ *     · 非容器类型带声明（脏数据）⇒ 声明作废，走几何分支
+ *     · 绝对定位子项             ⇒ 先剔除再判（否则造出假冲突）
+ *   计数键见 `LAYOUT_AL_STAT_KEYS`，由 `opts.stats` 收集。
+ *
  * ⚠️ 职责边界（2026-09-22 治本后定）：本模块是「容器级」布局方向的**单一事实源**。
  *   - 覆盖 display（flex/grid）+ 主轴方向（row/column/gridColumns）。
  *   - 「卡内文本子组方向 + icon 实测尺寸」归 figma-item-facts.js（item 内部，禁止本模块产出）。
@@ -27,6 +39,11 @@
  *     side-by-side 比例判据 bug，两个几何推断打架，靠执行顺序碰巧压对）。
  */
 import { areBoxesSideBySide } from './section-tree.js'
+import {
+  filterLayoutChildren,
+  resolveDeclaredAutoLayout,
+  LAYOUT_AL_STAT_KEYS,
+} from './layout-child-filter.js'
 
 /**
  * 🛡️ 均匀网格检测（2026-09-22 · mc-1790058609462 实锤）：子节点按 x 聚成「均匀列」
@@ -96,6 +113,151 @@ function excludeBackgroundLayers(boxes, parentBox) {
   })
 }
 
+/**
+ * 🛡️ P0（2026-11-16 · T0 实测 29 语料 / 1445 容器实锤）：**包含关系叠层**判定。
+ *
+ * ## 病灶（与刀 6 同 bbox 叠层是两类不同形态，刀 6 覆盖不到）
+ * 「背景层 + 内容层」容器里，背景块**铺满父容器**、内容块**完全内嵌其中但并不等尺寸**
+ * （典型 icon 复合容器：`RECTANGLE 24×24` 铺底 + `FRAME 18×18` 偏移 (3,3)）：
+ *   · `excludeBackgroundLayers` 只在面积 ≥90% 父面积时才剔 ⇒ 背景块常被剔掉、剩 1 项；
+ *   · 但 `decideGeometricLayout:137` 有「**过滤后不足 2 个 ⇒ 回退全集**」的兜底
+ *     （为防「无事实 ⇒ LLM 只能猜 ⇒ 竖排堆叠」的最坏结果）；
+ *   · 回退后是 2 个子项 ⇒ `areBoxesSideBySide` 对**内嵌盒**恒否 ⇒ ratio=0
+ *     ⇒ **高置信 `column`** 假事实 ⇒ 注入器硬写 `flex-direction:column`
+ *     ⇒ 内容层被推离背景层（图标错位）。
+ *
+ * ## 实测（只读观测脚本 `scripts/audit-layout-truth-conflict.mjs`）
+ *   · `A(inferLayoutFacts)=free-overlay 而 B 硬给方向` 共 895 个，其中 **595 个是包含关系叠层**；
+ *   · 这 595 个里 **523 个（87.9%）是 `confidence=high`** ⇒ 置信度过滤救不了，必须改判据；
+ *   · 本判据准入 232 个容器（`filtered<2` ∧ 无全等组 ∧ 有 base），落地后该冲突从 895 降到 700、
+ *     `display:'stack'` 从 73 升到 292；spec 92/92 全绿（`12:1` 网格与 `50:1` 刀6 反向锚均未被误伤）。
+ *
+ * ## 判据（纯几何，与方向判据正交）
+ * 存在一个子项 `base`，**包含所有其他子项**（容差 1px），且至少一个与 `base` **不全等**。
+ *   · 全等的由刀 6 先行接管（本函数 `anyDiff` 刻意排除全等，避免抢占刀 6 的既有输出）；
+ *   · 「全部被同一子项包含」⇒ 子项之间不存在主轴排列关系 ⇒ 只能层叠。
+ *   · 只要有一个子项超出 `base` 就不成立 ⇒ 真并列/真纵向不会被误判（A 组+B 且 C 独立 ⇒ 不命中）。
+ *
+ * @param {Array<object>} boxes 子节点（读 `absoluteBoundingBox` / `bbox`）
+ * @returns {boolean}
+ */
+function hasContainmentBase(boxes) {
+  if (!Array.isArray(boxes) || boxes.length < 2) return false
+  const boxOf = (c) => {
+    const b = c?.absoluteBoundingBox || c?.bbox
+    if (!b) return null
+    const { x, y, width, height } = b
+    return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0
+      ? { x, y, width, height }
+      : null
+  }
+  const bs = boxes.map(boxOf)
+  if (bs.some((b) => !b)) return false
+  const TOL = 1 // 与 excludeBackgroundLayers / section-tree 的贴合容差同量级
+  const within = (inner, outer) =>
+    inner.x >= outer.x - TOL &&
+    inner.y >= outer.y - TOL &&
+    inner.x + inner.width <= outer.x + outer.width + TOL &&
+    inner.y + inner.height <= outer.y + outer.height + TOL
+  const same = (a, b) =>
+    Math.abs(a.x - b.x) <= TOL &&
+    Math.abs(a.y - b.y) <= TOL &&
+    Math.abs(a.width - b.width) <= TOL &&
+    Math.abs(a.height - b.height) <= TOL
+  for (let i = 0; i < bs.length; i += 1) {
+    const base = bs[i]
+    let allIn = true
+    let anyDiff = false
+    for (let j = 0; j < bs.length; j += 1) {
+      if (i === j) continue
+      if (!within(bs[j], base)) {
+        allIn = false
+        break
+      }
+      if (!same(bs[j], base)) anyDiff = true
+    }
+    if (allIn && anyDiff) return true
+  }
+  return false
+}
+
+/**
+ * 是否存在**严格全等**的子项对（x/y/width/height 逐字段相等，不设容差）。
+ * 用途：`hasContainmentBase` 的排他闸——容器里若已有全等组（Mask group / icon 包装），
+ * 属刀 6 的管辖域，本分支不介入，避免把刀 6 的既有裁决改宽（spec「同 bbox 之外还有偏移子项
+ * ⇒ 不是 stack」就是这条边界）。
+ */
+function hasIdenticalPair(boxes) {
+  const bs = (boxes || []).map((c) => c?.absoluteBoundingBox || c?.bbox).filter(Boolean)
+  for (let i = 0; i < bs.length; i += 1) {
+    for (let j = i + 1; j < bs.length; j += 1) {
+      const a = bs[i]
+      const b = bs[j]
+      if (a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height) return true
+    }
+  }
+  return false
+}
+
+/**
+ * 🛡️ P0-b（2026-11-16 · T1-b 观测）：**近似全等偏移叠层对**判定（刀 6 的容差版补充）。
+ *
+ * ## 病灶（刀 6 只认逐字段全等，覆盖不到两类真层叠）
+ *   · icon 底 + Mask 蒙版**同尺寸但偏移 2px+**（真机 `2:8038`：RECT 48×48 @0,0 +
+ *     RECT 48×48 @2,0 —— IoU≈0.96，是叠放，刀 6 判不全等 ⇒ 落入方向判定 ⇒ 假 column）；
+ *   · **文字叠装饰底**（真机 `2:8890`：bg-decor 152×20 + TEXT "G2京沪高速" 144×21 @8,0，
+ *     IoU≈0.90 —— 文字叠在装饰条上，方向判定给 column ⇒ 文字被推到装饰条下方）。
+ *
+ * ## 判据（窄准入，四个条件同时成立）
+ *   ① 尺寸相近：双边宽、高各自差 ≤10%（挡「大底+小角标」非同尺寸结构）；
+ *   ② 高度重叠：IoU ≥ 0.75；
+ *   ③ **偏移 ≥2px**：与刀 6 的边界对齐——spec `51:1`（1px 差 ⇒ 不是 stack）是刀 6 的
+ *      「不引入近似阈值」锚，本分支**刻意从 2px 起步**，1px 坐标噪声对（观测到 106 对，
+ *      全为纯 VECTOR 装饰拷贝组）继续走既有方向判定，不顶撞既有锚；
+ *   ④ 存在至少一对满足①②③即命中（不要求全部子项参与——背景叠放对决定层叠语义）。
+ *
+ * ## 实测（T1-b，29 语料 / 1445 容器）
+ *   命中 217 容器（改后为 116 容器、排除严格全等对），**零**「A 侧非 free-overlay」命中
+ *   （零潜在误伤）；抽验全部为真层叠：icon 底+蒙版 / 文字叠装饰底 / 纯矢量光晕层。
+ *   其中 115 个当前被错判 `flex/column`、7 个 `row` —— 即本次可修正的确定性错误。
+ *
+ * @param {Array<object>} boxes 子节点（读 `absoluteBoundingBox` / `bbox`）
+ * @returns {boolean}
+ */
+function hasNearIdenticalStackPair(boxes) {
+  if (!Array.isArray(boxes) || boxes.length < 2) return false
+  const boxOf = (c) => {
+    const b = c?.absoluteBoundingBox || c?.bbox
+    if (!b) return null
+    const { x, y, width, height } = b
+    return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0
+      ? { x, y, width, height }
+      : null
+  }
+  const bs = boxes.map(boxOf)
+  if (bs.some((b) => !b)) return false
+  const sizeClose = (a, b) =>
+    Math.abs(a.width - b.width) <= 0.1 * Math.max(a.width, b.width) &&
+    Math.abs(a.height - b.height) <= 0.1 * Math.max(a.height, b.height)
+  const iou = (a, b) => {
+    const ix = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x))
+    const iy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y))
+    const inter = ix * iy
+    return inter / (a.width * a.height + b.width * b.height - inter)
+  }
+  for (let i = 0; i < bs.length; i += 1) {
+    for (let j = i + 1; j < bs.length; j += 1) {
+      const a = bs[i]
+      const b = bs[j]
+      // ③ 偏移 ≥2px（1px 噪声留给刀 6 边界，见注释）
+      if (Math.abs(a.x - b.x) < 2 && Math.abs(a.y - b.y) < 2) continue
+      if (!sizeClose(a, b)) continue
+      if (iou(a, b) >= 0.75) return true
+    }
+  }
+  return false
+}
+
 function decideGeometricLayout(children, opts = {}) {
   const all = (children || []).filter(
     (c) => c && (c.absoluteBoundingBox || c.bbox),
@@ -148,6 +310,32 @@ function decideGeometricLayout(children, opts = {}) {
     if (allIdentical) {
       return { display: 'stack', confidence: 'high' }
     }
+  }
+
+  // 🛡️ P0（2026-11-16 · T0 实测）：**包含关系叠层**（背景层 + 内嵌内容）优先于方向判定。
+  //   与刀 6 的分工：刀 6 管「bbox 完全相等」，本分支管「全被同一子项包含但不等尺寸」。
+  //   **三个准入条件，缺一不可**（每一条都对应实测到的误伤面）：
+  //     ① `filtered.length < 2` —— 只接管「本应回退全集」的场景。网格/多卡容器
+  //        `filtered >= 2` 时本来就该走 `boxes=filtered` 的正常判定，不得被本分支覆盖
+  //        （反例 `12:1`：bg + 2×2 四卡，filtered=4，必须仍判 grid-2，不能被判 stack）。
+  //     ② `!hasIdenticalPair` —— 容器里已有严格全等组时属刀 6 管辖域（Mask group / icon 包装），
+  //        本分支不介入（反例 `50:1`：2 个全等 98×98 + 1 个内嵌 48×48，归刀 6 反向锚）。
+  //     ③ `hasContainmentBase` —— 真存在「一个子项包含全部其余」的层叠结构。
+  //   下游：`layout-facts-injector.js:216` 对 `display:'stack'` **整类跳过** display/flex-direction
+  //        注入（"宁可不写，也绝不写错"）⇒ 不会把层叠容器写成 flex 纵流。
+  //   `stackReason` 为纯附加字段（下游不消费），用于区分本分支与刀 6 的命中，便于观测计量。
+  if (filtered.length < 2 && !hasIdenticalPair(boxes) && hasContainmentBase(boxes)) {
+    return { display: 'stack', confidence: 'high', stackReason: 'containment-base' }
+  }
+
+  // 🛡️ P0-b（2026-11-16 · T1-b 实测）：**近似全等偏移叠层对**（icon 底+蒙版偏移 2px+、
+  //   文字叠装饰底）。与刀 6/P0 的分工：刀 6 管逐字段全等；P0 管「全被同一子项包含」；
+  //   本分支管「同尺寸近似 + 偏移 ≥2px + IoU≥0.75」的叠放对。
+  //   准入四条件见 hasNearIdenticalStackPair 注释；「偏移 ≥2px」刻意对齐刀 6 的
+  //   「1px 差不算 stack」锚（spec `51:1`），互不侵蚀。
+  //   下游同走 `layout-facts-injector.js:216` 的 stack 整类跳过。
+  if (hasNearIdenticalStackPair(boxes)) {
+    return { display: 'stack', confidence: 'high', stackReason: 'near-identical-pair' }
   }
 
   // 🛡️ 均匀网格优先（side-by-side 比例对网格系统性误判 column）
@@ -330,50 +518,98 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
       : null
   if (!root || typeof root !== 'object') return {}
 
+  // 计数收集器（调用方传 `opts.stats` 时填充；0 也打，区分「没命中」与「没生效」）
+  const stats = opts && typeof opts.stats === 'object' ? opts.stats : null
+  const bump = (key, n = 1) => {
+    if (!stats) return
+    stats[key] = (Number(stats[key]) || 0) + n
+  }
+  if (stats) {
+    for (const k of LAYOUT_AL_STAT_KEYS) {
+      if (!Number.isFinite(Number(stats[k]))) stats[k] = 0
+    }
+  }
+
+  const toGeomFact = (decide) => ({
+    ...(decide.display === 'stack'
+      ? // 刀 6 同 bbox 叠层：无 flexDirection（方向事实不存在），
+        // 下游注入器/prompt 各自按 stack 分支处理，禁止当 flex 容器下发。
+        // P0：`stackReason` 仅在本分支（containment-base）存在时透传，
+        // 刀 6 输出**逐字不变**（阴性对照零回归）。
+        {
+          display: 'stack',
+          source: 'geometric-stack-inference',
+          ...(decide.stackReason ? { stackReason: decide.stackReason } : {}),
+        }
+      : decide.display === 'grid'
+      ? { display: 'grid', gridColumns: decide.gridColumns, source: 'geometric-grid-inference' }
+      : { display: 'flex', flexDirection: decide.flexDirection, source: 'geometric-inference' }),
+    confidence: decide.confidence,
+  })
+
   const map = {}
   const walk = (node) => {
     if (!node || typeof node !== 'object') return
     const nodeId = node.id != null ? String(node.id) : ''
-    const children = Array.isArray(node.children) ? node.children : []
-    
+    const rawChildren = Array.isArray(node.children) ? node.children : []
+    // 🛡️ R3-2：绝对定位子项不参与主轴排布（管线自身也会产生此类节点，
+    //   见 layout-child-filter 文件头）⇒ 必须先剔除，否则会把「声明 row + 绝对浮层」
+    //   误判成声明说谎，进而把真 row 容器改成 column。
+    const { children, absoluteSkipped } = filterLayoutChildren(node)
+    if (absoluteSkipped > 0) bump('absoluteSkipped', absoluteSkipped)
+
     // 🛡️ 扩大覆盖范围：≥1 个子节点（原 ≥2）都生成布局事实
     if (children.length >= 1 && nodeId) {
-      const mode = node.layoutMode
+      const al = resolveDeclaredAutoLayout(node)
+      if (al.declared && !al.valid) bump('alInvalid')
+      const alUsable = al.declared && al.valid
+      if (alUsable) bump('alDeclared')
+
+      // 几何判定（去掉绝对定位子项后仍 ≥2 个才可判；内部还会剔背景层）
+      const decide =
+        children.length >= 2
+          ? decideGeometricLayout(children, {
+              ...opts,
+              parentBox: node.absoluteBoundingBox || node.bbox,
+            })
+          : null
+
       let fact = null
-      if (mode === 'HORIZONTAL') {
-        fact = {
-          display: 'flex',
-          flexDirection: 'row',
-          source: 'figma-layoutMode',
-          confidence: 'high',
-        }
-      } else if (mode === 'VERTICAL') {
-        fact = {
-          display: 'flex',
-          flexDirection: 'column',
-          source: 'figma-layoutMode',
-          confidence: 'high',
-        }
-      } else if (children.length >= 2) {
-        // 非 Auto-Layout / 绝对定位文件 → 几何推断（默认 flex，不还原 absolute）
-        // 🛡️ 把父容器 bbox 传下去，供剔除「整块背景层」（否则背景层会与内容层
-        //    凑成假网格，见 decideGeometricLayout 的注释）。不原地改 opts（外部引用）。
-        const decide = decideGeometricLayout(children, {
-          ...opts,
-          parentBox: node.absoluteBoundingBox || node.bbox,
-        })
-        if (decide) {
+      if (alUsable && decide) {
+        const geomDir = decide.display === 'flex' ? decide.flexDirection : null
+        if (geomDir === al.dir) {
+          // 一致：逐字保持既有输出（source/confidence 不变 ⇒ 阴性对照零回归）
+          bump('alAgree')
           fact = {
-            ...(decide.display === 'stack'
-              ? // 刀 6 同 bbox 叠层：无 flexDirection（方向事实不存在），
-                // 下游注入器/prompt 各自按 stack 分支处理，禁止当 flex 容器下发。
-                { display: 'stack', source: 'geometric-stack-inference' }
-              : decide.display === 'grid'
-              ? { display: 'grid', gridColumns: decide.gridColumns, source: 'geometric-grid-inference' }
-              : { display: 'flex', flexDirection: decide.flexDirection, source: 'geometric-inference' }),
-            confidence: decide.confidence,
+            display: 'flex',
+            flexDirection: al.dir,
+            source: 'figma-layoutMode',
+            confidence: 'high',
+          }
+        } else {
+          // 冲突：几何胜（R3）。声明只留痕，供 prompt 显式告知「别按 layoutMode 排」。
+          bump('alConflict')
+          fact = {
+            ...toGeomFact(decide),
+            alConflict: true,
+            alDeclared: al.dir,
+            alSource: al.layoutMode,
           }
         }
+      } else if (alUsable) {
+        // 几何不可判（可测子项 <2）⇒ 声明是唯一证据。采信但降级：声明 ≠ 实测。
+        bump('alOnly')
+        fact = {
+          display: 'flex',
+          flexDirection: al.dir,
+          source: 'al-only',
+          confidence: 'low',
+        }
+      } else if (children.length >= 2) {
+        // 无声明 / 声明作废（脏数据）→ 几何推断（默认 flex，不还原 absolute）
+        // 🛡️ 把父容器 bbox 传下去，供剔除「整块背景层」（否则背景层会与内容层
+        //    凑成假网格，见 decideGeometricLayout 的注释）。不原地改 opts（外部引用）。
+        if (decide) fact = toGeomFact(decide)
       } else {
         // 🛡️ 单子节点容器：默认 column（用户定调：纵向堆叠是最常见的失败）
         fact = {
@@ -385,7 +621,7 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
       }
       if (fact) map[nodeId] = fact
     }
-    for (const child of children) walk(child)
+    for (const child of rawChildren) walk(child)
   }
   walk(root)
   return map

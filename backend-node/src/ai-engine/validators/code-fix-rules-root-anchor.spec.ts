@@ -300,6 +300,121 @@ describe('R7 panelBg · scaleMode 真值优先（R3-legacy）', () => {
 });
 
 /**
+ * 🛡️ 消歧二回归锚（2026-11-16 · mc-max-1794788041213-67ed9c4e 离线复现）：
+ *   病灶两层：①rootCls 多 class 值漏检（class="slot-con c-mc-max-…" 含空格 ⇒ 正则
+ *   ([\w-]+) 不匹配）⇒ 锚到第一个业务 section ⇒ 静默 no-op；②rootCls 锚对但其
+ *   样式纯 inline+@import（style 块无规则）⇒ styleBlockRe 不命中 ⇒ 仍 no-op。
+ *   修复两级：geom 锚优先（data-mvgo-geom="root" 确定性标记）+ 根类规则缺失时新建。
+ */
+describe('消歧二 · N4 根容器锚定（geom 锚 + 规则新建）', () => {
+  /** 67ed9c4e 真实形态复刻：base-panel + 多 class 根容器（带 geom 锚）+ inline 样式 + 无根类规则块 */
+  const MULTICLASS_ROOT_VUE = `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-traffic-trend-slot-con c-mc-max-1794788041213-67ed9c4e" style="display:flex;flex-direction:column;width:420px;height:358px;" data-mvgo-geom="root">
+      <div class="c-traffic-trend-section-01-con" data-section-id="53:34089">
+        <ContentSection />
+      </div>
+    </div>
+  </base-panel>
+</template>
+<script setup>
+</script>
+<style lang="less" scoped>
+@import '../resources/styles/index.less';
+.mc-bg-carrier-5334075 { width: 420px; height: 358px; background-image: url('../resources/images/bg-cp-traffic-trend-6920.png'); }
+</style>
+`
+  const PANEL_BG_MAPPING_67ED = [
+    {
+      previewAnalysisRole: 'bg',
+      skipMount: true,
+      resourceFile: '../resources/images/bg-cp-traffic-trend-6920.png',
+      downloadStatus: 'success',
+    },
+  ]
+  const FIGMA_420x358 = {
+    document: { absoluteBoundingBox: { width: 420, height: 358 } },
+  }
+
+  it('⭐ 阳性：多 class 根容器（含 geom 锚）必须锚到 slot-con 而非首个业务 section', () => {
+    expect(detectRootContainerClass(MULTICLASS_ROOT_VUE)).toBe(
+      'c-traffic-trend-slot-con',
+    )
+  })
+
+  it('⭐ 阳性：根类无规则块时新建规则并注入 panelBg（消歧二-b）', () => {
+    const files = { 'package/index.vue': MULTICLASS_ROOT_VUE }
+    const out = anchorRootContainerInFiles(files, {
+      figmaNodeData: FIGMA_420x358,
+      resourceDomMapping: PANEL_BG_MAPPING_67ED,
+    })
+    const s = out['package/index.vue']
+    expect(s).not.toBe(MULTICLASS_ROOT_VUE) // 发生了注入
+    expect(s).toContain('.c-traffic-trend-slot-con {')
+    expect(s).toContain("background-image: url('../resources/images/bg-cp-traffic-trend-6920.png')")
+  })
+
+  it('⭐ 阳性：新建路径幂等（二次执行不再重复注入）', () => {
+    const files = { 'package/index.vue': MULTICLASS_ROOT_VUE }
+    const opts = {
+      figmaNodeData: FIGMA_420x358,
+      resourceDomMapping: PANEL_BG_MAPPING_67ED,
+    }
+    const once = anchorRootContainerInFiles(files, opts)
+    const twice = anchorRootContainerInFiles(once, opts)
+    expect(twice['package/index.vue']).toBe(once['package/index.vue'])
+  })
+
+  it('⭐ 阳性：新建规则同时落 common.less（消歧二-c：进 index.css 编译链，预览直读 css）', () => {
+    const files = {
+      'package/index.vue': MULTICLASS_ROOT_VUE,
+      'resources/styles/common.less': '.other { color: red; }\n',
+    }
+    const out = anchorRootContainerInFiles(files, {
+      figmaNodeData: FIGMA_420x358,
+      resourceDomMapping: PANEL_BG_MAPPING_67ED,
+    })
+    const less = out['resources/styles/common.less']
+    expect(less).toContain('.c-traffic-trend-slot-con {')
+    // common.less 位于 resources/styles/ ⇒ 相对路径 ../images/（与 index.vue 的
+    // ../resources/images/ 层级不同，_imagesRelPrefix 按目标文件目录推导——两者都对）
+    expect(less).toContain("background-image: url('../images/bg-cp-traffic-trend-6920.png')")
+    // 幂等
+    const twice = anchorRootContainerInFiles(out, {
+      figmaNodeData: FIGMA_420x358,
+      resourceDomMapping: PANEL_BG_MAPPING_67ED,
+    })
+    expect((twice['resources/styles/common.less'].match(/\.c-traffic-trend-slot-con\s*\{/g) || []).length).toBe(1)
+  })
+
+  it('🔴 反向：无 panelBg（skipMount bg 无 resourceFile）时即便规则缺失也不新建', () => {
+    const files = { 'package/index.vue': MULTICLASS_ROOT_VUE }
+    const out = anchorRootContainerInFiles(files, {
+      figmaNodeData: FIGMA_420x358,
+      resourceDomMapping: [],
+    })
+    expect(out['package/index.vue']).toBe(MULTICLASS_ROOT_VUE)
+  })
+
+  it('🔴 反向：既有根类规则块时走 patchStyle 原路（不新建重复规则）', () => {
+    const withRule = MULTICLASS_ROOT_VUE.replace(
+      '</style>',
+      '.c-traffic-trend-slot-con { display: flex; }\n</style>',
+    )
+    const files = { 'package/index.vue': withRule }
+    const out = anchorRootContainerInFiles(files, {
+      figmaNodeData: FIGMA_420x358,
+      resourceDomMapping: PANEL_BG_MAPPING_67ED,
+    })
+    const s = out['package/index.vue']
+    // 走原 patchStyle：在既有块内注入（含 R7 剥离），不出现第二个 .slot-con { 开头规则
+    const ruleOpens = (s.match(/\.c-traffic-trend-slot-con\s*\{/g) || []).length
+    expect(ruleOpens).toBe(1)
+  })
+});
+
+
+/**
  * 🔴 接线回归守卫说明（2026-09-11 P2-1 更新）
  *
  * 事故：2026-08-31「迁出为共享规则」重构后，旧 `generation-context.js#createFixPipeline`

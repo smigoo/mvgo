@@ -162,4 +162,114 @@ describe('runFinalVueExpressionGate', () => {
     expect(res.bad).toHaveLength(0);
     expect(readFileSync(join(root, rel), 'utf-8')).toBe(GOOD_VUE);
   });
+
+  // 🛡️ 2026-11-16（mc-max-1794761757056-0d15ab1b 实锤）：终验缓存回退把
+  //   chunk-meta#segmentType=script 的「只有 <script setup>」分块碎片当成合法整文件，
+  //   落盘后入口无 <template> ⇒ Vue 无 render 函数 ⇒ 预览一片空白。
+  const SCRIPT_ONLY_CHUNK = [
+    '<script setup>',
+    "import { onMounted } from 'vue'",
+    'onMounted(() => {})',
+    '</script>',
+    '',
+  ].join('\n');
+
+  it('R1 阳性：缓存只有 script-only 碎片 → 不回退，坏文件按既有语义移除', () => {
+    const rel = 'package/index.vue';
+    writeFileSync(join(root, rel), BAD_VUE, 'utf-8');
+    writeChunk(rel, 3, SCRIPT_ONLY_CHUNK);
+    const warns: string[] = [];
+    const logger = { warn: (m: string) => warns.push(String(m)), error: () => {} };
+
+    const res = runFinalVueExpressionGate(root, [rel], { logger });
+
+    expect(res.bad).toHaveLength(1);
+    expect(res.bad[0].action).toBe('removed');
+    expect(existsSync(join(root, rel))).toBe(false);
+    // 真机可观测：计数行恒打，且明确区分「无缓存」与「缓存全是空壳碎片」
+    expect(warns.some((m) => m.includes('终验缓存回退·结构判据已评估'))).toBe(true);
+    expect(
+      warns.some(
+        (m) =>
+          m.includes('evaluated=1') &&
+          m.includes('rejectedNoTemplate=1') &&
+          m.includes('restored=0'),
+      ),
+    ).toBe(true);
+  });
+
+  it('R1 回归：跳过较新的 script-only 碎片，仍回退更早的合法整版', () => {
+    const rel = 'package/components/Bad.vue';
+    writeFileSync(join(root, rel), BAD_VUE, 'utf-8');
+    writeChunk(rel, 6, GOOD_VUE); // 先登记（较早的合法整版）
+    writeChunk(rel, 9, SCRIPT_ONLY_CHUNK); // 后登记（较新，倒序先遇到，必须被拒）
+
+    const res = runFinalVueExpressionGate(root, [rel]);
+
+    expect(res.bad).toHaveLength(1);
+    expect(res.bad[0].action).toBe('restored-from-cache');
+    expect(readFileSync(join(root, rel), 'utf-8')).toBe(GOOD_VUE);
+  });
+
+  // 🛡️ 2026-11-16：模型把两份完整 SFC 叠加（0d15ab1b 真机形态）。
+  const INNER = [
+    '<template>',
+    '  <base-panel panelKey="default-panel">',
+    '    <div class="c-demo-root"><ContentSection /><ChartTrend /></div>',
+    '  </base-panel>',
+    '</template>',
+  ].join('\n');
+  const SCRIPT = ['<script setup>', "const title = 'demo'", '</script>'].join('\n');
+  const STYLE = [
+    '<style lang="less" scoped>',
+    "@import '../resources/styles/index.less';",
+    '.c-demo-root { color: #fff; }',
+    '</style>',
+  ].join('\n');
+  const STACKED_VUE = `<template>\n${INNER}\n${SCRIPT}\n${STYLE}\n</template>\n${SCRIPT}\n${STYLE}`;
+
+  it('自愈优先：磁盘叠加坏版无缓存 → 确定性归一写回，不走 removed', () => {
+    const rel = 'package/index.vue';
+    writeFileSync(join(root, rel), STACKED_VUE, 'utf-8');
+    const warns: string[] = [];
+    const logger = { warn: (m: string) => warns.push(String(m)), error: () => {} };
+
+    const res = runFinalVueExpressionGate(root, [rel], { logger });
+
+    expect(res.healed).toHaveLength(1);
+    expect(res.healed[0].action).toBe('healed-stacked-blocks');
+    expect(res.healed[0].conservedTags).toBe(2);
+    expect(res.bad).toHaveLength(0);
+    const onDisk = readFileSync(join(root, rel), 'utf-8');
+    expect(validateVueSfcExpressions(onDisk, rel).valid).toBe(true);
+    expect(onDisk).toContain('<ContentSection');
+    expect((onDisk.match(/<script setup>/g) || []).length).toBe(1);
+    expect(warns.some((m) => m.includes('SFC 叠加结构自愈·已评估') && m.includes('healed=1'))).toBe(true);
+  });
+
+  it('自愈优先于缓存回退：缓存有旧合法版仍采用本轮归一版', () => {
+    const rel = 'package/index.vue';
+    writeFileSync(join(root, rel), STACKED_VUE, 'utf-8');
+    writeChunk(rel, 6, GOOD_VUE);
+
+    const res = runFinalVueExpressionGate(root, [rel]);
+
+    expect(res.healed).toHaveLength(1);
+    expect(res.bad).toHaveLength(0);
+    expect(readFileSync(join(root, rel), 'utf-8')).not.toBe(GOOD_VUE);
+  });
+
+  it('script-only 空壳不自造 template：计数行 reason=no-template，仍按既有语义移除', () => {
+    const rel = 'package/index.vue';
+    writeFileSync(join(root, rel), SCRIPT_ONLY_CHUNK, 'utf-8');
+    const warns: string[] = [];
+    const logger = { warn: (m: string) => warns.push(String(m)), error: () => {} };
+
+    const res = runFinalVueExpressionGate(root, [rel], { logger });
+
+    expect(res.healed).toHaveLength(0);
+    expect(res.bad).toHaveLength(1);
+    expect(res.bad[0].action).toBe('removed');
+    expect(warns.some((m) => m.includes('SFC 叠加结构自愈·已评估') && m.includes('reason=no-template'))).toBe(true);
+  });
 });

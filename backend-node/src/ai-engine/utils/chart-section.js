@@ -17,6 +17,11 @@ import {
 } from './section-tree.js'
 // 🛡️ G07：图表真值单一来源裁决（视觉声明优先，Figma 树只做显式 fallback）。
 import { resolveChartTruth, chartTruthCounts } from './resolve-chart-anchor.js'
+// 🛡️ 步骤 1（2026-11-15）：视觉真值存在时，@echarts 真值节点是否**逐条**被承载。
+import {
+  resolveChartTruthCoverage,
+  chartTruthCoverageCounts,
+} from './chart-truth-coverage.js'
 
 /**
  * 从 @echarts 节点名推断 echarts 类型。
@@ -338,6 +343,11 @@ function replaceSectionByIdDeep(sections, nodeId, replacement) {
  *   ② charts[] 真值：charts 字段有 type/series 但 effectiveSections 无 chart section
  *      （且 @echarts 未覆盖）→ 用 charts 真值注入（chartType 归一化，series 透传）
  *
+ * 🛡️ 步骤 1（2026-11-15）：① 的「覆盖」判定由**整条通道开关**改为**逐条真值判据**——
+ *   · 视觉真值存在（source≠figma-fallback）：只兜底 `resolveChartTruthCoverage` 判
+ *     `needsInjection` 的 @echarts 真值节点（唯一宿主段 && 未承载 && 视觉佐证 && 未被视觉认领）；
+ *   · 视觉真值缺失（source=figma-fallback）：维持旧口径（无 section 覆盖即兜底）。
+ *
  * @param {object} plan - subComponentPlan（含 effectiveSections）
  * @param {boolean} chartSignal - detectChartSignal 的结果
  * @param {{figmaNodeData?:object, charts?:Array}} [sources]
@@ -365,7 +375,22 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
     allowFigmaFallback: sources.allowFigmaFallback !== false,
   })
   sources.logger?.info?.('[chart-section] 图表真值守恒裁决', chartTruthCounts(truthDecision))
-  if (truthDecision.source !== 'figma-fallback') return plan
+
+  // 🛡️ 步骤 1（2026-11-15 · mc-max-1794752955560-c0cb00f1 实锤）：**早返回 ⇒ 逐条判据**。
+  //
+  // 旧写法 `if (truthDecision.source !== 'figma-fallback') return plan` 把「视觉侧有没有真值」
+  // 当成**整条 Figma 通道**的全局开关：本单视觉 3 条 chart ⇒ source='vision' ⇒ 直接 return，
+  // 下面 `collectEchartsNodes → uncoveredNodes` 根本不执行 ⇒ 第 5 个 @echarts 真值节点
+  // （`2:3604 @echarts/line-7`，流量预测折线）整段丢失（真值树铁证：`1744:125 slot-con`
+  // 有 8 个直接子 = 7 视觉段 + 该节点，它前兄弟是 `2:3565 '6sub-header'`）。
+  //
+  // 新口径：**视觉真值存在 ≠ 每条 @echarts 真值节点都已承载**。逐条问四问
+  // （唯一宿主段 && 未承载 && 视觉佐证 && 未被视觉逐条认领，见 chart-truth-coverage.js），
+  // 只给 `needsInjection` 的节点兜底。判据经 269 单 / 925 节点离线回放：朴素补 975 →
+  // +逐条视觉覆盖 14 → +守恒取数 10 → **+视觉区域佐证 2（0 假阳性）**，命中恰是两支必红单。
+  //
+  // 🔴 视觉真值**完全缺失**（source='figma-fallback'）时维持原口径：此时没有任何视觉佐证，
+  //   逐条判据必然全灭 ⇒ 必须保留旧路，否则 Figma 兜底能力整体倒退（零回归红线）。
   if (!chartSignal) return plan
 
   const effectiveSections = Array.isArray(plan?.effectiveSections) ? plan.effectiveSections : []
@@ -373,9 +398,24 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
 
   // ① @echarts 节点兜底
   const echartsNodes = collectEchartsNodes(figmaNodeData)
-  const uncoveredNodes = echartsNodes.filter(
-    (node) => !allLeaves.some((sec) => sectionCoversNode(sec, node.id)),
-  )
+  const visionSource = truthDecision.source !== 'figma-fallback'
+  const coverage = visionSource
+    ? resolveChartTruthCoverage({ figmaRoot: figmaNodeData, plan, visionCharts: charts })
+    : null
+  // 🔴 计数行恒打（0 也打，不省略）：逐条覆盖六类分布 + 本次走哪条路，真机可观测可复算。
+  sources.logger?.info?.('[chart-section] 图表真值逐条覆盖', {
+    ...chartTruthCoverageCounts(coverage),
+    mode: visionSource ? 'per-node' : 'legacy-all-uncovered',
+    figmaEchartsNodes: echartsNodes.length,
+  })
+  const needsIds = coverage
+    ? new Set(coverage.nodes.filter((n) => n.needsInjection).map((n) => String(n.nodeId)))
+    : null
+  const uncoveredNodes = echartsNodes.filter((node) => (needsIds
+    // 视觉源：只兜底「逐条判据判未承载」的节点（其余交由宿主段 + prompt 消费视觉真值）。
+    ? needsIds.has(String(node.id))
+    // 视觉真值缺失：沿用旧口径（无 section 覆盖即兜底）。
+    : !allLeaves.some((sec) => sectionCoversNode(sec, node.id))))
 
   // 🛡️ G07：原 ② 分支（charts[] 真值 → 造 `chart-truth-<idx>` 根级重复段）已删除。
   //   实锤复算：① 分支被压掉后该分支会造 3 个根级重复图表段（假绿 + 双渲染）；
@@ -540,10 +580,18 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
   //   **不等于实际出口**。这里补产物侧实测，避免真机日志出现「候选 5 / 实际 0」却无法解释。
   sources.logger?.info?.('[chart-section] 图表兜底注入裁决', {
     ...chartTruthCounts(truthDecision),
-    // 🛡️ 产物实测：真正进入 plan 的图表 section / 未被现有 section 覆盖的 Figma 节点数。
+    // 🛡️ 产物实测：真正进入 plan 的图表 section / 本次的兜底候选节点数。
+    //   🔴 口径变更（步骤 1）：兜底候选 = 逐条判据判 need 的节点（视觉源），或视觉真值缺失时
+    //   无 section 覆盖的节点。旧 `coveredFigmaNodes` 是「总数 − 兜底数」的**差集**，一个数同时
+    //   表达两件事，口径一变就不可辩驳 ⇒ 拆成两个各自有定义的观测量（叶子段同 id 覆盖 / 真值总数）。
     actualInjectedChartSections: chartSections.length,
+    fallbackMode: visionSource ? 'per-node' : 'legacy-all-uncovered',
     uncoveredFigmaNodes: uncoveredNodes.length,
-    coveredFigmaNodes: collectEchartsNodes(figmaNodeData).length - uncoveredNodes.length,
+    leafCoveredFigmaNodes: echartsNodes.filter(
+      (n) => allLeaves.some((sec) => sectionCoversNode(sec, n.id)),
+    ).length,
+    figmaEchartsNodes: echartsNodes.length,
+    ...(coverage ? { coverage: chartTruthCoverageCounts(coverage) } : {}),
     chartSections: chartSections.length,
     replacedInTree: replacedCount,
     hostedByGeometry: hostedPairs.length,

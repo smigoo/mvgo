@@ -194,7 +194,8 @@ export function detectStackIssues(files, opts = {}) {
         continue;
       }
       stats.matched += 1;
-      issues.push({ file, sectionId: String(sidM[1]), tplStart, container: el, kids, geo });
+      // B1-S3：父盒随 issue 携带，heal 侧据此把子项 flex 归一到 Σ=1（u.height/pbox.h）
+      issues.push({ file, sectionId: String(sidM[1]), tplStart, container: el, kids, geo, pbox });
     }
   }
   return { issues, stats };
@@ -221,8 +222,9 @@ export function healStackGeometry(files, issues) {
     }
     const edits = [];
     for (const it of list) {
+      let bumpLocalNoParent = 0;
       try {
-        const { geo, container, kids, tplStart } = it;
+        const { geo, container, kids, tplStart, pbox } = it;
         if (geo.paddingTop > 0) {
           const tagText = content.slice(tplStart + container.start, tplStart + container.end);
           const decls = [{ prop: 'padding-top', value: `${geo.paddingTop}px` }];
@@ -235,14 +237,24 @@ export function healStackGeometry(files, issues) {
             });
           }
         }
+        // 🎯 B1-S3 三源归一（2026-11-16 · fdbb799d 12×14px 实锤）：子项 flex 改产
+        //   Σ=1 同层归一比例（u.height/pbox.h），退役 `flex: 0 1 <px>px` px basis——
+        //   px basis 与容器高无函数关系、Σ 无约束（C1 根因三源之一）。父盒缺失时
+        //   fail-closed 跳过该子项（不猜分母），仅 padding/margin 事实仍可写。
+        const _pH = Number(pbox?.h) || 0;
         for (const u of geo.units) {
           for (const mi of u.members) {
             const el = kids[mi];
             if (!el) continue;
-            const decls = [
-              { prop: 'flex', value: `0 1 ${u.height}px` },
-              { prop: 'min-height', value: '0' },
-            ];
+            const decls = [];
+            if (_pH > 0) {
+              const _r = Math.min(1, Math.max(0, Number((u.height / _pH).toFixed(3))));
+              decls.push({ prop: 'flex', value: `${_r} 1 0` });
+              decls.push({ prop: 'min-height', value: '0' });
+            } else {
+              bumpLocalNoParent += 1;
+              decls.push({ prop: 'min-height', value: '0' });
+            }
             if (u.gapBefore > 0) decls.push({ prop: 'margin-top', value: `${u.gapBefore}px` });
             const tagText = content.slice(tplStart + el.start, tplStart + el.end);
             if (declsSatisfied(tagText, decls)) continue;
@@ -257,6 +269,8 @@ export function healStackGeometry(files, issues) {
         healed.push({
           file,
           sectionId: it.sectionId,
+          parentBoxH: _pH || null,
+          noParentFlexSkipped: bumpLocalNoParent,
           paddingTop: geo.paddingTop,
           leftover: geo.leftover,
           units: geo.units.map((u) => [u.height, u.gapBefore, u.members.length]),

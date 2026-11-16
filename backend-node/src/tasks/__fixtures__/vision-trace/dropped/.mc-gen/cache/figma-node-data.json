@@ -1,0 +1,17 @@
+{
+  "document": {
+    "id": "2:9778",
+    "type": "FRAME",
+    "name": "cp-流量监测",
+    "children": [
+      { "id": "1744:125", "type": "FRAME", "name": "slot-con", "children": [
+        { "id": "2:3660", "type": "FRAME", "name": "1统计" },
+        { "id": "2:3565", "type": "GROUP", "name": "6sub-header", "children": [
+          { "id": "2:3571", "type": "GROUP", "name": "tit" }
+        ] },
+        { "id": "2:3604", "type": "GROUP", "name": "@echarts/line-7" },
+        { "id": "2:7625", "type": "GROUP", "name": "@echarts/bar-1" }
+      ] }
+    ]
+  }
+}

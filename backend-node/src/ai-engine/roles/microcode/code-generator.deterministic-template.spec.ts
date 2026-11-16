@@ -44,7 +44,8 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize, evaluateColumnCanvasConvergence, pickSameSectionInteractiveTakeovers, applySectionTakeovers, hasInteractionSemantics, extractSectionIds } from './code-generator.js'
+import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, findRootTemplateBlock, siblingGapStyle, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize, evaluateColumnCanvasConvergence, pickSameSectionInteractiveTakeovers, applySectionTakeovers, hasInteractionSemantics, extractSectionIds, injectLayoutTruthMark } from './code-generator.js'
+import { normalizeInlineLengthPx } from '../../utils/inline-geom-dup-guard.js'
 import { stripSurplusBlockClosers } from './file-writer.js'
 import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
@@ -1945,3 +1946,52 @@ describe('G10v2 · 竖排 flex 分母与画布收敛', () => {
     expect(evaluateColumnCanvasConvergence({ containerH: 500, childHeights: [0, 0], gaps: [] }).mismatch).toBe(false);
   });
 });
+
+describe('P3-C · 装配成功即落 mvgo-layout-truth 标记（0f2346a3 实锤）', () => {
+  const SFC_NO_MARK = `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-x-slot-con" style="display:flex;flex-direction:column;min-height:0;width:420px;height:425px;">
+      <div class="c-x-switch-con" style="flex:0 0 auto; height:65px;min-height:0;">x</div>
+      <ContentA class="c-x-sech-2" />
+    </div>
+  </base-panel>
+</template>
+
+<script setup>
+import ContentA from './components/ContentA.vue'
+</script>
+
+<style lang="less" scoped>
+@import '../resources/styles/index.less';
+</style>
+`
+
+  it('阳性：无标记 + 有 less style 块 ⇒ 标记注入进该块末尾', () => {
+    const out = injectLayoutTruthMark(SFC_NO_MARK)
+    expect(out).toContain('mvgo-layout-truth')
+    expect(out.indexOf('mvgo-layout-truth')).toBeGreaterThan(out.indexOf('@import'))
+    expect(out.match(/<style/g)?.length).toBe(1)
+  })
+
+  it('阳性：无 less style 块 ⇒ 追加一个 scoped less 块承载标记', () => {
+    const noStyle = SFC_NO_MARK.replace(/<style[\s\S]*?<\/style>/, '')
+    const out = injectLayoutTruthMark(noStyle)
+    expect(out).toContain('<style lang="less" scoped>')
+    expect(out).toContain('mvgo-layout-truth')
+  })
+
+  it('幂等：已有标记 ⇒ 逐字不变（多轮装配不得重复注入）', () => {
+    const once = injectLayoutTruthMark(SFC_NO_MARK)
+    expect(injectLayoutTruthMark(once)).toBe(once)
+  })
+
+  it('阴性：空/非字符串入参原样返回', () => {
+    expect(injectLayoutTruthMark('')).toBe('')
+    expect(injectLayoutTruthMark(undefined as unknown as string)).toBe(undefined)
+  })
+
+  it('⭐ 端到端价值：补标记后 6 处 inline px 可被归一收口、复检零 issue', () => {
+    const marked = injectLayoutTruthMark(SFC_NO_MARK)
+    expect(normalizeInlineLengthPx(marked).stats.movedTags).toBeGreaterThan(0)
+  })
+})

@@ -32,6 +32,8 @@
  * - 纯函数（`planArtifactIntegrity`）与 IO（`assertArtifactIntegrity`）分离，前者可单测。
  */
 
+import { inspectSfcRenderableTemplate } from './sfc-syntax-validation.js';
+
 /** 各组件类型的必需产物（相对组件根目录） */
 const REQUIRED_BY_TYPE = {
   microcode: ['package/index.vue', 'declare.json', 'resources/styles/common.less'],
@@ -129,8 +131,10 @@ export function planArtifactIntegrity(entries = [], options = {}) {
       continue;
     }
     // 主入口「只有 script 没有 template」的残片（P1-5 实锤：190 个 chunk-meta 里 141 个如此）
+    // 🛡️ 2026-11-16 续接 R1：判据复用 sfc-syntax-validation 的唯一权威函数，
+    //    不再自写 `<template>` 正则（与 validateVueSfc / 终验 / 快照读取同口径）。
     if (requireTemplate && normalizeRelPath(path) === indexVuePath) {
-      if (!/<template[\s>]/.test(content)) {
+      if (!inspectSfcRenderableTemplate(content, path).hasTemplate) {
         missing.push({
           path,
           code: 'NO_TEMPLATE',

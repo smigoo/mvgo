@@ -19,7 +19,12 @@ const BLOCK_PENALTY = 10;
 const WARN_PENALTY = 2;
 const MAX_ISSUES_PER_DIM = 5; // 单维度明细最多列 5 条，防止超长
 
-function dimensionOf(id = '') {
+/**
+ * issue id → 维度归属（结构/资源/类名/语义）。
+ * 🛡️ 2026-11-16：导出为公开函数（纯附加，行为不变），供 gate-retry-policy 的噪声汇总
+ * 复用同一套维度归属，避免「两个模块各写一份分类表」的双真相。
+ */
+export function dimensionOf(id = '') {
   const s = String(id || '');
   const hit = DIMENSION_RULES.find((r) => r.test.test(s));
   return hit ? hit.dim : '结构';
@@ -76,10 +81,18 @@ export function computeGateScore(issues = []) {
 // 不可用」（死子组件 import 未挂、悬空标签渲染空白、资源只 import 不挂），软失败降级
 // 只该放行「布局/视觉欠佳」，不该放行「预览必然空白/缺块」的硬伤。
 // 事实源：单一 ids 集 + hasHardPublishBlock 纯函数，graph / service / publisher 三处共用。
+//
+// 🛡️ 2026-11-16 收窄（P1，docs/2026-11-16-门禁误伤评审与瘦身建议.md §3 B 档）：
+//   摘除 CODE-021（子组件死 import）/ CODE-022（资源 import 零挂载）及其 -ERROR 变体。
+//   理由：两者都是**纯静态形态**判据，却握着 fail-closed 权限 —— 死 import 不影响渲染
+//   （未挂载的模块只是白下载一次），资源 import 零挂载最多丢一张背景，都属于「欠佳」而非
+//   「打不开」。让它们继续 fail-closed，与 gate-severity.js「BLOCK 会 fail-closed，比带病
+//   出厂更差」的既有取向直接矛盾。摘除后它们仍是 BLOCK/WARN 计数项、照旧进 gateScore 与
+//   待补清单，只是不再否决发布。
+//   保留 CODE-023（悬空子组件标签：标签在模板里、组件文件不在 ⇒ 该块渲染空白/加载报错，
+//   属「打不开」），且其确定性补建兜底（tryFixDanglingComponentFiles）已在条件边前置。
 const HARD_PUBLISH_BLOCK_IDS = new Set([
-  'CODE-021', 'CODE-021-ERROR', // 子组件死代码 import
-  'CODE-022', 'CODE-022-ERROR', // 资源变量只 import 不挂载
-  'CODE-023', 'CODE-023-ERROR', // 悬空子组件标签（三要素不齐备）
+  'CODE-023', // 悬空子组件标签（三要素不齐备）⇒ 该块渲染空白 / 加载失败
 ]);
 
 /**

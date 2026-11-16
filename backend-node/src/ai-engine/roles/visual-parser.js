@@ -61,6 +61,14 @@ const logger = createLogger({ name: 'visual-parser' })
 //   现改为跨递归共享的增量预算对象，并在截断处写入显式标记，让模型知道「以下未展开」。
 const FIGMA_HINT_MAX_CHARS = 5000
 
+// 🛡️ 刀B（2026-11-16 · mc-max-1794820271884-d9b6f34b 实锤）：深度边界子清单上限。
+//   maxDepth=4 之下子节点被静默剪枝（`currentDepth >= maxDepth` 直接 return ''）——真机 prompt
+//   里 `89:39 @antd/tab` 只剩 `[layout: vertical, 6 children]` 方向行，6 个 tab 组 id 全部不可见；
+//   `2:8437 cons` 的 12 张卡 id 同样不可见 ⇒ 模型对这些区域「想锚也没锚可选」（喂料缺口）。
+//   治法：深度边界不再静默，改为输出一层紧凑子清单（只列直接子，不递归）。上限防超宽容器
+//   （几十个子节点）把预算吃穿；超限部分用「…另省略 K 个」显式标记，与预算截断同一待遇。
+const MAX_DEPTH_BOUNDARY_CHILDREN = 16
+
 // Vision 真实预览图分析比配置页连通性测试重得多：需要完整 UI 图 + 大 prompt + JSON 结构化输出。
 // 单次 attempt 超时取 240s（4 分钟）：正常视觉分析约 97s（实测），240s 留足冷启动余量；
 // 同时保证「单次超时 × requestMaxRetries(1)=2 次 attempt + 等待 ≈ 481s」< 节点超时 VISUAL_TIMEOUT_MS(600s)，
@@ -103,10 +111,23 @@ function computeVisionDynamicTimeout(fallbackMs) {
  * 此函数识别这类损坏结果，防止其被当成成功数据往下传递或缓存复用。
  * @param {Object} parsed - 解析后的结果（或 execute 阶段的最终结果）
  * @returns {boolean} true=退化/空结构，应拒绝或避免缓存
+ * 🎯 形态归一修复（2026-11-16 · 68783bf6/fdbb799d 实锤）：
+ *   两个调用点传入形态不同——:982 是解析阶段扁平形态（layout.sections），
+ *   :4802 是 execute 出口的 executeResult 包装形态（sections 埋在
+ *   layoutStructure.layout.sections，见 _buildCompleteResult:4533）。
+ *   旧实现只读顶层 ⇒ 包装形态 secCount 恒 0，charts/interactions 双零的
+ *   静态组件（弹窗/详情类）被误判退化 → 拒缓存 → 每次续跑重复调 Vision
+ *   （server.log 03:27:16/36/38 三条 WARN 实锤，bypassCache 重试同误判）。
+ *   修复：补读包装形态路径（优先扁平，退包装），不改变扁平形态语义。
  */
 export function isVisualAnalysisDegraded(parsed) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return true
-  const secCount = parsed.layout?.sections?.length || parsed.sections?.length || 0
+  const secCount =
+    parsed.layout?.sections?.length ||
+    parsed.sections?.length ||
+    parsed.layoutStructure?.layout?.sections?.length ||
+    parsed.layoutStructure?.sections?.length ||
+    0
   const hasContent = secCount > 0 || (parsed.charts?.length || 0) > 0 || (parsed.interactions?.length || 0) > 0
   return !hasContent
 }
@@ -373,7 +394,11 @@ export class VisualParser {
     // =====Figma 数据交叉验证提示 =====
     let figmaContextSection = ''
     if (figmaData) {
-      const figmaHints = this.extractFigmaHints(figmaData, 4, 0, resourceDomMapping)
+      // 🛡️ 刀A/B（2026-11-16）：budget.counters 由 extractFigmaHints 跨递归累加，此处恒打计数行
+      //   （0 也打）——区分「判据没跑」与「判据跑了没命中」（计数行铁律）。
+      const hintsBudget = { used: 0, limit: FIGMA_HINT_MAX_CHARS, truncated: false, counters: {} }
+      const figmaHints = this.extractFigmaHints(figmaData, 4, 0, resourceDomMapping, hintsBudget)
+      logger.info('📐 figma-hints 计数', { counters: hintsBudget.counters, used: hintsBudget.used, truncated: hintsBudget.truncated })
       if (figmaHints) {
         // 🛡️ C0.3-A（2026-11-04 · 真机 mc-max-1793755487753-104f5a31）：
         //   只补 `[id]` 不足以治本——`section.id` 是**单值契约**，而视觉分区常跨多个兄弟节点。
@@ -395,6 +420,12 @@ export class VisualParser {
           '3. **区域跨多个兄弟节点**时，用覆盖它们的**最近公共父节点** id，不要因为找不到单一节点就退回整屏根节点。',
           rootId ? `4. **禁止**把根节点 \`${rootId}\` 用作普通 section 的 id —— 只有该 section 确实就是整个组件时才可用。` : null,
           '5. **逐元素**给 id：`items[]` 里每个文字/图标元素各自给真实 \`figmaNode\`，不要整段共用同一个 id。',
+          // 🛡️ 刀C（2026-11-16 · ca3b76de 实锤）：模型侧锚点反例。真机 vision 把 21px 高的
+          //   sub-title(2:7625) 当成 131px 图表段的锚——prompt 有规则 2「最内层」但缺反例，
+          //   模型把「标题=区域名」误当「标题=区域身」。本条用**几何语言**（尺寸装不下）给
+          //   判别法，不做命名硬拦（某些组件 header 本身是合法业务段，命名禁令会误伤）；
+          //   硬判据仍归后处理 LCA/祖先审计单一来源，这里只是提示侧软约束。
+          '6. **标题节点不是段身**：名为 header / sub-title / sub-header / tit 或高度 ≤32px 的标题条，是段的**标签**而非内容容器——禁止作为覆盖图表/卡片/列表区域的 section.id。判别法：先看节点尺寸能否装下区域内容（如 21px 高的标题装不下 131px 高的图表），装不下就必须改用内容容器 id；区域真跨多兄弟时用最近公共父节点（见规则 3）。',
           '',
         ].filter((l) => l !== null).join('\n')
         figmaContextSection = `
@@ -599,13 +630,35 @@ ${analysisTask}`
    * @returns {string} 缩进树形结构的文本摘要
    */
   extractFigmaHints(node, maxDepth = 4, currentDepth = 0, resourceDomMapping = null, budget = null) {
-    if (!node || typeof node !== 'object' || currentDepth >= maxDepth) return ''
+    if (!node || typeof node !== 'object') return ''
 
     // 🛡️ C0.3-A（2026-11-04）：顶层创建**跨递归共享**的预算对象（增量累加，O(n)）。
     //   截断只发生在预算耗尽处，且一定写入显式标记（见下方 truncated 分支）。
+    // 🛡️ 刀A/B（2026-11-16）：同对象挂 counters（跨递归累加），供 buildPrompt 侧恒打计数行——
+    //   计数行铁律：0 也打，否则「没跑」与「判据失效」离线不可辨。
+    //   ⚠️ 必须原地变异调用方传入的对象（不得 `budget = {...}` 重新绑定——JS 参数重绑定
+    //   不会写回调用方，counters 通道会静默断掉，日志恒 0 = 假绿；2026-11-16 实测踩坑）。
     if (currentDepth === 0) {
-      budget = { used: 0, limit: FIGMA_HINT_MAX_CHARS, truncated: false }
+      if (!budget || typeof budget !== 'object') {
+        budget = {}
+      }
+      budget.used = 0
+      budget.limit = budget.limit || FIGMA_HINT_MAX_CHARS
+      budget.truncated = false
+      budget.counters = budget.counters || {
+        echartsContainerShown: 0,
+        echartsChildrenPruned: 0,
+        depthBoundaryListed: 0,
+        depthBoundaryChildren: 0,
+      }
     }
+
+    // 🛡️ 刀B（2026-11-16 · d9b6f34b 实锤）：深度边界不静默。
+    //   旧实现 `currentDepth >= maxDepth` 直接 return ''，模型对该节点存在**零感知**（连
+    //   「有子节点被剪」都不知道）。现改为：**父节点**（currentDepth === maxDepth - 1）渲染
+    //   自身行后，把本应被剪的直接子节点列成一层紧凑清单（只 id/name/尺寸/text 前20字，
+    //   不递归）。见下方「深度边界紧凑子清单」块。
+    if (currentDepth >= maxDepth) return ''
 
     const parts = []
     const indent = '  '.repeat(currentDepth)
@@ -615,9 +668,13 @@ ${analysisTask}`
     const type = node.type || ''
     const label = name || type
 
-    //@echarts 图表区域整体跳过：图表由 echarts 渲染，其下柱状分片/装饰矢量是静态还原物，
-    // 注入给视觉分析只会稀释注意力（与 figma-connector.extractResourceNodes 的 @echarts 跳过一致）
-    if (name && /@echarts/i.test(name)) return ''
+    //@echarts 图表区域（刀A 2026-11-16 · ca3b76de 实锤修订）：旧实现 `return ''` 整树剔除
+    // ——真值 2:3604(@echarts/line-7) 在深度 2 也被剔 ⇒ prompt 全文 0 次，「流量预测」段模型
+    // 想锚也没锚可选（真机 vision 被迫拿 TEXT 2:3572 当段锚）。现改「剔子保父」：保留容器行
+    // （id/尺寸/颜色照常渲染，模型可把它当图表段锚），只跳过子级递归（柱状分片/装饰矢量是
+    // echarts 静态还原物，注入只会稀释注意力——与 figma-connector.extractResourceNodes 的
+    // @echarts 跳过意图一致，且容器行本身仍可被下游 chart-anchor-resolver 消费）。
+    const isEchartsContainer = !!(name && /@echarts/i.test(name))
 
     // 跳过无意义的节点（空 FRAME、无名称的 VECTOR 等）
     if (!label && !node.characters) return ''
@@ -718,6 +775,50 @@ ${analysisTask}`
         } else if (Math.abs(dx) < 5 && sbb.y > fbb.y) {
           parts.push(`${indent}  [layout: vertical, ${node.children.length} children]`)
         }
+      }
+    }
+
+    // 🛡️ 刀A（2026-11-16 · ca3b76de 实锤）：@echarts「剔子保父」早返回。
+    //   放在自身行渲染之后 ⇒ 容器行（id/尺寸/颜色/资源注记）照常进入 prompt；
+    //   放在方向行之后 ⇒ 模型仍能看到「有 children」的事实。子级（柱状分片/坐标轴装饰等
+    //   echarts 静态还原物）不再递归——旧实现连容器行一起剔（2:3604 prompt 0 次），
+    //   图表段锚必错；现模型有容器 id 可选，下游 chart-anchor-resolver 亦可用。
+    if (isEchartsContainer) {
+      if (node.children && node.children.length > 0) {
+        parts.push(
+          `${indent}  [⚙️ 图表容器：内部由 echarts 渲染，子级为图表分片/装饰矢量，禁止当 UI 元素静态还原；图表段锚点应使用本容器 id ${node.id || '?'}]`
+        )
+        if (budget) budget.counters.echartsChildrenPruned += node.children.length
+      }
+      if (budget) budget.counters.echartsContainerShown += 1
+      return parts.join('\n')
+    }
+
+    // 🛡️ 刀B（2026-11-16 · d9b6f34b 实锤）：深度边界紧凑子清单。
+    //   本节点处于 maxDepth 的**父层**（currentDepth === maxDepth - 1）时，其子节点递归入口
+    //   会命中 `currentDepth >= maxDepth` 全部返回空 ⇒ 子节点静默蒸发（真机 6 个 tab 组 +
+    //   12 张卡 id 不可见，模型想锚也没锚可选）。现改：不递归，直接列一层紧凑清单——
+    //   每子一条（id 名称 尺寸 text 前20字），上限 MAX_DEPTH_BOUNDARY_CHILDREN 防超宽容器，
+    //   超限显式标注「另省略 K 个」（与预算截断同一显式待遇）。
+    //   @echarts 容器例外已在上方早返回（刀A 剔子保父优先，其子级不列）。
+    if (currentDepth === maxDepth - 1 && node.children && node.children.length > 0) {
+      const listed = node.children.slice(0, MAX_DEPTH_BOUNDARY_CHILDREN)
+      const omitted = node.children.length - listed.length
+      const items = listed.map((c) => {
+        const cb = c.absoluteBoundingBox
+        const csize = cb ? ` ${Math.round(cb.width)}x${Math.round(cb.height)}` : ''
+        const ctext = c.characters ? ` text="${String(c.characters).substring(0, 20)}"` : ''
+        return `${c.id || '?'} ${c.name || c.type || '?'}${csize}${ctext}`
+      })
+      const omitNote = omitted > 0 ? `；…另省略 ${omitted} 个（超出深度边界清单上限）` : ''
+      parts.push(
+        `${indent}  [⚠️ 深度边界：以下 ${listed.length} 个直接子节点在结构树中被剪枝（深度超限），` +
+          `真实存在、可作锚点引用：${items.join('；')}${omitNote}]`
+      )
+      if (budget) {
+        budget.used += parts[parts.length - 1].length + 1
+        budget.counters.depthBoundaryListed += 1
+        budget.counters.depthBoundaryChildren += listed.length
       }
     }
 
@@ -1936,6 +2037,12 @@ ${analysisTask}`
           overlay: layoutStats.overlay || 0,
           unknown: layoutStats.unknown || 0,
           modeConflict: layoutStats.modeConflict || 0,
+          // 🛡️ R3-2（2026-11-16）：AL 声明侧计数。
+          //   alDeclared = alAgree + modeConflict + 无法对账；alInvalid = 非容器类型带声明（脏数据作废）
+          alDeclared: layoutStats.alDeclared || 0,
+          alAgree: layoutStats.alAgree || 0,
+          alInvalid: layoutStats.alInvalid || 0,
+          absoluteSkipped: layoutStats.absoluteSkipped || 0,
         })
       } catch (e) {
         logger.warn({ err: e?.message }, '[S1] 布局事实冻结失败，跳过（下游回落各自判断）')

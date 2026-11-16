@@ -418,3 +418,85 @@ describe('canonicalListItem —— elements 平铺角色轨（刀71）', () => {
     expect(n.stats).toHaveLength(0);
   });
 });
+
+// ── 🛡️ P0-②（2026-11-16 · mc-1794808831127-c019cd88 实锤）────────────────────
+//   真机：Figma list 行 `1:377` 的左块是**单个 TEXT 节点**（`1:384`
+//   chars="环境温度\n15:34"，字号 14 / 行高 21 / 两行），vision 拆成
+//   `{type:'label', text:'环境温度', parts:[{type:'time', text:'15:34'}]}`；
+//   parts 内无 number ⇒ `normListPartsStat` 返回 null ⇒ 旧码整块 continue 丢弃
+//   ⇒ 产物 `FG_LIST_ITEMS` 该行 `texts:[]`（左文本块整块丢失）。
+describe('canonicalListItem —— P0-② parts 未成 stat 时回退纯文本轨（c019cd88）', () => {
+  // 与真机 visual.json 的 `body.items[0]` 逐字段同构（含 styles / position）。
+  const row377 = {
+    id: '1:377',
+    name: '环境温度预警',
+    role: 'warning-item',
+    layout: 'horizontal',
+    repeatedFill: '#0d2a4a',
+    content: {
+      layout: 'horizontal',
+      position: 'right',
+      elements: [
+        {
+          type: 'label',
+          text: '环境温度',
+          figmaNode: '1:377',
+          position: 'left',
+          styles: { fontSize: 12, color: '#a8d4f9' },
+          parts: [
+            { text: '15:34', type: 'time', figmaNode: '1:377', styles: { fontSize: 12, color: '#a8d4f9' } },
+          ],
+        },
+        {
+          type: 'value',
+          text: '枫港大桥温度到达55℃',
+          figmaNode: '1:377',
+          position: 'right',
+          styles: { fontSize: 14, color: '#ffffff' },
+        },
+      ],
+    },
+  };
+
+  it('⭐ 阳性：parts 仅 time（无 number）⇒ 左块按「自述 text + parts 树序」还原为两块之一', () => {
+    const n = canonicalListItem(row377);
+    // 左块两行逐行还原（真值 TEXT chars="环境温度\n15:34"）
+    expect(n.texts).toEqual([
+      { t: '环境温度', c: '#a8d4f9', fs: 12, fw: null },
+      { t: '15:34', c: '#a8d4f9', fs: 12, fw: null },
+    ]);
+    // 右块仍是 value 轨（右值区），未被并入 texts
+    expect(n.stats).toEqual([
+      { v: '枫港大桥温度到达55℃', l: '', vc: '#ffffff', vfs: 14, vfw: null, lc: null, lfs: null },
+    ]);
+    expect(n.fill).toBe('#0d2a4a');
+  });
+
+  it('阴性对照：剥掉自述 text（纯 value 容器）⇒ 维持旧「不落 text 兜底」语义（证明判据确实收紧在此）', () => {
+    const bare = JSON.parse(JSON.stringify(row377));
+    delete bare.content.elements[0].text; // 只留 parts（纯容器形态）
+    const n = canonicalListItem(bare);
+    expect(n.texts).toEqual([]); // 逐字维持旧行为
+    expect(n.stats.map((s) => s.v)).toEqual(['枫港大桥温度到达55℃']);
+  });
+
+  it('零漂移回归：parts 能配成 stat 时仍走 contentStats，不进 texts（既有通道逐字不变）', () => {
+    const withStat = {
+      content: {
+        elements: [
+          {
+            type: 'value',
+            text: '在线',
+            parts: [
+              { type: 'number', text: '3,792', styles: { fontSize: 16, color: '#1890ff' } },
+              { type: 'unit', text: '台', styles: { fontSize: 12 } },
+            ],
+          },
+        ],
+      },
+    };
+    const n = canonicalListItem(withStat);
+    expect(n.texts).toHaveLength(0);
+    expect(n.stats.map((s) => [s.v, s.l])).toEqual([['3,792', '台']]);
+  });
+});

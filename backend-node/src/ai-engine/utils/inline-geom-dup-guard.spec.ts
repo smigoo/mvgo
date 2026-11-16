@@ -14,6 +14,7 @@ import {
   formatInlinePxStats,
   INLINE_GEOM_DUP,
   INLINE_GEOM_PX,
+  INLINE_GEOM_CONFLICT,
 } from './inline-geom-dup-guard.js';
 import { injectMissingTabUi } from '../roles/microcode/code-healer.js';
 
@@ -101,36 +102,44 @@ describe('P0-A 终裁归一：段级几何只剩一个落点', () => {
     expect(stripInlineGeometryDuplicates(once).content).toBe(once);
   });
 
-  test('两层归一：P0 剥双写 + P3-A 搬长度 px ⇒ audit 归零（装配出口时序）', () => {
+  test('两层归一：P0 剥双写 + C 剥根容器长度 ⇒ audit 归零（装配出口时序）', () => {
     const { content } = stripInlineGeometryDuplicates(PRODUCT);
     const { issues, stats } = auditInlineGeometryDuplicates(content);
     expect(issues.map((i) => i.id)).toEqual([INLINE_GEOM_PX]);
     expect(stats.dupTags).toBe(0);
     expect(stats.pxTags).toBe(1);
     const final = normalizeInlineLengthPx(content);
-    expect(final.stats.movedTags).toBe(1);
+    // PRODUCT 的唯一 px 在内容根容器上 ⇒ C 剥除（尺寸归 root-container-normalizer），不搬类
+    expect(final.stats.rootKeepTags).toBe(1);
+    expect(final.stats.strippedRootTags).toBe(0);
     expect(auditInlineGeometryDuplicates(final.content).issues).toEqual([]);
-    expect(formatInlineGeomStats('x', { pxMovedTags: 1, pxMovedDecls: 2, pxInjectedClasses: 1 }))
-      .toContain('"pxMovedTags":1');
+    // 观测行字段表「单一来源」：geom 组只报段级双写 + 残留 px，px 明细必须走 formatInlinePxStats。
+    // （2026-11-16 真机实锤：旧版 geom 行手抄 px* 映射，子键改名后静默恒 0 ⇒ 误判「C 没生效」）
+    expect(formatInlineGeomStats('x', { dupTags: 2, pxTags: 1, pxNoAnchorTags: 3 }))
+      .toContain('"pxNoAnchorTags":3');
+    expect(formatInlineGeomStats('x', { movedTags: 1, movedDecls: 2 })).not.toContain('pxMovedTags');
+    expect(formatInlinePxStats('x', final.stats)).toContain('"rootKeepTags":1');
   });
 });
 
-describe('P0-B 阳性对照：真错必须 FAIL', () => {
-  test('双载体：原始产物 ⇒ INLINE-GEOM-DUP BLOCK', () => {
+describe('P0-B 阳性对照：真错必须命中', () => {
+  // 🛡️ P0（2026-11-16）：severity 由 BLOCK 降 WARN（修复靠确定性归一、不靠 LLM 重试；
+  //   产物能打开）。「判据仍检出 + 计数正确」是不放宽的锚点，不许改成「不报」。
+  test('双载体：原始产物 ⇒ INLINE-GEOM-DUP 仍检出（WARN）', () => {
     const { issues, stats } = auditInlineGeometryDuplicates(PRODUCT);
     expect(issues.map((i) => i.id)).toContain(INLINE_GEOM_DUP);
-    expect(issues.find((i) => i.id === INLINE_GEOM_DUP)?.severity).toBe('BLOCK');
+    expect(issues.find((i) => i.id === INLINE_GEOM_DUP)?.severity).toBe('WARN');
     expect(stats.dupTags).toBe(2);
   });
 
-  test('比例 + px 间距混排 ⇒ INLINE-GEOM-PX BLOCK（11-14 溢出 101px 形态）', () => {
+  test('比例 + px 间距混排 ⇒ INLINE-GEOM-PX 仍检出（WARN，11-14 溢出 101px 形态）', () => {
     const bad = PRODUCT.replace(
       '<TabsSection style="flex:0.111;min-width:0;" />',
       '<TabsSection style="flex:0.111;min-width:0;margin-top:10px;" />',
     );
     const { issues } = auditInlineGeometryDuplicates(bad);
     expect(issues.map((i) => i.id)).toContain(INLINE_GEOM_PX);
-    expect(issues.find((i) => i.id === INLINE_GEOM_PX)?.severity).toBe('BLOCK');
+    expect(issues.find((i) => i.id === INLINE_GEOM_PX)?.severity).toBe('WARN');
   });
 
   test('量纲混排不越权：本判据不重写 FLEX-004/005，交由既有门禁', () => {
@@ -204,39 +213,46 @@ const literal = 'style="width:20px"'
   .c-device-monitor-sech-1 { flex: 0 1 30px !important; min-height: 0; }
 </style>`;
 
-describe('P3-A 终写前归一：inline 绝对长度 px 只剩 class + less', () => {
-  test('判据收紧阳性：归一前 4 处 px ⇒ INLINE-GEOM-PX BLOCK', () => {
+describe('C · 终写前归一：inline 绝对长度 px 落到元素既有类（2026-11-16 治本）', () => {
+  test('判据收紧阳性：归一前 4 处 px ⇒ INLINE-GEOM-PX 仍检出（WARN）', () => {
     const { issues, stats } = auditInlineGeometryDuplicates(PRODUCT_B);
     expect(issues.map((i) => i.id)).toEqual([INLINE_GEOM_PX]);
-    expect(issues[0].severity).toBe('BLOCK');
+    expect(issues[0].severity).toBe('WARN');
     expect(stats.pxTags).toBe(4); // 3 个 T09 span + 1 个 F1 根容器
   });
 
-  test('真实形态归一：搬 4 标签 / 8 声明 / 2 条 less 规则（独立字面量断言）', () => {
+  test('真实形态归一：3 span 合并进同一个 hdr-text-1（同声明复用）/ 根容器 fail-closed / 零 mvgo-is-*', () => {
     const { content, stats } = normalizeInlineLengthPx(PRODUCT_B);
     expect(stats).toMatchObject({
       eligible: 1,
-      movedTags: 4,
-      // P3-B 整段收口：3 个 T09 span 各搬 6 条 + F1 根容器 7 条 = 25
-      movedDecls: 25,
-      injectedClasses: 2,
-      semanticTags: 4,
-      styleAttrsRemoved: 1,
+      movedTags: 3,
+      movedDecls: 6,
+      syntheticTags: 1,
+      syntheticReuseTags: 2,
+      rootKeepTags: 1,
+      strippedRootTags: 0,
+      strippedRootDecls: 0,
+      appendedClasses: 1,
+      noAnchorTags: 0,
       skippedNoStyleTarget: 0,
     });
-    expect(formatInlinePxStats('', stats)).toContain('"movedTags":4');
-    // T09 span：px 从 inline 消失，改用短语义 class（不再按声明集合哈希）
+    expect(formatInlinePxStats('', stats)).toContain('"movedTags":3');
+    // ⭐ C 的第一判据：不再出现 mvgo-is-* 语义层（P3-B 的老路，会被下游写者撕裂）
+    expect(content).not.toContain('mvgo-is-');
+    // span 用带组件前缀的类：prefix-fixer 不会给「已带正确前缀」的类改名
+    expect((content.match(/class="c-device-monitor-hdr-text-1"/g) || []).length).toBe(3);
+    // 声明落到类块，且同块按属性名去重（3 个 span 不得产生 3 份 gap）
+    expect(content).toContain(
+      '.c-device-monitor-hdr-text-1 { gap: 4px !important; margin-left: 16px !important; }',
+    );
+    expect((content.match(/gap: 4px !important/g) || []).length).toBe(1);
+    // var()/calc() 留 inline（postcss-pxtorem 会改变量回退值语义）
+    expect(content).toContain('font-size: calc(var(--fontSize, 14px) * 0.9286)');
     expect(content).not.toContain('gap:4px;margin-left:16px;');
-    expect(content).toContain('class="mvgo-is-hdr-text"');
-    expect(content).toContain('font-size: calc(var(--fontSize, 14px) * 0.9286)'); // var/calc 留在 inline
-    // F1 根容器：整段 style 消失
-    expect(content).not.toContain('style="display:flex; flex-direction:column; min-height:0; width:420px; height:425px;');
-    expect(content).toContain('class="c-device-monitor-slot-con c-mc-max-1794751473723-92612fc0 mvgo-is-root-geom"');
-    expect(content).not.toContain('style="display:flex;flex-direction:column;min-height:0;margin-left:auto;margin-right:auto;"');
-    // less 规则：px 交给 postcss-pxtorem，!important 保持原 inline 优先级
-    expect(content).toContain('gap:4px !important; margin-left:16px !important;');
-    expect(content).toContain('width:420px !important; height:425px !important;');
-    expect(content).toContain('mvgo-inline-styles：确定性写者样式由语义 class 承载');
+    // 根容器：剥完无尺寸兜底 ⇒ S1 fail-closed 保留 inline + 打 root 标记（F1 契约）
+    expect(content).toContain('data-mvgo-geom="root"');
+    expect(content).toContain('width:420px');
+    expect(content).toContain('height:425px');
   });
 
   test('零回归：:style 绑定 / 比例 inline / 方向 / script 字面量 / sech 段逐字保留', () => {
@@ -251,7 +267,7 @@ describe('P3-A 终写前归一：inline 绝对长度 px 只剩 class + less', ()
   });
 
   test('归一后 audit 归零 + 幂等 + 计数行 0 也打', () => {
-    const { content, stats } = normalizeInlineLengthPx(PRODUCT_B);
+    const { content } = normalizeInlineLengthPx(PRODUCT_B);
     expect(auditInlineGeometryDuplicates(content).issues).toEqual([]);
     const second = normalizeInlineLengthPx(content);
     expect(second.content).toBe(content);
@@ -268,8 +284,8 @@ describe('P3-A 终写前归一：inline 绝对长度 px 只剩 class + less', ()
     expect(auditInlineGeometryDuplicates(reintroduced).issues.map((i) => i.id)).toContain(INLINE_GEOM_PX);
   });
 
-  test('fail-closed：拿不到 style 注入点 ⇒ 整份原样返回，不剥 inline（留待判据 BLOCK）', () => {
-    const broken = `<template>\n<div style="width:20px;height:20px"></div>\n/* mvgo-layout-truth */\n`;
+  test('fail-closed：有锚类但拿不到 style 注入点 ⇒ 整份原样返回，不剥 inline', () => {
+    const broken = `<template>\n<div class="c-x-sech-1 c-x-sech-2" style="width:20px;height:20px"></div>\n/* mvgo-layout-truth */\n`;
     const { content, stats } = normalizeInlineLengthPx(broken);
     expect(content).toBe(broken);
     expect(stats.skippedNoStyleTarget).toBe(1);
@@ -277,13 +293,17 @@ describe('P3-A 终写前归一：inline 绝对长度 px 只剩 class + less', ()
     expect(auditInlineGeometryDuplicates(broken).issues.map((i) => i.id)).toContain(INLINE_GEOM_PX);
   });
 
-  test('无 <style> 块但 </template> 在 ⇒ 自建 style 段注入（也能合规）', () => {
-    const noStyle = `<template>\n<div style="width:20px"></div>\n</template>\n/* mvgo-layout-truth */\n`;
-    const { content, stats } = normalizeInlineLengthPx(noStyle);
-    expect(stats.injectedClasses).toBe(1);
-    expect(content).toContain('<style lang="less" scoped>');
-    expect(content).toContain('width:20px !important;');
-    expect(content).not.toContain('<div style="width:20px">');
+  test('第三档：无任何类且推不出前缀 ⇒ 保留 inline + 打 no-anchor 溯源标记（判据降 WARN）', () => {
+    const noClass = `<template>\n<div style="width:20px"></div>\n</template>\n<style lang="less" scoped>/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>\n`;
+    const { content, stats } = normalizeInlineLengthPx(noClass);
+    expect(stats.noAnchorTags).toBe(1);
+    expect(content).toContain('data-mvgo-geom="no-anchor"');
+    expect(content).toContain('width:20px');
+    const a = auditInlineGeometryDuplicates(content);
+    expect(a.stats.pxTags).toBe(0);
+    expect(a.stats.pxNoAnchorTags).toBe(1);
+    expect(a.issues.length).toBe(1);
+    expect(a.issues[0].severity).toBe('WARN');
   });
 });
 
@@ -332,50 +352,49 @@ const literal = 'style="width:20px"'
   .c-device-monitor-sech-1 { flex: 0 1 99px !important; min-height: 0; }
 </style>`;
 
-describe('P3-B 语义 class 整段收口（23:08 用户反馈「行内样式反而更多了」的根治）', () => {
-  test('判据扩展阳性：border-radius:6px / gap:0px 等 inline 长度 px ⇒ BLOCK', () => {
+describe('C · 声明落到元素已有类（替代 P3-B 的 mvgo-is-* 语义层）', () => {
+  test('判据阳性：T09 span / 根容器 / S4 tabblock / tablist 的 inline px ⇒ BLOCK', () => {
     const { issues, stats } = auditInlineGeometryDuplicates(PRODUCT_C);
     expect(issues.map((i) => i.id)).toContain(INLINE_GEOM_PX);
-    expect(stats.pxTags).toBeGreaterThanOrEqual(4); // T09 span / 根容器 / tabblock / tablist
+    expect(stats.pxTags).toBeGreaterThanOrEqual(4);
     const onlyRadius = `<template><div style="border-radius:6px"></div></template><style lang="less" scoped>/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>`;
     expect(auditInlineGeometryDuplicates(onlyRadius).issues.map((i) => i.id)).toContain(INLINE_GEOM_PX);
   });
 
-  test('整段收口：确定性写者改用短语义 class，不再出现哈希命名', () => {
+  test('落点：span 合成带组件前缀的类；S4 块复用 mc-s4-* 已有类；零 mvgo-is-*', () => {
     const { content, stats } = normalizeInlineLengthPx(PRODUCT_C);
-    expect(stats.semanticTags).toBeGreaterThanOrEqual(6);
-    expect(stats.styleAttrsRemoved).toBeGreaterThanOrEqual(1);
-    expect(formatInlinePxStats('', stats)).toContain('"semanticTags":');
-    expect(content).not.toContain('mvgo-igeom-');
-    for (const cls of [
-      'mvgo-is-hdr-text',
-      'mvgo-is-root-geom',
-      'mvgo-is-s4-tabblock',
-      'mvgo-is-s4-tablist',
-      'mvgo-is-s4-tab',
-      'mvgo-is-s4-rowlink',
-    ]) {
-      expect(content).toContain(cls);
-    }
-    // 语义 class 短、可读，不含 P3-A 的 7 位声明集合哈希
-    expect(content).not.toMatch(/mvgo-is-[a-z-]+-[0-9a-z]{7}\b/);
+    expect(stats).toMatchObject({
+      movedTags: 3,
+      movedDecls: 5,
+      syntheticTags: 1,
+      appendedClasses: 3,
+      rootKeepTags: 1,
+      strippedRootTags: 0,
+      strippedRootDecls: 0,
+      noAnchorTags: 0,
+    });
+    expect(content).not.toContain('mvgo-is-');
+    expect(content).toContain('class="c-device-monitor-hdr-text-1"');
+    expect(content).toContain(
+      '.c-device-monitor-hdr-text-1 { gap: 4px !important; margin-left: 16px !important; }',
+    );
+    // S4 块本身就有类 ⇒ 直接复用，不再派生任何新名
+    expect(content).toContain('.mc-s4-tabblock { gap: 0px !important; }');
+    expect(content).toContain('.mc-s4-tablist { border-radius: 6px !important; gap: 2px !important; }');
+    // 无长度 px 的 S4 元素（tab / row-link）逐字不变
+    expect(content).toContain('class="mc-s4-tab mc-s4-tab--active"');
+    expect(content).toContain('class="mc-s4-row-link"');
   });
 
-  test('根容器整段 style 消失；var()/calc()/url() 声明刻意留 inline（px2rem 语义保护）', () => {
+  test('根容器：无尺寸兜底 ⇒ fail-closed 保留；var()/calc()/url() 声明仍刻意留 inline', () => {
     const { content } = normalizeInlineLengthPx(PRODUCT_C);
-    expect(content).toContain('class="c-device-monitor-slot-con c-mc-max-1794755060583-69a238c6 mvgo-is-root-geom">');
-    expect(content).not.toContain('style="display:flex;flex-direction:column;min-height:0;width:420px;height:425px;');
+    expect(content).toContain('class="c-device-monitor-slot-con c-mc-max-1794755060583-69a238c6"');
+    expect(content).toContain('data-mvgo-geom="root"');
+    expect(content).toContain('width:420px');
+    expect(content).toContain('height:425px');
     expect(content).toContain('font-size: calc(var(--fontSize, 14px) * 0.9286)');
     expect(content).toContain('font-size: var(--fontSize, 14px)');
     expect(content).toContain(`:style="{ backgroundImage: 'url(' + bg8527 + ')', backgroundSize: '100% 100%' }"`);
-  });
-
-  test('S4 tab 块：border-radius:6px / padding / gap 进 less；装饰属性也不再留 inline', () => {
-    const { content } = normalizeInlineLengthPx(PRODUCT_C);
-    expect(content).toContain('border-radius:6px !important');
-    expect(content).toContain('padding:4px 0 !important');
-    expect(content).toContain('mvgo-inline-styles：确定性写者样式由语义 class 承载');
-    expect(content).toContain('var()/calc()/url() 声明刻意留在 inline');
   });
 
   test('归一后 audit 归零 + 幂等（两道归一互不重复注入）', () => {
@@ -384,10 +403,10 @@ describe('P3-B 语义 class 整段收口（23:08 用户反馈「行内样式反�
     const second = normalizeInlineLengthPx(content);
     expect(second.content).toBe(content);
     expect(second.stats.movedTags).toBe(0);
-    expect(second.stats.injectedClasses).toBe(0);
+    expect(second.stats.appendedClasses).toBe(0);
   });
 
-  test('零回归：:style / script 字面量 / sech 段 / 段级比例逐字保留', () => {
+  test('零回归：script 字面量 / sech 段规则逐字保留', () => {
     const { content } = normalizeInlineLengthPx(PRODUCT_C);
     expect(content).toContain(`const literal = 'style="width:20px"'`);
     expect(content).toContain('<ListSwitch class="c-device-monitor-sech-1" />');
@@ -404,12 +423,134 @@ describe('P3-B 语义 class 整段收口（23:08 用户反馈「行内样式反�
   });
 });
 
-describe('P3-B 阴性对照：非确定性写者形态逐字不变', () => {
+describe('S3 · 同落点类同属性冲突（2026-11-16 · 静默覆盖实锤）', () => {
+  const truth =
+    '<style lang="less" scoped>/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>';
+
+  test('不同值 ⇒ 首条优先 + 冲突注释 + INLINE-GEOM-CONFLICT WARN（不 BLOCK）', () => {
+    const src =
+      `<template><div class="c-x-sech-1">` +
+      `<div class="mc-s4-tab" style="margin-left:4px"></div>` +
+      `<div class="mc-s4-tab" style="margin-left:12px"></div>` +
+      `</div></template>${truth}`;
+    const { content, stats } = normalizeInlineLengthPx(src);
+    expect(stats.conflictClasses).toBe(1);
+    expect(stats.conflictDecls).toBe(1);
+    expect(stats.keptConflictTags).toBe(1);
+    // 类侧只有首条（4px），inline 两侧都已剥净 ⇒ 不存在「后写覆盖前写」
+    expect(content).toContain('margin-left: 4px !important');
+    expect(content).not.toContain('margin-left: 12px !important');
+    expect(content).not.toContain('style="margin-left:4px"');
+    expect(content).not.toContain('style="margin-left:12px"');
+    expect(content).toContain('mvgo-inline-conflict:');
+    const { issues, stats: aud } = auditInlineGeometryDuplicates(content);
+    expect(aud.conflictNotes).toBe(1);
+    expect(issues.map((i) => i.id)).toEqual([INLINE_GEOM_CONFLICT]);
+    expect(issues[0].severity).toBe('WARN');
+  });
+
+  test('同值重复 ⇒ 不算冲突（幂等），不产生注释', () => {
+    const src =
+      `<template><div class="c-x-sech-1">` +
+      `<div class="mc-s4-tab" style="margin-left:4px"></div>` +
+      `<div class="mc-s4-tab" style="margin-left:4px"></div>` +
+      `</div></template>${truth}`;
+    const { content, stats } = normalizeInlineLengthPx(src);
+    expect(stats.conflictDecls).toBe(0);
+    expect(stats.conflictClasses).toBe(0);
+    expect(content).not.toContain('mvgo-inline-conflict:');
+  });
+});
+
+describe('S2 · 落点命名唯一化（2026-11-16 · 撞名/覆盖实锤）', () => {
+  const truth =
+    '<style lang="less" scoped>/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>';
+
+  test('同类别不同声明 ⇒ 两个不同类名（不共用同一块、不互相覆盖）', () => {
+    const src =
+      `<template><div class="c-x-sech-1"><div class="c-x-sech-2"></div>` +
+      `<span style="margin-left:4px">a</span><span style="margin-left:12px">b</span>` +
+      `</div></template>${truth}`;
+    const { content, stats } = normalizeInlineLengthPx(src);
+    expect(stats.syntheticTags).toBe(2);
+    expect(stats.syntheticReuseTags).toBe(0);
+    expect(content).toContain('.c-x-geom-1 { margin-left: 4px !important; }');
+    expect(content).toContain('.c-x-geom-2 { margin-left: 12px !important; }');
+  });
+
+  test('同类别同声明 ⇒ 复用同一类名（避免拆出 N 份相同规则）', () => {
+    const src =
+      `<template><div class="c-x-sech-1"><div class="c-x-sech-2"></div>` +
+      `<span style="margin-left:4px">a</span><span style="margin-left:4px">b</span>` +
+      `</div></template>${truth}`;
+    const { content, stats } = normalizeInlineLengthPx(src);
+    expect(stats.syntheticTags).toBe(1);
+    expect(stats.syntheticReuseTags).toBe(1);
+    expect((content.match(/\.c-x-geom-1 \{/g) || []).length).toBe(1);
+  });
+
+  test('LCP 末段是结构词 ⇒ 退到组件名，不合成 sech-* 形态的假段类', () => {
+    const src =
+      `<template><div class="c-x-sech-1" style="gap:8px;"></div>` +
+      `<div class="c-x-sech-2"></div><span style="margin-left:4px">a</span></template>${truth}`;
+    const { content } = normalizeInlineLengthPx(src);
+    expect(content).toContain('.c-x-geom-1 {');
+    expect(content).not.toContain('.c-x-sech-geom');
+  });
+
+  test('非 scoped 产物 ⇒ 不合成（避免全局类污染），走 no-anchor 标记', () => {
+    const unscoped =
+      '<style lang="less">/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>';
+    const src = `<template><div class="c-x-sech-1"><span style="margin-left:4px">a</span></div></template>${unscoped}`;
+    const { content, stats } = normalizeInlineLengthPx(src);
+    expect(stats.syntheticTags).toBe(0);
+    expect(stats.skippedNonScoped).toBe(1);
+    expect(stats.noAnchorTags).toBe(1);
+    expect(content).toContain('data-mvgo-geom="no-anchor"');
+    expect(content).toContain('margin-left:4px');
+  });
+});
+
+describe('S1 · 根容器 fail-closed（2026-11-16 · f5c9792c 实锤）', () => {
+  const truth =
+    '<style lang="less" scoped>/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>';
+  const PX_ROOT = `<template><div class="c-x-slot-con" style="display:flex;flex-direction:column;min-height:0;width:420px;height:425px;margin-left:auto;margin-right:auto;"></div></template>${truth}`;
+
+  test('剥完无尺寸兜底 ⇒ 不剥 / 保留 inline / 打 root 标记 / 判据不计 BLOCK', () => {
+    const { content, stats } = normalizeInlineLengthPx(PX_ROOT);
+    expect(stats.rootKeepTags).toBe(1);
+    expect(stats.strippedRootTags).toBe(0);
+    expect(content).toContain('width:420px');
+    expect(content).toContain('height:425px');
+    expect(content).toContain('data-mvgo-geom="root"');
+    const { issues, stats: aud } = auditInlineGeometryDuplicates(content);
+    expect(issues).toEqual([]);
+    expect(aud.pxRootKeepTags).toBe(1);
+  });
+
+  test('剥完仍有尺寸兜底（height:100%）⇒ 照剥，不打标记', () => {
+    const src = `<template><div class="c-x-slot-con" style="display:flex;flex-direction:column;height:100%;width:420px;gap:8px;"></div></template>${truth}`;
+    const { content, stats } = normalizeInlineLengthPx(src);
+    expect(stats.strippedRootTags).toBe(1);
+    expect(stats.rootKeepTags).toBe(0);
+    expect(content).not.toContain('width:420px');
+    expect(content).toContain('height:100%');
+    expect(content).not.toContain('data-mvgo-geom="root"');
+  });
+
+  test('幂等：二次归一内容逐字不变、标记只加一次', () => {
+    const once = normalizeInlineLengthPx(PX_ROOT).content;
+    const twice = normalizeInlineLengthPx(once).content;
+    expect(twice).toBe(once);
+    expect((once.match(/data-mvgo-geom="root"/g) || []).length).toBe(1);
+  });
+});
+
+describe('C 阴性对照：非长度 px 形态逐字不变', () => {
   const truth = '<style lang="less" scoped>/* mvgo-layout-truth */ .c-x-sech-1 { flex: 0 1 30px !important; }</style>';
   const cases: Array<[string, string]> = [
     ['普通 P6 根容器（无 px 尺寸，非 F1 弹窗类）', `<template><div class="c-x-slot-con" style="display:flex;flex-direction:column;min-height:0;"><A style="flex:1;min-height:0;" /></div></template>${truth}`],
-    ['LLM 自由 span（有 mark 但不在 header-right 块内）', `<template><span style="display:inline-flex;line-height:1;white-space:nowrap">x</span></template>${truth}`],
-    ['LLM 自由 div（有 mark 但无语义 class / 无长度 px）', `<template><div style="color:#fff;cursor:pointer">x</div></template>${truth}`],
+    ['LLM 自由 div（无长度 px / 无类可落）', `<template><div style="color:#fff;cursor:pointer">x</div></template>${truth}`],
     ['无 mvgo-layout-truth（vue3 / mc-lite / LLM 自由模板）', '<template><span style="display:inline-flex;gap:4px;margin-left:16px">x</span></template>'],
     ['img 标签 inline 尺寸', `<template><img style="width:20px;height:20px" /></template>${truth}`],
     ['纯比例 inline（P1 量纲统一范畴，本轮不动）', `<template><A style="flex:0.113;min-width:0;" /></template>${truth}`],
@@ -421,11 +562,11 @@ describe('P3-B 阴性对照：非确定性写者形态逐字不变', () => {
     expect(auditInlineGeometryDuplicates(src).issues).toEqual([]);
   });
 
-  test('url() 声明留 inline：整段收口时不得把资源路径搬进 less', () => {
-    const src = `<template><div class="c-x-slot-con" style="width:420px;background:url(a.png);"></div></template>${truth}`;
+  test('url() 声明留 inline：剥根容器长度时不得把资源路径搬走', () => {
+    const src = `<template><div class="c-x-slot-con c-x-sech-1" style="width:420px;height:100%;background:url(a.png);"></div></template>${truth}`;
     const { content } = normalizeInlineLengthPx(src);
     expect(content).toContain('background:url(a.png)');
-    expect(content).toContain('width:420px !important');
+    expect(content).not.toContain('width:420px');
     expect(auditInlineGeometryDuplicates(content).issues).toEqual([]);
   });
 });
@@ -443,7 +584,7 @@ describe('P3-B 阴性对照：非确定性写者形态逐字不变', () => {
  * 本组用 injectMissingTabUi 真实注入 + 归一，锚住「注入就会产生 px」这一事实，
  * 防止日后有人把出口归一删掉而单测仍全绿。
  */
-describe('写盘出口归一：Tab 骨架注入产生的 inline px 必须被收口', () => {
+describe('C · 写盘出口归一：Tab 骨架注入的 inline px 落到元素已有类', () => {
   const SFC = `<template>
   <base-panel panelKey="default-panel">
     <div class="c-tm-slot-con">
@@ -478,19 +619,28 @@ function handleTabChange(v) { activeTab.value = v }
     expect(auditInlineGeometryDuplicates(injected).issues.map((i) => i.id)).toContain(INLINE_GEOM_PX);
   });
 
-  test('归一后：0 处 inline px、语义 class 为 tabblock/tabitem（不退化 root-geom）', () => {
+  test('归一后：0 处 inline px，声明落到 c-tm-slot-con-tabs / -tab-item 已有类', () => {
     const injected = injectMissingTabUi(SFC);
     const { content, stats } = normalizeInlineLengthPx(injected);
-    expect(stats.movedTags).toBe(2);
-    expect(stats.semanticTags).toBe(2);
-    // 只断言「标签区」不再带 px —— less 规则里本就该有这些声明（那才是收口目标）
+    expect(stats).toMatchObject({
+      movedTags: 2,
+      movedDecls: 4,
+      appendedClasses: 2,
+      syntheticTags: 0, // 注入的骨架自带类名 ⇒ 不需要合成
+      noAnchorTags: 0,
+    });
+    // 只断言「标签区」不再带 px —— less 规则里本就该有这些声明
     const head = content.slice(0, content.search(/<style\b/i));
     expect(head).not.toContain('gap:8px');
     expect(head).not.toContain('padding:4px 12px');
-    expect(content).toContain('mvgo-is-tabblock');
-    expect(content).toContain('mvgo-is-tabitem');
-    expect(content).not.toContain('mvgo-is-root-geom');
-    expect(content).toContain('gap:8px !important');
+    // ⭐ C 的核心：不新造 mvgo-is-* 语义层
+    expect(content).not.toContain('mvgo-is-');
+    expect(content).toContain(
+      '.c-tm-slot-con-tabs { gap: 8px !important; margin-bottom: 12px !important; }',
+    );
+    expect(content).toContain(
+      '.c-tm-slot-con-tab-item { padding: 4px 12px !important; border-radius: 4px !important; }',
+    );
     expect(auditInlineGeometryDuplicates(content).issues).toEqual([]);
   });
 

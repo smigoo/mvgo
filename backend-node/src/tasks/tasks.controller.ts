@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync, unlinkSync } from 'fs'
 import { TasksService } from './tasks.service';
 import { TaskCodeSnapshotService } from './task-code-snapshot.service';
 import { SnapshotQualityService } from './snapshot-quality.service';
+import { VisionTraceService } from './vision-trace.service';
 import { TaskQueueService } from '../queue/task-queue.service';
 import { SessionGuard } from '../auth/session.guard';
 import { CurrentUser, OptionalUser } from '../auth/current-user.decorator';
@@ -17,6 +18,7 @@ export class TasksController {
     private readonly queueService: TaskQueueService,
     private readonly taskCodeSnapshotService: TaskCodeSnapshotService,
     private readonly snapshotQualityService: SnapshotQualityService,
+    private readonly visionTraceService: VisionTraceService,
   ) {}
 
   /**
@@ -247,6 +249,26 @@ export class TasksController {
       candidateCreatedAt: candidate.createdAt,
       changes,
     };
+  }
+
+  /**
+   * GET /api/tasks/:sessionId/vision-trace
+   *
+   * 视觉分析溯源（只读）：把「视觉 LLM 原始输出」与「管线处理后的 plan」并排返回，
+   * 用于判断「视觉模型问题」还是「后续管线问题」。
+   * 不参与任何判定、不写盘、不改任务状态。
+   */
+  @Get(':sessionId/vision-trace')
+  @UseGuards(SessionGuard)
+  getVisionTrace(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() userId: string,
+  ) {
+    const access = this.tasksService.getTaskStatus(sessionId, userId);
+    if (!access.success && access.error === '无权访问此任务') {
+      throw new HttpException(access.error, HttpStatus.FORBIDDEN);
+    }
+    return this.visionTraceService.buildTrace(sessionId);
   }
 
   /**

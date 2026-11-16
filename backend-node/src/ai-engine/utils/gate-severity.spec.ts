@@ -74,8 +74,16 @@ describe('gate-severity 开关', () => {
     expect(resolveAfterStreak({ MVGO_GATE_ESCALATE_MAX: 'abc' })).toBe(2);
   });
 
-  test('resolveBlockActionIds：默认=策略表 BLOCK 项', () => {
-    expect([...resolveBlockActionIds({})].sort()).toEqual(['FLEX-004', 'TEXT-AXIS'].sort());
+  // 🛡️ 2026-11-16 默认值变更：升级默认只留痕（空集），硬阻断需显式 opt-in。
+  //   依据：该机制是「WARN 变硬阻」最大放大器，而 FLEX-004/TEXT-AXIS 属几何/语义欠佳。
+  test('resolveBlockActionIds：默认=空集（只留痕，不合成 BLOCK）', () => {
+    expect(resolveBlockActionIds({}).size).toBe(0);
+  });
+
+  test('resolveBlockActionIds：显式 opt-in = 恢复旧硬阻断集合', () => {
+    expect(
+      [...resolveBlockActionIds({ MVGO_GATE_ESCALATE_BLOCK_IDS: 'FLEX-004,TEXT-AXIS' })].sort(),
+    ).toEqual(['FLEX-004', 'TEXT-AXIS'].sort());
   });
 
   test('resolveBlockActionIds：none→空 / all→任意策略 id 均可 / 逗号列表→指定', () => {
@@ -90,8 +98,12 @@ describe('gate-severity 开关', () => {
     expect(custom.has('TEXT-AXIS')).toBe(false);
   });
 
-  test('isEscalatedBlockId：后缀 + 策略双重匹配才为真', () => {
-    expect(isEscalatedBlockId('FLEX-004-ESCALATED', {})).toBe(true);
+  test('isEscalatedBlockId：后缀 + 生效 BLOCK 集合双重匹配才为真', () => {
+    // 默认集合为空 ⇒ 即使策略内 id 也不认（升级默认只留痕）
+    expect(isEscalatedBlockId('FLEX-004-ESCALATED', {})).toBe(false);
+    expect(
+      isEscalatedBlockId('FLEX-004-ESCALATED', { MVGO_GATE_ESCALATE_BLOCK_IDS: 'FLEX-004' }),
+    ).toBe(true);
     expect(isEscalatedBlockId('STYLE-003-ESCALATED', {})).toBe(false); // 策略外
     expect(isEscalatedBlockId('FLEX-004', {})).toBe(false); // 无后缀
     expect(isEscalatedBlockId(ESCALATED_SUFFIX, {})).toBe(false); // 空 id
@@ -107,11 +119,26 @@ describe('resolveWarnEscalations', () => {
     expect(r.blockIssues).toHaveLength(0);
   });
 
-  test('连续 2 轮（默认阈值）⇒ FLEX-004 / TEXT-AXIS 升级为 BLOCK', () => {
+  // 🛡️ 2026-11-16：升级默认只留痕 ⇒ 要验证「合成 BLOCK」必须显式 opt-in
+  //   （MVGO_GATE_ESCALATE_BLOCK_IDS），默认档位下同场景只产生 escalated 留痕。
+  test('默认档位（未 opt-in）：连续 2 轮也只留痕，不合成 BLOCK', () => {
     const r = resolveWarnEscalations({
       issues: [warn('FLEX-004'), warn('TEXT-AXIS')],
       prevStreak: { 'FLEX-004': 1, 'TEXT-AXIS': 1 },
       env: {},
+    });
+    expect(r.escalated.map((e) => `${e.id}:${e.action}`).sort()).toEqual([
+      'FLEX-004:WARN',
+      'TEXT-AXIS:WARN',
+    ]);
+    expect(r.blockIssues).toHaveLength(0);
+  });
+
+  test('显式 opt-in 后：连续 2 轮（默认阈值）⇒ FLEX-004 / TEXT-AXIS 升级为 BLOCK', () => {
+    const r = resolveWarnEscalations({
+      issues: [warn('FLEX-004'), warn('TEXT-AXIS')],
+      prevStreak: { 'FLEX-004': 1, 'TEXT-AXIS': 1 },
+      env: { MVGO_GATE_ESCALATE_BLOCK_IDS: 'FLEX-004,TEXT-AXIS' },
     });
     expect(r.escalated.map((e) => `${e.id}:${e.action}`).sort()).toEqual([
       'FLEX-004:BLOCK',
@@ -199,10 +226,11 @@ describe('resolveWarnEscalations', () => {
   });
 
   test('blockIssues 形状：id 带后缀、severity=BLOCK、带 escalatedFrom/streak、message 自解释', () => {
+    // 🛡️ 2026-11-16：默认档位只留痕 ⇒ 形状断言须显式 opt-in 才会产出 blockIssues
     const r = resolveWarnEscalations({
       issues: [warn('FLEX-004', 'flex-grow 量纲混用')],
       prevStreak: { 'FLEX-004': 1 },
-      env: {},
+      env: { MVGO_GATE_ESCALATE_BLOCK_IDS: 'FLEX-004' },
     });
     const b = r.blockIssues[0];
     expect(b.id).toBe('FLEX-004-ESCALATED');

@@ -76,7 +76,9 @@ describe('THEME-COLOR theme-color-guard 主题变量化门禁', () => {
     expect(findBy(issues, 'THEME-PRESET-OVERRIDE')).toHaveLength(0)
   })
 
-  it('槽位色值抄写 >3 处 → THEME-SLOT-COLOR BLOCK（超阈值仍拦截）', () => {
+  // 🛡️ P0（2026-11-16）：全部 THEME-* 由「阈值 BLOCK」改固定 WARN。
+  //   判据仍命中、计数与文案照旧，只是不再 fail-closed（切主题不生效 ≠ 打不开）。
+  it('槽位色值抄写 >3 处 → THEME-SLOT-COLOR 仍命中（WARN，超阈值只加重文案）', () => {
     const issues = detectThemeColorViolations([
       { path: 'resources/styles/themes/theme-vars.less', content: THEME_VARS },
       {
@@ -89,9 +91,12 @@ describe('THEME-COLOR theme-color-guard 主题变量化门禁', () => {
 </style>`,
       },
     ])
-    const blocks = findBy(issues, 'THEME-SLOT-COLOR').filter((i: any) => i.severity === 'BLOCK')
-    expect(blocks).toHaveLength(1)
-    expect(blocks[0].message).toContain('#333333')
+    const hits = findBy(issues, 'THEME-SLOT-COLOR')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].severity).toBe('WARN')
+    expect(hits[0].message).toContain('非阻断')
+    expect(hits[0].message).toContain('超缓冲阈值')
+    expect(hits[0].message).toContain('#333333')
   })
 
   it('槽位色值抄写 ≤3 处 → 降级 WARN（2026-09-04 D：少量残留不硬失败）', () => {
@@ -107,10 +112,10 @@ describe('THEME-COLOR theme-color-guard 主题变量化门禁', () => {
     ])
     const warns = findBy(issues, 'THEME-SLOT-COLOR').filter((i: any) => i.severity === 'WARN')
     expect(warns).toHaveLength(1)
-    expect(warns[0].message).toContain('降级 WARN')
+    expect(warns[0].message).toContain('非阻断')
   })
 
-  it('本地预设名字面量重声明 >2 处 → THEME-PRESET-OVERRIDE BLOCK', () => {
+  it('本地预设名字面量重声明 >2 处 → THEME-PRESET-OVERRIDE 仍命中（WARN）', () => {
     const issues = detectThemeColorViolations([
       { path: 'resources/styles/themes/theme-vars.less', content: THEME_VARS },
       {
@@ -123,9 +128,10 @@ describe('THEME-COLOR theme-color-guard 主题变量化门禁', () => {
 </style>`,
       },
     ])
-    const blocks = findBy(issues, 'THEME-PRESET-OVERRIDE').filter((i: any) => i.severity === 'BLOCK')
-    expect(blocks).toHaveLength(1)
-    expect(blocks[0].message).toContain('3 处')
+    const hits = findBy(issues, 'THEME-PRESET-OVERRIDE')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].severity).toBe('WARN')
+    expect(hits[0].message).toContain('3 处')
   })
 
   it('本地预设名字面量重声明 ≤2 处 → 降级 WARN（2026-09-04 D）', () => {
@@ -141,7 +147,7 @@ describe('THEME-COLOR theme-color-guard 主题变量化门禁', () => {
     ])
     const warns = findBy(issues, 'THEME-PRESET-OVERRIDE').filter((i: any) => i.severity === 'WARN')
     expect(warns).toHaveLength(1)
-    expect(warns[0].message).toContain('降级 WARN')
+    expect(warns[0].message).toContain('非阻断')
   })
 
   it('var() 透传声明（@fontSize: var(--fontSize)）豁免 → 不报 THEME-PRESET-OVERRIDE（2026-09-04 A）', () => {
@@ -246,9 +252,10 @@ const chartColors = ['#1990FF', '#52C41A', '#FF7A00']
     expect(findBy(issues, 'THEME-SPECIAL-COLOR').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('.common() 定义颜色变量（>2 处）→ THEME-COMMON-COLOR-VAR 为 BLOCK（2026-10-09 阈值化）', () => {
-    // 2026-09-15 全语料审计 70% 命中时曾统一 WARN；2026-10-09 三件治本落地后升级为阈值 BLOCK
-    // （生成器移出 .common() 颜色 + 自愈器先补写再删 + 判据单一来源），>2 处说明系统性回潮，需重试修复。
+  it('.common() 定义颜色变量（>2 处）→ THEME-COMMON-COLOR-VAR 仍命中（WARN，2026-11-16 P0）', () => {
+    // 2026-09-15 曾统一 WARN；2026-10-09 升级阈值 BLOCK；2026-11-16 P0 又降回固定 WARN
+    // —— 依据：全量 1137 产物实测 52 个组件仅因此项 fail-closed，其中含 runtimeVerified=true；
+    // 且它只认「.common() 里几个颜色变量」这一静态形态，与渲染无关。
     const issues = detectThemeColorViolations([
       {
         path: 'resources/styles/themes/theme-vars.less',
@@ -267,7 +274,8 @@ const chartColors = ['#1990FF', '#52C41A', '#FF7A00']
     ])
     const hit = findBy(issues, 'THEME-COMMON-COLOR-VAR')
     expect(hit).toHaveLength(1)
-    expect(hit[0].severity).toBe('BLOCK')
+    expect(hit[0].severity).toBe('WARN')
+    expect(hit[0].message).toContain('非阻断')
     expect(hit[0].message).toContain('4 个颜色变量')
   })
 
@@ -288,7 +296,7 @@ const chartColors = ['#1990FF', '#52C41A', '#FF7A00']
     const hit = findBy(issues, 'THEME-COMMON-COLOR-VAR')
     expect(hit).toHaveLength(1)
     expect(hit[0].severity).toBe('WARN')
-    expect(hit[0].message).toContain('≤2 处降级 WARN')
+    expect(hit[0].message).toContain('非阻断')
   })
 
   it('交界：恰好 2 处颜色变量 → 仍为 WARN（阈值含端点）', () => {
@@ -474,13 +482,13 @@ describe('THEME-MIXINS-IDENTICAL 两套 theme mixin 值相同（模式 B，2026-
     ).toBeNull()
   })
 
-  it('接入主流程：相同值产出 BLOCK（0.1+0.3-b 后语料实测 0% 命中，故升级为 BLOCK）', () => {
+  it('接入主流程：相同值仍命中（WARN，2026-11-16 P0 由 BLOCK 降级）', () => {
     const issues = detectThemeColorViolations([
       { path: 'resources/styles/themes/theme-vars.less', content: SAME },
     ])
     const hits = findBy(issues, 'THEME-MIXINS-IDENTICAL')
     expect(hits).toHaveLength(1)
-    expect(hits[0].severity).toBe('BLOCK')
+    expect(hits[0].severity).toBe('WARN')
     expect(hits[0].message).toContain('完全相同')
   })
 
@@ -616,13 +624,13 @@ describe('THEME-SLOT-LOCAL-OVERRIDE 文件级槽位字面量重声明（2026-09-
     expect(hits[0].sample).toContain('@color-text-base')
   })
 
-  it('接入主流程：产出 BLOCK（后果最重且可确定性删除）', () => {
+  it('接入主流程：仍命中（WARN，2026-11-16 P0 由 BLOCK 降级）', () => {
     const issues = detectThemeColorViolations(
       f('resources/styles/common.less', '@color-text-base: rgba(51,51,51,1);'),
     )
     const hits = findBy(issues, 'THEME-SLOT-LOCAL-OVERRIDE')
     expect(hits).toHaveLength(1)
-    expect(hits[0].severity).toBe('BLOCK')
+    expect(hits[0].severity).toBe('WARN')
     expect(hits[0].message).toContain('首个定义者胜出')
   })
 })

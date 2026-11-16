@@ -26,6 +26,7 @@
 
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'fs'
 import { join } from 'path'
+import { findScriptSetupOpen, injectIntoScript } from './sfc-script-anchor.js'
 
 /**
  * 可用资源单一过滤帮手（R0-6，2026-09-01）。
@@ -366,7 +367,12 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
           reason:
             m && !m.resourceFile
               ? '映射缺少 resourceFile，无法生成 import'
-              : '注入后仍未具名声明（可能缺少 <script setup> 块）',
+              // 🔴 2026-11-16：原文案写死「可能缺少 `<script setup>` 块」，把排障引向
+              //   「块是否存在」。但 mc-1794791855405-2e4db5ba 的真根因是**块存在、仅属性顺序**
+              //   （`<script data-section-id="89:39" setup>`）导致插入点定位失败；改走
+              //   `findScriptSetupOpen`（属性顺序无关）后该形态不再走本分支。
+              //   现在走到此处只可能是「确无带 setup 的开标签，插入点不存在」。
+              : '注入后仍未具名声明（脚本段无 setup 开标签，插入点不存在）',
         })
       }
     }
@@ -560,9 +566,14 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
     return !n || !survivedDecls.has(n)
   })
 
-  // ── 注入到 <script setup> 之后 ──
-  const scriptSetupPattern = /<script\s+setup[^>]*>/
-  const scriptMatch = cleanedCode.match(scriptSetupPattern)
+  // ── 注入到脚本段开标签之后 ──
+  // 🔴 2026-11-16 根治（mc-1794791855405-2e4db5ba 实锤）：旧实现用 `/<script\s+setup[^>]*>/`，
+  //   要求 `setup` 紧跟 `<script`+空白。模型按归属链要求把 `data-section-id` 写到 `<script>` 上
+  //   （`<script data-section-id="89:39" setup>`）后该正则失配 ⇒ 走到函数末尾 `return cleanedCode`，
+  //   而**清理步骤已执行**（同名 import / `const NAME =` 占位声明被删）⇒ 资源绑定净损失、
+  //   `icon6 is not defined` 只在运行时被 RUNTIME-004 拦下。改走唯一事实源（属性顺序无关）。
+  const scriptAnchor = findScriptSetupOpen(cleanedCode)
+  const scriptMatch = scriptAnchor ? { index: scriptAnchor.index, 0: scriptAnchor.tag } : null
 
   if (scriptMatch) {
     if (safeImports.length === 0 && safeAliasDecls.length === 0) {
@@ -1167,7 +1178,9 @@ export function ensureRuntimeLibraryImports(content) {
   if (missingEcharts) lines.push(`import * as echarts from 'echarts'`);
   if (missingVue.length > 0) lines.push(`import { ${missingVue.join(', ')} } from 'vue'`);
   const inject = '\n' + lines.join('\n') + '\n';
-  return body.replace(/<script\s+setup[^>]*>/, (m) => m + inject);
+  // 🔴 2026-11-16：同源修正——属性顺序无关（原 `/<script\s+setup[^>]*>/` 对
+  //   `<script data-section-id="…" setup>` 失配 ⇒ 运行库 import 静默不注入）。
+  return injectIntoScript(body, inject).code;
 }
 
 export default {
@@ -1326,9 +1339,23 @@ export function findStaticStyleUrlVars(content = '') {
  * @returns {{content:string, changed:boolean, healed:Array<{variable:string, tag:string}>}}
  */
 export function healImgSrcBindings(content, resourceDomMapping) {
-  const result = { content, changed: false, healed: [] };
+  // 🔴 `stats` 是**纯可观测性附加字段**（2026-11-16 · P1 真机复盘）：
+  //   本函数有三处静默早退（mapping 无变量 / 本文件零 import / 标签候选数 ≠ 1），
+  //   此前调用方只能看到 `changed=false`，无法区分「没对象」「没接线」「判据挡了」。
+  //   真机复盘为此多花了一轮排查 ⇒ 这三类早退必须在计数里可见。
+  //   ⚠️ `stats` **不参与任何判断**，消费方可忽略；判据实现全程未改。
+  const stats = {
+    mappingVars: 0,
+    importedVars: 0,
+    imgs: 0,
+    withSrc: 0,
+    skippedNoCandidate: 0,
+    skippedMultiCandidate: 0,
+  };
+  const result = { content, changed: false, healed: [], stats };
   if (typeof content !== 'string' || !content) return result;
   const { varToMapping } = buildVarToMapping(resourceDomMapping || []);
+  stats.mappingVars = varToMapping.size;
   if (varToMapping.size === 0) return result;
 
   // ① 只处理本文件真正 import 过的变量
@@ -1339,19 +1366,29 @@ export function healImgSrcBindings(content, resourceDomMapping) {
     const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (new RegExp(`import\\s+${esc}\\s+from`).test(script)) imported.add(varName);
   }
+  stats.importedVars = imported.size;
   if (imported.size === 0) return result;
 
   let next = content;
   const healed = [];
   // ② 逐个 <img ...> 开标签
   next = next.replace(/<img\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g, (full, attrs) => {
-    if (/(?::src|v-bind:src|\ssrc)\s*=/.test(attrs)) return full; // ③ 已有 src，尊重作者
+    stats.imgs += 1;
+    if (/(?::src|v-bind:src|\ssrc)\s*=/.test(attrs)) {
+      stats.withSrc += 1;
+      return full; // ③ 已有 src，尊重作者
+    }
     const hits = [];
     for (const varName of imported) {
       const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (new RegExp(`\\b${esc}\\b`).test(attrs)) hits.push(varName);
     }
-    if (hits.length !== 1) return full; // ④ 零候选或多候选 ⇒ 不猜
+    if (hits.length !== 1) {
+      // ④ 零候选或多候选 ⇒ 不猜（分别计数：零候选＝上游没给变量可绑，多候选＝歧义）
+      if (hits.length === 0) stats.skippedNoCandidate += 1;
+      else stats.skippedMultiCandidate += 1;
+      return full;
+    }
     healed.push({ variable: hits[0], tag: full.slice(0, 80) });
     return `<img :src="${hits[0]}"${attrs}>`;
   });

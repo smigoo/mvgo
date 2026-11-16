@@ -80,7 +80,10 @@ describe('C0.3-A 接线契约：hint 行携带真 id + 预算显式截断（104f
 
   it('注入预算必须跨递归共享（O(n)）且截断必须显式标记，禁止静默 break', () => {
     expect(source).toContain('FIGMA_HINT_MAX_CHARS')
-    expect(source).toContain('budget = { used: 0, limit: FIGMA_HINT_MAX_CHARS, truncated: false }')
+    // 刀A/B（2026-11-16）改初始化为原地变异（不得重绑定——参数重绑定不写回调用方，
+    // counters 通道会静默断掉），并扩 counters 计数通道；语义不变：跨递归共享 + 显式截断。
+    expect(source).toContain('budget.used = 0')
+    expect(source).toContain('budget.truncated = false')
     expect(source).toContain('结构已截断')
     // 旧实现：每轮全量 join 后再静默 break（O(n²) + 模型不知情）
     expect(source).not.toContain("if (parts.join('\\n').length > 5000) break")

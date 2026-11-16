@@ -244,7 +244,9 @@ describe('FLEX-003 归属回归 —— `.A > .B { flex }` 不得污染祖先（�
     expect(checkFlexSourceConflicts(files).filter((i) => i.id === 'FLEX-003')).toHaveLength(0);
   });
 
-  it('真跨文件 grow 冲突（像素 vs 比例）仍要报（防放松）', () => {
+  // 🛡️ 2026-11-16 降级：跨样式源 flex 冲突 ⇒ 优先级由 scoped 决定、产物可渲染 ⇒ WARN。
+  //   「仍要报」的防放松语义保留（判据照旧命中、计数照旧），只是不再 fail-closed。
+  it('真跨文件 grow 冲突（像素 vs 比例）仍要报（WARN，防放松）', () => {
     const files = [
       {
         path: 'package/index.vue',
@@ -254,6 +256,6 @@ describe('FLEX-003 归属回归 —— `.A > .B { flex }` 不得污染祖先（�
     ];
     const blocks = checkFlexSourceConflicts(files).filter((i) => i.id === 'FLEX-003');
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].severity).toBe('BLOCK');
+    expect(blocks[0].severity).toBe('WARN');
   });
 });

@@ -23,6 +23,8 @@
  *   - `free-overlay`      ：子项重叠 / 交叉摆放 ⇒ 只能 absolute/grid 叠放，**禁止 flex 比例**
  */
 
+import { filterLayoutChildren, resolveDeclaredAutoLayout } from './layout-child-filter.js';
+
 export const LAYOUT_FACTS_VERSION = 1;
 
 /** 子项贴合/交叠容差（px） */
@@ -73,14 +75,6 @@ function avgCrossOverlap(sorted, axis) {
   return sum / (sorted.length - 1);
 }
 
-/** layoutMode → 期望方向（仅交叉验证用，不参与判定） */
-function modeDir(layoutMode) {
-  const m = String(layoutMode || '').toUpperCase();
-  if (m === 'HORIZONTAL') return 'row';
-  if (m === 'VERTICAL') return 'column';
-  return null;
-}
-
 /**
  * 分析单个容器。
  * @param {object} container Figma 节点（需含 children 与 absoluteBoundingBox）
@@ -88,29 +82,51 @@ function modeDir(layoutMode) {
  */
 export function inferLayoutFactsForContainer(container) {
   const cb = boxOf(container);
-  const layoutMode = container?.layoutMode || null;
-  const declaredDir = modeDir(layoutMode);
+  // 🛡️ R3-2（2026-11-16）：声明定性走统一判据（非容器类型带 AL ⇒ 作废，不算「声明」），
+  //   绝对定位子项先剔除再测（否则「声明 row + 绝对浮层」会被误判成声明说谎）。
+  const al = resolveDeclaredAutoLayout(container);
+  const layoutMode = al.layoutMode;
+  const declaredDir = al.valid ? al.dir : null;
+  const { children: layoutChildren, absoluteSkipped } = filterLayoutChildren(container);
+  const skippedField = absoluteSkipped > 0 ? { absoluteSkipped } : null;
   if (!cb) return { mode: 'unknown', reason: 'no-container-box', layoutMode };
 
-  const kids = (Array.isArray(container.children) ? container.children : [])
+  const kids = layoutChildren
     .map((node) => ({ node, box: boxOf(node) }))
     .filter((k) => k.box);
   if (kids.length < 2) {
-    return { mode: 'unknown', reason: 'single-child', childCount: kids.length, layoutMode };
+    return {
+      mode: 'unknown',
+      reason: 'single-child',
+      childCount: kids.length,
+      layoutMode,
+      ...(skippedField || {}),
+    };
   }
 
   const mark = (facts) => {
-    if (declaredDir) {
+    if (skippedField) Object.assign(facts, skippedField);
+    if (al.declared) {
+      facts.alDeclared = al.dir;
+      if (!al.valid) facts.alInvalid = true;
       // 间距交叉验证：`itemSpacing` 是 mode 侧唯一可读的间距真值：
       //   真机 `1263:38` 标 `itemSpacing=3`，几何实际 29px ⇒ mode 侧间距也不可信。
       const declaredSpacing = Number(container?.itemSpacing);
-      if (facts.gap != null && Number.isFinite(declaredSpacing) && Math.abs(declaredSpacing - facts.gap) > 1) {
+      if (
+        al.valid &&
+        facts.gap != null &&
+        Number.isFinite(declaredSpacing) &&
+        Math.abs(declaredSpacing - facts.gap) > 1
+      ) {
         facts.spacingConflict = true;
       }
-      const okRow = facts.mode === 'row' || facts.mode === 'row-between';
-      const okCol =
-        facts.mode === 'column' || facts.mode === 'column-stack' || facts.mode === 'column-between';
-      facts.modeConflict = declaredDir === 'row' ? !okRow : !okCol;
+      if (declaredDir) {
+        const okRow = facts.mode === 'row' || facts.mode === 'row-between';
+        const okCol =
+          facts.mode === 'column' || facts.mode === 'column-stack' || facts.mode === 'column-between';
+        facts.modeConflict = declaredDir === 'row' ? !okRow : !okCol;
+        facts.alAgree = !facts.modeConflict;
+      }
     }
     return facts;
   };
@@ -217,7 +233,20 @@ export function inferLayoutFacts(figmaData, stats = null) {
   };
   if (!root || typeof root !== 'object') return facts;
   if (stats && typeof stats === 'object') {
-    for (const k of ['evaluated', 'row', 'between', 'stack', 'overlay', 'unknown', 'modeConflict']) {
+    for (const k of [
+      'evaluated',
+      'row',
+      'between',
+      'stack',
+      'overlay',
+      'unknown',
+      'modeConflict',
+      // 🛡️ R3-2：AL 声明侧可观测面（0 也打）
+      'alDeclared',
+      'alAgree',
+      'alInvalid',
+      'absoluteSkipped',
+    ]) {
       if (!Number.isFinite(Number(stats[k]))) stats[k] = 0;
     }
   }
@@ -235,6 +264,11 @@ export function inferLayoutFacts(figmaData, stats = null) {
       else if (f.mode === 'free-overlay') bump('overlay');
       else bump('unknown');
       if (f.modeConflict) bump('modeConflict');
+      // 🛡️ R3-2：声明侧计数（与冲突计数正交：declared=agree+conflict+无法对账）
+      if (f.alDeclared) bump('alDeclared');
+      if (f.alAgree) bump('alAgree');
+      if (f.alInvalid) bump('alInvalid');
+      if (f.absoluteSkipped) bump('absoluteSkipped', f.absoluteSkipped);
     }
     for (const c of node.children || []) walk(c, depth + 1);
   };

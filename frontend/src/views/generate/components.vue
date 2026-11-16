@@ -267,6 +267,16 @@
                         </span>
                       </span>
                       <span class="task-hist-time">{{ historyTimeText(t) }}</span>
+                      <button
+                        type="button"
+                        class="task-hist-delete"
+                        :disabled="isDeletingHistoryTask(t.sessionId)"
+                        title="删除该任务及其关联产物"
+                        aria-label="删除该任务"
+                        @click.stop.prevent="deleteHistoryTask(t)"
+                      >
+                        {{ isDeletingHistoryTask(t.sessionId) ? '删除中' : '删除' }}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -474,6 +484,16 @@
                               </span>
                             </span>
                             <span class="task-hist-time">{{ historyTimeText(t) }}</span>
+                            <button
+                              type="button"
+                              class="task-hist-delete"
+                              :disabled="isDeletingHistoryTask(t.sessionId)"
+                              title="删除该任务及其关联产物"
+                              aria-label="删除该任务"
+                              @click.stop.prevent="deleteHistoryTask(t)"
+                            >
+                              {{ isDeletingHistoryTask(t.sessionId) ? '删除中' : '删除' }}
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1346,6 +1366,19 @@
               <div class="task-degraded task-degraded--retry" v-if="t.status === 'failed' && t.checkpointStatus && t.checkpointStatus !== 'none'">已缓存{{ checkpointCacheLabel(t.checkpointStatus) }}，换模型重试可秒续</div>
             </div>
             <span class="task-tag" :class="historyTagClass(t)">{{ historyTagText(t) }}</span>
+            <!-- 🆕 2026-11-16：右栏最近生成也支持单条删除（整行仍是进入任务详情，按钮 stop 冒泡） -->
+            <button
+              type="button"
+              class="task-item-delete"
+              :disabled="isDeletingHistoryTask(t.sessionId)"
+              :title="`删除任务「${t.name}」及其关联产物`"
+              aria-label="删除该任务"
+              @click.stop.prevent="deleteHistoryTask(t)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+              </svg>
+            </button>
           </div>
         </div>
         <div v-if="!recent.length" class="empty-state">
@@ -1369,7 +1402,7 @@ import { generateLite, batchGenerate, cancelTask } from '@/api/lite'
 // 🆕 2026-12 N 主题：显式参数类型（themeNodes 等可选字段需要它才不报 TS2339）
 import type { GenerateLiteParams } from '@/api/lite'
 // 🔴 2026-11-03：历史需求文档「复用」要按 sessionId 取全文（列表接口只有字数）
-import { fetchFigmaPreview, fetchTaskStatus } from '@/api/generator'
+import { fetchFigmaPreview, fetchTaskStatus, deleteTask as deleteGeneratedTask } from '@/api/generator'
 import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
 import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
@@ -4083,6 +4116,53 @@ function handleClickOutside(e) {
  *   放到 20 是把「被无关任务吃掉的窗口」一次补回来，不改后端上限。
  */
 const RECENT_LIMIT = 20
+const deletingHistoryTaskIds = ref(new Set<string>())
+function isDeletingHistoryTask(sessionId?: string) {
+  return !!sessionId && deletingHistoryTaskIds.value.has(sessionId)
+}
+async function deleteHistoryTask(task: any) {
+  const sessionId = String(task?.sessionId || '')
+  if (!sessionId || deletingHistoryTaskIds.value.has(sessionId)) return
+
+  const taskName = String(task?.name || task?.displayName || '未命名')
+  const isActive = ['running', 'paused', 'queued', 'rate_limited', 'retry_scheduled'].includes(String(task?.status || ''))
+  const confirmed = window.confirm(
+    isActive
+      ? `任务「${taskName}」仍在执行或等待中。删除会终止/移出队列，并删除任务记录及其关联组件产物，无法撤销。确定删除？`
+      : `删除任务「${taskName}」会同时删除任务记录及其关联组件产物，删除后无法预览或下载，无法撤销。确定删除？`,
+  )
+  if (!confirmed) return
+
+  deletingHistoryTaskIds.value = new Set([...deletingHistoryTaskIds.value, sessionId])
+  try {
+    const result = await deleteGeneratedTask(sessionId)
+    // 🔴 响应信封：controller 返回的扁平对象被再包一层，业务字段落在 data 内
+    //   （response-envelope.interceptor.ts:57-66 把 error 收进 data）——失败判据读 data.error。
+    if (result?.success === false) {
+      throw new Error(String(result?.data?.error || result?.message || '删除失败'))
+    }
+    recent.value = recent.value.filter((item) => item.sessionId !== sessionId)
+    // 删掉的正是右栏正在展示/轮询的任务 ⇒ 连同结果态一起清空，避免残留不可用的预览与进度
+    if (resultSessionId.value === sessionId) {
+      resultSessionId.value = ''
+      result.value = false
+      previewUrl.value = ''
+      genMsg.value = ''
+      stopTimer()
+    }
+    showToast('任务及关联产物已删除')
+    void fetchSummary()
+  } catch (error: any) {
+    showToast(`删除失败：${error?.message || '请稍后重试'}`)
+    // 失败可能源于「任务已不存在」等后端状态漂移，重拉一次让列表对齐真值
+    void fetchRecent()
+  } finally {
+    const next = new Set(deletingHistoryTaskIds.value)
+    next.delete(sessionId)
+    deletingHistoryTaskIds.value = next
+  }
+}
+
 async function fetchRecent() {
   try {
     const j = await http.get('/api/tasks/recent', { limit: RECENT_LIMIT })
@@ -6226,6 +6306,46 @@ html[data-theme='dark'] .spinner--lg {
   gap: var(--s2, 8px);
   padding: 7px var(--s3, 12px);
 }
+/* 🆕 2026-11-16：最近生成任务支持单条删除。
+   整行仍是「还原任务」入口，按钮用 stop 拦冒泡；默认低对比常驻（可发现），
+   悬停整行或聚焦时提亮，不抢名称/节点信息的注意力。 */
+.task-hist-delete {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 2px 8px;
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(220, 38, 38, 0.78);
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+.url-history-item--task:hover .task-hist-delete,
+.url-history-item--task:focus-within .task-hist-delete,
+.task-hist-delete:focus-visible {
+  opacity: 1;
+}
+.task-hist-delete:hover:not(:disabled) {
+  color: #dc2626;
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+.task-hist-delete:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+html[data-theme='dark'] .task-hist-delete {
+  border-color: rgba(248, 113, 113, 0.32);
+  color: rgba(248, 113, 113, 0.85);
+}
+html[data-theme='dark'] .task-hist-delete:hover:not(:disabled) {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.8);
+  background: rgba(239, 68, 68, 0.16);
+}
 .task-hist-dot {
   flex-shrink: 0;
   width: 7px;
@@ -7042,6 +7162,46 @@ html[data-theme='dark'] .spinner--lg {
   flex: none;
   background: var(--txt-3);
   transition: 0.12s;
+}
+/* 🆕 2026-11-16：右栏最近生成单条删除（整行仍是任务入口，按钮低对比常驻、悬停提亮） */
+.task-item-delete {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--txt-3);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+.task-item-delete svg {
+  width: 13px;
+  height: 13px;
+}
+.task-item:hover .task-item-delete,
+.task-item:focus-within .task-item-delete,
+.task-item-delete:focus-visible {
+  opacity: 1;
+}
+.task-item-delete:hover:not(:disabled) {
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.08);
+}
+.task-item-delete:disabled {
+  opacity: 0.35;
+  cursor: wait;
+}
+html[data-theme='dark'] .task-item-delete:hover:not(:disabled) {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.7);
+  background: rgba(239, 68, 68, 0.16);
 }
 .state-dot.done {
   background: var(--c-cta);

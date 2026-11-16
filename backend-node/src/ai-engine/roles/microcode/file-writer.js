@@ -112,6 +112,18 @@ import {
   mergeIconTruthStats,
   formatIconTruthConservationLog,
 } from '../../utils/icon-truth-conservation.js';
+// 🛡️ 标题装饰真值（2026-11-15 · mc-max-1794728034288-4bc53ccd 实锤）：「有的标题有 icon
+//   有的没有」——有 png 的两个标题是真 <img>，无 png 的三个被 LLM 留成空 span / 干脆没有。
+//   本判据直接从 Figma 树采装饰（绕开资源下载），按「伴随 TEXT 原文」归属，CSS 逐层复刻。
+//   🔁 2026-11-16 13:2x 回植：原接线随 11-15 19:20「精确回退」被手工摘除（无备份不可逆），
+//   判据本体经 daily auto-sync b863ce12 入库但接线消失 ⇒ 判据成孤儿（详见当日 memory）。
+//   本次按 11-15 memory 规格重写，位置升级：刀 53 终裁覆写之后、INLINE-PX 出口归一之后、
+//   根治⑫ 终验之前（16:40 轮实证刀 53 整块覆写会吞掉任何前置注入）。
+import {
+  collectHeaderDecorTruth,
+  applyHeaderDecorTruth,
+  formatHeaderDecorLog,
+} from '../../utils/header-decor-truth.js';
 // 🛡️ 刀 49（2026-10-22 · mc-1792643509867-db2d65f7 实锤）：**图标槽位尺寸契约**。
 //   共享 class 被「图标容器」和「图标本体」共用时（`.c-db2d65-icon` = div 的
 //   `width:100%;flex:1 1 0` + img 的 16×16），img 被拉成 570px。刀 39 依赖
@@ -119,7 +131,7 @@ import {
 //   本刀真值改用**导入图片的原始像素**（导出 1x，与 Figma bbox 等价），永不缺失。
 //   自愈只写**元素级内联**（inline 恒胜），绝不改写共享 class。
 import { enforceIconSlotSize, resolveImageAbsPath } from '../../utils/icon-slot-size-contract.js';
-import { resolveResourceDomMapping, pruneDanglingComponentFileRefs } from '../../utils/resource-import-guard.js';
+import { resolveResourceDomMapping, pruneDanglingComponentFileRefs, healImgSrcBindings } from '../../utils/resource-import-guard.js';
 // 🛡️ 刀 51（2026-10-22）：**段内标题行几何契约**。刀 50 把段的 padding / 子项间距钉到 Figma
 //   真值后，段内标题行**自身**仍是三套实现（`padding: 0 calc(@fontSize*0.6)`=7.2px、
 //   `gap` 6px/7px、标题 line-height 16px/1.2）⇒ 标题被推到 x=49（真值 44），三段还差 1~2px。
@@ -625,6 +637,28 @@ export function extractUndefinedLessMixins(errors = []) {
 }
 
 /**
+ * 🛡️ 2026-11-16：SFC 阻断的**证据落盘**（诊断用，不参与任何判定）。
+ *
+ * 病灶：`sfc-blocked.json` 只存 `errors`（`path:line:col`）与 `reason`，**不存出错行原文** ⇒
+ *   「Duplicate attribute」这类错误无法从缓存反推出「哪个属性重复、第二个从哪来」，
+ *   只能靠重跑真机复现（真机 `f96c9b9b` index.vue:18/27 双写即因此无法直接定位来源）。
+ * 只取**首个带行列号的错误**对应那一行（trim + 截断 400），零解析风险、零行为影响。
+ *
+ * @param {string} content 被阻断的文件内容
+ * @param {string[]} errors SFC 校验错误列表
+ * @returns {string} 出错行原文（取不到则空串）
+ */
+export function buildBlockedSample(content, errors) {
+  if (typeof content !== 'string' || !content) return '';
+  const first = (errors || []).find((e) => /:\d+:\d+/.test(String(e)));
+  if (!first) return '';
+  const m = String(first).match(/:(\d+):(\d+)/);
+  if (!m) return '';
+  const line = content.split('\n')[Number(m[1]) - 1] || '';
+  return line.trim().slice(0, 400);
+}
+
+/**
  * 名字分支：**纯名字**推测安全值（不含消费端事实）。
  * ⚠️ 它可能返回非颜色（`0px` / `1.5` / `1` / `400`）或兜底 `unset` ——
  * 这些值被 LESS 颜色函数当实参时编译期不可求值，故必须经 `safeLessVarValue` 后置过滤。
@@ -956,6 +990,23 @@ export function writeFiles(files, outputPath, options = {}) {
   const _r51Stats = { evaluated: 0, singleImg: 0, mapped: 0, matched: 0, healed: 0 };
   // 🛡️ 刀 52：父容器堆叠（与刀 51 共用同一棵 Figma 索引；同样必须留痕，否则零命中不可判读）
   const _r52Stats = { evaluated: 0, mapped: 0, matched: 0, healed: 0 };
+  // 🛡️ L3-c 写盘出口终验（2026-11-16 · P1 复核）：`<img v-if="iconN" …>` 缺 `:src` 的回填计数。
+  //   计数意义（真机可判读）：`files=0 && tags=0` 只表示本任务没有这类形态，
+  //   不表示「全链已干净」；必须与 L0-B 的 IMG-SRC-001 计数对照判读。
+  //   🔴 2026-11-16 真机复盘追加 `scannedVue/imgs/withSrc/skipped*`：
+  //   `changed=false` 的三种成因必须靠这些列区分，否则「已接线但无对象」与
+  //   「根本没执行到」在日志里长得一模一样（本轮实测多耗一轮排查）。
+  const _imgSrcStats = {
+    files: 0,
+    tags: 0,
+    scannedVue: 0,
+    imgs: 0,
+    withSrc: 0,
+    noImportFiles: 0,
+    skippedNoCandidate: 0,
+    skippedMultiCandidate: 0,
+    mappingVars: 0,
+  };
   // 🛡️ 刀 41（挂载点迁移）：折叠网格几何契约 —— 见文件头 import 处的病灶说明。
   //   留痕同理：`sections` 缺失 / `contracts:0` / `mismatches:0` 必须能在日志里区分。
   //   `skip*` 四列＝「为什么没判」（真机 2026-10-22：战略段两行 `38:3140/38:3153`
@@ -1276,6 +1327,20 @@ export function writeFiles(files, outputPath, options = {}) {
     //   「ancestorIds 中最近的 section」兜底归属；逐文件拿不到别的文件的 data-section-id。
     const _iconTruthSectionIds = collectAllSectionIds(filesForWrite);
     let _iconTruthStats = null;
+    // 🛡️ 标题装饰真值（2026-11-15 · 4bc53ccd 实锤 / 2026-11-16 回植）：装饰清单必须用
+    //   **Figma 树**在循环外预建（纯函数零 IO）——逐文件循环里拿不到完整树。
+    //   try/catch fail-open：装饰缺位只是观感退化，不得让写盘失败。
+    let _headerDecorTruth = [];
+    let _headerDecorApplied = null;
+    try {
+      _headerDecorTruth = collectHeaderDecorTruth(options.figmaRoot);
+    } catch (_hdtErr) {
+      if (logger) {
+        logger.warn('🛡️ 标题装饰真值采集失败（fail-open，不影响写盘）', {
+          error: _hdtErr?.message || String(_hdtErr),
+        });
+      }
+    }
 
     for (const [relativePath, content] of Object.entries(filesForWrite)) {
       currentFile = relativePath;
@@ -1822,7 +1887,12 @@ export function writeFiles(files, outputPath, options = {}) {
                   );
                 }
                 skippedFiles.push(relativePath);
-                sfcBlocked.push({ path: relativePath, errors: retry.errors, reason: 'sfc-invalid-after-fix' });
+                sfcBlocked.push({
+                  path: relativePath,
+                  errors: retry.errors,
+                  reason: 'sfc-invalid-after-fix',
+                  sample: buildBlockedSample(sanitizedContent, retry.errors),
+                });
                 continue;
               }
             }
@@ -1848,7 +1918,12 @@ export function writeFiles(files, outputPath, options = {}) {
                 );
               }
               skippedFiles.push(relativePath);
-              sfcBlocked.push({ path: relativePath, errors: syntaxResult.errors, reason: 'sfc-invalid' });
+              sfcBlocked.push({
+                path: relativePath,
+                errors: syntaxResult.errors,
+                reason: 'sfc-invalid',
+                sample: buildBlockedSample(sanitizedContent, syntaxResult.errors),
+              });
               continue;
             }
           }
@@ -2232,6 +2307,46 @@ export function writeFiles(files, outputPath, options = {}) {
               skipped: _r24c.skipped,
             });
           }
+
+          // 🛡️ L3-c 写盘出口终验（2026-11-16 · P1 复核实锤 · 与 R24/R24-C 互补）：
+          //   病灶：`<img v-if="icon1" class="…" alt="" />` —— 变量只出现在 `v-if` 里，
+          //     **全链没有任何一处**要求「引用必须落在 `:src` 上」⇒ 浏览器渲染空 `<img>`（图标位置空白）。
+          //   为何 R24/R24-C 够不着（本地实测）：`healEmptyImgSrc` 的候选域是
+          //     「本文件唯一 sectionId 下的资源」，要求候选恰好 1 个；本形态多图标同段
+          //     ⇒ `ambiguous-resource` 直接跳过（存量 20 个 IMG-SRC-001 全是这一类）。
+          //   本步候选域换成**本文件 `<script>` 里真实 import 过的资源变量**（不依赖 section
+          //     唯一性），与 pre-write ②-b 用**同一个** `healImgSrcBindings`（判据单一来源，
+          //     不新写第二份正则）。挂在这里的原因与 R24 完全相同：pre-write 之后仍有
+          //     覆写/回退步骤，只有写盘出口能保证「门禁校验 === 落盘」。
+          //   边界（宁漏不错）：标签已有 src / 标签内 0 个或 ≥2 个候选变量 ⇒ 一律不动。
+          //   幂等：已修过的标签第二次进来命中 0 处。
+          const _l3c = healImgSrcBindings(sanitizedContent, _r24Mapping);
+          // 🔴 可观测性（2026-11-16 · P1 真机复盘）：`changed=false` 有三种完全不同的原因 ——
+          //   ①本文件没有 `<img>`；②有 `<img>` 但都带 src；③有裸 `<img>` 但候选变量
+          //   0 个（上游没分配）／≥2 个（歧义）。此前日志一律静默 ⇒ 「接了但没对象」
+          //   与「根本没接线」在真机上无法区分（复盘为此多耗一轮）。
+          _imgSrcStats.scannedVue += 1;
+          const _l3cStats = _l3c.stats || null;
+          if (_l3cStats) {
+            _imgSrcStats.mappingVars = _l3cStats.mappingVars;
+            _imgSrcStats.imgs += _l3cStats.imgs;
+            _imgSrcStats.withSrc += _l3cStats.withSrc;
+            if (_l3cStats.importedVars === 0) _imgSrcStats.noImportFiles += 1;
+            _imgSrcStats.skippedNoCandidate += _l3cStats.skippedNoCandidate;
+            _imgSrcStats.skippedMultiCandidate += _l3cStats.skippedMultiCandidate;
+          }
+          if (_l3c.changed) {
+            sanitizedContent = _l3c.content;
+            _imgSrcStats.files += 1;
+            _imgSrcStats.tags += _l3c.healed.length;
+            currentStep = 'heal_img_src_binding';
+            if (logger) {
+              logger.warn(
+                `🛡️ L3-c 写盘出口终验（<img> 缺 :src 已按 import 变量回填）: ${relativePath}`,
+                { healed: _l3c.healed.length, vars: _l3c.healed.map((h) => h.variable) },
+              );
+            }
+          }
         } catch (r24Err) {
           // fail-open：修不了也要写盘，绝不因自愈异常丢产物
           if (logger) {
@@ -2591,8 +2706,9 @@ export function writeFiles(files, outputPath, options = {}) {
       //   病灶：**本写盘器内部**的确定性自愈（Tab UI 骨架自愈 :1412 injectMissingTabUi、
       //   ensure* 系列）会在 microcode-engineer 的终写前归一**之后**注入硬编码 inline px
       //   ⇒ 归一看到的是「注入前」内存版（真机 scannedTags=8/movedTags=0/skip 全 0），
-      //   磁盘落地的却是「注入后」11 标签版（2 处 inline px）⇒ L0-B INLINE-GEOM-PX BLOCK、
+      //   磁盘落地的却是「注入后」11 标签版（2 处 inline px）⇒ L0-B INLINE-GEOM-PX 命中、
       //   禁止晋升 last-good，产物带 px 交付。
+      //   （2026-11-16 P0 后该判据为 WARN，不再 fail-closed；归一治本层照旧必须做。）
       //   治本：归一挂到**落盘唯一出口**（writeFileSync 前的最终定稿点），任何上游 /
       //   内部修复器注入的 inline px 一律在此收口；随后由下方根治⑫ 出口终验校验最终字节
       //   （顺序不可颠倒：先归一再验，否则验的不是落盘内容）。
@@ -2602,19 +2718,58 @@ export function writeFiles(files, outputPath, options = {}) {
       if (relativePath.endsWith('index.vue')) {
         try {
           const _oip = normalizeInlineLengthPx(sanitizedContent);
-          if (_oip.stats.eligible > 0) {
-            if (logger) {
-              logger.info(
-                `🛡️ INLINE-PX 写盘出口归一·已评估 ${formatInlinePxStats('', _oip.stats).trim()}`,
-              );
-            }
-            sanitizedContent = _oip.content;
+          // 🔴 观测纪律：**0 也打**。否则「归一没执行」与「执行了但零命中」
+          //   （eligible=0 = 无 mvgo-layout-truth 标记）在日志上同形 —— 2026-11-15
+          //   0f2346a3 首轮真机就是因为只在 eligible>0 时才打，导致无法用日志区分
+          //   「出口归一没跑」和「产物根本没有标记」，白排查一轮。
+          if (logger) {
+            logger.info(
+              `🛡️ INLINE-PX 写盘出口归一·已评估 ${formatInlinePxStats('', _oip.stats).trim()}`,
+            );
           }
+          sanitizedContent = _oip.content;
         } catch (_oipErr) {
           if (logger) {
             logger.warn('🛡️ INLINE-PX 写盘出口归一异常（fail-open，L0-B 判据仍独立拒收残留）', {
               path: relativePath,
               error: _oipErr?.message || String(_oipErr),
+            });
+          }
+        }
+      }
+
+      // 🛡️ 标题装饰真值落地（2026-11-15 · 4bc53ccd/ca763935 实锤 / 2026-11-16 回植）：
+      //   🔴 位置纪律（16:40 轮真机铁证）：刀 53 终裁覆写是 `sanitizedContent = locked`
+      //   **确定性整块覆写**，任何排在它之前的内容级注入必然被吞（同一文件相隔 4ms：
+      //   08:16:41.473 装饰落地 → .477 刀53 覆写 → .482 落盘=覆写版）。故本块必须
+      //   **晚于刀 53 / INLINE-PX 出口归一、早于根治⑫ 终验**——注入结果仍过终验，
+      //   修复轮若快照救回无装饰版，下一轮循环重新补齐 ⇒ 幂等闭环。
+      //   作用域：排除 index.vue（装饰挂标题行子组件；L0-B px 判据作用域只认 index.vue，
+      //   装饰自带的尺寸 px 不与其冲突）。恒打计数行（0 也打）供真机验签。
+      if (
+        relativePath.endsWith('.vue') &&
+        !relativePath.endsWith('index.vue') &&
+        _headerDecorTruth.length > 0
+      ) {
+        try {
+          const _hdt = applyHeaderDecorTruth(
+            { [relativePath]: sanitizedContent },
+            _headerDecorTruth,
+            { drawIndex: _iconTruthDrawIndex },
+          );
+          _headerDecorApplied = _hdt.stats;
+          const _next = _hdt.files[relativePath];
+          if (typeof _next === 'string' && _next !== sanitizedContent) {
+            sanitizedContent = _next;
+            if (logger) {
+              logger.info(`🎯 标题装饰真值落地：${relativePath}`);
+            }
+          }
+        } catch (_hdtErr) {
+          if (logger) {
+            logger.warn('🛡️ 标题装饰真值落地失败（fail-open，不挡写盘）', {
+              path: relativePath,
+              error: _hdtErr?.message || String(_hdtErr),
             });
           }
         }
@@ -2688,6 +2843,7 @@ export function writeFiles(files, outputPath, options = {}) {
               path: relativePath,
               errors: _exitErrs,
               reason: 'final-exit-gate-blocked',
+              sample: buildBlockedSample(sanitizedContent, _exitErrs),
             });
             continue;
           }
@@ -2761,6 +2917,16 @@ export function writeFiles(files, outputPath, options = {}) {
         _iconTruthStats || { skipped: ['no-vue-file-evaluated'] },
       );
       logger.info(_iconLine.message, _iconLine.meta);
+    }
+
+    // 🛡️ 标题装饰真值（2026-11-15 · 4bc53ccd 实锤 / 2026-11-16 回植）：**恒打计数行**
+    //   （0 也打），把「无 Figma 树 / 采集零命中 / 循环内全部跳过」三态分开。
+    //   格式唯一来源 = formatHeaderDecorLog（与真机历史日志同形，可跨轮对比）。
+    if (logger) {
+      logger.info(
+        `🛡️ 标题装饰真值·已评估 ${formatHeaderDecorLog(_headerDecorApplied)}`,
+        { truthTotal: _headerDecorTruth.length },
+      );
     }
 
     // 🛡️ 产物终验（2026-11-12 · mc-1794463362140-8fa6d6f3 实锤）：表达式级最后闸。
@@ -3010,6 +3176,9 @@ export function writeFiles(files, outputPath, options = {}) {
         cache[String(b?.path || '')] = {
           errors: (b?.errors || []).map((e) => String(e).slice(0, 400)).slice(0, 5),
           reason: b?.reason || 'sfc-invalid',
+          // 出错行原文（2026-11-16）：Duplicate attribute 等无法从行列号还原的错，
+          // 靠这一行直接看出重复的是哪个属性、第二个从哪儿来。
+          ...(b?.sample ? { sample: String(b.sample).slice(0, 400) } : {}),
           at: Date.now(),
         };
       }
@@ -3019,11 +3188,29 @@ export function writeFiles(files, outputPath, options = {}) {
       /* 回灌缓存写失败不阻断（下一轮退化为无靶子重试，与旧行为一致） */
     }
     // 🛡️ 刀 41 计数随返回值上抛（noVFor* 六键进 patchHitReport.selfHealing 供 meta 验签）
+    // 🛡️ L3-c 每任务一行汇总（2026-11-16 · P1 真机复盘）：只在真的扫到 .vue 时打，
+    //   一任务一行、零噪声；分列可直接判读「无对象 / 无 import / 无候选 / 已修」。
+    if (logger && _imgSrcStats.scannedVue > 0) {
+      logger.info('🛡️ L3-c 写盘出口扫描汇总', {
+        ..._imgSrcStats,
+        verdict:
+          _imgSrcStats.tags > 0
+            ? 'healed'
+            : _imgSrcStats.imgs === 0
+              ? 'no-img'
+              : _imgSrcStats.imgs === _imgSrcStats.withSrc
+                ? 'all-src-present'
+                : 'has-bare-img-but-unhealable',
+      });
+    }
     return {
       written: writtenFiles,
       skipped: skippedFiles,
       sfcBlocked,
       blade41Stats: { ..._r41Stats, r10FinalScanned: _r10Final.scanned, r10FinalMoved: _r10Final.moved },
+      // 🛡️ L3-c 写盘出口计数（纯附加字段，不与 blade41Stats 混用）：
+      //   files= 命中文件数 / tags= 回填的 `<img>` 标签数。
+      imgSrcHealStats: { ..._imgSrcStats },
     };
   } catch (error) {
     if (logger) {

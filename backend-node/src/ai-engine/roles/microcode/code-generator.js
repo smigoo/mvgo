@@ -33,6 +33,7 @@ import {
   normalizeInlineLengthPx,
   auditInlineGeometryDuplicates,
   formatInlineGeomStats,
+  formatInlinePxStats,
   INLINE_GEOM_DUP,
 } from '../../utils/inline-geom-dup-guard.js';
 // 🛡️ G04：图表父壳挂载判据的 plan 事实源（planner 全保真原形优先）
@@ -987,7 +988,17 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   真机实测 slot-con 0 / chart 0 / canvas 110 溢出不可见。
     //   治本：把高度契约定在**产生处**（内联样式优先级最高，免疫后续合并/反杀），
     //   与既有正常组件的 `.c-…-slot-con{width:100%;height:100%;min-height:0}` 同口径。
-    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHeightStyle}min-height:0;${rootSizeStyle}${rootHostStyle}">`);
+    // 🎯 B1-S1b β（2026-11-16 · aca64532「空这么高」实锤）：组件含 intrinsic 锁定容器时，
+    //   根容器垂直居中——锁定设计高的容器（max-height 封顶）在宿主面板高于设计时
+    //   居中放置，剩余空间对称留在上下，而非全部堆在底部露宿主底色。
+    //   ⚠️ 时序：此处（根容器渲染）在段循环（intrinsic 主评估）之前 ⇒ 用
+    //   resolveIntrinsicLayout 预扫描（纯几何只读，不产 style、无副作用）；
+    //   主循环的 __intrinsicHits 仍独立计数（日志口径不变）。
+    const _hasIntrinsicLocked = (treeSections || []).some(
+      (sec) => resolveIntrinsicLayout(sec, figmaIndex).ok,
+    );
+    const _rootCenterStyle = _hasIntrinsicLocked ? 'justify-content:center;' : '';
+    lines.push(`    <div class="${rootContainerClass}"${rootHostAttr} style="display:flex;flex-direction:column;${rootHeightStyle}${_rootCenterStyle}min-height:0;${rootSizeStyle}${rootHostStyle}">`);
     for (const layer of rootHostLayers) {
       lines.push(
         `      <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
@@ -1584,15 +1595,21 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       applied: __takeoverHeightFallbacks,
     });
   }
-  // 🛡️ 方案 E + P0-A：段高样式片段（less 语法，px 由 postcss-pxtorem 转 rem）。
-  //   规则由 __sectionGeometries 派生，与 inline 比例同源，不再有第二套推断。
-  //   !important 仅作 legacy 兜底：终裁归一后 carrier='less' 的段已无 inline 几何声明。
+  // 🛡️ 方案 E + P0-A + B1-S1（2026-11-16）：段高样式片段（less 语法）。
+  //   规则由 __sectionGeometries 派生，与 inline 比例**逐字同源**（同一 ratioStyle 的
+  //   flex 值），px carrier（`flex: 0 1 <px>px !important`）退役——旧形态的 px basis
+  //   与容器高无函数关系，Σ 从未与根高约束（68783bf6 Σ714>868 反例 / c1ac194a
+  //   Σ518>348 溢出实锤）。B1-S2 后装配与 A4 同为 Σ=1 量纲，此处直接取 ratioStyle
+  //   的 flex 值（h/(Σh+Σgap)），根容器 height:100% 下比例展开即真值。
+  //   !important 保留：终裁归一剥 inline 后 class 是唯一落点，防 LLM 重试轮内联覆盖。
+  //   margin-top 仍是 px（兄弟间距真值，postcss-pxtorem 转 rem，与段高比例无关）。
   const layoutStyle = __sectionGeometries
     .filter((g) => g.carrier === 'less')
-    .map(
-      (g) =>
-        `  .${g.cls} { flex: 0 1 ${g.heightPx}px !important; min-height: 0${g.gapPx > 0 ? `; margin-top: ${g.gapPx}px !important` : ''}; }`,
-    )
+    .map((g) => {
+      const _f = /flex:\s*([\d.]+)/i.exec(g.ratioStyle || '');
+      const _grow = _f ? _f[1] : '1';
+      return `  .${g.cls} { flex: ${_grow} 1 0 !important; min-height: 0${g.gapPx > 0 ? `; margin-top: ${g.gapPx}px !important` : ''}; }`;
+    })
     .join('\n');
   return {
     template: lines.join('\n'),
@@ -1836,6 +1853,36 @@ export function injectLayoutStyle(content, rules) {
   return `${content.replace(/\s*$/, '')}\n\n<style lang="less" scoped>${payload}</style>\n`;
 }
 
+/**
+ * 🛡️ P3-C（2026-11-15 · mc-max-1794757961819-0f2346a3 实锤）：**确定性模板装配产物的标记**
+ *
+ * 与 `injectLayoutStyle` 的分工：那个函数负责「顺带注入段高 less 规则 + 标记」，
+ * 本函数只负责**标记**，用于「装配成功但逐段 less 规则为空」的形态
+ * （容器段 `isLayoutContainerSection` / 无段高真值的 simple-medium 分支）。
+ *
+ * 为什么要单独一个函数：`injectLayoutStyle` 的旧契约是 `rules 为空 ⇒ 原样返回`，
+ * 一旦放宽会让「有规则但规则无效」的调用点也静默注入标记，语义变糊。分开后：
+ *   - 规则注入仍受 `rules 非空` 约束（行为零变更）
+ *   - 标记注入由「确定性模板装配成功」这一**事实**单独决定
+ *
+ * 幂等：已含标记则逐字返回；无 `<style>` 块则追加一个（scoped，段 class 只作用于本组件模板）。
+ *
+ * @param {string} content index.vue 内容
+ * @returns {string}
+ */
+export function injectLayoutTruthMark(content) {
+  if (typeof content !== 'string' || !content) return content;
+  if (content.includes('mvgo-layout-truth')) return content;
+  const mark = '\n  /* mvgo-layout-truth：段高真值（px 由 postcss-pxtorem 转 rem，勿改为 inline） */\n';
+  const styleRe = /<style\b[^>]*lang=["']less["'][^>]*>([\s\S]*?)<\/style>/i;
+  const m = content.match(styleRe);
+  if (m) {
+    const body = m[1].replace(/\s*$/, '\n');
+    return content.replace(styleRe, `<style lang="less" scoped>${body}${mark}</style>`);
+  }
+  return `${content.replace(/\s*$/, '')}\n\n<style lang="less" scoped>${mark}</style>\n`;
+}
+
 export function applyDeterministicIndexTemplate(content, input, options = {}) {
   const src = typeof content === 'string' ? content : '';
   if (!src) return { content: src, applied: false, facts: null, reason: 'empty-content' };
@@ -1904,6 +1951,24 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
   if (det.layoutStyle) {
     out = injectLayoutStyle(out, det.layoutStyle);
   }
+  // 🛡️ P3-C（2026-11-15 · mc-max-1794757961819-0f2346a3 实锤）：**装配成功即落标记**。
+  //   病灶：`layoutStyle` 只由 `carrier==='less'` 的段派生，而容器段（`isLayoutContainerSection`）
+  //   与「无段高真值」的 simple/medium 分支一律 `carrier='inline'` ⇒ layoutStyle 为空 ⇒
+  //   `injectLayoutStyle` 直接返回 ⇒ **index.vue 里连 `mvgo-layout-truth` 标记都没有**。
+  //   而 P0/P3-A/P3-B 三层归一与 L0-B 判据**都以该标记为启用开关** ⇒ 真机产物
+  //   `0f2346a3` 带着 `width:420px;height:425px`（根容器）+ `height:65px`（容器段）+
+  //   3 处 header span `gap:4px;margin-left:16px` 共 6 处 inline px 完整落地，
+  //   且门禁零命中（audit eligible=0）——用户观感「行内样式一直没少」的真正来源。
+  //   治本：标记的语义从「有段高 less 规则」放宽为「**确定性模板装配产物**」——只要骨架
+  //   来自 effectiveSections（sectionRoots>0），几何声明就只允许由 less class 承载，
+  //   逐段规则可以为空。归一/判据因此对确定性产物全域生效，不再是「只有 max 分支的
+  //   叶子段才管」。
+  //   离线实证（0f2346a3 真实产物 + 只补标记）：audit `pxTags=6` → 归一
+  //   `movedTags=6/movedDecls=27/semanticTags=4,styleAttrsRemoved=1` → 复检 `pxTags=0`、
+  //   残留仅 `flex:0.113` 等纯比例与 `var()/calc()` 字号（P1 量纲统一 / px2rem 变量回退语义）。
+  if (Array.isArray(det.sectionRoots) && det.sectionRoots.length > 0) {
+    out = injectLayoutTruthMark(out);
+  }
   // 🛡️ P0-A（2026-11-15）终裁归一：less 真值规则注入后，把 carrier='less' 段上
   //   被 class 承载的 inline 声明剥掉 ⇒ 同一几何真值只剩一个落点。
   //   fail-closed：无 mvgo-layout-truth 标记 / 无真值 class ⇒ 逐字返回，绝不把段高弄丢。
@@ -1911,7 +1976,9 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
   out = _geomNorm.content;
   // 🛡️ P3-A 第一道归一（2026-11-15 真机回检补）：L0-B 的 validateCodeStructure 在
   //   **图内早期**就扫描装配产物，若此时 F1 根容器 `width:420px;height:425px` 仍在 inline，
-  //   收紧后的 INLINE-GEOM-PX 会每轮 BLOCK（确定性写者每轮重写，修复轮无法根治）。
+  //   收紧后的 INLINE-GEOM-PX 会每轮命中（确定性写者每轮重写，修复轮无法根治）。
+  //   ⚠️ P0（2026-11-16）：该判据已由 BLOCK 降 WARN（不再 fail-closed）；本处归一仍是
+  //   治本层，必须继续做——降 severity 不等于不改产物。
   //   故装配出口（injectLayoutStyle 之后、truth mark 已在位）立即做 P3-B 语义 class 整段收口
   //   （确定性写者的 inline 样式整体搬进 class+less，var()/calc()/url() 声明刻意留 inline）；
   //   终写前最后窗口那次归一保留，专门覆盖 T09 补跑 / header-right 提升等更晚的写者。
@@ -1922,21 +1989,20 @@ export function applyDeterministicIndexTemplate(content, input, options = {}) {
   const _geomResidual = auditInlineGeometryDuplicates(out);
   const _geomStats = {
     ..._geomNorm.stats,
-    pxMovedTags: _pxNorm.stats.movedTags,
-    pxMovedDecls: _pxNorm.stats.movedDecls,
-    pxInjectedClasses: _pxNorm.stats.injectedClasses,
-    pxSemanticTags: _pxNorm.stats.semanticTags,
-    pxStyleAttrsRemoved: _pxNorm.stats.styleAttrsRemoved,
     dupTags: _geomResidual.stats.dupTags,
     pxTags: _geomResidual.stats.pxTags,
+    pxNoAnchorTags: _geomResidual.stats.pxNoAnchorTags,
   };
   options?.logger?.info?.(formatInlineGeomStats('🛡️ INLINE-GEOM 终裁归一·已评估', _geomStats));
+  // C 明细单独一行，字段表唯一来源 = formatInlinePxStats（禁止在此手抄映射，见该函数注释）
+  options?.logger?.info?.(formatInlinePxStats('🛡️ INLINE-PX 终裁归一·已评估', _pxNorm.stats));
   // ⚠️ 分层口径：装配出口只负责「段级双写」(INLINE-GEOM-DUP) 的残留 warn。
-  //   此处 audit 若仍报 INLINE-GEOM-PX，只可能是 fail-closed（规则没落地）这类真错，
-  //   交由 L0-B 独立拒收；不再据 PX 打「应 BLOCK」warn，避免把预期中间态误报成失败。
+  //   此处 audit 若仍报 INLINE-GEOM-PX，只可能是 fail-closed（规则没落地）这类真错。
+  //   🛡️ P0（2026-11-16）：L0-B 的 INLINE-GEOM-PX/DUP 已由 BLOCK 降 WARN ⇒ 本处日志文案
+  //   同步去掉「应 BLOCK」，改为「应 WARN 留痕」（口径必须同源，否则运维会按旧文案误判）。
   const _dupResidual = _geomResidual.issues.filter((x) => x.id === INLINE_GEOM_DUP);
   if (_dupResidual.length > 0) {
-    options?.logger?.warn?.('🛡️ INLINE-GEOM 终裁归一残留双写（L0-B 应 BLOCK）', {
+    options?.logger?.warn?.('🛡️ INLINE-GEOM 终裁归一残留双写（L0-B 应 WARN 留痕）', {
       ids: _dupResidual.map((x) => x.id),
     });
   }

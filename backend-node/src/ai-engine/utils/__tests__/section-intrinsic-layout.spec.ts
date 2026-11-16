@@ -283,8 +283,11 @@ describe('刀 50 resolveSectionBox / unionBoxes（几何解析唯一实现）', 
 describe('刀 50 输出形态（inline style）', () => {
   const plan = resolveIntrinsicLayout(PLAN['38:3137'], INDEX);
 
-  test('⑮ 容器：只写 >0 的 padding（真值 0 不写，避免盖掉 class 上的合法语义）', () => {
-    expect(buildIntrinsicContainerStyle(plan)).toBe('padding-top:25px;padding-left:20px;');
+  test('⑮ 容器：padding 只写 >0 真值 + B1-S1b β 锁定声明（designW/H 真值派生，非硬编码）', () => {
+    // B1-S1b β：plan 携带 designW/H（604×161）⇒ 产 max-height + aspect-ratio
+    expect(buildIntrinsicContainerStyle(plan)).toBe(
+      'padding-top:25px;padding-left:20px;max-height:161px;aspect-ratio:604/161;',
+    );
     expect(buildIntrinsicContainerStyle({ ok: true, paddingTop: 0, paddingLeft: 0 } as any)).toBe('');
     expect(buildIntrinsicContainerStyle({ ok: false } as any)).toBe('');
   });

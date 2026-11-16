@@ -105,6 +105,8 @@ import {
   resolveClassPrefixId,
 } from '../validators/code-structure-validator.js';
 import { isFeatureEnabled } from '../config/v3-mode-features.js';
+// 🛡️ 2026-11-16：SFC 结构错误「配方化回灌」——可照抄代码形态 + 归属段定位
+import { buildSfcStructureRecipe } from '../utils/sfc-stacked-block-healer.js';
 //  P0-4: flex 布局静态检查 + 自动修复（零 LLM）
 import {
   checkFlexUsage,
@@ -123,6 +125,14 @@ import { ElementCoverageValidator, collectTechStackMarkers } from '../validators
 import { computeGateScore, hasHardPublishBlock } from '../utils/gate-score.js';
 // 🛡️ 层 7（2026-10-26 · 方案 A）：门禁分级 —— WARN 升级策略单一真相源（逐 id 决策）。
 import { resolveWarnEscalations } from '../utils/gate-severity.js';
+// 🛡️ P0-b（2026-11-16）：重试预算分级单一真相源 —— 只有 A 档真硬伤才占 LLM 重试轮次。
+import {
+  shouldRetryL0B,
+  isLegacyRetryPolicy,
+  resolveAcceptanceMaxRetry,
+  pickRetryWorthyIssues,
+  summarizeNoiseIssues,
+} from '../utils/gate-retry-policy.js';
 // 🛡️ #128 流程四件套 ②/③：fail-open 显性化台账（降级/WARN 升级事件落 component-meta.json）
 import { appendFailOpenEvent } from '../utils/fail-open-ledger.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
@@ -2206,7 +2216,10 @@ export function createPhase2Graph(config = {}) {
           // 🛡️ A6-d（2026-11-12 · tab 画板多张 bg 逐张修实锤）：轮次上限 1→2。
           //   第一轮复检 FAIL 数 < 初检（收敛中）⇒ 给第二轮；不收敛或已两轮 ⇒ 拒交付。
           //   计数行同步 retry=n/2。初检走 retry=0/2。
-          const _accMaxRetry = 2;
+          // 🛡️ 2026-11-16 · P0-b：上限改为 env 可调（ACCEPTANCE_MAX_RETRY，默认 1）。
+          //   原硬编码 2 是「零改码关不掉」的唯一一块（日志 retry=n/2 亦写死）；实测 46 单
+          //   打满 2 轮验收、`effective=false` 高频 ⇒ 默认只给 1 轮，且只有阻断类 FAIL 才进轮。
+          const _accMaxRetry = resolveAcceptanceMaxRetry(process.env);
           if ((state._acceptanceRetryCount || 0) < _accMaxRetry) {
             const _retryNo = state._acceptanceRetryCount || 0;
             const acc = runAcceptanceChecks({
@@ -2236,7 +2249,35 @@ export function createPhase2Graph(config = {}) {
               }
             }
             if (acc.fails.length > 0) {
-              // 🛡️ A6-e 最小 diff 修复契约（2026-11-12 · a1ee9908「什么都看不到」实锤）：
+              // 🛡️ 2026-11-16 · P0-b（重试预算分级，docs/2026-11-16-门禁误伤评审与瘦身建议.md）：
+              //   只有「阻断类」FAIL 才配花一轮定向修复。实测 46 次降级交付、`effective=false`
+              //   高频 ⇒ 对可降级缺失（缺文本 / 缺图标 / 背景错挂 / props 断链 / 分组偏差 /
+              //   标题槽未挂）再修一轮基本无效，反而「改 A 引 B」。含阻断码（Dangling =
+              //   index 引用的组件未落盘 ⇒ 产物打不开）才进修复轮。
+              //   🔴 放宽的是**重试预算**，不是判据：判据照旧全跑、FAIL 照旧计数、待补清单照旧上报。
+              const _clsInit = classifyAcceptanceFails(acc.fails);
+              if (_clsInit.blocking.length === 0) {
+                const _dwInit = formatDeliveryWarnings(_clsInit.degradable);
+                state._acceptanceDeliveredWithWarnings = true;
+                state._acceptanceWarnings = _dwInit.items;
+                state._acceptanceWarningCodes = _dwInit.codes;
+                state._acceptanceMissingTexts = _dwInit.missingTexts;
+                state._acceptanceWarningText = `已交付，但仍有待补内容（${_dwInit.codes.join('、')}）：${_dwInit.text}`;
+                logger.warn(
+                  '🛡️ acceptance 初检未过但均为可降级缺失 ⇒ 零重试直接降级交付（不烧 LLM 轮次）',
+                  {
+                    codes: _dwInit.codes,
+                    missingCount: _dwInit.missingTexts.length,
+                    retryBudget: _accMaxRetry,
+                  },
+                );
+                state.onProgress?.({
+                  stage: '验收',
+                  message: `⚠️ ${state._acceptanceWarningText}`,
+                  status: 'warning',
+                });
+              } else {
+                // 🛡️ A6-e 最小 diff 修复契约（2026-11-12 · a1ee9908「什么都看不到」实锤）：
               //   修复轮曾把 index.vue 重写成 <template #header-right><MainSection/>——
               //   修一张图的挂载被 LLM 自由发挥成重排整个装配（换 slot/换组件树）⇒ 全部
               //   内容塞进外壳右上小槽被裁剪不可见。修复必须是**增量**：装配结构不动。
@@ -2294,11 +2335,12 @@ export function createPhase2Graph(config = {}) {
                 _pendingRetryPolicyId: 'acceptance-fail',
                 _l0CodeRetryGuidance: (state._l0CodeRetryGuidance || '') + '\n' + guidance,
                 _acceptanceRetryCount: (state._acceptanceRetryCount || 0) + 1,
-                _acceptancePrevFailCount: acc.fails.length,
+                  _acceptancePrevFailCount: acc.fails.length,
                 generatedFiles: result.generatedFiles
                   ? Object.keys(result.generatedFiles)
                   : state.generatedFiles,
               };
+              }
             }
           } else {
             // 复检（第 n 轮重试后）：🛡️ A6-d 收敛判定——FAIL 数 < 上一轮且 < 上限 ⇒
@@ -2355,14 +2397,14 @@ export function createPhase2Graph(config = {}) {
             const retryNo = state._acceptanceRetryCount || 1;
             const converged = acc.fails.length < prevCount && acc.fails.length > 0;
             logger.info(
-              `🛡️ acceptance-retry：FAIL=${acc.fails.length} prev=${prevCount} effective=${acc.fails.length === 0} retry=${retryNo}/2`,
+              `🛡️ acceptance-retry：FAIL=${acc.fails.length} prev=${prevCount} effective=${acc.fails.length === 0} retry=${retryNo}/${_accMaxRetry}`,
               {
                 fails: acc.fails.map((f) => `${f.code}: ${f.detail.slice(0, 90)}`),
                 warns: (acc.warns || []).slice(0, 6),
               },
             );
             if (recheckLocated.length > 0) {
-              if (converged && retryNo < 2) {
+              if (converged && retryNo < _accMaxRetry) {
                 // 🛡️ A6-d 收敛中 ⇒ 第二轮定向修复（同 A6-c 双通道：failFiles+reviseFiles）
                 // 🛡️ A6-e：第二轮同样受最小 diff 修复契约约束（同初检分支）。
                 const carrierRebuild2 = needsCarrierRebuild(acc.fails);
@@ -2471,15 +2513,30 @@ export function createPhase2Graph(config = {}) {
       try {
         const sfcBlocked = result?.sfcBlockedDetail || result?.metrics?.sfcBlocked || result?._sfcBlockedFiles || [];
         if (Array.isArray(sfcBlocked) && sfcBlocked.length > 0 && (state._sfcSyntaxRetried || 0) < 2) {
-          const lines = sfcBlocked.slice(0, 5).map(
-            (f) => `- ${f.path}：${(f.errors || []).slice(0, 2).join('；')}`,
-          );
-          const syntaxGuidance = [
-            '【SFC 语法阻断修复指导（写盘门禁实测命中）】',
-            '以下文件存在语法错误被门禁拒绝落盘，必须**重新生成完整文件内容**（不是局部修补）：',
-            ...lines,
-            '要求：严格自闭合标签、开闭标签配对、模板内禁止 <script>/<style> 标签；逐文件消除全部错误。',
-          ].join('\n');
+          // 🛡️ 2026-11-16 配方化（用户硬约束：判据收紧后必须让修复轮有能力过）：
+          //   旧指导只有自然语言「重新生成完整文件」，无可照抄代码形态、无归属段定位
+          //   ⇒ 0d15ab1b 两轮盲修均失败（retry=2/2 effective=false）。改为可照抄配方；
+          //   skeleton 尽力从本轮产物文件集提取，取不到时配方显式降级为「按实测错误
+          //   行列定位、禁止凭空补段」，**不指空段**。
+          let structureSkeleton = '';
+          try {
+            const filesMap =
+              result?.generatedFiles &&
+              typeof result.generatedFiles === 'object' &&
+              !Array.isArray(result.generatedFiles)
+                ? result.generatedFiles
+                : null;
+            if (filesMap) {
+              structureSkeleton =
+                CodeStructureValidator.extractComponentSkeleton(filesMap) || '';
+            }
+          } catch {
+            structureSkeleton = '';
+          }
+          const syntaxGuidance = buildSfcStructureRecipe(sfcBlocked, {
+            round: (state._sfcSyntaxRetried || 0) + 1,
+            skeleton: structureSkeleton,
+          });
           logger.warn('🛡️ SFC 语法阻断 ⇒ 通用单文件重生成重试（上限 1 轮）', {
             files: sfcBlocked.map((f) => f.path),
           });
@@ -6184,15 +6241,27 @@ export function createPhase2Graph(config = {}) {
     //生成修复指导（用于重试）
     let retryGuidance = '';
     if (!result.pass && !result._bypassed) {
+      // 🛡️ P3（2026-11-16）：修复指导只列「值得修」的判据（A 档 = 空产物/白屏/运行时崩/
+      //   语法/整层缺失），其余形态/语义/几何欠佳折叠成一行汇总计数。
+      //   依据：噪声判据（VERT-004 873 次、FLEX-002 831、LAYOUT-001 781…）致败率与基线
+      //   无差异，却逐条灌进 prompt 抢注意力 ⇒ 修复轮改 A 引 B（`effective=false` 高频）。
+      //   明细仍全部进 codeValidationResult 与日志，可观测性不降。
       const blockIssues =
         result.issues?.filter((i) => i.severity === 'BLOCK') || [];
+      const worthyIssues = pickRetryWorthyIssues(blockIssues);
+      const noiseSummary = summarizeNoiseIssues(result.issues || []);
       if (blockIssues.length > 0) {
         retryGuidance =
           '\n\n🔴 上次生成未通过 L0-B 代码结构校验，必须修复以下问题：\n\n';
-        blockIssues.forEach((issue, i) => {
+        (worthyIssues.length > 0 ? worthyIssues : []).forEach((issue, i) => {
           retryGuidance += `${i + 1}. [${issue.id}] ${issue.message}\n`;
           if (issue.file) retryGuidance += `   文件: ${issue.file}\n`;
         });
+        if (worthyIssues.length === 0) {
+          retryGuidance +=
+            '（本轮无「产物不可用」级硬伤，明细见下方汇总行；不要为欠佳项重排结构）\n';
+        }
+        if (noiseSummary.line) retryGuidance += `\n${noiseSummary.line}\n`;
         retryGuidance += '\n请确保：\n';
         retryGuidance += '- 每个 .vue 文件都有 <style lang="less" scoped>\n';
         retryGuidance +=
@@ -6341,9 +6410,17 @@ export function createPhase2Graph(config = {}) {
     //  旧实现为每类可重试错误各写一个消费分支（_semanticRetried / _resourceRetried ...），
     //  新增类型时极易漏改此处——一旦漏改，重试标记无处消费，直接进校验器 → fail-closed。
     //  现统一只认 _pendingRetry，新增可重试类型只改 retry-policy.js，本函数零改动。
+    // 🛡️ 落一（2026-11-16 · mc-max-1794783635302-7ec8fd72 实锤）：消费闸改「读后即清」。
+    //  病灶：`_pendingRetryConsumed` 置 true 后**永不清零**——首轮 acceptance 重试消费过一次后，
+    //  本任务后续任何 `_pendingRetry` 信号（sfc-syntax-blocked 整段丢失重试）在
+    //  `!state._pendingRetryConsumed` 处恒假 ⇒ 静默失效 ⇒ 坏 SFC 不重生成、整段（流量预测折线图）
+    //  丢失仍 completed。真机 iteration 序列：eng(6)→eng(7)→val(8)→eng(9)→[sfc return
+    //  _pendingRetry]→val(10)→…→complete，第 9→10 跳重试信号被吞。
+    //  修法：消费完成即清闸，让每个新信号各自有效一次（与 retry-policy 预算制不冲突——
+    //  预算由 policy.budget 计数，闸门只负责「本信号只消费一次」防双跳）。
     if (state._pendingRetry && !state._pendingRetryConsumed) {
-      state._pendingRetryConsumed = true;
       state._pendingRetry = false;
+      state._pendingRetryConsumed = false; // 读后即清：本信号已消费，闸门复位待下一个信号
       // 🛡️ 同步消费旧标记（mc-max-1787927914106 实锤，2026-08-29）：engineer 侧
       // 判定可重试时除置统一 _pendingRetry 外，还「向后兼容」置 _semanticRetried/_resourceRetried
       // （本文件 1189-1194 行）。若此处只清 _pendingRetry、不清旧标记，下一轮生成成功后
@@ -6380,7 +6457,28 @@ export function createPhase2Graph(config = {}) {
 
     // ✅ fail-closed: 真正的 BLOCK（未 degrade bypass）绝不进入 complete / 精修
     if (!r.pass && !r._bypassed) {
-      if (retryCount <= maxRetry) {
+      // 🛡️ 2026-11-16 · P0-b（重试预算分级）：只有 A 档「产物确定不可用」（空产物/白屏/
+      //   运行时崩/语法不过/整层缺失/打不开）才占重试预算；B-C 档（静态形态、语义标签、
+      //   几何欠佳、命名规范）零重试直接走软失败降级交付。
+      //   依据：51 个 completed 100% 带 BLOCK 信号却全部降级放行，为形态类判据白烧 57 次
+      //   L0-B 轮次，且修复轮 `effective=false` 高频（改 A 引 B）。
+      //   回退：MVGO_GATE_RETRY_POLICY=legacy 即恢复「任何 BLOCK 都重试」的旧口径。
+      const _retryBudgetWorthy =
+        isLegacyRetryPolicy(process.env) || shouldRetryL0B(r.issues);
+      if (retryCount <= maxRetry && !_retryBudgetWorthy) {
+        logger.warn(
+          '🛡️ L0-B 未过但无 A 档硬伤 ⇒ 不吃重试预算，直接降级交付',
+          {
+            retryCount,
+            maxRetry,
+            blockIds: (r.issues || [])
+              .filter((i) => i.severity === 'BLOCK')
+              .map((i) => i.id)
+              .slice(0, 12),
+          },
+        );
+      }
+      if (retryCount <= maxRetry && _retryBudgetWorthy) {
         // 🛡️ P0-5 修复：检查修复指导是否存在
         if (
           !state._l0CodeRetryGuidance ||

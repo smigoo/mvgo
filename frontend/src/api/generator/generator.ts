@@ -538,3 +538,14 @@ export async function getRefineDiff(
   )
   return response.data
 }
+
+/**
+ * 视觉分析溯源（只读）：并排取回「视觉 LLM 原始输出」与「管线处理后 plan」，
+ * 供任务详情/进度面板判断问题出在视觉模型还是后续管线。
+ */
+export async function getTaskVisionTrace(sessionId: string): Promise<any> {
+  const response = await generatorRequest.get(
+    `/tasks/${encodeURIComponent(sessionId)}/vision-trace`,
+  )
+  return response.data
+}

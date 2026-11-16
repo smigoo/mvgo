@@ -2368,9 +2368,24 @@ export function formatAcceptanceGuidance(fails) {
         '     flex-direction:column（数值/标签按真值顺序），禁止把三块平铺成 grid 或全塞进同一行。',
       ].join('\n')
     : '';
+  // 🛡️ P3（2026-11-16 · docs/2026-11-16-门禁误伤评审与瘦身建议.md §3 C 档）：
+  //   可降级项（缺文本/缺图标/背景错挂/分组偏差/props 断链/标题槽未挂）不再逐条铺进
+  //   修复正文——它们与阻断类混排会让模型把注意力花在「欠佳」上（实测 effective=false
+  //   高频，改 A 引 B）。现在正文只给阻断类明细，其余折叠成一行汇总；**判据与配方不受影响**
+  //   （各 recipe 仍按 fails 里是否出现对应 code 触发，配方完整性不变）。
+  const _clsGuide = classifyAcceptanceFails(fails);
+  const briefLines =
+    _clsGuide.blocking.length > 0 && _clsGuide.degradable.length > 0
+      ? [
+          ..._clsGuide.blocking.map((f, i) => `${i + 1}. [${f.code}] ${f.detail}`),
+          `⚠️ 另有 ${_clsGuide.degradable.length} 项可降级缺失（${[
+            ...new Set(_clsGuide.degradable.map((d) => d.code)),
+          ].join('、')}）：本轮不必逐条修，交付时统一列入待补清单。`,
+        ]
+      : lines;
   return [
     '以下问题由组件验收判据实测命中，修复时必须逐条消除（禁止跳过/绕过）：',
-    ...lines,
+    ...briefLines,
     tabRecipe,
     bgOwnerRecipe,
     fgRecipe,

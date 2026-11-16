@@ -15,7 +15,13 @@
  *    （逐字迁自 header-geometry-fallback.js 内联闭包）。
  *
  * 迁移纪律：全部实现**逐字迁入**（零行为漂移由既有各刀 spec 全绿证明）；
- * 本模块不做任何新判定，只收拢。
+ * 本模块原则上不做新判定，只收拢。
+ *
+ * 例外（唯一一条，已登记）：`canonicalListItem` 的 **P0-② parts 回退**
+ *   （2026-11-16 · mc-1794808831127-c019cd88）。属**补既有实现的漏**而非新语义：
+ *   原实现对「parts 未能配成 stat」的元素直接丢弃，丢掉的是本就在真值里的文本；
+ *   现改为「自带 text ⇒ 回退纯文本轨」。判据收紧（仅自述 text 在场才算），
+ *   既有阴性 spec（section-semantics 形态④严格性 / 刀34 阴性）不受影响。
  */
 import {
   roleOf,
@@ -139,7 +145,35 @@ export function canonicalListItem(it) {
     // 🛡️ parts 形态：value 容器自身无 text，数值/标签在 parts 的角色节点中。
     if (Array.isArray(el?.parts)) {
       const stat = normListPartsStat(el);
-      if (stat) contentStats.push(stat);
+      if (stat) {
+        contentStats.push(stat);
+        continue;
+      }
+      // 🛡️ P0-②（2026-11-16 · mc-1794808831127-c019cd88 实锤）：「parts + 自述 text」
+      //   的**被拆散文本节点**回退纯文本轨。
+      //   实锤：Figma 该处是**单个 TEXT 节点**（`1:384` chars="环境温度\n15:34"，
+      //   字号 14 / 行高 21 / 两行），vision 把它拆成
+      //   `{type:'label', text:'环境温度', parts:[{type:'time', text:'15:34'}]}`。
+      //   而 `normListPartsStat` 要「parts 内恰 1 个 number」——此处 parts 只有 `time`
+      //   ⇒ 返回 null ⇒ 旧码在此**直接 continue、整块丢弃** ⇒ 产物 `FG_LIST_ITEMS`
+      //   该行 `texts:[]`（＝用户实报「左文本块整块丢失」，右块因 `texts:[]` 落入
+      //   `margin-left:auto` 的 else 视觉、并 nowrap 溢出）。
+      //   判据（**刻意收紧**，把爆炸半径压到最小）：
+      //     - 仅当该元素**自带非空 `text`**（＝确有被拆散的文本本体）才回退；
+      //       纯 value 容器（无自述 text、parts 里多个 number 等歧义态）**保持既有
+      //       「歧义不猜、不落 text 兜底」语义逐字不变**（形态④严格性 / 刀34 阴性
+      //       两处既有 spec 正是防这条回潮）。
+      //     - 还原口径：容器自述 text 优先，随后按 parts 树序逐条并入——即重建该
+      //       TEXT 节点的全部行（`环境温度` + `15:34`），零语义猜测。
+      //     - **纯追加**：stat 成立时逐字不变；stat 为空且无自述 text 时零改动。
+      const own = normListText(el);
+      if (own) {
+        texts.push(own);
+        for (const p of el.parts) {
+          const pn = normListText(p);
+          if (pn) texts.push(pn);
+        }
+      }
       continue;
     }
     // 🛡️ 刀71（2026-11-06 · c-f7451-8f7451ae「华为技术8台」连排实锤）：elements

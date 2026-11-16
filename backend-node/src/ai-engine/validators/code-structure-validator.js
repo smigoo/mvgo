@@ -13,13 +13,13 @@
 const HOST_STYLE_LEAK_PATTERNS = [
   {
     id: 'CODE-004',
-    severity: 'BLOCK',
+    severity: 'WARN',
     regex: /@apply\b|@tailwind\b|@layer\b/,
     message: '检测到 Tailwind 指令，生成组件禁止依赖宿主 Tailwind 样式链',
   },
   {
     id: 'CODE-005',
-    severity: 'BLOCK',
+    severity: 'WARN',
     regex:
       /from\s*["']@inspira-ui\/plugins["']|from\s*["']tailwindcss["']|from\s*["']tw-animate-css["']|import\s*["']@inspira-ui\/plugins["']|import\s*["']tailwindcss["']|import\s*["']tw-animate-css["']/,
     message: '检测到宿主 UI / Tailwind 依赖导入，生成组件必须保持自包含',
@@ -1170,7 +1170,7 @@ export class CodeStructureValidator {
             const hasScopedOnly = /<style[^>]*scoped/.test(content);
             issues.push({
               id: 'CODE-001',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: filePath,
               message: hasScopedOnly
                 ? '子组件 style 块缺少 lang="less" 属性，必须为 <style lang="less" scoped>'
@@ -1180,7 +1180,7 @@ export class CodeStructureValidator {
           if (!content.includes('@import') || !content.includes('index.less')) {
             issues.push({
               id: 'CODE-002',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: filePath,
               message:
                 "子组件若有 <style> 块，必须 @import '../../resources/styles/index.less'（或对应层级路径）",
@@ -1197,7 +1197,7 @@ export class CodeStructureValidator {
             const hasScopedOnly = /<style[^>]*scoped/.test(content);
             issues.push({
               id: 'CODE-001',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: filePath,
               message: hasScopedOnly
                 ? 'style 块缺少 lang="less" 属性，必须为 <style lang="less" scoped>'
@@ -1206,7 +1206,7 @@ export class CodeStructureValidator {
           } else {
             issues.push({
               id: 'CODE-001',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: filePath,
               message: '.vue 文件没有任何 style 块',
             });
@@ -1217,7 +1217,7 @@ export class CodeStructureValidator {
         if (!content.includes('@import') || !content.includes('index.less')) {
           issues.push({
             id: 'CODE-002',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: filePath,
             message:
               "未引入 resources/styles/index.less，必须 @import '../resources/styles/index.less'（或对应层级路径）",
@@ -1540,7 +1540,7 @@ export class CodeStructureValidator {
       if (!hasDeferredInit) {
         issues.push({
           id: 'CODE-011',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: filePath,
           message:
             'echarts.init 必须等待 DOM layout settle（onMounted 内先 await nextTick() 再 requestAnimationFrame 后才 init），禁止同步 init；否则 flex 百分比高度未 settle 时图表会定格在小尺寸',
@@ -1569,7 +1569,7 @@ export class CodeStructureValidator {
       if (!hasResizeListener) {
         issues.push({
           id: 'CODE-012',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: filePath,
           message:
             'echarts 实例创建后必须挂 ResizeObserver 或 window.resize 监听，并在回调中调用 chartInstance.resize()；否则图表无法随窗口/容器尺寸变化自适应',
@@ -2277,7 +2277,7 @@ export class CodeStructureValidator {
           if (count > 1) {
             issues.push({
               id: 'CODE-017',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: 'package/index.vue',
               message: `整块背景资源 ${fname} 被直写引用 ${count} 次，资源分发错误（设计上整块背景只应挂一个容器）。请仅在 mountTarget 匹配的容器挂载一次，其余引用剔除`,
             });
@@ -2287,7 +2287,7 @@ export class CodeStructureValidator {
           if (count > 1) {
             issues.push({
               id: 'CODE-017',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: 'package/index.vue',
               message: `整块背景变量 ${v} 被引用 ${count} 次，资源分发错误（同一背景变量只应挂一个容器）。请仅在 mountTarget 匹配的容器挂载一次，其余引用剔除`,
             });
@@ -2379,7 +2379,7 @@ export class CodeStructureValidator {
         for (const d of drifts) {
           issues.push({
             id: 'TEXT-001',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: d.file,
             message: `文本兄弟顺序漂移：Figma 容器「${d.parentName || '(未命名)'}」内文本的视觉顺序为 [${d.expected.join(' → ')}]，产物实际为 [${d.actual.join(' → ')}]（${d.kind === 'array' ? 'script 数组字面量' : 'template 静态兄弟元素'}）。文案全部正确但顺序错误——Figma 图层顺序≠视觉顺序，请按视觉坐标排序重排（水平组按 x、垂直组按 y）`,
           });
@@ -2459,7 +2459,7 @@ export class CodeStructureValidator {
             .join('、');
           issues.push({
             id: 'COMP-001',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: 'package/index.vue',
             message: `模块组装缺失：componentPlan 强制拆分了 ${total} 个 section，但 index.vue 未组装其中 ${missingSections.length} 个（${titles}）——这些模块在预览中整块消失。请在 index.vue 模板中通过 <子组件 /> 引用对应子组件（package/components/ 下已有生成文件），或将该 section 内容内联渲染，确保所有规划模块全部落地`,
             hint: {
@@ -2572,7 +2572,7 @@ export class CodeStructureValidator {
           const foreign = ci.foreignTexts.slice(0, 6).join('、');
           issues.push({
             id: 'COMP-002',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: ci.file,
             message: `内容归属错装：组件「${ci.file}」的骨架绑定 section ${ci.sectionId}，但该 section 的真值文案（${truth}）一个都没有渲染，反而渲染了只属于其它 section 的文案（${foreign}）——这些内容本应渲染在别的模块里，导致本模块空白 + 别的模块内容重复。请严格按该 section 的真值文案重写本组件的内容，不要复用邻居 section 的标题/标签/数值`,
             hint: {
@@ -2625,19 +2625,19 @@ export class CodeStructureValidator {
             : '';
           
           // 🛡️ L4 / P0-6（2026-09-07）：标题级核心文案篡改必 BLOCK，不受「≤2 处」阈值豁免。
-          // 先判标题级（t- 前缀 Figma TEXT 节点）篡改 → BLOCK；否则沿用 09-04 阈值策略。
+          // 🛡️ 2026-11-16 改为统一阈值制（P2，docs/2026-11-16-门禁误伤评审与瘦身建议.md）：
+          //   「标题级必 BLOCK」实测是残留误伤面——源码自认「仅『房址』1 处 OCR 误读即重试
+          //   耗尽」，标题同样会被 OCR 错读（换行/异体字/单位符号），把它与「大量臆造」同等
+          //   对待会让一轮白烧。现统一按处数阈值裁决：≤2 处 WARN（交付 + 待补清单点名可改），
+          //   >2 处仍 BLOCK（大量臆造是真问题）。标题级仍单独留痕，便于观测误读集中在标题。
           const titleSeverity = resolveTextTruthSeverity(unknownTexts, options.figmaNodeData);
           const TEXT_TRUTH_BLOCK_THRESHOLD = 2;
           const severity =
-            titleSeverity === 'BLOCK' || unknownTexts.length > TEXT_TRUTH_BLOCK_THRESHOLD
-              ? 'BLOCK'
-              : 'WARN';
+            unknownTexts.length > TEXT_TRUTH_BLOCK_THRESHOLD ? 'BLOCK' : 'WARN';
           const thresholdNote =
-            titleSeverity === 'BLOCK'
-              ? '（标题级核心文案被篡改，必 BLOCK——不受 ≤2 处阈值豁免）'
-              : severity === 'WARN'
-                ? `（≤${TEXT_TRUTH_BLOCK_THRESHOLD} 处降级为 WARN，允许少量 OCR 误读通过）`
-                : `（>${TEXT_TRUTH_BLOCK_THRESHOLD} 处升级为 BLOCK，防止大量臆造）`;
+            severity === 'WARN'
+              ? `（≤${TEXT_TRUTH_BLOCK_THRESHOLD} 处降级为 WARN，允许少量 OCR 误读通过${titleSeverity === 'BLOCK' ? '，含标题级' : ''}）`
+              : `（>${TEXT_TRUTH_BLOCK_THRESHOLD} 处升级为 BLOCK，防止大量臆造${titleSeverity === 'BLOCK' ? '，含标题级篡改' : ''}）`;
           
           issues.push({
             id: 'TEXT-TRUTH',
@@ -3249,7 +3249,7 @@ export class CodeStructureValidator {
         if (offenders.length > 0) {
           issues.push({
             id: 'PROP-BIND',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: offenders[0].split(' → ')[0],
             message:
               `绑定了 declare.json **未声明**的 businessProps 键，运行期必然取不到值、该区块渲染为空：` +
@@ -3313,7 +3313,7 @@ export class CodeStructureValidator {
             .join('；');
           issues.push({
             id: 'SEMANTIC-BINDING',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: '(semantic-binding-guard)',
             message: `语义元素错绑：${details}。角标/徽标数据（如"3/3740"）应出现在角标位置，不得绑定到进度/比例字段`,
             hint: {
@@ -3349,15 +3349,18 @@ export class CodeStructureValidator {
         } catch (err) {
           issues.push({
             id: 'CODE-021-ERROR',
-            severity: 'BLOCK',
+            // 🛡️ 2026-11-16：检测器自身异常 ⇒ fail-open WARN（与其余 17 个 -ERROR 口径一致）。
+            //   检测 bug 不该让整单失败；且 CODE-021 已摘出发布硬闸，此处保留 BLOCK 只会
+            //   制造「自家异常 ⇒ 白屏级阻断」的假闭。
+            severity: 'WARN',
             file: 'package/index.vue',
-            message: `子组件死代码检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+            message: `子组件死代码检测器执行异常（非阻断）：${err?.message || String(err)}`,
           });
         }
         if (deadImports.length > 0) {
           issues.push({
             id: 'CODE-021',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: 'package/index.vue',
             message: `子组件死代码：index.vue import 了 ${deadImports.length} 个子组件但模板 0 处引用（${deadImports.join('、')}）。请在模板中通过 <${deadImports[0]} /> 等标签装配这些子组件，或删除未使用的 import——当前真实结构只活在未挂载的子组件里，预览整块丢失`,
             hint: {
@@ -3446,9 +3449,11 @@ export class CodeStructureValidator {
         } catch (err) {
           issues.push({
             id: 'CODE-023-ERROR',
-            severity: 'BLOCK',
+            // 🛡️ 2026-11-16：检测器异常 ⇒ fail-open WARN。真悬空由 CODE-023 本体负责，
+            //   且真机 RUNTIME 探针会独立兜住「加载失败/白屏」，不需要靠自家异常来拦。
+            severity: 'WARN',
             file: 'package/index.vue',
-            message: `悬空子组件标签检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+            message: `悬空子组件标签检测器执行异常（非阻断）：${err?.message || String(err)}`,
           });
         }
         if (dangling.length > 0) {
@@ -3495,16 +3500,17 @@ export class CodeStructureValidator {
         } catch (err) {
           issues.push({
             id: 'CODE-022-ERROR',
-            severity: 'BLOCK',
+            // 🛡️ 2026-11-16：检测器异常 ⇒ fail-open WARN（同 021/023 口径）。
+            severity: 'WARN',
             file: filePath,
-            message: `资源变量未挂载检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+            message: `资源变量未挂载检测器执行异常（非阻断）：${err?.message || String(err)}`,
           });
           continue;
         }
         if (unmounted.length > 0) {
           issues.push({
             id: 'CODE-022',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: filePath,
             message: `资源变量未挂载：${filePath} import 了 ${unmounted.length} 个资源变量但模板/脚本 0 处引用（${unmounted.join('、')}）。背景/图标资源只 import 不挂载会导致大卡/标签背景整块丢失，请在模板中用 :src="icon" 或 :style="{ backgroundImage: 'url(' + bg + ')' }" 挂载，或删除未使用的 import`,
             hint: {
@@ -3605,7 +3611,7 @@ export class CodeStructureValidator {
       } catch (err) {
         issues.push({
           id: 'CODE-020-ERROR',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: '(class-name-guard)',
           message: `反向类名检测器执行异常（fail-closed）：${err?.message || String(err)}`,
         });
@@ -3613,7 +3619,7 @@ export class CodeStructureValidator {
       if (undefinedCls.length > 0) {
         issues.push({
           id: 'CODE-020',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: 'package/index.vue',
           message: `模板类名未定义：${undefinedCls.length} 个组件 class 在 CSS（*.less）里找不到精确定义（${undefinedCls.slice(0, 6).join('、')}${undefinedCls.length > 6 ? ' 等' : ''}）。class 前缀不匹配会导致样式选择器不命中、整块样式失效，请统一模板与 CSS 的类名（使用完整组件前缀）`,
           hint: {
@@ -3647,7 +3653,7 @@ export class CodeStructureValidator {
       } catch (err) {
         issues.push({
           id: 'CODE-024-ERROR',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: '(classname-contract)',
           message: `类名契约检测器执行异常（fail-closed）：${err?.message || String(err)}`,
         });
@@ -3656,7 +3662,7 @@ export class CodeStructureValidator {
       if (blocking.length > 0) {
         issues.push({
           id: 'CODE-024',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: blocking[0].file || 'package/index.vue',
           message:
             `类名契约违规（${blocking.length} 项）：` +
@@ -3713,7 +3719,7 @@ export class CodeStructureValidator {
       if (blocking.length > 0) {
         issues.push({
           id: 'CODE-025',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: blocking[0].file || 'package/index.vue',
           message:
             `资源契约违规（${blocking.length} 项）：` +
@@ -3759,7 +3765,7 @@ export class CodeStructureValidator {
       } catch (err) {
         issues.push({
           id: 'CODE-026-ERROR',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: '(mc-skeleton)',
           message: `骨架完整性检测器执行异常（fail-closed）：${err?.message || String(err)}`,
         });
@@ -3767,7 +3773,7 @@ export class CodeStructureValidator {
       if (skeletonViolations.length > 0) {
         issues.push({
           id: 'CODE-026',
-          severity: 'BLOCK',
+          severity: 'WARN',
           file: skeletonViolations[0].file,
           message:
             `微码产物骨架不完整（${skeletonViolations.length} 项）：` +
@@ -4217,7 +4223,7 @@ export function checkFlexSourceConflicts(files = []) {
         : '';
     issues.push({
       id: 'FLEX-003',
-      severity: 'BLOCK',
+      severity: 'WARN',
       file: [...fileGrows.keys()].join(' ↔ '),
       message: `同一 class .${cls} 在不同样式源中声明了不同的 flex 值（${detail}）${scopedNote}。区块高度比例将按其中一套错误值计算，导致各模块高度比例与 Figma 设计稿不符`,
       hint: {
@@ -4285,7 +4291,7 @@ export function checkFlexUsage(styleContent) {
     if (hasFlexChild && !hasMinHeight0) {
       issues.push({
         id: 'FLEX-001',
-        severity: 'BLOCK',
+        severity: 'WARN',
         message: `column-flex 容器 ${b.selector} 内含 flex:1 子元素但缺少 min-height:0，高度会被内容撑破（echarts/表格类容器必现）`,
         suggestion: `在 ${b.selector} 中补 \`min-height: 0;\`，且所有 flex:1 子元素同样需要 min-height:0`,
         autoFix: true,

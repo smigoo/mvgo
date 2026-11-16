@@ -7,17 +7,23 @@
  * var(--color*) 引用为 0）。
  *
  * 职责：确定性扫描生成产物，判定违规：
- *   1. THEME-PRESET-OVERRIDE（BLOCK，≤2 处降 WARN）：非槽位文件里本地重声明框架预设变量
+ *   1. THEME-PRESET-OVERRIDE（WARN，2026-11-16 P0 由阈值 BLOCK 降级）：非槽位文件里本地重声明框架预设变量
  *      （`@colorTextBase: #333;` / `--colorPrimary: #fff;`）——用「变量名」掩盖硬编码，
  *      并覆盖主题 mixin 接收变量（DailyTotal.vue:69 反模式）。
  *      豁免形态：值为 var() 透传声明（`@fontSize: var(--fontSize)`，file-writer 自愈产物）
  *      = 接入主题变量而非覆盖 → 不记违规（2026-09-04）。
- *   2. THEME-SLOT-COLOR（BLOCK，≤3 处降 WARN）：颜色属性值直接**抄写主题槽位色值**
+ *   2. THEME-SLOT-COLOR（WARN，2026-11-16 P0 降级）：颜色属性值直接**抄写主题槽位色值**
  *      （#hex 与 theme-vars.less 槽值一致却写死）——必须改为变量引用。
  *   3. THEME-SPECIAL-COLOR（WARN）：独立字面量但不属于槽位（图例/功能/渐变/SVG
  *      fill/stroke 等设计专色）——提示可变量化，不阻断（避免误杀数据可视化语义色）。
  *   4. 阈值降级（2026-09-04）：确定性自愈后少量残留不硬 BLOCK——LLM 生成路径
  *      无法稳定 0 违规时，硬 BLOCK+重试耗尽 = 任务 100% 失败（mc-max-1788505197306 实锤）。
+ *   5. 🛡️ P0 全量降级（2026-11-16 · docs/2026-11-16-内置组件全量审计.md）：
+ *      **所有 THEME-* 判据统一 WARN**（含原固定 BLOCK 的 MIXINS-IDENTICAL / SLOT-LOCAL-OVERRIDE）。
+ *      依据：后果一律「切主题不生效」，产物能打开、当前配色正确；判据只认静态形态，
+ *      修复靠确定性自愈（LLM 重试零收益）；全量 1137 个产物中 224 个「仅由 THEME-* 致
+ *      BLOCK」的组件里 57 个 runtimeVerified=true（真机跑通仍判死）= 确凿误伤。
+ *      唯一保留 BLOCK 的是 **VAR-SUFFIX-ILLEGAL**（非法 CSS 值，整条声明被浏览器丢弃）。
  *
  * 豁免 / fail-open：
  *   - themes/ 目录（槽位定义处 = 唯一允许硬编码色值的位置）、config/、declare.js 等
@@ -688,14 +694,23 @@ export function detectThemeColorViolations(generatedFiles) {
     //   healCommonColorVars 放宽前置条件（单侧/双侧缺失都先补写再删，存量写盘即收敛）；
     //   ③ 判据收敛到 isCommonColorConflictVar 单一来源（生成器/自愈器/门禁同口径）。
     //   保留 ≤N 处 WARN 缓冲，防精修路径偶发残留硬失败。
-    const commonColorSeverity =
-      commonColorVars.length <= COMMON_COLOR_WARN_UP_TO ? 'WARN' : 'BLOCK';
+    // 🛡️ P0（2026-11-16 · docs/2026-11-16-内置组件全量审计.md §4）：severity 由
+    //   「阈值 BLOCK」改为**固定 WARN**。四问依据：
+    //   ① 后果是「切主题不生效」，产物**能打开、当前配色正确**，不属「打不开/白屏」；
+    //   ② 判据只认「.common() 里声明了几个颜色变量」这一静态形态，与元素是否真渲染无关；
+    //   ③ 修复靠确定性自愈器 healCommonColorVars（LLM 重试对静态形态零收益）；
+    //   ④ 全量 1137 个产物实测：224 个「仅由 THEME-* 致 BLOCK」的组件里 57 个 runtimeVerified=true
+    //      （真机已跑通仍被判死）= 确凿误伤。
+    //   判据、计数、message、hint 一条不删；超缓冲阈值仍在文案里点名「大面积抄写」，
+    //   并照旧进 gateScore 与待补清单。
+    const commonColorSeverity = 'WARN';
+    const commonColorOver = commonColorVars.length > COMMON_COLOR_WARN_UP_TO;
     const varList = commonColorVars.map((v) => `${v.name}: ${v.value}`).join('、');
     issues.push({
       id: 'THEME-COMMON-COLOR-VAR',
       severity: commonColorSeverity,
       file: 'resources/styles/themes/theme-vars.less',
-      message: `${commonColorSeverity === 'WARN' ? `（≤${COMMON_COLOR_WARN_UP_TO} 处降级 WARN：不阻断本次生成，建议精修期清理）` : ''}.common() 内定义了 ${commonColorVars.length} 个颜色变量（${varList}）→ LESS 的 mixin 变量不覆盖 caller 已有同名变量，.common() 抢先定义后 .theme-light()/.theme-dark() 被静默忽略 → .dark/.light 编译结果完全相同、切主题零生效。请把这些颜色变量移入 .theme-light() 与 .theme-dark() 各自定义，.common() 只保留字号/圆角等跨主题共享令牌。`,
+      message: `${commonColorSeverity === 'WARN' ? `（非阻断${commonColorOver ? `：已达 ${commonColorVars.length} 处、超缓冲阈值 ${COMMON_COLOR_WARN_UP_TO}，属大面积抄写，精修期优先清理` : '：少量残留，建议精修期清理'}）` : ''}.common() 内定义了 ${commonColorVars.length} 个颜色变量（${varList}）→ LESS 的 mixin 变量不覆盖 caller 已有同名变量，.common() 抢先定义后 .theme-light()/.theme-dark() 被静默忽略 → .dark/.light 编译结果完全相同、切主题零生效。请把这些颜色变量移入 .theme-light() 与 .theme-dark() 各自定义，.common() 只保留字号/圆角等跨主题共享令牌。`,
       hint: {
         suggestion:
           '删除 .common() 内的 @colorX 定义，分别写进 .theme-light() / .theme-dark()（两处都要有，避免其中一个主题缺值编译失败）',
@@ -704,12 +719,11 @@ export function detectThemeColorViolations(generatedFiles) {
   }
 
   if (presets.length > 0) {
-    // 🛡️ 2026-09-04 阈值降级：≤PRESET_WARN_UP_TO 处降 WARN（少量残留不硬失败），超阈值仍 BLOCK
-    const severity = presets.length <= PRESET_WARN_UP_TO ? 'WARN' : 'BLOCK';
-    const thresholdNote =
-      severity === 'WARN'
-        ? `（≤${PRESET_WARN_UP_TO} 处降级 WARN：建议在精修期删除本地声明或改 var(--preset, 值) 透传，不阻断本次生成）`
-        : '';
+    // 🛡️ P0（2026-11-16）：同 THEME-COMMON-COLOR-VAR —— 阈值 BLOCK 改固定 WARN。
+    //   本地重声明预设变量后果是「主题色被本地字面量盖住」，产物仍按本地值正确渲染。
+    const severity = 'WARN';
+    const presetsOver = presets.length > PRESET_WARN_UP_TO;
+    const thresholdNote = `（非阻断${presetsOver ? `：${presets.length} 处已超缓冲阈值 ${PRESET_WARN_UP_TO}，属大面积覆盖，精修期优先清理` : '：少量残留，建议精修期删除本地声明或改 var(--preset, 值) 透传'}）`;
     issues.push({
       id: 'THEME-PRESET-OVERRIDE',
       severity,
@@ -724,9 +738,12 @@ export function detectThemeColorViolations(generatedFiles) {
     //   0.1 让 §3 核心槽位由 buildStyleTokens 确定性产出（设计主题=提取、缺的主题=派生），
     //   0.3-b 对专属槽位做确定性深浅派生 → 两套 mixin 必然不同。
     //   全语料按「整块 mixin 逐字相同」口径复测：基线 23/451=5.1% → 模拟 0.1+0.3-b 后 **0/451=0.0%**。
+    // 🛡️ P0（2026-11-16）：BLOCK → **WARN**。0.1+0.3-b 之后该形态在生成期已 0 命中（全量日志
+    //   0 行），存量重跑命中的是老产物；后果仍是「切主题不生效」，产物能打开、单主题下配色正确。
+    //   判据保留（两套 mixin 同值 = 主题开关失效的真信号），只是不再 fail-closed。
     issues.push({
       id: 'THEME-MIXINS-IDENTICAL',
-      severity: 'BLOCK',
+      severity: 'WARN',
       file: 'resources/styles/themes/theme-vars.less',
       message: `.theme-dark() 与 .theme-light() 的 ${identicalMixins.slotCount} 个槽位值完全相同 → 模式 B（编译期差异化）下 &.dark 与 &.light 展开出的 CSS 完全一致，主题开关彻底失效，且不像模式 A 那样还有运行期注入可补救。请分别为两套 mixin 填入深色稿 / 浅色稿的真实色值。`,
       hint: {
@@ -737,21 +754,21 @@ export function detectThemeColorViolations(generatedFiles) {
   }
 
   if (slotOverrides.length > 0) {
-    // 🔴 与其它主题门禁不同，本项设 **BLOCK**：
-    //   ① 后果最重 —— 直接让 .theme-dark()/.theme-light() 两套槽位全部作废，
-    //      .dark 与 .light 编译结果逐字相同，主题开关彻底失效；
-    //   ② 修复最轻 —— 纯删除即可，且可由 less-variable-checker 确定性自愈，
-    //      不需要 LLM 重新生成；
-    //   ③ 命中面可控 —— 全语料 53/254（20%），远低于 THEME-MIXINS-IDENTICAL 的 41%。
+    // 🛡️ P0（2026-11-16）：原设 BLOCK，现改 **WARN**。原文三条理由里 ②③ 恰恰是降级依据：
+    //   ① 后果仍是「切主题不生效」——.dark/.light 编译结果同值，但单主题下渲染正确、能打开；
+    //   ② 修复最轻 = 纯删除 + less-variable-checker 确定性自愈 ⇒ **不需要 LLM 重试**，
+    //      而 BLOCK 的唯一边际收益就是逼出重试（零收益）；
+    //   ③ 命中面 20% 属系统性形态，fail-closed 只会批量打红而不改善产物。
+    //   判据、计数、message（删哪几行）全部保留。
     const nameList = slotOverrides
       .map((h) => String(h.sample).split(':')[0].trim())
       .slice(0, 6)
       .join('、');
     issues.push({
       id: 'THEME-SLOT-LOCAL-OVERRIDE',
-      severity: 'BLOCK',
+      severity: 'WARN',
       file: slotOverrides[0].file,
-      message: `业务样式里有 ${slotOverrides.length} 处**文件级**槽位变量字面量重声明（${nameList}）→ LESS 变量「首个定义者胜出」，会在 .theme-dark()/.theme-light() 之前抢先定义同名变量，导致两套槽位值被静默忽略 → .dark 与 .light 编译结果逐字相同，主题开关彻底失效。删除这些声明即可恢复（实测：删 2 行就让 9 个槽位恢复生效）。${fmt(slotOverrides)}`,
+      message: `（非阻断：切主题不生效，单主题下渲染正确）业务样式里有 ${slotOverrides.length} 处**文件级**槽位变量字面量重声明（${nameList}）→ LESS 变量「首个定义者胜出」，会在 .theme-dark()/.theme-light() 之前抢先定义同名变量，导致两套槽位值被静默忽略 → .dark 与 .light 编译结果逐字相同，主题开关彻底失效。删除这些声明即可恢复（实测：删 2 行就让 9 个槽位恢复生效）。${fmt(slotOverrides)}`,
       hint: {
         suggestion:
           '删除 common.less / .vue <style> 文件顶层的 @color-*: <字面量> 声明；需要该颜色时直接引用槽位变量（值由 .theme-dark()/.theme-light() 提供）。色值只允许出现在 theme-vars.less 的主题 mixin 里',
@@ -767,12 +784,16 @@ export function detectThemeColorViolations(generatedFiles) {
     const nameList = [...new Set(varNameHits.map((v) => v.name))].slice(0, 6).join('、');
     // 🛡️ 2026-09-26：由「统一 WARN」升级为**阈值 BLOCK**（>3 处 BLOCK，≤3 处 WARN）。
     //   前置已治本：0.2 断 hex→var() 源、0.3-a 修 healer 覆盖率（80.9%→3.1%）+ 补框架语义色槽位。
-    const varNameSeverity = varNameHits.length <= VAR_NAME_WARN_UP_TO ? 'WARN' : 'BLOCK';
+    // 🛡️ P0（2026-11-16）：阈值 BLOCK 改固定 WARN（同族口径）。生成期实测该 id 592 次
+    //   命中**全部是自愈提示 WARN、0 次 BLOCK**（healBusinessStyleVarRefs 已消化），
+    //   存量重跑的超阈值命中是老产物没跑过自愈器 ⇒ BLOCK 只会打红，不改善产物。
+    const varNameSeverity = 'WARN';
+    const varNameOver = varNameHits.length > VAR_NAME_WARN_UP_TO;
     issues.push({
       id: 'THEME-VAR-NAME-MISMATCH',
       severity: varNameSeverity,
       file: varNameHits[0].file,
-      message: `${varNameSeverity === 'WARN' ? `（≤${VAR_NAME_WARN_UP_TO} 处降级 WARN：不阻断本次生成，建议精修期清理）` : ''}业务样式（common.less / .vue <style>）里直引了 ${varNameHits.length} 处 CSS 变量（${nameList}）→ 模式 A 残留。模式 B 下颜色差异化由 .theme-dark()/.theme-light() 两套槽位在**编译期**决定，业务样式应写 @color-xxx 槽位变量；直引 var() 会退化成依赖运行期注入，而平台并不注入这些名字 → fallback 恒生效（且多为写死字面量）→ 切主题零生效。${fmt(varNameHits)}`,
+      message: `${varNameSeverity === 'WARN' ? `（非阻断${varNameOver ? `：${varNameHits.length} 处已超缓冲阈值 ${VAR_NAME_WARN_UP_TO}，属大面积直引` : '：少量残留'}，建议精修期清理）` : ''}业务样式（common.less / .vue <style>）里直引了 ${varNameHits.length} 处 CSS 变量（${nameList}）→ 模式 A 残留。模式 B 下颜色差异化由 .theme-dark()/.theme-light() 两套槽位在**编译期**决定，业务样式应写 @color-xxx 槽位变量；直引 var() 会退化成依赖运行期注入，而平台并不注入这些名字 → fallback 恒生效（且多为写死字面量）→ 切主题零生效。${fmt(varNameHits)}`,
       hint: {
         suggestion:
           '删除业务样式里的 var(--colorX, ...)，改为引用 theme-vars.less 中 .theme-dark()/.theme-light() 已定义的 @color-xxx 槽位变量；var() 只保留在 .common() 的透传映射里（如 @fontSize: var(--fontSize)）',
@@ -795,12 +816,12 @@ export function detectThemeColorViolations(generatedFiles) {
     });
   }
   if (slotHits.length > 0) {
-    // 🛡️ 2026-09-04 阈值降级：≤SLOT_WARN_UP_TO 处降 WARN（自愈后少量残留不硬失败）
-    const severity = slotHits.length <= SLOT_WARN_UP_TO ? 'WARN' : 'BLOCK';
-    const thresholdNote =
-      severity === 'WARN'
-        ? `（≤${SLOT_WARN_UP_TO} 处降级 WARN：建议在精修期改为 @color-xxx 槽位变量引用，不阻断本次生成）`
-        : '';
+    // 🛡️ P0（2026-11-16）：阈值 BLOCK 改固定 WARN。该 id 是全量审计第一大户（172 个组件
+    //   命中），后果一律「该元素不响应主题」，组件能打开、当前配色正确；修复为确定性
+    //   槽位变量替换（LLM 重试无边际收益）。判据、计数、message（列出抄写位置）全保留。
+    const severity = 'WARN';
+    const slotOver = slotHits.length > SLOT_WARN_UP_TO;
+    const thresholdNote = `（非阻断${slotOver ? `：${slotHits.length} 处已超缓冲阈值 ${SLOT_WARN_UP_TO}，属大面积抄写，精修期优先清理` : '：少量残留，建议精修期改为 @color-xxx 槽位变量引用'}）`;
     issues.push({
       id: 'THEME-SLOT-COLOR',
       severity,

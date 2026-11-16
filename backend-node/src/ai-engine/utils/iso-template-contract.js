@@ -71,6 +71,13 @@ export function buildIsoTemplateContractText(iso, file = '本文件') {
   out.push(
     `5. 本模板会被 ${iso.groupSize} 个段复用，请按「最通用、最贴真值」的形态实现，不要为单一段做特殊分支。`,
   );
+  // 🎯 R-a ②（2026-11-16 · 68783bf6 实锤）：fail-open 分支契约。
+  //   旧契约只写「index 会用 v-for」的**预期形态**，没有任何 fail-open 指令 ⇒ 一旦改写因
+  //   属性不可表达而回退「逐段挂载」，代表模板被以**无 props** 形态挂载时直接渲染成空白空壳。
+  out.push(
+    `6. **fail-open 兜底**：系统**不保证** index 一定以 \`v-for\` 复用本模板（若段挂载标签属性不可表达，会退回「逐段挂载」形态 ⇒ 本模板可能被以**无 props** 形态挂载一次）。` +
+      `因此 \`items\` 为空时**禁止整段不渲染**：必须仍渲染出 \`title\` 与可见的空态/骨架（\`v-if="items && items.length"\` 正常分支 + \`v-else\` 占位），避免退化为一片空白。`,
+  );
   return out.join('\n') + '\n';
 }
 

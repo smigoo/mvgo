@@ -572,9 +572,11 @@ function isHeaderLikeSection(section) {
  * @param {object} figmaData Figma 节点树
  * @param {object} [stats] 可选 out param：回填各分支命中数，供调用方打真机日志计数行
  *   （判据必须挂日志计数，只靠入参塞值验证 = 假绿）
+ * @param {Array<string>} [excludedIds] 🛡️ P2（2026-11-16）：chrome 剥离节点 id 排他集
+ *   （parsed.chromeStrippedNodeIds），几何并集不得吸收这些节点及其归属容器
  * @returns {number} 写入比例的元素数
  */
-export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
+export function applyFigmaSectionRatios(sections, figmaData, stats = null, excludedIds = null) {
   if (!Array.isArray(sections) || !figmaData) return 0
   const figmaNodes = collectFigmaNodes(figmaData)
   const regions = collectSectionRegions(figmaData)
@@ -624,7 +626,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
         node: rootNodes[i],
       }))
       bump('rootDirect', directMatched.length)
-      return writeSectionRatios(directMatched, figmaNodes, stats)
+      return writeSectionRatios(directMatched, figmaNodes, stats, excludedIds)
     }
   }
 
@@ -645,7 +647,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
     }
     if (extra.length === restSections.length && extra.length > 0) {
       bump('idDirectPartial', extra.length)
-      return writeSectionRatios([...idMatched, ...extra], figmaNodes, stats)
+      return writeSectionRatios([...idMatched, ...extra], figmaNodes, stats, excludedIds)
     }
   }
 
@@ -684,7 +686,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
     if (idDirectMatched.length >= 2 && (idDirectMiss === 0 || (adoptsHallucinated && withinBound))) {
       if (adoptsHallucinated) bump('idDirectSkipHallucinated', hallucinatedMiss)
       bump('idDirect', idDirectMatched.length)
-      return writeSectionRatios(idDirectMatched, figmaNodes, stats)
+      return writeSectionRatios(idDirectMatched, figmaNodes, stats, excludedIds)
     }
     // ①-γ section.id 部分命中 + 剩余区域兜底（2026-11-04 治本 · mc-max-1793765119169-4cbe82a2 实锤）
     //   病灶：cp-环境监测(2:7879) 的 vision 4 段里 3 段 id 精确命中 Figma 图元
@@ -748,7 +750,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
           bump('idDirectLeftover', leftoverMatched.length)
           // 🛡️ 计数行取证：①-γ 接管时同样登记缺项数（否则日志只有 leftover、看不出兜底了几段）。
           bump('idDirectMiss', idDirectMiss)
-          return writeSectionRatios([...idDirectMatched, ...leftoverMatched], figmaNodes, stats)
+          return writeSectionRatios([...idDirectMatched, ...leftoverMatched], figmaNodes, stats, excludedIds)
         }
       }
       bump('idDirectLeftoverMiss', 1)
@@ -907,7 +909,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null) {
   if (idMatched.length) bump('figmaNodeId', idMatched.length)
   if (orderMatched.length) bump('order', orderMatched.length)
   if (!matched.length) bump('miss', 1)
-  return writeSectionRatios(matched, figmaNodes, stats)
+  return writeSectionRatios(matched, figmaNodes, stats, excludedIds)
 }
 
 /**
@@ -1033,6 +1035,19 @@ function subtreeHasTechMarker(node, childrenOf, depth = 0) {
   return kids.some((c) => subtreeHasTechMarker(c, childrenOf, depth + 1))
 }
 
+/**
+ * 🛡️ P1/P2（2026-11-16 · c-monitor 73:3 实锤）：子树（含自身）是否命中指定 id 集合。
+ * 判据：候选若是「有归属的容器」——其子树里有已被其他段认领的锚点、或被 chrome 剥离的
+ *   节点——它就不是裸内容块/裸标题条，并进来等于把别人的高度记到本段头上。
+ * depth≤6 与 subtreeHasText 同界（纯深度护栏，无语义）。
+ */
+function subtreeHitsSet(node, childrenOf, idSet, depth = 0) {
+  if (!node || depth > 6 || !idSet || idSet.size === 0) return false
+  if (idSet.has(String(node._id))) return true
+  const kids = childrenOf.get(String(node._id)) || []
+  return kids.some((c) => subtreeHitsSet(c, childrenOf, idSet, depth + 1))
+}
+
 const bboxOfNode = (n) => {
   const b = n && n.bbox
   if (!b) return null
@@ -1046,9 +1061,11 @@ const bboxOfNode = (n) => {
  * @param {Map<string,object[]>} childrenOf
  * @param {Set<string>} claimedIds 所有配对段的锚点 id
  * @param {Array<{id:string, box:object}>} anchors 全部段锚点（最近归属裁决用）
+ * @param {Set<string>|null} [excludedSet] 🛡️ P2（2026-11-16）：被 chrome 剥离的节点 id
+ *   （parsed.chromeStrippedNodeIds 契约字段），候选与父并集一律不得吸收
  * @returns {number} 并集高度（仅当严格高于锚点高时才返回，否则 0）
  */
-function geometricUnionHeightFor(node, section, byId, childrenOf, claimedIds, anchors) {
+function geometricUnionHeightFor(node, section, byId, childrenOf, claimedIds, anchors, excludedSet = null) {
   // 🔴 只对**容器锚点**生效：锚点是裸 TEXT 时（vision 把一行文字升格成段），再去并邻居
   //    就是猜测（既有阴性对照实测 10 → 19，等于凭空给文本行加高）。容器类型判断不依赖命名。
   const anchorType = String(node?.type || '').toUpperCase()
@@ -1071,9 +1088,19 @@ function geometricUnionHeightFor(node, section, byId, childrenOf, claimedIds, an
       const sid = String(sib._id)
       if (sid === String(cur._id) || sid === anchorId) continue
       if (claimedIds.has(sid)) continue
+      // 🛡️ P2（2026-11-16 · c-monitor 73:3）：已被 chrome 剥离的节点（如 header 薄条 1:449）
+      //   不再属于任何业务段，不得被段锚点反向吸收（病灶：27px tab 段吸到 124 顶）。
+      if (excludedSet && excludedSet.has(sid)) continue
       const b = bboxOfNode(sib)
       if (!b) continue
       if (!subtreeHasText(sib, childrenOf)) continue
+      // 🛡️ P1（2026-11-16 · c-monitor 73:3 实锤）：**子树含已认领锚点的容器**排除。
+      //   旧判据只挡「兄弟自身被认领」，挡不住「兄弟是有归属容器的父」——warning-list
+      //   容器 1:376 的叶子卡（1:377/388/400）各自成段，容器未被认领 → 被当裸内容块
+      //   并入 tab 段（gap=10 归上方），27 → 256。有归属的容器不是裸内容。
+      if (subtreeHitsSet(sib, childrenOf, claimedIds)) continue
+      //   同纪律：子树含 chrome 剥离节点的容器同样有归属（剥离的 header 组父级不得复吸）。
+      if (excludedSet && subtreeHitsSet(sib, childrenOf, excludedSet)) continue
       // 🔴 技术标记（`@echarts`/`@antd/tab`）排除**只对内容块生效**：薄条里的 tab 组
       //    （`6sub-header` 内含 `@antd/tab`）本就是该段的标题行，排除它会让「流量预测」
       //    副标题既进不了高度也进不了 header（真机实测 141 不升，即此因）。
@@ -1121,10 +1148,15 @@ function geometricUnionHeightFor(node, section, byId, childrenOf, claimedIds, an
     if (pid == null || pid === '') break
     const parent = byId.get(String(pid))
     if (!parent) break
+    // 🛡️ P2（2026-11-16）：父容器自身是被 chrome 剥离的节点 ⇒ 它已不属于任何业务段，停。
+    if (excludedSet && excludedSet.has(String(parent._id))) break
     const pb = bboxOfNode(parent)
     if (!pb || pb.height > UNION_PARENT_MAX_H) break
+    // 🛡️ P1/P2：父内「其他已认领锚点」或「chrome 剥离节点」都算有归属冲突 ⇒ 不并父。
     const claimedInside = (childrenOf.get(String(parent._id)) || []).filter(
-      (c) => String(c._id) !== String(curForParent._id) && claimedIds.has(String(c._id)),
+      (c) =>
+        String(c._id) !== String(curForParent._id) &&
+        (claimedIds.has(String(c._id)) || (excludedSet !== null && excludedSet.has(String(c._id)))),
     ).length
     if (claimedInside > 0) break
     top = Math.min(top, pb.y)
@@ -1151,7 +1183,7 @@ function geometricUnionHeightFor(node, section, byId, childrenOf, claimedIds, an
  * 🛡️ P0-8（2026-11-14）：第三条来源 —— **几何并集**（上方注释），补「命名不规范就全 miss」
  *   的死角，与既有两条同取 max，只升不降。
  */
-function writeSectionRatios(matched, figmaNodes, stats = null) {
+function writeSectionRatios(matched, figmaNodes, stats = null, excludedIds = null) {
   if (!Array.isArray(matched) || matched.length < 2) return 0
   const byId = new Map()
   const childrenOf = new Map()
@@ -1170,6 +1202,11 @@ function writeSectionRatios(matched, figmaNodes, stats = null) {
   for (const m of matched) {
     if (m?.node?._id != null) claimedIds.add(String(m.node._id))
   }
+  // 🛡️ P2（2026-11-16 · c-monitor 73:3）：chrome 剥离节点 id（契约字段经 options 透传），
+  //   与 claimedIds 同为几何并集的排他面；null/空 ⇒ 旧行为（fail-open）。
+  const excludedSet = Array.isArray(excludedIds) && excludedIds.length > 0
+    ? new Set(excludedIds.map((v) => String(v)))
+    : null
   // 最近归属裁决用的锚点表（id + 自身 bbox）
   const anchors = matched
     .filter((m) => m?.node?._id != null)
@@ -1190,6 +1227,7 @@ function writeSectionRatios(matched, figmaNodes, stats = null) {
       childrenOf,
       claimedIds,
       anchors,
+      excludedSet,
     )
     if (unionH > effH) {
       effH = unionH
@@ -1206,11 +1244,16 @@ function writeSectionRatios(matched, figmaNodes, stats = null) {
   }
   const total = resolved.reduce((a, m) => a + m.node.effectiveH, 0)
   if (!(total > 0)) return 0
-  const avg = total / resolved.length
+  // 🎯 B1-S2 三源归一（2026-11-16 · 68783bf6/fdbb799d/c1ac194a 实锤）：avg=1 → Σ=1 量纲迁移。
+  //   旧实现 flexGrow = effectiveH/avg（Σ=n 量纲），与 codegen 确定性装配的
+  //   flexItemStyleFromHeights（h/(Σh+Σgap)，Σ=1 同层归一）是两套权威量纲，规则②/⑥
+  //   消费时打架（0596cb3c：15%/32%/52% vs 真值 7%/16%/77%）。改为 h/Σ（Σ=1），
+  //   与装配层同一量纲；CSS 语义不变（flex-grow 是同层相对份额，比例常数因子无意义）。
+  //   Σ=1 恒 ≤1，天然远离 FLEX_GROW_SCALES.PIXEL_MIN(20) 误判线。
   let count = 0
   for (const { section, node } of resolved) {
     if (!section.styles) section.styles = {}
-    section.styles.flexGrow = Number((node.effectiveH / avg).toFixed(3))
+    section.styles.flexGrow = Number((node.effectiveH / total).toFixed(3))
     section.styles.flexShrink = 1
     section.styles.flexBasis = 0
     section.styles.figmaHeightPx = Math.round(node.effectiveH) // 仅审计
@@ -1273,11 +1316,11 @@ export function applyFigmaElementHeightRatios(parsed, figmaData, options = {}) {
     const total = heights.reduce((a, b) => a + b, 0)
     if (!(total > 0)) return
 
-    const avg = total / matched.length
+    // 🎯 B1-S2 三源归一（2026-11-16）：avg=1 → Σ=1（同 applyFigmaSectionRatios，量纲统一）。
     for (const { el, node } of matched) {
       if (!el.styles) el.styles = {}
-      // 比例量级（~1），不触犯 FLEX-004 的 flex-grow 量纲混用
-      el.styles.flexGrow = Number((node.effectiveH / avg).toFixed(3))
+      // 同层归一比例（Σ=1），不触犯 FLEX-004 的 flex-grow 量纲混用
+      el.styles.flexGrow = Number((node.effectiveH / total).toFixed(3))
       el.styles.flexShrink = 1
       el.styles.flexBasis = 0
       el.styles.figmaHeightPx = Math.round(node.effectiveH) // 仅审计，产物不得写区块固定高度
@@ -1285,8 +1328,18 @@ export function applyFigmaElementHeightRatios(parsed, figmaData, options = {}) {
     }
   }
 
+  // 🛡️ P2（2026-11-16 · c-monitor 73:3）：chrome 剥离节点排他集。来源优先级：
+  //   显式 options.excludedIds > parsed.chromeStrippedNodeIds（stripChromeSectionsInPlace
+  //   写入的契约字段，visual-parser 主链与 phase2 缓存补跑双消费方经 parsed 自动贯通）。
+  //   两者皆无（旧缓存 / 未剥离）⇒ null ⇒ 旧行为（fail-open）。
+  const excludedIds = Array.isArray(options.excludedIds)
+    ? options.excludedIds
+    : Array.isArray(parsed?.chromeStrippedNodeIds)
+      ? parsed.chromeStrippedNodeIds
+      : null
+
   // 顶层：section 级 1:1 顺序配对（device-switch 靠它按比例约束父列高度）
-  count += applyFigmaSectionRatios(sections, figmaData, options.stats || null)
+  count += applyFigmaSectionRatios(sections, figmaData, options.stats || null, excludedIds)
 
   for (const section of sections) {
     for (const group of collectSiblingGroups(section?.body || section)) {

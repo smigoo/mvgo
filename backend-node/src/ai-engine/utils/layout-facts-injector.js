@@ -304,6 +304,34 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
     const displayMismatch = needsDisplay && !!factDisplay
     const flexDirectionMismatch = needsFlexDirection && !!factDir
 
+    // 🛡️ T2（2026-11-16 · 布局判据收敛方案 §十一）：low 置信闸——**模糊带事实不补缺**。
+    //   口径（三分，与 figma-node-layout-facts 的 source 语义一一对应）：
+    //     · `geometric-inference` + confidence=low = 几何模糊带（side-by-side ratio 0.25~0.75，
+    //       方向本质不确定）：补 = 抛硬币（真机 `807:2` 三段纵排被摊横 / `2:8419` 横排被压纵
+    //       两类血泪都是这个带）⇒ **跳过注入**（display/direction 都不补），留痕可计数。
+    //     · `single-child-default`（单子节点默认 column）：2026-09-19 特意加的防护
+    //       （防 LLM 漏写 flexDirection 导致 CSS 默认 row 把纵向内容摊横）⇒ **照旧补**。
+    //     · `al-only`（声明唯一证据，几何不可交叉验证）：设计者明确画了 Auto Layout，
+    //       可信度高于几何模糊带 ⇒ **照旧补**。
+    //   注：R4b-A 仲裁（冲突保留产物声明）在本文之前已执行，本闸只影响「LLM 完全没写」的
+    //   补缺路径；与 stack 跳过（刀6/P0/P0-b）正交。
+    const LOW_SKIP_SOURCES = new Set(['geometric-inference'])
+    const lowSkip =
+      fact.confidence === 'low' && LOW_SKIP_SOURCES.has(String(fact.source || ''))
+    if (lowSkip && (displayMismatch || flexDirectionMismatch)) {
+      fixes.push({
+        code: 'LAYOUT-FACTS-LOW-SKIP',
+        className: effectiveClassName,
+        detail: `几何模糊带（ratio 0.25~0.75）不补缺：display=${extracted.display || '(缺失)'} flex-direction=${extracted.flexDirection || '(缺失)'} 保持原样（T2 low 闸）`,
+      })
+      if (logger) {
+        logger.info(
+          `🛡️ LAYOUT-FACTS-LOW-SKIP: ${effectiveClassName} 几何模糊带 low 事实不补缺（source=${fact.source}）`,
+        )
+      }
+      continue
+    }
+
     if (displayMismatch || flexDirectionMismatch) {
       // 方向取值：已有显式方向 → 原样传回（updateFlexProps 同值替换幂等，绝不翻转）；
       // 方向缺失 → 传几何事实（可能为 null → hasValidDirection=false 只清非法残留，旧语义保留）

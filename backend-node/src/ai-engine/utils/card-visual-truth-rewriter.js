@@ -30,6 +30,12 @@
  * @param {Array} [deps.resourceDomMapping] 资源映射（bg 图 fileName ↔ figmaNodeId 归属兜底）
  * @returns {{ files: Record<string,string>, summary: { bgFixed: number, colorFixed: number, iconFixed: number, skipped: number } }}
  */
+// 🔴 2026-11-16：脚本段锚点单一事实源。旧实现用 `/<script setup>/` **字面匹配**，
+//   对 `<script data-section-id="…" setup>`（归属链契约诱导模型把属性写在 setup 前）失配，
+//   直接落到「无 script 段」兜底 ⇒ 在 `</template>` 后**另起一个 `<script setup>` 块**
+//   ⇒ 双脚本块（写盘门禁 BLOCK 形态）。
+import { injectIntoScript } from './sfc-script-anchor.js';
+
 export function enforceCardVisualTruth(files, effectiveSections, deps = {}) {
   const { logger, resourceDomMapping } = deps;
   const result = { ...files };
@@ -172,10 +178,12 @@ export function enforceCardVisualTruth(files, effectiveSections, deps = {}) {
         // 补 import（若无）
         const importLine = `import ${card.bgVar} from '../../resources/images/${card.bgTruth}'`;
         if (!content.includes(card.bgTruth)) {
-          if (/<script setup>/.test(content)) {
-            content = content.replace('<script setup>', `<script setup>\n${importLine}`);
-          } else {
-            // 无 script 段则补一个
+          // 🔴 2026-11-16：改走唯一事实源（`injected=false` 才等价于「真的没有 script setup 块」）。
+          const anchored = injectIntoScript(content, `\n${importLine}`);
+          if (anchored.injected) {
+            content = anchored.code;
+          } else if (/<\/template>/i.test(content)) {
+            // 确实无 script 段则补一个
             content = content.replace('</template>', `</template>\n\n<script setup>\n${importLine}\n</script>`);
           }
         }

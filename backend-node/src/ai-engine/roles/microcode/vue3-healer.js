@@ -15,6 +15,7 @@
  */
 
 import { sanitizeVueStyleBlock } from '../../utils/css-sanitizer.js';
+import { findScriptSetupBlock, replaceScriptInner } from '../../utils/sfc-script-anchor.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 
 /**
@@ -30,14 +31,11 @@ export function wrapBareConstWithRef(vueContent, logger) {
     logger = safeLogger(logger);
     if (!vueContent || typeof vueContent !== 'string') return vueContent;
 
-    // 提取 <script setup> 块
-    const scriptMatch = vueContent.match(
-      /<script\s+setup[^>]*>([\s\S]*?)<\/script>/,
-    );
-    if (!scriptMatch) return vueContent;
+    // 提取带 setup 的脚本段（🔴 2026-11-16：改走唯一事实源，属性顺序无关）
+    const scriptBlock = findScriptSetupBlock(vueContent);
+    if (!scriptBlock) return vueContent;
 
-    const scriptBlock = scriptMatch[1];
-    const lines = scriptBlock.split('\n');
+    const lines = scriptBlock.inner.split('\n');
     let modified = false;
 
     // 匹配 const name = value（非 ref/reactive/函数/箭头函数）
@@ -134,12 +132,9 @@ export function wrapBareConstWithRef(vueContent, logger) {
 
     if (!modified) return vueContent;
 
-    // 替换回 <script setup> 块
+    // 替换回脚本段（🔴 2026-11-16：逐字保留原开标签，不再重写为 `<script setup>`）
     const newScriptBlock = lines.join('\n');
-    return vueContent.replace(
-      scriptMatch[0],
-      `<script setup>\n${newScriptBlock}\n</script>`,
-    );
+    return replaceScriptInner(vueContent, newScriptBlock).code;
 }
 
 /**

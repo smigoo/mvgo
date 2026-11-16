@@ -230,10 +230,19 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
         `**不要**写 flex-direction，列数请用 grid-template-columns 按 ${fact.gridColumns ? `${fact.gridColumns} 列` : 'Figma 几何'}还原。`
       : '禁止省略 display、禁止用 absolute 还原定位；⚠️ 该节点**无可靠主轴方向事实**，方向由你依据父子几何自行决定，不得与本节点已有的方向冲突。'
 
+  // 🛡️ R3-2（2026-11-16）：AL 与几何冲突时必须**显式告知模型**。
+  //   原因：prompt 里同时带着 `figmaNodeData`（含原始 `layoutMode`）与这条修正后的方向事实，
+  //   不写清楚模型会两头听 —— 有概率按 layoutMode 排列，等于本次纠正白做。
+  const conflictNote = fact.alConflict
+    ? `🔴 该节点 Figma Auto Layout 声明为 \`${fact.alSource || fact.alDeclared}\`` +
+      `（方向 ${fact.alDeclared}），**与几何实测冲突**：声明的布局已失效（残留/误设），` +
+      `**一律以几何事实为准**，禁止按 layoutMode 排列子项、禁止参照 nodeData 里的 layoutMode。`
+    : null
   return (
     `- figma 节点 \`${nodeId}\`（${name}）${classHint}：其容器 CSS **必须**写为 ` +
     `\`${cssDecl}\`` +
     `（Figma 几何真值来源：${fact.source}，置信度：${fact.confidence}）。` +
+    (conflictNote ? `${conflictNote}` : '') +
     `⚠️ ${dirNote}`
   )
 })

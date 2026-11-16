@@ -43,6 +43,34 @@ export function collectSectionIds(...sources) {
   return out;
 }
 
+/**
+ * 🛡️ P0-b（2026-11-15 · mc-1794808831127-c019cd88 实锤）——**归属键判据唯一来源**。
+ *
+ * 背景：本模块（P0-a）把 `ownerSectionId` 从「直接父（常是中间容器 / 折叠卡项锚）」
+ *   上溯到「最近 section」，并把**上溯前原值**保留在 `ownerSectionOriginal`。
+ *   于是所有「按 item / 卡片锚点反查资源」的消费者都从「命中」变「恒空」：
+ *     - `folded-item-background.js#bindFoldedItemBackgrounds`（刀 53 S3-BG 绑定）
+ *     - `folded-grid-section-takeover.js#detectListLeaf`（declared 通道）
+ *     - `microcode-engineer.js#bgForItem`（v-for 数据下发）
+ *   三处若各自实现 `ownerSectionId || ownerSectionOriginal`，必然漂移 ⇒ 收敛到本函数。
+ *
+ * 语义：`ownerKeyCandidates(entry)` = 该条资源可用来匹配归属锚的**全部键**。
+ *   调用方若要「无 owner 视为通配」（老产物 ownerSectionId 为 null ⇒ 放行），
+ *   需自行判 `ownerKeyCandidates(entry).length === 0`（本函数不替其决定）。
+ */
+export function ownerKeyCandidates(entry) {
+  if (!entry || typeof entry !== 'object') return [];
+  return [entry.ownerSectionId, entry.ownerSectionOriginal]
+    .map((v) => (v == null ? '' : String(v)))
+    .filter(Boolean);
+}
+
+/** entry 的归属键是否命中给定 id 集合（P0-b 单一判据；idSet 需有 `.has`）。 */
+export function ownerMatchesIds(idSet, entry) {
+  if (!idSet || typeof idSet.has !== 'function') return false;
+  return ownerKeyCandidates(entry).some((k) => idSet.has(k));
+}
+
 function emptyStats(reason) {
   return {
     verdict: 'no-evidence',

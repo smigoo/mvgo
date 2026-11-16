@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   existsSync,
   lstatSync,
@@ -14,7 +14,11 @@ import { createHash, randomUUID } from 'crypto';
 import { dirname, isAbsolute, join, posix, resolve, sep } from 'path';
 import { tempComponentsDir, customComponentsDir } from '../config/backend-root';
 import { renameWithCopyFallback } from '../ai-engine/utils/rename-with-copy-fallback.js';
-import { validateVueSfc } from '../ai-engine/utils/sfc-syntax-validation.js';
+import { validateVueSfc, inspectSfcRenderableTemplate } from '../ai-engine/utils/sfc-syntax-validation.js';
+import {
+  healStackedSfcBlocks,
+  formatHealStatsLine,
+} from '../ai-engine/utils/sfc-stacked-block-healer.js';
 
 export type TaskCodeSnapshotStatus = 'candidate' | 'validating' | 'last-good' | 'rejected' | 'partial';
 
@@ -253,6 +257,41 @@ export {
   collectMissingVueImports,
 } from '../ai-engine/utils/vue-import-closure.js';
 
+const sfcHealLogger = new Logger('SfcStackedBlockHealer');
+
+/**
+ * 🛡️ 2026-11-16：last-good 晋级出口 SFC 结构门禁的计数日志通道。
+ * 与读取预览回退（resolvePreviewRevision → isRenderableRevision）同一判据，
+ * 独立 logger 仅为让真机计数行可从日志按 tag 精确检索（不新增判据）。
+ */
+const promotionGateLogger = new Logger('SnapshotPromotionSfcGate');
+
+/**
+ * 🛡️ 2026-11-16：候选快照入口的「SFC 叠加结构」确定性自愈。
+ *
+ * 病灶（mc-max-1794761757056-0d15ab1b 实锤）：任务级终态 `onFilesReady` 绕过 chunk 推送
+ * 守卫（docs 2026-11-11 §22.8 R1'-A），把「两份完整 SFC 叠加」的坏 index.vue 直接推成
+ * candidate ⇒ `isRenderableRevision` 判 false、无 last-good 可回退 ⇒ 两条 422 + 预览空白。
+ * 本函数是**所有候选快照的单一入口**，与 `sanitizeStyleFenceLeak` 同级清洗，保证
+ * 「内存版 / 快照版」与「写盘版」同级别合法，不再把坏版冻结进可渲染候选。
+ *
+ * 纪律：只对 .vue；判据同源（healStackedSfcBlocks 内部统一裁决）；合格文件逐字不判；
+ * 被评估但无法归一（evaluated>0 且 healed=0）也恒打计数行；自愈自身异常 fail-open
+ * 不改产物，交既有门禁，绝不静默吞掉坏版。
+ */
+function normalizeStackedSfcContent(path: string, content: Buffer): Buffer {
+  if (!/\.vue$/i.test(path)) return content;
+  try {
+    const healed = healStackedSfcBlocks(content.toString('utf-8'), path);
+    if (healed.stats.evaluated > 0) {
+      sfcHealLogger.warn(formatHealStatsLine(healed.stats, path));
+    }
+    return healed.fixed ? Buffer.from(healed.source, 'utf-8') : content;
+  } catch {
+    return content;
+  }
+}
+
 @Injectable()
 export class TaskCodeSnapshotService {
   private readonly root = resolve(tempComponentsDir, '.task-code-snapshots');
@@ -286,7 +325,10 @@ export class TaskCodeSnapshotService {
       for (const [rawPath, rawContent] of entries) {
         const path = this.normalizeRelativePath(rawPath);
         const rawBuffer = Buffer.isBuffer(rawContent) ? rawContent : Buffer.from(rawContent, 'utf8');
-        const content = sanitizeStyleFenceLeak(path, rawBuffer);
+        const content = normalizeStackedSfcContent(
+          path,
+          sanitizeStyleFenceLeak(path, rawBuffer),
+        );
         
         // 图片文件使用独立的大小限制（PNG/JPG 无损压缩后容易超过 2MB）
         const isImage = IMAGE_EXT_RE.test(path);
@@ -402,7 +444,9 @@ export class TaskCodeSnapshotService {
       const absolutePath = this.resolveInside(revisionDir, 'package/index.vue');
       if (!existsSync(absolutePath)) return false;
       const content = readFileSync(absolutePath, 'utf-8');
-      if (!/<template[\s>]/.test(content)) return false;
+      // 🛡️ 2026-11-16 续接 R1/R2：不再自写 `<template>` 正则，复用唯一权威结构判据
+      //   （与写盘门禁 / 终验回退 / 产物完整性同口径）。script-only 入口一律不可渲染。
+      if (!inspectSfcRenderableTemplate(content, absolutePath).hasTemplate) return false;
       // 🔴 2026-11-11（真机 mc-lite-1794398124528-997fd90f）：必须传**绝对路径**。
       // 传相对路径 'package/index.vue' 会走 validateVueSfc 的「内存阶段」分支，把相对
       // @import 剥掉，连带剥掉 theme-vars.less 的变量定义 ⇒ 报 `variable @fontSize is
@@ -988,11 +1032,40 @@ export class TaskCodeSnapshotService {
     });
   }
 
+  /**
+   * 🛡️ 2026-11-16：晋级出口 SFC 可渲染判据（单一来源，包装既有 isRenderableRevision）。
+   *
+   * 独立成方法仅为让单测可直接断言「坏 revision 不可晋级」，判据仍是
+   * isRenderableRevision（= validateVueSfc 绝对路径完整编译 + import 闭包 + <template> 存在性），
+   * 与 readPreviewFile 回退、产物完整性同口径，不新增第二套 SFC 解析。
+   */
+  isRevisionSfcRenderable(sessionId: string, revision: string): boolean {
+    return this.isRenderableRevision(sessionId, revision);
+  }
+
   publishLastGood(
     sessionId: string,
     revision: string,
     validation: TaskCodeSnapshotValidation,
   ): TaskCodeSnapshotManifest {
+    // 🛡️ 2026-11-16（mc-max-1794819915607-80954ead 实锤）：晋级出口 SFC 结构门禁。
+    // 3 条晋级路径（phase2 + lite×2）的 validation.sfc 是硬编码 'passed'（假绿），
+    // 坏版 index.vue（游离 </div> / 缺 '<' 的开标签）写盘门禁已拦，但内存 allFiles
+    // 经任务级 onFilesReady → createCandidate 落 revision，再被无校验地晋级 last-good
+    // ⇒ 坏版成为默认预览源、resolvePreviewRevision 回退无可用版本 ⇒ 422 / 预览空白。
+    // 治本：晋级前用唯一判据复核 revision 实际 SFC 结构；非法 ⇒ 不写 last-good 指针，
+    // 降级为 candidate 保留现场供审查，last-good 保持旧值（预览自动回退）。合法路径逐字不变。
+    if (!this.isRenderableRevision(sessionId, revision)) {
+      const reason = 'last-good 晋级阻断：index.vue SFC 结构非法（不发布坏版）';
+      promotionGateLogger.error(
+        `🚫 ${reason} session=${sessionId} revision=${revision}`,
+        { sessionId, revision, sfc: 'blocked' },
+      );
+      return this.markCandidateDegraded(sessionId, revision, reason, {
+        ...validation,
+        sfc: 'blocked',
+      });
+    }
     const manifest = this.updateManifest(sessionId, revision, {
       status: 'last-good',
       validation,

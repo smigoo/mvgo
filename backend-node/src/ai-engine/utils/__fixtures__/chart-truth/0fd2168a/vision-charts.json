@@ -1,0 +1,150 @@
+[
+ {
+  "section": "1744:127",
+  "type": "bar",
+  "series": [
+   "北京方向",
+   "上海方向"
+  ],
+  "seriesTypes": [
+   "bar",
+   "bar"
+  ],
+  "legend": [
+   "北京方向",
+   "上海方向"
+  ],
+  "legendPosition": "top-right",
+  "legendType": "horizontal",
+  "seriesColors": [
+   "#1588f8",
+   "#18c02e"
+  ],
+  "axes": "X轴为小时，Y轴为车辆数",
+  "tooltip": "显示时间点和方向流量数据",
+  "barStyle": {
+   "widthRatio": 0.6,
+   "gapRatio": 0.2,
+   "roundCorner": 2
+  },
+  "axisStyle": {
+   "x": {
+    "show": true,
+    "lineColor": "#e0e0e0",
+    "lineWidth": 1,
+    "splitLine": {
+     "show": false
+    }
+   },
+   "y": {
+    "show": true,
+    "lineColor": "#e0e0e0",
+    "lineWidth": 1,
+    "splitLine": {
+     "show": true,
+     "color": "#f0f0f0",
+     "type": "dashed"
+    }
+   }
+  }
+ },
+ {
+  "section": "1744:128",
+  "type": "bar",
+  "series": [
+   "北京方向",
+   "上海方向"
+  ],
+  "seriesTypes": [
+   "bar",
+   "bar"
+  ],
+  "legend": [
+   "北京方向",
+   "上海方向"
+  ],
+  "legendPosition": "top-right",
+  "legendType": "horizontal",
+  "seriesColors": [
+   "#1588f8",
+   "#18c02e"
+  ],
+  "axes": "X轴为小时，Y轴为车辆数",
+  "tooltip": "显示时间点和方向流量数据",
+  "barStyle": {
+   "widthRatio": 0.6,
+   "gapRatio": 0.2,
+   "roundCorner": 2
+  },
+  "axisStyle": {
+   "x": {
+    "show": true,
+    "lineColor": "#e0e0e0",
+    "lineWidth": 1,
+    "splitLine": {
+     "show": false
+    }
+   },
+   "y": {
+    "show": true,
+    "lineColor": "#e0e0e0",
+    "lineWidth": 1,
+    "splitLine": {
+     "show": true,
+     "color": "#f0f0f0",
+     "type": "dashed"
+    }
+   }
+  }
+ },
+ {
+  "section": "2:3565",
+  "type": "line",
+  "series": [
+   "实际流量",
+   "预测流量"
+  ],
+  "seriesTypes": [
+   "line",
+   "line"
+  ],
+  "legend": [
+   "实际流量",
+   "预测流量"
+  ],
+  "legendPosition": "bottom-center",
+  "legendType": "horizontal",
+  "seriesColors": [
+   "#1588f8",
+   "#18c02e"
+  ],
+  "axes": "X轴为时间（2小时前 至 2小时后），Y轴为车辆数",
+  "tooltip": "显示具体时间点的流量数值",
+  "lineStyle": {
+   "width": 2,
+   "smooth": true,
+   "showSymbol": true,
+   "areaOpacity": 0.2
+  },
+  "axisStyle": {
+   "x": {
+    "show": true,
+    "lineColor": "#e0e0e0",
+    "lineWidth": 1,
+    "splitLine": {
+     "show": false
+    }
+   },
+   "y": {
+    "show": true,
+    "lineColor": "#e0e0e0",
+    "lineWidth": 1,
+    "splitLine": {
+     "show": true,
+     "color": "#f0f0f0",
+     "type": "dashed"
+    }
+   }
+  }
+ }
+]

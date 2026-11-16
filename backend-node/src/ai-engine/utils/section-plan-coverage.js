@@ -1160,6 +1160,18 @@ export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
     childrenOf.get(pid).push(id);
   }
 
+  // 🎯 A4-c（2026-11-16 · aca64532/c019cd88 两轮同稿必现实锤）：画布级 header 判据
+  //   （纯几何、零命名，单一事实源，候选收集与抬升两处共用）：
+  //   ① strip 高度占画布高 ≥ 12%（弹窗类面板标题 14.5% 命中）；
+  //   ② strip 顶 == 画布顶（大屏类面板标题贴第一屏线，占比 9.4% 时兜住）。
+  //   合法段内小标题（24px、画布中部）①②均不命中 ⇒ 正常提升零影响。
+  const rootBoxA4c = byId.get(tree.rootId)?.absoluteBoundingBox || null;
+  const canvasHA4c = rootBoxA4c && Number.isFinite(rootBoxA4c.height) ? rootBoxA4c.height : 0;
+  const canvasTopA4c = rootBoxA4c && Number.isFinite(rootBoxA4c.y) ? rootBoxA4c.y : null;
+  const _isCanvasHeaderBox = (bb) =>
+    (canvasHA4c > 0 && bb.height >= canvasHA4c * 0.12) ||
+    (canvasTopA4c != null && Math.abs(bb.y - canvasTopA4c) <= 1);
+
   const boxOf = (id) => {
     const b = byId.get(String(id))?.absoluteBoundingBox;
     if (!b) return null;
@@ -1247,6 +1259,10 @@ export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
       if (b.height > STRIP_MAX_HEIGHT_PX) return;
       if (b.width < STRIP_MIN_WIDTH_PX) return;
       if (!isStripLike(sid)) return;
+      if (_isCanvasHeaderBox(b)) {
+        stats.canvasHeaderSkipped = (stats.canvasHeaderSkipped || 0) + 1;
+        return;
+      }
       if (!claimed.has(String(sid))) {
         const { owner, gap } = nearestAnchorId(b);
         if (owner !== a.id || gap > STRIP_MAX_GAP_PX) return;
@@ -1321,6 +1337,17 @@ export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
       const stripBox = boxOf(sid);
       const anchorBox = boxOf(id);
       if (stripBox && anchorBox) {
+        // 🎯 A4-c：画布级 header 不得抬升段盒（双保险：候选阶段已拒，此处防 isAncestor 路径漏网）
+        if (_isCanvasHeaderBox(stripBox)) {
+          stats.canvasHeaderSkipped = (stats.canvasHeaderSkipped || 0) + 1;
+          stats.detail.push({
+            sectionId: id,
+            stripId: sid,
+            stripH: Math.round(stripBox.height),
+            skipped: 'canvas-header',
+          });
+          continue;
+        }
         const gapToStrip = anchorBox.y - (stripBox.y + stripBox.height);
         const liftedH = anchorBox.y + anchorBox.height - stripBox.y;
         const prevH = Number(s?.styles?.figmaHeightPx);

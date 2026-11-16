@@ -86,14 +86,16 @@ describe('刀 52 阳性：真机 796:3（两卡并列 + 三段纵向）', () => 
     ]);
   });
 
-  test('② 行组包裹层与普通段一视同仁：wrap 拿到 76px，三段拿到 161/212/265px', () => {
+  test('② 行组包裹层与普通段一视同仁：Σ=1 归一比例（B1-S3：76/787=0.097、161/787=0.205、212/787=0.269、265/787=0.337）', () => {
     const res = enforceStackGeometry(FILES, opts());
     expect(res.changed).toBe(true);
     const out = res.files['package/index.vue'];
-    expect(out).toMatch(/data-rowpeers-wrap[^>]*flex:0 1 76px/);
-    expect(out).toMatch(/data-section-id="38:3137"[^>]*flex:0 1 161px/);
-    expect(out).toMatch(/data-section-id="38:3162"[^>]*flex:0 1 212px/);
-    expect(out).toMatch(/data-section-id="38:3206"[^>]*flex:0 1 265px/);
+    expect(out).toMatch(/data-rowpeers-wrap[^>]*flex:0.097 1 0/);
+    expect(out).toMatch(/data-section-id="38:3137"[^>]*flex:0.205 1 0/);
+    expect(out).toMatch(/data-section-id="38:3162"[^>]*flex:0.269 1 0/);
+    expect(out).toMatch(/data-section-id="38:3206"[^>]*flex:0.337 1 0/);
+    // px basis 退役：产物不得再出现 flex:0 1 <px>
+    expect(out).not.toMatch(/flex:0 1 \d+px/);
   });
 
   test('③ 间距写进 margin-top（33/20/20），第一项无 margin', () => {
@@ -204,19 +206,19 @@ describe('刀 52 阴性：判不了就必须交回既有比例行为', () => {
     const good = FILES['package/index.vue']
       .replace(
         'data-rowpeers-wrap style="flex:0.192;min-height:0;',
-        'data-rowpeers-wrap style="flex:0 1 76px;min-height:0;',
+        'data-rowpeers-wrap style="flex:0.097 1 0;min-height:0;',
       )
       .replace(
         'data-section-id="38:3137" style="background:rgba(226,208,132,0.2);border-radius:12px;flex:0.204;min-height:0;',
-        'data-section-id="38:3137" style="background:rgba(226,208,132,0.2);border-radius:12px;flex:0 1 161px;min-height:0;margin-top:33px;',
+        'data-section-id="38:3137" style="background:rgba(226,208,132,0.2);border-radius:12px;flex:0.205 1 0;min-height:0;margin-top:33px;',
       )
       .replace(
         'data-section-id="38:3162" style="flex:0.268;min-height:0;',
-        'data-section-id="38:3162" style="flex:0 1 212px;min-height:0;margin-top:20px;',
+        'data-section-id="38:3162" style="flex:0.269 1 0;min-height:0;margin-top:20px;',
       )
       .replace(
         'data-section-id="38:3206" style="flex:0.335;min-height:0;',
-        'data-section-id="38:3206" style="flex:0 1 265px;min-height:0;margin-top:20px;',
+        'data-section-id="38:3206" style="flex:0.337 1 0;min-height:0;margin-top:20px;',
       );
     const res = enforceStackGeometry({ 'package/index.vue': good }, opts());
     expect(res.changed).toBe(false);

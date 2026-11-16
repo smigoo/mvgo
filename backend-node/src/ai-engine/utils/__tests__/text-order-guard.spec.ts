@@ -338,16 +338,16 @@ describe('TEXT-001 L0-B 门禁集成（code-structure-validator）', () => {
   const toFileArray = (files: Record<string, string>) =>
     Object.entries(files).map(([path, content]) => ({ path, content }));
 
-  it('残留漂移（自愈不可判定/未跑自愈）→ TEXT-001 BLOCK，fail-closed', () => {
+  // 🛡️ 2026-11-16 降级（P2）：TEXT-001 文本顺序漂移属「顺序欠佳」，文案都在、可读 ⇒ WARN。
+  it('残留漂移（自愈不可判定/未跑自愈）→ TEXT-001 仍检出（WARN，不再 fail-closed）', () => {
     const result = CodeStructureValidator.validate(
       toFileArray(FILES_VFOR_DRIFT),
       'mc-max-test',
       { target: 'microcode', figmaNodeData: FIGMA_ACCIDENT },
     );
-    expect(result.pass).toBe(false);
     const textIssues = result.issues.filter((i) => i.id === 'TEXT-001');
     expect(textIssues).toHaveLength(1);
-    expect(textIssues[0].severity).toBe('BLOCK');
+    expect(textIssues[0].severity).toBe('WARN');
     expect(textIssues[0].file).toBe('package/components/MonitorTypeTabs.vue');
     expect(textIssues[0].message).toContain('一氧化碳 → 能见度 → 洞内照明 → 洞外光强');
     expect(textIssues[0].message).toContain('一氧化碳 → 洞内照明 → 洞外光强 → 能见度');

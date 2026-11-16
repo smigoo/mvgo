@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   detectChartSignal,
   injectChartSectionIfMissing,
@@ -230,5 +232,134 @@ describe('injectChartSectionIfMissing：宿主语义守卫（防误删真实内�
     const figma = { name: 'root', children: [{ name: '@echarts/line', id: '2:7898', children: [] }] };
     const out = injectChartSectionIfMissing(plan, true, { figmaNodeData: figma, charts: [] });
     expect(out.effectiveSections.map((s) => s.id)).toEqual(['chart-2:7898']);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ 步骤 1/2（2026-11-15 · mc-max-1794752955560-c0cb00f1 实锤）：**早返回 ⇒ 逐条判据**接线。
+// 断点：`if (truthDecision.source !== 'figma-fallback') return plan` 把「视觉侧有没有真值」
+//   当成**整条 Figma 通道**的开关 ⇒ 本单视觉 3 条 chart 就把 `2:3604 @echarts/line-7`
+//   （流量预测折线）整段吞掉。接线后改为逐条 `needsInjection` 过滤（本文件上方代码）。
+// 本节用**四支真实 checkpoint 夹具**（`__fixtures__/chart-truth/*`，与
+//   `chart-truth-coverage.spec.ts` 同源）做阴阳对照，验证接线后行为逐条符合：
+//   - 必红（`c0cb00f1` / `0fd2168a`）：恰好注入 1 个 `chart-2:3604`（`chartType='line'`），
+//     不重复注入、走 `mode='per-node'` 口径；
+//   - 必绿（`3cacdefb` / `9b2ecb41`）：逐条 0 命中 ⇒ `out===plan` 零注入（阳性对照，
+//     证明不是「恒注入」）。
+// 另附「视觉真值缺失 ⇒ 旧口径不回退」的镜像断言（与上方 line 92 呼应，此处直接以
+//   `charts: []` + 真实夹具作对照，确保 `source==='figma-fallback'` 仍走全量兜底）。
+// ══════════════════════════════════════════════════════════════════════════
+describe('injectChartSectionIfMissing：视觉源逐条判据接线（2026-11-15 步骤 2）', () => {
+  const FIXTURE_ROOT = path.join(__dirname, '__fixtures__', 'chart-truth');
+
+  const loadCase = (name: string) => {
+    const dir = path.join(FIXTURE_ROOT, name);
+    const read = (f: string) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    return {
+      figmaRoot: read('figma.json'),
+      sections: read('plan.json'),
+      charts: read('vision-charts.json'),
+    };
+  };
+
+  // 深搜产物里 id 命中（注入段可能落根尾、也可能挂宿主 internalSubcomponents / body.children）
+  const findDeep = (node: unknown, id: string): any => {
+    if (!node || typeof node !== 'object') return null;
+    const rec = node as Record<string, any>;
+    if (String(rec.id) === id) return rec;
+    for (const key of Object.keys(rec)) {
+      const v = rec[key];
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          const hit = findDeep(item, id);
+          if (hit) return hit;
+        }
+      }
+    }
+    return null;
+  };
+
+  // 统计产物里 `chart-*` 形态注入段数量（防「重复注入 / 双渲染」）
+  const countInjected = (node: unknown): number => {
+    if (!node || typeof node !== 'object') return 0;
+    const rec = node as Record<string, any>;
+    let n = typeof rec.id === 'string' && /^chart-/.test(rec.id) ? 1 : 0;
+    for (const key of Object.keys(rec)) {
+      const v = rec[key];
+      if (Array.isArray(v)) for (const item of v) n += countInjected(item);
+    }
+    return n;
+  };
+
+  const run = (name: string, chartsOverride?: any[]) => {
+    const c = loadCase(name);
+    const plan: any = { isForced: false, effectiveSections: c.sections };
+    const logs: Array<[string, any]> = [];
+    const out = injectChartSectionIfMissing(plan, true, {
+      figmaNodeData: c.figmaRoot,
+      charts: chartsOverride ?? c.charts,
+      layoutStructure: null,
+      allowFigmaFallback: true,
+      logger: { info: (m: string, o: any) => logs.push([m, o]) },
+    });
+    return { plan, out, logs };
+  };
+
+  // ---- 必红：逐条判据精确定位并注入 `chart-2:3604` ----
+  for (const name of ['c0cb00f1', '0fd2168a']) {
+    it(`${name}（必红）→ 只注入 1 个 chart-2:3604（line），走 per-node 口径`, () => {
+      const { plan, out, logs } = run(name);
+      expect(out).not.toBe(plan); // 不再是早返回的「恒 plan」
+      const injected = findDeep(out, 'chart-2:3604');
+      expect(injected).toBeTruthy();
+      expect(injected.chartType).toBe('line');
+      expect(injected.sourceNodeIds).toEqual(['2:3604']);
+      expect(countInjected(out)).toBe(1); // 不重复注入 / 无双渲染
+
+      // 计数行恒打 + 走逐条口径（真机可观测可复算）
+      const cov = logs.find(([m]) => m.includes('逐条覆盖'));
+      expect(cov).toBeTruthy();
+      expect(cov![1].mode).toBe('per-node');
+      expect(cov![1].needsInjection).toBe(1);
+      expect(cov![1].truthNodes).toBeGreaterThan(0);
+    });
+  }
+
+  // ---- 必绿：逐条 0 命中 ⇒ 零注入（阳性对照：不是恒注入）----
+  for (const name of ['3cacdefb', '9b2ecb41']) {
+    it(`${name}（必绿）→ 逐条 0 命中，out===plan 零注入`, () => {
+      const { plan, out, logs } = run(name);
+      expect(out).toBe(plan);
+      expect(countInjected(out)).toBe(0);
+      const cov = logs.find(([m]) => m.includes('逐条覆盖'));
+      expect(cov).toBeTruthy();
+      expect(cov![1].mode).toBe('per-node');
+      expect(cov![1].needsInjection).toBe(0);
+      expect(cov![1].carried).toBeGreaterThan(0); // 真值节点确实存在、只是已承载
+    });
+  }
+
+  // ---- 镜像：视觉真值缺失 ⇒ source='figma-fallback' ⇒ 仍走旧全量兜底（零回归红线）----
+  it("视觉真值清空（charts:[]）⇒ 旧口径不回退：@echarts 真值节点仍被兜底并记账", () => {
+    const { out, logs } = run('c0cb00f1', []);
+    const cov = logs.find(([m]) => m.includes('逐条覆盖'));
+    expect(cov![1].mode).toBe('legacy-all-uncovered'); // 走旧路，不进逐条判据
+    expect(cov![1].truthNodes).toBe(0); // 视觉源关闭时逐条覆盖不参与
+    // 兜底产物必须带 source='figma-fallback' 记账（禁止与视觉真值混淆）
+    const firstInjected = (() => {
+      const walk = (n: unknown): any => {
+        if (!n || typeof n !== 'object') return null;
+        const r = n as Record<string, any>;
+        if (typeof r.id === 'string' && /^chart-/.test(r.id)) return r;
+        for (const k of Object.keys(r)) {
+          const v = r[k];
+          if (Array.isArray(v)) for (const it of v) { const h = walk(it); if (h) return h; }
+        }
+        return null;
+      };
+      return walk(out);
+    })();
+    expect(firstInjected).toBeTruthy();
+    expect(firstInjected.source).toBe('figma-fallback');
   });
 });

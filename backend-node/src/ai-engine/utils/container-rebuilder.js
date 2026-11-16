@@ -28,7 +28,8 @@
  * @returns {object} 新的 layout（不修改入参）
  */
 import { inferFlexDirection } from './flex-direction-inferrer.js'
-import { indexFigmaNodes, getFigmaBox } from './section-tree.js'
+import { indexFigmaNodes, getFigmaBox, isLayoutContainerSection } from './section-tree.js'
+import { sectionAnchorCandidates } from './section-anchor-identity.js'
 
 function getBBox(node) {
   return getFigmaBox(node)
@@ -47,7 +48,37 @@ export function rebuildSlotConContainers(layout, figmaData) {
   if (sections.length === 0) return { ...layout, sections: sections.slice() }
   if (!figmaData) return { ...layout, sections: sections.slice() }
 
-  const secIds = new Set(sections.map((s) => s.id))
+  // 🔴 根因 K 续接（2026-11-16 · mc-max-1794760190105-8abf9789 实锤）：
+  //   锚点审计把修复写进 `section.figmaAnchorId`（**绝不改写 id**），而本函数旧版只取 s.id
+  //   ⇒ 视觉段 id 与 Figma 直接子 id 不同源时，候选判据 `kids.every(...)` 恒 false：
+  //   本单 `89:37 cons` 直接子是 `89:39`/`2:8437`，视觉段却叫 `2:8825`/`2:8437`
+  //   ⇒ 横向容器整层丢失，Tab 与卡片网格被提升为顶层纵向段。
+  //   修法只做「身份解析同源」：复用 `sectionAnchorCandidates`（既有单一事实源），
+  //   不新造判据、不改入参/返回结构、不注入任何 Figma children、
+  //   不按任务 id / 组件名 / 节点 id 特判。
+  //   ① 匹配是「Figma 直接子 id ↔ section 声明锚点」的**精确字符串相等**，故不做
+  //      Figma-id 形态校验 —— 视觉段允许合成 id（既有 T-TOPO 夹具 a/b、43:4791-list 等）。
+  //   ② 歧义锚点（多段指向同一 id）不猜，直接弃用。
+  //   ③ 已恢复的容器段不得再当「被提升的叶子」参与候选，否则父级 slot-con 会在
+  //      二次运行时被再包一层（幂等破坏，且下游会多生成一个嵌套 div）。
+  const sectionIds = new Set(sections.map((s) => String(s.id)))
+  const anchorToSection = new Map()
+  const ambiguousAnchors = new Set()
+  for (const sec of sections) {
+    if (isLayoutContainerSection(sec)) continue
+    for (const cand of sectionAnchorCandidates(sec)) {
+      if (cand == null) continue
+      const fid = String(cand)
+      if (!fid || ambiguousAnchors.has(fid)) continue
+      const prev = anchorToSection.get(fid)
+      if (!prev) anchorToSection.set(fid, sec)
+      else if (prev !== sec) {
+        anchorToSection.delete(fid)
+        ambiguousAnchors.add(fid)
+      }
+    }
+  }
+  const secIds = new Set(anchorToSection.keys())
   const figmaIndex = indexFigmaNodes(figmaData.document || figmaData)
   const allNodes = [...figmaIndex.values()].map((record) => record.rawNode || record)
   const byId = figmaIndex
@@ -79,17 +110,20 @@ export function rebuildSlotConContainers(layout, figmaData) {
     //   全部被过滤 ⇒ 恒返回 'vertical' ⇒ 横向容器被**反向**包成竖直容器（正是本刀要修的 bug）。
     const direction = inferFlexDirection(members) === 'horizontal' ? 'horizontal' : 'vertical'
 
+    // 排序键必须用 **Figma 直接子 id**，不能用 section.id：锚点修复后两者会不同
+    // （本单 Tab 段 section.id=2:8825，但它在 `89:37` 里的直接子 id 是 `89:39`）。
     const sortedMembers = members
-      .map((m) => sections.find((s) => s.id === m.id))
-      .filter(Boolean)
+      .map((m) => ({ figmaId: String(m.id), sec: anchorToSection.get(String(m.id)) }))
+      .filter((x) => x.sec)
       .sort((a, b) => {
-        const ba = getBBox(byId.get(String(a.id))) || {}
-        const bb = getBBox(byId.get(String(b.id))) || {}
+        const ba = getBBox(byId.get(a.figmaId)) || {}
+        const bb = getBBox(byId.get(b.figmaId)) || {}
         // 横向按 x 升序（左右顺序），纵向按 y 升序（上下顺序）
         const ka = direction === 'horizontal' ? ba.x || 0 : ba.y || 0
         const kb = direction === 'horizontal' ? bb.x || 0 : bb.y || 0
         return ka - kb
       })
+      .map((x) => x.sec)
 
     const containerSection = {
       id: node.id,
@@ -102,7 +136,14 @@ export function rebuildSlotConContainers(layout, figmaData) {
       header: { title: node.name || 'container' },
       body: { layout: direction, children: sortedMembers },
     }
-    rebuilt.push({ container: containerSection, memberIds: members.map((m) => m.id) })
+    rebuilt.push({
+      container: containerSection,
+      memberIds: members.map((m) => m.id),
+      // 组装阶段要按「顶层 section 自身 id」跳过被消费的段，锚点修复后二者不再相同
+      memberSectionIds: members
+        .map((m) => String(anchorToSection.get(String(m.id))?.id ?? ''))
+        .filter(Boolean),
+    })
     members.forEach((m) => consumed.add(m.id))
   }
 
@@ -159,7 +200,7 @@ export function rebuildSlotConContainers(layout, figmaData) {
     for (const kid of raw.children || []) {
       const kidId = String(kid.id)
       if (kidId === String(pid)) continue
-      if (!secIds.has(kidId)) continue // 只回收「被提升为顶层 section」的直接子
+      if (!sectionIds.has(kidId)) continue // 半提升回收保持原口径：只认顶层 section 自身 id
       if (parentSec.children.some((c) => String(c.id) === kidId)) continue
       if (reclaimedIds.has(kidId)) continue
       const kidRec = byId.get(kidId)
@@ -188,16 +229,18 @@ export function rebuildSlotConContainers(layout, figmaData) {
   if (rebuilt.length === 0 && reclaimedIds.size === 0) return { ...layout, sections: sections.slice() }
 
   // 组装：容器 section 插入第一个 member 的原位置，移除被消费的 member 与被回收的 member
-  const consumedMemberIds = new Set()
-  rebuilt.forEach((r) => r.memberIds.forEach((id) => consumedMemberIds.add(id)))
+  const consumedSectionIds = new Set()
+  rebuilt.forEach((r) => r.memberSectionIds.forEach((id) => consumedSectionIds.add(String(id))))
 
   const result = []
   for (let i = 0; i < sections.length; i++) {
     const sec = sections[i]
     if (reclaimedIds.has(String(sec.id))) continue // 已被父 section 回收，不再顶层平级
-    if (consumedMemberIds.has(sec.id)) {
+    if (consumedSectionIds.has(String(sec.id))) {
       // 在该 member 原位置插入其所属容器（仅一次）
-      const rb = rebuilt.find((r) => r.memberIds.includes(sec.id))
+      const rb = rebuilt.find((r) =>
+        r.memberSectionIds.some((id) => String(id) === String(sec.id)),
+      )
       const alreadyIn = result.some(
         (x) => x.layoutSource === 'container-rebuild' && x.id === rb.container.id,
       )

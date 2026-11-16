@@ -25,6 +25,7 @@ import {
   evaluateSlotFlowCoResidency,
   collectSectionIdSet,
 } from './inline-header-slot-inferrer.js';
+import { findScriptSetupBlock, injectIntoScript } from './sfc-script-anchor.js';
 
 const SLOT_HEADER_RIGHT = 'header-right';
 
@@ -373,14 +374,18 @@ function buildLessRules(model) {
 }
 
 function ensureRefImport(code) {
-  if (/\bref\b/.test(code.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/i)?.[1] || '')) return code;
+  // 🔴 2026-11-16：改走唯一事实源（旧 `/<script\s+setup[^>]*>/i` 对
+  //   `<script data-section-id="…" setup>` 失配 ⇒ `/ref/.test('')` 恒 false ⇒
+  //   误判「ref 未声明」而重复注入 import ⇒ 重复声明 SyntaxError）。
+  if (/\bref\b/.test(findScriptSetupBlock(code)?.inner || '')) return code;
   const vueImportRe = /import\s*\{([^}]+)\}\s*from\s*(['"])vue\2/;
   if (vueImportRe.test(code)) {
     return code.replace(vueImportRe, (_all, names, quote) =>
       `import { ${names.trim()}, ref } from ${quote}vue${quote}`,
     );
   }
-  return code.replace(/(<script\s+setup[^>]*>)/i, `$1\nimport { ref } from 'vue'`);
+  // 🔴 2026-11-16：属性顺序无关，且**保留原开标签属性**（旧实现会把属性写没）。
+  return injectIntoScript(code, `\nimport { ref } from 'vue'`).code;
 }
 
 /** 移除 body 中与 header-right Tab 重复的静态组件（标签 + import + 组件文件）。

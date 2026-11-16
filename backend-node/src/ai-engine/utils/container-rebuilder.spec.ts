@@ -320,3 +320,92 @@ describe('v3 半提升回收', () => {
     expect(JSON.stringify(twice)).toEqual(JSON.stringify(once))
   })
 })
+
+/**
+ * 根因 K 续接（2026-11-16 · mc-max-1794760190105-8abf9789 实锤）：
+ * 锚点审计把修复写进 `figmaAnchorId`（不改写 id），容器重建却只认 `section.id`
+ * ⇒ 横向父容器 `cons` 的直接子 `89:39` 与视觉段 `2:8825` 不同源 ⇒ 整层容器丢失。
+ * 判据同源后必须同时满足：阳性真命中 / 阴性不臆造 / 歧义不猜 / 幂等 / 排序用 Figma 直接子。
+ */
+const anchorFigma = {
+  document: figmaNode('root', 'root', 0, 420, 425, [
+    figmaNode('89:40', 'slot-con', 475, 407, 381, [
+      figmaNode('89:38', 'switch', 475, 396, 65, [
+        figmaNode('2:8787', 'active', 475, 193, 65, undefined, 1480),
+        figmaNode('2:8806', 'default', 475, 193, 65, undefined, 1683),
+      ]),
+      figmaNode('89:37', 'cons', 540, 407, 316, [
+        figmaNode('89:39', '@antd/tab', 540, 46, 316, [], 1475),
+        figmaNode('2:8437', 'cons', 553, 361, 290, [], 1521),
+      ]),
+    ]),
+  ]),
+}
+
+const anchorSections = (): any[] => [
+  { id: '2:8787', name: '隧道设备统计', layout: 'horizontal', body: { layout: 'horizontal', children: [] } },
+  { id: '2:8806', name: '南北接线设备统计', layout: 'horizontal', body: { layout: 'horizontal', children: [] } },
+  {
+    id: '2:8825',
+    name: '功能导航Tab',
+    layout: 'vertical',
+    figmaAnchorId: '89:39',
+    body: { layout: 'vertical-6-items', children: [] },
+  },
+  { id: '2:8437', name: '设备状态卡片网格', layout: 'grid', body: { layout: 'grid', items: [] } },
+]
+
+describe('rebuildSlotConContainers · 锚点身份同源（根因 K 续接）', () => {
+  it('① 阳性：`figmaAnchorId` 与 Figma 直接子不同源时，横向 cons 容器仍被重建', () => {
+    const out = rebuildSlotConContainers({ sections: anchorSections() } as any, anchorFigma as any)
+    const ids = out.sections.map((s: any) => s.id)
+    expect(ids).toEqual(['89:38', '89:37'])
+
+    const cons = out.sections.find((s: any) => s.id === '89:37') as any
+    expect(cons.layout).toBe('horizontal')
+    expect(cons.layoutSource).toBe('container-rebuild')
+    // 左右顺序按 Figma 直接子 x 升序：Tab(1475) 在左、网格(1521) 在右
+    expect(cons.children.map((c: any) => c.id)).toEqual(['2:8825', '2:8437'])
+
+    const sw = out.sections.find((s: any) => s.id === '89:38') as any
+    expect(sw.layout).toBe('horizontal')
+    expect(sw.children.map((c: any) => c.id)).toEqual(['2:8787', '2:8806'])
+  })
+
+  it('② 阴性：无 `figmaAnchorId` ⇒ 复现旧行为（不得凭空造容器）', () => {
+    const secs = anchorSections().map((s) => {
+      const c = { ...s }
+      delete c.figmaAnchorId
+      return c
+    })
+    const out = rebuildSlotConContainers({ sections: secs } as any, anchorFigma as any)
+    expect(out.sections.map((s: any) => s.id)).toEqual(['89:38', '2:8825', '2:8437'])
+    expect(out.sections.every((s: any) => s.id !== '89:37')).toBe(true)
+  })
+
+  it('③ 歧义：两段声明同一 Figma 锚点 ⇒ fail-closed 不猜', () => {
+    const secs = anchorSections().map((s) =>
+      s.id === '2:8437' ? { ...s, figmaAnchorId: '89:39' } : s,
+    )
+    const out = rebuildSlotConContainers({ sections: secs } as any, anchorFigma as any)
+    expect(out.sections.some((s: any) => s.id === '89:37')).toBe(false)
+  })
+
+  it('④ 幂等：重建结果再跑一次，结构与字段逐字不变', () => {
+    const once = rebuildSlotConContainers({ sections: anchorSections() } as any, anchorFigma as any)
+    const twice = rebuildSlotConContainers(once, anchorFigma as any)
+    expect(JSON.stringify(twice)).toEqual(JSON.stringify(once))
+  })
+
+  it('⑤ 合成段 id（非 Figma 形态）也能按 `figmaAnchorId` 归位且排序用 Figma 直接子', () => {
+    const secs = anchorSections().map((s) =>
+      s.id === '2:8825' ? { ...s, id: 'semantic-tab', figmaAnchorId: '89:39' } : s,
+    )
+    const out = rebuildSlotConContainers({ sections: secs } as any, anchorFigma as any)
+    const cons = out.sections.find((s: any) => s.id === '89:37') as any
+    expect(cons).toBeTruthy()
+    expect(cons.children.map((c: any) => c.id)).toEqual(['semantic-tab', '2:8437'])
+    // 被消费的顶层段不得在结果里残留
+    expect(out.sections.some((s: any) => s.id === 'semantic-tab')).toBe(false)
+  })
+})

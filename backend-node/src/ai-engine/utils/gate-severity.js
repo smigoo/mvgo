@@ -116,6 +116,13 @@ export function resolveAfterStreak(env = process.env) {
  * 生效的 BLOCK 集合。
  * 环境变量 `MVGO_GATE_ESCALATE_BLOCK_IDS` 为**替换**语义（非追加）：
  *   'none' ⇒ 清空（等于「只留痕」＝原语义）；'all' ⇒ 全部候选；'a,b' ⇒ 指定集合。
+ *
+ * 🔴 2026-11-16 默认值变更（P1 · docs/2026-11-16-门禁误伤评审与瘦身建议.md §4）：
+ *   默认由「策略表 BLOCK 项」改为**空集**——即升级机制默认只做 streak 留痕、不合成 BLOCK。
+ *   依据：该机制是「WARN 变硬阻」的最大放大器（升级后进 hasHardPublishBlock ⇒ 直接
+ *   l0b-fail，一单都不产出）；而实测 FLEX-004 / TEXT-AXIS 属几何/语义类欠佳，用户口径是
+ *   「大部分好就行」，不该因此剥夺整轮产物。留痕保留 ⇒ 需要时可用
+ *   `MVGO_GATE_ESCALATE_BLOCK_IDS=FLEX-004,TEXT-AXIS` 一键恢复旧的硬阻断行为。
  */
 export function resolveBlockActionIds(env = process.env) {
   const raw = String(env?.[ENV_ESCALATE_BLOCK_IDS] ?? '').trim();
@@ -125,7 +132,8 @@ export function resolveBlockActionIds(env = process.env) {
     return new Set([...policyBlockIds(), ...Object.keys(WARN_ESCALATION_POLICY)]);
   }
   if (raw) return new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
-  return new Set(policyBlockIds());
+  // 默认：只留痕（不合成 BLOCK）。恢复旧默认 ⇒ 设 env 为 'FLEX-004,TEXT-AXIS'。
+  return new Set();
 }
 
 /**

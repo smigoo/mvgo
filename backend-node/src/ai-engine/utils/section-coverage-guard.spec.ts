@@ -362,14 +362,16 @@ import SwitchBar from './components/SwitchBar.vue'
 })
 
 describe('COMP-001 L0-B 门禁集成', () => {
-  it('流量监测形态 → COMP-001 BLOCK', () => {
+  // 🛡️ 2026-11-16 降级（P2）：COMP-001 属「plan 段未组装」语义标签判据，源码自认
+  //   「连拦 3 轮、每轮产物完全相同」⇒ 检出照旧、计数照旧，但不再 fail-closed。
+  it('流量监测形态 → COMP-001 仍检出（WARN）', () => {
     const res = CodeStructureValidator.validate(FLOW_FILES, 'c-monitor', {
       target: 'microcode',
       componentPlan: FLOW_PLAN,
     })
     const comp = res.issues.filter((i: any) => i.id === 'COMP-001')
     expect(comp).toHaveLength(1)
-    expect(comp[0].severity).toBe('BLOCK')
+    expect(comp[0].severity).toBe('WARN')
     expect(comp[0].message).toContain('当日总流量')
     expect(comp[0].message).toContain('流量预测')
   })

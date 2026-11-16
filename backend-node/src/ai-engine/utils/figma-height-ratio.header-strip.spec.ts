@@ -218,7 +218,7 @@ describe('A4 ④ 段头完整性下限（headerStripFloorHeight）', () => {
     expect(sections[1].styles.figmaHeightPx).toBe(100)
   })
 
-  it('量纲纪律：补齐后 flexGrow 仍是 avg=1 比例量级，且不写固定高度', () => {
+  it('量纲纪律：补齐后 flexGrow 仍是 Σ=1 归一比例量级，且不写固定高度', () => {
     const sections: any[] = sectionsFor([
       'sec-day',
       'sec-chart1',
@@ -237,6 +237,6 @@ describe('A4 ④ 段头完整性下限（headerStripFloorHeight）', () => {
       // 几何契约双写：px 真值同步
       expect(s.geometryPx.h).toBe(s.styles.figmaHeightPx)
     }
-    expect(sections[0].styles.flexGrow).toBeCloseTo(129 / (total / 5), 2)
+    expect(sections[0].styles.flexGrow).toBeCloseTo(129 / total, 2)
   })
 })

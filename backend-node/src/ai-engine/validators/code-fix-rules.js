@@ -39,6 +39,12 @@ import {
 } from '../utils/post-process.js';
 import { normalizeCssVarNames } from '../utils/css-var-contract.js';
 import { collectCardGroups, collectCardBgByOwner } from '../utils/card-background-truth.js';
+// 🔴 2026-11-16：脚本段锚点单一事实源。旧实现用 `/(<script setup>\n?)/` 与
+//   `/(<script setup>\s*(?:\n|$))/`（要求 `setup` 紧跟标签名），对
+//   `<script data-section-id="…" setup>` 失配 ⇒ 模板已写入 `@click="handleMcTabSwitch"`
+//   但 `ref` / `handleMcTabSwitch` 的脚本注入整块弃权 ⇒ 运行时 `handleMcTabSwitch is not defined`
+//   （与 mc-1794791855405-2e4db5ba 的 `icon6 is not defined` 同型）。
+import { findScriptSetupOpen, injectIntoScript } from '../utils/sfc-script-anchor.js';
 // 🛡️ S2：布局事实（tab 间距等）与渲染侧同源
 import { inferLayoutFactsForContainer } from '../utils/layout-geom-facts.js';
 import { sizeFromScaleMode } from '../utils/background-size-inference.js';
@@ -46,6 +52,14 @@ import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 // 🛡️ S3-BG（2026-11-15）：折叠进 v-for 的段，其原锚点已从模板消失；
 //   资源归属兜底不得再为它们注入承载 div（否则被 M6-3a 剥背景后只剩孤儿空 div）。
 import { collectFoldedOwnerIds } from '../utils/folded-item-background.js';
+// 🛡️ S3-BG 防线3（2026-11-16 · L2 套娃根治方案 v2）：注入后逐条 SFC 校验唯一判据
+//   （无反向依赖，静态 import 安全；禁在本文件新增任何 lazy HTML/SFC 结构判据）。
+//   extractLessGlobalVars：校验时补顶层 LESS 变量，防 @import 剥离造成未定义变量假阳性
+//   （P1-4 同源口径）⇒ 不会把「写盘门禁本来会放行」的文件误回滚。
+import {
+  validateVueSfc,
+  extractLessGlobalVars,
+} from '../utils/sfc-syntax-validation.js';
 import {
   ensureGridDisplay,
   ensureGridDisplayInVueSfc,
@@ -179,6 +193,19 @@ export function detectRootContainerClass(vueContent) {
       /<template\s+(?:#|v-slot:)[^>]*>[\s\S]*?<\/template\s*>/gi,
       '',
     );
+  // 🛡️ 消歧二（2026-11-16 · mc-max-1794788041213-67ed9c4e 离线复现实锤）：
+  //   优先「确定性根锚」——装配层在根容器写 data-mvgo-geom="root"（唯一、机器生成），
+  //   属性序无关、无正则歧义。旧实现漏检多 class 值（class="slot-con c-mc-max-…"
+  //   含空格 ⇒ ([\w-]+) 不匹配）⇒ 引擎继续扫描抓到**第一个业务 section** 类
+  //   （c-traffic-trend-section-01-block-01-con）⇒ N4 面板背景锚错容器且其样式
+  //   在子组件文件 ⇒ styleBlockRe 不命中 ⇒ 静默 no-op ⇒ bg 供料到位仍白底。
+  const mGeom = stripped.match(
+    /<([a-zA-Z][\w-]*)[^>]*\bdata-mvgo-geom=(["'])root\2[^>]*>/i,
+  );
+  if (mGeom) {
+    const clsAttr = mGeom[0].match(/\bclass=(["'])([\w-]+)/i);
+    if (clsAttr) return clsAttr[2];
+  }
   const mBase = stripped.match(
     /<template\b[^>]*>[\s\S]*?<base-panel[^>]*>[\s\S]*?<([a-zA-Z][\w-]*)[^>]*\bclass=(["'])([\w-]+)\2/i,
   );
@@ -318,6 +345,41 @@ export function anchorRootContainerInFiles(files, options = {}) {
     out[idxPath] = nextIdx;
     changed = true;
   }
+  // 🛡️ 消歧二-b（2026-11-16 · 67ed9c4e 离线复现实锤）：根类**无规则块时新建**。
+  //   病灶：rootCls 修复后（geom 锚）锚对了 slot-con，但其样式是纯 inline +
+  //   @import（确定性模板形态）⇒ index.vue style 块内无 `.{rootCls} {` 规则 ⇒
+  //   styleBlockRe 不命中 ⇒ patchStyle 恒 no-op ⇒ panelBg 供料到位仍不注入
+  //   （bg 被 LLM 挂在无 DOM 的自造 carrier 类上，CODE-016 只报不修）。
+  //   修法：style 块内确无 rootCls 规则时，在**最后一个 style 块尾部**新建规则——
+  //   只写 panelBg 声明（width/height 不动：inline 已有真值尺寸，重复声明无益）；
+  //   规则里的 px 不涉及（背景声明无长度）。幂等：二次执行规则已存在 ⇒ 走 patchStyle 原路。
+  if (!changed && panelBg) {
+    const styleBlockRe0 = new RegExp(`\\.${rootCls}\\s*\\{`);
+    const hasRule = styleBlockRe0.test(out[idxPath]);
+    if (!hasRule) {
+      const prefix = _imagesRelPrefix(idxPath);
+      const bgSize = panelBgStyle?.size || '100% 100%';
+      const bgRepeat = panelBgStyle?.repeat || 'no-repeat';
+      const bgPos =
+        bgSize !== 'cover' && bgSize !== 'contain' && bgRepeat !== 'repeat'
+          ? '\n  background-position: center;'
+          : '';
+      const rule =
+        `\n/* N4 面板背景（根类规则缺失，消歧二-b 新建；px2rem 不适用于背景声明） */\n` +
+        `.${rootCls} {\n` +
+        `  width: 100%;\n` +
+        `  height: 100%;\n` +
+        `  background-image: url('${prefix}${bgFileName}');\n` +
+        `  background-size: ${bgSize};\n` +
+        `  background-repeat: ${bgRepeat};${bgPos}\n}\n`;
+      const lastClose = out[idxPath].lastIndexOf('</style>');
+      if (lastClose >= 0) {
+        out[idxPath] =
+          out[idxPath].slice(0, lastClose) + rule + out[idxPath].slice(lastClose);
+        changed = true;
+      }
+    }
+  }
   // 注入目标二：resources/styles/common.less（兼容旧结构，存在才注入）
   const lessPath =
     paths.find((p) => p === 'resources/styles/common.less') ||
@@ -327,6 +389,36 @@ export function anchorRootContainerInFiles(files, options = {}) {
     if (nextLess !== files[lessPath]) {
       out[lessPath] = nextLess;
       changed = true;
+    }
+  }
+  // 🛡️ 消歧二-c（2026-11-16 · 8b489b14 真机实锤）：微码预览渲染链读的是
+  //   `resources/styles/index.css`（由 index.less @import common.less 编译），
+  //   **不读 SFC <style> 块**——消歧二-b 只把新建规则写进 index.vue 时，真机
+  //   index.css 里 slot-con 出现 0 次 ⇒ 规则成了「写了但渲染不到」的死规则
+  //   （DOM 实测 bg=none）。修法：新建规则**同时**落 common.less（进编译链 ⇒
+  //   index.css 携带 ⇒ 预览生效）；common.less 缺失时维持仅 index.vue 兜底。
+  if (panelBg) {
+    const styleBlockRe0 = new RegExp(`\\.${rootCls}\\s*\\{`);
+    if (lessPath && typeof out[lessPath] === 'string') {
+      if (!styleBlockRe0.test(out[lessPath])) {
+        const prefix = _imagesRelPrefix(lessPath);
+        const bgSize = panelBgStyle?.size || '100% 100%';
+        const bgRepeat = panelBgStyle?.repeat || 'no-repeat';
+        const bgPos =
+          bgSize !== 'cover' && bgSize !== 'contain' && bgRepeat !== 'repeat'
+            ? '\n  background-position: center;'
+            : '';
+        const rule =
+          `\n/* N4 面板背景（消歧二-c：落 common.less 进 index.css 编译链，预览直读 css） */\n` +
+          `.${rootCls} {\n` +
+          `  width: 100%;\n` +
+          `  height: 100%;\n` +
+          `  background-image: url('${prefix}${bgFileName}');\n` +
+          `  background-size: ${bgSize};\n` +
+          `  background-repeat: ${bgRepeat};${bgPos}\n}\n`;
+        out[lessPath] = out[lessPath] + rule;
+        changed = true;
+      }
     }
   }
   if (changed && logger && typeof logger.info === 'function') {
@@ -1237,11 +1329,43 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     // 2026-11-15（0fde9c29 实锤）：折叠段跳过计数（0 也打，便于区分「没折叠」与「闸失效」）
     skippedFoldedList: 0,
     carrierSizeRuleInjected: 0,
+    // 🛡️ 2026-11-16（L2 套娃根治 v2）：共享家族去重 / 锚点非法 / 注入回滚 计数（0 也恒打）
+    skippedSharedDuplicate: 0,
+    skippedAnchorInAttr: 0,
+    revertedInvalid: 0,
   };
   const out = { ...files };
   if (!files || typeof files !== 'object' || !Array.isArray(resourceDomMapping)) {
     return { files: out, stats };
   }
+  // 🛡️ 防线2（L2 套娃根治 v2 · 2026-11-16）：原始快照锚定。
+  //   ①' 分支的插入点只基于「本轮 pass 开始前的原文」计算，绝不基于每轮累积的 out[file]
+  //   ——否则注入 div 自身含 bg 变量名 ⇒ 下一轮 lastIndexOf 命中上一轮的自己 ⇒ 套娃
+  //   （1c15a129 实锤：12 owner 共用 bg4，carrier 24 个、连续 </div> 套娃、属性内截断）。
+  //   同文件多条注入都要生效 ⇒ 用 per-file 补丁表（patchByFile）把快照坐标换算回 out 坐标。
+  const originalByFile = { ...files };
+  // 防线2 坐标簿记：per-file 补丁表（原始坐标 at + 位移 shift）。锚点在原始快照上计算，
+  //   写入当前文本时用 shiftAt(file, atAbs) 做前缀和换算——同文件多条编辑（① 补绑加属性、
+  //   ①' 注入 carrier）各记录一条补丁，锚点只受「位于其之前」的编辑影响（单标量 delta 在
+  //   「先注入尾部、再注入头部」时会错位）。S3-b 的 import 注入按模板先行的管线约定不前置
+  //   模板区（script 在 template 之后 ⇒ 不影响模板内锚点；script 前置的文件才记补丁）。
+  const patchByFile = new Map(); // file -> Array<{at: number, shift: number}>
+  const shiftAt = (file, origPos) => {
+    let s = 0;
+    for (const p of patchByFile.get(file) || []) {
+      if (p.at <= origPos) s += p.shift;
+    }
+    return s;
+  };
+  const addPatch = (file, at, shift) => {
+    if (!patchByFile.has(file)) patchByFile.set(file, []);
+    patchByFile.get(file).push({ at, shift });
+  };
+  // 防线1 态二：本 pass 内已注入代表 carrier 的共享家族（varName 集合）。位次去重——
+  //   家族中首个走到 ①' 的成员为代表并注入；其余成员 skippedSharedDuplicate。
+  const injectedSharedVar = new Set();
+  // 防线3 校验入参：顶层 LESS 变量补集（只算一次；防 @import 剥离型假阳性误回滚，P1-4 同源）
+  const lessGlobalVarsByFile = extractLessGlobalVars(files);
   const entries = Object.entries(files).filter(
     ([p, c]) => /\.vue$/i.test(p) && typeof c === 'string',
   );
@@ -1314,6 +1438,22 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     const escV = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`\\b${escV}\\b`).test(src);
   };
+  // 🛡️ S3-BG 跨文件收窄判据补齐（L2 套娃根治 v2 · 2026-11-16）：折叠网格/兄弟卡轮换形态。
+  //   既有跨文件判据只认 FG_LIST_ITEMS/bgVar；而折叠网格接管器（folded-grid-section-takeover
+  //   :4741/:4891）产出 `FG_GRID_BGS[it.bgImg]` 轮换、mountCardBgGroups 产出 `FG_CARD_BGS`
+  //   轮换——都在**别的文件**消费 bg 变量（import 在 index.vue）⇒ 旧判据漏判 ⇒ 兜底对已由
+  //   v-for 逐卡消费的资源再注入承载 div（重复背景块）。
+  //   与 isFoldedListVarConsumed 同一收窄口径：只认「const FG_GRID_BGS = [ / const FG_CARD_BGS = [」
+  //   容器字面量且数组元素中出现该 varName，刻意不放宽为任意 const（防误跳过本该补挂的场景）。
+  const isSharedGridOrCardVarConsumed = (code, varName) => {
+    const srcM = String(code).match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!srcM) return false;
+    const src = srcM[1];
+    const arrM = /const\s+(?:FG_GRID_BGS|FG_CARD_BGS)\s*=\s*\[([^\]]*)\]/.exec(src);
+    if (!arrM) return false;
+    const escV = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escV}\\b`).test(arrM[1]);
+  };
   for (const r of resourceDomMapping) {
     if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
     stats.scanned += 1;
@@ -1377,6 +1517,13 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
         continue;
       }
       out[targetFile] = hostCode.replace(insM[1], `${insM[1]}${importLine}\n`);
+      // 🛡️ 防线2 补丁簿记：import 行插在 <script> 开标签后。常规 SFC template 在前、
+      //   script 在后 ⇒ 插入点在模板区之后，不影响模板内锚点（不记补丁）；
+      //   script 前置的文件（罕见）⇒ 插入点在模板区之前，记补丁保证后续锚点换算正确。
+      const tplOpen = hostCode.indexOf('<template>');
+      if (tplOpen >= 0 && insM.index < tplOpen) {
+        addPatch(targetFile, insM.index, importLine.length + 1);
+      }
       varByFile.set(fname, { file: targetFile, varName: newVar });
       stats.importInjected = (stats.importInjected || 0) + 1;
       // 🛡️ S3-b：重新读取补 import 后的落点（下方主循环统一用 varInfo）
@@ -1390,12 +1537,18 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     //   ⇒ 跳过注入/补绑（防造第二份背景块）。
     //   🔴 2026-11-15 补：刀 53 把 v-for 渲染在 components/ListSection.vue，而 import
     //      落点可能是 index.vue ⇒ 只查 hostSrc 会漏判，补一条收窄的跨文件判据。
+    //   🔴 2026-11-16 补（L2 套娃根治 v2）：跨文件收窄判据补齐 FG_GRID_BGS/FG_CARD_BGS
+    //      （折叠网格/兄弟卡轮换在别的文件消费 bg 变量，旧判据漏判）。
     const consumedInFoldedListElsewhere = entries.some(
       ([p, c]) => p !== varInfo.file && isFoldedListVarConsumed(c, varInfo.varName),
     );
+    const consumedInGridOrCardElsewhere = entries.some(
+      ([p, c]) => p !== varInfo.file && isSharedGridOrCardVarConsumed(c, varInfo.varName),
+    );
     if (
       isDataDrivenConsumedLocal(hostSrc, varInfo.varName) ||
-      consumedInFoldedListElsewhere
+      consumedInFoldedListElsewhere ||
+      consumedInGridOrCardElsewhere
     ) {
       stats.skippedDataDriven += 1;
       continue;
@@ -1436,12 +1589,44 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
         continue;
       } else {
         // 无 :style（含仅有静态 style）⇒ 在标签名后新建动态绑定（与静态 style 可共存）
+        //   🔴 2026-11-16 修（防线3 实锤暴露的既有 bug）：原替换串 `$1 :style=...` 丢开标签
+        //   `<` ⇒ 产出 `div :style=...` 坏标签（Invalid end tag）。旧 spec 断言全是子串
+        //   匹配探不到；新增逐条 validateVueSfc 后该形态被 revertedInvalid 拦下——
+        //   补回 `<` 才是治本（拦截只是兜底）。
         finalTag = whole.replace(
           /<([A-Za-z][\w.-]*)/,
-          `$1 :style="{ ${dynDecl} }"`,
+          `<$1 :style="{ ${dynDecl} }"`,
         );
       }
-      out[varInfo.file] = hostSrc.replace(whole, finalTag);
+      const atOrig = ownerTag.index; // whole 在原始快照中的起点（补丁簿记用）
+      // 🛡️ 防线3（L2 套娃根治 v2 · 2026-11-16）：逐注入校验 + 单条回滚。
+      //   补绑落笔后立即 validateVueSfc（唯一 SFC 判据）；非法 ⇒ 本条回滚（out 恢复本条
+      //   注入前值、不记补丁），计 revertedInvalid，不流入下游写盘门禁（防整段丢弃）。
+      //   匹配用当前文本（out）——ownerTag 来自原始快照，① 分支只在同文件无其他补丁时到达；
+      //   保险：若当前文本中找不到 whole（被其他编辑改写）⇒ fail-open 跳过，不硬拼。
+      const curHost = out[varInfo.file];
+      const curIdx = curHost.indexOf(whole);
+      if (curIdx < 0) {
+        stats.skippedNonObjectStyle += 1;
+        continue;
+      }
+      const beforeTag = curHost;
+      out[varInfo.file] =
+        curHost.slice(0, curIdx) +
+        finalTag +
+        curHost.slice(curIdx + whole.length);
+      const tagCheck = validateVueSfc(
+        out[varInfo.file],
+        varInfo.file,
+        { lessGlobalVars: lessGlobalVarsByFile },
+      );
+      if (!tagCheck.valid) {
+        out[varInfo.file] = beforeTag;
+        stats.revertedInvalid += 1;
+        continue;
+      }
+      // 补丁簿记（shift = finalTag.length - whole.length；at 用原始快照坐标）
+      addPatch(varInfo.file, atOrig, finalTag.length - whole.length);
       stats.containerTagged += 1;
       continue;
     }
@@ -1453,6 +1638,19 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     //      「引用所在行行尾」常落在父级/兄弟位置 ⇒ 注入 div 变错位方块破坏布局（5afb401f 实锤）；
     //   ③ 原 `hostSrc.slice(0, tplIdx + insertAt)` 与 insertAt 的**绝对坐标重复叠加 tplIdx**
     //      （仅当 `<template>` 位于文件首、tplIdx===0 时才凑巧正确）⇒ 现统一用绝对坐标。
+    //   🔴 2026-11-16（L2 套娃根治 v2 · 防线1 态二）：共享家族去重闸（位次代表制）。
+    //   同一 varName（同 resourceFile）的多个 mapping owner 走到 ①' 时：家族中**首个**到达
+    //   本分支的成员为代表并注入；其余成员 skippedSharedDuplicate。去重语义≠已消费语义：
+    //   不吞资源、不臆断消费，只是「一张图只兜底挂一次」——与 ③ 错挂清理的 legitIdsByVar
+    //   豁免天然一致（代表 wantId 本就在该 varName 的合法归属段集合内，不会被误剥）。
+    //   反证样本（1c15a129）：12 owner 共用 bg4 逐条注入 ⇒ carrier 24 个、lastIndexOf 套娃、
+    //   属性内截断 ⇒ ContentSection.vue 整段被写盘门禁丢弃。
+    //   幂等：代表 carrier 已存在 ⇒ 家族其余成员的 lastIndexOf 仍可在原始快照中找到消费点、
+    //   但 injectedSharedVar 已登记 ⇒ 走 skippedSharedDuplicate，不会重复注入。
+    if (injectedSharedVar.has(varInfo.varName)) {
+      stats.skippedSharedDuplicate += 1;
+      continue;
+    }
     const dynDecl = `backgroundImage: 'url(' + ${varInfo.varName} + ')', backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat'`;
     // 🔴 2026-11-15：尺寸不再写 inline px（px2rem 只对 less/css 生效）——
     //   改为确定性 class + 同文件 <style> 段规则，规则里的 px 会被 postcss-pxtorem 转换。
@@ -1460,17 +1658,20 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     const h = Math.round(r.figmaBox?.height || 0);
     const cls = `mc-bg-carrier-${String(wantId).replace(/[^A-Za-z0-9]/g, '') || 'x'}`;
     const injectDiv = `<div data-section-id="${wantId}" class="${cls}" :style="{ ${dynDecl} }"></div>`;
-    const tplIdx = hostSrc.indexOf('<template>');
+    // 🛡️ 防线2（L2 套娃根治 v2 · 2026-11-16）：锚点只基于原始快照计算（out[file] 已被
+    //   之前的注入污染过——注入 div 自身含 varName ⇒ lastIndexOf 会命中上一轮的自己）。
+    const originalSrc = originalByFile[varInfo.file];
+    const tplIdx = originalSrc.indexOf('<template>');
     if (tplIdx < 0) continue;
-    const closeIdx = hostSrc.lastIndexOf('</template>');
+    const closeIdx = originalSrc.lastIndexOf('</template>');
     if (closeIdx < 0) continue;
     // ⚠️ tplBody 只取 **template 内容**（不含 `<template>` 自身标签）：原写法
     //   `slice(tplIdx, closeIdx)` 把开标签也括进来 ⇒ 兜底的 `indexOf('<')` 命中 `<template>`
     //   的尖括号 ⇒ 插入点落在 `<template>` 之后 = **根容器之外**，又是一个错位方块（本节实测）。
-    const gt0 = hostSrc.indexOf('>', tplIdx);
+    const gt0 = originalSrc.indexOf('>', tplIdx);
     const bodyStart = gt0 >= 0 ? gt0 + 1 : tplIdx;
-    const tplBody = hostSrc.slice(bodyStart, closeIdx);
-    // 插入点（绝对坐标）：varName 消费元素的开标签之后 ⇒ 注入 div 落在其内部（层级归属由此确定）
+    const tplBody = originalSrc.slice(bodyStart, closeIdx);
+    // 插入点（原始快照绝对坐标）：varName 消费元素的开标签之后 ⇒ 注入 div 落在其内部
     const useIdx = tplBody.lastIndexOf(varInfo.varName);
     let atAbs = -1;
     if (useIdx >= 0) {
@@ -1483,11 +1684,27 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
       const gt = lt >= 0 ? tplBody.indexOf('>', lt) : -1;
       atAbs = gt >= 0 ? bodyStart + gt + 1 : closeIdx;
     }
-    out[varInfo.file] =
-      hostSrc.slice(0, atAbs) + '\n' + injectDiv + hostSrc.slice(atAbs);
-    const sized = ensureCarrierSizeRule(out[varInfo.file], cls, w, h);
-    out[varInfo.file] = sized.code;
-    if (sized.inserted) stats.carrierSizeRuleInjected += 1;
+    // 🛡️ 防线3（L2 套娃根治 v2 · 2026-11-16）：注入落笔后立即 validateVueSfc；
+    //   非法（典型：锚点落在属性内部被截断）⇒ 本条回滚（不写回、不记补丁），
+    //   计 skippedAnchorInAttr——绝不产出坏 SFC，下游写盘门禁不再因本 pass 整段丢弃。
+    const atOut = atAbs + shiftAt(varInfo.file, atAbs);
+    const curSrc = out[varInfo.file];
+    const candidate =
+      curSrc.slice(0, atOut) + '\n' + injectDiv + curSrc.slice(atOut);
+    const sizedCand = ensureCarrierSizeRule(candidate, cls, w, h);
+    const injCheck = validateVueSfc(sizedCand.code, varInfo.file, {
+      lessGlobalVars: lessGlobalVarsByFile,
+    });
+    if (!injCheck.valid) {
+      stats.skippedAnchorInAttr += 1;
+      continue;
+    }
+    out[varInfo.file] = sizedCand.code;
+    if (sizedCand.inserted) stats.carrierSizeRuleInjected += 1;
+    // 补丁簿记：注入位移 = '\n' + injectDiv；size 规则插在 </style> 前（模板区之后），
+    //   对模板内锚点无影响，但稳妥起见按其后插位置不记补丁（锚点都在 template 内）。
+    addPatch(varInfo.file, atAbs, injectDiv.length + 1);
+    injectedSharedVar.add(varInfo.varName);
     stats.missingContainerInjected += 1;
   }
   // ③ 错挂清理：归属容器已补挂后，其它段开标签上同资源的 bg 声明移除（防双挂/拉伸）。
@@ -1970,15 +2187,16 @@ export function injectTabInteractivity(files, figmaNodeData, identifyTabSections
     if (importM && !/\bref\b/.test(importM[1])) {
       next = next.replace(importM[0], importM[0].replace('{', '{ ref,'));
     } else if (!importM) {
-      next = next.replace(
-        /(<script setup>\n?)/,
-        `$1import { ref } from 'vue'\n`,
-      );
+      // 🔴 2026-11-16：改走唯一事实源（属性顺序无关）
+      next = injectIntoScript(next, `\nimport { ref } from 'vue'\n`).code;
     }
-    const setupAnchor = /(<script setup>\s*(?:\n|$))/.exec(next);
+    // 🔴 2026-11-16：同上。旧 `/(<script setup>\s*(?:\n|$))/` 对
+    //   `<script data-section-id="…" setup>` 失配 ⇒ 状态注入静默弃权。
+    const setupAnchor = findScriptSetupOpen(next);
     if (setupAnchor) {
       const stateCode = `\n// 🛡️ S4 tab 交互注入（G1-v2 确定性兜底）：\nconst activeMcTab = ref('')\nfunction handleMcTabSwitch(e) {\n  const root = e?.currentTarget\n  const item = e?.target?.closest('[data-mc-tab-key]') || (root?.getAttribute('data-mc-tab-key') ? root : null)\n  if (item) activeMcTab.value = item.getAttribute('data-mc-tab-key') || ''\n}\n`;
-      next = next.replace(setupAnchor[0], setupAnchor[0] + stateCode);
+      const at = setupAnchor.index + setupAnchor.tag.length;
+      next = next.slice(0, at) + stateCode + next.slice(at);
     }
     out[p] = next;
     stats.injected += 1;

@@ -11,6 +11,8 @@ import {
   collectSectionIds,
   resolveOwnerSectionToNearestSection,
   formatResourceOwnershipLog,
+  ownerKeyCandidates,
+  ownerMatchesIds,
 } from '../resource-ownership-normalize';
 
 const SECTIONS = ['88:32', '2:3565', '2:3439', '1744:127', '1744:128', '2:3566'];
@@ -166,5 +168,43 @@ describe('formatResourceOwnershipLog', () => {
     const line = formatResourceOwnershipLog({ verdict: 'no-evidence', reason: 'no-section-ids' });
     expect(line.message).toContain('verdict=no-evidence');
     expect(line.message).toContain('reason=no-section-ids');
+  });
+});
+
+describe('P0-b 归属键判据（单一来源 · 2026-11-15 c019cd88）', () => {
+  it('ownerKeyCandidates：同时给出 ownerSectionId 与 ownerSectionOriginal（去空去 null）', () => {
+    expect(ownerKeyCandidates({ ownerSectionId: '2016:219', ownerSectionOriginal: '1:377' })).toEqual([
+      '2016:219',
+      '1:377',
+    ]);
+    expect(ownerKeyCandidates({ ownerSectionId: 'A', ownerSectionOriginal: null })).toEqual(['A']);
+    expect(ownerKeyCandidates({ ownerSectionId: null })).toEqual([]);
+    expect(ownerKeyCandidates(null as any)).toEqual([]);
+  });
+
+  it('ownerMatchesIds：任一键命中即真（上溯后的 section 与原值都认）', () => {
+    const ids = new Set(['1:377', '1:388']);
+    const e = { ownerSectionId: '2016:219', ownerSectionOriginal: '1:377' };
+    expect(ownerMatchesIds(ids, e)).toBe(true);
+    // 只认 section（上溯前值缺失）⇒ 不命中
+    expect(ownerMatchesIds(ids, { ownerSectionId: '2016:219' })).toBe(false);
+    // 无 owner 键 ⇒ 不命中（「无 owner 视为通配」由调用方自行决定）
+    expect(ownerMatchesIds(ids, {})).toBe(false);
+    expect(ownerMatchesIds(null as any, e)).toBe(false);
+  });
+
+  it('与本模块上溯联动：上溯产物能被 item 锚点集合命中', () => {
+    const r = resolveOwnerSectionToNearestSection(
+      [{ figmaNodeId: '1:375', ownerSectionId: '1:377', ancestorIds: ['1:376', '2016:219'] }],
+      collectSectionIds(['2016:219']),
+      { silent: true },
+    );
+    const m = r.mappings[0];
+    expect(m.ownerSectionId).toBe('2016:219');
+    expect(m.ownerSectionOriginal).toBe('1:377');
+    // DOM 锚点侧：认 section
+    expect(ownerMatchesIds(new Set(['2016:219']), m)).toBe(true);
+    // 折叠卡项侧：认原值
+    expect(ownerMatchesIds(new Set(['1:377']), m)).toBe(true);
   });
 });

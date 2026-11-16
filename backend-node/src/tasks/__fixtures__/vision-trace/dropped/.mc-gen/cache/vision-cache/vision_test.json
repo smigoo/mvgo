@@ -1,0 +1,45 @@
+{
+  "_cachedAt": 1794760843971,
+  "generatedAt": "2026-11-15T16:40:43.000Z",
+  "summary": "含当日总流量、两条隧道柱图、车型分布卡片、流量预测折线图",
+  "layoutStructure": {
+    "layout": {
+      "type": "single-panel",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "2:3660",
+          "name": "当日总流量",
+          "role": "常驻",
+          "headerRelation": "content-below-title",
+          "body": { "layout": "horizontal", "children": [{ "id": "2:3559", "role": "stat-card" }] }
+        },
+        {
+          "id": "2:3565",
+          "name": "流量标题行",
+          "role": "常驻",
+          "headerRelation": "title-itself",
+          "body": { "layout": "horizontal", "children": [] }
+        },
+        {
+          "id": "2:3604",
+          "name": "流量预测",
+          "role": "常驻",
+          "headerRelation": "title-itself",
+          "header": {
+            "title": "流量预测",
+            "controls": [{ "id": "2:3566", "name": "江阴靖江长江隧道", "role": "tab", "active": true }]
+          },
+          "body": {
+            "layout": "vertical",
+            "children": [{ "id": "2:3565-chart", "role": "chart", "type": "line" }]
+          }
+        }
+      ]
+    }
+  },
+  "charts": [
+    { "type": "bar", "section": "2:7625" },
+    { "type": "line", "section": "2:3565-chart" }
+  ]
+}

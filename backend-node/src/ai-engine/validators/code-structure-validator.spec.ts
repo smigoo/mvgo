@@ -93,12 +93,15 @@ describe('CODE-011 echarts.init 时序检测', () => {
     expect(issues).toHaveLength(0)
   })
 
-  it('同步 init（无任何延迟）BLOCK', () => {
+  // 🛡️ 2026-11-16 降级：echarts 同步 init 属「图表可能 0 宽初始化」的最佳实践，
+  //   真坏件由 RUNTIME-017（零宽图表容器）与真机截图兜住 ⇒ 只 WARN 不阻断。
+  it('同步 init（无任何延迟）→ 检出但 WARN（不再阻断）', () => {
     const issues = runCode011(makeVue(`
       onMounted(() => { echarts.init(chartRef.value) })
     `))
     expect(issues).toHaveLength(1)
-    expect(issues[0].severity).toBe('BLOCK')
+    expect(issues[0].id).toBe('CODE-011')
+    expect(issues[0].severity).toBe('WARN')
   })
 
   it('尺寸守卫 + ResizeObserver 延迟 init 放行（2026-08-16 事故形态）', () => {
@@ -247,7 +250,8 @@ describe('CODE-001 style 属性顺序无关', () => {
     expect(runCode001(content)).toHaveLength(0)
   })
 
-  it('<style scoped>（缺 lang="less"）→ BLOCK', () => {
+  // 🛡️ 2026-11-16 降级：style 块 lang/scoped 契约属规范问题，样式仍会生效 ⇒ WARN。
+  it('<style scoped>（缺 lang="less"）→ 检出但 WARN', () => {
     const content = `<template><div class="root"></div></template>
 <script setup>
 </script>
@@ -256,16 +260,16 @@ describe('CODE-001 style 属性顺序无关', () => {
 </style>`
     const issues = runCode001(content)
     expect(issues).toHaveLength(1)
-    expect(issues[0].severity).toBe('BLOCK')
+    expect(issues[0].severity).toBe('WARN')
   })
 
-  it('没有任何 style 块 → BLOCK', () => {
+  it('没有任何 style 块 → 检出但 WARN', () => {
     const content = `<template><div class="root"></div></template>
 <script setup>
 </script>`
     const issues = runCode001(content)
     expect(issues).toHaveLength(1)
-    expect(issues[0].severity).toBe('BLOCK')
+    expect(issues[0].severity).toBe('WARN')
   })
 })
 
@@ -366,6 +370,10 @@ const runValidator = (
 
 const blocksOf = (res: any, id: string) =>
   res.issues.filter((i: any) => i.id === id && i.severity === 'BLOCK')
+
+// 🛡️ 2026-11-16：B 档判据降 WARN 后，验「判据仍命中」须不看 severity。
+//   blocksOf 只认 BLOCK（fail-closed 语义），降级项请用 hitsOf 断言「照旧检出」。
+const hitsOf = (res: any, id: string) => res.issues.filter((i: any) => i.id === id)
 
 describe('CODE-016 背景挂载容器判定', () => {
   it('sub-state 状态背景挂非根容器（tab 选中态）→ 不 BLOCK', () => {
@@ -526,7 +534,8 @@ describe('CODE-017 整块背景重复挂载判定', () => {
     expect(blocksOf(res, 'CODE-017')).toHaveLength(0)
   })
 
-  it('负面对照：整块背景真实挂载 2 处（无变量定义）→ 仍 BLOCK', () => {
+  // 🛡️ 2026-11-16 降级：背景被挂两处属「多铺一张背景」，产物仍能打开 ⇒ WARN。
+  it('负面对照：整块背景真实挂载 2 处（无变量定义）→ 仍检出（WARN）', () => {
     const res = runValidator([
       {
         path: 'resources/styles/common.less',
@@ -538,7 +547,8 @@ describe('CODE-017 整块背景重复挂载判定', () => {
 }`,
       },
     ])
-    expect(blocksOf(res, 'CODE-017').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-017').length).toBeGreaterThan(0)
+    expect(blocksOf(res, 'CODE-017')).toHaveLength(0)
   })
 
   it('去重场景：3 个不同背景变量指向同一去重图片、各挂一处 → 不 BLOCK（2026-09-03 设备监测 12 卡片实锤）', () => {
@@ -566,7 +576,7 @@ import bg5 from '../resources/images/bg-8439.png'
     expect(blocksOf(res, 'CODE-017')).toHaveLength(0)
   })
 
-  it('同一变量被引用 2 处（url(${bg1}) + :src="bg1"）→ 仍 BLOCK', () => {
+  it('同一变量被引用 2 处（url(${bg1}) + :src="bg1"）→ 仍检出（WARN）', () => {
     const res = runValidator([
       {
         path: 'package/index.vue',
@@ -576,7 +586,8 @@ import bg1 from '../resources/images/bg-7890.png'
 </script>`,
       },
     ])
-    expect(blocksOf(res, 'CODE-017').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-017').length).toBeGreaterThan(0)
+    expect(blocksOf(res, 'CODE-017')).toHaveLength(0)
   })
 })
 
@@ -1203,7 +1214,9 @@ ${vueStyle}
 ]
 
 describe('FLEX-003 跨样式源 flex 冲突', () => {
-  it('scoped SFC 与 common.less 同 class 两套 flex 值 → BLOCK（Task3 FlowPrediction 形态）', () => {
+  // 🛡️ 2026-11-16 降级：两个样式源同 class 两套 flex 值 ⇒ 优先级由 scoped 决定，
+  //   产物可正常渲染，且它曾是「禁止晋升 last-good」第一大户（6 次）⇒ WARN。
+  it('scoped SFC 与 common.less 同 class 两套 flex 值 → 仍检出（WARN，Task3 形态）', () => {
     const res = V.validate(
       mkFlexFiles('.c-test-chart-area { flex: 180 1 0; min-height: 0; }', [
         {
@@ -1214,12 +1227,13 @@ describe('FLEX-003 跨样式源 flex 冲突', () => {
       'c-test',
       { target: 'microcode' },
     )
-    const blocks = blocksOf(res, 'FLEX-003')
-    expect(blocks).toHaveLength(1)
-    expect(blocks[0].message).toContain('.c-test-chart-area')
-    expect(blocks[0].message).toContain('180 1 0')
+    const hits = hitsOf(res, 'FLEX-003')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].severity).toBe('WARN')
+    expect(hits[0].message).toContain('.c-test-chart-area')
+    expect(hits[0].message).toContain('180 1 0')
     // 命中 scoped 时必须把优先级结论写进文案，否则 LLM 无法判断该删哪一份
-    expect(blocks[0].message).toContain('死样式')
+    expect(hits[0].message).toContain('死样式')
   })
 
   it('负面对照：两个样式源写法完全一致 → 不 BLOCK（冗余声明但无害）', () => {
@@ -2045,7 +2059,9 @@ import StatsSection from './components/StatsSection.vue'
     expect(ids).toContain('CODE-026')
   })
 
-  it('骨架真缺（全量集本身就缺）仍必须 BLOCK —— 不得放行', () => {
+  // 🛡️ 2026-11-16 降级：缺单个骨架文件（如 css-vars.js）⇒ 主题变量/辅助样式缺失，
+  //   产物仍可打开；「整份空壳/无 template」由 EMPTY_ARTIFACT / ARTIFACT_INCOMPLETE 兜住。
+  it('骨架真缺（全量集本身就缺）仍必须检出（WARN，不再 fail-closed）', () => {
     const broken = fullProduct.filter(
       (f) => f.path !== 'resources/config/css-vars.js',
     )
@@ -2054,7 +2070,9 @@ import StatsSection from './components/StatsSection.vue'
       productFiles: broken,
     })
     expect((res.issues || []).map((i) => i.id)).toContain('CODE-026')
-    expect(res.pass).toBe(false)
+    expect(hitsOf(res, 'CODE-026')[0].severity).toBe('WARN')
+    // 空壳类硬闸仍独立生效（本用例产物有 .vue + template ⇒ 不该被误判为空壳）
+    expect((res.issues || []).map((i) => i.id)).not.toContain('EMPTY_ARTIFACT')
   })
 
   it('只改 .less 的轮次：EMPTY_ARTIFACT/EMPTY_BODY 不因 .vue 缺席而误判', () => {
@@ -2108,8 +2126,11 @@ describe('PROP-BIND 绑定未声明的 businessProps 键', () => {
       (i: any) => i.id === 'PROP-BIND' && i.severity === 'BLOCK',
     )
 
-  it('引用未声明的 businessProps.actions → BLOCK（该绑定渲染必然为空）', () => {
-    expect(blocks(validate([DECLARE_EMPTY, vueWith('businessProps.actions')]))).toHaveLength(1)
+  // 🛡️ 2026-11-16 降级：绑定未声明键 ⇒ 该处渲染为空（局部空盒子，非整套产物打不开）⇒ WARN。
+  it('引用未声明的 businessProps.actions → 仍检出（WARN）', () => {
+    const res = validate([DECLARE_EMPTY, vueWith('businessProps.actions')])
+    expect(hitsOf(res, 'PROP-BIND')).toHaveLength(1)
+    expect(blocks(res)).toHaveLength(0)
   })
 
   it('键已在 declare.json.businessConfig 声明 → 不 BLOCK', () => {

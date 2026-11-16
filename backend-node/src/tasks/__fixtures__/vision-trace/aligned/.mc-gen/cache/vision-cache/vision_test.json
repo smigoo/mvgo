@@ -1,0 +1,34 @@
+{
+  "_cachedAt": 1794760836745,
+  "generatedAt": "2026-11-15T16:40:36.700Z",
+  "summary": "含当日总流量统计、两条隧道柱图、车型分布卡片、流量预测折线图",
+  "layoutStructure": {
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "2:3660",
+          "name": "当日总流量",
+          "role": "常驻",
+          "headerRelation": "content-below-title",
+          "body": { "layout": "horizontal", "children": [{ "id": "2:3559", "role": "stat-card" }] }
+        },
+        {
+          "id": "2:3604",
+          "name": "流量预测",
+          "role": "常驻",
+          "headerRelation": "title-same-row",
+          "body": {
+            "layout": "horizontal",
+            "children": [{ "id": "2:3571", "role": "chart", "type": "line" }]
+          }
+        }
+      ]
+    }
+  },
+  "charts": [
+    { "type": "bar", "section": "2:7625" },
+    { "type": "line", "section": "2:3604" }
+  ]
+}

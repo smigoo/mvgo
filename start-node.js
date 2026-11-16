@@ -76,21 +76,50 @@ function gitHeadShort(cwd) {
 //     ① `dist/.build-stamp`       —— build 脚本成功结尾写入（scripts/write-build-stamp.mjs），最可靠
 //     ② `tsconfig.build.tsbuildinfo` —— 直接跑 `nest build`（不走 npm script）时也会刷新
 //     ③ `dist/main.js` mtime      —— 兜底，兼容历史语义
+//   ⚠️ 2026-11-16 自审缺口 (d) 收口 —— 上面的「取最新者」本身就是绕过通道：
+//     ② tsbuildinfo 被**任何** tsc/nest build 刷新，包括绕过 `npm run build` 直跑的 `nest build`。
+//     直跑后 tsbuildinfo 变成最新 ⇒ R3-B 仍 ✅，而 G03 no-undef / parsable 的源面+运行面复扫、
+//     以及 `.build-stamp` 写入**全都没执行** ⇒ 护栏给了一个「门禁已过」的错觉。
+//     现改为**判据单一来源**：`.build-stamp` 由 `npm run build` 走完整条门禁链后才写，
+//     是唯一「受门禁构建」的证据 —— stamp 存在时只用它做基准，tsbuildinfo/main.js 退为
+//     「stamp 缺失时的历史兜底」。并新增「门禁绕过迹象」告警：stamp 存在而 dist 产物比它更新 ⇒
+//     这份 dist 不是门禁链产物，明确告知「与源码一致」不等于「门禁已过」。
 const DIST_MAIN = path.join(BE_DIR, 'dist', 'main.js');
 const BUILD_STAMP = path.join(BE_DIR, 'dist', '.build-stamp');
 const TS_BUILDINFO = path.join(BE_DIR, 'tsconfig.build.tsbuildinfo');
-const _evidence = [BUILD_STAMP, TS_BUILDINFO, DIST_MAIN]
-  .map((f) => {
-    try {
-      const st = fs.statSync(f);
-      return st.isFile() ? { name: path.relative(BE_DIR, f), t: st.mtimeMs } : null;
-    } catch { return null; }
-  })
-  .filter(Boolean);
+const _mtimeOf = (f) => {
+  try {
+    const st = fs.statSync(f);
+    return st.isFile() ? st.mtimeMs : null;
+  } catch {
+    return null;
+  }
+};
+const _stampT = _mtimeOf(BUILD_STAMP);
+const _tsInfoT = _mtimeOf(TS_BUILDINFO);
+const _mainT = _mtimeOf(DIST_MAIN);
+// stamp 存在 ⇒ 基准唯一取 stamp；否则回退「取最新者」的历史语义（兼容 stamp 尚未产生的旧目录）
+const _evidence = _stampT !== null
+  ? [{ name: path.relative(BE_DIR, BUILD_STAMP), t: _stampT }]
+  : [
+      { name: path.relative(BE_DIR, BUILD_STAMP), t: _stampT },
+      { name: path.relative(BE_DIR, TS_BUILDINFO), t: _tsInfoT },
+      { name: path.relative(BE_DIR, DIST_MAIN), t: _mainT },
+    ].filter((e) => e.t !== null);
 const _distTime = _evidence.length ? Math.max(..._evidence.map((e) => e.t)) : 0;
 const _distBasis = _evidence.length
   ? _evidence.filter((e) => e.t === _distTime).map((e) => e.name).join(' | ')
   : '无构建产物';
+// 门禁绕过迹象：stamp 存在时，比 stamp 更新的 dist 产物 ⇒ 这份 dist 不是 `npm run build` 的产物。
+// 容差 1s：避免同一次构建内先后写入被文件系统时间精度判成「更新」。
+const _bypass = _stampT === null
+  ? []
+  : [
+      [path.relative(BE_DIR, TS_BUILDINFO), _tsInfoT],
+      [path.relative(BE_DIR, DIST_MAIN), _mainT],
+    ]
+      .filter(([, t]) => t !== null && t > _stampT + 1000)
+      .map(([n, t]) => `${n}(${new Date(t).toISOString()})`);
 const _srcScan = latestSrcMtime(path.join(BE_DIR, 'src'), /\.(ts|js)$/);
 const _gitHash = gitHeadShort(BE_DIR);
 const STALE = _distTime > 0 && _srcScan.latest > _distTime;
@@ -108,6 +137,16 @@ if (STALE) {
     `当前 dist 落后于源码，运行的是旧代码，请重新 build 后再启动。`;
   R3B_REPORT = _r3bWarn + '\n' + R3B_STATUS;
   console.warn(_r3bWarn);
+}
+// (d) 门禁绕过告警：健康态也必须吭声 —— 否则「门禁已过」与「门禁压根没跑」无法区分
+//   （与 STALE 同理：只在出问题时说话，就会重演「护栏失效很久没人发现」）。
+if (_bypass.length) {
+  const _bypassWarn =
+    `[start-node] ⚠️ R3-B 门禁绕过迹象：${_bypass.join('、')} 比 dist/.build-stamp(${new Date(_stampT).toISOString()}) 更新 ⇒ ` +
+    `这份 dist 不是 \`npm run build\` 的产物（G03 no-undef + parsable 源面/运行面复扫 + stamp 写入均未执行）。` +
+    `上面「与源码一致」只说明 dist 不落后，不代表门禁已过；请重跑 \`npm run build\` 后再启动。`;
+  R3B_REPORT += '\n' + _bypassWarn;
+  console.warn(_bypassWarn);
 }
 console.log(R3B_STATUS);
 

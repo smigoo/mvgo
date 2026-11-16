@@ -10,6 +10,7 @@
  */
 import { rmSync } from 'fs';
 import { join } from 'path';
+import { validateVueSfcExpressions } from '../ai-engine/utils/sfc-syntax-validation.js';
 
 // backend-root.js 走 `import.meta.url`，jest CJS 运行时无法加载（既有 17 个 suite 同因）。
 // 单一事实源：与 tasks.service.spec.ts 同款 mock，把落盘根指到固定临时目录。
@@ -380,5 +381,177 @@ describe('TaskCodeSnapshotService#isRenderableRevision（import 闭包）', () =
       GOOD_ENTRY,
     );
     expect(service.readFile(sid, rev, 'package/index.vue').toString('utf-8')).toBe(GOOD_ENTRY);
+  });
+});
+
+/**
+ * 🛡️ 2026-11-16（mc-max-1794761757056-0d15ab1b 实锤）：任务级终态 onFilesReady 绕过
+ * chunk 推送守卫，把「两份完整 SFC 叠加」的坏 index.vue 推成 candidate ⇒ 422 + 空白。
+ * createCandidate 是所有候选快照的单一入口，必须在冻结前确定性归一。
+ */
+describe('TaskCodeSnapshotService#createCandidate（SFC 叠加结构自愈）', () => {
+  const ROOT = join(tmpdir(), 'mvgo-snapshot-closure-test');
+  let svc: TaskCodeSnapshotService;
+
+  const INNER = [
+    '<template>',
+    '  <base-panel panelKey="default-panel">',
+    '    <div class="c-demo-root"><ContentSection /><ChartTrend /></div>',
+    '  </base-panel>',
+    '</template>',
+  ].join('\n');
+  const SCRIPT = ['<script setup>', "const title = 'demo'", '</script>'].join('\n');
+  // 不带 less @import：isRenderableRevision 用绝对路径跑 validateVueSfc 会编译
+  // 真实 @import 依赖链，临时 revision 里没有 resources/styles ⇒ 假阳判 false。
+  // 本用例只验「叠加归一」，不验 less 链（既有用例已覆盖）。
+  const STYLE = ['<style scoped>', '.c-demo-root { color: #fff; }', '</style>'].join('\n');
+  const STACKED = `<template>\n${INNER}\n${SCRIPT}\n${STYLE}\n</template>\n${SCRIPT}\n${STYLE}`;
+  const GOOD = `${INNER}\n${SCRIPT}\n${STYLE}`;
+
+  const create = (sid: string, index: string) =>
+    svc.createCandidate({
+      sessionId: sid,
+      componentId: 'c-test-stacked',
+      groupId: 'g-1',
+      target: 'microcode' as never,
+      files: { 'package/index.vue': index },
+    }).revision;
+
+  beforeAll(() => {
+    svc = new TaskCodeSnapshotService();
+  });
+
+  afterAll(() => {
+    rmSync(join(ROOT, 'temp-components', '.task-code-snapshots'), {
+      recursive: true,
+      force: true,
+    });
+  });
+
+  it('坏入口推成 candidate 时先归一 → revision 内文件合法且可渲染', () => {
+    const sid = 'mc-test-stacked-heal';
+    const rev = create(sid, STACKED);
+    const content = svc.readPreviewFile(sid, rev, 'package/index.vue').toString('utf-8');
+
+    expect(content).not.toBe(STACKED);
+    expect(validateVueSfcExpressions(content, 'package/index.vue').valid).toBe(true);
+    expect((content.match(/<script setup>/g) || []).length).toBe(1);
+    expect(content).toContain('<ContentSection');
+    expect(content).toContain('<ChartTrend');
+    expect(
+      (
+        svc as unknown as {
+          isRenderableRevision: (s: string, r: string) => boolean;
+        }
+      ).isRenderableRevision(sid, rev),
+    ).toBe(true);
+  });
+
+  it('阴性对照：合法入口逐字冻结，不被改写', () => {
+    const sid = 'mc-test-stacked-healthy';
+    const rev = create(sid, GOOD);
+    expect(svc.readPreviewFile(sid, rev, 'package/index.vue').toString('utf-8')).toBe(GOOD);
+  });
+});
+
+/**
+ * 🛡️ 2026-11-16：last-good 晋级出口 SFC 结构门禁（mc-max-1794819915607-80954ead 实锤）。
+ *
+ * 病灶：坏版 index.vue（根 <div 缺 '<' → 游离 </div> ⇒ Invalid end tag）写盘门禁已拦，
+ * 但内存 allFiles 经任务级 onFilesReady → createCandidate 落 revision，再被
+ * publishLastGood() 无校验晋级 last-good ⇒ 坏版成为默认预览源、回退无可用版本 ⇒ 422。
+ * 治本：publishLastGood() 晋级前用唯一判据复核 SFC 结构，非法不写 last-good 指针。
+ */
+describe('TaskCodeSnapshotService#publishLastGood SFC 结构门禁', () => {
+  const TEST_ROOT = join(tmpdir(), 'mvgo-snapshot-closure-test');
+  const svc = new TaskCodeSnapshotService();
+
+  const write = (sid: string, files: Record<string, string>) =>
+    svc.createCandidate({
+      sessionId: sid,
+      componentId: 'c-promotion-gate',
+      groupId: 'g-1',
+      target: 'microcode' as never,
+      files,
+    }).revision;
+
+  const gate = (sid: string, rev: string) =>
+    (svc as unknown as { isRevisionSfcRenderable: (s: string, r: string) => boolean })
+      .isRevisionSfcRenderable(sid, rev);
+
+  // 真实坏形态（mc-max-1794819915607-80954ead）：第三个 section 的 <div 丢左尖括号，
+  // 退化成纯文本 `div ...>`；原本配对它的 </div> 于是多出 ⇒ 编译器报 Invalid end tag。
+  const BAD_STRAY_CLOSER = [
+    '<template>',
+    '  <base-panel panelKey="default-panel">',
+    '    <div class="root">',
+    '      <Child />',
+    '      <div class="a"><i>1</i></div>',
+    '      <div class="b"><i>2</i></div>',
+    '      div :style="{}" class="c" data-section-id="1:400" style="flex:0.237;">',
+    '        <Child />',
+    '      </div>',
+    '    </div>',
+    '  </base-panel>',
+    '</template>',
+    '<script setup>import Child from \'./components/Child.vue\'</script>',
+  ].join('\n');
+  const GOOD_ENTRY = [
+    '<template><div class="root"><Child /></div></template>',
+    "<script setup>import Child from './components/Child.vue'</script>",
+  ].join('\n');
+  const CHILD = '<template><i>child</i></template>';
+
+  beforeAll(() => {
+    rmSync(join(TEST_ROOT, 'temp-components'), { recursive: true, force: true });
+  });
+  afterAll(() => {
+    rmSync(TEST_ROOT, { recursive: true, force: true });
+  });
+
+  it('真实游离 </div> 坏版：门禁判不可渲染，publishLastGood 不写 last-good 指针', () => {
+    const sid = 'mc-promo-bad-stray';
+    const badRev = write(sid, {
+      'package/index.vue': BAD_STRAY_CLOSER,
+      'package/components/Child.vue': CHILD,
+    });
+
+    expect(gate(sid, badRev)).toBe(false);
+    const result = svc.publishLastGood(sid, badRev, { sfc: 'passed' });
+    // 坏版降级为 candidate，不得成为 last-good。
+    expect(result.status).toBe('candidate');
+    expect(result.validation?.sfc).toBe('blocked');
+    expect(svc.getLastGoodManifest(sid)?.revision).not.toBe(badRev);
+  });
+
+  it('已有合法 last-good 时，坏版晋级被拒，last-good 保持旧值（预览自动回退）', () => {
+    const sid = 'mc-promo-keep-good';
+    const goodRev = write(sid, {
+      'package/index.vue': GOOD_ENTRY,
+      'package/components/Child.vue': CHILD,
+    });
+    expect(gate(sid, goodRev)).toBe(true);
+    svc.publishLastGood(sid, goodRev, { sfc: 'passed' });
+
+    const badRev = write(sid, {
+      'package/index.vue': BAD_STRAY_CLOSER,
+      'package/components/Child.vue': CHILD,
+    });
+    const result = svc.publishLastGood(sid, badRev, { sfc: 'passed' });
+
+    expect(result.status).toBe('candidate');
+    expect(svc.getLastGoodManifest(sid)?.revision).toBe(goodRev);
+    expect(svc.readPreviewFile(sid, badRev, 'package/index.vue').toString('utf-8')).toBe(GOOD_ENTRY);
+  });
+
+  it('阴性对照：合法 revision 经 publishLastGood 正常晋级，行为零变化', () => {
+    const sid = 'mc-promo-healthy';
+    const goodRev = write(sid, {
+      'package/index.vue': GOOD_ENTRY,
+      'package/components/Child.vue': CHILD,
+    });
+    const result = svc.publishLastGood(sid, goodRev, { sfc: 'passed' });
+    expect(result.status).toBe('last-good');
+    expect(svc.getLastGoodManifest(sid)?.revision).toBe(goodRev);
   });
 });

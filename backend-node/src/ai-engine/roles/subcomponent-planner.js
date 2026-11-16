@@ -43,6 +43,9 @@ import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType, declaredTableHeaders } from '../utils/section-type-derive.js';
 import { mergeVisualRows } from '../utils/figma-height-ratio.js';
+// 🛡️ 2026-11-16（c-traffic-monitor-c12d0e52 实锤）：锚定事实优先于语义标签 ——
+//   段已承载 @echarts 真值时，panel-header 判据不得把它当 chrome 删掉。
+import { collectChartTruthBearingSectionIds } from '../utils/chart-truth-bearing.js';
 import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
 // 🛡️ Phase B（2026-10-31 治理方案）：显式事实协议「只填沉默、不翻案」。
 //   几何恢复类兜底执行前，必须检查 vision 是否已就同一问题显式发言；
@@ -2537,14 +2540,14 @@ function applyFlexGrowFallback(nodes) {
   };
   collect(nodes);
   if (withHeight.length === 0) return;
-  const avg =
-    withHeight.reduce((sum, s) => sum + s.layoutMetadata.height, 0) / withHeight.length;
+  // 🎯 B1-S2 三源归一（2026-11-16）：avg=1 → Σ=1（同 applyFigmaHeightGrow，量纲统一）。
+  const heightTotal = withHeight.reduce((sum, s) => sum + s.layoutMetadata.height, 0);
   const apply = (list) => {
     if (!Array.isArray(list)) return;
     for (const s of list) {
       const meta = s.layoutMetadata;
-      if (meta && !(meta.flexGrow > 0) && meta.height > 0 && avg > 0) {
-        meta.flexGrow = Math.round((meta.height / avg) * 1000) / 1000;
+      if (meta && !(meta.flexGrow > 0) && meta.height > 0 && heightTotal > 0) {
+        meta.flexGrow = Math.round((meta.height / heightTotal) * 1000) / 1000;
       }
       if (Array.isArray(s.children)) apply(s.children);
     }
@@ -2634,13 +2637,15 @@ function applyFigmaHeightGrow(nodes, figmaIndex) {
       if (axisValue > 0) measured.push({ s, axisValue, height });
     }
     if (measured.length >= 2) {
-      const avg =
-        measured.reduce((sum, m) => sum + m.axisValue, 0) / measured.length;
-      if (avg > 0) {
+      // 🎯 B1-S2 三源归一（2026-11-16 · 68783bf6/c1ac194a 实锤）：avg=1 → Σ=1 量纲迁移。
+      //   与 codegen 装配 flexItemStyleFromHeights（h/(Σh+Σgap)）同量纲；CSS flex-grow
+      //   是同层相对份额，比例常数因子无语义；Σ=1 恒 ≤1，远离 PIXEL_MIN 误判线。
+      const axisTotal = measured.reduce((sum, m) => sum + m.axisValue, 0);
+      if (axisTotal > 0) {
         for (const { s, axisValue, height } of measured) {
           const meta = s.layoutMetadata;
           if (!meta) continue;
-          const next = Math.round((axisValue / avg) * 1000) / 1000;
+          const next = Math.round((axisValue / axisTotal) * 1000) / 1000;
           const needHeight = height > 0 && !(meta.height > 0);
           // 🛡️ 治本（2026-09-16 · mc-1789501340553-e25b9b55 实锤）：同步写入 Figma 实测高度。
           //   此前只更新 flexGrow 不更新 height → height 始终为 0（extractLayoutMetadata 从 LLM 产出的
@@ -2649,6 +2654,17 @@ function applyFigmaHeightGrow(nodes, figmaIndex) {
           if (meta.flexGrow !== next || needHeight) {
             meta.flexGrow = next;
             if (height > 0) meta.height = height;
+            // 🎯 A4 修复值回写（2026-11-16 · 5f60396d 实锤）：vision styles 的 A4 残余错值
+            //   （flexGrow=0.078/geometryPx.h=24——段锚配到标题条上的配对错位产物）与
+            //   planner 修复值「半对半错」并存：figmaHeightPx 已被 structure-source 注入
+            //   回写对，这两个字段还错着。唯一暴露面=buildSectionHeightsMap 的 raw
+            //   fallback（pxOfAuthoritative 查不到 repaired 才吃 styles.flexGrow）。
+            //   此处把修复值同步回 styles（flexGrow 随 B1-S2 已是 Σ=1 量纲；
+            //   geometryPx 随 P0-8 并集修正高），配错值就此消失——单一事实源收口。
+            if (s.styles && typeof s.styles === 'object') {
+              s.styles.flexGrow = next;
+              if (height > 0) s.styles.geometryPx = { h: Math.round(height) };
+            }
             changed += 1;
           }
         }
@@ -2747,6 +2763,28 @@ export class SubcomponentPlanner {
     //   ⇒ index 无 `#header-right` 插槽 ⇒ 插槽内容退回 body 再渲一遍（用户看到的就是这个）。
     //   判据：`isPanelHeader` ∧ `hasDeclaredHeaderSlotContent`（段里确有插槽业务内容）⇒ 保留，
     //   并显式打上 `_headerSlotHost` 供结构契约当插槽叶（不靠 type 猜测）。
+    // 🛡️ 2026-11-16 锚定事实优先（c-traffic-monitor-c12d0e52 实锤）：
+    //   视觉 LLM 对同一张图三次给出不同段语义（段数 6/5/7、headerRelation 三种、
+    //   图表归属 id 三次全错）。visual-parser 已把段**锚回** Figma 真值
+    //   （该段 id=2:3604、figmaNodeId=2:3604、reanchoredFrom=2:3565），
+    //   但下面的 isPanelHeader 只看 headerRelation 一个字符串 ⇒ 已锚定到 @echarts 真值的段
+    //   被当 chrome 删掉 ⇒ plan 少一段 ⇒ 产物整块缺折线图。
+    //   判据单一来源：chart-truth-bearing.js（内部复用 chart-section.js#collectEchartsNodes）。
+    //   无 figmaNodeData / 无 @echarts 节点时 ids 为空集 ⇒ 与既有行为逐字等价。
+    const chartTruthBearing = skipPanelHeaderFilter
+      ? { ids: new Set(), details: [] }
+      : collectChartTruthBearingSectionIds(businessSections, opts.figmaNodeData);
+    // 🔴 豁免**只对 self 通道**生效（段锚定的就是 @echarts 真值节点本身）：
+    //   删掉它必然导致图表缺失，且它是最小单元、不会与内部段重复覆盖。
+    //   ancestor/content 通道仅作计数观测 —— 实测 c-env-monitor-49a3cadc 的 2:7879
+    //   是整块面板段（ancestor），plan 已从内部派生 89:42 / chart-2:7898 两段，
+    //   再保留它会重复渲染；故不进过滤豁免（回放实证，非推测）。
+    const truthBearingExemptIds = new Set(
+      chartTruthBearing.details
+        .filter((d) => d.via === 'self')
+        .map((d) => String(d.sectionId)),
+    );
+
     const headerSlotHosts = skipPanelHeaderFilter
       ? []
       : businessSections.filter((sec) => isPanelHeader(sec, false) && hasDeclaredHeaderSlotContent(sec));
@@ -2755,16 +2793,33 @@ export class SubcomponentPlanner {
       if (sec && typeof sec === 'object') sec._headerSlotHost = true;
     }
     const preservedHeaderSlotContent = headerSlotHosts.length;
+    // 恒打：本层因「承载图表真值」而被豁免的 chrome 段数。
+    // 必须在**过滤前**的 businessSections 上算 —— 过滤后 sec 会被后续步骤改写，
+    // 二次调 isPanelHeader 会漂移（首次接线实测恒得 0，口径错）。
+    // 0 也打：恒 0 说明判据没命中，暴涨说明误伤，两种都要在真机日志里可见。
+    const truthBearingKept = skipPanelHeaderFilter
+      ? 0
+      : businessSections.filter(
+          (sec) => truthBearingExemptIds.has(String(sec?.id ?? '')) && isPanelHeader(sec),
+        ).length;
+
     let sections = skipPanelHeaderFilter
       ? businessSections
       : businessSections.filter(
-          (sec) => !isPanelHeader(sec) || headerSlotHostIds.has(String(sec?.id ?? '')),
+          (sec) =>
+            !isPanelHeader(sec) ||
+            headerSlotHostIds.has(String(sec?.id ?? '')) ||
+            truthBearingExemptIds.has(String(sec?.id ?? '')),
         );
     let filteredCount = rawSections.length - sections.length;
     logger.info('🛡️ panel-header 插槽事实过滤·已评估', {
       evaluated: skipPanelHeaderFilter ? 0 : businessSections.length,
       filtered: skipPanelHeaderFilter ? 0 : businessSections.length - sections.length,
       preservedHeaderSlotContent,
+      chartTruthBearing: chartTruthBearing.ids.size,
+      chartTruthBearingSelfExempt: truthBearingExemptIds.size,
+      chartTruthBearingKept: truthBearingKept,
+      chartTruthBearingDetails: chartTruthBearing.details.slice(0, 6),
     });
     // 🔴 R23：E1（确定性递归结构）是否真的替代了 vision sections —— 归并后方向复算的判定域闸门
     let e1Derived = false;

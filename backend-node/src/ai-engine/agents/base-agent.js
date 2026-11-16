@@ -295,7 +295,7 @@ export class BaseAgent {
     const status = await pauseChecker();
     if (status !== 'paused') return status || 'running';
 
-    logger?.info?.('⏸ 任务已暂停，等待恢复...', {}) ||
+    this.logger?.info?.('⏸ 任务已暂停，等待恢复...', {}) ||
       console.log('[pause] ⏸ 任务已暂停，等待恢复...');
     // 轮询等待，每 1.5s 检查一次，超时 30min 自动恢复（防死锁）
     const POLL_INTERVAL = 1500;
@@ -305,14 +305,14 @@ export class BaseAgent {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL));
       const s = await pauseChecker();
       if (s === 'running') {
-        logger?.info?.('▶ 任务已恢复，继续生成', {}) ||
+        this.logger?.info?.('▶ 任务已恢复，继续生成', {}) ||
           console.log('[pause] ▶ 任务已恢复，继续生成');
         return 'running';
       }
       if (s === 'cancelled') return 'cancelled';
       // s === 'paused' 继续等待
     }
-    logger?.warn?.('⏸ 暂停超时(30min)，自动恢复生成', {}) ||
+    this.logger?.warn?.('⏸ 暂停超时(30min)，自动恢复生成', {}) ||
       console.warn('[pause] ⏸ 暂停超时(30min)，自动恢复生成');
     return 'running';
   }

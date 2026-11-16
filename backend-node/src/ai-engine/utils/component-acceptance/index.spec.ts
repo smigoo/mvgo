@@ -89,6 +89,46 @@ describe('runAcceptanceChecks（判分闭环 D1 单一事实源）', () => {
     expect(g).toContain('[D2]');
     expect(g).toContain('必须逐条消除');
   });
+
+  // 🛡️ P3（2026-11-16）：可降级项不逐条铺正文，折叠成一行汇总；阻断类照旧逐条给明细。
+  describe('P3 噪声聚合（可降级项折叠）', () => {
+    it('混合场景：只列阻断类明细 + 一行可降级汇总', () => {
+      const g = formatAcceptanceGuidance([
+        { code: 'Dangling', detail: 'index.vue 引用 HeaderSection.vue 未落盘' },
+        { code: 'E3-v4', detail: '背景错挂祖先容器' },
+        { code: 'C1b', detail: '3 条真值文本未物化' },
+      ]);
+      // 阻断类照旧逐条
+      expect(g).toContain('[Dangling]');
+      expect(g).toContain('未落盘');
+      // 可降级项：不再逐条编号，只出现在汇总行
+      expect(g).not.toMatch(/\d+\. \[E3-v4\]/);
+      expect(g).not.toMatch(/\d+\. \[C1b\]/);
+      expect(g).toContain('另有 2 项可降级缺失');
+      expect(g).toContain('E3-v4');
+      expect(g).toContain('C1b');
+    });
+
+    it('纯度可降级（无阻断码）：不生成「另有 N 项」折扣，明细照旧全列', () => {
+      const g = formatAcceptanceGuidance([
+        { code: 'E3-v4', detail: '背景错挂' },
+        { code: 'C1b', detail: '文本未物化' },
+      ]);
+      expect(g).toContain('[E3-v4]');
+      expect(g).toContain('[C1b]');
+      expect(g).not.toContain('另有');
+    });
+
+    it('配方完整性不受聚合影响：E3-v4/G2 等 recipe 仍按 code 触发', () => {
+      const g = formatAcceptanceGuidance([
+        { code: 'Dangling', detail: 'x' },
+        { code: 'E3-v4', detail: 'y', hardConstraints: [] },
+        { code: 'G2', detail: 'z' },
+      ]);
+      expect(g).toContain('E3-v4 背景归属');
+      expect(g).toContain('G2 props 契约');
+    });
+  });
 });
 
 describe('identifyNodeRole 与 _identifyNodeType 口径一致性（naming 向下兼容 P1）', () => {

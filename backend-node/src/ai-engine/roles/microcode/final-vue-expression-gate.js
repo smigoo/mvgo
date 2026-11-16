@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { validateVueSfcExpressions } from '../../utils/sfc-syntax-validation.js';
+import { validateVueSfcExpressions, inspectSfcRenderableTemplate } from '../../utils/sfc-syntax-validation.js';
+import { healStackedSfcBlocks, formatHealStatsLine } from '../../utils/sfc-stacked-block-healer.js';
 import { isDegradableVuePath } from '../../utils/bad-file-isolation.js';
 import { pruneDanglingSubComponentImports } from './code-healer.js';
 
@@ -33,11 +34,11 @@ import { pruneDanglingSubComponentImports } from './code-healer.js';
  * @param {string} outputPath 产物根目录
  * @param {string[]} writtenVueFiles 本轮成功写入的 .vue 相对路径（writeFiles 的 writtenFiles 过滤 .vue）
  * @param {{logger?: {warn?:Function, error?:Function}}} [options]
- * @returns {{checked: number, bad: Array<{path:string, errors:string[], action:string, restoredFrom: (string|null)>}}}
+ * @returns {{checked: number, healed: Array<{path:string, action:string, conservedTags:number}>, bad: Array<{path:string, errors:string[], action:string, restoredFrom: (string|null)>}}}
  *   永不 throw：终检自身异常按 0 坏档处理（保守，不阻断主流程）。
  */
 export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options = {}) {
-  const out = { checked: 0, bad: [] };
+  const out = { checked: 0, healed: [], bad: [] };
   try {
     // 🛡️ allVueOnDisk（2026-11-12 · 3cdc4757）：终局扫描口径——以磁盘事实为准列全量 .vue，
     //   不依赖调用方登记（调用方清单可能漏掉早轮写入/编辑器新产的文件）。
@@ -60,8 +61,39 @@ export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options =
       const res = validateVueSfcExpressions(disk, relPath);
       if (res.valid) continue;
 
+      // ①' 确定性自愈（2026-11-16 · mc-max-1794761757056-0d15ab1b 实锤）：
+      //    磁盘坏 .vue 先试「整份 SFC 叠加」归一，**优先于缓存回退**——归一版本是本轮
+      //    完整内容，比旧 chunk（可能只有 script 段）更贴切。判据同源、合格文件不判、
+      //    无候选过判据则原样交回退/隔离（不猜、不造 template）。计数行恒打（含
+      //    no-template / unfixable 的 healed=0），供区分「没自愈」与「没接线」。
+      const heal = healStackedSfcBlocks(disk, relPath);
+      try {
+        options.logger?.warn?.(formatHealStatsLine(heal.stats, relPath));
+      } catch {
+        /* 观测失败不影响裁决 */
+      }
+      if (heal.fixed && validateVueSfcExpressions(heal.source, relPath).valid) {
+        try {
+          writeFileSync(absPath, heal.source, 'utf-8');
+          out.healed.push({
+            path: relPath,
+            action: 'healed-stacked-blocks',
+            conservedTags: heal.stats.conservedTags,
+          });
+          options.logger?.warn?.(
+            `🛡️ 产物终验：${relPath} SFC 叠加结构已确定性自愈（${heal.source.length}B，守恒标签 ${heal.stats.conservedTags} 个）`,
+            { errors: res.errors.slice(0, 2), stats: heal.stats },
+          );
+          continue;
+        } catch {
+          /* 写回失败则继续走缓存回退分支 */
+        }
+      }
+
       // ① 缓存回退：chunk-meta.json 登记的候选倒序，取第一个过终验的
-      const restored = restoreFromChunkCache(outputPath, relPath);
+      //    🛡️ 2026-11-16：候选合法性由 validateVueSfcExpressions（含 R1 结构判据）统一裁决，
+      //    segmentType=script 的分块碎片不再是「合法整文件」。
+      const restored = restoreFromChunkCache(outputPath, relPath, options.logger);
       if (restored) {
         try {
           writeFileSync(absPath, restored, 'utf-8');
@@ -244,30 +276,70 @@ function pruneDanglingImportsOnDisk(outputPath, logger) {
 
 /**
  * 从 code-chunks 缓存找过终验的 .vue 候选（pickCachedChunkLastGood 的 .vue 版）。
- * 判据：① chunk-meta.json#files[relPath] 有登记；② 候选文本自身过终验。
+ * 判据：① chunk-meta.json#files[relPath] 有登记；② 候选文本自身过终验
+ * （2026-11-16 起 `validateVueSfcExpressions` 含 R1 结构判据 ⇒ script-only 分块碎片不再假绿）。
  * 不比较 class 前缀（.vue 的模板结构差异大，前缀判据不适用；候选过终验即安全）。
+ *
+ * 🛡️ 真机计数行恒打（0 也打）：`终验缓存回退·结构判据已评估`，带
+ * evaluated/rejectedNoTemplate/rejectedInvalid/restored/segmentTypes，供排障区分
+ * 「无缓存」与「缓存全是 script-only 碎片」。计数用同一权威判据的 hasTemplate 分类，
+ * 验收另用 @vue/compiler-sfc 独立复编（改者≠验者同正则）。
  * @returns {string|null}
- */function restoreFromChunkCache(outputPath, relativePath) {
+ */
+function restoreFromChunkCache(outputPath, relativePath, logger) {
+  const stats = {
+    evaluated: 0,
+    rejectedNoTemplate: 0,
+    rejectedInvalid: 0,
+    restored: 0,
+    segmentTypes: [],
+  };
+  const report = (content) => {
+    try {
+      logger?.warn?.(
+        `🛡️ 终验缓存回退·结构判据已评估：file=${relativePath} evaluated=${stats.evaluated} ` +
+          `rejectedNoTemplate=${stats.rejectedNoTemplate} rejectedInvalid=${stats.rejectedInvalid} ` +
+          `restored=${stats.restored} segmentTypes=${stats.segmentTypes.join(',') || 'none'}`,
+        { ...stats, file: relativePath },
+      );
+    } catch {
+      /* 观测失败不影响回退裁决 */
+    }
+    return content;
+  };
   try {
     const chunkDir = join(outputPath, '.mc-gen', 'cache', 'code-chunks');
     const metaPath = join(chunkDir, 'chunk-meta.json');
-    if (!existsSync(metaPath)) return null;
+    if (!existsSync(metaPath)) return report(null);
     const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
     const entries = (meta && meta.files && meta.files[relativePath]) || [];
-    if (!Array.isArray(entries) || entries.length === 0) return null;
+    if (!Array.isArray(entries) || entries.length === 0) return report(null);
     for (let i = entries.length - 1; i >= 0; i -= 1) {
-      const name = entries[i] && entries[i].file;
+      const entry = entries[i];
+      const name = entry && entry.file;
       if (!name) continue;
+      if (entry && entry.segmentType) stats.segmentTypes.push(String(entry.segmentType));
       const p = join(chunkDir, name);
       if (!existsSync(p)) continue;
       const raw = readFileSync(p, 'utf-8');
       if (!raw || raw.trim().length < 10) continue;
+      stats.evaluated += 1;
       const g = validateVueSfcExpressions(raw, relativePath);
-      if (g.valid) return raw;
+      if (!g.valid) {
+        // 仅用于观测分类，裁决仍由 g.valid（同一判据）给出，不另立第二套判据
+        if (!inspectSfcRenderableTemplate(raw, relativePath).hasTemplate) {
+          stats.rejectedNoTemplate += 1;
+        } else {
+          stats.rejectedInvalid += 1;
+        }
+        continue;
+      }
+      stats.restored += 1;
+      return report(raw);
     }
-    return null;
+    return report(null);
   } catch {
-    return null;
+    return report(null);
   }
 }
 

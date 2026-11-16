@@ -577,10 +577,11 @@ describe('Figma section 整体高度是 flex 比例唯一事实源', () => {
     }
     const res: any = new SubcomponentPlanner().plan(vision, { figmaNodeData: ROOT })
     const byId = (id: string) => findSection(res.effectiveSections, id)
-    expect(byId('43:4893').layoutMetadata.flexGrow).toBe(0.423)
-    expect(byId('table-section').layoutMetadata.flexGrow).toBe(2.487)
+    // B1-S2 Σ=1：66/468=0.141、388/468=0.829、14/468=0.03
+    expect(byId('43:4893').layoutMetadata.flexGrow).toBe(0.141)
+    expect(byId('table-section').layoutMetadata.flexGrow).toBe(0.829)
     expect(byId('table-section').layoutMetadata.height).toBe(388)
-    expect(byId('807:2').layoutMetadata.flexGrow).toBe(0.09)
+    expect(byId('807:2').layoutMetadata.flexGrow).toBe(0.03)
   })
 
   it('56445358：section.id 精确指向首行时，沿父链找回 388px 整表盒，不覆盖整体高度', () => {
@@ -722,8 +723,9 @@ describe('Figma section 整体高度是 flex 比例唯一事实源', () => {
     const footer = findSection(res.effectiveSections, '48:5888')
     expect(list.layoutMetadata.height).toBe(532)
     expect(footer.layoutMetadata.height).toBe(16)
-    expect(list.layoutMetadata.flexGrow).toBe(1.942)
-    expect(footer.layoutMetadata.flexGrow).toBe(0.058)
+    // B1-S2 Σ=1：532/548=0.971、16/548=0.029
+    expect(list.layoutMetadata.flexGrow).toBe(0.971)
+    expect(footer.layoutMetadata.flexGrow).toBe(0.029)
   })
 
   it('a100e890：语义 id footer-summary 无 role 无 styles ⇒ type=footer 且文本锚恢复 16px', () => {

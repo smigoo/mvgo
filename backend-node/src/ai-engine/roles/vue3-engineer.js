@@ -1186,16 +1186,26 @@ export class Vue3Engineer extends MicrocodeEngineer {
       }
       // 🔴 只有「全部薄包装都成功」才改 index：否则独立产物会变成死文件（与 mc 同纪律）。
       let _isoIndexApplied = 0;
+      let _isoIndexSkipped = [];
       if (_isoPlan.indexGroups.length > 0 && _isoFallback === 0) {
+        // 🎯 R-a ③：兜底内联计数（跨 try 边界供日志使用；0 也落行）
+        let _isoInlined = 0;
+        let _isoInlinePatched = 0;
         try {
           const _idxPath = 'package/index.vue';
           const _before = allFiles[_idxPath];
           if (typeof _before === 'string' && _before.trim()) {
             const _rw = rewriteIndexRepeatGroups(_before, _isoPlan.indexGroups);
             _isoIndexApplied = _rw.applied.length;
+            _isoIndexSkipped = _rw.skipped;
+            _isoInlined = Array.isArray(_rw.inlined) ? _rw.inlined.length : 0;
             if (_isoIndexApplied > 0) {
               const _pr = pruneRepeatMemberArtifacts(_rw.content, _rw.applied, allFiles);
               allFiles[_idxPath] = _pr.content;
+            } else if (_isoInlined > 0) {
+              // 🎯 R-a ③：改写 fail-open 但兜底内联已补数据 ⇒ 写回（不删文件/不改 import）
+              allFiles[_idxPath] = _rw.content;
+              _isoInlinePatched = _rw.inlined.reduce((a, g) => a + (Number(g.patched) || 0), 0);
             }
           }
         } catch (_isoIdxErr) {
@@ -1203,7 +1213,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
         }
         // 计数行恒打（0 也打）：「改写未命中」与「没尝试改写」可区分
         this.logger.info(
-          `🧬 刀66-C index 段级 v-for(vue3): groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied}`,
+          `🧬 刀66-C index 段级 v-for(vue3): groups=${_isoPlan.indexGroups.length} applied=${_isoIndexApplied} inlined=${_isoInlined} inlinePatched=${_isoInlinePatched} skipped=${_isoIndexSkipped.length}${_isoIndexSkipped.length ? ` reasons=[${_isoIndexSkipped.map((s) => `${s.repName}:${s.reason}`).join(',')}]` : ''}`,
         );
       }
 
@@ -1886,7 +1896,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             });
             const _stripped = _stripTags.length
               ? stripChartInlineMinHeight(_idxContent, _stripTags)
-              : { code: _idxContent, stripped: [] as any[] };
+              : { code: _idxContent, stripped: [] };
             if (_stripped.stripped.length > 0) {
               codeResult.files[_idxPath] = _stripped.code;
               this.logger.info(

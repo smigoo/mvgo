@@ -103,6 +103,24 @@ function resolveRootClass(list, idxContent, options = {}) {
  * @param {Object} [options] { logger, figmaNodeData, rootLayoutFacts|rootCls }
  * @returns {{ files: Array<{path,content}>, fixes: Array<{path, rootCls, action}>, rootCls: string|null, rootClsSource: string|null }}
  */
+/** 在 index.vue 的 template 段找带 rootCls 的开标签（用于读取 inline 尺寸真值） */
+function findRootContainerTag(indexVueContent, rootCls) {
+  const src = String(indexVueContent || '');
+  const styleAt = src.search(/<style\b/i);
+  const head = styleAt >= 0 ? src.slice(0, styleAt) : src;
+  const rx = /<[a-z][^>]*>/gi;
+  let m;
+  while ((m = rx.exec(head)) !== null) {
+    const tag = m[0];
+    const cm = tag.match(/class\s*=\s*"([^"]*)"/);
+    if (!cm) continue;
+    if (!cm[1].split(/\s+/).includes(rootCls)) continue;
+    return tag;
+  }
+  return null;
+}
+
+
 export function normalizeRootContainerLayout(files = [], options = {}) {
   const logger = options?.logger || null;
   // 🛡️ I4 终验兜底：figma bbox 有效时对内容根补 aspect-ratio（语义对齐 anchorRootContainerInFiles）
@@ -127,6 +145,30 @@ export function normalizeRootContainerLayout(files = [], options = {}) {
     options,
   );
   if (!rootCls) return { files: list, fixes, rootCls: null, rootClsSource: null };
+
+  // 🛡️ S4（2026-11-16）：F1 契约让位。
+  //   本归一器的职责是「内容根容器一律 height:100%」，前提是**根容器自己没有尺寸真值**。
+  //   F1 弹窗类由产生处（code-generator 的 rootSizeStyle）在 inline 写 `width:420px;height:425px`
+  //   —— 那是组件自身尺寸的唯一真相，inline 优先级最高且免疫下游改写。
+  //   旧行为会把它在 class 侧抹成 100%×100%（真机 8cc9f6dd 病灶：chunk 里 420/425 正确，
+  //   落盘后只剩 100%）。⇒ 根容器 inline 已声明尺寸或已带 `data-mvgo-geom="root"` 时直接跳过。
+  const rootTag = findRootContainerTag(idxPath.content, rootCls);
+  if (rootTag) {
+    const hasRootMark = /data-mvgo-geom="root"/.test(rootTag);
+    const styleM = rootTag.match(/(?:^|\s)style\s*=\s*"([^"]*)"/);
+    const inlineSize = Boolean(
+      styleM && /(?:^|;)\s*(?:width|height)\s*:\s*[\d.]+px/i.test(styleM[1]),
+    );
+    if (hasRootMark || inlineSize) {
+      fixes.push({ path: idxPath.path, rootCls, action: 'skipped-inline-truth' });
+      logger?.info?.('🛡️ 内容根容器归一让位：inline 已声明尺寸（F1 契约，不抹成 100%）', {
+        rootCls,
+        hasRootMark,
+        inlineSize,
+      });
+      return { files: list, fixes, rootCls, rootClsSource };
+    }
+  }
 
   const headRe = new RegExp(`([^{}]*\\.${escapeRe(rootCls)}(?:\\s*,[^{}]*)?\\s*\\{)([^{}]*)\\}`, 'g');
 

@@ -161,4 +161,69 @@ describe('S3-BG 折叠项逐卡背景绑定', () => {
     expect(bindFoldedItemBackgrounds(sections, []).bound).toBe(0);
     expect(bindFoldedItemBackgrounds(sections, null as any).bound).toBe(0);
   });
+
+  it('⑨ P0-b 阳性：P0-a 上溯后 ownerSectionId 变 section，靠 ownerSectionOriginal 找回绑定', () => {
+    const sections = mkSections();
+    // 模拟 `resolveOwnerSectionToNearestSection` 的产物：ownerSectionId=最近 section，
+    // ownerSectionOriginal=上溯前原值（= 卡项锚点）
+    const normed = MAPPING.map((m) => ({
+      ...m,
+      ownerSectionOriginal: m.ownerSectionId,
+      ownerSectionId: '2016:219',
+      ownerSectionOrigin: 'ancestor',
+    }));
+    const audit = bindFoldedItemBackgrounds(sections, normed);
+    const items = (sections[0].children[0] as any).items;
+    expect(audit.bound).toBe(3);
+    expect(audit.skipped).toBe(0);
+    expect(audit.ambiguous).toBe(0);
+    // 三处全靠原值命中 ⇒ 计数槽必须落 3（计数行铁律：0 也要能区分）
+    expect(audit.matchedByOriginal).toBe(3);
+    for (const [i, m] of MAPPING.entries()) {
+      expect(items[i].bg.resourceFile).toBe(m.resourceFile);
+    }
+  });
+
+  it('⑨b 阴性对照：剥掉 ownerSectionOriginal ⇒ 回到「恒不命中」（证明测试确实在测这条通路）', () => {
+    const sections = mkSections();
+    const normed = MAPPING.map((m) => ({
+      ...m,
+      ownerSectionId: '2016:219',
+    }));
+    const audit = bindFoldedItemBackgrounds(sections, normed);
+    expect(audit.bound).toBe(0);
+    expect(audit.skipped).toBe(3);
+    expect(audit.matchedByOriginal).toBe(0);
+  });
+
+  it('⑩ 阴性：跨组不得泄漏 —— tab 条目的 ownerSectionOriginal 不能绑到 list 行', () => {
+    const sections = mkSections();
+    const mixed = [
+      ...MAPPING.map((m) => ({ ...m, ownerSectionId: '2016:219', ownerSectionOriginal: m.ownerSectionId })),
+      // tab 组的三个底图（key `1:413/1:425/1:437`），同样已上溯到同一 section
+      { resourceFile: '../resources/images/bg-tab-1.png', figmaNodeId: '2016:215', ownerSectionId: '2016:219', ownerSectionOriginal: '1:413', previewAnalysisRole: 'bg', recommendedUsage: 'backgroundBlock', downloadStatus: 'success', assignedVarName: 'bgT1' },
+      { resourceFile: '../resources/images/bg-tab-2.png', figmaNodeId: '2016:216', ownerSectionId: '2016:219', ownerSectionOriginal: '1:425', previewAnalysisRole: 'bg', recommendedUsage: 'backgroundBlock', downloadStatus: 'success', assignedVarName: 'bgT2' },
+      { resourceFile: '../resources/images/bg-tab-3.png', figmaNodeId: '2016:217', ownerSectionId: '2016:219', ownerSectionOriginal: '1:437', previewAnalysisRole: 'bg', recommendedUsage: 'backgroundBlock', downloadStatus: 'success', assignedVarName: 'bgT3' },
+    ];
+    const audit = bindFoldedItemBackgrounds(sections, mixed);
+    const items = (sections[0].children[0] as any).items;
+    expect(audit.bound).toBe(3);
+    expect(audit.ambiguous).toBe(0);
+    // 每一行必须绑到自己的 list bg，绝不能借到 tab 底图
+    const files = items.map((x: any) => x.bg.resourceFile);
+    expect(files).toEqual(MAPPING.map((m) => m.resourceFile));
+    expect(files.some((f: string) => /tab/.test(f))).toBe(false);
+  });
+
+  it('⑪ 阴性：ownerSectionOriginal 不在 item 锚集合内 ⇒ fail-open 留空', () => {
+    const sections = mkSections();
+    const foreign = MAPPING.map((m) => ({
+      ...m,
+      ownerSectionId: '2016:219',
+      ownerSectionOriginal: '9:9999', // 与任何 item 锚都不相等
+    }));
+    const audit = bindFoldedItemBackgrounds(sections, foreign);
+    expect(audit.bound).toBe(0);
+    expect(audit.skipped).toBe(3);
+  });
 });

@@ -13,6 +13,12 @@ import { removeClassBlocks } from './style-class-consolidator.js';
 // 🛡️ R19（2026-10-21）：文本 run 真值单一来源。下方 `extractPerCharTextTruth` 与
 //   `injectNodeLevelColorTruth` 一律委托本模块，**禁止再写第二套逐字符求值**。
 import { extractTextRuns, normalizeColor } from './text-runs.js';
+// 🛡️ 脚本段锚点单一事实源（2026-11-14）：属性顺序无关的 `<script setup>` 定位。
+//   历史 `/<script\s+setup[^>]*>/` 要求 `setup` 紧跟标签名，遇
+//   `<script data-section-id="89:39" setup>`（归属链契约诱导模型把属性写在 setup 前）
+//   即静默失配 ⇒ 下游装配/注入整段跳过。此处两处（状态切换装配 ~1770 / 计数分段 helper ~2003）
+//   一律改用本模块，禁止再自写正则。
+import { findScriptSetupOpen, injectIntoScript } from './sfc-script-anchor.js';
 
 const COMPACT_CHART_RE = /(?:donut|ring|pie|gauge|radar|mini|small|compact|spark|仪表|环形|环图|小图)/i;
 
@@ -1767,8 +1773,10 @@ export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
     `import ${act.assignedVarName} from '../resources/images/${String(act.resourceFile).split('/').pop()}'\n` +
     `import ${def.assignedVarName} from '../resources/images/${String(def.resourceFile).split('/').pop()}'\n` +
     `const switchSelected = ref('active')\n`;
-  if (/<script setup>/.test(out)) {
-    out = out.replace('<script setup>', '<script setup>' + scriptInject);
+  if (findScriptSetupOpen(out)) {
+    // 🔴 2026-11-16：属性顺序无关 + 保留原开标签（旧 `/<script setup>/` 字面串
+    //   对 `<script data-section-id="…" setup>` 判假 ⇒ 确定性装配整块静默跳过）。
+    out = injectIntoScript(out, scriptInject).code;
   } else {
     return { applied: false, details: null };
   }
@@ -1998,8 +2006,9 @@ export function injectPerCharTextSegments(files, perCharTruth = []) {
       `  ].filter((x) => x.text)\n` +
       `}\n`;
 
-    if (/<script setup>/.test(out)) {
-      out = out.replace('<script setup>', '<script setup>' + helperSrc);
+    if (findScriptSetupOpen(out)) {
+      // 🔴 2026-11-16：同源修正（属性顺序无关 + 保留原开标签）。
+      out = injectIntoScript(out, helperSrc).code;
     } else {
       continue; // 无 script setup → 无法注入 helper，跳过（fail-closed）
     }

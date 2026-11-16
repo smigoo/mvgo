@@ -107,11 +107,11 @@ const modelFiles = {
 
 function layoutWithHeights(heights: number[]) {
   // 🎯 2026-09-09 配对修正：buildSectionHeightsMap 只认 A4 归一化系数 styles.flexGrow
-  // （avg=1 量纲），figmaHeightPx 仅审计用、不参与映射。旧测试靠坏像素 fallback
+  // （Σ=1 三源归一量纲），figmaHeightPx 仅审计用、不参与映射。旧测试靠坏像素 fallback
   // （pxOf||Math.round(layoutMetadata.height)）通过，已随量纲 bug 修复移除该 fallback。
-  // 此处按「真实 A4 算法」把高度转成归一化系数（avg=1），与 figma-height-ratio.js:421 一致。
-  const avg = heights.reduce((a, b) => a + b, 0) / heights.length;
-  const grows = heights.map((h) => Number((h / avg).toFixed(3)));
+  // 此处按「真实 A4 算法」把高度转成归一化系数（Σ=1），与 figma-height-ratio.js（B1-S2 后）一致。
+  const total = heights.reduce((a, b) => a + b, 0);
+  const grows = heights.map((h) => Number((h / total).toFixed(3)));
   return {
     layout: {
       sections: grows.map((g, i) => ({
@@ -124,13 +124,13 @@ function layoutWithHeights(heights: number[]) {
 }
 
 describe('buildSectionHeightsMap (A4→CSS)', () => {
-  it('真实 25e40782 结构：按 A4 归一化系数返回 { overview-cards:0.5, device-list:1.5 }', () => {
-    // [100,300] 归一化 avg=200 → flexGrow=[0.5,1.5]（系数量纲，非像素）
+  it('真实 25e40782 结构：按 A4 归一化系数返回 { overview-cards:0.25, device-list:0.75 }（B1-S2 Σ=1）', () => {
+    // [100,300] Σ=1 归一 → flexGrow=[0.25,0.75]（B1-S2 三源归一量纲，非像素）
     const layout = layoutWithHeights([100, 300]);
     const map = buildSectionHeightsMap(modelFiles, layout, {});
     expect(map).toEqual({
-      'c-monitor-overview-cards': 0.5,
-      'c-monitor-device-list': 1.5,
+      'c-monitor-overview-cards': 0.25,
+      'c-monitor-device-list': 0.75,
     });
   });
 
@@ -146,8 +146,8 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     };
     const map = buildSectionHeightsMap(modelFiles, layout, params);
     expect(map).toEqual({
-      'c-monitor-overview-cards': 0.5,
-      'c-monitor-device-list': 1.5,
+      'c-monitor-overview-cards': 0.25,
+      'c-monitor-device-list': 0.75,
     });
   });
 
@@ -185,8 +185,8 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     const layout = {
       layout: {
         sections: [
-          { id: 'sec-0', title: '区块0', styles: { flexGrow: 0.5 } },
-          { id: 'sec-1', title: '区块1', styles: { flexGrow: 1.5 } },
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: 0.25 } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: 0.75 } },
         ],
       },
     };
@@ -200,8 +200,8 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     };
     const map = buildSectionHeightsMap(modelFiles, layout, params);
     expect(map).toEqual({
-      'c-monitor-overview-cards': 0.5,
-      'c-monitor-device-list': 1.5,
+      'c-monitor-overview-cards': 0.25,
+      'c-monitor-device-list': 0.75,
     });
   });
 
@@ -215,8 +215,8 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     const layout = {
       layout: {
         sections: [
-          { id: 'sec-0', title: '区块0', styles: { flexGrow: 0.5 } },
-          { id: 'sec-1', title: '区块1', styles: { flexGrow: 1.5 } },
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: 0.25 } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: 0.75 } },
           { id: 'sec-dup', title: '设备网格(冗余切片)', styles: {} }, // 无 flexGrow
         ],
       },
@@ -224,16 +224,16 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     const params = {
       subComponentPlan: {
         effectiveSections: [
-          { id: 'sec-0', layoutMetadata: { flexGrow: 0.5 }, sourceNodeIds: ['n0'] },
-          { id: 'sec-1', layoutMetadata: { flexGrow: 1.5 }, sourceNodeIds: ['n1', 'n2', 'n3'] },
+          { id: 'sec-0', layoutMetadata: { flexGrow: 0.25 }, sourceNodeIds: ['n0'] },
+          { id: 'sec-1', layoutMetadata: { flexGrow: 0.75 }, sourceNodeIds: ['n1', 'n2', 'n3'] },
           { id: 'sec-dup', layoutMetadata: { flexGrow: 0 }, sourceNodeIds: ['n2', 'n3'] },
         ],
       },
     };
     const map = buildSectionHeightsMap(modelFiles, layout, params);
     expect(map).toEqual({
-      'c-monitor-overview-cards': 0.5,
-      'c-monitor-device-list': 1.5,
+      'c-monitor-overview-cards': 0.25,
+      'c-monitor-device-list': 0.75,
     });
   });
 
@@ -266,13 +266,13 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
   });
 
   it('嵌套容器不计高度槽：叶子对齐 2 子组件，容器自身不占槽', () => {
-    const avg = (100 + 300) / 2;
+    const total = 100 + 300;
     const layout = {
       layout: {
         sections: [
           { id: '89:40', title: 'slot-con', styles: { flexGrow: 1 } },
-          { id: 'sec-0', title: '区块0', styles: { flexGrow: Number((100 / avg).toFixed(3)) } },
-          { id: 'sec-1', title: '区块1', styles: { flexGrow: Number((300 / avg).toFixed(3)) } },
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: Number((100 / total).toFixed(3)) } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: Number((300 / total).toFixed(3)) } },
         ],
       },
     };
@@ -293,8 +293,8 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     };
     const map = buildSectionHeightsMap(modelFiles, layout, params);
     expect(map).toEqual({
-      'c-monitor-overview-cards': 0.5,
-      'c-monitor-device-list': 1.5,
+      'c-monitor-overview-cards': 0.25,
+      'c-monitor-device-list': 0.75,
     });
   });
 });

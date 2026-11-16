@@ -85,6 +85,10 @@ import {
 } from './lite-truncation-telemetry.js';
 import { repairScopedThirdPartySelectors } from '../ai-engine/utils/css-sanitizer.js';
 import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDeclarations } from '../ai-engine/utils/sfc-semantics.js';
+// 🧷 2026-11-16：`<script setup>` 锚点唯一事实源（属性顺序无关）。
+// 旧 `/<script\s+setup(?:\s[^>]*)?>/` 要求 setup 紧跟 `<script`+空白，遇
+// `<script data-section-id="x" setup>` 会静默返回空 ⇒ 脚本段被当作不存在。
+import { findScriptBlock, findScriptSetupBlock } from '../ai-engine/utils/sfc-script-anchor.js';
 // 🆕 2026-09-04（方案 A/C）：组件语义命名工具——中文→语义映射 / 确定性唯一 componentId
 // c-<语义>-<sessionId 尾 8hex>（与 max 管线同一契约）
 import { zhToSemanticEn, buildComponentId, normalizeUserComponentId } from '../ai-engine/utils/component-naming.js';
@@ -2005,8 +2009,11 @@ ${originalCode}`;
   }
 
   private extractSfcBlock(code: string, block: 'script'): string {
-    const match = code.match(/<script\s+setup(?:\s[^>]*)?>[\s\S]*?<\/script>/i);
-    return match?.[0] || '';
+    // 属性顺序无关（旧 `/<script\s+setup(?:\s[^>]*)?>[\s\S]*?<\/script>/i` 对
+    // `<script data-x setup>` 失配）。口径严格等价：必须存在 `</script>` 闭合，否则返回空。
+    const hit = findScriptSetupBlock(code);
+    if (!hit || hit.closeIndex === -1) return '';
+    return code.slice(hit.index, hit.closeIndex + '</script>'.length);
   }
 
   // ===================== 工具方法 =====================
@@ -3174,11 +3181,12 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOd
    * 仅作用于 <script> 块，不影响 <template>/<style>；无重复时原样返回。
    */
   private sanitizeVueScriptImports(vueCode: string): string {
-    const scriptMatch = vueCode.match(/<script\s+setup(?:\s[^>]*)?>([\s\S]*?)<\/script>/i)
-      || vueCode.match(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/i);
-    if (!scriptMatch) return vueCode;
-    const fullTag = scriptMatch[0];
-    const inner = scriptMatch[1];
+    // 属性顺序无关（旧 setup 正则对 `<script data-x setup>` 失配；「回退任意 script」口径同源）。
+    // 严格等价：两条旧正则都要求存在 `</script>` 闭合 ⇒ 无闭合时原样返回。
+    const block = findScriptBlock(vueCode);
+    if (!block || block.end >= vueCode.length) return vueCode;
+    const fullTag = vueCode.slice(block.index, block.end + '</script>'.length);
+    const inner = block.inner;
 
     // 1. 归一化无引号/裸标识符模块说明符：from vue; → from 'vue'
     //    已带引号的（'vue' / "vue" / './x' / '../x'）首字符不在匹配类内，不受影响。

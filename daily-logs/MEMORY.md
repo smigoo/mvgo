@@ -16,7 +16,7 @@
 
 ## 状态（11-12）
 - 本地 :13030 跑 dist（改源码须 build+重启）；:2610 Vite；:8080 java。生产：前端 11-03；Node 11-05 `da19f6e`；⚠️ 生产 backend-node 目录多会话同操作。
-- **组件生成质量线**（详见 memory/2026-11-12.md）：acceptance 门禁现有 G2 props 断链、E3-v4 v5（bg 只许挂直接父级 ancestorIds[0]，祖先 FAIL）、E2-v3 前景零消费 FAIL＋hardConstraints 挂载配方（含归属段不存在⇒建宿主容器指令）、G1-v2 carrier 三级解析、C1b 祖先链定位；T09 插槽去重 corpus 纳入 index.vue。已实证：修复轮一轮 FAIL=0（ce185bd1）。待办：P0#1 C1 代码片段误报（`$emit('legen`、`/>` 被当展示文本）、P1 段内子块顺序（「今日累计」标题定位、「产品描述」重复）、6f4a2525 三项视觉（环形图挤压/面板遮挡数字/预测tab空胶囊）、ce185bd1 图标偏大 P2。
+- **组件生成质量线**（详见 memory/2026-11-12.md）：acceptance 门禁现有 G2 props 断链、E3-v4 v5（bg 只许挂直接父级 ancestorIds[0]，祖先 FAIL）、E2-v3 前景零消费 FAIL＋hardConstraints 挂载配方（含归属段不存在⇒建宿主容器指令）、G1-v2 carrier 三级解析、C1b 祖先链定位；T09 插槽去重 corpus 纳入 index.vue。已实证：修复轮一轮 FAIL=0（ce185bd1）。P0#1 C1 代码片段误报已于 11-12 修复（0bfa3ab，55/55 spec + bd32c592 真机三证），MEMORY 待办行过期已清。仍待办：P1 段内子块顺序（「今日累计」标题定位、「产品描述」重复）、6f4a2525 三项视觉（环形图挤压/面板遮挡数字/预测tab空胶囊）、ce185bd1 图标偏大 P2、「阈值线」图表配置文案豁免专项。
 - 常驻并行 WIP 勿 commit/勿 revert：microcode-engineer.js、section-tree/anchor 系列、app.module.ts(v3)、ai-engine-v3/、project-runs/、quality-score-v1、dist.old-*/dist.bak.*。
 - 🔴 **main↔go-dev 差异定性（11-12 复核结论）**：`merge-base(main, go-dev)=a13f28a=go-dev HEAD` ⇒ go-dev **完全在 main 祖先链内，无提交丢失**；`git diff go-dev main` 的 33 文件差异全是**内容级**（main 后续演进），非遗漏。唯一「go-dev 有、main 缺且需移植」= 页脚「实验室」入口，已按 go-dev 形态恢复（frontend `cb62107`，`labLinks` 补回 meeting `devOnly:false`）。判别口诀：`git diff --numstat` 第 2 列(DELETED)>0 才是 go-dev 独有内容；main 侧新增文件=更晚功能。`AppHeader.vue` 不在差异清单 ⇒ 「大屏布局」在 header 是两分支共同决策，非合并遗漏。生产门禁：`/api/v2/pipeline`、`/api/v3/project`、`/api/meeting/runs/*` 生产 404 ⇒ 实验室下拉中 components-test / project-lab 必须保持 devOnly（与 go-dev 生产行为逐字一致）。
 

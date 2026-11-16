@@ -159,9 +159,53 @@ function collectLessScopeVars(lessSource, vars) {
   return vars
 }
 
+/**
+ * 🛡️ R1 唯一权威判据（续接 docs/2026-11-11-组件生成根因治理改动清单.md §22.5）：
+ * 一个 .vue 必须有可渲染的 <template>。
+ *
+ * 实锤 mc-max-1794761757056-0d15ab1b：终验 `restoreFromChunkCache` 把
+ * `chunk-meta.json#segmentType=script` 的分块碎片（只有 <script setup>，872B）当成
+ * 「合法整文件」回退落盘 ⇒ Vue 无 render 函数 ⇒ ready 但 visibleChildren=[] ⇒ 预览空白；
+ * 而旧版 `validateVueSfc` / `validateVueSfcExpressions` 都是
+ * `if (descriptor.template) { ...检查... }`，无 template 时**跳过全部 template 检查**并判 valid。
+ *
+ * 纪律：判据只认 compiler-sfc 的 descriptor（语法级），不另写 `<template>` 正则；
+ * `validateVueSfc` / `validateVueSfcExpressions` / `isRenderableRevision` /
+ * `planArtifactIntegrity` 四处一律复用本函数，禁止第二套口径。
+ *
+ * @returns {{valid: boolean, hasTemplate: boolean, errors: string[]}}
+ */
+export function inspectRenderableTemplateFromDescriptor(descriptor, filePath = '') {
+  if (descriptor && descriptor.template) {
+    return { valid: true, hasTemplate: true, errors: [] };
+  }
+  return {
+    valid: false,
+    hasTemplate: false,
+    errors: [
+      `${filePath || 'Vue SFC'}: SFC: 缺少 <template>（script-only 空组件：Vue 无 render 函数 ⇒ 组件 ready 但无可见根节点）`,
+    ],
+  };
+}
+
+/** 无 descriptor 的调用方入口（内部仍走同一 descriptor 判据，不复制口径）。 */
+export function inspectSfcRenderableTemplate(source = '', filePath = '') {
+  try {
+    const { descriptor } = parseSfc(String(source || ''), { filename: filePath || 'component.vue' });
+    return inspectRenderableTemplateFromDescriptor(descriptor, filePath);
+  } catch (error) {
+    return {
+      valid: false,
+      hasTemplate: false,
+      errors: [formatCompilerError(error, filePath, 'SFC')],
+    };
+  }
+}
+
 function validateVueSfcDescriptor(descriptor, source, filePath, errors, options = {}) {
   const id = `data-v-${Buffer.from(String(filePath || 'component.vue')).toString('hex').slice(0, 8)}`
   const canResolveLocalStyleImports = isAbsolute(filePath) && existsSync(filePath)
+  errors.push(...inspectRenderableTemplateFromDescriptor(descriptor, filePath).errors)
   const scriptBlocks = extractScriptBlocks(source)
   for (const block of scriptBlocks) {
     validateScriptBlock(block, source, filePath, errors)
@@ -280,7 +324,9 @@ export function validateVueSfc(source = '', filePath = '', options = {}) {
 
 /**
  * 🛡️ 表达式级终检（2026-11-12 · mc-1794463362140-8fa6d6f3 实锤）：
- * 只查「模板表达式 + script + SFC parse」，**不跑 compileStyle/less**。
+ * 只查「模板表达式 + script + SFC parse + 可渲染 template 结构」，**不跑 compileStyle/less**。
+ * 2026-11-16 追加 `inspectRenderableTemplateFromDescriptor`：无 `<template>` 的
+ * script-only 分块碎片不再因「跳过 template 检查」而假绿（0d15ab1b 实锤）。
  *
  * 为什么需要它（与 validateVueSfc 的分工）：
  *   validateVueSfc 已含 compileTemplate，但它只挂在 writeFiles 的**单文件写前门禁**上。
@@ -313,6 +359,9 @@ export function validateVueSfcExpressions(source = '', filePath = '') {
   }
   if (!descriptor) return { valid: errors.length === 0, errors }
 
+  // 🛡️ R1 升档：与 validateVueSfc 同一权威判据（禁止第二套 <template> 正则）。
+  //   终验/缓存回退/best-of/dangling-backstop 都走这里，script-only 碎片不得判 valid。
+  errors.push(...inspectRenderableTemplateFromDescriptor(descriptor, filePath).errors)
   for (const block of extractScriptBlocks(sourceText)) {
     validateScriptBlock(block, sourceText, filePath, errors)
   }
