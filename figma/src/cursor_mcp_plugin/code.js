@@ -31,15 +31,17 @@ function logContainer(kind, node, memberCount, parentName) {
 
 // 选区缓存与广播：Dev Mode 下焦点切到插件 UI 时 figma.currentPage.selection 会被清空，
 // 这里监听 selectionchange 缓存最近一次非空选区，并实时推给 UI。
-// 注意：只缓存「节点 id 数组」，不缓存节点对象引用——被删/失效节点再用 getNodeById 解析会抛 get_name。
+// 注意：只缓存「节点 id 数组」，不缓存节点对象引用——被删/失效节点再用 getNodeByIdAsync 解析会抛 get_name。
+// 🔴 dynamic-page 模式（manifest documentAccess）禁止同步 figma.getNodeById，必须用 getNodeByIdAsync。
 let lastNonEmptySelection = [];
-function resolveCachedSelection() {
-  return lastNonEmptySelection.map(id => figma.getNodeById(id)).filter(Boolean);
+async function resolveCachedSelection() {
+  const nodes = await Promise.all(lastNonEmptySelection.map(id => figma.getNodeByIdAsync(id).catch(() => null)));
+  return nodes.filter(Boolean);
 }
-function broadcastSelection() {
+async function broadcastSelection() {
   const live = figma.currentPage.selection;
   if (live && live.length > 0) lastNonEmptySelection = live.map(n => n.id);
-  const sel = live && live.length ? live : resolveCachedSelection();
+  const sel = (live && live.length) ? live : (await resolveCachedSelection());
   figma.ui.postMessage({
     type: "selection-state",
     count: sel ? sel.length : 0,
@@ -73,7 +75,7 @@ async function cacheStructureResult(partial) {
       figma.ui.postMessage({ type: "structure-cache", cache });
     }
   } catch (e) {}
-  broadcastSelection();
+  broadcastSelection(); // async，fire-and-forget：结果 postMessage 迟到无害
 })();
 
 figma.ui.onmessage = async (msg) => {
@@ -83,7 +85,7 @@ figma.ui.onmessage = async (msg) => {
       break;
     case "request-selection":
       // UI 加载完成 / 「重新捕获选区」按钮来要选区
-      broadcastSelection();
+      broadcastSelection(); // async，fire-and-forget
       publishUndoState();
       break;
     case "undo-organize": {
@@ -111,7 +113,7 @@ figma.ui.onmessage = async (msg) => {
       // 显式写 pluginData: mvRootBackdrop=1，后续整理/契约认这个标记。只写标记、零几何变化。
       // 这是「最下层+纯色无法 100% 判定」时的白名单兜底，不依赖名字/LLM/自动几何猜测。
       let sel = figma.currentPage.selection;
-      if (!sel || sel.length === 0) sel = resolveCachedSelection();
+      if (!sel || sel.length === 0) sel = await resolveCachedSelection();
       if (!sel || sel.length === 0) {
         figma.ui.postMessage({ type: "mark-backdrop-result", ok: false, error: "请先选中要标记为背景的节点" });
         break;
@@ -130,9 +132,9 @@ figma.ui.onmessage = async (msg) => {
       break;
     case "ai-organize": {
       try {
-        const TYPE_CN = { RECTANGLE: "矩形", TEXT: "文本", ELLIPSE: "椭圆", VECTOR: "矢量图形", LINE: "线条" };
-        let sel = figma.currentPage.selection;
-        if (!sel || sel.length === 0) sel = resolveCachedSelection();
+      const TYPE_CN = { RECTANGLE: "矩形", TEXT: "文本", ELLIPSE: "椭圆", VECTOR: "矢量图形", LINE: "线条" };
+      let sel = figma.currentPage.selection;
+      if (!sel || sel.length === 0) sel = await resolveCachedSelection();
         if (!sel || sel.length === 0) {
           figma.ui.postMessage({ type: "ai-organize-result", ok: false, error: "请先在画布中选中要整理的框架节点" });
           break;
@@ -200,7 +202,7 @@ figma.ui.onmessage = async (msg) => {
       // 阶段 1：只读结构方案预览。零 token、零副作用，不修改任何节点。
       try {
         let sel = figma.currentPage.selection;
-        if (!sel || sel.length === 0) sel = resolveCachedSelection();
+        if (!sel || sel.length === 0) sel = await resolveCachedSelection();
         if (!sel || sel.length === 0) {
           figma.ui.postMessage({ type: "structure-plan", ok: false, error: "请先在画布中选中要分析的框架节点" });
           break;
@@ -228,7 +230,7 @@ figma.ui.onmessage = async (msg) => {
       try {
         const cOpts = msg || {};
         let sel = figma.currentPage.selection;
-        if (!sel || sel.length === 0) sel = resolveCachedSelection();
+        if (!sel || sel.length === 0) sel = await resolveCachedSelection();
         if (!sel || sel.length === 0) {
           figma.ui.postMessage({ type: "structure-contract", ok: false, error: "请先在画布中选中要整理的框架节点" });
           break;
@@ -277,7 +279,7 @@ figma.ui.onmessage = async (msg) => {
       try {
         const jOpts = msg || {};
         let sel = figma.currentPage.selection;
-        if (!sel || sel.length === 0) sel = resolveCachedSelection();
+        if (!sel || sel.length === 0) sel = await resolveCachedSelection();
         if (!sel || sel.length === 0) {
           figma.ui.postMessage({ type: "structure-json", ok: false, error: "请先在画布中选中要整理的框架节点" });
           break;
@@ -328,7 +330,7 @@ figma.ui.onmessage = async (msg) => {
         resetGroupDiag(); resetStructLog();
         const tStruct0 = Date.now();   // v20261110.53：零 token 路径的确定性整理计时
         let sel = figma.currentPage.selection;
-        if (!sel || sel.length === 0) sel = resolveCachedSelection();
+        if (!sel || sel.length === 0) sel = await resolveCachedSelection();
         if (!sel || sel.length === 0) {
           figma.ui.postMessage({ type: "ai-organize-result", ok: false, error: "请先在画布中选中要整理的结构节点" });
           break;
