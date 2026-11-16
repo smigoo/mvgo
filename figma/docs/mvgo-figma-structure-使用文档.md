@@ -17,7 +17,9 @@
 4. 等 AI 分析完（大文件约 1–3 分钟）→ 回画布刷新看新命名。
 5. 只用**零 token 工具**（仅结构化整理 / 结构方案 / 结构契约 → mvgo）时，连 Key 都不用填，纯本地运行。
 
-> 仅当保存设置报 `Failed to fetch`（网关跨域 CORS 被拦）时，才需要 §四 的可选本地代理：mac 双击 `start-relay-mac.command`、Windows 双击 `start-relay-win.bat`，再展开「⚙️ 高级设置」点「连接本地代理」。默认直连态不需要展开、不需要点任何按钮。
+> **本包是面向部门同事的当前最新版（v2026-11-16，包含 AI 自动整理同构护栏与跨模块去重修复）**。仅当保存设置报 `Failed to fetch`（网关跨域 CORS 被拦）时，才需要 §四 的可选本地代理：mac 双击 `start-relay-mac.command`、Windows 双击 `start-relay-win.bat`，再展开「⚙️ 高级设置」点「连接本地代理」。默认直连态不需要展开、不需要点任何按钮。
+>
+> **安全提示**：AI 全自动整理会修改图层名称和父子结构，也可能执行视觉分析返回的删除操作。首次请复制 Figma 页面/组件或在副本文件里验证；选中范围尽量限定为一个组件根，不要直接整理多组件 Frame。纯本地「仅结构化整理」也会改命名/分组，运行前同样确认选区。
 
 ---
 
@@ -474,9 +476,10 @@ Open the mvgo-figma-structure plugin in Figma and join a channel.
 
 ## 附：重新打包给同事
 
+从项目仓库执行：
+
 ```bash
-cd <本仓库根目录>
-./pack-dist.sh     # 自动产出 mvgo-figma-structure-*-<日期>.zip（客户端 mac/win + 网页 三包）
+/Users/smigoo/工作/mvgo/figma/pack-dist.sh
 ```
 
-`pack-dist.sh` 只挑上面「Zip 包里应该有什么」列出的必要文件（含 `node_modules/ws` 与两个 `start-relay-*` 启动器），不会把 `node_modules` 全量、`.git`、构建产物等带进去。文档在包内命名为 `README.md`（ASCII，避免 Windows 资源管理器中文名乱码）；`start-relay-win.bat` 内容也全 ASCII，避免中文 bat 编码乱码。
+脚本从当前工作树复制插件文件，输出三个 zip（客户端 macOS / 客户端 Windows / 团队网页版）到 `figma/dist-日期-时分秒/` 唯一新目录，不覆盖旧包。发给同事前请确认脚本输出的三个文件都存在，并按 §三/§十四选择安装方式。包内使用文档统一命名为 `README.md`（ASCII，避免 Windows 文件名乱码）；客户端本地导入需要 Figma 桌面端，网页版须由管理员发布到团队。
