@@ -43,8 +43,12 @@ describe('B1-S1 layoutStyle px carrier 退役（源码契约）', () => {
     expect(layoutStyleBlock()).toContain('margin-top: ${g.gapPx}px !important')
   })
 
-  it('min-height:0 保留（flex 子项收缩约束）', () => {
-    expect(layoutStyleBlock()).toContain('min-height: 0')
+  it('min-height:auto（2026-11-17 方案 A · RUNTIME-016 根治）：段不得压穿内容 min-content', () => {
+    // 🛡️ 本轮刻意翻转 11-16 的「min-height:0 保留」：footer flex:0.024 在 617px 容器仅
+    //   14.9px < 内容 24px，min-height:0 允许坍缩 ⇒ 表格末行与 footer 图例相撞（真机实锤）。
+    //   auto 让浏览器用原生 min-content 做下界，治本；不再保留 0 的收缩约束。
+    expect(layoutStyleBlock()).toContain('min-height: auto')
+    expect(layoutStyleBlock()).not.toContain('min-height: 0;')
   })
 
   it('carrier 判定不变：仍只对叶子段（sech class）产 less 规则', () => {

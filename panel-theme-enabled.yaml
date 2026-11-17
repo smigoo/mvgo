@@ -1,0 +1,341 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - img "company" [ref=e8]
+        - generic [ref=e10]:
+          - img "logo" [ref=e12]
+          - generic [ref=e13]:
+            - heading "感智｜晓界工坊" [level=1] [ref=e14]
+            - generic [ref=e15]: $ AI 驱动 · 一键生成
+      - navigation [ref=e17]:
+        - link "组件开发" [ref=e18] [cursor=pointer]:
+          - /url: /generator/components
+        - link "组件库" [ref=e19] [cursor=pointer]:
+          - /url: /components
+        - link "接口开发" [ref=e20] [cursor=pointer]:
+          - /url: /generator/api
+        - link "任务中心" [ref=e21] [cursor=pointer]:
+          - /url: /tasks
+        - link "管理后台" [ref=e22] [cursor=pointer]:
+          - /url: /admin/operation-log
+      - generic [ref=e23]:
+        - button "切换到工作台模式" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+          - generic: TEST
+          - text: 工作台
+        - button "设置" [ref=e27] [cursor=pointer]:
+          - img [ref=e28]
+          - text: 设置
+        - button "切换到深色" [ref=e31] [cursor=pointer]:
+          - img [ref=e32]
+          - text: 切换到深色
+        - generic [ref=e35] [cursor=pointer]:
+          - img [ref=e37]
+          - generic [ref=e40]: dev-local
+    - main [ref=e41]:
+      - generic [ref=e43]:
+        - main [ref=e44]:
+          - heading "新建生成任务" [level=1] [ref=e45]
+          - paragraph [ref=e46]: 选择来源并填写信息，AI 将为你生成对应组件。
+          - tablist "输入来源" [ref=e47]:
+            - tab "上传截图" [ref=e48] [cursor=pointer]:
+              - img [ref=e49]
+              - text: 上传截图
+            - tab "Figma 链接" [selected] [ref=e53] [cursor=pointer]:
+              - img [ref=e54]
+              - text: Figma 链接
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - textbox "粘贴 figma.com 链接" [active] [ref=e64]: https://www.figma.com/design/XK5lAcOFt3Yn6WvtanieKM/test?node-id=57-2
+              - button "最近使用" [ref=e65]:
+                - img [ref=e66]
+              - button "获取中..." [ref=e443] [cursor=pointer]
+            - generic [ref=e444]:
+              - text: 链接格式有效
+              - button "清设计稿缓存" [ref=e445] [cursor=pointer]
+            - generic [ref=e70]:
+              - generic [ref=e386]:
+                - generic [ref=e387]: 就绪 0 / 2
+                - generic [ref=e388]: 第 1 张为结构基准（决定结构与文案），其余主题只提供色值
+              - generic [ref=e389]:
+                - generic "默认主题：链接使用上方已确认的 Figma 来源" [ref=e390] [cursor=pointer]:
+                  - generic [ref=e391]:
+                    - button "浅色" [ref=e392]:
+                      - img [ref=e393]
+                      - text: 浅色
+                    - generic "第 1 张即默认主题（决定组件结构与文案），无需排序" [ref=e396]: 默认主题
+                    - textbox "主题名，如 黄昏模式" [ref=e397]: 浅色
+                    - button "删除该主题" [ref=e399]:
+                      - img [ref=e400]
+                  - generic [ref=e403]: 请先在上方获取默认主题预览
+                  - generic [ref=e404]:
+                    - img [ref=e405]
+                    - text: 链接使用上方已确认的 Figma 来源（决定组件结构与文案）
+                  - generic [ref=e408]:
+                    - combobox "该主题使用的面板（组件壳取第 1 张·默认主题的选择）" [ref=e409]:
+                      - option "默认面板" [selected]
+                      - option "弹窗面板"
+                      - option "一体化面板"
+                    - generic [ref=e410]: 等待主预览
+                - generic "点击在大框预览此主题" [ref=e411] [cursor=pointer]:
+                  - generic [ref=e412]:
+                    - button "深色" [ref=e413]:
+                      - img [ref=e414]
+                      - text: 深色
+                    - textbox "主题名，如 黄昏模式" [ref=e416]: 深色
+                    - button "删除该主题" [ref=e418]:
+                      - img [ref=e419]
+                  - generic [ref=e422]: 粘贴链接后自动生成预览
+                  - generic [ref=e423]:
+                    - textbox "在此粘贴「深色」的 figma.com 节点链接" [ref=e424]
+                    - button "最近使用" [ref=e425]:
+                      - img [ref=e426]
+                  - generic [ref=e429]:
+                    - combobox "该主题使用的面板（组件壳取第 1 张·默认主题的选择）" [ref=e430]:
+                      - option "默认面板"
+                      - option "弹窗面板"
+                      - option "一体化面板" [selected]
+                    - generic [ref=e431]: 未填链接
+              - list [ref=e432]:
+                - listitem [ref=e433]: 主题「浅色」未填写 Figma 链接（或在上方主框未就绪的 默认主题），本次不会生成
+                - listitem [ref=e434]: 主题「深色」未填写 Figma 链接（或在上方主框未就绪的 链接），本次不会生成
+              - generic [ref=e435]:
+                - button "添加主题（还可加 6 个）" [ref=e436] [cursor=pointer]:
+                  - img [ref=e437]
+                  - text: 添加主题（还可加 6 个）
+                - button "取消" [ref=e439] [cursor=pointer]
+            - generic [ref=e446]:
+              - strong [ref=e447]: 链接已识别
+              - paragraph [ref=e448]: 即将自动获取预览，也可以点击“获取预览”立即开始
+              - generic [ref=e449]: Figma 图片通常需要 5–15 秒
+          - generic [ref=e86]:
+            - radiogroup "代码类型" [ref=e88]:
+              - radio "Vue3" [ref=e89] [cursor=pointer]
+              - radio "微码" [checked] [ref=e90] [cursor=pointer]
+            - radiogroup "生成规格" [ref=e92]:
+              - radio "Lite" [ref=e93] [cursor=pointer]
+              - radio "Max" [checked] [ref=e94] [cursor=pointer]
+            - radiogroup "面板演示主题" [ref=e377]:
+              - radio "默认面板" [checked] [ref=e378] [cursor=pointer]
+              - radio "一体化面板" [ref=e379] [cursor=pointer]
+            - button "生成 Max 微码组件" [disabled]:
+              - generic: 生成 Max 微码组件
+          - button "高级选项" [ref=e96] [cursor=pointer]:
+            - img [ref=e97]
+            - generic [ref=e100]: 高级选项
+            - img [ref=e101]
+          - generic [ref=e381]:
+            - text: 当前接入面板：
+            - strong [ref=e382]: 默认面板
+            - text: （面板类型，与配色无关）
+        - complementary [ref=e103]:
+          - generic [ref=e104]:
+            - generic [ref=e105]:
+              - img [ref=e106]
+              - text: 今日概览
+            - link "查看全部" [ref=e111] [cursor=pointer]:
+              - /url: /tasks
+          - generic [ref=e112]:
+            - button "97 总任务" [ref=e113] [cursor=pointer]:
+              - generic [ref=e114]: "97"
+              - generic [ref=e115]: 总任务
+            - button "74 已完成" [ref=e116] [cursor=pointer]:
+              - generic [ref=e117]: "74"
+              - generic [ref=e118]: 已完成
+            - button "0 进行中" [ref=e119] [cursor=pointer]:
+              - generic [ref=e120]: "0"
+              - generic [ref=e121]: 进行中
+            - button "23 失败" [ref=e122] [cursor=pointer]:
+              - generic [ref=e123]: "23"
+              - generic [ref=e124]: 失败
+          - generic [ref=e125]:
+            - generic [ref=e126]:
+              - img [ref=e127]
+              - text: 最近生成
+            - link "更多" [ref=e130] [cursor=pointer]:
+              - /url: /tasks
+          - generic [ref=e131]:
+            - button "监测预警 17 分钟前 Figma MC 删除该任务" [ref=e440] [cursor=pointer]:
+              - generic [ref=e134]:
+                - generic "监测预警" [ref=e135]
+                - generic [ref=e136]: 17 分钟前
+                - generic [ref=e138]: Figma
+              - generic [ref=e139]: MC
+              - button "删除该任务" [ref=e140]:
+                - img [ref=e141]
+            - button "监测预警 23 分钟前 Figma MC 删除该任务" [ref=e383] [cursor=pointer]:
+              - generic [ref=e145]:
+                - generic "监测预警" [ref=e146]
+                - generic [ref=e147]: 23 分钟前
+                - generic [ref=e149]: Figma
+              - generic [ref=e150]: MC
+              - button "删除该任务" [ref=e151]:
+                - img [ref=e152]
+            - button "设备列表 40 分钟前 Figma MC 删除该任务" [ref=e441] [cursor=pointer]:
+              - generic [ref=e156]:
+                - generic "设备列表" [ref=e157]
+                - generic [ref=e158]: 40 分钟前
+                - generic [ref=e160]: Figma
+              - generic [ref=e161]: MC
+              - button "删除该任务" [ref=e162]:
+                - img [ref=e163]
+            - button "设施概况 41 分钟前 Figma MC 删除该任务" [ref=e442] [cursor=pointer]:
+              - generic [ref=e167]:
+                - generic "设施概况" [ref=e168]
+                - generic [ref=e169]: 41 分钟前
+                - generic [ref=e171]: Figma
+              - generic [ref=e172]: MC
+              - button "删除该任务" [ref=e173]:
+                - img [ref=e174]
+            - button "监测预警 41 分钟前 Figma MC 删除该任务" [ref=e385] [cursor=pointer]:
+              - generic [ref=e178]:
+                - generic "监测预警" [ref=e179]
+                - generic [ref=e180]: 41 分钟前
+                - generic [ref=e182]: Figma
+              - generic [ref=e183]: MC
+              - button "删除该任务" [ref=e184]:
+                - img [ref=e185]
+            - button "监测预警 1 小时前 Figma MC 删除该任务" [ref=e187] [cursor=pointer]:
+              - generic [ref=e189]:
+                - generic "监测预警" [ref=e190]
+                - generic [ref=e191]: 1 小时前
+                - generic [ref=e193]: Figma
+              - generic [ref=e194]: MC
+              - button "删除该任务" [ref=e195]:
+                - img [ref=e196]
+            - button "设施概况 1 小时前 截图 MC 删除该任务" [ref=e198] [cursor=pointer]:
+              - generic [ref=e200]:
+                - generic "设施概况" [ref=e201]
+                - generic [ref=e202]: 1 小时前
+                - generic [ref=e204]: 截图
+              - generic [ref=e205]: MC
+              - button "删除该任务" [ref=e206]:
+                - img [ref=e207]
+            - button "mc-lite-1794880619324-28bac823 1 小时前 截图 MC 删除该任务" [ref=e209] [cursor=pointer]:
+              - generic [ref=e211]:
+                - generic "mc-lite-1794880619324-28bac823" [ref=e212]
+                - generic [ref=e213]: 1 小时前
+                - generic [ref=e215]: 截图
+              - generic [ref=e216]: MC
+              - button "删除该任务" [ref=e217]:
+                - img [ref=e218]
+            - button "合作厂商弹窗 1 小时前 Figma MC 删除该任务" [ref=e220] [cursor=pointer]:
+              - generic [ref=e222]:
+                - generic "合作厂商弹窗" [ref=e223]
+                - generic [ref=e224]: 1 小时前
+                - generic [ref=e226]: Figma
+              - generic [ref=e227]: MC
+              - button "删除该任务" [ref=e228]:
+                - img [ref=e229]
+            - button "监测预警 1 小时前 Figma MC 删除该任务" [ref=e231] [cursor=pointer]:
+              - generic [ref=e233]:
+                - generic "监测预警" [ref=e234]
+                - generic [ref=e235]: 1 小时前
+                - generic [ref=e237]: Figma
+              - generic [ref=e238]: MC
+              - button "删除该任务" [ref=e239]:
+                - img [ref=e240]
+            - button "设施概况 1 小时前 Figma MC 删除该任务" [ref=e242] [cursor=pointer]:
+              - generic [ref=e244]:
+                - generic "设施概况" [ref=e245]
+                - generic [ref=e246]: 1 小时前
+                - generic [ref=e248]: Figma
+              - generic [ref=e249]: MC
+              - button "删除该任务" [ref=e250]:
+                - img [ref=e251]
+            - button "mc-max-1794880341769-f54adcd1 1 小时前 Figma MC 删除该任务" [ref=e253] [cursor=pointer]:
+              - generic [ref=e255]:
+                - generic "mc-max-1794880341769-f54adcd1" [ref=e256]
+                - generic [ref=e257]: 1 小时前
+                - generic [ref=e259]: Figma
+              - generic [ref=e260]: MC
+              - button "删除该任务" [ref=e261]:
+                - img [ref=e262]
+            - button "设施概况 1 小时前 Figma MC 删除该任务" [ref=e264] [cursor=pointer]:
+              - generic [ref=e266]:
+                - generic "设施概况" [ref=e267]
+                - generic [ref=e268]: 1 小时前
+                - generic [ref=e270]: Figma
+              - generic [ref=e271]: MC
+              - button "删除该任务" [ref=e272]:
+                - img [ref=e273]
+            - button "监测预警 1 小时前 Figma MC 删除该任务" [ref=e275] [cursor=pointer]:
+              - generic [ref=e277]:
+                - generic "监测预警" [ref=e278]
+                - generic [ref=e279]: 1 小时前
+                - generic [ref=e281]: Figma
+              - generic [ref=e282]: MC
+              - button "删除该任务" [ref=e283]:
+                - img [ref=e284]
+            - button "监测预警 2 小时前 Figma MC 删除该任务" [ref=e286] [cursor=pointer]:
+              - generic [ref=e288]:
+                - generic "监测预警" [ref=e289]
+                - generic [ref=e290]: 2 小时前
+                - generic [ref=e292]: Figma
+              - generic [ref=e293]: MC
+              - button "删除该任务" [ref=e294]:
+                - img [ref=e295]
+            - button "设施概况 2 小时前 Figma MC 删除该任务" [ref=e297] [cursor=pointer]:
+              - generic [ref=e299]:
+                - generic "设施概况" [ref=e300]
+                - generic [ref=e301]: 2 小时前
+                - generic [ref=e303]: Figma
+              - generic [ref=e304]: MC
+              - button "删除该任务" [ref=e305]:
+                - img [ref=e306]
+            - button "监测预警 2 小时前 Figma MC 删除该任务" [ref=e308] [cursor=pointer]:
+              - generic [ref=e310]:
+                - generic "监测预警" [ref=e311]
+                - generic [ref=e312]: 2 小时前
+                - generic [ref=e314]: Figma
+              - generic [ref=e315]: MC
+              - button "删除该任务" [ref=e316]:
+                - img [ref=e317]
+            - button "设备列表 2 小时前 Figma MC 删除该任务" [ref=e319] [cursor=pointer]:
+              - generic [ref=e321]:
+                - generic "设备列表" [ref=e322]
+                - generic [ref=e323]: 2 小时前
+                - generic [ref=e325]: Figma
+              - generic [ref=e326]: MC
+              - button "删除该任务" [ref=e327]:
+                - img [ref=e328]
+            - button "合作厂商弹窗 2 小时前 Figma MC 删除该任务" [ref=e330] [cursor=pointer]:
+              - generic [ref=e332]:
+                - generic "合作厂商弹窗" [ref=e333]
+                - generic [ref=e334]: 2 小时前
+                - generic [ref=e336]: Figma
+              - generic [ref=e337]: MC
+              - button "删除该任务" [ref=e338]:
+                - img [ref=e339]
+            - button "监测预警 2 小时前 Figma MC 删除该任务" [ref=e341] [cursor=pointer]:
+              - generic [ref=e343]:
+                - generic "监测预警" [ref=e344]
+                - generic [ref=e345]: 2 小时前
+                - generic [ref=e347]: Figma
+              - generic [ref=e348]: MC
+              - button "删除该任务" [ref=e349]:
+                - img [ref=e350]
+    - contentinfo [ref=e352]:
+      - generic [ref=e353]: © 2026 感智晓界工坊 · 感动科技 | 智能体工作室
+      - navigation [ref=e354]:
+        - link "架构介绍" [ref=e355] [cursor=pointer]:
+          - /url: /generator/intro
+        - link "页面开发" [ref=e356] [cursor=pointer]:
+          - /url: /generator/page-skeleton
+        - link "工作流编排" [ref=e357] [cursor=pointer]:
+          - /url: /generator/workflow
+        - button "实验室 ▾" [ref=e359] [cursor=pointer]:
+          - text: 实验室
+          - generic [ref=e360]: ▾
+        - link "更新日志" [ref=e361] [cursor=pointer]:
+          - /url: /help/changelog
+        - link "系统公告" [ref=e362] [cursor=pointer]:
+          - /url: /announcements
+        - link "建议反馈" [ref=e363] [cursor=pointer]:
+          - /url: https://aio.microvideo.cn/tzy/biz/formCustSql/formCustSqlView/njgd_yjfk
+  - generic "任务监控（按住拖拽可移动位置）" [ref=e364]:
+    - generic [ref=e365]:
+      - img [ref=e366]
+      - generic [ref=e369]: 监控
+    - generic [ref=e370]: ›

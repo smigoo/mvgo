@@ -6,6 +6,7 @@
  * 两个都必须算进堆叠序列，否则过粗漏判（真机两次踩坑：面积阈值、1px 重叠）。
  */
 import { isOverCoarseAnchor, expandOverCoarseSections } from './over-coarse-section-expander.js'
+import { buildNodeLayoutFacts } from './figma-node-layout-facts.js'
 
 function node(id, name, x, y, w, h, children, type = 'FRAME') {
   return {
@@ -212,5 +213,93 @@ describe('expandOverCoarseSections', () => {
     expect(res.stats.expanded).toBe(1)
     expect(res.stats.exempted).toBe(0)
     expect(res.sections.map((s) => s.id)).toEqual(['4:2', '4:3', '4:4'])
+  })
+})
+
+// ── 2026-11-17：局部 E1 展开必须注入 layoutFacts（`73:3` list 行 icon 错位根治） ──
+// 病灶：`deriveSectionsFromFigmaTree` 的「方向感知兄弟排序」与「行内图元豁免」均依赖 A 类布局
+//   事实；本模块局部展开处曾漏传 ⇒ `isRowParent` 恒 false ⇒ 行内小图标（无文本·垂直居中略低于
+//   文本）被提升为独立叶子，并按 y 主序排到文本之后（真机 `1:377`：icon 28×28 y=221 vs 文本 y=214）。
+// 对照：传 facts ⇒ icon 保留在行内、且排在文本之前；空 facts ⇒ 逐字复现旧 y 主序行为。
+describe('expandOverCoarseSections · layoutFacts 注入（行内图元不脱离行）', () => {
+  /** 真机 1:376 形态：两个垂直堆叠的行；行内 = 小图标（无文本·垂直居中略低）+ 文本 */
+  function rowFixture(): any {
+    const row1 = {
+      id: '2:1',
+      name: 'row',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 195 },
+      children: [
+        {
+          id: '2:2',
+          name: 'icon-1',
+          type: 'FRAME',
+          absoluteBoundingBox: { x: 10, y: 87, width: 28, height: 28 },
+          children: [
+            { id: '2:3', name: 'vec', type: 'VECTOR', absoluteBoundingBox: { x: 12, y: 89, width: 24, height: 24 }, children: [] },
+          ],
+        },
+        { id: '2:4', name: 't', type: 'TEXT', characters: '环境温度', absoluteBoundingBox: { x: 60, y: 80, width: 100, height: 24 } },
+      ],
+    }
+    const row2 = {
+      id: '2:5',
+      name: 'row2',
+      type: 'FRAME',
+      absoluteBoundingBox: { x: 0, y: 195, width: 400, height: 195 },
+      children: [
+        { id: '2:6', name: 't', type: 'TEXT', characters: '预警内容', absoluteBoundingBox: { x: 10, y: 260, width: 120, height: 24 } },
+      ],
+    }
+    return {
+      document: {
+        id: '2:0',
+        name: 'slot',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+        children: [row1, row2],
+      },
+    }
+  }
+  const anchorSection = [{ id: '2:0', figmaAnchorId: '2:0' }]
+
+  it('阳性：行内小图标不脱离行、且排在文本之前（facts 自算注入）', () => {
+    const res: any = expandOverCoarseSections(anchorSection, rowFixture())
+    expect(res.stats.expanded).toBe(1)
+    expect(res.stats.layoutFactsSource).toBe('computed')
+    expect(res.stats.layoutFacts).toBeGreaterThan(0)
+    const row = res.sections.find((s: any) => s.id === '2:1')
+    expect(row).toBeTruthy()
+    // icon(2:2) 在文本(2:4) 之前 —— 真机 1:377 期望形态
+    expect(row.children.map((c: any) => c.id)).toEqual(['2:2', '2:4'])
+    // icon 未被提升为脱离行的独立顶层段
+    expect(res.sections.some((s: any) => s.id === '2:2')).toBe(false)
+  })
+
+  it('阴性对照：facts 存在但不覆盖该行 ⇒ 方向判据降级、回退 y 主序（文本在图标前）', () => {
+    // 非空但与该行无关的 facts：证明判据是「按 node id 注入」而非全局魔法
+    const stray = { '9:99': { display: 'flex', flexDirection: 'row', source: 'geometric-inference', confidence: 'high' } }
+    const res: any = expandOverCoarseSections(anchorSection, rowFixture(), { layoutFacts: stray })
+    expect(res.stats.layoutFactsSource).toBe('injected')
+    expect(res.stats.layoutFacts).toBe(1)
+    const row = res.sections.find((s: any) => s.id === '2:1')
+    expect(row.children.map((c: any) => c.id)).toEqual(['2:4', '2:2'])
+  })
+
+  it('防御：注入空 facts 表 ⇒ 视为未提供、自算（不得静默退回 y 主序）', () => {
+    const res: any = expandOverCoarseSections(anchorSection, rowFixture(), { layoutFacts: {} })
+    expect(res.stats.layoutFactsSource).toBe('computed')
+    expect(res.stats.layoutFacts).toBeGreaterThan(0)
+    const row = res.sections.find((s: any) => s.id === '2:1')
+    expect(row.children.map((c: any) => c.id)).toEqual(['2:2', '2:4'])
+  })
+
+  it('判据同源：注入外部 facts 与自算 facts 结果逐项一致', () => {
+    const figma = rowFixture()
+    const injected: any = expandOverCoarseSections(anchorSection, figma, { layoutFacts: buildNodeLayoutFacts(figma.document) })
+    expect(injected.stats.layoutFactsSource).toBe('injected')
+    const computed: any = expandOverCoarseSections(anchorSection, figma)
+    const shape = (r: any) => r.sections.map((s: any) => [s.id, (s.children || []).map((c: any) => c.id)])
+    expect(shape(injected)).toEqual(shape(computed))
   })
 })

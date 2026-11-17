@@ -1092,6 +1092,26 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
     entriesByVar.get(v).push(bg);
   }
   for (const [varName, entries] of entriesByVar) {
+    // 🔴 2026-11-17 治本（ef014f7d 实锤）：**同图多 owner** 不是「重复引用」。
+    //   病灶：Figma 里两个不同节点（1:390 / 1:402）各自填了同一张 bg-1-390.png ⇒ plan 固化出
+    //   两条 ownerSectionId 不同的 mapping 条目（1:388 / 1:400）。它们是**两个段各自的背景**，
+    //   却因「同 varName」被本函数当成「同一背景被挂到多个容器」，评分保留一处、剥掉另一处
+    //   ⇒ 真机 1:388 段背景永久丢失（只留 size/position/repeat 空壳）。
+    //   判据：entries 里出现 ≥2 个不同 ownerSectionId ⇒ 每个 owner 的挂载点都是合法消费。
+    //   只剥「dataSectionId 不属于任何 owner」的引用（祖先容器 / 根容器 —— 那才是本函数
+    //   原本要防的「同一段被挂到多层 ⇒ 整块拉伸」）。
+    const ownerIds = new Set(
+      entries
+        .map((e) => (e.ownerSectionId != null ? String(e.ownerSectionId) : ''))
+        .filter(Boolean),
+    );
+    const multiOwner = ownerIds.size > 1;
+    if (multiOwner) {
+      logger.info('🛡️ P2-3 同图多 owner：按段保留、只剥非 owner 引用', {
+        var: varName,
+        ownerSectionIds: [...ownerIds],
+      });
+    }
     const refs = allCands
       .filter((c) => c.tag.includes(varName) && /:style\s*=/.test(c.tag))
       .map((c) => {
@@ -1168,7 +1188,11 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
         keep = refs.find((r) => r.tag === best.tag) || refs[0];
       }
     }
-    const removeList = refs.filter((r) => r.tag !== keep.tag);
+    // 多 owner（同图不同段）⇒ 判据换成「剥非 owner 引用」：每段自己的挂载点全部保留，
+    //   只剥挂在祖先/根本身的引用（整块拉伸的来源）。单 owner ⇒ 维持原「评分保留唯一」。
+    const removeList = multiOwner
+      ? refs.filter((r) => !r.dataSectionId || !ownerIds.has(String(r.dataSectionId)))
+      : refs.filter((r) => r.tag !== keep.tag);
     for (const ref of removeList) {
       const styleMatch = ref.tag.match(/:style="([^"]*)"/);
       if (!styleMatch) continue;
@@ -3061,14 +3085,24 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
         // section 根若写单值，grow 恒不改写（如 .c-device-monitor-tabs-section 的 `flex: 1` 保持 1，
         // 而非权威系数 1.661）→ switch/tab 比例 1:2.95 而非 1:4.9。此处扩展正则覆盖单/双/三值，
         // 缺省的 shrink/basis 按 CSS 规范默认补齐（单值=1 1 0，双值=<grow> <shrink> 0）。
+        // 🔴 2026-11-17 治本（mc-max-1794845320233-c584dc52 白屏实锤）：旧正则尾部 `\s*;?` 会把
+        //   flex 值后的**空格**吞进匹配段，替换串 `flex: X Y Z;` 以 `;` 硬收尾 ⇒ 原文残留的
+        //   `!important` 被顶成分号后缀 ⇒ `flex: 0.143 1 0;!important` ⇒ LESS `Unrecognised input`
+        //   ⇒ 组件加载失败白屏（11-16 layoutStyle 落 `!important` 后与老规则②相遇才爆）。
+        //   治本（回调内终点检查而非正则前瞻——前瞻会被正则回溯绕过：basis 组回退成空匹配后
+        //   前瞻看到的是 " 0 !important" 的 " "，照样通过）：匹配终点后紧跟 `!important` 的声明
+        //   **整体不碰**（`!important` 即 layoutStyle 权威落定的语义标记，规则② 本就不得覆盖）；
+        //   其余改写保留被 `\s*;?` 消耗的分号（semi），不再硬编码第二个 `;`（防 `;;`）。
         const newBody = body.replace(
-          /flex\s*:\s*(\d+(?:\.\d+)?)(\s+[01])?(\s+(?:0|auto|0%))?\s*;?/gi,
-          (m, g, s, b) => {
+          /flex\s*:\s*(\d+(?:\.\d+)?)(\s+[01])?(\s+(?:0|auto|0%))?(\s*;)?/gi,
+          (m, g, s, b, semi, offset) => {
             const gv = Number(g);
             if (!(gv > 0) || gv > ratioMax) return m;
+            const after = body.slice(offset + m.length, offset + m.length + 20);
+            if (/^\s*!\s*important/i.test(after)) return m;
             const shrink = s ? s.trim() : '1';
             const basis = b ? b.trim() : '0';
-            return `flex: ${px} ${shrink} ${basis};`;
+            return `flex: ${px} ${shrink} ${basis}${semi || ';'}`;
           },
         );
         if (newBody !== body) {
@@ -3468,11 +3502,19 @@ export function fixInlineSectionFlex(content, ctx = {}) {
     const px = lookup(cls);
     if (px <= 0) return whole; // 命中不到映射 → 不动（不猜）
 
-    const newStyle = styleVal.replace(FLEX_DECL_RE, (mm, pre, g, s, b) => {
+    // 🔴 2026-11-17 同族治本（规则② ;!important 白屏的姊妹缺陷）：与规则② 相同的
+    //   `\s*;?` 吞空格 + `;` 硬收尾形态。内联 style 的 flex 声明若带 `!important`
+    //   同样会被顶成 `;!important` ⇒ LESS 编译失败。回调内终点检查 + 分号保留，
+    //   与规则② 同一修复口径（上游同族一次性收口）。
+    const newStyle = styleVal.replace(FLEX_DECL_RE, (mm, pre, g, s, b, offset) => {
       const gv = Number(g);
       if (!(gv > 0) || gv > ratioMax) return mm; // 像素量级 / 非正 → 不碰
+      const after = styleVal.slice(offset + mm.length, offset + mm.length + 20);
+      if (/^\s*!\s*important/i.test(after)) return mm; // !important 权威声明不碰
       const shrink = s ? s.trim() : '1';
       const basis = b ? b.trim() : '0';
+      // mm 匹配串末尾本就含被 `\s*;?` 消耗的分号（或原声明无分号）⇒ 一律以 `;` 收尾
+      // （原声明无分号的行尾形态补分号合法；带分号的等长恢复）
       return `${pre}flex: ${px} ${shrink} ${basis};`;
     });
     if (newStyle === styleVal) return whole;
@@ -4875,4 +4917,228 @@ export function dropContainerBgWhenChildrenOwnCards(files, treeSections, options
     );
   }
   return report;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Section N: 空壳图标位确定性回灌（2026-11-17 · 路线 B）
+// ══════════════════════════════════════════════════════════════
+
+/** 通用词元停用词表：单独出现时不构成语义命中（T3 弃权） */
+const ICON_BACKFILL_STOPWORDS = new Set([
+  'icon', 'img', 'image', 'pic', 'logo', 'photo',
+  'wrapper', 'container', 'box', 'item', 'con', 'row', 'col',
+  'label', 'title', 'text', 'desc', 'group', 'frame', 'div',
+]);
+
+/**
+ * 🛡️ 空壳图标位回灌（路线 B · 2026-11-17）：
+ * 「mapping success 前景资源零消费 + 产物存在语义匹配空壳 div」⇒ 确定性注入
+ *   import + `<img>`，不建宿主、不删顶包图、纯附加。
+ *
+ * 病根（mc-max-1794925030759-386c3291 实锤）：icon-statistics-477.png 零消费，
+ *   ContentSection.vue 的 `<div class="c-monitor-icon"></div>` 空壳被 icon-1-385.png
+ *   顶包（该图在 1:385/1:397 合法登记不能删）⇒ E2-v3 FAIL 被「可降级」白名单放行。
+ *
+ * 判据（docs/2026-11-17-路线B三决策点评审与修改方案.md v2）：
+ *   硬门槛 C1 资源合格（success ∧ role∈{icon,image} ∧ !isTinyDecoration）
+ *         C2 零消费（文件名未出现在任何 .vue）
+ *         C3 空壳 div（成对闭合、内容仅空白、无绑定）
+ *   三级证据（命中其一即注入；均不中⇒弃权 fail-open）：
+ *     T1 语义词元：class 去 class 前缀与停用词后，与资源 name/figmaPath 语义词元命中
+ *     T2 段证据：class 含通用 icon 词元 ∧ 资源归一 owner 段 = 空 div 所在段
+ *              （data-section-id 段内唯一空壳候选才注入）
+ *     T3 仅通用词元无段证据 ⇒ 弃权
+ * 边界：无 class 空 div / 同段多空壳候选 / 无 mapping / 已消费 / 装饰 ⇒ 一律不动。
+ * 幂等：注入后资源已消费（C2 失败），重跑零注入。
+ *
+ * @param {Record<string,string>} allFiles 全部产物文件（就地改写命中文件）
+ * @param {Array} resourceDomMapping resource-dom-mapping 单一事实源
+ * @param {object} options { logger }
+ * @returns {{ files: Record<string,string>, fixes: Array, skipped: Array }}
+ */
+export function backfillUnconsumedIconsIntoEmptyDivs(
+  allFiles,
+  resourceDomMapping,
+  options = {},
+) {
+  const logger = safeLogger(options.logger);
+  const result = { files: {}, fixes: [], skipped: [] };
+  if (!allFiles || typeof allFiles !== 'object') return result;
+  if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) return result;
+
+  const vueEntries = Object.entries(allFiles).filter(
+    ([p, c]) => p.endsWith('.vue') && typeof c === 'string',
+  );
+  if (vueEntries.length === 0) return result;
+
+  // ── C2 前置：全产物消费语料（文件名出现在任意 .vue 即视为已消费）──
+  const consumed = new Set();
+  for (const [, c] of vueEntries) {
+    for (const m of c.matchAll(/([\w.\u4e00-\u9fa5-]+\.(?:png|jpe?g|svg|webp))/g)) {
+      consumed.add(m[1]);
+    }
+  }
+
+  // ── C3 前置：扫全部 .vue 的成对空壳 div（内容仅空白、无绑定）──
+  //   形态：<div ...class="x"...></div>，开闭标签间仅空白（无子标签/文本/:style/v-bind）。
+  const emptyDivsByFile = new Map(); // path -> [{ fullTag, cls, index }]
+  const EMPTY_DIV_RE = /(<div\b[^>]*?class="([^"]*)"[^>]*?>)[ \t\r\n]*(<\/div>)/g;
+  for (const [p, c] of vueEntries) {
+    const list = [];
+    for (const m of c.matchAll(EMPTY_DIV_RE)) {
+      const openTag = m[1];
+      // 🛡️ 排除带绑定的开标签（:src/:style/v-if/v-bind/v-for 等）——只认纯静态空壳
+      if (/\s(?::[\w-]+|v-[\w-]+)\s*=/i.test(openTag)) continue;
+      list.push({ fullTag: m[0], openTag, cls: m[2], index: m.index });
+    }
+    if (list.length > 0) emptyDivsByFile.set(p, list);
+  }
+  if (emptyDivsByFile.size === 0) {
+    logger?.info?.('🛡️ 空壳图标位回灌：产物无空壳 div 候选，0 注入');
+    return result;
+  }
+
+  // ── 逐资源判据 ──
+  for (const r of resourceDomMapping) {
+    if (!r || r.downloadStatus !== 'success' || !r.resourceFile) continue;
+    const role = String(r.previewAnalysisRole || '').toLowerCase();
+    if (role !== 'icon' && role !== 'image') continue; // C1
+    if (r.isTinyDecoration) continue; // C1 装饰豁免
+
+    const fname = r.resourceFile.split('/').pop();
+    if (!fname || consumed.has(fname)) continue; // C2 零消费
+
+    // 语义词元：资源 name（去停用词）
+    const nameTokens = tokenSemantics(String(r.name || ''));
+    const pathTokens = tokenSemantics(String(r.figmaPath || ''));
+
+    // 收集所有文件里的候选空壳，按 T1 > T2 定序
+    let best = null; // { path, div, level }
+    let candidatesAtSameLevel = 0;
+    for (const [p, divs] of emptyDivsByFile) {
+      const content = allFiles[p];
+      for (const div of divs) {
+        const clsTokens = tokenSemantics(div.cls);
+        // T1：语义词元（非停用词）命中资源 name 或 figmaPath
+        const t1 =
+          clsTokens.some((t) => nameTokens.includes(t)) ||
+          clsTokens.some((t) => pathTokens.includes(t));
+        // T2 前置：class 含通用 icon 词元 ∧ 资源自身是 icon role
+        const t2Pre =
+          role === 'icon' &&
+          (clsTokens.includes('icon') || /\bicon\b|icon[\w-]/i.test(div.cls));
+        const level = t1 ? 1 : t2Pre ? 2 : 0;
+        if (level === 0) continue;
+        if (!best || level < best.level) {
+          best = { path: p, div, level };
+          candidatesAtSameLevel = 1;
+        } else if (level === best.level) {
+          candidatesAtSameLevel += 1;
+        }
+      }
+    }
+
+    if (!best) {
+      result.skipped.push({ fname, reason: 'no-semantic-match' });
+      continue; // T3 弃权
+    }
+    if (candidatesAtSameLevel > 1) {
+      // 段内/全产物同级候选不唯一 ⇒ 防猜错位置，弃权
+      result.skipped.push({
+        fname,
+        reason: `ambiguous-${candidatesAtSameLevel}-candidates`,
+      });
+      continue;
+    }
+
+    // ── T2 补充证据：owner 段必须命中该文件（段锚在产物存在）──
+    if (best.level === 2) {
+      const owner = String(r.ownerSectionId || '');
+      const ownerHit =
+        (owner && allFiles[best.path].includes(owner)) ||
+        (Array.isArray(r.ancestorIds) &&
+          r.ancestorIds.some((a) => allFiles[best.path].includes(String(a))));
+      if (!ownerHit) {
+        result.skipped.push({ fname, reason: 't2-owner-anchor-missing' });
+        continue;
+      }
+    }
+
+    // ── 注入 ──
+    const varName = varNameFor(r, fname);
+    let code = allFiles[best.path];
+    // ① import（幂等：ensureResourceImportInVue 已有撞名复核）
+    code = ensureResourceImportInVue(code, varName, r, best.path);
+    // ② 空壳 div → 内嵌 <img>（成对闭合形态，含精确尺寸）
+    const w = Math.round(Number(r.figmaBox?.width)) || null;
+    const h = Math.round(Number(r.figmaBox?.height)) || null;
+    const dim =
+      w > 0 && h > 0
+        ? `width:${w}px;height:${h}px;object-fit:contain`
+        : `max-width:48px;max-height:48px;object-fit:contain`;
+    const imgTag = `<img :src="${varName}" class="auto-mounted-icon" style="${dim};flex:none;" alt="${String(r.name || '').replace(/"/g, '')}" />`;
+    const patched = code.replace(
+      best.div.fullTag,
+      () => best.div.openTag + imgTag + '</div>',
+    );
+    if (patched === code) {
+      result.skipped.push({ fname, reason: 'inject-noop' });
+      continue;
+    }
+    allFiles[best.path] = patched;
+    result.files[best.path] = patched;
+    result.fixes.push({
+      file: best.path,
+      fname,
+      figmaNodeId: r.figmaNodeId,
+      matchLevel: best.level === 1 ? 'T1-token' : 'T2-owner-segment',
+      varName,
+      size: w && h ? `${w}x${h}` : null,
+    });
+    logger?.info?.('🛡️ 空壳图标位回灌注入', {
+      file: best.path,
+      fname,
+      node: r.figmaNodeId,
+      matchLevel: best.level === 1 ? 'T1-token' : 'T2-owner-segment',
+    });
+  }
+
+  if (result.fixes.length > 0 && logger) {
+    logger.info(`🛡️ 空壳图标位回灌完成 fixes=${result.fixes.length}`, {
+      fixes: result.fixes,
+      skipped: result.skipped.slice(0, 8),
+    });
+  }
+  return result;
+}
+
+/**
+ * 语义词元提取：按 -/_/空白/驼峰边界切词 → 小写 → 过滤纯数字与停用词。
+ * `c-monitor-icon` → ['monitor']（icon 被停用）；`icon-statistics` → ['statistics']。
+ */
+function tokenSemantics(str) {
+  const raw = String(str || '')
+    .replace(/([\w$]) ([A-Z])/g, '$1-$2') // 无意义占位（保持行为稳定，后续切词）
+    .split(/[-_/.:\s]|(?<=[a-z])(?=[A-Z])/);
+  const out = [];
+  for (const t of raw) {
+    const lo = t.toLowerCase();
+    if (!lo || /^\d+$/.test(lo)) continue;
+    if (ICON_BACKFILL_STOPWORDS.has(lo)) continue;
+    if (lo.length < 2) continue;
+    if (!out.includes(lo)) out.push(lo);
+  }
+  return out;
+}
+
+/** 资源变量名：semanticVarName → assignedVarName → 派生兜底 */
+function varNameFor(r, fname) {
+  if (r.semanticVarName && /^[A-Za-z_$][\w$]*$/.test(r.semanticVarName)) {
+    return r.semanticVarName;
+  }
+  if (r.assignedVarName && /^[A-Za-z_$][\w$]*$/.test(r.assignedVarName)) {
+    return r.assignedVarName;
+  }
+  const stem = fname.replace(/\.[a-z]+$/i, '').replace(/[^\w]+/g, '');
+  return `res${stem.charAt(0).toUpperCase()}${stem.slice(1)}`;
 }

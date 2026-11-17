@@ -1237,6 +1237,22 @@ export function injectMissingTabUi(content, options = {}) {
   // ③ 模板是否已渲染该 tabs？已渲染则跳过（不重复注入）
   if (templateRendersTabs(tplBody, tabsVar)) return content;
 
+  // ③-c 🛡️ 子组件承载闸（2026-11-17 · mc-max-1794876977826-8d203ee3 实锤双 tab 行）：
+  //   script 的 tabs 数组由**子组件**消费（如 <HeaderSection/> / <TabsSection/> 内部
+  //   v-for 渲染 tab），主模板看不到 v-for/class-tab ⇒ ③ 的三条检测全盲 ⇒ 又注入一套
+  //   通用骨架 ⇒ 双 tab 行并存（用户实拍：设计贴图 tab 行 + 无样式胶囊行上下两排）。
+  //   判据（可辩驳、零语义猜测）：主模板已引用**名称含 Tab 的组件标签**（<XxxTab…/>
+  //   / <Tab…/> / <…Tabs…/>，PascalCase 标签）——import 语句与模板标签任一命中 ⇒
+  //   tab 渲染职责已移交子组件 ⇒ 跳过注入。（A2/7b4ae1d8 修的是 header 通道；
+  //   本闸补「子组件承载」通道。）
+  const scriptTabComp = scriptBody.match(
+    /import\s+((?:\w+ as )?\w*(?:Tab|tabs)\w*)\s+from/i,
+  );
+  const tplTabCompRe = /<(\w*(?:Tab|tabs)\w*)\b/g;
+  if (scriptTabComp || tplTabCompRe.test(tplBody)) {
+    return content;
+  }
+
   // ③-b 🛡️ header 通道已承载闸（2026-11-10 · 7b4ae1d8 双份 tabs 实锤）：header-right 等
   //   header 专属插槽非空 ⇒ label/tab 契约已由 header 通道消费，内容区再注入 tab 骨架必双份
   //   （旧判据只认 v-for，HeaderSection 等子组件承载识别不到）。
@@ -2392,10 +2408,15 @@ export function healUnquotedObjectKeysInVue(vueContent) {
  *   - 类名**真实存在**（`.c-device-monitor-error` 就在 common.less 里）—— 契约层也不会报；
  *   - DOM 存在、CSS 命中 —— 只有**渲染出来的值是空的**，纯代码门禁结构上无从判断。
  *
- * 已排除的嫌疑：离线重放 `normalizeClassNameDialect`（刀 12）**复现不出**（changes=[]，
- * 它只处理 template/style 段，不动 script）→ 污染源是 **LLM 自身输出**，非管线改写器。
- * 因此这里做**确定性后处理**：拿「模板真正访问过的 `.prop`」当事实源，
- * 把类名化的数据键还原成模板要的那个名字。
+ * 污染源定性（2026-11-17 修正，原断言"是 LLM 自身输出"已被 cache 证据证伪）：
+ *   - 旧断言「离线重放 normalizeClassNameDialect（刀 12）复现不出 ⇒ LLM 自身输出」**不成立**：
+ *     真机 eba2284f 的 `.mc-gen/cache/code-chunks` 原始输出证明 LLM 写的是裸键 `tunnel`，
+ *     污染源是写盘出口 `autoFixPrefixViolations` 的 classBindRegex 曾对**整文件**全局替换，
+ *     误把 `<script setup>` 的 `CHART_DATA={tunnel:...}` 数据键前缀化成 `c-traffic-monitor-tunnel`
+ *     （该误伤已在 code-structure-validator.js 限定为 template 段，从源头不再制造）。
+ *   - 刀 12 复现不出只说明"解析器不背锅"，不能推出"LLM 背锅"——写盘链上还有其它改写器。
+ * 这里仍做**确定性后处理**（存量坏产物的兜底自愈）：拿「模板真正访问过的 `.prop`」当事实源，
+ * 把类名化的数据键还原成模板要的那个名字。新产物不应再触发本自愈（源头已堵）。
  *
  * 保守边界（宁可不改，不可错改）：
  *   - 只改 `<script>` 段（template 里的类名是另一个语境，由刀 18 管引号）；

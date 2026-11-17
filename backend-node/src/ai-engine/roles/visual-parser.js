@@ -645,12 +645,19 @@ ${analysisTask}`
       budget.used = 0
       budget.limit = budget.limit || FIGMA_HINT_MAX_CHARS
       budget.truncated = false
-      budget.counters = budget.counters || {
-        echartsContainerShown: 0,
-        echartsChildrenPruned: 0,
-        depthBoundaryListed: 0,
-        depthBoundaryChildren: 0,
-      }
+      // 🔴 2026-11-17 修（ef014f7d 排查时实测）：调用方传的是 `counters: {}`（空对象 truthy）
+      //   ⇒ 原 `budget.counters || {默认}` 不补默认字段 ⇒ 刀A/刀B 的 `+=` 在 undefined 上
+      //   建键得 **NaN** ⇒ 日志恒 `{"echartsChildrenPruned":null,...}`（NaN 序列化为 null），
+      //   无法区分「判据没跑」与「跑了但值不可读」。改为显式补默认（调用方传什么都不会 NaN）。
+      budget.counters = Object.assign(
+        {
+          echartsContainerShown: 0,
+          echartsChildrenPruned: 0,
+          depthBoundaryListed: 0,
+          depthBoundaryChildren: 0,
+        },
+        budget.counters,
+      )
     }
 
     // 🛡️ 刀B（2026-11-16 · d9b6f34b 实锤）：深度边界不静默。
@@ -2516,8 +2523,43 @@ ${analysisTask}`
         names.forEach(n => {
           if (typeof n === 'string' && n.length > 1 && n.length <= 30) identifiedNames.add(n.toLowerCase())
         })
+        // 🛡️ 2026-11-17（缺口② 根治 · mc-max-1794854504488-e9a62138 实锤 37%）：**表格数据载体**。
+        //   vision 把表格段识别成 `body: { type:'table', headers:['设备名称',…], cells:
+        //   [{column,header,values:['服务区巡检狗K1',…]}, …], rows:[{icon,…}] }` —— headers 是
+        //   **字符串数组**（非对象数组）、cells.values 同为字符串数组。`names` 只收对象字段、
+        //   `childFields` 递归的是 children/sections/…：数组里的**裸字符串**两头都不沾 ⇒ 表格
+        //   文字（表头 4 + 行名 8 + 列名）永远进不了 identifiedNames ⇒ 该批 Figma TEXT 节点
+        //   全判 missing（真机：missing 12 条全部是「设备名称/服务区巡检狗K1-8/速度(m/s)/
+        //   启用状态」，37% 触发「视觉分析覆盖率不足」降级提示；而产物与 vision 识别其实**完全
+        //   一致**——文字在 `analysis.json`/产物表格里全量存在）。修法：数组型 `headers` 与
+        //   `cells[].values` 的字符串项直接入识别集（与 body.rows 的 icon.placeholder 等
+        //   对象字段路径互补）。**只收字符串项，不放宽到任意数组**（解释性文本零误收）。
+        if (Array.isArray(obj.headers)) {
+          obj.headers.forEach(h => {
+            if (typeof h === 'string' && h.length > 1 && h.length <= 30) identifiedNames.add(h.toLowerCase())
+          })
+        }
+        if (Array.isArray(obj.cells)) {
+          obj.cells.forEach(c => {
+            if (!c || typeof c !== 'object') return
+            const cellTexts = [c.header, c.title, c.label, c.name].filter(Boolean)
+            cellTexts.forEach(t => {
+              if (typeof t === 'string' && t.length > 1 && t.length <= 30) identifiedNames.add(t.toLowerCase())
+            })
+            if (Array.isArray(c.values)) {
+              c.values.forEach(v => {
+                if (typeof v === 'string' && v.length > 1 && v.length <= 30) identifiedNames.add(v.toLowerCase())
+              })
+            }
+          })
+        }
         // 递归子节点（layout 必须包含：sections 实际嵌套在 layoutStructure.layout.sections 下，缺它会导致覆盖率恒 0）
-        const childFields = ['children', 'sections', 'items', 'elements', 'body', 'header', 'content', 'controls', 'layout']
+        // 🛡️ 2026-11-17 二轮真机补（22795788）：vision 表格行数据有两种形态——首轮
+        //   `cells[].values`（字符串数组，上方分支已收）、本轮 `rows[].{name,power,speed,status}`
+        //   （**对象数组**）。rows 元素的字符串字段走 names 通道即可，但 'rows' 此前不在
+        //   childFields ⇒ 递归不到 rows 元素 ⇒ K1-8 又判 missing（70%）。补 'rows' 一键
+        //   （与 children/items 同族）：icon 资源路径 >30 字符被长度门槛滤掉，零误收。
+        const childFields = ['children', 'sections', 'items', 'elements', 'body', 'header', 'content', 'controls', 'layout', 'rows']
         childFields.forEach(f => {
           if (Array.isArray(obj[f])) obj[f].forEach(child => addIdentified(child, prefix))
           else if (obj[f] && typeof obj[f] === 'object') addIdentified(obj[f], prefix)
@@ -3925,7 +3967,15 @@ ${analysisTask}`
     const placeholder = element.placeholder || element.name || ''
 
     // ── 优先级1: figmaNodeId 精确匹配 ──
-    let matched = candidates.find(m => m.figmaNodeId === element.figmaNodeId)
+    // 🛡️ 2026-11-17（mc-max-1794878113452-ebc85839 实锤「icon 跑到别处」）：
+    //   vision 输出的元素主键是 **id**（'1:477'），旧判据只读 element.figmaNodeId
+    //   ⇒ 精确档恒落空 ⇒ 走「Y 就近/兜底第一个」⇒ 1:477（统计小图标）被错配成
+    //   1:385 桥图标（icon-1-385.png），桥图脱离告警行渲染在页面中部、正确资源
+    //   零消费。补 id/fallback 双通道（与 :3662 directId 同口径）。
+    const directNodeId = element.figmaNodeId || element.figmaNode || element.id
+    let matched = directNodeId
+      ? candidates.find(m => m.figmaNodeId === String(directNodeId))
+      : undefined
 
     // ── 优先级2: figmaPath 路径语义匹配 ──
     // placeholder 拆词后与 figmaPath 各段做包含检测

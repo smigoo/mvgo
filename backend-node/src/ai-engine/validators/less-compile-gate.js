@@ -1556,7 +1556,7 @@ function toDiagnostic({ error, file, source, sourceType, styleIndex = null, line
   }
 }
 
-function createFileManager(files, outputPath) {
+function createFileManager(files, outputPath, { restrictToOutputPath = false } = {}) {
   const normalizedFiles = new Map(Object.entries(files || {}).map(([key, value]) => [normalizePath(key), String(value)]))
   class GeneratedFileManager extends less.FileManager {
     supports() { return true }
@@ -1565,6 +1565,9 @@ function createFileManager(files, outputPath) {
       const base = normalizePath(currentDirectory || '')
       const requested = normalizePath(normalize(join(base, filename)))
       const relativeToOutput = normalizePath(relative(outputPath || '/', requested))
+      if (restrictToOutputPath && (relativeToOutput === '..' || relativeToOutput.startsWith('../') || relativeToOutput.startsWith('/'))) {
+        throw { type: 'File', message: `LESS 依赖路径越出 Lite Vue3 产物目录：${filename}`, filename: requested }
+      }
       const candidates = [requested, relativeToOutput, normalizePath(filename)]
       for (const candidate of candidates) {
         if (normalizedFiles.has(candidate)) {
@@ -1979,6 +1982,50 @@ export class LessCompileGate {
 
   static async validateDirectory(outputPath) {
     return this.validate(collectLessCompileFiles(outputPath), { outputPath })
+  }
+
+  /** Lite Vue3 专用：只编译最终磁盘 SFC 的 LESS 块，不套用 microcode 主题 wrapper。 */
+  static async validateVue3SfcDirectory(outputPath) {
+    const diagnostics = []
+    const files = {}
+    const walk = (dir) => {
+      if (!existsSync(dir)) return
+      for (const name of readdirSync(dir)) {
+        if (['node_modules', '.cache', '.checkpoint', '_upload'].includes(name)) continue
+        const fullPath = join(dir, name)
+        const stat = statSync(fullPath)
+        if (stat.isDirectory()) walk(fullPath)
+        else if (name.endsWith('.vue')) {
+          files[normalizePath(relative(outputPath, fullPath))] = readFileSync(fullPath, 'utf-8')
+        }
+      }
+    }
+    walk(join(outputPath, 'package'))
+    const fileManager = createFileManager(files, outputPath, { restrictToOutputPath: true })
+    let checkedStyles = 0
+    for (const [file, source] of Object.entries(files)) {
+      for (const style of extractLessStyles(source)) {
+        checkedStyles += 1
+        try {
+          await less.render(style.content, {
+            filename: join(outputPath, file),
+            paths: [dirname(join(outputPath, file)), outputPath],
+            plugins: [{ install(_, pluginManager) { pluginManager.addFileManager(fileManager) } }],
+            javascriptEnabled: false,
+          })
+        } catch (error) {
+          diagnostics.push(toDiagnostic({
+            error,
+            file,
+            source: source,
+            sourceType: 'sfc-style',
+            styleIndex: style.index,
+            lineOffset: style.startLine - 1,
+          }))
+        }
+      }
+    }
+    return { ok: diagnostics.length === 0, checkedFiles: Object.keys(files).length, checkedStyles, diagnostics }
   }
 
   static async validate(files = {}, options = {}) {

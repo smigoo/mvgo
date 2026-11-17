@@ -457,8 +457,9 @@ function treeOf(figmaNodeData) {
  *
  * 判据（结构化、命名无关）：
  *   - 段锚点必须能在 Figma 真值树中定位（否则 no-evidence，fail-open）；
- *   - 段锚点的直接父 **不是面板根**（父为根 = 面板级结构层，可能是真 header 行）；
- *   - 同父直接子层中 ≥SLOT_SIBLING_SECTION_MIN 个**其它 section**；
+ *   - 同父直接子层中 ≥SLOT_SIBLING_SECTION_MIN 个**其它 section**（父为面板根亦同；
+ *     2026-11-17 起不再对根父无条件 keep——根下平铺的 body 首段与其兄弟 section 共居，
+ *     真面板头则因兄弟 section <2 自动不满足，同一判据区分两者）；
  *   - 父容器高度 ≥ 段高度 × SLOT_PARENT_HEIGHT_RATIO_MIN。
  *
  * @param {string} secId 段/槽锚点 id
@@ -476,7 +477,14 @@ export function evaluateSlotFlowCoResidency(secId, sectionIdSet, figmaNodeData) 
   if (!anchorNode) return { verdict: 'no-evidence', reason: 'anchor-not-in-figma-tree' };
   const parentId = tree.parentOf.get(id) || '';
   if (!parentId) return { verdict: 'no-evidence', reason: 'no-parent' };
-  if (parentId === tree.rootId) return { verdict: 'keep', reason: 'parent-is-panel-root' };
+  // 🔴 2026-11-17 治本（mc-max-1794911885243-30260c7a 实锤）：移除「父=面板根 ⇒ 无条件 keep」
+  //   的短路。旧逻辑把「根下的真面板头行」与「根下平铺的 body 首段」混为一谈：本例 Tab 栏
+  //   `2:9020`（带 slotCandidate=header-right、elementType=statistic）与列表 `2:8869`、分割线
+  //   `2:9047` 同为面板根 3 个平级 section 之一，父即根 ⇒ 旧逻辑无条件 keep ⇒ 不被
+  //   revokeUnqualifiedHeaderSlotCandidates 撤销 ⇒ 一路进 #header-right（徽章巨大化、脱离
+  //   body flex 流）。真面板头（如 2:3550）虽也父为根，但其根下兄弟 section 数 <2
+  //   （其它兄弟是 body 容器等非 section 节点）⇒ 走下方判据自动 keep，不受影响。
+  //   故根父与任意父统一走同一套共居判据（兄弟 section≥2 + 父高≥段高×2），判据单一来源不变。
 
   const ids = sectionIdSet instanceof Set ? sectionIdSet : new Set();
   const facts = siblingSectionFacts(id, ids, tree);

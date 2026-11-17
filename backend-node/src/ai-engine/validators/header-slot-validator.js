@@ -8,6 +8,7 @@ import { createLogger } from '../logger/index.js';
 //   原实现 `figmaConnector.findHeaderContainer()` 按图层名匹配（header/头部前缀），
 //   设计稿改名即失效；owner 用「标题锚 → 其父即 root 的祖先」+ 无量纲几何，命名无关。
 import { findHeaderOwnerNode } from '../utils/header-owner-truth.js';
+import { markDuplicateShadowTexts } from '../utils/section-title-truth.js';
 
 const logger = createLogger({ name: 'header-slot-validator' });
 
@@ -141,6 +142,22 @@ export class HeaderSlotValidator {
    * 🆕 v3.1 优化：按 X 坐标和间距智能分类插槽位置
    */
   deriveHeaderSlotsFromFigma(figmaNodeData, titleNode = null, headerSlotCandidates = []) {
+    // 🛡️ 2026-11-17（叠字废稿层去重 · 3c86927e 实锤链头）：先对真值树**预标记**
+    //   叠字废稿层（`_dupShadow`），collectTexts 采集时跳过——治「设计稿同位叠字
+    //   被推导成 headerSlots 契约」的上游根因。幂等：重复调用零增量。
+    try {
+      const dupStats = markDuplicateShadowTexts(figmaNodeData);
+      if (dupStats.marked > 0) {
+        logger.info('🛡️ 叠字废稿层已标记（headerSlots 采集将跳过）', {
+          evaluated: dupStats.evaluated,
+          marked: dupStats.marked,
+          markedIds: dupStats.markedIds.slice(0, 6),
+          markedTexts: dupStats.markedTexts.slice(0, 6),
+        });
+      }
+    } catch (_dupErr) {
+      // fail-open：标记失败不阻断推导（与既有 fail-open 纪律一致）
+    }
     // 🛡️ 2026-11-15：owner 优先（结构事实），图层名匹配仅作 fail-open 兜底。
     const ownerRes = findHeaderOwnerNode(figmaNodeData);
     const container = ownerRes.node || this.figmaConnector.findHeaderContainer(figmaNodeData);
@@ -148,9 +165,13 @@ export class HeaderSlotValidator {
       /^[*#]/.test(t) || /TODO|FIXME|标注|备注/.test(t);
     const slots = [];
 
-    const collectTexts = (node, acc) => {
-      if (!node || typeof node !== 'object') return;
-      if (node.type === 'TEXT' && typeof node.characters === 'string') {
+  const collectTexts = (node, acc) => {
+    if (!node || typeof node !== 'object') return;
+    // 🛡️ 2026-11-17（叠字废稿层去重 · 3c86927e 实锤链头）：`_dupShadow` 由
+    //   `section-title-truth#markDuplicateShadowTexts` 预标记（同 bbox 同文本叠层 /
+    //   被 title 覆盖的隐藏层）——这些层在设计稿里被上层盖住不可见，采集进来会被
+    //   推导成 headerSlots 契约（真机「小标题 小标题」⇒ tab 栏被错误安进标题条）。
+    if (node.type === 'TEXT' && node._dupShadow !== true && typeof node.characters === 'string') {
         const t = node.characters.trim();
         if (t)
           acc.push({

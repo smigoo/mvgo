@@ -59,7 +59,10 @@ export const PRODUCT_DEFECT_RUNTIME_IDS = new Set([
   'RUNTIME-005', // 预览根容器尺寸为空（layout）
   'RUNTIME-006', // 组件 ready 但无可见根节点（blank-render）
   'RUNTIME-012', // 截图像素近似全白 / 无有效内容（blank-render 像素级）
-  'RUNTIME-013', // 仅静态抽取，无法证明组件可在真实运行时加载
+  // 🛡️ 2026-11-17 门禁二次评审 P0-3：RUNTIME-013 移出「确定性产物缺陷」集合。
+  //   static-fallback 产物能打开（只是动态内容显示模板语法），不属「白屏/空壳」硬伤；
+  //   已在 screenshot-renderer.js 降为 WARN + incremental + status:'WARN'。
+  //   留在此集合会让 generate 链 hasDeterministicRuntimeMissing 仍判硬 BLOCK ⇒ 降级失效。
 ])
 
 /**

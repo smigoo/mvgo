@@ -56,15 +56,15 @@ const buildTrendOption = () => ({
 </script>`
 
 describe('regression: mc-max-1786873908060-3b0eb599 禁止臆造', () => {
-  it('历史回放：一氧化碳→二氧化碳 臆造被阻断 (DO-NOT-INVENT-TEXT, BLOCK)', () => {
+  it('历史回放：一氧化碳→二氧化碳 臆造被检出留痕 (DO-NOT-INVENT-TEXT, WARN)', () => {
     const res = validateDoNotInvent({
       files: { 'package/index.vue': BAD_COMPONENT },
       analysis: { doNotInvent: ['一氧化碳为隧道核心监测气体，不要将一氧化碳写成二氧化碳'] },
     })
-    expect(res.pass).toBe(false) // BLOCK 阻断
+    expect(res.pass).toBe(true) // 2026-11-17 降 WARN 放行
     const issue = res.issues.find((i) => i.id === 'DO-NOT-INVENT-TEXT')
     expect(issue).toBeDefined()
-    expect(issue.severity).toBe('BLOCK')
+    expect(issue.severity).toBe('WARN')
     expect(issue.message).toContain('一氧化碳')
     expect(issue.message).toContain('二氧化碳')
   })
@@ -93,7 +93,7 @@ describe('regression: mc-max-1786873908060-3b0eb599 禁止臆造', () => {
     expect(res.issues).toHaveLength(0)
   })
 
-  it('历史回放组合：真实产物（双系列 + 二氧化碳）同时触发文本篡改 BLOCK + 系列膨胀 WARN', () => {
+  it('历史回放组合：真实产物（双系列 + 二氧化碳）同时触发文本篡改 WARN + 系列膨胀 WARN', () => {
     const res = validateDoNotInvent({
       files: { 'package/index.vue': BAD_COMPONENT },
       analysis: {
@@ -104,6 +104,6 @@ describe('regression: mc-max-1786873908060-3b0eb599 禁止臆造', () => {
     const ids = res.issues.map((i) => i.id)
     expect(ids).toContain('DO-NOT-INVENT-TEXT')
     expect(ids).toContain('DO-NOT-INVENT-CHART')
-    expect(res.blockCount).toBe(1) // 文本篡改升级为 BLOCK，阻止发布
+    expect(res.blockCount).toBe(0) // 2026-11-17 质量项全部降 WARN，不再阻断发布
   })
 })

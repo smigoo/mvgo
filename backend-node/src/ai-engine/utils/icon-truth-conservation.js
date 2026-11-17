@@ -48,6 +48,7 @@ import {
   insertImport,
 } from './resource-img-src-healer.js';
 import { isIconRole, usageIsImg } from './missing-icon-render-healer.js';
+import { parseCssRules, classesInFragment } from './css-selector-facts.js';
 
 /** 图形绘制声明：只认「真的画了东西」的属性，display/flex/width/height 不算。 */
 const DRAW_DECL_RE =
@@ -168,15 +169,20 @@ export function collectRenderedImgVars(templateBody) {
 
 /**
  * 从全产物样式文件建「哪些 class 确实画了图形」索引。
- * 只做事实采集，不含阈值/裁决；复合选择器（.light .x / .x:hover）同样归属到 .x。
+ * 只做事实采集，不含阈值/裁决；解析统一走 `css-selector-facts.parseCssRules`（单一事实源）。
+ *
+ * 🔴 **只认 subject**（2026-11-17 修正）：声明只作用于最后一个复合选择器，祖先只是约束。
+ *   旧实现把选择器里**所有** class 都记为「CSS 画的图形」，在 LESS 嵌套/后代选择器下会把
+ *   真实容器（`.frame .icon .dot{background:…}` 的 `.frame` / `.icon`）也标记成假图形
+ *   ⇒ 刀 51 有**误删真实节点**的风险（比漏删严重）。收紧方向：宁少删，不误删。
  */
 export function buildDrawClassIndex(files) {
   const index = new Set();
   const take = (css) => {
-    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
-    let r;
-    while ((r = ruleRe.exec(String(css || ''))) !== null) {
-      const body = r[2];
+    for (const rule of parseCssRules(css)) {
+      const chain = rule.selector;
+      if (!chain || chain.length === 0) continue;
+      const body = rule.decl;
       let draws = /gradient\s*\(/i.test(body);
       if (!draws) {
         DRAW_DECL_RE.lastIndex = 0;
@@ -186,9 +192,7 @@ export function buildDrawClassIndex(files) {
         }
       }
       if (!draws) continue;
-      const clsRe = /\.(-?[_a-zA-Z]+[\w-]*)/g;
-      let c;
-      while ((c = clsRe.exec(r[1])) !== null) index.add(c[1]);
+      for (const c of classesInFragment(chain[chain.length - 1])) index.add(c);
     }
   };
   for (const [p, content] of Object.entries(files || {})) {
@@ -213,7 +217,7 @@ function classesOf(attrs) {
   return m ? m[1].trim().split(/\s+/).filter(Boolean) : [];
 }
 
-function parseTemplateTree(body) {
+export function parseTemplateTree(body) {
   const roots = [];
   const stack = [];
   const rx = new RegExp(TAG_RE.source, 'g');
@@ -231,7 +235,9 @@ function parseTemplateTree(body) {
     last = m.index + m[0].length;
     if (m[2] === undefined) continue; // HTML 注释
     const closing = m[1] === '/';
-    const tag = m[2].toLowerCase();
+    // 🛡️ P0-d：组件标签判定必须用**原始大小写**（下方 tag 会被 toLowerCase 供标签栈配对）
+    const rawTag = m[2];
+    const tag = rawTag.toLowerCase();
     const attrs = m[3] || '';
     if (closing) {
       let idx = -1;
@@ -247,6 +253,14 @@ function parseTemplateTree(body) {
     }
     const selfClose = /\/\s*$/.test(attrs) || VOID_TAGS.has(tag);
     const parent = stack[stack.length - 1] || null;
+    // 🛡️ P0-d（2026-11-17 · mc-1794880493923-bff54606 实锤「下方四行路段整块消失」）：
+    //   PascalCase 自定义标签（`<ContentSection2 />` 等 Vue 子组件）是**可渲染单元**，
+    //   必须视为「子树有内容」。原判据只认 img/svg/canvas/{{}}/指令 ⇒ 装配容器
+    //  （class 挂真值背景图 + 内含子组件标签）被误判为「CSS 假图标块」⇒ healer
+    //   删 3 块 + 替换 1 块，12 个子组件 11 个变孤儿 import，预览整块丢失。
+    //   判据与 Vue 官方模板约定同源（模板中 PascalCase = 组件）；lowercase 自定义
+    //   元素不放宽（宁漏不误删）。幂等：标签在 ⇒ 永不命中假块判据。
+    const isComponentTag = /^[A-Z]/.test(rawTag);
     const node = {
       tag,
       attrs,
@@ -260,6 +274,7 @@ function parseTemplateTree(body) {
       hasText: false,
       hasRenderable:
         RENDER_TAGS.has(tag) ||
+        isComponentTag ||
         /\b(?:v-for|v-if|v-else-if|v-else|v-html|v-text|v-show)\b/.test(attrs) ||
         /\b(?::src|v-bind:src|src)\s*=/i.test(attrs),
     };
@@ -271,7 +286,7 @@ function parseTemplateTree(body) {
   return roots;
 }
 
-function subtreeHasContent(node) {
+export function subtreeHasContent(node) {
   if (node.hasText || node.hasRenderable) return true;
   return node.children.some(subtreeHasContent);
 }

@@ -199,7 +199,8 @@ const rootBgStyle = computed(() => ({
     expect(runCode007(content)).toHaveLength(0)
   })
 
-  it('根面板有背景但代码完全未落地 → BLOCK（2026-09-03 由 WARN 升级，防深色兜底顶替 Figma 背景色）', () => {
+  // 🛡️ 2026-11-17 降级：判据仍检出但档位 BLOCK→WARN（真机 78 单仅 1 命中且 completed 未阻断）。
+  it('根面板有背景但代码完全未落地 → 检出但 WARN（防深色兜底顶替 Figma 背景色；不再白烧重试）', () => {
     const content = makeVue3(
       `  <div class="env-monitor-root"></div>`,
       ``,
@@ -207,7 +208,7 @@ const rootBgStyle = computed(() => ({
     )
     const issues = runCode007(content)
     expect(issues).toHaveLength(1)
-    expect(issues[0].severity).toBe('BLOCK')
+    expect(issues[0].severity).toBe('WARN')
   })
 })
 
@@ -832,34 +833,37 @@ ${rootStyleBody}
   background-position: center;`,
       PANEL_BG_MAPPING,
     )
-    expect(blocksOf(res, 'CODE-014')).toHaveLength(0)
+    // 降级后 blocksOf 恒 0（无 BLOCK）会假绿，改用 hitsOf 验「判据确实不报」
+    expect(hitsOf(res, 'CODE-014')).toHaveLength(0)
   })
 
-  it('负面对照：臆造渐变背景（无 mapping 证据）→ 仍 BLOCK', () => {
+  // 🛡️ 2026-11-17 降级：以下阳性对照判据仍检出、档位 WARN（hitsOf 不看 severity）。
+  it('负面对照：臆造渐变背景（无 mapping 证据）→ 仍检出但 WARN', () => {
     const res = runCode014(
       `  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);`,
       PANEL_BG_MAPPING,
     )
-    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014')[0].severity).toBe('WARN')
   })
 
-  it('负面对照：url 指向非面板资源（臆造别处图片）→ 仍 BLOCK', () => {
+  it('负面对照：url 指向非面板资源（臆造别处图片）→ 仍检出但 WARN', () => {
     const res = runCode014(
       `  background-image: url('../images/some-other-bg.png');`,
       PANEL_BG_MAPPING,
     )
-    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014').length).toBeGreaterThan(0)
   })
 
-  it('负面对照：无 resourceDomMapping 时保持原判定 → 仍 BLOCK', () => {
+  it('负面对照：无 resourceDomMapping 时保持原判定 → 仍检出但 WARN', () => {
     const res = runCode014(
       `  background-image: url('../images/bg-7880.png');`,
       [],
     )
-    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014').length).toBeGreaterThan(0)
   })
 
-  it('臆造边框不受面板背景豁免影响 → 仍 BLOCK', () => {
+  it('臆造边框不受面板背景豁免影响 → 仍检出但 WARN', () => {
     const res = runCode014(
       `  background-image: url('../images/bg-7880.png');
   border: 1px solid #4a758d;`,
@@ -2517,12 +2521,14 @@ import icon1 from '../resources/images/icon-1.png'
         layoutStructure: { styles: { colors: ['rgba(3,98,166,1)'] } },
       },
     )
-    expect(blocksOf(res, 'CODE-007')).toHaveLength(0)
-    expect(blocksOf(res, 'CODE-014')).toHaveLength(0)
+    // 007/014 已降 WARN：blocksOf 恒 0 会假绿，改 hitsOf 验「真值落地产物一条都不报」
+    expect(hitsOf(res, 'CODE-007')).toHaveLength(0)
+    expect(hitsOf(res, 'CODE-014')).toHaveLength(0)
     expect(blocksOf(res, 'CODE-025')).toHaveLength(0)
   })
 
-  it('反向：摘掉 backgroundTruth（vision colors[0] 主题蓝在场）→ CODE-007 转红', () => {
+  // 🛡️ 2026-11-17：007/014 转 WARN 后「转红」= 判据检出（hitsOf），不再产生 BLOCK。
+  it('反向：摘掉 backgroundTruth（vision colors[0] 主题蓝在场）→ CODE-007 仍检出（WARN）', () => {
     const factsNoTruth = JSON.parse(JSON.stringify(DESIGN_FACTS_GROUP_BACKDROP))
     factsNoTruth.root.backgroundTruth = { colors: [], source: 'figma-api' }
     const res = runVue3(
@@ -2532,10 +2538,11 @@ import icon1 from '../resources/images/icon-1.png'
         layoutStructure: { styles: { colors: ['rgba(3,98,166,1)'] } },
       },
     )
-    expect(blocksOf(res, 'CODE-007').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-007').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-007')[0].severity).toBe('WARN')
   })
 
-  it('反向：styleEvidence 全 false（旧 backdrop 漏网形态）→ CODE-014 转红', () => {
+  it('反向：styleEvidence 全 false（旧 backdrop 漏网形态）→ CODE-014 仍检出（WARN）', () => {
     const factsNoEvidence = JSON.parse(JSON.stringify(DESIGN_FACTS_GROUP_BACKDROP))
     factsNoEvidence.root.styleEvidence.border = { allowed: false, source: 'figma-api', evidenceCount: 0 }
     factsNoEvidence.root.styleEvidence.borderRadius = { allowed: false, value: null, source: 'figma-api' }
@@ -2543,10 +2550,11 @@ import icon1 from '../resources/images/icon-1.png'
       [{ path: 'package/index.vue', content: INDEX_VUE_TRUTHFUL }],
       { designFacts: factsNoEvidence },
     )
-    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014')[0].severity).toBe('WARN')
   })
 
-  it('反向：臆造 box-shadow（真值无阴影证据）→ CODE-014 仍 BLOCK', () => {
+  it('反向：臆造 box-shadow（真值无阴影证据）→ CODE-014 仍检出（WARN）', () => {
     const res = runVue3(
       [
         {
@@ -2559,6 +2567,57 @@ import icon1 from '../resources/images/icon-1.png'
       ],
       { designFacts: DESIGN_FACTS_GROUP_BACKDROP },
     )
-    expect(blocksOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014').length).toBeGreaterThan(0)
+    expect(hitsOf(res, 'CODE-014')[0].severity).toBe('WARN')
   })
+
+  it('🔴 eba2284f（2026-11-17）：autoFixPrefixViolations 只修 template 的 :class 对象键，绝不误伤 script 数据对象键', () => {
+    // 真机 mc-max-1794924930104-eba2284f：LLM 原始（cache）CHART_DATA 键=tunnel/bridge（正确），
+    // 但写盘产物变成 'c-traffic-monitor-tunnel' ⇒ activeTab='tunnel' 取不到 ⇒ data.actual render-error。
+    // 根因=classBindRegex 对整文件全局替换，误伤 <script setup> 数据对象。此用例锁死作用域闸门。
+    const compId = 'c-traffic-monitor-eba2284f'
+    const less = '.bridge,\n.tunnel { display: flex; }' // .tunnel{ 命中违规；.bridge, 不命中（后跟逗号）
+    const content = [
+      '<template>',
+      '  <div class="tunnel"></div>',
+      '</template>',
+      '<script setup>',
+      "const activeTab = ref('tunnel')",
+      'const CHART_DATA = {',
+      '  tunnel: { actual: [1], predict: [2] },',
+      '  bridge: { actual: [3], predict: [4] }',
+      '}',
+      'const data = CHART_DATA[activeTab.value] || CHART_DATA.tunnel',
+      '</script>',
+    ].join('\n')
+    const vueFiles = [{ path: 'package/components/ContentForecast.vue', content }]
+    const res = autoFixPrefixViolations(less, compId, vueFiles)
+    const out = res.vueFiles[0].content
+
+    // 阴阳对照①：template 的 class="tunnel" 属性仍被前缀化（原 P0 修复能力不丢）
+    expect(out).toContain('class="c-traffic-monitor-tunnel"')
+    // 阴阳对照②：script 数据对象键 / 访问处一字不动（新拦截；这是本 bug 的核心）
+    expect(out).toContain('  tunnel: { actual: [1], predict: [2] },')
+    expect(out).toContain('  bridge: { actual: [3], predict: [4] }')
+    expect(out).toContain('const data = CHART_DATA[activeTab.value] || CHART_DATA.tunnel')
+    expect(out).not.toContain("'c-traffic-monitor-tunnel': { actual")
+    // common.less 选择器仍照常前缀化（能力不丢）
+    expect(res.commonLess).toContain('.c-traffic-monitor-tunnel {')
+    expect(res.fixedClasses).toContain('tunnel')
+  })
+
+  it('🔴 eba2284f 反向对照：无 <template> 段时 script 数据键绝不被改写（作用域闸门 fail-safe）', () => {
+    const compId = 'c-traffic-monitor-eba2284f'
+    const less = '.tunnel { display: flex; }'
+    const content = [
+      '<script setup>',
+      'const CHART_DATA = { tunnel: { actual: [1] } }',
+      '</script>',
+    ].join('\n')
+    const vueFiles = [{ path: 'package/components/ContentForecast.vue', content }]
+    const res = autoFixPrefixViolations(less, compId, vueFiles)
+    expect(res.vueFiles[0].content).toBe(content) // 无 template 段 ⇒ classBindRegex 不跑 ⇒ script 零改写
+    expect(res.commonLess).toContain('.c-traffic-monitor-tunnel {')
+  })
+
 })

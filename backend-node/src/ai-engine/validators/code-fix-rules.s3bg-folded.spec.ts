@@ -112,8 +112,8 @@ describe('S3-BG 承载 div 尺寸：DOM 上零 inline px', () => {
     // DOM 上不得出现 inline 尺寸
     expect(out).not.toMatch(/<div[^>]*style="[^"]*(width|height)\s*:\s*\d+px/);
     expect(out).toContain('class="mc-bg-carrier-23660"');
-    // 尺寸真值进 less 规则
-    expect(out).toContain('.mc-bg-carrier-23660 { width:140px; height:74px; }');
+    // 尺寸真值进 less 规则（2026-11-17 起 carrier 脱离 flex 流：absolute 三件套 + 尺寸）
+    expect(out).toContain('.mc-bg-carrier-23660 { position:absolute; inset:0; pointer-events:none; width:140px; height:74px; }');
     // 背景仍是动态绑定（变量名可解析）
     expect(out).toContain("backgroundImage: 'url(' + bg1 + ')'");
   });
@@ -122,7 +122,7 @@ describe('S3-BG 承载 div 尺寸：DOM 上零 inline px', () => {
     const r = backstopMountBgOwnership(files, mkMapping('2:3660'));
     const out = r.files['package/index.vue'];
     expect(out).toContain('<style lang="less" scoped>');
-    expect(out).toContain('width:140px; height:74px; }');
+    expect(out).toContain('pointer-events:none; width:140px; height:74px; }');
     expect(out).not.toMatch(/style="width:\d+px/);
   });
 

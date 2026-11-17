@@ -111,10 +111,17 @@ describe('S5 · 产物空壳类禁止降级（2026-11-09 · a7b905d1 实锤）',
     ).toBe(true)
   })
 
-  it('RUNTIME-005 / RUNTIME-012 / RUNTIME-013 BLOCK → true（同属产物空壳）', () => {
-    for (const id of ['RUNTIME-005', 'RUNTIME-012', 'RUNTIME-013']) {
+  it('RUNTIME-005 / RUNTIME-012 BLOCK → true（同属产物空壳）', () => {
+    for (const id of ['RUNTIME-005', 'RUNTIME-012']) {
       expect(hasDeterministicRuntimeMissing({ issues: [{ id, severity: 'BLOCK' }] })).toBe(true)
     }
+  })
+
+  it('RUNTIME-013 即便 BLOCK 形态 → false（P0-3 已移出 PRODUCT_DEFECT：静态抽取非白屏硬伤）', () => {
+    // 防回退锚：若 013 被误加回 PRODUCT_DEFECT_RUNTIME_IDS，此断言变红。
+    expect(
+      hasDeterministicRuntimeMissing({ issues: [{ id: 'RUNTIME-013', severity: 'BLOCK' }] }),
+    ).toBe(false)
   })
 
   it('环境类 RUNTIME-001 / RUNTIME-002 即便 BLOCK → false（仍允许降级发布）', () => {

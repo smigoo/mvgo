@@ -358,21 +358,27 @@ export class AiConfigService {
     // figmaTokens 里有可用值就以 activeFigmaTokenId 命中的那个覆盖 figmaToken；
     // 全空时原样透传，历史单值继续生效（旧配置零漂移）。
     Object.assign(merged, applyFigmaTokenProjection(merged));
-    if (merged.modelMode === 'unified') {
-      // 统一模式：unified* 为唯一真相源，强制 vision*/text* 与之同源。
-      // 修复「UI 显示 gpt-5.5、生成却走 kimi」类脏数据：无论文件里 role 字段是否被
-      // 历史代码写成不同值，合并结果一律以 unified* 为准，杜绝三套字段漂移。
-      for (const role of ['vision', 'text']) {
-        merged[`${role}ApiKey`] = merged.unifiedApiKey;
-        merged[`${role}BaseURL`] = merged.unifiedBaseURL;
-        merged[`${role}Model`] = merged.unifiedModel;
-        merged[`${role}ProviderType`] = merged.unifiedProviderType;
-        merged[`${role}Temperature`] = merged.unifiedTemperature;
-      }
-    }
     // 🆕 降维：若配置为「模型库 + 槽位绑定」新结构，解析出完整 legacy 字段 + providers，
     // 保证下游 resolveVisionConfig/resolveTextConfig 零改动兼容（幂等，旧结构原样透传）。
     const result = resolveBindingToLegacy(merged);
+
+    // 🔴 2026-11-17 时序根治（统一模式 unified* → vision*/text* 同源）：
+    //    同源必须发生在降维**之后**。降维会用主模型（`models[].temperature` 等）把 unified*
+    //    重写一遍；若同源跑在此之前，vision*/text* 就停在「文件里的旧 unifiedTemperature」——
+    //    实测后果：`lite.service.ts:2480` 读 `aiCfg.visionTemperature` 得到陈旧值（如 0.9），
+    //    而 mc/max 读 `unifiedTemperature` 拿到主模型的 0 ⇒ 同一份配置两条链路温度分叉。
+    //    （`resolveVisionConfig/resolveTextConfig` 统一模式走 prefix='unified'，见
+    //    `ai-defaults.js:307`，本不受影响；这里修的是「同源」这条不变量本身。）
+    //    语义与原先一致：unified* 仍是唯一真相源，只是改为以「降维后的权威值」为准。
+    if (result.modelMode === 'unified') {
+      for (const role of ['vision', 'text']) {
+        result[`${role}ApiKey`] = result.unifiedApiKey;
+        result[`${role}BaseURL`] = result.unifiedBaseURL;
+        result[`${role}Model`] = result.unifiedModel;
+        result[`${role}ProviderType`] = result.unifiedProviderType;
+        result[`${role}Temperature`] = result.unifiedTemperature;
+      }
+    }
 
     // 🔒 用户配置隔离（2026-09-11）：当用户有自己的配置时，确保 providers 不为 null/undefined。
     // 如果用户的 models 为空或 binding 为空，resolveBindingToLegacy 不会生成 providers，

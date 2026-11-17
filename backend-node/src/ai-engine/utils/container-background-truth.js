@@ -357,6 +357,21 @@ export function resolveSectionPanel(secId, figmaIndex) {
   if (!sec) return null;
   const secArea = areaOf(sec.absoluteBoundingBox);
   if (!secArea) return null;
+  // 🛡️ 2026-11-17（刀37/42 图标宿主豁免 · mc-max-1794870481347-aa5a69cc 实锤）：
+  //   病灶：`1:385`（icon FRAME 28×28，唯一子 = VECTOR `1:386` 图标形状本体，面积比 0.636
+  //   ≥0.6）被当「面板底」⇒ 把 Vector 的黑色 fill `rgba(4,0,0,1)`（真值是**图标本体的形状
+  //   填色**，不是任何容器的底）写成宿主 inline `background`；而宿主在产物里是
+  //   `width:100%` 全宽容器 ⇒ 三条告警条目各被一条全宽黑条盖住正文，视觉保真 0.39 BLOCK。
+  //   判据缺口：本函数的目标域是「**段容器**的面板底」，从没有想把「图标宿主」纳入。
+  //   豁免判据（纯几何、命名无关、可辩驳）：**sec 自身最大边 ≤ 48px** ⇒ 图标量级，
+  //   不可能是段面板底（真值面板底全部 ≥ 段尺寸量级；48 阈值取刀51 图标 28px 系 ×1.7
+  //   裕度、低于最小真值面板底 50px）。⚠️ 刻意**不加**「子是 VECTOR 就豁免」——既有
+  //   夹具 card1/card2 的面板底本身就是大 VECTOR（265×76），加了对小图标之外还误杀
+  //   真面板底。面积比 ≥0.6 门槛对大 VECTOR 面板底照常生效，零影响。
+  //   fail-open 同向：拿不准（>48px）就不豁免，维持原判据。
+  const secW = Number(sec.absoluteBoundingBox?.width) || 0;
+  const secH = Number(sec.absoluteBoundingBox?.height) || 0;
+  if (Math.max(secW, secH) > 0 && Math.max(secW, secH) <= 48) return null;
   // 段自身是否横跨父级（判「面板必须 width:100%」，纯几何、命名无关）
   const parentEntry =
     entry.parentId != null ? figmaIndex.get(String(entry.parentId)) : null;
@@ -386,6 +401,52 @@ export function resolveSectionPanel(secId, figmaIndex) {
       fullWidth,
       ...(kind === 'gradient' ? { angleGuessed: !hasGradientHandles(child.fills) } : {}),
     };
+  }
+  // 🛡️ 2026-11-17（自身填充兜底形态 · mc-max-1794870462702-5401e49e 实锤立项）：
+  //   病灶：优质厂商段 12 张厂商卡（38:3168 FRAME 126×30，cornerRadius=6）的真值底色
+  //   `rgba(246,255,247,1)` 直接挂在**卡 FRAME 自身 fills**，子树只有 TEXT（无 GRAPHIC
+  //   面板底子层）⇒ 上面「子 GRAPHIC 层=面板底」判据找不到载体 ⇒ null ⇒ 产物卡全透明
+  //   （战略/普通段的卡底是独立子 RECTANGLE ⇒ 两段命中、优质段漏 —— 同稿三段两种形态）。
+  //   判据（纯几何 + 填充形态，命名无关）：子树**无任何 GRAPHIC 面板底命中**时，卡/容器
+  //   自身 fills 可见且非透明 ⇒ 它就是自身的面板底（self-bg 形态；Figma 卡 FRAME 直填
+  //   是常见画法）。安全边界：
+  //   ① 走到这里 = 子 GRAPHIC 判据已经全军覆没，不会与既有形态双写；
+  //   ② 透明填充（a=0）与不可见填充跳过（无真值不猜）；
+  //   ③ ≤48px 图标宿主豁免在上方已生效，本形态同受保护；
+  //   ④ 🔴 GRAPHIC_TYPES 自身（RECTANGLE/VECTOR 等）**不适用**本兜底 —— 它们是
+  //     「别人面板的底子层」，不是独立面板。dfe50968 基线回归实锤：`panel-gold-bg`
+  //     （RECTANGLE，子面板底）若再走 selfBg 会成为**第二个**发光 owner ⇒ 42-B 的
+  //     「唯一 owner」反查二义 ⇒ 全部 NoOwner（misplaced 2→0）。容器语义限 FRAME/GROUP。
+  if (!['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE'].includes(String(sec.type || '').toUpperCase())) {
+    return null;
+  }
+  const selfFills = Array.isArray(sec.fills) ? sec.fills : [];
+  const visibleFill = selfFills.find(
+    (f) =>
+      f &&
+      f.visible !== false &&
+      (f.type === 'SOLID' || f.type === 'GRADIENT_LINEAR' || f.type === 'GRADIENT_RADIAL') &&
+      !(f.type === 'SOLID' && Number(f.color?.a) === 0),
+  );
+  if (visibleFill) {
+    const css = fillsToCss([visibleFill]);
+    if (css) {
+      const kind = css.startsWith('linear-gradient') ? 'gradient' : 'solid';
+      const radii = Array.isArray(sec.rectangleCornerRadii)
+        ? sec.rectangleCornerRadii.filter((n) => Number.isFinite(Number(n))).map(Number)
+        : [];
+      const radius = Number(sec.cornerRadius) || (radii.length > 0 ? Math.max(...radii) : 0);
+      return {
+        css,
+        layerId: String(sec.id || ''),
+        kind,
+        radius,
+        shadow: effectsToBoxShadow(sec.effects),
+        fullWidth,
+        selfBg: true,
+        ...(kind === 'gradient' ? { angleGuessed: !hasGradientHandles([visibleFill]) } : {}),
+      };
+    }
   }
   return null;
 }

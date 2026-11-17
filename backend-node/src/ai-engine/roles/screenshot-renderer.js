@@ -47,10 +47,23 @@ const RUNTIME_BLOCK_IDS = new Set([
   'RUNTIME-009',
   'RUNTIME-011',
   'RUNTIME-012',
-  'RUNTIME-013',
+  // 🛡️ 2026-11-17 门禁二次评审 P0-3：RUNTIME-013 从 BLOCK 移出，降为 incremental。
+  //   static-fallback 产物「能打开但动态内容显示 {{ }} 模板语法」——是质量退化，
+  //   但不属「白屏/渲染崩溃」硬伤；且真机 0 命中、不在 retry-worthy 名单。
+  //   ⚠️ 必须同步：① emit severity→WARN（否则 fallback 仍 fail）；② 从
+  //   runtime-error-classifier.js 的 PRODUCT_DEFECT_RUNTIME_IDS 移出（否则 generate
+  //   链 hasDeterministicRuntimeMissing 仍硬 BLOCK）。两处缺一即降级无效。
   'RUNTIME-014',
   'RUNTIME-015',
-  'RUNTIME-016',
+  // 🛡️ 2026-11-17 用户授权：RUNTIME-016 从 BLOCK 移出，降为 incremental/WARN。
+  //   判据本身（collectTextOverlaps / X1-X3 豁免 / ratio>0.15）全保留、继续留痕计数；
+  //   但真机 13 单命中 13 单 failed，多数根因在管线段高推导（见
+  //   docs/2026-11-17-RUNTIME-016文本重叠根治方案.md），D2 回灌 3 轮白烧且越修越糟。
+  //   ⚠️ 降级生效需三处同步：① 此处移出 BLOCK；② emit 改 addWarn；③ phase2.js
+  //   textOverlapBlocked 判据加 severity==='BLOCK'（否则 WARN 仍被认作 blocked，
+  //   继续 D2 三轮 + fail-closed，降级完全失效）。
+  //   ⚠️ 已知代价：WARN 留痕不阻断，真叠字可能带缺陷出厂；真白屏类
+  //   (RUNTIME-006/012/CODE-023/SFC) 不受影响、仍硬 BLOCK。
   // 🛡️ 2026-11-15 T2-W（mc-max-1794680105142-4804ca47 折线图整图空白实锤）：
   // 图表父容器宽度塌成 0 → echarts.init 守卫短路、不抛错、无 canvas，静态门禁与
   // RUNTIME-004/009 全绿。判据见 evaluateChartRenderReality()，只吃真机 DOM 事实。
@@ -58,13 +71,27 @@ const RUNTIME_BLOCK_IDS = new Set([
   // 🛡️ 2026-11-15（mc-max-1794710719020-d8887ee9 副标题文字跑到右侧实锤）：
   // 内层标题组叠加外层分布语义类 ⇒ 文字被 space-between 推到最右。静态门禁与
   // VISUAL-002 像素分都无法归因，判据见 evaluateTitleGeometryReality()，只吃真机 DOM 几何。
-  'RUNTIME-018',
+  // 🛡️ 2026-11-17 门禁二次评审 P0-2：RUNTIME-018 从 BLOCK 移出，降为 incremental。
+  //   两项实证：① 真机 018 命中 5 单中 4 单 _runtimeGateDowngraded=true，generate 模式本就
+  //   fail-open 放行；② gate-retry-policy.spec.ts:143 断言「几何欠佳、不值得重试」——判死却
+  //   不给修复机会，口径相反。降级后带 WARN severity 落入 incremental_fix（generate 链
+  //   phase2.js:6897 仅 logger.warn 不阻断，revision 链 :3520 才驱动修复）。
+  //   ⚠️ 必须同步改下方 emit 的 severity 为 WARN；若沿用 addBlock 写死 BLOCK，会掉进
+  //   classifyRuntimeGate fallback(:304-311) 仍判 fail——VISUAL-002(:81-88) 同一教训。
 ])
 
 const RUNTIME_INCREMENTAL_IDS = new Set([
   'RUNTIME-007',
   'RUNTIME-008',
   'RUNTIME-010',
+  // 🛡️ 2026-11-17 P0-2：标题几何欠佳，留痕+不阻断（见上方 RUNTIME-018 移出注释）。
+  'RUNTIME-018',
+  // 🛡️ 2026-11-17 P0-3：static-fallback 静态抽取，降 incremental（见上方 RUNTIME-013 移出注释）。
+  'RUNTIME-013',
+  // 🛡️ 2026-11-17 用户授权：文本重叠降 incremental/WARN（见上方 RUNTIME-016 移出注释）。
+  //   落 incremental 而非静默丢弃 ⇒ revision 链仍会出修复指导（buildRuntimeRevisionGuidance），
+  //   只是不 fail-closed；根治靠段高方案，不靠这里硬拦。
+  'RUNTIME-016',
 ])
 
 // 🔴 2026-11-05 C3′ → **C2**（docs/2026-11-05-VISUAL-002门禁ReferenceError根因与G1G2真机验签.md §3.4 / §7.5）
@@ -753,6 +780,11 @@ async function renderViaPreviewPage({
   const addBlock = (id, category, message, evidence = {}) => {
     issues.push({ id, severity: 'BLOCK', category, message, evidence })
   }
+  // 🛡️ 2026-11-17 P0-2/P0-3：WARN emit helper。与 addBlock 同源，仅 severity 不同。
+  //   避免「移出 BLOCK 集合但仍写死 severity:'BLOCK' ⇒ fallback 仍 fail」陷阱（VISUAL-002 教训）。
+  const addWarn = (id, category, message, evidence = {}) => {
+    issues.push({ id, severity: 'WARN', category, message, evidence })
+  }
   const frontendUrl = await detectFrontendUrl()
   if (!frontendUrl) {
     addBlock('RUNTIME-001', 'navigation', '真实预览页不可达', { candidates: getFrontendCandidates() })
@@ -1027,14 +1059,17 @@ async function renderViaPreviewPage({
       addBlock('RUNTIME-006', 'blank-render', '组件已标记 ready，但没有可见根节点', previewState)
     }
     // 🛡️ RUNTIME-016 文本重叠门禁（2026-11-10 · 流量 6c12ab55 实锤，用户验收最痛点）：
-    //   stage 内自有文本节点 bbox 两两相交（交比>0.15）即 BLOCK——「客车 22350 叠在
+    //   stage 内自有文本节点 bbox 两两相交（交比>0.15）即检出——「客车 22350 叠在
     //   隧道/大桥标签上」类排版坍缩此前渲染成功即放行。evidence 带重叠对样本。
+    // 🛡️ 2026-11-17 用户授权降级 BLOCK→WARN：判据/evidence 全保留、继续留痕计数，
+    //   仅处置档位改 WARN（真机 13 单全 failed、D2 3 轮白烧，根治在段高方案）。
+    //   必须同步 phase2.js 的 textOverlapBlocked 加 severity 判定，否则降级无效。
     if (
       previewState.status === 'ready' &&
       Array.isArray(previewState.textOverlaps) &&
       previewState.textOverlaps.length > 0
     ) {
-      addBlock('RUNTIME-016', 'text-overlap', `真实预览存在 ${previewState.textOverlaps.length} 对文本节点重叠`, {
+      addWarn('RUNTIME-016', 'text-overlap', `真实预览存在 ${previewState.textOverlaps.length} 对文本节点重叠（非阻断：留痕，根治靠段高约束）`, {
         overlaps: previewState.textOverlaps,
       })
     }
@@ -1118,7 +1153,9 @@ async function renderViaPreviewPage({
         `bad=${titleReality.bad.length},verdict=${titleReality.verdict}`,
     )
     if (titleReality.shouldBlock) {
-      addBlock(
+      // P0-2（2026-11-17）：severity WARN（非 BLOCK），确保走 incremental_fix 而非 fallback fail。
+      // 判据本身（evaluateTitleGeometryReality / shouldBlock）不变，仅处置档位降级。
+      addWarn(
         'RUNTIME-018',
         'layout',
         `真实预览存在 ${titleReality.bad.length} 个标题组文字被分布布局推到右侧（左缘偏移 > 组宽 50%）`,
@@ -1791,19 +1828,27 @@ export async function renderScreenshot(params) {
         status: 'completed',
       })
 
+      // P0-3（2026-11-17）：static-fallback 从 BLOCK 降 WARN。
+      //   status + severity 必须同时改：status 留 BLOCK 会让 phase2.js:6769
+      //   `action==='fail' && status==='BLOCK'` 与 result 展示仍按硬阻断口径处理。
       return {
         renderedImage: screenshotPath,
         isStaticFallback: true,
         runtimeGate: {
-          status: 'BLOCK',
+          status: 'WARN',
           issues: [{
             id: 'RUNTIME-013',
-            severity: 'BLOCK',
+            severity: 'WARN',
             category: 'static-fallback',
-            message: '仅完成静态抽取，不能证明组件可在真实 Vue 运行时加载',
+            message: '仅完成静态抽取，不能证明组件可在真实 Vue 运行时加载（已按 P0-3 降为留痕告警，动态内容可能显示为模板语法）',
             evidence: { screenshotPath },
           }],
           isStaticFallback: true,
+          warning: {
+            code: 'RUNTIME_GATE_WARNING',
+            type: 'static-fallback',
+            message: '仅完成静态抽取，动态内容可能显示为模板语法，已留痕不阻断',
+          },
         },
       }
     } finally {

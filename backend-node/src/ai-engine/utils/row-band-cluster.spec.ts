@@ -201,3 +201,60 @@ describe('刀17b · crossAxisCenterStyle（横向容器交叉轴居中，6bba721
     expect(crossAxisCenterStyle([{ x: 0, y: 0, w: 0, h: 10 } as any], CONT)).toBe('')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ 顶层行带规划（2026-11-17 · mc-max-1794870462702-5401e49e 实锤立项）
+// 实锤：两统计卡横向并排（各 265×76 同 y）+ 三内容段纵向堆叠；旧顶层比例分支
+// 一律高度归一 ⇒ 两卡 Σgrow=0.176<1 各塌缩 51px、三段分母被行带污染底部空白 176px。
+// ─────────────────────────────────────────────────────────────────────────────
+import { planTopLevelBands } from './row-band-cluster.js'
+
+// 5401e49e 顶层 5 节点真实 bbox（slot-icon 796:3 直系子级）
+const E5401_TOP = [
+  { ref: '38:3282-在线设备卡', box: B(27229, 51483, 265, 76) },
+  { ref: '38:3260-合作厂商卡', box: B(26900, 51483, 265, 76) },
+  { ref: '38:3137-战略段', box: B(26894, 51592, 604, 161) },
+  { ref: '38:3162-优质段', box: B(26894, 51773, 604, 212) },
+  { ref: '38:3206-普通段', box: B(26894, 52005, 604, 265) },
+]
+
+describe('顶层行带规划 · planTopLevelBands', () => {
+  it('⭐ 阳性（5401e49e 复刻）：5 节点 ⇒ 4 带，首带 2 成员（两统计卡）', () => {
+    const r = planTopLevelBands(E5401_TOP)
+    expect(r).not.toBeNull()
+    expect(r!.bands.length).toBe(4)
+    expect(r!.bands[0].length).toBe(2)
+    // 行带成员按 x 升序：合作厂商卡(26900) 在前、在线设备卡(27229) 在后
+    expect(r!.bands[0][0].ref).toContain('38:3260')
+    expect(r!.bands[0][1].ref).toContain('38:3282')
+    expect(r!.bands[1].length).toBe(1)
+    expect(r!.bands[2].length).toBe(1)
+  })
+
+  it('阴性（纯纵流）：全部 y 错开 ⇒ null，逐字走旧路径', () => {
+    const verticalOnly = [
+      { ref: 'a', box: B(0, 0, 604, 100) },
+      { ref: 'b', box: B(0, 120, 604, 200) },
+      { ref: 'c', box: B(0, 340, 604, 80) },
+    ]
+    expect(planTopLevelBands(verticalOnly)).toBeNull()
+  })
+
+  it('阴性（单带全横行）：退化为 horizontal 管辖 ⇒ null', () => {
+    const oneRow = [
+      { ref: 'a', box: B(0, 0, 100, 76) },
+      { ref: 'b', box: B(120, 0, 100, 76) },
+    ]
+    expect(planTopLevelBands(oneRow)).toBeNull()
+  })
+
+  it('fail-open：任一盒缺失 ⇒ null', () => {
+    const withNull = [
+      { ref: 'a', box: B(0, 0, 100, 76) },
+      { ref: 'b', box: null as any },
+    ]
+    expect(planTopLevelBands(withNull)).toBeNull()
+    expect(planTopLevelBands([])).toBeNull()
+    expect(planTopLevelBands([{ ref: 'a', box: B(0, 0, 100, 76) }])).toBeNull()
+  })
+})

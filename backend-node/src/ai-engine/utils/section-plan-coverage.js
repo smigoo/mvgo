@@ -1377,3 +1377,136 @@ export function mergeAdjacentHeaderStrips({ sections, figmaNodeData } = {}) {
 
   return { sections, stats };
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * 🛡️ P0-8c（2026-11-17 · mc-max-1794870462702-5401e49e 实锤立项）：**同层重叠文本归属**。
+ *
+ * 病灶：弹窗顶部「两统计卡横向并排 + 卡面文本是父容器直接子级裸 TEXT」形态下——
+ *   ① E1 孤儿吸收轨（section-tree#collectOrphanTextKids）只在 `deriveSectionsFromFigmaTree`
+ *     内部执行；本单 vision 段锚点完备 → E1 不跑 → 吸收轨整段缺位；
+ *   ② P0-8b 只认「宽 ≥40px 标题条」→「33/66」数字（宽 28px）永无归属；
+ *   ③ 「合作厂商/在线设备」两标题条与两卡 y 完全重叠 → `nearestAnchorId` gap 平手
+ *     （都 = −37）→ 先遍历者独占（claimed 先占位）→ 另一条被「只留最近一条」挤掉
+ *     ⇒ 右卡错挂左卡标题、左卡文本全丢、数字全丢 ⇒ LLM 只能从文本池猜 ⇒ 两卡同文。
+ *
+ * 判据（纯几何，与 P0-8b 同一 `indexCoverageTree`、fail-open 同款）：
+ *   ① 未被任何段认领的 TEXT（characters 非空、有 bbox）；
+ *   ② 与某段锚点盒**重叠**（重叠面积 > 50% 文本自身面积）→ **精确归属**：
+ *      重叠比是 0/1 分布（左卡文本 overlap 左卡=1.0、右卡=0.0），天然无平手；
+ *      恰好一个段命中该条件才归属（≥2 段都 >0.5 ⇒ 脏数据，fail-open 不猜）；
+ *   ③ 处置与 P0-8b 同款最小动作：段无 `header.title` ⇒ 首个归属文本作标题（y 最小）；
+ *      文本 id 并进 `section.sourceNodeIds`（去重、不改锚点、不抬段盒——卡面文本本来
+ *      就在卡盒内，高度已含）。
+ *
+ * 幂等：归属过的 id 已在 sourceNodeIds ⇒ 再跑零增量。纯读树 + 补事实，不改结构。
+ */
+const ORPHAN_OVERLAP_RATIO = 0.5;
+
+export function absorbSiblingTextsIntoSections({ sections, figmaNodeData } = {}) {
+  const stats = { evaluated: 0, candidates: 0, absorbed: 0, titled: 0, detail: [] };
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return { sections: sections || [], stats };
+  }
+  const tree = indexCoverageTree(figmaNodeData);
+  if (!tree) return { sections, stats };
+  const { byId } = tree;
+
+  const boxOf = (id) => {
+    const b = byId.get(String(id))?.absoluteBoundingBox;
+    if (!b) return null;
+    const { x, y, width, height } = b;
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+    return { x, y, width, height };
+  };
+
+  // 段锚点表 + 已认领集合（与 P0-8b 同口径：figmaNodeId ?? id）
+  const anchors = [];
+  const claimed = new Set();
+  walkSections(sections, (s) => {
+    const id = String(s?.figmaNodeId ?? s?.id ?? '');
+    if (!id) return;
+    claimed.add(id);
+    const b = boxOf(id);
+    if (b) anchors.push({ id, box: b, section: s });
+  });
+  if (anchors.length === 0) return { sections, stats };
+
+  // 全树 TEXT 候选（未认领 + 非空文本 + 有盒）
+  const textCandidates = [];
+  for (const [id, node] of byId) {
+    if (claimed.has(id)) continue;
+    if (String(node?.type || '').toUpperCase() !== 'TEXT') continue;
+    const chars = String(node?.characters || '').trim();
+    if (!chars) continue;
+    const b = boxOf(id);
+    if (!b) continue;
+    textCandidates.push({ id, chars, box: b });
+  }
+  stats.candidates = textCandidates.length;
+  if (textCandidates.length === 0) return { sections, stats };
+
+  const overlapRatio = (t, a) => {
+    const ox = Math.min(t.x + t.width, a.x + a.width) - Math.max(t.x, a.x);
+    const oy = Math.min(t.y + t.height, a.y + a.height) - Math.max(t.y, a.y);
+    if (ox <= 0 || oy <= 0) return 0;
+    const area = t.width * t.height;
+    return area > 0 ? (ox * oy) / area : 0;
+  };
+
+  const bySection = new Map(); // sectionId → texts[]
+  for (const t of textCandidates) {
+    const hits = anchors.filter((a) => overlapRatio(t.box, a.box) > ORPHAN_OVERLAP_RATIO);
+    // 恰好一个段重度重叠才归属；≥2 段都 >0.5 ⇒ 文本骑缝（脏数据），fail-open 不猜。
+    if (hits.length !== 1) continue;
+    const owner = hits[0];
+    if (!bySection.has(owner.id)) bySection.set(owner.id, []);
+    bySection.get(owner.id).push(t);
+  }
+  if (bySection.size === 0) return { sections, stats };
+
+  walkSections(sections, (s) => {
+    const id = String(s?.figmaNodeId ?? s?.id ?? '');
+    const texts = bySection.get(id);
+    if (!texts || texts.length === 0) return;
+    stats.evaluated += 1;
+    const prevIds = Array.isArray(s?.sourceNodeIds) ? s.sourceNodeIds : [];
+    let added = 0;
+    for (const t of texts) {
+      if (!prevIds.includes(t.id)) {
+        s.sourceNodeIds = [...(Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds : []), t.id];
+        added += 1;
+      }
+    }
+    // 标题：段无 header.title ⇒ 取归属文本中 y 最小（阅读序首行）作标题。
+    const noTitle = !s?.header || !String(s.header.title || '').trim();
+    if (noTitle) {
+      const first = [...texts].sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)[0];
+      if (first) {
+        s.header = { ...(s.header && typeof s.header === 'object' ? s.header : {}), title: first.chars };
+        stats.titled += 1;
+      }
+    }
+    // 文本项下发通道：写 `body.items`（vision 同义字段，section-tree#formatOne 的
+    //   tabsNote ② 回退通道直接消费）—— 阅读序（y→x）、最多 8 项、每项 ≤24 字符。
+    //   只在段尚无 items/children 文本载体时补（不覆盖 vision 已声明的内容）。
+    const hasBodyTexts =
+      (Array.isArray(s?.body?.items) && s.body.items.length > 0) ||
+      (Array.isArray(s?.body?.children) && s.body.children.length > 0);
+    if (!hasBodyTexts && texts.length > 0) {
+      const ordered = [...texts]
+        .sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)
+        .slice(0, 8)
+        .map((t) => ({ text: t.chars.slice(0, 24) }));
+      s.body = { ...(s.body && typeof s.body === 'object' ? s.body : {}), items: ordered };
+    }
+    stats.absorbed += added;
+    stats.detail.push({
+      sectionId: id,
+      texts: texts.map((t) => t.chars.slice(0, 12)),
+      added,
+      titled: noTitle ? true : undefined,
+    });
+  });
+
+  return { sections, stats };
+}

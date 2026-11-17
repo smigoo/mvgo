@@ -106,10 +106,61 @@ export function extractOverlapAnchors(pairs) {
 }
 
 const OP_HEAL_MARK = '/* op-heal */';
+const OP_HEAL_C2_MARK = '/* op-heal-c2 */';
 
 /** 类名转正则安全串 */
 function escCls(cls) {
   return String(cls).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 🛡️ 方案 B（2026-11-17 · RUNTIME-016 根治兜底，触发样本 mc-max-1794884228303-7f6a9d00）：
+ *   动作 C 原路径只认链上 `position:absolute + top:Npx` 的定位祖先（0062020b 同位压盖），
+ *   本单两段（sech-2 表格 / sech-3 footer）全是 `position:relative` 的 flex 段，无 top 可改
+ *   ⇒ 原路径每轮 cross-parent-no-pos-ancestor skipped，三轮白烧。
+ *   修正版不注入无效的 margin/padding（会被 min-height:0 吸收或更糟），而是对链上
+ *   `position:relative` 且 min-height 被压穿的段注入 `min-height:auto !important`：
+ *   CSS 原生 min-content 下界让段不被压得比内容矮，与方案 A 的 less 源头改动同治本方向，
+ *   但作用在写盘出口、覆盖 A 够不到的形态（inline carrier 段 / LLM 重试重写 min-height:0）。
+ *   !important 压过模板 inline 的 `min-height:0`（class 规则默认低于 inline）。
+ *
+ *   判据（缺一不注入，不瞎改）：① cross-parent 真重叠（调用方保证 overlapHeight>0）；
+ *   ② 原 absolute+top 路径两链都解析不到（调用方在 !posA||!posB 分支调用）；
+ *   ③ token 拆点后的 class 在文件模板里真实出现；④ 该 class 规则含 position:relative；
+ *   ⑤ 🔴该规则带确定性段高声明 `flex:N 1 0 !important`（=方案 A 注入的 sech 段）——
+ *     这是与 0062020b 的关键分界：那个病灶的根 slot-con 只是 `height:100%` 的普通相对
+ *     容器，没有 flex 段高规则，不能当"被压穿的段"注入，否则误伤原 absolute 路径降级形态；
+ *   ⑥ 当前 min-height 非 auto/max-content/fit-content（已是下界则不动）；⑦ 幂等标记。
+ *   复合 class token（如 `c-device-footer.c-device-sech-3`）按 '.' 拆成单个类逐个尝试。
+ *
+ * @returns {{styleText:string}|null} 命中返回新 styleText，否则 null（调用方记 skipped）
+ */
+function healRelativeBandCollapse(cp, styleText, content, fileHeals) {
+  const tokens = [...(cp.chainA || []), ...(cp.chainB || [])];
+  // ⑤ 确定性段高规则判据（本单 sech 段形态 flex:N 1 0 !important；0062020b slot-con 无）
+  const SEGMENT_FLEX_RE = /flex\s*:\s*[\d.]+\s+1\s+0\s*!important/;
+  let patched = styleText;
+  let hit = false;
+  for (const token of tokens) {
+    for (const cls of String(token || '').split('.').filter(Boolean)) {
+      if (!new RegExp(`\\b${escCls(cls)}\\b`).test(content)) continue;
+      const rule = findRule(patched, cls);
+      if (!rule) continue;
+      if (!/position\s*:\s*relative/.test(rule.declBody)) continue;
+      if (!SEGMENT_FLEX_RE.test(rule.declBody)) continue; // ⑤ 只治被压穿的确定性段
+      if (/min-height\s*:\s*(auto|max-content|fit-content)/.test(rule.declBody)) continue;
+      if (rule.declBody.includes(OP_HEAL_C2_MARK)) continue; // 幂等
+      const inject = ` min-height: auto !important; ${OP_HEAL_C2_MARK}`;
+      patched = patched.slice(0, rule.bodyStart) + inject + patched.slice(rule.bodyStart);
+      fileHeals.push({
+        cls,
+        action: 'relative-band-min-height-auto',
+        detail: `段 .${cls} 注入 min-height:auto !important（避免压穿内容，避让重叠 ${Math.round(cp.overlapHeight)}px）`,
+      });
+      hit = true;
+    }
+  }
+  return hit ? { styleText: patched } : null;
 }
 
 /** 提取 <style ...>...</style> 文本（第一个块； scoped less 同样适用） */
@@ -279,7 +330,15 @@ export function applyOverlapProofHeal(files, anchors, logger) {
       const posA = resolvePosAncestor(cp.chainA);
       const posB = resolvePosAncestor(cp.chainB);
       if (!posA || !posB) {
-        skipped.push({ path, reason: 'cross-parent-no-pos-ancestor' });
+        // 🛡️ 方案 B 兜底（2026-11-17）：relative 段无 absolute+top，原路径治不了；
+        //   改对链上 relative 段注入 min-height:auto !important，让段不被压穿内容。
+        //   命中则 styleText 已被注入（幂等标记 op-heal-c2），否则才记原 skipped。
+        const band = healRelativeBandCollapse(cp, styleText, content, fileHeals);
+        if (band) {
+          styleText = band.styleText;
+        } else {
+          skipped.push({ path, reason: 'cross-parent-no-pos-ancestor' });
+        }
         continue;
       }
       if (posA.cls === posB.cls) continue; // 同一定位容器 ⇒ 非兄弟压盖

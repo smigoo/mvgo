@@ -69,7 +69,9 @@ describe('装配层 flex 样式禁止 inline 尺寸（px2rem 约束）', () => {
 
   it('S4 分母覆盖仍生效（比例口径，非 px）', () => {
     expect(flexItemStyleFromWidths([98, 173], 0, 292)).toBe('flex:0.336;min-width:0;')
-    // 纵向分母 = Σh + Σgap：131/(686+60)
+    // 分母覆盖参数仍可用（本例 746 = 686+60 是历史「Σh+Σgap」口径的调用形态）。
+    // ⚠️ F1（2026-11-17）后管线实际传的纵向分母是 **Σh**（Σgrow=1 填满容器，见
+    //   code-generator.js#__bandDen/__topDen）；此处只钉「覆盖参数生效」，不代表管线口径。
     expect(flexItemStyleFromHeights(H, 2, 746)).toBe(`flex:${(131 / 746).toFixed(3)};min-height:0;`)
   })
 })

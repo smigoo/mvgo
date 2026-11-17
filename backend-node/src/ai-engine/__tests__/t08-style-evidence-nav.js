@@ -1,8 +1,9 @@
 /**
  * T08: styleEvidence 硬性门禁（CODE-014）+ 导航必含 section（P0 修复）
  *
- * - CODE-014：designFacts.root.styleEvidence 某项 allowed:false 时，根容器严禁生成该装饰，
- *   否则 L0-B BLOCK（违反重生成）。验证「有证据可生成 / 无证据臆造即 BLOCK / transparent 不误杀」。
+ * - CODE-014：designFacts.root.styleEvidence 某项 allowed:false 时，根容器严禁生成该装饰。
+ *   2026-11-17 降级 BLOCK→WARN（判据保留）：验证「有证据可生成 / 无证据臆造仍检出但 WARN /
+ *   transparent 不误杀」。真机 78 单仅 1 命中且 completed 未阻断。
  * - nav-section：detectNavSignal + injectNavSectionIfMissing 确保导航进入 effectiveSections。
  */
 import { test } from 'node:test'
@@ -61,17 +62,16 @@ function runCode014(figmaNodeData, rootStyleBody) {
   })
 }
 
-test('CODE-014: 根容器臆造背景/圆角/阴影 → BLOCK（styleEvidence 全 false）', () => {
+test('CODE-014: 根容器臆造背景/圆角/阴影 → 仍检出但 WARN（styleEvidence 全 false）', () => {
   const res = runCode014(EMPTY_FIGMA, `  background: #edf4fb;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   border-radius: 6px;`)
   const c014 = res.issues.find((i) => i.id === 'CODE-014')
-  assert.ok(c014, '应产生 CODE-014 BLOCK')
-  assert.equal(c014.severity, 'BLOCK')
+  assert.ok(c014, '应仍检出 CODE-014')
+  assert.equal(c014.severity, 'WARN')
   assert.ok(/background/.test(c014.message))
   assert.ok(/box-shadow/.test(c014.message))
   assert.ok(/border-radius/.test(c014.message))
-  assert.equal(res.pass, false)
 })
 
 test('CODE-014: 根容器有 Figma 证据（allowed:true）即使生成装饰也不误杀', () => {

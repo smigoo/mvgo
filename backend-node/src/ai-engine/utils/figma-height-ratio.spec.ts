@@ -1323,7 +1323,7 @@ describe('①-γ id 部分命中 + 剩余区域兜底（2026-11-04 治本 · 4cb
     expect(sections.some((s: any) => s.styles.figmaHeightPx === 28)).toBe(false)
   })
 
-  it('阴性（等量纪律）：剩余区域数 ≠ 未命中段数 ⇒ 不采纳，退回 ②（不猜）', () => {
+  it('阴性（等量纪律）：剩余区域数 ≠ 未命中段数 ⇒ ①-γ 不采纳；② 只对真实段配对（自造段不占位）', () => {
     const sections: any[] = [
       { id: '2:7889', name: '标签切换栏' },
       { id: '89:43', name: '操作按钮' },
@@ -1335,9 +1335,26 @@ describe('①-γ id 部分命中 + 剩余区域兜底（2026-11-04 治本 · 4cb
     applyFigmaSectionRatios(sections, cpEnvMonitor(), stats)
     expect(stats.idDirectLeftover).toBe(0)
     expect(stats.idDirectLeftoverMiss).toBe(1)
-    // ② 路径原样生效（展开 sub-t 后 5 图元 == 5 sections），证明 ①-γ 未越权接管
-    expect(stats.order).toBe(5)
-    expect(sections[0].styles.figmaHeightPx).toBe(28) // header 28.09 → ② 路径的结果
+    // 🛡️ 2026-11-17 语义修订（mc-max-1794845329435-4cac37a8 环境监测实锤）：自造段
+    //   （id 不在 Figma 树且未标 anchorValid）不再占据 ② 对位序列——旧语义「② 用全量
+    //   restSections 对位」正是环境监测图表塌陷的病灶（chart 段被挤错位拿图例 14px、
+    //   160px canvas 被 overflow:hidden 裁掉 ⇒ 用户报「echarts 没生成」）。
+    //   新语义：syntheticSectionsExcluded=2（chart-section + extra-section），
+    //   ② 只对 3 个真实段 1:1（剔除 ① 消费的 89:42 后 regions 剩 [header(28), chart(113)]，
+    //   归并对位 [2:7889←27, 89:43←24, 2:7949←14]? 不——①-α 已消费 89:42 区域，
+    //   剩余 region 按 y 视觉序 [header 28, @echarts 113] 与 realRest=[2:7889, 89:43, 2:7949]
+    //   数量不等 ⇒ ①-γ 等量纪律拦截后由 ② 消费真实段。此处只断言关键事实：
+    //   自造段不写比例、真实段拿到 Figma 真值、计数行打点正确。
+    expect(stats.syntheticSectionsExcluded).toBe(2)
+    // 自造段不得拿到任何 Figma 高度真值（不参与对位 = 不被错配）
+    const chartSection = sections.find((s: any) => s.id === 'chart-section')
+    const extraSection = sections.find((s: any) => s.id === 'extra-section')
+    if (chartSection?.styles) expect(chartSection.styles.figmaHeightPx).toBeUndefined()
+    if (extraSection?.styles) expect(extraSection.styles.figmaHeightPx).toBeUndefined()
+    // 真实段拿到真值（不再错位）
+    const px = sections.map((s: any) => s.styles?.figmaHeightPx)
+    expect(px).toContain(113) // 图表段拿到整图高度（不再错拿图例 14px）
+    expect(px).not.toContain(8) // 旧错位形态（图例 8px 级）不得出现
   })
 
   it('阴性（证据门槛）：id 命中 < 2 段 ⇒ 不启用 ①-γ（孤例不猜）', () => {

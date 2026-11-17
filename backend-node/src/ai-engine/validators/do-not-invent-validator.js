@@ -27,6 +27,17 @@
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
 import { indexFigmaNodes } from '../utils/section-tree.js'
 import { resolveAllChartMounts } from '../utils/chart-mount-truth.js'
+import { findMissingChartTypes, findChartHolderFile } from '../utils/chart-missing-types.js'
+import {
+  normalizeChartType,
+  collectChartSeriesTypes,
+  collectTextCarriedChartTypes,
+} from '../utils/chart-type-detection.js'
+export {
+  normalizeChartType,
+  collectChartSeriesTypes,
+  collectTextCarriedChartTypes,
+}
 
 export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData = null } = {}) {
   const issues = []
@@ -56,11 +67,13 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
     const hasTo = text.includes(to) || vueContent.includes(to)
     // 分析明确是 from，生成却只有 to（没有 from）→ 视为篡改
     if (hasTo && !hasFrom) {
-      const msg = `核心文案被篡改：分析证据为「${from}」，生成代码出现「${to}」`
+      // 🛡️ 2026-11-17 质量门禁放行策略（用户指令「能运行就放行+写清具体问题」）：
+      //    文案不符是质量瑕疵、产物仍能运行，降 WARN 留痕不再阻断交付。判据/message/snippet 全保留。
+      const msg = `（非阻断：质量留痕）核心文案被篡改：分析证据为「${from}」，生成代码出现「${to}」`
       if (!seen.has(msg)) {
         seen.add(msg)
         issues.push({
-          severity: 'BLOCK',
+          severity: 'WARN',
           id: 'DO-NOT-INVENT-TEXT',
           message: msg,
           file: 'package/index.vue',
@@ -113,40 +126,40 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
   // vision 识别到某类型图表，但产物全文件（含子组件）里没有对应类型的 echarts series。
   // 例：vision 有 doughnut，LLM 拆组件时漏写 template 图表容器（chartRef），script 的
   // echarts.init 成死代码 → 最终产物看不到图。旧版只扫 index.vue，查不到这种缺失。
+  // 🛡️ 2026-11-17 判据单一来源：组装逻辑抽至 utils/chart-missing-types.js，
+  //    门禁（本处）与生成侧 N2 兜底共用同一函数，杜绝「门禁报缺、N2 判有」的口径漂移。
+  //    豁免（2026-11-09 · 00f3626c 实锤）：文字数字卡承载的图表类型不判缺失——
+  //    vision chart.section 的 Figma 子树内有 TEXT 节点即视为已被文字形态承载。
+  //    防线保留：子树无 TEXT 且产物无对应 series ⇒ 仍判缺失。
   if (analysisCharts.length > 0) {
-    const requiredTypes = new Set(
-      analysisCharts
-        .map((c) => normalizeChartType(c?.type))
-        .filter((t) => t !== null),
-    )
-    const generatedTypes = collectChartSeriesTypes(vueContent)
-    // echarts 的 series 对象缺省 type 时默认为 'line'：vision 说 line 时，
-    // 产物只要有任意 series 声明（即便未显式写 type:'line'）即视为满足。
-    const hasSeriesDecl = /series\s*:\s*\[/.test(vueContent)
-    // 🛡️ 豁免（2026-11-09 · mc-max-1794208722463-00f3626c 实锤，Figma 真值裁决）：
-    //   「文字数字卡承载」——vision 把「装饰性矢量环（ELLIPSE+arcData 静态弧段）+
-    //   数字 TEXT 卡（客车 66109/货车 16270）」识别为 pie 图表，LLM 用底图+数字行
-    //   形态等价还原 ⇒ 强行要求 echarts pie series 是判据域误伤（该 BLOCK 杀死本单）。
-    //   判据（确定性、与图层命名无关）：vision chart.section 的 Figma 子树内存在
-    //   TEXT 节点（数据以文字形态在场）⇒ 该类型视为已被文字形态承载，不判缺失。
-    //   防线保留：子树无 TEXT 且产物无对应 series ⇒ 仍 BLOCK（真缺失）。
-    const carriedByText = collectTextCarriedChartTypes(analysisCharts, analysisFigmaIndex)
-    for (const t of requiredTypes) {
-      const satisfied =
-        generatedTypes.has(t) ||
-        (t === 'line' && hasSeriesDecl) ||
-        carriedByText.has(t)
-      if (!satisfied) {
-        const msg = `图表类型缺失：视觉分析识别到「${t}」类型图表，但产物代码中没有任何对应类型的 echarts series（图表容器/初始化可能漏写）`
-        if (!seen.has(msg)) {
-          seen.add(msg)
-          issues.push({
-            severity: 'BLOCK',
-            id: 'DO-NOT-INVENT-CHART-MISSING',
-            message: msg,
-            file: 'package/index.vue',
-          })
-        }
+    const { missing } = findMissingChartTypes({
+      charts: analysisCharts,
+      vueContent,
+      figmaIndex: analysisFigmaIndex,
+    })
+    for (const { type: t, chart } of missing) {
+      // 🛡️ 2026-11-17 可观测性改造：WARN 写清「哪个文件/哪个段/缺什么类型」。
+      //    只改报告文案 + file 字段——判据仍由 findMissingChartTypes 决定，零注入、不动产物。
+      //    承载文件定位复用 2.7 段 G12b 同源的 findChartHolderFile；找不到 ⇒ fail-open
+      //    保留原默认（file=index.vue、message 注明未定位），绝不丢 WARN、不虚构位置。
+      const holder = findChartHolderFile(files, chart?.section)
+      const sid = chart?.section != null ? String(chart.section) : ''
+      const where = holder
+        ? `承载文件 ${holder.path} 的 ${sid} 段`
+        : sid
+          ? `${sid} 段（未定位到承载文件）`
+          : '未标注段（未定位到承载文件）'
+      // 🛡️ 2026-11-17 质量门禁放行策略：图表类型缺失=视觉瑕疵、组件仍能运行，降 WARN 留痕。
+      const msg = `（非阻断：质量留痕）图表类型缺失：视觉分析识别到「${t}」类型图表（${where}），但产物代码中没有任何对应类型的 echarts series（图表容器/初始化可能漏写）`
+      if (!seen.has(msg)) {
+        seen.add(msg)
+        issues.push({
+          severity: 'WARN',
+          id: 'DO-NOT-INVENT-CHART-MISSING',
+          message: msg,
+          file: holder ? holder.path : 'package/index.vue',
+          _sectionId: sid || null,
+        })
       }
     }
   }
@@ -165,11 +178,11 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
     const normT = normalizeChartType(c?.type)
     const sid = c?.section != null ? String(c.section) : ''
     if (!normT || !sid) continue
-    const holder = Object.entries(files).find(
-      ([p, v]) => typeof v === 'string' && /\.vue$/.test(p) && v.includes(`data-section-id="${sid}"`),
-    )
+    // 🛡️ 2026-11-17：定位逻辑抽至 findChartHolderFile 与 2.5 段同源，判据逐字等价（第一个含
+    //    data-section-id="<sid>" 的 .vue）。纯重构，2.7 段 message/file/severity 全不变。
+    const holder = findChartHolderFile(files, sid)
     if (!holder) continue
-    const [holderPath, holderContent] = holder
+    const { path: holderPath, content: holderContent } = holder
     const holderTypes = collectChartSeriesTypes(holderContent)
     const holderHasDecl = /series\s*:\s*\[/.test(holderContent)
     const satisfied = holderTypes.has(normT) || (normT === 'line' && holderHasDecl)
@@ -217,11 +230,13 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
   const mountMissing = mountVerdicts.missing
   if (mountMissing.length > 0) {
     for (const { path, refName, kind } of mountMissing) {
-      const msg = `echarts 挂载点缺失：${path} 的 script 调用了 echarts.init(${refName}.value)，但 template 中没有 <div ref="${refName}"> 挂载点 —— 图表永远无法渲染`
+      // 🛡️ 2026-11-17 质量门禁放行策略（本轮触发点 dce6cbac）：挂载点缺失=图表不渲染，
+      //    但组件其余部分能运行，降 WARN 留痕；写盘前 chart-mount-healer 仍会尝试自愈。
+      const msg = `（非阻断：质量留痕）echarts 挂载点缺失：${path} 的 script 调用了 echarts.init(${refName}.value)，但 template 中没有 <div ref="${refName}"> 挂载点 —— 图表无法渲染`
       if (!seen.has(msg)) {
         seen.add(msg)
         issues.push({
-          severity: 'BLOCK',
+          severity: 'WARN',
           id: 'DO-NOT-INVENT-CHART-MOUNT-MISSING',
           message: msg,
           file: path,
@@ -369,88 +384,8 @@ export function countDataPoints(vueContent) {
   return max === 0 ? null : max
 }
 
-/**
- * 把 vision 的图表 type 归一化为 echarts 语义的 category。
- *
- * vision 会输出 pie/doughnut/donut/bar/line/area/multiple 等；echarts 里 doughnut=pie 的子类，
- * area 本质是 line+areaStyle。归一化后用于「图表类型缺失」检查：
- * - pie / doughnut / donut → 'pie'
- * - bar / column → 'bar'
- * - line / area → 'line'
- * - 其余无法归一化的（multiple/空/未知）→ null（跳过检查，避免误伤）
- */
-export function normalizeChartType(type) {
-  const t = String(type || '').trim().toLowerCase()
-  if (!t) return null
-  if (/pie|doughnut|donut|ring|环形|饼图/.test(t)) return 'pie'
-  if (/bar|column|柱状|柱形/.test(t)) return 'bar'
-  if (/line|area|curve|折线|曲线|面积/.test(t)) return 'line'
-  if (/radar|雷达/.test(t)) return 'radar'
-  if (/gauge|仪表/.test(t)) return 'gauge'
-  if (/scatter|散点/.test(t)) return 'scatter'
-  return null
-}
-
-/**
- * 收集产物代码中所有 echarts series 的 type 归一化集合。
- *
- * 扫描全产物（含子组件），提取 `type: 'pie'` / `type: "bar"` 等 series 声明，
- * 归一化后返回 Set。用于「图表类型缺失」检查——vision 有某类型、产物无该类型 → BLOCK。
- *
- * 注意：series 数组内每个对象都可能有 type 字段；也兼容旧式单 series 直写 type。
- */
-export function collectChartSeriesTypes(vueContent) {
-  const types = new Set()
-  if (!vueContent || typeof vueContent !== 'string') return types
-  // 匹配 series 对象内的 type: 'xxx'（含双引号/单引号）
-  const typeRe = /type\s*:\s*['"]([a-zA-Z]+)['"]/g
-  let m
-  while ((m = typeRe.exec(vueContent)) !== null) {
-    const norm = normalizeChartType(m[1])
-    if (norm) types.add(norm)
-  }
-  return types
-}
-
-/**
- * 「文字数字卡承载」图表类型集合（豁免判据，2026-11-09 · 00f3626c 实锤）。
- *
- * vision chart.section 的 Figma 子树内存在 TEXT 节点（数据以文字形态在场，
- * 如「客车 66109 / 货车 16270」数字卡）⇒ 该图表已被文字形态承载，
- * 不要求产物必须有对应 echarts series（与图层命名无关，只认结构与类型）。
- *
- * @param {Array} charts vision charts（{section, type}）
- * @param {Map|null} figmaIndex indexFigmaNodes 产物；null ⇒ 空集（fail-open 不豁免）
- * @returns {Set<string>} 归一化类型集合
- */
-export function collectTextCarriedChartTypes(charts, figmaIndex) {
-  const out = new Set()
-  const idx = figmaIndex && typeof figmaIndex.get === 'function' ? figmaIndex : null
-  if (!idx) return out
-  for (const c of Array.isArray(charts) ? charts : []) {
-    const normT = normalizeChartType(c?.type)
-    const sid = c?.section != null ? String(c.section) : ''
-    if (!normT || !sid) continue
-    const hit = idx.get(sid)
-    const raw = hit?.rawNode
-    if (!raw) continue
-    if (subtreeHasNumericText(raw, 0)) out.add(normT)
-  }
-  return out
-}
-
-/** 子树内是否存在含数字的 TEXT 节点（深度限 8；characters 缺失时按 TEXT 存在计） */
-function subtreeHasNumericText(node, depth) {
-  if (!node || typeof node !== 'object' || depth > 8) return false
-  if (String(node.type) === 'TEXT') {
-    const chars = node.characters
-    if (chars == null || /\d/.test(String(chars))) return true
-  }
-  for (const c of node.children || []) {
-    if (subtreeHasNumericText(c, depth + 1)) return true
-  }
-  return false
-}
+// 🛡️ 2026-11-17 判据单一来源：三个底层纯函数已下沉到 utils/chart-type-detection.js，
+//    本文件顶部 import + re-export（对外 API 与既有 spec import 路径零变更）。
 
 /**
  * 检测「echarts.init 存在但 template 无对应 ref 挂载点」的假阳性图表。

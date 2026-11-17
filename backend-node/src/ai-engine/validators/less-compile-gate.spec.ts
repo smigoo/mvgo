@@ -213,6 +213,51 @@ describe('LessCompileGate.validateDirectory', () => {
     expect(blocks[0].line).toBe(6)
     expect(blocks[0].importedFrom).toBeNull()
   })
+
+  it('Vue3 Lite SFC gate blocks microcode-only undefined theme variables', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      '<template><div /></template>\n<style lang="less">.panel { background: @colorBgPanel; }</style>',
+      'utf-8',
+    )
+
+    const result = await LessCompileGate.validateVue3SfcDirectory(root)
+
+    expect(result.ok).toBe(false)
+    expect(result.checkedFiles).toBe(1)
+    expect(result.checkedStyles).toBe(1)
+    expect(result.diagnostics[0].file).toBe('package/index.vue')
+    expect(result.diagnostics[0].message).toContain('@colorBgPanel')
+  })
+
+  it('Vue3 Lite SFC gate accepts local LESS variables and in-output relative imports', async () => {
+    await mkdir(join(root, 'package', 'styles'), { recursive: true })
+    await writeFile(join(root, 'package', 'styles', 'tokens.less'), '@panel: #fff;\n', 'utf-8')
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      '<template><div /></template>\n<style lang="less">@import "./styles/tokens.less"; .panel { background: @panel; }</style>',
+      'utf-8',
+    )
+
+    const result = await LessCompileGate.validateVue3SfcDirectory(root)
+
+    expect(result).toMatchObject({ ok: true, checkedFiles: 1, checkedStyles: 1, diagnostics: [] })
+  })
+
+  it('Vue3 Lite SFC gate blocks imports escaping the output directory and ignores plain CSS styles', async () => {
+    await writeFile(join(root, 'outside.less'), '@colorBgPanel: #fff;\n', 'utf-8')
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      '<template><div /></template>\n<style>.panel { color: red; }</style>\n<style lang="less">@import "../../outside.less";</style>',
+      'utf-8',
+    )
+
+    const result = await LessCompileGate.validateVue3SfcDirectory(root)
+
+    expect(result.ok).toBe(false)
+    expect(result.checkedStyles).toBe(1)
+    expect(result.diagnostics[0].message).toContain('越出 Lite Vue3 产物目录')
+  })
 })
 
 describe("rebalanceBlockComments（2026-10-15 · a715fafc B 降级配套）", () => {

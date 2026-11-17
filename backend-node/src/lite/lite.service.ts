@@ -5,7 +5,7 @@ import { ComponentService } from '../component/component.service';
 import { TokenTrackerService } from '../token-usage/token-tracker.service';
 import { AiConfigService } from '../config/config.service';
 import { QuotaService } from '../quota/quota.service';
-import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
+import { TaskCodeSnapshotService, TaskCodeSnapshotValidation } from '../tasks/task-code-snapshot.service';
 import { GenerateLiteDto } from './dto/generate-lite.dto';
 // 🆕 2026-10-12 N 主题：Lite 侧的主题装配（槽位名与规范一致，只扩套数）
 import type { LiteThemeEntry } from '../lite/utils/lite-multi-theme';
@@ -95,6 +95,7 @@ import { zhToSemanticEn, buildComponentId, normalizeUserComponentId } from '../a
 // 🛡️ 2026-09-11 治本（LESS 编译竞态）：发布前对 outputPath 跑 Less 变量完整性检查器，
 // 把"被使用但未定义"的变量补进 theme-vars.less 的 .common()，保证候选快照自带可编译 LESS。
 import { LessVariableChecker } from '../ai-engine/validators/less-variable-checker.js';
+import { LessCompileGate } from '../ai-engine/validators/less-compile-gate.js';
 import { resolvePrivateGroupId as resolvePrivateGroupIdCore } from '../common/group-resolver';
 // 动态导入 ESM 模块（workspace-preview-publisher.js 依赖 ESM 的 logger）
 const loadPreviewPublisher = () => import('../ai-engine/utils/workspace-preview-publisher.js');
@@ -2894,7 +2895,8 @@ ${userAddendum}${buildOddEvenHintSection(brief.oddEvenHints)}
     同时：grid/flex 中任何内容可能超过可用高度的容器（列表、网格、侧边栏导航）都必须成对写 \`min-height: 0\` + \`overflow-y: auto\`，**禁止内容把外层画布（height:100% 的根容器）撑出滚动/被裁切**。判定标准：根容器自身 scrollHeight 不得大于其 clientHeight。
 13. **主题颜色规范（强制，防 THEME-VAR-NAME-MISMATCH / FLEX-003）**：
     - 一切颜色（文字/背景/边框/阴影）**禁止写 \`var(--colorXxx, fallback)\` 直引 CSS 变量**——平台不注入这些名字，fallback 恒生效 → 切主题零响应，质量门禁直接 BLOCK（实锤 c-122f11：15 处 var() 直引三轮重试全部被拦）。
-    - 颜色一律引用主题槽位 Less 变量（theme-vars.less 的 \`.theme-dark()\`/\`.theme-light()\` 已定义）：\`@colorTextBase\`（正文文字）、\`@colorTextInverse\`（反色文字）、\`@colorBgPanel\`（面板背景）、\`@colorPrimary\`（主色）、\`@colorSecondary\`、\`@colorDanger\`、\`@colorBorder\`，写法如 \`color: @colorTextBase;\`。需要新颜色槽位时直接引用新名字（如 \`@colorBgCard\`），平台检查器会把缺失槽位补齐到两套主题。
+    - Lite Vue3 不使用微码 LESS 主题变量；颜色按设计真值使用 CSS 字面量。禁止引用 \`@colorTextBase\`、\`@colorBgPanel\`、\`@colorPrimary\` 等微码私有槽位，也禁止导入微码 \`resources/styles/themes/theme-vars.less\`。不得猜测未经 Vue3 运行时契约确认的 CSS custom property 名；视觉确需跨体系变量时须另行评审。
+    - (旧微码主题规范，仅适用于 Lite 微码，不适用于本 Lite Vue3 prompt)：颜色一律引用主题槽位 Less 变量（theme-vars.less 的 \`.theme-dark()\`/\`.theme-light()\` 已定义）：\`@colorTextBase\`（正文文字）、\`@colorTextInverse\`（反色文字）、\`@colorBgPanel\`（面板背景）、\`@colorPrimary\`（主色）、\`@colorSecondary\`、\`@colorDanger\`、\`@colorBorder\`，写法如 \`color: @colorTextBase;\`。需要新颜色槽位时直接引用新名字（如 \`@colorBgCard\`），平台检查器会把缺失槽位补齐到两套主题。
     - **同名 class 的布局属性（flex/width/height/min-*）只能写在一处**：要么 \`common.less\`（共享表）要么组件 \`<style>\`，两处都写且值不同会触发 FLEX-003 BLOCK（scoped 优先级恒高，共享表成死样式）。图标/固定件写 \`flex: 0 0 auto\`，需要撑满的区块写 \`flex: 1\` 并成对 \`min-height: 0\`。
 14. **常见 UI 控件 → antd 默认实现（U1 · 2026-10-09，实锤 c-c19746-c1974689 半真半假）**：截图中出现下述控件形态时**必须**用对应 Ant Design Vue 组件实现，**禁止手写 div/span 模仿组件 DOM 结构**（指纹：class 名中出现 \`antd-xxx\` / \`ant-design-vue-xxx\` 即不合格）：
     - 表单成组（标签+必填星号+输入控件）→ \`<a-form>\` + \`<a-form-item>\`；**每行标签必须由 \`<a-form-item>\` 的 \`label\` 属性或 \`#label\` 插槽承载（必填星号写在插槽内），禁止裸 \`<label>\` 标签**（实锤 mv-lite-1791600614695-397d13ce：控件全换 antd 但 10 处裸 label 行结构残留）；输入框 → \`<a-input>\`、多行 → \`<a-textarea>\`、下拉 → \`<a-select>\`
@@ -3525,15 +3527,13 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOd
     //   两者都幂等，重复调用安全。
     if (dto) await this.injectNThemeTruth(dto, outputPath, target, sessionId);
 
-    // 🛡️ 2026-09-11 治本（首次预览走快照报 "variable @x is undefined"，刷新走 workspace 才成功）：
-    // createCandidate 会把 outputPath 定格为候选快照。若此时 theme-vars.less 仍缺变量
-    // （修复器在后续迭代才补齐），快照即"不可编译"，首次预览编译失败。此处发布前先跑
-    // LessVariableChecker 补齐缺失变量，使快照与最终 workspace 一致、均可编译。
-    // 检查器幂等（已补齐则 no-op）；失败仅告警，不阻断发布事务。
-    try {
-      await LessVariableChecker.check(outputPath)
-    } catch (lessCheckErr: any) {
-      console.warn('[lite] 预发布 Less 变量检查跳过', lessCheckErr?.message)
+    // LessVariableChecker 属于微码 theme-vars 写入链，不能改动 Vue3 的独立 SFC 样式作用域。
+    if (target === 'microcode') {
+      try {
+        await LessVariableChecker.check(outputPath)
+      } catch (lessCheckErr: any) {
+        console.warn('[lite] 预发布 Less 变量检查跳过', lessCheckErr?.message)
+      }
     }
 
     const candidate = this.taskCodeSnapshotService.createCandidate({
@@ -3544,13 +3544,74 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}${userAddendum}${buildOd
       stage: 'lite-generation',
       files: this.collectSnapshotFiles(outputPath),
     });
-    const validation = {
-      semantics: 'passed' as const,
-      sfc: 'passed' as const,
-      less: 'passed' as const,
-      runtime: 'pending' as const,
+    const validation: TaskCodeSnapshotValidation = {
+      semantics: 'passed',
+      sfc: 'passed',
+      less: 'pending',
+      runtime: 'pending',
     };
     this.taskCodeSnapshotService.markValidating(sessionId, candidate.revision, validation);
+    if (target === 'vue3') {
+      this.progressService.sendCodeSnapshot(sessionId, {
+        revision: candidate.revision,
+        status: 'validating',
+        stage: candidate.stage,
+        fileCount: candidate.files.length,
+        changedFiles: candidate.files.map((file) => file.path),
+        lastGoodRevision: candidate.lastGoodRevision,
+      });
+      let lessResult;
+      try {
+        lessResult = await LessCompileGate.validateVue3SfcDirectory(outputPath);
+      } catch (error: any) {
+        const reason = `Lite Vue3 LESS 校验器异常，候选未发布：${error?.message || String(error)}`;
+        console.error(`[lite-vue3-less-gate] sessionId=${sessionId} checkedFiles=0 checkedStyles=0 result=validator_error diagnostics=0 repairs=0 published=0 lastGoodPreserved=${candidate.lastGoodRevision ? 1 : 0}`);
+        const rejected = this.taskCodeSnapshotService.rejectCandidate(
+          sessionId,
+          candidate.revision,
+          reason,
+          { ...validation, less: 'blocked' },
+        );
+        this.progressService.sendCodeSnapshot(sessionId, {
+          revision: rejected.revision,
+          status: rejected.status,
+          stage: rejected.stage,
+          fileCount: rejected.files.length,
+          changedFiles: [],
+          lastGoodRevision: rejected.lastGoodRevision,
+        });
+        throw new Error(reason);
+      }
+      const passed = lessResult.ok;
+      const compileState = passed
+        ? (lessResult.checkedStyles ? 'passed' : 'not_applicable')
+        : 'blocked';
+      console.info(`[lite-vue3-less-gate] sessionId=${sessionId} checkedFiles=${lessResult.checkedFiles} checkedStyles=${lessResult.checkedStyles} result=${compileState} diagnostics=${lessResult.diagnostics.length} repairs=0 published=0 lastGoodPreserved=${candidate.lastGoodRevision ? 1 : 0}`);
+      if (!passed) {
+        const first = lessResult.diagnostics[0];
+        const reason = `Lite Vue3 LESS 编译失败：${first.file}:${first.line}:${first.column} ${first.message}`;
+        const rejected = this.taskCodeSnapshotService.rejectCandidate(
+          sessionId,
+          candidate.revision,
+          reason,
+          { ...validation, less: 'blocked' },
+        );
+        this.progressService.sendCodeSnapshot(sessionId, {
+          revision: rejected.revision,
+          status: rejected.status,
+          stage: rejected.stage,
+          fileCount: rejected.files.length,
+          changedFiles: [],
+          lastGoodRevision: rejected.lastGoodRevision,
+        });
+        throw new Error(reason);
+      }
+      validation.less = 'passed';
+      this.taskCodeSnapshotService.markValidating(sessionId, candidate.revision, validation);
+    } else {
+      validation.less = 'passed';
+      this.taskCodeSnapshotService.markValidating(sessionId, candidate.revision, validation);
+    }
     this.progressService.sendCodeSnapshot(sessionId, {
       revision: candidate.revision,
       status: 'validating',

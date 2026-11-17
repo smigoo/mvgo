@@ -18,6 +18,8 @@
  */
 import {
   revokeUnqualifiedHeaderSlotCandidates,
+  evaluateSlotFlowCoResidency,
+  collectSectionIdSet,
   SLOT_SIBLING_SECTION_MIN,
   SLOT_PARENT_HEIGHT_RATIO_MIN,
 } from '../inline-header-slot-inferrer.js'
@@ -243,5 +245,84 @@ describe('刀65-B ③ · 流式容器共居判据', () => {
   test('阈值常量可辩驳：兄弟≥2、父高≥2倍', () => {
     expect(SLOT_SIBLING_SECTION_MIN).toBe(2)
     expect(SLOT_PARENT_HEIGHT_RATIO_MIN).toBe(2)
+  })
+})
+
+/**
+ * 🔴 2026-11-17 治本（mc-max-1794911885243-30260c7a 实锤）：父=面板根的短路移除。
+ * 真机：Tab 栏 2:9020（statistic 带 slotCandidate=header-right）与列表 2:8869、
+ * 分割线 2:9047 同为面板根 3 个平级 section；旧逻辑 `parentId===rootId ⇒ keep`
+ * 使其绕过共居判据塞进 #header-right。真面板头父亦为根，但兄弟 section<2，
+ * 走同一判据自动 keep。下面阴阳对照锁死「根父不再无条件放行」。
+ */
+describe('刀65-B ③ 补强 · 父=面板根也走共居判据（2026-11-17）', () => {
+  const ROOT = '2:9778'
+  // 面板根下 3 个平级 section：Tab(h=38) / 列表(h=242) / 分割线(h=2)
+  const rootTree = () => ({
+    id: ROOT,
+    absoluteBoundingBox: bb(10, 109, 420, 336),
+    children: [
+      { id: '2:9020', absoluteBoundingBox: bb(20, 119, 380, 38), children: [] }, // Tab 栏
+      { id: '2:8869', absoluteBoundingBox: bb(20, 160, 380, 242), children: [] }, // 列表
+      { id: '2:9047', absoluteBoundingBox: bb(20, 405, 380, 2), children: [] }, // 分割线
+    ],
+  })
+
+  test('阳性（真机 2:9020）：父=面板根 + 兄弟2段 + 父高336≥38×2 ⇒ reject', () => {
+    const tree = rootTree()
+    const sections = [
+      { id: '2:9020', slotCandidate: 'header-right', body: { children: [{ id: 'tab' }] } },
+      { id: '2:8869', slotCandidate: null },
+      { id: '2:9047', slotCandidate: null },
+    ]
+    const ids = collectSectionIdSet(sections)
+    const v = evaluateSlotFlowCoResidency('2:9020', ids, tree)
+    expect(v.verdict).toBe('reject')
+    expect(v.reason).toContain('bodySiblingSections=2>=2')
+    // 端到端：第三支撤销，header-right 资格移除
+    const r = revokeUnqualifiedHeaderSlotCandidates(sections, tree)
+    expect(r.revokedIds).toEqual(['2:9020'])
+    expect((sections[0] as any).slotCandidate).toBeNull()
+  })
+
+  test('阴性（真面板头）：父=面板根但兄弟 section<2 ⇒ keep（不误伤 header 行）', () => {
+    const tree = {
+      id: ROOT,
+      absoluteBoundingBox: bb(0, 0, 420, 336),
+      children: [
+        { id: '2:3550', absoluteBoundingBox: bb(20, 119, 380, 32), children: [] },
+        { id: '1744:125', absoluteBoundingBox: bb(0, 158, 420, 170), children: [] }, // body 容器非 section
+      ],
+    }
+    const sections = [
+      { id: '2:3550', slotCandidate: 'header-right', body: { children: [{ id: 't' }] } },
+      { id: '2:8869', slotCandidate: null }, // 在 body 容器内，非根直接子
+    ]
+    const ids = collectSectionIdSet(sections)
+    const v = evaluateSlotFlowCoResidency('2:3550', ids, tree)
+    expect(v.verdict).toBe('keep')
+    expect(v.reason).toContain('bodySiblingSections=0<2')
+    const r = revokeUnqualifiedHeaderSlotCandidates(sections, tree)
+    expect(r.revokedIds).not.toContain('2:3550')
+  })
+
+  test('阴性（根父+兄弟2段但父高不足×2）⇒ keep：判据对根父同样要求父高', () => {
+    const tree = {
+      id: ROOT,
+      absoluteBoundingBox: bb(0, 0, 420, 60), // 父高仅 60 < 38×2
+      children: [
+        { id: '2:9020', absoluteBoundingBox: bb(20, 0, 380, 38), children: [] },
+        { id: '2:8869', absoluteBoundingBox: bb(20, 38, 380, 20), children: [] },
+        { id: '2:9047', absoluteBoundingBox: bb(20, 46, 380, 2), children: [] }, // 兄弟补足到 2
+      ],
+    }
+    const sections = [
+      { id: '2:9020', slotCandidate: 'header-right' },
+      { id: '2:8869', slotCandidate: null },
+      { id: '2:9047', slotCandidate: null },
+    ]
+    const v = evaluateSlotFlowCoResidency('2:9020', collectSectionIdSet(sections), tree)
+    expect(v.verdict).toBe('keep')
+    expect(v.reason).toContain('parentH=60<segH=38x2')
   })
 })

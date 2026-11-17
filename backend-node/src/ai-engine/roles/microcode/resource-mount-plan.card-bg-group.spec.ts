@@ -379,3 +379,74 @@ const statCards = [1, 2]
     expect(out).toContain('const FG_CARD_BGS = [bg1, bg2]');
   });
 });
+
+// ── mc-max-1794891744785-2d75d800 形态（2026-11-17 治本）：vision 语义 id 段 ──
+// 段 id 被 enrich 覆盖为语义 id（section-cards），Figma 锚身份保到 figmaAnchorId。
+// 三张卡 bg 的 owner（136:129/128/127）与祖先链都不在产物锚点集（全是语义 id），
+// 但段的 figmaAnchorId=136:121 会以 data-resource-anchor 落进产物锚点集
+// ⇒ 判据③b 公共产物祖先锚复活 ⇒ 成组轮换。
+const mappingSemantic = [
+  {
+    ...mapping2ffd[0],
+    ancestorIds: ['136:129', '2:8023', '136:121', '2:7952'],
+  },
+  { ...mapping2ffd[1] },
+  { ...mapping2ffd[2] },
+];
+
+const sectionsSemantic = [
+  { id: 'section-tabs', type: 'tabs', responsibility: 'Tab切换栏', elementCount: 2, sourceNodeIds: ['2:7955', '2:7957'] },
+  {
+    id: 'section-cards',
+    type: 'stats',
+    responsibility: '统计卡片',
+    elementCount: 3,
+    sourceNodeIds: ['136:127', '136:128', '136:129'],
+    figmaAnchorId: '136:121',
+  },
+];
+
+const STATS_SEMANTIC = `<template>
+  <div class="c-vehicle-monitor-stats" data-section-id="section-cards" data-resource-anchor="136:121">
+    <div class="stat-card" v-for="item in statItems" :key="item.label">{{ item.value }}</div>
+  </div>
+</template>
+<script setup>
+const statItems = [1, 2, 3]
+</script>`;
+
+describe('buildResourceMountPlan · 语义 id 段（figmaAnchorId 复活通道，2d75d800 形态）', () => {
+  it('⑦ 阳性：产物锚点集只含语义 id + 数字补标锚 ⇒ 判据③b 经 data-resource-anchor 命中成组', () => {
+    // 产物 DOM 锚点集 = 语义 id（data-section-id）+ Figma 数字锚（data-resource-anchor）
+    const plan = buildResourceMountPlan(sectionsSemantic, mappingSemantic, {
+      productAnchorIds: new Set(['section-tabs', 'section-cards', '136:121']),
+    });
+    expect(plan.cardBgGroups).toHaveLength(1);
+    const g = plan.cardBgGroups[0];
+    expect(g.anchorId).toBe('136:121');
+    expect(g.members.map((m) => m.varName)).toEqual(['bg1', 'bg2', 'bg3']); // x 序
+  });
+
+  it('⑧ 阴性对照：无数字补标锚（旧行为）⇒ 不成组（不劣化旧产物）', () => {
+    const plan = buildResourceMountPlan(sectionsSemantic, mappingSemantic, {
+      productAnchorIds: new Set(['section-tabs', 'section-cards']),
+    });
+    expect(plan.cardBgGroups).toHaveLength(0);
+  });
+
+  it('⑨ 集成：组锚=数字 id 时执行器经 data-resource-anchor 找到落点文件并注入轮换', () => {
+    const allFiles = {
+      'package/index.vue': INDEX_VUE,
+      'package/components/StatsSection.vue': STATS_SEMANTIC,
+    };
+    const plan = buildResourceMountPlan(sectionsSemantic, mappingSemantic, {
+      productAnchorIds: new Set(['section-tabs', 'section-cards', '136:121']),
+    });
+    const { mounted, diagnostics } = mountPlannedResources(allFiles, plan, { logger: null });
+    const out = allFiles['package/components/StatsSection.vue'];
+    expect(out).toContain('const FG_CARD_BGS = [bg1, bg2, bg3]');
+    expect(out).toMatch(/class="stat-card"[^>]*FG_CARD_BGS\[/);
+    expect(mounted.some((m) => m.mountTarget === 'v-for-item-rotation')).toBe(true);
+    expect(diagnostics.filter((d) => String(d.reason || '').startsWith('card-bg-group'))).toHaveLength(0);
+  });
+});

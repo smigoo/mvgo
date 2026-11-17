@@ -218,11 +218,11 @@ describe('FLEX-005 纯函数：resolveClassGrows scoped 优先', () => {
 });
 
 describe('FLEX-005 纯函数：detectFlexSiblingIssues', () => {
-  it('事故复刻：组件标签兄弟组 scoped 像素量级 vs common.less 比例量级 → BLOCK', () => {
+  it('事故复刻：组件标签兄弟组 scoped 像素量级 vs common.less 比例量级 → WARN（P0-1 降档）', () => {
     const issues = detectFlexSiblingIssues(mkAccidentFiles());
     const f5 = issues.filter((i: any) => i.id === 'FLEX-005');
     expect(f5).toHaveLength(1);
-    expect(f5[0].severity).toBe('BLOCK');
+    expect(f5[0].severity).toBe('WARN');
     expect(f5[0].file).toBe('package/index.vue');
     // 文案必须携带兄弟明细与量级标记，LLM 重试才能定点修复
     expect(f5[0].message).toContain('.c-test-root');
@@ -408,11 +408,13 @@ describe('FLEX-005 纯函数：detectFlexSiblingIssues', () => {
 });
 
 describe('FLEX-005 L0-B 门禁集成（CodeStructureValidator）', () => {
-  it('事故形态 → validator 输出 FLEX-005 BLOCK（fail-closed）', () => {
+  it('事故形态 → validator 输出 FLEX-005 WARN（P0-1 降档，不再 fail-closed）', () => {
     const res = V.validate(mkAccidentFiles(), 'c-test', { target: 'microcode' });
     const f5 = res.issues.filter((i: any) => i.id === 'FLEX-005');
     expect(f5).toHaveLength(1);
-    expect(f5[0].severity).toBe('BLOCK');
+    expect(f5[0].severity).toBe('WARN');
+    // 降档阳性锚：WARN 不再让 validate().pass 变 false（同族 FLEX-004 已是 WARN）
+    expect(res.pass).toBe(true);
   });
 
   it('统一为像素量纲后 → 零 FLEX-005（自愈路径不误杀）', () => {

@@ -2509,9 +2509,36 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     'REGULAR_POLYGON',
   ])
 
+  // 🛡️ 行内图元豁免（2026-11-17 · 73:3「list 内 icon 脱离行」根治）：
+  //   病灶：图标容器（`1:385 icon-1` 28×28，内含 1 个 VECTOR）满足「有子节点」⇒ 被提升为
+  //   独立嵌套 section，脱离所属行的真实兄弟结构（该行 `1:377` 只剩 [icon 段, 文本带] 两段，
+  //   icon 不再是文本的同级 box），下游按段切分 ⇒ icon 与文本被拆到不同结构单元。
+  //   判据（纯几何 + 内容，命名无关，零绝对尺寸；三条**同时**满足方豁免）：
+  //     ① 子树**不含任何可读文本**（TEXT 且 characters 去空白后长度 ≥2）⇒ 纯图形
+  //        （图标/徽标/图形芯片）。承载文本的容器（标题/图例/统计项/标签卡）不豁免——它们是内容。
+  //     ② 面积 **< 父级 15%** ⇒ 非主体内容块（行内并排内容块通常占行宽 ≥1/3）。
+  //     ③ 父级为**横排且 high 置信**（`isRowParent`，与兄弟排序同源）⇒ 图元处于行内流。
+  //        纵排 / 网格 / 无事实 / low 置信一律不豁免（保持既有行为，收敛爆炸半径）。
+  const hasReadableText = (n, d = 0) => {
+    if (!n || typeof n !== 'object' || d > 6) return false
+    if (String(n.type || '').toUpperCase() === 'TEXT' && String(n.characters || '').trim().length >= 2) return true
+    return (n.children || []).some((c) => hasReadableText(c, d + 1))
+  }
+  const isInlineGraphicAtom = (node, parentBox, parentNode) => {
+    if (!isRowParent(parentNode)) return false
+    if (!(parentBox && parentBox.width && parentBox.height)) return false
+    const nb = node.absoluteBoundingBox
+    if (!nb || !nb.width || !nb.height) return false
+    const parentArea = parentBox.width * parentBox.height
+    if (!(parentArea > 0)) return false
+    if (!(nb.width * nb.height / parentArea < 0.15)) return false
+    if (hasReadableText(node)) return false
+    return true
+  }
+
   // 🛡️ 递归推导辅助函数：判断节点是否应作为 section（而非普通 item）
   // 🛡️ P0 修复（2026-09-17）：添加尺寸过滤，避免装饰性小节点（徽章/图标/色块）被提升为 section
-  const shouldPromoteToSection = (node, parentBox) => {
+  const shouldPromoteToSection = (node, parentBox, parentNode) => {
     if (!node || typeof node !== 'object') return false
     const type = String(node.type || '').toUpperCase()
     const name = String(node.name || '')
@@ -2569,7 +2596,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       if (parentArea > 0 && nodeArea / parentArea < 0.03 && !isTextBar) return false
     }
     
-    if (hasChildren) return true
+    if (hasChildren) return !isInlineGraphicAtom(node, parentBox, parentNode)
     
     // 无子节点但面积足够大（> 父节点 15%）也提升
     if (parentBox && parentBox.height && parentBox.width) {
@@ -2579,6 +2606,43 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     
     return false
   }
+
+  // 🛡️ 方向感知兄弟排序（2026-11-17 · 73:3「list 内 icon 不在原位」根治 · 影响面已量化）。
+  //
+  //   病灶：`compareReadingOrder` 是 **y 主序**，其注释称「这正是横向 flex-flow 的自然序」——
+  //   **该论断有误**。横向流的兄弟顺序由**主轴 x** 决定；y 主序仅在「兄弟同 y」时才与 x 主序
+  //   等价。而真实设计稿的行内元素常**垂直居中且高度不等**：
+  //     73:3 warning-list 行 `1:377`（386×50）：icon `1:385` 28×28 居中 ⇒ y=221；
+  //     相邻 TEXT `1:384`(y=214) / `1:387`(y=214) 高 43。y 主序 ⇒ 文本(214) 排在 icon(221) 前
+  //     ⇒ **icon 被排到行尾（右侧）**，即用户反馈的「list 中的 icon 去了其他地方」。
+  //
+  //   判据（单一来源 = A 类布局事实，与 `sections[].layout` 同源，**不新增第二份方向判据**）：
+  //     父级为**横排**且**置信 high**（`deriveChildLayout(parent) === 'horizontal'` 且
+  //       `fact.confidence === 'high'`）⇒ **x 主序**（左→右，y 作同 x 的 tiebreak）；
+  //     其余（column / grid / 无事实 / **low 置信**）⇒ 既有 **y 主序**（上→下），逐字不变。
+  //     ⚠️ 为什么必须限定 high：low 置信的 row 存在「实为多行带被几何误判成一行」的形态
+  //       （全语料实锤 `30:1091`：子项 y 跨 49558→49585 共 27px，`30:1094` 属第二行；
+  //        对该容器做 x 主序会把第二行项**交错**插入第一行）⇒ 与注入器 T2 闸
+  //       （`layout-facts-injector#LOW_SKIP_SOURCES` 对 low 跳过 display/flex-direction 注入）
+  //       **同一纪律**：布局方向只信 high 事实，low 一律退回几何默认 y 主序。
+  //     爆炸半径（34 语料逐父级对账）：仅 **high 横排父级**的兄弟序可能变化，结构零变化。
+  const isRowParent = (parentNode) => {
+    if (deriveChildLayout(parentNode, layoutFacts) !== 'horizontal') return false
+    const id = parentNode && parentNode.id != null ? String(parentNode.id) : ''
+    const fact = (id && layoutFacts && layoutFacts[id]) || null
+    return !!fact && fact.confidence === 'high'
+  }
+  const compareRowMajor = (a, b) => {
+    const ab = a?.absoluteBoundingBox || a?.figmaBox || {}
+    const bb = b?.absoluteBoundingBox || b?.figmaBox || {}
+    const ax = Number.isFinite(ab.x) ? Math.round(ab.x) : Number.MAX_SAFE_INTEGER
+    const bx = Number.isFinite(bb.x) ? Math.round(bb.x) : Number.MAX_SAFE_INTEGER
+    if (ax !== bx) return ax - bx
+    return compareReadingOrder(a, b)
+  }
+  const sortSiblingsByParentLayout = (parentNode, kids = []) =>
+    isRowParent(parentNode) ? [...kids].sort(compareRowMajor) : sortChildrenForReadingOrder(kids)
+  const siblingComparatorFor = (parentNode) => (isRowParent(parentNode) ? compareRowMajor : compareReadingOrder)
 
   // 🛡️ P1 修复（2026-09-17）：收集节点子树所有 Figma 节点 id，作为 section 的 sourceNodeIds。
   //   资源挂载系统（buildResourceMountPlan）依赖 sourceNodeIds 把资源归属到叶子组件；
@@ -2601,7 +2665,8 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     // 🛡️ 深度保护：最多拆 2 层嵌套（depth 0=顶层 section、1=嵌套区块、2=内容卡片）。
     //   再往下（图标/文字/数字等原子元素）不再拆成 section，作为 item 保留。
     if (depth > 2) {
-      const leafKids = sortChildrenForReadingOrder(
+      const leafKids = sortSiblingsByParentLayout(
+        parentNode,
         (parentNode.children || []).filter((c) => c && typeof c === 'object'),
       )
       return { sections: leafKids.map((c) => mapChildNode(c)), hasNested: false }
@@ -2612,7 +2677,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     const nestedSections = []
     
     for (const child of directKids) {
-      if (!shouldPromoteToSection(child, parentBox)) continue
+      if (!shouldPromoteToSection(child, parentBox, parentNode)) continue
       
       const type = String(child.type || '').toUpperCase()
       const name = String(child.name || '')
@@ -2640,7 +2705,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       //   不是并列业务 section → 子节点 item 化，不递归成 section。
       //   非 header 容器（slot/con/内容区）才递归推导业务 section。
       const sub = isContentBlock
-        ? { sections: sortChildrenForReadingOrder(childKids).map((c) => mapChildNode(c)), hasNested: false }
+        ? { sections: sortSiblingsByParentLayout(child, childKids).map((c) => mapChildNode(c)), hasNested: false }
         : deriveNestedSections(child, depth + 1)
       
       // 🛡️ 2026-09-30 P0-1：容器才下发 gridColumns（叶子暂不下发；理由见 deriveChildGridColumns 注释——
@@ -2679,11 +2744,14 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     
     // 如果没有提升为 section 的子节点，回退到 mapChildNode 保留原始 children 结构
     if (nestedSections.length === 0) {
-      return { sections: sortChildrenForReadingOrder(directKids).map((c) => mapChildNode(c)), hasNested: false }
+      return {
+        sections: sortSiblingsByParentLayout(parentNode, directKids).map((c) => mapChildNode(c)),
+        hasNested: false,
+      }
     }
 
-    // 阅读序（y → x，同 mapChildNode 口径：行内从左到右、跨行从上到下）
-    nestedSections.sort(compareReadingOrder)
+    // 兄弟序（方向感知：横排父级 x 主序、其余 y 主序 —— 见 compareRowMajor 注释）
+    nestedSections.sort(siblingComparatorFor(parentNode))
 
     // 🛡️ 2026-10-20（#128 ⑦ · 84af4f8f 实锤）：横向并列兄弟检出。
     //   病灶：本函数恒按 y 排序兄弟 ⇒ 隐含「兄弟=纵向堆叠」假设。但设计稿常见
@@ -2742,8 +2810,64 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
       //   孤儿文本」，与真值阅读序无关。下游据此写模板 ⇒ 「33 在上、合作厂商在下」。
       //   治本：吸收完统一按阅读序（y → x）重排 —— 与 mapChildNode / nestedSections 同一比较器，
       //   不新增判据、不改任何兄弟本身。
-      section.children = sortChildrenForReadingOrder(section.children)
+      section.children = sortSiblingsByParentLayout(section, section.children)
     }
+    // 🛡️ 行内图元「降级不丢弃」（2026-11-17 · 与 `isInlineGraphicAtom` **同源**）：
+    //   病灶：`shouldPromoteToSection` 对行内原子图元返回 false 后，非 TEXT 的它**不进任何
+    //     section 的 children / sourceNodeIds** ⇒ 旧「静默丢弃」——图标既无渲染位无资源归属
+    //     （全语料实锤 `1:743 inspection-summary` 的 `1:753 icon-inspection-plan` 29.2×32：
+    //      豁免前恒被提升 ⇒ 从不触达此路径；豁免后若放任 ⇒ 整行只剩 5 个总数块，图标消失）。
+    //   判据：同一谓词 `isInlineGraphicAtom`（横排 high 父级 ∧ 面积 < 父级 15% ∧ 子树无可读文本），
+    //     **不新增第二份方向/尺寸判据**；TEXT 仍走孤儿文本轨（互不重叠）。
+    //   动作（与孤儿文本同轨，零新段优先）：
+    //     ① 几何重叠某已提升兄弟（>50% 图元面积）⇒ 吸收为该兄弟的 inline item
+    //        （追加 children + sourceNodeIds，兄弟 bbox/布局不动）；
+    //     ② 否则 ⇒ 并入孤儿带（与同行孤儿文本合成一带，带内顺序由既有重排保证）。
+    const promotedIds = new Set(
+      nestedSections.map((s) => String(s?.id || '')).filter(Boolean),
+    )
+    const demotedAtoms = directKids.filter((child) => {
+      if (!child || typeof child !== 'object') return false
+      const cid = String(child.id || '')
+      if (!cid || promotedIds.has(cid)) return false
+      if (String(child.type || '').toUpperCase() === 'TEXT') return false
+      return isInlineGraphicAtom(child, parentBox, parentNode)
+    })
+    if (demotedAtoms.length) {
+      // 与 collectOrphanTextKids 同一 `overlapRatio` 口径：交集 / 图元自身面积
+      const boxOverlapRatio = (a, b) => {
+        if (!a || !b) return 0
+        const ox = Math.min(a.x + (a.width || 0), b.x + (b.width || 0)) - Math.max(a.x, b.x)
+        const oy = Math.min(a.y + (a.height || 0), b.y + (b.height || 0)) - Math.max(a.y, b.y)
+        if (ox <= 0 || oy <= 0) return 0
+        const area = (a.width || 0) * (a.height || 0)
+        return area > 0 ? (ox * oy) / area : 0
+      }
+      for (const atom of demotedAtoms) {
+        const ab = atom.absoluteBoundingBox
+        let best = null
+        let bestRatio = 0.5
+        for (const s of nestedSections) {
+          const r = boxOverlapRatio(ab, s?.absoluteBoundingBox)
+          if (r > bestRatio) { best = s; bestRatio = r }
+        }
+        if (best) {
+          if (!Array.isArray(best.sourceNodeIds)) best.sourceNodeIds = []
+          const aid = String(atom.id || '')
+          if (aid && !best.sourceNodeIds.includes(aid)) best.sourceNodeIds.push(aid)
+          if (!Array.isArray(best.children)) best.children = []
+          best.children.push(mapChildNode(atom))
+          best.children = sortSiblingsByParentLayout(best, best.children)
+        } else {
+          orphanTextKids.standalone.push(atom)
+        }
+      }
+      // 并入后按 y 重排（与 collectOrphanTextKids 内部同口径，供带式聚类使用）
+      orphanTextKids.standalone.sort(
+        (a, b) => (a?.absoluteBoundingBox?.y || 0) - (b?.absoluteBoundingBox?.y || 0),
+      )
+    }
+
     // ③-b 独立段轨（头/中/尾真孤儿）
     //   全位化后 standalone 可能同时含头部与尾部孤儿（5ef650ff 实测）⇒ 先按 y 带聚类：
     //   相邻文本与当前带的底边不重叠（gap>1px）⇒ 新开一带；每带独立成段。
@@ -2812,7 +2936,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
           ...(mergedBox && mergedBox.height ? { figmaHeightPx: mergedBox.height } : {}),
         },
       })
-      nestedSections.sort(compareReadingOrder)
+      nestedSections.sort(siblingComparatorFor(parentNode))
     })
 
     // 🛡️ 图表居中 + 图例分两侧（2026-09-17 · 策略类型分布实锤）：识别
@@ -2854,7 +2978,7 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     
     // 🛡️ header 语义：标题区子节点 item 化；非 header 容器递归推导业务 section。
     const sub = isHeader
-      ? { sections: sortChildrenForReadingOrder(directKids).map((c) => mapChildNode(c)), hasNested: false }
+      ? { sections: sortSiblingsByParentLayout(child, directKids).map((c) => mapChildNode(c)), hasNested: false }
       : deriveNestedSections(child, 1)
     
     // 🛡️ 2026-09-30 P0-1：容器才下发 gridColumns（叶子暂不下发；理由见 deriveChildGridColumns 注释——

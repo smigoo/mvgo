@@ -63,6 +63,10 @@ import { pickCachedChunkLastGood } from './cached-chunk-last-good.js';
 //   本刀在全产物**唯一写盘出口**修复（此前的样式步骤都可能再追加规则，只有这里能保证
 //   「门禁校验内容 == 实际落盘内容」）。判据见 chart-container-guard.js#restoreChartMinHeightAfterZero。
 import { restoreChartMinHeightAfterZero } from '../../utils/chart-container-guard.js';
+// 🛡️ ECHARTS-SYMBOL（2026-11-17 · mc-max-1794911859161-cf8ca3f5 实锤）：写盘前归一
+//   LLM 臆造的 `symbol: true`（布尔）→ 'circle'——echarts 6 createSymbol 对布尔调
+//   .indexOf 崩溃 ⇒ RUNTIME-004 硬 BLOCK。纯附加归一，判据见 echarts-symbol-sanitizer.js。
+import { sanitizeEchartsSymbolLiterals } from '../../utils/echarts-symbol-sanitizer.js';
 import {
   isColorEvaluable,
   isColorFnConsumer,
@@ -112,6 +116,19 @@ import {
   mergeIconTruthStats,
   formatIconTruthConservationLog,
 } from '../../utils/icon-truth-conservation.js';
+// 🛡️ 段内成员 DOM 真值对账（2026-11-17 · mc-max-1794891630233-96b16ae5 实锤）：
+//   `buildDeterministicIndexTemplate` 只确定性装配 index.vue，**子组件内部 DOM 由 LLM 自述**
+//   ⇒ 同构成员三行三种写法：行1 多一份空图标槽（label 被推右 37px）+ 两个 span 横排塌成一行；
+//   行2 正确；行4 空槽多余。判据全部来自真值/结构事实（零类名、零图层名、无量纲）：
+//     · 空槽 = 子树零内容 + 尺寸与同父已渲染 `<img>` 相等（同一图标位的第二份载体）；
+//     · 塌行 = ≥2 个纯静态文本叶子的拼接 === 同一 section 含 `\n` 的 TEXT 真值，且容器未 column。
+//   只写**元素级 inline**（inline 恒胜），绝不改共享 class 规则。
+import {
+  buildClassDeclIndex,
+  healSectionMemberDomTruth,
+  mergeSectionMemberDomTruthStats,
+  formatSectionMemberDomTruthLog,
+} from '../../utils/section-member-dom-truth.js';
 // 🛡️ 标题装饰真值（2026-11-15 · mc-max-1794728034288-4bc53ccd 实锤）：「有的标题有 icon
 //   有的没有」——有 png 的两个标题是真 <img>，无 png 的三个被 LLM 留成空 span / 干脆没有。
 //   本判据直接从 Figma 树采装饰（绕开资源下载），按「伴随 TEXT 原文」归属，CSS 逐层复刻。
@@ -1326,6 +1343,11 @@ export function writeFiles(files, outputPath, options = {}) {
     //   图标 mapping 的 ownerSectionId 常是中间 group，精确命中为空时需按
     //   「ancestorIds 中最近的 section」兜底归属；逐文件拿不到别的文件的 data-section-id。
     const _iconTruthSectionIds = collectAllSectionIds(filesForWrite);
+    // 🛡️ 段内成员 DOM 真值对账（2026-11-17）：样式声明索引必须用**全量** filesForWrite 预建 ——
+    //   逐文件循环里只有单个 .vue，拿不到 common.less ⇒ 空槽尺寸 / 容器 flex-direction 都判不出
+    //   ⇒ 恒 fail-open 假绿（与 _iconTruthDrawIndex 同理）。
+    const _smdDeclIndex = buildClassDeclIndex(filesForWrite);
+    let _smdStats = null;
     let _iconTruthStats = null;
     // 🛡️ 标题装饰真值（2026-11-15 · 4bc53ccd 实锤 / 2026-11-16 回植）：装饰清单必须用
     //   **Figma 树**在循环外预建（纯函数零 IO）——逐文件循环里拿不到完整树。
@@ -1538,6 +1560,27 @@ export function writeFiles(files, outputPath, options = {}) {
           if (logger) {
             logger.warn(
               `🛡️ G6 script 区 CSS 声明行清除跳过: ${relativePath}（${cssInScriptErr?.message || cssInScriptErr}）`,
+            );
+          }
+        }
+        // 🛡️ ECHARTS-SYMBOL（2026-11-17）：写盘前归一 LLM 臆造的布尔 symbol。
+        //   与 G12a/G13 同属「写盘出口的确定性图表处置」，放在两者之前——先修字段值，
+        //   再判死代码/注入重建守卫，避免带坏值的 option 被误判为活实现。
+        //   fail-open：异常绝不阻断写盘（门禁该拦就拦）；只动 series.symbol 布尔字面量。
+        try {
+          const symbolFix = sanitizeEchartsSymbolLiterals(sanitizedContent);
+          if (symbolFix.changed) {
+            sanitizedContent = symbolFix.content;
+            if (logger) {
+              logger.warn(
+                `🛡️ ECHARTS-SYMBOL 布尔 symbol 已归一: ${relativePath}（${symbolFix.replacements.length} 处：${symbolFix.replacements.map((r) => `${r.from}→${r.to}`).join('；')}）`,
+              );
+            }
+          }
+        } catch (symbolFixErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ ECHARTS-SYMBOL 归一跳过: ${relativePath}（${symbolFixErr?.message || symbolFixErr}）`,
             );
           }
         }
@@ -2458,6 +2501,38 @@ export function writeFiles(files, outputPath, options = {}) {
         }
       }
 
+      // 🛡️ 段内成员 DOM 真值对账（2026-11-17 · mc-max-1794891630233-96b16ae5 实锤）：
+      //   位置：图标真值守恒之后 —— 刀 45 / 图标守恒可能刚补出 `<img>`，本步才有「已渲染载体」
+      //   可对账；且在唯一写盘出口循环内（校验 === 落盘）。只写元素级 inline、删空槽节点，
+      //   从不改共享 class 规则（同名类被多元素复用）。
+      if (relativePath.endsWith('.vue')) {
+        try {
+          const _smdFiles = { [relativePath]: sanitizedContent };
+          const _smd = healSectionMemberDomTruth(_smdFiles, {
+            figmaRoot: options.figmaRoot,
+            declIndex: _smdDeclIndex,
+            silent: true,
+          });
+          const _smdNext = _smdFiles[relativePath];
+          if (typeof _smdNext === 'string' && _smdNext !== sanitizedContent) {
+            sanitizedContent = _smdNext;
+            currentStep = 'section_member_dom_truth';
+          }
+          _smdStats = mergeSectionMemberDomTruthStats(_smdStats, _smd.stats);
+          if (_smd.changes.length > 0 && logger) {
+            logger.warn(`🛡️ 段内成员 DOM 真值对账：${relativePath} 已收口`, {
+              edits: _smd.changes[0].edits,
+            });
+          }
+        } catch (_smdErr) {
+          if (logger) {
+            logger.warn(`🛡️ 段内成员 DOM 真值对账跳过（fail-open，不挡写盘）: ${relativePath}`, {
+              error: _smdErr?.message || String(_smdErr),
+            });
+          }
+        }
+      }
+
       // 🛡️ 刀 51（2026-10-22）：**段内标题行几何契约**。
       //   位置：R24 / 刀 45 之后 —— 那两步可能刚补出 `<img>`，本步才有「图标」可对齐；
       //   且必须在所有覆写/回退步骤之后（写盘出口是唯一能保证「校验 === 落盘」的地方）。
@@ -2919,6 +2994,16 @@ export function writeFiles(files, outputPath, options = {}) {
       logger.info(_iconLine.message, _iconLine.meta);
     }
 
+    // 🛡️ 段内成员 DOM 真值对账（2026-11-17）：**恒打计数行**（0 也打），把「无 Figma 树 /
+    //   跑了零命中 / 循环内被 continue 跳过」三态分开。逐文件 silent，格式唯一来源 =
+    //   formatSectionMemberDomTruthLog（真机日志可直接跨轮比对）。
+    if (logger) {
+      const _smdLine = formatSectionMemberDomTruthLog(
+        _smdStats || { skipped: ['no-vue-file-evaluated'] },
+      );
+      logger.info(_smdLine.message, _smdLine.meta);
+    }
+
     // 🛡️ 标题装饰真值（2026-11-15 · 4bc53ccd 实锤 / 2026-11-16 回植）：**恒打计数行**
     //   （0 也打），把「无 Figma 树 / 采集零命中 / 循环内全部跳过」三态分开。
     //   格式唯一来源 = formatHeaderDecorLog（与真机历史日志同形，可跨轮对比）。
@@ -3207,6 +3292,19 @@ export function writeFiles(files, outputPath, options = {}) {
       written: writtenFiles,
       skipped: skippedFiles,
       sfcBlocked,
+      // 🛡️ 2026-11-17（快照落后根治 · P1-C/P1-D 复检实锤）：把**本函数实际定稿的内存 map**
+      //   原样回传。调用方必须用它替换自己的引用，否则内存快照会永久落后磁盘。
+      //   病灶链（代码事实）：`execute` 侧 `writeFiles` 包装层把入参 map 换成**新对象**
+      //   （`normalizeClassNameDialect` / `consolidateSubComponentClasses` 均 `const next = {...files}`）
+      //   ⇒ 本函数内所有就地回写（sanitized 回写 :2900、刀 53 终裁覆写、S6/bg 挂载注入）
+      //   只落在 `targetFiles` 上，调用方 `finalTruthFiles` 仍是**旧引用**；
+      //   而终态补偿（execute:10951 的「写盘自愈回读」）只覆盖最后一趟 `written` 列表
+      //   ⇒ 任何在上一趟已写、或本轮 `identical` 跳过的文件，内存快照永远拿不到写盘层内容。
+      //   真机证据：`mc-max-1794852551062-e95f5990` 磁盘三段标题图标 import+`:src` 齐备
+      //   （mtime 02:10:28，早于验收 02:10:29），验收/资源守恒却判「3 张前景资源零消费」
+      //   （`resConserve imported=2,notImported=3` + E2-v3 FAIL）。
+      //   字段纯附加：不传/不采纳时行为与本改动前逐字一致（调用方自行决定是否替换引用）。
+      finalFiles: files,
       blade41Stats: { ..._r41Stats, r10FinalScanned: _r10Final.scanned, r10FinalMoved: _r10Final.moved },
       // 🛡️ L3-c 写盘出口计数（纯附加字段，不与 blade41Stats 混用）：
       //   files= 命中文件数 / tags= 回填的 `<img>` 标签数。

@@ -111,3 +111,31 @@ describe('R7 修复锚点的 plan 契约透传', () => {
     expect(out.children[0].figmaAnchorId).toBe('2:8023')
   })
 })
+
+describe('2026-11-17 治本（mc-max-1794891744785-2d75d800）：enrich 语义 id 覆盖前保留 Figma 锚身份', () => {
+  // enrich 是 buildEffectiveSection 上游的闭包内联逻辑，无法单测内部 —— 这里锁它的
+  // **契约面**：写出的 `figmaAnchorId` 必须被既有消费方按单一来源语义正确识别。
+  // 真实 enrich 行为由 code-generator 端到端产物断言覆盖（data-resource-anchor 落盘）。
+
+  test('契约：figmaAnchorId 是 sectionAnchorCandidates 第 1 优先候选（几何键切到数字锚）', () => {
+    const sec = { id: 'section-cards', figmaAnchorId: '136:121', name: '统计卡片' }
+    expect(sectionAnchorKey(sec)).toBe('136:121')
+    expect(collectSourceNodeIds(sec)).toContain('136:121')
+  })
+
+  test('契约：无 figmaAnchorId 的语义 id 段几何键保持语义 id（旧产物行为不变）', () => {
+    const sec = { id: 'section-cards', name: '统计卡片' }
+    expect(sectionAnchorKey(sec)).toBe('section-cards')
+  })
+
+  test('契约：buildEffectiveSection 透传 enrich 写入的 figmaAnchorId（plan 下游可见）', () => {
+    const ctx = () => ({ enableInternalSplit: false, allInternalSubcomponents: [], figmaIndex: null })
+    const out = buildEffectiveSection(
+      { id: 'section-cards', figmaAnchorId: '136:121', name: '统计卡片', body: { children: [] } },
+      0,
+      ctx(),
+    )
+    expect(out.figmaAnchorId).toBe('136:121')
+    expect(out.id).toBe('section-cards')
+  })
+})

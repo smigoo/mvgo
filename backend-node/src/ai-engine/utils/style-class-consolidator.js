@@ -1308,22 +1308,92 @@ export function ensureBackgroundLayerPosition(files = {}) {
 
   let updatedCommonLess = commonLess;
 
-  // 匹配所有带 pointer-events: none 的规则块
-  const pointerEventsRe = /(\.[a-zA-Z][\w-]*\s*\{)([^}]*pointer-events\s*:\s*none[^}]*)(\})/g;
-  updatedCommonLess = updatedCommonLess.replace(pointerEventsRe, (fullMatch, openBrace, body, closeBrace) => {
-    const hasPosition = /(^|[\s;{])position\s*:/i.test(body);
-    if (!hasPosition) {
-      const newBody = `position: absolute;\n${body}`;
-      return openBrace + newBody + closeBrace;
-    }
-    return fullMatch;
-  });
-
+  // 🛡️ 2026-11-17（跨嵌套错插根治 · mc-max-1794872520197-0ef14c21 实锤）：
+  //   旧正则 `(\.cls \{)([^}]*pointer-events\s*:\s*none[^}]*)(\})` 的 `[^}]*`
+  //   **不感知嵌套** —— 外层规则块内含嵌套子规则（LESS 嵌套是产物常态）时，正则从
+  //   外层 `{` 一路吞过嵌套块内的 `pointer-events: none` 才停，把 `position: absolute`
+  //   插到**外层规则**的开头。真机形态：`.c-monitor-zh1-s-209 { … .c-monitor-bg-tile2-active
+  //   { grid-area:1/1; …; pointer-events:none } }`（tab 项，3 个 v-for 实例）⇒ 三个 tab
+  //   全部 absolute 且无 top/left ⇒ 全叠在容器原点互叠，整行 tab 塌掉
+  //   （RUNTIME-016 tab 互叠对实锤，D2 回灌 3 轮不收敛的根因）。
+  //   治本：括号**配平扫描**逐规则块解析（与 collectClassProp 同一反嵌套纪律）——
+  //   只在「块体**直接层**（depth 1）含 pointer-events:none」时才补 position；
+  //   嵌套子块里的 pointer-events 归子块所有，不构成对外层的指控。
+  //   修复形态：仍插到**外层块体开头**（与旧行为一致），但只对直接层命中者生效。
+  const fixedBlocks = [];
+  updatedCommonLess = ensurePositionForDirectLayerBlocks(updatedCommonLess, fixedBlocks);
   if (updatedCommonLess !== commonLess) {
     next[COMMON_LESS_PATH] = updatedCommonLess;
   }
+  // 🛡️ 2026-11-17 二轮自审（6562f7c5 实锤：`content.substring is not a function`）：
+  //   修复留痕**绝不能**塞进 files map（next[...] 会混进产物表，writeFiles 逐值
+  //   substring 直接崩）。只走 logger——engineer 侧已有恒打计数行。
+  //   （首版误放 `next.__bgLayerPositionFixed = fixedBlocks`，已拆除。）
 
   return next;
+}
+
+/**
+ * 🛡️ 2026-11-17：括号配平**递归**逐块扫描 —— 对「块体**直接层**含 pointer-events:none 且无
+ * position 声明」的 class 规则块（含嵌套子块），在该块体开头补 `position: absolute`。
+ * 递归保证：嵌套子块自己直接层命中时补在**子块**里（旧正则实现实际也覆盖此形态——
+ * 旧行为补在它捕到的第一个块头，嵌套场景恰是子块头，行为等价保留）。
+ *
+ * @param {string} css 全文（或上层块体）
+ * @param {Array<{selector:string}>} [trace] 修复留痕
+ * @returns {string} 修复后的文本
+ */
+function ensurePositionForDirectLayerBlocks(css, trace = []) {
+  let out = '';
+  let i = 0;
+  const n = css.length;
+  while (i < n) {
+    const open = css.indexOf('{', i);
+    if (open < 0) { out += css.slice(i); break; }
+    let selStart = open;
+    while (selStart > 0 && !'\n};'.includes(css[selStart - 1])) selStart -= 1;
+    const selector = css.slice(selStart, open).trim();
+    const isClassRule = /^\.[A-Za-z_][\w-]*$/.test(selector);
+
+    let depth = 1;
+    let j = open + 1;
+    while (j < n && depth > 0) {
+      if (css[j] === '{') depth += 1;
+      else if (css[j] === '}') depth -= 1;
+      j += 1;
+    }
+    const bodyEnd = depth === 0 ? j - 1 : n;
+    const body = css.slice(open + 1, bodyEnd);
+
+    if (isClassRule && body.length > 0) {
+      const directDecls = body.replace(/\{[\s\S]*?\}/g, '');
+      const hasPointerEventsNone = /(?:^|;)\s*pointer-events\s*:\s*none/i.test(directDecls);
+      const hasPosition = /(?:^|;)\s*position\s*:/i.test(directDecls);
+      // 🛡️ grid 堆叠层豁免（2026-11-17 二轮 · 真机还原态回放实证）：块体直接层含
+      //   `grid-area` ⇒ 它是 display:grid 宿主内的**堆叠层**（与兄弟层共用 grid 区域，
+      //   靠 z-index/源序分层）——补 absolute 会把它拽出 grid 流 ⇒ 图标底板塌陷。
+      //   这类层天然不参与布局（grid-area 已隔离），无需 absolute。
+      const isGridStackLayer = /(?:^|;)\s*grid-area\s*:/.test(directDecls);
+      if (hasPointerEventsNone && !hasPosition && !isGridStackLayer) {
+        const insertOffset = open + 1;
+        out += css.slice(i, insertOffset) + '\nposition: absolute;';
+        if (trace) trace.push({ selector });
+        i = insertOffset;
+        // 递归处理本块体内剩余部分（嵌套子块也可能各自命中）
+        out += ensurePositionForDirectLayerBlocks(css.slice(insertOffset, bodyEnd), trace);
+        i = bodyEnd;
+        continue;
+      }
+      // 递归：本块体内部还有嵌套子块要扫
+      out += css.slice(i, open + 1) + ensurePositionForDirectLayerBlocks(body, trace) + '}';
+      i = bodyEnd + 1;
+      continue;
+    }
+
+    out += css.slice(i, bodyEnd + 1);
+    i = bodyEnd + 1;
+  }
+  return out;
 }
 
 /**

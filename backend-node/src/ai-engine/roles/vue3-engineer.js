@@ -64,6 +64,7 @@ import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
 // 🛡️ G05：数字字面量判据的 plan 入参与 mc-max 同源（全保真 planner 原形优先）。
 import { resolvePlanSourceFromInput } from '../utils/resolve-plan-source.js';
 import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource, buildChartTypeTruthSet } from '../utils/chart-type-guard.js';
+import { findMissingChartTypes } from '../utils/chart-missing-types.js';
 // 🛡️ A4→CSS 高度比例落表（2026-09-15）：Vue3 链路此前未接入 buildSectionLayoutFacts
 //（buildSectionHeightsMap 经 this._buildSectionHeightsMap 继承自 MicrocodeEngineer），
 // 导致图表 section 高度比例丢失（mv-max-1789477270646-3e3b7cb2 图表空白实锤）。
@@ -2088,30 +2089,39 @@ export class Vue3Engineer extends MicrocodeEngineer {
           });
         }
 
-        // 🎯 N2 图表生成兜底（vue3 端，2026-08-31 与 mc 端对齐治本版）：
-        // 旧版盲目注入 `import { ref,... } from 'vue'` 与 LLM 已有 import 重复声明 →
-        // SFC 编译失败（mc 端事故 mc-max-1788174922721-1034fb6d 同根因，vue3 端同代码复用风险）。
-        // 改用 code-healer.injectEchartsFallback（import 差集 + 符号冲突检测 + 根容器内注入），
+        // 🎯 N2 图表生成兜底（vue3 端 · 2026-11-17 判据同源化，与 mc 端对齐）：
+        //   判据从「产物无任何 echarts.init」改为与门禁 DO-NOT-INVENT-CHART-MISSING 同源的
+        //   「vision 要的类型 T 在产物里缺失」（utils/chart-missing-types#findMissingChartTypes）。
+        //   注入类型取【缺失的那个类型】而非固定 charts[0]：缺 pie 注入 line 是无效修复。
+        // 注入器用 code-healer.injectEchartsFallback（import 差集 + 符号冲突检测 + 根容器内注入），
         // 并加注入器自检防线：注入后 validateVueSfc，失败即回滚。
         try {
           const chartsForGuard = Array.isArray(input.charts)
             ? input.charts
             : [];
-          const hasEcharts = Object.values(codeResult.files).some(
-            (f) => typeof f === 'string' && f.includes('echarts.init('),
-          );
-          if (chartsForGuard.length > 0 && !hasEcharts) {
+          // 🛡️ 判据单一来源：与门禁共用 findMissingChartTypes（含文字卡承载豁免 / line 缺省 series 豁免）
+          const { missing: missingCharts } = findMissingChartTypes({
+            charts: chartsForGuard,
+            files: codeResult.files,
+            figmaNodeData: input.figmaNodeData || null,
+          });
+          if (missingCharts.length > 0) {
             const idxPathN2 = 'package/index.vue';
             const targetFile = codeResult.files[idxPathN2];
             if (typeof targetFile === 'string') {
-              const firstChart = chartsForGuard[0] || {};
-              const chartType = resolveEchartsType(firstChart.type) || 'line';
+              // 缺失类型对应的 vision chart（无匹配则回退首图）；注入类型取归一化缺失类型
+              const firstMissing = missingCharts[0];
+              const targetChart =
+                firstMissing.chart && typeof firstMissing.chart === 'object'
+                  ? firstMissing.chart
+                  : chartsForGuard[0] || {};
+              const chartType = resolveEchartsType(firstMissing.type) || 'line';
               const chartSeries = (
-                Array.isArray(firstChart.series) ? firstChart.series : ['trend']
+                Array.isArray(targetChart.series) ? targetChart.series : ['trend']
               ).join(', ');
               // 🎯 D 系列第一刀：优先传视觉真值 legendItems
-              const legendItems = Array.isArray(firstChart.legend?.items)
-                ? firstChart.legend.items
+              const legendItems = Array.isArray(targetChart.legend?.items)
+                ? targetChart.legend.items
                 : [];
               const healedForN2 =
                 microcodeHealer.healVueEmbeddedStyleBraces(targetFile);
@@ -2125,7 +2135,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
                 if (guardN2.valid) {
                   codeResult.files[idxPathN2] = patched;
                   this.logger.warn(
-                    `⚠️ [vue3] 图表生成兜底：vision.charts.length=${chartsForGuard.length} 但产物无 echarts，已注入占位（type=${chartType} series=${chartSeries}，SFC 自检通过）。请人工补数据/样式`,
+                    `⚠️ [vue3] 图表生成兜底：vision 缺失类型 [${missingCharts.map((m) => m.type).join(',')}]，已注入占位（type=${chartType} series=${chartSeries}，SFC 自检通过）。请人工补数据/样式`,
                   );
                 } else {
                   this.logger.warn(
@@ -2503,10 +2513,29 @@ export class Vue3Engineer extends MicrocodeEngineer {
 
       // 🛡️ 父类 MicrocodeEngineer.writeFiles 返回 { written, skipped }（对象，非数组）。
       // 此前按旧数组形态直接使用导致 writtenFiles.map is not a function（写盘成功后任务仍失败）。
-      const { written: writtenFiles, skipped: writeSkipped } = this.writeFiles(
-        codeResult.files,
-        outputPath,
-      );
+      const _vue3Write = this.writeFiles(codeResult.files, outputPath);
+      const { written: writtenFiles, skipped: writeSkipped } = _vue3Write;
+      // 🛡️ 2026-11-17（快照落后根治 · 与 mc 端同修）：**采纳写盘出口定稿 map**。
+      //   同一病灶：父类 writeFiles 包装层把入参 map 换成新对象（类名方言归一 / 子组件类
+      //   收敛均为 `{...files}`），file-writer 内的就地回写与刀 53 终裁覆写只落在
+      //   targetFiles 上 ⇒ 这里的 `codeResult.files` 是旧引用 ⇒ 后续
+      //   runArtifactInvariants / onFilesReady 候选快照 / 返回值读到的都是写盘前版本。
+      //   计数行恒打（0 也打），否则「采纳生效」与「没采纳」在日志上同形。
+      if (_vue3Write && _vue3Write.finalFiles && typeof _vue3Write.finalFiles === 'object') {
+        const _preVue3Adopt = codeResult.files;
+        let _vue3AdoptChanged = 0;
+        for (const [k, v] of Object.entries(_vue3Write.finalFiles)) {
+          if (_preVue3Adopt[k] !== v) _vue3AdoptChanged++;
+        }
+        codeResult.files = _vue3Write.finalFiles;
+        this.logger.info(
+          `🛡️ [vue3] 终态 map 采纳写盘出口（内存=磁盘）files=${Object.keys(codeResult.files).length} adopted=${_vue3AdoptChanged}`,
+        );
+      } else {
+        this.logger.info(
+          `🛡️ [vue3] 终态 map 采纳写盘出口（内存=磁盘）files=${Object.keys(codeResult.files || {}).length} adopted=0`,
+        );
+      }
       if (writeSkipped && writeSkipped.length > 0) {
         this.logger.warn('⚠️ Vue3 写盘部分文件被跳过', {
           skipped: writeSkipped,

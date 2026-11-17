@@ -5,15 +5,16 @@ describe('do-not-invent-validator', () => {
     expect(validateDoNotInvent({ files: {}, analysis: {} }).pass).toBe(true)
   })
 
-  // ── 核心文案篡改（BLOCK 级）──
-  it('BLOCK：核心文案篡改（一氧化碳→二氧化碳）阻止发布', () => {
+  // ── 核心文案篡改（2026-11-17 降 WARN：能运行即放行，问题文字留痕）──
+  it('WARN：核心文案篡改（一氧化碳→二氧化碳）放行但留具体问题', () => {
     const files = { 'package/index.vue': `<template><div>二氧化碳浓度</div></template>` }
     const res = validateDoNotInvent({ files, analysis: { doNotInvent: ['不要将一氧化碳写成二氧化碳'] } })
-    expect(res.pass).toBe(false) // BLOCK 阻断
-    expect(res.blockCount).toBe(1)
+    expect(res.pass).toBe(true) // 降 WARN 后不阻断
+    expect(res.blockCount).toBe(0)
     const issue = res.issues.find(i => i.id === 'DO-NOT-INVENT-TEXT')
     expect(issue).toBeDefined()
-    expect(issue.severity).toBe('BLOCK')
+    expect(issue.severity).toBe('WARN')
+    expect(issue.message).toContain('二氧化碳') // 阳性锚：具体问题文字仍在
   })
 
   it('放行：组件声明 doNotInvent 但生成保留原词（一氧化碳）不算篡改', () => {
@@ -22,10 +23,10 @@ describe('do-not-invent-validator', () => {
     expect(res.pass).toBe(true)
   })
 
-  it('BLOCK 时 issue 包含 snippet 字段', () => {
+  it('降 WARN 后 issue 仍包含 snippet 字段（判据未删）', () => {
     const files = { 'package/index.vue': `<template><div class="stat">二氧化碳 12ppm</div></template>` }
     const res = validateDoNotInvent({ files, analysis: { doNotInvent: ['不要将一氧化碳写成二氧化碳'] } })
-    expect(res.pass).toBe(false)
+    expect(res.pass).toBe(true)
     const issue = res.issues.find(i => i.id === 'DO-NOT-INVENT-TEXT')
     expect(issue.snippet).toBeDefined()
     expect(issue.snippet).toContain('二氧化碳')
@@ -167,8 +168,8 @@ const option = { series: [{ data: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }] }
     expect(extractSnippet('hello world', 'zzz')).toBeUndefined()
   })
 
-  // ── 图表类型缺失（BLOCK 级 · 2026-09-15 · 07e31fbb 实锤）──
-  it('BLOCK：vision 识别到 doughnut，但产物无 pie series（图表容器漏写）', () => {
+  // ── 图表类型缺失（2026-09-15 实锤；2026-11-17 降 WARN 放行）──
+  it('WARN：vision 识别到 doughnut，但产物无 pie series（放行+留痕）', () => {
     const files = {
       'package/index.vue': `<template><div></div></template>`,
       'package/components/ListSection.vue': `<template><div>只有统计列表</div></template>`,
@@ -177,10 +178,11 @@ const option = { series: [{ data: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }] }
       files,
       analysis: { charts: [{ section: 'chart-container', type: 'doughnut', series: ['交通事故'] }] },
     })
-    expect(res.pass).toBe(false)
+    expect(res.pass).toBe(true) // 2026-11-17 降 WARN 放行
     const issue = res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MISSING')
     expect(issue).toBeDefined()
-    expect(issue.severity).toBe('BLOCK')
+    expect(issue.severity).toBe('WARN')
+    expect(issue.message).toContain('图表类型缺失') // 阳性锚：具体问题文字仍在（normalize 后为 pie）
   })
 
   it('放行：vision 识别到 doughnut，产物子组件里确有 type:pie series', () => {
@@ -241,7 +243,7 @@ const option = { series: [{ name: '方向', type: 'bar', data: [1, 2] }] }
   })
 
   // ── echarts 挂载点缺失（BLOCK 级 · 2026-09-15 · 07e31fbb 实锤）──
-  it('BLOCK：script 有 echarts.init(chartRef.value) 但 template 无 ref="chartRef" 挂载点', () => {
+  it('WARN：script 有 echarts.init(chartRef.value) 但 template 无 ref="chartRef" 挂载点（放行+留痕）', () => {
     const files = {
       'package/index.vue': `<template><base-panel><ListSection /></base-panel></template>
 <script setup>
@@ -254,10 +256,11 @@ const option = { series: [{ type: 'pie', data: [1, 2] }] }
       files,
       analysis: { charts: [{ type: 'doughnut', series: ['交通事故'] }] },
     })
-    expect(res.pass).toBe(false)
+    expect(res.pass).toBe(true) // 2026-11-17 降 WARN 放行
     const issue = res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MOUNT-MISSING')
     expect(issue).toBeDefined()
-    expect(issue.severity).toBe('BLOCK')
+    expect(issue.severity).toBe('WARN')
+    expect(issue.message).toContain('chartRef') // 阳性锚：具体问题文字仍在
   })
 
   it('放行：script 有 echarts.init 且 template 有对应 ref 挂载点', () => {

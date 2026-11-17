@@ -93,6 +93,36 @@ describe('绘制事实索引 / 结构判据（节点归属，不按类名枚举�
     expect(idx.has('x')).toBe(false)
   })
 
+  // 🔴 2026-11-17 治本（回灌锚 mc-max-1794895488047-f785be7f）：声明只作用于 **subject**。
+  //   LESS 嵌套 / 后代选择器下，旧实现把选择器里所有 class 都记为「CSS 画的图形」
+  //   ⇒ 真实容器也被标成假图形 ⇒ 刀 51 有**误删真实节点**的风险（比漏删严重）。
+  it('祖先归因不误标：`.frame .icon .dot{background:…}` 只标 `.dot`，不标 `.frame` / `.icon`', () => {
+    const idx = buildDrawClassIndex({
+      'a.less': '.zz-frame { \n .zz-icon { \n .zz-dot { background: linear-gradient(#fff, #000); } } }',
+    })
+    expect(idx.has('zz-dot')).toBe(true)
+    expect(idx.has('zz-icon')).toBe(false)
+    expect(idx.has('zz-frame')).toBe(false)
+  })
+
+  it('主题根 class（.light / .dark）不因被当作祖先而误标', () => {
+    const idx = buildDrawClassIndex({
+      'a.less': '.light .zz-dot { background: #f00; } .dark .zz-dot2 { background: #000; }',
+    })
+    expect(idx.has('zz-dot')).toBe(true)
+    expect(idx.has('zz-dot2')).toBe(true)
+    expect(idx.has('light')).toBe(false)
+    expect(idx.has('dark')).toBe(false)
+  })
+
+  it('嵌套规则里的绘制声明照常采到（不漏采）+ 内层属性不混进外层', () => {
+    const idx = buildDrawClassIndex({
+      'a.less': '.zz-card { display: flex; .zz-badge { border-radius: 50%; } }',
+    })
+    expect(idx.has('zz-badge')).toBe(true)
+    expect(idx.has('zz-card')).toBe(false)
+  })
+
   it('ContentVehicleDist 嵌套 <div><i/><i/></div> 只取最外层 1 个假图标块', () => {
     const idx = buildDrawClassIndex({ 'a.less': LESS })
     const blocks = findGraphicIconBlocks(templateRange(VEHDIST)!.body, idx)
@@ -118,6 +148,66 @@ describe('绘制事实索引 / 结构判据（节点归属，不按类名枚举�
     const idx = buildDrawClassIndex({ 'a.less': LESS })
     const sfc = '<template><div class="r"><span class="zz-renamed-icon">{{ x }}</span><b>t</b></div></template>'
     expect(findGraphicIconBlocks(sfc, idx)).toHaveLength(0)
+  })
+
+  // 🛡️ P0-d（2026-11-17 · mc-1794880493923-bff54606 实锤「下方四行路段整块消失」）：
+  //   PascalCase 子组件标签是可渲染单元，含它的装配容器不是「CSS 假图标块」。
+  //   修复前：healer 把 4 个挂真值背景的包装容器整块删掉 ⇒ 12 子组件 11 个孤儿。
+  it('P0-d：内含 PascalCase 子组件标签的容器不判假图标块；真·空 CSS 图形块仍命中', () => {
+    const idx = buildDrawClassIndex({ 'a.less': LESS })
+    // 阴性对照：mc-bff54606 真实形态 —— 容器挂绘制背景 + 内含 <ContentSection2 />
+    const assembled =
+      '<template><div class="r">' +
+      '<div class="zz-renamed-icon"><ContentSection2 /></div>' +
+      '<div class="zz-renamed-icon"><ContentSection3 /><ContentTailText /></div>' +
+      '<div class="pure-layout"><span class="zz-renamed-icon"></span><b>t</b></div>' +
+      '</div></template>'
+    const blocks = findGraphicIconBlocks(assembled, idx)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].classes).toEqual(['zz-renamed-icon'])
+    expect(blocks[0].tag).toBe('span')
+  })
+
+  it('P0-d：healer 不删含子组件标签的容器（回归锚：mc-1794880493923-bff54606）', () => {
+    const assembledVue = `<template>
+  <div class="c-x-con" data-mvgo-geom="root">
+    <ContentSection class="c-x-sech-1" />
+    <div class="c-traffic-monitor-vehdist-icon"><ContentSection2 /></div>
+    <div class="c-traffic-monitor-vehdist-icon"><ContentSection3 /></div>
+  </div>
+</template>
+
+<script setup>
+import ContentSection from './components/ContentSection.vue'
+import ContentSection2 from './components/ContentSection2.vue'
+import ContentSection3 from './components/ContentSection3.vue'
+</script>
+
+<style lang="less" scoped>
+@import '../resources/styles/index.less';
+</style>`
+    const files = {
+      'package/index.vue': assembledVue,
+      'package/components/ContentSection.vue': VEHDIST.replace(
+        /c-traffic-monitor/g,
+        'c-x',
+      ),
+      'package/components/ContentSection2.vue': VEHDIST.replace(
+        /c-traffic-monitor/g,
+        'c-x',
+      ),
+      'package/components/ContentSection3.vue': VEHDIST.replace(
+        /c-traffic-monitor/g,
+        'c-x',
+      ),
+      'resources/styles/common.less': LESS,
+    }
+    const before = files['package/index.vue']
+    const r = healIconTruthConservation(files, { silent: true })
+    expect(files['package/index.vue']).toBe(before)
+    expect(r.stats.removed).toBe(0)
+    expect(r.stats.replaced).toBe(0)
+    expect(r.stats.verdict).toBe('clean')
   })
 })
 

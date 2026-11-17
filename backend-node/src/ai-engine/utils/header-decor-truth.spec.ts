@@ -123,6 +123,56 @@ describe('collectHeaderDecorTruth · 采集判据', () => {
     expect(collectHeaderDecorTruth({})).toEqual([]);
     expect(collectHeaderDecorTruth({ document: { id: 'x', type: 'FRAME' } })).toEqual([]);
   });
+
+  /* ── Ⓖ 数字角标底板排除（2026-11-17 路线A第二步 · 真机 e6cb4983 实锤）─────
+   * 病灶：Tab 的 badge-count（父 group 18×18 = 红点 RECTANGLE + 纯数字 TEXT "2"）
+   * 被 ⒸⒹⒺ 误判为标题装饰；归属键=伴随 TEXT 原文，"2" 全文复用 ⇒ 红点插进每个 "2"。
+   * 治本：⚊ 伴随 TEXT 为纯数字 ⇒ 不采集。标题装饰伴随 TEXT 恒为标签文案，不命中。 */
+
+  /** 一个「数字角标」：GROUP badge(N×N) → [满圆红点 RECTANGLE, 纯数字 TEXT] */
+  function badgeCount({ badgeId, dotId, textId, count }) {
+    const dot = node(dotId, 'RECTANGLE', 10, 10, 18, 18, {
+      cornerRadius: 20, fills: [solid('#f53f3f')],
+    });
+    const textNode = node(textId, 'TEXT', 14, 13, 8, 14, { characters: count });
+    // 父 group 18×18，仅两个子节点（dot + 数字），高 18 ≤ maxTextH(14)*2=28（过 Ⓓ），
+    // 兄弟数 2（过 Ⓔ），中心对齐（dot center=19 / text center=20，tol=10.8 过 Ⓒ）
+    return node(badgeId, 'GROUP', 10, 10, 18, 18, { children: [dot, textNode] });
+  }
+
+  test('⭐ 阳性（核心拦截）：数字角标底板（红点+纯数字TEXT "2"）⇒ 不采集', () => {
+    const badge = badgeCount({ badgeId: 'bc1', dotId: 'dot1', textId: 'n1', count: '2' });
+    const list = collectHeaderDecorTruth({ document: wrap([badge]) });
+    expect(list).toHaveLength(0);
+  });
+
+  test('⭐ 阴阳对照：同一棵树，纯数字→非纯数字 ⇒ 从不采集变采集', () => {
+    const badgeNum = badgeCount({ badgeId: 'bc2', dotId: 'dot2', textId: 'n2', count: '6' });
+    expect(collectHeaderDecorTruth({ document: wrap([badgeNum]) })).toHaveLength(0);
+    // 只把伴随 TEXT 从 "6" 改成标签文案，其余形态全同 ⇒ 判据应放行
+    const labelNode = node('n2b', 'TEXT', 14, 13, 40, 14, { characters: '状态6' });
+    const badgeLabel = node('bc2b', 'GROUP', 10, 10, 48, 18, {
+      children: [node('dot2b', 'RECTANGLE', 10, 10, 18, 18, { cornerRadius: 20, fills: [solid('#f53f3f')] }), labelNode],
+    });
+    const list = collectHeaderDecorTruth({ document: wrap([badgeLabel]) });
+    expect(list).toHaveLength(1);
+    expect(list[0].text).toBe('状态6');
+  });
+
+  test('阴性防误伤：伴随 TEXT 含数字但非纯数字（G2京沪高速）⇒ 仍采集', () => {
+    const badge = badgeCount({ badgeId: 'bc3', dotId: 'dot3', textId: 'n3', count: '2' });
+    // 把 "2" 换成 "G2京沪高速"（非纯数字）
+    badge.children[1] = node('n3b', 'TEXT', 14, 13, 90, 14, { characters: 'G2京沪高速' });
+    badge.absoluteBoundingBox.width = 90;
+    const list = collectHeaderDecorTruth({ document: wrap([badge]) });
+    expect(list).toHaveLength(1);
+    expect(list[0].text).toBe('G2京沪高速');
+  });
+
+  test('阴性防误伤：多位数纯数字角标（"12"）同样拦截', () => {
+    const badge = badgeCount({ badgeId: 'bc4', dotId: 'dot4', textId: 'n4', count: '12' });
+    expect(collectHeaderDecorTruth({ document: wrap([badge]) })).toHaveLength(0);
+  });
 });
 
 /* ── 落地 ───────────────────────────────────────────────────────────────── */

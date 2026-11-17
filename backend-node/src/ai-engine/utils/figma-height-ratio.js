@@ -606,6 +606,29 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
       restSections.push(section)
     }
   }
+  // 🛡️ 2026-11-17 治本（mc-max-1794845329435-4cac37a8 环境监测图表塌陷，与下方 pairRegions
+  //   剔除已消费区域配套）：vision **自造段**（id 不在 Figma 树、又无 figmaNodeId/figmaNode
+  //   锚、也未标 anchorValid===false —— 典型如轴拆分段 `2:7898-y-axis`/`-x-axis`）不参与
+  //   顺序/直配序列。病灶：这类段挤占 restSections 位次 ⇒ ② 顺序 1:1 对位整体错位（真值
+  //   chart=113px 错配给 x-axis、图例 14px 错配给 chart ⇒ 产物段高塌陷 21px、160px canvas
+  //   被 overflow:hidden 裁掉 ⇒ 用户报「echarts 没生成」）。
+  //   判据（纯结构、保守）：`id` 与 `figmaNodeId/figmaNode` 都无法在 figmaNodes 命中，且
+  //   **未标** anchorValid===false（带幻觉标记的段归 ①-β 追认判据管辖，ec1db095 契约，
+  //   本处不得二次裁决）。被剔除的段不写比例（消费端 flex:1 兜底），不猜。
+  const syntheticSections = []
+  const realRestSections = []
+  for (const section of restSections) {
+    const sid = String(section?.id ?? '')
+    const node = sid ? figmaNodes.find((n) => n._id === sid) : null
+    if (!node && section?.anchorValid !== false) {
+      syntheticSections.push(section)
+    } else {
+      realRestSections.push(section)
+    }
+  }
+  if (syntheticSections.length > 0) {
+    bump('syntheticSectionsExcluded', syntheticSections.length)
+  }
 
   // ②-α 根下直配（2026-11-03 治本 · mc-max-1793669737047-17691193）：当 sections 全无
   //   figmaNodeId、且 sections 中存在 header 类 section、且根下非 bg 节点数 == sections 数时，
@@ -768,17 +791,41 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
   // 🛡️ 2026-11-04：HEADER_RE / HEADER_MAX_HEIGHT_PX 已提升到模块作用域（①-γ 共用），
   //   此处不得再声明同名局部常量——同一函数内的局部 `const` 会让上方 ①-γ 分支落入 TDZ。
   let pairRegions = regions
+  // 🛡️ 2026-11-17 治本（mc-max-1794845329435-4cac37a8 环境监测图表塌陷实锤）：
+  //   ① figmaNodeId 直配消费了 `89:42`(sub-t 32px) 后，② 顺序配对仍在**全量 regions** 上
+  //   1:1 对位 ⇒ 剩余区域未剔除已消费区域 ⇒ 整体错位一格：标题段 2:7881 错拿图表 113px、
+  //   图表段 2:7898 错拿图例 14px、自造轴段错拿刻度 Vector 22px（离线复现 stats：
+  //   figmaNodeId=1 + order=4；产物 sech-2 flex=0.144 ≈ 14/97，DOM 实测段高 21px，
+  //   echarts canvas 160px 被 overflow:hidden 裁成一条缝 —— 用户报「echarts 没生成」）。
+  //   治本：② 入口前用 collectLeftoverRegions（①-γ 同一判据：自身/祖先/后代已消费即剔除）
+  //   把 ① 已消费节点所占区域从序列剔除，再走既有归并/剥头/1:1 链。
+  //   安全性：idMatched 为空时 leftover=regions 原样（零行为变化）；已有消费时剔除的是
+  //   「高度已计入该段」的区域，与 ①-γ 判据逐字同源（单一来源），不引入新猜测。
+  if (idMatched.length > 0) {
+    const byIdIdx = new Map()
+    for (const n of figmaNodes) if (n && n._id != null) byIdIdx.set(String(n._id), n)
+    const consumed = collectLeftoverRegions(regions, idMatched.map((m) => m.node), byIdIdx)
+    if (consumed.length > 0 && consumed.length !== regions.length) {
+      pairRegions = consumed
+      bump('orderConsumedTrimmed', regions.length - consumed.length)
+    }
+  }
   // 🛠️ 2026-10-30 视觉行归并兜底（mc-max-1793349441153-c3b958e0 实锤，见 mergeVisualRows）。
   // 仅在「regions 比 sections 多」时启用；归并后恰好对齐才采纳，否则原样退回走下面的旧容错链。
   // 🔴 归并结果按 y 升序，顺带修掉「文档顺序 ≠ 视觉顺序」的串列风险；数量本就相等时不动，
   //    以保证既有已验证行为（132 个 region/section 直配用例）零回归。
-  if (restSections.length >= 2 && pairRegions.length > restSections.length) {
+  // 🛡️ 2026-11-17（与上方 syntheticSectionsExcluded 配套）：② 顺序配对**只用真实段**。
+  //   自造段（syntheticSections）不占 restSections 位次 ⇒ 对位不再被挤错。
+  //   其余分支（②-α/P0-8c/①-β/①-γ）保持 restSections 原语义：它们的等量守卫天然挡住
+  //   自造段（extra≠length / 全命中不成立），不会因本剔除改变行为。
+  const orderSections = realRestSections.length >= 2 ? realRestSections : restSections
+  if (orderSections.length >= 2 && pairRegions.length > orderSections.length) {
     const mergedRows = mergeVisualRows(pairRegions)
-    if (mergedRows.length === restSections.length) {
+    if (mergedRows.length === orderSections.length) {
       pairRegions = mergedRows
     }
   }
-  if (restSections.length >= 2 && pairRegions.length === restSections.length + 1) {
+  if (orderSections.length >= 2 && pairRegions.length === orderSections.length + 1) {
     const first = pairRegions[0]
     const bb = first?.absoluteBoundingBox
     if (HEADER_RE.test(String(first?.name || '').trim()) && bb && bb.height > 0 && bb.height <= HEADER_MAX_HEIGHT_PX) {
@@ -794,7 +841,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
   // 展开其直接子级（剥 header 类小子项，按 y 排序插入原位）。限 2 轮防过深。
   const MAX_EXPANSION_PASS = 2
   for (let pass = 0; pass < MAX_EXPANSION_PASS; pass++) {
-    if (pairRegions.length >= restSections.length) break
+    if (pairRegions.length >= orderSections.length) break
     if (pairRegions.length < 2) break
     // 选最大（按 bbox.h），且：有 children & 非技术组件 & 非 header 类小子项
     let bestIdx = -1
@@ -829,7 +876,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
   // 留到展开后（剥 sub-header）；③ 复合展开深度不到位仍多 N（放弃 fail-open，由后段 1:1 跳过）。
   const SUB_HEADER_RE = /^sub-?header$/i
   const stripLeadingHeaderIfExcess = () => {
-    if (pairRegions.length !== restSections.length + 1) return false
+    if (pairRegions.length !== orderSections.length + 1) return false
     if (pairRegions.length < 3) return false
     const first = pairRegions[0]
     const bb = first?.absoluteBoundingBox
@@ -840,14 +887,14 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
     return false
   }
   const stripSubHeader = () => {
-    if (pairRegions.length <= restSections.length) return false
+    if (pairRegions.length <= orderSections.length) return false
     const before = pairRegions.length
     pairRegions = pairRegions.filter(
       (r) => !(SUB_HEADER_RE.test(String(r?.name || '').trim()) && (r?.absoluteBoundingBox?.height || 0) <= HEADER_MAX_HEIGHT_PX),
     )
     return pairRegions.length < before
   }
-  for (let t = 0; t < 5 && pairRegions.length > restSections.length; t++) {
+  for (let t = 0; t < 5 && pairRegions.length > orderSections.length; t++) {
     if (stripSubHeader()) continue
     if (stripLeadingHeaderIfExcess()) continue
     break
@@ -864,14 +911,14 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
   //   合作厂商 10 图元 → 4 视觉行 [76,161,212,265]（与 ①-β id 直配结果逐项一致，互为交叉验证）。
   //   🔴 刻意不放松 WRAPPER_RE 匹配 `slot-*`：`slot-当日总流量` 等业务名 slot 自身就是 section
   //   （e1432017 复合展开契约，spec「复合 region 展开」用例），blanket 前缀会把它整体打挂。
-  if (pairRegions.length > restSections.length) {
+  if (pairRegions.length > orderSections.length) {
     const mergedAfterExpansion = mergeVisualRows(pairRegions)
-    if (mergedAfterExpansion.length === restSections.length) {
+    if (mergedAfterExpansion.length === orderSections.length) {
       pairRegions = mergedAfterExpansion
     }
   }
   const orderMatched = []
-  if (restSections.length === pairRegions.length && restSections.length >= 2) {
+  if (orderSections.length === pairRegions.length && orderSections.length >= 2) {
     // 🛡️ 2026-11-05 治本：区域侧先归一到视觉序，再与 vision 段序（视觉上下序）逐位配对。
     //   与 ①-γ 剩余区域映射共用 sortByVisualOrder（单一口径，杜绝两处排序语义分叉）。
     //   文档序与视觉序一致的样本（既有已验收的直配场景）排序后不变 ⇒ 零位移。
@@ -888,7 +935,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
     } else {
       bump('orderVisualSortSkippedOverlap', 1)
     }
-    for (let i = 0; i < restSections.length; i++) {
+    for (let i = 0; i < orderSections.length; i++) {
       const node = pairRegions[i]
       const bb = node?.absoluteBoundingBox
       if (bb && bb.height > 0) {
@@ -900,7 +947,7 @@ export function applyFigmaSectionRatios(sections, figmaData, stats = null, exclu
             if (cbb && cbb.height > effectiveH) effectiveH = cbb.height
           }
         }
-        orderMatched.push({ section: restSections[i], node: { name: node.name, effectiveH, _id: node.id } })
+        orderMatched.push({ section: orderSections[i], node: { name: node.name, effectiveH, _id: node.id } })
       }
     }
   }
@@ -1246,7 +1293,8 @@ function writeSectionRatios(matched, figmaNodes, stats = null, excludedIds = nul
   if (!(total > 0)) return 0
   // 🎯 B1-S2 三源归一（2026-11-16 · 68783bf6/fdbb799d/c1ac194a 实锤）：avg=1 → Σ=1 量纲迁移。
   //   旧实现 flexGrow = effectiveH/avg（Σ=n 量纲），与 codegen 确定性装配的
-  //   flexItemStyleFromHeights（h/(Σh+Σgap)，Σ=1 同层归一）是两套权威量纲，规则②/⑥
+  //   flexItemStyleFromHeights（h/Σh，Σ=1 同层归一；2026-11-17 F1 前曾是 h/(Σh+Σgap)，
+  //   已修正——basis:0 下 Σgrow<1 只部分分配 ⇒ 段高压扁 + 底部死白）是两套权威量纲，规则②/⑥
   //   消费时打架（0596cb3c：15%/32%/52% vs 真值 7%/16%/77%）。改为 h/Σ（Σ=1），
   //   与装配层同一量纲；CSS 语义不变（flex-grow 是同层相对份额，比例常数因子无意义）。
   //   Σ=1 恒 ≤1，天然远离 FLEX_GROW_SCALES.PIXEL_MIN(20) 误判线。

@@ -57,4 +57,11 @@ describe('RUNTIME-STATIC-* 规则编号中心表（立项 G3）', () => {
     expect(RUNTIME_CODES['RUNTIME-009']).toBeTruthy()
     expect(RUNTIME_CODES['RUNTIME-010']).toBeTruthy()
   })
+
+  it('RUNTIME_CODES 与 addBlock 全集对齐：017/018 已补登（2026-11-17 防回退锚）', () => {
+    // 2026-09-10 审计后新增的 017（零宽图表）/018（标题几何）长期漏登，
+    // 导致 RUNTIME_STATIC_RULES 无法引用这两个码。补登后此断言即为阳性对照。
+    expect(RUNTIME_CODES['RUNTIME-017']).toBeTruthy()
+    expect(RUNTIME_CODES['RUNTIME-018']).toBeTruthy()
+  })
 })

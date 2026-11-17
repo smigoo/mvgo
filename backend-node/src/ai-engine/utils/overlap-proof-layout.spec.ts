@@ -365,3 +365,86 @@ describe('根治⑮ · applyOverlapProofHeal 动作 C（异父同位错开）', 
     expect(mB[1]).toContain('top: 101px'); // 保留者不动
   });
 });
+
+// ── 方案 B（2026-11-17 · RUNTIME-016 根治兜底）：relative 段无 absolute+top ──
+// 本单 mc-max-1794884228303-7f6a9d00：sech-2 表格末行 × sech-3 footer 图例跨段相撞，
+// 两段全 position:relative（common.less:37/43）、无 top ⇒ 原动作 C 每轮 skipped 白烧。
+const REL_BAND_VUE = `<template>
+  <div class="c-device-root">
+    <div class="c-device-sech-2"><div class="ant-table-cell">服务区巡检狗K8</div></div>
+    <div class="c-device-sech-3"><div class="c-device-footer-legend-item">离线</div></div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-device-sech-2 { flex: 0.672 1 0 !important; position: relative; min-height: 0; }
+.c-device-sech-3 { flex: 0.024 1 0 !important; position: relative; min-height: 0; }
+</style>`;
+
+const REL_BAND_PAIRS = [
+  {
+    a: '服务区巡检狗K8', b: '离线', ratio: 0.86,
+    aBox: [71.8, 593.9, 102.3, 17], bBox: [76.3, 592.5, 20.5, 10.2],
+    aAnc: 'ant-table-cell < ant-table-row < c-device-sech-2 < root',
+    bAnc: 'c-device-footer-legend-item < c-device-sech-3 < root',
+  },
+];
+
+describe('方案 B · relative 段 min-height:auto 兜底（2026-11-17 RUNTIME-016 根治）', () => {
+  test('① 阳性：relative 段跨段相撞 ⇒ 注入 min-height:auto !important（带 op-heal-c2）', () => {
+    const anchors = extractOverlapAnchors(REL_BAND_PAIRS as any);
+    const { files, healed } = applyOverlapProofHeal({ [IDX_FILE]: REL_BAND_VUE }, anchors);
+    const out = files[IDX_FILE];
+    const m2 = /\.c-device-sech-2\s*\{([^}]*)\}/.exec(out)!;
+    const m3 = /\.c-device-sech-3\s*\{([^}]*)\}/.exec(out)!;
+    expect(m2[1]).toContain('min-height: auto !important');
+    expect(m3[1]).toContain('min-height: auto !important');
+    expect(out).toContain('op-heal-c2');
+    expect(healed.flatMap((h: any) => h.heals.map((x: any) => x.action)))
+      .toContain('relative-band-min-height-auto');
+  });
+
+  test('② 阴性·absolute+top 用例（0062020b）⇒ 走原路径，输出逐字不变（零回归）', () => {
+    const anchors = extractOverlapAnchors(REAL_0062_PAIRS as any);
+    const r1 = applyOverlapProofHeal({ [IDX_FILE]: REAL_0062_VUE }, anchors);
+    // 原路径命中 cross-parent-top-shift，绝不能带方案 B 的 C2 标记
+    expect(r1.files[IDX_FILE]).toContain('op-heal-c');
+    expect(r1.files[IDX_FILE]).not.toContain('op-heal-c2');
+    expect(r1.healed.flatMap((h: any) => h.heals.map((x: any) => x.action)))
+      .toContain('cross-parent-top-shift');
+    expect(r1.healed.flatMap((h: any) => h.heals.map((x: any) => x.action)))
+      .not.toContain('relative-band-min-height-auto');
+  });
+
+  test('③ 阴性·relative 段已是 min-height:auto（方案 A 已治）⇒ 不重复注入', () => {
+    const already = REL_BAND_VUE.replace(/min-height: 0/g, 'min-height: auto');
+    const anchors = extractOverlapAnchors(REL_BAND_PAIRS as any);
+    const { files, healed, skipped } = applyOverlapProofHeal({ [IDX_FILE]: already }, anchors);
+    expect(files[IDX_FILE]).not.toContain('op-heal-c2');
+    expect(healed.flatMap((h: any) => h.heals.map((x: any) => x.action)))
+      .not.toContain('relative-band-min-height-auto');
+    expect(skipped.some((s: any) => s.reason === 'cross-parent-no-pos-ancestor')).toBe(true);
+  });
+
+  test('④ 阴性·链上无 position:relative 段（既非 absolute 也非 relative）⇒ skipped 不瞎改', () => {
+    const plain = REL_BAND_VUE
+      .replace(/position: relative; /g, '')
+      .replace(/min-height: 0/g, 'min-height: 0');
+    const anchors = extractOverlapAnchors(REL_BAND_PAIRS as any);
+    const { files, healed, skipped } = applyOverlapProofHeal({ [IDX_FILE]: plain }, anchors);
+    expect(files[IDX_FILE]).not.toContain('op-heal-c2');
+    expect(healed.flatMap((h: any) => h.heals.map((x: any) => x.action)))
+      .not.toContain('relative-band-min-height-auto');
+    expect(skipped.some((s: any) => s.reason === 'cross-parent-no-pos-ancestor')).toBe(true);
+  });
+
+  test('⑤ 幂等：连跑两遍第二遍零 C2 动作', () => {
+    const anchors = extractOverlapAnchors(REL_BAND_PAIRS as any);
+    const r1 = applyOverlapProofHeal({ [IDX_FILE]: REL_BAND_VUE }, anchors);
+    const r2 = applyOverlapProofHeal(r1.files, anchors);
+    const c2 = r2.healed.flatMap((h: any) =>
+      h.heals.filter((x: any) => x.action === 'relative-band-min-height-auto'),
+    );
+    expect(c2).toHaveLength(0);
+    expect(r2.files[IDX_FILE]).toBe(r1.files[IDX_FILE]);
+  });
+});

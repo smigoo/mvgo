@@ -114,6 +114,101 @@ function excludeBackgroundLayers(boxes, parentBox) {
 }
 
 /**
+ * 🛡️ 2026-11-17 新增（`73:3`「监测预警」实锤 · 1693 容器量化）：剔除**装饰性位图铺底**子节点。
+ *
+ * ## 病灶（与 `excludeBackgroundLayers` 是同一族问题的两个形态）
+ * 「自由摆放行」（`layoutMode=(none)`，子项绝对定位）里常有一层**低透明度位图铺底**
+ * （设计稿的阴影/渐变/氛围图）。它**不铺满父容器**（有的还刻意出血越界）⇒
+ * `excludeBackgroundLayers` 的「面积 ≥90% 父面积」判据抓不到它；但它与行内每个内容子项
+ * 都大范围重叠 ⇒ 两两 `areBoxesSideBySide` 恒否 ⇒ side-by-side 比例被系统性拉低 ⇒ **low 置信**。
+ *
+ * 真机 `73:3` 实测（`XK5lAcOFt3Yn6WvtanieKM_73-3_*.json` 的 `1:377`，FRAME 386×50 真值 row）：
+ *   剔除背景层 `1:379`(GROUP，面积比 1.000) 后剩 4 项：
+ *     `1:378` RECTANGLE 140×44 @x=1749.99（`opacity:0.3` + `fills:[IMAGE]`，**左出血父 x=1773 达 23px**）
+ *     `1:384` TEXT 58.83×43 ／ `1:385` FRAME icon-1 28×28 ／ `1:387` TEXT 253.89×43
+ *   · 含 `1:378`：6 组 pair 里 4 组 side-by-side ⇒ ratio 0.667 = **low**；
+ *   · 剔 `1:378`：3 组 pair 全 side-by-side ⇒ ratio 1 ⇒ **high** ⇒ 逃出注入器 T2 low 闸
+ *     （`layout-facts-injector` 对 `geometric-inference` + low **整段跳过** display/direction）
+ *     ⇒ 才写得出 `display:flex; flex-direction:row` ⇒ 行内 icon 归位。
+ *
+ * ## 判据（三条件 + 一道重叠闸，纯几何 / 不写死任何 node id）
+ *   ① `opacity` 为数字且 `<1` —— 低透明度 = 装饰语义（内容子项不会半透明）；
+ *   ② `fills` 里存在 `type==='IMAGE'` —— 位图铺底；
+ *   ③ 非 TEXT —— 与 `excludeBackgroundLayers` 的 TEXT 豁免同源（文字天然不是铺底）；
+ *   ④ 与**同容器内 ≥2 个兄弟** bbox 重叠 ≥ `0.5·min(面积)` —— 铺底必然与多数内容重叠。
+ *      这道闸是**承重**的：去掉它（无条件剔 `opacity<1 ∧ IMAGE`）会翻掉 19 个容器、
+ *      其中 10 个方向改变（`GTcJm0DKQvcJvcOZTh5n1l` 的 10 个 `flex/column/high -> stack/high`）。
+ *
+ * ## 爆炸半径（29 语料 / 1693 个「≥2 可比子项」容器 · 逐容器 `decideLayoutForBoxes` 对账）
+ *   · 翻转 9 个：**low→high 9 个、方向改变 0 个** —— 全部把「本就该 high 的自由摆放行」从 low
+ *     抬到 high（只解开注入器 T2 闸），**无一个容器的 flexDirection 被改变**；
+ *   · 命中容器全部落在 `73:3` 三份 cache（`1:377`/`1:388`/`1:400`，frame 2136636625/26/27），
+ *     剔除项恒为 `1:378`/`1:389`/`1:401`；
+ *   · 承重性对照（同闸同语料）：`IMAGE` 放宽成「任意 fills」→ 2 个方向改变；去掉 `IMAGE`
+ *     （只留 `opacity<1 ∧ !TEXT`）→ 16 个方向改变 ⇒ **两个条件都不可省**。
+ *   · ⚠️ 不可用节点级 `visible`：真机树已被 `figma-connector#pruneRedundantFields` 裁剪，
+ *     节点级 `visible` 不在白名单 ⇒ 该信号在管线里**永不命中**；而 `opacity`（仅 `!==1` 存活）
+ *     与 `fills[].type==='IMAGE'` 都会存活，故本判据在真机可用（同族判据 `A_HIDDEN_IMG` 与
+ *     本判据实测数值完全一致，但只有本判据能落到真机）。
+ *
+ * ## 与其他判据的分工（正交，不互相侵蚀）
+ *   · `excludeBackgroundLayers`：**铺满**父容器（≥90% 面积）的整块背景层；
+ *   · 本函数：**不铺满**、但「低透明度 + 位图语义 + 多重重叠」的铺底；
+ *   · 刀 6 / P0 / P0-b（`stack` 族）：子项**互相**叠放；本函数判「子项与铺底叠」。
+ *     剔除后若仍存在互相叠放，后续 `stack` 分支照常接管（顺序：本函数 → 背景层 → 刀 6 → P0 → P0-b）。
+ *
+ * 与 `excludeBackgroundLayers` 相同的兜底纪律：**只在剔除后仍 ≥2 个时才生效**
+ * （由调用方回退全集），避免「无事实 ⇒ LLM 只能猜 ⇒ 竖排堆叠」这一最坏结果。
+ *
+ * @param {Array<object>} boxes 子节点（读 `absoluteBoundingBox`/`bbox`/`opacity`/`fills`/`type`）
+ * @returns {Array<object>} 剔除装饰性位图铺底后的子项（无命中时**原引用**返回）
+ */
+function excludeDecorativeImageBackdrops(boxes) {
+  if (!Array.isArray(boxes) || boxes.length < 3) return boxes
+  const boxOf = (c) => {
+    const b = c?.absoluteBoundingBox || c?.bbox
+    if (!b) return null
+    const { x, y, width, height } = b
+    return [x, y, width, height].every(Number.isFinite) && width > 0 && height > 0
+      ? { x, y, width, height }
+      : null
+  }
+  const isBackdrop = (c) => {
+    if (String(c?.type || '').toUpperCase() === 'TEXT') return false // ③ 文字豁免
+    if (!(typeof c.opacity === 'number' && c.opacity < 1)) return false // ① 低透明度
+    const fills = Array.isArray(c.fills) ? c.fills : [] // ② 位图铺底
+    return fills.some((f) => String(f?.type || '').toUpperCase() === 'IMAGE')
+  }
+  // ④ 重叠率 = 交集 / min(两者面积)（与 `hasNearIdenticalStackPair` 的 IoU 口径区分：
+  //    此处刻意用 min 分母 —— 铺底常比内容大，「被大底包住的小内容」也算重叠）。
+  const overlapOf = (a, b) => {
+    const ix = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x))
+    const iy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y))
+    const minArea = Math.min(a.width * a.height, b.width * b.height)
+    return minArea > 0 ? (ix * iy) / minArea : 0
+  }
+  const drop = new Set()
+  for (let i = 0; i < boxes.length; i += 1) {
+    if (!isBackdrop(boxes[i])) continue
+    const bi = boxOf(boxes[i])
+    if (!bi) continue
+    let hits = 0
+    for (let j = 0; j < boxes.length; j += 1) {
+      if (i === j) continue
+      const bj = boxOf(boxes[j])
+      if (!bj) continue
+      if (overlapOf(bi, bj) >= 0.5) {
+        hits += 1
+        if (hits >= 2) break
+      }
+    }
+    if (hits >= 2) drop.add(i)
+  }
+  if (drop.size === 0) return boxes
+  return boxes.filter((_, i) => !drop.has(i))
+}
+
+/**
  * 🛡️ P0（2026-11-16 · T0 实测 29 语料 / 1445 容器实锤）：**包含关系叠层**判定。
  *
  * ## 病灶（与刀 6 同 bbox 叠层是两类不同形态，刀 6 覆盖不到）
@@ -264,6 +359,14 @@ function decideGeometricLayout(children, opts = {}) {
   )
   if (all.length < 2) return null
 
+  // 🛡️ 2026-11-17 治本（`73:3`「监测预警」实锤）：**先剔装饰性位图铺底**再走背景层/方向判定。
+  //   低透明度位图铺底不铺满父容器（可能还出血越界）⇒ 逃过 `excludeBackgroundLayers` 的
+  //   90% 面积判据，却与行内每个内容子项大范围重叠 ⇒ side-by-side 比例被拉低 ⇒ 假 low 置信
+  //   ⇒ 注入器 T2 闸跳过 ⇒ 真值 row 的自由摆放行拿不到 flex-direction。判据见函数注释。
+  //   **兜底纪律**：剔除后不足 2 个 ⇒ 回退全集（同 `excludeBackgroundLayers`，防「无事实」）。
+  const dedecor = excludeDecorativeImageBackdrops(all)
+  const pool = dedecor.length >= 2 ? dedecor : all
+
   // 🛡️ 2026-09-29 治本（mc-max-1790667854851-5f5bce3a 实锤）：**先剔除整块背景层**再判方向。
   //   真机列表项 `136:129` 的 4 个 children = bg(140×74, x=37) / icon(48×52, x=41) /
   //   组1(50×18, x=89) / 组2(39×23, x=90)。`detectGridColumns` 会把 **bg 与 icon 按
@@ -273,13 +376,13 @@ function decideGeometricLayout(children, opts = {}) {
   //   产物 `.list-item` 既没有 grid 也没有 flex ⇒ 三个 div 退化成 block 竖排堆叠
   //   （截图实锤：icon 在上、文字在下、数值被裁）。
   //   剔除背景层后剩 3 个（< 4，不判网格）⇒ 走 side-by-side 判定 ⇒ 正确得出 row。
-  const filtered = excludeBackgroundLayers(all, opts.parentBox)
+  const filtered = excludeBackgroundLayers(pool, opts.parentBox)
   // 🛡️ 过滤后不足 2 个（典型：1 背景层 + 1 内容）⇒ **回退用全集**，不返回 null。
   //   理由：本仓已实锤「**无事实 ⇒ LLM 只能猜 ⇒ 竖排堆叠/布局错乱**」是最坏结果
   //   （见文件头与本次事故）。含背景层的判定至多让 side-by-side 比例偏 column，
   //   属**既有行为**；而返回 null 会凭空抹掉事实、引入新回归（实测 children=2 的
   //   覆盖会从 15 掉到 10）。
-  const boxes = filtered.length >= 2 ? filtered : all
+  const boxes = filtered.length >= 2 ? filtered : pool
   if (boxes.length < 2) return null
 
   // 🛡️ 刀 6（2026-10-27 · 8bbcf027 `36:1726` 实锤）：**同 bbox 叠层**优先于一切方向判定。

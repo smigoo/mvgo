@@ -84,23 +84,23 @@ echarts.init(chartRef)
 const option = { xAxis: { type: 'category' }, yAxis: { type: 'value' }, series: [{ data: [820, 932] }] }
 </script>`
 
-describe('§2.5 承载形态契约：非 echarts 承载仍 BLOCK（判据不扩域）', () => {
-  it('xq1（2e7c55d4）：DOM 数据驱动柱条 ≠ bar 承载 ⇒ BLOCK bar', () => {
+describe('§2.5 承载形态契约：非 echarts 承载仍检出（判据不扩域；2026-11-17 降 WARN 放行）', () => {
+  it('xq1（2e7c55d4）：DOM 数据驱动柱条 ≠ bar 承载 ⇒ 检出缺失 bar（WARN）', () => {
     const res = validateDoNotInvent({
       files: { 'package/components/ContentSection4.vue': DOM_BARS_VUE },
       analysis: { charts: [{ section: '53:34122', type: 'bar' }] },
     })
     expect(hasMissing(res)).toBe(true)
-    expect(res.pass).toBe(false)
+    expect(res.pass).toBe(true) // 判据仍检出，降 WARN 后放行
   })
 
-  it('xq3（eacfce31）：纯 CSS 描边环 ≠ pie 承载 ⇒ BLOCK pie', () => {
+  it('xq3（eacfce31）：纯 CSS 描边环 ≠ pie 承载 ⇒ 检出缺失 pie（WARN）', () => {
     const res = validateDoNotInvent({
       files: { 'package/components/StatsSection.vue': CSS_RING_VUE },
       analysis: { charts: [{ section: '53:34089', type: 'ring' }] },
     })
     expect(hasMissing(res)).toBe(true)
-    expect(res.pass).toBe(false)
+    expect(res.pass).toBe(true) // 判据仍检出，降 WARN 后放行
   })
 
   it('xq3 镜像（2e7c55d4 反向）：有 echarts pie、缺 echarts bar ⇒ 只 BLOCK bar，pie 放行', () => {

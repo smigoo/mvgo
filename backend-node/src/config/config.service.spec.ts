@@ -111,6 +111,40 @@ describe('AiConfigService', () => {
     });
   });
 
+  it('统一模式：同源发生在降维之后 —— 主模型温度(0)覆盖文件遗留的 unifiedTemperature(0.9)', async () => {
+    // 🔴 阴阳对照（阳性）：降维前 visionTemperature 会停在被遗留的 0.9，四条链路温度分叉；
+    //    修后降维把 unifiedTemperature 重写为主模型的 0，同源再派生 ⇒ vision/text 一并归 0。
+    service.setUserConfig({
+      modelMode: 'unified',
+      unifiedTemperature: 0.9,
+      models: [{ id: 'm1', model: 'kimi-k3', apiKey: 'k', baseURL: 'https://x', temperature: 0 }],
+      binding: { unified: { primaryId: 'm1' } },
+    });
+
+    const merged = await service.getMergedAiConfig('user-unified-temp');
+
+    expect(merged.unifiedTemperature).toBe(0);
+    expect(merged.visionTemperature).toBe(0);
+    expect(merged.textTemperature).toBe(0);
+  });
+
+  it('separate 模式：降维按各槽主模型温度落值，不受统一同源影响', async () => {
+    // 🔴 阴阳对照（阴性）：同源 if 只认 modelMode==='unified'，separate 分叉必须原样保留。
+    service.setUserConfig({
+      modelMode: 'separate',
+      models: [
+        { id: 'mv', model: 'vision-m', apiKey: 'kv', baseURL: 'https://v', temperature: 0.2 },
+        { id: 'mt', model: 'text-m', apiKey: 'kt', baseURL: 'https://t', temperature: 0.3 },
+      ],
+      binding: { vision: { primaryId: 'mv' }, text: { primaryId: 'mt' } },
+    });
+
+    const merged = await service.getMergedAiConfig('user-separate-temp');
+
+    expect(merged.visionTemperature).toBe(0.2);
+    expect(merged.textTemperature).toBe(0.3);
+  });
+
   it('方案 B++：无用户级配置时不返回任何模型字段（全局仅系统凭证）', async () => {
     service.saveAiConfig({
       textModel: 'admin-personal',

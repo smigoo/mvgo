@@ -26,65 +26,12 @@
         <option value="empty">无面板</option>
       </select>
     </div>
-    <!-- 🎨 主题切换控件（R12 · 2026-10-10 双主题 / 🆕🆕 2026-10-12 N 主题）
-     - N 主题：按 declare.json 的 themeConfig.list **动态渲染**（不再硬编码两段）
-     - 单主题：只渲染 list 里那一个
-     徽标数据源：declare.json 的 themeConfig.dualTruth（后端 normalizeDeclareJson 写入），
-     预览页本就已在读 declare.json ⇒ 本控件零新增请求。 -->
-    <!-- 🔴 2026-10-13：放开嵌入态（isEmbedded）——预览内直接可选多主题；
-         切换走 switchPreviewTheme 同一状态（手动档 + localStorage 持久化）。
-         嵌入态用紧凑样式（mc-theme-switcher--embedded）。isVue3 保持隐藏
-         （Vue3 组件主题机制不同，走 CSS 变量注入链路）。 -->
-    <div v-if="!isVue3" class="mc-theme-switcher" :class="[resolvedThemeClass, { 'mc-theme-switcher--embedded': isEmbedded }]">
-      <div class="mc-theme-seg" role="radiogroup" aria-label="主题切换">
-        <button
-          v-for="t in selectableThemes"
-          :key="t.key"
-          type="button"
-          class="mc-theme-seg-btn"
-          :class="{ active: resolvedThemeClass === t.key, builtin: t.readonly }"
-          role="radio"
-          :aria-checked="resolvedThemeClass === t.key"
-          :title="t.readonly && t.coreColors
-            ? `切换到「${t.name}」主题（内置预设色：主色 ${t.coreColors.colorPrimary}，不含设计稿真值）`
-            : `切换到「${t.name}」主题`"
-          @click="switchPreviewTheme(t.key)"
-        >
-          <svg v-if="t.brightness !== 'dark'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="5" />
-            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-          </svg>
-          <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-          </svg>
-          <span>{{ t.name }}</span>
-        </button>
-      </div>
-      <!-- 全真值徽标：多主题且全为设计真值时显示 -->
-      <span
-        v-if="isDualTruth"
-        class="mc-theme-badge"
-        :title="`共 ${selectableThemes.length} 套主题，色值均取自设计稿`"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-        {{ selectableThemes.length > 2 ? `${selectableThemes.length} 主题` : '双真值' }}
-      </span>
-      <!-- 单稿组件：明示另一侧是派生值，避免误读（R12 反误读设计） -->
-      <span v-else class="mc-theme-derived">
-        {{ resolvedThemeClass === 'dark' ? '浅色侧为派生值' : '深色侧为派生值' }}
-      </span>
-    </div>
-    <!-- 主题提示条（保留原信息：演示面板说明） -->
-    <div v-if="!isVue3 && !isEmbedded" class="mc-theme-hint" :class="resolvedThemeClass">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="16" x2="12" y2="12"/>
-        <line x1="12" y1="8" x2="12.01" y2="8"/>
-      </svg>
-      当前为演示主题面板（{{ resolvedThemeClass === 'dark' ? '深色' : '浅色' }}），实际项目中可在面板配置中切换主题
-    </div>
+    <!-- 🎨 主题切换浮层已于 2026-11-17 从画布搬走 → 父页面 TaskDetail 预览工具条。
+         根因：原 .mc-theme-switcher/.mc-theme-hint 为 position:fixed，叠在
+         .mc-preview-stage 上方；截图器 screenshot-renderer 对 stage 做元素截图时
+         会把浮层一并截进 rendered.png，遮挡组件标题并系统性压低 VISUAL-002 亮度直方图。
+         逻辑不删：resolvedThemeClass / set-theme postMessage / CSS 变量重注入 /
+         深浅面板联动全部保留，切换改由父页面工具条下发。 -->
     <!-- 🔴🔴 2026-10-14 修「任务详情/预览切主题不生效」根因：
          主题覆盖层 CSS 选择器是 [data-preview-scope="..."] .theme_2 .组件类 ——
          要求主题类是 scope 元素的后代。此前主题类与 data-preview-scope 同挂

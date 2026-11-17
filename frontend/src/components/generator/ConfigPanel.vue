@@ -242,6 +242,21 @@
               </div>
 
               <div class="config-group">
+                <label>采样温度</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                  :value="slotTemperature('unified')"
+                  :disabled="!primaryModelOf('unified')"
+                  placeholder="自动（0）"
+                  @input="setSlotTemperature('unified', $event)"
+                />
+                <div class="hint">0 = 最确定（同一张图每次结果一致，视觉推荐 0）；留空 = 自动（0）。调高会放大「同图不同果」。</div>
+              </div>
+
+              <div class="config-group">
                 <label>模型池（可选）</label>
                 <div v-if="poolCandidates('unified').length" class="pool-check-list">
                   <label v-for="c in poolCandidates('unified')" :key="c.id" class="pool-check-item">
@@ -272,6 +287,21 @@
               </div>
 
               <div class="config-group">
+                <label>采样温度</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                  :value="slotTemperature('text')"
+                  :disabled="!primaryModelOf('text')"
+                  placeholder="自动（0）"
+                  @input="setSlotTemperature('text', $event)"
+                />
+                <div class="hint">0 = 最确定；留空 = 自动（0）。代码生成建议 0。</div>
+              </div>
+
+              <div class="config-group">
                 <label>模型池（可选）</label>
                 <div v-if="poolCandidates('text').length" class="pool-check-list">
                   <label v-for="c in poolCandidates('text')" :key="c.id" class="pool-check-item">
@@ -295,6 +325,21 @@
                   <option value="" disabled>请选择主模型</option>
                   <option v-for="c in slotOptions('vision')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
                 </select>
+              </div>
+
+              <div class="config-group">
+                <label>采样温度</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                  :value="slotTemperature('vision')"
+                  :disabled="!primaryModelOf('vision')"
+                  placeholder="自动（0）"
+                  @input="setSlotTemperature('vision', $event)"
+                />
+                <div class="hint">0 = 最确定（同一张图每次结果一致，视觉推荐 0）；留空 = 自动（0）。调高会放大「同图不同果」。</div>
               </div>
 
               <div class="config-group">
@@ -1575,6 +1620,37 @@ async function detectModelCapability(m: ModelEntry) {
   } finally {
     detecting.value[m.id] = false
   }
+}
+
+// 🎛️ 槽位采样温度（2026-11-17）：**单一真相源 = 该槽位主模型的 `models[].temperature`**。
+// 为什么不新增 unifiedTemperature / visionTemperature 独立输入框：后端
+// `resolveBindingToLegacy`（config.service.ts:534）会用 `models[primary].temperature`
+// **覆盖**这两个 legacy 字段（原文注释：「主模型未填温度时清掉 legacy 残留，避免 UI 显示 A、
+// 生成走 B」）⇒ 独立输入框存下去会被覆盖，属假绿。故这里直接读写模型态：
+//   · 分别配置模式：text / vision 是两个模型条目 ⇒ 温度天然各自独立（视觉可单独压到 0）；
+//   · 统一模式：一个条目兼两职 ⇒ 想要视觉更确定就该切「分别配置」。
+// 留空 = undefined = 后端不下发温度字段 ⇒ VisionAgent 兜底 0（确定性最强）。
+function primaryModelOf(slot: 'unified' | 'text' | 'vision'): ModelEntry | undefined {
+  const id = formData.value.binding?.[slot]?.primaryId
+  if (!id) return undefined
+  return (formData.value.models || []).find((m: ModelEntry) => m?.id === id)
+}
+
+function slotTemperature(slot: 'unified' | 'text' | 'vision'): number | '' {
+  const v: any = primaryModelOf(slot)?.temperature
+  return v === undefined || v === null || v === '' ? '' : Number(v)
+}
+
+function setSlotTemperature(slot: 'unified' | 'text' | 'vision', e: Event) {
+  const m = primaryModelOf(slot)
+  if (!m) return
+  const raw = String((e.target as HTMLInputElement)?.value ?? '').trim()
+  if (raw === '') {
+    m.temperature = undefined
+    return
+  }
+  const n = Number(raw)
+  m.temperature = Number.isFinite(n) ? Math.min(2, Math.max(0, n)) : undefined
 }
 
 // 把槽位绑定的主模型同步到 legacy 字段（保存前调用，保证 saveData 的 legacy 字段与模型库一致）

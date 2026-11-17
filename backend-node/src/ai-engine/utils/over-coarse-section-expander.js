@@ -48,6 +48,13 @@
  * fail-open：展开为空 / 子段数越界 / 子段有锚点无法解析 / 自检未过 ⇒ 保留原段。
  */
 import { deriveSectionsFromFigmaTree, getFigmaBox, indexFigmaNodes } from './section-tree.js'
+// 🔴 布局真值（A 类单一事实源）：局部 E1 展开必须与主路径同源注入 `layoutFacts`，否则
+//   `section-tree#deriveSectionsFromFigmaTree` 内的「方向感知兄弟排序」「行内图元豁免」全部
+//   静默降级（`isRowParent` 恒 false）⇒ 行内 icon 被当独立叶子、按 y 主序排到文本之后。
+//   ⚠️ 依赖方向（禁反）：`figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），
+//   故 **不可**在 `section-tree.js` 内反向 import 本文件所需的 facts 构建器（会成环）；
+//   facts 只能由调用方注入——本模块即其中一个注入点。
+import { buildNodeLayoutFacts } from './figma-node-layout-facts.js'
 import { FIGMA_ID_RE, sectionAnchorKey } from './section-anchor-truth.js'
 // 🔴 单一事实源（根治理硬要求）：`layoutMetadata` 的形状只由本模块定义，展开器**不得**另写一套。
 //   两处键名一旦漂移，展开段会在 `applyFigmaHeightGrow` / prompt 高度块里**再次静默隐形**。
@@ -338,13 +345,17 @@ function buildExpandedLayoutMetadata(rawNode, kid) {
  *
  * @param {Array<object>} sections planner effectiveSections
  * @param {object} figmaRoot Figma 真值树（或 { document }）
+ * @param {object} [opts]
+ * @param {Record<string,object>} [opts.layoutFacts] A 类布局事实（`buildNodeLayoutFacts` 结果）。
+ *   外部已算过则复用（判据同源，避免重复遍历）；缺省时本函数用 `buildNodeLayoutFacts(root)` 自算。
  * @returns {{ sections: Array<object>, stats: {
  *   evaluated: number, sections: number, expanded: number, skippedReason: string,
  *   exempted: number, exemptReasons: string[],
+ *   layoutFacts: number, layoutFactsSource: string,
  *   details: Array<{sectionId:string, from:string, to:string[], reason:string, covered:number}>
  * }}}
  */
-export function expandOverCoarseSections(sections, figmaRoot) {
+export function expandOverCoarseSections(sections, figmaRoot, opts = {}) {
   const stats = {
     evaluated: 0,
     sections: Array.isArray(sections) ? sections.length : 0,
@@ -352,6 +363,8 @@ export function expandOverCoarseSections(sections, figmaRoot) {
     skippedReason: '',
     exempted: 0,
     exemptReasons: [],
+    layoutFacts: 0,
+    layoutFactsSource: 'none',
     details: [],
   }
   if (!Array.isArray(sections) || sections.length === 0) {
@@ -363,6 +376,19 @@ export function expandOverCoarseSections(sections, figmaRoot) {
     stats.skippedReason = 'no-figma-data'
     return { sections, stats }
   }
+  // 🔴 布局真值（A 类单一事实源）：注入给 `deriveSectionsFromFigmaTree`。
+  //   缺它 ⇒ 方向感知兄弟排序回退 y 主序、`isInlineGraphicAtom` 失效（行内 icon 被提为独立
+  //   叶子并排到文本之后）。2026-11-17 端到端落差根因（`73:3` list 行 icon 错位）。
+  //   外部（planner）已算过则复用；否则用**同一函数**从根算——判据同源，不写第二套遍历。
+  //   🛡️ 防御：**空表视为未提供**——若上游 `nodeLayoutFacts` 因缺数据退化成 `{}`，误当「已注入」
+  //   会让本修复静默失效（回到 y 主序）。宁可自算，不可空转。
+  const injectedFacts =
+    opts && opts.layoutFacts && typeof opts.layoutFacts === 'object' && Object.keys(opts.layoutFacts).length > 0
+      ? opts.layoutFacts
+      : null
+  const layoutFacts = injectedFacts || buildNodeLayoutFacts(root)
+  stats.layoutFacts = layoutFacts && typeof layoutFacts === 'object' ? Object.keys(layoutFacts).length : 0
+  stats.layoutFactsSource = injectedFacts ? 'injected' : 'computed'
   const index = indexFigmaNodes(root)
   if (index.size === 0) {
     stats.skippedReason = 'empty-figma-index'
@@ -390,10 +416,12 @@ export function expandOverCoarseSections(sections, figmaRoot) {
       out.push(sec)
       continue
     }
-    // 局部 E1：把锚点节点当作根，复用同一递归推导
+    // 局部 E1：把锚点节点当作根，复用同一递归推导。
+    // 🔴 必须注入 `layoutFacts`（与主路径 :2898 同源），否则方向判据静默降级——
+    //   行内 icon 容器会脱离所属行、按 y 主序排到文本之后（2026-11-17 落差根因）。
     let derived = null
     try {
-      derived = deriveSectionsFromFigmaTree({ document: anchor })
+      derived = deriveSectionsFromFigmaTree({ document: anchor }, layoutFacts)
     } catch {
       derived = null
     }

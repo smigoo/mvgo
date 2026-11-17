@@ -30,6 +30,8 @@
 const TOL = 1; // 与 section-tree 孤儿分带同一容差（px）
 const MAX_DEPTH = 6;
 
+export { TOL };
+
 function isValidBox(b) {
   return (
     b &&
@@ -50,7 +52,7 @@ function unionBox(nodes) {
 }
 
 /** y 聚带：按 top 排序，与当前带底边相交（含 1px 容差）即同带 */
-function clusterY(items) {
+export function clusterY(items) {
   const sorted = [...items].sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
   const bands = [];
   for (const it of sorted) {
@@ -195,4 +197,51 @@ export function crossAxisCenterStyle(childBoxes, containerBox, self = false) {
     if (b.h >= containerBox.h * 0.92) return '';
   }
   return self ? 'align-self:center;' : 'align-items:center;';
+}
+
+/**
+ * 🛡️ 顶层行带规划（2026-11-17 · mc-max-1794870462702-5401e49e 实锤立项）。
+ *
+ * ## 病灶
+ * 顶层比例分支（code-generator `topBodyRoots`）把**所有**顶层节点按「高度归一」纵切，
+ * 不区分「纵向堆叠 vs 横向行带」。真值是「两统计卡横向并排（各 265×76，同 y）+
+ * 三内容段纵向堆叠」时：两卡各得 `flex:0.088`（=76/863，863=Σh+Σgap 含了两卡自己的
+ * 152px）却被装进 row 容器 ⇒ Σgrow=0.176<1 部分分配 ⇒ 每卡 51px（宽度塌缩 81%）；
+ * 同时三内容段的分母混入了行带高度 ⇒ Σflex=0.740<1 ⇒ 底部空白 176px。
+ * **一个建模缺口，两个视觉症状**。
+ *
+ * ⚠️ F1（2026-11-17）补充：上段「Σflex<1 ⇒ 底部空白」的**结论**成立，但当时归因写成了
+ *   「分母含 Σgap ⇒ 让出间距份额」——真正机理是 CSS Flexbox §9.7：`basis:0` 且 Σgrow<1 时
+ *   浏览器只分配 Σgrow 比例的自由空间，`(1−Σgrow)×free` 直接不分配。故分母现已统一回到
+ *   **Σh**（Σgrow=1 填满容器），见 `code-generator.js#__bandDen/__topDen`。本文件只做几何
+ *   聚带，不参与分母计算，描述保留作历史归因。
+ *
+ * ## 判据（纯几何，与刀12 同一聚类来源 clusterY/TOL）
+ *   ① 任一盒缺失/非法 ⇒ null（fail-open，逐字走旧路径）；
+ *   ② y 聚带后只有 1 个带 ⇒ 全横行/全纵流的退化形态 ⇒ null（旧路径已能正确处理：
+ *      全横行归 horizontal 分支、全纵流按高度归一无害）；
+ *   ③ ≥2 带且存在成员数 ≥2 的带 ⇒ 命中：带成员按宽度归一（flexItemStyleFromWidths
+ *      由调用方施加），带与带之间按高度归一。
+ *
+ * 与 `planRowBands` 的分工：那个函数服务于**容器段内部**（≥3 子项、要求 ≥2 带 ∧ 至少
+ * 一带成行）；本函数服务于**顶层 bodyRoots**（≥2 子项即可，命中条件放宽为
+ * 「≥2 带且至少一带多成员」——单带多成员正是「顶层全是横行」形态，也是本单病灶）。
+ *
+ * @param {Array<{ref:any, box:{x:number,y:number,w:number,h:number}}>} entries
+ * @returns {null | { bands: Array<Array<{ref:any, box:object}>> }}
+ *   bands[i] = 同一带的成员（按 x 升序）；null ⇒ 调用方走既有逐段高度归一路径。
+ */
+export function planTopLevelBands(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (list.length < 2) return null;
+  if (!list.every((e) => isValidBox(e && e.box))) return null;
+  const items = list.map((e) => ({ ref: e.ref, box: e.box }));
+  const bands = clusterY(items);
+  if (bands.length < 2) return null;
+  if (!bands.some((b) => b.length >= 2)) return null;
+  return {
+    bands: bands.map((band) =>
+      [...band].sort((a, b) => a.box.x - b.box.x || a.box.y - b.box.y),
+    ),
+  };
 }

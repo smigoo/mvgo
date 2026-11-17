@@ -256,6 +256,94 @@ describe('E3-v4 bg 归属段对位（流量 mc-max-1794114542727 实锤：卡图
   });
 });
 
+// 🔴 E3-v4 v7（2026-11-17 · mc-max-1794888736786-4703917b 实锤）：补齐 v2 设计稿「三层取证」
+//   中从未落地的第三层（模板内动态绑定消费）。真值 owner 1:413 = 1:412 的**重复子项**
+//   （plan body.children[].id、control:tabs），产物按「段级容器 + v-for 逐项」建模、背景经
+//   **条件内联**动态绑定消费 ⇒ 旧判据误报「无任何消费形态」⇒ 假 FAIL 逼出无效修复轮。
+describe('E3-v4 v7 模板动态绑定消费放行（tabs 重复子项 bg 归属）', () => {
+  const mappingTabs = [
+    {
+      figmaNodeId: '1:414',
+      name: 'bg-tile2-active',
+      previewAnalysisRole: 'bg',
+      downloadStatus: 'success',
+      resourceFile: '../resources/images/bg-tile2-active-414.png',
+      ownerSectionId: '1:413',
+      ancestorIds: ['1:413', '1:412', '73:3'],
+      targetDomSelector: '[data-section-id="1:413"]',
+      figmaBox: { x: 1772.52, y: 173.06, width: 80.47857666015625, height: 26.031253814697266 },
+      usage: ':style="{ backgroundImage: `url(${bgX})` }"',
+    },
+  ];
+  const BT = '`';
+  const HEADER_CONDITIONAL = [
+    '<template>',
+    '  <div class="c-monitor-header" data-section-id="1:412">',
+    '    <div v-for="tab in tabs" :key="tab.value" class="c-monitor-zh1-s-209">',
+    '      <div class="c-monitor-bg-tile2-active"',
+    '        :style="activeTab === tab.value ? { backgroundImage: ' +
+      BT + 'url(${bg2})' + BT + ' } : null"></div>',
+    '      <span>{{ tab.label }}</span>',
+    '    </div>',
+    '  </div>',
+    '</template>',
+    '<script setup>',
+    "import bg2 from '../../resources/images/bg-tile2-active-414.png'",
+    "import { ref } from 'vue'",
+    "const tabs = [{ label: '全部', value: 'all' }]",
+    "const activeTab = ref('all')",
+    '</script>',
+  ].join('\n');
+
+  it('① 阳性（v7 放行）：owner 1:413 为重复子项未建段、bg 经条件内联动态绑定消费 ⇒ 无 E3-v4，出计数行', () => {
+    const r = runAcceptanceChecks({
+      files: { 'package/components/HeaderSection.vue': HEADER_CONDITIONAL },
+      resourceDomMapping: mappingTabs,
+    });
+    expect(r.fails.filter((x) => x.code === 'E3-v4')).toHaveLength(0);
+    expect(r.warns.some((w) => w.includes('模板动态绑定消费放行 1 张'))).toBe(true);
+  });
+
+  it('② 阴性对照（不放松真错）：同图若被字面挂在祖先段 1:412 开标签 ⇒ 仍 FAIL（一处合规不洗白另一处错挂）', () => {
+    const bad = [
+      '<template>',
+      '  <div data-section-id="1:412" :style="{ backgroundImage: ' + BT + 'url(${bg2})' + BT + ' }">',
+      '    <span>x</span>',
+      '  </div>',
+      '</template>',
+      '<script setup>',
+      "import bg2 from '../../resources/images/bg-tile2-active-414.png'",
+      '</script>',
+    ].join('\n');
+    const r = runAcceptanceChecks({
+      files: { 'package/components/HeaderSection.vue': bad },
+      resourceDomMapping: mappingTabs,
+    });
+    const e34 = r.fails.filter((x) => x.code === 'E3-v4');
+    expect(e34).toHaveLength(1);
+    expect(e34[0].detail).toContain('祖先段');
+  });
+
+  it('③ 边界（不越界放行）：owner 段已建（data-section-id="1:413" 存在）但未消费该 bg ⇒ 仍 FAIL，不得被 v7 洗白', () => {
+    const files = {
+      'package/components/HeaderSection.vue': [
+        '<template>',
+        '  <div data-section-id="1:412">',
+        '    <div data-section-id="1:413"></div>',
+        '    <div :style="activeTab ? { backgroundImage: \'url(\' + bg2 + \')\' } : null"></div>',
+        '  </div>',
+        '</template>',
+        '<script setup>',
+        "import bg2 from '../../resources/images/bg-tile2-active-414.png'",
+        'const activeTab = true',
+        '</script>',
+      ].join('\n'),
+    };
+    const r = runAcceptanceChecks({ files, resourceDomMapping: mappingTabs });
+    expect(r.fails.filter((x) => x.code === 'E3-v4')).toHaveLength(1);
+  });
+});
+
 describe('E2-v3 落盘未消费（修复 Object.values 逐字符遍历 bug）', () => {
   const mapping = [
     {

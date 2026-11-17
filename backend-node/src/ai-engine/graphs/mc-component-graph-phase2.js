@@ -145,8 +145,6 @@ import { OrphanComponentDetector } from '../validators/orphan-component-detector
 import { LessVariableChecker } from '../validators/less-variable-checker.js';
 // 🛡️ 根治⑤（2026-11-12 · cfe8977a 实锤）：CODE-023 确定性兜底（缓存补建悬空组件文件）
 import { tryFixDanglingComponentFiles } from '../validators/dangling-component-backstop.js';
-// 🛡️ 根治⑧（2026-11-12 · 97af5197 实锤）：CODE-022 确定性兜底（臆造名 alias 回契约名 / 孤儿 import 删除）
-import { tryFixOrphanResourceImports } from '../validators/orphan-import-backstop.js';
 // 🛡️ 根治⑩-b（2026-11-12 · 3cdc4757 实锤）：终局 SFC 扫描（复用写盘终验门，磁盘全量口径）
 import { runFinalVueExpressionGate } from '../roles/microcode/final-vue-expression-gate.js';
 // 🛡️ 根治⑬（2026-11-13 · 8a74b874 实锤）：D2 重叠锚点提取（结构化透传至写盘防叠补齐）
@@ -4004,7 +4002,7 @@ export function createPhase2Graph(config = {}) {
     // （条件边已转 l0b-fail），此处纯防御，不引入新分支语义。
     if (state._l0HardBlock) {
       const err = new Error(
-        'L0-B 硬闸 BLOCK（CODE-021/022/023）命中，禁止发布组件',
+        'L0-B 硬闸 BLOCK（CODE-023 + WARN 升级）命中，禁止发布组件',
       );
       err.code = 'L0B_HARD_BLOCK';
       err.codeValidationResult = state.codeValidationResult;
@@ -6508,8 +6506,8 @@ export function createPhase2Graph(config = {}) {
       }
       // 🛡️ 软失败兜底（2026-09-11）：BLOCK 且重试耗尽 → 不再写「失败」，改为降级完成 + 评分明细。
       // 路由到 complete（其产物完整性硬门禁仍会拦截「缺文件/空产物」这类完全不可用情况，作硬底线）。
-      // 🛡️ 发布硬闸（2026-09-13）：021/022/023 这类「预览必然空白/缺块」的确定性硬伤，软失败
-      // 不得降级放行——命中即走 l0b-fail fail-closed，禁止 publish / 标 completed。
+      // 🛡️ 发布硬闸（2026-09-13，2026-11-17 收窄）：仅 CODE-023「缺组件文件」这类「预览必然空白/缺块」
+      // 的确定性硬伤，软失败不得降级放行——命中即走 l0b-fail fail-closed，禁止 publish / 标 completed。
       // 🛡️ 根治⑩-b 终局 SFC 扫描（2026-11-12 · 3cdc4757 实锤）：写盘终验修好的文件会被
       //   后续编辑器（theme 注入 / less checker / 统一终态落盘的内存回写）再次改坏——本任务
       //   ContentForecast.vue 终验两次从缓存回退合法版，最终磁盘仍是坏版 ⇒ 预览「组件加载失败」。
@@ -6535,10 +6533,13 @@ export function createPhase2Graph(config = {}) {
       if (hasHardPublishBlock(r.issues)) {
         // 🛡️ 根治⑤（2026-11-12 · cfe8977a 实锤）：hardBlocks 全为 CODE-023「缺组件文件」
         // 时先做确定性兜底（缓存补建），复核通过 ⇒ 转软失败降级链；否则维持 fail-closed。
+        // 🛡️ 2026-11-17 收窄：发布硬闸自 11-16 起只剩 CODE-023（gate-score.js:94-96）。
+        // CODE-021/022 已降 WARN 且不在 WARN 升级策略表（gate-severity.js 无 key、env 未 opt-in），
+        // 真机 11-16/17 零兜底命中 ⇒ 原 /^CODE-02[123]/ 过滤仅剩 CODE-023 可达，收窄口径避免误报。
         const _hardBlocks023 = (r.issues || []).filter(
           (i) =>
             i.severity === 'BLOCK' &&
-            (/^CODE-02[123]/.test(i.id) || String(i.id || '').endsWith('-ESCALATED')),
+            (/^CODE-023/.test(i.id) || String(i.id || '').endsWith('-ESCALATED')),
         );
         const _onlyMissingFile =
           _hardBlocks023.length > 0 &&
@@ -6571,44 +6572,12 @@ export function createPhase2Graph(config = {}) {
             actions: _backstop.actions,
           });
         }
-        // 🛡️ 根治⑧（2026-11-12 · 97af5197 实锤）：hardBlocks 全为 CODE-022 时先做确定性兜底
-        // （臆造变量名 alias 回契约名 / 零引用孤儿 import 删除），复核通过 ⇒ 转软失败降级链；
-        // 否则维持 fail-closed。病灶链：LLM 自造 `bgbg_m36`（文件名派生+bg 前缀）import 后
-        // 0 引用 ⇒ CODE-022 硬闸；pre-write 修复器 pruneUnmountedResourceImports 只迭代
-        // 契约名 ⇒ 臆造名永不自愈 ⇒ 修复轮逐字复现 ⇒ 重试耗尽 fail-closed（与 2026-09-29
-        // 「门禁 BLOCK / 修复器不删」死锁同族，死锁面从注释换成臆造名）。
-        const _hardBlocks022 = _hardBlocks023.filter((i) => /^CODE-022/.test(String(i.id || '')));
-        const _onlyOrphanImport =
-          _hardBlocks022.length > 0 && _hardBlocks022.length === _hardBlocks023.length;
-        if (_onlyOrphanImport && state.outputPath) {
-          const _backstop022 = tryFixOrphanResourceImports(state.outputPath, r.issues, logger);
-          if (_backstop022.fixed) {
-            logger.warn('🛡️ CODE-022 兜底成功：孤儿资源 import 已确定性清理，转软失败降级链', {
-              actions: _backstop022.actions,
-            });
-            state.onProgress?.({
-              stage: 'L0-B校验',
-              message: '🛡️ 孤儿资源 import 已确定性清理（臆造名归位/删除），降级完成',
-              status: 'warning',
-            });
-            // 从 issues 剔除已消的 CODE-022 ⇒ hasHardPublishBlock 不再命中 ⇒ 走软失败链
-            r.issues = (r.issues || []).filter((i) => !/^CODE-022/.test(String(i.id || '')));
-            const _gs022 = r.gateScore || computeGateScore(r.issues);
-            state._l0SoftFail = true;
-            state._gateScore = _gs022;
-            return 'do-not-invent-check';
-          }
-          logger.warn('🛡️ CODE-022 兜底未完全生效，维持 fail-closed', {
-            actions: _backstop022.actions,
-            remaining: _backstop022.remaining,
-          });
-        }
-        logger.error('🛡️ L0-B 硬闸 BLOCK（021/022/023 + WARN 升级）且重试耗尽：禁止发布，转 fail-closed', {
+        logger.error('🛡️ L0-B 硬闸 BLOCK（CODE-023 + WARN 升级）且重试耗尽：禁止发布，转 fail-closed', {
           hardBlocks: (r.issues || [])
             .filter(
               (i) =>
                 i.severity === 'BLOCK' &&
-                (/^CODE-02[123]/.test(i.id) || String(i.id || '').endsWith('-ESCALATED')),
+                (/^CODE-023/.test(i.id) || String(i.id || '').endsWith('-ESCALATED')),
             )
             .map((i) => i.id),
         });
@@ -6721,13 +6690,16 @@ export function createPhase2Graph(config = {}) {
         state.figmaNodeData || state._uiCache?.figmaNodeData || state._visualParserCache?.figmaNodeData || null,
     });
     state._doNotInventResult = res;
-    if (!res.pass) {
+    // 🛡️ 2026-11-17 质量门禁放行策略（用户指令「能运行就放行，把 warn 写出来、写清具体问题」）：
+    //    三条质量 BLOCK（文案篡改/图表类型缺失/挂载点缺失）已降 WARN —— 产物能运行就不再让
+    //    用户白等最后 failed。残留 BLOCK（若有）才 fail-closed；WARN 写回前端可见的交付警告字段。
+    const _dniBlocks = res.issues.filter((i) => i.severity === 'BLOCK');
+    if (_dniBlocks.length > 0) {
       const err = new Error(
-        `禁止臆造校验未通过，禁止发布组件：${res.issues.map((i) => i.id).join(', ') || 'unknown'}`,
+        `禁止臆造校验未通过，禁止发布组件：${_dniBlocks.map((i) => i.id).join(', ') || 'unknown'}`,
       );
       err.code = 'DO_NOT_INVENT_BLOCKED';
       err.doNotInventResult = res;
-      // P2-1: 失败路径保留诊断上下文
       err.diagnosticContext = {
         coverageReport: state._visualParserCache?.coverageReport,
         textTruthValidation: state._visualParserCache?.textTruthValidation,
@@ -6737,13 +6709,31 @@ export function createPhase2Graph(config = {}) {
       };
       throw err;
     }
+    const _dniWarns = res.issues.filter((i) => i.severity === 'WARN');
+    if (_dniWarns.length > 0) {
+      // 具体问题的文字内容落到用户可见的交付警告（复用 acceptance 降级交付链路同一字段）
+      const _dniCodes = _dniWarns.map((i) => i.id);
+      const _dniText = _dniWarns.map((i) => i.message).join('；');
+      state._acceptanceDeliveredWithWarnings = true;
+      state._acceptanceWarnings = _dniWarns.map((i) => ({
+        code: i.id,
+        text: i.message,
+        file: i.file || 'package/index.vue',
+      }));
+      state._acceptanceWarningCodes = _dniCodes;
+      state._acceptanceWarningText = `已交付，但仍有待补内容（${_dniCodes.join('、')}）：${_dniText}`;
+      logger.warn('🛡️ 禁止臆造质量项降 WARN 放行（能运行即交付，问题已写入交付警告）', {
+        codes: _dniCodes,
+        detail: _dniText,
+      });
+    }
     // 🛡️ G12b：段级图表缺失 WARN 计数恒打（0 也打；>0 ⇒ 有 vision 图表信号在承载文件内落空，
     //   WARN 不拦发布，分布数据供后续升级 BLOCK 决策）
     logger.info('🛡️ G12b 段级图表存在性·已评估', {
       chartSectionMissing: res.warnChartSectionMissing || 0,
       warnIssues: res.issues.filter((i) => i.severity === 'WARN').map((i) => i.id),
     });
-    logger.info('✅ 禁止臆造校验通过', { issueCount: res.issues.length });
+    logger.info('✅ 禁止臆造校验通过（质量项以 WARN 留痕）', { issueCount: res.issues.length });
     return { doNotInventResult: res };
   });
 
@@ -6821,8 +6811,12 @@ export function createPhase2Graph(config = {}) {
         // 🛡️ 2026-11-10（R12 设备 17e22ea6 实锤，用户目检「布局完全错误」）：RUNTIME-016
         //   文本重叠是确定性产物缺陷（非环境类）——旧口径走「降级为完成」通道 ⇒ 布局坍缩
         //   产物带「已过门禁」标交付。文本重叠不参与降级放行，与 RUNTIME-004 同权硬 BLOCK。
+        // 🛡️ 2026-11-17 用户授权降级 BLOCK→WARN：判据必须认 severity。
+        //   旧写法只认 id ⇒ WARN 的 016 仍被判 blocked ⇒ 继续白烧 3 轮 D2 + fail-closed，
+        //   降级完全失效。现仅 severity==='BLOCK' 才拦（与 classifyRuntimeGate 同源口径）。
+        //   注意只匹配 016 自己的 issue，不影响真白屏类（006/012）经 isDeterministicMissing 硬 BLOCK。
         const textOverlapBlocked = (runtimeGate?.issues || []).some(
-          (i) => i.id === 'RUNTIME-016',
+          (i) => i.id === 'RUNTIME-016' && i.severity === 'BLOCK',
         );
         if (isGenerateMode && !isDeterministicMissing && !textOverlapBlocked) {
           logger.warn('generate 运行时门禁未通过，降级为完成（不阻断发布）', {

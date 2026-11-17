@@ -838,12 +838,23 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
       ],
     }
     const tpl = buildDeterministicIndexTemplate(input)!.template
-    // 🛡️ S4（2026-11-14）：分母 = Σ高 + Σ间距（66+388+14+25=493）⇒ 0.134 / 0.787 / 0.028，
-    //   Σflex 0.949 + 25px 份额 0.051 = 1.000。旧值 0.141/0.829/0.030 是"纯 Σ高"分母，
-    //   叠 margin-top:25px 后总高 515+25 = 540 > 容器 515（溢出）。
-    expect(tpl).toMatch(/<StatsSection[^>]*style="flex:0.134;min-height:0;"/)
-    expect(tpl).toMatch(/<ContentSection[^>]*style="flex:0.787;min-height:0;margin-top:25px;"/)
-    expect(tpl).toMatch(/<ContentFooterLegend[^>]*style="flex:0.028;min-height:0;"/)
+    // 🛡️ F1（2026-11-17）：分母**回 Σ高**（66+388+14 = 468）⇒ 0.141 / 0.829 / 0.030，Σflex = 1.000。
+    //   历史沿革：S4（11-14）曾把分母改成 `Σ高 + Σ间距`（= 493）让 Σflex = 0.949，理由是
+    //   「叠 margin-top:25px 后总高 515+25 = 540 > 容器 515（溢出）」——该推理漏了 basis=0 时
+    //   free space 已先扣 margin（Σ段高 = free = H − Σmargin = 490，+25 = 515 恰好装满）。
+    //   真机 Chromium 量测（c-monitor-0c46af4d，Σh=177/Σgap=34）：Σgrow=0.839 时容器 234 下
+    //   段高 25.6/47.4/47.4/47.4、底部死白 32.2px；分母回 Σh 后段高 49.9 级填满、死白 0.2px。
+    //   ⇒ 旧断言值 0.134/0.787/0.028 属被修正的口径，不得回退。
+    expect(tpl).toMatch(/<StatsSection[^>]*style="flex:0.141;min-height:0;"/)
+    expect(tpl).toMatch(/<ContentSection[^>]*style="flex:0.829;min-height:0;margin-top:25px;"/)
+    expect(tpl).toMatch(/<ContentFooterLegend[^>]*style="flex:0.030;min-height:0;"/)
+    // 🛡️ F1 契约（阳性对照）：Σflex-grow 必须 = 1。Flexbox §9.7 只在 Σgrow ≥ 1 时分配全部
+    //   自由空间；Σgrow < 1（旧 S4 口径 0.949）会把 (1−Σgrow)×free 留成容器底部死白。
+    //   反向对照见 G10v2 的「分母含间距 ⇒ flex 之和 < 1」用例（显式传 Σ+gap 时 Σ=0.930），
+    //   证明本条断言对两种口径有区分力、不会恒真。
+    const __grows = [...tpl.matchAll(/flex:([\d.]+);min-height:0/g)].map((m) => Number(m[1]))
+    expect(__grows.length).toBeGreaterThan(1)
+    expect(__grows.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 2)
     expect(tpl).not.toContain('margin-top:68px')
   })
 
@@ -890,18 +901,20 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
       const component = facts.sectionRoots.find((s) => s.id === id)!.component
       return facts.template.split('\n').find((line) => line.includes(`<${component} `)) || ''
     }
-    // 🛡️ S4：分母含间距（25 + 22）⇒ 0.128；表格 0.753、footer 0.027（Σflex 0.908 + 47px 份额 ≈ 1）
-    expect(lineOf('43:4893')).toContain('flex:0.128;min-height:0;')
+    // 🛡️ F1（2026-11-17）：分母回 Σ高（66+388+14 = 468）⇒ 0.141 / 0.829 / 0.030，Σflex = 1.000。
+    //   与上一例同源口径修正（S4 的 Σ高+Σ间距 会让 Σgrow<1 ⇒ Flexbox §9.7 只分配该比例
+    //   自由空间 ⇒ 底部死白）。间距仍以 margin-top:25px / 22px 落盘，不进分母。
+    expect(lineOf('43:4893')).toContain('flex:0.141;min-height:0;')
     expect(lineOf('43:4898')).toContain('flex:0;min-height:0;')
     expect(lineOf('43:4903')).toContain('flex:0;min-height:0;')
     expect(lineOf('43:4898')).not.toContain('flex:1')
     expect(lineOf('43:4903')).not.toContain('flex:1')
     expect(lineOf('43:4898')).not.toContain('margin-')
     expect(lineOf('43:4903')).not.toContain('margin-')
-    // 🛡️ S4：表格比例同受间距分母影响（同一条容器）⇒ 0.753
-    expect(lineOf('table')).toContain('flex:0.753;min-height:0;margin-top:25px;')
-    // 🛡️ S4：footer 同样吃间距分母（且带 margin-top:22px）⇒ 0.027
-    expect(lineOf('footer')).toContain('flex:0.027;min-height:0;margin-top:22px;')
+    // 🛡️ F1：表格比例同源（同一条容器）⇒ 0.829
+    expect(lineOf('table')).toContain('flex:0.829;min-height:0;margin-top:25px;')
+    // 🛡️ F1：footer 同源（且带 margin-top:22px）⇒ 0.030
+    expect(lineOf('footer')).toContain('flex:0.030;min-height:0;margin-top:22px;')
   })
 
   test('无高度事实时顶层多 section 行为不变（回落 flex:1，零回归）', () => {
@@ -1271,10 +1284,11 @@ describe('刀12 · 2D 行簇重建（ad8939a5 `801:3` 实锤：左图右文被�
     expect(leafTags[0].at).toBeGreaterThan(rowAt)
     expect(leafTags[4].at).toBeGreaterThan(leafTags[3].at)
     // ③ 行带内 img 与右列按真值宽度比分 flex。
-    //   🛡️ S4（2026-11-14）：分母改为 `Σ宽 + Σ间距`（98+173+21=292）⇒ 98/292=0.336、173/292=0.592，
-    //   Σflex 0.928 + margin 21px 份额 0.072 = 1.000（旧值 0.362/0.638 是"Σ宽"分母，叠 margin 会横向溢出）。
-    expect(tpl).toContain('flex:0.336;min-width:0;')
-    expect(tpl).toContain('flex:0.592;min-width:0;margin-left:21px;')
+    //   🛡️ F1（2026-11-17）：分母只取 `Σ宽`（98+173=271）⇒ 98/271=0.362、173/271=0.638，Σ=1.000。
+    //   S4 曾把分母改成 `Σ宽+Σ间距`（292）⇒ 0.336/0.592（Σflex 0.928）——basis:0 下 free 已扣
+    //   margin 21px，Σgrow<1 只是让 7.2% 的自由空间不分配（行带右侧留白），并不会「溢出」。
+    expect(tpl).toContain('flex:0.362;min-width:0;')
+    expect(tpl).toContain('flex:0.638;min-width:0;margin-left:21px;')
     // ④ 带高比例：头带 98/(98+135.25+16+90) ≈ 0.289（与既有「子项高度和」口径一致）
     expect(tpl).toContain('flex:0.289;min-height:0;')
   })
@@ -1481,10 +1495,12 @@ describe('刀16 · 兄弟间距真值注入（6bba7218 实锤：纵流 33/20/20p
     // 纵向兄弟：33/20/20
     expect(tpl).toContain('margin-top:33px')
     expect((tpl.match(/margin-top:20px/g) || []).length).toBe(2)
-    // 🛡️ S4（2026-11-14）：分母改为 `Σ尺寸 + Σ间距`，比例值随之变化（旧值 0.500 = 纯 Σ宽 分母）。
-    //   行带两卡：W = 2w + 64 ⇒ 每卡 w/(2w+64) = 0.446（Σ 0.892 + 64px 份额 0.108 = 1.000）。
-    expect((tpl.match(/flex:0\.446;min-width:0;/g) || []).length).toBe(2)
-    //   纵流三段：Σflex 0.893 + (33+20+20)/容器高 份额 = 1.000（不再"1.0 + 73px"）
+    // 🛡️ F1（2026-11-17）：分母回**纯 Σ尺寸**，Σgrow = 1.000。
+    //   basis:0 时 flexbox 的 free space 已先扣 margin（CSS Flexbox §9.7），
+    //   Σgrow<1 只会让 `(1−Σgrow)×free` 不被分配 ⇒ 横向留白 / 纵向底部死白。
+    //   行带两卡等宽 ⇒ 0.500/0.500（旧口径 0.446 会把每卡从 265 压到 241）。
+    expect((tpl.match(/flex:0\.500;min-width:0;/g) || []).length).toBe(2)
+    //   纵流三段：Σh = 76+161+212+265 = 714，h/714 ⇒ Σgrow = 1.000
     const __ys = [0.225, 0.297, 0.371]
     expect(tpl).toContain(`flex:${__ys[0]};min-height:0;margin-top:33px;`)
   })
@@ -1910,6 +1926,14 @@ describe('刀 7c 根级宿主吸收背景层（顶层几何护栏）', () => {
  * 这种「比例刚好满 + 再叠间距」的形态照样通过 ⇒ 需要两条新判据：
  *   ① 分母让出间距份额：flex = h / (Σh + Σgap)，使 Σflex < 1；
  *   ② 绝对真值收敛复核：Σh + Σgap 与容器高偏差 > 15% ⇒ 判比例不可信，弃用 flex。
+ *
+ * ⚠️ F1（2026-11-17）修正 ①：`flex-basis: 0` 下自由空间**已先扣 margin**，Σflex=1 也不会
+ *   出现「容器 100% + 43px」（真机 Chromium：211 容器 → 段高 176.8 + margin 34 = 210.8 ≤ 211）。
+ *   真正会出事的是反过来——Σflex<1 时按 Flexbox §9.7 只分配该比例的自由空间，
+ *   `(1−Σflex)×free` 直接不分配 ⇒ 段高压扁 + 底部死白（c-monitor-0c46af4d：Σgrow=0.839 ⇒
+ *   死白 32.2px）。故管线分母已回 **Σh**（Σgrow=1 填满容器），见 `code-generator.js#__bandDen`。
+ *   ① 保留为「`denominatorOverride` 参数可用」的单元覆盖，**不再代表管线口径**；
+ *   ② 是物理占位检查（Σh+Σgap 应≈容器高），与 flex 分母无关，继续有效。
  */
 describe('G10v2 · 竖排 flex 分母与画布收敛', () => {
   it('⭐ 阳性：分母含间距 ⇒ flex 之和 < 1（不再「100% + 43px」）', () => {

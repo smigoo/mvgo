@@ -1332,10 +1332,12 @@ export class CodeStructureValidator {
 
         if (!staticPass && !dynamicPass) {
           issues.push({
+            // 🛡️ 2026-11-17 降级 BLOCK→WARN（判据/message/计数行全保留）：真机 78 单仅 1 单命中且
+            //    completed 未阻断，属视觉保真真错但非 A 档不可用；保留检出留痕，不再白烧重试。
             id: 'CODE-007',
-            severity: 'BLOCK',
+            severity: 'WARN',
             file: filePath,
-            message: `Vue3 根面板存在背景，但根选择器未直接落地背景字面量；期望包含: ${rootBgExpectation.expectedValues.slice(0, 3).join(' / ')}（支持静态 CSS 或 :style 动态绑定）。禁止用深色兜底/渐变顶替 Figma 真值背景色`,
+            message: `（非阻断：视觉保真留痕，不重生成）Vue3 根面板存在背景，但根选择器未直接落地背景字面量；期望包含: ${rootBgExpectation.expectedValues.slice(0, 3).join(' / ')}（支持静态 CSS 或 :style 动态绑定）。禁止用深色兜底/渐变顶替 Figma 真值背景色`,
           });
         }
       }
@@ -1814,10 +1816,12 @@ export class CodeStructureValidator {
             forbidden.push('box-shadow');
           if (forbidden.length > 0) {
             issues.push({
+              // 🛡️ 2026-11-17 降级 BLOCK→WARN（判据/message/计数行全保留）：真机 78 单仅 1 单命中
+              //    且 completed 未阻断；保留检出留痕，不再白烧重试。
               id: 'CODE-014',
-              severity: 'BLOCK',
+              severity: 'WARN',
               file: 'package/index.vue',
-              message: `根容器（.${rootClass}）的 Figma 真值不含以下装饰，但产物中检测到：${forbidden.join('、')}。styleEvidence 确认根容器无对应证据，禁止臆造（违反 L0-B，需重生成）`,
+              message: `（非阻断：视觉保真留痕，不重生成）根容器（.${rootClass}）的 Figma 真值不含以下装饰，但产物中检测到：${forbidden.join('、')}。styleEvidence 确认根容器无对应证据，禁止臆造`,
             });
           }
         }
@@ -1911,12 +1915,15 @@ export class CodeStructureValidator {
             /(^|-)(theme|mode|root|page|app|wrapper|wrap|scope|container)($|-)/i.test(
               wrapper,
             );
+          // 🛡️ 2026-11-17 降级 BLOCK→WARN（判据/message/计数行全保留）：真机 78 单 0 命中，
+          //    且写盘出口 code-fix-rules.js 已有确定性剥壳兜底；保留检出留痕，不再白烧重试。
+          //    isThemeLike 仍保留用于区分 message 文案（主题包裹=样式 0 命中），但不再决定 severity。
           issues.push({
             id: 'STYLE-001',
-            severity: isThemeLike ? 'BLOCK' : 'WARN',
+            severity: 'WARN',
             file: commonLessFile.path,
             message: isThemeLike
-              ? `common.less 中的 class 被主题/作用域选择器 .${wrapper} 包裹。宿主不给组件根添加该类，包裹后样式在真实DOM上0命中。必须将所有 .c- class 直接写在文件根层`
+              ? `（非阻断：样式失效留痕，不重生成）common.less 中的 class 被主题/作用域选择器 .${wrapper} 包裹。宿主不给组件根添加该类，包裹后样式在真实DOM上0命中。必须将所有 .c- class 直接写在文件根层`
               : `common.less 中 .c- class 被外层选择器 .${wrapper} 包裹（非主题类）。请确认该包裹层在真实 DOM 上存在；若不存在请将 .c- class 提到文件根层`,
           });
         }
@@ -4597,11 +4604,24 @@ export function autoFixPrefixViolations(
         `([\\[{,]\\s*)(?<![a-z0-9-])${escapeRegExp(className)}(\\s*[:}\\]])`,
         'g',
       );
-      vueFile.content = vueFile.content.replace(
-        classBindRegex,
-        (_m, pre, post) =>
-          `${pre}${quoteObjectKeyIfNeeded(prefixedName)}${post}`,
-      );
+      // 🔴 作用域闸门（2026-11-17 eba2284f 实锤 P0）：此替换**仅限 <template> 段**。
+      //   原实现对整份 content 全局替换，本意改 template 的 `:class="{ wrapper: true }"`，
+      //   却误伤 `<script setup>` 里的普通数据对象键——`CHART_DATA = { tunnel: ... }`
+      //   被改成 `{ 'c-traffic-monitor-tunnel': ... }`（键含 `-` 被 quoteObjectKeyIfNeeded 加引号），
+      //   而访问处 `CHART_DATA[activeTab.value]` 仍是裸 `tunnel` ⇒ data=undefined ⇒
+      //   `data.actual` 抛错 ⇒ RUNTIME-004 render-error。cache 原始输出证明 LLM 是对的，
+      //   是我方确定性改写制造了坏产物。template 段外的 script/style 一律不参与此替换。
+      const tplBody = extractTopLevelTemplate(vueFile.content);
+      if (tplBody) {
+        const fixedTpl = tplBody.replace(
+          classBindRegex,
+          (_m, pre, post) =>
+            `${pre}${quoteObjectKeyIfNeeded(prefixedName)}${post}`,
+        );
+        if (fixedTpl !== tplBody) {
+          vueFile.content = vueFile.content.replace(tplBody, fixedTpl);
+        }
+      }
 
       // 🛡️ P2（2026-09-08）：同时修复 <style scoped> 块内无前缀的 CSS 选择器。
       // 子组件的 <style scoped> 也可能引用裸 class 名（.wrapper），需要加前缀。

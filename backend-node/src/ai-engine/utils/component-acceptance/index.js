@@ -43,6 +43,9 @@ import { DEGENERATE_FALLBACK_CLASS } from '../../validators/code-fix-rules.js';
 // 🛡️ C1-DUP（2026-11-12 · mc-max-1794415139727-828c281a 实锤）：识别刀53/54 确定性
 //   接管组件（类名单一来源，禁副本正则）——重复渲染判定时接管文件是 keeper。
 import { FG_TAKEOVER_CLASS_RX } from '../folded-grid-section-takeover.js';
+// 🛡️ D1 段内标题佐证（2026-11-17）：Figma 树根归一 + id 索引的**单一来源**
+//   （禁在验收侧再造第二份树遍历；与接管渲染器同源的取值域靠同一棵树保证）。
+import { indexFigmaNodes, unwrapFigmaRoot } from '../card-inner-layout-truth.js';
 
 /**
  * 🛡️ 节点角色判定（对齐版，2026-11-10 naming 向下兼容方案 P1）：
@@ -605,6 +608,34 @@ export function runAcceptanceChecks(input = {}) {
       }
       return false;
     };
+    // 🛡️ E3-v4 v7（2026-11-17 · mc-max-1794888736786-4703917b 实锤）：补齐 v2 设计稿
+    //   承诺但**从未落地**的第三层取证「任意开标签/模板内动态绑定消费」。
+    //   v2 注释（:576）写「消费取证升级为三层（段级开标签 → 任意开标签 → 数据驱动容器→
+    //   模板可达）」，但实现只落了「段级开标签 + 数据驱动 const 容器」两条——条件内联形态
+    //   从两层之间漏掉。实锤样本（tabs）：真值 1:413 = 1:412 的**重复子项**（plan
+    //   body.children[].id、control:tabs，bg 1:414 是其组件），mapping.usage 本身就写
+    //   `:style="{ backgroundImage: `url(${bgX})` }"`；产物忠实照做并按 tab 态加条件
+    //   `activeTab === tab.value ? { backgroundImage: `url(${bg2})` } : null`——既不在
+    //   data-section-id 开标签上、也不经 const 容器 ⇒ 旧判据必然误报「无任何消费形态」。
+    //   判定口径（可辩驳）：资源变量在 `<template>` 中出现在**动态绑定**里（`:style` /
+    //   `v-bind:style` / 插值 `{{ }}`）；静态 style 不含变量名（是字面路径）故不受影响。
+    const isTemplateDynamicallyConsumed = (code, varName) => {
+      const tpl = templateOf(code);
+      if (!tpl) return false;
+      const v = escapeRe(varName);
+      const re = new RegExp(
+        `:style\\s*=\\s*"(?:[^"]*\\b${v}\\b[^"]*)"` +
+          `|v-bind(?::[\\w-]+)?\\s*=\\s*"(?:[^"]*\\b${v}\\b[^"]*)"` +
+          `|\\{\\{[^}]*\\b${v}\\b[^}]*\\}\\}`,
+      );
+      return re.test(tpl);
+    };
+    const hasTemplateDynamicConsumption = (ownVars) => {
+      for (const [, code] of entries) {
+        for (const v of ownVars) if (isTemplateDynamicallyConsumed(code, v)) return true;
+      }
+      return false;
+    };
     const hasDataDrivenConsumption = (ownVars) => {
       for (const [, code] of entries) {
         for (const v of ownVars) if (isDataDrivenConsumed(code, v)) return true;
@@ -671,6 +702,7 @@ export function runAcceptanceChecks(input = {}) {
 
     const misownedBg = [];
     let relaxedCardLevel = 0;
+    let exprConsumed = 0;
     let degenerateTruth = 0;
     let ancestorStretchFail = 0;
     for (const r of input.resourceDomMapping) {
@@ -721,6 +753,21 @@ export function runAcceptanceChecks(input = {}) {
         relaxedCardLevel += 1;
         continue;
       }
+      // 🛡️ E3-v4 v7（2026-11-17 · 4703917b 实锤）：模板动态绑定消费（条件内联）——v2 设计
+      //   稿第三层取证的落地（见上方 isTemplateDynamicallyConsumed 注释）。层级分流同 v2
+      //   「wantId 不是产物已建段级容器」（重复子项/tab 项被 v-for 逐项渲染，不建 per-item
+      //   id 段）：要求 (a) wantId ∉ 产物段级容器集合；(b) **无任何 data-section-id 标签**
+      //   字面消费该 var（无字面错挂，与 v6 一致，一处合规不洗白另一处错挂）；(c) 该 var 在
+      //   模板中经动态绑定被消费。真「拉伸」仍需运行时 DOM 尺寸，归 G3，不在静态判据里假装能判。
+      if (
+        !sectionIds.has(wantId) &&
+        !_sites.literalMount &&
+        !_sites.firstAny &&
+        hasTemplateDynamicConsumption(ownVars)
+      ) {
+        exprConsumed += 1;
+        continue;
+      }
       // 🛡️ E3-v4 v5（2026-11-12 · 55a17681 实锤 + 用户裁决「只允许挂父级」）：v3 的
       //   「祖先段挂载 WARN 放行」口子删除。真值语义：ancestorIds[0] = 直接父级
       //   （= owner = wantId，视觉宿主，真值 box 与资源同尺寸）；ancestorIds[1+] = 祖父
@@ -745,6 +792,13 @@ export function runAcceptanceChecks(input = {}) {
       // 真机计数行（判据必须可观测；不允许只靠函数入参塞值验证）
       warns.push(
         `E3-v4 卡片级 owner 放行 ${relaxedCardLevel} 张（产物按段级建模、背景经数据驱动消费；拉伸检测归运行时 G3）`,
+      );
+    }
+    if (exprConsumed > 0) {
+      // 真机计数行（v7 模板动态绑定额）：与 relaxedCardLevel 区分，便于对账「数据驱动容器
+      // vs 条件内联」两种放行形态各自命中量
+      warns.push(
+        `E3-v4 模板动态绑定消费放行 ${exprConsumed} 张（重复子项 owner 未建段、背景经 :style 动态绑定消费；拉伸检测归运行时 G3）`,
       );
     }
     if (degenerateTruth > 0) {
@@ -1682,7 +1736,58 @@ export function runAcceptanceChecks(input = {}) {
     });
     if (titledSecs.length >= 2) {
       checked += 1;
-      const missing = titledSecs.filter((s) => !allVueNoS2.includes(String(s.header.title).trim()));
+      // 🛡️ 2026-11-17（D1 域与渲染域同源 · mc-max-1794852555195-0f7fb21c 实锤）：
+      //   **title 必须能被「该段自身子树」佐证**才纳入判据。
+      //   真机形态：plan 把 `807:3`（GROUP name='header'）里的 TEXT「具身机器人设备列表」
+      //   判给 stats 段 `43:4892`、把 `807:2`（GROUP 'slot-con'）直属 TEXT「点击查看详情」
+      //   判给 legend 段 `43:4869`；而在 Figma 树里这两个 TEXT 的 parent **都不是**该段节点
+      //   （807:3 / 807:2 与段节点同级，属面板标题条 / 槽位直属文本）⇒ 接管渲染器的段头
+      //   取值域是「段的直接子级 TEXT」（同源判据：folded-grid-section-takeover#
+      //   resolveInBoxSectionHeader）⇒ 这两条标题永远渲染不出来 ⇒ D1 恒 FAIL，且修复轮
+      //   拿到的配方是「补标题」而真值根本不在该段里（假 FAIL + 不可照抄配方）。
+      //   口径（可辩驳、不静默失效）：
+      //     · 已物化 ⇒ 通过（原逻辑）；
+      //     · 能证明「title 不在该段子树内」⇒ **撤出**该条（归属错误交上游归属 / 段内文本
+      //       覆盖由 C1b、TEXT-COVERAGE 负责，检测力不丢）；
+      //     · 段节点取不到 / 无 figmaNodeData ⇒ **维持旧行为**（不因数据缺失判据失效）。
+      //   索引与根归一直接复用既有单一来源（card-inner-layout-truth 的 unwrapFigmaRoot /
+      //   indexFigmaNodes），禁在验收侧再造第二份树遍历。
+      const _d1Root = unwrapFigmaRoot(input.figmaNodeData);
+      const _d1Index = _d1Root ? indexFigmaNodes(_d1Root) : null;
+      const _d1TextsUnder = (node) => {
+        const set = new Set();
+        const walk = (n) => {
+          if (!n || typeof n !== 'object') return;
+          if (typeof n.characters === 'string' && n.characters.trim()) set.add(n.characters.trim());
+          for (const c of n.children || []) walk(c);
+        };
+        walk(node);
+        return set;
+      };
+      const _d1Detached = [];
+      const missing = titledSecs.filter((s) => {
+        const title = String(s.header.title).trim();
+        if (allVueNoS2.includes(title)) return false; // 已物化
+        if (!_d1Index) return true; // 无真值树 ⇒ 维持旧行为
+        const sid = String(s.id || '');
+        const node =
+          _d1Index.get(sid) ||
+          _d1Index.get(sid.replace(/-(list|grid|row|col|wrap)$/i, '')) ||
+          null;
+        if (!node) return true; // 段节点不可得 ⇒ 维持旧行为（不允许判据静默失效）
+        if (_d1TextsUnder(node).has(title)) return true; // 段内确有该标题 ⇒ 真缺席
+        _d1Detached.push({ id: sid, title });
+        return false; // 标题不在该段子树内 ⇒ 归属错误，不据此判 FAIL
+      });
+      if (_d1Detached.length > 0) {
+        warns.push(
+          `D1 段外标题撤出 ${_d1Detached.length} 条（标题真值不在该段子树内 ⇒ 归属错误，非分组塌陷；` +
+            `如 ${_d1Detached
+              .slice(0, 3)
+              .map((d) => `[${d.id}]「${d.title.slice(0, 12)}」`)
+              .join('、')}）——不据此判 FAIL；该文本是否物化由 C1b / TEXT-COVERAGE 判`,
+        );
+      }
       if (missing.length > 0) {
         fails.push({
           code: 'D1',

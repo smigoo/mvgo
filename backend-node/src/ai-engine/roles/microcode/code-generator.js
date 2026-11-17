@@ -43,8 +43,13 @@ import {
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
+// 🛡️ 2026-11-17 治本（mc-max-1794891744785-2d75d800 实锤）：语义 id 段的资源锚复活。
+//   figmaAnchorId 是 planner enrich 保留的 Figma 锚身份（section-anchor-identity 单一来源），
+//   此处以 α3 专用属性 `data-resource-anchor` 落到容器 DOM —— 红线（本文件 :941）只禁
+//   复用 `data-section-id`，专用锚属性是既有合规通道。
+import { FIGMA_ID_RE } from '../../utils/section-anchor-identity.js';
 import { resolveSectionSize, resolveSectionBox, resolveIntrinsicLayout, buildIntrinsicContainerStyle, buildIntrinsicChildStyle } from '../../utils/section-intrinsic-layout.js';
-import { planRowBands, planColumnGroups, crossAxisCenterStyle } from '../../utils/row-band-cluster.js';
+import { planRowBands, planColumnGroups, crossAxisCenterStyle, planTopLevelBands } from '../../utils/row-band-cluster.js';
 import { resolveAbsorbedBgLayers, buildAbsorbedBgLayerStyle, claimCollapsedLeafContainedIds, expandCandidateIdsWithDirectChildren } from '../../utils/container-absorbed-bg.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 // 🛡️ P1-B（2026-10-26）：装配层需要知道「哪些成员被刀 53 两阶段决策抑制」，
@@ -348,8 +353,10 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
 export function flexItemStyleFromWidths(widths, index, denominatorOverride) {
   const nums = (Array.isArray(widths) ? widths : []).map((w) => Number(w) || 0);
   const sumW = nums.reduce((sum, w) => sum + w, 0);
-  // 🛡️ S4（2026-11-14）：与 heights 版同口径 —— 分母可覆盖为 `Σ宽 + Σ间距`，
-  //   否则 `w/Σw` 之和恒为 1，再叠 `margin-left` 就是「100% + 间距」⇒ 横向溢出。
+  // 🛡️ F1（2026-11-17）：分母口径 = **纯 Σ宽**（S4 的 `Σ宽 + Σ间距` 已废弃）。
+  //   basis:0 时 free space 已先扣 margin-left（Flexbox §9.7），分母再含间距会让
+  //   Σgrow<1 ⇒ `(1−Σgrow)×free` 不分配 ⇒ 横向留白 + 每卡被压。
+  //   `denominatorOverride` 保留为通用覆盖口（调用方传 Σ宽 即可）。
   const total =
     Number.isFinite(denominatorOverride) && denominatorOverride > 0
       ? Number(denominatorOverride)
@@ -400,11 +407,19 @@ export function siblingGapStyle(prevBox, curBox, axis, prevEffectiveSize = 0, gu
 }
 
 /**
- * 🛡️ S4（2026-11-14 · 9ed088e3 实锤）：兄弟间距的**数值**版本（单一实现，供分母使用）。
+ * 🛡️ S4（2026-11-14 · 9ed088e3 实锤）：兄弟间距的**数值**版本（供 margin-top 出口使用）。
  *
  * 病灶：`flex:<h/Σh>` 之和恒为 1，再叠 `margin-top` ⇒ 子项总高 = 容器 100% + Σgap
  *   ⇒ 必然溢出（真机 101px / 807 画布 = 12.5%，末段被压）。
- * 正解：flex 分母改为 `Σh + Σgap`，把间距份额让出来（Σflex < 1，剩余量正好是 Σmargin）。
+ *
+ * ⚠️ 旧口径已被 F1（2026-11-17）修正，勿回灌：
+ *   当时把 flex 分母改为 `Σh + Σgap`（Σflex < 1，「剩余量正好是 Σmargin」）——该推理**漏了
+ *   `flex-basis: 0` 时自由空间已先扣 margin**。按 CSS Flexbox §9.7，basis=0 且 Σgrow<1 时浏览器
+ *   **只分配 Σgrow 比例的自由空间**，`(1 − Σgrow) × free` 不被分配 ⇒ 段高被压 + 底部死白
+ *   （c-monitor-0c46af4d 真机：Σgrow=0.839 ⇒ 段高 22.7/41.9/42/42 合计 148.6，死白 28.5）。
+ *   现行口径：**分母只取 Σh**，使 Σgrow=1 填满容器（真机同容器得 27.1/49.9/49.9/49.9 = 176.8，
+ *   加 Σmargin 34 恰 210.8 ≤ 211，无溢出、无死白）。本函数仍供 `margin-top` 出口与
+ *   `__basisRatio` 护栏使用，**不再参与 flex 分母**。
  *
  * 与 `siblingGapStyle` 同一判据（含 G1 超限守卫），区别只是返回数字。
  * @returns {number} >0 的间距像素；不合法/贴合/超限 ⇒ 0
@@ -477,8 +492,8 @@ export function flexItemStyleFromHeights(heights, index, denominatorOverride, fo
   const nums = (Array.isArray(heights) ? heights : []).map((h) => Number(h) || 0);
   const sumH = nums.reduce((sum, h) => sum + h, 0);
   const px = nums[index] || 0;
-  // 🛡️ G10v2：分母可覆盖为 `Σ子项高 + Σ兄弟间距`（= 容器可用高的真实份额）。
-  //   否则 `h/Σh` 之和恒为 1，再叠 margin 就是「100% + 间距」⇒ 必然溢出。
+  // 🛡️ F1（2026-11-17）：分母口径 = **纯 Σh**（S4 的 `Σh + Σgap` 已废弃，原因见
+  //   `siblingGapPx` 文档块的 Flexbox §9.7 推导 + 真机量测表）。
   const total =
     Number.isFinite(denominatorOverride) && denominatorOverride > 0
       ? Number(denominatorOverride)
@@ -618,8 +633,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let __rowBandEvaluated = 0;
   let __rowBandHits = 0;
   let __gapApplied = 0;
-  // 🛡️ S4：分母已含 Σgap 的容器数（0 也打，便于辨「没命中」与「没生效」）
-  let __gapDenominatorApplied = 0;
+  // 🛡️ F1（2026-11-17）：**存在兄弟间距**（走 margin 出口）的容器数 —— 原 `gapDenominatorApplied`
+  //   语义（间距进 flex 分母）已随 F1 废弃，改名以免日志名说谎。0 也打，便于辨「没命中」与「没生效」。
+  let __gapMarginApplied = 0;
   // 🛡️ px basis 因覆盖率不足退回比例填满的容器数（0 也打）
   let __pxBasisFallback = 0;
   // 🛡️ P0-A（2026-11-15）：段级几何唯一事实源。
@@ -1095,6 +1111,22 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         // 🛡️ P1 修复（2026-09-17）：容器 div 添加 data-section-id，让 resource-mounter 能精确匹配
         //   到递归渲染后的 DOM 层级（此前无此属性 → targetDomSelector 匹配失败 → 资源挂载丢失）。
         const sectionIdAttr = sec.id ? ` data-section-id="${sec.id}"` : '';
+        // 🛡️ 2026-11-17 治本（mc-max-1794891744785-2d75d800 实锤）：vision 语义 id 段的
+        //   **Figma 数字锚补标**。sem.id 覆盖 sec.id 后 `data-section-id` 是语义 id，与资源
+        //   `ownerSectionId`（Figma 数字 id）不同命名空间 ⇒ 产物锚点集 ∩ 资源锚点集 = ∅
+        //   ⇒ 确定性挂载链（锚点精确挂载 / α3 补标 / 兄弟卡背景组 / R24 出口）整链失活。
+        //   修法：planner enrich 已把被覆盖前的数字锚保到 `sec.figmaAnchorId`，此处以
+        //   α3 专用属性 `data-resource-anchor` 落盘（microcode-engineer 的 productAnchorIds
+        //   收集与 findTagBySectionAnchor 均已认该属性）⇒ 资源锚点回到数字 id 空间，全链复活。
+        //   判据：FIGMA_ID_RE 形态且 ≠ sec.id（非数字锚/同值不写）；缺字段 ⇒ 零输出（旧产物行为逐字不变）。
+        const _figmaAnchor =
+          sec.figmaAnchorId != null && FIGMA_ID_RE.test(String(sec.figmaAnchorId))
+            ? String(sec.figmaAnchorId)
+            : null;
+        const resourceAnchorAttr =
+          _figmaAnchor && String(sec.id) !== _figmaAnchor
+            ? ` data-resource-anchor="${_figmaAnchor}"`
+            : '';
         // 🛡️ P5 高度传导（2026-09-17 · e0cdf905 实锤）：容器 div 必须内联 flex:1;min-height:0 ——
         //   它处于父 flex 容器内部，不内联则高度退回内容流 auto → 塌陷。
         //   🛡️ P6 合并：容器自身的 flex 比例优先用父分配的 parentFlexStyle（无分配时回退 flex:1），
@@ -1122,7 +1154,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   让容器自成层叠上下文，把 -1 层圈在容器内（高于祖先背景、低于容器内容）。
         const absorbedLayers = bgLayersByContainer.get(String(sec.id)) || [];
         const relativeStyle = absorbedLayers.length > 0 ? 'position:relative;isolation:isolate;' : '';
-        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${relativeStyle}">`);
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr}${resourceAnchorAttr} style="${ownFlex}${displayStyle}${alignStyle}${intrinsicPad}${relativeStyle}">`);
         for (const layer of absorbedLayers) {
           lines.push(
             `${pad}  <div class="c-${semantic}-absorbed-bg" data-absorbed-bg="${layer.id}" style="${buildAbsorbedBgLayerStyle(layer)}"></div>`,
@@ -1261,7 +1293,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   根治段锚层级归位属 G3/上游锚审计，本刀只做错位拦截。
         let __canvasMismatch = false;
         let __ratioMismatch = false; // G10v2：本容器比例不可信 ⇒ 不写 flex / 不写间距
-        let __columnDenominator = 0; // G10v2：flex 分母 = Σ子项高 + Σ兄弟间距（让出 margin 份额）
+        let __columnDenominator = 0; // F1：flex 分母 = Σ子项高（不含 Σgap，见下）
         if (!intrinsic.ok && !isHorizontal && (sec.children || []).length >= 2) {
           const __cbox = resolveSectionBox(sec, figmaIndex);
           const __cboxes = sec.children.map((c) => resolveSectionBox(c, figmaIndex));
@@ -1291,9 +1323,12 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
               if (Number.isFinite(gapPx) && gapPx > 0) __gapsNumeric.push(Math.round(gapPx));
             }
             __ratioCanvasGroups += 1;
-            __columnDenominator =
-              childHeights.reduce((a, h) => a + (Number(h) || 0), 0) +
-              __gapsNumeric.reduce((a, g) => a + g, 0);
+            // 🛡️ F1（2026-11-17）：分母**只取 Σh**（G10v2 原口径 Σh+Σgap 已修正，见
+            //   `siblingGapPx` 文档块）。此分支只在「Σh+Σgap 与容器高偏差 ≤15%」时生效，
+            //   即 Σh+Σgap ≈ H；此时 basis:0 的 free = H − Σgap = Σh，若分母仍含 Σgap
+            //   ⇒ Σgrow = Σh/(Σh+Σgap) < 1 ⇒ 按 Flexbox §9.7 只分配该比例 ⇒ 容器内留白
+            //   Σh×Σgap/(Σh+Σgap)（c-monitor：177×34/211 = 28.5px，与真机实测逐字一致）。
+            __columnDenominator = childHeights.reduce((a, h) => a + (Number(h) || 0), 0);
             const __conv = evaluateColumnCanvasConvergence({
               containerH: __cbox.h,
               childHeights,
@@ -1340,8 +1375,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             renderBodyNode(child, indent + 1, flexStyle + g);
           } else {
             // 🛡️ G10v2：① 不收敛 ⇒ 不写 flex（回落自然流，保 min-height:0）；
-            //   ② 收敛时分母用「Σ子项高 + Σ兄弟间距」⇒ flex 之和 < 1，剩余份额正好留给 margin，
-            //   不再出现「比例 100% + 43px 间距」的必然溢出。
+            //   ② 收敛时分母用**纯 Σ子项高**（F1），Σgrow=1 ⇒ 按设计比例填满 free space；
+            //   margin 份额由 flexbox 自己从 free 里先扣，不需要分母让位。
             const flexStyle = __ratioMismatch
               ? 'min-height:0;'
               : flexItemStyleFromHeights(childHeights, i, __columnDenominator > 0 ? __columnDenominator : undefined);
@@ -1394,7 +1429,10 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       lines.push(
         `${pad}<div class="c-${semantic}-band" style="${flexStyle}${alignSelf}display:flex;flex-direction:${node.direction};${isRowBand ? 'align-items:stretch;' : ''}">`,
       );
-      // 🛡️ S4：带内兄弟同样先把间距算进分母（否则 row 带横向溢出、column 组纵向溢出）
+      // 🛡️ S4（2026-11-14）→ 🛡️ F1（2026-11-17）修正：带内兄弟的间距**不再进分母**。
+      //   S4 原意「间距算进分母 ⇒ Σflex<1 ⇒ 剩余份额留给 margin」在 basis:0 下是错的
+      //   （free 已扣 margin，Σgrow<1 只是把 (1−Σgrow)×free 变成死白）。分母回 Σsizes
+      //   ⇒ Σgrow=1，段/带按设计比例填满容器，margin 由 free 扣减后自然容纳。
       const __bandGaps = node.children.map((_, i) =>
         i > 0
           ? siblingGapPx(
@@ -1407,8 +1445,8 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
           : 0,
       );
       const __bandGapSum = __bandGaps.reduce((a, g) => a + (Number(g) || 0), 0);
-      const __bandDen = sizes.reduce((a, v) => a + (Number(v) || 0), 0) + __bandGapSum;
-      if (__bandGapSum > 0) __gapDenominatorApplied += 1;
+      const __bandDen = sizes.reduce((a, v) => a + (Number(v) || 0), 0);
+      if (__bandGapSum > 0) __gapMarginApplied += 1;
       for (let i = 0; i < node.children.length; i++) {
         // 🛡️ 刀16：带内兄弟间距（row 带看 x 差、column 组看 y 差）
         const __gpx2 = __bandGaps[i] || 0;
@@ -1435,13 +1473,193 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     //   故无几何事实的组件零变化；仅当高度可解析时才产生比例。
     // 顶层容器只要仍含 body 后代就保留；入槽叶由 renderBodyNode 按同一契约跳过。
     const topBodyRoots = structureContract.bodyRoots;
+    // 🛡️ 顶层行带分组（2026-11-17 · mc-max-1794870462702-5401e49e 实锤立项）：
+    //   病灶：顶层比例分支此前一律按「高度归一」纵切，不区分「纵向堆叠 vs 横向行带」。
+    //   实锤形态「两统计卡横向并排（各 265×76 同 y）+ 三内容段纵向堆叠」：
+    //     ① 两卡各得 flex:0.088（=76/863，分母混入了行带自己的 152px）却被装进
+    //        `mc-sibling-row`（row 容器）⇒ Σgrow=0.176<1 部分分配 ⇒ 每卡 51px（塌缩 81%）；
+    //     ② 三内容段分母同样被污染 ⇒ Σflex=0.740<1 ⇒ 底部空白 176px。
+    //   一个建模缺口，两个视觉症状。判据单一来源 `row-band-cluster.js#planTopLevelBands`
+    //   （纯几何 y 聚带 + x 错开，与刀12 同 TOL）；无行带 / 盒缺失 ⇒ null ⇒ 逐字走旧路径。
+    let __topBands = null;
+    let topHeights = [];
     if (topBodyRoots.length > 1) {
-      const topHeights = topBodyRoots.map((s) =>
+      topHeights = topBodyRoots.map((s) =>
         isSizeExcluded(s) ? 0 : resolveHeightWithTakeover(s),
       );
-      // 🛡️ S4（2026-11-14）：先算兄弟间距，再定 flex 分母。
-      //   病灶：`flex:<h/Σh>` 之和恒为 1，再叠 `margin-top` ⇒ 总高 = 容器 + Σgap ⇒ 溢出
-      //   （真机 101px/807）。分母改为 `Σh + Σgap`：Σflex < 1，剩余份额正好容纳 margin。
+      const __bandEntries = topBodyRoots.map((s) => ({
+        ref: s,
+        box: resolveSectionBox(s, figmaIndex),
+      }));
+      __topBands = planTopLevelBands(__bandEntries);
+      // 🔴 P1-B 兼容闸（dfe50968 回归守卫）：存在「≥2 成员且存活成员 ≥2」的带才保留；
+      //   否则整批 null 回旧路径。判定语义：
+      //   - 5401e49e 真实行带：两统计卡都是独立存活段 ⇒ 带 [alive,alive] ⇒ 保留；
+      //   - dfe50968 合并统计段（vision 单段 + figma 多卡）：带内 3 成员仅 1 存活
+      //     （其余是 display:none 幽灵身份）⇒ 行带语义不成立（它们从未被当作横排）⇒ 回退。
+      if (__topBands) {
+        const __hasAliveRowBand = __topBands.bands.some(
+          (band) =>
+            band.length >= 2 &&
+            band.filter((m) => !isSizeExcluded(m.ref)).length >= 2,
+        );
+        if (!__hasAliveRowBand) __topBands = null;
+      }
+      options?.logger?.info?.('🛡️ 顶层行带分组·已评估', {
+        sections: topBodyRoots.length,
+        bands: __topBands ? __topBands.bands.length : 0,
+        rowBands: __topBands ? __topBands.bands.filter((b) => b.length >= 2).length : 0,
+      });
+    }
+    if (__topBands) {
+      // 行带形态：带间纵向高度归一（分母 = Σ带高 + Σ带间距）；带内横向宽度归一（row 容器承载）。
+      const __bandHeights = __topBands.bands.map((band) => {
+        const boxes = band.map((m) => m.box);
+        return Math.max(...boxes.map((b) => b.y + b.h)) - Math.min(...boxes.map((b) => b.y));
+      });
+      const __bandGaps = __topBands.bands.map((_, bi) => {
+        if (bi === 0) return 0;
+        const prev = __topBands.bands[bi - 1];
+        const cur = __topBands.bands[bi];
+        // 带级盒 = 成员盒并集（unionBoxes 语义就地内联：带成员 1..N 共同跨度）
+        const __bandUnion = (members) => {
+          let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+          for (const m of members) {
+            x1 = Math.min(x1, m.box.x); y1 = Math.min(y1, m.box.y);
+            x2 = Math.max(x2, m.box.x + m.box.w); y2 = Math.max(y2, m.box.y + m.box.h);
+          }
+          return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+        };
+        const prevU = __bandUnion(prev);
+        const curU = __bandUnion(cur);
+        return siblingGapPx(prevU, curU, 'vertical', 0, __gapGuardStats);
+      });
+      const __bandGapSum = __bandGaps.reduce((a, g) => a + (Number(g) || 0), 0);
+      // 🛡️ F1（2026-11-17 · c-monitor-0c46af4d 实锤 + 真机 Chromium 量测）：分母**只取 Σh**。
+      //   S4 旧口径「分母 = Σh + Σgap ⇒ Σflex < 1 ⇒ 剩余份额正好容纳 margin」在
+      //   `flex-basis: 0` 前提下不成立：CSS Flexbox §9.7 —— Σflex-grow < 1 时浏览器
+      //   **只分配该比例的自由空间**，剩下的 (1 − Σgrow) × free 不被分配 ⇒ 堆成容器底部死白。
+      //   实测（414 宽面板，真值 Σh=177 / Σgap=34 ⇒ 旧分母 211 ⇒ Σgrow=0.839）：
+      //     · 容器高 234 ⇒ 段高 25.6/47.4/47.4/47.4、底部死白 32.2（设计 27/50/50/50、留白 14）
+      //     · 容器高 211 ⇒ 段高 22.7/41.9/42/42、底部死白 28.5
+      //   分母回 Σh ⇒ Σgrow = 1 ⇒ 段高按设计比例填满容器、死白 0.2px（亚像素舍入）。
+      //   不溢出：basis=0 时 Σ段高 = free = H − Σmargin，加回 Σmargin 恰为 H
+      //   （实测 211 容器：176.8 + 34 = 210.8 ≤ 211；234 容器：199.8 + 34 = 233.8 ≤ 234）。
+      //   与 B1-S1（`code-generator.b1-s1-px-retire.spec.ts`）文档契约「Σ=1 同层归一」一致 ——
+      //   旧口径实际 Σ=0.839，本就与自身契约不符。
+      //   ⚠️ `__bandGapSum` 仍保留给 `margin-top` 出口与计数，只是不再进分母。
+      const __bandDen = __bandHeights.reduce((a, h) => a + (Number(h) || 0), 0);
+      if (__bandGapSum > 0) __gapMarginApplied += 1;
+      let __secIdx = 0;
+      for (let bi = 0; bi < __topBands.bands.length; bi++) {
+        const band = __topBands.bands[bi];
+        const __bgpx = __bandGaps[bi] || 0;
+        const bandGap = __bgpx > 0 ? `margin-top:${Math.round(__bgpx)}px;` : '';
+        if (bandGap) __gapApplied += 1;
+        if (band.length === 1) {
+          // 单成员带：与旧路径逐字同形（高度比例 + 间距 + 段高 class）。
+          const sec = band[0].ref;
+          const i = topBodyRoots.indexOf(sec);
+          const _h = Number(topHeights[i]) || 0;
+          let _secCls = '';
+          if (_h > 0 && !isLayoutContainerSection(sec)) {
+            _secCls = `c-${semantic}-sech-${__secIdx + 1}`;
+          } else if (_h > 0) {
+            __pxHeightSkipped += 1;
+          }
+          const _ratioStyle = flexItemStyleFromHeights(
+            __bandHeights,
+            bi,
+            __bandDen > 0 ? __bandDen : undefined,
+            true,
+          );
+          __sectionGeometries.push({
+            index: __secIdx,
+            heightPx: Math.round(_h),
+            gapPx: Math.round(__bgpx),
+            ratioStyle: _ratioStyle,
+            gapStyle: bandGap,
+            cls: _secCls,
+            carrier: _secCls ? 'less' : 'inline',
+          });
+          __secIdx += 1;
+          renderBodyNode(sec, 0, _ratioStyle + bandGap, _secCls);
+        } else {
+          // 多成员带：row 容器（flex:0 1 auto 不参与纵向分配）+ 成员按宽度归一。
+          //   容器自身 flex-grow=0：带高由成员内容/真值高决定，剩余纵向空间全给其他带。
+          //   🔴 P1-B 语义保留（dfe50968 回归根因修复）：被剔除成员（isSizeExcluded，
+          //   合并统计段的 display:none 身份）不占宽度分母 —— 与旧路径 flex:0 同语义。
+          const widths = band.map((m) =>
+            isSizeExcluded(m.ref) ? 0 : m.box.w,
+          );
+          const bandWidthSum = widths.reduce((a, w) => a + (Number(w) || 0), 0);
+          const bandInnerGaps = band.map((_, mi) => {
+            if (mi === 0) return 0;
+            // P1-B 语义：prev/cur 任一被剔除 ⇒ 不注入间距（flex:0 成员不占位，
+            // 旧路径对剔除成员不产 margin；此处同语义，否则剔除成员的 margin 残留分母）。
+            if (isSizeExcluded(band[mi - 1].ref) || isSizeExcluded(band[mi].ref)) return 0;
+            const prevM = band[mi - 1].box;
+            const curM = band[mi].box;
+            return siblingGapPx(prevM, curM, 'horizontal', 0, __gapGuardStats);
+          });
+          const bandGapSum = bandInnerGaps.reduce((a, g) => a + (Number(g) || 0), 0);
+          // 🛡️ F1（2026-11-17）：分母只取 Σ宽度（间距由 basis:0 的 free 先扣，不进分母）。
+          const bandDen = bandWidthSum;
+          if (bandGapSum > 0) __gapMarginApplied += 1;
+          lines.push(
+            `      <div class="mc-top-row-band" style="${bandGap}flex:0 1 auto;display:flex;flex-direction:row;align-items:stretch;min-height:0;width:100%;">`,
+          );
+          for (let mi = 0; mi < band.length; mi++) {
+            const sec = band[mi].ref;
+            const i = topBodyRoots.indexOf(sec);
+            const innerGap =
+              bandInnerGaps[mi] > 0 ? `margin-left:${Math.round(bandInnerGaps[mi])}px;` : '';
+            if (innerGap) __gapApplied += 1;
+            // 成员段高 class 保留（高度是 row 容器交叉轴的 stretch 参考），主轴比例换宽度归一。
+            const _h = Number(topHeights[i]) || 0;
+            let _secCls = '';
+            if (_h > 0 && !isLayoutContainerSection(sec)) {
+              _secCls = `c-${semantic}-sech-${__secIdx + 1}`;
+            } else if (_h > 0) {
+              __pxHeightSkipped += 1;
+            }
+            const _ratioStyle = flexItemStyleFromWidths(
+              widths,
+              mi,
+              bandDen > 0 ? bandDen : undefined,
+            );
+            __sectionGeometries.push({
+              index: __secIdx,
+              heightPx: Math.round(_h),
+              // 🛡️ 2026-11-17 行带高异常根治（mc-max-1794890428265-8312d0b9 实锤）：
+              //   `gapPx` 是**纵向**兄弟间距通道（唯一消费者 = layoutStyle 的 `margin-top`）。
+              //   带内成员是 row 横向排布：横向间距真值由 `gapStyle`(margin-left) **单源**承载
+              //   （见下方 innerGap），带级纵向间距由 band 容器自身 bandGap 承载。
+              //   此处曾误填 `bandInnerGaps[mi]`（**横向**值）⇒ 同一个 99px/64px 被同时写成
+              //   `margin-left` + `margin-top`，行带高 = 横向间距 + 成员高（真机 27 → 123px），
+              //   其余段被等比压扁。带内成员无纵向间距语义 ⇒ 恒 0。
+              gapPx: 0,
+              ratioStyle: _ratioStyle,
+              gapStyle: innerGap,
+              cls: _secCls,
+              carrier: _secCls ? 'less' : 'inline',
+            });
+            __secIdx += 1;
+            renderBodyNode(sec, 1, _ratioStyle + innerGap, _secCls);
+          }
+          lines.push(`      </div>`);
+        }
+      }
+    } else if (topBodyRoots.length > 1) {
+      // 🛡️ S4（2026-11-14）原始动机 + 🛡️ F1（2026-11-17）修正：
+      //   S4 当时判「`flex:<h/Σh>` 之和恒为 1，再叠 `margin-top` ⇒ 总高 = 容器 + Σgap ⇒ 溢出
+      //   （真机 101px/807）」，故把分母改成 `Σh + Σgap` 让 Σflex < 1。
+      //   ⚠️ 该推理在 `flex-basis: 0` 下不成立：basis=0 时 free space 已先扣掉 margin，
+      //   Σ段高 = free = H − Σmargin，加回 Σmargin 恰为 H（真机 Chromium 量测：211 容器
+      //   176.8+34=210.8、234 容器 199.8+34=233.8，均不溢出）；而 Σgrow<1 触发的
+      //   Flexbox §9.7「只分配该比例自由空间」反而把 (1−Σgrow)×free 变成底部死白
+      //   （c-monitor-0c46af4d：Σgrow=0.839 ⇒ 死白 32.2px / 段高被压 16%）。
+      //   ⇒ 分母回 Σh，Σgrow=1 填满容器。详见单成员带 `__bandDen` 处完整量测表。
       const __topGaps = topBodyRoots.map((_, i) => {
         if (i === 0) return 0;
         const prevB = resolveSectionBox(topBodyRoots[i - 1], figmaIndex);
@@ -1449,9 +1667,9 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         return siblingGapPx(prevB, curB, 'vertical', topHeights[i - 1], __gapGuardStats);
       });
       const __topGapSum = __topGaps.reduce((a, g) => a + (Number(g) || 0), 0);
-      const __topDen =
-        topHeights.reduce((a, h) => a + (Number(h) || 0), 0) + __topGapSum;
-      if (__topGapSum > 0) __gapDenominatorApplied += 1;
+      // 分母只取 Σh（F1）。`__topGapSum` 仍供 `__basisRatio` 与 margin-top 出口使用。
+      const __topDen = topHeights.reduce((a, h) => a + (Number(h) || 0), 0);
+      if (__topGapSum > 0) __gapMarginApplied += 1;
       // 🛡️ px basis 护栏：Σ(真值高+间距) 占设计容器高的比例太低 ⇒ 说明分段退化/内容缺失，
       //   这时用 basis 会留下大片空白，退回比例填满更稳；同时计数便于发现「分段退化」样本。
       // 设计容器高用「子项盒跨度」近似（不依赖根节点 id）：span = max(bottom) − min(top)。
@@ -1526,9 +1744,10 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     // 🛡️ G10v2 生效自检（0 也打）：`groups` = 进入「Σ子项高+Σ间距 vs 容器高」复核的竖排容器数；
     //   `mismatch` = 判比例不可信并弃用 flex 的容器数（>0 = 真有容器被拦下，
     //   与「没跑」用 groups 区分）。本刀只拦不修：段锚归位属 G3/上游。
-    // 🛡️ S4：间距已计入 flex 分母的容器数（0 也打）
-    options.logger.info('🛡️ S4 间距计入 flex 分母·已评估', {
-      gapDenominatorApplied: __gapDenominatorApplied,
+    // 🛡️ F1（2026-11-17）：存在兄弟间距（走 margin 出口）的容器数（0 也打）。
+    //   原口径「间距计入 flex 分母」已废弃 —— 间距不再进分母，改名以免日志名说谎。
+    options.logger.info('🛡️ F1 兄弟间距走 margin 出口·已评估', {
+      gapMarginApplied: __gapMarginApplied,
       gapApplied: __gapApplied,
     });
     // 🛡️ P0-10：px basis 生效/退避计数（0 也打 —— 辨「没命中」与「没生效」）
@@ -1600,15 +1819,26 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   //   flex 值），px carrier（`flex: 0 1 <px>px !important`）退役——旧形态的 px basis
   //   与容器高无函数关系，Σ 从未与根高约束（68783bf6 Σ714>868 反例 / c1ac194a
   //   Σ518>348 溢出实锤）。B1-S2 后装配与 A4 同为 Σ=1 量纲，此处直接取 ratioStyle
-  //   的 flex 值（h/(Σh+Σgap)），根容器 height:100% 下比例展开即真值。
+  //   的 flex 值（h/Σh；2026-11-17 F1 后分母不含 Σgap，Σgrow=1 填满容器），根容器
+  //   height:100% 下比例展开即真值。
   //   !important 保留：终裁归一剥 inline 后 class 是唯一落点，防 LLM 重试轮内联覆盖。
   //   margin-top 仍是 px（兄弟间距真值，postcss-pxtorem 转 rem，与段高比例无关）。
+  // 🛡️ 方案 A（2026-11-17 · RUNTIME-016 文本重叠根治，触发样本 mc-max-1794884228303-7f6a9d00）：
+  //   病灶＝段高只按 Figma 面积比例分配（footer flex:0.024 → 617px 容器里仅 14.9px），
+  //   `min-height:0` 允许段坍缩到比内容矮 ⇒ 表格末行与 footer 图例在 y≈585-595 相撞。
+  //   改 `min-height:auto`：flex column 子项不得压穿自身 min-content 高（footer 内容 24px /
+  //   表格 8 行 428px），浏览器原生撑到内容高，两股溢出不再互压 —— 不需要管线知道内容
+  //   高度真值（那数据根本不落盘），用 CSS 原生 min-content 做下界即可。
+  //   权衡已登记：内容总量 > 容器高的极端场景，段会撑破固定容器（溢出/裁切），但比字压字
+  //   更可读；正常内容 < 分配高的段 min-content 不触发，行为逐字不变（见阴阳对照 spec）。
+  //   ⚠️ 只改 less 段规则；inline 比例 flexItemStyleFromHeights（被逐字断言锁死）不动；
+  //   min-height:auto 走 postcss-pxtorem 无关（auto 非尺寸），无 inline px 违规。
   const layoutStyle = __sectionGeometries
     .filter((g) => g.carrier === 'less')
     .map((g) => {
       const _f = /flex:\s*([\d.]+)/i.exec(g.ratioStyle || '');
       const _grow = _f ? _f[1] : '1';
-      return `  .${g.cls} { flex: ${_grow} 1 0 !important; min-height: 0${g.gapPx > 0 ? `; margin-top: ${g.gapPx}px !important` : ''}; }`;
+      return `  .${g.cls} { flex: ${_grow} 1 0 !important; min-height: auto${g.gapPx > 0 ? `; margin-top: ${g.gapPx}px !important` : ''}; }`;
     })
     .join('\n');
   return {

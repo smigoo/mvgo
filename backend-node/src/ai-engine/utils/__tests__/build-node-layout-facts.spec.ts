@@ -374,3 +374,150 @@ describe('同 bbox 叠层（刀 6 · 2026-10-27 · 8bbcf027 `36:1726` 实锤）'
     expect(facts['51:1'].display).not.toBe('stack')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ 2026-11-17 装饰性位图铺底剔除（`73:3`「监测预警」实锤）
+//    事故：自由摆放行里有一层「低透明度位图铺底」（设计稿阴影/氛围图，`opacity:0.3` + `IMAGE`），
+//      它不铺满父容器（还可能出血越界）⇒ 逃过 `excludeBackgroundLayers` 的 90% 面积判据，却与行内
+//      每个内容子项大范围重叠 ⇒ 两两 `areBoxesSideBySide` 恒否 ⇒ ratio 被拉低到 low
+//      ⇒ 注入器 T2 闸（`geometric-inference` + low **整段跳过**）⇒ 真值 row 的行拿不到 flex-direction。
+//    判据（见 `excludeDecorativeImageBackdrops`）：`opacity<1` ∧ 含 `IMAGE` fill ∧ 非 TEXT
+//      ∧ 与同容器 ≥2 个兄弟重叠 ≥ 0.5·min(面积)。
+//    全语料量化（29 语料 / 1693 个「≥2 可比子项」容器，逐容器对账）：
+//      翻转 9 个 —— **low→high 9、方向改变 0**；命中全部落在 `73:3` 的 `1:377`/`1:388`/`1:400`。
+//    承重性：`IMAGE` 放宽成「任意 fills」→ 2 个方向改变；去掉 `IMAGE` → 16 个方向改变（两条件都不可省）。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('buildNodeLayoutFacts — 装饰性位图铺底剔除（2026-11-17 · 73:3 实锤）', () => {
+  it('⭐ 真机 1:377：低透明度位图铺底（出血越界）被剔 ⇒ 自由摆放行从 low 抬到 row/high', () => {
+    // 父 386×50；真值 row（icon 左 / 两段文字右）。铺底 `1:378` 140×44 @x=1750 ——
+    // 父 x=1773，**左出血 23px** ⇒ 面积占父 0.32 < 0.9 ⇒ `excludeBackgroundLayers` 抓不到它。
+    const row = {
+      id: '1:377',
+      type: 'FRAME',
+      absoluteBoundingBox: box(1773, 210, 386, 50),
+      children: [
+        {
+          id: '1:378',
+          type: 'RECTANGLE',
+          name: 'bg-img',
+          opacity: 0.3,
+          fills: [{ type: 'IMAGE', visible: true }],
+          absoluteBoundingBox: box(1750, 216, 140, 44),
+        },
+        child('1:379', 1773, 210, 386, 50, { name: 'bg-1', type: 'GROUP' }), // 整块背景层（100% 父面积）
+        { id: '1:384', type: 'TEXT', absoluteBoundingBox: box(1818.41, 214, 58.83, 43) },
+        child('1:385', 1781, 221, 28, 28, { name: 'icon-1' }),
+        { id: '1:387', type: 'TEXT', absoluteBoundingBox: box(1896.85, 214, 253.89, 43) },
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [row] } })
+    // 含铺底：4 项内容 6 组 pair 仅 4 组 side-by-side ⇒ ratio 0.667 = low（注入器 T2 跳过，行拿不到 flex）
+    // 剔铺底：剩 3 项 3 组 pair 全 side-by-side ⇒ ratio 1 = high ⇒ 注入器写出 display:flex/flex-direction:row
+    expect(facts['1:377']).toEqual({
+      display: 'flex',
+      flexDirection: 'row',
+      source: 'geometric-inference',
+      confidence: 'high',
+    })
+  })
+
+  it('阴性①：铺底只与 1 个兄弟重叠（不足 ≥2 闸）⇒ 不剔，仍 low', () => {
+    // 若被误剔 ⇒ 只剩 [A1,A2] 完全并排 ⇒ ratio 1 = high；故 confidence='low' 即「未剔」的判据。
+    const node = {
+      id: '60:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 200, 50),
+      children: [
+        {
+          id: '60:bg',
+          type: 'RECTANGLE',
+          opacity: 0.5,
+          fills: [{ type: 'IMAGE' }],
+          absoluteBoundingBox: box(0, 0, 40, 40),
+        },
+        child('60:a1', 10, 10, 30, 30),
+        child('60:a2', 100, 10, 30, 30),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['60:1']).toMatchObject({
+      display: 'flex',
+      source: 'geometric-inference',
+      confidence: 'low',
+    })
+  })
+
+  it('阴性②：opacity<1 但**无 IMAGE fill**（纯色半透明遮罩）⇒ 不剔，仍 low', () => {
+    const node = {
+      id: '61:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 200, 50),
+      children: [
+        {
+          id: '61:bg',
+          type: 'RECTANGLE',
+          opacity: 0.5,
+          fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 0, a: 1 } }],
+          absoluteBoundingBox: box(0, 0, 40, 40),
+        },
+        child('61:a1', 10, 10, 30, 30),
+        child('61:a2', 100, 10, 30, 30),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['61:1']).toMatchObject({ source: 'geometric-inference', confidence: 'low' })
+  })
+
+  it('阴性③：含 IMAGE fill 但**无 opacity<1**（不透明位图）⇒ 不剔，仍 low', () => {
+    const node = {
+      id: '62:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 200, 50),
+      children: [
+        { id: '62:img', type: 'RECTANGLE', fills: [{ type: 'IMAGE' }], absoluteBoundingBox: box(0, 0, 40, 40) },
+        child('62:a1', 10, 10, 30, 30),
+        child('62:a2', 100, 10, 30, 30),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['62:1']).toMatchObject({ source: 'geometric-inference', confidence: 'low' })
+  })
+
+  it('阴性④：TEXT 即便 opacity<1 + IMAGE 也**豁免**（与 excludeBackgroundLayers 的 TEXT 豁免同源）', () => {
+    const node = {
+      id: '63:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 200, 50),
+      children: [
+        {
+          id: '63:t',
+          type: 'TEXT',
+          opacity: 0.5,
+          fills: [{ type: 'IMAGE' }],
+          absoluteBoundingBox: box(0, 0, 40, 40),
+        },
+        child('63:a1', 10, 10, 30, 30),
+        child('63:a2', 100, 10, 30, 30),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['63:1']).toMatchObject({ source: 'geometric-inference', confidence: 'low' })
+  })
+
+  it('兜底：全部铺底被剔后不足 2 个 ⇒ 回退全集，事实不丢（display 仍为 flex）', () => {
+    // 三层互相重叠（B1/B2 均满足 ≥2 闸）⇒ 剔后只剩 A1；按兜底纪律必须回退全集，不得 return null。
+    const node = {
+      id: '64:1',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 200, 50),
+      children: [
+        { id: '64:b1', type: 'RECTANGLE', opacity: 0.5, fills: [{ type: 'IMAGE' }], absoluteBoundingBox: box(0, 0, 60, 40) },
+        { id: '64:b2', type: 'RECTANGLE', opacity: 0.5, fills: [{ type: 'IMAGE' }], absoluteBoundingBox: box(20, 0, 60, 40) },
+        child('64:a1', 10, 0, 60, 40),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['64:1']).toBeDefined()
+    expect(facts['64:1'].display).toBe('flex')
+  })
+})

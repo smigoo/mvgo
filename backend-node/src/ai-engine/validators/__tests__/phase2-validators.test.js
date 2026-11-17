@@ -133,7 +133,8 @@ describe('Phase 2 方案6: L0-B校验增强', () => {
       )
       const styleIssue = result.issues.find((i) => i.id === 'STYLE-001')
       expect(styleIssue).toBeDefined()
-      expect(styleIssue.severity).toBe('BLOCK')
+      // 🛡️ 2026-11-17 降级：判据仍检出，档位 BLOCK→WARN（真机 0 命中 + 写盘出口有确定性剥壳兜底）
+      expect(styleIssue.severity).toBe('WARN')
       expect(styleIssue.message).toContain('外层选择器包裹')
     })
 
@@ -156,7 +157,7 @@ describe('Phase 2 方案6: L0-B校验增强', () => {
       )
       const styleIssue = result.issues.find((i) => i.id === 'STYLE-001')
       expect(styleIssue).toBeDefined()
-      expect(styleIssue.severity).toBe('BLOCK')
+      expect(styleIssue.severity).toBe('WARN')
     })
 
     it('正确的根层 class 不报错', () => {

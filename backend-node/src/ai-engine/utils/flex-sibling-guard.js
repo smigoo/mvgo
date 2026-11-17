@@ -583,11 +583,19 @@ export function detectFlexSiblingIssues(files = []) {
 
       issues.push({
         id: 'FLEX-005',
-        severity: 'BLOCK',
+        // 🛡️ 2026-11-17 门禁二次评审 P0-1：BLOCK → WARN。
+        // 同族 FLEX-003/004 已在 S4 降 WARN（V:4225/4242），本项因定义在外部文件被漏改，
+        // 形成「同族一硬一软」口径矛盾；且真机 0 命中、不在 RETRY_WORTHY_PATTERNS，
+        // BLOCK 只增加 pass=false 与交付降级标记，不换来任何 LLM 定向修复收益。
+        // 不重新升 BLOCK：gate-severity.js WARN 策略表无 FLEX-005 key（默认只留痕）。
+        severity: 'WARN',
         file: f.path,
         message: `兄弟区块 flex-grow 量纲混用（${f.path} 模板 ${parentDesc} 内）：${desc}。像素量级（Figma 高度写法）与比例量级在同一兄弟组混排，比例量级区块将被严重挤压（例：131 与 15 同组 → 前者独占 ~90% 高度），各区块高度比例与 Figma 设计稿不符`,
         hint: {
-          suggestion: '同一组兄弟区块统一量纲：全部写 `flex: <Figma高度px> 1 0`（grow 取各区块的 Figma 高度真值）；若某兄弟报「多值」，先按 FLEX-003 删掉跨文件重复声明',
+          // 口径订正（2026-11-17）：原文案「全部写 flex: <Figma高度px> 1 0」在教错误写法
+          // （像素写进 grow 正是本规则要拦的问题），与 FLEX-004 正确口径（V:4251）相反。
+          // 注：hint 当前无 prompt 读取点，此订正仅用于源码口径卫生，非运行时收益。
+          suggestion: '统一量纲：同一组兄弟区块的 grow 统一使用管线下发的 flexGrow 系数（`flex: <flexGrow系数> 1 0`，各区块系数平均值为 1），禁止把 Figma 像素高度直接写进 grow。若某兄弟报「多值」，先按 FLEX-003 删掉跨文件重复声明',
         },
       });
     }

@@ -25,7 +25,7 @@
  */
 
 /**
- * 已知运行时 RUNTIME-* 码全集（与 screenshot-renderer.js addBlock 一一对应，2026-09-10 审计）。
+ * 已知运行时 RUNTIME-* 码全集（与 screenshot-renderer.js addBlock 一一对应，2026-09-10 审计；2026-11-17 补登 017/018）。
  * 作为「静态规则预防目标」的取值域校验基准。
  */
 export const RUNTIME_CODES = {
@@ -45,6 +45,8 @@ export const RUNTIME_CODES = {
   'RUNTIME-014': '无法构建组件截图容器（renderer）',
   'RUNTIME-015': '截图渲染失败（renderer，异常抛出）',
   'RUNTIME-016': 'stage 内文本节点 bbox 两两相交（text-overlap，交比>0.15；2026-11-10 流量 6c12ab55 实锤）',
+  'RUNTIME-017': '零宽/零高图表容器（chart-render-reality，图表整块空白；2026-11-15 T2-W 实锤）',
+  'RUNTIME-018': '标题组文字被推到右侧（title-geometry-reality，几何欠佳；2026-11-15 立项）',
 }
 
 /**

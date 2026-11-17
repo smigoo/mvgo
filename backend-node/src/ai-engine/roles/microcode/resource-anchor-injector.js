@@ -112,6 +112,12 @@ export function injectResourceAnchors(
   }
 
   // ③ section 树索引（首见为准，不覆盖）
+  // 🛡️ 2026-11-17 治本（mc-max-1794891744785-2d75d800 实锤）：**锚身份别名索引**。
+  //   planner enrich 语义回填后，段树里 `id` 是语义 id（如 section-total），而 bg/icon
+  //   资源的 `ownerSectionId` 是 Figma 数字 id（如 136:122）。旧实现只按 `node.id` 建索引
+  //   ⇒ owners（数字 id）在树里查不到 ⇒ skippedNoRoot，补标全空。修法：节点带
+  //   `figmaAnchorId`（enrich 保留的 Figma 锚身份）时以它为**别名键**指向同一节点
+  //   （parent 同挂），owners 命中别名键后其余流程零改动。纯附加：无别名字段的行为逐字不变。
   const nodeById = new Map();
   const parentOf = new Map();
   const walkNode = (node, parent) => {
@@ -121,14 +127,24 @@ export function injectResourceAnchors(
       nodeById.set(id, node);
       parentOf.set(id, parent);
     }
+    const alias =
+      node.figmaAnchorId != null ? String(node.figmaAnchorId) : '';
+    if (alias && alias !== id && !nodeById.has(alias)) {
+      nodeById.set(alias, node);
+      parentOf.set(alias, parent);
+    }
     for (const c of kidsOf(node)) walkNode(c, id);
   };
   for (const s of sections) walkNode(s, null);
 
+  // 🛡️ 2026-11-17 治本（同上）：锚点文件查找认**双属性**。语义 id 段的 Figma 数字锚
+  //   在产物 DOM 上是 `data-resource-anchor`（code-generator 专用锚输出），
+  //   只认 `data-section-id` 会把复活后的锚判成「无根」⇒ 补标继续 skippedNoRoot。
   const findFileWithSectionAnchor = (sid) => {
     const needle = `data-section-id="${sid}"`;
+    const needleAlt = `data-resource-anchor="${sid}"`;
     for (const [fp, c] of Object.entries(allFiles)) {
-      if (typeof c === 'string' && c.includes(needle)) return fp;
+      if (typeof c === 'string' && (c.includes(needle) || c.includes(needleAlt))) return fp;
     }
     return null;
   };
@@ -146,11 +162,22 @@ export function injectResourceAnchors(
       continue;
     }
 
-    // ④ 最近产物锚点祖先（沿 section 树上溯，找 `data-section-id`）
+    // ④ 最近产物锚点祖先（沿 section 树上溯，找 `data-section-id` / `data-resource-anchor`）
+    // 🛡️ 2026-11-17 治本（语义 id 段复活）：上溯每步除节点自身 id 外，还试其
+    //    `figmaAnchorId` 别名（enrich 保留的 Figma 锚身份）——语义段父链的锚
+    //    可能只以别名形式出现在产物 DOM 上。
     let rootId = parentOf.get(oid) || null;
     let rootFile = null;
     while (rootId) {
       rootFile = findFileWithSectionAnchor(rootId);
+      if (!rootFile) {
+        const _aliasNode = nodeById.get(rootId);
+        const _alias =
+          _aliasNode && _aliasNode.figmaAnchorId != null
+            ? String(_aliasNode.figmaAnchorId)
+            : '';
+        if (_alias && _alias !== rootId) rootFile = findFileWithSectionAnchor(_alias);
+      }
       if (rootFile) break;
       rootId = parentOf.get(rootId) || null;
     }
@@ -191,7 +218,11 @@ export function injectResourceAnchors(
       tplEndM && tplEndM.index > 0 ? tplStart + tplEndM.index : content.length;
     const tpl = content.slice(tplStart, tplEnd);
     const tree = parseTemplateElementTree(tpl);
+    // 🛡️ 2026-11-17 治本（语义 id 段复活）：根锚元素查找认**双属性**——rootId 命中
+    //    data-section-id（数字段 id 直写形态）或 data-resource-anchor（语义 id 段的
+    //    Figma 数字锚形态）皆视为「根锚元素」。与 ④ 的文件级查找同一裁决口径。
     let el = findElementByAttr(tree, 'data-section-id', rootId);
+    if (!el) el = findElementByAttr(tree, 'data-resource-anchor', rootId);
     if (!el) {
       stats.skippedNoRoot += 1;
       continue;

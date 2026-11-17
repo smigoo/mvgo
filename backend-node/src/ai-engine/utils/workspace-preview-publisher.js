@@ -8,6 +8,7 @@ import {
   readdirSync,
   renameSync,
   rmdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'fs'
@@ -538,6 +539,17 @@ function recoverPreviewTransactions() {
   for (const name of entries) {
     if (!name.endsWith('.json')) continue
     const journalPath = join(previewTransactionJournalDir, name)
+    // 🛡️ 2026-11-17 治本（mc-lite-1794909915261-2ef72d7f 十二连报实锤）：目录里堆积了
+    //   159 个**名为 *.json 的空目录**（11-03~11-14 EPERM rename 风暴期的残留——当时
+    //   mkdirSync 先建目录、writeFileSync+renameSync 后续失败，目录留存）。恢复函数
+    //   只按扩展名过滤，对目录 readFileSync 抛 EISDIR ⇒ 每次任务/启动逐个打 error 级
+    //   「journal 恢复失败，保留文件待人工处理」，污染任务进度流（progress 里 12 条
+    //   error 让用户误判任务失败）。真 journal 是文件，非文件条目一律跳过不报错。
+    try {
+      if (!statSync(journalPath).isFile()) continue
+    } catch {
+      continue
+    }
     try {
       const journal = JSON.parse(readFileSync(journalPath, 'utf-8'))
       if (journal?.version !== 1 || !journal.transactionKey || !Array.isArray(journal.captured)) {

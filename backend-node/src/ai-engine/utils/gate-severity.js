@@ -81,7 +81,7 @@ export const WARN_ESCALATION_POLICY = Object.freeze({
   },
   'VAR-UNUSED': {
     action: 'WARN',
-    rationale: '资源型 LESS 变量零消费 ⇒ 挂载断尾；但同族已由 CODE-022 硬闸覆盖，避免同一缺陷双重阻断。',
+    rationale: '资源型 LESS 变量零消费 ⇒ 挂载断尾；同族由 CODE-022(WARN，2026-11-16 已摘出发布硬闸)+RESOURCE-001(WARN)+确定性归一器覆盖，避免同一缺陷双重阻断。',
   },
 });
 

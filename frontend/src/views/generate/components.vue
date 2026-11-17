@@ -1409,6 +1409,10 @@ import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
 import RippleButton from '@/components/inspira-ui/RippleButton.vue'
 import { useResizableFrame } from '@/composables/useResizableFrame'
 import { PREVIEW_VIEWPORT_PRESETS } from '@/constants/previewViewports'
+import {
+  resolveGenerationPanelType,
+  type PreviewPanelKey,
+} from '@/utils/task-preview-panel'
 import http from '@/core/http'
 
 // ═══ 状态 ═══
@@ -3570,12 +3574,23 @@ async function goSingle(aiConfig) {
     groupId,
     config: aiConfig
   }
+  // Keep this shared request flag in the function scope: the Figma branch below
+  // consumes it after the component-type-specific panel selection.
+  const submitThemeNodes =
+    compType.value === 'microcode' &&
+    nThemeEnabled.value &&
+    nThemeReady.value &&
+    !nThemeDuplicateNode.value &&
+    !nThemeDuplicateName.value
   if (compType.value === 'microcode') {
-    // 🔴 2026-10-19：多主题模式下组件壳（panelKey）取**默认主题卡**的面板选择
-    //   （结构基准决定结构与壳）；其余主题的面板选择随 themeNodes 透传进
-    //   declare.json themeConfig.list[].panelType 留痕。单稿/未就绪时仍用全局开关。
-    const primaryPanel = nThemeRows.value[0]?.panelType
-    p.panelType = nThemeEnabled.value && primaryPanel ? primaryPanel : panelType.value
+    // 多主题壳与 themeNodes 必须使用同一提交判据。仅开着多主题面板但主题未就绪时，
+    // 请求仍是单稿，不能让残留的第 0 行默认值覆盖顶部面板选择。
+    const primaryPanel = nThemeRows.value[0]?.panelType as PreviewPanelKey | undefined
+    p.panelType = resolveGenerationPanelType(
+      panelType.value as PreviewPanelKey,
+      primaryPanel,
+      submitThemeNodes,
+    )
     // 🔴 2026-11-11：组件 ID 仅微码生效（vue3 目录锚定 sessionId，架构解耦，强开会动解析链路）
     if (advUserId.value.trim()) p.userComponentId = advUserId.value.trim()
   }
@@ -3618,7 +3633,7 @@ async function goSingle(aiConfig) {
     //   第 1 张不可排序/不可删（想换默认主题就改上方主链接），前端不另传 primaryRole。
     //   默认主题（第 0 行）复用主框已解析的 fileKey/nodeId，避免用户重复粘贴。
     //   不满足条件时**不下发**（退化单稿，与改动前请求体一致）。
-    if (nThemeReady.value && !nThemeDuplicateNode.value && !nThemeDuplicateName.value) {
+    if (submitThemeNodes) {
       p.themeNodes = nThemeFilled.value.map((x, i) => ({
         fileKey: x.parsed!.fileKey,
         nodeId: x.parsed!.nodeId,

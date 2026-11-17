@@ -564,3 +564,142 @@ describe('刀 42-c 面板宽度兜底', () => {
     expect(panelTag(files['package/index.vue'])).not.toContain('width:100%');
   });
 });
+
+/**
+ * 🛡️ 2026-11-17（刀37/42 图标宿主豁免 · mc-max-1794870481347-aa5a69cc 实锤）：
+ *   `1:385`（icon FRAME 28×28，唯一子 = VECTOR 图标形状，面积比 0.636 ≥0.6）被当
+ *   「面板底」⇒ Vector 黑 fill `rgba(4,0,0,1)` 写成宿主 inline background；宿主在产物
+ *   是 width:100% 全宽 ⇒ 三条告警各被全宽黑条盖住正文（视觉保真 0.39 BLOCK）。
+ *   豁免判据（纯几何）：sec 最大边 ≤48px ⇒ 图标量级，不是面板底。
+ *   阴性锚（取自实测夹具）：card1 面板底 VECTOR 265×76 >48 ⇒ 照常生效。
+ */
+describe('刀37/42 图标宿主豁免（aa5a69cc 实锤：28px 图标宿主不吸黑底）', () => {
+  const ICON_BLACK_FILL = {
+    type: 'SOLID',
+    visible: true,
+    color: { r: 4 / 255, g: 0, b: 0, a: 1 },
+  };
+
+  /** 真机形态缩样：icon 宿主 FRAME(28×28) 唯一子 = VECTOR(24×21，面积比 0.64) */
+  const buildIconHostFigma = () => ({
+    document: {
+      id: '0:0',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 414, 274),
+      children: [
+        {
+          id: 'row',
+          name: '告警条',
+          type: 'FRAME',
+          absoluteBoundingBox: box(0, 0, 414, 58),
+          children: [
+            {
+              id: 'icon-host',
+              name: 'icon-1',
+              type: 'FRAME',
+              absoluteBoundingBox: box(8, 15, 28, 28),
+              fills: [{ type: 'SOLID', visible: false, color: { r: 1, g: 1, b: 1, a: 1 } }],
+              children: [
+                {
+                  id: 'icon-shape',
+                  name: 'Vector',
+                  type: 'VECTOR',
+                  absoluteBoundingBox: box(10, 19, 24, 21),
+                  fills: [ICON_BLACK_FILL],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  it('阳性：≤48px 图标宿主（子 VECTOR 面积比≥0.6）⇒ 豁免，不注入任何背景', () => {
+    const idx = indexFigmaNodes(buildIconHostFigma());
+    const panel = resolveSectionPanel('icon-host', idx);
+    expect(panel).toBeNull();
+  });
+
+  it('产物级阴性：heal 对该宿主零变更（黑 fill 不落 inline）', () => {
+    const files = {
+      'package/index.vue':
+        '<template><div class="c-row" data-section-id="row"><div class="c-icon" data-section-id="icon-host" style="width:100%"><img /></div></div></template>',
+    };
+    const { files: out, changes } = healContainerBackgroundTruth(files, {
+      figmaRoot: buildIconHostFigma(),
+    });
+    expect(out['package/index.vue']).not.toContain('rgba(4, 0, 0');
+    expect(changes.filter((c) => c.sectionId === 'icon-host')).toHaveLength(0);
+  });
+
+  it('阴性锚：>48px 的大 VECTOR 面板底（card1 265×76 既有夹具）⇒ 豁免不触发、判据照旧', () => {
+    // buildBaseFigma 的 card1：GROUP 265×76，唯一图形子 VECTOR card1-bg 265×76（渐变）
+    const figma = buildFigma();
+    const idx = indexFigmaNodes(figma);
+    const bg = resolveSectionPanel('card1', idx);
+    expect(bg).not.toBeNull();
+    expect(bg.kind).toBe('gradient');
+  });
+});
+
+describe('刀 42 自身填充兜底形态（2026-11-17 · 5401e49e 实锤）', () => {
+  /** 优质厂商卡形态：底色 fills 直接挂卡 FRAME 自身，子树只有 TEXT */
+  const buildSelfBgCardFigma = (opts: Record<string, any> = {}) => ({
+    document: {
+      id: 'root',
+      name: 'root',
+      type: 'FRAME',
+      absoluteBoundingBox: box(0, 0, 660, 868),
+      children: [
+        {
+          id: '38:3168',
+          name: 'Frame 2136639903',
+          type: 'FRAME',
+          absoluteBoundingBox: box(0, 0, 126, 30),
+          fills: opts.fills !== undefined ? opts.fills : [
+            { type: 'SOLID', visible: true, color: { r: 0.963134765625, g: 1, b: 0.9674357175827026, a: 1 } },
+          ],
+          cornerRadius: opts.cornerRadius !== undefined ? opts.cornerRadius : 6,
+          children: [
+            { id: 't1', name: '大华股份', type: 'TEXT', absoluteBoundingBox: box(16, 0, 56, 30), characters: '大华股份', fills: [] },
+            { id: 't2', name: '8台', type: 'TEXT', absoluteBoundingBox: box(76, 0, 22, 30), characters: '8台', fills: [] },
+          ],
+        },
+      ],
+    },
+  });
+
+  it('⭐ 阳性：卡 FRAME 自身 SOLID 填充 → selfBg 面板底 + 圆角', () => {
+    const panel = resolveSectionPanel('38:3168', indexFigmaNodes(buildSelfBgCardFigma()));
+    expect(panel).not.toBeNull();
+    expect(panel!.css).toBe('rgba(246, 255, 247, 1)');
+    expect(panel!.kind).toBe('solid');
+    expect(panel!.selfBg).toBe(true);
+    expect(panel!.radius).toBe(6);
+  });
+
+  it('阴性：透明填充（a=0）不猜底色', () => {
+    const figma = buildSelfBgCardFigma({
+      fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1, a: 0 } }],
+    });
+    expect(resolveSectionPanel('38:3168', indexFigmaNodes(figma))).toBeNull();
+  });
+
+  it('阴性：不可见填充跳过', () => {
+    const figma = buildSelfBgCardFigma({
+      fills: [{ type: 'SOLID', visible: false, color: { r: 1, g: 1, b: 1, a: 1 } }],
+    });
+    expect(resolveSectionPanel('38:3168', indexFigmaNodes(figma))).toBeNull();
+  });
+
+  it('阴性：≤48px 图标宿主 + 自身填充仍被豁免（刀37/42 图标豁免不回退）', () => {
+    const figma = buildSelfBgCardFigma({ cornerRadius: 0 });
+    // 把卡改成 28×28 图标量级
+    (figma.document.children[0] as any).absoluteBoundingBox = box(0, 0, 28, 28);
+    (figma.document.children[0] as any).children = [
+      { id: 'v', name: 'icon', type: 'VECTOR', absoluteBoundingBox: box(1, 1, 26, 26), fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0, a: 1 } }] },
+    ];
+    expect(resolveSectionPanel('38:3168', indexFigmaNodes(figma))).toBeNull();
+  });
+});

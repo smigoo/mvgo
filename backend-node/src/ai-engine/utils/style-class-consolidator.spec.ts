@@ -1,4 +1,4 @@
-import { consolidateSubComponentClasses, ensureBackgroundContainerDimensions } from './style-class-consolidator.js'
+import { consolidateSubComponentClasses, ensureBackgroundContainerDimensions, ensureBackgroundLayerPosition } from './style-class-consolidator.js'
 
 /**
  * 子组件类样式收敛（2026-09-03，管线 A 方案）。
@@ -985,5 +985,96 @@ describe('consolidateSubComponentClasses · F2c 粘连闭括号不再吞掉相�
     expect(css).toContain('height: 27px;')
     expect(css).toContain('overflow: hidden;')
     expect((css.match(/\{/g) || []).length).toBe((css.match(/\}/g) || []).length)
+  })
+})
+
+/**
+ * 🛡️ 2026-11-17（跨嵌套错插根治 · mc-max-1794872520197-0ef14c21 实锤）：
+ *   旧正则 `[^}]*` 不感知嵌套——外层块内嵌套子块含 pointer-events:none 时，
+ *   position:absolute 被插到**外层**块头。真机形态：`.c-monitor-zh1-s-209`（tab 项，
+ *   嵌套 `.c-monitor-bg-tile2-active { grid-area:1/1; pointer-events:none }`）⇒ 三个
+ *   v-for tab 全部 absolute 无锚 ⇒ 全叠容器原点互叠（RUNTIME-016，D2 回灌 3 轮不收敛根因）。
+ *   治本：括号配平**递归**扫描，只在「块体**直接层**含 pointer-events:none」补；
+ *   `grid-area` 直接层 ⇒ grid 堆叠层豁免（补 absolute 会拽出 grid 流，图标底板塌陷）。
+ */
+describe('ensureBackgroundLayerPosition · 跨嵌套错插根治 + grid 堆叠层豁免', () => {
+  const run = (css: string) =>
+    ensureBackgroundLayerPosition({ 'resources/styles/common.less': css })[
+      'resources/styles/common.less'
+    ]
+
+  it('阴性（真机还原态 0ef14c21）：还原态全文零改动（旧版会把 absolute 错插回 zh1/bg-tile2）', () => {
+    const restored = [
+      '.c-monitor-tab {',
+      '  align-items: center;',
+      '  gap: 10px;',
+      '  width: 100%;',
+      '  display: flex;',
+      '  flex-direction: row;',
+      '  flex: 0 0 27px;',
+      '  min-height: 27px;',
+      '}',
+      '',
+      '.c-monitor-zh1-s-209 {',
+      '  display: grid;',
+      '  grid-template-columns: 1fr;',
+      '  align-items: center;',
+      '  justify-items: center;',
+      '  width: 81px;',
+      '  height: 26px;',
+      '  flex-shrink: 0;',
+      '  box-sizing: border-box;',
+      '  cursor: pointer;',
+      '',
+      '  .c-monitor-bg-tile2-active {',
+      '    grid-area: 1 / 1;',
+      '    width: 80px;',
+      '    height: 26px;',
+      '    background: @color-btn-bg-default;',
+      '    border-radius: 2px;',
+      '    pointer-events: none;',
+      '  }',
+      '',
+      '  .c-monitor-zh2 {',
+      '    grid-area: 1 / 1;',
+      '    position: relative;',
+      '  }',
+      '}',
+    ].join('\n')
+    expect(run(restored)).toBe(restored)
+  })
+
+  it('阳性：直接层 pointer-events:none 且无 position ⇒ 补 absolute（既有行为保留）', () => {
+    const out = run('.card {\n  pointer-events: none;\n  width: 100%;\n}')
+    expect(out).toContain('position: absolute')
+  })
+
+  it('豁免：grid-area 直接层（grid 堆叠层）⇒ 不补 absolute（补了会拽出 grid 流）', () => {
+    const css = '.tab {\n  .bg {\n    grid-area: 1 / 1;\n    pointer-events: none;\n  }\n}'
+    expect(run(css)).not.toContain('position: absolute')
+  })
+
+  it('阴性：非 grid 的嵌套 pointer-events ⇒ 补在子块自身（不上提外层）', () => {
+    const css = '.tab {\n  display: flex;\n  .bg {\n    pointer-events: none;\n  }\n}'
+    const out = run(css)
+    expect(out).not.toMatch(/\.tab \{\s*position/)
+    expect(out).toMatch(/\.bg \{\s*position: absolute/)
+  })
+
+  it('幂等：已有 position 声明 ⇒ 不补', () => {
+    const css = '.card {\n  position: relative;\n  pointer-events: none;\n}'
+    expect((run(css).match(/position/g) || []).length).toBe(1)
+  })
+
+  it('多块混排：命中块各自正确、无辜块不沾', () => {
+    const css = [
+      '.a { color: red; }',
+      '.b { pointer-events: none; }',
+      '.c { .d { pointer-events: none; } }',
+    ].join('\n')
+    const out = run(css)
+    expect(out).toMatch(/\.b \{\s*position: absolute/)
+    expect(out).toMatch(/\.d \{\s*position: absolute/)
+    expect(out).not.toMatch(/\.a \{\s*position/)
   })
 })

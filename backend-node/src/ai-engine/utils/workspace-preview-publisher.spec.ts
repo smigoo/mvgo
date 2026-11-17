@@ -20,6 +20,9 @@ function runModuleScript(code: string, extraEnv: Record<string, string> = {}) {
       ...extraEnv,
     },
     encoding: 'utf-8',
+    // 🔴 logger.error 同时落 stderr（logger.js outputToConsole 走 console.error）——
+    //   只收 stdout 会让「断言不含 error 日志」的用例假绿（2026-11-17 实测），必须并收两流。
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
 
@@ -124,11 +127,27 @@ describe('workspace-preview-publisher · journal 原子写容错', () => {
   const journalDir = join(PROJECT_ROOT, 'temp-components', '.preview-transactions');
 
   afterEach(() => {
-    // 清掉本 spec 可能留下的唯一命名探针，避免污染真实 journal 目录
+    // 清掉本 spec 可能留下的探针，避免污染真实 journal 目录。
+    // 🔴 2026-11-17 补漏（实锤：真实目录曾积压 11 个 spec-probe 残留、每次任务恢复都报错刷屏）：
+    //   journal 落盘文件名是 transactionKey 的 **sha256 摘要**（writePreviewTransactionJournal 内部
+    //   digest），原判据按文件名 `spec-` 前缀匹配永远够不着 ⇒ 每跑一轮 spec 漏一个。
+    //   现按**内容**判归属：读 JSON 的 transactionKey 以 spec- 开头 ⇒ 本 spec 造的，删。
     try {
       for (const name of readdirSync(journalDir)) {
+        const p = join(journalDir, name);
+        // 文件名直接带 spec- 的（tmp 残留 / 旧形态）照旧清
         if (name.startsWith('spec-') || name.includes('.spec-probe.')) {
-          rmSync(join(journalDir, name), { recursive: true, force: true });
+          rmSync(p, { recursive: true, force: true });
+          continue;
+        }
+        if (!name.endsWith('.json')) continue;
+        try {
+          const j = JSON.parse(readFileSync(p, 'utf-8'));
+          if (typeof j?.transactionKey === 'string' && j.transactionKey.startsWith('spec-')) {
+            rmSync(p, { recursive: true, force: true });
+          }
+        } catch {
+          /* 非本 spec 的文件不动 */
         }
       }
     } catch {
@@ -172,6 +191,42 @@ describe('workspace-preview-publisher · journal 原子写容错', () => {
     expect(leftovers).toEqual([]);
 
     rmSync(journalPath, { recursive: true, force: true });
+  });
+
+  it('恢复函数对「名为 *.json 的目录」（EPERM 风暴残留）静默跳过，不报 error（2026-11-17 mc-lite-…2ef72d7f 十二连报治本）', () => {
+    mkdirSync(journalDir, { recursive: true });
+    // ① 阳性垃圾：名为 *.json 的**目录**（ historic EPERM mkdirSync 先建、rename 后续失败的残留形态）
+    const junkDir = join(journalDir, `spec-junk-${Date.now()}.json`);
+    mkdirSync(junkDir, { recursive: true });
+    // ② 阴性对照：同目录放一个**真 journal 文件**（结构非法即可，能走进恢复 try 块）
+    const realJournal = join(journalDir, `spec-real-${Date.now()}.json`);
+    writeFileSync(realJournal, '{"broken":true}', 'utf-8');
+
+    // 🔴 断言通道（2026-11-17 假绿复盘）：logger.error 落 stderr，而 execFileSync 只返回
+    //   stdout ⇒ 在子进程内劫持 process.stderr.write 收集 error 文本，再打到 stdout 供外层断言。
+    //   旧代码（无 isFile 门）对垃圾目录逐个报「journal 恢复失败」⇒ errText 含 junkDir 路径必红。
+    //   ⚠️ 不断言全局 errCount=0：真实目录可能存有历史非法 journal 文件（真文件报真错是
+    //   正确行为，与本用例正交），只断言 spec 自己造的条目不被报错。
+    const out = runModuleScript(`
+      import { __testing } from ${JSON.stringify(`file://${MODULE_PATH}`)};
+      const errChunks = [];
+      const origErrWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk, ...rest) => {
+        errChunks.push(String(chunk));
+        return origErrWrite(chunk, ...rest);
+      };
+      __testing.recoverPreviewTransactions();
+      process.stderr.write = origErrWrite;
+      const errText = errChunks.join('');
+      console.log('RECOVER_DONE junkReported=' + errText.includes(${JSON.stringify('spec-junk-')}));
+      console.log('RECOVER_DONE realReported=' + errText.includes(${JSON.stringify('spec-real-')}));
+    `);
+    // ① 垃圾目录（*.json 目录形态）必须被 isFile 门静默跳过——零报错
+    expect(String(out)).toContain('RECOVER_DONE junkReported=false');
+    // ② 垃圾目录本身不被消费方改动（保留待人工处理语义不变，只是不再报错刷屏）
+    expect(existsSync(junkDir)).toBe(true);
+    // ③ 阳性对照：真文件（结构非法）仍走 error 上报——isFile 门只滤目录，不放走真错误
+    expect(String(out)).toContain('RECOVER_DONE realReported=true');
   });
 });
 

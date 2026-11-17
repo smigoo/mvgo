@@ -3954,7 +3954,12 @@ function escapeHtmlText(t) {
 
 export function applySectionHeader(body, tr, semantic) {
   const hdr = tr && tr.header;
-  if (!hdr || !hdr.title) return body;
+  // 🛡️ S1-c（2026-11-17）：段外壳背景（纯色底框 + 圆角）与段头**共用**这一个包装层 ——
+  //   二者是同一条结构事实的两半（「段根 ≠ 内容容器」），拆成两次包装会嵌套两层壳。
+  //   ⇒ 只要「有段头」或「有段外壳」，就包装一次；两者都无 ⇒ **逐字返回**（零回归）。
+  const shellBg = tr && tr.sectionBg ? tr.sectionBg : null;
+  const hasHeader = Boolean(hdr && hdr.title);
+  if (!hasHeader && !shellBg) return body;
   if (!HEADER_RENDER_KINDS.has(String(tr.kind))) return body;
   const lines = String(body).split('\n');
   const tplStart = lines.findIndex((l) => l.trim() === '<template>');
@@ -3989,24 +3994,52 @@ export function applySectionHeader(body, tr, semantic) {
   //   归一化会把真值字号压成 calc(var(--fontSize)*N) 而失真，故豁免而非归一）。
   //   故类名必须是 `-fg-header-` 形态，不能是自定义的 `-fg-sec-`。
   const cls = `c-${sem}-fg-header-${idSlug(tr.sectionId)}`;
-  const h = Number(hdr.height) > 0 ? Math.round(Number(hdr.height)) : 0;
-  if (!(h > 0)) return body;
-  const gap = Number.isFinite(Number(hdr.gap)) && Number(hdr.gap) > 0 ? Math.round(Number(hdr.gap)) : 0;
-  const pad = Number.isFinite(Number(hdr.paddingLeft)) && Number(hdr.paddingLeft) > 0
+  const h = hasHeader && Number(hdr.height) > 0 ? Math.round(Number(hdr.height)) : 0;
+  // 有段头但**缺高度真值** ⇒ 不画段头（宁缺勿臆造），但仍允许段外壳落地（若存在）。
+  const drawHeader = hasHeader && h > 0;
+  if (!drawHeader && !shellBg) return body;
+  const gap = Number.isFinite(Number(hdr?.gap)) && Number(hdr.gap) > 0 ? Math.round(Number(hdr.gap)) : 0;
+  const pad = Number.isFinite(Number(hdr?.paddingLeft)) && Number(hdr.paddingLeft) > 0
     ? Math.round(Number(hdr.paddingLeft))
     : 0;
-  const fs = Number(hdr.fontSize) > 0 ? Number(hdr.fontSize) : 14;
-  const fw = hdr.fontWeight != null ? Number(hdr.fontWeight) : 500;
-  const color = hdr.color || 'rgba(51, 51, 51, 1)';
-  const wrapOpen = `  <div class="${cls}" style="display:flex;flex-direction:column;height:100%;min-height:0;">`;
-  const headerLines = [
+  const fs = Number(hdr?.fontSize) > 0 ? Number(hdr.fontSize) : 14;
+  const fw = hdr?.fontWeight != null ? Number(hdr.fontWeight) : 500;
+  const color = hdr?.color || 'rgba(51, 51, 51, 1)';
+  // 🛡️ S1-c：外壳层的背景/圆角取真值；无壳 ⇒ 与改前**逐字相同**的 style 串。
+  const shellStyle = shellBg
+    ? `${shellBg.background ? `background:${shellBg.background};` : ''}${
+        shellBg.borderRadius ? `border-radius:${Math.round(Number(shellBg.borderRadius))}px;` : ''
+      }`
+    : '';
+  const wrapOpen = `  <div class="${cls}" style="display:flex;flex-direction:column;${
+    drawHeader ? 'height:100%;' : ''
+  }min-height:0;${shellStyle}">`;
+  // 🛡️ S1-b（2026-11-17）：段头**伴随图标**（真值几何 + 资源变量名）。
+  //   本单三张前景 icon（`icon-战略厂商-3160.png` / `-优质厂商-3164` / `-普通厂商-3208`）
+  //   资源映射归属正确却零消费（E2-v3）—— 因为段头层整体缺失，icon 无处可挂。
+  //   无 icon 事实 ⇒ 该行不存在 ⇒ 产物**逐字不变**（与既有「无 icon 项不产 <img>」同款结构保证）。
+  const hdrIcon =
+    drawHeader && hdr.icon && hdr.icon.varName && hdr.icon.file && SECTION_ICON_VAR_RX.test(String(hdr.icon.varName))
+      ? hdr.icon
+      : null;
+  const iconLines = drawHeader && hdrIcon
+    ? [
+        `      <img class="${cls}-icon" :src="${hdrIcon.varName}" style="width:${Math.max(1, Math.round(Number(hdrIcon.w) || 1))}px;height:${Math.max(1, Math.round(Number(hdrIcon.h) || 1))}px;flex:none;object-fit:contain;${
+          Number(hdrIcon.gap) > 0 ? `margin-right:${Math.round(Number(hdrIcon.gap))}px;` : ''
+        }" alt="" />`,
+      ]
+    : [];
+  const headerLines = drawHeader
+    ? [
     `    <div data-section-header="${escapeHtmlText(tr.sectionId)}" style="height:${h}px;flex:none;display:flex;align-items:center;padding-left:${pad}px;margin-bottom:${gap}px;">`,
+    ...iconLines,
     // 🛡️ M5-7 豁免必须**命中本标签**：掩码函数只看「标签自身的 class」是否匹配
     //   `/-fg-(header|…)-/`，父级带 fg- 不算 ⇒ span 自己也要挂 fg-header 类，
     //   否则它的真值 `font-size:${fs}px` 会被判硬编码（真机 cc0eddc6 实测）。
     `      <span class="${cls}-title" style="font-size:${fs}px;font-weight:${fw};color:${color};line-height:1.2;white-space:nowrap;">${escapeHtmlText(hdr.title)}</span>`,
     '    </div>',
-  ];
+      ]
+    : [];
   const out = [
     ...lines.slice(0, rootOpen),
     wrapOpen,
@@ -4015,6 +4048,17 @@ export function applySectionHeader(body, tr, semantic) {
     '  </div>',
     ...lines.slice(rootClose + 1),
   ];
+  // 🛡️ S1-b：段头图标的模块 import —— 由本函数**唯一**注入（去重：同 varName 已 import 则跳过）。
+  //   放在 `<script …>` 开标签之后（SFC 合法位置），不改动既有 import 顺序。
+  if (hdrIcon) {
+    const importLine = `import ${hdrIcon.varName} from '../../resources/images/${hdrIcon.file}'`;
+    const alreadyRx = new RegExp(`(^|\\s)import\\s+${hdrIcon.varName}\\s+from\\s+`);
+    const has = out.some((l) => alreadyRx.test(String(l)));
+    if (!has) {
+      const scriptIdx = out.findIndex((l) => /^\s*<script\b/.test(String(l)));
+      if (scriptIdx >= 0) out.splice(scriptIdx + 1, 0, importLine);
+    }
+  }
   return out.join('\n');
 }
 
@@ -4298,7 +4342,7 @@ function renderFoldedGridLeafVueBody(tr, semantic) {
     //   而 `import icon4` 全成死代码。实锤：c-device-6d79e69d 表格首列 8 行图标全破图。
     const iconFiles = new Map();
     const iconConflicts = new Set();
-    const IDENT_RX = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+    const IDENT_RX = SECTION_ICON_VAR_RX; // 单一来源（见常量定义处）
     for (const c of tr.cols) {
       for (const cell of c.cells) {
         const ic = cell.icon;
@@ -5042,6 +5086,201 @@ function declaredUnconsumedCount(sec, kind) {
 const SECTION_HEADER_BOX_TOL_PX = 2;
 
 /**
+ * 🛡️ S1-b（2026-11-17）：**段盒内**标题行的顶部带高度上限（px）。
+ *   真机 `mc-max-1794845346507-a8d1722c` 三段：标题顶 = 段盒顶 + 25、高 16 ⇒ 底 +41。
+ *   上界取 48（48 > 41 留 7px 裕度，且 < 首个行带/内容体顶）—— 目的不是"卡阈值"，是
+ *   **把「段头」与「内容区文本」在几何上分开**：内容区文本必然落在首个行带里，
+ *   行带顶 = 段盒顶 + 57（真值），故 48 不会误收内容区文本。
+ */
+const SECTION_HEADER_INBOX_BAND_PX = 48;
+
+/**
+ * 🛡️ icon 变量名合法性 —— **唯一实现**（`assignedVarName` / `semanticVarName` 都会被
+ *   当成 `<img :src>` 的模块绑定标识符，非法标识符写进 import 会炸脚本）。
+ *   消费方：table 分支的 `IDENT_RX`（本常量）与 S1-b 段头 icon 采集。
+ */
+const SECTION_ICON_VAR_RX = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * 🛡️ S1-b（2026-11-17 · `mc-max-1794845346507-a8d1722c` 实锤）：**段盒内标题行**识别。
+ *
+ * 病灶：本单三段（`38:3137` / `38:3162` / `38:3206`）的段锚点 = **整个分组 GROUP**
+ *   （底框 RECTANGLE + 标题 TEXT + icon + 若干个行带 FRAME 都在 GROUP 内），产物
+ *   `c-…-fg-grid-383137` 的段根**直接是 4 列网格** ⇒ 「无分组标题、无边框圆角外框、
+ *   三张 icon 零消费」（E2-v3 / C1b / D1 三码同源）。
+ *
+ * 为什么既有判据必然漏：`resolveSectionHeaderFacts` 的候选域限定为
+ *   「`sec.sourceNodeIds` 里的条 + `bottom <= anchorTop + 2`（**条在段盒上方**）」——
+ *   本单标题在段盒**内部**，且三段都没有 `sourceNodeIds` ⇒ 循环不进 ⇒ 提前 return，
+ *   连 `evaluated` 都不加（真机 `sectionHeaderOutOfBox=0/0` = 观测假绿）。
+ *
+ * 判据（纯文本一致性 + 几何，零命名、零模糊匹配）：
+ *   ① 段锚点的**直接子级**（`figmaIndex` 的 `parentId === secId`）里存在 TEXT，
+ *      其 `characters` **逐字等于** `sec.header.title`；
+ *   ② 该 TEXT 落在**段盒顶部带**内（`top >= 盒顶 − TOL` 且 `bottom <= 盒顶 + BAND`）；
+ *   ③ 段盒高必须**容得下**（`bottom <= 盒底 + TOL`）—— 盒外的条由 S1-a 处理，不在此。
+ *   三条不齐 ⇒ null（fail-open，零回归）。
+ *
+ * 与 S1-a 的关系：S1-a 拒的是「**盒外**的面板级条」（渲染会挤占内容高）；
+ *   本形态条在**盒内**、段盒高本就把标题算进去了（161 = 25 + 16 + 16 + 30 + 20 + 30 + 24）
+ *   ⇒ 渲染段头**不挤占**内容，故**不走 S1-a 排他**。
+ *
+ * @returns {{cand:{id:string,bbox:object}, textNode:object, gapRaw:number, inBox:true,
+ *            icon:({varName:string,file:string,w:number,h:number,gap:number}|null)}|null}
+ */
+/**
+ * 🛡️ S1-c（2026-11-17 · `mc-max-1794845346507-a8d1722c` 实锤）：**段外壳背景**（纯色底框）事实。
+ *
+ * 病灶：三个厂商段真值都有「与段盒**完全同盒**的 RECTANGLE 底框」
+ *   （`38:3138` 604×161 @51592 = 段盒逐字相同，`rgba(226,208,132,0.2)` + `cornerRadius 12`），
+ *   产物 `fg-grid-383137` 的段根却是**裸网格** ⇒ 用户看到「无边框圆角外框」。
+ *   `body.repeatedFill` 里其实已带同值，但该字段语义是「重复项填充」、实际卡片底色由
+ *   cardTruth 给出 ⇒ **不可作判据来源**（语义误标，复用即第二份口径）。
+ *
+ * 判据（纯几何 + 层级，零命名）：
+ *   ① 段锚点的**直接子级**里存在 RECTANGLE / FRAME；
+ *   ② 其 bbox 与段盒**四边差 ≤ 1px**（完全同盒 ⇒ 它是段外壳而不是某个卡片/行带）；
+ *   ③ 有可见 SOLID 填充（渐变/图片层不在此通道，避免与既有资源挂载抢域）。
+ *   三条不齐 ⇒ null（fail-open，零回归：无此事实的段产物**逐字不变**）。
+ *
+ * @returns {{background:string, borderRadius:number|null, nodeId:string}|null}
+ */
+export function resolveSectionShellBg(sec, figmaIndex) {
+  const secId = String(sec?.id ?? sec?.figmaNodeId ?? '');
+  if (!secId || !figmaIndex || typeof figmaIndex.get !== 'function') return null;
+  const anchor = figmaIndex.get(secId);
+  const ab = anchor?.bbox || anchor?.rawNode?.absoluteBoundingBox || null;
+  if (!ab) return null;
+  const bx = Number(ab.x);
+  const by = Number(ab.y);
+  const bw = Number(ab.width);
+  const bh = Number(ab.height);
+  if (![bx, by, bw, bh].every(Number.isFinite)) return null;
+
+  const TOL = 1;
+  let hit = null;
+  for (const [id, e] of figmaIndex) {
+    if (String(e?.parentId ?? '') !== secId) continue;
+    const node = e.rawNode || e.node || e;
+    const t = String(node?.type || '').toUpperCase();
+    if (t !== 'RECTANGLE' && t !== 'FRAME') continue;
+    const b = e.bbox || node?.absoluteBoundingBox || null;
+    if (!b) continue;
+    const x = Number(b.x);
+    const y = Number(b.y);
+    const w = Number(b.width);
+    const h = Number(b.height);
+    if (![x, y, w, h].every(Number.isFinite)) continue;
+    if (Math.abs(x - bx) > TOL || Math.abs(y - by) > TOL) continue;
+    if (Math.abs(w - bw) > TOL || Math.abs(h - bh) > TOL) continue;
+    const fill = (node.fills || []).find((f) => f && f.visible !== false && f.type === 'SOLID' && f.color);
+    if (!fill) continue;
+    const c = fill.color;
+    const a = typeof fill.opacity === 'number' ? fill.opacity : typeof c.a === 'number' ? c.a : 1;
+    const to255 = (v) => Math.round((Number(v) || 0) * 255);
+    const background = `rgba(${to255(c.r)}, ${to255(c.g)}, ${to255(c.b)}, ${Number(Number(a).toFixed(3))})`;
+    const cr = Number(node.cornerRadius);
+    hit = { background, borderRadius: Number.isFinite(cr) && cr > 0 ? cr : null, nodeId: String(id) };
+    break;
+  }
+  return hit;
+}
+
+function resolveInBoxSectionHeader(sec, figmaIndex, resourceMapping) {
+  const secId = String(sec?.id ?? sec?.figmaNodeId ?? '');
+  const title = String(sec?.header?.title || '').trim();
+  if (!secId || !title) return null;
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return null;
+  const anchor = figmaIndex.get(secId);
+  const ab = anchor?.bbox || anchor?.rawNode?.absoluteBoundingBox || null;
+  if (!ab) return null;
+  const secTop = Number(ab.y);
+  const secW = Number(ab.width);
+  const secH = Number(ab.height);
+  if (![secTop, secW, secH].every(Number.isFinite)) return null;
+  const secBottom = secTop + secH;
+
+  // ① 直接子级（**不依赖 rawNode.children**：真机索引只保证 bbox/parentId）
+  const kids = [];
+  for (const [id, e] of figmaIndex) {
+    if (String(e?.parentId ?? '') !== secId) continue;
+    const b = e.bbox || e.rawNode?.absoluteBoundingBox || e.node?.absoluteBoundingBox || null;
+    if (!b) continue;
+    const x = Number(b.x);
+    const y = Number(b.y);
+    const w = Number(b.width);
+    const h = Number(b.height);
+    if (![x, y, w, h].every(Number.isFinite)) continue;
+    kids.push({ id: String(id), node: e.rawNode || e.node || e, bbox: { x, y, width: w, height: h } });
+  }
+  if (!kids.length) return null;
+
+  // ② 文本**逐字等于** header.title（不按 name、不做包含匹配 —— 防把内容区同名文本当段头）
+  const textHits = kids.filter(
+    (k) =>
+      String(k.node?.type || '').toUpperCase() === 'TEXT' &&
+      String(k.node?.characters || '').trim() === title,
+  );
+  if (!textHits.length) return null;
+
+  // ③ 顶部带 + 盒内
+  const cand = textHits.find((k) => {
+    const top = k.bbox.y;
+    const bottom = top + k.bbox.height;
+    return (
+      top >= secTop - SECTION_HEADER_BOX_TOL_PX &&
+      bottom <= secTop + SECTION_HEADER_INBOX_BAND_PX &&
+      bottom <= secBottom + SECTION_HEADER_BOX_TOL_PX
+    );
+  });
+  if (!cand) return null;
+
+  const textTop = cand.bbox.y;
+  const textBottom = textTop + cand.bbox.height;
+
+  // gap = 「标题下方最近的直接子级顶」 − 标题底（真值 51649 − 51633 = 16）；无兄弟 ⇒ 0
+  let gapRaw = 0;
+  for (const k of kids) {
+    if (k.id === cand.id) continue;
+    const t = k.bbox.y;
+    if (t < textBottom - SECTION_HEADER_BOX_TOL_PX) continue;
+    const d = t - textBottom;
+    if (d < 0) continue;
+    if (!gapRaw || d < gapRaw) gapRaw = d;
+  }
+
+  // icon = 与标题**垂直重叠**的直接子级里，资源映射给了模块变量名的那个
+  //   （真机 38:3160 16×16 @y51617 与标题同 y ⇒ 命中；底框 RECTANGLE 无 resourceFile ⇒ 不候选）
+  let icon = null;
+  if (Array.isArray(resourceMapping) && resourceMapping.length) {
+    const textCY = textTop + cand.bbox.height / 2;
+    const byId = new Map();
+    for (const m of resourceMapping) {
+      const nid = String(m?.figmaNodeId ?? '');
+      if (nid) byId.set(nid, m);
+    }
+    for (const k of kids) {
+      if (k.id === cand.id) continue;
+      const m = byId.get(k.id);
+      if (!m) continue;
+      const v = String(m.assignedVarName || m.semanticVarName || '');
+      if (!SECTION_ICON_VAR_RX.test(v)) continue;
+      const file = String(m.resourceFile || '').replace(/^.*\//, '');
+      if (!file) continue;
+      const kCY = k.bbox.y + k.bbox.height / 2;
+      const overlap = Math.abs(kCY - textCY) <= Math.max(cand.bbox.height, k.bbox.height) / 2;
+      if (!overlap) continue;
+      if (k.bbox.width > secW * 0.5) continue; // 背景块不算图标
+      const gapToText = Math.round(Math.max(0, cand.bbox.x - (k.bbox.x + k.bbox.width)));
+      icon = { varName: v, file, w: Math.round(k.bbox.width), h: Math.round(k.bbox.height), gap: gapToText };
+      break;
+    }
+  }
+
+  return { cand, textNode: cand.node, gapRaw, inBox: true, icon };
+}
+
+/**
  * 🛡️ S1-a（2026-11-16）：取段盒 —— **必须以渲染端自己的高度基准为准**。
  *   渲染高来自 `code-generator#resolveHeightWithTakeover`（优先 `styles.figmaHeightPx`，
  *   其次段盒），故这里同口径：顶取 `absoluteBoundingBox`/`figmaBox` 的 y，
@@ -5109,7 +5348,7 @@ function ancestorChainOf(anchorId, figmaIndex) {
  *   🔴 实测教训：只用条件③ 「盒包含」在 2178 个历史产物上会误杀 128 例合法副标题
  *   （盒未抬升的老 checkpoint / 容器内兄弟条），故必须叠条件①②。
  */
-export function resolveSectionHeaderFacts(sec, figmaIndex, stats) {
+export function resolveSectionHeaderFacts(sec, figmaIndex, stats, resourceMapping) {
   const title = String(sec?.header?.title || '').trim();
   if (!title || !figmaIndex) return null;
   const entryOf = (id) => {
@@ -5169,7 +5408,15 @@ export function resolveSectionHeaderFacts(sec, figmaIndex, stats) {
       best = { cand, textNode, gapRaw };
     }
   }
-  if (!best) return null;
+  // 🛡️ S1-b（2026-11-17）：盒外条全无 ⇒ 尝试「**段盒内**标题行」（本单 a8d1722c 形态）。
+  //   仍取不到 ⇒ 返回 null（fail-open，与改前逐字等价）。
+  let inBox = null;
+  if (!best) {
+    inBox = resolveInBoxSectionHeader(sec, figmaIndex, resourceMapping);
+    if (!inBox) return null;
+    best = inBox;
+    if (stats) stats.inBox = Number(stats.inBox || 0) + 1;
+  }
   const { cand, textNode, gapRaw } = best;
   // 🛡️ S1-a：**面板级块**排他（详见函数头注释）。三条件必须同时成立才拒，方向一律偏 fail-open：
   //   ① 条是**图根直接子级**（图根的直接子级只有背景层 / panel chrome / 各 body 容器）；
@@ -5177,7 +5424,9 @@ export function resolveSectionHeaderFacts(sec, figmaIndex, stats) {
   //   ③ 段盒**不覆盖**条 ⇒ 真把它画进段内必然挤占内容高（本单 532−55=477）。
   //   条件 ① 单用会误杀「同父兄弟副标题」（`4sub-header`/`6sub-header`/`@antd/tab`，实测 46 例）；
   //   条件 ③ 单用会误杀「盒未抬升的合法副标题」（同批实测 128 例）—— 故必须双闸。
-  const secBox = sectionBoxOf(sec);
+  // 🔴 S1-a 排他仅适用「盒外条」形态：盒内标题**本就在**段盒内、且段盒高已含其空间
+  //   ⇒ 不存在「画进段内会挤占内容高」的问题（本单 161 高里 41px 本就是标题+间隙）。
+  const secBox = inBox ? null : sectionBoxOf(sec);
   if (secBox) {
     if (stats) stats.evaluated += 1;
     const anchorChain = ancestorChainOf(String(sec?.id ?? sec?.figmaNodeId ?? ''), figmaIndex);
@@ -5207,13 +5456,16 @@ export function resolveSectionHeaderFacts(sec, figmaIndex, stats) {
     color: colorOf(textNode),
     paddingLeft,
     stripId: cand.id,
+    // 🛡️ S1-b：段盒内形态的伴随图标（真值几何 + 资源变量名）；其它形态恒 null（零回归）
+    icon: inBox?.icon || null,
+    inBox: Boolean(inBox),
   };
 }
 
 export function collectFoldedGridTakeover(p = {}) {
   // 🔴 R3：scope-incomplete 段计数（0 也必须出现 —— 计数行铁律，防「判据失效」与「真没问题」不可辨）
   // 🔴 R6：接管形态 vs 段声明消费对账拒修计数（同上，0 也必须出现）
-  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listWrapProven: 0, listWrapUnresolved: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], layoutGapFromFacts: 0, overlayMarked: 0, sectionHeaderEvaluated: 0, sectionHeaderOutOfBox: 0, skipped: [] };
+  const out = { map: new Map(), evaluated: 0, headerHits: 0, gridHits: 0, textHits: 0, iconHits: 0, legendHits: 0, kvGridHits: 0, listHits: 0, listRow: 0, listColumn: 0, listDirectionOverrides: 0, listItemBg: 0, listItemBgDeclared: 0, listItemBgSubtree: 0, listItemBgSkipped: 0, listWrapProven: 0, listWrapUnresolved: 0, listTextsFilled: 0, listTextsEmpty: 0, listTextsAllEmptySections: 0, listSatelliteTexts: 0, listSatelliteSections: 0, listSatelliteFail: 0, listSatelliteFailSamples: [], listCardHIconFallbackRejected: 0, listTextPairsInline: 0, listTextPairsStacked: 0, listTextPairsConflict: 0, iconFromMapping: 0, iconTextUnmatched: 0, statRowHits: 0, statRowSuppressed: 0, tableHits: 0, tableSuppressed: 0, tableAnchorRepairs: 0, tableStructVeto: 0, footerHits: 0, regionHits: 0, scopeIncomplete: 0, declaredUnconsumed: 0, panelBgTried: 0, panelBgInjected: 0, cardIconEvaluated: 0, cardIconHit: 0, cardRowEvaluated: 0, cardRowOrderFixed: 0, listGeoNegGapClamped: 0, listGeoGeoNotReady: 0, listGeoRelaxed: 0, listGeoWidthNotUniform: 0, listGeoGeomPicked: 0, listGeoSpanRejected: 0, listGeoInnerStacked: 0, listGeoInnerInline: 0, listGeoInnerConflict: 0, listGeoValuePartsInline: 0, listGeoValuePartsStacked: 0, listGeoSamples: [], chartOwned: 0, chartOwnedIds: [], layoutGapFromFacts: 0, overlayMarked: 0, sectionHeaderEvaluated: 0, sectionHeaderOutOfBox: 0, sectionHeaderInBox: 0, sectionHeaderDeclared: 0, sectionHeaderResolved: 0, sectionShellBgResolved: 0, skipped: [] };
   const treeSections = Array.isArray(p.treeSections) ? p.treeSections : [];
   if (!treeSections.length) return out;
 
@@ -5425,11 +5677,27 @@ export function collectFoldedGridTakeover(p = {}) {
     //   header 落点** ⇒ 即使 plan 已把标题并进 section.header（P0-8b），产物仍是"只有卡片"。
     //   这里只做**事实采集**，是否渲染由渲染器按 kind 决定（S1 先开 grid/list）。
     //   🛡️ S1-a（2026-11-16）：evaluated/outOfBox 逐段累加，任务级 0 也落行（见审计行）。
-    const _secHeaderStats = { evaluated: 0, outOfBox: 0 };
-    const _secHeader = resolveSectionHeaderFacts(sec, figmaIndex, _secHeaderStats);
+    const _secHeaderStats = { evaluated: 0, outOfBox: 0, inBox: 0 };
+    const _secHeader = resolveSectionHeaderFacts(sec, figmaIndex, _secHeaderStats, p.resourceMapping);
     out.sectionHeaderEvaluated += _secHeaderStats.evaluated;
     out.sectionHeaderOutOfBox += _secHeaderStats.outOfBox;
-    if (_secHeader) tr.header = _secHeader;
+    out.sectionHeaderInBox += Number(_secHeaderStats.inBox || 0);
+    // 🛡️ S1-b（2026-11-17）：`declared` / `resolved` 两数**必须分开打**。
+    //   病灶：本单三段都有 `header.title`，但取不到事实时 `evaluated=0/outOfBox=0`
+    //   ⇒ 计数行「0/0」与「判据没失效」不可辨（观测假绿）。现 `declared - resolved > 0`
+    //   即为「声明了段头却没落图」的直接读数。
+    if (String(sec?.header?.title || '').trim()) out.sectionHeaderDeclared += 1;
+    if (_secHeader) {
+      tr.header = _secHeader;
+      out.sectionHeaderResolved += 1;
+    }
+    // 🛡️ S1-c（2026-11-17）：段外壳背景（与段盒完全同盒的 RECTANGLE 纯色底框）。
+    //   计数恒打（0 也打）——「段有底框却 resolved=0」= 判据未命中，不是「真没底框」。
+    const _secShellBg = resolveSectionShellBg(sec, figmaIndex);
+    if (_secShellBg) {
+      tr.sectionBg = _secShellBg;
+      out.sectionShellBgResolved += 1;
+    }
 
     const tag = nameOf.get(String(sec.id));
     if (!tag) {

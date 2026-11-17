@@ -3809,13 +3809,30 @@ export function createPhase2Graph(config = {}) {
         state.figmaNodeData || state._uiCache?.figmaNodeData || state._visualParserCache?.figmaNodeData || null,
     });
     state._doNotInventResult = res;
-    if (!res.pass) {
+    // 🛡️ 2026-11-17 质量门禁放行策略（与 phase2 同口径）：三条质量项降 WARN，
+    //    产物能运行即交付；残留 BLOCK 才 fail-closed；WARN 具体问题写回 state + 日志。
+    const _dniBlocks = res.issues.filter((i) => i.severity === 'BLOCK');
+    if (_dniBlocks.length > 0) {
       const err = new Error(
-        `禁止臆造校验未通过，禁止发布组件：${res.issues.map((i) => i.id).join(', ') || 'unknown'}`,
+        `禁止臆造校验未通过，禁止发布组件：${_dniBlocks.map((i) => i.id).join(', ') || 'unknown'}`,
       );
       err.code = 'DO_NOT_INVENT_BLOCKED';
       err.doNotInventResult = res;
       throw err;
+    }
+    const _dniWarns = res.issues.filter((i) => i.severity === 'WARN');
+    if (_dniWarns.length > 0) {
+      const _dniText = _dniWarns.map((i) => i.message).join('；');
+      state._doNotInventWarnings = _dniWarns.map((i) => ({
+        code: i.id,
+        text: i.message,
+        file: i.file || 'package/index.vue',
+      }));
+      state._doNotInventWarningText = `已交付，但仍有待补内容（${_dniWarns.map((i) => i.id).join('、')}）：${_dniText}`;
+      logger.warn('🛡️ 禁止臆造质量项降 WARN 放行（能运行即交付，问题已写入交付警告）', {
+        codes: _dniWarns.map((i) => i.id),
+        detail: _dniText,
+      });
     }
     // 🛡️ G12b：段级图表缺失 WARN 计数恒打（同 phase2 接线）
     logger.info('🛡️ G12b 段级图表存在性·已评估', {

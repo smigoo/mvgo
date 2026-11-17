@@ -1401,6 +1401,24 @@
                           :title="designCanvasMode ? '当前：Figma 设计画布 1:1（点击切回响应式）' : '当前：响应式视口（点击锁定 Figma 设计画布）'"
                           @click="designCanvasMode = !designCanvasMode"
                         >{{ designCanvasMode ? '设计画布' : '响应式' }}</button>
+                        <!-- 🎨 主题切换（2026-11-17：从预览画布浮层搬来）
+                             根因：preview 页 .mc-theme-switcher 是 position:fixed 叠在 stage 上，
+                             截图器对 stage 做元素截图时一并截进 rendered.png ⇒ 遮挡 + VISUAL-002 虚低。
+                             治本：控件移出截图 DOM 路径，复用既有 set-theme postMessage 通道。 -->
+                        <template v-if="showPreviewThemeSwitch">
+                          <span class="rz-zoom-label">主题:</span>
+                          <a-select
+                            v-model:value="previewThemeChoice"
+                            class="rz-theme-select"
+                            size="small"
+                            :dropdown-match-select-width="false"
+                            :title="`切换预览主题（共 ${previewThemeOptions.length} 套，实时生效并持久化）`"
+                          >
+                            <a-select-option v-for="t in previewThemeOptions" :key="t.key" :value="t.key">
+                              {{ t.name }}
+                            </a-select-option>
+                          </a-select>
+                        </template>
                         <span class="rz-zoom-label">容器尺寸:</span>
                         <span class="rz-size" aria-live="polite">{{ frameResize.sizeLabel.value }}</span>
                         <button class="rz-btn" title="恢复默认视口尺寸" @click="frameResize.resetSize()">重置</button>
@@ -1977,6 +1995,7 @@ import {
   buildPagePlaygroundLocation
 } from '@/utils/task-actions'
 import { buildPreviewUrl as buildResolvedPreviewUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
+import { resolveTaskPreviewPanelType, type PreviewPanelKey } from '@/utils/task-preview-panel'
 import { useTheme } from '@/composables/useTheme'
 import http from '@/core/http'
 import GitLabPushModal from '@/components/GitLabPushModal.vue'
@@ -3347,9 +3366,26 @@ const previewHintText = computed(() => {
 })
 
 // ── 预览面板类型（仅微码组件）────────────────────────────────
-// 原先这个下拉是预览页 iframe 内部的浮层，会压在组件内容上。
-// 现在移到预览提示行右侧，选中值通过 postMessage 下发到 iframe 内实时生效。
-const previewPanelType = ref('')
+// 预览默认跟随任务生成时选定的面板；多主题仍交给预览页按当前主题自动联动。
+const manualPreviewPanelType = ref<PreviewPanelKey | '' | null>(null)
+const previewPanelType = computed<PreviewPanelKey | ''>({
+  get: () => {
+    if (manualPreviewPanelType.value !== null) return manualPreviewPanelType.value
+    return resolveTaskPreviewPanelType(
+      resolveTaskTarget(task.value),
+      task.value?.panelKey,
+      // 🔴 2026-11-17：与主题徽章 designThemeCount 同口径——只数设计稿真值主题。
+      //   原 `themeList.length > 1` 会把「单设计主题 + 系统内置 dark 占位」误判成多主题
+      //   ⇒ 任务选定的一体化面板被判为「多主题交给预览联动」，握手补发/联动 watch 全跳过，
+      //   预览页主题联动（浅色→default-panel）随即盖掉产物 panelKey="aio-panel"
+      //   （任务 8312d0b9 实锤：选了一体化面板，预览却显示默认面板）。
+      designThemeCount.value > 1,
+    )
+  },
+  set: (value) => {
+    manualPreviewPanelType.value = value as PreviewPanelKey | ''
+  },
+})
 const showPanelTypeSwitch = computed(
   () => !pageTaskFlag.value && !isVue3Target.value && shouldShowPreview.value
 )
@@ -3371,7 +3407,66 @@ function pushPanelTypeToFrames() {
   })
 }
 
-watch(previewPanelType, pushPanelTypeToFrames)
+watch(previewPanelType, () => {
+  // 🔴 2026-11-17：同 designThemeCount 口径（原 themeList.length > 1 被内置 dark 占位撑爆）
+  if (designThemeCount.value > 1) return
+  pushPanelTypeToFrames()
+})
+
+// ── 预览主题切换（2026-11-17：从 preview 画布浮层搬到工具条）──────────────
+// 控件搬出 iframe 后不再污染 rendered.png；切换仍走 preview 页既有的
+// `set-theme` postMessage（persist:true），CSS 变量重注入/面板深浅联动全部复用。
+const showPreviewThemeSwitch = computed(
+  () => !pageTaskFlag.value && !isVue3Target.value && shouldShowPreview.value,
+)
+/** 工具条主题下拉项：与 preview 页 selectableThemes 同源（declare.json themeConfig.list）。
+ *  单主题任务的 themeList 空（loadThemeMeta 只填 list>1）⇒ 与 preview 页同口径兜底 light/dark。 */
+const previewThemeOptions = computed<{ key: string; name: string }[]>(() => {
+  const list = themeList.value
+  if (list.length > 0) {
+    const nameCount = new Map<string, number>()
+    for (const t of list) nameCount.set(t.name, (nameCount.get(t.name) || 0) + 1)
+    return list.map((t) => ({
+      key: t.key,
+      name: t.isBuiltin
+        ? `${t.name}·内置`
+        : (nameCount.get(t.name) || 0) > 1
+          ? `${t.name}·设计稿`
+          : t.name,
+    }))
+  }
+  return [
+    { key: 'light', name: '浅色' },
+    { key: 'dark', name: '深色' },
+  ]
+})
+/** 当前预览主题：初值跟随宿主明暗，与 buildPreviewUrl 的 ?theme=hostTheme 一致。 */
+const previewThemeChoice = ref<string>(hostTheme.value === 'dark' ? 'dark' : 'light')
+// 宿主明暗变化（含首次取值稳定化）时同步工具条，但不覆盖用户已下发值。
+watch(hostTheme, (t) => {
+  const key = t === 'dark' ? 'dark' : 'light'
+  if (previewThemeOptions.value.some((o) => o.key === key)) previewThemeChoice.value = key
+})
+/** 主题切换下发到所有预览帧（含隐藏的候选帧，换帧后主题不回退）。 */
+function pushThemeToFrames(theme: string, source?: Window | null) {
+  const targets: (Window | null)[] = source
+    ? [source]
+    : Array.from(previewViewportRef.value?.querySelectorAll('iframe.preview-iframe') || []).map(
+        (el) => (el as HTMLIFrameElement).contentWindow,
+      )
+  for (const target of targets) {
+    try {
+      target?.postMessage({ type: 'set-theme', theme, persist: true }, window.location.origin)
+    } catch {
+      /* iframe 已卸载或不可访问：忽略 */
+    }
+  }
+}
+watch(previewThemeChoice, (theme) => {
+  if (!showPreviewThemeSwitch.value) return
+  if (!previewThemeOptions.value.some((o) => o.key === theme)) return
+  pushThemeToFrames(theme)
+})
 
 const taskElapsedTime = computed(() => {
   // 引用 elapsedTick 使 computed 每秒重新计算
@@ -5018,9 +5113,13 @@ function handlePreviewFrameMessage(event: MessageEvent) {
     //   「预览内切主题时按深浅自动联动面板（深=aio/浅=default）」，
     //   补发静态面板值会把预览页 userPickedPanel 置位 ⇒ 联动永久失效
     //   （用户实测：切深色主题仍是浅色面板）。
-    if (themeList.value.length > 1) {
+    // 🔴 2026-11-17：多主题判定改用 designThemeCount（设计稿真值主题数）。
+    //   原 `themeList.length > 1` 把「单设计主题 + 系统内置 dark 占位」也算多主题
+    //   ⇒ 单主题任务的任务面板（aio-panel）从不补发，预览页联动盖成 default-panel
+    //   （任务 8312d0b9 实锤）。真正的多主题任务 designThemeCount > 1，行为不变。
+    if (designThemeCount.value > 1) {
       /* 多主题：跳过补发 */
-    } else if (showPanelTypeSwitch.value) {
+    } else if (showPanelTypeSwitch.value && previewPanelType.value) {
       try {
         ;(event.source as Window | null)?.postMessage(
           { type: 'set-panel-type', panelType: previewPanelType.value },
@@ -5029,6 +5128,10 @@ function handlePreviewFrameMessage(event: MessageEvent) {
       } catch {
         /* 源窗口已关闭：忽略 */
       }
+    }
+    // 🎨 新帧挂载后补发工具条当前主题（浮层已搬走，否则新帧会退回 URL ?theme 值）。
+    if (showPreviewThemeSwitch.value && previewThemeChoice.value) {
+      pushThemeToFrames(previewThemeChoice.value, event.source as Window | null)
     }
     return
   }
@@ -9482,6 +9585,10 @@ watch(bindingWizardOpen, (open) => {
 }
 .rz-zoom-select {
   width: 104px;
+}
+/* 主题切换下拉（从预览画布浮层搬来，尺寸对齐工具条其它 select） */
+.rz-theme-select {
+  width: 92px;
 }
 /* select 高度按 bf-bar 收紧（24px），label 字号对齐工具条 */
 .rz-bar-controls :deep(.ant-select-selector),

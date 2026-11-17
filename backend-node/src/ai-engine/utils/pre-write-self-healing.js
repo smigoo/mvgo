@@ -28,6 +28,14 @@ import {
 } from './flex-sibling-guard.js';
 // 🛡️ S6（2026-09-16）：背景 :style 补全自愈（backgroundImage 缺 size/repeat/position → 补默认值）
 import { ensureBackgroundStyleComplete } from './post-process.js';
+// 🏢 M6-3a/3b 终局兜底（2026-11-17 · ef014f7d 实锤）：宿主外壳禁挂内联背景。判据与
+//   code-validator 同源（同一函数，非第二份正则）——本阶段在**所有背景注入 pass 之后**，
+//   负责把任何注入器写到 `<base-panel>` 上的背景剥掉（真机：tab 激活态胶囊图 100%×100%
+//   铺满整块面板）。
+import {
+  stripBasePanelInlineBackground,
+  splitTopLevel,
+} from './host-shell-bg.js';
 import { bindSectionItemIcons } from './section-item-icon-bind.js';
 import { collectMissingVueImports } from './vue-import-closure.js';
 import { scanProductStyleIssues } from './style-conflict-detector.js';
@@ -133,10 +141,80 @@ import { collectCardGroups, collectCardBgByOwner, injectCardBgImages } from './c
  * @returns {{ files: Record<string,string>, summary: object }} 自愈后的文件集 + 计数摘要
  */
 /**
+ * 🛡️ 元素子树范围配平（2026-11-17 · ef014f7d 实锤）：返回 `openEndIdx` 所对应元素的
+ * 子树**结束位置**（匹配闭合标签之后）。
+ *
+ * 为什么需要：本文件两处「重复 bg 挂载剥离」原判据是「该 var 在本元素**之后的模板文本**里
+ * 再次出现」⇒ 把**兄弟段**（两个 data-section-id 平级元素各挂同一张图）误判成
+ * 「祖先-后代双重挂载」，于是剥掉前一兄弟的 backgroundImage，只留下
+ * `backgroundSize/Position/Repeat` 空壳 ⇒ 该段背景永久丢失（真机 ef014f7d 的 1:388）。
+ * 真值形态只有「同一元素 + 其后代」同时挂同一 var 才是冗余；判据必须落到**子树内**。
+ *
+ * 纯文本配平（不引入解析器）：同名标签 `<div` / `</div` 计数，跳过自闭合 `/>`。
+ * 返回 -1 表示无匹配闭合（调用方按 fail-open 视为「无子树」⇒ 不剥，保守）。
+ */
+function findElementSubtreeEnd(tpl, openEndIdx, tagName) {
+  if (typeof tpl !== 'string' || !tagName) return -1;
+  const lower = String(tagName).toLowerCase();
+  const openRe = new RegExp(`<${lower}(?=[\\s/>])`, 'gi');
+  const closeRe = new RegExp(`</${lower}\\s*>`, 'gi');
+  let depth = 1;
+  let i = openEndIdx;
+  while (i < tpl.length) {
+    openRe.lastIndex = i;
+    closeRe.lastIndex = i;
+    const o = openRe.exec(tpl);
+    const c = closeRe.exec(tpl);
+    if (!c) return -1;
+    if (o && o.index < c.index) {
+      // 同名开始标签：自闭合（`<div ... />`）不增加深度
+      const gt = tpl.indexOf('>', o.index);
+      const selfClose = gt > 0 && tpl[gt - 1] === '/';
+      if (!selfClose) depth += 1;
+      i = gt > 0 ? gt + 1 : o.index + o[0].length;
+      continue;
+    }
+    depth -= 1;
+    i = c.index + c[0].length;
+    if (depth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * 🛡️ 空壳 :style 清理（2026-11-17）：剥掉 `backgroundImage` 子句后若 `:style` 对象
+ * 只剩 background 族非 image 键（size/position/repeat…）且无任何其它键 ⇒ 整条 :style
+ * 删除。否则退化成「有尺寸无图」的空壳（真机形态：
+ * `:style="{ backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }"`），
+ * 既无视觉收益又会让「背景缺失」在产物里不可辨。
+ * 判据与 M6-3a 的 splitTopLevel 同源；有其它键（布局/颜色）时不动。
+ */
+function dropEmptyBgStyleShell(tag) {
+  if (typeof tag !== 'string' || !/:style\s*=/.test(tag)) return tag;
+  return tag.replace(
+    /(^|[\s<])(:style)\s*=\s*(["'])\s*\{([\s\S]*?)\}\3/i,
+    (m, pre, attr, q, body) => {
+      const parts = splitTopLevel(body, ',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parts.length === 0) return '';
+      const hasImage = parts.some((s) => /^backgroundImage\s*:/i.test(s));
+      const allBg = parts.every((s) => /^background[A-Za-z]*\s*:/i.test(s));
+      if (!hasImage && allBg) return '';
+      return m;
+    },
+  );
+}
+
+/**
  * 🛡️ A2（2026-09-29）：同一资源 var 在同一 .vue 内被多处 backgroundImage 引用（卡根 cover + 内层 bg-m 100%）。
  * 确定性收口：保留「内层」那处（bg-[m] 语义背景层），剥离「section 根（带 data-section-id）」上的那处。
- * 命名无关：判据只用 data-section-id 存在性 + 同一 var 是否在模板更深处重复引用。
- * 保守：仅当根元素带 data-section-id 且其 backgroundImage 引用的 var 在更深处也有 backgroundImage 时，才剥离根处。
+ * 命名无关：判据只用 data-section-id 存在性 + 同一 var 是否在**该根元素子树内**重复引用。
+ *
+ * 🔴 2026-11-17 修订（ef014f7d 实锤）：原判据「var 在根元素之后的整段模板里出现」会把
+ *   **兄弟段**（1:388 与 1:400 平级、各自合法挂同一张 bg-1-390）当成双重挂载 ⇒ 剥掉 1:388
+ *   的 image 留空壳 ⇒ 该段背景永久丢失。现限定为「根元素**子树内**再次出现」，
+ *   兄弟关系不再命中；剥后残留空壳由 dropEmptyBgStyleShell 整条清除。
  */
 export function stripDuplicateSectionRootBg(content) {
   if (typeof content !== 'string' || !content) return content;
@@ -147,15 +225,18 @@ export function stripDuplicateSectionRootBg(content) {
   const rm = tplBody.match(rootRe);
   if (!rm) return content;
   const rootTag = rm[0];
-  const afterRoot = tplBody.slice(rm.index + rootTag.length);
+  const rootTagName = rm[1];
+  const subtreeEnd = findElementSubtreeEnd(tplBody, rm.index + rootTag.length, rootTagName);
+  if (subtreeEnd < 0) return content; // fail-open：无法配平不猜
+  // 根元素**子树内**（后代容器/背景层）才构成双重挂载
+  const innerScope = tplBody.slice(rm.index + rootTag.length, subtreeEnd);
   // 根元素上「url(' + v + ')」拼接形态的 bg 变量
   const vars = [...rootTag.matchAll(/url\(\s*['"]\s*\+\s*(\w+)\s*\+\s*['"]\s*\)/g)].map((m) => m[1]);
   if (vars.length === 0) return content;
   let newRoot = rootTag;
   let changed = false;
   for (const v of vars) {
-    // 该 var 在模板更深处（内层 bg 层）也出现 → 剥离根上这一处
-    if (!new RegExp(`url\\([\\s\\S]{0,20}${v}`).test(afterRoot)) continue;
+    if (!new RegExp(`url\\([\\s\\S]{0,20}${v}`).test(innerScope)) continue;
     const clause = new RegExp(
       `backgroundImage\\s*:\\s*['"\`]url\\(['"\`]\\s*\\+\\s*${v}\\s*\\+\\s*['"\`]\\)['"\`]\\s*,?\\s*`,
       'g',
@@ -167,7 +248,8 @@ export function stripDuplicateSectionRootBg(content) {
     }
   }
   if (!changed) return content;
-  return content.replace(rootTag, newRoot);
+  const cleaned = dropEmptyBgStyleShell(newRoot);
+  return content.replace(rootTag, cleaned);
 }
 
 /**
@@ -176,8 +258,12 @@ export function stripDuplicateSectionRootBg(content) {
  * 单卡 bg 同时挂到**祖先容器**（136:127 整条统计区 405 宽）与卡级（127×84）双层 ⇒ 渲染时
  * 祖先层把 141×75 单卡图拉伸铺满整条区域（skill 渲染取证：sec=136:127 fn=bg-126 w=405）。
  * 判据（与原函数同构，作用域扩到全部 data-section-id 元素）：某容器标签上的 bg 变量在该元素
- * **之后的模板内容**中再次出现 ⇒ 双重挂载冗余，剥**上层**保留卡级（视觉单卡正确）。
+ * **子树内**再次出现 ⇒ 双重挂载冗余，剥**上层**保留后代（视觉单卡正确）。
  * 保守：只剥 :style 动态 backgroundImage 子句；每个 bg 变量至少有一层保留才剥；幂等（剥后不再命中）。
+ *
+ * 🔴 2026-11-17 修订（ef014f7d 实锤）：同 A2，作用域由「元素之后的整段模板」收窄为
+ *   「该元素**子树内**」——兄弟段各自合法挂同一资源（1:390/1:402 同图不同 owner）不得被剥；
+ *   剥后残留的「只有 size/position/repeat」空壳一并清除。
  */
 export function stripDuplicateAncestorBg(content) {
   if (typeof content !== 'string' || !content) return content;
@@ -191,13 +277,16 @@ export function stripDuplicateAncestorBg(content) {
   let changed = false;
   for (const m of matches) {
     const tag = m[0];
-    const endIdx = m.index + tag.length;
-    const after = tplBody.slice(endIdx);
+    const tagName = m[1];
+    const openEnd = m.index + tag.length;
+    const subtreeEnd = findElementSubtreeEnd(tplBody, openEnd, tagName);
+    if (subtreeEnd < 0) continue; // fail-open：无法配平不猜
+    const innerScope = tplBody.slice(openEnd, subtreeEnd);
     const vars = [...tag.matchAll(/url\(\s*['"]\s*\+\s*(\w+)\s*\+\s*['"]\s*\)/g)].map((x) => x[1]);
     let newTag = tag;
     let tagChanged = false;
     for (const v of vars) {
-      if (!new RegExp(`url\\([\\s\\S]{0,20}${v}`).test(after)) continue;
+      if (!new RegExp(`url\\([\\s\\S]{0,20}${v}`).test(innerScope)) continue;
       const clause = new RegExp(
         `backgroundImage\\s*:\\s*['"\`]url\\(['"\`]\\s*\\+\\s*${v}\\s*\\+\\s*['"\`]\\)['"\`]\\s*,?\\s*`,
         'g',
@@ -209,7 +298,8 @@ export function stripDuplicateAncestorBg(content) {
       }
     }
     if (tagChanged) {
-      out = out.slice(0, m.index) + newTag + out.slice(m.index + tag.length);
+      const cleaned = dropEmptyBgStyleShell(newTag);
+      out = out.slice(0, m.index) + cleaned + out.slice(m.index + tag.length);
       changed = true;
     }
   }
@@ -1065,6 +1155,40 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       summary.bgStyleComplete++;
       logger?.warn?.('🛡️ S6 修复：背景 :style 补全 size/repeat/position', { file: fp });
     }
+  }
+
+  // ⑦-b 🏢 M6-3a/3b 终局兜底（2026-11-17 · ef014f7d 实锤）：宿主外壳禁挂内联背景。
+  //   病灶：`code-validator` 的 M6-3a 剥离在生成阶段执行，而**背景注入 pass 在其后**仍会给
+  //   `<base-panel>` 挂图 ⇒ 真机产物
+  //   `<base-panel :style="{ backgroundImage: 'url(' + bgctive414 + ')' ... }">`，把 80×26 的
+  //   tab 激活态胶囊图按 100%×100% 铺满整块面板（用户可见「根背景误绑」）。
+  //   为什么放在这里：本阶段是**写盘前最后一道**，位于全部注入 pass 之后；判据与
+  //   M6-3a 共用同一函数（host-shell-bg.js），不写第二份正则，也不依赖 pass 先后。
+  //   范围严格限定：只作用于 `package/index.vue` 的 `<base-panel>` 及其首子元素。
+  try {
+    const bpIdx = Object.keys(result).find(
+      (p) => p === 'package/index.vue' || p.endsWith('/index.vue'),
+    )
+    if (bpIdx && typeof result[bpIdx] === 'string') {
+      const stripped = stripBasePanelInlineBackground(result[bpIdx])
+      if (stripped !== result[bpIdx]) {
+        result[bpIdx] = stripped
+        summary.hostShellBgStripped = (summary.hostShellBgStripped || 0) + 1
+        logger?.warn?.(
+          '🏢 M6-3a/3b 终局兜底：已剥离 <base-panel> 内联背景（注入 pass 晚于生成阶段剥离）',
+          { file: bpIdx },
+        )
+      }
+    }
+  } catch (bpErr) {
+    reportPatchChainError(bpErr, {
+      logger: logger,
+      pass: 'runPreWriteSelfHealing:hostShellBg',
+      counter: summary,
+    })
+    logger?.warn?.('🏢 M6-3a/3b 终局兜底异常（fail-open）', {
+      error: bpErr?.message || String(bpErr),
+    })
   }
 
   // ⑥-b 🛡️ R9-b（2026-11-09 · loop-verify · 设备监测 49d23fe1 实锤）：横排 flex 兄弟组

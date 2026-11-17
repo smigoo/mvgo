@@ -97,6 +97,76 @@ const statItems = [{ k: 'a', bg: bg1 }]
     expect(r.files['package/components/Flow.vue']).toBe(code);
   });
 
+  it('🛡️ E3-v4 v7 镜像：模板动态绑定消费（条件内联）⇒ 跳过注入（4703917b 实锤：tabs 重复子项 bg，旧闸误注入 carrier 被空壳折叠 drop ⇒ 只剩孤儿 CSS 类 + 假 FAIL）', () => {
+    // 真值 owner 1:413 = 1:412 的重复子项（plan body.children[].id、control:tabs）；
+    // 产物按「段级容器 + v-for 逐项」建模，背景经条件内联动态绑定消费（mapping.usage 本身即该形态）。
+    const MAPPING_TABS = [
+      {
+        resourceFile: '../resources/images/bg-tile2-active-414.png',
+        figmaNodeId: '1:414',
+        ownerSectionId: '1:413',
+        ancestorIds: ['1:413', '1:412', '73:3'],
+        targetDomSelector: '[data-section-id="1:413"]',
+        figmaBox: { x: 1772, y: 173, width: 80, height: 26 },
+        previewAnalysisRole: 'bg',
+        downloadStatus: 'success',
+      },
+    ];
+    const BT = '`';
+    const code = [
+      '<template>',
+      '  <div class="c-monitor-header" data-section-id="1:412">',
+      '    <div v-for="tab in tabs" :key="tab.value" class="c-monitor-zh1-s-209">',
+      '      <div class="c-monitor-bg-tile2-active"',
+      '        :style="activeTab === tab.value ? { backgroundImage: ' +
+        BT + 'url(${bg2})' + BT + ' } : null"></div>',
+      '      <span>{{ tab.label }}</span>',
+      '    </div>',
+      '  </div>',
+      '</template>',
+      '<script setup>',
+      "import bg2 from '../../resources/images/bg-tile2-active-414.png'",
+      "import { ref } from 'vue'",
+      "const tabs = [{ label: '全部', value: 'all' }]",
+      "const activeTab = ref('all')",
+      '</script>',
+    ].join('\n');
+    const r = backstopMountBgOwnership({ 'package/components/HeaderSection.vue': code }, MAPPING_TABS);
+    expect(r.stats.skippedExprConsumed).toBe(1);
+    expect(r.stats.missingContainerInjected).toBe(0);
+    expect(r.stats.carrierSizeRuleInjected).toBe(0);
+    // 输出逐字不变（无孤儿 mc-bg-carrier-* div / 无孤儿 CSS 类）
+    expect(r.files['package/components/HeaderSection.vue']).toBe(code);
+  });
+
+  it('🛡️ E3-v4 v7 镜像边界：owner 段已建（data-section-id="1:413" 存在）但未消费 ⇒ 不跳过，仍补挂（防「跳过导致判据 FAIL 无法收敛」）', () => {
+    const MAPPING_TABS = [
+      {
+        resourceFile: '../resources/images/bg-tile2-active-414.png',
+        figmaNodeId: '1:414',
+        ownerSectionId: '1:413',
+        ancestorIds: ['1:413', '1:412'],
+        targetDomSelector: '[data-section-id="1:413"]',
+        figmaBox: { x: 1, y: 1, width: 80, height: 26 },
+        previewAnalysisRole: 'bg',
+        downloadStatus: 'success',
+      },
+    ];
+    const code = `<template>
+  <div data-section-id="1:412">
+    <div data-section-id="1:413"></div>
+    <div :style="activeTab ? { backgroundImage: 'url(' + bg2 + ')' } : null"></div>
+  </div>
+</template>
+<script setup>
+import bg2 from '../../resources/images/bg-tile2-active-414.png'
+const activeTab = true
+</script>`;
+    const r = backstopMountBgOwnership({ 'package/components/HeaderSection.vue': code }, MAPPING_TABS);
+    expect(r.stats.skippedExprConsumed).toBe(0);
+    expect(r.stats.containerTagged).toBe(1);
+  });
+
   it('③ 动态形态祖先错挂：补挂归属容器同时剥掉祖先段的同资源动态背景（防双挂/拉伸）', () => {
     const code = `<template>
   <div data-section-id="88:33" :style="{ backgroundImage: 'url(' + bg1 + ')' }">
@@ -108,6 +178,9 @@ import bg1 from '../../resources/images/bg-_m-34.png'
 </script>`;
     const r = backstopMountBgOwnership({ 'package/components/Flow.vue': code }, MAPPING);
     const out = r.files['package/components/Flow.vue'];
+    // 🛡️ E3-v4 v7 镜像排除：var 已被**非 owner** 段（88:33 祖先）字面消费 ⇒ 不得被 v7 跳过
+    //   （对齐判据侧 `!literalMount && !firstAny`；一处合规不洗白另一处错挂）。
+    expect(r.stats.skippedExprConsumed).toBe(0);
     expect(r.stats.missingContainerInjected).toBe(1);
     expect(r.stats.movedFromAncestor).toBe(1);
     expect(out).toContain('data-section-id="2:3660"');

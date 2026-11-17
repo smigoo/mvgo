@@ -231,6 +231,54 @@ import bg1 from '../../resources/images/bg-_m-34.png'
     expect(out).toContain("backgroundImage: 'url(' + bg1 + ')'");
     expect(out).toMatch(/data-section-id="88:33">\s*<div data-section-id="2:3660"/);
   });
+
+  // 🔴 2026-11-17 治本（mc-max-1794911885243-30260c7a 实锤）：carrier 脱离 flex 流。
+  //   旧版注入的 carrier 只有 width/height ⇒ 作为普通 flex item 占 h px，把后续 section
+  //   挤出容器 ⇒ 文字层叠。阳性：注入规则必须带 absolute 三件套；阴性：锚点/背景绑定不变。
+  it('B2 阳性：注入 carrier 的尺寸规则带 position:absolute/inset:0/pointer-events:none（不占 flex 高度）', () => {
+    const files = {
+      'package/components/Flow.vue': `<template>
+  <div data-section-id="88:33">
+    <span>当日总流量</span>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/bg-_m-34.png'
+</script>`,
+    };
+    const r = backstopMountBgOwnership(files, mkMapping('../resources/images/bg-_m-34.png', ['2:3660']));
+    const out = r.files['package/components/Flow.vue'];
+    expect(r.stats.missingContainerInjected).toBe(1);
+    // 阳性：尺寸规则脱离流
+    expect(out).toMatch(/\.mc-bg-carrier-23660\s*\{[^}]*position:absolute/);
+    expect(out).toMatch(/\.mc-bg-carrier-23660\s*\{[^}]*inset:0/);
+    expect(out).toMatch(/\.mc-bg-carrier-23660\s*\{[^}]*pointer-events:none/);
+    expect(out).toMatch(/\.mc-bg-carrier-23660\s*\{[^}]*width:100px;\s*height:40px/);
+    // 阴性：锚点保留（资源挂载不 fail-closed）+ 背景动态绑定照旧
+    expect(out).toContain('data-section-id="2:3660"');
+    expect(out).toContain("backgroundImage: 'url(' + bg1 + ')'");
+  });
+
+  it('B2 幂等：已有 absolute 规则的 carrier 再跑一次不重复注入', () => {
+    const files = {
+      'package/components/Flow.vue': `<template>
+  <div data-section-id="88:33">
+    <div data-section-id="2:3660" class="mc-bg-carrier-23660" :style="{ backgroundImage: 'url(' + bg1 + ')' }"></div>
+    <span>当日总流量</span>
+  </div>
+</template>
+<script setup>
+import bg1 from '../../resources/images/bg-_m-34.png'
+</script>
+<style lang="less" scoped>
+.mc-bg-carrier-23660 { position:absolute; inset:0; pointer-events:none; width:100px; height:40px; }
+</style>`,
+    };
+    const r = backstopMountBgOwnership(files, mkMapping('../resources/images/bg-_m-34.png', ['2:3660']));
+    const out = r.files['package/components/Flow.vue'];
+    expect((out.match(/mc-bg-carrier-23660/g) || []).length).toBeLessThanOrEqual(3); // class 定义 + 元素 + 规则内类名
+    expect(out).toMatch(/\.mc-bg-carrier-23660\s*\{[^}]*position:absolute/);
+  });
 });
 
 describe('防线2：原始快照锚定（幂等不套娃）', () => {

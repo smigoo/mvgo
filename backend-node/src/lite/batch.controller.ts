@@ -20,6 +20,7 @@ import { LiteService } from './lite.service';
 import { Phase2Service } from '../phase2/phase2.service';
 import { GeneratePhase2Dto } from '../phase2/dto/generate-phase2.dto';
 import { GenerateLiteDto } from './dto/generate-lite.dto';
+import { buildBatchPhase2Dto } from './batch-phase2-dto.util';
 import { parseFigmaUrl } from '../ai-engine/utils/figma-url-parser.js';
 import {
   LiteErrorCode,
@@ -711,14 +712,10 @@ export class BatchController {
             if (!parsed.fileKey || !parsed.nodeId) {
               throw new Error('Max 完整生成需要包含 node-id 的有效 Figma 链接');
             }
-            const phase2Dto = new GeneratePhase2Dto();
-            phase2Dto.componentName = item.componentName || sessionId;
-            phase2Dto.componentId = sessionId;
-            phase2Dto.fileKey = parsed.fileKey;
-            phase2Dto.nodeId = parsed.nodeId;
-            phase2Dto.groupId = groupId;
-            phase2Dto.target = item.componentType || 'vue3';
-            phase2Dto.previewToken = item.previewToken;
+            const phase2Dto = buildBatchPhase2Dto(item, sessionId, parsed, groupId);
+            this.logger.log(
+              `[panelType-propagation] batch max sessionId=${sessionId} panelType=${phase2Dto.panelType || 'default-panel'}`,
+            );
             await this.phase2Service.startGeneration(
               sessionId,
               phase2Dto,

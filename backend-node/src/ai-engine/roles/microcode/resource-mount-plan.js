@@ -221,13 +221,21 @@ export function mountCardBgGroups(allFiles, plan, options = {}) {
   const lessGlobalVars = options.lessGlobalVars || extractLessGlobalVars(allFiles);
   for (const grp of groups) {
     const anchorSel = `data-section-id="${grp.anchorId}"`;
+    // 🛡️ 2026-11-17 治本（mc-max-1794891744785-2d75d800 实锤）：语义 id 段复活后，
+    //   组锚可能是 Figma 数字 id（公共产物祖先锚=段的 figmaAnchorId），而该锚在产物 DOM
+    //   上是 **data-resource-anchor**（code-generator 对语义 id 段的专用锚输出，红线禁止
+    //   复用 data-section-id）⇒ 落点查找必须双属性，否则组锚命中却找不到落点文件
+    //   （card-bg-group-anchor-missing，组通道又失活）。
+    const anchorSelAlt = `data-resource-anchor="${grp.anchorId}"`;
     const indexSrc = typeof allFiles['package/index.vue'] === 'string' ? allFiles['package/index.vue'] : '';
     const importedSet = new Set();
     for (const im of indexSrc.matchAll(/import\s+\w+\s+from\s+['"](\.[^'"]+\.vue)['"]/g)) {
       importedSet.add(im[1].replace(/^\.\//, 'package/'));
     }
     const cands = Object.keys(allFiles).filter(
-      (p) => typeof allFiles[p] === 'string' && allFiles[p].includes(anchorSel),
+      (p) =>
+        typeof allFiles[p] === 'string' &&
+        (allFiles[p].includes(anchorSel) || allFiles[p].includes(anchorSelAlt)),
     );
     const targetFile =
       cands.find((p) => importedSet.has(p)) ||

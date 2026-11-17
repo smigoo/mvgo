@@ -24,6 +24,7 @@ import {
   executeModelRequest,
 } from '../utils/ai-request-gateway.js';
 import { buildChatUrl } from '../utils/chat-url.js';
+import { formatVisionCallLog } from '../utils/vision-call-log.js';
 import { getProviderPool } from '../utils/provider-pool.js';
 import { isOpenAICompatibleBaseURL } from '../utils/provider-utils.js';
 // 🔴 brief（Lite 视觉分析）完整性判据唯一来源 —— 键集合与 buildAnalysisPrompt 的 schema
@@ -422,6 +423,23 @@ export class VisionAgent {
         // 支持调用方动态覆盖 max_tokens（截断重试用更高上限）
         const maxTokens =
           Number(options.maxTokens) > 0 ? options.maxTokens : this.maxTokens;
+        // 📊 [vision-call] 实发采样参数埋点（格式化唯一来源 `utils/vision-call-log.js`）。
+        //   位置刻意选在 axios.post **直前**、且 temperature 已按最终模型归一化之后 ⇒
+        //   这三个值就是真正进 body 的 sampled 参数，不是配置值（配置值见构造函数 `VisionAgent 配置`）。
+        //   2026-11-17：mc/max 管线此前零 temperature 埋点，「同图不同果」只能靠读代码推导。
+        logger.info(
+          formatVisionCallLog({
+            model: snap.model,
+            temperature,
+            maxTokens,
+            providerId: snap.providerId,
+            baseURL: snap.baseURL,
+            attempt: attempt || 1,
+            selfHeal: this._selfHealCount,
+            outputKind: options.outputKind,
+            context: options.context,
+          }),
+        );
         // 🛡️ 2026-09-26 治本：视觉分析是「结构化 JSON 抽取」，不需要长链推理。
         // 但 qwen3.7-plus/qwen3.8-max 等默认开推理，会把 8k~13k token 烧在 reasoning 上 →
         // 单次调用 218~276s，被超时上限掐断 → 视觉降级阻断生成。注入关推理参数后 8~9s。
@@ -540,6 +558,10 @@ export class VisionAgent {
           finishReason,
         } = await this.callOpenAICompatibleAPI(messages, {
           context: 'vision-agent.analyzeImage',
+          // 🔴 透传 outputKind：analyzeImage 同时服务 brief(看图)/sfc(写码)/json(mc·max 视觉)
+          //   三种调用，[vision-call] 埋点靠它判别「哪条行属于哪次调用」（2026-11-17 真机实锤
+          //   缺它 ⇒ 两条行 outputKind=-，同 session 温度 0.7/0 会被误读成温度分叉）。
+          outputKind: options.outputKind,
           signal: options.signal,
           onProgress: options.onProgress || this.onProgress,
           requestConcurrency: options.requestConcurrency,
@@ -569,6 +591,7 @@ export class VisionAgent {
             finishReason,
           } = await this.callOpenAICompatibleAPI(messages, {
             context: 'vision-agent.analyzeImage',
+            outputKind: options.outputKind,
             signal: options.signal,
             onProgress: options.onProgress || this.onProgress,
             requestConcurrency: options.requestConcurrency,
@@ -663,6 +686,28 @@ export class VisionAgent {
             },
           ],
         });
+
+        // 📊 [vision-call] Anthropic 分支埋点：本分支温度是**构造 ChatAnthropic 时的快照**
+        //   （下方截断升档/完整性自愈各自重建客户端），故 refresh `_lastRequestTemperature`
+        //   与落日志同源，保证与 OpenAI 分支口径一致（同一 formatter，同一字段序）。
+        this._lastRequestTemperature = normalizeRequestTemperature(
+          this.model,
+          this.temperature,
+        );
+        logger.info(
+          formatVisionCallLog({
+            model: this.model,
+            temperature: this._lastRequestTemperature,
+            maxTokens: this.maxTokens,
+            providerId: this.providerId,
+            baseURL: this.baseURL,
+            attempt: 1,
+            selfHeal: this._selfHealCount,
+            outputKind: options.outputKind,
+            context: 'vision-agent.analyzeImage',
+            protocol: 'anthropic',
+          }),
+        );
 
         // 🔴 let 声明：截断升档路径需要重新赋值 response（下方升档重试块）
         let response = await this.llm.invoke([message], {
@@ -1220,6 +1265,7 @@ export class VisionAgent {
         const { content: result, usage: rawUsage } =
           await this.callOpenAICompatibleAPI(messages, {
             context: 'vision-agent.compareImages',
+            outputKind: options.outputKind,
             signal: options.signal,
             onProgress: options.onProgress || this.onProgress,
             requestConcurrency: options.requestConcurrency,

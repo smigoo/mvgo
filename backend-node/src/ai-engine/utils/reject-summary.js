@@ -165,9 +165,18 @@ export function pickTakeoverAudit(takeover) {
     // 🛡️ S1-a（2026-11-16）：段头和段盒的对账计数 —— **0 也打**。
     //   `outOfBox>0` ⇒ 有条悬在段盒上方被拦下（面板级 header 被误并入段的形态，本次生效）；
     //   `outOfBox=0` 而产物仍出现「面板标题 + 段内标题」双份 ⇒ 判据未接线或被下游覆盖。
+    // 🛡️ S1-b / S1-c（2026-11-17）：`declared` 与 `resolved` **必须分开**。
+    //   病灶 `mc-max-1794845346507-a8d1722c`：三段都声明了 `header.title`，但段头事实
+    //   全取不到 ⇒ 旧读数只有 `0/0`（evaluated/outOfBox 都不动）⇒「判据没生效」与
+    //   「本来就没段头」不可辨 = 观测假绿。现 `declared>0 而 resolved=0` 直接可读。
+    //   `inBox` = 盒内形态命中数（S1-b）；`shellBg` = 段外壳背景命中数（S1-c）。
     sectionHeader: {
       evaluated: num(takeover.sectionHeaderEvaluated),
       outOfBox: num(takeover.sectionHeaderOutOfBox),
+      inBox: num(takeover.sectionHeaderInBox),
+      declared: num(takeover.sectionHeaderDeclared),
+      resolved: num(takeover.sectionHeaderResolved),
+      shellBg: num(takeover.sectionShellBgResolved),
     },
     skippedTotal: skipped.length,
     skipped: skipped.slice(0, SKIPPED_CAP).map((s) => ({
@@ -439,7 +448,7 @@ export function formatRejectSummaryLine(summary) {
       //   `FG_LIST_WIDTHS` 即步③ 判据失效。这是本行的唯一用途。
       `listGeo:negGap=${t.listGeo?.negGapClamped ?? 0},geoNotReady=${t.listGeo?.geoNotReady ?? 0},relaxed=${t.listGeo?.relaxed ?? 0},widthNotUniform=${t.listGeo?.widthNotUniform ?? 0},geomPicked=${t.listGeo?.geomPicked ?? 0},spanRejected=${t.listGeo?.spanRejected ?? 0},innerStacked=${t.listGeo?.innerStacked ?? 0},innerInline=${t.listGeo?.innerInline ?? 0},innerConflict=${t.listGeo?.innerConflict ?? 0},vPartsInline=${t.listGeo?.valuePartsInline ?? 0},vPartsStacked=${t.listGeo?.valuePartsStacked ?? 0}`,
     );
-    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`, `panelBg=${t.panelBg?.injected ?? 0}/${t.panelBg?.tried ?? 0}`, `chartOwned=${t.chartOwned ?? 0}${Array.isArray(t.chartOwnedIds) && t.chartOwnedIds.length ? '[' + t.chartOwnedIds.join(',') + ']' : ''}`, `cardIcon=${t.cardIcon?.hit ?? 0}/${t.cardIcon?.evaluated ?? 0}`, `cardRow=${t.cardRow?.fixed ?? 0}/${t.cardRow?.evaluated ?? 0}`, `sectionHeaderOutOfBox=${t.sectionHeader?.outOfBox ?? 0}/${t.sectionHeader?.evaluated ?? 0}`);
+    parts.push(`skipped=${t.skippedTotal ?? 0}`, `anchorRepairs=${t.anchorRepairs ?? 0}`, `scopeIncomplete=${t.scopeIncomplete ?? 0}`, `declaredUnconsumed=${t.declaredUnconsumed ?? 0}`, `panelBg=${t.panelBg?.injected ?? 0}/${t.panelBg?.tried ?? 0}`, `chartOwned=${t.chartOwned ?? 0}${Array.isArray(t.chartOwnedIds) && t.chartOwnedIds.length ? '[' + t.chartOwnedIds.join(',') + ']' : ''}`, `cardIcon=${t.cardIcon?.hit ?? 0}/${t.cardIcon?.evaluated ?? 0}`, `cardRow=${t.cardRow?.fixed ?? 0}/${t.cardRow?.evaluated ?? 0}`, `sectionHeaderOutOfBox=${t.sectionHeader?.outOfBox ?? 0}/${t.sectionHeader?.evaluated ?? 0}`, `sectionHeaderDeclared=${t.sectionHeader?.declared ?? 0}/${t.sectionHeader?.resolved ?? 0}`, `sectionHeaderInBox=${t.sectionHeader?.inBox ?? 0}`, `sectionShellBg=${t.sectionHeader?.shellBg ?? 0}`);
   }
   const c = summary.contract;
   if (c) {

@@ -4,10 +4,18 @@
  * 纯函数，可单测。复用 sharp 做分块亮度直方图比对。
  *
  * 比对方法：
- *   1. 两图 resize 到同一宽高（256×N，保持比例），removeAlpha
+ *   1. 两图统一合成到白底（flatten '#ffffff'）后 resize 到同一宽高（256×N，fit fill）
  *   2. 逐 8×8 块算亮度均值直方图
  *   3. score = 1 - 平均块差（L1 归一化）
  *   4. 阈值分档：≥0.85 pass / 0.6~0.85 warn / <0.6 block
+ *
+ * 🔴 alpha 口径（2026-11-17 路线 A）：原实现用 `removeAlpha()`——它直接丢弃 alpha
+ *   通道、保留半透明像素的原始 RGB。设计稿 Figma 预览图带大面积半透明浅蓝背景
+ *   （rgba(237,244,251,0.7)），而产物是浏览器截图（实色无 alpha）。两边口径不一致
+ *   会造成亮度分布系统性偏差：实证「把设计稿按白底完美渲染」vs「removeAlpha 设计稿」
+ *   只有 0.6602（应判 pass 却 BLOCK）；统一 flatten 白底后同一对照 = 1.0000。
+ *   白底合成是浏览器渲染的自然口径，且对不透明图（产物）逐字节 no-op，故只纠正
+ *   带 alpha 的设计稿一侧，不误伤产物。合成底色单一事实源 = COMPOSITE_BACKGROUND。
  *
  * 只对「渲染非全白」才比对；空白渲染由 RUNTIME-012 处理。
  */
@@ -19,6 +27,8 @@ import { readFileSync, existsSync } from 'node:fs'
 const BLOCK_SIZE = 8
 const COMPARE_WIDTH = 256
 const COMPARE_HEIGHT = 256
+// alpha 合成底色的唯一事实源：浏览器渲染的自然背景，同时使带 alpha 设计稿与实色产物口径一致
+const COMPOSITE_BACKGROUND = '#ffffff'
 
 export const FIDELITY_THRESHOLDS = Object.freeze({
   PASS: 0.85,
@@ -39,7 +49,7 @@ export const FIDELITY_VERDICTS = Object.freeze({
 async function blockLuminanceHistogram(imagePath) {
   const sharp = (await import('sharp')).default
   const { data, info } = await sharp(imagePath)
-    .removeAlpha()
+    .flatten({ background: COMPOSITE_BACKGROUND })
     .resize({ width: COMPARE_WIDTH, height: COMPARE_HEIGHT, fit: 'fill' })
     .raw()
     .toBuffer({ resolveWithObject: true })

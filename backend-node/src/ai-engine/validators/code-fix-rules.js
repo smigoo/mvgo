@@ -1294,7 +1294,18 @@ export function healDegenerateSubComponentContent(files, figmaNodeData) {
  */
 function ensureCarrierSizeRule(code, cls, w, h) {
   if (typeof code !== 'string' || !cls) return { code, inserted: false };
-  const rule = `.${cls} { width:${w}px; height:${h}px; }`;
+  // 🔴 2026-11-17 治本（mc-max-1794911885243-30260c7a 实锤）：承载 div 必须脱离 flex 流。
+  //   病灶：carrier 被注入为 var 消费容器的**流内子元素**，只带 width/height ⇒ 作为普通
+  //   flex item 占 h px（本例 40px），把后续 6 行 section 挤出 max-height:242px 容器 ⇒
+  //   文字层叠错位。真值里背景本就该是 absolute 覆盖层（产物 common.less 已有
+  //   `.bg-item-event{position:absolute;inset:0}` 同款正确形态），carrier 却漏了这层声明。
+  //   修法：尺寸规则补 absolute 三件套——背景照渲染（data-section-id 锚点保留、资源不
+  //   fail-closed），但不再占 flex 高度。inset:0 相对最近定位祖先铺满，pointer-events:none
+  //   防挡点击。幂等键见下方 includes(`.${cls} {`)，旧规则已存在时不重复注入。
+  const rule = `.${cls} { position:absolute; inset:0; pointer-events:none; width:${w}px; height:${h}px; }`;
+  // 幂等：类名规则已存在即不重复注入。注意本函数是「无消费点→新注入」路径专属，
+  //   存量产物（carrier 已挂载）走 skippedAlreadyMounted 不进这里 ⇒ 修复只对**新生成**
+  //   生效；历史产物保持原样（不二次改写已交付内容）。
   if (code.includes(rule) || code.includes(`.${cls}{`) || code.includes(`.${cls} {`)) {
     return { code, inserted: false };
   }
@@ -1333,6 +1344,8 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     skippedSharedDuplicate: 0,
     skippedAnchorInAttr: 0,
     revertedInvalid: 0,
+    // 🛡️ 2026-11-17（E3-v4 v7 镜像）：模板动态绑定消费（条件内联）跳过计数（0 也恒打）
+    skippedExprConsumed: 0,
   };
   const out = { ...files };
   if (!files || typeof files !== 'object' || !Array.isArray(resourceDomMapping)) {
@@ -1454,6 +1467,45 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
     const escV = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`\\b${escV}\\b`).test(arrM[1]);
   };
+  // 🛡️ E3-v4 v7 镜像（2026-11-17 · mc-max-1794888736786-4703917b 实锤；改验分离，与判据侧
+  //   component-acceptance `isTemplateDynamicallyConsumed` 独立同源实现）：
+  //   模板内**动态绑定消费**（条件内联形态）——真值 owner 是重复子项（plan body.children[].id、
+  //   control:tabs），产物按「段级容器 + v-for 逐项」建模，背景经
+  //   `activeTab === tab.value ? { backgroundImage: `url(${bg2})` } : null` 消费。
+  //   mapping.usage 本身即该形态，LLM 忠实照做；旧闸只认 const 容器（isDataDrivenConsumedLocal）
+  //   ⇒ 误判「未消费」⇒ 注入承载 div ⇒ 被空壳折叠 drop ⇒ 只剩孤儿 CSS 类 + E3-v4 假 FAIL。
+  //   判定口径：varName 在 `<template>` 中出现在动态绑定里（:style / v-bind:style / 插值 {{}}）。
+  const isTemplateDynamicConsumedLocal = (code, varName) => {
+    const tplM = String(code).match(/<template>([\s\S]*?)<\/template>/i);
+    if (!tplM) return false;
+    const escV = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(
+      `:style\\s*=\\s*"(?:[^"]*\\b${escV}\\b[^"]*)"` +
+        `|v-bind(?::[\\w-]+)?\\s*=\\s*"(?:[^"]*\\b${escV}\\b[^"]*)"` +
+        `|\\{\\{[^}]*\\b${escV}\\b[^}]*\\}\\}`,
+    );
+    return re.test(tplM[1]);
+  };
+  // 🛡️ E3-v4 v7 镜像的**排除条件**（2026-11-17 · 对齐判据侧 `!_sites.literalMount && !_sites.firstAny`）：
+  //   判据的 v7 放行不仅要求「wantId 未建段 + var 在模板里动态绑定消费」，还要求**除 owner
+  //   段外没有任何 `data-section-id` 开标签消费该 var**（一处合规不洗白另一处错挂，与 v6 同源）。
+  //   修侧若只判「动态绑定消费」就跳过，会把「var 字面挂在祖先段 `data-section-id` 上」的真实
+  //   错挂一并放过（test ③ 回归：bg1 挂在 88:33 祖先段）⇒ 补挂/剥离失效 ⇒ 判据 FAIL 不收敛。
+  //   故镜像同一排除：存在非 wantId 的段标签消费该 var ⇒ 不跳过，走 ① 补绑 + ③ 剥离。
+  const hasOtherSectionConsumingVar = (varName, wantId) => {
+    const escV = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const varRe = new RegExp(`\\b${escV}\\b`);
+    for (const [, code] of entries) {
+      if (typeof code !== 'string') continue;
+      for (const m of code.matchAll(/<[a-zA-Z][^>]*>/g)) {
+        const idm = m[0].match(/data-section-id="([^"]+)"/);
+        if (!idm) continue;
+        if (idm[1] === String(wantId)) continue;
+        if (varRe.test(m[0])) return true;
+      }
+    }
+    return false;
+  };
   for (const r of resourceDomMapping) {
     if (r?.previewAnalysisRole !== 'bg' || r?.downloadStatus !== 'success') continue;
     stats.scanned += 1;
@@ -1551,6 +1603,24 @@ export function backstopMountBgOwnership(files, resourceDomMapping, options = {}
       consumedInGridOrCardElsewhere
     ) {
       stats.skippedDataDriven += 1;
+      continue;
+    }
+    // 🛡️ E3-v4 v7 镜像闸（2026-11-17 · 4703917b 实锤）：模板动态绑定消费（条件内联）⇒ 跳过。
+    //   ⚠️ 必须与判据侧放行条件**严格对齐**：判据 v7 分支判三件事——(a) wantId ∉ 产物已建
+    //   段级容器集合；(b) 除 owner 段外无任何 `data-section-id` 标签消费该 var（!_sites.
+    //   literalMount && !_sites.firstAny）；(c) var 经模板动态绑定消费。修侧逐条镜像：
+    //   (a) ⇒ !ownerIsBuiltSection；(b) ⇒ !hasOtherSectionConsumingVar；(c) ⇒
+    //   isTemplateDynamicConsumedLocal。三者不同时成立即不跳过（否则错挂场景被洗白 ⇒ 判据
+    //   FAIL 无法被兜底收敛 ⇒ 死循环重试）。
+    const ownerIsBuiltSection = entries.some(
+      ([, c]) => typeof c === 'string' && c.includes(`data-section-id="${wantId}"`),
+    );
+    if (
+      !ownerIsBuiltSection &&
+      !hasOtherSectionConsumingVar(varInfo.varName, wantId) &&
+      entries.some(([, c]) => isTemplateDynamicConsumedLocal(c, varInfo.varName))
+    ) {
+      stats.skippedExprConsumed += 1;
       continue;
     }
 
