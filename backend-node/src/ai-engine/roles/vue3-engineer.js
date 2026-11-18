@@ -353,6 +353,19 @@ export class Vue3Engineer extends MicrocodeEngineer {
     const isRevision =
       (previousCritiques && previousCritiques.length > 0) ||
       !!_l0CodeRetryGuidance;
+    // 与 MicrocodeEngineer 共用同一采样阶梯；Vue3 覆盖 generateCode，不能依赖父类入口。
+    if (isRevision && typeof this.temperature === 'number') {
+      const retryRound = Math.min(previousCritiques?.length || 1, 3);
+      const bumped = Math.min(0.2 * retryRound, 0.6);
+      if (bumped > this.temperature) {
+        this.logger.info(`🎯 Vue3 重试换采样：temperature ${this.temperature} → ${bumped}（修订轮 ${retryRound}）`, {
+          componentName: input.componentName,
+        });
+        this._setRuntimeTemperature(bumped, `vue3-revision-${retryRound}`);
+      }
+    } else if (!isRevision && this.temperature !== this._temperatureBaseline) {
+      this._restoreRuntimeTemperature('vue3-first-pass');
+    }
     const isPartialRevision =
       !!isRevision &&
       targetFileSet.size > 0 &&
@@ -2100,11 +2113,18 @@ export class Vue3Engineer extends MicrocodeEngineer {
             ? input.charts
             : [];
           // 🛡️ 判据单一来源：与门禁共用 findMissingChartTypes（含文字卡承载豁免 / line 缺省 series 豁免）
-          const { missing: missingCharts } = findMissingChartTypes({
+          const { missing: missingCharts, exemptBlocked } = findMissingChartTypes({
             charts: chartsForGuard,
             files: codeResult.files,
             figmaNodeData: input.figmaNodeData || null,
           });
+          // 🛡️ N2 早退计数（2026-11-18 G1 配套埋点，与 mc 端对齐）：判据判缺但产物已有 echarts ⇒
+          //    注入器 code-healer.js:1944 早退跳过，missing 有值无人消费。0 也打日志。
+          let n2SkippedByExistingChart = 0;
+          // 🛡️ N-P0a-1（2026-11-18，与 mc 端对齐）：早退原因精确分布（no-anchor=无锚点静默缺图）。
+          //    唯一来源 = 注入器 onSkip 回调；n2SkippedByExistingChart 保留以兼容既有日志消费方。
+          /** @type {Record<string, number>} */
+          const n2SkipReasons = {};
           if (missingCharts.length > 0) {
             const idxPathN2 = 'package/index.vue';
             const targetFile = codeResult.files[idxPathN2];
@@ -2129,6 +2149,13 @@ export class Vue3Engineer extends MicrocodeEngineer {
                 chartType,
                 chartSeries,
                 legendItems,
+                // 🛡️ P0-a 治本（2026-11-18，与 mc 端对齐）：注入落点锚点 = vision chart.section；
+                //    缺省 ⇒ 注入器仅在模板内 section 唯一时落点，否则不注入，杜绝 </template> 越界游离。
+                anchorSection: targetChart.section,
+                // 🛡️ N-P0a-1（2026-11-18，与 mc 端对齐）：放弃注入时上报 reason，聚合进下方日志。
+                onSkip: (r) => {
+                  n2SkipReasons[r] = (n2SkipReasons[r] || 0) + 1;
+                },
               });
               if (patched !== healedForN2) {
                 const guardN2 = validateVueSfc(patched, idxPathN2);
@@ -2150,11 +2177,29 @@ export class Vue3Engineer extends MicrocodeEngineer {
                     codeResult.files[idxPathN2] = healedForN2;
                   }
                 }
-              } else if (healedForN2 !== targetFile) {
-                codeResult.files[idxPathN2] = healedForN2;
+              } else {
+                // 🛡️ N2 早退计数：注入器未改动产物 ⇒ 若产物已含 echarts.init，
+                //    说明早退生效（缺图修不掉）。事实依据=patched===healedForN2，
+                //    归因沿用注入器同一字面量，不另立判据。仅观测计数，不改注入行为。
+                if (
+                  typeof healedForN2 === 'string' &&
+                  healedForN2.includes('echarts.init(')
+                ) {
+                  n2SkippedByExistingChart += 1;
+                }
+                if (healedForN2 !== targetFile) {
+                  codeResult.files[idxPathN2] = healedForN2;
+                }
               }
             }
           }
+          this.logger.info('🛡️ N2 图表兜底·已评估', {
+            missingTypes: missingCharts.map((m) => m.type),
+            n2SkippedByExistingChart,
+            // 🛡️ N-P0a-1：早退原因精确分布（空 {} ⇒ 未发生放弃；{no-anchor:1} ⇒ 无锚点静默缺图）。
+            n2SkipReasons,
+            exemptBlocked: exemptBlocked || null,
+          });
         } catch (n2err) {
           reportPatchChainError(n2err, { logger: this.logger, pass: 'execute:1784' });
           this.logger.warn('N2 图表兜底失败（非阻断）', {

@@ -12,7 +12,8 @@
     "type": "vertical-stack",
     "sections": [
       {
-        "id": "section-tabs",
+        "id": "2:3550",
+        "anchorKind": "container",
         "name": "Tab切换栏",
         "role": "tabs",
         "headerRelation": "title-same-row",
@@ -23,7 +24,8 @@
         ]
       },
       {
-        "id": "section-total",
+        "id": "2:3660",
+        "anchorKind": "container",
         "name": "今日累计",
         "role": "stats-header",
         "headerRelation": "content-below-title",
@@ -102,3 +104,39 @@
 5. 文字拆分：数值+单位必须拆为独立 `parts`（number/unit），各自独立 figmaNode/styles
 6. 无重复项组件可用简化 `children` 结构，无需 `items`
 7. **重复卡必须逐项标注 `repeatedFill`**（卡片底色 hex）：N 张中「恰好 1 张异色 = 激活态」「≥4 张严格 ABAB 交替 = 斑马纹」「全同 = 无高亮」——上例首卡 `#a6ceff` 异色即激活态；漏标会被 Figma 真值交叉核对判缺
+
+## anchorKind 锚定示例（2026-11-18 新增）
+
+**标题条与内容块是并列兄弟时的正确声明（title-strip）：**
+
+```json
+{
+  "sections": [
+    {
+      "id": "2:3604",
+      "anchorKind": "container",
+      "name": "流量预测",
+      "header": { "title": "流量预测" },
+      "body": { "layout": "vertical", "children": [ { "id": "2:3605", "type": "chart", "chartType": "line" } ] }
+    }
+  ]
+}
+```
+
+**错误声明（禁止）：** 把 `id` 指向 24px 的标题文字节点 `"2:3571"`（tit）——下游会按 24px 算段高，整段塌陷。
+若标题条壳（6sub-header）与内容块（@echarts/line-7）是并列兄弟，`id` 必须填内容块 `2:3604`，
+标题文字只出现在 `header.title`。
+
+## 角标（badge）版式规则（2026-11-18 新增）
+
+**骑跨宿主的角标必须绝对定位，不得排成流内兄弟：**
+
+- Tab/按钮右上角的红色数字角标（badge-count），在 Figma 里与 tab 是**同父兄弟**、
+  bbox **骑跨** tab 边缘（重叠率约 0.3~0.8）。
+- 生成代码时：宿主元素 `position:relative`，角标 `position:absolute; right:-6px; top:-6px`
+  （按真值几何，角标**不占据流内空间**）。
+- ❌ 禁止把 badge 排成 `<tab/><badge/><tab/><badge/>` 的 flex 兄弟序列——那会撑宽 Tab 条。
+
+```json
+{ "role": "tabs", "children": [ { "type": "tab", "name": "全部", "overlayBadge": "badge-1" } ] }
+```

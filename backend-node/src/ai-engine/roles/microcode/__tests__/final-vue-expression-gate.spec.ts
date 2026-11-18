@@ -100,6 +100,7 @@ describe('runFinalVueExpressionGate', () => {
 
     expect(res.checked).toBe(1);
     expect(res.bad).toHaveLength(0);
+    expect(res.failClosed).toBe(0); // 阴性：合法产物不得计入 fail-closed
     expect(readFileSync(join(root, rel), 'utf-8')).toBe(GOOD_VUE);
   });
 
@@ -150,6 +151,9 @@ describe('runFinalVueExpressionGate', () => {
 
     expect(res.bad[0].action).toBe('left-in-place');
     expect(existsSync(join(root, rel))).toBe(true); // fail-closed 不删
+    // 2026-11-18 · dcb5f88c/27bc42b2：fail-closed 必须**可计数**——此前只打一行 warn，
+    // 调用方无从区分「已隔离」与「坏文件原样留着」⇒ 叠加假绿无从识别。
+    expect(res.failClosed).toBe(1);
   });
 
   it('根治⑭ 回归：removeIfNoCache=false + 全部合法 → 零隔离动作', () => {

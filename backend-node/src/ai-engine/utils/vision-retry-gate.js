@@ -9,6 +9,16 @@
 //   （与 vision-anchor-validator / inline-row-merger 同源，禁在本文件另写一份正则）
 import { FIGMA_ID_RE } from './section-anchor-truth.js'
 
+/**
+ * 🔴 段数契约下界（**单一来源**）。
+ *
+ * 同一个数同时是「触发重跑」与「择优判优」的门槛，缺一即出现
+ * 「因结构塌陷而重跑、又按结构塌陷判优」的裂缝（2026-11-18 真机实锤，见下方 ⓪）。
+ * 改这个数必须只改这里 —— `shouldRetryVisionAnalysis` 与
+ * `pickBetterVisionAnalysis` 都从这里取，禁另写字面量。
+ */
+export const VISION_SECTION_CONTRACT_MIN = 3
+
 /** 「段承载字段」清单：这些字段出现的 id 才算「该节点被某个段认领」 */
 const SECTION_CARRIER_KEYS = Object.freeze([
   'id',
@@ -138,7 +148,7 @@ export function shouldRetryVisionAnalysis({
   truthLeafSections = 0,
   lowCoverage = false,
   orphanCharts = 0,
-  minSections = 3,
+  minSections = VISION_SECTION_CONTRACT_MIN,
 } = {}) {
   const few = Number(sections) < Number(minSections) && Number(truthLeafSections) >= Number(minSections);
   const orphaned = Number(orphanCharts) > 0;
@@ -157,6 +167,20 @@ export function shouldRetryVisionAnalysis({
  *   即：把「更完整的结构」判成了「更差」，orphan 是**软信号**却给了**硬否决权**。
  *
  * ━━━ 分层判据（层级从硬到软）━━━
+ * ⓪ **结构性塌陷否决权**：任一侧段数低于结构契约下界 `VISION_SECTION_CONTRACT_MIN`(3)
+ *    且两侧不等 ⇒ **段数多者胜**，覆盖率无权补。
+ *    机理：`coverageRate` 是**元素召回**口径（`visual-parser.js` 中
+ *    `coreMatched/(coreMatched+coreMissing)`），与**段结构正交** ——
+ *    把 N 个元素全塞进 1 个容器，召回仍可 100%；拆成多段时丢几个元素反而更低。
+ *    故段数差 < `SECTION_GAP_DECISIVE`(2) 时若改由覆盖率裁决，会把「塌陷版」判成更优。
+ *    〖真机事故 2026-11-18 · mc-max-1795012976783-9778c031〗
+ *      first=`sections:1 / rate:100`，retry=`sections:2 / rate:67`
+ *      ⇒ 旧逻辑走 ②（|67-100|=33 ≥ 2）选 `'first'` ⇒ 保留塌陷版 ⇒
+ *        planner 只出 1 段（`contract-audit sections:1`）⇒ 确定性模板
+ *        `sectionRoots:1` 且该唯一段是图表段（`chartOwned`）⇒ `<div class="…-slot-con">` 空壳、零子组件。
+ *    可达性论证（防误伤）：此支只在「重跑已被触发」时生效，而重跑由
+ *      `sections<3 且真值叶段≥3` / `lowCoverage` / `orphanCharts` 三支之一触发；
+ *      若首支 `sections<3`，则其相对真值已结构性塌陷，段数更多者严格更接近真值。
  * ① **结构完整性**：段数差 ≥ `SECTION_GAP_DECISIVE`(2) ⇒ 段数多者胜。
  *    差 1 段可能只是过度切分（一张卡被切成两段），故不作为决定性证据；
  *    差 ≥2 才说明**少了一整个区块**。
@@ -185,6 +209,10 @@ export function pickBetterVisionAnalysis(first, retry) {
   const orA = num(first?.orphans);
   const orB = num(retry?.orphans);
 
+  // ⓪ 结构性塌陷否决权（见上方 ⓪ 段：覆盖率与段结构正交，无权补塌陷）
+  if (secA !== secB && Math.min(secA, secB) < VISION_SECTION_CONTRACT_MIN) {
+    return secB > secA ? 'retry' : 'first';
+  }
   // ① 结构完整性优先
   if (Math.abs(secB - secA) >= SECTION_GAP_DECISIVE) return secB > secA ? 'retry' : 'first';
   // ② 覆盖率

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="docx-page-size" content="A4">
+  <meta name="document-type" content="工程审计/项目评审报告">
+  <title>MVGO 五组件生成质量与上游根因审计报告（2026-11-18）</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2.0cm 1.8cm 2.0cm 2.0cm;
+      @top-left { content: "MVGO 五组件生成质量与上游根因审计报告"; font-size: 9pt; color: #667085; }
+      @top-right { content: "工程审计 / 项目评审"; font-size: 9pt; color: #667085; }
+      @bottom-left { content: "仅基于当前会话已确认证据"; font-size: 8.5pt; color: #98A2B3; }
+      @bottom-right { content: "第 " counter(page) " 页"; font-size: 8.5pt; color: #667085; }
+    }
+    @page cover {
+      margin: 0;
+      @top-left { content: none; }
+      @top-right { content: none; }
+      @bottom-left { content: none; }
+      @bottom-right { content: none; }
+    }
+    @page toc {
+      @top-left { content: none; }
+      @top-right { content: none; }
+      @bottom-left { content: none; }
+      @bottom-right { content: none; }
+    }
+    :root {
+      --navy: #183B56;
+      --blue: #2F6B9A;
+      --text: #1D2939;
+      --muted: #667085;
+      --line: #D0D5DD;
+      --soft: #F2F4F7;
+      --soft-blue: #EEF5FB;
+      --red: #B42318;
+      --red-bg: #FDECEC;
+      --yellow: #B54708;
+      --yellow-bg: #FFF4E5;
+      --green: #027A48;
+      --green-bg: #ECFDF3;
+      --body-size: 10.5pt;
+      --body-line: 1.62;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { color: var(--text); background: #fff; font-family: "Microsoft YaHei", "微软雅黑", Arial, sans-serif; font-size: var(--body-size); line-height: var(--body-line); }
+    section[role="cover"] { page: cover; }
+    section[role="toc"] { page: toc; }
+    .cover { min-height: 29.7cm; padding: 5.3cm 2.2cm 3cm; background: #F7F9FC; border-top: 14px solid var(--navy); display: flex; flex-direction: column; justify-content: center; }
+    .cover-kicker { color: var(--blue); font-size: 13pt; font-weight: 700; letter-spacing: .12em; margin: 0 0 1.3cm; }
+    .cover h1 { color: var(--navy); font-size: 29pt; line-height: 1.35; margin: 0 0 .8cm; font-weight: 700; }
+    .cover-subtitle { color: var(--muted); font-size: 14pt; margin: 0 0 4.2cm; }
+    .cover-meta { border-top: 1px solid var(--line); padding-top: .45cm; color: var(--muted); font-size: 10pt; }
+    .toc-page { min-height: 29.7cm; padding: 2.6cm 2.2cm; }
+    .toc-page h2 { color: var(--navy); font-size: 20pt; margin: 0 0 1cm; border-bottom: 2px solid var(--navy); padding-bottom: .25cm; }
+    .toc-list { list-style: none; margin: 0; padding: 0; }
+    .toc-list li { margin: 0 0 .38cm; padding-bottom: .12cm; border-bottom: 1px dotted #B8C1CC; }
+    .toc-list a { color: var(--text); text-decoration: none; }
+    .toc-list .sub { padding-left: .65cm; color: var(--muted); font-size: 10pt; }
+    .body { padding: 0; }
+    .body h2 { color: var(--navy); font-size: 18pt; line-height: 1.35; margin: 1.1cm 0 .42cm; padding-bottom: .16cm; border-bottom: 2px solid var(--navy); page-break-after: avoid; }
+    .body h3 { color: var(--blue); font-size: 13.5pt; line-height: 1.4; margin: .72cm 0 .22cm; page-break-after: avoid; }
+    .body h4 { color: var(--text); font-size: 11.5pt; margin: .45cm 0 .12cm; }
+    p { margin: 0 0 .28cm; text-align: justify; }
+    .no-indent { text-indent: 0; }
+    ul, ol { margin: .1cm 0 .35cm .65cm; padding-left: .45cm; }
+    li { margin: 0 0 .14cm; }
+    code { font-family: "SFMono-Regular", Consolas, monospace; font-size: .92em; color: #344054; background: #F2F4F7; padding: .03em .2em; border-radius: 2px; }
+    .summary { margin: .6cm 0 .8cm; padding: .5cm .58cm; background: var(--soft-blue); border-left: 5px solid var(--blue); page-break-inside: avoid; }
+    .summary h2 { border: 0; margin: 0 0 .22cm; padding: 0; font-size: 16pt; }
+    .summary ol { margin-bottom: 0; }
+    .notice { padding: .25cm .35cm; margin: .25cm 0 .42cm; background: var(--soft); border: 1px solid var(--line); color: #475467; font-size: 9.5pt; page-break-inside: avoid; }
+    .risk-legend { display: flex; gap: .25cm; flex-wrap: wrap; margin: .18cm 0 .32cm; }
+    .risk { display: inline-block; padding: .04cm .18cm; border-radius: 3px; font-size: 8.5pt; font-weight: 700; line-height: 1.5; }
+    .p0 { color: var(--red); background: var(--red-bg); }
+    .p1 { color: var(--yellow); background: var(--yellow-bg); }
+    .ok { color: var(--green); background: var(--green-bg); }
+    table { width: 100%; border-collapse: collapse; margin: .22cm 0 .45cm; font-size: 9.2pt; page-break-inside: avoid; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    th, td { border: 1px solid var(--line); padding: .16cm .2cm; vertical-align: top; text-align: left; }
+    th { background: var(--navy); color: #fff; font-weight: 700; }
+    tbody tr:nth-child(even) { background: #FAFBFC; }
+    .tight td, .tight th { padding: .12cm .16cm; }
+    .risk-table th:first-child, .risk-table td:first-child { width: 11%; text-align: center; }
+    .risk-table th:nth-child(2) { width: 39%; }
+    .risk-table th:nth-child(3) { width: 50%; }
+    .component-title { display: flex; align-items: baseline; gap: .18cm; flex-wrap: wrap; }
+    .component-title .risk { font-size: 8pt; }
+    .obs { border-left: 3px solid var(--blue); padding-left: .3cm; margin: .12cm 0 .28cm; }
+    .confidence { color: var(--muted); font-size: 9.2pt; margin-top: .2cm; }
+    .footer-note { margin-top: .5cm; padding-top: .25cm; border-top: 1px solid var(--line); color: var(--muted); font-size: 9pt; }
+    .avoid-break { page-break-inside: avoid; }
+    .page-break { page-break-before: always; }
+    @media screen {
+      body { max-width: 21cm; margin: 0 auto; padding: 1rem; }
+      .cover, .toc-page { margin: -1rem; margin-bottom: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <section role="cover" class="cover">
+    <p class="cover-kicker">工程审计 / 项目评审</p>
+    <h1>MVGO 五组件生成质量与上游根因审计报告</h1>
+    <p class="cover-subtitle">围绕生成链路、组件装配、数据消费与验收边界的证据化审计</p>
+    <div class="cover-meta">
+      <p class="no-indent">审计日期：2026-11-18</p>
+      <p class="no-indent">文档性质：中文技术审计报告</p>
+      <p class="no-indent">审计边界：当前会话已确认的五个组件审计证据</p>
+    </div>
+  </section>
+
+  <section role="toc" class="toc-page">
+    <h2>目录</h2>
+    <ol class="toc-list">
+      <li><a href="#s1">一、执行摘要</a></li>
+      <li><a href="#s2">二、审计范围与方法</a><div class="sub">2.1 审计范围　2.2 取证方法</div></li>
+      <li><a href="#s3">三、生成链路与验收边界</a><div class="sub">3.1 当前证据链　3.2 链路判断</div></li>
+      <li><a href="#s4">四、五组件逐项审计</a><div class="sub">4.1 重点车辆监测　4.2 智能侦测　4.3 环境监测　4.4 监测预警　4.5 流量监测</div></li>
+      <li><a href="#s5">五、公共根因与当前改善边界</a><div class="sub">5.1 公共根因　5.2 已确认改善项与表述边界</div></li>
+      <li><a href="#s6">六、最新 P0 观察：后续同类根因线索</a></li>
+      <li><a href="#s7">七、验收建议与质量门边界</a><div class="sub">7.1 五组件后续验收清单　7.2 质量门解释</div></li>
+      <li><a href="#s8">八、审计交付边界与只读声明</a></li>
+    </ol>
+  </section>
+
+  <main class="body">
+    <section class="summary" id="s1">
+      <h2>一、执行摘要</h2>
+      <p class="no-indent">本轮审计对象严格限定为以下五个组件：</p>
+      <ol>
+        <li><code>c-vehicle-monitor-77ccc814</code>：重点车辆监测；</li>
+        <li><code>c-intelligent-detection-417c52e1</code>：智能侦测；</li>
+        <li><code>c-env-monitor-27bc42b2</code>：环境监测；</li>
+        <li><code>c-monitor-d703ca6a</code>：监测预警；</li>
+        <li><code>c-traffic-monitor-45d4f3f3</code>：流量监测。</li>
+      </ol>
+      <p class="no-indent">本轮审计对每个组件核对了 <code>package/index.vue</code>、<code>components</code>、<code>.checkpoint/analysis.json</code>、<code>chunk-meta.json</code>，并沿生成链路核对了后端 <code>subcomponent-planner.js:3897-3902</code>、<code>prompt-builder.js:2277</code>、<code>code-generator.js</code> 的 <code>buildDeterministicIndexTemplate</code>、<code>section-structure-contract.js</code>、<code>chart-type-detection.js</code> 的 <code>collectTextCarriedChartTypes</code>、<code>chart-missing-types.js</code>、<code>code-fix-rules.js</code> 的 S4，以及 <code>component-acceptance/index.js:2064-2123</code> 和 <code>mc-component-graph-phase2.js</code> 的 acceptance 降级路径。</p>
+      <ol>
+        <li>五个组件的审计事实必须以当前组件标识为边界，不能再沿用其他样本的哈希、组件名称或旧报告结论。</li>
+        <li>组件源码、checkpoint 和 chunk 元数据之间存在承载与消费不一致：部分内容已生成或已进入中间产物，但未在最终 index、子组件挂载、布局状态或图表交互中形成闭合链路。</li>
+        <li><code>section-structure-contract.js</code>、确定性 index 模板、S4 修复规则和 acceptance 逻辑共同构成当前主要质量门；其中 acceptance 的降级路径可能把未闭合问题转化为“可继续生成”状态，不能将通过门禁等同于视觉还原完成。</li>
+        <li>已确认的改善项包括 <code>anchorKind</code>、R1-c、S4 定位和文本折叠等方向；这些改善不能被表述为五个组件当前全部问题已经消失，也不能替代逐组件证据。</li>
+        <li>最新 P0 观察单独记录为后续同类根因观察：E2 数据串位、D2 列错位、A2 Tab 顺序/归属问题。它们不直接改写本报告中的五组件逐项事实。</li>
+      </ol>
+    </section>
+
+    <section id="s2">
+      <h2>二、审计范围与方法</h2>
+      <h3>2.1 审计范围</h3>
+      <table class="tight">
+        <thead><tr><th>组件标识</th><th>中文名称</th><th>核对材料</th></tr></thead>
+        <tbody>
+          <tr><td><code>c-vehicle-monitor-77ccc814</code></td><td>重点车辆监测</td><td><code>package/index.vue</code>、<code>components</code>、<code>.checkpoint/analysis.json</code>、<code>chunk-meta.json</code></td></tr>
+          <tr><td><code>c-intelligent-detection-417c52e1</code></td><td>智能侦测</td><td><code>package/index.vue</code>、<code>components</code>、<code>.checkpoint/analysis.json</code>、<code>chunk-meta.json</code></td></tr>
+          <tr><td><code>c-env-monitor-27bc42b2</code></td><td>环境监测</td><td><code>package/index.vue</code>、<code>components</code>、<code>.checkpoint/analysis.json</code>、<code>chunk-meta.json</code></td></tr>
+          <tr><td><code>c-monitor-d703ca6a</code></td><td>监测预警</td><td><code>package/index.vue</code>、<code>components</code>、<code>.checkpoint/analysis.json</code>、<code>chunk-meta.json</code></td></tr>
+          <tr><td><code>c-traffic-monitor-45d4f3f3</code></td><td>流量监测</td><td><code>package/index.vue</code>、<code>components</code>、<code>.checkpoint/analysis.json</code>、<code>chunk-meta.json</code></td></tr>
+        </tbody>
+      </table>
+      <div class="notice">不纳入本报告的内容包括其他组件哈希、其他批次样本、旧报告专属统计，以及无法由当前会话证据直接支持的扩展结论。</div>
+      <h3>2.2 取证方法</h3>
+      <ol>
+        <li>对照每个组件的 <code>package/index.vue</code> 与 <code>components</code>，核对模块是否实际挂载、props 是否传递、Tab 和图表节点是否存在。</li>
+        <li>对照 <code>.checkpoint/analysis.json</code> 与 <code>chunk-meta.json</code>，核对视觉分析、分段、图表识别、文本承载和组件分片之间的事实是否一致。</li>
+        <li>沿 <code>subcomponent-planner.js:3897-3902</code>、<code>prompt-builder.js:2277</code>、<code>buildDeterministicIndexTemplate</code> 和 <code>section-structure-contract.js</code>，核对规划、提示词、index 装配和结构契约。</li>
+        <li>沿 <code>collectTextCarriedChartTypes</code>、<code>chart-missing-types.js</code>、S4 和 acceptance 代码，核对图表类型识别、缺失类型判断、修复定位和最终验收边界。</li>
+        <li>将历史快照、当前源码证据和已确认改善项分栏记录，避免把离线修复方向或历史问题直接写成当前全部现状。</li>
+      </ol>
+    </section>
+
+    <section id="s3">
+      <h2>三、生成链路与验收边界</h2>
+      <h3>3.1 当前证据链</h3>
+      <table class="tight">
+        <thead><tr><th>环节</th><th>当前核对证据</th><th>审计关注点</th></tr></thead>
+        <tbody>
+          <tr><td>组件输入与分析</td><td><code>.checkpoint/analysis.json</code></td><td>视觉结构、文本、图表和区域关系是否被正确记录</td></tr>
+          <tr><td>分片元数据</td><td><code>chunk-meta.json</code></td><td>内容是否被拆分、重复承载、遗漏或错误归属</td></tr>
+          <tr><td>子组件规划</td><td><code>subcomponent-planner.js:3897-3902</code></td><td>子组件规划是否保留原始语义和结构边界</td></tr>
+          <tr><td>生成提示</td><td><code>prompt-builder.js:2277</code></td><td>规划结果是否以正确约束传入生成阶段</td></tr>
+          <tr><td>index 装配</td><td><code>code-generator.js</code> 的 <code>buildDeterministicIndexTemplate</code></td><td>子组件是否按正确顺序、槽位、props 和状态挂载</td></tr>
+          <tr><td>结构契约</td><td><code>section-structure-contract.js</code></td><td>section、Tab、容器和内容归属是否满足结构约束</td></tr>
+          <tr><td>图表识别</td><td><code>chart-type-detection.js</code> 的 <code>collectTextCarriedChartTypes</code>、<code>chart-missing-types.js</code></td><td>文本承载的图表语义是否被识别，缺失图表判断是否准确</td></tr>
+          <tr><td>修复定位</td><td><code>code-fix-rules.js</code> 的 S4</td><td>修复是否落到正确组件、section 和代码位置</td></tr>
+          <tr><td>acceptance</td><td><code>component-acceptance/index.js:2064-2123</code></td><td>验收覆盖的是结构存在性，还是实际内容、状态和交互闭合</td></tr>
+          <tr><td>降级路径</td><td><code>mc-component-graph-phase2.js</code></td><td>acceptance 失败或证据不足时是否降级放行</td></tr>
+        </tbody>
+      </table>
+      <h3>3.2 链路判断</h3>
+      <ul>
+        <li>组件问题不能只依据最终截图判断，也不能只依据文件是否生成判断；必须同时核对 index、子组件、checkpoint、chunk 元数据和 acceptance。</li>
+        <li>“模板存在”不等于“模板已正确挂载”，“数据存在”不等于“数据已被正确消费”，“图表类型被识别”也不等于“图表已经真实绘制”。</li>
+        <li><code>buildDeterministicIndexTemplate</code> 与 <code>section-structure-contract.js</code> 能收敛部分装配不确定性，但不能单独证明 Tab 状态、字段顺序、图表绘制和数据归属在运行态正确。</li>
+        <li><code>mc-component-graph-phase2.js</code> 的 acceptance 降级路径必须作为审计边界单独保留：降级结果只能说明流程继续，不能直接说明组件满足设计事实。</li>
+      </ul>
+    </section>
+
+    <section id="s4">
+      <h2>四、五组件逐项审计</h2>
+      <div class="notice">逐项结论只针对本节列出的五个组件。历史快照中的问题用于说明形成链路；已确认改善项单列，不作为“当前全部已修复”的证明。</div>
+
+      <article class="avoid-break">
+        <h3 class="component-title">4.1 <code>c-vehicle-monitor-77ccc814</code>：重点车辆监测 <span class="risk p0">P0 观察</span></h3>
+        <h4>当前审计观察</h4>
+        <div class="obs"><ul><li>车辆卡片内部方向不一致：同一类卡片的内容排列、信息方向或视觉阅读方向没有形成一致规则。</li><li>存在空字段，说明数据或字段占位在 index、子组件与实际展示之间未完全闭合。</li><li>卡片使用固定尺寸时发生内容裁切，固定宽高与内部字段密度不匹配。</li><li>Tab 状态链断：Tab 的选中状态、内容区域消费和最终展示之间没有形成可验证的闭环。</li></ul></div>
+        <h4>根因链判断</h4>
+        <p>应重点核对 <code>package/index.vue</code> 的卡片与 Tab 挂载、对应 <code>components</code> 的字段消费、<code>chunk-meta.json</code> 的字段归属，以及 <code>section-structure-contract.js</code> 对卡片和状态区域的约束。若 index 已挂载组件而字段仍为空，问题属于数据接线或消费链；若字段已存在但被裁切，问题属于固定尺寸与布局契约；若 Tab 有声明但内容不随状态变化，问题属于状态链未被真实消费。</p>
+        <p class="confidence"><strong>证据置信度：</strong>高。卡片方向、空字段、固定尺寸裁切和 Tab 状态链均为本轮确认的逐项观察；具体首发环节按上述源码和中间产物对账，不扩大为单一上游根因。</p>
+      </article>
+
+      <article class="avoid-break">
+        <h3 class="component-title">4.2 <code>c-intelligent-detection-417c52e1</code>：智能侦测 <span class="risk p0">P0 观察</span></h3>
+        <h4>当前审计观察</h4>
+        <div class="obs"><ul><li>存在样板与数据列表双承载：同一业务内容同时以样板化结构和实际数据列表承载，导致内容职责重叠或展示归属不清。</li><li>该问题不能仅按“组件缺失”描述；需要区分样板是否用于布局、数据列表是否用于真实内容，以及两者是否被 index 同时挂载。</li></ul></div>
+        <h4>根因链判断</h4>
+        <p>应对照 <code>.checkpoint/analysis.json</code> 的内容结构、<code>chunk-meta.json</code> 的分片归属、<code>package/index.vue</code> 的挂载顺序及 <code>components</code> 的数据消费，确认样板和数据列表是否来自不同生成阶段。<code>subcomponent-planner.js:3897-3902</code> 与 <code>prompt-builder.js:2277</code> 是核对语义分配和提示约束的关键位置；若两类承载均进入最终 index，则属于重复装配或职责未收敛；若其中一类仅存在于中间产物，则属于生成链路未正确裁决承载方式。</p>
+        <p class="confidence"><strong>证据置信度：</strong>高。样板/数据列表双承载为当前会话已确认事实；本报告不把它进一步推断为某一个单独模块的唯一责任。</p>
+      </article>
+
+      <article class="avoid-break">
+        <h3 class="component-title">4.3 <code>c-env-monitor-27bc42b2</code>：环境监测 <span class="risk p0">P0 观察</span></h3>
+        <h4>当前审计观察</h4>
+        <div class="obs"><ul><li>存在历史图表消失链：图表语义在分析、分片、识别或装配的某个环节被削弱或遗漏，最终表现为历史图表在生成物中消失。</li><li>该结论描述的是已确认的历史形成链，不应直接写成当前运行态中所有图表均已消失。</li><li>当前复核重点是 <code>collectTextCarriedChartTypes</code> 与 <code>chart-missing-types.js</code> 是否能够识别文本承载的图表语义，以及识别结果是否进入最终 index 和图表子组件。</li></ul></div>
+        <h4>根因链判断</h4>
+        <p>应按 <code>.checkpoint/analysis.json</code> → <code>chunk-meta.json</code> → <code>chart-type-detection.js</code> → <code>chart-missing-types.js</code> → <code>buildDeterministicIndexTemplate</code> 的顺序核对。若 checkpoint 已记录图表而 chunk 未承载，属于分片丢失；若 chunk 已承载而 <code>collectTextCarriedChartTypes</code> 未识别，属于图表类型检测缺口；若类型已识别但 index 未挂载图表组件，属于装配缺口；若组件已挂载但图表未绘制，则应继续核对数据消费和 acceptance 覆盖。</p>
+        <p class="confidence"><strong>证据置信度：</strong>高。历史图表消失链已确认；当前状态必须以本轮组件源码和中间产物的逐层对账为准，不能用历史快照替代当前结论。</p>
+      </article>
+
+      <article class="avoid-break">
+        <h3 class="component-title">4.4 <code>c-monitor-d703ca6a</code>：监测预警 <span class="risk p0">P0 观察</span></h3>
+        <h4>当前审计观察</h4>
+        <div class="obs"><ul><li>存在父子双 Tab：父级和子级均承载 Tab 语义，但两层状态和内容归属没有形成单一、清晰的消费链。</li><li><code>active</code> 状态存在不被消费的情况：状态可能被声明或传递，但实际内容区域没有依据该状态完成切换。</li><li>因此，Tab 文件存在、Tab 文案存在或 acceptance 通过，均不足以证明 Tab 交互和归属正确。</li></ul></div>
+        <h4>根因链判断</h4>
+        <p>应对照 <code>package/index.vue</code> 的父子 Tab 结构、对应 <code>components</code> 的 <code>active</code> props 或状态变量、<code>chunk-meta.json</code> 的 Tab 归属，以及 <code>section-structure-contract.js</code> 的 section 关系。重点检查 <code>buildDeterministicIndexTemplate</code> 是否生成了正确的父子顺序和状态传递，并检查 <code>component-acceptance/index.js:2064-2123</code> 是否只验证节点存在而未验证状态消费。若 acceptance 失败后进入 <code>mc-component-graph-phase2.js</code> 的降级路径，则应保留“结构存在但状态未闭合”的风险结论。</p>
+        <p class="confidence"><strong>证据置信度：</strong>高。父子双 Tab 与 <code>active</code> 状态不消费为本轮确认事实；具体是父级、子级还是 index 装配首发，需以逐文件对账为准。</p>
+      </article>
+
+      <article class="avoid-break">
+        <h3 class="component-title">4.5 <code>c-traffic-monitor-45d4f3f3</code>：流量监测 <span class="risk p1">P1 / 中高置信度</span></h3>
+        <h4>当前审计观察</h4>
+        <div class="obs"><ul><li>预测 Tab 与 ECharts 的相对真实性较高，说明预测内容和图表承载在当前产物中具有较强的实际落地迹象。</li><li>时间选择器仍偏静态，节假日链接也仍为静态表现，尚未证明与数据状态或用户选择形成闭环。</li><li>段高风险仍需保留：图表、选择器、节假日链接及其上下文的尺寸和顺序可能在段高约束下产生裁切、错位或不可见。</li></ul></div>
+        <h4>根因链判断</h4>
+        <p>应核对 <code>package/index.vue</code> 中预测 Tab、ECharts 和时间选择器的挂载关系，<code>components</code> 中图表数据与状态消费，<code>chunk-meta.json</code> 中交互语义是否被独立承载，以及 <code>section-structure-contract.js</code> 对图表 section 高度的约束。<code>collectTextCarriedChartTypes</code> 和 <code>chart-missing-types.js</code> 只能说明图表类型识别与缺失判断，不能替代对 ECharts 实际绘制和时间选择状态的验收。</p>
+        <p class="confidence"><strong>证据置信度：</strong>中高。预测 Tab/ECharts 相对真实、时间选择器和节假日链接静态、段高风险均已确认；实际运行态交互仍应通过后续验收补齐。</p>
+      </article>
+    </section>
+
+    <section id="s5">
+      <h2>五、公共根因与当前改善边界</h2>
+      <h3>5.1 公共根因</h3>
+      <div class="risk-legend"><span class="risk p0">P0 高优先级</span><span class="risk p1">P1 次高优先级</span><span class="risk ok">改善方向已确认</span></div>
+      <table class="risk-table">
+        <thead><tr><th>优先级</th><th>根因观察</th><th>影响</th></tr></thead>
+        <tbody>
+          <tr><td><span class="risk p0">P0</span></td><td>生成内容、index 装配、子组件消费和视觉状态之间缺少完整闭环</td><td>可出现空字段、双承载、Tab 状态不消费和图表消失</td></tr>
+          <tr><td><span class="risk p0">P0</span></td><td>section、卡片、图表和 Tab 的结构契约与实际布局消费不完全一致</td><td>可出现固定尺寸裁切、段高风险和父子归属不清</td></tr>
+          <tr><td><span class="risk p0">P0</span></td><td>acceptance 存在降级路径</td><td>结构或流程继续不等于内容、状态和视觉验收通过</td></tr>
+          <tr><td><span class="risk p1">P1</span></td><td>图表文本承载识别与缺失类型判断仍需和最终装配对账</td><td>图表语义可能在中间链路被误判或丢失</td></tr>
+          <tr><td><span class="risk p1">P1</span></td><td>index 确定性模板虽能收敛部分生成差异，但仍需验证 props、顺序和状态消费</td><td>模板存在不等于运行态语义正确</td></tr>
+        </tbody>
+      </table>
+      <h3>5.2 已确认改善项与表述边界</h3>
+      <p>本轮已确认以下方向属于改善项或已进入修复/约束链路：</p>
+      <ul>
+        <li><code>anchorKind</code>：用于提高锚点语义和定位准确性；不能据此断言所有历史锚点问题已消失。</li>
+        <li>R1-c：用于收敛相关结构或数据定位；不能据此断言五个组件的所有结构归属已经正确。</li>
+        <li>S4 定位：用于将修复落到更明确的组件或代码位置；不能据此断言修复已覆盖全部运行态问题。</li>
+        <li>文本折叠：用于处理文本承载或重复内容的展示风险；不能据此断言图表、Tab、字段和交互已完成验收。</li>
+      </ul>
+      <p>这些改善项必须与当前五组件的源码、checkpoint、chunk 元数据和 acceptance 结果分别对账。报告不将改善方向写成当前全部现状，也不将历史快照直接写成当前部署状态。</p>
+    </section>
+
+    <section id="s6">
+      <h2>六、最新 P0 观察：后续同类根因线索</h2>
+      <div class="notice">以下三项是当前会话最新确认的 P0 观察，用于指导后续同类问题归因，不混入五组件逐项事实。</div>
+      <ol>
+        <li><strong>E2：数据串位。</strong>需继续核对数据从 chunk、index props 到子组件消费的键和值是否保持同一语义归属。</li>
+        <li><strong>D2：列错位。</strong>需继续核对列定义、字段顺序、容器布局和实际数据渲染之间是否存在错配。</li>
+        <li><strong>A2：Tab 顺序/归属问题。</strong>需继续核对父子 Tab 的结构顺序、归属边界、active 状态和内容消费，避免把存在文案误判为已完成交互。</li>
+      </ol>
+      <p>这三项观察不改变第四节对五个指定组件的现象描述，也不应被反向套用为每个组件已经发生的确定事实。</p>
+    </section>
+
+    <section id="s7">
+      <h2>七、验收建议与质量门边界</h2>
+      <h3>7.1 五组件后续验收清单</h3>
+      <table class="tight">
+        <thead><tr><th>组件</th><th>后续必查项目</th><th>通过标准</th></tr></thead>
+        <tbody>
+          <tr><td><code>c-vehicle-monitor-77ccc814</code></td><td>卡片方向、空字段、固定尺寸、Tab 状态链</td><td>字段完整可见；卡片方向一致；无裁切；Tab 状态驱动正确内容</td></tr>
+          <tr><td><code>c-intelligent-detection-417c52e1</code></td><td>样板与数据列表承载、index 挂载、数据归属</td><td>样板职责与数据职责唯一且清晰；无重复承载或错误叠加</td></tr>
+          <tr><td><code>c-env-monitor-27bc42b2</code></td><td>历史图表链、图表类型识别、缺失判断、最终挂载</td><td>图表语义从分析到 index 和组件闭合；实际图表可见且可验证</td></tr>
+          <tr><td><code>c-monitor-d703ca6a</code></td><td>父子 Tab、active 状态、内容消费、降级结果</td><td>Tab 顺序和归属正确；active 状态被消费；切换后内容真实变化</td></tr>
+          <tr><td><code>c-traffic-monitor-45d4f3f3</code></td><td>预测 Tab、ECharts、时间选择器、节假日链接、段高</td><td>图表真实绘制；选择状态可消费；链接状态明确；无段高裁切或错位</td></tr>
+          <tr><td>全五组件</td><td>index、components、checkpoint、chunk、acceptance 对账</td><td>结构、数据、状态和视觉四层同时闭合</td></tr>
+        </tbody>
+      </table>
+      <h3>7.2 质量门解释</h3>
+      <ol>
+        <li>文件存在、模板存在或节点计数正确，只能证明产物落地，不能证明数据和状态已被正确消费。</li>
+        <li><code>component-acceptance/index.js:2064-2123</code> 的检查范围必须与真实内容完整性、Tab 切换、图表绘制、字段顺序和裁切风险区分开。</li>
+        <li><code>mc-component-graph-phase2.js</code> 的 acceptance 降级结果必须显式标记为降级，不应被解释为视觉通过。</li>
+        <li>图表识别工具和 S4 修复定位属于链路能力，不替代最终运行态验收。</li>
+        <li>后续验收应以五个组件自身的当前源码和产物为准，不能复用其他批次样本的统计或结论。</li>
+      </ol>
+    </section>
+
+    <section id="s8">
+      <h2>八、审计交付边界与只读声明</h2>
+      <p>本轮仅完成审计整理和报告修订：</p>
+      <ul>
+        <li>未改源码；</li>
+        <li>未构建；</li>
+        <li>未重启；</li>
+        <li>未提交；</li>
+        <li>未推送；</li>
+        <li>未部署。</li>
+      </ul>
+      <p>本次只覆盖本报告文件：<code>/Users/smigoo/工作/mvgo/output/audit-report-2026-11-18/stage1/final_draft.md</code>。报告中的历史快照、改善项和后续根因观察均不构成源码已修改、服务已重启或修复已部署的证明。</p>
+      <div class="footer-note">文档生成范围：Stage 2 文档排版。内容依据 Stage 1 final_draft.md，未新增未经稿件支持的事实，未改变稿件原有含义。</div>
+    </section>
+  </main>
+</body>
+</html>

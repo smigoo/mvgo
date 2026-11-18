@@ -24,6 +24,7 @@ import { createLogger } from '../logger/index.js'
 import { coerceLLMText } from '../utils/model-config.js'
 import { getVisualSimilarityThreshold } from '../../config/runtime-env.js'
 import { robustJSONParse } from '../utils/json-parser.js'
+import { locateDiffRegions, formatDiffRegionsForRefiner } from '../utils/crop-diff-regions.js'
 
 const logger = createLogger({ name: 'visual-comparator' })
 
@@ -134,6 +135,33 @@ export class VisualComparator {
         issueCount: report.issues.length,
         pass: report.pass,
       })
+
+      // 🆕 步骤 1（三级回灌 · 2026-11-18）：确定性差异区域定位（零 LLM，纯 sharp 分块）。
+      //   纯附加：结果挂 report.diffRegions，不影响 overallSimilarity/issues/pass 既有语义
+      //   （dual-truth-score 与前端 0-100 契约不受影响）。失败 best-effort 不阻断。
+      //   注意：必须 try/catch 隔离——定位失败只降级为无 diffRegions，绝不让 compare() 抛错。
+      try {
+        if (options.diffRegionsOutDir && renderedImagePath) {
+          const diffResult = await locateDiffRegions({
+            figmaImagePath: figmaImagePath,
+            renderedImagePath: renderedImagePath,
+            outDir: options.diffRegionsOutDir,
+          })
+          if (diffResult.evaluated === 1) {
+            report.diffRegions = diffResult
+            logger.info(
+              `diffRegions:evaluated=1,regions=${diffResult.regions.length},diffBlockRatio=${diffResult.diffBlockRatio}`,
+            )
+          } else {
+            logger.info(`diffRegions:evaluated=0,reason=${diffResult.reason}`)
+          }
+        } else {
+          logger.info('diffRegions:evaluated=0,reason=no-outdir-or-rendered')
+        }
+      } catch (diffError) {
+        logger.warn('差异区域定位失败（非阻断）', { error: diffError.message })
+        logger.info('diffRegions:evaluated=0,reason=exception')
+      }
 
       return report
     } catch (error) {
@@ -269,6 +297,13 @@ export class VisualComparator {
 
   /**
    * 将差异报告格式化为 refiner 可用的提示词段落
+   *
+   * 🆕 步骤 1（三级回灌 · 2026-11-18）：输出扩展为「三件套」纯文本——
+   *   ① 差异区域裁剪小图落盘路径（refiner 是文本模型不吃图，路径供人工核对/后续多模态消费；
+   *      go/no-go ① 实证 layout-refiner.js:396 / style-refiner.js:486 全走纯字符串 prompt）
+   *   ② 差异区域 bbox 坐标（归一化 + 渲染图像素，来自确定性分块比对 crop-diff-regions.js）
+   *   ③ Vision 报告结构化文字（原有内容，逐字保留，向后兼容）
+   * 环境开关：REFINE_WITH_SHOTS=0 时退回纯文字（③），与改动前逐字节一致。
    */
   static formatForRefiner(report) {
     if (!report || !report.issues || report.issues.length === 0) {
@@ -277,6 +312,17 @@ export class VisualComparator {
 
     const lines = ['## 视觉比对发现的问题\n', '以下问题已通过视觉模型确认，请优先修复：\n']
 
+    // 🆕 ①+②：确定性差异区域（bbox 坐标 + 裁剪小图路径）。纯附加段，插在标题后。
+    const includeShots = process.env.REFINE_WITH_SHOTS !== '0'
+    if (includeShots && report.diffRegions) {
+      const diffText = formatDiffRegionsForRefiner(report.diffRegions)
+      if (diffText) {
+        lines.push(diffText)
+        lines.push('')
+      }
+    }
+
+    // ③：既有文字差异清单（原逻辑逐字保留）
     // 按 severity 排序：high → medium → low
     const severityOrder = { high: 0, medium: 1, low: 2 }
     const sorted = [...report.issues].sort((a, b) =>

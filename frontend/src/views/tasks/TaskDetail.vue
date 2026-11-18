@@ -1389,18 +1389,18 @@
                       <div class="bf-url">
                         {{ pageTaskFlag ? 'page' : 'component' }}://{{ task.componentName || sessionId }}/preview
                       </div>
-                      <span v-if="previewSourceLabel" class="bf-source" :title="previewSourceLabel">
+                      <!-- <span v-if="previewSourceLabel" class="bf-source" :title="previewSourceLabel">
                         {{ previewSourceLabel }}
-                      </span>
+                      </span> -->
                       <!-- 响应式拉伸控制（playground 同款）：收进浏览器工具条，不再占组件上方一行 -->
                       <span class="rz-bar-controls">
                         <!-- 🛡️ G0 设计画布开关：默认响应式；开启后按 Figma 真值画布 1:1 渲染（布局验收） -->
-                        <button
+                        <!-- <button
                           class="rz-btn"
                           :class="{ 'rz-btn--active': designCanvasMode }"
                           :title="designCanvasMode ? '当前：Figma 设计画布 1:1（点击切回响应式）' : '当前：响应式视口（点击锁定 Figma 设计画布）'"
                           @click="designCanvasMode = !designCanvasMode"
-                        >{{ designCanvasMode ? '设计画布' : '响应式' }}</button>
+                        >{{ designCanvasMode ? '设计画布' : '响应式' }}</button> -->
                         <!-- 🎨 主题切换（2026-11-17：从预览画布浮层搬来）
                              根因：preview 页 .mc-theme-switcher 是 position:fixed 叠在 stage 上，
                              截图器对 stage 做元素截图时一并截进 rendered.png ⇒ 遮挡 + VISUAL-002 虚低。

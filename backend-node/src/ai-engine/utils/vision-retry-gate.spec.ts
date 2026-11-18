@@ -12,6 +12,7 @@ import {
   countOrphanChartCarriers,
   shouldRetryVisionAnalysis,
   pickBetterVisionAnalysis,
+  VISION_SECTION_CONTRACT_MIN,
 } from './vision-retry-gate.js'
 
 const section = (id: string, name: string, extra: Record<string, any> = {}) => ({
@@ -198,5 +199,63 @@ describe('pickBetterVisionAnalysis · 分层裁决（结构 > 覆盖率 > orphan
   test('缺字段全按 0 处理，不抛错', () => {
     expect(pickBetterVisionAnalysis({}, {})).toBe('retry')
     expect(pickBetterVisionAnalysis(undefined, { sections: 3 })).toBe('retry')
+  })
+})
+
+/**
+ * 🔴 2026-11-18 真机事故回归锚（mc-max-1795012976783-9778c031）。
+ *
+ * 病灶链：vision 首次把整组件塌成 **1 段**（`2:1169`「策略类型分布」），而元素召回仍
+ *   `13/13 = 100%`；系统据段数契约自动重跑，得 **2 段**（`287:4`/`287:5`）但召回 **67%**。
+ *   旧实现：段数差 `|2-1| = 1 < SECTION_GAP_DECISIVE(2)` ⇒ 不比段数 ⇒ 转覆盖率，
+ *   `|67-100| = 33 ≥ RATE_GAP_DECISIVE(2)` ⇒ 取覆盖率高的 `'first'`（保留塌陷版）。
+ *   后果：`contract-audit sections:1` ⇒ 确定性模板 `sectionRoots:1`，且该唯一段是图表段
+ *   （`chartOwned` 让给 LLM）⇒ 产物 `<div class="…-slot-con">` 空壳、零子组件、`<style>` 只剩注释。
+ *
+ * 机理：`coverageRate = coreMatched/(coreMatched+coreMissing)` 是**元素召回**口径，
+ *   与**段结构正交** —— 把 N 个元素全塞进一个容器，召回不扣分。故「结构塌陷」必须
+ *   有独立否决权，不能用覆盖率补。
+ */
+describe('pickBetterVisionAnalysis · 结构性塌陷否决权（段数 < 契约下界时段数多者胜）', () => {
+  test('真机 A 任务形态：1段/100% vs 2段/67% ⇒ 必须选重试支（塌陷不可用覆盖率补）', () => {
+    expect(
+      pickBetterVisionAnalysis(
+        { sections: 1, rate: 100, orphans: 0 },
+        { sections: 2, rate: 67, orphans: 0 },
+      ),
+    ).toBe('retry')
+  })
+
+  test('反向入参：2段/67% vs 1段/100% ⇒ 选首支（判据只看段数，与顺序无关）', () => {
+    expect(
+      pickBetterVisionAnalysis(
+        { sections: 2, rate: 67, orphans: 0 },
+        { sections: 1, rate: 100, orphans: 0 },
+      ),
+    ).toBe('first')
+  })
+
+  test('两侧都塌陷但不等 ⇒ 仍选段数多者（更接近真值）', () => {
+    expect(pickBetterVisionAnalysis({ sections: 1, rate: 90 }, { sections: 2, rate: 30 })).toBe('retry')
+  })
+
+  test('两侧段数均达标（≥3）⇒ 本支不介入，回落到 ② 覆盖率裁决', () => {
+    // 3 vs 4：差 1 未达 ①；覆盖率差 20pp ≥ 2 ⇒ 取高者
+    expect(pickBetterVisionAnalysis({ sections: 3, rate: 60 }, { sections: 4, rate: 80 })).toBe('retry')
+    expect(pickBetterVisionAnalysis({ sections: 3, rate: 80 }, { sections: 4, rate: 60 })).toBe('first')
+  })
+
+  test('段数相等且都塌陷 ⇒ 本支不介入（并列走 ② 覆盖率）', () => {
+    expect(pickBetterVisionAnalysis({ sections: 2, rate: 90 }, { sections: 2, rate: 40 })).toBe('first')
+  })
+
+  test('契约下界为单一来源：VISION_SECTION_CONTRACT_MIN 驱动本支开关', () => {
+    // 阈值 = min + 1（两侧均达标）⇒ 不介入；阈值 = min（一侧塌陷）⇒ 介入
+    expect(
+      pickBetterVisionAnalysis({ sections: VISION_SECTION_CONTRACT_MIN, rate: 70 }, { sections: VISION_SECTION_CONTRACT_MIN + 1, rate: 60 }),
+    ).toBe('first') // 达标两侧：① 差 1 不决、② 覆盖率 70 > 60 ⇒ first
+    expect(
+      pickBetterVisionAnalysis({ sections: VISION_SECTION_CONTRACT_MIN - 1, rate: 70 }, { sections: VISION_SECTION_CONTRACT_MIN, rate: 60 }),
+    ).toBe('retry') // 一侧塌陷 ⇒ 段数多者胜
   })
 })

@@ -30,6 +30,7 @@
  */
 
 import { extractSfcTemplate } from './sfc-template-extractor.js';
+import { parseTemplateElementTree } from './template-element-tree.js';
 
 /** init 目标提取（与历史口径逐字一致：`echarts.init(X)` / `echarts.init(X.value)`） */
 export const CHART_INIT_RE = /echarts\.init\(\s*([A-Za-z_$][\w$]*)(?:\.value)?\s*\)/g;
@@ -231,6 +232,146 @@ export function findMissingChartMounts(vueContent) {
   return resolveAllChartMounts(vueContent)
     .filter((r) => !r.mounted)
     .map(({ name, kind, reason }) => ({ name, kind, reason }));
+}
+
+/** 局部正则转义（本模块零业务耦合，不复用 code-healer 的 escapeRe） */
+function escRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 🔌 挂载点**容器归属**判定（P0-a · 2026-11-18 · mc-max-1795004981354-c659d482 实锤）。
+ *
+ * ## 病灶（3.5 挂载点判据抓不到的第四种形态）
+ * `resolveChartMount` 只回答「模板里有没有 ref=X」——**有**就 mounted:true。但 c659d482 产物：
+ *   `<base-panel …>…</base-panel>`（宿主外壳）之后，canvas
+ *   `<div ref="chartRef" class="…-chart-canvas">` 成了 **template 顶层兄弟**（N2 旧注入器
+ *   第③级 `patched.replace(/(<\/template>)/, canvasDiv)` 干的）⇒ 3.5 判据放行（挂载点"存在"），
+ *   图表区却空、canvas 渲在面板外。归因：**挂载点存在，但不在任何 section 容器内**。
+ *
+ * ## 本法（元素树配平扫描定位 + 祖先链，判据单一来源）
+ * 逐字符配平解析模板（`template-element-tree`，引号/自闭合/注释感知，杜绝正则截断），
+ * 定位绑定 ref=name 的元素，返回其祖先链归属：
+ *   - `topLevel`：该元素是 template 顶层节点（无元素祖先）。
+ *   - `nested`：落在某容器内（有元素祖先）。
+ *   - `sectionId`：自身或最近祖先的 `data-section-id`（与 `code-generator.js:1113`
+ *     `data-section-id="${sec.id}"` 同源，供注入器锚点对账/门禁溯源）。
+ *   - `stray`：`topLevel` **且** template 顶层节点数 ≥2 ⇒ 被削成游离兄弟（越界）。单根组件
+ *     （ref 元素即唯一根，如 `<template><div ref="chartRef"/></template>`）**不判越界**，
+ *     避免把合法单一根误伤。
+ *
+ * 纯函数、无 IO；消费方：`code-healer#injectEchartsFallback`（注入自检）、
+ * `do-not-invent-validator`（3.6 挂载点越界 WARN）。禁各写一套正则。
+ *
+ * @param {string} vueContent .vue 全文
+ * @param {string} name 挂载 ref 标识符
+ * @returns {{ found:boolean, topLevel:boolean, nested:boolean, sectionId:string|null,
+ *   topLevelCount:number, stray:boolean, reason:string }}
+ */
+export function resolveMountContainer(vueContent, name) {
+  const base = {
+    found: false,
+    topLevel: false,
+    nested: false,
+    sectionId: null,
+    topLevelCount: 0,
+    stray: false,
+  };
+  const template = extractSfcTemplate(vueContent);
+  if (!template) return { ...base, reason: 'no-template' };
+  // ⚠️ extractSfcTemplate 返回串**自带 SFC 根 `<template>` 包裹层** ⇒ 其子节点才是模板真正的顶层。
+  //    不剥会把所有元素都算作「嵌套」（topLevel 恒 false，越界判据失效）。仅在唯一根为 <template> 时剥。
+  const rawTree = parseTemplateElementTree(template);
+  const wrapper =
+    rawTree.length === 1 && rawTree[0]?.tag === 'template' ? rawTree[0] : null;
+  const tree = wrapper ? wrapper.children || [] : rawTree;
+  const topLevelCount = Array.isArray(tree) ? tree.length : 0;
+  const staticRe = new RegExp(`(?<![:@\\w-])ref\\s*=\\s*["']${escRe(name)}["']`);
+  const dynRe = new RegExp(`(?:\\bv-bind:|\\B:)ref\\s*=\\s*"[^"]*\\b${escRe(name)}\\b[^"]*"`);
+  const sectionRe = /\bdata-section-id\s*=\s*["']([^"']+)["']/;
+
+  const walk = (nodes, ancestors) => {
+    for (const node of nodes) {
+      const attrs = typeof node?.attrs === 'string' ? node.attrs : '';
+      if (staticRe.test(attrs) || dynRe.test(attrs)) {
+        let sectionId = null;
+        // 反向遍历：ancestors 由外到内，取**最近**祖先的 data-section-id（最细粒度锚点）
+        for (let i = ancestors.length - 1; i >= 0; i -= 1) {
+          const a = ancestors[i];
+          const m = sectionRe.exec(typeof a?.attrs === 'string' ? a.attrs : '');
+          if (m) {
+            sectionId = m[1];
+            break;
+          }
+        }
+        if (sectionId === null) {
+          const m = sectionRe.exec(attrs);
+          if (m) sectionId = m[1];
+        }
+        const topLevel = ancestors.length === 0;
+        return {
+          found: true,
+          topLevel,
+          nested: !topLevel,
+          sectionId,
+          topLevelCount,
+          stray: topLevel && topLevelCount >= 2,
+          reason: topLevel ? 'top-level-sibling' : 'nested-in-container',
+        };
+      }
+      const hit = walk(node?.children || [], ancestors.concat(node));
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  const hit = walk(tree, []);
+  return hit || { ...base, topLevelCount, reason: 'no-ref-element' };
+}
+
+/**
+ * 🔌 图表承载容器**锚点解析**（P0-a · 2026-11-18 · `mc-max-1795004981354-c659d482` 实锤）。
+ *
+ * ## 用途
+ * N2 兜底注入器（`code-healer#injectEchartsFallback`）的**注入落点**决策：旧版回退到
+ * `</template>` 前 ⇒ canvas 落到宿主外壳（如 `</base-panel>`）之外、成 template 顶层游离兄弟
+ * （越界根因，图表区空、canvas 渲在面板外）。今以 `data-section-id` 锚点定位承载容器——
+ * 该属性与 `code-generator.js:1113` `data-section-id="${sec.id}"` **逐字同源**，
+ * 亦即门禁 2.7 `findChartHolderFile(files, sid)` 的匹配键（`chart.section`）。
+ *
+ * ## 裁决（确定性，绝不硬猜归属）
+ * 1. 有 `anchorSection`（vision chart.section）且模板内存在该 `data-section-id` 容器 ⇒ 精确命中；
+ * 2. 无精确命中但模板内 `data-section-id` 容器**唯一** ⇒ 用之（单 section 组件安全落点）；
+ * 3. 其余（0 个 / 多个歧义）⇒ **返回 null**，调用方**不注入**（宁缺勿越界），交门禁 WARN 留痕。
+ *
+ * 纯函数、无 IO；与 `resolveMountContainer` 同处一模块（同类 `data-section-id` 语义，禁各写一套）。
+ *
+ * @param {string} vueContent .vue 全文
+ * @param {string|number|null} [anchorSection] vision chart.section（Figma 节点 id，形如 `2:7898`）
+ * @returns {{ openTag:string, sectionId:string, reason:'anchor-match'|'unique-section' }|null}
+ */
+export function resolveMountAnchor(vueContent, anchorSection) {
+  const template = extractSfcTemplate(vueContent);
+  if (!template) return null;
+  const tree = parseTemplateElementTree(template);
+  const hits = [];
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      const attrs = typeof node?.attrs === 'string' ? node.attrs : '';
+      const m = /\bdata-section-id\s*=\s*["']([^"']+)["']/.exec(attrs);
+      if (m) hits.push({ openTag: attrs, sectionId: m[1] });
+      if (Array.isArray(node?.children) && node.children.length > 0) walk(node.children);
+    }
+  };
+  walk(tree);
+  if (hits.length === 0) return null;
+  const want = anchorSection == null ? null : String(anchorSection);
+  if (want) {
+    const exact = hits.find((h) => h.sectionId === want);
+    if (exact) return { ...exact, reason: 'anchor-match' };
+  }
+  if (hits.length === 1) return { ...hits[0], reason: 'unique-section' };
+  return null;
 }
 
 /**

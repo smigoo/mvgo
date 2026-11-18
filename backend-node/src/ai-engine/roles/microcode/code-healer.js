@@ -32,7 +32,7 @@ import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
 import { CARTESIAN_SERIES_TYPES } from '../../utils/chart-type-guard.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
-import { resolveChartMount } from '../../utils/chart-mount-truth.js';
+import { resolveChartMount, resolveMountAnchor } from '../../utils/chart-mount-truth.js';
 import { stripDanglingComponentRefs } from '../../utils/section-coverage-guard.js';
 import {
   isUsedByLessColorFn,
@@ -1934,14 +1934,34 @@ function extractMixinScopedVars(themeVars) {
  * validateVueSfc 失败 → 写盘门禁跳过 index.vue → L0-B EMPTY_ARTIFACT ×3 轮重试耗尽）：
  * 1. vue import 差集：只导入产物 script 缺失的标识符（script 已出现同名单词则复用），杜绝重复声明；
  * 2. 注入符号（chartRef/chart/getOption）冲突检测 + mc 前缀私有名，不与 LLM 已声明变量撞名；
- * 3. 模板注入：非法 CSS `margin:flex:1` → `flex:1`；位置从 `</template>` 前（base-panel 宿主外壳外）
- *    改为语义根容器内（优先填充空 root div）；class 前缀按根 class 派生，不再硬编码 env-monitor。
+ * 3. 模板注入：非法 CSS `margin:flex:1` → `flex:1`；落点四级①空 `-root` div 填充 ②`-root` 开标签后
+ *    ③`data-section-id` 锚点容器内（P0-a 治本，2026-11-18）④无锚点 ⇒ **不注入原样返回**（宁缺勿越界）；
+ *    class 前缀按根 class 派生，不再硬编码 env-monitor。
  *
  * 本函数保持纯字符串变换；注入器自检（validateVueSfc + 失败回滚）由调用方 microcode-engineer 持有。
+ *
+ * 🛡️ N-P0a-1 留痕契约（2026-11-18）：可选 `options.onSkip(reason)` 回调，放弃注入时上报唯一
+ * reason ∈ { empty-content, has-echarts-init, no-script-block, symbol-conflict, no-anchor,
+ * resize-symbol-conflict }；**未传即零副作用**，返回内容与历史逐字一致。回调用途=调用方把
+ * 「评估了但没注入」聚合进既有 `🛡️ N2 图表兜底·已评估` 日志，消除「静默缺图不可观测」。
  */
 export function injectEchartsFallback(content, options = {}) {
-  if (typeof content !== 'string' || !content.trim()) return content;
-  if (content.includes('echarts.init(')) return content; // 已有 echarts，无需注入
+  // 🛡️ N-P0a-1（2026-11-18）：早退留痕回调 —— 本函数仍是纯字符串变换（返回内容/语义不可变），
+  // 放弃注入时唯一可观测手段即本回调上报 reason（全 6 个早退点，逐点唯一字面量）。
+  // 未传 onSkip 时零副作用（行为与历史逐字一致）；契约=同步且不得抛出（调用方自保证），
+  // 故此处不套 try/catch（避免 catch 计数漂移、也避免掩盖调用方回调缺陷）。
+  const onSkip = typeof options.onSkip === 'function' ? options.onSkip : null;
+  const skip = (reason) => {
+    if (onSkip) onSkip(reason);
+  };
+  if (typeof content !== 'string' || !content.trim()) {
+    skip('empty-content');
+    return content;
+  }
+  if (content.includes('echarts.init(')) {
+    skip('has-echarts-init'); // 已有 echarts，无需注入
+    return content;
+  }
   const chartType = String(options.chartType || 'line').toLowerCase();
   // 🎯 D 系列第一刀：优先使用视觉真值 legendItems，回退 chartSeries
   const legendItems = Array.isArray(options.legendItems) ? options.legendItems : [];
@@ -1951,7 +1971,10 @@ export function injectEchartsFallback(content, options = {}) {
   const isCartesian = CARTESIAN_SERIES_TYPES.has(chartType);
 
   const scriptM = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i);
-  if (!scriptM) return content;
+  if (!scriptM) {
+    skip('no-script-block');
+    return content;
+  }
   const script = scriptM[1];
   const tplM = extractSfcTemplate(content);
   const tplBody = tplM || '';
@@ -1963,6 +1986,7 @@ export function injectEchartsFallback(content, options = {}) {
   const optionVar = usedInScript('getOption') ? 'mcGetChartOption' : 'getOption';
   // 私有名仍冲突（几乎不可能）→ 放弃注入，宁可不注入也不破坏产物
   if (usedInScript(chartRefVar) || usedInScript(chartVar) || usedInScript(optionVar)) {
+    skip('symbol-conflict');
     return content;
   }
 
@@ -1987,18 +2011,36 @@ export function injectEchartsFallback(content, options = {}) {
   });
   const canvasDiv = `<div ref="${chartRefVar}" class="${canvasClass}" style="width:100%;height:100%;flex:1;min-height:${minHeight}px;"></div>`;
   let patched = content;
-  // 优先：空的语义根 div（LLM 只画了容器没画内容）→ 直接填充
+  // ①：空的语义根 div（LLM 只画了容器没画内容）→ 直接填充
   const emptyRootRe = /(<div\b[^>]*\bclass\s*=\s*["'][^"']*-root\b[^"']*["'][^>]*>)\s*(<\/div>)/;
   if (emptyRootRe.test(patched)) {
     patched = patched.replace(emptyRootRe, `$1\n      ${canvasDiv}\n    $2`);
   } else {
-    // 次选：root 开标签后第一个子节点位置（与 tab 栏注入对称）
+    // ②：root 开标签后第一个子节点位置（与 tab 栏注入对称）
     const rootOpenRe = /(<div\b[^>]*\bclass\s*=\s*["'][^"']*-root\b[^"']*["'][^>]*>)/;
     if (rootOpenRe.test(patched)) {
       patched = patched.replace(rootOpenRe, `$1\n      ${canvasDiv}`);
     } else {
-      // 回退：template 结束前（保持旧兜底位置）
-      patched = patched.replace(/(<\/template>)/, `${canvasDiv}\n$1`);
+      // ③ 🔴 P0-a 治本（2026-11-18，mc-max-1795004981354-c659d482 实锤）：
+      // 旧版此处为 `patched.replace(/(<\/template>)/, canvasDiv + '\n$1')` ⇒ 当产物根是
+      // `<base-panel>`、内层无 `-root` 类时，canvas 被塞到 `</base-panel>` **之外**，成 template
+      // 顶层游离兄弟 ⇒ 图表区空、canvas 渲在面板外（越界根因）。今改为按 `data-section-id`
+      // 锚点定位承载容器（与 code-generator.js:1113 / 门禁 2.7 同源），注入其开标签之后；
+      // **无锚点则一律不注入**（宁缺勿越界），原样返回。
+      // ⚠️ 订正（2026-11-18 只读核查门禁源码 do-not-invent-validator.js:161/184/244）：
+      // 门禁 2.5 / 2.7 / 3.5 对「缺图 / 缺挂载点」**均 severity:'WARN'**（注释逐字写「非阻断：质量留痕」
+      // 「先 WARN 不 BLOCK」）⇒ 既不 BLOCK、也不触发上层重试。故「无锚点 ⇒ 静默缺图」在历史实现下
+      // **完全不可观测**（真机实测 4 例，见 N-P0a-1）——留痕改由下方 onSkip 回调承担。
+      const anchor = resolveMountAnchor(patched, options.anchorSection);
+      if (anchor) {
+        // 用函数式 replacer，避免 openTag 内的 `$` 被当作替换模式（$&/$1…）
+        patched = patched.replace(anchor.openTag, () => `${anchor.openTag}\n      ${canvasDiv}`);
+      } else {
+        // 🔴 N-P0a-1 留痕（2026-11-18）：无锚点（0 个 / 多个歧义）⇒ 不注入。此处早退即
+        //    「静默缺图」根因，必须上报 reason 供调用方聚合（历史此处零留痕 ⇒ 4 例实测不可观测）。
+        skip('no-anchor');
+        return content;
+      }
     }
   }
 
@@ -2013,7 +2055,10 @@ export function injectEchartsFallback(content, options = {}) {
     ? 'mcHandleChartResize'
     : 'handleMcChartResize';
   // 极端撞名（几乎不可能）→ 放弃注入，宁可不注入不破坏产物
-  if (usedInScript(observerVar) || usedInScript(resizeVar)) return content;
+  if (usedInScript(observerVar) || usedInScript(resizeVar)) {
+    skip('resize-symbol-conflict');
+    return content;
+  }
   const scriptInject = [
     ...importLines,
     `const ${chartRefVar} = ref(null); let ${chartVar} = null; let ${observerVar} = null`,
@@ -3143,4 +3188,168 @@ export function injectChartRebuildGuard(content, options = {}) {
     injected: injected.map((it) => `${it.refName}→${it.initFn}(${it.instanceExpr})`),
     skipped: skipReasons.length ? skipReasons.join(';') : undefined,
   };
+}
+
+/**
+ * 🛡️ 刀 23（2026-11-18 · RUNTIME-004 族B 实锤）：SFC 整份双写折叠守卫。
+ *
+ * 病灶（mc-max-1794826753848-3bece447 产物逐字节实锤）：
+ *   `index.vue` = `《template><template>` 双开 + `<script setup>` 整段逐字出现 2 次 +
+ *   `<style>` 2 次 ⇒ vue/compiler-sfc `Identifier 'ref' has already been declared`
+ *   ⇒ 预览 load-error ⇒ RUNTIME-004 BLOCK ⇒ 任务 failed。
+ *   根因＝分块编排某 chunk 把「整份 SFC」当作自己的段输出，与既有段拼接后成两份完整文件；
+ *   恢复/重试链路放大（断点续跑把双写段当已完成分块原样复活）。
+ *
+ * 判据（全部同时成立才折叠，宁漏勿误）：
+ *   ① 文件内 `<template` 开标签 ≥2 且 `</template>` 闭合 ≥2（子组件 template 嵌套不算——
+ *      那是「闭合数 ≤ 开标签数」的嵌套形态；此处要求顶层出现「两份块序列」）；
+ *   ② `<script` 开标签 ≥2（合法 SFC 只允许 `<script>` + 可选 `<script setup>` ≤2 个块，
+ *      但双写形态是「同一 setup 块重复」，故以「首个 `</script>` 之后仍存在第二个
+ *      `<script` 开标签」为准，且两个块内容逐字相同（取 trim 后全等））。
+ *
+ * 修法（确定性折叠，保留第一份完整块序列）：
+ *   - 第二个 `<template>` 起若为首个块的逐字重复（trim 相等），剥除重复段；
+ *   - 第二个 `<script setup>…</script>` 若与首个逐字相同（trim 相等），剥除；
+ *   - `<template><template>` 紧邻双开折叠为单开；
+ *   - 内容不完全相同时 fail-open 不动（防误删真实的多块变体），交由 P1-4/语法门禁既有链路。
+ *
+ * 纯函数：入参 content 字符串，返回 { content, changed, reason }。幂等：修后再次调用 changed=false。
+ * 🔴 职责边界：只折叠「块级双写」。折叠后产物**可能**残留「块内重复 import」（原件单块内
+ *    两次 `import { ref }` 的形态）⇒ 由接线处（microcode-engineer 刀23 段）对折叠命中的
+ *    文件补一次 dedupeScriptImports。本函数不 import sfc-semantics —— 静态引入会把
+ *    acorn-optional-loader 的 import.meta 拖进 jest CJS 环境炸掉全部 healer spec（实测）。
+ */
+export function collapseDuplicatedSfcBlocks(content) {
+  const src = typeof content === 'string' ? content : '';
+  if (!src) return { content: src, changed: false, reason: 'empty' };
+  if (!/<template[\s>]/i.test(src)) return { content: src, changed: false, reason: 'no-template' };
+
+  const openTplRe = /<template[\s>]/gi;
+  const closeTplRe = /<\/template\s*>/gi;
+  const openTplCount = (src.match(openTplRe) || []).length;
+  const closeTplCount = (src.match(closeTplRe) || []).length;
+  // 合法嵌套形态：闭多数 ≤ 开多数。双写形态必然 开=闭 且 开≥2。
+  if (openTplCount < 2 || openTplCount !== closeTplCount) {
+    return { content: src, changed: false, reason: 'not-doubled' };
+  }
+
+  const scriptBlockRe = /<script(\s[^>]*)?>([\s\S]*?)<\/script\s*>/gi;
+  const scriptBlocks = [];
+  let sm;
+  while ((sm = scriptBlockRe.exec(src)) !== null) {
+    scriptBlocks.push({ full: sm[0], body: sm[2] });
+  }
+  if (scriptBlocks.length < 2) return { content: src, changed: false, reason: 'single-script' };
+  // 两份 script 必须逐字相同（trim 后全等）才判「整份双写」；不同则可能是合法多块，fail-open。
+  if (scriptBlocks[0].body.trim() !== scriptBlocks[1].body.trim()) {
+    return { content: src, changed: false, reason: 'script-mismatch' };
+  }
+
+  // ── 折叠（保留第一份块序列） ──
+  let out = src;
+
+  // ② 剥除与第一份逐字相同的后续 script 块（相同 ⇒ 移除哪个都语义等价）
+  out = out.replace(scriptBlocks[1].full, '');
+
+  // ③ 剥除与第一份逐字相同的后续 style 块（用 lastIndexOf 定位，防 replace 误删首份）
+  const styleBlockRe = /<style(\s[^>]*)?>([\s\S]*?)<\/style\s*>/gi;
+  const styles = [];
+  let stm;
+  while ((stm = styleBlockRe.exec(out)) !== null) {
+    styles.push({ full: stm[0], body: stm[2] });
+  }
+  if (styles.length >= 2 && styles[0].body.trim() === styles[styles.length - 1].body.trim()) {
+    const dupStyle = styles[styles.length - 1].full;
+    const lastIdx = out.lastIndexOf(dupStyle);
+    if (lastIdx !== -1) {
+      out = out.slice(0, lastIdx) + out.slice(lastIdx + dupStyle.length);
+    }
+  }
+
+  // ④ `<template><template>` 紧邻双开折叠为单开（保留带属性的那份）
+  out = out.replace(/<template(\s[^>]*)?>\s*<template(\s[^>]*)?>/i, (_m0, a, b) => {
+    return a && a.trim() ? `<template${a}>` : `<template${b || ''}>`;
+  });
+
+  // ⑤ 闭合再平衡：剥重复块后闭合数可能多于开标签数（双写形态的外层 wrapper 残留）
+  //    ⇒ 从尾部剥除盈余闭合（前置条件已保证这是双写残留，非合法嵌套）
+  let opens = (out.match(/<template[\s>]/gi) || []).length;
+  let closes = (out.match(/<\/template\s*>/gi) || []).length;
+  while (closes > opens) {
+    const idx = out.toLowerCase().lastIndexOf('</template>');
+    if (idx === -1) break;
+    out = out.slice(0, idx) + out.slice(idx + '</template>'.length);
+    closes -= 1;
+  }
+
+  // ⑥ 块内 import 去重 → 已移出（见头注释职责边界）：由接线处对折叠命中文件
+  //    补 dedupeScriptImports。此处只负责块级折叠。
+
+  // 空行折叠
+  out = out.replace(/\n{3,}/g, '\n\n').trimStart();
+
+  if (out === src) return { content: src, changed: false, reason: 'no-change' };
+  return { content: out, changed: true, reason: 'collapsed-duplicated-sfc', needsImportDedupe: true };
+}
+
+/**
+ * 🛡️ Map 直取空值守卫（2026-11-18 · B1 RUNTIME-004 实锤）：
+ *   `const current = dataMap[activeTunnel.value]` 初始 key 不在 map ⇒ undefined ⇒
+ *   `current.actual` 抛 TypeError ⇒ 白屏。写盘出口确定性兜底：
+ *   命中「const x = Map[key]; …tail 有 x.attr 直取且无 if(!x) 守卫」⇒
+ *   ① 声明补 `|| {}`；② 直取点补 `?.`（首个 .attr → ?.attr，链式后续由 ① 兜住）。
+ * 纯文本变换、幂等（补过后不再命中「无守卫」判据）。
+ */
+
+/** 判定 script 内容是否存在「Map 直取后无守卫直取属性」的危险形态 */
+export function findUnguardedMapAccess(content) {
+  if (!content || typeof content !== 'string') return []
+  const scriptM = /<script[^>]*>([\s\S]*?)<\/script>/.exec(content)
+  if (!scriptM) return []
+  const script = scriptM[1]
+  const hits = []
+  const re = /const\s+(\w+)\s*=\s*(\w+)\[([^\]]+)\]\s*;?/g
+  let m
+  while ((m = re.exec(script)) !== null) {
+    const [full, varName, mapName, keyExpr] = m
+    // 字面量 key（'a' / "a" / 0）不会 undefined——除非 map 缺 key；仍视为可崩，交下游统一补守卫
+    const after = script.slice(m.index + full.length)
+    const window = after.slice(0, 600)
+    const directUse = new RegExp(`\\b${varName}\\s*\\.\\s*\\w+`).test(window)
+    const guarded =
+      new RegExp(`if\\s*\\(\\s*!?\\s*${varName}\\b`).test(window) ||
+      /\|\|\s*\{\}/.test(full) ||
+      /\?\./.test(window.slice(0, directUse ? 0 : 80))
+    if (directUse && !guarded) {
+      hits.push({ varName, mapName, keyExpr })
+    }
+  }
+  return hits
+}
+
+/**
+ * 就地补守卫：声明补 `|| {}`；首个直取点 var. → var?.。
+ * @returns {{content: string, changed: boolean, patched: Array<{varName, mapName}>}}
+ */
+export function guardMapAccess(content) {
+  const hits = findUnguardedMapAccess(content)
+  if (hits.length === 0) return { content, changed: false, patched: [] }
+  let next = content
+  const patched = []
+  for (const { varName, mapName, keyExpr } of hits) {
+    // ① 声明补 || {}
+    const declRe = new RegExp(
+      `(const\\s+${varName}\\s*=\\s*${mapName}\\[[^\\]]+\\])(?!\\s*\\|\\|)`,
+    )
+    if (declRe.test(next)) {
+      next = next.replace(declRe, '$1 || {}')
+    }
+    // ② 首个直取点补 ?.（仅 var. → var?.，避免把可选链重复加）
+    const useRe = new RegExp(`\\b${varName}\\.(?!\\.)`)
+    if (useRe.test(next)) {
+      next = next.replace(useRe, `${varName}?.`)
+    }
+    patched.push({ varName, mapName })
+  }
+  return { content: next, changed: next !== content, patched }
 }

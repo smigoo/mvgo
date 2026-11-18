@@ -9,6 +9,7 @@
 import { readFileSync, existsSync, unlinkSync, readdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { createLogger } from '../logger/index.js'
+import { collectChartSeriesTypes, normalizeChartType } from '../utils/chart-type-detection.js'
 
 const logger = createLogger({ name: 'orphan-component-detector' })
 
@@ -16,9 +17,12 @@ export class OrphanComponentDetector {
   /**
    * 检测并清理孤儿组件
    * @param {string} componentDir - 组件目录路径
-   * @returns {object} 检测结果
+   * @param {object} [options] - 可选保护参数（不传时行为与改动前逐字相同）
+   * @param {Array} [options.visionCharts] - vision 声明的图表（{section,type}）；
+   *        含 echarts.init 且 series type 归一化后命中其中任一 type 的孤儿 ⇒ 不删
+   * @returns {object} 检测结果（新增 protectedOrphans 字段，恒为数组，0 也打）
    */
-  static async detect(componentDir) {
+  static async detect(componentDir, options = {}) {
     logger.info('开始检测孤儿组件', { componentDir })
 
     try {
@@ -26,7 +30,16 @@ export class OrphanComponentDetector {
         orphans: [],
         deleted: [],
         kept: [],
-        errors: []
+        errors: [],
+        // 🛡️ S1（P0）：vision 图表宿主保护名单。命名与视觉段的孤儿图表计数隔离，不得混用。
+        protectedOrphans: []
+      }
+
+      // 归一化 vision 类型集；空/undefined ⇒ 保护不触发（fail-open 到原行为）
+      const visionTypes = new Set()
+      for (const c of Array.isArray(options?.visionCharts) ? options.visionCharts : []) {
+        const t = normalizeChartType(c?.type)
+        if (t) visionTypes.add(t)
       }
 
       // 1. 定位 package 目录与主组件
@@ -74,8 +87,24 @@ export class OrphanComponentDetector {
         const isReferenced = this.isComponentReferenced(corpus, childName, childPath)
 
         if (!isReferenced) {
-          result.orphans.push(childPath)
-          logger.info('发现孤儿组件', { childPath, childName })
+          // 🛡️ S1（P0）：vision 图表宿主保护——双条件 AND
+          //   ①源码含 echarts.init（真图表组件，排除假图表）
+          //   ②series type 归一化后 ∈ vision.charts 类型集（设计稿要的那类图，排除臆造图）
+          //   visionTypes 为空 ⇒ 保护不触发，行为与改动前逐字相同
+          const childContent = contentMap.get(childPath) || ''
+          const protectedTypes = this._protectedChartTypes(childContent, visionTypes)
+          if (protectedTypes.length > 0) {
+            result.protectedOrphans.push(childPath)
+            logger.info('🛡️ 图表宿主孤儿已保护（不删）', {
+              childPath,
+              childName,
+              visionTypes: [...visionTypes],
+              seriesTypes: protectedTypes,
+            })
+          } else {
+            result.orphans.push(childPath)
+            logger.info('发现孤儿组件', { childPath, childName })
+          }
         } else {
           result.kept.push(childPath)
         }
@@ -97,6 +126,7 @@ export class OrphanComponentDetector {
         orphansFound: result.orphans.length,
         deleted: result.deleted.length,
         kept: result.kept.length,
+        protectedOrphans: result.protectedOrphans.length,
         errors: result.errors.length
       })
 
@@ -106,6 +136,33 @@ export class OrphanComponentDetector {
       logger.error('孤儿组件检测失败', { error: error.message })
       throw error
     }
+  }
+
+  /**
+   * S1（P0）：判断孤儿是否为「vision 声明图表的宿主组件」。
+   * 返回命中的归一化类型数组（非空 ⇒ 保护）；空数组 ⇒ 照删。
+   *
+   * 双条件 AND：
+   *   ①源码含 echarts.init —— 真图表组件（排除只有 type 文本的假图表）
+   *   ②series type（经 collectChartSeriesTypes 归一化，area/line/curve→line）
+   *     与 vision.charts[].type 归一化集有交集 —— 设计稿声明的那类图（排除臆造图）
+   *
+   * 判据单一来源：归一化只走 chart-type-detection.js，本文件不另写正则/映射。
+   * fail-open：visionTypes 为空 ⇒ 恒返回 []（行为与改动前逐字相同）。
+   *
+   * @param {string} content - 孤儿组件源码
+   * @param {Set<string>} visionTypes - vision.charts[].type 归一化集
+   * @returns {string[]} 命中的类型（空数组=不保护）
+   */
+  static _protectedChartTypes(content, visionTypes) {
+    if (!visionTypes || visionTypes.size === 0) return []
+    if (!content || !content.includes('echarts.init(')) return []
+    const seriesTypes = collectChartSeriesTypes(content)
+    const hit = []
+    for (const t of seriesTypes) {
+      if (visionTypes.has(t)) hit.push(t)
+    }
+    return hit
   }
 
   /**

@@ -93,16 +93,11 @@ export class BaseAgent {
     // 可选：per-provider 思考开关（如 deepseek 系支持 thinking:{type:"disabled"} 关推理）。
     // 仅当 provider/models 配置显式声明时才透传，避免给不支持的网关（lkeap/glm 官方）注入未知参数 → 400。
     this.thinkingType = config.thinkingType || '';
-    //优先尊重显式 providerType（前端文本接口协议选择），否则回退到 URL 自动识别
+    this.providerId = config.providerId || null;
+    // 优先尊重显式 providerType（前端文本接口协议选择），否则回退到 URL 自动识别
     this.providerType = config.providerType || 'auto';
-    let isOpenAICompatible;
-    if (this.providerType === 'openai-compatible') {
-      isOpenAICompatible = true;
-    } else if (this.providerType === 'anthropic') {
-      isOpenAICompatible = false;
-    } else {
-      isOpenAICompatible = isOpenAICompatibleBaseURL(this.baseURL);
-    }
+    // 保存构造时的归一化值，修订轮临时升温后可恢复到任务基线。
+    this._temperatureBaseline = this.temperature;
 
     this.llm = this.skipLLM ? null : this._buildLLM();
 
@@ -112,56 +107,80 @@ export class BaseAgent {
         `智能体 ${this.name} 以 skipLLM 模式初始化（纯确定性，无 LLM 依赖）`,
       );
     } else {
-      attachUnifiedInvoke(this.llm, {
-        context: this.name,
-        provider: isOpenAICompatible ? 'openai-compatible' : 'anthropic',
-        model: this.model,
-        providerId: config.providerId,
-        // 🛡️ 2026-11-02：池归属 scope 透传给统一网关（get/pick 归属校验用）
-        poolScope: this.poolScope,
-        sessionId: this.sessionId,
-        maxTokens: this.maxTokens,
-        // 🛡️ 模型收集（2026-08-29）：用 getter 动态读 this.onProgress（execute 时才被赋值为
-        // graph 的 state.onProgress），使 agent-model 事件能透传到 phase2 收集 actualTextModels。
-        onProgress: (data) => this.onProgress?.(data),
-        // 🔀 主 provider 熔断后自动切换备用：每次 attempt 重新 pick 供应商池并重建 llm。
-        // excludeIds：排除上一次 attempt 刚失败的 provider，实现「超时 → 切换大模型」故障转移。
-        refreshProvider: ({ excludeIds = [], previousProviderId = null, forceThinkingDisabled = false } = {}) => {
-          // 🛡️ 2026-11-02 跨用户串配置根治：池读取必须带本用户注册 scope。
-          // 无 scope ⇒ 本用户未配置 provider 池 ⇒ 不做池故障转移（槽位里可能是他人凭证），
-          // 保持构造时传入的自身配置（正确的用户凭证）继续重试。
-          if (!this.poolScope) return null
-          // 🛡️ 自愈（2026-09-29 B 层·模型无关）：网关检测到「推理烧光输出预算」
-          // （finish_reason=length + reasoning_tokens>0）后，会让后续 attempt 复用同一个
-          // 刚失败的 provider，但强制 thinkingType:'disabled' 重建重试 —— 而非换 provider。
-          // 这样任何推理模型（含未知/新模型、被别名/中转包装的模型）都能自愈，
-          // 不再依赖 ai-defaults 的模型名启发式（A 层）。
-          const p = forceThinkingDisabled && previousProviderId
-            ? getProviderPool().get(previousProviderId, { scope: this.poolScope })
-            : getProviderPool().pick('text', { excludeIds, scope: this.poolScope });
-          // 🧠 2026-09-30 第二批（方言自愈）：forceThinkingDisabled ⇒ 上一次 attempt 已
-          // 「推理烧光预算」（或强关后仍失败）。把当前生效方言标记失效，
-          // _buildLLM → buildThinkingOffParams 会自动顺延到下一候选方言重试
-          // （实测例：microvideo 中转 deepseek 认 thinking:disabled，误发 enable_thinking 被忽略）。
-          if (forceThinkingDisabled && p) {
-            try {
-              markThinkingDialectRouteFailed(p.model || this.model, p.baseURL || this.baseURL);
-            } catch { /* 自愈标记失败不影响重试主流程 */ }
-          }
-          if (!p || !p.apiKey) return null;
-          return {
-            providerId: p.id,
-            apiKey: p.apiKey,
-            baseURL: p.baseURL || '',
-            model: p.model || this.model || '', // 🛡️ provider 无 model 时回退到实例 model，空则下游抛错
-            providerType: p.providerType || 'auto',
-            // 🔧 per-provider 思考开关透传（deepseek disabled 等）；自愈时强制关推理
-            thinkingType: forceThinkingDisabled ? 'disabled' : (p.thinkingType || ''),
-          };
-        },
-        createLLM: (snap) => this._buildLLM(snap),
-      });
+      this._attachUnifiedInvoke();
     }
+  }
+
+  /**
+   * 为当前 LLM 挂载统一请求网关。重建 LLM 后必须再次调用，避免新实例绕过
+   * 超时、心跳、provider 故障转移、思考方言和模型使用记录。
+   */
+  _attachUnifiedInvoke() {
+    if (!this.llm) return this.llm;
+    const isOpenAICompatible = this.providerType === 'openai-compatible'
+      ? true
+      : this.providerType === 'anthropic'
+        ? false
+        : isOpenAICompatibleBaseURL(this.baseURL);
+    return attachUnifiedInvoke(this.llm, {
+      context: this.name,
+      provider: isOpenAICompatible ? 'openai-compatible' : 'anthropic',
+      model: this.model,
+      providerId: this.providerId,
+      poolScope: this.poolScope,
+      sessionId: this.sessionId,
+      maxTokens: this.maxTokens,
+      onProgress: (data) => this.onProgress?.(data),
+      refreshProvider: ({ excludeIds = [], previousProviderId = null, forceThinkingDisabled = false } = {}) => {
+        if (!this.poolScope) return null;
+        const p = forceThinkingDisabled && previousProviderId
+          ? getProviderPool().get(previousProviderId, { scope: this.poolScope })
+          : getProviderPool().pick('text', { excludeIds, scope: this.poolScope });
+        if (forceThinkingDisabled && p) {
+          try {
+            markThinkingDialectRouteFailed(p.model || this.model, p.baseURL || this.baseURL);
+          } catch { /* 自愈标记失败不影响重试主流程 */ }
+        }
+        if (!p || !p.apiKey) return null;
+        return {
+          providerId: p.id,
+          apiKey: p.apiKey,
+          baseURL: p.baseURL || '',
+          model: p.model || this.model || '',
+          providerType: p.providerType || 'auto',
+          thinkingType: forceThinkingDisabled ? 'disabled' : (p.thinkingType || ''),
+        };
+      },
+      createLLM: (snap) => this._buildLLM(snap),
+    });
+  }
+
+  /**
+   * 切换文本生成采样温度并重建真实 LLM 实例。
+   * 返回归一化后的实际温度；推理模型由统一事实源归一化为 1。
+   */
+  _setRuntimeTemperature(requestedTemperature, reason = 'runtime') {
+    if (this.skipLLM) return this.temperature;
+    const nextTemperature = normalizeRequestTemperature(
+      this.model,
+      requestedTemperature,
+    );
+    const previousTemperature = this.temperature;
+    this.temperature = nextTemperature;
+    this.llm = this._buildLLM();
+    this._attachUnifiedInvoke();
+    this.logger.info('🌡️ 文本 LLM 温度已切换并重建实例', {
+      reason,
+      requestedTemperature,
+      effectiveTemperature: nextTemperature,
+      previousTemperature,
+      model: this.model,
+    });
+    return nextTemperature;
+  }
+
+  _restoreRuntimeTemperature(reason = 'restore') {
+    return this._setRuntimeTemperature(this._temperatureBaseline, reason);
   }
 
   /**

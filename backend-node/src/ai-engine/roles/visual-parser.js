@@ -77,10 +77,24 @@ const MAX_DEPTH_BOUNDARY_CHILDREN = 16
 const VISION_ANALYSIS_TIMEOUT_MS = 240000
 const VISION_ANALYSIS_MAX_RETRIES = 1
 
+// 🔴 N-V1-a（2026-11-18 · mc-max-1795008711331-d5bd7800 实锤）：动态超时上界 270s。
+//   约束来源与 :74-76 同一算式：requestMaxRetries=1 ⇒ 2 次 attempt，
+//   2 × 270s + 等待 ≈ 550s < 节点 VISUAL_TIMEOUT_MS(600s) ⇒ 第 2 次 attempt 仍有完整窗口。
+//   不再回退到历史上的 210s/480s（480s×2 必然撞节点超时，210s 对该模型只剩 12s 余量）。
+const VISION_ANALYSIS_TIMEOUT_CEIL_MS = 270000
+
 /**
  * 🆕 S2 动态超时：按 vision 池 provider 的耗时画像计算超时（快模型短、慢模型长）。
- * 取池内所有 vision provider p90 耗时的最大值 × 1.5（保守），夹在 [90s, 480s]；
- * 无画像样本（首次/重启后）回退 fallbackMs。避免固定 240s 对慢模型误杀、对快模型挂起响应慢。
+ * 取池内所有 vision provider p90 耗时的最大值 × 1.5（保守），夹在 [240s, 270s]；
+ * 无画像样本（首次/重启后）回退 fallbackMs。
+ *
+ * 🔴 N-V1-a 订正（2026-11-18）：本注释原写「[90s, 480s]」、实现却夹在 [90s, 210s]，
+ *   且下界 90s **低于本文件自认的正常耗时**（:73「实测约 97s」）。实锤：
+ *   mc-max-1795008711331-d5bd7800 的 degradeReason 恰为 `LLM invoke timeout after 90000ms`；
+ *   同一 Figma 节点（HEDMvb4sr5tobjg82QDb3x / 2:1169）历史有一次 **197.9s 成功**
+ *   ⇒ 证伪「模型不可用」，病灶是超时被 p90 画像夹到误杀区间。
+ *   现下界对齐固定设计值 240s、上界 270s：画像只能「微调」，不能再把预算压到误杀区间。
+ *   注：vision 池只有 1 个 provider 时该值仍决定单次 attempt 的生死，故下界必须 ≥ 实测慢样本。
  */
 function computeVisionDynamicTimeout(fallbackMs) {
   try {
@@ -99,7 +113,7 @@ function computeVisionDynamicTimeout(fallbackMs) {
       //   注入关推理后 276s→~110s），反馈回路不再由慢样本驱动。上限由 150s 放宽到 210s 留抖动余量
       //   （实测 qwen3.7-plus 104s / qwen3.8-max 117s；210s 给出 ~2x 余量）。maxRetries=1 时两 attempt
       //   最坏 ≈420s + 等待 < 节点 VISUAL_TIMEOUT_MS(600s)，仍安全。
-      return Math.min(210000, Math.max(90000, Math.round(maxP90 * 1.5)))
+      return Math.min(VISION_ANALYSIS_TIMEOUT_CEIL_MS, Math.max(VISION_ANALYSIS_TIMEOUT_MS, Math.round(maxP90 * 1.5)))
     }
   } catch { /* 画像不可用时回退固定值 */ }
   return fallbackMs
@@ -130,6 +144,35 @@ export function isVisualAnalysisDegraded(parsed) {
     0
   const hasContent = secCount > 0 || (parsed.charts?.length || 0) > 0 || (parsed.interactions?.length || 0) > 0
   return !hasContent
+}
+
+/**
+ * 🔴 N-V1-c（2026-11-18 · mc-max-1795008711331-d5bd7800 实锤）：Vision 结果是否可写入/复用缓存。
+ *
+ * 病灶：写缓存前只用 isVisualAnalysisDegraded 判「结构是否为空」，而 Figma 兜底重建的**降级结果
+ * 有 sections** ⇒ 被判「非退化」⇒ 写入 24h 缓存；_readCache 与命中分支又都没有降级过滤
+ * ⇒ 同分组内重试必命中这份降级结果 ⇒ 跳过 AI 直接再降级再阻断，且与提示文案「重试会重新识别
+ * 设计稿，更快完成」正好相反。
+ * 实证（该任务产物）：`.mc-gen/cache/vision-cache/vision_HEDMvb4sr5tobjg82QDb3x_2:1169_microcode.json`
+ * 内含 `degraded:true` / `visualDegraded:true` / `layoutSource:'figma'` / `_cachedAt` = 任务结束时刻。
+ *
+ * 判据（写侧 :5030 与读侧 _readCache 共用同一函数，防「写侧修了、读侧漏了」）：
+ *   ① 显式降级标志 degraded / visualDegraded 任一为 true ⇒ 不可缓存；
+ *   ② 顶层 layoutSource 非 'vision'（'figma' / 'degraded'）⇒ 不可缓存；
+ *      无该字段（历史正常结果）放行 —— 顶层 layoutSource 只有降级路径会写（:1030/:5015），
+ *      section 级 'inline-row'/'container-rebuild' 不在此层，不受影响；
+ *   ③ 结构为空（isVisualAnalysisDegraded）⇒ 不可缓存（11-16 既有语义逐字保留）。
+ *
+ * ⚠️ 禁止改 isVisualAnalysisDegraded 本体：它另有 :1095「拒绝半截数据」消费者，
+ *   且 11-16 刚为包装形态误判修过（见 visual-parser.degraded-form.spec.ts）。
+ * @param {Object} result - execute 出口的 executeResult（或缓存文件反序列化后的同形对象）
+ * @returns {boolean} true=可缓存/可复用
+ */
+export function isCacheableVisionResult(result) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false
+  if (result.degraded === true || result.visualDegraded === true) return false
+  if (result.layoutSource && result.layoutSource !== 'vision') return false
+  return !isVisualAnalysisDegraded(result)
 }
 
 // 视觉可信度裁决为纯函数，抽到 utils/visual-trust.js（无 import.meta 依赖，便于单测）。
@@ -176,6 +219,11 @@ export { rebuildSlotConContainers, collectContainerHints }
 // 🛡️ 根治⑩（2026-11-12 · f3085ec6 实锤）：vision section 消毒（纯函数，无 import.meta）——
 //   剔除背景板/装饰 section（R1）+ 标题条锚点纠偏到正下方内容块（R2），布局引擎侧治本。
 import { sanitizeVisionSections } from '../utils/vision-section-sanitizer.js'
+// 🛡️ F1（2026-11-18 · E2 数据串位实锤）：stat-card 段 `name` 按 Figma 宿主 id 幂等回填
+//   （纯函数，无 import.meta）—— vision「看图识内容」重命名时首尾卡互换，既有守卫只校验
+//   「文本值 ∈ Figma 文本集」不校验「文本挂在哪张卡上」⇒ 必须在 normalize 阶段用 Figma 宿主
+//   子树真值校正 name 归属。判据单一来源 = utils/stat-card-name-reassign.js。
+import { reassignStatCardNames } from '../utils/stat-card-name-reassign.js'
 // 🛡️ 2026-09-15（mc-max-1789446564243-f64ecbed 实锤）：幻觉 section 剔除（纯函数，无 import.meta）。
 // Vision 会凭空产出「设计里不存在」的 section（如 badge-indicator，子节点 id 89:37 在 Figma 树中 0 命中），
 // 下游 planner 按 sections 出子组件清单 → 多生成一个 .vue（角标画两遍 + 多占一行挤走图表）。
@@ -907,8 +955,11 @@ ${analysisTask}`
       logger.info('🔍 [诊断] Prompt 已保存', { path: promptPath, size: prompt.length })
 
       // 2. 调用Vision AI分析图片
-      // 🛡️ vision 止损：真实预览图分析比配置页红色小图测试重得多，90s 容易误杀复杂面板。
-      // 将单次上限提高到 150s，并允许一次重试；仍保留上限，避免网关长时间挂起。
+      // 🛡️ vision 止损：真实预览图分析比配置页红色小图测试重得多，固定值容易误杀复杂面板。
+      // 🔴 N-V1-a 订正（2026-11-18）：本注释原写「单次上限提高到 150s」，但实际走的是
+      //   computeVisionDynamicTimeout 动态区间（现 [240s, 270s]，见 :80-95）。数值以函数为准，
+      //   勿按注释猜——历史上正是「注释写 150s / 实现 90s」的漂移造成误判。
+      //   仍保留上限，避免网关长时间挂起；允许一次重试以覆盖偶发挂起。
       const visionRequestOptions = {
         ...requestOptions,
         requestTimeoutMs: computeVisionDynamicTimeout(requestOptions.requestTimeoutMs ?? VISION_ANALYSIS_TIMEOUT_MS),
@@ -2120,6 +2171,35 @@ ${analysisTask}`
           // `{layoutStructure:{layout,sections}}` 形态，`parsed.layout` 可能是外壳本身（无顶层
           // sections），盲目重建会把它清空 ⇒ 必须先验 `Array.isArray(cur.sections)`。
           const rebuiltSlots = []
+          // 🛡️ F1（2026-11-18 · E2 实锤）：stat-card 段 name 按 Figma 宿主 id 幂等回填 ——
+          //   必须**早于** sanitize（sanitize 会重锚 section.id）；用 vision 原始 id 判定
+          //   「name 宿主错位」。判据单一来源 = utils/stat-card-name-reassign.js（不改 id /
+          //   不改产物 / 只附加 nameReassignedFrom）。两槽同源时按数组身份去重防重复计数。
+          try {
+            const _f1Seen = new WeakSet()
+            const _f1Stats = []
+            const _fixNameSlot = (obj, label) => {
+              const cur = obj?.layout
+              if (!cur || !Array.isArray(cur.sections)) return
+              if (_f1Seen.has(cur.sections)) return
+              _f1Seen.add(cur.sections)
+              const r = reassignStatCardNames({ sections: cur.sections, figmaNodeData: figmaData })
+              // 🔴 计数行铁律：`examined=0` 也必须落进 stats —— 否则「有布局槽但零命中」
+              //   与「无布局槽」在日志里都表现为空，离线无法区分（判据失效 vs 无病灶）。
+              const _det = r.details.length
+                ? ' ' + r.details.map((d) => `${d.id}:${d.from}→${d.to}`).join(';')
+                : ''
+              _f1Stats.push(`${label}:${r.reassigned}/${r.examined}${_det}`)
+            }
+            _fixNameSlot(parsed, 'layout')
+            _fixNameSlot(parsed.layoutStructure, 'layoutStructure.layout')
+            // 🔴 计数行铁律：零命中也要可见（否则「无病灶」与「判据不生效」离线不可辨）
+            logger.info('🛡️ F1 stat-card name 宿主回填·已评估', {
+              stats: _f1Stats.join(' | ') || '(无布局槽)',
+            })
+          } catch (_f1Err) {
+            logger.warn({ err: _f1Err?.message }, '[F1] stat-card name 回填失败，跳过')
+          }
           // 🛡️ 根治⑩ R1/R2（f3085ec6 实锤）：先消毒（剔背景板 section + 标题条锚纠偏），
           //   再做容器层级重建 —— 锚对了，rebuild/reclaim 与下游 flex 才有正确输入。
           const sanitizeMeta = { removed: [], reanchored: [] }
@@ -4760,9 +4840,24 @@ ${analysisTask}`
         return null
       }
 
-      logger.info('📦 Vision 缓存命中', { cacheKey, age: Math.round((Date.now() - cached._cachedAt) / 60000) + 'min' })
       // 移除内部字段后返回
       const { _cachedAt, _cacheKey, ...result } = cached
+
+      // 🔴 N-V1-c（2026-11-18）：降级结果一律不复用。历史已写入的坏缓存
+      //   （Figma 兜底重建 + degraded/visualDegraded/layoutSource:'figma'）在此被拒
+      //   ⇒ 重新调用 Vision，而不是「命中缓存 → 再降级 → 再阻断」的秒失败循环。
+      //   与写侧共用 isCacheableVisionResult（单一来源）。
+      if (!isCacheableVisionResult(result)) {
+        logger.warn('⚠️ Vision 缓存内容为降级/空结构结果，拒绝复用并将重新分析', {
+          cacheKey,
+          degraded: result.degraded === true,
+          visualDegraded: result.visualDegraded === true,
+          layoutSource: result.layoutSource || null,
+        })
+        return null
+      }
+
+      logger.info('📦 Vision 缓存命中', { cacheKey, age: Math.round((Date.now() - cached._cachedAt) / 60000) + 'min' })
       return result
     } catch (e) {
       logger.warn('读取 Vision 缓存失败', { error: e.message })
@@ -4948,10 +5043,18 @@ ${analysisTask}`
         logger.warn({ err: e?.message }, '[S3] 循环契约注入失败，跳过（下游回落各自判断）')
       }
 
-      //  写入 Vision 缓存（仅在结果有效时；退化/空结构结果不缓存，避免重试命中缓存后永久复用坏数据）
+      //  写入 Vision 缓存（仅在结果有效时；退化/空结构/降级结果不缓存，避免重试命中缓存后永久复用坏数据）
+      //  🔴 N-V1-c（2026-11-18）：判据由 isVisualAnalysisDegraded（只看结构是否为空）升级为
+      //    isCacheableVisionResult（叠加 degraded/visualDegraded/layoutSource 三项）——
+      //    Figma 兜底重建的降级结果「有 sections」，旧判据会放行并写盘。
       if (cacheKey && cacheDir) {
-        if (isVisualAnalysisDegraded(executeResult)) {
-          logger.warn('⚠️ 视觉分析结果为退化/空结构，跳过缓存，允许后续重试重新调用 Vision', { cacheKey })
+        if (!isCacheableVisionResult(executeResult)) {
+          logger.warn('⚠️ 视觉分析结果为降级/退化结构，跳过缓存，允许后续重试重新调用 Vision', {
+            cacheKey,
+            degraded: executeResult.degraded === true,
+            visualDegraded: executeResult.visualDegraded === true,
+            layoutSource: executeResult.layoutSource || null,
+          })
         } else {
           this._writeCache(cacheKey, cacheDir, executeResult)
         }

@@ -63,6 +63,32 @@ describe('视觉分析重跑判据（段数契约）', () => {
     ).toBe('first');
   });
 
+  /**
+   * 🔴 2026-11-18 补锚：上面那组只用段数差 5（gap ≥ SECTION_GAP_DECISIVE），
+   *   漏掉了「一侧段数低于契约下界(3)、另一侧只多 1 段」这条缝 ——
+   *   真机 mc-max-1795012976783-9778c031 正是 gap=1（1 段 vs 2 段）落进缝里，
+   *   旧逻辑转用覆盖率裁决，把「1段/100%（结构塌陷但元素全召回）」判优于
+   *   「2段/67%」⇒ 保留塌陷版 ⇒ planner 只出 1 段 ⇒ slot-con 空壳、零子组件。
+   *   规则：任一侧段数 < 3 且两侧不等 ⇒ 段数多者胜（覆盖率与段结构正交，无权补）。
+   */
+  it('择优：gap=1 且一侧低于契约下界 ⇒ 段数多者仍胜（覆盖率不得翻盘）', () => {
+    expect(
+      pickBetterVisionAnalysis({ sections: 1, rate: 100 }, { sections: 2, rate: 67 }),
+    ).toBe('retry');
+    expect(
+      pickBetterVisionAnalysis({ sections: 2, rate: 67 }, { sections: 1, rate: 100 }),
+    ).toBe('first');
+  });
+
+  it('择优：两侧段数均达标(≥3)时 gap=1 仍按覆盖率裁决（本规则不越界）', () => {
+    expect(
+      pickBetterVisionAnalysis({ sections: 5, rate: 70 }, { sections: 6, rate: 75 }),
+    ).toBe('retry');
+    expect(
+      pickBetterVisionAnalysis({ sections: 5, rate: 75 }, { sections: 6, rate: 70 }),
+    ).toBe('first');
+  });
+
   it('择优：段数相同则比覆盖率；完全相等时保留首次（不无谓替换）', () => {
     expect(
       pickBetterVisionAnalysis({ sections: 5, rate: 60 }, { sections: 5, rate: 75 }),

@@ -18,6 +18,8 @@ import {
   resolveChartMount,
   resolveAllChartMounts,
   findMissingChartMounts,
+  resolveMountContainer,
+  resolveMountAnchor,
 } from './chart-mount-truth.js';
 
 const vue = (template: string, script: string) => `<template>\n${template}\n</template>\n\n<script setup>\n${script}\n</script>\n`;
@@ -143,5 +145,100 @@ describe('chart-mount-truth: 阴向（防假阴 · 原病灶必须仍拦）', ()
        onMounted(() => { echarts.init(a.value); echarts.init(b.value) })`,
     );
     expect(findMissingChartMounts(c).map((r) => r.name)).toEqual(['b']);
+  });
+});
+
+// ============================================================
+// 🆕 2026-11-18 P0-a：挂载点**容器归属** + 注入锚点
+// 实锤 mc-max-1795004981354-c659d482：canvas 落在 </base-panel> 之外（template 顶层游离兄弟）
+// ============================================================
+describe('chart-mount-truth: 挂载点容器归属（resolveMountContainer）', () => {
+  it('阳：ref 元素嵌套在 data-section-id 容器内 ⇒ nested + sectionId 溯源', () => {
+    const c = vue(
+      `<base-panel><div class="c-x-chart-con" data-section-id="2:7898"><div ref="chartRef"></div></div></base-panel>`,
+      `const chartRef = ref(null)`,
+    );
+    expect(resolveMountContainer(c, 'chartRef')).toMatchObject({
+      found: true,
+      topLevel: false,
+      nested: true,
+      stray: false,
+      sectionId: '2:7898',
+    });
+  });
+
+  it('阴（c659d482 病灶）：ref 元素成 template 顶层游离兄弟 ⇒ stray', () => {
+    const c = vue(
+      `<base-panel><div class="c-x-chart-con" data-section-id="2:7898"><span/></div></base-panel>\n<div ref="chartRef" class="c-x-chart-canvas"></div>`,
+      `const chartRef = ref(null)`,
+    );
+    expect(resolveMountContainer(c, 'chartRef')).toMatchObject({
+      found: true,
+      topLevel: true,
+      nested: false,
+      stray: true,
+    });
+  });
+
+  it('单根组件（ref 元素即唯一根）⇒ topLevel 但不算越界（防误伤合法单一根）', () => {
+    const c = vue(`<div ref="chartRef"></div>`, `const chartRef = ref(null)`);
+    expect(resolveMountContainer(c, 'chartRef')).toMatchObject({
+      topLevel: true,
+      topLevelCount: 1,
+      stray: false,
+    });
+  });
+
+  it('无 ref 元素 ⇒ not found / no-ref-element', () => {
+    const c = vue(`<div class="a"></div>`, `const chartRef = ref(null)`);
+    expect(resolveMountContainer(c, 'chartRef')).toMatchObject({
+      found: false,
+      reason: 'no-ref-element',
+    });
+  });
+});
+
+describe('chart-mount-truth: 注入锚点解析（resolveMountAnchor）', () => {
+  const twoSections = `<base-panel><div class="a-con" data-section-id="2:7898"><div data-section-id="2:7899"><span/></div></div></base-panel>`;
+
+  it('anchorSection 精确命中 ⇒ 落该容器（openTag 含锚点，reason=anchor-match）', () => {
+    const c = vue(twoSections, `const x = ref(1)`);
+    const a = resolveMountAnchor(c, '2:7898');
+    expect(a).toMatchObject({ sectionId: '2:7898', reason: 'anchor-match' });
+    expect(a && a.openTag).toContain('data-section-id="2:7898"');
+  });
+
+  it('指定内层锚点（2:7899）也可精确命中', () => {
+    const c = vue(twoSections, `const x = ref(1)`);
+    expect(resolveMountAnchor(c, '2:7899')).toMatchObject({
+      sectionId: '2:7899',
+      reason: 'anchor-match',
+    });
+  });
+
+  it('无 anchorSection 但模板内 section 唯一 ⇒ unique-section 回退', () => {
+    const c = vue(
+      `<base-panel><div class="a-con" data-section-id="9:1"><span/></div></base-panel>`,
+      `const x = ref(1)`,
+    );
+    expect(resolveMountAnchor(c, undefined)).toMatchObject({
+      sectionId: '9:1',
+      reason: 'unique-section',
+    });
+  });
+
+  it('多 section 且无 anchorSection（歧义）⇒ null（绝不硬猜归属）', () => {
+    const c = vue(twoSections, `const x = ref(1)`);
+    expect(resolveMountAnchor(c, undefined)).toBeNull();
+  });
+
+  it('anchorSection 未命中 + 多 section ⇒ null', () => {
+    const c = vue(twoSections, `const x = ref(1)`);
+    expect(resolveMountAnchor(c, '9:9')).toBeNull();
+  });
+
+  it('模板无任何 section 容器 ⇒ null', () => {
+    const c = vue(`<div class="a"></div>`, `const x = ref(1)`);
+    expect(resolveMountAnchor(c, '2:7898')).toBeNull();
   });
 });

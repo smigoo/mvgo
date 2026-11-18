@@ -3908,6 +3908,70 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.warn(`数据键还原失败，按原样继续: ${e?.message || e}`);
       }
 
+      // 🛡️ 刀 20（2026-11-18 · B1 RUNTIME-004 实锤）：Map 直取空值守卫——
+      //   `const x = dataMap[key]` 初始 key 不在 map ⇒ undefined ⇒ `x.attr` 抛 TypeError
+      //   ⇒ 白屏（监测预警/流量监测都踩过）。写盘前确定性兜底：声明补 `|| {}` + 首个
+      //   直取点补 `?.`。紧随刀 19 之后（同「改写器之后、校验之前」收口纪律）。
+      //   🔴 与刀 23 互补：刀20 治 RUNTIME-004 族A（空键 render-error）、刀23 治族B（双写 load-error）。
+      try {
+        let guardFixes = 0;
+        for (const [k, v] of Object.entries(allFiles)) {
+          if (!k.endsWith('.vue') || typeof v !== 'string') continue;
+          const g = microcodeHealer.guardMapAccess(v);
+          if (g.changed) {
+            allFiles[k] = g.content;
+            guardFixes += g.patched.length;
+          }
+        }
+        // 计数行铁律：零命中也要可见
+        this.logger.info(
+          `🛡️ Map 直取空值守卫·已评估 ${JSON.stringify({ guardFixes })}`,
+        );
+      } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:guard-map' });
+        this.logger.warn(`Map 空值守卫失败，按原样继续: ${e?.message || e}`);
+      }
+
+      // 🛡️ 刀 23（2026-11-18 · RUNTIME-004 族B 实锤）：SFC 整份双写折叠——
+      //   某个 chunk 把「整份 SFC」当作自己的段输出 ⇒ index.vue = `<template><template>` 双开
+      //   + `<script setup>` 逐字×2 ⇒ `Identifier 'ref' has already been declared`
+      //   ⇒ 预览 load-error ⇒ RUNTIME-004 BLOCK ⇒ 任务 failed（c-env-monitor-3bece447
+      //   产物逐字节实锤；重试/断点续跑链会把双写段当已完成分块原样复活，无法自愈）。
+      //   判据：双份 script 块逐字相同 + template 块序列重复 ⇒ 折叠保留第一份；任一不同
+      //   ⇒ fail-open 不动。折叠命中后补一次块内 import 去重（dedupeScriptImports 与
+      //   assembleIndexVue 同源）—— 原件单块内常有两次 `import { ref }`（S4 注入段 +
+      //   图表段各自带），只折叠不去重仍崩。healer 不自带 dedupe（import.meta 拖崩
+      //   jest CJS 的 healer spec，实测），故在 engineer 侧收口。
+      try {
+        let knife23Fixes = 0;
+        for (const [k, v] of Object.entries(allFiles)) {
+          if (!k.endsWith('.vue') || typeof v !== 'string') continue;
+          const healed = microcodeHealer.collapseDuplicatedSfcBlocks(v);
+          if (!healed.changed) continue;
+          let content = healed.content;
+          const sm = content.match(/<script(\s[^>]*)?>([\s\S]*?)<\/script\s*>/i);
+          if (sm) {
+            try {
+              const deduped = dedupeScriptImports(sm[2]);
+              if (deduped !== sm[2]) {
+                content = content.replace(sm[0], `<script${sm[1] || ''}>${deduped}</script>`);
+              }
+            } catch (_e) {
+              /* dedupe 失败 fail-open：折叠结果仍保留，交由既有 P1-4/语法门禁 */
+            }
+          }
+          allFiles[k] = content;
+          knife23Fixes += 1;
+        }
+        // 计数行铁律：零命中也要可见
+        this.logger.info(
+          `🛡️ SFC 整份双写折叠·已评估 ${JSON.stringify({ knife23Fixes })}`,
+        );
+      } catch (e) {
+        reportPatchChainError(e, { logger: this.logger, pass: 'generateCode:knife23' });
+        this.logger.warn(`SFC 双写折叠失败，按原样继续: ${e?.message || e}`);
+      }
+
       // 🛡️ 刀 20（2026-09-14）：父容器缺 display:flex → 子组件根的 flex 值全部失效
       // → 本应「左 Tab + 右内容」的骨架塌成纵向堆叠、内容被挤出视口（CSS 合法、门禁全绿）。
       // 检测与修复全部复用 FLEX-003 的兄弟组事实源（parseVueTemplate + flexIndex + compRoots）。
@@ -8581,11 +8645,11 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.info(`🎯 重试换采样：temperature ${this.temperature} → ${bumped}（修订轮 ${retryRound}）`, {
           componentName,
         });
-        this.temperature = bumped;
+        this._setRuntimeTemperature(bumped, `microcode-revision-${retryRound}`);
       }
-    } else if (!isRevision && this.temperature > 0) {
-      // 首次生成：恢复基线温度（上一任务可能抬高过实例状态）
-      this.temperature = 0;
+    } else if (!isRevision && this.temperature !== this._temperatureBaseline) {
+      // 首次生成：恢复构造时基线（上一任务可能抬高过实例状态）
+      this._restoreRuntimeTemperature('microcode-first-pass');
     }
 
     this.logger.info(`开始执行代码${action}`, {
@@ -9510,11 +9574,19 @@ export class MicrocodeEngineer extends BaseAgent {
         try {
           const chartsForGuard = Array.isArray(charts) ? charts : [];
           // 🛡️ 判据单一来源：与门禁共用 findMissingChartTypes（含文字卡承载豁免 / line 缺省 series 豁免）
-          const { missing: missingCharts } = findMissingChartTypes({
+          const { missing: missingCharts, exemptBlocked } = findMissingChartTypes({
             charts: chartsForGuard,
             files: codeResult.files || {},
             figmaNodeData: figmaNodeData || null,
           });
+          // 🛡️ N2 早退计数（2026-11-18 G1 配套埋点）：判据判缺但产物已有 echarts ⇒
+          //    注入器 code-healer.js:1944 早退跳过，missing 有值无人消费。0 也打日志。
+          let n2SkippedByExistingChart = 0;
+          // 🛡️ N-P0a-1（2026-11-18）：早退原因精确分布（no-anchor=无锚点静默缺图，真机实测 4 例）。
+          //    唯一来源 = 注入器 onSkip 回调；与此处启发式 n2SkippedByExistingChart 是同一事实
+          //    的精确版（后者保留以兼容既有日志消费方）。
+          /** @type {Record<string, number>} */
+          const n2SkipReasons = {};
           if (missingCharts.length > 0) {
             const idxPathN2 = 'package/index.vue';
             const targetFile = codeResult.files[idxPathN2];
@@ -9542,6 +9614,15 @@ export class MicrocodeEngineer extends BaseAgent {
                 chartType,
                 chartSeries,
                 legendItems,
+                // 🛡️ P0-a 治本（2026-11-18）：注入落点锚点 = vision chart.section（Figma 节点 id，
+                //    与产物 data-section-id / 门禁 2.7 findChartHolderFile 同源）；缺省 ⇒ 注入器
+                //    仅在模板内 section 唯一时落点，否则不注入，杜绝 </template> 越界游离。
+                anchorSection: targetChart.section,
+                // 🛡️ N-P0a-1（2026-11-18）：放弃注入时上报 reason（no-anchor 等），聚合进下方日志。
+                //    入口早退也覆盖：has-echarts-init / no-script-block / symbol-conflict。
+                onSkip: (r) => {
+                  n2SkipReasons[r] = (n2SkipReasons[r] || 0) + 1;
+                },
               });
               if (patched !== healedForN2) {
                 // 🛡️ 注入器自检防线：注入后立即本地校验 SFC，失败即回滚（不注入比注入坏产物好）
@@ -9568,11 +9649,30 @@ export class MicrocodeEngineer extends BaseAgent {
                     );
                   }
                 }
-              } else if (healedForN2 !== targetFile) {
-                codeResult.files[idxPathN2] = healedForN2;
+              } else {
+                // 🛡️ N2 早退计数：注入器未改动产物 ⇒ 若产物已含 echarts.init，
+                //    说明早退生效（缺图修不掉）。事实依据=patched===healedForN2，
+                //    归因沿用注入器同一字面量，不另立判据。仅观测计数，不改注入行为。
+                if (
+                  typeof healedForN2 === 'string' &&
+                  healedForN2.includes('echarts.init(')
+                ) {
+                  n2SkippedByExistingChart += 1;
+                }
+                if (healedForN2 !== targetFile) {
+                  codeResult.files[idxPathN2] = healedForN2;
+                }
               }
             }
           }
+          this.logger.info('🛡️ N2 图表兜底·已评估', {
+            missingTypes: missingCharts.map((m) => m.type),
+            n2SkippedByExistingChart,
+            // 🛡️ N-P0a-1：早退原因精确分布。空 {} ⇒ 未发生放弃（未进入注入分支或注入成功）；
+            //    {no-anchor:1} ⇒ 无锚点静默缺图（历史不可观测的 4 例根因）。
+            n2SkipReasons,
+            exemptBlocked: exemptBlocked || null,
+          });
         } catch (n2err) {
           reportPatchChainError(n2err, { logger: this.logger, pass: 'execute:7786' });
           this.logger.warn('N2 图表兜底失败（非阻断）', {

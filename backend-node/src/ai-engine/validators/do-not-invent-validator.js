@@ -131,13 +131,22 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
   //    豁免（2026-11-09 · 00f3626c 实锤）：文字数字卡承载的图表类型不判缺失——
   //    vision chart.section 的 Figma 子树内有 TEXT 节点即视为已被文字形态承载。
   //    防线保留：子树无 TEXT 且产物无对应 series ⇒ 仍判缺失。
+  // 🛡️ G1（2026-11-18）：2.5 已判缺失的 (section,type) 记入集合，供 2.7 显式互斥；
+  //    warnChartMissing 恒打（0 也打），与 2.7 的 warnChartSectionMissing 对账。
+  let warnChartMissing = 0
+  let exemptBlocked = { r1: 0, r2: 0, r3: 0, r4: 0 } // 恒打，0 也打
+  const chartMissingPairs = new Set()
   if (analysisCharts.length > 0) {
-    const { missing } = findMissingChartTypes({
+    const verdict = findMissingChartTypes({
       charts: analysisCharts,
       vueContent,
       figmaIndex: analysisFigmaIndex,
     })
+    exemptBlocked = verdict.exemptBlocked
+    const { missing } = verdict
     for (const { type: t, chart } of missing) {
+      warnChartMissing += 1
+      chartMissingPairs.add(`${chart?.section != null ? String(chart.section) : ''}||${t}`)
       // 🛡️ 2026-11-17 可观测性改造：WARN 写清「哪个文件/哪个段/缺什么类型」。
       //    只改报告文案 + file 字段——判据仍由 findMissingChartTypes 决定，零注入、不动产物。
       //    承载文件定位复用 2.7 段 G12b 同源的 findChartHolderFile；找不到 ⇒ fail-open
@@ -187,7 +196,10 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
     const holderHasDecl = /series\s*:\s*\[/.test(holderContent)
     const satisfied = holderTypes.has(normT) || (normT === 'line' && holderHasDecl)
     if (!satisfied) {
+      // 🛡️ G1（2026-11-18）2.5/2.7 显式互斥：2.5 已对同一 (section,type) 报缺失时，
+      //    2.7 只计数、不上报 WARN。按 (section,type) 判，不用 seen(msg)（两条文案不同）。
       chartSectionMissing += 1
+      if (chartMissingPairs.has(`${sid}||${normT}`)) continue
       const msg = `段级图表缺失：vision 记录 ${sid} 段有「${normT}」图表，但承载文件 ${holderPath} 内无对应类型 series（可能漏写或被拆至兄弟组件承载）`
       if (!seen.has(msg)) {
         seen.add(msg)
@@ -251,6 +263,10 @@ export function validateDoNotInvent({ files = {}, analysis = {}, figmaNodeData =
     pass: blockCount === 0,
     blockCount,
     issues,
+    // 🛡️ G1：全产物级图表缺失计数（WARN 观测，0 也打——调用方落日志）
+    warnChartMissing,
+    // 🛡️ G1：四层文字承载豁免拦截计数（r1 产物自证 / r2 图层名 / r3 几何 / r4 轴刻度），0 也打
+    exemptBlocked,
     // 🛡️ G12b：段级图表缺失计数（WARN 观测，0 也打——调用方落日志）
     warnChartSectionMissing: chartSectionMissing,
     // 🛡️ 2026-11-15：挂载点判据 fail-open 计数（声明无法溯源的目标数，恒打便于真机对账）

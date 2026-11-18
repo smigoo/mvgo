@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile, access } from 'fs/promises'
+import { mkdtemp, mkdir, rm, writeFile, access, readFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -104,5 +104,89 @@ describe('OrphanComponentDetector.detect', () => {
 
     expect(result.deleted).toHaveLength(0)
     expect(await exists(stray)).toBe(true)
+  })
+
+  // ===== S1 图表宿主保护红测（P0：ChartBlock 被孤儿检测误删）=====
+  // 判据：①源码含 echarts.init 且 ②series type 归一化后 ∈ vision.charts 归一化类型集
+  // 背景：本次事故 vision type='area' / 产物 series type='line' ⇒ 必须走 normalizeChartType 同源
+  const CHART_SRC_LINE = `<template><div ref="chartRef" /></template>\n<script setup>\nimport * as echarts from 'echarts'\nconst chart = echarts.init(chartRef.value)\nconst option = { xAxis: { type: 'category' }, series: [{ type: 'line' }] }\n</script>\n`
+  const CHART_SRC_PIE = CHART_SRC_LINE.replace("type: 'line'", "type: 'pie'")
+  const NO_ECHARTS_SRC = `<template><div class="x" /></template>\n<script setup>\nconst series = [{ type: 'line' }]\n</script>\n` // 只有 type 文本、无 echarts.init ⇒ 假图表
+
+  const indexVue = `<template><div class="root" /></template>\n`
+
+  /** 写入一个 index + 指定子组件，返回子组件绝对路径 */
+  const setupChild = async (name: string, content: string) => {
+    await writeFile(join(root, 'package', 'index.vue'), indexVue, 'utf-8')
+    const child = join(root, 'package', 'components', name)
+    await writeFile(child, content, 'utf-8')
+    return child
+  }
+
+  it('【S1-阳性】vision 声明 area / 产物 series line，命中归一化 ⇒ 孤儿 retained 且记 protectedOrphans', async () => {
+    const child = await setupChild('ChartBlock.vue', CHART_SRC_LINE)
+    const result: any = await (OrphanComponentDetector.detect as any)(root, {
+      visionCharts: [{ section: '2:7898', type: 'area' }],
+    })
+    expect(result.protectedOrphans).toContain(child)
+    expect(result.orphans).not.toContain(child)
+    expect(result.deleted).not.toContain(child)
+    expect(await exists(child)).toBe(true)
+  })
+
+  it('【S1-阴性·类型不符】产物是 pie 而 vision 只声明 area(line) ⇒ 仍照删', async () => {
+    const child = await setupChild('PieBlock.vue', CHART_SRC_PIE)
+    const result: any = await (OrphanComponentDetector.detect as any)(root, {
+      visionCharts: [{ section: '2:7898', type: 'area' }],
+    })
+    expect(result.orphans).toContain(child)
+    expect(result.deleted).toContain(child)
+    expect(result.protectedOrphans || []).not.toContain(child)
+    expect(await exists(child)).toBe(false)
+  })
+
+  it('【S1-阴性·无 echarts】只有 series type 文本、无 echarts.init 的假图表 ⇒ 仍照删', async () => {
+    const child = await setupChild('FakeChart.vue', NO_ECHARTS_SRC)
+    const result: any = await (OrphanComponentDetector.detect as any)(root, {
+      visionCharts: [{ section: '2:7898', type: 'area' }],
+    })
+    expect(result.deleted).toContain(child)
+    expect(await exists(child)).toBe(false)
+  })
+
+  it('【S1-阴性·真孤儿】无图表的普通孤儿（TitleHeader/TabBar 形态）⇒ 仍照删，保护不过度', async () => {
+    const child = await setupChild('TitleHeader.vue', `<template><h1>t</h1></template>\n`)
+    const result: any = await (OrphanComponentDetector.detect as any)(root, {
+      visionCharts: [{ section: '2:7898', type: 'area' }],
+    })
+    expect(result.deleted).toContain(child)
+    expect(await exists(child)).toBe(false)
+  })
+
+  it('【S1-fail-open】visionCharts 为空 / 未传 ⇒ 含 echarts 的孤儿也照删（行为与改动前逐字相同）', async () => {
+    const child = await setupChild('ChartBlock.vue', CHART_SRC_LINE)
+    const r1: any = await (OrphanComponentDetector.detect as any)(root, { visionCharts: [] })
+    expect(r1.deleted).toContain(child)
+    const child2 = await setupChild('ChartBlock.vue', CHART_SRC_LINE)
+    const r2: any = await OrphanComponentDetector.detect(root) // 单参调用兼容
+    expect(r2.deleted).toContain(child2)
+    expect(r2.protectedOrphans).toEqual([]) // 新字段恒在，0 也打
+  })
+
+  it('【S1-双图同步】mc/vue3 两处调用点必须都传第二参（visionCharts），漏一处即 FAIL', async () => {
+    const files = [
+      join(__dirname, '..', '..', 'ai-engine', 'graphs', 'mc-component-graph-phase2.js'),
+      join(__dirname, '..', '..', 'ai-engine', 'graphs', 'mc-component-graph-vue3.js'),
+    ]
+    for (const f of files) {
+      const src = await readFile(f, 'utf-8')
+      expect(src).toMatch(/OrphanComponentDetector\.detect\([\s\S]{0,400}?visionCharts/)
+    }
+  })
+
+  it('【S1-日志命名】protectedOrphans 与视觉段 orphanCharts 文案不得混用', async () => {
+    const src = await readFile(join(__dirname, 'orphan-component-detector.js'), 'utf-8')
+    expect(src).toMatch(/protectedOrphans/)
+    expect(src).not.toMatch(/orphanCharts/) // 命名隔离：视觉段判据在 phase2:1593，不在此检测器
   })
 })

@@ -96,14 +96,14 @@ describe('判据同源化接线（源码契约，四象限同步）', () => {
   });
 
   it('②mc N2：触发判据用 missing、注入类型用缺失类型（非 charts[0]）', () => {
-    expect(MC).toMatch(/const \{ missing: missingCharts \} = findMissingChartTypes\(\{/);
+    expect(MC).toMatch(/const \{ missing: missingCharts, exemptBlocked \} = findMissingChartTypes\(\{/);
     expect(MC).toMatch(/if \(missingCharts\.length > 0\)/);
     expect(MC).toMatch(/resolveEchartsType\(firstMissing\.type\)/);
     expect(MC).not.toMatch(/!hasEcharts/);
   });
 
   it('②vue3 N2：与 mc 同款接线（四象限同步）', () => {
-    expect(VUE3).toMatch(/const \{ missing: missingCharts \} = findMissingChartTypes\(\{/);
+    expect(VUE3).toMatch(/const \{ missing: missingCharts, exemptBlocked \} = findMissingChartTypes\(\{/);
     expect(VUE3).toMatch(/if \(missingCharts\.length > 0\)/);
     expect(VUE3).toMatch(/resolveEchartsType\(firstMissing\.type\)/);
     expect(VUE3).not.toMatch(/!hasEcharts/);
@@ -115,6 +115,14 @@ describe('判据同源化接线（源码契约，四象限同步）', () => {
       'utf-8',
     );
     expect(HEALER).toMatch(/content\.includes\('echarts\.init\('\)/);
+    // N2 计数行（2026-11-18）：早退次数以「注入器未改动产物」为事实计数，不修改早退行为
+    for (const [name, src] of [
+      ['mc', readFileSync(join(SRC, 'ai-engine/roles/microcode-engineer.js'), 'utf-8')],
+      ['vue3', readFileSync(join(SRC, 'ai-engine/roles/vue3-engineer.js'), 'utf-8')],
+    ] as const) {
+      expect(src).toMatch(/n2SkippedByExistingChart \+= 1;/) // name
+      expect(src).toMatch(/🛡️ N2 图表兜底·已评估/) // name
+    }
   });
 });
 

@@ -14,6 +14,10 @@
 
 import { Graph } from './graph.js';
 import { FigmaConnector } from '../roles/figma-connector.js';
+// 🆕 步骤 1（三级回灌 · 2026-11-18）：path join 顶层导入（本文件此前无；供 diffRegionsOutDir 组路径）
+import { join as joinPath } from 'node:path';
+// 🆕 步骤 2（二级 · 2026-11-18）：中间轮廉价像素探针（零 Vision、观察模式）
+import { analyzeCheapPixels, CHEAP_SHOT_DEFAULTS } from '../utils/cheap-shot-probe.js';
 import {
   VisualParser,
   evaluateVisualTrustVerdict,
@@ -869,6 +873,11 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        // 文本代码生成温度必须从 resolveTextConfig 透传；不能复用视觉温度。
+        temperature:
+          textCfg.temperature ??
+          textCfg.textTemperature ??
+          textCfg.unifiedTemperature,
         onTokenUsage: state.onTokenUsage,
       });
 
@@ -1353,6 +1362,24 @@ export function createPhase2Graph(config = {}) {
         renderProbes = result.renderProbes || null;
       }
 
+      // 🆕 步骤 2（二级 · 2026-11-18）：廉价像素探针（观察模式，只记录不阻断、不进 Vision）。
+      //   vue3 图每轮本就有截图（adversarial 预启动），零额外渲染成本；结果挂独立字段
+      //   cheapShotProbe，**绝不写回 state.renderedImage**（不触发额外 Vision）。
+      //   落点与 mc 图不同：mc 图在中间轮分支省掉截图，vue3 图在已有截图上做探针。
+      if (CHEAP_SHOT_DEFAULTS.enabled && renderedImage && !isStaticFallback) {
+        try {
+          const cheapProbe = await analyzeCheapPixels(renderedImage);
+          state.cheapShotProbe = cheapProbe;
+          const sig = (cheapProbe.signals || []).join('|') || 'none';
+          logger.info(
+            `[cheap-shot] probed=${cheapProbe.probed},signals=${sig},blank=${cheapProbe.blank},` +
+              `tooTall=${cheapProbe.tooTall},aspect=${cheapProbe.aspectRatio},tag=vue3-r${state.iterationCount || 0}`,
+          );
+        } catch (cheapError) {
+          logger.info(`[cheap-shot] probed=0,reason=wrapper-exception,tag=vue3,error=${cheapError.message}`);
+        }
+      }
+
       let visualComparisonReport = null;
       if (
         runtimeGate?.status === 'PASS' &&
@@ -1386,6 +1413,9 @@ export function createPhase2Graph(config = {}) {
             requestQueueTimeoutMs: state.requestQueueTimeoutMs,
             requestTimeoutMs: state.requestTimeoutMs,
             requestMaxRetries: state.requestMaxRetries,
+            // 🆕 步骤 1（三级回灌 · 2026-11-18）：差异区域裁剪小图落盘目录（四象限同步：vue3-max 同点位）。
+            //   本文件无顶层 path import（既有风格为调用点动态 import，见 :321），同款处理。
+            diffRegionsOutDir: joinPath(state.outputPath || '', '.mc-gen', 'screenshots', 'diff-regions'),
           },
         );
         state.onProgress?.({
@@ -2173,6 +2203,8 @@ export function createPhase2Graph(config = {}) {
 
     const orphanDetectionResult = await OrphanComponentDetector.detect(
       state.outputPath,
+      // 🛡️ S1（P0）：vision 声明图表的宿主孤儿不被误删（ChartBlock 事故根治）
+      { visionCharts: state.charts },
     );
 
     if (orphanDetectionResult.deleted.length > 0) {
@@ -3838,6 +3870,12 @@ export function createPhase2Graph(config = {}) {
     logger.info('🛡️ G12b 段级图表存在性·已评估', {
       chartSectionMissing: res.warnChartSectionMissing || 0,
       warnIssues: res.issues.filter((i) => i.severity === 'WARN').map((i) => i.id),
+    });
+    // 🛡️ G1（2026-11-18）：与 mc 图同款计数行（四象限同步），逐字透传不重算判据
+    logger.info('🛡️ G1 图表文字承载豁免·已评估', {
+      exemptBlocked: res.exemptBlocked || { r1: 0, r2: 0, r3: 0, r4: 0 },
+      chartMissing: res.warnChartMissing || 0,
+      chartSectionMissing: res.warnChartSectionMissing || 0,
     });
     logger.info('✅ 禁止臆造校验通过', { issueCount: res.issues.length });
     return { doNotInventResult: res };

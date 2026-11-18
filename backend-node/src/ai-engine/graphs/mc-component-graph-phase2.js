@@ -67,6 +67,8 @@ import {
   buildRuntimeRevisionGuidance,
   hasDeterministicRuntimeMissing,
 } from '../roles/screenshot-renderer.js';
+// 🆕 步骤 2（二级 · 2026-11-18）：中间轮廉价截图探针（零 Vision、观察模式）
+import { probeCheapShot, CHEAP_SHOT_DEFAULTS } from '../utils/cheap-shot-probe.js';
 import {
   getMaxIterations,
   getQualityScoreThreshold,
@@ -1946,14 +1948,19 @@ export function createPhase2Graph(config = {}) {
       const textCfg = state.textAIConfig || state.aiConfig || {};
       // 渲染器：微码组件固定使用 MicrocodeEngineer（面板头部/背景由 base-panel 插槽剥离，产物含 component.js/declare.json）
       const EngineerClass = MicrocodeEngineer;
-      const engineer = new EngineerClass({
-        apiKey: textCfg.apiKey,
-        model: textCfg.model,
-        baseURL: textCfg.baseURL,
-        thinkingType: textCfg.thinkingType,
-        onTokenUsage: state.onTokenUsage,
-        providerId: textCfg.providerId || null,
-      });
+        const engineer = new EngineerClass({
+          apiKey: textCfg.apiKey,
+          model: textCfg.model,
+          baseURL: textCfg.baseURL,
+          // 文本代码生成温度必须从 resolveTextConfig 透传；不能复用视觉温度。
+          temperature:
+            textCfg.temperature ??
+            textCfg.textTemperature ??
+            textCfg.unifiedTemperature,
+          thinkingType: textCfg.thinkingType,
+          onTokenUsage: state.onTokenUsage,
+          providerId: textCfg.providerId || null,
+        });
 
       // 提取 Figma 节点中文名称作为 displayName（用于 declare.json componentName）
       // ⚠️ 必须剥离 cp-/mc-/mv-/page- 前缀，与上方「早提取」（_rootTitle，第 591 行）逐字一致。
@@ -3010,6 +3017,43 @@ export function createPhase2Graph(config = {}) {
     // 避免每轮都跑 ~3min 的 Puppeteer 截图 + Vision 比对，把最贵的像素保真闭环收敛到最后一轮。
     const _maxIter = state.maxIterations || 1;
     if (revisionLoopCount < _maxIter - 1) {
+      // 🆕 步骤 2（二级 · 2026-11-18）：中间轮廉价截图 + 像素探针（观察模式，只记录不阻断）。
+      //   旧逻辑（跳过截图渲染与视觉比对）在 MVGO_CHEAP_SHOT=0 时逐字保留；默认开启时改为
+      //   调 probeCheapShot（依赖注入，零 Vision）——结果挂 _cheapShotProbe 独立字段，
+      //   **绝不写回 state.renderedImage / _screenshotPromise**（否则下游 visual-comparator
+      //   会误触发完整 Vision 比对，回到 ~3min 贵路径）。
+      if (CHEAP_SHOT_DEFAULTS.enabled && state.outputPath) {
+        const probePromise = (async () => {
+          try {
+            return await probeCheapShot({
+              renderScreenshot,
+              renderParams: {
+                outputPath: state.outputPath,
+                sessionId: state.sessionId || state.componentName || 'unknown',
+                componentName: state.componentName,
+                target: state.target || 'microcode',
+                previewImage: state.previewImage || null,
+                onProgress: null, // 中间轮不污染前端进度（观察模式静默）
+              },
+              logger,
+              tag: `mc-r${revisionLoopCount}`,
+            });
+          } catch (error) {
+            // 双保险：probe 内部已 best-effort；此处兜住任何意外，绝不打断图
+            logger.info(
+              `[cheap-shot] probed=0,reason=wrapper-exception,tag=mc-r${revisionLoopCount},error=${error.message}`,
+            );
+            return { probed: 0, reason: 'wrapper-exception' };
+          }
+        })();
+        // 不 await：与既有截图Promise 同款后台模式，供后续节点/收尾读；观察模式首期只打日志
+        return {
+          renderedImage: null,
+          visualComparisonReport: null,
+          _screenshotPromise: null,
+          _cheapShotProbe: probePromise,
+        };
+      }
       logger.info(
         `[skip-screenshot] 中间轮(${revisionLoopCount}/${_maxIter})跳过截图渲染与视觉比对`,
       );
@@ -3149,6 +3193,9 @@ export function createPhase2Graph(config = {}) {
         requestQueueTimeoutMs: state.requestQueueTimeoutMs,
         requestTimeoutMs: state.requestTimeoutMs,
         requestMaxRetries: state.requestMaxRetries,
+        // 🆕 步骤 1（三级回灌 · 2026-11-18）：差异区域裁剪小图落盘目录（与截图同目录隔离）。
+        //   纯附加 option：不传则 comparator 跳过定位（旧调用方零影响）。
+        diffRegionsOutDir: join(state.outputPath || '', '.mc-gen', 'screenshots', 'diff-regions'),
       });
 
       // FIX: 如果比对降级（如 API 失败），返回 null 避免 revision-decision 把 similarity:0 当有效分数
@@ -4538,6 +4585,8 @@ export function createPhase2Graph(config = {}) {
 
     const orphanDetectionResult = await OrphanComponentDetector.detect(
       state.outputPath,
+      // 🛡️ S1（P0）：vision 声明图表的宿主孤儿不被误删（ChartBlock 事故根治）
+      { visionCharts: state.charts },
     );
 
     if (orphanDetectionResult.deleted.length > 0) {
@@ -6732,6 +6781,13 @@ export function createPhase2Graph(config = {}) {
     logger.info('🛡️ G12b 段级图表存在性·已评估', {
       chartSectionMissing: res.warnChartSectionMissing || 0,
       warnIssues: res.issues.filter((i) => i.severity === 'WARN').map((i) => i.id),
+    });
+    // 🛡️ G1（2026-11-18）：四层豁免拦截 + 全产物级缺失计数恒打（0 也打）。
+    //   与 chart-missing-types 的 exemptBlocked 单一来源逐字透传，禁止在此重算判据。
+    logger.info('🛡️ G1 图表文字承载豁免·已评估', {
+      exemptBlocked: res.exemptBlocked || { r1: 0, r2: 0, r3: 0, r4: 0 },
+      chartMissing: res.warnChartMissing || 0,
+      chartSectionMissing: res.warnChartSectionMissing || 0,
     });
     logger.info('✅ 禁止臆造校验通过（质量项以 WARN 留痕）', { issueCount: res.issues.length });
     return { doNotInventResult: res };

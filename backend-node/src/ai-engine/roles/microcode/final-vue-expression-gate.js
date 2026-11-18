@@ -34,11 +34,14 @@ import { pruneDanglingSubComponentImports } from './code-healer.js';
  * @param {string} outputPath 产物根目录
  * @param {string[]} writtenVueFiles 本轮成功写入的 .vue 相对路径（writeFiles 的 writtenFiles 过滤 .vue）
  * @param {{logger?: {warn?:Function, error?:Function}}} [options]
- * @returns {{checked: number, healed: Array<{path:string, action:string, conservedTags:number}>, bad: Array<{path:string, errors:string[], action:string, restoredFrom: (string|null)>}}}
+ * @returns {{checked: number, healed: Array<{path:string, action:string, conservedTags:number}>, bad: Array<{path:string, errors:string[], action:string, restoredFrom: (string|null)}>, failClosed: number}}
+ *   `failClosed` = 跑完仍**留在产物里的坏文件数**（left-in-place / remove-failed）。
+ *   2026-11-18 · dcb5f88c 实锤新增：此前调用方只能看 bad[]，无法区分「已隔离」与
+ *   「坏文件原样留着」⇒ 叠加假绿无从识别。调用方必须把该值打进取证日志。
  *   永不 throw：终检自身异常按 0 坏档处理（保守，不阻断主流程）。
  */
 export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options = {}) {
-  const out = { checked: 0, healed: [], bad: [] };
+  const out = { checked: 0, healed: [], bad: [], failClosed: 0 };
   try {
     // 🛡️ allVueOnDisk（2026-11-12 · 3cdc4757）：终局扫描口径——以磁盘事实为准列全量 .vue，
     //   不依赖调用方登记（调用方清单可能漏掉早轮写入/编辑器新产的文件）。
@@ -90,6 +93,16 @@ export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options =
         }
       }
 
+      // ①'' 刀23 折叠**不在此处**（2026-11-18 · dcb5f88c/27bc42b2 复核结论）：
+      //    曾在此加 `collapseDuplicatedSfcBlocks` 兜底，实测证明①' 的 `healStackedSfcBlocks`
+      //    已**覆盖全部叠加形态**——真机快照(.mc-gen/cache/bad-sfc/package__index.vue.txt)、
+      //    `<template><template>` 双开、双份 SFC 平铺三种形态均 `fixed=true / reason=healed`
+      //    且修后 `validateVueSfcExpressions().valid=true`（`conservedTags` 分别 6/1/2）。
+      //    故本模块保留**单一自愈器**（判据单一来源、不留不可证分支）。
+      //    折叠只保留在两个「无此自愈器」的位置：写盘门禁前 / CODE-023 剥除复检（file-writer.js）。
+      //    ⚠️ 若将来出现 heal 判 `rejectedConservation` 而折叠可修的形态，再在此补插，
+      //       并以该真机快照补阳性 spec（不得无 spec 上线）。
+
       // ① 缓存回退：chunk-meta.json 登记的候选倒序，取第一个过终验的
       //    🛡️ 2026-11-16：候选合法性由 validateVueSfcExpressions（含 R1 结构判据）统一裁决，
       //    segmentType=script 的分块碎片不再是「合法整文件」。
@@ -136,8 +149,9 @@ export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options =
               action: 'remove-failed',
               restoredFrom: null,
             });
+            out.failClosed += 1; // 坏文件未能删除 = 仍在产物里，与 left-in-place 同语义
             options.logger?.error?.(
-              `🚫 终局扫描：${relPath} 编译失败，隔离失败（${rmErr?.message || rmErr}）——坏文件仍留在产物中`,
+              `🚫 终局扫描：${relPath} 编译失败，隔离失败（${rmErr?.message || rmErr}）——坏文件仍留在产物中（fail-closed=${out.failClosed}）`,
               { errors: res.errors.slice(0, 2) },
             );
             continue;
@@ -165,9 +179,13 @@ export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options =
           action: 'left-in-place',
           restoredFrom: null,
         });
+        // 🛡️ 2026-11-18 · dcb5f88c/27bc42b2 实锤：fail-closed 必须**可计数**。
+        //   此前 left-in-place 只打一行 warn，调用方无从判断「坏文件仍在产物里」，
+        //   与「已隔离」在日志里长得一样 ⇒ 假绿无从识别。
+        out.failClosed += 1;
         options.logger?.warn?.(
-          `🛡️ 终局扫描：${relPath} 编译失败且无缓存可回退，路径不可降级，保留原文件（fail-closed）`,
-          { errors: res.errors.slice(0, 2) },
+          `🛡️ 终局扫描：${relPath} 编译失败且无缓存可回退，路径不可降级，保留原文件（fail-closed=${out.failClosed}）`,
+          { errors: res.errors.slice(0, 2), failClosed: out.failClosed },
         );
         continue;
       }
@@ -194,6 +212,7 @@ export function runFinalVueExpressionGate(outputPath, writtenVueFiles, options =
           action: 'remove-failed',
           restoredFrom: null,
         });
+        out.failClosed += 1; // 同上：坏文件仍在产物里
       }
     }
   } catch {

@@ -657,6 +657,182 @@ watch(activeTab, (newTab) => {})
       }
     }
   })
+
+  // ============================================================
+  // 🆕 2026-11-18 P0-a：注入落点锚点化（mc-max-1795004981354-c659d482 实锤）
+  // 旧版第③级回退 `</template>` 前 ⇒ 产物根为 <base-panel> 且内层无 -root 类时，
+  // canvas 被塞到 </base-panel> 之外、成 template 顶层游离兄弟 ⇒ 图表区空、canvas 渲在面板外。
+  // ============================================================
+  /** 实锤最小复刻：无 -root 类，图表区在 data-section-id 容器内，宿主外壳是 <base-panel> */
+  function makeNoRootVue() {
+    return `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-env-monitor-slot-con" style="display:flex;flex-direction:column;height:100%;">
+      <div class="c-env-monitor-echarts-line-con" data-section-id="2:7898" style="flex:0.779;min-height:0;display:flex;flex-direction:column;">
+        <div class="c-env-monitor-group-2136637691-con" data-section-id="2:7899" style="flex:1.000;min-height:0;display:flex;flex-direction:column;">
+          <ContentTailText style="min-height:0;" />
+        </div>
+      </div>
+    </div>
+  </base-panel>
+</template>
+
+<script setup>
+import ContentTailText from './components/ContentTailText.vue'
+import { onMounted } from 'vue'
+onMounted(() => {})
+</script>
+
+<style lang="less" scoped>
+.c-env-monitor-slot-con { width: 100%; }
+</style>`
+  }
+
+  it('P0-a 阳性（c659d482 实锤）：无 -root → canvas 注入 data-section-id 锚点容器内，绝不越出 </base-panel>', () => {
+    const out = injectEchartsFallback(makeNoRootVue(), { anchorSection: '2:7898' })
+    expect(out).not.toBe(makeNoRootVue())
+    // canvas 紧跟锚点容器 <div … data-section-id="2:7898"> 开标签之后（容器内首个位置）
+    expect(out).toMatch(
+      /<div class="c-env-monitor-echarts-line-con" data-section-id="2:7898"[^>]*>\s*<div ref="chartRef"/,
+    )
+    // 🔴 越界回归锚：绝不得落在 </base-panel> 之后
+    expect(out).not.toMatch(/<\/base-panel>\s*<div ref="chartRef"/)
+    // canvas 位置必须在锚点容器内、且在 </base-panel> 之前
+    const canvasIdx = out.indexOf('<div ref="chartRef"')
+    const panelCloseIdx = out.indexOf('</base-panel>')
+    expect(canvasIdx).toBeGreaterThan(-1)
+    expect(canvasIdx).toBeLessThan(panelCloseIdx)
+  })
+
+  it('P0-a：无 anchorSection 但模板内 section 容器唯一 → 落该容器（单 section 安全回退）', () => {
+    const src = `<template>
+  <base-panel>
+    <div class="c-x-chart-con" data-section-id="9:1"><span/></div>
+  </base-panel>
+</template>
+<script setup>
+import { onMounted } from 'vue'
+onMounted(() => {})
+</script>
+<style lang="less" scoped>
+.c-x-chart-con { width: 100%; }
+</style>`
+    const out = injectEchartsFallback(src, {})
+    expect(out).toMatch(
+      /<div class="c-x-chart-con" data-section-id="9:1"[^>]*>\s*<div ref="chartRef"/,
+    )
+    expect(out).not.toMatch(/<\/base-panel>\s*<div ref="chartRef"/)
+  })
+
+  it('P0-a 阴性对照：无 -root 且无 data-section-id → 原样返回不注入（宁缺勿越界）', () => {
+    const src = `<template>
+  <base-panel><span/></base-panel>
+</template>
+<script setup>
+import { onMounted } from 'vue'
+onMounted(() => {})
+</script>
+<style lang="less" scoped>
+.a { width: 100%; }
+</style>`
+    expect(injectEchartsFallback(src, {})).toBe(src)
+  })
+
+  it('P0-a 阴性对照：多 section 且无 anchorSection（歧义）→ 不注入，不猜归属', () => {
+    const src = `<template>
+  <base-panel>
+    <div data-section-id="1:1"><span/></div>
+    <div data-section-id="2:2"><span/></div>
+  </base-panel>
+</template>
+<script setup>
+import { onMounted } from 'vue'
+onMounted(() => {})
+</script>
+<style lang="less" scoped>
+.a { width: 100%; }
+</style>`
+    // 无 anchorSection ⇒ 歧义不猜；anchorSection 未命中 ⇒ 亦不猜
+    expect(injectEchartsFallback(src, {})).toBe(src)
+    expect(injectEchartsFallback(src, { anchorSection: '9:9' })).toBe(src)
+  })
+
+  // ============================================================
+  // 🆕 2026-11-18 N-P0a-1：早退留痕回调 onSkip（「静默缺图不可观测」根治）
+  // 历史此处零留痕 ⇒ 无锚点放弃注入无任何日志，产物「图表区空白」不可观测（真机实测 4 例）。
+  // 契约：6 个早退点逐点唯一 reason；成功注入不回调；未传回调行为逐字不变。
+  // ============================================================
+  const noAnchorSrc = `<template>
+  <base-panel><span/></base-panel>
+</template>
+<script setup>
+import { onMounted } from 'vue'
+onMounted(() => {})
+</script>
+<style lang="less" scoped>
+.a { width: 100%; }
+</style>`
+
+  it('N-P0a-1：无锚点放弃注入 → onSkip 上报 no-anchor（4 例静默缺图根因）', () => {
+    const reasons: string[] = []
+    const out = injectEchartsFallback(noAnchorSrc, { onSkip: (r) => reasons.push(r) })
+    expect(out).toBe(noAnchorSrc)
+    expect(reasons).toEqual(['no-anchor'])
+  })
+
+  it('N-P0a-1：成功注入 → onSkip 零调用（不得误报）', () => {
+    const reasons: string[] = []
+    const out = injectEchartsFallback(makeNoRootVue(), {
+      anchorSection: '2:7898',
+      onSkip: (r) => reasons.push(r),
+    })
+    expect(out).not.toBe(makeNoRootVue())
+    expect(reasons).toEqual([])
+  })
+
+  it('N-P0a-1：产物已含 echarts.init → onSkip 上报 has-echarts-init（早退可归因）', () => {
+    const src = makeNoRootVue().replace(
+      'onMounted(() => {})',
+      'onMounted(() => { echarts.init(document.body) })',
+    )
+    const reasons: string[] = []
+    const out = injectEchartsFallback(src, {
+      anchorSection: '2:7898',
+      onSkip: (r) => reasons.push(r),
+    })
+    expect(out).toBe(src)
+    expect(reasons).toEqual(['has-echarts-init'])
+  })
+
+  it('N-P0a-1：其余 4 个早退点逐条枚举 no-script-block / empty-content / symbol-conflict', () => {
+    // ① 无 <script> 块
+    const noScript = `<template><base-panel><span/></base-panel></template>
+<style lang="less" scoped>.a { width: 100%; }</style>`
+    const r1: string[] = []
+    expect(injectEchartsFallback(noScript, { onSkip: (r) => r1.push(r) })).toBe(noScript)
+    expect(r1).toEqual(['no-script-block'])
+
+    // ② 空内容
+    const r2: string[] = []
+    expect(injectEchartsFallback('', { onSkip: (r) => r2.push(r) })).toBe('')
+    expect(r2).toEqual(['empty-content'])
+
+    // ③ 符号冲突：chartRef 已被占用 ⇒ 派生 mcChartRef，而 mcChartRef 也已被占用
+    const conflict = `<template><base-panel><span/></base-panel></template>
+<script setup>
+import { onMounted } from 'vue'
+const chartRef = null
+const mcChartRef = null
+onMounted(() => {})
+</script>`
+    const r3: string[] = []
+    expect(injectEchartsFallback(conflict, { onSkip: (r) => r3.push(r) })).toBe(conflict)
+    expect(r3).toEqual(['symbol-conflict'])
+  })
+
+  it('N-P0a-1：未传 onSkip → 行为与历史逐字一致（零副作用）', () => {
+    expect(injectEchartsFallback(noAnchorSrc, {})).toBe(noAnchorSrc)
+  })
 })
 
 // ============================================================

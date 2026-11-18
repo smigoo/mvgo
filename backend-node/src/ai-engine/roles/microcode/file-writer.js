@@ -36,13 +36,17 @@ import { stripFgTakeoverRules } from '../../utils/folded-grid-section-takeover.j
 //   的同一份解析（禁造第三份）。只改 .less 源：.css 由下游 `recompileIndexCss` 自动重生成。
 import { dropOrphanStyleRules } from '../../utils/orphan-style-rule-guard.js';
 import { stripSectionContractBleed } from '../../utils/section-contract-bleed-guard.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl, injectChartRebuildGuard } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healCssDeclarationsInScript, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs, healBareVarArithmeticToCalc, stripDeadChartImpl, injectChartRebuildGuard, collapseDuplicatedSfcBlocks } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { normalizeInlineLengthPx, formatInlinePxStats } from '../../utils/inline-geom-dup-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
 // 🛡️ 产物终验（2026-11-12 · 8fa6d6f3 实锤）：表达式级最后闸，拦「写盘出口自愈链
 //    注坏 :style 后、磁盘残留坏版」到达前端（详见 final-vue-expression-gate.js docblock）。
 import { runFinalVueExpressionGate } from './final-vue-expression-gate.js';
+// 🛡️ 2026-11-18（N1 死结 · 方案 A）：缺开始标签跨行错配的确定性自愈。
+//   独立接在写盘门禁判死前，不碰 healStackedSfcBlocks / 终验门 / 快照服务，
+//   零回退路径干扰（11-16 收紧判据为保留 last-good，不能放宽它）。
+import { healSfcOpenTag, formatOpenTagHealStatsLine } from '../../utils/sfc-open-tag-healer.js';
 // 🛡️ 根治②（2026-11-12 · 8fa6d6f3 实锤）：`:style` 对象后 CSS 残留归一器 ——
 //    bg 挂载链把目标标签原静态 style 值残留拼进 `:style` 引号内（`:style="{...};display:flex;..."`）
 //    ⇒ 前端表达式解析炸。写前确定性归位（残留 CSS 并入静态 style），比门禁拦截更优（内容可救）。
@@ -673,6 +677,41 @@ export function buildBlockedSample(content, errors) {
   if (!m) return '';
   const line = content.split('\n')[Number(m[1]) - 1] || '';
   return line.trim().slice(0, 400);
+}
+
+/**
+ * 🛡️ 2026-11-18：SFC 阻断的**完整原文快照**（诊断用，纯附加、fail-open）。
+ *
+ * 病灶：`sample` 只取首个错误所在那一行（trim + 截断 400），跨行标签错配
+ * （`Invalid end tag` / `Element is missing end tag`）天然看不见——单看报错行
+ * 无法判断缺的是哪个开标签、哪个闭标签游离。判死时把**被门禁拦下的原文逐字**
+ * 落盘到 `<cacheDir>/bad-sfc/`，供修复轮与人工重放用同一权威判据重判。
+ *
+ * 纪律：
+ *  - 零判定：只写字节，不解析、不归范、不 trim；原文什么样就写什么样。
+ *  - fail-open：写失败返回 null，绝不阻断生成（与 sfc-blocked.json 回灌缓存同口径）。
+ *  - 判据单一来源：合法性仍只由 `validateVueSfc` 裁决，本函数不自建第二套 SFC 解析。
+ *
+ * @param {string} cacheDir 回灌缓存目录（outputPath/.mc-gen/cache）
+ * @param {string} relativePath 被阻断文件的相对路径（用于生成安全文件名）
+ * @param {string} content 被门禁拦下的完整原文
+ * @returns {string|null} 相对 cacheDir 的快照路径（如 bad-sfc/package__components__Bad.vue.txt），失败为 null
+ */
+export function writeBlockedSnapshot(cacheDir, relativePath, content) {
+  try {
+    if (!cacheDir || typeof content !== 'string' || !content) return null;
+    const safeName = String(relativePath || 'unknown.vue')
+      .replace(/[/\\]/g, '__')
+      .replace(/[^A-Za-z0-9._-]/g, '_')
+      .slice(0, 180) || 'unknown.vue';
+    const rel = join('bad-sfc', `${safeName}.txt`);
+    const full = join(cacheDir, rel);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, content, 'utf-8');
+    return rel;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -1851,9 +1890,80 @@ export function writeFiles(files, outputPath, options = {}) {
             );
           }
         }
-        const syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
+        // 🛡️ 2026-11-18（N1 死结 · 方案 A）：缺开始标签跨行错配，写盘门禁判死前先试确定性自愈。
+        //   标签名从游离闭标签动态提取、候选由编译器裁决、内容守恒，零硬编码；
+        //   主闸（原文本已 FAIL）保证合法文件逐字不判，修好才重算 syntaxResult。
+        //   fail-open：自愈器异常或修不好一律走原门禁/回退路径，不阻断。
+        let _syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
           lessGlobalVars,
         });
+        // 🛡️ N3 叠加假绿（2026-11-18 · c-env-monitor-dcb5f88c / 27bc42b2 实锤）：
+        //   「整份 SFC 双写」（`<template><template>` 双开 + 两份 `<script setup>` 逐字
+        //   重复 + 两份 `<style>`）由重试/断点续跑链在写盘后复活 ⇒ 写盘门禁判死
+        //   （reason=sfc-invalid / sfc-invalid-after-fix），但坏版仍从其他轮落盘 ⇒ 假绿。
+        //   治本：判死前先跑刀23 同源折叠（判据：2 份 script 逐字相同 + template 序列重复；
+        //   纯函数 fail-open 幂等，与 microcode-engineer:3949 同源）。命中且复检通过
+        //   ⇒ 更新 sanitizedContent、门禁转绿，不走判死/快照回退。主闸「原文已 FAIL」保证
+        //   合法文件逐字不判（零误伤）；折叠结果仍须过 validateVueSfc 才采用。
+        if (!_syntaxResult.valid) {
+          try {
+            const _collapse = collapseDuplicatedSfcBlocks(sanitizedContent);
+            if (logger) {
+              logger.warn(
+                `🛡️ SFC 整份双写折叠·写盘门禁（已评估）: ${relativePath}（changed=${_collapse.changed} reason=${_collapse.reason}）`,
+              );
+            }
+            if (
+              _collapse.changed &&
+              validateVueSfc(_collapse.content, relativePath, { lessGlobalVars }).valid
+            ) {
+              sanitizedContent = _collapse.content;
+              _syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
+                lessGlobalVars,
+              });
+              if (logger) {
+                logger.warn(
+                  `🛡️ SFC 整份双写已确定性折叠（写盘门禁判死前）: ${relativePath}（${_collapse.content.length}B）`,
+                );
+              }
+            }
+          } catch (_collapseErr) {
+            if (logger) {
+              logger.warn(
+                `🛡️ SFC 整份双写折叠跳过（fail-open）: ${relativePath}（${_collapseErr?.message || _collapseErr}）`,
+              );
+            }
+          }
+        }
+        if (!_syntaxResult.valid) {
+          try {
+            const _openHeal = healSfcOpenTag(sanitizedContent, relativePath);
+            if (logger) {
+              logger.warn(formatOpenTagHealStatsLine(_openHeal.stats, relativePath));
+            }
+            if (
+              _openHeal.fixed &&
+              validateVueSfc(_openHeal.source, relativePath, { lessGlobalVars }).valid
+            ) {
+              sanitizedContent = _openHeal.source;
+              _syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
+                lessGlobalVars,
+              });
+              if (logger) {
+                logger.warn(
+                  `🛡️ SFC 缺开始标签已确定性自愈（写盘门禁判死前）: ${relativePath}（restoredTag=${_openHeal.diagnosis?.restoredTag || '?'}）`,
+                );
+              }
+            }
+          } catch (openHealErr) {
+            if (logger) {
+              logger.warn(
+                `🛡️ SFC 缺开始标签自愈跳过（fail-open）: ${relativePath}（${openHealErr?.message || openHealErr}）`,
+              );
+            }
+          }
+        }
+        const syntaxResult = _syntaxResult;
         if (!syntaxResult.valid) {
           // 🛡️ 写盘门禁容错：模型常引用未定义的 less 设计令牌
           const styleBlocks = (
@@ -1930,11 +2040,17 @@ export function writeFiles(files, outputPath, options = {}) {
                   );
                 }
                 skippedFiles.push(relativePath);
+                const _snapshot = writeBlockedSnapshot(
+                  join(outputPath, '.mc-gen', 'cache'),
+                  relativePath,
+                  sanitizedContent,
+                );
                 sfcBlocked.push({
                   path: relativePath,
                   errors: retry.errors,
                   reason: 'sfc-invalid-after-fix',
                   sample: buildBlockedSample(sanitizedContent, retry.errors),
+                  ...(_snapshot ? { snapshot: _snapshot } : {}),
                 });
                 continue;
               }
@@ -1961,11 +2077,17 @@ export function writeFiles(files, outputPath, options = {}) {
                 );
               }
               skippedFiles.push(relativePath);
+              const _snapshot = writeBlockedSnapshot(
+                join(outputPath, '.mc-gen', 'cache'),
+                relativePath,
+                sanitizedContent,
+              );
               sfcBlocked.push({
                 path: relativePath,
                 errors: syntaxResult.errors,
                 reason: 'sfc-invalid',
                 sample: buildBlockedSample(sanitizedContent, syntaxResult.errors),
+                ...(_snapshot ? { snapshot: _snapshot } : {}),
               });
               continue;
             }
@@ -2872,6 +2994,38 @@ export function writeFiles(files, outputPath, options = {}) {
         } catch (_exitErr) {
           _exitErrs = [String(_exitErr?.message || _exitErr)];
         }
+        // 🛡️ N3 叠加假绿（同上方 .vue 门禁）：写盘出口终验判死（reason=final-exit-gate-blocked）
+        //   前先试刀23 同源折叠——R5 救回/后置改写可能在多轮 writeFiles 之间把叠加版盖回，
+        //   出口是 writeFileSync 前最后一站。命中且复检通过 ⇒ 出口转绿，不做快照救回/判死。
+        if (!_exitOk) {
+          try {
+            const _collapse = collapseDuplicatedSfcBlocks(sanitizedContent);
+            if (logger) {
+              logger.warn(
+                `🛡️ SFC 整份双写折叠·写盘出口终验（已评估）: ${relativePath}（changed=${_collapse.changed} reason=${_collapse.reason}）`,
+              );
+            }
+            if (
+              _collapse.changed &&
+              validateVueSfc(_collapse.content, relativePath, { lessGlobalVars: _exitLessVars }).valid
+            ) {
+              sanitizedContent = _collapse.content;
+              _exitOk = true;
+              _exitErrs = null;
+              if (logger) {
+                logger.warn(
+                  `🛡️ SFC 整份双写已确定性折叠（写盘出口终验转绿）: ${relativePath}（${_collapse.content.length}B）`,
+                );
+              }
+            }
+          } catch (_collapseErr) {
+            if (logger) {
+              logger.warn(
+                `🛡️ SFC 整份双写折叠跳过（写盘出口终验，fail-open）: ${relativePath}（${_collapseErr?.message || _collapseErr}）`,
+              );
+            }
+          }
+        }
         if (!_exitOk) {
           const _exitSnap = _fgFinalSnapshotOf(options.fgTakeoverFiles, relativePath);
           let _snapOk = false;
@@ -2914,11 +3068,17 @@ export function writeFiles(files, outputPath, options = {}) {
               );
             }
             skippedFiles.push(relativePath);
+            const _snapshot = writeBlockedSnapshot(
+              join(outputPath, '.mc-gen', 'cache'),
+              relativePath,
+              sanitizedContent,
+            );
             sfcBlocked.push({
               path: relativePath,
               errors: _exitErrs,
               reason: 'final-exit-gate-blocked',
               sample: buildBlockedSample(sanitizedContent, _exitErrs),
+              ...(_snapshot ? { snapshot: _snapshot } : {}),
             });
             continue;
           }
@@ -3020,25 +3180,14 @@ export function writeFiles(files, outputPath, options = {}) {
     //   CSS 残留）可能早轮落盘成功、后续轮才被拦 ⇒ 磁盘残留坏版直达前端。
     //   此处以磁盘事实为准对全部 .vue 终检：坏文件先试 code-chunks 缓存回退，
     //   无合法候选则移除（与写盘门禁「坏文件不落盘」同语义）。永不 throw。
-    try {
-      const _gateSeen = new Set(writtenFiles);
-      for (const _k of Object.keys(files || {})) _gateSeen.add(_k);
-      const _gateRes = runFinalVueExpressionGate(
-        outputPath,
-        [..._gateSeen].filter((p) => typeof p === 'string' && p.endsWith('.vue')),
-        { logger },
-      );
-      if (_gateRes.bad.length > 0 && logger) {
-        logger.warn('🛡️ 产物终验完成（表达式级）', {
-          checked: _gateRes.checked,
-          bad: _gateRes.bad.map((b) => ({ path: b.path, action: b.action })),
-        });
-      }
-    } catch (_gateErr) {
-      if (logger) {
-        logger.warn(`🛡️ 产物终验跳过（${_gateErr?.message || _gateErr}）`);
-      }
-    }
+    //
+    //   🔴 2026-11-18（c-env-monitor-dcb5f88c / 27bc42b2 实锤）**位置下移至本函数最末**：
+    //   此前它跑在这里（theme-vars 补全 / less 门禁 / **CODE-023 宿主联动剥除**之前），
+    //   而 CODE-023 会 `writeFileSync` 写 `.vue` ⇒ 「终验」之后仍有人写盘 ⇒ 闸名不副实。
+    //   真机实证：门禁 09:55:50.758 判死 index.vue，CODE-023 在 .808 把剥引用后的
+    //   仍非法版本写回磁盘，而终验已在 .7xx 跑完 ⇒ 全程无人复检 ⇒ 5305B 坏文件 + completed。
+    //   移到 CODE-023 之后即「最后一个 .vue 写盘点之后」，才配叫终验。
+    //   实际调用见下方 `// 🛡️ 产物终验（末位调用）`。
 
     // 🛡️ 跨文件缺失变量全局兜底（2026-09-10 治本）：单文件写盘门禁是「逐文件 retry.valid 门禁」，
     // 若某 .vue/.less 除缺失变量外还带其他错误（CODE-003 前缀缺失 / 注释未闭合等），retry.valid 为
@@ -3214,25 +3363,89 @@ export function writeFiles(files, outputPath, options = {}) {
         ),
       ];
       if (missingNames.length > 0 && files && typeof files === 'object') {
+        // 🛡️ N3 叠加假绿根治（2026-11-18 · c-env-monitor-dcb5f88c / 27bc42b2 实锤）：
+        //   剥引用是「减法」，但**宿主自身可能本就非法**——最典型就是门禁刚判死的那一份
+        //   （`<template><template>` 双开 + 两份 script/style 逐字重复）。旧实现在这里
+        //   **无条件 writeFileSync**，于是：
+        //     ① 门禁 09:55:50.758 判死 index.vue（坏版不落盘）✅
+        //     ② 本函数 09:55:50.808 把「剥掉 ContentSection 引用、但仍叠加」的坏版写回磁盘 ❌
+        //     ③ 且本块位于**产物终验之后** ⇒ 同类闸无法兜住 ⇒ 磁盘 5305B 非法文件 + 任务 completed
+        //   治本：剥完必须过**同一把尺**（`validateVueSfc`，判据单一来源、不另写正则）。
+        //   非法 ⇒ 先试刀23 同源折叠（判据互补：2 份 script 逐字相同 + template 序列重复）；
+        //   仍非法 ⇒ **不写盘、不改内存**（守住 memory=disk，不给假绿留出固化口），
+        //   计入 `suppressedHosts` 恒打计数行，由既有 artifactIncomplete 链路诚实标记缺块。
+        let _lvForPrune = null;
+        try {
+          _lvForPrune = extractLessGlobalVars(files);
+        } catch {
+          _lvForPrune = null;
+        }
+        const _pruneOk = (text, rel) => {
+          try {
+            return validateVueSfc(text, rel, { lessGlobalVars: _lvForPrune }).valid;
+          } catch {
+            return false; // 复检自身异常 ⇒ 保守视为非法（宁可不写，不复活坏版）
+          }
+        };
         let prunedHosts = [];
+        const suppressedHosts = [];
+        const collapsedHosts = [];
         for (const rel of Object.keys(files)) {
           if (!rel.endsWith('.vue')) continue;
           if (missingNames.some((n) => rel.endsWith(`/${n}.vue`) || rel.endsWith(`\\${n}.vue`))) continue;
           const before = files[rel];
           const after = pruneDanglingComponentFileRefs(before, missingNames);
           if (after !== before) {
-            files[rel] = after;
+            let _cand = after;
+            let _ok = _pruneOk(_cand, rel);
+            let _usedCollapse = false;
+            if (!_ok) {
+              try {
+                const _col = collapseDuplicatedSfcBlocks(_cand);
+                if (_col && _col.changed && _pruneOk(_col.content, rel)) {
+                  _cand = _col.content;
+                  _ok = true;
+                  _usedCollapse = true;
+                }
+              } catch {
+                /* fail-open：按既有判死路径处理 */
+              }
+            }
+            if (!_ok) {
+              // 宿主剥完仍非法 ⇒ 这一版**不允许落盘**（它可能正是门禁判死的原件换个形态）。
+              // 内存同步跳过：memory 保持上一轮（或初始候选）内容，绝不把坏版固化成「同源」。
+              suppressedHosts.push(rel);
+              continue;
+            }
+            files[rel] = _cand;
+            if (_usedCollapse) collapsedHosts.push(rel);
             const abs = join(outputPath, rel);
             if (existsSync(abs)) {
-              writeFileSync(abs, after, 'utf-8');
+              writeFileSync(abs, _cand, 'utf-8');
             }
             prunedHosts.push(rel);
           }
+        }
+        // 🛡️ 计数行**恒打**（0 也打）：把「没跑 / 跑了零命中 / 剥了但全被抑制」三态分开，
+        //   真机日志可直接跨轮比对（本 block 此前只在有命中时打 warn ⇒ 零命中不可观测）。
+        if (logger) {
+          logger.info('🛡️ CODE-023 宿主联动剥除·已评估', {
+            missing: missingNames,
+            pruned: prunedHosts.length,
+            hosts: prunedHosts.slice(0, 5),
+            collapsed: collapsedHosts,
+            suppressed: suppressedHosts,
+          });
         }
         if (prunedHosts.length > 0 && logger) {
           logger.warn('🛡️ CODE-023 宿主联动剥除：被拒子组件的 import/标签已从宿主剥除', {
             missing: missingNames,
             hosts: prunedHosts,
+          });
+        }
+        if (suppressedHosts.length > 0 && logger) {
+          logger.warn('🛡️ CODE-023 宿主联动剥除·已抑制（剥后仍非法，拒绝写盘复活坏版）', {
+            suppressed: suppressedHosts,
           });
         }
       }
@@ -3241,6 +3454,45 @@ export function writeFiles(files, outputPath, options = {}) {
         logger.warn('CODE-023 宿主联动剥除失败（非致命，走既有门禁判死路径）', {
           error: danglingErr.message,
         });
+      }
+    }
+    // 🛡️ 产物终验（末位调用 · 2026-11-18 · dcb5f88c/27bc42b2 实锤移至此）：
+    //   **必须在本函数所有 `.vue` 写盘点之后**（含上方 CODE-023 宿主联动剥除的
+    //   writeFileSync）。以磁盘事实为准对全部 .vue 终检：坏文件先试 code-chunks
+    //   缓存回退，无合法候选则移除（与写盘门禁「坏文件不落盘」同语义）。永不 throw。
+    //   `failClosed` 必须打进日志：它是「跑完仍留在产物里的坏文件数」，
+    //   此前只打 bad[] ⇒ 「已隔离」与「坏文件原样留着」在日志里同形 ⇒ 假绿无从识别。
+    try {
+      const _gateSeen = new Set(writtenFiles);
+      for (const _k of Object.keys(files || {})) _gateSeen.add(_k);
+      const _gateRes = runFinalVueExpressionGate(
+        outputPath,
+        [..._gateSeen].filter((p) => typeof p === 'string' && p.endsWith('.vue')),
+        { logger },
+      );
+      // 🔴 计数行恒打（0 也打）：阴性无留痕 ⇒ 「终验到底跑没跑」不可证（2026-11-18 L3 实锤：
+      //   mc-max-1795004421051-15749b10 全程零 `产物终验` 记录，只能靠"没有异常"推断它跑过 = 假绿风险）。
+      //   判据单一来源：跟 CODE-023 那条计数行同一口径，坏则 WARN、净则 INFO，字段恒全量。
+      const _gatePayload = {
+        checked: _gateRes.checked,
+        healed: (_gateRes.healed || []).map((h) => ({
+          path: h.path,
+          action: h.action,
+          conservedTags: h.conservedTags,
+        })),
+        bad: _gateRes.bad.map((b) => ({ path: b.path, action: b.action })),
+        failClosed: _gateRes.failClosed,
+      };
+      if (logger) {
+        if (_gateRes.bad.length > 0 || _gateRes.failClosed > 0) {
+          logger.warn('🛡️ 产物终验完成（表达式级）', _gatePayload);
+        } else {
+          logger.info('🛡️ 产物终验完成（表达式级）', _gatePayload);
+        }
+      }
+    } catch (_gateErr) {
+      if (logger) {
+        logger.warn(`🛡️ 产物终验跳过（${_gateErr?.message || _gateErr}）`);
       }
     }
     // 🛡️ C 刀（2026-11-13）：sfcBlocked 错误回灌缓存——下一轮 chunk prompt 携带具体错误行，
@@ -3257,18 +3509,30 @@ export function writeFiles(files, outputPath, options = {}) {
       }
       if (!cache || typeof cache !== 'object' || Array.isArray(cache)) cache = {};
       for (const rel of writtenFiles) delete cache[rel];
+      let _snapshotCount = 0;
       for (const b of sfcBlocked) {
+        if (b?.snapshot) _snapshotCount += 1;
         cache[String(b?.path || '')] = {
           errors: (b?.errors || []).map((e) => String(e).slice(0, 400)).slice(0, 5),
           reason: b?.reason || 'sfc-invalid',
           // 出错行原文（2026-11-16）：Duplicate attribute 等无法从行列号还原的错，
           // 靠这一行直接看出重复的是哪个属性、第二个从哪儿来。
           ...(b?.sample ? { sample: String(b.sample).slice(0, 400) } : {}),
+          // 完整原文快照（2026-11-18）：跨行标签错配（Invalid end tag）单行看不出来，
+          // 这里只记相对路径，字节落在 <cacheDir>/bad-sfc/，供重放/评审用同一判据重判。
+          ...(b?.snapshot ? { snapshot: String(b.snapshot) } : {}),
           at: Date.now(),
         };
       }
       mkdirSync(cacheDir, { recursive: true });
       writeFileSync(cacheFile, JSON.stringify(cache, null, 2), 'utf-8');
+      if (logger) {
+        logger.info('🛡️ SFC 坏文本全文快照·已评估', {
+          blocked: sfcBlocked.length,
+          snapshotWritten: _snapshotCount,
+          dir: join(cacheDir, 'bad-sfc'),
+        });
+      }
     } catch (cacheErr) {
       /* 回灌缓存写失败不阻断（下一轮退化为无靶子重试，与旧行为一致） */
     }

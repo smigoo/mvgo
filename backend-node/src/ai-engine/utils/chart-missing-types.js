@@ -14,8 +14,12 @@
  *   requiredTypes = { normalizeChartType(c.type) | c ∈ charts, 非 null }
  *   generatedTypes = collectChartSeriesTypes(vueContent)
  *   lineSatisfiedByDecl = type==='line' && /series\s*:\s*\[/.test(vueContent)
- *   carriedByText = collectTextCarriedChartTypes(charts, figmaIndex)
- *   missing = requiredTypes 中不满足 generatedTypes∪lineDecl∪carriedByText 的类型
+ *   carriedByText = collectTextCarriedChartTypes(charts, figmaIndex, exemptBlocked)
+ *   effectiveCarried = hasEchartsProof ? ∅ : carriedByText   ← R1 产物自证矛盾
+ *   missing = requiredTypes 中不满足 generatedTypes∪lineDecl∪effectiveCarried 的类型
+ *
+ * 🛡️ G1 收紧（2026-11-18）：R1 必须落在本函数（只有这里拿得到产物 content），
+ * R2/R3/R4 落 chart-type-detection.js。四层计数 exemptBlocked 恒在，零命中也打 0。
  */
 import {
   normalizeChartType,
@@ -31,7 +35,7 @@ import { indexFigmaNodes } from './section-tree.js';
  * @param {string} [opts.vueContent]   已拼接好的 .vue 内容；给了就优先，省去 files 拼接
  * @param {object} [opts.figmaNodeData] Figma 树（用于文字卡承载豁免）
  * @param {Map|null} [opts.figmaIndex] 已构建的 Figma 索引；给了就优先（门禁惰性构建后复用，避免重复建索引）
- * @returns {{missing: Array<{type:string,chart:object}>, generatedTypes:Set<string>, carriedByText:Set<string>, hasSeriesDecl:boolean, vueContent:string}}
+ * @returns {{missing: Array<{type:string,chart:object}>, generatedTypes:Set<string>, carriedByText:Set<string>, hasSeriesDecl:boolean, vueContent:string, exemptBlocked:{r1:number,r2:number,r3:number,r4:number}}}
  */
 export function findMissingChartTypes({
   charts = [],
@@ -60,7 +64,16 @@ export function findMissingChartTypes({
       resolvedIndex = null;
     }
   }
-  const carriedByText = collectTextCarriedChartTypes(charts, resolvedIndex);
+  // 四层判据计数（恒在；R2/R3/R4 由 detection 层累加，R1 在本函数累加）
+  const exemptBlocked = { r1: 0, r2: 0, r3: 0, r4: 0 };
+  const carriedByText = collectTextCarriedChartTypes(charts, resolvedIndex, exemptBlocked);
+
+  // R1 产物自证矛盾：产物已在用 echarts 画图（init 或 series 声明）却缺该类型，
+  // 「该类型由文字承载」与产物行为自相矛盾 ⇒ 禁用豁免。只在本层做（detection 无 content）。
+  // 边界：真文字卡产物无 echarts ⇒ 豁免保留（T1 反例）。
+  const hasEchartsProof = /echarts\s*\.\s*init\s*\(/.test(content) || hasSeriesDecl;
+  if (hasEchartsProof && carriedByText.size > 0) exemptBlocked.r1 = carriedByText.size;
+  const effectiveCarriedByText = hasEchartsProof ? new Set() : carriedByText;
 
   const missing = [];
   const seen = new Set();
@@ -71,11 +84,18 @@ export function findMissingChartTypes({
     const satisfied =
       generatedTypes.has(type) ||
       (type === 'line' && hasSeriesDecl) ||
-      carriedByText.has(type);
+      effectiveCarriedByText.has(type);
     if (!satisfied) missing.push({ type, chart });
   }
 
-  return { missing, generatedTypes, carriedByText, hasSeriesDecl, vueContent: content };
+  return {
+    missing,
+    generatedTypes,
+    carriedByText: effectiveCarriedByText,
+    hasSeriesDecl,
+    vueContent: content,
+    exemptBlocked,
+  };
 }
 
 /**
