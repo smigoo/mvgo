@@ -195,7 +195,10 @@ function checkM1(dirName, declare) {
     if (!cid.startsWith(naming.componentIdPrefix))
       cidErrors.push(`未以 "${naming.componentIdPrefix}" 开头`)
     if (!isKebab(cid)) cidErrors.push('不符合 kebab-case')
-    if (cid !== dirName) cidErrors.push(`与目录名 "${dirName}" 不一致`)
+    // M1-1 规范（check-items.md:47）：目录名一致性仅前端模式校验；
+    // --component-path 模式目录名可能是 revision id / sessionId（rawgen 快照），
+    // 与 componentId 不同命名空间，强制比对必误报。
+    if (!COMPONENT_PATH && cid !== dirName) cidErrors.push(`与目录名 "${dirName}" 不一致`)
     if (cid.length > naming.componentIdMaxLength)
       cidErrors.push(`长度 ${cid.length} 超过 ${naming.componentIdMaxLength}`)
   }
@@ -841,15 +844,26 @@ function checkM4(dir, declare, isBusiness) {
       if (missingCoreVars.length === 0) {
         const darkVarValues = extractObjectKeyValues(cssVarsContent, 'dark')
         const colorRules = CFG.enums.darkThemeColorRules || {}
+        // 🔴 D1=B（2026-11-22 用户拍板）：dark 主色允许「等于 common 同名键的设计真值」，
+        //   判据可辩驳——真值分支只放行 dark===common，乱写一个既非枚举又非 common 的色仍 FAIL。
+        //   开关来自 config（darkThemeTruthFromCommon），默认关闭 ⇒ 历史组件零回归。
+        const truthRule = CFG.enums.darkThemeTruthFromCommon || {}
+        const truthEnabled = truthRule.enabled === true
+        const truthVars = Array.isArray(truthRule.vars) ? truthRule.vars : []
+        const commonVarValues = truthEnabled && truthVars.length ? extractObjectKeyValues(cssVarsContent, 'common') : {}
         const colorErrors = []
         coreVars.forEach((varName) => {
           const allowedValues = colorRules[varName]
           if (!allowedValues || allowedValues.length === 0) return
           const actualValue = (darkVarValues[varName] || '').toUpperCase()
           const allowedValuesUpper = allowedValues.map((v) => v.toUpperCase())
-          if (!allowedValuesUpper.includes(actualValue)) {
+          const truthValue = truthEnabled && truthVars.includes(varName)
+            ? String(commonVarValues[varName] || '').toUpperCase()
+            : ''
+          const truthMatch = !!truthValue && truthValue === actualValue
+          if (!allowedValuesUpper.includes(actualValue) && !truthMatch) {
             colorErrors.push(
-              `${varName}: "${darkVarValues[varName]}" 不在允许值 [${allowedValues.join(', ')}] 中`
+              `${varName}: "${darkVarValues[varName]}" 不在允许值 [${allowedValues.join(', ')}] 中${truthValue ? `，也非 common 真值 ${commonVarValues[varName]}` : ''}`
             )
           }
         })

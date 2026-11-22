@@ -47,6 +47,10 @@
       "colorPrimaryBg": ["#414141", "#454545", "#474747"],
       "colorPrimaryBgHover": ["#4B4B4B", "#4F4F4F", "#525252"]
     },
+    "darkThemeTruthFromCommon": {
+      "enabled": true,
+      "vars": ["colorPrimary"]
+    },
     "darkThemeOptionalVars": {
       "scrollbarTrackBg": ["#424242"],
       "scrollbarThumbBg": ["#646464"]
